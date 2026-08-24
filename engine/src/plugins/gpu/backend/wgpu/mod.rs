@@ -4,7 +4,6 @@
 //! bounded migration bridges. This root only composes those owners.
 
 mod adapter_mapping;
-mod current_host;
 mod device_request;
 mod execution;
 #[cfg(test)]
@@ -24,21 +23,12 @@ pub(crate) use pipeline_realization::{
     ComputePipelineRealizationRecord, PipelineRealizationState, RenderPipelineRealizationRecord,
 };
 pub(crate) use program_binding_realization::{
-    BindGroupLayoutRealizationRecord, BindGroupRealizationRecord, CurrentRenderAttachmentsTerminal,
-    CurrentRenderBufferCopyTerminal, CurrentRenderBufferUploadTerminal,
-    CurrentRenderComputePipelineTerminal, CurrentRenderIndexBufferTerminal,
-    CurrentRenderIndirectBufferTerminal, CurrentRenderPipelineBindGroupsTerminal,
-    CurrentRenderReadbackBufferTerminal, CurrentRenderRenderPipelineTerminal,
-    CurrentRenderRenderPipelinesTerminal, CurrentRenderTextureCopyTerminal,
-    CurrentRenderTextureReadbackCopyTerminal, CurrentRenderTextureUploadTerminal,
-    CurrentRenderTimestampResourcesTerminal, CurrentRenderTimestampWritesTerminal,
-    CurrentRenderVertexBufferTerminal, CurrentSurfaceReadbackCopyTerminal,
-    CurrentSurfaceTextureCopyTerminal, PipelineLayoutRealizationRecord,
+    BindGroupLayoutRealizationRecord, BindGroupRealizationRecord, PipelineLayoutRealizationRecord,
     ProgramBindingRealizationState, ProgramRealizationRecord,
 };
 pub(crate) use resource_realization::{
     BufferRealizationRecord, QuerySetRealizationRecord, ResourceRealizationState,
     SamplerRealizationRecord, TextureRealizationRecord, TextureViewRealizationRecord,
 };
-pub(crate) use state::{CurrentRenderDeviceQueue, WgpuContextState};
+pub(crate) use state::WgpuContextState;
 pub(crate) use surface::WgpuSurfaceState;

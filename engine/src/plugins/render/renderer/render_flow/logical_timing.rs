@@ -79,8 +79,7 @@ impl LogicalGpuPassTimingPlan {
 ///
 /// The readback ID is allocated exactly once here because it identifies the eventual G5 result,
 /// while the readback operation itself is projected later from the exact used query range. G5
-/// readback targets the resolve buffer directly; any renderer-owned staging buffer retained by the
-/// temporary raw executor is a physical compatibility sidecar, not logical work.
+/// readback targets the resolve buffer directly.
 #[derive(Debug, Clone)]
 pub(super) struct LogicalGpuPassTiming {
     query_set: GpuQuerySetHandle,

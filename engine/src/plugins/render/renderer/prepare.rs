@@ -4,10 +4,9 @@ use super::resource_descriptors::{
 };
 use super::*;
 use crate::plugins::gpu::{
-    CurrentRenderBufferUploadTerminal, CurrentRenderTextureUploadTerminal, GpuBufferRange,
-    GpuBufferRegion, GpuBufferUsage, GpuCopyExtent, GpuMemoryIntent, GpuResourceLifetime,
-    GpuTextureAspect, GpuTextureCopyRegion, GpuTextureDimension, GpuTextureHandle,
-    GpuTextureOrigin, GpuTextureUsage, GpuTransferRegion, GpuUploadOperation, PreparedGpuData,
+    GpuBufferRange, GpuBufferRegion, GpuBufferUsage, GpuCopyExtent, GpuMemoryIntent,
+    GpuResourceLifetime, GpuTextureAspect, GpuTextureCopyRegion, GpuTextureDimension,
+    GpuTextureHandle, GpuTextureOrigin, GpuTextureUsage, GpuUploadOperation, PreparedGpuData,
     TransferData,
 };
 use crate::plugins::render::features::{
@@ -542,7 +541,7 @@ impl Renderer {
 
     fn prepare_material_gpu_resources(
         &mut self,
-        context: &GpuContext,
+        _context: &GpuContext,
         material: Option<&crate::plugins::render::PreparedMaterialFeatureContribution>,
         pending_operations: &mut RendererPendingOperations,
     ) -> Result<Option<PreparedMaterialGpuResources>> {
@@ -620,7 +619,6 @@ impl Renderer {
                         GpuResourceLifetime::Transient,
                     )?)?;
             let texture = RendererTextureResource {
-                realized: context.realize_texture(&texture_handle)?,
                 _handle: texture_handle,
             };
 
@@ -631,7 +629,6 @@ impl Renderer {
                         &texture._handle,
                     )?)?;
             let view = RendererTextureViewResource {
-                _realized: context.realize_texture_view(&view_handle, &texture.realized)?,
                 _handle: view_handle,
             };
             let sampler_handle =
@@ -641,7 +638,6 @@ impl Renderer {
                         GpuResourceLifetime::Transient,
                     )?)?;
             let sampler = RendererSamplerResource {
-                _realized: context.realize_sampler(&sampler_handle)?,
                 _handle: sampler_handle,
             };
             texture_views.push(view);
@@ -650,9 +646,7 @@ impl Renderer {
             textures.push(texture);
         }
 
-        // G4C1 texture/view/sampler records are complete before the raw interval. The complete
-        // material binding set and all physical groups are realized once through the canonical
-        // G4C2 `GpuRuntimeBindingSet` path in render-flow binding realization.
+        // G5 preparation owns material texture/view/sampler realization from these descriptors.
         for (texture, upload) in textures.iter().zip(texture_uploads) {
             pending_operations.queue_texture(texture, &upload.bytes)?;
         }
@@ -741,10 +735,8 @@ fn canonical_renderer_texture_upload(
 
 impl RendererPendingOperations {
     fn queue_buffer(&mut self, buffer: &RendererBufferResource, contents: &[u8]) -> Result<()> {
-        self.buffer_uploads.push(RendererPendingBufferUpload {
-            operation: canonical_renderer_buffer_upload(&buffer._handle, contents)?,
-            legacy_realized: buffer.realized.clone(),
-        });
+        self.buffer_uploads
+            .push(canonical_renderer_buffer_upload(&buffer._handle, contents)?);
         Ok(())
     }
 
@@ -753,158 +745,18 @@ impl RendererPendingOperations {
         texture: &RendererTextureResource,
         contents: &[u8],
     ) -> Result<()> {
-        self.texture_uploads.push(RendererPendingTextureUpload {
-            operation: canonical_renderer_texture_upload(&texture._handle, contents)?,
-            legacy_realized: texture.realized.clone(),
-        });
+        self.texture_uploads.push(canonical_renderer_texture_upload(
+            &texture._handle,
+            contents,
+        )?);
         Ok(())
     }
 
-    pub(super) fn apply(self, context: &GpuContext, queue: &Queue) -> Result<()> {
-        for upload in self.buffer_uploads {
-            Self::apply_buffer_upload(context, queue, &upload)?;
-        }
-        for upload in self.texture_uploads {
-            Self::apply_texture_upload(context, queue, &upload)?;
-        }
-        Ok(())
-    }
-
-    pub(super) fn apply_buffer_upload(
-        context: &GpuContext,
-        queue: &Queue,
-        upload: &RendererPendingBufferUpload,
-    ) -> Result<()> {
-        let GpuTransferRegion::Buffer(destination) = upload.operation.destination() else {
-            return Err(anyhow::anyhow!(
-                "renderer pending buffer upload lowered to a non-buffer destination"
-            ));
-        };
-        if upload.legacy_realized.logical_identity() != destination.buffer().diagnostic_identity() {
-            return Err(anyhow::anyhow!(
-                "renderer pending buffer upload destination '{}' disagrees with its temporary G4C1 realization '{}'",
-                destination.buffer().diagnostic_identity(),
-                upload.legacy_realized.logical_identity()
-            ));
-        }
-        context
-            .current_render_execution_bridge()
-            .for_buffer_upload(
-                &upload.legacy_realized,
-                WriteRendererBuffer {
-                    queue,
-                    byte_offset: destination.range().offset(),
-                    contents: upload.operation.payload().as_bytes(),
-                },
-            )?;
-        Ok(())
-    }
-
-    pub(super) fn apply_texture_upload(
-        context: &GpuContext,
-        queue: &Queue,
-        upload: &RendererPendingTextureUpload,
-    ) -> Result<()> {
-        let GpuTransferRegion::Texture(destination) = upload.operation.destination() else {
-            return Err(anyhow::anyhow!(
-                "renderer pending texture upload lowered to a non-texture destination"
-            ));
-        };
-        if upload.legacy_realized.logical_identity() != destination.texture().diagnostic_identity()
-        {
-            return Err(anyhow::anyhow!(
-                "renderer pending texture upload destination '{}' disagrees with its temporary G4C1 realization '{}'",
-                destination.texture().diagnostic_identity(),
-                upload.legacy_realized.logical_identity()
-            ));
-        }
-        let extent = destination.extent();
-        let bytes_per_row = extent
-            .width()
-            .checked_mul(
-                destination
-                    .texture()
-                    .descriptor()
-                    .format()
-                    .bytes_per_texel(),
-            )
-            .ok_or_else(|| {
-                anyhow::anyhow!("renderer pending texture upload row byte length overflowed")
-            })?;
-        let aspect = match destination.aspect() {
-            GpuTextureAspect::All | GpuTextureAspect::Color => TextureAspect::All,
-            GpuTextureAspect::DepthOnly => TextureAspect::DepthOnly,
-            GpuTextureAspect::StencilOnly => TextureAspect::StencilOnly,
-        };
-        let origin = destination.origin();
-        context
-            .current_render_execution_bridge()
-            .for_texture_upload(
-                &upload.legacy_realized,
-                UploadRendererTexture {
-                    queue,
-                    bytes: upload.operation.payload().as_bytes(),
-                    mip_level: destination.mip_level(),
-                    origin: Origin3d {
-                        x: origin.x(),
-                        y: origin.y(),
-                        z: origin.z(),
-                    },
-                    aspect,
-                    bytes_per_row,
-                    rows_per_image: extent.height(),
-                    size: Extent3d {
-                        width: extent.width(),
-                        height: extent.height(),
-                        depth_or_array_layers: extent.depth_or_layers(),
-                    },
-                },
-            )?;
-        Ok(())
-    }
-}
-
-struct WriteRendererBuffer<'a> {
-    queue: &'a Queue,
-    byte_offset: u64,
-    contents: &'a [u8],
-}
-
-impl CurrentRenderBufferUploadTerminal for WriteRendererBuffer<'_> {
-    fn upload_buffer(self, buffer: &Buffer) {
-        self.queue
-            .write_buffer(buffer, self.byte_offset, self.contents);
-    }
-}
-
-struct UploadRendererTexture<'a> {
-    queue: &'a Queue,
-    bytes: &'a [u8],
-    mip_level: u32,
-    origin: Origin3d,
-    aspect: TextureAspect,
-    bytes_per_row: u32,
-    rows_per_image: u32,
-    size: Extent3d,
-}
-
-impl CurrentRenderTextureUploadTerminal for UploadRendererTexture<'_> {
-    fn upload_texture(self, texture: &Texture) {
-        self.queue.write_texture(
-            TexelCopyTextureInfo {
-                texture,
-                mip_level: self.mip_level,
-                origin: self.origin,
-                aspect: self.aspect,
-            },
-            self.bytes,
-            TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(self.bytes_per_row),
-                rows_per_image: Some(self.rows_per_image),
-            },
-            self.size,
-        );
+    pub(super) fn into_operations(self) -> Vec<GpuUploadOperation> {
+        self.buffer_uploads
+            .into_iter()
+            .chain(self.texture_uploads)
+            .collect()
     }
 }
 
@@ -1413,6 +1265,7 @@ fn hash_prepared_feature_contribution(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::gpu::GpuTransferRegion;
     use crate::plugins::render::{
         FeatureContributionStatus, FeatureFallbackPolicy, PreparedFeatureContribution,
         PreparedFeaturePayload, PreparedMaterialBindingTable, PreparedMaterialFeatureContribution,

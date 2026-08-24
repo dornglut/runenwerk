@@ -1,10 +1,11 @@
+use crate::plugins::gpu::{
+    GpuSurfaceCapabilities, GpuSurfaceConfiguration, GpuSurfacePresentMode, GpuTextureFormat,
+    GpuTextureUsage,
+};
 use crate::runtime::NativeWindowId;
+use anyhow::{Result, anyhow};
 use id_macros::id;
 use std::collections::BTreeMap;
-use wgpu::{
-    CompositeAlphaMode, Device, PresentMode, Surface, SurfaceColorSpace, SurfaceConfiguration,
-    TextureFormat, TextureUsages,
-};
 
 #[id]
 pub struct RenderSurfaceId;
@@ -164,29 +165,94 @@ impl RenderSurfaceRegistryResource {
 pub fn build_surface_config(
     width: u32,
     height: u32,
-    format: TextureFormat,
-    alpha_mode: CompositeAlphaMode,
-) -> SurfaceConfiguration {
-    SurfaceConfiguration {
-        usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC | TextureUsages::COPY_DST,
-        format,
-        color_space: SurfaceColorSpace::Auto,
-        width: width.max(1),
-        height: height.max(1),
-        present_mode: PresentMode::Fifo,
-        desired_maximum_frame_latency: 2,
-        alpha_mode,
-        view_formats: vec![format],
+    format: GpuTextureFormat,
+    capabilities: &GpuSurfaceCapabilities,
+) -> Result<GpuSurfaceConfiguration> {
+    let alpha_mode = capabilities
+        .alpha_modes()
+        .first()
+        .copied()
+        .ok_or_else(|| anyhow!("render surface reports no supported alpha mode"))?;
+    let mut usages = vec![GpuTextureUsage::ColorAttachment];
+    for usage in [
+        GpuTextureUsage::CopySource,
+        GpuTextureUsage::CopyDestination,
+    ] {
+        if capabilities.supports_usage(usage) {
+            usages.push(usage);
+        }
     }
-}
-
-pub fn configure_surface(surface: &Surface<'_>, device: &Device, config: &SurfaceConfiguration) {
-    surface.configure(device, config);
+    if !capabilities.supports_present_mode(GpuSurfacePresentMode::Fifo) {
+        return Err(anyhow!("render surface does not support FIFO presentation"));
+    }
+    if !capabilities.supports_alpha_mode(alpha_mode) {
+        return Err(anyhow!(
+            "render surface alpha-mode selection became invalid"
+        ));
+    }
+    Ok(GpuSurfaceConfiguration::new(
+        width.max(1),
+        height.max(1),
+        format,
+        usages,
+        GpuSurfacePresentMode::Fifo,
+        alpha_mode,
+        2,
+        [format],
+    )?)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::gpu::GpuSurfaceAlphaMode;
+
+    fn surface_capabilities(
+        usages: impl IntoIterator<Item = GpuTextureUsage>,
+    ) -> GpuSurfaceCapabilities {
+        GpuSurfaceCapabilities::from_normalized_facts(
+            vec![GpuTextureFormat::Bgra8UnormSrgb],
+            usages.into_iter().collect(),
+            vec![GpuSurfacePresentMode::Fifo],
+            vec![GpuSurfaceAlphaMode::Opaque],
+        )
+    }
+
+    #[test]
+    fn renderer_surface_configuration_preserves_policy_and_supported_copy_usages() {
+        let capabilities = surface_capabilities([
+            GpuTextureUsage::ColorAttachment,
+            GpuTextureUsage::CopySource,
+            GpuTextureUsage::CopyDestination,
+        ]);
+
+        let config = build_surface_config(0, 0, GpuTextureFormat::Bgra8UnormSrgb, &capabilities)
+            .expect("renderer surface policy should normalize into a valid configuration");
+
+        assert_eq!((config.width(), config.height()), (1, 1));
+        assert_eq!(config.present_mode(), GpuSurfacePresentMode::Fifo);
+        assert_eq!(config.desired_maximum_frame_latency(), 2);
+        assert_eq!(config.alpha_mode(), GpuSurfaceAlphaMode::Opaque);
+        assert_eq!(
+            config.usages(),
+            &[
+                GpuTextureUsage::ColorAttachment,
+                GpuTextureUsage::CopySource,
+                GpuTextureUsage::CopyDestination,
+            ]
+        );
+    }
+
+    #[test]
+    fn renderer_surface_configuration_does_not_request_unsupported_copy_usages() {
+        let capabilities = surface_capabilities([GpuTextureUsage::ColorAttachment]);
+
+        let config =
+            build_surface_config(640, 480, GpuTextureFormat::Bgra8UnormSrgb, &capabilities)
+                .expect("color-attachment-only surfaces should remain configurable");
+
+        assert_eq!(config.usages(), &[GpuTextureUsage::ColorAttachment]);
+    }
 
     #[test]
     fn render_surface_registry_binds_primary_surface_to_primary_native_window() {

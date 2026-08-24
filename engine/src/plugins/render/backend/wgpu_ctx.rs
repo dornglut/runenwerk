@@ -1,28 +1,27 @@
 use super::{build_surface_config, preferred_surface_format};
 use crate::plugins::gpu::{
-    GpuCapabilityFeature, GpuCapabilityProfile, GpuCapabilityRequirement, GpuContext,
-    GpuContextDescriptor, GpuFormatRole, GpuPowerPreference, GpuPreferredFallback,
-    GpuTextureFormat,
+    GpuAcquiredSurfaceImage, GpuCapabilityFeature, GpuCapabilityProfile, GpuCapabilityRequirement,
+    GpuContext, GpuContextDescriptor, GpuFormatRole, GpuPowerPreference, GpuPreferredFallback,
+    GpuSurfaceAcquireErrorCategory, GpuSurfaceConfiguration, GpuSurfaceHandle, GpuTextureFormat,
 };
 use anyhow::Result;
 use pollster::block_on;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use wgpu::{CurrentSurfaceTexture, Surface, SurfaceConfiguration, SurfaceTexture};
 use winit::window::Window;
 
 use super::RenderSurfaceId;
 
 #[derive(Debug)]
-struct WgpuSurfaceState<'window> {
-    surface: Surface<'window>,
-    config: SurfaceConfiguration,
+struct WgpuSurfaceState {
+    surface: GpuSurfaceHandle,
+    config: GpuSurfaceConfiguration,
 }
 
 #[derive(Debug)]
-pub struct WgpuCtx<'window> {
+pub struct WgpuCtx {
     context: GpuContext,
-    surfaces: BTreeMap<RenderSurfaceId, WgpuSurfaceState<'window>>,
+    surfaces: BTreeMap<RenderSurfaceId, WgpuSurfaceState>,
 }
 
 /// Stable renderer-facing acquisition categories across the WGPU 30 surface-result cutover.
@@ -38,7 +37,7 @@ pub enum RenderSurfaceAcquireError {
     Validation,
 }
 
-impl<'window> WgpuCtx<'window> {
+impl WgpuCtx {
     async fn new_async(window: Arc<Window>) -> Result<Self> {
         let mut requirements = GpuCapabilityProfile::DesktopPresentationBaseline.requirements();
         requirements.insert(GpuCapabilityRequirement::Preferred {
@@ -54,8 +53,8 @@ impl<'window> WgpuCtx<'window> {
             requirements.insert(GpuCapabilityRequirement::Required(feature))?;
         }
         let mut descriptor = GpuContextDescriptor::new(requirements)
-            .with_label("Runenwerk current host")
-            .with_provenance("temporary G7 host compatibility")
+            .with_label("Runenwerk renderer")
+            .with_provenance("Runenwerk renderer surface execution")
             .with_power_preference(GpuPowerPreference::HighPerformance);
         for (format, roles) in [
             (
@@ -132,18 +131,14 @@ impl<'window> WgpuCtx<'window> {
             }
         }
         let (context, surface) =
-            GpuContext::request_for_current_host(descriptor, Arc::clone(&window)).await?;
+            GpuContext::request_for_surface(descriptor, Arc::clone(&window)).await?;
 
-        let surface_config = {
-            let bridge = context.current_host_surface_bridge();
-            let size = window.inner_size();
-            let caps = bridge.capabilities(&surface);
-            let format = preferred_surface_format(&caps);
-            let surface_config =
-                build_surface_config(size.width, size.height, format, caps.alpha_modes[0]);
-            bridge.configure(&surface, &surface_config);
-            surface_config
-        };
+        let size = window.inner_size();
+        let caps = context.surface_capabilities(surface)?;
+        let format = preferred_surface_format(&caps)
+            .ok_or_else(|| anyhow::anyhow!("render surface reports no supported format"))?;
+        let surface_config = build_surface_config(size.width, size.height, format, &caps)?;
+        let surface = context.configure_surface(surface, surface_config.clone())?;
 
         Ok(Self {
             context,
@@ -167,27 +162,26 @@ impl<'window> WgpuCtx<'window> {
         window: Arc<Window>,
         target_size_px: (u32, u32),
     ) -> Result<()> {
-        let (surface, config) = {
-            let bridge = self.context.current_host_surface_bridge();
-            let surface = bridge.create_surface(window)?;
-            let caps = bridge.capabilities(&surface);
-            let format = preferred_surface_format(&caps);
-            let config = build_surface_config(
-                target_size_px.0,
-                target_size_px.1,
-                format,
-                caps.alpha_modes[0],
-            );
-            bridge.configure(&surface, &config);
-            (surface, config)
-        };
+        let surface = self.context.attach_surface(window)?;
+        let caps = self.context.surface_capabilities(surface)?;
+        let format = preferred_surface_format(&caps)
+            .ok_or_else(|| anyhow::anyhow!("render surface reports no supported format"))?;
+        let config = build_surface_config(target_size_px.0, target_size_px.1, format, &caps)?;
+        let surface = self.context.configure_surface(surface, config.clone())?;
         self.surfaces
             .insert(render_surface_id, WgpuSurfaceState { surface, config });
         Ok(())
     }
 
     pub fn detach_surface(&mut self, render_surface_id: RenderSurfaceId) -> bool {
-        self.surfaces.remove(&render_surface_id).is_some()
+        let Some(state) = self.surfaces.get(&render_surface_id) else {
+            return false;
+        };
+        if self.context.detach_surface(state.surface).is_err() {
+            return false;
+        }
+        self.surfaces.remove(&render_surface_id);
+        true
     }
 
     pub fn has_surface(&self, render_surface_id: RenderSurfaceId) -> bool {
@@ -197,7 +191,7 @@ impl<'window> WgpuCtx<'window> {
     pub fn surface_config(
         &self,
         render_surface_id: RenderSurfaceId,
-    ) -> Option<&SurfaceConfiguration> {
+    ) -> Option<&GpuSurfaceConfiguration> {
         self.surfaces
             .get(&render_surface_id)
             .map(|state| &state.config)
@@ -207,41 +201,59 @@ impl<'window> WgpuCtx<'window> {
         let Some(state) = self.surfaces.get_mut(&render_surface_id) else {
             return false;
         };
-        state.config.width = width.max(1);
-        state.config.height = height.max(1);
-        self.context
-            .current_host_surface_bridge()
-            .configure(&state.surface, &state.config);
+        let Ok(config) = GpuSurfaceConfiguration::new(
+            width.max(1),
+            height.max(1),
+            state.config.format(),
+            state.config.usages().iter().copied(),
+            state.config.present_mode(),
+            state.config.alpha_mode(),
+            state.config.desired_maximum_frame_latency(),
+            state.config.view_formats().iter().copied(),
+        ) else {
+            return false;
+        };
+        let Ok(surface) = self
+            .context
+            .configure_surface(state.surface, config.clone())
+        else {
+            return false;
+        };
+        state.surface = surface;
+        state.config = config;
         true
     }
 
-    pub fn get_current_texture(
+    pub fn acquire_surface_image(
         &self,
         render_surface_id: RenderSurfaceId,
-    ) -> Result<SurfaceTexture, RenderSurfaceAcquireError> {
-        let outcome = self
+    ) -> Result<GpuAcquiredSurfaceImage, RenderSurfaceAcquireError> {
+        let surface = self
             .surfaces
             .get(&render_surface_id)
             .ok_or(RenderSurfaceAcquireError::Lost)?
-            .surface
-            .get_current_texture();
-        match outcome {
-            CurrentSurfaceTexture::Success(texture)
-            | CurrentSurfaceTexture::Suboptimal(texture) => Ok(texture),
-            CurrentSurfaceTexture::Timeout | CurrentSurfaceTexture::Occluded => {
-                Err(RenderSurfaceAcquireError::Timeout)
-            }
-            CurrentSurfaceTexture::Outdated => Err(RenderSurfaceAcquireError::Outdated),
-            CurrentSurfaceTexture::Lost => Err(RenderSurfaceAcquireError::Lost),
-            CurrentSurfaceTexture::Validation => Err(RenderSurfaceAcquireError::Validation),
-        }
-    }
-
-    pub fn present(&self, frame: SurfaceTexture) {
+            .surface;
         self.context
-            .current_render_device_queue()
-            .queue
-            .present(frame);
+            .acquire_surface_image(surface)
+            .map_err(|error| match error.category() {
+                GpuSurfaceAcquireErrorCategory::Timeout
+                | GpuSurfaceAcquireErrorCategory::Occluded => RenderSurfaceAcquireError::Timeout,
+                GpuSurfaceAcquireErrorCategory::Outdated => RenderSurfaceAcquireError::Outdated,
+                GpuSurfaceAcquireErrorCategory::Lost
+                | GpuSurfaceAcquireErrorCategory::UnknownSurface
+                | GpuSurfaceAcquireErrorCategory::StaleGeneration
+                | GpuSurfaceAcquireErrorCategory::ContextOrDeviceUnavailableOrLost => {
+                    RenderSurfaceAcquireError::Lost
+                }
+                GpuSurfaceAcquireErrorCategory::NotConfigured
+                | GpuSurfaceAcquireErrorCategory::AlreadyAcquired
+                | GpuSurfaceAcquireErrorCategory::Validation
+                | GpuSurfaceAcquireErrorCategory::ForeignContext
+                | GpuSurfaceAcquireErrorCategory::IdentityExhausted
+                | GpuSurfaceAcquireErrorCategory::InternalInvariant => {
+                    RenderSurfaceAcquireError::Validation
+                }
+            })
     }
 
     pub(crate) fn context(&self) -> &GpuContext {

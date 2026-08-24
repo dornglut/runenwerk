@@ -4,7 +4,9 @@ use std::path::{Path, PathBuf};
 const FLOW_KEYS: &str = "src/plugins/render/pipelines/flow_keys.rs";
 const BINDINGS: &str = "src/plugins/render/renderer/render_flow/bindings.rs";
 const EXECUTION_PLAN: &str = "src/plugins/render/graph/execution_plan.rs";
-const EXECUTE_PASSES: &str = "src/plugins/render/renderer/render_flow/execute_passes/pipeline.rs";
+const PIPELINE_REALIZATION: &str =
+    "src/plugins/render/renderer/render_flow/pipeline_realization.rs";
+const LOGICAL_OPERATIONS: &str = "src/plugins/render/renderer/render_flow/logical_operations.rs";
 const EXECUTE: &str = "src/plugins/render/renderer/render_flow/execute.rs";
 const RENDER_FLOW_MOD: &str = "src/plugins/render/renderer/render_flow/mod.rs";
 const PIPELINE_CACHE: &str = "src/plugins/render/renderer/pipeline_cache.rs";
@@ -278,26 +280,24 @@ fn complete_pipeline_layout_is_typed_before_pipeline_descriptor_publication() {
         );
     }
     for required in [
-        "for group in runtime_bindings.groups() {",
-        "context.realize_bind_group_layout(group.layout())",
-        "context.realize_bind_group(&layout, group.values().cloned())",
+        "context.realize_program(pipeline_key.pipeline_descriptor.program())",
+        "context.realize_pipeline_layout(pipeline_key.pipeline_descriptor.layout())",
+        "runtime_bindings,",
     ] {
         assert!(
             bindings.contains(required),
-            "all canonical bind-group layouts and values must delegate to G4C2 realization: {required}"
+            "G4C2 descriptor realization must retain the complete typed binding contract: {required}"
         );
     }
-    assert_eq!(
-        bindings
-            .matches("context.realize_bind_group_layout(")
-            .count(),
-        1,
-        "G4C2 must own one generalized bind-group-layout realization path rather than a parallel group-0 path"
-    );
-    assert!(
-        !bindings.contains("context.realize_bind_group_layout(&primary_bind_group_layout)"),
-        "the retired group-0-only realization path must not return beside generalized G4C2 realization"
-    );
+    for retired_physical_sidecar in [
+        "context.realize_bind_group_layout(",
+        "context.realize_bind_group(",
+    ] {
+        assert!(
+            !bindings.contains(retired_physical_sidecar),
+            "renderer must leave execution-owned binding materialization to G5 preparation: {retired_physical_sidecar}"
+        );
+    }
     for forbidden in [
         "layout_ty: BindingType",
         "hash_bind_group_layout_entries(",
@@ -444,7 +444,7 @@ fn render_pipeline_state_is_typed_before_complete_descriptor_publication() {
     let flow_keys = read(&manifest_dir, FLOW_KEYS);
     let bindings = read(&manifest_dir, BINDINGS);
     let execution_plan = read(&manifest_dir, EXECUTION_PLAN);
-    let execute_passes = read(&manifest_dir, EXECUTE_PASSES);
+    let pipeline_realization = read(&manifest_dir, PIPELINE_REALIZATION);
     let execute = read(&manifest_dir, EXECUTE);
     let render_flow_mod = read(&manifest_dir, RENDER_FLOW_MOD);
 
@@ -494,7 +494,7 @@ fn render_pipeline_state_is_typed_before_complete_descriptor_publication() {
     for (path, source) in [
         (BINDINGS, bindings.as_str()),
         (EXECUTION_PLAN, execution_plan.as_str()),
-        (EXECUTE_PASSES, execute_passes.as_str()),
+        (PIPELINE_REALIZATION, pipeline_realization.as_str()),
         (RENDER_FLOW_MOD, render_flow_mod.as_str()),
     ] {
         for forbidden in [
@@ -538,7 +538,7 @@ fn render_pipeline_state_is_typed_before_complete_descriptor_publication() {
         (FLOW_KEYS, flow_keys.as_str()),
         (BINDINGS, bindings.as_str()),
         (EXECUTION_PLAN, execution_plan.as_str()),
-        (EXECUTE_PASSES, execute_passes.as_str()),
+        (PIPELINE_REALIZATION, pipeline_realization.as_str()),
     ] {
         assert!(
             !source.contains("vertex_layout_signature_hash"),
@@ -550,15 +550,16 @@ fn render_pipeline_state_is_typed_before_complete_descriptor_publication() {
 #[test]
 fn wgpu_pipeline_semantics_project_from_complete_g4b_descriptors() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let pipeline_passes = read(&manifest_dir, EXECUTE_PASSES);
+    let pipeline_passes = read(&manifest_dir, PIPELINE_REALIZATION);
+    let logical_operations = read(&manifest_dir, LOGICAL_OPERATIONS);
     let bindings = read(&manifest_dir, BINDINGS);
     let compute_realization = read(&manifest_dir, PIPELINE_COMPUTE_REALIZATION);
     let render_realization = read(&manifest_dir, PIPELINE_RENDER_REALIZATION);
     let realization = section(
         &pipeline_passes,
         "pub(in crate::plugins::render::renderer::render_flow) fn realize_compiled_pass(",
-        "pub(in crate::plugins::render::renderer::render_flow) fn encode_compiled_pass(",
-        EXECUTE_PASSES,
+        "fn resolve_color_target_format_from_plan(",
+        PIPELINE_REALIZATION,
     );
     let paths = [
         (
@@ -597,9 +598,9 @@ fn wgpu_pipeline_semantics_project_from_complete_g4b_descriptors() {
         realization_start,
         realization_end,
         pipeline_realization_token,
-        encode_start,
-        encode_end,
-        execution_bridge_token,
+        _encode_start,
+        _encode_end,
+        _execution_bridge_token,
         prepared_pipeline_kind,
     ) in paths
     {
@@ -607,7 +608,7 @@ fn wgpu_pipeline_semantics_project_from_complete_g4b_descriptors() {
             realization,
             realization_start,
             realization_end,
-            EXECUTE_PASSES,
+            PIPELINE_REALIZATION,
         );
         assert!(
             realized.contains(".resolve_compiled_bind_group("),
@@ -628,14 +629,15 @@ fn wgpu_pipeline_semantics_project_from_complete_g4b_descriptors() {
                 "{label} renderer realization must not regain private backend pipeline authority through {forbidden:?}"
             );
         }
-
-        let encode = section(&pipeline_passes, encode_start, encode_end, EXECUTE_PASSES);
+        let canonical_operation = if label == "compute" {
+            "GpuWorkOperation::Compute(operation)"
+        } else {
+            "GpuWorkOperation::Render(GpuRenderOperation::new("
+        };
         assert!(
-            encode.contains("prepared.pipeline")
-                && encode.contains(prepared_pipeline_kind)
-                && encode.contains(".current_render_execution_bridge()")
-                && encode.contains(execution_bridge_token),
-            "{label} G5 encode path must consume the opaque pipeline realized by G4C3"
+            logical_operations.contains(prepared_pipeline_kind)
+                && logical_operations.contains(canonical_operation),
+            "{label} canonical G5 operation must consume the opaque pipeline realized by G4C3"
         );
         for forbidden in [
             ".resolve_compiled_bind_group(",
@@ -646,21 +648,27 @@ fn wgpu_pipeline_semantics_project_from_complete_g4b_descriptors() {
             ".create_render_pipeline(",
         ] {
             assert!(
-                !encode.contains(forbidden),
-                "{label} G5 encode path must not re-enter G4 realization through {forbidden:?}"
+                !logical_operations.contains(forbidden),
+                "{label} G5 operation projection must not re-enter G4 realization through {forbidden:?}"
             );
         }
     }
     for required in [
         "context.realize_program(pipeline_key.pipeline_descriptor.program())",
         "context.realize_pipeline_layout(",
-        "for group in runtime_bindings.groups() {",
-        "context.realize_bind_group_layout(group.layout())",
-        "context.realize_bind_group(&layout, group.values().cloned())",
     ] {
         assert!(
             bindings.contains(required),
             "G4C2 binding resolution must own {required:?}"
+        );
+    }
+    for retired_physical_sidecar in [
+        "context.realize_bind_group_layout(",
+        "context.realize_bind_group(",
+    ] {
+        assert!(
+            !bindings.contains(retired_physical_sidecar),
+            "G5 preparation must own execution-time binding materialization: {retired_physical_sidecar}"
         );
     }
 

@@ -76,22 +76,6 @@ impl PipelineRealizationState {
         Ok(operation(&record.object))
     }
 
-    /// Validates one already-issued opaque render-pipeline handle for the lexical execution bridge
-    /// and lends only its private WGPU object to the supplied call.
-    pub(crate) fn with_execution_render_pipeline<R>(
-        &self,
-        pipeline: &GpuRealizedRenderPipeline,
-        program_binding_state: &ProgramBindingRealizationState,
-        operation: impl FnOnce(&wgpu::RenderPipeline) -> R,
-    ) -> Result<R, GpuPipelineRealizationError> {
-        let request = "current render render-pipeline execution";
-        let record = &pipeline.record;
-        self.validate_execution_affinity(request, record.affinity())?;
-        publication::ensure_available(self, request)?;
-        self.validate_render_execution_record(request, record, program_binding_state)?;
-        Ok(operation(&record.object))
-    }
-
     /// Validates a lexical set of render pipelines before one render pass that may switch between
     /// them. This is required by UI encoding and still exposes no reusable raw-pipeline authority.
     pub(crate) fn with_execution_render_pipelines<R>(
@@ -123,16 +107,16 @@ impl PipelineRealizationState {
             || record.program.descriptor() != record.descriptor().program()
             || record.layout.descriptor() != record.descriptor().layout()
         {
-            return Err(execution_bridge_violation(
+            return Err(execution_authority_violation(
                 request,
                 "the retained compute-pipeline record no longer agrees with its exact G4C2 dependencies",
             ));
         }
         program_binding_state
-            .validate_execution_bridge_program(&record.program)
+            .validate_execution_program(&record.program)
             .map_err(|error| map_execution_dependency_error(request, error))?;
         program_binding_state
-            .validate_execution_bridge_pipeline_layout(&record.layout)
+            .validate_execution_pipeline_layout(&record.layout)
             .map_err(|error| map_execution_dependency_error(request, error))?;
         Ok(())
     }
@@ -148,22 +132,22 @@ impl PipelineRealizationState {
             || record.program.descriptor() != record.descriptor().program()
             || record.layout.descriptor() != record.descriptor().layout()
         {
-            return Err(execution_bridge_violation(
+            return Err(execution_authority_violation(
                 request,
                 "the retained render-pipeline record no longer agrees with its exact G4C2 dependencies",
             ));
         }
         program_binding_state
-            .validate_execution_bridge_program(&record.program)
+            .validate_execution_program(&record.program)
             .map_err(|error| map_execution_dependency_error(request, error))?;
         program_binding_state
-            .validate_execution_bridge_pipeline_layout(&record.layout)
+            .validate_execution_pipeline_layout(&record.layout)
             .map_err(|error| map_execution_dependency_error(request, error))?;
 
         let program = GpuRealizedProgram::from_record(Arc::clone(&record.program));
         let stage_io = render_validation::validate_stage_io(record.descriptor(), &program)?;
         if stage_io != record.stage_io {
-            return Err(execution_bridge_violation(
+            return Err(execution_authority_violation(
                 request,
                 "the retained render-pipeline stage-IO evidence no longer matches its descriptor and realized program",
             ));
@@ -213,17 +197,17 @@ fn map_execution_dependency_error(
         GpuProgramBindingRealizationErrorCategory::ContextOrDeviceUnavailableOrLost => {
             GpuPipelineRealizationErrorCategory::ContextOrDeviceUnavailableOrLost
         }
-        _ => GpuPipelineRealizationErrorCategory::CurrentRenderExecutionBridgeViolation,
+        _ => GpuPipelineRealizationErrorCategory::ExecutionAuthorityViolation,
     };
     GpuPipelineRealizationError::new(category, request, error.to_string())
 }
 
-fn execution_bridge_violation(
+fn execution_authority_violation(
     request: &'static str,
     detail: &'static str,
 ) -> GpuPipelineRealizationError {
     GpuPipelineRealizationError::new(
-        GpuPipelineRealizationErrorCategory::CurrentRenderExecutionBridgeViolation,
+        GpuPipelineRealizationErrorCategory::ExecutionAuthorityViolation,
         request,
         detail,
     )

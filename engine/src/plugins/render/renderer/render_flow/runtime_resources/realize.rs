@@ -13,7 +13,7 @@ use crate::plugins::render::renderer::resource_descriptors::{
 impl FlowRuntimeResources {
     pub fn realize_for_frame(
         &mut self,
-        context: &GpuContext,
+        _context: &GpuContext,
         flow: &CompiledRenderFlowPlan,
         surface_size: (u32, u32),
         surface_format: TextureFormat,
@@ -48,11 +48,11 @@ impl FlowRuntimeResources {
             )? {
                 CurrentRuntimeResourceDisposition::Buffer(spec) => {
                     self.textures.remove(&id);
-                    self.realize_flow_buffer(context, id, descriptor, spec)?;
+                    self.realize_flow_buffer(id, descriptor, spec)?;
                 }
                 CurrentRuntimeResourceDisposition::FlowTexture(spec) => {
                     self.buffers.remove(&id);
-                    self.realize_flow_texture(context, id, descriptor.lifetime(), spec)?;
+                    self.realize_flow_texture(id, descriptor.lifetime(), spec)?;
                 }
                 CurrentRuntimeResourceDisposition::InvocationHistoryTexture(_) => {
                     self.textures.remove(&id);
@@ -85,7 +85,6 @@ impl FlowRuntimeResources {
 
     fn realize_flow_texture(
         &mut self,
-        context: &GpuContext,
         id: GpuWorkResourceId,
         lifetime: crate::plugins::gpu::GpuResourceLifetime,
         spec: TextureAllocationSpec,
@@ -111,21 +110,17 @@ impl FlowRuntimeResources {
             let handle = self
                 .resource_ids
                 .allocate_texture_handle(spec.descriptor.clone())?;
-            let realized = context.realize_texture(&handle)?;
             let view_handle =
                 self.resource_ids
                     .allocate_texture_view_handle(whole_texture_view_descriptor(
                         format!("engine_render_resource_{id}_view"),
                         &handle,
                     )?)?;
-            let realized_view = context.realize_texture_view(&view_handle, &realized)?;
             self.textures.insert(
                 id,
                 RuntimeTextureResource {
                     handle,
                     view_handle,
-                    realized,
-                    realized_view,
                     format: spec.format,
                     size: spec.size,
                     usage: spec.usage,
@@ -143,7 +138,6 @@ impl FlowRuntimeResources {
 
     fn realize_flow_buffer(
         &mut self,
-        context: &GpuContext,
         id: GpuWorkResourceId,
         declaration: &RenderResourceDeclaration,
         spec: BufferAllocationSpec,
@@ -174,12 +168,10 @@ impl FlowRuntimeResources {
                 self.resource_ids
                     .allocate_buffer_handle(spec.descriptor.clone())?
             };
-            let realized = context.realize_buffer(&handle)?;
             self.buffers.insert(
                 id,
                 RuntimeBufferResource {
                     handle,
-                    realized,
                     size,
                     kind: spec.kind,
                     generation: previous_generation.saturating_add(1),
@@ -216,7 +208,6 @@ impl FlowRuntimeResources {
 
     pub fn realize_invocation_history_textures(
         &mut self,
-        context: &GpuContext,
         invocation_id: &str,
         surface_size: (u32, u32),
         surface_format: TextureFormat,
@@ -278,18 +269,14 @@ impl FlowRuntimeResources {
                     GpuResourceLifetime::Retained,
                 )?;
                 let handle = self.resource_ids.allocate_texture_handle(descriptor)?;
-                let realized = context.realize_texture(&handle)?;
                 let view_handle = self.resource_ids.allocate_texture_view_handle(
                     whole_texture_view_descriptor(format!("{label}_view"), &handle)?,
                 )?;
-                let realized_view = context.realize_texture_view(&view_handle, &realized)?;
                 self.invocation_history_textures.insert(
                     key,
                     RuntimeTextureResource {
                         handle,
                         view_handle,
-                        realized,
-                        realized_view,
                         format: texture_spec.format,
                         size: texture_spec.size,
                         usage: texture_spec.usage,
@@ -309,7 +296,6 @@ impl FlowRuntimeResources {
 
     pub fn realize_invocation_uniform_buffer(
         &mut self,
-        context: &GpuContext,
         invocation_id: &str,
         resource_id: GpuWorkResourceId,
         size: u64,
@@ -370,12 +356,10 @@ impl FlowRuntimeResources {
                 GpuMemoryIntent::Device,
             )?;
             let handle = self.resource_ids.allocate_buffer_handle(descriptor)?;
-            let realized = context.realize_buffer(&handle)?;
             self.invocation_uniform_buffers.insert(
                 key.clone(),
                 RuntimeBufferResource {
                     handle,
-                    realized,
                     size,
                     kind: RuntimeBufferKind::Uniform,
                     generation: previous_generation.saturating_add(1),

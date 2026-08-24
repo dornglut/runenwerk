@@ -8,42 +8,35 @@ use crate::plugins::render::frame::{PreparedFlowInputs, PreparedRenderFrame};
 use crate::plugins::render::graph::{
     CompiledBindingEntry, CompiledBuiltinImport, CompiledComputeExecutionPlan,
     CompiledCopyExecutionPlan, CompiledFixedStepRegion, CompiledPassBindings,
-    CompiledPassExecutionPlan, CompiledPresentExecutionPlan, CompiledRasterExecutionPlan,
-    CompiledRenderFlowPlan, CompiledResourceRef, CompiledStorageAccess, CompiledTargetPlan,
-    RenderShaderReference, preflight_prepared_render_frame,
+    CompiledPassExecutionPlan, CompiledPresentExecutionPlan, CompiledRenderFlowPlan,
+    CompiledResourceRef, CompiledStorageAccess, CompiledTargetPlan, RenderShaderReference,
+    preflight_prepared_render_frame,
 };
 use crate::plugins::render::inspect::{
-    CaptureStage, CaptureTextureClass, PassTimingSample, RenderCaptureIdentity,
-    RenderCapturePointIdentity, RenderCaptureSelector, RenderCaptureSelectorResult,
-    RenderCaptureTerminal, RenderCaptureTerminalCode, RenderDebugConfigResource,
-    RenderDebugControlResource, RenderGpuTimingCapability, RenderGpuTimingDiagnostic,
-    RenderPassMaterialBindingEvidence, RenderPassModelMeshMaterialSelectionEvidence,
-    RenderPassProvenanceRecord, RenderPassTimingEvidence, RenderSelectorResolution,
-    ResolvedRenderCapturePlan, RuntimeResourceInspectionEntry, RuntimeResourceReuse,
-    resource_kind_name,
+    CaptureStage, CaptureTextureClass, RenderCaptureIdentity, RenderCapturePointIdentity,
+    RenderCaptureSelector, RenderCaptureSelectorResult, RenderCaptureTerminal,
+    RenderCaptureTerminalCode, RenderDebugConfigResource, RenderDebugControlResource,
+    RenderGpuTimingCapability, RenderGpuTimingDiagnostic, RenderPassMaterialBindingEvidence,
+    RenderPassModelMeshMaterialSelectionEvidence, RenderPassTimingEvidence,
+    RenderSelectorResolution, ResolvedRenderCapturePlan, RuntimeResourceInspectionEntry,
+    RuntimeResourceReuse, resource_kind_name,
 };
 use crate::plugins::render::pipelines::{FlowPassKind, FlowPassPipelineKey};
 use crate::plugins::render::{RenderResourceDeclaration, current_runtime_gpu_capabilities};
 use anyhow::{Result, bail};
 use std::collections::{BTreeMap, BTreeSet};
 use std::hash::{Hash, Hasher};
-use std::sync::mpsc::channel;
 
 mod bindings;
-mod canonical_compute;
-mod canonical_copy;
-mod canonical_execution;
-mod canonical_render;
-mod canonical_upload;
 mod canonical_work;
 mod capture;
 mod execute;
-mod execute_passes;
 mod gpu_timing;
 mod logical_copy;
 mod logical_operations;
 mod logical_timing;
 mod occurrences;
+mod pipeline_realization;
 mod preflight_cache;
 mod program_sources;
 mod provenance;
@@ -67,28 +60,21 @@ pub(super) struct PreparedPipelinePass {
 }
 
 pub(super) use capture::{
-    CaptureTextureSource, FrameCaptureRuntime, PendingCaptureReadback, PreparedCaptureReadback,
-    encode_legacy_prepared_texture_capture, prepare_texture_capture_readback, read_capture_back,
-    texture_readback_format,
+    CaptureTextureSource, FrameCaptureRuntime, PreparedCaptureReadback,
+    prepare_texture_capture_readback, texture_readback_format,
 };
 #[cfg(test)]
 pub(super) use execute::FeaturePassAction;
-pub(super) use gpu_timing::{
-    GpuPassTimestampIndices, GpuPassTimestampWrites, GpuPassTimingFrame,
-    PendingGpuPassTimingReadback, read_gpu_pass_timing_evidence,
-};
+pub(super) use gpu_timing::{GpuPassTimestampIndices, GpuPassTimingFrame};
 pub(crate) use preflight_cache::RendererPreparedFramePreflightCacheEntry;
 pub(crate) use program_sources::RendererProgramSourceAuthority;
 pub(super) use provenance::{
-    EncodedPassEvidence, EncodedPipelinePass, collect_pass_material_binding_evidence,
-    collect_pass_resource_truth, execution_flow_pass_kind, execution_pass_authoring_index,
-    execution_pass_feature_id, execution_pass_id, execution_pass_kind_name,
-    execution_pass_shader_reference, feature_runtime_version, hash_view_signature,
-    material_specialization_fragment_hash, pass_consumes_material_resources,
-    resolve_shader_material, resolve_shader_material_for_packet,
+    EncodedPassEvidence, collect_pass_material_binding_evidence, collect_pass_resource_truth,
+    execution_flow_pass_kind, execution_pass_authoring_index, execution_pass_feature_id,
+    execution_pass_id, execution_pass_kind_name, execution_pass_shader_reference,
+    feature_runtime_version, hash_view_signature, material_specialization_fragment_hash,
+    pass_consumes_material_resources, resolve_shader_material, resolve_shader_material_for_packet,
 };
 pub(crate) use runtime_resources::{
-    FlowRuntimeResources, ResolvedBufferRef, ResolvedColorTargetView, ResolvedDepthTargetView,
-    ResolvedTextureRef, RuntimeResourceKey, RuntimeResourceKind, RuntimeTextureRef,
-    RuntimeTextureView,
+    FlowRuntimeResources, ResolvedTextureRef, RuntimeResourceKey, RuntimeResourceKind,
 };

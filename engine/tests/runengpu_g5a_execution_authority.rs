@@ -16,71 +16,52 @@ fn source(path: &str) -> String {
 }
 
 #[test]
-fn transitional_g5_bridge_consumes_prepared_work_without_compiled_execution_fallback() {
+fn live_renderer_frame_submits_one_prepared_graph_without_raw_execution_fallback() {
     let execute = source("src/plugins/render/renderer/render_flow/execute.rs");
-    let canonical_start = execute
-        .find("if let Some(legacy_work) = legacy_work.as_deref() {")
-        .expect(
-            "transitional prepared-work execution branch must remain explicit until G5C removes it",
-        );
-    let residual_offset = execute[canonical_start..]
-        .find("let invocation_result = (|| -> Result<()> {")
-        .expect(
-            "residual renderer branch must remain distinguishable from prepared generic execution",
-        );
-    let canonical = &execute[canonical_start..canonical_start + residual_offset];
+    let adapter = source("src/plugins/render/adapters/gpu_work.rs");
 
     for required in [
-        "schedule_legacy_invocation_work(legacy_work)?",
-        "encode_canonical_upload_operation(",
-        "encode_canonical_compute_operation(",
-        "encode_canonical_copy_operation(",
-        "encode_canonical_render_operation(",
-        "frame.encode_resolve(context, encoder, operation)?",
-        "RenderGpuWorkPayload::TimingReadback { occurrence }",
-        "GpuWorkOperation::Readback(operation)",
-        "frame.encode_legacy_readback(context, encoder, operation)?",
+        "prepare_render_gpu_frame_work(",
+        "context.prepare_submission(graph)",
+        ".submit_prepared(prepared)",
+        "ResolvedRenderGpuWorkNode::present(",
     ] {
         assert!(
-            canonical.contains(required),
-            "transitional G5 renderer execution must consume prepared generic work through {required}"
+            execute.contains(required),
+            "live renderer execution must use the canonical G5 frame boundary through {required}"
         );
     }
-    assert!(
-        !canonical.contains("encode_compiled_pass("),
-        "execution-complete prepared work must not fall back to the compiled renderer execution recipe"
-    );
-
-    let schedule_start = execute
-        .find("fn schedule_legacy_invocation_work(")
-        .expect("transitional G3 schedule adapter must exist until the frame-level G5C cutover");
-    let schedule_end = execute[schedule_start..]
-        .find("fn encode_prepared_timing_tail(")
-        .map(|offset| schedule_start + offset)
-        .expect("transitional schedule helper must end before the residual timing-tail helper");
-    assert!(
-        execute[schedule_start..schedule_end].contains(".ordered_payloads()?"),
-        "prepared logical work order must come from PreparedRenderWorkPlan rather than renderer pass order"
-    );
+    for retired in [
+        "encode_compiled_pass(",
+        "schedule_legacy_invocation_work(",
+        "current_render_execution_bridge",
+        "current_render_device_queue",
+        "queue.submit",
+        "RenderGpuWorkSidecar",
+    ] {
+        assert!(
+            !execute.contains(retired) && !adapter.contains(retired),
+            "raw or sidecar renderer execution authority must remain deleted: {retired}"
+        );
+    }
 }
 
 #[test]
 fn g4_compiled_pass_realization_does_not_require_physical_surface_objects() {
-    let pipeline = source("src/plugins/render/renderer/render_flow/execute_passes/pipeline.rs");
+    let pipeline = source("src/plugins/render/renderer/render_flow/pipeline_realization.rs");
     let realization_start = pipeline
         .find("fn realize_compiled_pass(")
         .expect("G4 compiled-pass realization boundary must remain explicit");
-    let encoding_start = pipeline[realization_start..]
-        .find("fn encode_compiled_pass(")
+    let realization_end = pipeline[realization_start..]
+        .find("fn resolve_color_target_format_from_plan(")
         .map(|offset| realization_start + offset)
-        .expect(
-            "legacy physical encoding boundary must remain distinguishable from G4 realization",
-        );
-    let realization = &pipeline[realization_start..encoding_start];
+        .expect("format projection helpers must follow G4 realization");
+    let realization = &pipeline[realization_start..realization_end];
 
     for forbidden in [
         "frame_texture: &Texture",
         "frame_view: &TextureView",
+        "current_render_execution_bridge",
         "resolve_color_target_from_plan(",
         "resolve_depth_target_from_plan(",
     ] {
@@ -127,51 +108,46 @@ fn canonical_timing_tail_owns_one_readback_identity_without_a_logical_staging_co
 
     assert!(canonical.contains("timing.readback_id(),"));
     assert!(execute.contains("timing.readback_id(),"));
-    assert!(adapter.contains("TimingReadback"));
-    assert!(adapter.contains("Some(GpuWorkNodeKind::Readback)"));
+    assert!(adapter.contains("pub(crate) fn timing_readback("));
+    assert!(adapter.contains("operation: GpuWorkOperation::Readback(operation)"));
     assert!(!adapter.contains("TimingReadbackCopy"));
 }
 
 #[test]
-fn canonical_physical_adapters_do_not_reconstruct_compiled_gpu_semantics() {
-    for (path, operation) in [
-        (
-            "src/plugins/render/renderer/render_flow/canonical_compute.rs",
-            "GpuComputeOperation",
-        ),
-        (
-            "src/plugins/render/renderer/render_flow/canonical_copy.rs",
-            "GpuCopyOperation",
-        ),
-        (
-            "src/plugins/render/renderer/render_flow/canonical_render.rs",
-            "GpuRenderOperation",
-        ),
-        (
-            "src/plugins/render/renderer/render_flow/canonical_upload.rs",
-            "GpuUploadOperation",
-        ),
+fn canonical_physical_execution_is_owned_only_by_runengpu() {
+    for retired in [
+        "src/plugins/render/renderer/render_flow/canonical_compute.rs",
+        "src/plugins/render/renderer/render_flow/canonical_copy.rs",
+        "src/plugins/render/renderer/render_flow/canonical_render.rs",
+        "src/plugins/render/renderer/render_flow/canonical_upload.rs",
     ] {
-        let adapter = source(path);
         assert!(
-            adapter.contains(operation),
-            "{path} must consume the canonical {operation} contract"
+            !engine_path(retired).exists(),
+            "renderer physical adapter must remain deleted: {retired}"
         );
-        for forbidden in [
-            "CompiledPassExecutionPlan",
-            "CompiledComputeExecutionPlan",
-            "CompiledCopyExecutionPlan",
-            "CompiledRasterExecutionPlan",
-            "resolve_texture_from_label",
-            "resolve_buffer_ref",
-            "context.realize_buffer(",
-            "context.realize_texture(",
-            "context.realize_texture_view(",
-        ] {
-            assert!(
-                !adapter.contains(forbidden),
-                "{path} must not recreate renderer-owned or lazy G4 execution authority via {forbidden}"
-            );
-        }
+    }
+
+    let operations = source("src/plugins/render/renderer/render_flow/logical_operations.rs");
+    for operation in [
+        "GpuComputeOperation",
+        "GpuRenderOperation",
+        "GpuUploadOperation",
+    ] {
+        assert!(
+            operations.contains(operation),
+            "renderer must project execution-complete logical {operation} values"
+        );
+    }
+    for forbidden in [
+        "CommandEncoder",
+        "RenderPass<'",
+        "ComputePass<'",
+        "queue.submit",
+        "current_render_execution_bridge",
+    ] {
+        assert!(
+            !operations.contains(forbidden),
+            "logical operation projection must not regain physical execution through {forbidden}"
+        );
     }
 }

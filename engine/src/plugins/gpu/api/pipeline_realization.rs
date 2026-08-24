@@ -23,7 +23,7 @@ pub enum GpuPipelineRealizationErrorCategory {
     UnexpectedBackendPipelineValidationRejection,
     BackendResourceExhaustion,
     ContextOrDeviceUnavailableOrLost,
-    CurrentRenderExecutionBridgeViolation,
+    ExecutionAuthorityViolation,
 }
 
 impl GpuPipelineRealizationErrorCategory {
@@ -69,7 +69,7 @@ impl GpuPipelineRealizationErrorCategory {
             Self::ContextOrDeviceUnavailableOrLost => {
                 "stop using this context and let the owning product choose recovery"
             }
-            Self::CurrentRenderExecutionBridgeViolation => {
+            Self::ExecutionAuthorityViolation => {
                 "use only the audited lexical current-render execution terminal"
             }
         }
@@ -296,7 +296,7 @@ mod tests {
             GpuPipelineRealizationErrorCategory::UnexpectedBackendPipelineValidationRejection,
             GpuPipelineRealizationErrorCategory::BackendResourceExhaustion,
             GpuPipelineRealizationErrorCategory::ContextOrDeviceUnavailableOrLost,
-            GpuPipelineRealizationErrorCategory::CurrentRenderExecutionBridgeViolation,
+            GpuPipelineRealizationErrorCategory::ExecutionAuthorityViolation,
         ];
         for category in categories {
             assert!(!category.correction().trim().is_empty(), "{category:?}");

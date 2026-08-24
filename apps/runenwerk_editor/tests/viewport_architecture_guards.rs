@@ -1377,22 +1377,22 @@ fn wr021_material_product_spine_runtime_boundaries_are_consumed() {
         "PreparedSceneMaterialBundle must be consumed during shader resolution, and missing generated bundles must be treated as forbidden fallbacks",
     );
 
-    let execute = read_workspace_source_tree_contents(
-        "engine/src/plugins/render/renderer/render_flow/execute_passes",
+    let pipeline_realization = read_workspace_source(
+        "engine/src/plugins/render/renderer/render_flow/pipeline_realization.rs",
     );
     let bindings =
         read_workspace_source("engine/src/plugins/render/renderer/render_flow/bindings.rs");
     assert!(
-        execute.contains("resolve_shader_material_for_packet")
-            && execute.contains("reject_material_shader_fallback(")
-            && execute.contains("reject_unresident_material_textures(")
-            && execute.contains("pass_consumes_material_resources")
-            && execute.contains("builtin or scene-bundle fallback is forbidden")
+        pipeline_realization.contains("resolve_shader_material_for_packet")
+            && pipeline_realization.contains("reject_material_shader_fallback(")
+            && pipeline_realization.contains("reject_unresident_material_textures(")
+            && pipeline_realization.contains("pass_consumes_material_resources")
+            && pipeline_realization.contains("builtin or scene-bundle fallback is forbidden")
             && bindings.contains("gpu_material_runtime_binding_values_for_pass")
             && bindings.contains("GpuRuntimeBindingSet::new(")
-            && bindings.contains("for group in runtime_bindings.groups() {")
-            && bindings.contains("context.realize_bind_group(&layout, group.values().cloned())"),
-        "material feature passes must enter the complete typed runtime binding set, realize every canonical group through G4C2, and fail closed instead of falling back to old scene shaders",
+            && bindings.contains("runtime_bindings,")
+            && !bindings.contains("context.realize_bind_group("),
+        "material feature passes must enter the complete typed runtime binding set for G5 preparation and fail closed instead of falling back to old scene shaders",
     );
 
     let material_runtime_state =
@@ -1616,6 +1616,9 @@ fn renderer_uniform_uploads_are_invocation_scoped() {
     );
     let bindings =
         read_workspace_source("engine/src/plugins/render/renderer/render_flow/bindings.rs");
+    let logical_operations = read_workspace_source(
+        "engine/src/plugins/render/renderer/render_flow/logical_operations.rs",
+    );
     let g4c2_registry = read_workspace_source(
         "engine/src/plugins/gpu/backend/wgpu/program_binding_realization/registry.rs",
     );
@@ -1637,13 +1640,14 @@ fn renderer_uniform_uploads_are_invocation_scoped() {
     assert!(
         resolve.contains("RuntimeResourceKey::InvocationUniform")
             && bindings.contains("GpuRuntimeBindingValue")
-            && bindings.contains("for group in runtime_bindings.groups() {")
-            && bindings.contains("context.realize_bind_group(&layout, group.values().cloned())")
+            && bindings.contains("runtime_bindings,")
+            && !bindings.contains("context.realize_bind_group(")
+            && logical_operations.contains("pipeline.bindings.runtime_bindings.clone()")
             && g4c2_registry.contains("struct BindGroupRequestKey")
             && g4c2_registry.contains("values: Vec<GpuRuntimeBindingValue>")
             && runtime_binding_values.contains("handle: GpuBufferHandle")
             && runtime_binding_values.contains("Hash"),
-        "G4C2 bind-group realization must preserve invocation-local typed handles inside generalized per-group realization keys so another invocation cannot reuse the wrong bind group",
+        "canonical G5 operations must preserve invocation-local typed handles until generalized bind-group realization so another invocation cannot reuse the wrong bind group",
     );
 }
 

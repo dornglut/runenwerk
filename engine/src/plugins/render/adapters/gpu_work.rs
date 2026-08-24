@@ -5,8 +5,7 @@
 //! values. It does not allocate logical GPU resources, reconstruct operation accesses, invent
 //! pipeline/binding state, or project renderer declarations into a second GPU identity space.
 //! The prepared graph remains the only access, initialization, hazard, capability, dependency,
-//! and topological-order authority. The private sidecar contains only later-phase render
-//! execution payload.
+//! and topological-order authority.
 //!
 //! A compiled render pass is not an execution identity: fixed-step regions may execute one pass
 //! repeatedly and feature gates may omit an occurrence. RunenRender therefore supplies distinct
@@ -14,7 +13,6 @@
 //! to derive every resource dependency and hazard from the canonical operations.
 
 use crate::plugins::gpu::*;
-use crate::plugins::render::graph::CompiledRenderFlowPlan;
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, thiserror::Error)]
@@ -41,21 +39,7 @@ pub enum RenderGpuWorkAdapterError {
     MissingOrderedOccurrence {
         occurrence: RenderGpuWorkOccurrenceId,
     },
-    #[error("prepared render node '{node_id}' has no execution sidecar payload")]
-    MissingSidecarPayload { node_id: GpuPreparedWorkNodeId },
-    #[error("prepared render node '{node_id}' received duplicate execution sidecar payload")]
-    DuplicateSidecarPayload { node_id: GpuPreparedWorkNodeId },
-    #[error("prepared node '{node_id}' does not belong to this render work graph")]
-    ForeignPreparedNode { node_id: GpuPreparedWorkNodeId },
-    #[error(
-        "prepared render node '{node_id}' operation kind {actual:?} disagrees with sidecar payload kind {expected:?}"
-    )]
-    SidecarOperationKindMismatch {
-        node_id: GpuPreparedWorkNodeId,
-        expected: GpuWorkNodeKind,
-        actual: GpuWorkNodeKind,
-    },
-    #[error("render GPU-work sidecar could not map fragment-local node {local_node}")]
+    #[error("render GPU work could not map fragment-local node {local_node}")]
     MissingPreparedNodeMapping { local_node: u64 },
 }
 
@@ -83,55 +67,6 @@ impl core::fmt::Display for RenderGpuWorkOccurrenceId {
     }
 }
 
-/// Execution-only payload associated with one prepared RunenGPU node.
-///
-/// Pass payload deliberately retains only renderer occurrence identity. Generic GPU operation kind
-/// and execution semantics live exclusively in the prepared node's `GpuWorkOperation`.
-#[derive(Debug, Clone)]
-pub(crate) enum RenderGpuWorkPayload {
-    Pass {
-        occurrence: RenderGpuWorkOccurrenceId,
-    },
-    Upload {
-        occurrence: RenderGpuWorkOccurrenceId,
-    },
-    TimingResolve {
-        occurrence: RenderGpuWorkOccurrenceId,
-    },
-    TimingReadback {
-        occurrence: RenderGpuWorkOccurrenceId,
-    },
-    CaptureReadback {
-        occurrence: RenderGpuWorkOccurrenceId,
-    },
-}
-
-impl RenderGpuWorkPayload {
-    /// Non-pass payloads denote one fixed generic operation class. Pass payloads intentionally do
-    /// not duplicate the prepared operation kind: one render-domain pass occurrence may lower to
-    /// compute, render, or copy work, and the canonical `GpuWorkOperation` remains that authority.
-    fn fixed_operation_kind(&self) -> Option<GpuWorkNodeKind> {
-        match self {
-            Self::Pass { .. } => None,
-            Self::Upload { .. } => Some(GpuWorkNodeKind::Upload),
-            Self::TimingResolve { .. } => Some(GpuWorkNodeKind::Resolve),
-            Self::TimingReadback { .. } | Self::CaptureReadback { .. } => {
-                Some(GpuWorkNodeKind::Readback)
-            }
-        }
-    }
-
-    pub(crate) const fn occurrence(&self) -> RenderGpuWorkOccurrenceId {
-        match self {
-            Self::Pass { occurrence }
-            | Self::Upload { occurrence }
-            | Self::TimingResolve { occurrence }
-            | Self::TimingReadback { occurrence }
-            | Self::CaptureReadback { occurrence } => *occurrence,
-        }
-    }
-}
-
 /// One execution-complete renderer occurrence ready for G3 graph preparation.
 ///
 /// The operation is already the semantic authority for accesses and mechanical capability
@@ -145,7 +80,6 @@ pub(crate) struct ResolvedRenderGpuWorkNode {
     operation: GpuWorkOperation,
     preference: GpuExecutionPreference,
     provenance: GpuResourceProvenance,
-    payload: RenderGpuWorkPayload,
     control_order_after: Vec<RenderGpuWorkOccurrenceId>,
 }
 
@@ -164,7 +98,6 @@ impl ResolvedRenderGpuWorkNode {
             operation,
             preference,
             provenance,
-            payload: RenderGpuWorkPayload::Pass { occurrence },
             control_order_after: control_order_after.into_iter().collect(),
         }
     }
@@ -182,7 +115,6 @@ impl ResolvedRenderGpuWorkNode {
             operation: GpuWorkOperation::Upload(operation),
             preference: GpuExecutionPreference::TransferPreferred,
             provenance,
-            payload: RenderGpuWorkPayload::Upload { occurrence },
             control_order_after: control_order_after.into_iter().collect(),
         }
     }
@@ -200,7 +132,6 @@ impl ResolvedRenderGpuWorkNode {
             operation: GpuWorkOperation::Resolve(operation),
             preference: GpuExecutionPreference::TransferPreferred,
             provenance,
-            payload: RenderGpuWorkPayload::TimingResolve { occurrence },
             control_order_after: control_order_after.into_iter().collect(),
         }
     }
@@ -218,7 +149,6 @@ impl ResolvedRenderGpuWorkNode {
             operation: GpuWorkOperation::Readback(operation),
             preference: GpuExecutionPreference::TransferPreferred,
             provenance,
-            payload: RenderGpuWorkPayload::TimingReadback { occurrence },
             control_order_after: control_order_after.into_iter().collect(),
         }
     }
@@ -236,131 +166,33 @@ impl ResolvedRenderGpuWorkNode {
             operation: GpuWorkOperation::Readback(operation),
             preference: GpuExecutionPreference::TransferPreferred,
             provenance,
-            payload: RenderGpuWorkPayload::CaptureReadback { occurrence },
             control_order_after: control_order_after.into_iter().collect(),
         }
     }
-}
 
-/// Private execution-only payload keyed solely by prepared G3 node identity.
-/// It deliberately stores no access, hazard, initialization, capability, dependency, export,
-/// diagnostic, or ordering data.
-#[derive(Debug, Clone, Default)]
-struct RenderGpuWorkSidecar {
-    entries: BTreeMap<GpuPreparedWorkNodeId, RenderGpuWorkPayload>,
-}
-
-impl RenderGpuWorkSidecar {
-    fn insert(
-        &mut self,
-        graph: &GpuPreparedWorkGraph,
-        node_id: GpuPreparedWorkNodeId,
-        payload: RenderGpuWorkPayload,
-    ) -> Result<(), RenderGpuWorkAdapterError> {
-        let Some(node) = graph.nodes().iter().find(|node| node.id() == node_id) else {
-            return Err(RenderGpuWorkAdapterError::ForeignPreparedNode { node_id });
-        };
-        if let Some(expected) = payload.fixed_operation_kind() {
-            let actual = node.node().kind();
-            if expected != actual {
-                return Err(RenderGpuWorkAdapterError::SidecarOperationKindMismatch {
-                    node_id,
-                    expected,
-                    actual,
-                });
-            }
+    /// Frame-terminal presentation enters only the canonical GPU work graph. There is
+    /// intentionally no renderer executor payload or alternate presentation authority.
+    pub(crate) fn present(
+        occurrence: RenderGpuWorkOccurrenceId,
+        label: GpuResourceLabel,
+        operation: GpuPresentOperation,
+        control_order_after: impl IntoIterator<Item = RenderGpuWorkOccurrenceId>,
+    ) -> Self {
+        let provenance = GpuResourceProvenance::new(label.clone(), None, None);
+        Self {
+            occurrence,
+            label,
+            operation: GpuWorkOperation::Present(operation),
+            preference: GpuExecutionPreference::Automatic,
+            provenance,
+            control_order_after: control_order_after.into_iter().collect(),
         }
-        if self.entries.contains_key(&node_id) {
-            return Err(RenderGpuWorkAdapterError::DuplicateSidecarPayload { node_id });
-        }
-        self.entries.insert(node_id, payload);
-        Ok(())
-    }
-
-    fn finish(self, graph: &GpuPreparedWorkGraph) -> Result<Self, RenderGpuWorkAdapterError> {
-        for node in graph.nodes() {
-            if !self.entries.contains_key(&node.id()) {
-                return Err(RenderGpuWorkAdapterError::MissingSidecarPayload {
-                    node_id: node.id(),
-                });
-            }
-        }
-        if let Some(node_id) = self
-            .entries
-            .keys()
-            .find(|id| graph.nodes().iter().all(|node| node.id() != **id))
-            .copied()
-        {
-            return Err(RenderGpuWorkAdapterError::ForeignPreparedNode { node_id });
-        }
-        Ok(self)
-    }
-
-    fn get(
-        &self,
-        graph: &GpuPreparedWorkGraph,
-        node_id: GpuPreparedWorkNodeId,
-    ) -> Result<&RenderGpuWorkPayload, RenderGpuWorkAdapterError> {
-        if graph.nodes().iter().all(|node| node.id() != node_id) {
-            return Err(RenderGpuWorkAdapterError::ForeignPreparedNode { node_id });
-        }
-        self.entries
-            .get(&node_id)
-            .ok_or(RenderGpuWorkAdapterError::MissingSidecarPayload { node_id })
-    }
-}
-
-/// One bounded render G3 work authority plus its temporary execution sidecar.
-///
-/// Prepared node IDs are process-local references only. This value must never be persisted or
-/// used as a stable cache, replay, wire, or cross-process key.
-#[derive(Debug, Clone)]
-pub struct PreparedRenderWorkPlan {
-    graph: GpuPreparedWorkGraph,
-    sidecar: RenderGpuWorkSidecar,
-}
-
-impl PreparedRenderWorkPlan {
-    pub fn graph(&self) -> &GpuPreparedWorkGraph {
-        &self.graph
-    }
-
-    pub(crate) fn payload(
-        &self,
-        node_id: GpuPreparedWorkNodeId,
-    ) -> Result<&RenderGpuWorkPayload, RenderGpuWorkAdapterError> {
-        self.sidecar.get(&self.graph, node_id)
-    }
-
-    pub(crate) fn ordered_payloads(
-        &self,
-    ) -> Result<Vec<(GpuPreparedWorkNodeId, &RenderGpuWorkPayload)>, RenderGpuWorkAdapterError>
-    {
-        self.graph
-            .topological_order()
-            .iter()
-            .copied()
-            .map(|node_id| self.payload(node_id).map(|payload| (node_id, payload)))
-            .collect()
     }
 }
 
 struct AuthoredRenderFragment {
     fragment: GpuWorkFragment,
     occurrence_nodes: BTreeMap<RenderGpuWorkOccurrenceId, GpuWorkNodeId>,
-    pending: Vec<(GpuWorkNodeId, RenderGpuWorkPayload)>,
-}
-
-/// Transitional per-invocation entry point retained until G5C1 moves its caller to the bounded
-/// frame authority below.
-pub(crate) fn prepare_render_gpu_work(
-    plan: &CompiledRenderFlowPlan,
-    nodes: impl IntoIterator<Item = ResolvedRenderGpuWorkNode>,
-) -> Result<PreparedRenderWorkPlan, RenderGpuWorkAdapterError> {
-    prepare_render_gpu_frame_work(
-        GpuResourceLabel::new(format!("render.flow.{}.work", plan.flow_id))?,
-        nodes,
-    )
 }
 
 /// Prepares one bounded frame/surface render submission from execution-complete logical GPU
@@ -373,7 +205,7 @@ pub(crate) fn prepare_render_gpu_work(
 pub(crate) fn prepare_render_gpu_frame_work(
     graph_label: GpuResourceLabel,
     nodes: impl IntoIterator<Item = ResolvedRenderGpuWorkNode>,
-) -> Result<PreparedRenderWorkPlan, RenderGpuWorkAdapterError> {
+) -> Result<GpuPreparedWorkGraph, RenderGpuWorkAdapterError> {
     prepare_resolved_render_gpu_work(graph_label, nodes)
 }
 
@@ -392,7 +224,7 @@ pub(crate) fn prepare_render_gpu_frame_work(
 fn prepare_resolved_render_gpu_work(
     graph_label: GpuResourceLabel,
     nodes: impl IntoIterator<Item = ResolvedRenderGpuWorkNode>,
-) -> Result<PreparedRenderWorkPlan, RenderGpuWorkAdapterError> {
+) -> Result<GpuPreparedWorkGraph, RenderGpuWorkAdapterError> {
     let nodes = nodes.into_iter().collect::<Vec<_>>();
     validate_occurrences(&nodes)?;
 
@@ -429,8 +261,8 @@ fn prepare_resolved_render_gpu_work(
         &desired_control_orders,
     );
 
-    let (graph, pending) = if required_explicit_orders.is_empty() {
-        (provisional_graph, provisional.pending)
+    let graph = if required_explicit_orders.is_empty() {
+        provisional_graph
     } else {
         let final_fragment = author_render_fragment(
             &nodes,
@@ -440,29 +272,10 @@ fn prepare_resolved_render_gpu_work(
             &graph_provenance,
             &required_explicit_orders,
         )?;
-        let graph = GpuPreparedWorkGraph::prepare(graph_label, [final_fragment.fragment])?;
-        (graph, final_fragment.pending)
+        GpuPreparedWorkGraph::prepare(graph_label, [final_fragment.fragment])?
     };
 
-    let prepared_by_local = graph
-        .nodes()
-        .iter()
-        .map(|node| (node.id().local_node(), node.id()))
-        .collect::<BTreeMap<_, _>>();
-    let mut sidecar = RenderGpuWorkSidecar::default();
-    for (node_id, payload) in pending {
-        let local = node_id.diagnostic_local();
-        let prepared_id = prepared_by_local
-            .get(&local)
-            .copied()
-            .ok_or(RenderGpuWorkAdapterError::MissingPreparedNodeMapping { local_node: local })?;
-        sidecar.insert(&graph, prepared_id, payload)?;
-    }
-
-    Ok(PreparedRenderWorkPlan {
-        sidecar: sidecar.finish(&graph)?,
-        graph,
-    })
+    Ok(graph)
 }
 
 fn validate_occurrences(
@@ -511,7 +324,6 @@ fn author_render_fragment(
     explicit_orders: &BTreeSet<(RenderGpuWorkOccurrenceId, RenderGpuWorkOccurrenceId)>,
 ) -> Result<AuthoredRenderFragment, RenderGpuWorkAdapterError> {
     let mut occurrence_nodes = BTreeMap::<RenderGpuWorkOccurrenceId, GpuWorkNodeId>::new();
-    let mut pending = Vec::<(GpuWorkNodeId, RenderGpuWorkPayload)>::new();
     let fragment = GpuWorkFragment::build_with_provenance(
         graph_label.clone(),
         graph_provenance.clone(),
@@ -533,7 +345,6 @@ fn author_render_fragment(
                     node.provenance.clone(),
                 )?;
                 occurrence_nodes.insert(node.occurrence, node_id.clone());
-                pending.push((node_id, node.payload.clone()));
             }
 
             for (before_occurrence, after_occurrence) in explicit_orders {
@@ -578,7 +389,6 @@ fn author_render_fragment(
     Ok(AuthoredRenderFragment {
         fragment,
         occurrence_nodes,
-        pending,
     })
 }
 
@@ -802,26 +612,27 @@ mod tests {
 
         let prepared = prepare_render_gpu_frame_work(label("render frame test work"), nodes)
             .expect("bounded frame work should prepare");
-        let by_occurrence = prepared
-            .ordered_payloads()
-            .expect("sidecar should cover every prepared node")
-            .into_iter()
-            .map(|(node, payload)| (payload.occurrence(), node))
-            .collect::<BTreeMap<_, _>>();
-        let producer_node = by_occurrence[&producer];
-        let consumer_node = by_occurrence[&consumer];
-        let unrelated_node = by_occurrence[&unrelated];
+        let node_id = |label: &str| {
+            prepared
+                .nodes()
+                .iter()
+                .find(|node| node.node().label().as_str() == label)
+                .expect("prepared node label should exist")
+                .id()
+        };
+        let producer_node = node_id("invocation a upload");
+        let consumer_node = node_id("invocation b read");
+        let unrelated_node = node_id("invocation c independent");
 
-        assert!(prepared.graph().dependencies().iter().any(|dependency| {
+        assert!(prepared.dependencies().iter().any(|dependency| {
             dependency.before() == producer_node && dependency.after() == consumer_node
         }));
-        assert!(prepared.graph().dependencies().iter().all(|dependency| {
+        assert!(prepared.dependencies().iter().all(|dependency| {
             dependency.before() != unrelated_node && dependency.after() != unrelated_node
         }));
 
         for buffer in [&shared, &copied, &independent] {
             let initialization = prepared
-                .graph()
                 .initialization()
                 .iter()
                 .find(|entry| {
@@ -907,29 +718,30 @@ mod tests {
 
         let prepared = prepare_render_gpu_frame_work(label("capture stage order test"), nodes)
             .expect("capture stage work should prepare");
-        let by_occurrence = prepared
-            .ordered_payloads()
-            .expect("sidecar should cover every capture stage node")
-            .into_iter()
-            .map(|(node, payload)| (payload.occurrence(), node))
-            .collect::<BTreeMap<_, _>>();
-        let before_node = by_occurrence[&before_capture];
-        let pass_node = by_occurrence[&pass];
-        let after_node = by_occurrence[&after_capture];
+        let prepared_node = |label: &str| {
+            prepared
+                .nodes()
+                .iter()
+                .find(|node| node.node().label().as_str() == label)
+                .expect("prepared node label should exist")
+        };
+        let before_node = prepared_node("capture before").id();
+        let pass_node = prepared_node("independent pass").id();
+        let after_node = prepared_node("capture after").id();
 
-        assert!(prepared.graph().dependencies().iter().any(|dependency| {
+        assert!(prepared.dependencies().iter().any(|dependency| {
             dependency.before() == before_node && dependency.after() == pass_node
         }));
-        assert!(prepared.graph().dependencies().iter().any(|dependency| {
+        assert!(prepared.dependencies().iter().any(|dependency| {
             dependency.before() == pass_node && dependency.after() == after_node
         }));
-        assert!(matches!(
-            prepared.payload(before_node).unwrap(),
-            RenderGpuWorkPayload::CaptureReadback { occurrence } if *occurrence == before_capture
-        ));
-        assert!(matches!(
-            prepared.payload(after_node).unwrap(),
-            RenderGpuWorkPayload::CaptureReadback { occurrence } if *occurrence == after_capture
-        ));
+        assert_eq!(
+            prepared_node("capture before").node().kind(),
+            GpuWorkNodeKind::Readback
+        );
+        assert_eq!(
+            prepared_node("capture after").node().kind(),
+            GpuWorkNodeKind::Readback
+        );
     }
 }

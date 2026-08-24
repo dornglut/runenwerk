@@ -249,25 +249,6 @@ impl FlowRuntimeResources {
         })
     }
 
-    pub fn resolve_color_target_from_plan<'a>(
-        &'a self,
-        pass_id: RenderPassId,
-        targets: &CompiledTargetPlan,
-        frame_view: &'a TextureView,
-        frame_format: TextureFormat,
-    ) -> Result<ResolvedColorTargetView<'a>> {
-        Ok(match self.resolve_color_target(pass_id, targets)? {
-            ResolvedColorTarget::Surface => ResolvedColorTargetView {
-                view: RuntimeTextureView::Surface(frame_view),
-                format: frame_format,
-            },
-            ResolvedColorTarget::Texture(texture) => ResolvedColorTargetView {
-                view: RuntimeTextureView::Realized(texture.realized_view.clone()),
-                format: texture.format,
-            },
-        })
-    }
-
     fn resolve_depth_target<'a>(
         &'a self,
         pass_id: RenderPassId,
@@ -328,19 +309,6 @@ impl FlowRuntimeResources {
             .map(|texture| texture.format))
     }
 
-    pub fn resolve_depth_target_from_plan(
-        &self,
-        pass_id: RenderPassId,
-        targets: &CompiledTargetPlan,
-    ) -> Result<Option<ResolvedDepthTargetView>> {
-        Ok(self
-            .resolve_depth_target(pass_id, targets)?
-            .map(|texture| ResolvedDepthTargetView {
-                view: texture.realized_view.clone(),
-                format: texture.format,
-            }))
-    }
-
     pub fn resolve_logical_texture_binding(
         &self,
         pass_id: RenderPassId,
@@ -396,68 +364,26 @@ impl FlowRuntimeResources {
         self.resolve_storage_buffer_for_pass_by_key(pass_id, resource_key)
     }
 
-    pub fn resolve_texture_from_label<'a>(
+    pub fn resolve_texture_from_label_without_surface<'a>(
         &'a self,
         pass_label: &str,
         resource_id: &str,
-        frame_texture: &'a Texture,
-        frame_size: (u32, u32),
-        frame_format: TextureFormat,
     ) -> Result<ResolvedTextureRef<'a>> {
         let resource_key = self
             .resolve_resource_key_from_input(resource_id)
             .ok_or_else(|| {
                 anyhow::anyhow!(
-                    "pass '{}' references unknown resource '{}' during runtime encoding",
+                    "pass '{}' references unknown resource '{}' during logical texture resolution",
                     pass_label,
                     resource_id
                 )
             })?;
-
-        self.resolve_texture_with_label(
-            pass_label,
-            resource_key,
-            frame_texture,
-            frame_size,
-            frame_format,
-        )
-    }
-
-    pub fn resolve_texture<'a>(
-        &'a self,
-        pass_id: RenderPassId,
-        resource_key: RuntimeResourceKey,
-        frame_texture: &'a Texture,
-        frame_size: (u32, u32),
-        frame_format: TextureFormat,
-    ) -> Result<ResolvedTextureRef<'a>> {
-        let pass_label = pass_id.to_string();
-        self.resolve_texture_with_label(
-            pass_label.as_str(),
-            resource_key,
-            frame_texture,
-            frame_size,
-            frame_format,
-        )
-    }
-
-    fn resolve_texture_with_label<'a>(
-        &'a self,
-        pass_label: &str,
-        resource_key: RuntimeResourceKey,
-        frame_texture: &'a Texture,
-        frame_size: (u32, u32),
-        frame_format: TextureFormat,
-    ) -> Result<ResolvedTextureRef<'a>> {
         if resource_key == RuntimeResourceKey::SurfaceColor {
-            return Ok(ResolvedTextureRef {
-                id: resource_key,
-                texture: RuntimeTextureRef::Surface(frame_texture),
-                view_handle: None,
-                format: frame_format,
-                size: frame_size,
-                is_depth: false,
-            });
+            bail!(
+                "pass '{}' requires the exact acquired '{}' texture",
+                pass_label,
+                SURFACE_COLOR_RESOURCE_LABEL
+            );
         }
         if matches!(resource_key, RuntimeResourceKey::DynamicTexture(_)) {
             bail!(
@@ -466,10 +392,9 @@ impl FlowRuntimeResources {
                 resource_key
             );
         }
-
         let kind = self.kind_of_key(&resource_key).ok_or_else(|| {
             anyhow::anyhow!(
-                "pass '{}' references unknown resource '{}' during runtime encoding",
+                "pass '{}' references unknown resource '{}' during logical texture resolution",
                 pass_label,
                 resource_key
             )
@@ -481,19 +406,17 @@ impl FlowRuntimeResources {
                 resource_key
             );
         }
-
-        let Some(texture) = self.texture_resource_for_key(&resource_key) else {
-            bail!(
-                "pass '{}' references imported texture '{}' but only imported '{}' is supported in core runtime execution",
-                pass_label,
-                resource_key,
-                SURFACE_COLOR_RESOURCE_LABEL
-            );
-        };
-
+        let texture = self
+            .texture_resource_for_key(&resource_key)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "pass '{}' references unsupported imported texture '{}'",
+                    pass_label,
+                    resource_key
+                )
+            })?;
         Ok(ResolvedTextureRef {
             id: resource_key,
-            texture: RuntimeTextureRef::Realized(&texture.realized),
             view_handle: Some(&texture.view_handle),
             format: texture.format,
             size: texture.size,
@@ -556,7 +479,6 @@ impl FlowRuntimeResources {
         Ok(ResolvedBufferRef {
             id: resource_key,
             handle: &buffer.handle,
-            buffer: &buffer.realized,
             size: buffer.size,
             kind: buffer.kind,
         })
@@ -585,7 +507,6 @@ impl FlowRuntimeResources {
                     resource_id,
                 },
                 handle: &buffer.handle,
-                buffer: &buffer.realized,
                 size: buffer.size,
                 kind: buffer.kind,
             });

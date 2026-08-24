@@ -5,17 +5,6 @@ mod backend;
 
 pub(crate) use api::GpuWorkAuthoringErrorContext;
 pub use api::*;
-pub(crate) use backend::{
-    CurrentRenderAttachmentsTerminal, CurrentRenderBufferCopyTerminal,
-    CurrentRenderBufferUploadTerminal, CurrentRenderComputePipelineTerminal,
-    CurrentRenderIndexBufferTerminal, CurrentRenderIndirectBufferTerminal,
-    CurrentRenderPipelineBindGroupsTerminal, CurrentRenderReadbackBufferTerminal,
-    CurrentRenderRenderPipelineTerminal, CurrentRenderRenderPipelinesTerminal,
-    CurrentRenderTextureCopyTerminal, CurrentRenderTextureReadbackCopyTerminal,
-    CurrentRenderTextureUploadTerminal, CurrentRenderTimestampResourcesTerminal,
-    CurrentRenderTimestampWritesTerminal, CurrentRenderVertexBufferTerminal,
-    CurrentSurfaceReadbackCopyTerminal, CurrentSurfaceTextureCopyTerminal,
-};
 
 #[cfg(test)]
 mod tests {
@@ -115,9 +104,7 @@ mod tests {
         );
 
         let context_source =
-            fs::read_to_string(wgpu_context).expect("current host terminal should be readable");
-        let current_host_source =
-            fs::read_to_string(&current_host).expect("current-host bridge should be readable");
+            fs::read_to_string(wgpu_context).expect("renderer GPU context should be readable");
         let mut backend_paths = Vec::new();
         rust_sources_below(&backend, &mut backend_paths);
         backend_paths.sort();
@@ -131,73 +118,26 @@ mod tests {
             "WgpuCtx must not restore public device or queue authority"
         );
         assert!(
-            context_source.matches("request_for_current_host").count() == 1,
-            "the host terminal must use the sole G4A compatibility request path"
+            !current_host.exists(),
+            "the pre-G7 current-host compatibility bridge must remain deleted"
         );
-        assert_eq!(
-            backend_source.matches("request_for_current_host").count(),
-            1,
-            "G4A must retain exactly one current-host request terminal"
-        );
-        assert_eq!(
-            backend_source
-                .matches("current_host_surface_bridge")
-                .count(),
-            1,
-            "G4A must retain exactly one current-host surface bridge accessor"
-        );
-        assert_eq!(
-            backend_source
-                .matches("struct CurrentHostSurfaceBridge")
-                .count(),
-            1,
-            "G4A must retain exactly one bounded current-host bridge type"
-        );
-        let bridge_definition = current_host_source
-            .split("struct CurrentHostSurfaceBridge")
-            .nth(1)
-            .and_then(|source| source.split("impl<'a> CurrentHostSurfaceBridge").next())
-            .expect("current-host bridge definition should be present");
-        let bridge_implementation = current_host_source
-            .split("impl<'a> CurrentHostSurfaceBridge")
-            .nth(1)
-            .and_then(|source| source.split("impl GpuContext").next())
-            .expect("current-host bridge implementation should be present");
-        assert!(
-            !bridge_definition.contains("pub"),
-            "the current-host bridge must not expose raw fields"
-        );
-        assert_eq!(
-            bridge_implementation.matches("pub(crate) fn").count(),
-            3,
-            "the current-host bridge may expose only create, capabilities, and configure"
-        );
-        for retired_surface_operation in [
-            "create_current_host_surface",
-            "current_host_surface_capabilities",
-            "configure_current_host_surface",
+        for retired_surface_authority in [
+            "request_for_current_host",
+            "current_host_surface_bridge",
+            "CurrentHostSurfaceBridge",
         ] {
             assert!(
-                !backend_source.contains(retired_surface_operation),
-                "GpuContext must not retain G7 surface operation: {retired_surface_operation}"
+                !backend_source.contains(retired_surface_authority)
+                    && !context_source.contains(retired_surface_authority),
+                "retired current-host surface authority remains: {retired_surface_authority}"
             );
         }
         assert!(
-            !bridge_implementation.contains("fn device(")
-                && !bridge_implementation.contains("fn queue(")
-                && !bridge_implementation.contains("fn instance(")
-                && !bridge_implementation.contains("fn adapter(")
-                && !bridge_implementation.contains("FnOnce")
-                && !bridge_implementation.contains("FnMut")
-                && !bridge_implementation.contains("Fn("),
-            "the current-host bridge must not expose raw WGPU authority"
-        );
-        assert!(
-            context_source.contains("struct WgpuSurfaceState")
-                && context_source.contains("surface: Surface")
-                && context_source.contains("config: SurfaceConfiguration")
-                && context_source.contains("get_current_texture"),
-            "WgpuCtx must retain surface/configuration ownership and acquisition"
+            context_source.contains("surface: GpuSurfaceHandle")
+                && context_source.contains("config: GpuSurfaceConfiguration")
+                && context_source.contains("GpuContext::request_for_surface(")
+                && context_source.contains(".acquire_surface_image(surface)"),
+            "renderer surface state must retain only G7A logical mapping and acquisition"
         );
 
         let source_root = manifest.join("src");

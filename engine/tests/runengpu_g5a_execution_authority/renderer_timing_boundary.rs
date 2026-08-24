@@ -6,23 +6,25 @@ fn renderer_timing_metadata_is_realization_owned() {
     let realization_start = execute
         .find("fn realize_render_batch<'a>(")
         .expect("renderer realization boundary must remain explicit");
-    let raw_execution_start = execute[realization_start..]
-        .find("fn execute_realized_batch(")
+    let realization_end = execute[realization_start..]
+        .find("fn realize_projected_uniform_uploads(")
         .map(|offset| realization_start + offset)
-        .expect("temporary raw execution boundary must remain explicit until cutover");
-    let realization = &execute[realization_start..raw_execution_start];
-    let raw_execution = &execute[raw_execution_start..];
+        .expect("uniform upload realization must follow batch realization");
+    let realization = &execute[realization_start..realization_end];
 
     assert!(
         realization.contains("register_pass_metadata("),
         "renderer timing evidence identity must be fixed during realization"
     );
-    assert!(
-        !raw_execution.contains("register_pass_metadata("),
-        "the temporary raw executor must not create renderer timing evidence identity"
-    );
-    assert!(
-        raw_execution.contains("timestamp_scale_available"),
-        "temporary physical timing execution may only consume backend-neutral timestamp scale availability"
-    );
+    assert!(execute.contains("timing_frame.pending_evidence()"));
+    for retired in [
+        "fn execute_realized_batch(",
+        "timestamp_scale_available",
+        "current_render_execution_bridge",
+    ] {
+        assert!(
+            !execute.contains(retired),
+            "timing must remain on the canonical submission lifecycle: {retired}"
+        );
+    }
 }

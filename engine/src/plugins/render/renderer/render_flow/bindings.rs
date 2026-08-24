@@ -8,15 +8,14 @@ use crate::plugins::gpu::{
     GpuFragmentOutputStateDescriptor, GpuFrontFace, GpuIndexFormat, GpuMultisampleStateDescriptor,
     GpuPipelineLayoutDescriptor, GpuPrimitiveStateDescriptor,
     GpuPrimitiveTopology as GpuPipelinePrimitiveTopology, GpuProgramDescriptor,
-    GpuProgramInterfaceDescriptor, GpuRealizedBindGroup, GpuRealizedPipelineLayout,
-    GpuRealizedProgram, GpuRenderEntryPoints, GpuRenderPipelineDescriptor,
-    GpuRenderPipelineStateDescriptor, GpuRuntimeBindingResource, GpuRuntimeBindingSet,
-    GpuRuntimeBindingValue, GpuRuntimeBufferBinding, GpuRuntimeTextureViewBinding, GpuSamplerClass,
-    GpuSamplerHandle, GpuShaderStage, GpuShaderStages, GpuSpecializationValueSet,
-    GpuStorageBufferAccess, GpuStorageTextureAccess, GpuTextureFormat, GpuTextureSampleClass,
-    GpuTextureViewDimension, GpuTextureViewHandle, GpuVertexAttribute,
-    GpuVertexBufferLayoutDescriptor, GpuVertexFormat, GpuVertexInputStateDescriptor,
-    GpuVertexStepMode,
+    GpuProgramInterfaceDescriptor, GpuRealizedPipelineLayout, GpuRealizedProgram,
+    GpuRenderEntryPoints, GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor,
+    GpuRuntimeBindingResource, GpuRuntimeBindingSet, GpuRuntimeBindingValue,
+    GpuRuntimeBufferBinding, GpuRuntimeTextureViewBinding, GpuSamplerClass, GpuSamplerHandle,
+    GpuShaderStage, GpuShaderStages, GpuSpecializationValueSet, GpuStorageBufferAccess,
+    GpuStorageTextureAccess, GpuTextureFormat, GpuTextureSampleClass, GpuTextureViewDimension,
+    GpuTextureViewHandle, GpuVertexAttribute, GpuVertexBufferLayoutDescriptor, GpuVertexFormat,
+    GpuVertexInputStateDescriptor, GpuVertexStepMode,
 };
 use crate::plugins::render::pipelines::FlowPassPipelineDescriptor;
 use crate::plugins::render::renderer::resource_descriptors::linear_sampler_descriptor;
@@ -40,14 +39,12 @@ struct RuntimeBindingResolved {
     resource: Option<RuntimeBindingResource>,
 }
 
-/// G4C2-owned program/layout/bind-group realization prepared before the temporary raw pipeline
-/// interval. The remaining render/compute pipeline object is deliberately G4C3-owned.
+/// G4C2/G4C3 program and pipeline-layout realization plus canonical runtime binding descriptors.
 pub(in crate::plugins::render::renderer) struct RealizedFlowProgramBindings {
     pub(super) pipeline_key: FlowPassPipelineKey,
     pub(super) runtime_bindings: GpuRuntimeBindingSet,
     pub(super) program: GpuRealizedProgram,
     pub(super) pipeline_layout: GpuRealizedPipelineLayout,
-    pub(super) bind_groups: Vec<GpuRealizedBindGroup>,
 }
 
 impl Renderer {
@@ -294,20 +291,11 @@ impl Renderer {
         let realized_pipeline_layout = pollster::block_on(
             context.realize_pipeline_layout(pipeline_key.pipeline_descriptor.layout()),
         )?;
-        let mut bind_groups = Vec::with_capacity(runtime_bindings.groups().len());
-        for group in runtime_bindings.groups() {
-            let layout = pollster::block_on(context.realize_bind_group_layout(group.layout()))?;
-            bind_groups.push(pollster::block_on(
-                context.realize_bind_group(&layout, group.values().cloned()),
-            )?);
-        }
-
         Ok(RealizedFlowProgramBindings {
             pipeline_key,
             runtime_bindings,
             program,
             pipeline_layout: realized_pipeline_layout,
-            bind_groups,
         })
     }
 }

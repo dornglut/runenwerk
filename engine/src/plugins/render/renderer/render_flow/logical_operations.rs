@@ -355,7 +355,6 @@ fn compiled_resource_ref_matches_id(
 }
 
 /// Projects an immutable renderer-prepared byte sequence into exact logical CPU→GPU buffer work.
-/// Physical `queue.write_buffer` remains a temporary G5B/G5C realization detail.
 pub(super) fn project_buffer_upload(
     buffer: &GpuBufferHandle,
     bytes: &[u8],
@@ -377,9 +376,9 @@ pub(super) fn project_buffer_upload(
 
 /// Canonical timestamp tail for one expanded renderer invocation.
 ///
-/// The resolve and GPU-to-CPU readback are both first-class RunenGPU operations. The temporary raw
-/// renderer executor may derive private staging from the readback operation until frame-level G5
-/// submission is live, but it must not introduce a second logical copy destination or readback DAG.
+/// The resolve and GPU-to-CPU readback are both first-class RunenGPU operations. Readback result
+/// observation follows the accepted G5 submission lifecycle and does not introduce a second copy
+/// destination or readback DAG.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct ProjectedTimingTail {
     resolve: GpuQueryResolveOperation,

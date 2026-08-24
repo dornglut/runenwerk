@@ -1,76 +1,24 @@
 use super::*;
 use crate::plugins::gpu::{
-    CurrentRenderReadbackBufferTerminal, CurrentRenderTextureReadbackCopyTerminal,
-    CurrentSurfaceReadbackCopyTerminal, GpuBufferHandle, GpuBufferUsage, GpuContext, GpuCopyExtent,
-    GpuMemoryIntent, GpuReadbackId, GpuReadbackOperation, GpuRealizedBuffer, GpuRealizedTexture,
-    GpuResourceLifetime, GpuTextureAspect, GpuTextureCopyRegion, GpuTextureHandle,
-    GpuTextureOrigin, GpuTransferRegion, GpuWorkResourceIdAllocator,
+    GpuContext, GpuCopyExtent, GpuReadbackId, GpuReadbackOperation, GpuTextureAspect,
+    GpuTextureCopyRegion, GpuTextureHandle, GpuTextureOrigin,
 };
-use crate::plugins::render::renderer::resource_descriptors::buffer_descriptor;
 
-#[derive(Debug)]
-pub struct PendingCaptureReadback {
-    pub selector_index: usize,
-    pub identity: RenderCaptureIdentity,
-    pub _handle: GpuBufferHandle,
-    pub buffer: GpuRealizedBuffer,
-    pub width: u32,
-    pub height: u32,
-    pub source_format: TextureFormat,
-    pub readback_format: TextureReadbackFormat,
-    pub padded_bytes_per_row: u32,
-}
-
-/// Execution-complete capture semantics plus a temporary physical staging sidecar.
-///
-/// Non-surface capture owns one canonical `GpuReadbackOperation`; the renderer may not reconstruct
-/// its texture source or byte coverage from the realized WGPU resource. `PreG7Surface` remains an
-/// explicit residual until G7A acquisition supplies the exact logical surface texture. The legacy
-/// staging resource below exists only while the normal frame still encodes through the raw renderer
-/// bridge and is deleted when frame-level G5 submission consumes the canonical readback directly.
+/// Capture identity and the canonical readback submitted by G5.
 #[derive(Debug)]
 pub struct PreparedCaptureReadback {
     pub selector_index: usize,
     pub identity: RenderCaptureIdentity,
-    authority: PreparedCaptureAuthority,
-    legacy: LegacyPreparedCaptureReadback,
+    operation: GpuReadbackOperation,
     pub width: u32,
     pub height: u32,
     pub source_format: TextureFormat,
-    pub readback_format: TextureReadbackFormat,
 }
 
 impl PreparedCaptureReadback {
-    pub(super) fn canonical_operation(&self) -> Option<&GpuReadbackOperation> {
-        match &self.authority {
-            PreparedCaptureAuthority::Canonical(operation) => Some(operation),
-            PreparedCaptureAuthority::PreG7Surface => None,
-        }
+    pub(super) fn canonical_operation(&self) -> &GpuReadbackOperation {
+        &self.operation
     }
-
-    pub(super) fn is_pre_g7_surface(&self) -> bool {
-        matches!(self.authority, PreparedCaptureAuthority::PreG7Surface)
-    }
-}
-
-#[derive(Debug)]
-enum PreparedCaptureAuthority {
-    Canonical(GpuReadbackOperation),
-    PreG7Surface,
-}
-
-#[derive(Debug)]
-struct LegacyPreparedCaptureReadback {
-    _handle: GpuBufferHandle,
-    buffer: GpuRealizedBuffer,
-    source: LegacyPreparedCaptureTextureSource,
-    padded_bytes_per_row: u32,
-}
-
-#[derive(Debug, Clone)]
-enum LegacyPreparedCaptureTextureSource {
-    Surface,
-    Realized(GpuRealizedTexture),
 }
 
 #[derive(Debug, Clone)]
@@ -329,82 +277,36 @@ pub struct TextureReadbackFormat {
 
 #[derive(Debug, Clone, Copy)]
 pub enum CaptureTextureSource<'a> {
-    Surface,
-    Logical {
-        handle: &'a GpuTextureHandle,
-        realized: &'a GpuRealizedTexture,
-    },
+    Surface { handle: &'a GpuTextureHandle },
+    Logical { handle: &'a GpuTextureHandle },
 }
 
 #[allow(clippy::too_many_arguments)]
 pub fn prepare_texture_capture_readback(
-    context: &GpuContext,
+    _context: &GpuContext,
     selector_index: usize,
     identity: RenderCaptureIdentity,
     texture: CaptureTextureSource<'_>,
     size: (u32, u32),
     source_format: TextureFormat,
-    readback_format: TextureReadbackFormat,
+    _readback_format: TextureReadbackFormat,
 ) -> Result<PreparedCaptureReadback> {
     let width = size.0.max(1);
     let height = size.1.max(1);
-    let unpadded_bytes_per_row = width
-        .checked_mul(4)
-        .ok_or_else(|| anyhow::anyhow!("capture width overflow for {}", identity.pass_id()))?;
-    let padded_bytes_per_row = align_to(unpadded_bytes_per_row, COPY_BYTES_PER_ROW_ALIGNMENT);
-    let total_size = (padded_bytes_per_row as u64)
-        .checked_mul(height as u64)
-        .ok_or_else(|| {
-            anyhow::anyhow!("capture buffer size overflow for {}", identity.pass_id())
-        })?;
-
-    let (authority, legacy_source) = match texture {
-        CaptureTextureSource::Surface => (
-            PreparedCaptureAuthority::PreG7Surface,
-            LegacyPreparedCaptureTextureSource::Surface,
-        ),
-        CaptureTextureSource::Logical { handle, realized } => {
-            if handle.diagnostic_identity() != realized.logical_identity() {
-                anyhow::bail!(
-                    "capture logical texture '{}' disagrees with its G4C1 realization",
-                    handle.diagnostic_identity()
-                );
-            }
-            (
-                PreparedCaptureAuthority::Canonical(canonical_capture_readback_operation(
-                    handle, width, height,
-                )?),
-                LegacyPreparedCaptureTextureSource::Realized(realized.clone()),
-            )
+    let handle = match texture {
+        CaptureTextureSource::Surface { handle } | CaptureTextureSource::Logical { handle } => {
+            handle
         }
     };
-
-    // Removal condition: delete this resource with the raw capture copy/map bridge when the
-    // frame-level G5 submission path consumes the canonical `GpuReadbackOperation` directly.
-    let mut resource_ids = GpuWorkResourceIdAllocator::new();
-    let handle = resource_ids.allocate_buffer_handle(buffer_descriptor(
-        "engine_render_capture_legacy_readback",
-        total_size,
-        [GpuBufferUsage::CopyDestination],
-        GpuResourceLifetime::Transient,
-        GpuMemoryIntent::Readback,
-    )?)?;
-    let buffer = context.realize_buffer(&handle)?;
+    let operation = canonical_capture_readback_operation(handle, width, height)?;
 
     Ok(PreparedCaptureReadback {
         selector_index,
         identity,
-        authority,
-        legacy: LegacyPreparedCaptureReadback {
-            _handle: handle,
-            buffer,
-            source: legacy_source,
-            padded_bytes_per_row,
-        },
+        operation,
         width,
         height,
         source_format,
-        readback_format,
     })
 }
 
@@ -426,329 +328,6 @@ fn canonical_capture_readback_operation(
     )?)
 }
 
-/// Temporary raw execution of one prepared capture.
-///
-/// For a canonical non-surface capture, logical source identity and extent are derived exclusively
-/// from the `GpuReadbackOperation`; the padded renderer buffer is private physical staging. Surface
-/// capture stays on the pre-G7 residual path and is the only case allowed to lack a canonical
-/// operation.
-pub fn encode_legacy_prepared_texture_capture(
-    context: &GpuContext,
-    encoder: &mut CommandEncoder,
-    frame_texture: Option<&Texture>,
-    prepared: PreparedCaptureReadback,
-) -> Result<PendingCaptureReadback> {
-    let canonical_operation = prepared.canonical_operation().cloned();
-    let is_pre_g7_surface = prepared.is_pre_g7_surface();
-    let PreparedCaptureReadback {
-        selector_index,
-        identity,
-        authority: _,
-        legacy,
-        width,
-        height,
-        source_format,
-        readback_format,
-    } = prepared;
-    let LegacyPreparedCaptureReadback {
-        _handle,
-        buffer,
-        source,
-        padded_bytes_per_row,
-    } = legacy;
-
-    let (copy_width, copy_height) = match (canonical_operation.as_ref(), is_pre_g7_surface, &source)
-    {
-        (Some(operation), false, LegacyPreparedCaptureTextureSource::Realized(texture)) => {
-            let GpuTransferRegion::Texture(region) = operation.source() else {
-                anyhow::bail!(
-                    "canonical renderer texture capture has a non-texture readback source"
-                );
-            };
-            if region.texture().diagnostic_identity() != texture.logical_identity() {
-                anyhow::bail!(
-                    "canonical renderer capture source disagrees with its legacy G4C1 realization"
-                );
-            }
-            let extent = region.extent();
-            if extent.width() != width || extent.height() != height || extent.depth_or_layers() != 1
-            {
-                anyhow::bail!(
-                    "canonical renderer capture extent disagrees with renderer capture metadata"
-                );
-            }
-            (extent.width(), extent.height())
-        }
-        (None, true, LegacyPreparedCaptureTextureSource::Surface) => (width, height),
-        _ => anyhow::bail!(
-            "renderer capture semantic authority disagrees with its temporary physical source"
-        ),
-    };
-
-    let copy = CaptureCopyToReadback {
-        encoder,
-        surface: match &source {
-            LegacyPreparedCaptureTextureSource::Surface => frame_texture,
-            LegacyPreparedCaptureTextureSource::Realized(_) => None,
-        },
-        padded_bytes_per_row,
-        width: copy_width,
-        height: copy_height,
-    };
-    match source {
-        LegacyPreparedCaptureTextureSource::Surface => context
-            .current_render_execution_bridge()
-            .for_surface_readback_copy(&buffer, copy)?,
-        LegacyPreparedCaptureTextureSource::Realized(texture) => context
-            .current_render_execution_bridge()
-            .for_texture_readback_copy(&texture, &buffer, copy)?,
-    }
-
-    Ok(PendingCaptureReadback {
-        selector_index,
-        identity,
-        _handle,
-        buffer,
-        width,
-        height,
-        source_format,
-        readback_format,
-        padded_bytes_per_row,
-    })
-}
-
-pub fn read_capture_back(
-    context: &GpuContext,
-    device: &Device,
-    pending: PendingCaptureReadback,
-) -> (usize, RenderCapturedTexture) {
-    let PendingCaptureReadback {
-        selector_index,
-        identity,
-        _handle: _,
-        buffer,
-        width,
-        height,
-        source_format,
-        readback_format,
-        padded_bytes_per_row,
-    } = pending;
-
-    let fallback_identity = identity.clone();
-    let capture = RenderCapturedTexture {
-        identity,
-        width,
-        height,
-        format: format!("{:?}", source_format),
-        bytes_rgba8: None,
-        terminal: RenderCaptureTerminal::completed(),
-    };
-
-    let mut output = None;
-    let bridge_result = context
-        .current_render_execution_bridge()
-        .for_buffer_readback(
-            &buffer,
-            ReadCaptureBuffer {
-                device,
-                capture,
-                readback_format,
-                padded_bytes_per_row,
-                output: &mut output,
-            },
-        );
-    if let Err(error) = bridge_result {
-        let mut capture = RenderCapturedTexture {
-            identity: fallback_identity,
-            width,
-            height,
-            format: format!("{:?}", source_format),
-            bytes_rgba8: None,
-            terminal: RenderCaptureTerminal::completed(),
-        };
-        capture.terminal = RenderCaptureTerminal::with_reason(
-            RenderCaptureTerminalCode::ReadbackFailed,
-            "resource_bridge_failed",
-            error.to_string(),
-        );
-        return (selector_index, capture);
-    }
-    (
-        selector_index,
-        output.expect("readback terminal always publishes one capture result"),
-    )
-}
-
-struct CaptureCopyToReadback<'a> {
-    encoder: &'a mut CommandEncoder,
-    surface: Option<&'a Texture>,
-    padded_bytes_per_row: u32,
-    width: u32,
-    height: u32,
-}
-
-impl CaptureCopyToReadback<'_> {
-    fn encode(self, texture: &Texture, buffer: &Buffer) {
-        self.encoder.copy_texture_to_buffer(
-            TexelCopyTextureInfo {
-                texture,
-                mip_level: 0,
-                origin: Origin3d::ZERO,
-                aspect: TextureAspect::All,
-            },
-            TexelCopyBufferInfo {
-                buffer,
-                layout: TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(self.padded_bytes_per_row),
-                    rows_per_image: Some(self.height),
-                },
-            },
-            Extent3d {
-                width: self.width,
-                height: self.height,
-                depth_or_array_layers: 1,
-            },
-        );
-    }
-}
-
-impl CurrentRenderTextureReadbackCopyTerminal for CaptureCopyToReadback<'_> {
-    fn copy_texture_to_readback(self, texture: &Texture, buffer: &Buffer) {
-        self.encode(texture, buffer);
-    }
-}
-
-impl CurrentSurfaceReadbackCopyTerminal for CaptureCopyToReadback<'_> {
-    fn copy_surface_to_readback(self, buffer: &Buffer) {
-        let surface = self
-            .surface
-            .expect("surface readback terminal retains its acquired texture");
-        self.encode(surface, buffer);
-    }
-}
-
-struct ReadCaptureBuffer<'a> {
-    device: &'a Device,
-    capture: RenderCapturedTexture,
-    readback_format: TextureReadbackFormat,
-    padded_bytes_per_row: u32,
-    output: &'a mut Option<RenderCapturedTexture>,
-}
-
-impl CurrentRenderReadbackBufferTerminal for ReadCaptureBuffer<'_> {
-    fn read_buffer(self, buffer: &Buffer) {
-        *self.output = Some(read_capture_buffer(
-            self.device,
-            buffer,
-            self.capture,
-            self.readback_format,
-            self.padded_bytes_per_row,
-        ));
-    }
-}
-
-fn read_capture_buffer(
-    device: &Device,
-    buffer: &Buffer,
-    mut capture: RenderCapturedTexture,
-    readback_format: TextureReadbackFormat,
-    padded_bytes_per_row: u32,
-) -> RenderCapturedTexture {
-    let width = capture.width;
-    let height = capture.height;
-    let slice = buffer.slice(..);
-    let (sender, receiver) = channel();
-    slice.map_async(MapMode::Read, move |result| {
-        let _ = sender.send(result);
-    });
-
-    if let Err(err) = device.poll(PollType::wait_indefinitely()) {
-        capture.terminal = RenderCaptureTerminal::with_reason(
-            RenderCaptureTerminalCode::ReadbackFailed,
-            "device_poll_failed",
-            format!("device.poll failed for capture readback: {err}"),
-        );
-        return capture;
-    }
-
-    match receiver.recv() {
-        Ok(Ok(())) => {}
-        Ok(Err(err)) => {
-            capture.terminal = RenderCaptureTerminal::with_reason(
-                RenderCaptureTerminalCode::ReadbackFailed,
-                "map_async_failed",
-                format!("buffer map_async failed: {err}"),
-            );
-            return capture;
-        }
-        Err(err) => {
-            capture.terminal = RenderCaptureTerminal::with_reason(
-                RenderCaptureTerminalCode::ReadbackFailed,
-                "map_async_channel_failed",
-                format!("buffer map_async channel failed: {err}"),
-            );
-            return capture;
-        }
-    }
-
-    let data = match slice.get_mapped_range() {
-        Ok(data) => data,
-        Err(err) => {
-            capture.terminal = RenderCaptureTerminal::with_reason(
-                RenderCaptureTerminalCode::ReadbackFailed,
-                "mapped_range_failed",
-                format!("failed to access mapped capture bytes: {err}"),
-            );
-            buffer.unmap();
-            return capture;
-        }
-    };
-    let unpadded_bytes_per_row = width.saturating_mul(4) as usize;
-    let expected_padded_len = padded_bytes_per_row as usize * height as usize;
-    if data.len() < expected_padded_len {
-        capture.terminal = RenderCaptureTerminal::with_reason(
-            RenderCaptureTerminalCode::ReadbackFailed,
-            "mapped_bytes_too_short",
-            format!(
-                "mapped capture bytes too short: actual={} expected_at_least={}",
-                data.len(),
-                expected_padded_len
-            ),
-        );
-        drop(data);
-        buffer.unmap();
-        return capture;
-    }
-
-    let mut rgba = vec![0u8; unpadded_bytes_per_row * height as usize];
-    for row in 0..height as usize {
-        let source_offset = row * padded_bytes_per_row as usize;
-        let source_end = source_offset + unpadded_bytes_per_row;
-        let destination_offset = row * unpadded_bytes_per_row;
-        let destination_end = destination_offset + unpadded_bytes_per_row;
-        let source_row = &data[source_offset..source_end];
-        let destination_row = &mut rgba[destination_offset..destination_end];
-        match readback_format.mode {
-            TextureReadbackMode::Rgba8 => destination_row.copy_from_slice(source_row),
-            TextureReadbackMode::Bgra8 => {
-                for (pixel_index, chunk) in source_row.as_chunks::<4>().0.iter().enumerate() {
-                    let destination_index = pixel_index * 4;
-                    destination_row[destination_index] = chunk[2];
-                    destination_row[destination_index + 1] = chunk[1];
-                    destination_row[destination_index + 2] = chunk[0];
-                    destination_row[destination_index + 3] = chunk[3];
-                }
-            }
-        }
-    }
-
-    capture.bytes_rgba8 = Some(rgba);
-    drop(data);
-    buffer.unmap();
-    capture
-}
-
 pub fn texture_readback_format(format: TextureFormat) -> Option<TextureReadbackFormat> {
     let mode = match format {
         TextureFormat::Rgba8Unorm | TextureFormat::Rgba8UnormSrgb => TextureReadbackMode::Rgba8,
@@ -758,22 +337,13 @@ pub fn texture_readback_format(format: TextureFormat) -> Option<TextureReadbackF
     Some(TextureReadbackFormat { mode })
 }
 
-pub fn align_to(value: u32, alignment: u32) -> u32 {
-    if alignment == 0 {
-        return value;
-    }
-    let remainder = value % alignment;
-    if remainder == 0 {
-        value
-    } else {
-        value + (alignment - remainder)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugins::gpu::{GpuTextureFormat, GpuTextureUsage};
+    use crate::plugins::gpu::{
+        GpuResourceLifetime, GpuTextureFormat, GpuTextureUsage, GpuTransferRegion,
+        GpuWorkResourceIdAllocator,
+    };
     use crate::plugins::render::renderer::resource_descriptors::texture_descriptor;
 
     #[test]

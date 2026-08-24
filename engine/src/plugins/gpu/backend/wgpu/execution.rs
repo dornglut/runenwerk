@@ -2397,7 +2397,7 @@ fn submission_program_binding_failure(
         }
         GpuProgramBindingRealizationErrorCategory::ForeignContext
         | GpuProgramBindingRealizationErrorCategory::StaleDeviceGeneration
-        | GpuProgramBindingRealizationErrorCategory::CurrentRenderExecutionBridgeViolation => {
+        | GpuProgramBindingRealizationErrorCategory::ExecutionAuthorityViolation => {
             GpuSubmissionFailureKind::InternalInvariant
         }
         _ => GpuSubmissionFailureKind::BackendValidation,
@@ -2415,7 +2415,7 @@ fn submission_pipeline_failure(error: GpuPipelineRealizationError) -> GpuSubmiss
         }
         GpuPipelineRealizationErrorCategory::ForeignContext
         | GpuPipelineRealizationErrorCategory::StaleDeviceGeneration
-        | GpuPipelineRealizationErrorCategory::CurrentRenderExecutionBridgeViolation => {
+        | GpuPipelineRealizationErrorCategory::ExecutionAuthorityViolation => {
             GpuSubmissionFailureKind::InternalInvariant
         }
         _ => GpuSubmissionFailureKind::BackendValidation,
