@@ -172,8 +172,9 @@ fn hard_cutoff_removes_legacy_render_symbols_and_fallbacks() {
         "compute runtime path should consume prepare-projected dispatch values"
     );
     assert!(
-        render_flow.contains("ordered_payloads()?"),
-        "renderer must schedule execution payloads through prepared G3 node order"
+        render_flow.contains("context.prepare_submission(graph)")
+            && render_flow.contains(".submit_prepared(prepared)"),
+        "normal renderer frames must prepare and irreversibly submit one canonical RunenGPU graph"
     );
     assert!(
         !render_flow.contains("for pass in &flow.pass_order"),
@@ -182,9 +183,9 @@ fn hard_cutoff_removes_legacy_render_symbols_and_fallbacks() {
     assert!(
         render_flow.contains("context.realize_compute_pipeline(")
             && render_flow.contains("context.realize_render_pipeline(")
-            && render_flow.contains(".for_compute_pipeline(")
-            && render_flow.contains(".for_render_pipeline("),
-        "renderer runtime must realize pipelines through G4C3 and consume opaque realized handles through the execution bridge"
+            && render_flow.contains("GpuWorkOperation::Compute")
+            && render_flow.contains("GpuWorkOperation::Render"),
+        "renderer runtime must realize pipelines through G4C3 and carry them only in canonical GPU operations"
     );
     assert!(
         !render_flow.contains("flow_pipeline_cache.render_pipeline")
@@ -246,7 +247,7 @@ fn hard_cutoff_removes_legacy_render_symbols_and_fallbacks() {
 }
 
 #[test]
-fn g3_render_cutover_has_one_prepared_graph_authority_and_payload_only_sidecar() {
+fn g5c1_render_cutover_has_one_frame_graph_and_no_raw_executor_sidecar() {
     let production = read_render_production_sources();
     let retired = [
         "CompiledResourceAccessKind",
@@ -287,62 +288,135 @@ fn g3_render_cutover_has_one_prepared_graph_authority_and_payload_only_sidecar()
     assert!(pass_graph.contains("pub non_data_order_after: Vec<RenderPassId>"));
 
     let adapter = read("src/plugins/render/adapters/gpu_work.rs");
-    let payload_start = adapter
-        .find("pub(crate) enum RenderGpuWorkPayload")
-        .expect("render G3 adapter should define its execution-only payload");
-    let payload_tail = &adapter[payload_start..];
-    let payload_end = payload_tail
-        .find("\n}\n\nimpl RenderGpuWorkPayload")
-        .expect("render execution payload declaration should precede its implementation");
-    let payload = &payload_tail[..payload_end];
-    assert!(payload.contains("occurrence: RenderGpuWorkOccurrenceId"));
+    assert!(adapter.contains("pub(crate) fn prepare_render_gpu_frame_work("));
+    for retired_sidecar in [
+        "RenderGpuWorkPayload",
+        "RenderGpuWorkSidecar",
+        "PreparedRenderWorkPlan",
+        "prepare_render_gpu_work(",
+        "ordered_payloads(",
+    ] {
+        assert!(
+            !adapter.contains(retired_sidecar),
+            "normal-frame cutover must delete dead raw-executor sidecar authority '{retired_sidecar}'"
+        );
+    }
     assert!(
-        !payload.contains("pass_id:"),
-        "render execution payload must not duplicate compiled pass identity after occurrence cutover"
+        adapter.contains("GpuInitialCoverage::descriptor_initialization"),
+        "frame graph preparation must preserve descriptor-owned initialization evidence"
     );
-    for forbidden_truth in [
-        "CompiledPassExecutionPlan",
-        "GpuWorkOperation",
-        "GpuRuntimeBindingSet",
-        "GpuResourceAccess",
-    ] {
-        assert!(
-            !payload.contains(forbidden_truth),
-            "render execution payload must retain renderer identity only, not generic GPU truth '{forbidden_truth}'"
-        );
-    }
-
-    let sidecar_start = adapter
-        .find("struct RenderGpuWorkSidecar")
-        .expect("render G3 adapter should define its private sidecar");
-    let sidecar_tail = &adapter[sidecar_start..];
-    let sidecar_end = sidecar_tail
-        .find("\n}\n\nimpl RenderGpuWorkSidecar")
-        .expect("sidecar declaration should precede its implementation");
-    let sidecar = &sidecar_tail[..sidecar_end];
-    assert!(sidecar.contains("BTreeMap<GpuPreparedWorkNodeId, RenderGpuWorkPayload>"));
-    for forbidden_truth in [
-        "GpuResourceAccess",
-        "GpuCapabilityRequirements",
-        "GpuInitialCoverage",
-        "GpuWorkDependency",
-        "topological_order",
-    ] {
-        assert!(
-            !sidecar.contains(forbidden_truth),
-            "render sidecar must not contain generic graph truth '{forbidden_truth}'"
-        );
-    }
 
     let execute = read("src/plugins/render/renderer/render_flow/execute.rs");
-    let schedule = function_body(&execute, "fn schedule_invocation_passes(");
-    assert!(schedule.contains(".ordered_payloads()?"));
-    for alternate_order in ["flow.execution.passes", "topological_sort", "sort_by"] {
+    for raw_executor in [
+        "current_render_device_queue",
+        "current_render_execution_bridge",
+        "CommandEncoder",
+        "SurfaceTexture",
+        "queue.submit",
+        "execute_realized_batch",
+        "schedule_legacy_invocation_work",
+    ] {
         assert!(
-            !schedule.contains(alternate_order),
-            "runtime scheduling must not restore alternate order path '{alternate_order}'"
+            !execute.contains(raw_executor),
+            "normal renderer frame must not retain raw executor authority '{raw_executor}'"
         );
     }
+
+    let invocation_start = execute
+        .find("struct RealizedFlowInvocation<'a> {")
+        .expect("renderer should retain one realized invocation handoff");
+    let invocation_tail = &execute[invocation_start..];
+    let invocation_end = invocation_tail
+        .find("\n}\n\nstruct RealizedScheduledPass")
+        .expect("realized invocation declaration should precede scheduled-pass state");
+    let invocation = &invocation_tail[..invocation_end];
+    assert!(
+        invocation.contains("canonical_resolution: Option<CanonicalInvocationResolution>"),
+        "realized invocation must retain owned canonical resolution as its semantic authority"
+    );
+    assert!(
+        !invocation.contains("canonical_work") && !invocation.contains("PreparedRenderWorkPlan"),
+        "realized invocation must not retain a prepared per-invocation G3 graph alongside semantic resolution"
+    );
+
+    let render_packet = function_body(&execute, "    pub(crate) fn render_packet(");
+    let drain = render_packet
+        .find("let canonical_resolutions = batch")
+        .expect("render packet should drain owned invocation resolutions at frame scope");
+    let graph_prepare = render_packet
+        .find("prepare_render_gpu_frame_work(")
+        .expect("render packet should prepare one complete frame graph");
+    let submission_prepare = render_packet
+        .find("context.prepare_submission(graph)")
+        .expect("renderer should hand the frame graph to RunenGPU preparation");
+    let submission_accept = render_packet
+        .find(".submit_prepared(prepared)")
+        .expect("renderer should irreversibly accept the prepared frame once");
+    let dynamic_acceptance_bookkeeping = render_packet
+        .find("record_accepted_uploads(&accepted_dynamic_uploads)")
+        .expect("dynamic upload generations should be recorded after G5 acceptance");
+    assert!(
+        drain < graph_prepare
+            && graph_prepare < submission_prepare
+            && submission_prepare < submission_accept
+            && submission_accept < dynamic_acceptance_bookkeeping,
+        "owned invocation resolutions must aggregate before the sole RunenGPU prepare/accept boundary, and renderer generation evidence may advance only afterward"
+    );
+    assert_eq!(
+        render_packet
+            .matches("ResolvedRenderGpuWorkNode::present(")
+            .count(),
+        1,
+        "normal frame must append exactly one terminal canonical Present"
+    );
+    assert_eq!(
+        render_packet.matches("GpuPresentOperation::new(").count(),
+        1,
+        "normal frame must construct exactly one canonical Present operation"
+    );
+    assert!(
+        execute.contains("if terminal_present_controls.is_empty()"),
+        "presenting frames must reject absence of a compiled Present record"
+    );
+    assert!(
+        !execute.contains("if terminal_controls.is_empty()"),
+        "a real compiled Present with no renderer-owned predecessor must remain valid for G3 hazard ordering"
+    );
+    assert!(render_packet.contains("pending_operations).into_operations()"));
+    assert!(render_packet.contains("validate_prepared_uploads("));
+
+    let backend = read("src/plugins/render/backend/wgpu_ctx.rs");
+    for raw_surface_authority in [
+        "wgpu::Surface",
+        "SurfaceTexture",
+        "get_current_texture",
+        "fn present(",
+        "current_host_surface_bridge",
+    ] {
+        assert!(
+            !backend.contains(raw_surface_authority),
+            "renderer backend must not retain raw surface authority '{raw_surface_authority}'"
+        );
+    }
+    assert!(backend.contains(".acquire_surface_image(surface)"));
+    let renderer = read("src/plugins/render/renderer/mod.rs");
+    assert!(renderer.contains("self.ctx.acquire_surface_image(render_surface_id)?"));
+    assert!(renderer.contains("let acquired_extent = acquired.texture().descriptor().extent()"));
+    assert!(renderer.contains("acquired.default_view(),"));
+    assert!(renderer.contains("(acquired_extent.width(), acquired_extent.height()),"));
+
+    let ui_lowering = read("src/plugins/render/renderer/setup.rs");
+    assert!(ui_lowering.contains("acquired_surface_extent.0 as f32"));
+    assert!(ui_lowering.contains("acquired_surface_extent.1 as f32"));
+    assert!(ui_lowering.contains("if instance_count == 0 {"));
+    assert!(ui_lowering.contains("GpuDrawRange::new(0, 6)?"));
+    assert!(ui_lowering.contains("GpuDrawRange::new(0, instance_count)?"));
+
+    let present_projection = read("src/plugins/render/renderer/render_flow/logical_copy.rs");
+    assert!(present_projection.contains(
+        "if source_key == RuntimeResourceKey::SurfaceColor {\n        return Ok(ProjectedCopyOperation::NoWork);"
+    ));
+    assert!(present_projection.contains("GpuWorkOperation::Copy(operation)"));
 }
 
 #[test]

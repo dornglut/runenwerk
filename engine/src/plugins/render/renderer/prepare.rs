@@ -4,8 +4,10 @@ use super::resource_descriptors::{
 };
 use super::*;
 use crate::plugins::gpu::{
-    CurrentRenderBufferUploadTerminal, CurrentRenderTextureUploadTerminal, GpuBufferUsage,
-    GpuMemoryIntent, GpuResourceLifetime, GpuTextureDimension, GpuTextureUsage,
+    GpuBufferRange, GpuBufferRegion, GpuBufferUsage, GpuCopyExtent, GpuMemoryIntent,
+    GpuResourceLifetime, GpuTextureAspect, GpuTextureCopyRegion, GpuTextureDimension,
+    GpuTextureHandle, GpuTextureOrigin, GpuTextureUsage, GpuUploadOperation, PreparedGpuData,
+    TransferData,
 };
 use crate::plugins::render::features::{
     MATERIAL_RENDER_FEATURE_ID, UI_RENDER_FEATURE_ID, UiFontAtlasResource,
@@ -105,7 +107,7 @@ impl Renderer {
             GpuResourceLifetime::Transient,
             GpuMemoryIntent::Device,
         )?;
-        pending_operations.queue_buffer(&buffer.realized, contents);
+        pending_operations.queue_buffer(&buffer, contents)?;
         Ok(buffer)
     }
 
@@ -374,30 +376,24 @@ impl Renderer {
                 size: [surface_width.max(1.0), surface_height.max(1.0)],
                 _pad: [0.0; 2],
             };
-            pending_operations.queue_buffer(
-                &rect_pass.screen_buffer.realized,
-                bytemuck::bytes_of(&screen),
-            );
+            pending_operations
+                .queue_buffer(&rect_pass.screen_buffer, bytemuck::bytes_of(&screen))?;
         }
         if let Some(stroke_pass) = self.stroke_pass.as_ref() {
             let screen = ScreenUniformRaw {
                 size: [surface_width.max(1.0), surface_height.max(1.0)],
                 _pad: [0.0; 2],
             };
-            pending_operations.queue_buffer(
-                &stroke_pass.screen_buffer.realized,
-                bytemuck::bytes_of(&screen),
-            );
+            pending_operations
+                .queue_buffer(&stroke_pass.screen_buffer, bytemuck::bytes_of(&screen))?;
         }
         if let Some(glyph_pass) = self.glyph_pass.as_ref() {
             let screen = ScreenUniformRaw {
                 size: [surface_width.max(1.0), surface_height.max(1.0)],
                 _pad: [0.0; 2],
             };
-            pending_operations.queue_buffer(
-                &glyph_pass.screen_buffer.realized,
-                bytemuck::bytes_of(&screen),
-            );
+            pending_operations
+                .queue_buffer(&glyph_pass.screen_buffer, bytemuck::bytes_of(&screen))?;
         }
         if let Some(viewport_embed_pass) = self.viewport_embed_pass.as_ref() {
             let screen = ScreenUniformRaw {
@@ -405,9 +401,9 @@ impl Renderer {
                 _pad: [0.0; 2],
             };
             pending_operations.queue_buffer(
-                &viewport_embed_pass.screen_buffer.realized,
+                &viewport_embed_pass.screen_buffer,
                 bytemuck::bytes_of(&screen),
-            );
+            )?;
         }
         if let Some(product_surface_pass) = self.product_surface_pass.as_ref() {
             let screen = ScreenUniformRaw {
@@ -415,9 +411,9 @@ impl Renderer {
                 _pad: [0.0; 2],
             };
             pending_operations.queue_buffer(
-                &product_surface_pass.screen_buffer.realized,
+                &product_surface_pass.screen_buffer,
                 bytemuck::bytes_of(&screen),
-            );
+            )?;
         }
 
         let draw_plan = build_ui_draw_plan(
@@ -545,7 +541,7 @@ impl Renderer {
 
     fn prepare_material_gpu_resources(
         &mut self,
-        context: &GpuContext,
+        _context: &GpuContext,
         material: Option<&crate::plugins::render::PreparedMaterialFeatureContribution>,
         pending_operations: &mut RendererPendingOperations,
     ) -> Result<Option<PreparedMaterialGpuResources>> {
@@ -623,7 +619,6 @@ impl Renderer {
                         GpuResourceLifetime::Transient,
                     )?)?;
             let texture = RendererTextureResource {
-                realized: context.realize_texture(&texture_handle)?,
                 _handle: texture_handle,
             };
 
@@ -634,7 +629,6 @@ impl Renderer {
                         &texture._handle,
                     )?)?;
             let view = RendererTextureViewResource {
-                _realized: context.realize_texture_view(&view_handle, &texture.realized)?,
                 _handle: view_handle,
             };
             let sampler_handle =
@@ -644,7 +638,6 @@ impl Renderer {
                         GpuResourceLifetime::Transient,
                     )?)?;
             let sampler = RendererSamplerResource {
-                _realized: context.realize_sampler(&sampler_handle)?,
                 _handle: sampler_handle,
             };
             texture_views.push(view);
@@ -653,19 +646,9 @@ impl Renderer {
             textures.push(texture);
         }
 
-        // G4C1 texture/view/sampler records are complete before the raw interval. The complete
-        // material binding set and all physical groups are realized once through the canonical
-        // G4C2 `GpuRuntimeBindingSet` path in render-flow binding realization.
+        // G5 preparation owns material texture/view/sampler realization from these descriptors.
         for (texture, upload) in textures.iter().zip(texture_uploads) {
-            pending_operations
-                .texture_uploads
-                .push(RendererPendingTextureUpload {
-                    texture: texture.realized.clone(),
-                    bytes: upload.bytes,
-                    bytes_per_row: upload.bytes_per_row,
-                    rows_per_image: upload.rows_per_image,
-                    size: upload.size,
-                });
+            pending_operations.queue_texture(texture, &upload.bytes)?;
         }
 
         Ok(Some(PreparedMaterialGpuResources {
@@ -709,89 +692,71 @@ impl Renderer {
     }
 }
 
+fn canonical_renderer_buffer_upload(
+    buffer: &GpuBufferHandle,
+    contents: &[u8],
+) -> Result<GpuUploadOperation> {
+    let byte_len = u64::try_from(contents.len()).map_err(|_| {
+        anyhow::anyhow!(
+            "renderer pending buffer upload byte length exceeds the RunenGPU u64 domain"
+        )
+    })?;
+    let label = buffer.descriptor().common().label();
+    let payload = PreparedGpuData::<TransferData>::from_pod_transfer(
+        format!("renderer pending buffer upload {}", label.as_str()),
+        contents,
+        buffer.descriptor().common().provenance().clone(),
+    )?;
+    let range = GpuBufferRange::new(buffer, 0, byte_len)?;
+    let region = GpuBufferRegion::new(buffer, range)?;
+    Ok(GpuUploadOperation::new(region.into(), payload)?)
+}
+
+fn canonical_renderer_texture_upload(
+    texture: &GpuTextureHandle,
+    contents: &[u8],
+) -> Result<GpuUploadOperation> {
+    let extent = texture.descriptor().extent();
+    let region = GpuTextureCopyRegion::new(
+        texture,
+        0,
+        GpuTextureOrigin::new(0, 0, 0),
+        GpuTextureAspect::Color,
+        GpuCopyExtent::new(extent.width(), extent.height(), extent.depth_or_layers())?,
+    )?;
+    let label = texture.descriptor().common().label();
+    let payload = PreparedGpuData::<TransferData>::from_pod_transfer(
+        format!("renderer pending texture upload {}", label.as_str()),
+        contents,
+        texture.descriptor().common().provenance().clone(),
+    )?;
+    Ok(GpuUploadOperation::new(region.into(), payload)?)
+}
+
 impl RendererPendingOperations {
-    fn queue_buffer(&mut self, buffer: &GpuRealizedBuffer, contents: &[u8]) {
-        self.buffer_uploads.push(RendererPendingBufferUpload {
-            buffer: buffer.clone(),
-            bytes: contents.to_vec(),
-        });
-    }
-
-    pub(super) fn apply(self, context: &GpuContext, queue: &Queue) -> Result<()> {
-        for upload in self.buffer_uploads {
-            Self::apply_buffer_upload(context, queue, &upload)?;
-        }
-        for upload in self.texture_uploads {
-            context
-                .current_render_execution_bridge()
-                .for_texture_upload(
-                    &upload.texture,
-                    UploadRendererTexture {
-                        queue,
-                        bytes: &upload.bytes,
-                        bytes_per_row: upload.bytes_per_row,
-                        rows_per_image: upload.rows_per_image,
-                        size: upload.size,
-                    },
-                )?;
-        }
+    fn queue_buffer(&mut self, buffer: &RendererBufferResource, contents: &[u8]) -> Result<()> {
+        self.buffer_uploads
+            .push(canonical_renderer_buffer_upload(&buffer._handle, contents)?);
         Ok(())
     }
 
-    pub(super) fn apply_buffer_upload(
-        context: &GpuContext,
-        queue: &Queue,
-        upload: &RendererPendingBufferUpload,
+    pub(super) fn queue_texture(
+        &mut self,
+        texture: &RendererTextureResource,
+        contents: &[u8],
     ) -> Result<()> {
-        context
-            .current_render_execution_bridge()
-            .for_buffer_upload(
-                &upload.buffer,
-                WriteRendererBuffer {
-                    queue,
-                    contents: &upload.bytes,
-                },
-            )?;
+        self.texture_uploads.push(canonical_renderer_texture_upload(
+            &texture._handle,
+            contents,
+        )?);
         Ok(())
     }
-}
 
-struct WriteRendererBuffer<'a> {
-    queue: &'a Queue,
-    contents: &'a [u8],
-}
-
-impl CurrentRenderBufferUploadTerminal for WriteRendererBuffer<'_> {
-    fn upload_buffer(self, buffer: &Buffer) {
-        self.queue.write_buffer(buffer, 0, self.contents);
-    }
-}
-
-struct UploadRendererTexture<'a> {
-    queue: &'a Queue,
-    bytes: &'a [u8],
-    bytes_per_row: u32,
-    rows_per_image: u32,
-    size: Extent3d,
-}
-
-impl CurrentRenderTextureUploadTerminal for UploadRendererTexture<'_> {
-    fn upload_texture(self, texture: &Texture) {
-        self.queue.write_texture(
-            TexelCopyTextureInfo {
-                texture,
-                mip_level: 0,
-                origin: Origin3d::ZERO,
-                aspect: TextureAspect::All,
-            },
-            self.bytes,
-            TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(self.bytes_per_row),
-                rows_per_image: Some(self.rows_per_image),
-            },
-            self.size,
-        );
+    pub(super) fn into_operations(self) -> Vec<GpuUploadOperation> {
+        self.buffer_uploads
+            .into_iter()
+            .chain(self.texture_uploads)
+            .collect()
     }
 }
 
@@ -1300,6 +1265,7 @@ fn hash_prepared_feature_contribution(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::gpu::GpuTransferRegion;
     use crate::plugins::render::{
         FeatureContributionStatus, FeatureFallbackPolicy, PreparedFeatureContribution,
         PreparedFeaturePayload, PreparedMaterialBindingTable, PreparedMaterialFeatureContribution,
@@ -1309,6 +1275,71 @@ mod tests {
         PreparedMaterialTextureBinding, PreparedMaterialTextureBindingLocation,
         PreparedMaterialTextureKind,
     };
+
+    #[test]
+    fn pending_buffer_upload_retains_exact_logical_destination_and_payload() {
+        let mut resource_ids = GpuWorkResourceIdAllocator::new();
+        let buffer = resource_ids
+            .allocate_buffer_handle(
+                super::super::resource_descriptors::buffer_descriptor(
+                    "pending buffer upload test",
+                    16,
+                    [GpuBufferUsage::CopyDestination],
+                    GpuResourceLifetime::Transient,
+                    GpuMemoryIntent::Device,
+                )
+                .expect("test buffer descriptor should be valid"),
+            )
+            .expect("test buffer handle should allocate");
+        let operation = canonical_renderer_buffer_upload(&buffer, &[1_u8, 2, 3, 4])
+            .expect("pending buffer upload should become canonical");
+
+        let GpuTransferRegion::Buffer(destination) = operation.destination() else {
+            panic!("pending buffer upload should retain a buffer destination");
+        };
+        assert_eq!(
+            destination.buffer().diagnostic_identity(),
+            buffer.diagnostic_identity()
+        );
+        assert_eq!(destination.range().offset(), 0);
+        assert_eq!(destination.range().size(), 4);
+        assert_eq!(operation.payload().as_bytes(), &[1_u8, 2, 3, 4]);
+    }
+
+    #[test]
+    fn pending_texture_upload_retains_exact_logical_destination_and_payload() {
+        let mut resource_ids = GpuWorkResourceIdAllocator::new();
+        let texture = resource_ids
+            .allocate_texture_handle(
+                texture_descriptor_with_extent(
+                    "pending texture upload test",
+                    GpuTextureDimension::D2,
+                    (2, 1, 1),
+                    crate::plugins::gpu::GpuTextureFormat::Rgba8Unorm,
+                    [GpuTextureUsage::CopyDestination],
+                    GpuResourceLifetime::Transient,
+                )
+                .expect("test texture descriptor should be valid"),
+            )
+            .expect("test texture handle should allocate");
+        let bytes = [1_u8, 2, 3, 4, 5, 6, 7, 8];
+        let operation = canonical_renderer_texture_upload(&texture, &bytes)
+            .expect("pending texture upload should become canonical");
+
+        let GpuTransferRegion::Texture(destination) = operation.destination() else {
+            panic!("pending texture upload should retain a texture destination");
+        };
+        assert_eq!(
+            destination.texture().diagnostic_identity(),
+            texture.diagnostic_identity()
+        );
+        assert_eq!(destination.mip_level(), 0);
+        assert_eq!(destination.origin(), GpuTextureOrigin::new(0, 0, 0));
+        assert_eq!(destination.extent().width(), 2);
+        assert_eq!(destination.extent().height(), 1);
+        assert_eq!(destination.extent().depth_or_layers(), 1);
+        assert_eq!(operation.payload().as_bytes(), bytes.as_slice());
+    }
 
     #[test]
     fn material_contribution_hash_uses_encoded_typed_parameter_payload() {

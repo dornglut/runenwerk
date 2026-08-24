@@ -17,15 +17,36 @@ pub(super) struct ExpandedRenderPassOccurrence<'a> {
     pub(super) control_order_after: Vec<RenderGpuWorkOccurrenceId>,
 }
 
+/// Test-local per-invocation convenience wrapper over the frame-owned occurrence allocator.
+#[cfg(test)]
+fn expand_render_pass_occurrences<'a, F>(
+    flow: &'a CompiledRenderFlowPlan,
+    flow_inputs: &'a PreparedFlowInputs,
+    include_pass: F,
+) -> Result<Vec<ExpandedRenderPassOccurrence<'a>>>
+where
+    F: FnMut(&CompiledPassExecutionPlan) -> Result<bool>,
+{
+    let mut maximum_occurrence = 0_u64;
+    expand_render_pass_occurrences_in_frame(
+        flow,
+        flow_inputs,
+        &mut maximum_occurrence,
+        include_pass,
+    )
+}
+
 /// Expands one prepared render invocation into the pass executions that can become canonical GPU
-/// work.
+/// work while allocating occurrence identity from one frame-owned monotonic space.
 ///
 /// Lexical pass order is used only to locate contiguous fixed-step regions and to lift an authored
 /// `order_after` request onto the latest actual predecessor occurrence. Arbitrary lexical adjacency
-/// outside fixed-step regions never becomes execution order.
-pub(super) fn expand_render_pass_occurrences<'a, F>(
+/// outside fixed-step regions never becomes execution order. The caller must retain the same
+/// `maximum_occurrence` across every invocation that can enter one bounded frame GPU work graph.
+pub(super) fn expand_render_pass_occurrences_in_frame<'a, F>(
     flow: &'a CompiledRenderFlowPlan,
     flow_inputs: &'a PreparedFlowInputs,
+    maximum_occurrence: &mut u64,
     mut include_pass: F,
 ) -> Result<Vec<ExpandedRenderPassOccurrence<'a>>>
 where
@@ -44,7 +65,6 @@ where
         .map(|pass| (execution_pass_id(pass), pass))
         .collect::<BTreeMap<_, _>>();
 
-    let mut next_occurrence = 1_u64;
     let mut consumed_region_passes = BTreeSet::<RenderPassId>::new();
     let mut occurrences = Vec::<ExpandedRenderPassOccurrence<'a>>::new();
 
@@ -70,7 +90,7 @@ where
                     if !included.get(region_pass_id).copied().unwrap_or(false) {
                         continue;
                     }
-                    let occurrence_id = allocate_occurrence_id(&mut next_occurrence)?;
+                    let occurrence_id = allocate_occurrence_id(maximum_occurrence)?;
                     let control_order_after = previous_region_occurrence.into_iter().collect();
                     occurrences.push(ExpandedRenderPassOccurrence {
                         occurrence_id,
@@ -91,7 +111,7 @@ where
 
         if included.get(&pass_id).copied().unwrap_or(false) {
             occurrences.push(ExpandedRenderPassOccurrence {
-                occurrence_id: allocate_occurrence_id(&mut next_occurrence)?,
+                occurrence_id: allocate_occurrence_id(maximum_occurrence)?,
                 pass,
                 fixed_step_iteration: None,
                 control_order_after: Vec::new(),
@@ -103,12 +123,11 @@ where
     Ok(occurrences)
 }
 
-fn allocate_occurrence_id(next: &mut u64) -> Result<RenderGpuWorkOccurrenceId> {
-    let value = *next;
-    *next = next.checked_add(1).ok_or_else(|| {
+fn allocate_occurrence_id(maximum: &mut u64) -> Result<RenderGpuWorkOccurrenceId> {
+    *maximum = maximum.checked_add(1).ok_or_else(|| {
         anyhow::anyhow!("render GPU execution occurrence identity space is exhausted")
     })?;
-    Ok(RenderGpuWorkOccurrenceId::new(value))
+    Ok(RenderGpuWorkOccurrenceId::new(*maximum))
 }
 
 fn lift_explicit_non_data_orders(
@@ -390,5 +409,57 @@ mod tests {
         assert_eq!(occurrences.len(), 2);
         assert!(occurrences[0].control_order_after.is_empty());
         assert!(occurrences[1].control_order_after.is_empty());
+    }
+
+    #[test]
+    fn frame_occurrence_allocator_does_not_reuse_ids_across_invocations() {
+        let flow = RenderFlow::new("frame.occurrence.identity")
+            .compute_pass("a")
+            .dispatch([1, 1, 1])
+            .finish()
+            .compute_pass("b")
+            .dispatch([1, 1, 1])
+            .finish()
+            .validate()
+            .expect("frame occurrence flow should validate");
+        let plan = compile_flow_plan(&flow).expect("frame occurrence flow should compile");
+        let mut inputs = PreparedFlowInputs::default();
+        for pass in &plan.execution.passes {
+            inputs
+                .projected_dispatch_workgroups
+                .insert(execution_pass_id(pass), [1, 1, 1]);
+        }
+
+        let mut maximum_occurrence = 0_u64;
+        let first = expand_render_pass_occurrences_in_frame(
+            &plan,
+            &inputs,
+            &mut maximum_occurrence,
+            |_| Ok(true),
+        )
+        .expect("first frame invocation should expand");
+        let second = expand_render_pass_occurrences_in_frame(
+            &plan,
+            &inputs,
+            &mut maximum_occurrence,
+            |_| Ok(true),
+        )
+        .expect("second frame invocation should expand");
+
+        assert_eq!(
+            first
+                .iter()
+                .map(|occurrence| occurrence.occurrence_id.raw())
+                .collect::<Vec<_>>(),
+            vec![1, 2]
+        );
+        assert_eq!(
+            second
+                .iter()
+                .map(|occurrence| occurrence.occurrence_id.raw())
+                .collect::<Vec<_>>(),
+            vec![3, 4]
+        );
+        assert_eq!(maximum_occurrence, 4);
     }
 }

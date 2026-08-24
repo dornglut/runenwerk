@@ -2,13 +2,13 @@ use super::logical_timing::LogicalGpuPassTiming;
 use super::*;
 use crate::plugins::gpu::{
     GpuAttachmentStore, GpuBlendConstant, GpuBufferHandle, GpuBufferRange, GpuBufferRegion,
-    GpuColorAttachmentLoad, GpuColorClearValue, GpuComputeOperation, GpuCopyOperation,
-    GpuDepthAttachmentLoad, GpuDepthClearValue, GpuDepthStencilAccess, GpuDispatchIntent,
-    GpuDispatchSize, GpuDrawIntent, GpuDrawRange, GpuIndexBufferBinding, GpuIndexFormat,
-    GpuQueryRange, GpuQueryResolveOperation, GpuRenderColorAttachment,
-    GpuRenderDepthStencilAttachment, GpuRenderDraw, GpuRenderOperation, GpuScissorRect,
-    GpuTextureViewHandle, GpuTimestampWrites, GpuUploadOperation, GpuVertexBufferBinding,
-    GpuViewport, GpuWorkOperation, PreparedGpuData, TransferData,
+    GpuColorAttachmentLoad, GpuColorClearValue, GpuComputeOperation, GpuDepthAttachmentLoad,
+    GpuDepthClearValue, GpuDepthStencilAccess, GpuDispatchIntent, GpuDispatchSize, GpuDrawIntent,
+    GpuDrawRange, GpuIndexBufferBinding, GpuIndexFormat, GpuQueryRange, GpuQueryResolveOperation,
+    GpuReadbackId, GpuReadbackOperation, GpuRenderColorAttachment, GpuRenderDepthStencilAttachment,
+    GpuRenderDraw, GpuRenderOperation, GpuScissorRect, GpuTextureViewHandle, GpuTimestampWrites,
+    GpuUploadOperation, GpuVertexBufferBinding, GpuViewport, GpuWorkOperation, PreparedGpuData,
+    TransferData,
 };
 use crate::plugins::render::graph::CompiledDrawSource;
 use crate::plugins::render::{RenderDepthPolicy, RenderIndirectDrawArgsKind};
@@ -56,16 +56,18 @@ pub(super) fn project_compute_operation(
     Ok(GpuWorkOperation::Compute(operation))
 }
 
-/// Projects one already-realized, surface-independent raster pass into canonical RunenGPU work.
+/// Projects one already-realized raster pass into canonical RunenGPU work.
 ///
-/// `None` is returned only when the pass still depends on a target whose logical GPU identity is
-/// intentionally unavailable before G7A (the current host surface or renderer dynamic-target
-/// compatibility path). G5A must not invent a placeholder surface identity to erase that boundary.
+/// The optional surface view is the exact logical view owned by an acquired G7A surface image.
+/// When it is absent, `SurfaceColor` remains residual exactly as it did before G7A. Dynamic-target
+/// compatibility paths and unsupported surface-depth imports remain residual rather than receiving
+/// invented placeholder identities.
 pub(super) fn project_render_operation(
     context: &GpuContext,
     runtime_resources: &FlowRuntimeResources,
     pass: &CompiledPassExecutionPlan,
     pipeline: &PreparedPipelinePass,
+    surface_color_view: Option<&GpuTextureViewHandle>,
     timing: Option<(&LogicalGpuPassTiming, GpuPassTimestampIndices)>,
 ) -> Result<Option<GpuWorkOperation>> {
     let raster = match pass {
@@ -95,7 +97,9 @@ pub(super) fn project_render_operation(
     }
     let color_key =
         runtime_resources.resolve_resource_key(raster.pass_id, color_target_ref, "color_output")?;
-    let Some(color_target) = logical_texture_target(runtime_resources, &color_key) else {
+    let Some(color_target) =
+        logical_texture_target(runtime_resources, &color_key, surface_color_view)
+    else {
         return Ok(None);
     };
     if color_target.is_depth {
@@ -126,7 +130,7 @@ pub(super) fn project_render_operation(
     } else if let Some(depth_ref) = raster.targets.depth_output.as_ref() {
         let depth_key =
             runtime_resources.resolve_resource_key(raster.pass_id, depth_ref, "depth_output")?;
-        let Some(depth_target) = logical_texture_target(runtime_resources, &depth_key) else {
+        let Some(depth_target) = logical_texture_target(runtime_resources, &depth_key, None) else {
             return Ok(None);
         };
         if !depth_target.is_depth {
@@ -306,7 +310,19 @@ struct LogicalTextureTarget {
 fn logical_texture_target(
     runtime_resources: &FlowRuntimeResources,
     key: &RuntimeResourceKey,
+    surface_color_view: Option<&GpuTextureViewHandle>,
 ) -> Option<LogicalTextureTarget> {
+    if matches!(key, RuntimeResourceKey::SurfaceColor) {
+        let view = surface_color_view?;
+        let texture = view.descriptor().texture().descriptor();
+        let extent = texture.extent();
+        return Some(LogicalTextureTarget {
+            view: view.clone(),
+            size: (extent.width(), extent.height()),
+            is_depth: texture.format().is_depth(),
+        });
+    }
+
     let texture = match key {
         RuntimeResourceKey::FlowOwned(resource_id) => runtime_resources.textures.get(resource_id),
         RuntimeResourceKey::InvocationHistory {
@@ -339,7 +355,6 @@ fn compiled_resource_ref_matches_id(
 }
 
 /// Projects an immutable renderer-prepared byte sequence into exact logical CPU→GPU buffer work.
-/// Physical `queue.write_buffer` remains a temporary G5B/G5C realization detail.
 pub(super) fn project_buffer_upload(
     buffer: &GpuBufferHandle,
     bytes: &[u8],
@@ -361,13 +376,13 @@ pub(super) fn project_buffer_upload(
 
 /// Canonical timestamp tail for one expanded renderer invocation.
 ///
-/// Both the prepared G3 graph and the temporary pre-G5B physical timing adapter consume these
-/// same RunenGPU operation values. Renderer timing state may retain physical leases and diagnostic
-/// metadata, but it must not reconstruct resolve/copy ranges independently.
+/// The resolve and GPU-to-CPU readback are both first-class RunenGPU operations. Readback result
+/// observation follows the accepted G5 submission lifecycle and does not introduce a second copy
+/// destination or readback DAG.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct ProjectedTimingTail {
     resolve: GpuQueryResolveOperation,
-    readback_copy: GpuCopyOperation,
+    readback: GpuReadbackOperation,
 }
 
 impl ProjectedTimingTail {
@@ -375,34 +390,29 @@ impl ProjectedTimingTail {
         query_set: &crate::plugins::gpu::GpuQuerySetHandle,
         query_range: GpuQueryRange,
         resolve_buffer: &GpuBufferHandle,
-        readback_buffer: &GpuBufferHandle,
+        readback_id: GpuReadbackId,
     ) -> Result<Self> {
         let resolve = GpuQueryResolveOperation::new(query_set, query_range, resolve_buffer, 0)?;
         let byte_len = u64::from(resolve.source_range().count())
             .checked_mul(8)
             .ok_or_else(|| anyhow::anyhow!("render GPU timestamp byte coverage overflow"))?;
-        let readback_copy = GpuCopyOperation::buffer_to_buffer(
+        let readback = GpuReadbackOperation::new(
             GpuBufferRegion::new(
                 resolve_buffer,
                 GpuBufferRange::new(resolve_buffer, 0, byte_len)?,
-            )?,
-            GpuBufferRegion::new(
-                readback_buffer,
-                GpuBufferRange::new(readback_buffer, 0, byte_len)?,
-            )?,
+            )?
+            .into(),
+            readback_id,
         )?;
-        Ok(Self {
-            resolve,
-            readback_copy,
-        })
+        Ok(Self { resolve, readback })
     }
 
     pub(super) fn resolve(&self) -> &GpuQueryResolveOperation {
         &self.resolve
     }
 
-    pub(super) fn readback_copy(&self) -> &GpuCopyOperation {
-        &self.readback_copy
+    pub(super) fn readback(&self) -> &GpuReadbackOperation {
+        &self.readback
     }
 }
 
@@ -410,9 +420,9 @@ pub(super) fn project_timing_tail(
     query_set: &crate::plugins::gpu::GpuQuerySetHandle,
     query_range: GpuQueryRange,
     resolve_buffer: &GpuBufferHandle,
-    readback_buffer: &GpuBufferHandle,
+    readback_id: GpuReadbackId,
 ) -> Result<ProjectedTimingTail> {
-    ProjectedTimingTail::new(query_set, query_range, resolve_buffer, readback_buffer)
+    ProjectedTimingTail::new(query_set, query_range, resolve_buffer, readback_id)
 }
 
 pub(super) fn timestamp_writes(
@@ -424,4 +434,57 @@ pub(super) fn timestamp_writes(
         Some(indices.begin),
         Some(indices.end),
     )?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plugins::gpu::{
+        GpuResourceLifetime, GpuTextureFormat, GpuTextureUsage, GpuWorkResourceIdAllocator,
+    };
+    use crate::plugins::render::renderer::resource_descriptors::{
+        texture_descriptor, whole_texture_view_descriptor,
+    };
+    use std::num::NonZeroU64;
+
+    #[test]
+    fn supplied_surface_color_view_is_the_logical_render_target() {
+        let mut allocator =
+            GpuWorkResourceIdAllocator::for_owner_scope(NonZeroU64::new(811).unwrap());
+        let texture = allocator
+            .allocate_texture_handle(
+                texture_descriptor(
+                    "canonical surface color texture",
+                    (37, 19),
+                    GpuTextureFormat::Bgra8UnormSrgb,
+                    [GpuTextureUsage::ColorAttachment],
+                    GpuResourceLifetime::Transient,
+                )
+                .expect("surface-like texture descriptor should be valid"),
+            )
+            .expect("surface-like texture handle should allocate");
+        let view = allocator
+            .allocate_texture_view_handle(
+                whole_texture_view_descriptor("canonical surface color view", &texture)
+                    .expect("surface-like view descriptor should be valid"),
+            )
+            .expect("surface-like view handle should allocate");
+        let runtime_resources = FlowRuntimeResources::default();
+
+        let target = logical_texture_target(
+            &runtime_resources,
+            &RuntimeResourceKey::SurfaceColor,
+            Some(&view),
+        )
+        .expect("supplied surface color view should become a logical render target");
+
+        assert_eq!(target.view.descriptor(), view.descriptor());
+        assert_eq!(target.size, (37, 19));
+        assert!(!target.is_depth);
+        assert!(
+            logical_texture_target(&runtime_resources, &RuntimeResourceKey::SurfaceColor, None,)
+                .is_none(),
+            "surface color remains residual until the acquired G7A view is supplied"
+        );
+    }
 }

@@ -1,3 +1,5 @@
+mod retirement;
+
 use super::super::WgpuDeviceHealth;
 use super::{WgpuSurfaceLease, WgpuSurfaceState, WgpuSurfaceStateInner};
 use crate::plugins::gpu::{

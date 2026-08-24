@@ -1,7 +1,6 @@
 use crate::plugins::gpu::{
-    GpuBufferHandle, GpuContext, GpuRealizedBindGroup, GpuRealizedBindGroupLayout,
-    GpuRealizedBuffer, GpuRealizedRenderPipeline, GpuRealizedSampler, GpuRealizedTexture,
-    GpuRealizedTextureView, GpuSamplerHandle, GpuTextureHandle, GpuTextureViewHandle,
+    GpuBufferHandle, GpuContext, GpuRealizedRenderPipeline, GpuRuntimeBindingSet,
+    GpuRuntimeBindingValue, GpuSamplerHandle, GpuTextureHandle, GpuTextureViewHandle,
     GpuWorkResourceIdAllocator,
 };
 use crate::plugins::render::RenderFlowId;
@@ -585,22 +584,21 @@ struct ScreenUniformRaw {
 struct RectPass {
     pipeline: GpuRealizedRenderPipeline,
     screen_buffer: RendererBufferResource,
-    screen_bind_group: GpuRealizedBindGroup,
+    runtime_bindings: GpuRuntimeBindingSet,
 }
 
 #[derive(Debug)]
 struct StrokePass {
     pipeline: GpuRealizedRenderPipeline,
     screen_buffer: RendererBufferResource,
-    screen_bind_group: GpuRealizedBindGroup,
+    runtime_bindings: GpuRuntimeBindingSet,
 }
 
 #[derive(Debug)]
 struct GlyphPass {
     pipeline: GpuRealizedRenderPipeline,
     screen_buffer: RendererBufferResource,
-    screen_bind_group: GpuRealizedBindGroup,
-    texture_bind_group_layout: GpuRealizedBindGroupLayout,
+    screen_binding: GpuRuntimeBindingValue,
     texture_sampler: RendererSamplerResource,
 }
 
@@ -608,8 +606,7 @@ struct GlyphPass {
 struct ViewportEmbedPass {
     pipeline: GpuRealizedRenderPipeline,
     screen_buffer: RendererBufferResource,
-    screen_bind_group: GpuRealizedBindGroup,
-    texture_bind_group_layout: GpuRealizedBindGroupLayout,
+    screen_binding: GpuRuntimeBindingValue,
     texture_sampler: RendererSamplerResource,
 }
 
@@ -617,33 +614,33 @@ struct ViewportEmbedPass {
 struct ProductSurfacePass {
     pipeline: GpuRealizedRenderPipeline,
     screen_buffer: RendererBufferResource,
-    screen_bind_group: GpuRealizedBindGroup,
-    texture_bind_group_layout: GpuRealizedBindGroupLayout,
+    screen_binding: GpuRuntimeBindingValue,
     texture_sampler: RendererSamplerResource,
 }
 
 #[derive(Debug, Clone)]
 struct RendererBufferResource {
     _handle: GpuBufferHandle,
-    realized: GpuRealizedBuffer,
 }
 
 #[derive(Debug, Clone)]
 struct RendererTextureResource {
     _handle: GpuTextureHandle,
-    realized: GpuRealizedTexture,
 }
 
 #[derive(Debug, Clone)]
 struct RendererTextureViewResource {
     _handle: GpuTextureViewHandle,
-    _realized: GpuRealizedTextureView,
 }
 
 #[derive(Debug, Clone)]
 struct RendererSamplerResource {
     _handle: GpuSamplerHandle,
-    _realized: GpuRealizedSampler,
+}
+
+#[derive(Debug, Clone)]
+struct UiTextureBindings {
+    runtime_bindings: GpuRuntimeBindingSet,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -655,9 +652,8 @@ enum UiPipelineKind {
     ProductSurface,
 }
 
-type UiViewportBindGroups = BTreeMap<ViewportSurfaceBindingSource, GpuRealizedBindGroup>;
-type UiProductSurfaceBindGroups =
-    BTreeMap<ProductSurfaceTextureBindingSource, GpuRealizedBindGroup>;
+type UiViewportBindGroups = BTreeMap<ViewportSurfaceBindingSource, UiTextureBindings>;
+type UiProductSurfaceBindGroups = BTreeMap<ProductSurfaceTextureBindingSource, UiTextureBindings>;
 
 #[derive(Debug, Clone, Default)]
 struct UiDynamicBindGroups {
@@ -665,27 +661,12 @@ struct UiDynamicBindGroups {
     product_surface: UiProductSurfaceBindGroups,
 }
 
-/// Data uploads are intentionally staged while G4C1/G4C2/G4C3 resources are realized. Their
-/// queue operations execute only after the batch has acquired its raw G5 operation loan.
+/// Canonical data uploads staged during renderer preparation and consumed by the frame-owned G5
+/// work graph before submission.
 #[derive(Debug, Clone, Default)]
 struct RendererPendingOperations {
-    buffer_uploads: Vec<RendererPendingBufferUpload>,
-    texture_uploads: Vec<RendererPendingTextureUpload>,
-}
-
-#[derive(Debug, Clone)]
-struct RendererPendingBufferUpload {
-    buffer: GpuRealizedBuffer,
-    bytes: Vec<u8>,
-}
-
-#[derive(Debug, Clone)]
-struct RendererPendingTextureUpload {
-    texture: GpuRealizedTexture,
-    bytes: Vec<u8>,
-    bytes_per_row: u32,
-    rows_per_image: u32,
-    size: Extent3d,
+    buffer_uploads: Vec<crate::plugins::gpu::GpuUploadOperation>,
+    texture_uploads: Vec<crate::plugins::gpu::GpuUploadOperation>,
 }
 
 #[derive(Debug, Clone)]
@@ -756,7 +737,7 @@ struct UiProductSurfaceBatch {
 struct UiGlyphAtlasGpu {
     _texture: RendererTextureResource,
     _view: RendererTextureViewResource,
-    bind_group: GpuRealizedBindGroup,
+    texture_bindings: UiTextureBindings,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -849,7 +830,7 @@ pub struct Renderer {
 
 #[derive(Debug, ecs::Component, ecs::Resource)]
 pub struct Gfx {
-    ctx: WgpuCtx<'static>,
+    ctx: WgpuCtx,
     pub renderer: Renderer,
 }
 
@@ -899,7 +880,7 @@ impl Gfx {
     ) -> Option<(u32, u32)> {
         self.ctx
             .surface_config(render_surface_id)
-            .map(|config| (config.width, config.height))
+            .map(|config| (config.width(), config.height()))
     }
 
     pub fn resize(
@@ -927,9 +908,9 @@ impl Gfx {
         let mut timings = GfxFrameTimings::default();
         let render_surface_id = prepared_frame.surface.render_surface_id;
         let acquire_start = Instant::now();
-        let frame = self.ctx.get_current_texture(render_surface_id)?;
+        let acquired = self.ctx.acquire_surface_image(render_surface_id)?;
         timings.acquire_ms = acquire_start.elapsed().as_secs_f32() * 1000.0;
-        let view = frame.texture.create_view(&Default::default());
+        let acquired_extent = acquired.texture().descriptor().extent();
         let gpu_timing_capability = if self
             .ctx
             .context()
@@ -943,27 +924,29 @@ impl Gfx {
         let context = self.ctx.context();
         timings.renderer = self.renderer.render(
             context,
-            &frame.texture,
-            &view,
+            acquired.texture(),
+            acquired.default_view(),
+            (acquired_extent.width(), acquired_extent.height()),
             prepared_frame,
             shader_registry,
             compiled_flows,
             ui_rect_shader,
             ui_font_atlas,
             viewport_surface_bindings,
-            self.ctx
-                .surface_config(render_surface_id)
-                .ok_or_else(|| anyhow::anyhow!("render surface is not attached"))?
-                .format,
+            resource_descriptors::wgpu_texture_format(
+                self.ctx
+                    .surface_config(render_surface_id)
+                    .ok_or_else(|| anyhow::anyhow!("render surface is not attached"))?
+                    .format(),
+            ),
             preflight_config,
             debug_control,
             debug_config,
             gpu_timing_capability,
         )?;
 
-        let present_start = Instant::now();
-        self.ctx.present(frame);
-        timings.present_ms = present_start.elapsed().as_secs_f32() * 1000.0;
+        // The one terminal Present is part of the accepted RunenGPU submission above.
+        timings.present_ms = 0.0;
         Ok(timings)
     }
 }

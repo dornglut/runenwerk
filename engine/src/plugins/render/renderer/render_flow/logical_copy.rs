@@ -1,27 +1,32 @@
+use super::super::dynamic_targets::RendererDynamicTextureTargetCache;
 use super::*;
 use crate::plugins::gpu::{
     GpuBufferRange, GpuBufferRegion, GpuCopyExtent, GpuCopyOperation, GpuTextureAspect,
-    GpuTextureCopyRegion, GpuTextureHandle, GpuTextureOrigin, GpuWorkOperation,
+    GpuTextureCopyRegion, GpuTextureHandle, GpuTextureOrigin, GpuTextureViewHandle,
+    GpuWorkOperation,
 };
+use crate::plugins::render::RenderPassId;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum ProjectedCopyOperation {
     /// Source and destination resolve to the same runtime resource, so no GPU operation exists.
     NoWork,
-    /// Fully logical surface-independent transfer semantics owned by RunenGPU.
+    /// Fully logical transfer semantics owned by RunenGPU.
     Canonical(Box<GpuWorkOperation>),
-    /// At least one endpoint still lacks durable logical GPU identity before G7A.
+    /// At least one endpoint still lacks durable logical GPU identity before the live G7A cutover.
     PreG7Residual,
 }
 
 /// Projects one resolved renderer copy into canonical RunenGPU work or an explicit pre-G7 residual.
 ///
 /// Buffer/texture class mismatches remain invalid. The current renderer does not implement
-/// buffer-texture copies, so G5A does not invent that execution meaning here. Surface/dynamic
-/// texture endpoints remain explicitly residual rather than sharing the same result as a true
-/// no-work copy.
+/// buffer-texture copies, so G5A does not invent that execution meaning here. Dynamic texture
+/// endpoints become canonical only when the frame resolver supplies the existing target cache; the
+/// transitional per-invocation path deliberately withholds it. Surface endpoints remain residual
+/// until their exact acquired G7A handle is supplied by the frame caller.
 pub(super) fn project_copy_operation(
     runtime_resources: &FlowRuntimeResources,
+    dynamic_texture_targets: Option<&RendererDynamicTextureTargetCache>,
     pass: &CompiledCopyExecutionPlan,
 ) -> Result<ProjectedCopyOperation> {
     let source = pass.source.as_ref().ok_or_else(|| {
@@ -94,52 +99,153 @@ pub(super) fn project_copy_operation(
             );
         }
         (RuntimeResourceKind::TextureLike, RuntimeResourceKind::TextureLike) => {
-            let Some(source) = logical_texture(runtime_resources, &source_key) else {
+            let Some(source) = logical_texture(
+                runtime_resources,
+                dynamic_texture_targets,
+                pass.pass_id,
+                &source_key,
+            )?
+            else {
                 return Ok(ProjectedCopyOperation::PreG7Residual);
             };
-            let Some(destination) = logical_texture(runtime_resources, &destination_key) else {
+            let Some(destination) = logical_texture(
+                runtime_resources,
+                dynamic_texture_targets,
+                pass.pass_id,
+                &destination_key,
+            )?
+            else {
                 return Ok(ProjectedCopyOperation::PreG7Residual);
             };
-            if source.is_depth || destination.is_depth {
-                anyhow::bail!(
-                    "copy pass '{}' requested unsupported depth copy '{}' -> '{}'; only color-like texture copies are supported",
-                    pass.pass_id,
-                    source_key,
-                    destination_key
-                );
-            }
-            let width = source.size.0.min(destination.size.0);
-            let height = source.size.1.min(destination.size.1);
-            if width == 0 || height == 0 {
-                anyhow::bail!(
-                    "copy pass '{}' resolved texture copy extent to zero for '{}' -> '{}'",
-                    pass.pass_id,
-                    source_key,
-                    destination_key
-                );
-            }
-            let extent = GpuCopyExtent::new(width, height, 1)?;
-            GpuCopyOperation::texture_to_texture(
-                GpuTextureCopyRegion::new(
-                    source.handle,
-                    0,
-                    GpuTextureOrigin::new(0, 0, 0),
-                    GpuTextureAspect::Color,
-                    extent,
-                )?,
-                GpuTextureCopyRegion::new(
-                    destination.handle,
-                    0,
-                    GpuTextureOrigin::new(0, 0, 0),
-                    GpuTextureAspect::Color,
-                    extent,
-                )?,
+            project_texture_to_texture(
+                pass.pass_id,
+                source_key,
+                source,
+                destination_key,
+                destination,
             )?
         }
     };
     Ok(ProjectedCopyOperation::Canonical(Box::new(
         GpuWorkOperation::Copy(operation),
     )))
+}
+
+/// Projects the current render-domain Present pass semantics.
+///
+/// `CompiledPresentExecutionPlan` does not consume the presentation lease. It only ensures that its
+/// selected texture is copied into `SurfaceColor`; the one frame-terminal `GpuPresentOperation`
+/// remains a separate G5C operation. A source that is already `SurfaceColor` is therefore true
+/// no-work. The destination comes only from the exact acquired G7A default view supplied by the
+/// frame caller.
+pub(super) fn project_present_copy_operation(
+    runtime_resources: &FlowRuntimeResources,
+    dynamic_texture_targets: Option<&RendererDynamicTextureTargetCache>,
+    pass: &CompiledPresentExecutionPlan,
+    surface_color_view: Option<&GpuTextureViewHandle>,
+) -> Result<ProjectedCopyOperation> {
+    let source = pass.source.as_ref().ok_or_else(|| {
+        anyhow::anyhow!(
+            "present pass '{}' is missing source resource in execution plan",
+            pass.pass_id
+        )
+    })?;
+    let source_key =
+        runtime_resources.resolve_resource_key(pass.pass_id, source, "present_source")?;
+    if source_key == RuntimeResourceKey::SurfaceColor {
+        return Ok(ProjectedCopyOperation::NoWork);
+    }
+
+    let source_kind = runtime_resources
+        .kind_of_resource(source_key.clone())
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "present pass '{}' references unknown source resource '{}'",
+                pass.pass_id,
+                source_key
+            )
+        })?;
+    if matches!(source_kind, RuntimeResourceKind::BufferLike) {
+        anyhow::bail!(
+            "present pass '{}' reads buffer-like resource '{}' but present requires a texture-like source",
+            pass.pass_id,
+            source_key
+        );
+    }
+
+    let Some(source) = logical_texture(
+        runtime_resources,
+        dynamic_texture_targets,
+        pass.pass_id,
+        &source_key,
+    )?
+    else {
+        return Ok(ProjectedCopyOperation::PreG7Residual);
+    };
+    let Some(surface_color_view) = surface_color_view else {
+        return Ok(ProjectedCopyOperation::PreG7Residual);
+    };
+    let destination_texture = surface_color_view.descriptor().texture();
+    let destination_extent = destination_texture.descriptor().extent();
+    let destination = LogicalCopyTexture {
+        handle: destination_texture,
+        size: (destination_extent.width(), destination_extent.height()),
+        is_depth: destination_texture.descriptor().format().is_depth(),
+    };
+    let operation = project_texture_to_texture(
+        pass.pass_id,
+        source_key,
+        source,
+        RuntimeResourceKey::SurfaceColor,
+        destination,
+    )?;
+    Ok(ProjectedCopyOperation::Canonical(Box::new(
+        GpuWorkOperation::Copy(operation),
+    )))
+}
+
+fn project_texture_to_texture(
+    pass_id: RenderPassId,
+    source_key: RuntimeResourceKey,
+    source: LogicalCopyTexture<'_>,
+    destination_key: RuntimeResourceKey,
+    destination: LogicalCopyTexture<'_>,
+) -> Result<GpuCopyOperation> {
+    if source.is_depth || destination.is_depth {
+        anyhow::bail!(
+            "copy pass '{}' requested unsupported depth copy '{}' -> '{}'; only color-like texture copies are supported",
+            pass_id,
+            source_key,
+            destination_key
+        );
+    }
+    let width = source.size.0.min(destination.size.0);
+    let height = source.size.1.min(destination.size.1);
+    if width == 0 || height == 0 {
+        anyhow::bail!(
+            "copy pass '{}' resolved texture copy extent to zero for '{}' -> '{}'",
+            pass_id,
+            source_key,
+            destination_key
+        );
+    }
+    let extent = GpuCopyExtent::new(width, height, 1)?;
+    Ok(GpuCopyOperation::texture_to_texture(
+        GpuTextureCopyRegion::new(
+            source.handle,
+            0,
+            GpuTextureOrigin::new(0, 0, 0),
+            GpuTextureAspect::Color,
+            extent,
+        )?,
+        GpuTextureCopyRegion::new(
+            destination.handle,
+            0,
+            GpuTextureOrigin::new(0, 0, 0),
+            GpuTextureAspect::Color,
+            extent,
+        )?,
+    )?)
 }
 
 struct LogicalCopyTexture<'a> {
@@ -150,24 +256,52 @@ struct LogicalCopyTexture<'a> {
 
 fn logical_texture<'a>(
     runtime_resources: &'a FlowRuntimeResources,
+    dynamic_texture_targets: Option<&'a RendererDynamicTextureTargetCache>,
+    pass_id: RenderPassId,
     key: &RuntimeResourceKey,
-) -> Option<LogicalCopyTexture<'a>> {
-    let texture = match key {
-        RuntimeResourceKey::FlowOwned(resource_id) => runtime_resources.textures.get(resource_id),
+) -> Result<Option<LogicalCopyTexture<'a>>> {
+    match key {
+        RuntimeResourceKey::FlowOwned(resource_id) => Ok(runtime_resources
+            .textures
+            .get(resource_id)
+            .map(|texture| LogicalCopyTexture {
+                handle: &texture.handle,
+                size: texture.size,
+                is_depth: texture.is_depth,
+            })),
         RuntimeResourceKey::InvocationHistory {
             invocation_id,
             resource_id,
-        } => runtime_resources
+        } => Ok(runtime_resources
             .invocation_history_textures
-            .get(&(invocation_id.clone(), *resource_id)),
+            .get(&(invocation_id.clone(), *resource_id))
+            .map(|texture| LogicalCopyTexture {
+                handle: &texture.handle,
+                size: texture.size,
+                is_depth: texture.is_depth,
+            })),
+        RuntimeResourceKey::DynamicTexture(dynamic_key) => {
+            let Some(dynamic_texture_targets) = dynamic_texture_targets else {
+                return Ok(None);
+            };
+            let resolved = dynamic_texture_targets.texture_ref(pass_id, dynamic_key)?;
+            let view = resolved.view_handle.ok_or_else(|| {
+                anyhow::anyhow!(
+                    "dynamic texture target '{}' has no logical RunenGPU view handle",
+                    dynamic_key
+                )
+            })?;
+            let texture = view.descriptor().texture();
+            let descriptor = texture.descriptor();
+            let extent = descriptor.extent();
+            Ok(Some(LogicalCopyTexture {
+                handle: texture,
+                size: (extent.width(), extent.height()),
+                is_depth: descriptor.format().is_depth(),
+            }))
+        }
         RuntimeResourceKey::InvocationUniform { .. }
-        | RuntimeResourceKey::DynamicTexture(_)
         | RuntimeResourceKey::SurfaceColor
-        | RuntimeResourceKey::SurfaceDepth => None,
-    }?;
-    Some(LogicalCopyTexture {
-        handle: &texture.handle,
-        size: texture.size,
-        is_depth: texture.is_depth,
-    })
+        | RuntimeResourceKey::SurfaceDepth => Ok(None),
+    }
 }

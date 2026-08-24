@@ -1,9 +1,8 @@
 use super::*;
 use crate::plugins::gpu::{
-    GpuBufferDescriptor, GpuBufferHandle, GpuRealizedBuffer, GpuRealizedTexture,
-    GpuRealizedTextureView, GpuTextureDescriptor, GpuTextureDimension, GpuTextureHandle,
-    GpuTextureViewHandle, GpuWorkResourceId, GpuWorkResourceIdAllocator, PreparedGpuData,
-    UniformData,
+    GpuBufferDescriptor, GpuBufferHandle, GpuTextureDescriptor, GpuTextureDimension,
+    GpuTextureHandle, GpuTextureViewHandle, GpuWorkResourceId, GpuWorkResourceIdAllocator,
+    PreparedGpuData, UniformData,
 };
 use crate::plugins::render::{
     PreparedTargetBinding, RenderDynamicTextureTargetKey, RenderFlowId,
@@ -29,8 +28,6 @@ pub enum RuntimeBufferKind {
 pub struct RuntimeTextureResource {
     pub handle: GpuTextureHandle,
     pub view_handle: GpuTextureViewHandle,
-    pub realized: GpuRealizedTexture,
-    pub realized_view: GpuRealizedTextureView,
     pub format: TextureFormat,
     pub size: (u32, u32),
     pub usage: TextureUsages,
@@ -43,7 +40,6 @@ pub struct RuntimeTextureResource {
 #[derive(Debug)]
 pub struct RuntimeBufferResource {
     pub handle: GpuBufferHandle,
-    pub realized: GpuRealizedBuffer,
     pub size: u64,
     pub kind: RuntimeBufferKind,
     pub generation: u64,
@@ -189,44 +185,18 @@ impl FlowRuntimeResources {
 #[derive(Debug)]
 pub struct ResolvedTextureRef<'a> {
     pub id: RuntimeResourceKey,
-    pub texture: RuntimeTextureRef<'a>,
     pub view_handle: Option<&'a GpuTextureViewHandle>,
     pub format: TextureFormat,
     pub size: (u32, u32),
     pub is_depth: bool,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum RuntimeTextureRef<'a> {
-    Surface(&'a Texture),
-    Realized(&'a GpuRealizedTexture),
-}
-
 #[derive(Debug)]
 pub struct ResolvedBufferRef<'a> {
     pub id: RuntimeResourceKey,
     pub handle: &'a GpuBufferHandle,
-    pub buffer: &'a GpuRealizedBuffer,
     pub size: u64,
     pub kind: RuntimeBufferKind,
-}
-
-#[derive(Debug)]
-pub enum RuntimeTextureView<'a> {
-    Surface(&'a TextureView),
-    Realized(GpuRealizedTextureView),
-}
-
-#[derive(Debug)]
-pub struct ResolvedColorTargetView<'a> {
-    pub view: RuntimeTextureView<'a>,
-    pub format: TextureFormat,
-}
-
-#[derive(Debug)]
-pub struct ResolvedDepthTargetView {
-    pub view: GpuRealizedTextureView,
-    pub format: TextureFormat,
 }
 
 mod inspect;
@@ -237,8 +207,7 @@ mod resolve;
 mod tests {
     use super::*;
     use crate::plugins::gpu::{
-        GpuAddressMode, GpuBufferUsage, GpuCapabilityProfile, GpuContext, GpuContextDescriptor,
-        GpuContextRequestErrorCategory, GpuFilterMode, GpuMemoryIntent, GpuQueryKind,
+        GpuAddressMode, GpuBufferUsage, GpuFilterMode, GpuMemoryIntent, GpuQueryKind,
         GpuQuerySetDescriptor, GpuReconstruction, GpuResourceCommon, GpuResourceDescriptor,
         GpuResourceLabel, GpuResourceLifetime, GpuResourceProvenance, GpuSamplerDescriptor,
         GpuTextureAspect, GpuTextureDescriptor, GpuTextureExtent, GpuTextureFormat,
@@ -653,24 +622,6 @@ mod tests {
 
     #[test]
     fn concurrently_live_invocation_uniforms_have_distinct_runengpu_handles() {
-        let context = match pollster::block_on(GpuContext::request(GpuContextDescriptor::new(
-            GpuCapabilityProfile::ComputeBaseline.requirements(),
-        ))) {
-            Ok(context) => context,
-            Err(error)
-                if matches!(
-                    error.category(),
-                    GpuContextRequestErrorCategory::NoAdapterAvailable
-                        | GpuContextRequestErrorCategory::NoAdmissibleCandidate
-                        | GpuContextRequestErrorCategory::MandatoryFeatureMissing
-                ) =>
-            {
-                eprintln!("G4C1 invocation-resource environment unavailable: {error}");
-                return;
-            }
-            Err(error) => panic!("unexpected G4C1 context admission failure: {error}"),
-        };
-
         let mut declaration_ids = GpuWorkResourceIdAllocator::new();
         let declaration = RenderResourceDeclaration::declare_uniform::<RuntimeTestUniform>(
             &mut declaration_ids,
@@ -682,19 +633,16 @@ mod tests {
         resources.descriptors.insert(resource_id, declaration);
 
         let first = resources
-            .realize_invocation_uniform_buffer(&context, "viewport.a", resource_id, 4)
+            .realize_invocation_uniform_buffer("viewport.a", resource_id, 4)
             .expect("first invocation uniform should realize");
         let first_handle_identity = first.handle.diagnostic_identity();
-        let first_realization = first.realized.clone();
 
         let second = resources
-            .realize_invocation_uniform_buffer(&context, "viewport.b", resource_id, 4)
+            .realize_invocation_uniform_buffer("viewport.b", resource_id, 4)
             .expect("second invocation uniform should realize");
         let second_handle_identity = second.handle.diagnostic_identity();
-        let second_realization = second.realized.clone();
 
         assert_ne!(first_handle_identity, second_handle_identity);
-        assert!(!first_realization.is_same_record(&second_realization));
         assert_eq!(resources.invocation_uniform_buffers.len(), 2);
         assert!(
             resources

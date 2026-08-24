@@ -1,7 +1,7 @@
 //! Structural G4C1/G4C2/G4C3 cutover guards.
 //!
 //! Behavioural tests exercise the typed API. These guards keep the accepted G4 ownership
-//! topology from regressing while G5 still owns the residual execution interval.
+//! topology from regressing after G5C1 removes the renderer's residual execution interval.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -128,12 +128,8 @@ fn g4c1_logical_resource_creation_stays_private_while_g5b_staging_is_isolated() 
     }
     assert_eq!(
         token_paths(&manifest, ".create_view("),
-        BTreeSet::from([
-            owner.to_owned(),
-            surface_execution.to_owned(),
-            "src/plugins/render/renderer/mod.rs".to_owned(),
-        ]),
-        "texture-view creation escaped G4C1 or the exact renderer/G7 presentation exceptions"
+        BTreeSet::from([owner.to_owned(), surface_execution.to_owned(),]),
+        "texture-view creation escaped G4C1 or G7 surface execution"
     );
     assert!(
         token_paths(&manifest, ".create_buffer_init(").is_empty(),
@@ -220,7 +216,7 @@ fn g4c3_is_the_only_compute_and_render_pipeline_creation_owner() {
 }
 
 #[test]
-fn accepted_g4_bridge_ladder_has_one_execution_bridge_and_no_predecessor_authority() {
+fn accepted_g4_bridge_ladder_has_no_renderer_execution_bridge_or_predecessor_authority() {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let forbidden = inventory(
         &manifest,
@@ -242,39 +238,21 @@ fn accepted_g4_bridge_ladder_has_one_execution_bridge_and_no_predecessor_authori
         "superseded G4 compatibility authority remains: {forbidden:#?}"
     );
 
-    let bridge_path = "src/plugins/gpu/backend/wgpu/program_binding_realization/current_render_execution_bridge.rs";
-    let bridge = compact(&read(&manifest, bridge_path));
-    assert_eq!(
-        inventory(&manifest, &["structCurrentRenderExecutionBridge"]),
-        BTreeMap::from([(
-            (
-                bridge_path.to_owned(),
-                "structCurrentRenderExecutionBridge".to_owned()
-            ),
-            1,
-        )]),
-        "the accepted G4 boundary permits exactly one residual G5 execution bridge"
+    assert!(
+        !manifest
+            .join("src/plugins/gpu/backend/wgpu/program_binding_realization/current_render_execution_bridge.rs")
+            .exists(),
+        "G5C1 must delete the residual renderer execution bridge module"
     );
-    for forbidden in [
-        "pubstructCurrentRenderExecutionBridge",
-        "Deref",
-        "AsRef<",
-        "FnOnce",
-        "for_pipeline_creation(",
+    for retired in [
+        "CurrentRenderExecutionBridge",
+        "current_render_execution_bridge",
+        "CurrentRenderDeviceQueue",
+        "current_render_device_queue",
     ] {
         assert!(
-            !bridge.contains(forbidden),
-            "G5 execution bridge exposed forbidden authority: {forbidden}"
-        );
-    }
-    for required in [
-        "for_compute_pipeline(",
-        "for_render_pipeline(",
-        "for_pipeline_bind_groups(",
-    ] {
-        assert!(
-            bridge.contains(required),
-            "G5 execution bridge lost required lexical consumption terminal {required}"
+            token_paths(&manifest, retired).is_empty(),
+            "G5C1 must remove source-wide renderer raw authority '{retired}'"
         );
     }
 
@@ -282,12 +260,13 @@ fn accepted_g4_bridge_ladder_has_one_execution_bridge_and_no_predecessor_authori
         &manifest,
         "src/plugins/render/renderer/render_flow/bindings.rs",
     ));
-    assert!(bindings.contains("SurfaceColorisnotaG4C2sampledorstorageshaderresourcebeforeG7"));
+    assert!(bindings.contains("hasnologicaltextureviewforG4C2shaderbindingrealization"));
+    assert!(bindings.contains("resolve_logical_texture_binding("));
     assert!(!bindings.contains("RuntimeTextureRef::Surface(texture)=>"));
 }
 
 #[test]
-fn execution_bridge_keeps_lent_backend_objects_private_and_nonretaining() {
+fn canonical_execution_keeps_backend_objects_private_without_renderer_terminals() {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let records = compact(&read(
         &manifest,
@@ -337,9 +316,9 @@ fn execution_bridge_keeps_lent_backend_objects_private_and_nonretaining() {
             }
         }
     }
-    assert!(
-        terminal_count != 0,
-        "the residual G5 execution bridge must retain audited purpose-typed terminals"
+    assert_eq!(
+        terminal_count, 0,
+        "G5C1 must delete every purpose-typed renderer raw terminal implementation"
     );
 }
 
@@ -402,17 +381,15 @@ fn g4c2_uses_one_shared_health_gate_and_the_fixed_naga_profile() {
     ));
     assert!(program.contains("let_gate=realization.error_attribution_gate.acquire();"));
 
-    let current_host = compact(&read(
-        &manifest,
-        "src/plugins/gpu/backend/wgpu/current_host.rs",
-    ));
-    assert!(current_host.contains(
-        "_error_attribution_gate=self.state.error_attribution_gate.acquire();surface.configure(&self.state.device,config);"
-    ));
     assert!(
-        current_host
-            .contains("_error_attribution_gate:self.backend.error_attribution_gate.acquire()")
+        !manifest
+            .join("src/plugins/gpu/backend/wgpu/current_host.rs")
+            .exists(),
+        "G7A surface authority must keep the retired current-host bridge deleted"
     );
+    let surface = compact(&read(&manifest, "src/plugins/gpu/backend/wgpu/surface.rs"));
+    assert!(surface.contains("let_attribution_gate=error_attribution_gate.acquire();"));
+    assert!(surface.contains("record.surface.configure(device,&native);"));
 
     let evidence = compact(&read(
         &manifest,
@@ -426,7 +403,7 @@ fn g4c2_uses_one_shared_health_gate_and_the_fixed_naga_profile() {
 }
 
 #[test]
-fn renderer_completes_g4_realization_before_its_one_raw_g5_interval() {
+fn renderer_completes_realization_before_one_canonical_g5_acceptance() {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let renderer = compact(&read(&manifest, "src/plugins/render/renderer/mod.rs"));
     assert!(
@@ -441,34 +418,32 @@ fn renderer_completes_g4_realization_before_its_one_raw_g5_interval() {
     let realization = execute
         .find("letmutbatch=self.realize_render_batch(")
         .expect("render packet must begin with its complete G4 realization batch");
-    let loan_marker = "letloan=context.current_render_device_queue()";
-    let loan = execute
-        .find(loan_marker)
-        .expect("render packet must retain its one residual G5 raw interval");
-    assert_eq!(
-        execute.matches(loan_marker).count(),
-        1,
-        "renderer production execution must retain exactly one raw device/queue interval"
-    );
+    let graph = execute
+        .find("prepare_render_gpu_frame_work(")
+        .expect("render packet must prepare one complete frame graph");
+    let prepare = execute
+        .find("context.prepare_submission(graph)")
+        .expect("render packet must delegate physical preparation to RunenGPU");
+    let accept = execute
+        .find(".submit_prepared(prepared)")
+        .expect("render packet must cross one irreversible RunenGPU acceptance boundary");
     assert!(
-        realization < loan,
-        "G4 realization must complete before the residual G5 interval"
+        realization < graph && graph < prepare && prepare < accept,
+        "renderer realization and frame graph formation must complete before RunenGPU acceptance"
     );
-    let raw_phase = &execute[loan + loan_marker.len()..];
     for forbidden in [
-        "self.realize_render_batch(",
-        "context.realize_",
-        "pollster::block_on(context.realize",
         "current_render_device_queue()",
+        "current_render_execution_bridge()",
+        "CommandEncoder",
+        "queue.submit(",
         "create_compute_pipeline(",
         "create_render_pipeline(",
     ] {
         assert!(
-            !raw_phase.contains(forbidden),
-            "the G5 raw phase must not re-enter G4 realization via {forbidden}"
+            !execute.contains(forbidden),
+            "renderer production execution must not retain raw authority via {forbidden}"
         );
     }
-    assert!(raw_phase.contains("self.execute_realized_batch("));
 
     let setup = compact(&read(&manifest, "src/plugins/render/renderer/setup.rs"));
     let ui_realization = setup
@@ -477,10 +452,8 @@ fn renderer_completes_g4_realization_before_its_one_raw_g5_interval() {
     let ui_realization = &setup[ui_realization..];
     for required in [
         "context.realize_program",
-        "context.realize_bind_group_layout",
         "context.realize_pipeline_layout",
         "context.realize_render_pipeline",
-        "context.realize_bind_group(",
     ] {
         assert!(
             ui_realization.contains(required),
@@ -492,23 +465,14 @@ fn renderer_completes_g4_realization_before_its_one_raw_g5_interval() {
 
     let flow = compact(&read(
         &manifest,
-        "src/plugins/render/renderer/render_flow/execute_passes/pipeline.rs",
+        "src/plugins/render/renderer/render_flow/pipeline_realization.rs",
     ));
     let pass_realization = flow
         .find("fnrealize_compiled_pass(")
         .expect("flow G4 realization helper must remain present");
-    let pass_encoding = flow
-        .find("fnencode_compiled_pass(")
-        .expect("flow G5 encoding helper must remain present");
-    assert!(
-        pass_realization < pass_encoding,
-        "flow G4 realization must remain structurally separate from G5 encoding"
-    );
-    let realization_phase = &flow[pass_realization..pass_encoding];
+    let realization_phase = &flow[pass_realization..];
     assert!(realization_phase.contains("context.realize_compute_pipeline("));
     assert!(realization_phase.contains("context.realize_render_pipeline("));
-    let encoding_phase = &flow[pass_encoding..];
-    assert!(!encoding_phase.contains("context.realize_"));
     assert!(!flow.contains("current_render_device_queue("));
     assert!(!flow.contains("create_compute_pipeline("));
     assert!(!flow.contains("create_render_pipeline("));
@@ -534,48 +498,7 @@ fn renderer_completes_g4_realization_before_its_one_raw_g5_interval() {
         &manifest,
         "src/plugins/render/gpu_primitives/plan.rs",
     ));
-    let fixture = primitive
-        .split("fngpu_primitives_runtime_dispatch_writes_scan_scatter_and_draw_args_when_adapter_available")
-        .nth(1)
-        .expect("primitive runtime proof must remain");
-    let fixture_body = fixture
-        .split("fnrealize_runtime_primitive_stages(")
-        .next()
-        .expect("primitive runtime proof body must remain");
-    let realization = fixture_body
-        .find("letrealized_stages=realize_runtime_primitive_stages(")
-        .expect("fixture must complete its G4 primitive realization before raw work");
-    let last_resource = fixture_body
-        .rfind("prepare_readback_buffer(")
-        .expect("fixture must retain G4C1 readback resource realization");
-    let loan = fixture_body
-        .find("context.current_render_device_queue()")
-        .expect("fixture must retain its residual G5 interval");
-    let encoding = fixture_body
-        .find("encode_runtime_primitive_stage(&context,&mutencoder,stage)")
-        .expect("fixture must preserve G5 primitive encoding after the raw interval begins");
-    assert!(
-        last_resource < realization && realization < loan && loan < encoding,
-        "fixture must complete G4C1/G4C2/G4C3 before its G5 interval"
-    );
-
-    let primitive_realization = primitive
-        .split("fnrealize_runtime_primitive_stages(")
-        .nth(1)
-        .expect("primitive fixture realization helper must remain");
-    for required in [
-        "context.realize_program",
-        "context.realize_bind_group_layout",
-        "context.realize_pipeline_layout",
-        "context.realize_compute_pipeline",
-        "context.realize_bind_group",
-    ] {
-        assert!(
-            primitive_realization.contains(required),
-            "primitive fixture realization must delegate {required:?} to RunenGPU"
-        );
-    }
-    assert!(primitive.contains(".for_compute_pipeline("));
-    assert!(!primitive.contains(".for_pipeline_creation("));
+    assert!(!primitive.contains("current_render_execution_bridge("));
+    assert!(!primitive.contains("current_render_device_queue("));
     assert!(!primitive.contains(".create_compute_pipeline("));
 }

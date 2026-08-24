@@ -3,20 +3,10 @@ use crate::plugins::render::{RenderFlowId, RenderPassId};
 
 #[derive(Debug, Clone)]
 pub struct EncodedPassEvidence {
-    pub dispatch_workgroups: Option<[u32; 3]>,
     pub shader_id: String,
     pub shader_revision: u64,
     pub fallback_used: bool,
     pub pipeline_key: Option<FlowPassPipelineKey>,
-}
-
-#[derive(Debug, Clone)]
-pub struct EncodedPipelinePass {
-    pub dispatch_workgroups: Option<[u32; 3]>,
-    pub shader_id: String,
-    pub shader_revision: u64,
-    pub fallback_used: bool,
-    pub pipeline_key: FlowPassPipelineKey,
 }
 
 #[derive(Debug, Default)]

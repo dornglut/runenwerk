@@ -6,22 +6,17 @@ fn read(path: &str) -> String {
 }
 
 #[test]
-fn residual_copy_format_compatibility_delegates_to_runengpu() {
-    let source = read("src/plugins/render/renderer/render_flow/execute_passes.rs");
-    let start = source
-        .find("fn copy_formats_are_raw_compatible(")
-        .expect("residual copy-format adapter should remain explicit until G5C");
-    let tail = &source[start..];
-    let end = tail.find("#[cfg(test)]").unwrap_or(tail.len());
-    let adapter = &tail[..end];
-
+fn canonical_copy_format_compatibility_is_owned_only_by_runengpu() {
     assert!(
-        adapter.contains("gpu_texture_formats_copy_compatible("),
-        "residual renderer copy compatibility must delegate to RunenGPU's canonical relation"
+        !Path::new("src/plugins/render/renderer/render_flow/execute_passes.rs").exists(),
+        "G5C1 must delete the residual raw copy executor"
     );
+    let projection = read("src/plugins/render/renderer/render_flow/logical_copy.rs");
     assert!(
-        !adapter.contains("remove_srgb_suffix"),
-        "residual renderer copy compatibility must not recreate a WGPU-owned format relation"
+        projection.contains("GpuCopyOperation::")
+            && !projection.contains("gpu_texture_formats_copy_compatible")
+            && !projection.contains("remove_srgb_suffix"),
+        "renderer copy projection must construct canonical operations and leave format compatibility to RunenGPU"
     );
 }
 

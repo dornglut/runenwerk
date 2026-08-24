@@ -1,7 +1,8 @@
 use super::*;
 use crate::plugins::gpu::{
     GpuBufferHandle, GpuBufferUsage, GpuMemoryIntent, GpuQueryKind, GpuQueryRange,
-    GpuQuerySetDescriptor, GpuQuerySetHandle, GpuResourceLifetime, GpuWorkResourceIdAllocator,
+    GpuQuerySetDescriptor, GpuQuerySetHandle, GpuReadbackId, GpuResourceLifetime,
+    GpuWorkResourceIdAllocator,
 };
 use crate::plugins::render::renderer::resource_descriptors::{buffer_descriptor, owned_common};
 
@@ -73,16 +74,17 @@ impl LogicalGpuPassTimingPlan {
     }
 }
 
-/// Logical timestamp resources and timestamp-local query ranges prepared before G3 work.
+/// Logical timestamp resources, result identity, and timestamp-local query ranges prepared before
+/// G3 work.
 ///
-/// This value contains only backend-neutral RunenGPU handles. Physical query/buffer realization
-/// remains in `GpuPassTimingFrame`, and resolve/readback operation construction remains part of the
-/// late G5A operation projection.
+/// The readback ID is allocated exactly once here because it identifies the eventual G5 result,
+/// while the readback operation itself is projected later from the exact used query range. G5
+/// readback targets the resolve buffer directly.
 #[derive(Debug, Clone)]
 pub(super) struct LogicalGpuPassTiming {
     query_set: GpuQuerySetHandle,
     resolve_buffer: GpuBufferHandle,
-    readback_buffer: GpuBufferHandle,
+    readback_id: GpuReadbackId,
     query_capacity: u32,
 }
 
@@ -116,18 +118,12 @@ impl LogicalGpuPassTiming {
             GpuResourceLifetime::Transient,
             GpuMemoryIntent::Device,
         )?)?;
-        let readback_buffer = allocator.allocate_buffer_handle(buffer_descriptor(
-            "render.flow.timestamp_readback",
-            byte_len,
-            [GpuBufferUsage::CopyDestination],
-            GpuResourceLifetime::Transient,
-            GpuMemoryIntent::Readback,
-        )?)?;
+        let readback_id = GpuReadbackId::allocate()?;
 
         Ok(Some(Self {
             query_set,
             resolve_buffer,
-            readback_buffer,
+            readback_id,
             query_capacity,
         }))
     }
@@ -140,8 +136,8 @@ impl LogicalGpuPassTiming {
         &self.resolve_buffer
     }
 
-    pub(super) fn readback_buffer(&self) -> &GpuBufferHandle {
-        &self.readback_buffer
+    pub(super) const fn readback_id(&self) -> GpuReadbackId {
+        self.readback_id
     }
 
     pub(super) const fn query_capacity(&self) -> u32 {
@@ -162,7 +158,7 @@ impl LogicalGpuPassTiming {
         if end >= self.query_capacity {
             anyhow::bail!(
                 "render GPU timestamp occurrence {timestamp_ordinal} exceeds query capacity {}",
-                self.query_capacity
+                self.query_capacity,
             );
         }
         Ok(GpuPassTimestampIndices { begin, end })
