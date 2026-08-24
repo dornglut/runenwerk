@@ -73,7 +73,7 @@ A logical resource descriptor may carry prepared source bytes while private phys
 G5R intentionally revises exactly one G3R descriptor-entry rule:
 
 ```text
-G3R current rule
+G3R accepted pre-G5R rule
     Prepared descriptor -> checked prepared initialized coverage
 
 G5R corrected rule
@@ -82,7 +82,7 @@ G5R corrected rule
     completed canonical materialization -> initialized coverage
 ```
 
-The existing public `GpuBufferInitialization::Prepared(data)` and `GpuTextureInitialization::Prepared(data)` vocabulary remains valid as **authoring intent**: it requests initial contents from prepared source data. The variant does not certify that those contents already exist physically. G5R must lower that request through canonical graph-visible materialization before graph-entry initialization may rely on it. A rename or parallel source enum is not required merely to correct the current semantic bug.
+The existing public `GpuBufferInitialization::Prepared(data)` and `GpuTextureInitialization::Prepared(data)` vocabulary remains valid as **authoring intent**: it requests initial contents from prepared source data. The variant does not certify that those contents already exist physically. G5R must lower that request through canonical graph-visible materialization before graph-entry initialization may rely on it. A rename or parallel source enum is not required merely to correct this semantic mismatch.
 
 All other G3R distinctions remain intact unless a later explicit correction says otherwise:
 
@@ -177,11 +177,11 @@ The representative G6 workload must expose whether application semantics dominat
 
 ### Shader-interface authority decision
 
-Before extraction, G6 must explicitly resolve one question that is currently open:
+Before extraction, G6 must explicitly resolve one question deliberately deferred to G6:
 
 > Are compiler-known shader interface facts manually declared as the accepted RunenGPU authority, or admitted through one immutable compiler/reflection-derived artifact?
 
-The current canonical shader-authoring design remains authoritative until an accepted G6 revision changes it. Planning language does not supersede that rule.
+The accepted canonical shader-authoring design remains authoritative unless an accepted G6 revision changes it. Planning language does not supersede that rule.
 
 A reflection-derived authority, if accepted, may own only facts inherent in canonical WGSL, such as entry points, stages, binding coordinates, resource kinds, cardinality/layout facts, and workgroup size where applicable.
 
