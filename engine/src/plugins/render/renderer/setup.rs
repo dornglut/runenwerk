@@ -93,7 +93,54 @@ impl Renderer {
             ),
             last_capture_selector_results: Vec::new(),
             last_captured_textures: Vec::new(),
+            gpu_observations: super::render_flow::RendererGpuObservationState::default(),
+            pending_gpu_observation_output:
+                super::render_flow::RendererGpuObservationOutput::default(),
         }
+    }
+
+    pub(super) fn begin_frame_gpu_observation(&mut self, context: &GpuContext) {
+        // Gfx owns one nonblocking progress point for its context/device generation. Timing and
+        // capture consume the resulting public lifecycle facts; neither feature creates a poll
+        // loop or reaches into the backend.
+        context.progress();
+        let super::render_flow::RendererGpuObservationOutput {
+            timing_evidence,
+            captured_textures,
+            capture_results,
+        } = self.gpu_observations.progress(context);
+        self.pending_gpu_observation_output
+            .timing_evidence
+            .extend(timing_evidence);
+        self.pending_gpu_observation_output
+            .captured_textures
+            .extend(captured_textures);
+        self.pending_gpu_observation_output
+            .capture_results
+            .extend(capture_results);
+    }
+
+    pub(super) fn publish_progressed_gpu_observations(&mut self) {
+        let mut progressed = std::mem::take(&mut self.pending_gpu_observation_output);
+        progressed
+            .timing_evidence
+            .append(&mut self.last_gpu_pass_timing_evidence);
+        progressed
+            .captured_textures
+            .append(&mut self.last_captured_textures);
+        progressed
+            .capture_results
+            .append(&mut self.last_capture_selector_results);
+        self.last_gpu_pass_timing_evidence = progressed.timing_evidence;
+        self.last_captured_textures = progressed.captured_textures;
+        self.last_capture_selector_results = progressed.capture_results;
+    }
+
+    pub(in crate::plugins::render) fn clear_published_gpu_observations(&mut self) {
+        self.last_gpu_pass_timing_evidence.clear();
+        self.last_capture_plan = ResolvedRenderCapturePlan::default();
+        self.last_capture_selector_results.clear();
+        self.last_captured_textures.clear();
     }
 
     pub fn last_pass_timings(&self) -> &[crate::plugins::render::inspect::PassTimingSample] {

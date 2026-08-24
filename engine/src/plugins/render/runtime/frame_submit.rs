@@ -238,9 +238,10 @@ pub(crate) fn frame_render_submit_system(
                         Ok(export) => {
                             artifact_manifest_path = Some(export.manifest_path.clone());
                             for exported in &export.exported_capture_images {
-                                let exported_point = exported.frame_identity.capture_point.clone();
                                 for result in &mut selector_results {
-                                    if result.capture_point != exported_point {
+                                    if result.frame_identity.as_ref()
+                                        != Some(&exported.frame_identity)
+                                    {
                                         continue;
                                     }
                                     if result.terminal.code == RenderCaptureTerminalCode::Completed
@@ -287,7 +288,7 @@ pub(crate) fn frame_render_submit_system(
                 };
 
                 if let Err(violations) = validate_selector_terminal_invariant(
-                    &debug_config.capture_selectors,
+                    gfx.renderer.last_capture_plan(),
                     &frame_report.capture_results,
                 ) {
                     frame_report
@@ -420,6 +421,7 @@ pub(crate) fn frame_render_submit_system(
                 );
             }
 
+            gfx.renderer.clear_published_gpu_observations();
             Ok(())
         }
         Err(err) => {

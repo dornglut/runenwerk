@@ -35,6 +35,7 @@ mod gpu_timing;
 mod logical_copy;
 mod logical_operations;
 mod logical_timing;
+mod observation;
 mod occurrences;
 mod pipeline_realization;
 mod preflight_cache;
@@ -60,12 +61,13 @@ pub(super) struct PreparedPipelinePass {
 }
 
 pub(super) use capture::{
-    CaptureTextureSource, FrameCaptureRuntime, PreparedCaptureReadback,
-    prepare_texture_capture_readback, texture_readback_format,
+    CaptureTextureSource, FrameCaptureRuntime, PreparedCaptureReadback, TextureReadbackFormat,
+    TextureReadbackMode, prepare_texture_capture_readback, texture_readback_format,
 };
 #[cfg(test)]
 pub(super) use execute::FeaturePassAction;
 pub(super) use gpu_timing::{GpuPassTimestampIndices, GpuPassTimingFrame};
+pub(super) use observation::{RendererGpuObservationOutput, RendererGpuObservationState};
 pub(crate) use preflight_cache::RendererPreparedFramePreflightCacheEntry;
 pub(crate) use program_sources::RendererProgramSourceAuthority;
 pub(super) use provenance::{

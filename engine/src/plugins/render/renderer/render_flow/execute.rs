@@ -82,12 +82,8 @@ impl Renderer {
     ) -> Result<RendererFrameTimings> {
         let mut timings = packet.prepare_timings;
         self.last_pass_timings.clear();
-        self.last_gpu_pass_timing_evidence.clear();
         self.last_runtime_resources.clear();
         self.last_pass_provenance.clear();
-        self.last_capture_plan = ResolvedRenderCapturePlan::default();
-        self.last_capture_selector_results.clear();
-        self.last_captured_textures.clear();
 
         let preflight_start = Instant::now();
         self.last_preflight_report =
@@ -205,13 +201,56 @@ impl Renderer {
             nodes,
         )?;
         let prepared = pollster::block_on(context.prepare_submission(graph))?;
-        let _submission = context.submit_prepared(prepared).map_err(|rejection| {
+        let submission = context.submit_prepared(prepared).map_err(|rejection| {
             anyhow::anyhow!(
                 "GPU frame submission rejected ({:?}): {}",
                 rejection.reason().kind(),
                 rejection.reason().detail()
             )
         })?;
+        // Once G5 accepts the submission, retain every renderer-observed readback before any
+        // fallible product evidence work. An accepted lifecycle handle must never be dropped merely
+        // because later provenance publication fails for this frame.
+        let timing_frames = batch
+            .invocations
+            .iter_mut()
+            .filter_map(|invocation| invocation.timing_frame.take())
+            .collect::<Vec<_>>();
+        let mut capture_readbacks = batch
+            .invocations
+            .iter_mut()
+            .flat_map(|invocation| {
+                invocation.scheduled_passes.iter_mut().flat_map(|pass| {
+                    let execution = &mut pass.execution;
+                    execution
+                        .before_captures
+                        .drain(..)
+                        .chain(execution.after_captures.drain(..))
+                })
+            })
+            .collect::<Vec<_>>();
+        capture_readbacks.append(&mut batch.final_captures);
+        let RendererGpuObservationOutput {
+            timing_evidence,
+            captured_textures,
+            capture_results,
+        } = self.gpu_observations.accept(
+            context,
+            submission,
+            timing_frames,
+            capture_readbacks,
+            &mut batch.capture_runtime,
+        );
+        self.pending_gpu_observation_output
+            .timing_evidence
+            .extend(timing_evidence);
+        self.pending_gpu_observation_output
+            .captured_textures
+            .extend(captured_textures);
+        self.pending_gpu_observation_output
+            .capture_results
+            .extend(capture_results);
+
         let accepted_upload_report = self
             .dynamic_texture_targets
             .record_accepted_uploads(&accepted_dynamic_uploads);
@@ -272,38 +311,14 @@ impl Renderer {
             self.flow_runtime_cache = runtime_cache;
         }
 
-        for invocation in &mut batch.invocations {
-            if let Some(timing_frame) = invocation.timing_frame.take() {
-                self.last_gpu_pass_timing_evidence
-                    .extend(timing_frame.pending_evidence());
-            }
-            for capture in invocation.scheduled_passes.iter().flat_map(|pass| {
-                pass.execution
-                    .before_captures
-                    .iter()
-                    .chain(pass.execution.after_captures.iter())
-            }) {
-                record_pending_capture(
-                    &mut batch.capture_runtime,
-                    &mut self.last_captured_textures,
-                    capture,
-                );
-            }
-        }
-        for capture in &batch.final_captures {
-            record_pending_capture(
-                &mut batch.capture_runtime,
-                &mut self.last_captured_textures,
-                capture,
-            );
-        }
         timings.flow_encode_ms = flow_encode_start.elapsed().as_secs_f32() * 1000.0;
         timings.encode_submit_ms = encode_submit_start.elapsed().as_secs_f32() * 1000.0;
         batch.capture_runtime.finalize_unresolved();
         let (capture_plan, capture_selector_results) =
             batch.capture_runtime.into_plan_and_results();
         self.last_capture_plan = capture_plan;
-        self.last_capture_selector_results = capture_selector_results;
+        self.last_capture_selector_results
+            .extend(capture_selector_results);
         Ok(timings)
     }
 
@@ -1040,6 +1055,7 @@ impl Renderer {
             match prepare_texture_capture_readback(
                 context,
                 selector_index,
+                selector.clone(),
                 identity,
                 capture_source,
                 capture_size,
@@ -1169,6 +1185,7 @@ impl Renderer {
             match prepare_texture_capture_readback(
                 context,
                 selector_index,
+                selector.clone(),
                 identity,
                 CaptureTextureSource::Surface {
                     handle: surface_texture,
@@ -1302,27 +1319,6 @@ fn accepted_pass_provenance(
         depth_targets: pass_resource_truth.depth_targets,
         capture_points_available: pass_resource_truth.capture_points_available,
     }
-}
-
-fn record_pending_capture(
-    runtime: &mut FrameCaptureRuntime,
-    captures: &mut Vec<RenderCapturedTexture>,
-    prepared: &PreparedCaptureReadback,
-) {
-    let terminal = RenderCaptureTerminal::with_reason(
-        RenderCaptureTerminalCode::Skipped,
-        "readback_pending",
-        "GPU capture submission was accepted; readback materialization is pending",
-    );
-    runtime.set_terminal(prepared.selector_index, terminal.clone());
-    captures.push(RenderCapturedTexture {
-        identity: prepared.identity.clone(),
-        width: prepared.width,
-        height: prepared.height,
-        format: format!("{:?}", prepared.source_format),
-        bytes_rgba8: None,
-        terminal,
-    });
 }
 
 #[cfg(test)]

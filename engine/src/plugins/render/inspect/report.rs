@@ -93,15 +93,7 @@ pub struct RenderDebugFrameReport {
 
 impl RenderDebugFrameReport {
     pub fn validate_invariants(&self) -> Vec<String> {
-        match validate_selector_terminal_invariant(
-            &self
-                .capture_plan
-                .selectors
-                .iter()
-                .map(|value| value.selector.clone())
-                .collect::<Vec<_>>(),
-            &self.capture_results,
-        ) {
+        match validate_selector_terminal_invariant(&self.capture_plan, &self.capture_results) {
             Ok(()) => Vec::new(),
             Err(violations) => violations
                 .into_iter()

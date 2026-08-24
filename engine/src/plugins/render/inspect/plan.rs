@@ -12,6 +12,10 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RenderSelectorResolution {
+    Pending {
+        capture_point: RenderCapturePointIdentity,
+        frame_identity: RenderCaptureIdentity,
+    },
     Matched {
         capture_point: RenderCapturePointIdentity,
         frame_identity: RenderCaptureIdentity,
@@ -190,20 +194,28 @@ pub struct RenderCaptureInvariantViolation {
 }
 
 pub fn validate_selector_terminal_invariant(
-    selectors: &[RenderCaptureSelector],
+    plan: &ResolvedRenderCapturePlan,
     results: &[RenderCaptureSelectorResult],
 ) -> Result<(), Vec<RenderCaptureInvariantViolation>> {
-    let mut counts = vec![0usize; selectors.len()];
+    let mut counts = vec![0usize; plan.selectors.len()];
     let mut violations = Vec::<RenderCaptureInvariantViolation>::new();
 
     for result in results {
-        if result.selector_index >= selectors.len() {
+        let result_frame = result
+            .frame_identity
+            .as_ref()
+            .map(|identity| identity.frame_index)
+            .unwrap_or(plan.frame_index);
+        if result_frame != plan.frame_index {
+            continue;
+        }
+        if result.selector_index >= plan.selectors.len() {
             violations.push(RenderCaptureInvariantViolation {
                 selector_index: result.selector_index,
                 message: format!(
                     "selector result index {} is out of bounds (selectors={})",
                     result.selector_index,
-                    selectors.len()
+                    plan.selectors.len()
                 ),
             });
             continue;
@@ -212,12 +224,17 @@ pub fn validate_selector_terminal_invariant(
     }
 
     for (selector_index, count) in counts.into_iter().enumerate() {
-        if count == 0 {
+        let selector = &plan.selectors[selector_index];
+        let readback_pending = matches!(
+            selector.resolution,
+            RenderSelectorResolution::Pending { .. }
+        );
+        if count == 0 && !readback_pending {
             violations.push(RenderCaptureInvariantViolation {
                 selector_index,
                 message: format!(
                     "selector {} has no terminal outcome (silent drop)",
-                    selectors[selector_index].describe()
+                    selector.selector.describe()
                 ),
             });
         } else if count > 1 {
@@ -225,7 +242,7 @@ pub fn validate_selector_terminal_invariant(
                 selector_index,
                 message: format!(
                     "selector {} has {} terminal outcomes",
-                    selectors[selector_index].describe(),
+                    selector.selector.describe(),
                     count
                 ),
             });
@@ -278,24 +295,54 @@ mod tests {
 
     #[test]
     fn selector_terminal_invariant_accepts_exactly_one_terminal_per_selector() {
-        let selectors = vec![selector("pass.a"), selector("pass.b")];
+        let selectors = [selector("pass.a"), selector("pass.b")];
         let results = vec![
             completed_result(0, selectors[0].clone()),
             completed_result(1, selectors[1].clone()),
         ];
 
-        assert!(validate_selector_terminal_invariant(&selectors, &results).is_ok());
+        let plan = ResolvedRenderCapturePlan {
+            frame_index: 7,
+            selectors: selectors
+                .iter()
+                .cloned()
+                .enumerate()
+                .map(|(selector_index, selector)| ResolvedRenderCaptureSelector {
+                    selector_index,
+                    resolution: RenderSelectorResolution::Unmatched {
+                        reason: RenderCaptureTerminalReason::new("test", "test"),
+                    },
+                    selector,
+                })
+                .collect(),
+        };
+        assert!(validate_selector_terminal_invariant(&plan, &results).is_ok());
     }
 
     #[test]
     fn selector_terminal_invariant_rejects_missing_and_duplicate_terminals() {
-        let selectors = vec![selector("pass.a"), selector("pass.b")];
+        let selectors = [selector("pass.a"), selector("pass.b")];
         let results = vec![
             completed_result(0, selectors[0].clone()),
             completed_result(0, selectors[0].clone()),
         ];
 
-        let violations = validate_selector_terminal_invariant(&selectors, &results)
+        let plan = ResolvedRenderCapturePlan {
+            frame_index: 7,
+            selectors: selectors
+                .iter()
+                .cloned()
+                .enumerate()
+                .map(|(selector_index, selector)| ResolvedRenderCaptureSelector {
+                    selector_index,
+                    resolution: RenderSelectorResolution::Unmatched {
+                        reason: RenderCaptureTerminalReason::new("test", "test"),
+                    },
+                    selector,
+                })
+                .collect(),
+        };
+        let violations = validate_selector_terminal_invariant(&plan, &results)
             .expect_err("duplicate + missing selector outcomes should violate invariant");
         assert!(
             violations
@@ -307,5 +354,28 @@ mod tests {
                 .iter()
                 .any(|value| value.message.contains("no terminal outcome"))
         );
+    }
+
+    #[test]
+    fn selector_terminal_invariant_accepts_matched_pending_readback_without_terminal_result() {
+        let selector = selector("pass.pending");
+        let capture_point = selector.stable_point_fallback();
+        let plan = ResolvedRenderCapturePlan {
+            frame_index: 9,
+            selectors: vec![ResolvedRenderCaptureSelector {
+                selector_index: 0,
+                selector,
+                resolution: RenderSelectorResolution::Pending {
+                    capture_point: capture_point.clone(),
+                    frame_identity: RenderCaptureIdentity {
+                        frame_index: 9,
+                        pass_label: "pass.pending".to_string(),
+                        capture_point,
+                    },
+                },
+            }],
+        };
+
+        assert!(validate_selector_terminal_invariant(&plan, &[]).is_ok());
     }
 }

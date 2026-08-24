@@ -826,6 +826,8 @@ pub struct Renderer {
     last_capture_plan: ResolvedRenderCapturePlan,
     last_capture_selector_results: Vec<RenderCaptureSelectorResult>,
     last_captured_textures: Vec<RenderCapturedTexture>,
+    gpu_observations: render_flow::RendererGpuObservationState,
+    pending_gpu_observation_output: render_flow::RendererGpuObservationOutput,
 }
 
 #[derive(Debug, ecs::Component, ecs::Resource)]
@@ -906,6 +908,8 @@ impl Gfx {
         debug_config: &RenderDebugConfigResource,
     ) -> Result<GfxFrameTimings> {
         let mut timings = GfxFrameTimings::default();
+        self.renderer
+            .begin_frame_gpu_observation(self.ctx.context());
         let render_surface_id = prepared_frame.surface.render_surface_id;
         let acquire_start = Instant::now();
         let acquired = self.ctx.acquire_surface_image(render_surface_id)?;
@@ -944,6 +948,7 @@ impl Gfx {
             debug_config,
             gpu_timing_capability,
         )?;
+        self.renderer.publish_progressed_gpu_observations();
 
         // The one terminal Present is part of the accepted RunenGPU submission above.
         timings.present_ms = 0.0;
@@ -966,6 +971,7 @@ pub use frame_bindings::RenderFrameDataRegistry;
 #[cfg(test)]
 mod tests {
     use super::Renderer;
+    use crate::plugins::render::inspect::RenderPassTimingEvidence;
 
     #[test]
     fn clip_to_scissor_clamps_and_rejects_empty() {
@@ -975,5 +981,43 @@ mod tests {
 
         let none = Renderer::clip_to_scissor([200.0, 200.0, 10.0, 10.0], 100, 80);
         assert!(none.is_none());
+    }
+
+    #[test]
+    fn progressed_observation_output_is_retained_until_successful_frame_publication() {
+        let mut renderer = Renderer::new();
+        renderer
+            .pending_gpu_observation_output
+            .timing_evidence
+            .push(RenderPassTimingEvidence::gpu_sample(
+                Some(12),
+                Some(3),
+                "flow",
+                "pass",
+                "compute",
+                0.5,
+            ));
+
+        assert!(renderer.last_gpu_pass_timing_evidence.is_empty());
+        assert_eq!(
+            renderer
+                .pending_gpu_observation_output
+                .timing_evidence
+                .len(),
+            1
+        );
+
+        renderer.publish_progressed_gpu_observations();
+        assert_eq!(renderer.last_gpu_pass_timing_evidence.len(), 1);
+        assert!(
+            renderer
+                .pending_gpu_observation_output
+                .timing_evidence
+                .is_empty()
+        );
+        renderer.publish_progressed_gpu_observations();
+        assert_eq!(renderer.last_gpu_pass_timing_evidence.len(), 1);
+        renderer.clear_published_gpu_observations();
+        assert!(renderer.last_gpu_pass_timing_evidence.is_empty());
     }
 }
