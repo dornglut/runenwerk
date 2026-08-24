@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-08-14
+last_reviewed: 2026-08-24
 related_docs:
   - ../engineering-workflow.md
   - ../../architecture/runenwerk-platform-architecture.md
@@ -13,6 +13,8 @@ related_docs:
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
   - ../../adr/accepted/0015-separate-gpu-execution-from-rendering.md
   - ../../design/active/runengpu-architecture-design.md
+  - ../../design/active/runengpu-post-g5c-hardening-design.md
+  - ../../design/active/runengpu-phase-requirements-proof-matrix.md
   - ../../design/active/runenrender-decomposition-design.md
 ---
 
@@ -80,10 +82,11 @@ G1A logical resource identity
                         -> G5A/B executable work and surface-independent execution lifecycle
                             -> G7A minimal durable surface foundation
                                 -> G5C final renderer execution cutover
-                                    -> G6 representative breadth, scale, offscreen proof, and cost characterization
-                                        -> G7B complete surface/device loss, generations, and reconstruction
-                                            -> G8 operational, scalability, extension, and no-reach-through conformance
-                                                -> GX standalone transfer to dornglut/runen-gpu
+                                    -> G5R initialization-materialization correction
+                                        -> G6 representative breadth, scale, ergonomics, offscreen proof, and cost characterization
+                                            -> G7B complete surface/device loss, generations, reconstruction, and retained-state continuity
+                                                -> G8 operational, diagnostics, browser, backend-neutrality, extension, and no-reach-through conformance
+                                                    -> GX standalone release and transfer to dornglut/runen-gpu
 ```
 
 `G3R` and `G4R` are corrective predecessor phases discovered by G5 owner review. They are
@@ -94,6 +97,12 @@ corrected G1-G4 authority is re-proven against the refreshed private WGPU/Naga b
 surface identity/generation/capability/acquisition/presentation foundation required so the final
 G5C renderer cutover does not create a disposable pre-G7 surface execution architecture. Full
 loss/reconstruction policy remains G7B.
+
+`G5R` is a bounded correctness gate between final execution cutover and representative proof. It
+requires graph initialization truth and physical content materialization to agree before G6 may
+characterize performance, ergonomics, or application breadth. The focused post-G5C hardening
+design owns the detailed G5R/G6/G7B/G8/GX semantic gates; the RunenGPU phase requirements and
+proof matrix owns the corresponding retained proof roles and observable evidence/artifacts.
 
 G4 is itself ordered:
 
@@ -109,8 +118,10 @@ Each phase consumes accepted predecessor authority, not an unmerged implementati
 branch. The owning GitHub issue determines whether a phase is proposed, active, blocked,
 or complete at any particular time.
 
-Detailed contracts belong to accepted RunenGPU designs, specifications, and owning issues;
-this roadmap does not duplicate them.
+Detailed semantic contracts belong to accepted RunenGPU designs. Proof roles, observable evidence,
+and retained artifact requirements belong to the RunenGPU proof matrix. A workspace RON spec is
+subordinate implementation-handoff detail created only when an activated bounded slice benefits
+from it; this roadmap does not duplicate any of those requirements.
 
 ## RunenRender sequence
 
