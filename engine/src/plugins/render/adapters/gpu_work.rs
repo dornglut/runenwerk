@@ -145,10 +145,7 @@ pub(crate) struct ResolvedRenderGpuWorkNode {
     operation: GpuWorkOperation,
     preference: GpuExecutionPreference,
     provenance: GpuResourceProvenance,
-    /// Only the deletion-bound raw renderer executor needs a sidecar payload. Frame-only
-    /// operations such as terminal Present deliberately have none and can enter only the canonical
-    /// frame graph consumed by RunenGPU submission.
-    payload: Option<RenderGpuWorkPayload>,
+    payload: RenderGpuWorkPayload,
     control_order_after: Vec<RenderGpuWorkOccurrenceId>,
 }
 
@@ -167,7 +164,7 @@ impl ResolvedRenderGpuWorkNode {
             operation,
             preference,
             provenance,
-            payload: Some(RenderGpuWorkPayload::Pass { occurrence }),
+            payload: RenderGpuWorkPayload::Pass { occurrence },
             control_order_after: control_order_after.into_iter().collect(),
         }
     }
@@ -185,7 +182,7 @@ impl ResolvedRenderGpuWorkNode {
             operation: GpuWorkOperation::Upload(operation),
             preference: GpuExecutionPreference::TransferPreferred,
             provenance,
-            payload: Some(RenderGpuWorkPayload::Upload { occurrence }),
+            payload: RenderGpuWorkPayload::Upload { occurrence },
             control_order_after: control_order_after.into_iter().collect(),
         }
     }
@@ -203,7 +200,7 @@ impl ResolvedRenderGpuWorkNode {
             operation: GpuWorkOperation::Resolve(operation),
             preference: GpuExecutionPreference::TransferPreferred,
             provenance,
-            payload: Some(RenderGpuWorkPayload::TimingResolve { occurrence }),
+            payload: RenderGpuWorkPayload::TimingResolve { occurrence },
             control_order_after: control_order_after.into_iter().collect(),
         }
     }
@@ -221,7 +218,7 @@ impl ResolvedRenderGpuWorkNode {
             operation: GpuWorkOperation::Readback(operation),
             preference: GpuExecutionPreference::TransferPreferred,
             provenance,
-            payload: Some(RenderGpuWorkPayload::TimingReadback { occurrence }),
+            payload: RenderGpuWorkPayload::TimingReadback { occurrence },
             control_order_after: control_order_after.into_iter().collect(),
         }
     }
@@ -239,28 +236,7 @@ impl ResolvedRenderGpuWorkNode {
             operation: GpuWorkOperation::Readback(operation),
             preference: GpuExecutionPreference::TransferPreferred,
             provenance,
-            payload: Some(RenderGpuWorkPayload::CaptureReadback { occurrence }),
-            control_order_after: control_order_after.into_iter().collect(),
-        }
-    }
-
-    /// Frame-terminal presentation enters only the canonical GPU work graph. There is
-    /// intentionally no raw-executor payload: the legacy renderer bridge must fail closed rather
-    /// than learn how to present a RunenGPU acquisition.
-    pub(crate) fn present(
-        occurrence: RenderGpuWorkOccurrenceId,
-        label: GpuResourceLabel,
-        operation: GpuPresentOperation,
-        control_order_after: impl IntoIterator<Item = RenderGpuWorkOccurrenceId>,
-    ) -> Self {
-        let provenance = GpuResourceProvenance::new(label.clone(), None, None);
-        Self {
-            occurrence,
-            label,
-            operation: GpuWorkOperation::Present(operation),
-            preference: GpuExecutionPreference::Automatic,
-            provenance,
-            payload: None,
+            payload: RenderGpuWorkPayload::CaptureReadback { occurrence },
             control_order_after: control_order_after.into_iter().collect(),
         }
     }
@@ -334,11 +310,10 @@ impl RenderGpuWorkSidecar {
     }
 }
 
-/// One bounded render work graph plus the deletion-bound raw-executor payload sidecar.
+/// One bounded render G3 work authority plus its temporary execution sidecar.
 ///
-/// This value exists only for the temporary per-invocation renderer bridge. Frame-wide renderer
-/// work returns the canonical `GpuPreparedWorkGraph` directly and never carries this sidecar into
-/// RunenGPU submission.
+/// Prepared node IDs are process-local references only. This value must never be persisted or
+/// used as a stable cache, replay, wire, or cross-process key.
 #[derive(Debug, Clone)]
 pub struct PreparedRenderWorkPlan {
     graph: GpuPreparedWorkGraph,
@@ -376,57 +351,48 @@ struct AuthoredRenderFragment {
     pending: Vec<(GpuWorkNodeId, RenderGpuWorkPayload)>,
 }
 
-/// Transitional per-invocation entry point retained only for the raw renderer executor.
-///
-/// Every node entering this path must carry a sidecar payload. Frame-only operations such as
-/// terminal Present therefore reject here instead of expanding the legacy execution authority.
+/// Transitional per-invocation entry point retained until G5C1 moves its caller to the bounded
+/// frame authority below.
 pub(crate) fn prepare_render_gpu_work(
     plan: &CompiledRenderFlowPlan,
     nodes: impl IntoIterator<Item = ResolvedRenderGpuWorkNode>,
 ) -> Result<PreparedRenderWorkPlan, RenderGpuWorkAdapterError> {
-    let graph_label = GpuResourceLabel::new(format!("render.flow.{}.work", plan.flow_id))?;
-    let (graph, pending) = prepare_resolved_render_gpu_work(graph_label, nodes)?;
-    prepare_legacy_render_work_plan(graph, pending)
+    prepare_render_gpu_frame_work(
+        GpuResourceLabel::new(format!("render.flow.{}.work", plan.flow_id))?,
+        nodes,
+    )
 }
 
 /// Prepares one bounded frame/surface render submission from execution-complete logical GPU
-/// occurrences and returns the sole graph consumed by RunenGPU execution.
+/// occurrences.
 ///
-/// Every canonical occurrence that shares one physical renderer submission must enter this one
-/// fragment in deterministic frame execution sequence. That gives the GPU work graph direct
-/// authority over cross-invocation RAW/WAR/WAW hazards and initialization without using fragment
-/// collection order or reconstructing resource dependencies in RunenRender. No legacy execution
-/// sidecar leaves this boundary.
+/// Every canonical occurrence that currently shares one physical renderer submission must enter
+/// this one fragment in deterministic frame execution sequence. That gives G3 direct authority over
+/// cross-invocation RAW/WAR/WAW hazards and initialization without using fragment collection order
+/// or reconstructing resource dependencies in RunenRender.
 pub(crate) fn prepare_render_gpu_frame_work(
     graph_label: GpuResourceLabel,
     nodes: impl IntoIterator<Item = ResolvedRenderGpuWorkNode>,
-) -> Result<GpuPreparedWorkGraph, RenderGpuWorkAdapterError> {
-    let (graph, _) = prepare_resolved_render_gpu_work(graph_label, nodes)?;
-    Ok(graph)
+) -> Result<PreparedRenderWorkPlan, RenderGpuWorkAdapterError> {
+    prepare_resolved_render_gpu_work(graph_label, nodes)
 }
 
 /// Prepares one bounded render work set from execution-complete logical GPU occurrences.
 ///
 /// All kind-preserving resources are discovered from operation-derived accesses. Every non-query
-/// resource is supplied to the GPU work graph with descriptor initialization coverage, so an
-/// uninitialized descriptor remains uninitialized and a Prepared/Zeroed descriptor contributes
-/// only the coverage already owned by RunenGPU. Caller-declared duplicate access truth is
-/// intentionally absent.
+/// resource is supplied to G3R with descriptor initialization coverage, so an uninitialized
+/// descriptor remains uninitialized and a Prepared/Zeroed descriptor contributes only the
+/// coverage already owned by RunenGPU. Caller-declared duplicate access truth is intentionally
+/// absent.
 ///
-/// The graph rejects explicit order already guaranteed by typed data dependencies. The adapter
-/// therefore performs one provisional preparation without control edges, consumes the graph's own
-/// dependency result, and retains only unsatisfied render-control requirements for the final
+/// G3 intentionally rejects explicit order already guaranteed by typed data dependencies. The
+/// adapter therefore performs one provisional preparation without control edges, consumes G3's
+/// own dependency result, and retains only unsatisfied render-control requirements for the final
 /// preparation. No access intersection or hazard rule is duplicated in RunenRender.
 fn prepare_resolved_render_gpu_work(
     graph_label: GpuResourceLabel,
     nodes: impl IntoIterator<Item = ResolvedRenderGpuWorkNode>,
-) -> Result<
-    (
-        GpuPreparedWorkGraph,
-        Vec<(GpuWorkNodeId, RenderGpuWorkPayload)>,
-    ),
-    RenderGpuWorkAdapterError,
-> {
+) -> Result<PreparedRenderWorkPlan, RenderGpuWorkAdapterError> {
     let nodes = nodes.into_iter().collect::<Vec<_>>();
     validate_occurrences(&nodes)?;
 
@@ -478,13 +444,6 @@ fn prepare_resolved_render_gpu_work(
         (graph, final_fragment.pending)
     };
 
-    Ok((graph, pending))
-}
-
-fn prepare_legacy_render_work_plan(
-    graph: GpuPreparedWorkGraph,
-    pending: Vec<(GpuWorkNodeId, RenderGpuWorkPayload)>,
-) -> Result<PreparedRenderWorkPlan, RenderGpuWorkAdapterError> {
     let prepared_by_local = graph
         .nodes()
         .iter()
@@ -574,9 +533,7 @@ fn author_render_fragment(
                     node.provenance.clone(),
                 )?;
                 occurrence_nodes.insert(node.occurrence, node_id.clone());
-                if let Some(payload) = node.payload.clone() {
-                    pending.push((node_id, payload));
-                }
+                pending.push((node_id, node.payload.clone()));
             }
 
             for (before_occurrence, after_occurrence) in explicit_orders {
@@ -796,15 +753,6 @@ mod tests {
         .expect("test region should be valid")
     }
 
-    fn prepared_node_id(graph: &GpuPreparedWorkGraph, node_label: &str) -> GpuPreparedWorkNodeId {
-        graph
-            .nodes()
-            .iter()
-            .find(|node| node.node().label().as_str() == node_label)
-            .map(GpuPreparedWorkNode::id)
-            .unwrap_or_else(|| panic!("prepared graph is missing node '{node_label}'"))
-    }
-
     #[test]
     fn frame_work_preparation_owns_cross_invocation_raw_and_initialization() {
         let mut allocator =
@@ -852,21 +800,28 @@ mod tests {
             ),
         ];
 
-        let graph = prepare_render_gpu_frame_work(label("render frame test work"), nodes)
+        let prepared = prepare_render_gpu_frame_work(label("render frame test work"), nodes)
             .expect("bounded frame work should prepare");
-        let producer_node = prepared_node_id(&graph, "invocation a upload");
-        let consumer_node = prepared_node_id(&graph, "invocation b read");
-        let unrelated_node = prepared_node_id(&graph, "invocation c independent");
+        let by_occurrence = prepared
+            .ordered_payloads()
+            .expect("sidecar should cover every prepared node")
+            .into_iter()
+            .map(|(node, payload)| (payload.occurrence(), node))
+            .collect::<BTreeMap<_, _>>();
+        let producer_node = by_occurrence[&producer];
+        let consumer_node = by_occurrence[&consumer];
+        let unrelated_node = by_occurrence[&unrelated];
 
-        assert!(graph.dependencies().iter().any(|dependency| {
+        assert!(prepared.graph().dependencies().iter().any(|dependency| {
             dependency.before() == producer_node && dependency.after() == consumer_node
         }));
-        assert!(graph.dependencies().iter().all(|dependency| {
+        assert!(prepared.graph().dependencies().iter().all(|dependency| {
             dependency.before() != unrelated_node && dependency.after() != unrelated_node
         }));
 
         for buffer in [&shared, &copied, &independent] {
-            let initialization = graph
+            let initialization = prepared
+                .graph()
                 .initialization()
                 .iter()
                 .find(|entry| {
@@ -950,91 +905,31 @@ mod tests {
             ),
         ];
 
-        let graph = prepare_render_gpu_frame_work(label("capture stage order test"), nodes)
+        let prepared = prepare_render_gpu_frame_work(label("capture stage order test"), nodes)
             .expect("capture stage work should prepare");
-        let before_node = prepared_node_id(&graph, "capture before");
-        let pass_node = prepared_node_id(&graph, "independent pass");
-        let after_node = prepared_node_id(&graph, "capture after");
+        let by_occurrence = prepared
+            .ordered_payloads()
+            .expect("sidecar should cover every capture stage node")
+            .into_iter()
+            .map(|(node, payload)| (payload.occurrence(), node))
+            .collect::<BTreeMap<_, _>>();
+        let before_node = by_occurrence[&before_capture];
+        let pass_node = by_occurrence[&pass];
+        let after_node = by_occurrence[&after_capture];
 
-        assert!(graph.dependencies().iter().any(|dependency| {
+        assert!(prepared.graph().dependencies().iter().any(|dependency| {
             dependency.before() == before_node && dependency.after() == pass_node
         }));
-        assert!(graph.dependencies().iter().any(|dependency| {
+        assert!(prepared.graph().dependencies().iter().any(|dependency| {
             dependency.before() == pass_node && dependency.after() == after_node
         }));
-        assert_eq!(
-            graph
-                .nodes()
-                .iter()
-                .find(|node| node.id() == before_node)
-                .expect("before capture node should exist")
-                .node()
-                .kind(),
-            GpuWorkNodeKind::Readback
-        );
-        assert_eq!(
-            graph
-                .nodes()
-                .iter()
-                .find(|node| node.id() == after_node)
-                .expect("after capture node should exist")
-                .node()
-                .kind(),
-            GpuWorkNodeKind::Readback
-        );
-    }
-
-    #[test]
-    fn terminal_present_is_frame_only_and_cannot_enter_legacy_sidecar_execution() {
-        let mut allocator =
-            GpuWorkResourceIdAllocator::for_owner_scope(NonZeroU64::new(703).unwrap());
-        let texture_label = label("frame present texture");
-        let texture = allocator
-            .allocate_texture_handle(
-                GpuTextureDescriptor::new(
-                    common("frame present texture"),
-                    GpuTextureDimension::D2,
-                    GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, 4, 4, 1)
-                        .expect("present texture extent should be valid"),
-                    1,
-                    1,
-                    GpuTextureFormat::Rgba8Unorm,
-                    GpuTextureUsages::new(&texture_label, [GpuTextureUsage::CopyDestination])
-                        .expect("present texture usage should be valid"),
-                    GpuTextureInitialization::Zeroed,
-                )
-                .expect("present texture descriptor should be valid"),
-            )
-            .expect("present texture handle should allocate");
-        let subresource =
-            GpuTextureSubresourceRange::new(&texture_label, 0, 1, 0, 1, GpuTextureAspect::Color)
-                .expect("present subresource should be valid");
-        let operation = GpuPresentOperation::new(texture.clone().into(), subresource)
-            .expect("present operation should be valid");
-        let present = ResolvedRenderGpuWorkNode::present(
-            RenderGpuWorkOccurrenceId::new(1),
-            label("frame terminal present"),
-            operation,
-            [],
-        );
-
-        let frame_graph =
-            prepare_render_gpu_frame_work(label("frame present graph"), [present.clone()])
-                .expect("frame-only Present should prepare");
-        assert_eq!(frame_graph.nodes().len(), 1);
-        assert_eq!(
-            frame_graph.nodes()[0].node().kind(),
-            GpuWorkNodeKind::Present
-        );
-
-        let (legacy_graph, pending) =
-            prepare_resolved_render_gpu_work(label("legacy present rejection"), [present])
-                .expect("generic graph construction should still accept Present");
-        let error = prepare_legacy_render_work_plan(legacy_graph, pending)
-            .expect_err("legacy raw executor must reject a frame-only Present node");
         assert!(matches!(
-            error,
-            RenderGpuWorkAdapterError::MissingSidecarPayload { .. }
+            prepared.payload(before_node).unwrap(),
+            RenderGpuWorkPayload::CaptureReadback { occurrence } if *occurrence == before_capture
+        ));
+        assert!(matches!(
+            prepared.payload(after_node).unwrap(),
+            RenderGpuWorkPayload::CaptureReadback { occurrence } if *occurrence == after_capture
         ));
     }
 }
