@@ -5,7 +5,7 @@ status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-07-02
+last_reviewed: 2026-08-23
 related_docs:
   - ../../workspace/planning/roadmap.md
   - ../../workspace/planning/decision-register.md
@@ -80,9 +80,10 @@ domain/ui/ui_controls/src/base_control/compiler.rs
 domain/ui/ui_controls/src/base_control/lowering/inspection.rs
 domain/ui/ui_controls/src/catalog/entry.rs
 domain/ui/ui_controls/src/catalog/inspection.rs
-domain/ui/ui_controls/tests/base_controls_overlay_package.rs
-domain/ui/ui_controls/tests/base_controls_overlay_catalog.rs
-domain/ui/ui_controls/tests/base_controls_overlay_inspection.rs
+domain/ui/ui_controls/tests/overlay.rs
+domain/ui/ui_controls/tests/overlay/package.rs
+domain/ui/ui_controls/tests/overlay/catalog.rs
+domain/ui/ui_controls/tests/overlay/inspection.rs
 
 domain/ui/ui_input/tests/overlay_normalized_facts.rs
 
@@ -93,9 +94,10 @@ domain/ui/ui_runtime/src/overlay/placement.rs
 domain/ui/ui_runtime/src/overlay/stack.rs
 domain/ui/ui_runtime/src/overlay/layering.rs
 domain/ui/ui_runtime/src/overlay/proof_frame.rs
-domain/ui/ui_runtime/tests/overlay_layering_report.rs
-domain/ui/ui_runtime/tests/executable_overlay_layering_story.rs
-domain/ui/ui_runtime/tests/overlay_package_backed.rs
+domain/ui/ui_runtime/tests/overlay.rs
+domain/ui/ui_runtime/tests/overlay/layering_report.rs
+domain/ui/ui_runtime/tests/overlay/executable_story.rs
+domain/ui/ui_runtime/tests/overlay/package_backed.rs
 
 domain/ui/ui_static_mount/tests/base_controls_overlay_layering_static_mount.rs
 ```
@@ -111,6 +113,15 @@ The merged implementation proves package-backed declarations, catalog projection
 `OverlayBoundaryAssertions` proves zero host command execution, zero product mutation, zero text-edit transaction, zero app-specific modal operation, zero authored UI edit, and zero plugin-framework operation.
 
 ## Validated gate
+
+The current boundary-owned focused targets are:
+
+```text
+cargo test -p ui_controls --test overlay
+cargo test -p ui_runtime --test overlay
+```
+
+The commands below are retained as the contemporaneous Phase 13 completion evidence from before the later test-topology cutover.
 
 The full Phase 13 gate passed locally on 2026-07-02 before merge:
 
