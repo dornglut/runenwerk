@@ -94,7 +94,7 @@ impl CaptureObservation {
 
         let mut bytes_rgba8 = readback.as_bytes().to_vec();
         if self.readback_format.mode == TextureReadbackMode::Bgra8 {
-            for pixel in bytes_rgba8.chunks_exact_mut(4) {
+            for pixel in bytes_rgba8.as_chunks_mut::<4>().0 {
                 pixel.swap(0, 2);
             }
         }
