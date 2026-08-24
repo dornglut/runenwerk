@@ -12,6 +12,7 @@ use std::path::PathBuf;
 
 const MAX_PENDING_DIAGNOSTIC_TRANSACTIONS: usize = 8;
 const MAX_RETAINED_DIAGNOSTIC_CAPTURE_BYTES: usize = 64 * 1024 * 1024;
+const CAPTURE_BYTE_CAPACITY_REASON: &str = "diagnostics_capture_byte_capacity_exceeded";
 
 #[derive(Debug, ecs::Component, ecs::Resource)]
 pub(crate) struct RenderFrameDiagnosticsTransactionState {
@@ -33,6 +34,7 @@ impl Default for RenderFrameDiagnosticsTransactionState {
 #[derive(Debug)]
 pub(crate) struct RenderFrameDiagnosticsSnapshot {
     pub frame_index: u64,
+    pub simulation_tick: u64,
     pub provenance: Vec<RenderPassProvenanceRecord>,
     pub capture_plan: ResolvedRenderCapturePlan,
     pub pixel_probes: Vec<RenderPixelProbeRequest>,
@@ -41,8 +43,21 @@ pub(crate) struct RenderFrameDiagnosticsSnapshot {
 }
 
 #[derive(Debug)]
+pub(crate) struct CompletedRenderFrameDiagnostics {
+    pub report: RenderDebugFrameReport,
+    pub simulation_tick: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RenderFrameDiagnosticsCompletionMode {
+    AwaitingNormalCompletion,
+    ProductAborted,
+}
+
+#[derive(Debug)]
 struct RenderFrameDiagnosticsTransaction {
     frame_index: u64,
+    simulation_tick: u64,
     provenance: Vec<RenderPassProvenanceRecord>,
     capture_plan: ResolvedRenderCapturePlan,
     capture_results: BTreeMap<usize, RenderCaptureSelectorResult>,
@@ -50,6 +65,8 @@ struct RenderFrameDiagnosticsTransaction {
     pixel_probes: Vec<PendingPixelProbe>,
     texture_diffs: Vec<PendingTextureDiff>,
     artifact: PendingArtifactExport,
+    payload_capacity_exceeded: BTreeSet<RenderCaptureIdentity>,
+    completion_mode: RenderFrameDiagnosticsCompletionMode,
     warnings: Vec<String>,
     errors: Vec<String>,
 }
@@ -87,7 +104,7 @@ impl RenderFrameDiagnosticsTransactionState {
         &mut self,
         captures: Vec<RenderCapturedTexture>,
         results: Vec<RenderCaptureSelectorResult>,
-    ) -> Vec<RenderDebugFrameReport> {
+    ) -> Vec<CompletedRenderFrameDiagnostics> {
         for capture in captures {
             let frame_index = capture.identity.frame_index;
             if let Some(transaction) = self.pending.get_mut(&frame_index) {
@@ -125,7 +142,7 @@ impl RenderFrameDiagnosticsTransactionState {
         snapshot: RenderFrameDiagnosticsSnapshot,
         captures: Vec<RenderCapturedTexture>,
         results: Vec<RenderCaptureSelectorResult>,
-    ) -> Vec<RenderDebugFrameReport> {
+    ) -> Vec<CompletedRenderFrameDiagnostics> {
         let frame_index = snapshot.frame_index;
         let mut transaction = RenderFrameDiagnosticsTransaction::new(snapshot);
         for result in results {
@@ -137,7 +154,7 @@ impl RenderFrameDiagnosticsTransactionState {
         transaction.advance();
 
         if transaction.is_complete() {
-            return vec![transaction.into_report()];
+            return vec![transaction.into_completion()];
         }
 
         if self.pending.contains_key(&frame_index) {
@@ -147,7 +164,7 @@ impl RenderFrameDiagnosticsTransactionState {
                     "a product diagnostics transaction for semantic frame {frame_index} already exists"
                 ),
             );
-            return vec![transaction.into_report()];
+            return vec![transaction.into_completion()];
         }
 
         if self.pending.len() >= self.max_pending_transactions {
@@ -158,7 +175,7 @@ impl RenderFrameDiagnosticsTransactionState {
                     self.max_pending_transactions
                 ),
             );
-            return vec![transaction.into_report()];
+            return vec![transaction.into_completion()];
         }
 
         let available_bytes = self
@@ -167,7 +184,7 @@ impl RenderFrameDiagnosticsTransactionState {
         transaction.enforce_retained_byte_capacity(available_bytes);
         transaction.advance();
         if transaction.is_complete() {
-            vec![transaction.into_report()]
+            vec![transaction.into_completion()]
         } else {
             self.pending.insert(frame_index, transaction);
             Vec::new()
@@ -181,7 +198,7 @@ impl RenderFrameDiagnosticsTransactionState {
             .fold(0usize, usize::saturating_add)
     }
 
-    fn take_completed_reports(&mut self) -> Vec<RenderDebugFrameReport> {
+    fn take_completed_reports(&mut self) -> Vec<CompletedRenderFrameDiagnostics> {
         let completed = self
             .pending
             .iter()
@@ -192,7 +209,7 @@ impl RenderFrameDiagnosticsTransactionState {
         completed
             .into_iter()
             .filter_map(|frame_index| self.pending.remove(&frame_index))
-            .map(RenderFrameDiagnosticsTransaction::into_report)
+            .map(RenderFrameDiagnosticsTransaction::into_completion)
             .collect()
     }
 
@@ -244,6 +261,7 @@ impl RenderFrameDiagnosticsTransaction {
 
         Self {
             frame_index: snapshot.frame_index,
+            simulation_tick: snapshot.simulation_tick,
             provenance: snapshot.provenance,
             capture_plan: snapshot.capture_plan,
             capture_results: BTreeMap::new(),
@@ -256,6 +274,8 @@ impl RenderFrameDiagnosticsTransaction {
                 terminal: artifact_terminal,
                 manifest_path: None,
             },
+            payload_capacity_exceeded: BTreeSet::new(),
+            completion_mode: RenderFrameDiagnosticsCompletionMode::AwaitingNormalCompletion,
             warnings: Vec::new(),
             errors: Vec::new(),
         }
@@ -283,9 +303,11 @@ impl RenderFrameDiagnosticsTransaction {
             capture.bytes_rgba8 = None;
         } else if byte_len > available_bytes {
             capture.bytes_rgba8 = None;
+            self.payload_capacity_exceeded
+                .insert(capture.identity.clone());
             self.errors.push(format!(
-                "diagnostics_capture_byte_capacity_exceeded: semantic frame {} capture {:?} required {} retained bytes with {} available",
-                self.frame_index, capture.identity, byte_len, available_bytes
+                "{CAPTURE_BYTE_CAPACITY_REASON}: semantic frame {} capture {:?} required {} retained bytes with {} available",
+                self.frame_index, capture.identity, byte_len, available_bytes,
             ));
         }
         self.captures.push(capture);
@@ -311,20 +333,45 @@ impl RenderFrameDiagnosticsTransaction {
     }
 
     fn advance(&mut self) {
+        let capture_plan = &self.capture_plan;
+        let captures = &self.captures;
+        let payload_capacity_exceeded = &self.payload_capacity_exceeded;
         for probe in &mut self.pixel_probes {
-            if probe.result.is_some() || !probe.dependencies.is_terminal(&self.captures) {
+            if probe.result.is_some() || !probe.dependencies.is_terminal(captures) {
                 continue;
             }
-            probe.result =
-                evaluate_pixel_probes(std::slice::from_ref(&probe.request), &self.captures).pop();
+            probe.result = if let Some(detail) = probe
+                .dependencies
+                .byte_capacity_failure_detail(payload_capacity_exceeded)
+            {
+                Some(capacity_probe_result(
+                    capture_plan,
+                    &probe.request,
+                    CAPTURE_BYTE_CAPACITY_REASON,
+                    &detail,
+                ))
+            } else {
+                evaluate_pixel_probes(std::slice::from_ref(&probe.request), captures).pop()
+            };
         }
 
         for diff in &mut self.texture_diffs {
-            if diff.result.is_some() || !diff.dependencies.is_terminal(&self.captures) {
+            if diff.result.is_some() || !diff.dependencies.is_terminal(captures) {
                 continue;
             }
-            diff.result =
-                evaluate_texture_diffs(std::slice::from_ref(&diff.request), &self.captures).pop();
+            diff.result = if let Some(detail) = diff
+                .dependencies
+                .byte_capacity_failure_detail(payload_capacity_exceeded)
+            {
+                Some(capacity_diff_result(
+                    capture_plan,
+                    &diff.request,
+                    CAPTURE_BYTE_CAPACITY_REASON,
+                    &detail,
+                ))
+            } else {
+                evaluate_texture_diffs(std::slice::from_ref(&diff.request), captures).pop()
+            };
         }
 
         if !self.artifact.terminal
@@ -334,36 +381,51 @@ impl RenderFrameDiagnosticsTransaction {
                 .iter()
                 .all(|identity| self.has_terminal_capture(identity))
         {
-            let output_dir = self
+            let capacity_blocked = self
                 .artifact
-                .output_dir
-                .as_ref()
-                .expect("pending artifact export owns its output directory");
-            match export_captured_textures(output_dir, self.frame_index, &self.captures) {
-                Ok(export) => {
-                    self.artifact.manifest_path = Some(export.manifest_path);
-                    for exported in export.exported_capture_images {
-                        for result in self.capture_results.values_mut() {
-                            if result.frame_identity.as_ref() == Some(&exported.frame_identity)
-                                && result.terminal.code == RenderCaptureTerminalCode::Completed
-                            {
-                                result.artifact_path = Some(exported.image_path.clone());
+                .dependencies
+                .iter()
+                .any(|identity| self.payload_capacity_exceeded.contains(identity));
+            if capacity_blocked {
+                self.artifact.manifest_path = None;
+                self.errors.push(format!(
+                    "{CAPTURE_BYTE_CAPACITY_REASON}: semantic frame {} artifact export requires capture bytes that product diagnostics could not retain",
+                    self.frame_index
+                ));
+            } else {
+                let output_dir = self
+                    .artifact
+                    .output_dir
+                    .as_ref()
+                    .expect("pending artifact export owns its output directory");
+                match export_captured_textures(output_dir, self.frame_index, &self.captures) {
+                    Ok(export) => {
+                        self.artifact.manifest_path = Some(export.manifest_path);
+                        for exported in export.exported_capture_images {
+                            for result in self.capture_results.values_mut() {
+                                if result.frame_identity.as_ref() == Some(&exported.frame_identity)
+                                    && result.terminal.code == RenderCaptureTerminalCode::Completed
+                                {
+                                    result.artifact_path = Some(exported.image_path.clone());
+                                }
                             }
                         }
                     }
-                }
-                Err(err) => {
-                    let reason =
-                        RenderCaptureTerminalReason::new("artifact_export_failed", err.to_string());
-                    for result in self.capture_results.values_mut() {
-                        if result.terminal.code == RenderCaptureTerminalCode::Completed {
-                            result.terminal = RenderCaptureTerminal::new(
-                                RenderCaptureTerminalCode::ExportFailed,
-                                Some(reason.clone()),
-                            );
+                    Err(err) => {
+                        let reason = RenderCaptureTerminalReason::new(
+                            "artifact_export_failed",
+                            err.to_string(),
+                        );
+                        for result in self.capture_results.values_mut() {
+                            if result.terminal.code == RenderCaptureTerminalCode::Completed {
+                                result.terminal = RenderCaptureTerminal::new(
+                                    RenderCaptureTerminalCode::ExportFailed,
+                                    Some(reason.clone()),
+                                );
+                            }
                         }
+                        self.errors.push(format!("artifact_export_failed: {err}"));
                     }
-                    self.errors.push(format!("artifact_export_failed: {err}"));
                 }
             }
             self.artifact.terminal = true;
@@ -404,34 +466,17 @@ impl RenderFrameDiagnosticsTransaction {
                 continue;
             }
             capture.bytes_rgba8 = None;
+            self.payload_capacity_exceeded
+                .insert(capture.identity.clone());
             self.errors.push(format!(
-                "diagnostics_capture_byte_capacity_exceeded: semantic frame {} capture {:?} could not retain {} bytes",
-                self.frame_index, capture.identity, byte_len
+                "{CAPTURE_BYTE_CAPACITY_REASON}: semantic frame {} capture {:?} could not retain {} bytes",
+                self.frame_index, capture.identity, byte_len,
             ));
         }
     }
 
     fn fail_capacity(&mut self, reason_code: &str, detail: String) {
         self.errors.push(format!("{reason_code}: {detail}"));
-        for selector in &self.capture_plan.selectors {
-            self.capture_results
-                .entry(selector.selector_index)
-                .or_insert_with(|| RenderCaptureSelectorResult {
-                    selector_index: selector.selector_index,
-                    selector: selector.selector.clone(),
-                    capture_point: resolution_capture_point(&selector.resolution)
-                        .cloned()
-                        .unwrap_or_else(|| selector.selector.stable_point_fallback()),
-                    frame_identity: resolution_identity(&selector.resolution).cloned(),
-                    terminal: RenderCaptureTerminal::with_reason(
-                        RenderCaptureTerminalCode::Skipped,
-                        reason_code,
-                        detail.clone(),
-                    ),
-                    artifact_path: None,
-                });
-        }
-
         for probe in &mut self.pixel_probes {
             if probe.result.is_none() {
                 probe.result = Some(capacity_probe_result(
@@ -455,6 +500,8 @@ impl RenderFrameDiagnosticsTransaction {
         self.artifact.terminal = true;
         self.artifact.manifest_path = None;
         self.captures.clear();
+        self.payload_capacity_exceeded.clear();
+        self.completion_mode = RenderFrameDiagnosticsCompletionMode::ProductAborted;
     }
 
     fn has_terminal_capture(&self, identity: &RenderCaptureIdentity) -> bool {
@@ -489,32 +536,38 @@ impl RenderFrameDiagnosticsTransaction {
     }
 
     fn is_complete(&self) -> bool {
-        self.capture_results_complete()
-            && self.pixel_probes.iter().all(|probe| probe.result.is_some())
-            && self.texture_diffs.iter().all(|diff| diff.result.is_some())
-            && self.artifact.terminal
+        let product_consumers_terminal =
+            self.pixel_probes.iter().all(|probe| probe.result.is_some())
+                && self.texture_diffs.iter().all(|diff| diff.result.is_some())
+                && self.artifact.terminal;
+        product_consumers_terminal
+            && (self.completion_mode == RenderFrameDiagnosticsCompletionMode::ProductAborted
+                || self.capture_results_complete())
     }
 
-    fn into_report(self) -> RenderDebugFrameReport {
+    fn into_completion(self) -> CompletedRenderFrameDiagnostics {
         debug_assert!(self.is_complete());
-        RenderDebugFrameReport {
-            frame_index: self.frame_index,
-            provenance: self.provenance,
-            capture_plan: self.capture_plan,
-            capture_results: self.capture_results.into_values().collect(),
-            artifact_manifest_path: self.artifact.manifest_path,
-            pixel_probe_results: self
-                .pixel_probes
-                .into_iter()
-                .filter_map(|probe| probe.result)
-                .collect(),
-            texture_diff_results: self
-                .texture_diffs
-                .into_iter()
-                .filter_map(|diff| diff.result)
-                .collect(),
-            warnings: self.warnings,
-            errors: self.errors,
+        CompletedRenderFrameDiagnostics {
+            simulation_tick: self.simulation_tick,
+            report: RenderDebugFrameReport {
+                frame_index: self.frame_index,
+                provenance: self.provenance,
+                capture_plan: self.capture_plan,
+                capture_results: self.capture_results.into_values().collect(),
+                artifact_manifest_path: self.artifact.manifest_path,
+                pixel_probe_results: self
+                    .pixel_probes
+                    .into_iter()
+                    .filter_map(|probe| probe.result)
+                    .collect(),
+                texture_diff_results: self
+                    .texture_diffs
+                    .into_iter()
+                    .filter_map(|diff| diff.result)
+                    .collect(),
+                warnings: self.warnings,
+                errors: self.errors,
+            },
         }
     }
 }
@@ -526,6 +579,22 @@ impl ConsumerDependencies {
                 .identities
                 .iter()
                 .all(|identity| captures.iter().any(|capture| &capture.identity == identity))
+    }
+
+    fn byte_capacity_failure_detail(
+        &self,
+        capacity_exceeded: &BTreeSet<RenderCaptureIdentity>,
+    ) -> Option<String> {
+        let affected = self
+            .identities
+            .iter()
+            .filter(|identity| capacity_exceeded.contains(*identity))
+            .collect::<Vec<_>>();
+        (!affected.is_empty()).then(|| {
+            format!(
+                "product diagnostics could not retain capture bytes for dependencies {affected:?}"
+            )
+        })
     }
 }
 
@@ -581,19 +650,6 @@ fn resolution_identity(resolution: &RenderSelectorResolution) -> Option<&RenderC
     match resolution {
         RenderSelectorResolution::Pending { frame_identity, .. }
         | RenderSelectorResolution::Matched { frame_identity, .. } => Some(frame_identity),
-        RenderSelectorResolution::Unmatched { .. }
-        | RenderSelectorResolution::Disabled { .. }
-        | RenderSelectorResolution::Unsupported { .. }
-        | RenderSelectorResolution::Skipped { .. } => None,
-    }
-}
-
-fn resolution_capture_point(
-    resolution: &RenderSelectorResolution,
-) -> Option<&crate::plugins::render::inspect::RenderCapturePointIdentity> {
-    match resolution {
-        RenderSelectorResolution::Pending { capture_point, .. }
-        | RenderSelectorResolution::Matched { capture_point, .. } => Some(capture_point),
         RenderSelectorResolution::Unmatched { .. }
         | RenderSelectorResolution::Disabled { .. }
         | RenderSelectorResolution::Unsupported { .. }
@@ -663,6 +719,7 @@ mod tests {
     use crate::plugins::render::inspect::{
         CaptureStage, CaptureTextureClass, RenderPixelProbeAssertionMode, RenderPixelSampleMode,
         RenderSelectorResolution, ResolvedRenderCaptureSelector,
+        validate_selector_terminal_invariant,
     };
 
     fn selector(pass_id: &str) -> RenderCaptureSelector {
@@ -735,6 +792,7 @@ mod tests {
     ) -> RenderFrameDiagnosticsSnapshot {
         RenderFrameDiagnosticsSnapshot {
             frame_index,
+            simulation_tick: frame_index.saturating_mul(10),
             provenance: Vec::new(),
             capture_plan,
             pixel_probes,
@@ -845,14 +903,17 @@ mod tests {
             state.observe_terminal_captures(vec![ready.clone()], vec![result_for(&ready, 0)]);
 
         assert_eq!(reports.len(), 1);
-        assert_eq!(reports[0].frame_index, 7);
-        assert_eq!(reports[0].pixel_probe_results[0].probe_id, "frame-n-probe");
+        assert_eq!(reports[0].report.frame_index, 7);
         assert_eq!(
-            reports[0].pixel_probe_results[0].frame_identity,
+            reports[0].report.pixel_probe_results[0].probe_id,
+            "frame-n-probe"
+        );
+        assert_eq!(
+            reports[0].report.pixel_probe_results[0].frame_identity,
             Some(identity(7, &selector))
         );
         assert_eq!(
-            reports[0].pixel_probe_results[0].status,
+            reports[0].report.pixel_probe_results[0].status,
             RenderPixelProbeStatus::Passed
         );
     }
@@ -884,13 +945,16 @@ mod tests {
             vec![left_capture.clone(), right_capture.clone()],
             vec![result_for(&left_capture, 0), result_for(&right_capture, 1)],
         );
-        assert_eq!(reports[0].texture_diff_results[0].diff_id, "frame-n-diff");
         assert_eq!(
-            reports[0].texture_diff_results[0].status,
+            reports[0].report.texture_diff_results[0].diff_id,
+            "frame-n-diff"
+        );
+        assert_eq!(
+            reports[0].report.texture_diff_results[0].status,
             RenderTextureDiffStatus::Compared
         );
         assert_eq!(
-            reports[0].texture_diff_results[0].left_frame_identity,
+            reports[0].report.texture_diff_results[0].left_frame_identity,
             Some(identity(8, &left))
         );
     }
@@ -924,18 +988,18 @@ mod tests {
         let n1 = capture(11, &selector, [11, 0, 0, 255]);
         let first = state.observe_terminal_captures(vec![n1.clone()], vec![result_for(&n1, 0)]);
         assert_eq!(first.len(), 1);
-        assert_eq!(first[0].frame_index, 11);
+        assert_eq!(first[0].report.frame_index, 11);
         assert_eq!(
-            first[0].pixel_probe_results[0].sampled_rgba8,
+            first[0].report.pixel_probe_results[0].sampled_rgba8,
             Some([11, 0, 0, 255])
         );
         assert_eq!(state.pending_count(), 1);
 
         let n = capture(10, &selector, [10, 0, 0, 255]);
         let second = state.observe_terminal_captures(vec![n.clone()], vec![result_for(&n, 0)]);
-        assert_eq!(second[0].frame_index, 10);
+        assert_eq!(second[0].report.frame_index, 10);
         assert_eq!(
-            second[0].pixel_probe_results[0].sampled_rgba8,
+            second[0].report.pixel_probe_results[0].sampled_rgba8,
             Some([10, 0, 0, 255])
         );
     }
@@ -1036,14 +1100,14 @@ mod tests {
             vec![failed.clone(), ready.clone()],
             vec![result_for(&failed, 0), result_for(&ready, 1)],
         );
-        let probe = &reports[0].pixel_probe_results[0];
+        let probe = &reports[0].report.pixel_probe_results[0];
         assert_eq!(probe.status, RenderPixelProbeStatus::Skipped);
         assert_eq!(probe.frame_identity, Some(identity(14, &failed_selector)));
         assert_eq!(
             probe.message.as_ref().unwrap().code,
             "capture_not_completed"
         );
-        let diff = &reports[0].texture_diff_results[0];
+        let diff = &reports[0].report.texture_diff_results[0];
         assert_eq!(diff.status, RenderTextureDiffStatus::Skipped);
         assert_eq!(
             diff.left_frame_identity,
@@ -1075,7 +1139,7 @@ mod tests {
         );
         assert_eq!(reports.len(), 1);
         assert_eq!(
-            reports[0].pixel_probe_results[0].status,
+            reports[0].report.pixel_probe_results[0].status,
             RenderPixelProbeStatus::Skipped
         );
         assert_eq!(state.pending_count(), 0);
@@ -1174,13 +1238,13 @@ mod tests {
         frame.artifact_output_dir = Some(output.clone());
         let mut state = RenderFrameDiagnosticsTransactionState::default();
         let reports = state.begin_frame(frame, vec![ready.clone()], vec![result_for(&ready, 0)]);
-        assert_eq!(reports[0].frame_index, 20);
-        let manifest_path = reports[0].artifact_manifest_path.as_ref().unwrap();
+        assert_eq!(reports[0].report.frame_index, 20);
+        let manifest_path = reports[0].report.artifact_manifest_path.as_ref().unwrap();
         assert!(manifest_path.ends_with("frame_20__manifest.json"));
         let manifest = std::fs::read_to_string(manifest_path).unwrap();
         assert!(manifest.contains("\"frame_index\": 20"));
         assert!(
-            reports[0].capture_results[0]
+            reports[0].report.capture_results[0]
                 .artifact_path
                 .as_ref()
                 .unwrap()
@@ -1221,11 +1285,11 @@ mod tests {
             vec![result_for(&second, 0), result_for(&first, 0)],
         );
         assert_eq!(reports.len(), 2);
-        assert_eq!(reports[0].frame_index, 21);
-        assert_eq!(reports[1].frame_index, 22);
-        for report in reports {
-            assert!(report.capture_results.iter().all(|result| {
-                result.frame_identity.as_ref().unwrap().frame_index == report.frame_index
+        assert_eq!(reports[0].report.frame_index, 21);
+        assert_eq!(reports[1].report.frame_index, 22);
+        for completed in reports {
+            assert!(completed.report.capture_results.iter().all(|result| {
+                result.frame_identity.as_ref().unwrap().frame_index == completed.report.frame_index
             }));
         }
     }
@@ -1271,80 +1335,223 @@ mod tests {
         let ready = capture(23, &selector, [1, 1, 1, 255]);
         let reports =
             state.observe_terminal_captures(vec![ready.clone()], vec![result_for(&ready, 0)]);
-        assert_eq!(reports[0].provenance[0].frame_index, 23);
-        assert_eq!(reports[0].provenance[0].shader_id, "shader.original");
+        assert_eq!(reports[0].report.provenance[0].frame_index, 23);
+        assert_eq!(reports[0].report.provenance[0].shader_id, "shader.original");
     }
 
     #[test]
-    fn transaction_and_byte_capacity_exhaustion_are_bounded_and_truthful() {
-        let first_selector = selector("pass.first");
-        let second_selector = selector("pass.second");
+    fn transaction_capacity_aborts_product_without_fabricating_capture_terminal() {
+        let occupying_selector = selector("pass.occupying");
+        let completed_selector = selector("pass.completed");
+        let pending_selector = selector("pass.pending");
         let mut state = RenderFrameDiagnosticsTransactionState::with_limits(1, 2);
         state.begin_frame(
             snapshot(
                 24,
-                pending_plan(24, std::slice::from_ref(&first_selector)),
+                pending_plan(24, std::slice::from_ref(&occupying_selector)),
                 vec![],
                 vec![],
             ),
             vec![],
             vec![],
         );
-        let overflow = state.begin_frame(
+        let observed_capture = capture(25, &completed_selector, [1, 2, 3, 255]);
+        let aborted = state.begin_frame(
             snapshot(
                 25,
-                pending_plan(25, std::slice::from_ref(&second_selector)),
+                pending_plan(25, &[completed_selector, pending_selector.clone()]),
                 vec![RenderPixelProbeRequest::center(
                     "overflow",
-                    second_selector.clone(),
+                    pending_selector.clone(),
                 )],
                 vec![],
             ),
-            vec![],
-            vec![],
+            vec![observed_capture.clone()],
+            vec![result_for(&observed_capture, 0)],
         );
         assert_eq!(state.pending_count(), 1);
+        assert_eq!(aborted.len(), 1);
+        let aborted_report = &aborted[0].report;
         assert!(
-            overflow[0]
+            aborted_report
                 .errors
                 .iter()
                 .any(|error| error.contains("diagnostics_transaction_capacity_exceeded"))
         );
         assert_eq!(
-            overflow[0].pixel_probe_results[0].status,
+            aborted_report.pixel_probe_results[0].status,
             RenderPixelProbeStatus::Skipped
         );
+        assert!(matches!(
+            aborted_report.capture_plan.selectors[1].resolution,
+            RenderSelectorResolution::Pending { .. }
+        ));
+        assert_eq!(aborted_report.capture_results.len(), 1);
+        assert_eq!(
+            aborted_report.capture_results[0].terminal.code,
+            RenderCaptureTerminalCode::Completed
+        );
+        assert!(
+            aborted_report
+                .capture_results
+                .iter()
+                .all(|result| result.selector_index != 1)
+        );
+        assert!(aborted_report.validate_invariants().is_empty());
+        assert_eq!(aborted[0].simulation_tick, 250);
 
-        let ready = capture(24, &first_selector, [1, 2, 3, 255]);
-        let report =
-            state.observe_terminal_captures(vec![ready.clone()], vec![result_for(&ready, 0)]);
-        assert_eq!(report.len(), 1);
-        assert_eq!(state.pending_count(), 0);
+        let later_real_capture = capture(25, &pending_selector, [9, 8, 7, 255]);
+        let later_real_result = result_for(&later_real_capture, 1);
+        assert_eq!(
+            later_real_result.terminal.code,
+            RenderCaptureTerminalCode::Completed
+        );
+        assert!(
+            validate_selector_terminal_invariant(
+                &aborted_report.capture_plan,
+                &[
+                    aborted_report.capture_results[0].clone(),
+                    later_real_result.clone(),
+                ],
+            )
+            .is_ok()
+        );
+        assert!(
+            state
+                .observe_terminal_captures(vec![later_real_capture], vec![later_real_result],)
+                .is_empty()
+        );
+        assert_eq!(state.pending_count(), 1);
+    }
 
-        let byte_selector = selector("pass.bytes");
-        let other = selector("pass.pending");
-        let byte_capture = capture(26, &byte_selector, [1, 2, 3, 255]);
-        state.begin_frame(
-            snapshot(
-                26,
-                pending_plan(26, &[byte_selector.clone(), other.clone()]),
-                vec![],
-                vec![RenderTextureDiffRequest::new(
-                    "retain-bytes",
-                    byte_selector.clone(),
-                    other.clone(),
-                )],
-            ),
-            vec![byte_capture.clone()],
-            vec![result_for(&byte_capture, 0)],
+    #[test]
+    fn byte_capacity_preserves_completed_capture_and_terminalizes_product_consumers() {
+        let left = selector("pass.bytes.left");
+        let right = selector("pass.bytes.right");
+        let probe = RenderPixelProbeRequest {
+            id: "capacity-probe".to_string(),
+            selector: left.clone(),
+            sample_mode: RenderPixelSampleMode::Center,
+            assertion: RenderPixelProbeAssertionMode::CompareToCapture {
+                other_selector: right.clone(),
+                tolerance: 0,
+            },
+        };
+        let diff = RenderTextureDiffRequest::new("capacity-diff", left.clone(), right.clone());
+        let output = std::env::temp_dir().join(format!(
+            "runenwerk_frame_diagnostics_capacity_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mut frame = snapshot(
+            26,
+            pending_plan(26, &[left.clone(), right.clone()]),
+            vec![probe],
+            vec![diff],
+        );
+        frame.artifact_output_dir = Some(output.clone());
+
+        let left_capture = capture(26, &left, [1, 2, 3, 255]);
+        let mut state = RenderFrameDiagnosticsTransactionState::with_limits(8, 2);
+        assert!(
+            state
+                .begin_frame(
+                    frame,
+                    vec![left_capture.clone()],
+                    vec![result_for(&left_capture, 0)],
+                )
+                .is_empty()
         );
         let pending = state.pending.get(&26).unwrap();
+        assert_eq!(pending.retained_capture_bytes(), 0);
         assert!(
             pending
-                .errors
-                .iter()
-                .any(|error| error.contains("diagnostics_capture_byte_capacity_exceeded"))
+                .payload_capacity_exceeded
+                .contains(&identity(26, &left))
         );
-        assert_eq!(pending.retained_capture_bytes(), 0);
+        assert_eq!(
+            pending.capture_results[&0].terminal.code,
+            RenderCaptureTerminalCode::Completed
+        );
+
+        let right_capture = capture(26, &right, [1, 2, 3, 255]);
+        let completed = state.observe_terminal_captures(
+            vec![right_capture.clone()],
+            vec![result_for(&right_capture, 1)],
+        );
+        assert_eq!(completed.len(), 1);
+        assert_eq!(state.pending_count(), 0);
+        let report = &completed[0].report;
+        assert!(report.validate_invariants().is_empty());
+        assert!(
+            report
+                .capture_results
+                .iter()
+                .all(|result| { result.terminal.code == RenderCaptureTerminalCode::Completed })
+        );
+        assert_eq!(
+            report.pixel_probe_results[0].message.as_ref().unwrap().code,
+            CAPTURE_BYTE_CAPACITY_REASON
+        );
+        assert_eq!(
+            report.texture_diff_results[0]
+                .message
+                .as_ref()
+                .unwrap()
+                .code,
+            CAPTURE_BYTE_CAPACITY_REASON
+        );
+        assert!(report.artifact_manifest_path.is_none());
+        assert!(report.errors.iter().any(|error| {
+            error.contains(CAPTURE_BYTE_CAPACITY_REASON)
+                && error.contains("artifact export requires capture bytes")
+        }));
+        assert!(!output.exists());
+    }
+
+    #[test]
+    fn delayed_and_immediate_completions_preserve_original_simulation_tick() {
+        let delayed_selector = selector("pass.tick.delayed");
+        let mut delayed_snapshot = snapshot(
+            27,
+            pending_plan(27, std::slice::from_ref(&delayed_selector)),
+            vec![],
+            vec![],
+        );
+        delayed_snapshot.simulation_tick = 42;
+        let mut state = RenderFrameDiagnosticsTransactionState::default();
+        assert!(
+            state
+                .begin_frame(delayed_snapshot, vec![], vec![])
+                .is_empty()
+        );
+
+        let delayed_capture = capture(27, &delayed_selector, [1, 2, 3, 255]);
+        let delayed = state.observe_terminal_captures(
+            vec![delayed_capture.clone()],
+            vec![result_for(&delayed_capture, 0)],
+        );
+        assert_eq!(delayed[0].report.frame_index, 27);
+        assert_eq!(delayed[0].simulation_tick, 42);
+
+        let immediate_selector = selector("pass.tick.immediate");
+        let immediate_capture = capture(28, &immediate_selector, [4, 5, 6, 255]);
+        let mut immediate_snapshot = snapshot(
+            28,
+            pending_plan(28, std::slice::from_ref(&immediate_selector)),
+            vec![],
+            vec![],
+        );
+        immediate_snapshot.simulation_tick = 43;
+        let immediate = state.begin_frame(
+            immediate_snapshot,
+            vec![immediate_capture.clone()],
+            vec![result_for(&immediate_capture, 0)],
+        );
+        assert_eq!(immediate[0].report.frame_index, 28);
+        assert_eq!(immediate[0].simulation_tick, 43);
     }
 }

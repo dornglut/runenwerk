@@ -10,12 +10,13 @@ use crate::plugins::pipelines::{PipelineCacheResource, PipelineCacheStats};
 use crate::plugins::render::backend::RenderSurfaceAcquireError;
 use crate::plugins::render::backend::{RenderSurfaceDiagnostic, RenderSurfaceRegistryResource};
 use crate::plugins::render::runtime::{
-    RenderFrameDiagnosticsSnapshot, RenderFrameDiagnosticsTransactionState,
+    CompletedRenderFrameDiagnostics, RenderFrameDiagnosticsSnapshot,
+    RenderFrameDiagnosticsTransactionState,
 };
 use crate::plugins::render::*;
 use crate::plugins::time::domain::Time;
 use crate::runtime::FramePacingRuntimeStateResource;
-use crate::runtime::{Res, ResMut, WorldMut};
+use crate::runtime::{Res, ResMut, SimulationTick, WorldMut};
 use crate::state::{DebugMetricsState, StartupState};
 use anyhow::anyhow;
 use scheduler::set_slow_node_logging_enabled;
@@ -113,6 +114,10 @@ pub(crate) fn frame_render_submit_system(
         .resource::<RenderFrameDiagnosticsPolicyResource>()
         .ok()
         .copied()
+        .unwrap_or_default();
+    let diagnostics_simulation_tick = world
+        .resource::<SimulationTick>()
+        .map(|tick| tick.0)
         .unwrap_or_default();
 
     let render_result = {
@@ -239,13 +244,15 @@ pub(crate) fn frame_render_submit_system(
             let mut diagnostics_transactions = world
                 .remove_resource::<RenderFrameDiagnosticsTransactionState>()
                 .unwrap_or_default();
-            let mut completed_reports = diagnostics_transactions
-                .observe_terminal_captures(delayed_captures, delayed_capture_results);
+            let mut completed_reports: Vec<CompletedRenderFrameDiagnostics> =
+                diagnostics_transactions
+                    .observe_terminal_captures(delayed_captures, delayed_capture_results);
             if full_diagnostics {
                 completed_reports.extend(
                     diagnostics_transactions.begin_frame(
                         RenderFrameDiagnosticsSnapshot {
                             frame_index: semantic_frame_index,
+                            simulation_tick: diagnostics_simulation_tick,
                             provenance: gfx.renderer.last_pass_provenance().to_vec(),
                             capture_plan: gfx.renderer.last_capture_plan().clone(),
                             pixel_probes: debug_config.pixel_probes.clone(),
@@ -261,13 +268,17 @@ pub(crate) fn frame_render_submit_system(
             }
             world.insert_resource(diagnostics_transactions);
 
-            for mut frame_report in completed_reports {
+            for completed in completed_reports {
+                let simulation_tick = completed.simulation_tick;
+                let mut frame_report = completed.report;
                 frame_report
                     .errors
                     .extend(frame_report.validate_invariants());
-                if let Err(err) =
-                    submit_render_frame_report_to_diagnostics(&mut world, &frame_report)
-                {
+                if let Err(err) = submit_render_frame_report_to_diagnostics(
+                    &mut world,
+                    &frame_report,
+                    simulation_tick,
+                ) {
                     tracing::warn!(
                         frame = frame_report.frame_index,
                         error = %err,

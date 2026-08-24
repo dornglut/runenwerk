@@ -8,7 +8,6 @@ use crate::plugins::diagnostics::core::ingest::{
 use crate::plugins::diagnostics::core::model::{
     DiagnosticsAttachment, DiagnosticsEntry, DiagnosticsSeverity, DiagnosticsStatus,
 };
-use crate::runtime::SimulationTick;
 use serde::Serialize;
 
 const RENDER_PRODUCER_ID: &str = "render.inspect";
@@ -112,11 +111,8 @@ struct RenderTextureDiffAttachmentMetadata {
 pub fn submit_render_frame_report_to_diagnostics(
     world: &mut ecs::World,
     report: &RenderDebugFrameReport,
+    simulation_tick: u64,
 ) -> anyhow::Result<()> {
-    let simulation_tick = world
-        .resource::<SimulationTick>()
-        .map(|value| value.0)
-        .unwrap_or_default();
     let submission = map_render_report_to_submission(report, simulation_tick)?;
     submit_diagnostics_entry(world, submission)
 }
@@ -434,6 +430,10 @@ fn sanitize_token(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::diagnostics::{
+        DiagnosticsConfigResource, DiagnosticsPendingReportsResource, ResolvedDiagnosticsPlan,
+    };
+    use crate::runtime::SimulationTick;
 
     #[test]
     fn render_mapping_keeps_schema_and_attachment_contract_fields() {
@@ -445,5 +445,32 @@ mod tests {
         assert_eq!(submission.entry.domain_id, "render");
         assert_eq!(submission.entry.schema_id, "runenwerk.render.frame_report");
         assert_eq!(submission.entry.schema_version, 2);
+        assert_eq!(submission.simulation_tick, 0);
+    }
+
+    #[test]
+    fn delayed_render_submission_uses_original_tick_not_current_world_tick() {
+        let mut world = ecs::World::new();
+        world.insert_resource(DiagnosticsConfigResource::default());
+        world.insert_resource(ResolvedDiagnosticsPlan::default());
+        world.insert_resource(DiagnosticsPendingReportsResource::default());
+        world.insert_resource(SimulationTick(99));
+
+        let report = RenderDebugFrameReport {
+            frame_index: 7,
+            ..RenderDebugFrameReport::default()
+        };
+        submit_render_frame_report_to_diagnostics(&mut world, &report, 42)
+            .expect("delayed render report should submit with its original tick");
+
+        let pending = world
+            .resource::<DiagnosticsPendingReportsResource>()
+            .expect("pending diagnostics reports should be installed");
+        let diagnostics_report = pending
+            .by_frame_index
+            .get(&7)
+            .expect("render diagnostics report should retain semantic frame identity");
+        assert_eq!(diagnostics_report.frame_index, 7);
+        assert_eq!(diagnostics_report.simulation_tick, 42);
     }
 }

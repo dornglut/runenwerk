@@ -12,7 +12,8 @@ pub use dynamic_targets::*;
 pub use dynamic_texture_uploads::*;
 
 pub(crate) use frame_diagnostics::{
-    RenderFrameDiagnosticsSnapshot, RenderFrameDiagnosticsTransactionState,
+    CompletedRenderFrameDiagnostics, RenderFrameDiagnosticsSnapshot,
+    RenderFrameDiagnosticsTransactionState,
 };
 pub(crate) use frame_prepare::frame_render_prepare_system;
 pub(crate) use frame_submit::frame_render_submit_system;
