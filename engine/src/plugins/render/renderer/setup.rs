@@ -187,10 +187,22 @@ impl Renderer {
         &self.last_capture_selector_results
     }
 
+    pub(in crate::plugins::render) fn take_published_capture_selector_results(
+        &mut self,
+    ) -> Vec<crate::plugins::render::inspect::RenderCaptureSelectorResult> {
+        std::mem::take(&mut self.last_capture_selector_results)
+    }
+
     pub fn last_captured_textures(
         &self,
     ) -> &[crate::plugins::render::inspect::RenderCapturedTexture] {
         &self.last_captured_textures
+    }
+
+    pub(in crate::plugins::render) fn take_published_captured_textures(
+        &mut self,
+    ) -> Vec<crate::plugins::render::inspect::RenderCapturedTexture> {
+        std::mem::take(&mut self.last_captured_textures)
     }
 
     pub fn flow_pipeline_cache_stats(&self) -> super::pipeline_cache::RendererPipelineCacheStats {

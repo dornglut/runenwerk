@@ -70,10 +70,43 @@ fn renderer_observation_retains_semantics_not_execution_authority() {
         "CommandEncoder",
         "CommandBuffer",
         "mapped_range",
+        "RenderPixelProbeRequest",
+        "RenderTextureDiffRequest",
+        "RenderDebugFrameReport",
+        "artifact_manifest",
+        "artifact_output",
     ] {
         assert!(
             !observation.contains(forbidden),
             "renderer observation retained generic execution authority: {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn product_diagnostics_transaction_retains_no_gpu_lifecycle_authority() {
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let transaction =
+        fs::read_to_string(manifest.join("src/plugins/render/runtime/frame_diagnostics.rs"))
+            .expect("product diagnostics transaction source should be readable");
+
+    assert!(transaction.contains("RenderCaptureIdentity"));
+    assert!(transaction.contains("RenderPixelProbeRequest"));
+    assert!(transaction.contains("RenderTextureDiffRequest"));
+    for forbidden in [
+        "GpuContext",
+        "GpuSubmission",
+        "GpuReadback",
+        "GpuReadbackId",
+        "GpuReadbackStatus",
+        "wgpu::",
+        "mapped_range",
+        "CommandEncoder",
+        "CommandBuffer",
+    ] {
+        assert!(
+            !transaction.contains(forbidden),
+            "product diagnostics transaction retained GPU lifecycle authority: {forbidden}"
         );
     }
 }
