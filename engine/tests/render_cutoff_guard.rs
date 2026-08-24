@@ -369,6 +369,19 @@ fn g5c1_render_cutover_has_one_frame_graph_and_no_raw_executor_sidecar() {
         1,
         "normal frame must append exactly one terminal canonical Present"
     );
+    assert_eq!(
+        render_packet.matches("GpuPresentOperation::new(").count(),
+        1,
+        "normal frame must construct exactly one canonical Present operation"
+    );
+    assert!(
+        execute.contains("if terminal_present_controls.is_empty()"),
+        "presenting frames must reject absence of a compiled Present record"
+    );
+    assert!(
+        !execute.contains("if terminal_controls.is_empty()"),
+        "a real compiled Present with no renderer-owned predecessor must remain valid for G3 hazard ordering"
+    );
     assert!(render_packet.contains("pending_operations).into_operations()"));
     assert!(render_packet.contains("validate_prepared_uploads("));
 

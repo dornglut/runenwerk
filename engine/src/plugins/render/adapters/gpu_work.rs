@@ -563,6 +563,48 @@ mod tests {
         .expect("test region should be valid")
     }
 
+    fn color_target_view(allocator: &mut GpuWorkResourceIdAllocator) -> GpuTextureViewHandle {
+        let texture_label = label("frame surface color");
+        let texture = allocator
+            .allocate_texture_handle(
+                GpuTextureDescriptor::new(
+                    common("frame surface color"),
+                    GpuTextureDimension::D2,
+                    GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, 4, 4, 1)
+                        .expect("test surface extent should be valid"),
+                    1,
+                    1,
+                    GpuTextureFormat::Rgba8Unorm,
+                    GpuTextureUsages::new(&texture_label, [GpuTextureUsage::ColorAttachment])
+                        .expect("test surface usage should be valid"),
+                    GpuTextureInitialization::Uninitialized,
+                )
+                .expect("test surface texture descriptor should be valid"),
+            )
+            .expect("test surface texture handle should allocate");
+        let view_label = label("frame surface color view");
+        allocator
+            .allocate_texture_view_handle(
+                GpuTextureViewDescriptor::new(
+                    common("frame surface color view"),
+                    &texture,
+                    None,
+                    GpuTextureDimension::D2,
+                    GpuTextureSubresourceRange::new(
+                        &view_label,
+                        0,
+                        1,
+                        0,
+                        1,
+                        GpuTextureAspect::Color,
+                    )
+                    .expect("test surface subresources should be valid"),
+                )
+                .expect("test surface view descriptor should be valid"),
+            )
+            .expect("test surface view handle should allocate")
+    }
+
     #[test]
     fn frame_work_preparation_owns_cross_invocation_raw_and_initialization() {
         let mut allocator =
@@ -742,6 +784,104 @@ mod tests {
         assert_eq!(
             prepared_node("capture after").node().kind(),
             GpuWorkNodeKind::Readback
+        );
+    }
+
+    #[test]
+    fn presenting_frame_without_explicit_present_predecessors_ends_at_present() {
+        let mut allocator =
+            GpuWorkResourceIdAllocator::for_owner_scope(NonZeroU64::new(703).unwrap());
+        let surface_view = color_target_view(&mut allocator);
+        let independent = buffer(&mut allocator, "independent frame upload", 16);
+        let render_occurrence = RenderGpuWorkOccurrenceId::new(1);
+        let independent_occurrence = RenderGpuWorkOccurrenceId::new(2);
+        let present_occurrence = RenderGpuWorkOccurrenceId::new(3);
+        let render = GpuRenderOperation::new(
+            [GpuRenderColorAttachment::new(
+                surface_view.clone(),
+                GpuColorAttachmentLoad::Clear(
+                    GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0)
+                        .expect("test clear value should be valid"),
+                ),
+                GpuAttachmentStore::Store,
+                None,
+            )
+            .expect("test surface attachment should be valid")],
+            None,
+            std::iter::empty::<GpuRenderDraw>(),
+            None,
+        )
+        .expect("test surface render should be valid");
+        let present = GpuPresentOperation::new(
+            surface_view.clone().into(),
+            surface_view.descriptor().subresources(),
+        )
+        .expect("test Present should be valid");
+        let nodes = [
+            ResolvedRenderGpuWorkNode::pass(
+                render_occurrence,
+                label("surface render"),
+                GpuWorkOperation::Render(render),
+                GpuExecutionPreference::GraphicsRequired,
+                [],
+            ),
+            ResolvedRenderGpuWorkNode::upload(
+                independent_occurrence,
+                label("independent upload"),
+                GpuUploadOperation::new(
+                    whole_region(&independent, 16).into(),
+                    transfer_payload("independent upload payload", 16),
+                )
+                .expect("independent upload should be valid"),
+                [],
+            ),
+            ResolvedRenderGpuWorkNode::present(
+                present_occurrence,
+                label("frame terminal Present"),
+                present,
+                [],
+            ),
+        ];
+
+        let prepared = prepare_render_gpu_frame_work(label("terminal Present test"), nodes)
+            .expect("G3 should order a zero-control Present from resource hazards");
+        let prepared_node = |label: &str| {
+            prepared
+                .nodes()
+                .iter()
+                .find(|node| node.node().label().as_str() == label)
+                .expect("prepared node label should exist")
+        };
+        let render_node = prepared_node("surface render").id();
+        let present_node = prepared_node("frame terminal Present").id();
+
+        assert_eq!(
+            prepared
+                .nodes()
+                .iter()
+                .filter(|node| node.node().kind() == GpuWorkNodeKind::Present)
+                .count(),
+            1
+        );
+        assert_eq!(prepared.topological_order().last(), Some(&present_node));
+        let surface_hazard = prepared
+            .dependencies()
+            .iter()
+            .find(|dependency| {
+                dependency.before() == render_node && dependency.after() == present_node
+            })
+            .expect("G3 must order the surface write before Present");
+        assert!(
+            surface_hazard
+                .reasons()
+                .iter()
+                .any(|reason| matches!(reason, GpuDependencyReason::ReadAfterWrite { .. }))
+        );
+        assert!(
+            surface_hazard
+                .reasons()
+                .iter()
+                .all(|reason| !matches!(reason, GpuDependencyReason::ExplicitNonData { .. }))
         );
     }
 }

@@ -163,18 +163,8 @@ impl Renderer {
         }
         nodes.append(&mut frame.nodes);
 
-        let mut terminal_controls = frame.terminal_present_controls.into_iter().flatten().fold(
-            Vec::new(),
-            |mut controls, occurrence| {
-                if !controls.contains(&occurrence) {
-                    controls.push(occurrence);
-                }
-                controls
-            },
-        );
-        if terminal_controls.is_empty() {
-            bail!("presenting normal frame resolved no compiled Present predecessor");
-        }
+        let mut terminal_controls =
+            resolve_terminal_present_controls(frame.terminal_present_controls)?;
         if !batch.final_captures.is_empty() {
             let mut final_capture_occurrences = Vec::with_capacity(batch.final_captures.len());
             for capture in &batch.final_captures {
@@ -1220,6 +1210,24 @@ impl Renderer {
     }
 }
 
+fn resolve_terminal_present_controls(
+    terminal_present_controls: Vec<Vec<RenderGpuWorkOccurrenceId>>,
+) -> Result<Vec<RenderGpuWorkOccurrenceId>> {
+    if terminal_present_controls.is_empty() {
+        bail!("presenting normal frame resolved no compiled Present");
+    }
+
+    Ok(terminal_present_controls.into_iter().flatten().fold(
+        Vec::new(),
+        |mut controls, occurrence| {
+            if !controls.contains(&occurrence) {
+                controls.push(occurrence);
+            }
+            controls
+        },
+    ))
+}
+
 fn accepted_pass_provenance(
     frame_index: u64,
     flow: &CompiledRenderFlowPlan,
@@ -1315,4 +1323,28 @@ fn record_pending_capture(
         bytes_rgba8: None,
         terminal,
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn presenting_frame_rejects_when_no_compiled_present_was_resolved() {
+        let error = resolve_terminal_present_controls(Vec::new())
+            .expect_err("a presenting frame without a compiled Present must be rejected");
+
+        assert_eq!(
+            error.to_string(),
+            "presenting normal frame resolved no compiled Present"
+        );
+    }
+
+    #[test]
+    fn compiled_present_without_non_data_predecessors_is_valid() {
+        let controls = resolve_terminal_present_controls(vec![Vec::new()])
+            .expect("an empty inner control set still records a real compiled Present");
+
+        assert!(controls.is_empty());
+    }
 }
