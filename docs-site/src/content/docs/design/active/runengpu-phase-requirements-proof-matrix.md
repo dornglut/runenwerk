@@ -186,7 +186,7 @@ The proof must show that the normal path no longer owns raw renderer command enc
 
 **Role:** exact semantic correction evidence.
 
-**Semantic owner:** post-G5C hardening design, G5R section. That design narrowly supersedes G3R's current `Prepared descriptor -> checked prepared initialized coverage` rule while retaining the rest of G3R's requirement/effect separation.
+**Semantic owner:** post-G5C hardening design, G5R section. That design narrowly supersedes G3R's accepted `Prepared descriptor -> checked prepared initialized coverage` rule while retaining the rest of G3R's requirement/effect separation.
 
 **Evidence cases:**
 
@@ -249,9 +249,9 @@ At least two representative workload sizes or iteration envelopes must be record
 
 **Role:** representative GPU-driven integration + visual showcase.
 
-**Semantic owner:** accepted proof-workload direction plus current G6 phase decision.
+**Semantic owner:** post-G5C hardening design, G6 representative workload.
 
-**Evidence:** fixed-step simulation/draw behavior, double-buffered agents, current spatial-neighborhood pipeline where retained, compute-to-graphics sharing, instanced drawing, one RunenGPU context, offscreen completion, and bounded state/resource invariants.
+**Evidence:** fixed-step simulation/draw behavior, double-buffered agents, the retained spatial-neighborhood pipeline where it is part of the proof job, compute-to-graphics sharing, instanced drawing, one RunenGPU context, offscreen completion, and bounded state/resource invariants.
 
 Persistent readable state follows the same G3R/G5R rule as `G6-I01`: initial readable coverage is established canonically; generic shader writes preserve already-established initialized coverage but do not create new definite coverage.
 

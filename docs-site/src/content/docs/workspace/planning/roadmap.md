@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-08-23
+last_reviewed: 2026-08-24
 related_docs:
   - ../engineering-workflow.md
   - ../../architecture/runenwerk-platform-architecture.md
@@ -118,10 +118,10 @@ Each phase consumes accepted predecessor authority, not an unmerged implementati
 branch. The owning GitHub issue determines whether a phase is proposed, active, blocked,
 or complete at any particular time.
 
-Detailed contracts belong to accepted RunenGPU designs and the owning proof matrix. A
-workspace RON spec is subordinate implementation-handoff detail created only when an
-activated bounded slice benefits from it; this roadmap does not duplicate any of those
-requirements.
+Detailed semantic contracts belong to accepted RunenGPU designs. Proof roles, observable evidence,
+and retained artifact requirements belong to the RunenGPU proof matrix. A workspace RON spec is
+subordinate implementation-handoff detail created only when an activated bounded slice benefits
+from it; this roadmap does not duplicate any of those requirements.
 
 ## RunenRender sequence
 
