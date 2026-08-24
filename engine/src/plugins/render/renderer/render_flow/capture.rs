@@ -8,6 +8,7 @@ use crate::plugins::gpu::{
 #[derive(Debug)]
 pub struct PreparedCaptureReadback {
     pub selector_index: usize,
+    pub selector: RenderCaptureSelector,
     pub identity: RenderCaptureIdentity,
     operation: GpuReadbackOperation,
     pub width: u32,
@@ -26,6 +27,7 @@ struct SelectorRuntimeState {
     selector: RenderCaptureSelector,
     capture_point: Option<RenderCapturePointIdentity>,
     frame_identity: Option<RenderCaptureIdentity>,
+    readback_pending: bool,
     terminal: Option<RenderCaptureTerminal>,
 }
 
@@ -35,6 +37,7 @@ impl SelectorRuntimeState {
             selector,
             capture_point: None,
             frame_identity: None,
+            readback_pending: false,
             terminal: None,
         }
     }
@@ -121,6 +124,7 @@ impl FrameCaptureRuntime {
         if let Some(state) = self.selectors.get_mut(selector_index)
             && state.terminal.is_none()
         {
+            state.readback_pending = false;
             state.terminal = Some(RenderCaptureTerminal::with_reason(
                 code,
                 reason_code,
@@ -131,6 +135,7 @@ impl FrameCaptureRuntime {
 
     pub fn set_terminal(&mut self, selector_index: usize, terminal: RenderCaptureTerminal) {
         if let Some(state) = self.selectors.get_mut(selector_index) {
+            state.readback_pending = false;
             state.terminal = Some(terminal);
         }
     }
@@ -147,9 +152,21 @@ impl FrameCaptureRuntime {
         }
     }
 
+    pub fn set_readback_pending(&mut self, selector_index: usize) {
+        if let Some(state) = self.selectors.get_mut(selector_index)
+            && state.frame_identity.is_some()
+            && state.terminal.is_none()
+        {
+            state.readback_pending = true;
+        }
+    }
+
     pub fn finalize_unresolved(&mut self) {
         for state in &mut self.selectors {
             if state.terminal.is_some() {
+                continue;
+            }
+            if state.readback_pending {
                 continue;
             }
             if state.frame_identity.is_some() {
@@ -178,53 +195,69 @@ impl FrameCaptureRuntime {
         let mut results = Vec::<RenderCaptureSelectorResult>::with_capacity(self.selectors.len());
 
         for (selector_index, state) in self.selectors.into_iter().enumerate() {
-            let terminal = state.terminal.unwrap_or_else(|| {
-                RenderCaptureTerminal::with_reason(
-                    RenderCaptureTerminalCode::Unmatched,
-                    "selector_unmatched",
-                    "selector matched no capture point in this frame",
-                )
+            let terminal = state.terminal.or_else(|| {
+                (!state.readback_pending).then(|| {
+                    RenderCaptureTerminal::with_reason(
+                        RenderCaptureTerminalCode::Unmatched,
+                        "selector_unmatched",
+                        "selector matched no capture point in this frame",
+                    )
+                })
             });
             let capture_point = state
                 .capture_point
                 .clone()
                 .unwrap_or_else(|| state.selector.stable_point_fallback());
-            let resolution = match terminal.code {
-                RenderCaptureTerminalCode::Unmatched => RenderSelectorResolution::Unmatched {
-                    reason: terminal.reason.clone().unwrap_or_else(|| {
-                        crate::plugins::render::inspect::RenderCaptureTerminalReason::new(
-                            "selector_unmatched",
-                            "selector matched no capture point in this frame",
-                        )
-                    }),
+            let resolution = match terminal.as_ref().map(|terminal| terminal.code) {
+                Some(RenderCaptureTerminalCode::Unmatched) => RenderSelectorResolution::Unmatched {
+                    reason: terminal
+                        .as_ref()
+                        .and_then(|value| value.reason.clone())
+                        .unwrap_or_else(|| {
+                            crate::plugins::render::inspect::RenderCaptureTerminalReason::new(
+                                "selector_unmatched",
+                                "selector matched no capture point in this frame",
+                            )
+                        }),
                 },
-                RenderCaptureTerminalCode::Disabled => RenderSelectorResolution::Disabled {
-                    reason: terminal.reason.clone().unwrap_or_else(|| {
-                        crate::plugins::render::inspect::RenderCaptureTerminalReason::new(
-                            "capture_disabled",
-                            "capture is disabled",
-                        )
-                    }),
+                Some(RenderCaptureTerminalCode::Disabled) => RenderSelectorResolution::Disabled {
+                    reason: terminal
+                        .as_ref()
+                        .and_then(|value| value.reason.clone())
+                        .unwrap_or_else(|| {
+                            crate::plugins::render::inspect::RenderCaptureTerminalReason::new(
+                                "capture_disabled",
+                                "capture is disabled",
+                            )
+                        }),
                 },
-                RenderCaptureTerminalCode::Unsupported => RenderSelectorResolution::Unsupported {
-                    reason: terminal.reason.clone().unwrap_or_else(|| {
-                        crate::plugins::render::inspect::RenderCaptureTerminalReason::new(
-                            "capture_unsupported",
-                            "selector resolved to an unsupported capture path",
-                        )
-                    }),
+                Some(RenderCaptureTerminalCode::Unsupported) => {
+                    RenderSelectorResolution::Unsupported {
+                        reason: terminal
+                            .as_ref()
+                            .and_then(|value| value.reason.clone())
+                            .unwrap_or_else(|| {
+                                crate::plugins::render::inspect::RenderCaptureTerminalReason::new(
+                                    "capture_unsupported",
+                                    "selector resolved to an unsupported capture path",
+                                )
+                            }),
+                    }
+                }
+                Some(RenderCaptureTerminalCode::Skipped) => RenderSelectorResolution::Skipped {
+                    reason: terminal
+                        .as_ref()
+                        .and_then(|value| value.reason.clone())
+                        .unwrap_or_else(|| {
+                            crate::plugins::render::inspect::RenderCaptureTerminalReason::new(
+                                "capture_skipped",
+                                "capture matched a point but did not produce a completed readback",
+                            )
+                        }),
                 },
-                RenderCaptureTerminalCode::Skipped => RenderSelectorResolution::Skipped {
-                    reason: terminal.reason.clone().unwrap_or_else(|| {
-                        crate::plugins::render::inspect::RenderCaptureTerminalReason::new(
-                            "capture_skipped",
-                            "capture matched a point but did not produce a completed readback",
-                        )
-                    }),
-                },
-                RenderCaptureTerminalCode::ReadbackFailed
-                | RenderCaptureTerminalCode::ExportFailed
-                | RenderCaptureTerminalCode::Completed => {
+                Some(RenderCaptureTerminalCode::ReadbackFailed)
+                | Some(RenderCaptureTerminalCode::ExportFailed)
+                | Some(RenderCaptureTerminalCode::Completed) => {
                     if let Some(frame_identity) = state.frame_identity.clone() {
                         RenderSelectorResolution::Matched {
                             capture_point: capture_point.clone(),
@@ -232,12 +265,28 @@ impl FrameCaptureRuntime {
                         }
                     } else {
                         RenderSelectorResolution::Skipped {
-                            reason: terminal.reason.clone().unwrap_or_else(|| {
+                            reason: terminal.as_ref().and_then(|value| value.reason.clone()).unwrap_or_else(|| {
                                 crate::plugins::render::inspect::RenderCaptureTerminalReason::new(
                                     "capture_missing_match",
                                     "selector terminal state did not include a matched frame id",
                                 )
                             }),
+                        }
+                    }
+                }
+                None => {
+                    if let Some(frame_identity) = state.frame_identity.clone() {
+                        RenderSelectorResolution::Pending {
+                            capture_point: capture_point.clone(),
+                            frame_identity,
+                        }
+                    } else {
+                        RenderSelectorResolution::Skipped {
+                            reason:
+                                crate::plugins::render::inspect::RenderCaptureTerminalReason::new(
+                                    "capture_missing_match",
+                                    "pending capture state did not include a matched frame id",
+                                ),
                         }
                     }
                 }
@@ -250,14 +299,16 @@ impl FrameCaptureRuntime {
                     resolution,
                 },
             );
-            results.push(RenderCaptureSelectorResult {
-                selector_index,
-                selector: state.selector,
-                capture_point,
-                frame_identity: state.frame_identity,
-                terminal,
-                artifact_path: None,
-            });
+            if let Some(terminal) = terminal {
+                results.push(RenderCaptureSelectorResult {
+                    selector_index,
+                    selector: state.selector,
+                    capture_point,
+                    frame_identity: state.frame_identity,
+                    terminal,
+                    artifact_path: None,
+                });
+            }
         }
 
         (plan, results)
@@ -285,6 +336,7 @@ pub enum CaptureTextureSource<'a> {
 pub fn prepare_texture_capture_readback(
     _context: &GpuContext,
     selector_index: usize,
+    selector: RenderCaptureSelector,
     identity: RenderCaptureIdentity,
     texture: CaptureTextureSource<'_>,
     size: (u32, u32),
@@ -302,6 +354,7 @@ pub fn prepare_texture_capture_readback(
 
     Ok(PreparedCaptureReadback {
         selector_index,
+        selector,
         identity,
         operation,
         width,
@@ -345,6 +398,36 @@ mod tests {
         GpuWorkResourceIdAllocator,
     };
     use crate::plugins::render::renderer::resource_descriptors::texture_descriptor;
+
+    #[test]
+    fn accepted_pending_capture_is_not_finalized_as_skipped() {
+        let selector = RenderCaptureSelector::named_pass_surface_color("flow", "pass");
+        let control = RenderDebugControlResource {
+            capture_enabled: true,
+            readback_enabled: true,
+            ..RenderDebugControlResource::default()
+        };
+        let mut runtime = FrameCaptureRuntime::new(37, &control, std::slice::from_ref(&selector));
+        let capture_point = selector.stable_point_fallback();
+        runtime.set_matched_identity(
+            0,
+            capture_point.clone(),
+            RenderCaptureIdentity {
+                frame_index: 37,
+                pass_label: "pass".to_string(),
+                capture_point,
+            },
+        );
+        runtime.set_readback_pending(0);
+        runtime.finalize_unresolved();
+
+        let (plan, results) = runtime.into_plan_and_results();
+        assert!(results.is_empty());
+        assert!(matches!(
+            plan.selectors[0].resolution,
+            RenderSelectorResolution::Pending { .. }
+        ));
+    }
 
     #[test]
     fn canonical_capture_readback_uses_exact_logical_texture_region() {

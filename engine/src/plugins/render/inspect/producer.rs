@@ -8,13 +8,12 @@ use crate::plugins::diagnostics::core::ingest::{
 use crate::plugins::diagnostics::core::model::{
     DiagnosticsAttachment, DiagnosticsEntry, DiagnosticsSeverity, DiagnosticsStatus,
 };
-use crate::runtime::SimulationTick;
 use serde::Serialize;
 
 const RENDER_PRODUCER_ID: &str = "render.inspect";
 const RENDER_DOMAIN_ID: &str = "render";
 const RENDER_SCHEMA_ID: &str = "runenwerk.render.frame_report";
-const RENDER_SCHEMA_VERSION: u32 = 1;
+const RENDER_SCHEMA_VERSION: u32 = 2;
 
 #[derive(Debug, Serialize)]
 pub struct RenderDiagnosticsEntryDto {
@@ -53,6 +52,7 @@ pub struct RenderCaptureSelectorDto {
 #[derive(Debug, Serialize)]
 pub struct RenderCaptureResultDto {
     pub selector_index: usize,
+    pub frame_index: Option<u64>,
     pub flow_id: String,
     pub pass_id: String,
     pub stage: String,
@@ -111,11 +111,8 @@ struct RenderTextureDiffAttachmentMetadata {
 pub fn submit_render_frame_report_to_diagnostics(
     world: &mut ecs::World,
     report: &RenderDebugFrameReport,
+    simulation_tick: u64,
 ) -> anyhow::Result<()> {
-    let simulation_tick = world
-        .resource::<SimulationTick>()
-        .map(|value| value.0)
-        .unwrap_or_default();
     let submission = map_render_report_to_submission(report, simulation_tick)?;
     submit_diagnostics_entry(world, submission)
 }
@@ -189,6 +186,10 @@ pub fn map_render_report_to_entry_dto(
             .iter()
             .map(|value| RenderCaptureResultDto {
                 selector_index: value.selector_index,
+                frame_index: value
+                    .frame_identity
+                    .as_ref()
+                    .map(|identity| identity.frame_index),
                 flow_id: value.capture_point.flow_id.clone(),
                 pass_id: value.capture_point.pass_id.clone(),
                 stage: value.capture_point.stage.as_str().to_string(),
@@ -251,8 +252,13 @@ fn map_render_report_to_submission(
         let Some(path) = result.artifact_path.as_ref() else {
             continue;
         };
+        let capture_frame_index = result
+            .frame_identity
+            .as_ref()
+            .map(|identity| identity.frame_index)
+            .unwrap_or(report.frame_index);
         attachments.push(DiagnosticsAttachment {
-            attachment_id: format!("render.capture.image.{}.{}", report.frame_index, index),
+            attachment_id: format!("render.capture.image.{capture_frame_index}.{index}"),
             kind: "render.capture_image".to_string(),
             label: format!(
                 "Capture {}:{}:{}:{}",
@@ -266,7 +272,7 @@ fn map_render_report_to_submission(
             path_or_handle: path.display().to_string(),
             metadata: Some(serde_json::to_value(
                 RenderCaptureImageAttachmentMetadata {
-                    frame_index: report.frame_index,
+                    frame_index: capture_frame_index,
                     selector_index: result.selector_index,
                     flow_id: result.capture_point.flow_id.clone(),
                     pass_id: result.capture_point.pass_id.clone(),
@@ -343,6 +349,7 @@ fn capture_selector_resolution_parts(
     resolution: &RenderSelectorResolution,
 ) -> (String, Option<String>, Option<String>) {
     match resolution {
+        RenderSelectorResolution::Pending { .. } => ("pending".to_string(), None, None),
         RenderSelectorResolution::Matched { .. } => ("matched".to_string(), None, None),
         RenderSelectorResolution::Unmatched { reason } => (
             "unmatched".to_string(),
@@ -423,6 +430,10 @@ fn sanitize_token(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::diagnostics::{
+        DiagnosticsConfigResource, DiagnosticsPendingReportsResource, ResolvedDiagnosticsPlan,
+    };
+    use crate::runtime::SimulationTick;
 
     #[test]
     fn render_mapping_keeps_schema_and_attachment_contract_fields() {
@@ -433,6 +444,33 @@ mod tests {
         assert_eq!(submission.entry.producer_id, "render.inspect");
         assert_eq!(submission.entry.domain_id, "render");
         assert_eq!(submission.entry.schema_id, "runenwerk.render.frame_report");
-        assert_eq!(submission.entry.schema_version, 1);
+        assert_eq!(submission.entry.schema_version, 2);
+        assert_eq!(submission.simulation_tick, 0);
+    }
+
+    #[test]
+    fn delayed_render_submission_uses_original_tick_not_current_world_tick() {
+        let mut world = ecs::World::new();
+        world.insert_resource(DiagnosticsConfigResource::default());
+        world.insert_resource(ResolvedDiagnosticsPlan::default());
+        world.insert_resource(DiagnosticsPendingReportsResource::default());
+        world.insert_resource(SimulationTick(99));
+
+        let report = RenderDebugFrameReport {
+            frame_index: 7,
+            ..RenderDebugFrameReport::default()
+        };
+        submit_render_frame_report_to_diagnostics(&mut world, &report, 42)
+            .expect("delayed render report should submit with its original tick");
+
+        let pending = world
+            .resource::<DiagnosticsPendingReportsResource>()
+            .expect("pending diagnostics reports should be installed");
+        let diagnostics_report = pending
+            .by_frame_index
+            .get(&7)
+            .expect("render diagnostics report should retain semantic frame identity");
+        assert_eq!(diagnostics_report.frame_index, 7);
+        assert_eq!(diagnostics_report.simulation_tick, 42);
     }
 }

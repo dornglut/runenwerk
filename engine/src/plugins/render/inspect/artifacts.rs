@@ -66,20 +66,31 @@ pub fn export_captured_textures(
             Some(bytes) => {
                 let file_name = deterministic_capture_filename(&capture.identity, "png");
                 let image_path = output_root.join(file_name);
-                let image =
-                    image::RgbaImage::from_raw(capture.width, capture.height, bytes.clone())
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "capture '{}' has invalid rgba byte length {} for {}x{}",
-                                capture.identity.pass_id(),
-                                bytes.len(),
-                                capture.width,
-                                capture.height
-                            )
-                        })?;
-                image
-                    .save(&image_path)
-                    .with_context(|| format!("failed to write capture image {:?}", image_path))?;
+                let expected_len = usize::try_from(capture.width)
+                    .ok()
+                    .and_then(|width| {
+                        usize::try_from(capture.height)
+                            .ok()
+                            .and_then(|height| width.checked_mul(height))
+                    })
+                    .and_then(|pixels| pixels.checked_mul(4));
+                if expected_len != Some(bytes.len()) {
+                    anyhow::bail!(
+                        "capture '{}' has invalid rgba byte length {} for {}x{}",
+                        capture.identity.pass_id(),
+                        bytes.len(),
+                        capture.width,
+                        capture.height
+                    );
+                }
+                image::save_buffer(
+                    &image_path,
+                    bytes,
+                    capture.width,
+                    capture.height,
+                    image::ColorType::Rgba8,
+                )
+                .with_context(|| format!("failed to write capture image {:?}", image_path))?;
                 exported_images.push(image_path.clone());
                 exported_capture_images.push(ExportedCaptureArtifact {
                     frame_identity: capture.identity.clone(),

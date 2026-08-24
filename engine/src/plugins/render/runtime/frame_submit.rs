@@ -1,20 +1,22 @@
 use crate::plugins::SceneResource;
 use crate::plugins::inspect::{
-    RenderCaptureTerminal, RenderCaptureTerminalCode, RenderCaptureTerminalReason,
     RenderCapturedTextureState, RenderDebugConfigResource, RenderDebugControlResource,
-    RenderDebugFrameReport, RenderDebugFrameReportState, RenderDebugTimingsState,
-    RenderFrameDiagnosticsMode, RenderFrameDiagnosticsPolicyResource, RenderPassProvenanceState,
-    RenderRuntimeResourceInspectorState, RenderTextureInspectorState, export_captured_textures,
-    submit_render_frame_report_to_diagnostics, validate_selector_terminal_invariant,
+    RenderDebugFrameReportState, RenderDebugTimingsState, RenderFrameDiagnosticsMode,
+    RenderFrameDiagnosticsPolicyResource, RenderPassProvenanceState,
+    RenderRuntimeResourceInspectorState, RenderTextureInspectorState,
+    submit_render_frame_report_to_diagnostics,
 };
 use crate::plugins::pipelines::{PipelineCacheResource, PipelineCacheStats};
 use crate::plugins::render::backend::RenderSurfaceAcquireError;
 use crate::plugins::render::backend::{RenderSurfaceDiagnostic, RenderSurfaceRegistryResource};
-use crate::plugins::render::runtime::debug_eval::{evaluate_pixel_probes, evaluate_texture_diffs};
+use crate::plugins::render::runtime::{
+    CompletedRenderFrameDiagnostics, RenderFrameDiagnosticsSnapshot,
+    RenderFrameDiagnosticsTransactionState,
+};
 use crate::plugins::render::*;
 use crate::plugins::time::domain::Time;
 use crate::runtime::FramePacingRuntimeStateResource;
-use crate::runtime::{Res, ResMut, WorldMut};
+use crate::runtime::{Res, ResMut, SimulationTick, WorldMut};
 use crate::state::{DebugMetricsState, StartupState};
 use anyhow::anyhow;
 use scheduler::set_slow_node_logging_enabled;
@@ -113,6 +115,10 @@ pub(crate) fn frame_render_submit_system(
         .ok()
         .copied()
         .unwrap_or_default();
+    let diagnostics_simulation_tick = world
+        .resource::<SimulationTick>()
+        .map(|tick| tick.0)
+        .unwrap_or_default();
 
     let render_result = {
         let flow_registry = match world.resource::<RenderFlowRegistryResource>() {
@@ -183,15 +189,15 @@ pub(crate) fn frame_render_submit_system(
                 );
             }
 
+            let published_capture_results = gfx.renderer.take_published_capture_selector_results();
+            let published_captures = gfx.renderer.take_published_captured_textures();
             if let Ok(captured_textures) = world.resource_mut::<RenderCapturedTextureState>() {
-                captured_textures.observe_frame(
-                    prepared_frame.context.frame_index,
-                    gfx.renderer.last_captured_textures(),
-                );
+                captured_textures
+                    .observe_frame(prepared_frame.context.frame_index, &published_captures);
             }
 
             if let Ok(texture_inspector) = world.resource_mut::<RenderTextureInspectorState>() {
-                texture_inspector.observe_captures(gfx.renderer.last_captured_textures());
+                texture_inspector.observe_captures(&published_captures);
             }
 
             let total_ms = timings.acquire_ms
@@ -223,96 +229,67 @@ pub(crate) fn frame_render_submit_system(
             }
 
             let diagnostics_start = std::time::Instant::now();
-            let diagnostics_mode = if full_diagnostics {
-                let mut selector_results = gfx.renderer.last_capture_selector_results().to_vec();
-                let mut artifact_manifest_path = None;
+            let semantic_frame_index = prepared_frame.context.frame_index;
+            let (current_captures, delayed_captures): (Vec<_>, Vec<_>) = published_captures
+                .into_iter()
+                .partition(|capture| capture.identity.frame_index == semantic_frame_index);
+            let (current_capture_results, delayed_capture_results): (Vec<_>, Vec<_>) =
+                published_capture_results.into_iter().partition(|result| {
+                    result
+                        .frame_identity
+                        .as_ref()
+                        .is_none_or(|identity| identity.frame_index == semantic_frame_index)
+                });
 
-                if debug_control.artifact_export_enabled
-                    && !gfx.renderer.last_captured_textures().is_empty()
-                {
-                    match export_captured_textures(
-                        debug_control.artifact_output_dir.as_path(),
-                        prepared_frame.context.frame_index,
-                        gfx.renderer.last_captured_textures(),
-                    ) {
-                        Ok(export) => {
-                            artifact_manifest_path = Some(export.manifest_path.clone());
-                            for exported in &export.exported_capture_images {
-                                let exported_point = exported.frame_identity.capture_point.clone();
-                                for result in &mut selector_results {
-                                    if result.capture_point != exported_point {
-                                        continue;
-                                    }
-                                    if result.terminal.code == RenderCaptureTerminalCode::Completed
-                                    {
-                                        result.artifact_path = Some(exported.image_path.clone());
-                                    }
-                                }
-                            }
-                        }
-                        Err(err) => {
-                            let reason = RenderCaptureTerminalReason::new(
-                                "artifact_export_failed",
-                                err.to_string(),
-                            );
-                            for result in &mut selector_results {
-                                if result.terminal.code == RenderCaptureTerminalCode::Completed {
-                                    result.terminal = RenderCaptureTerminal::new(
-                                        RenderCaptureTerminalCode::ExportFailed,
-                                        Some(reason.clone()),
-                                    );
-                                }
-                            }
-                            tracing::warn!(error = %err, "render capture artifact export failed");
-                        }
-                    }
-                }
-
-                let mut frame_report = RenderDebugFrameReport {
-                    frame_index: prepared_frame.context.frame_index,
-                    provenance: gfx.renderer.last_pass_provenance().to_vec(),
-                    capture_plan: gfx.renderer.last_capture_plan().clone(),
-                    capture_results: selector_results,
-                    artifact_manifest_path,
-                    pixel_probe_results: evaluate_pixel_probes(
-                        &debug_config.pixel_probes,
-                        gfx.renderer.last_captured_textures(),
+            let mut diagnostics_transactions = world
+                .remove_resource::<RenderFrameDiagnosticsTransactionState>()
+                .unwrap_or_default();
+            let mut completed_reports: Vec<CompletedRenderFrameDiagnostics> =
+                diagnostics_transactions
+                    .observe_terminal_captures(delayed_captures, delayed_capture_results);
+            if full_diagnostics {
+                completed_reports.extend(
+                    diagnostics_transactions.begin_frame(
+                        RenderFrameDiagnosticsSnapshot {
+                            frame_index: semantic_frame_index,
+                            simulation_tick: diagnostics_simulation_tick,
+                            provenance: gfx.renderer.last_pass_provenance().to_vec(),
+                            capture_plan: gfx.renderer.last_capture_plan().clone(),
+                            pixel_probes: debug_config.pixel_probes.clone(),
+                            texture_diffs: debug_config.texture_diffs.clone(),
+                            artifact_output_dir: debug_control
+                                .artifact_export_enabled
+                                .then(|| debug_control.artifact_output_dir.clone()),
+                        },
+                        current_captures,
+                        current_capture_results,
                     ),
-                    texture_diff_results: evaluate_texture_diffs(
-                        &debug_config.texture_diffs,
-                        gfx.renderer.last_captured_textures(),
-                    ),
-                    warnings: Vec::new(),
-                    errors: Vec::new(),
-                };
+                );
+            }
+            world.insert_resource(diagnostics_transactions);
 
-                if let Err(violations) = validate_selector_terminal_invariant(
-                    &debug_config.capture_selectors,
-                    &frame_report.capture_results,
+            for completed in completed_reports {
+                let simulation_tick = completed.simulation_tick;
+                let mut frame_report = completed.report;
+                frame_report
+                    .errors
+                    .extend(frame_report.validate_invariants());
+                if let Err(err) = submit_render_frame_report_to_diagnostics(
+                    &mut world,
+                    &frame_report,
+                    simulation_tick,
                 ) {
-                    frame_report
-                        .errors
-                        .extend(violations.into_iter().map(|value| {
-                            format!(
-                                "selector invariant violation at index {}: {}",
-                                value.selector_index, value.message
-                            )
-                        }));
-                }
-
-                if let Err(err) =
-                    submit_render_frame_report_to_diagnostics(&mut world, &frame_report)
-                {
                     tracing::warn!(
                         frame = frame_report.frame_index,
                         error = %err,
                         "failed submitting render diagnostics report to canonical diagnostics core"
                     );
                 }
-
                 if let Ok(report_state) = world.resource_mut::<RenderDebugFrameReportState>() {
                     report_state.observe_frame(frame_report);
                 }
+            }
+            let diagnostics_mode = if full_diagnostics {
                 "full"
             } else {
                 "lightweight"
@@ -420,6 +397,7 @@ pub(crate) fn frame_render_submit_system(
                 );
             }
 
+            gfx.renderer.clear_published_gpu_observations();
             Ok(())
         }
         Err(err) => {

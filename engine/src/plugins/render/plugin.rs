@@ -35,7 +35,8 @@ use super::residency::{
 };
 use super::runtime::{
     RenderDynamicTextureTargetRequestRegistryResource, RenderDynamicTextureUploadRegistryResource,
-    RenderRuntimeSet, frame_render_prepare_system, frame_render_submit_system,
+    RenderFrameDiagnosticsTransactionState, RenderRuntimeSet, frame_render_prepare_system,
+    frame_render_submit_system,
 };
 use super::shader::ShaderRegistryResource;
 use crate::app::App;
@@ -110,6 +111,7 @@ impl Plugin for RenderPlugin {
         app.init_resource::<RenderCapturedTextureState>();
         app.init_resource::<RenderPassProvenanceState>();
         app.init_resource::<RenderDebugFrameReportState>();
+        app.init_resource::<RenderFrameDiagnosticsTransactionState>();
         app.init_resource::<WorldRuntimeInspectorSnapshot>();
         app.init_resource::<StartupState>();
         app.init_resource::<DebugMetricsState>();
