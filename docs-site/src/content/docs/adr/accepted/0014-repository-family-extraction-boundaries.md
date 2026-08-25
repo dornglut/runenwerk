@@ -24,17 +24,16 @@ Runenwerk is the integration and product repository for independently usable pee
 frameworks:
 
 ```text
-product       repository                package / topology
-RunenSDF      dornglut/runen-sdf        runen-sdf / runen_sdf
-RunenECS      dornglut/runen-ecs        runen-ecs / runen_ecs
-                                         + runen-ecs-macros / runen_ecs_macros
-RunenGPU      dornglut/runen-gpu        runen-gpu / runen_gpu
-RunenRender   dornglut/runen-render     runen-render / runen_render
-RunenUI       dornglut/runen-ui         existing workspace topology
+product       repository                 package       crate
+RunenSDF      dornglut/runen-sdf         runen-sdf     runen_sdf
+RunenECS      target dornglut/runen-ecs  topology refined by active RunenECS design
+RunenGPU      dornglut/runen-gpu         runen-gpu     runen_gpu
+RunenRender   dornglut/runen-render      runen-render  runen_render
+RunenUI       dornglut/runen-ui          existing workspace; current packages include runenui_core and runenui_runtime
 ```
 
-The table uses current Dornglut repository identities. Historical Crystonix paths
-remain provenance only and are not active repository authority.
+Historical `Crystonix/*` paths remain provenance only; active repository identity
+uses the `dornglut/*` namespace.
 
 RunenSDF and RunenUI already exist as independent workstreams. RunenECS,
 RunenGPU, and RunenRender remain governed by their accepted boundary designs and
@@ -44,12 +43,10 @@ Framework repositories must not depend on Runenwerk. Integration-specific
 translation, application lifecycle, product policy, and cross-framework
 composition remain in Runenwerk.
 
-RunenGPU and RunenRender each begin with one public package. RunenECS begins with
-the `runen-ecs` library package plus the technically required
-`runen-ecs-macros` proc-macro companion defined by its active extraction design.
-This decision does not redefine RunenUI package topology. Further packages require
-independently useful dependency, backend, release, ABI, or compile-time pressure.
-Repository extraction is not itself justification for package proliferation.
+RunenGPU and RunenRender each begin with one public package. This decision does not redefine RunenUI package topology. The RunenECS active extraction design now refines its initial topology to Cargo package `runen-ecs` / Rust crate `runen_ecs` plus the technically required Cargo package `runen-ecs-macros` / Rust crate `runen_ecs_macros` proc-macro companion. Additional packages
+require independently useful dependency, backend, release, ABI, or compile-time
+pressure. Repository extraction is not itself justification for package
+proliferation.
 
 ## Dependency direction
 
@@ -84,28 +81,28 @@ because an application may accelerate or display their outputs.
 
 ### RunenSDF
 
-The corrected standalone repository transfer historically completed at:
+The corrected standalone repository transfer completed at:
 
 ```text
 repository: dornglut/runen-sdf
 commit: d52badefc640d6dc6dcdd40268af3aea1bb8eefe
 ```
 
-Later RunenSDF state is owned by current repository-family architecture, code,
-and GitHub history; this ADR does not mirror changing live migration state.
+Current Runenwerk `main` does not yet contain a merged clean-cutover removal of
+`domain/sdf`. That decision remains separate from the completed standalone
+transfer.
 
 ### RunenECS
 
 Internal ownership and safety repairs remain required before source movement.
-The active RunenECS boundary design and execution plan refine package topology,
-ECS-native scheduling ownership, repair order, and the separate transfer gate.
+The active RunenECS extraction design and execution plan refine the target package
+topology and ECS-native scheduling boundary without authorizing source movement.
 
 ### RunenGPU and RunenRender
 
 The previous renderer-owned-WGPU target is superseded. GPU execution must be
-separated before rendering extraction. Current implementation phase and maturity
-state are owned by the applicable roadmap, issues, and current architecture rather
-than this ADR.
+separated before rendering extraction. No implementation phase is authorized
+until the complete current-source S0 inventory is accepted.
 
 ### RunenUI
 
@@ -118,18 +115,15 @@ Tracks may investigate in parallel, but structural changes that share manifests,
 lockfiles, identity policy, or canonical architecture must be serialized or
 explicitly rebased.
 
-The dependency-constrained family order is:
+The dependency-constrained order is:
 
-1. complete any separately approved framework-local repair and conformance;
-2. extract/cut over a framework only through its separately accepted transfer
-   boundary;
-3. preserve foundational dependency order, including RunenGPU before
-   RunenRender;
-4. consider reusable cross-framework adapters only after public contracts
-   stabilize.
-
-RunenECS's internal C0-C9 repair order is owned by its active execution plan and
-is not duplicated here.
+1. complete any separately approved RunenSDF clean cutover;
+2. repair and prove RunenECS before extraction;
+3. inventory the current combined GPU/render implementation;
+4. separate and extract RunenGPU;
+5. separate RunenRender on the accepted RunenGPU boundary;
+6. extract RunenRender;
+7. consider reusable cross-framework adapters after public contracts stabilize.
 
 ## Clean cutover
 
@@ -161,15 +155,13 @@ materials, GPU execution, or product policy.
 ### RunenECS
 
 RunenECS owns entity/component/resource lifecycle, storage and query semantics,
-deferred structural mutation, system identity/access contracts, explicit semantic
-ordering and sets, ECS schedule validation, deterministic serial reference
-execution, and explicit reflection.
+deferred structural mutation, system identity and access contracts, explicit ECS
+ordering/sets, ECS schedule validation, deterministic serial reference execution,
+and explicit reflection.
 
-General spatial indexing, application/frame lifecycle, rendering extraction,
-networking semantics, replay policy, world policy, and product scheduling remain
-outside ECS core. Runenwerk owns application/product lifecycle scheduling and
-cross-framework integration; independently owned framework semantics remain with
-their respective repositories.
+General spatial indexing, application/frame lifecycle scheduling, rendering
+extraction, networking, replay, world policy, and product scheduling remain
+outside ECS core.
 
 ### RunenGPU
 
@@ -198,14 +190,12 @@ RunenRender or RunenGPU by default.
 
 ### Runenwerk
 
-Runenwerk owns application and product lifecycle scheduling, windows/event loops,
-ECS/domain extraction and framework invocation, scene/world/material/SDF/UI/editor/
-simulation adapters, shader source discovery and reload policy, product
-quality/capability selection, diagnostics presentation, recovery, and integration
-evidence.
-
-Runenwerk does not redefine ECS-internal schedule semantics merely because it
-chooses when an ECS schedule runs.
+Runenwerk owns application/product lifecycle scheduling, windows/event loops,
+ECS/domain extraction, scene/world/material/SDF/UI/editor/simulation adapters,
+shader source discovery and reload policy, product quality/capability selection,
+diagnostics presentation, recovery, and integration evidence. It chooses when an
+ECS schedule runs but does not redefine RunenECS-internal ordering, access,
+validation, deferred-command, or reference-execution semantics.
 
 ## Adapter rule
 
@@ -248,12 +238,11 @@ Runtime IDs are not silently promoted into persisted identity.
 ## Consequences
 
 - Existing code location is implementation evidence, not permanent ownership.
-- RunenECS source movement remains blocked by internal ownership/safety work and
-  standalone conformance.
-- RunenECS owns ECS-native schedule semantics; Runenwerk owns application/product
+- RunenSDF provides the first standalone transfer proof.
+- RunenECS source movement remains blocked by internal ownership/safety work.
+- RunenECS owns ECS-native scheduling semantics; Runenwerk owns application/product
   lifecycle scheduling and integration.
-- RunenGPU must be proven and extracted before RunenRender where that dependency
-  is required by the current accepted family architecture.
+- RunenGPU must be proven and extracted before RunenRender.
 - RunenRender consumes RunenGPU through a public one-way dependency.
 - RunenUI remains independent.
 - Connector inspection does not substitute for executable validation.
@@ -268,8 +257,7 @@ Rejected:
 - one repository containing SDF, ECS, GPU, rendering, and UI;
 - Git submodules or source mirrors;
 - a universal shared-core repository;
-- speculative multi-package repository skeletons beyond technically required
-  companions such as a proc-macro package;
+- speculative multi-package repository skeletons;
 - long-lived compatibility packages;
 - making RunenUI or RunenSDF depend on rendering for integration convenience;
 - retaining WGPU ownership in RunenRender;
