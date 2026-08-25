@@ -5,7 +5,7 @@ status: accepted
 owner: engine
 layer: domain / engine-runtime
 canonical: true
-last_reviewed: 2026-05-12
+last_reviewed: 2026-08-25
 related_adrs:
   - ../../adr/accepted/0004-separate-description-from-execution.md
   - ../../adr/accepted/0008-adopt-sdf-first-field-product-architecture.md
@@ -28,6 +28,16 @@ Accepted execution architecture.
 This design defines the long-term target without requiring immediate
 multithreading. Serial fallback remains mandatory.
 
+Current-main Issue #198 authority correction: ECS-native system identity, access
+facts, explicit ordering/sets, schedule validation, deferred-command boundaries,
+and deterministic serial reference execution belong to RunenECS. Runenwerk owns
+application/frame/fixed/render/network/replay lifecycle and product barriers.
+There is no accepted external scheduler dependency or `runen_schedule` package.
+The [Issue 198 current-main census](../../reports/investigations/runenecs-issue-198-current-main-census.md)
+records the evidence and exact move/stay/redesign/delete map. The ownership
+statements below are read with this correction; no implementation or source
+transfer is authorized by this amendment.
+
 Implementation sequence is tracked by the
 [Runtime Product Job Executor Roadmap](../../engine/roadmaps/runtime-product-job-executor-roadmap.md).
 That roadmap turns this accepted architecture into engine runtime phases while
@@ -35,7 +45,7 @@ keeping this document focused on ownership and invariants.
 
 ## Purpose
 
-Runenwerk needs an execution model for ECS systems, scheduler planning,
+Runenwerk needs an execution model for ECS systems and product jobs,
 deferred mutation, query snapshots, field-product formation, render preparation,
 procgen, physics, AI, streaming, VFX, diagnostics, network, replay, and
 background jobs.
@@ -45,7 +55,7 @@ The execution fabric coordinates these systems without collapsing ownership:
 ```text
 ECS remains live runtime state.
 Field products remain formed product state.
-Scheduler owns deterministic planning.
+RunenECS owns deterministic ECS planning; Runenwerk owns product planning.
 Runtime owns actual execution.
 Graph owns neutral graph structure.
 Diagnostics explain failures.
@@ -56,9 +66,9 @@ Diagnostics explain failures.
 `domain/ecs` owns entity/component/resource storage contracts, query metadata,
 system interfaces, deferred ECS command descriptors, and ECS-owned diagnostics.
 
-`domain/scheduler` owns labels, ordering constraints, access conflict
-detection, deterministic stages or waves, barriers, plan diagnostics, and plan
-inspection DTOs.
+RunenECS owns ECS labels, ordering constraints, access conflict detection,
+deterministic stages or waves, deferred-command boundaries, and ECS plan
+diagnostics. Runenwerk owns application/product barriers and lifecycle policy.
 
 `domain/graph` owns neutral graph structure and validation. It does not become
 the runtime execution authority.
@@ -70,8 +80,9 @@ composition.
 
 ## Execution Plan Model
 
-The current scheduler can keep `ExecutionStage` as the serial-compatible plan
-shape while evolving semantics toward waves and barriers. A future plan may
+RunenECS can keep a serial-compatible execution-plan shape while evolving
+semantics toward validated waves and ECS-owned deferred boundaries. Runenwerk
+may add product barriers around that execution. A future plan may
 include:
 
 - phases such as update, fixed update, render prepare, render submit, frame end,

@@ -35,7 +35,6 @@ PR/check state, completion tables, or which implementation issue is active today
 RunenSDF --------+
 RunenECS --------+--> Runenwerk adapters and applications
 RunenUI ---------+
-RunenScheduler --+
                        |
                        +--> RunenRender --> RunenGPU
                        +--> non-render RunenGPU consumers
@@ -159,7 +158,7 @@ The owning issues determine activation and current status.
 ## Other repository-family programs
 
 RunenSDF remains the accepted standalone field-mathematics authority. RunenECS,
-RunenScheduler, RunenSpatial, and RunenUI continue through separately owned programs and
+RunenSpatial, and RunenUI continue through separately owned programs and
 may proceed in parallel only when repository, branch, workspace, files, authority, and
 dependencies do not conflict.
 

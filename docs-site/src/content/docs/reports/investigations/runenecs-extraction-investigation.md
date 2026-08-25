@@ -5,7 +5,7 @@ status: active
 owner: ecs
 layer: investigation
 canonical: true
-last_reviewed: 2026-07-19
+last_reviewed: 2026-08-25
 related_docs:
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
@@ -13,6 +13,7 @@ related_docs:
   - ../../design/active/runenecs-boundary-repair-execution-plan.md
   - ../../workspace/planning/roadmap.md
   - ../../workspace/specs/pt-runenecs-r1-entity-errors.ron
+  - ./runenecs-issue-198-current-main-census.md
 ---
 
 # RunenECS Extraction Investigation
@@ -29,8 +30,8 @@ before extraction?
 EXTRACTION CANDIDATE                 yes
 MOVE CURRENT PACKAGES AS-IS          forbidden
 ARCHITECTURAL OWNERSHIP DIRECTION    established
-COMPLETE FILE/CONSUMER INVENTORY     pending local verification
-SAFETY DESIGN                        incomplete until unsafe inventory is command-verified
+COMPLETE FILE/CONSUMER INVENTORY     command-verified in the Issue 198 census
+SAFETY DESIGN                        repair remains required; unsafe inventory is command-verified
 FIRST EXECUTABLE REPAIR              R1 entity identity and structured core errors
 SOURCE MOVEMENT                      forbidden
 ```
@@ -42,17 +43,19 @@ and engine tick/frame concepts. The separate scheduler is context-generic in
 shape but exposes Runenwerk lifecycle and render/network barriers.
 
 This report establishes the durable owner split and the ordered repair program.
-It does not claim complete command-verified inventory and does not authorize code
-changes.
+The complete current-main evidence and current decisions are now recorded in
+[RunenECS Issue 198 Current-Main Census](./runenecs-issue-198-current-main-census.md),
+which supersedes conflicting historical statements in this report. This report
+does not authorize code changes.
 
 ## Baseline and evidence
 
-Repository: `Crystonix/Runenwerk`
+Repository: `dornglut/runenwerk`
 
 Reviewed published main:
 
 ```text
-c078bd8609dc407d68269e86a1472c9234932213
+25c20a8b7643dc391ec49d870b24458767dd6033
 ```
 
 Evidence:
@@ -63,8 +66,10 @@ E3 connector-backed source, manifest, test, and consumer inspection
 E4 Cargo.lock/package facts where available
 ```
 
-The connector cannot run Cargo, Miri, sanitizers, benchmarks, or reliable complete
-repository-wide searches. Local verification remains mandatory.
+The historical connector evidence did not run Cargo, Miri, sanitizers, benchmarks,
+or reliable complete repository-wide searches. The current-main census performs
+the local command-verified gate and records the remaining Miri, sanitizer, and
+MSRV gaps explicitly.
 
 ## Current package candidates
 
@@ -77,14 +82,13 @@ domain/scheduler    package scheduler
 The intended repository remains:
 
 ```text
-Crystonix/RunenECS
+dornglut/runen-ecs
   runenecs
   runenecs_macros
-  runen_schedule
 ```
 
-`runen_schedule` remains separately usable without `runenecs`. A fourth repository
-is not created during this program.
+ECS-native scheduling is part of `runenecs`; no external scheduler repository or
+generic scheduler dependency is required by #198.
 
 ## Current ECS aggregation
 
@@ -222,23 +226,20 @@ generation finalization, replay/network capture, and product barriers.
 Target split:
 
 ```text
-runen_schedule
-  neutral labels
-  access/conflict declarations
-  dependency graph
-  deterministic stages/waves
-  generic reports
-  serial reference execution
-
 runenecs
-  system access extraction
-  world/resource borrowing
-  deferred command application at ECS-owned boundaries
+  system identity and access facts
+  explicit semantic order and sets
+  schedule validation and deferred-command boundaries
+  deterministic serial reference execution
 
 Runenwerk
   frame/tick/startup/shutdown/render/network/replay/product phases
+  application host execution and product/publication barriers
 ```
 
+Semantic ordering is distinct from access incompatibility. The `ecs -> scheduler`
+edge is removed in the target topology; no replacement generic scheduler crate is
+introduced. Generic DAG/demo/DOT/telemetry residue without a consumer is deleted.
 Parallel execution remains deferred until sound access, deterministic barriers,
 panic/poison policy, cancellation, worker ownership, bounded queues, and serial
 equivalence are proven.
@@ -247,15 +248,15 @@ equivalence are proven.
 
 Current public families have different semantics and owners.
 
-Provisional classification:
+Current-main classification:
 
 | Facility | Target disposition |
 |---|---|
-| typed events/broadcast | likely RunenECS; verify retention, overflow, cursors, terminal behavior |
-| FIFO world queues | candidate; retain only with independent non-network ECS consumer proof |
+| typed events/broadcast | RunenECS when local retention, overflow, cursors, and terminal behavior are proven |
+| FIFO world queues | RunenECS only for proven local semantics |
 | tick buffers/provenance | Runenwerk simulation/runtime |
 | external ingress/transport | Runenwerk |
-| work claims/retry/ack | not automatically ECS; requires separate ownership proof |
+| work claims/retry/ack | delete unless an ECS-local consumer proves the semantics |
 
 No facility is retained solely because it currently lives in `World`.
 
@@ -276,7 +277,7 @@ replication, prediction, rollback, transport   Runenwerk
 replay formats and retention                    Runenwerk
 ```
 
-The final disposition follows local consumer inventory.
+The exact current-main disposition is recorded in the Issue 198 census.
 
 ## Macro findings
 
@@ -290,39 +291,41 @@ The final disposition follows local consumer inventory.
 
 ## Durable target decisions
 
-Fixed:
+Current-main decisions:
 
-- one RunenECS repository with `runenecs`, `runenecs_macros`, and
-  independently usable `runen_schedule`;
+- one eventual RunenECS repository with `runenecs` and `runenecs_macros`;
+- no `runen_schedule` package and no generic scheduler dependency;
 - no Runenwerk geometry in ECS core;
 - no ECS-owned general spatial index;
 - opaque world-local generational entities;
 - explicit reflection registry;
-- serial execution as normative initial behavior;
+- deterministic serial execution as normative initial behavior;
 - structured framework errors;
 - no process-global reflection or telemetry authority;
-- no source movement before boundary repair and downstream conformance.
+- no source movement before boundary repair and downstream conformance;
+- current-main census C0 is complete; C1/R1 remains the first implementation
+  slice after #198 acceptance.
 
-Provisional until local evidence:
+Remaining redesign gates:
 
-- exact event/queue/change-journal public families;
-- exact scheduler public API and labels;
-- public low-level query/SystemParam extensibility;
-- retained parallel executor;
-- exact package/file move matrix.
+- event/queue/change-journal retention and terminal semantics;
+- sealed low-level query/SystemParam boundary and Miri/sanitizer proof;
+- final package/file move matrix after C1-C8 evidence;
+- retained parallel executor, which is not required for the serial reference.
 
 ## Repair program
 
 ```text
-R1 entity identity and structured core errors
-R2 atomic bundle/spawn/command invariants
-R3 query and SystemParam unsafe-boundary hardening
-R4 explicit reflection registry and macro migration
-R5 remove ECS spatial and geometry ownership
-R6 messaging split and tick-buffer migration
-R7 change journal and ownership/network separation
-R8 neutralize runen_schedule and lifecycle integration
-R9 standalone downstream conformance and benchmark baseline
+C0 current-main census and authority binding
+C1 entity identity and structured core errors
+C2 atomic bundle/spawn/command invariants
+C3 query and SystemParam unsafe-boundary hardening
+C4 explicit reflection registry and macro migration
+C5 ECS-native schedule/access/order/deferred semantics; remove ecs -> scheduler
+C6 remove ECS spatial and geometry ownership
+C7 messaging split and ownership/network/lifecycle separation
+C8 standalone downstream conformance and benchmark baseline
+C9 accepted repository transfer and Runenwerk cutover
 ```
 
 The sequence is dependency-ordered. Later steps may be investigated in parallel,
@@ -330,14 +333,14 @@ but only the next executable repair receives a concrete phase specification.
 
 ## Mandatory local gate
 
-Before activating R1, run:
+Before activating C1/R1, the current-main census ran:
 
 ```text
 cargo metadata --format-version 1 --locked
-cargo tree -p ecs
-cargo tree -i ecs --workspace
-cargo tree -p scheduler
-cargo tree -i scheduler --workspace
+cargo tree -p ecs --locked
+cargo tree -i ecs --workspace --locked
+cargo tree -p scheduler --locked
+cargo tree -i scheduler --workspace --locked
 find domain/ecs domain/ecs_macros domain/scheduler -type f | sort
 rg -n '^\s*(pub\s+)?(unsafe\s+)?trait|unsafe\s*\{' domain/ecs domain/ecs_macros domain/scheduler
 rg -n '\becs\b|ecs::|scheduler::' --glob Cargo.toml --glob '*.rs' .
@@ -348,27 +351,29 @@ rg -n 'OwnerId|OwnerRole|tick_buffer|change_extraction|interest' domain engine n
 cargo test -p ecs --all-features --locked
 cargo test -p scheduler --all-features --locked
 cargo clippy -p ecs -p scheduler -p ecs_macros --all-targets --all-features --locked -- -D warnings
-python tools/docs/validate_docs.py
-pnpm --dir docs-site build
+cargo validate
+CI=true pnpm --dir docs-site build
 git diff --check
 git status --short --branch
 ```
 
-Also identify repository-authoritative Miri and sanitizer commands. Do not infer
-success when a command is unavailable.
+The census found no repository-authoritative Miri, sanitizer, or MSRV command;
+those gaps remain explicit and are not inferred as success.
 
 ## Gate result
 
 ```text
 repository ownership direction   established
-connector source investigation   substantial but not complete by workflow gate
-local consumer/unsafe inventory  pending
-complete design gate             pending
-implementation authorization     blocked
+accepted base                    exact 25c20a8b7643dc391ec49d870b24458767dd6033
+local consumer/unsafe inventory  command-verified for #198 census
+focused/workspace/docs gate      passed
+Miri/sanitizer/MSRV              no repository-authoritative lane found
+implementation authorization     blocked until #198 acceptance
 external extraction              forbidden
 ```
 
 ## Next safe action
 
-After the local gate and owner review, activate exactly R1. Do not implement R2–R9,
-rename packages, create RunenECS, or move source externally in the R1 phase.
+After #198 is accepted and owner review authorizes C1, activate exactly R1. Do
+not implement C2–C9, rename packages, create RunenECS, or move source externally
+in the R1 phase.

@@ -5,7 +5,7 @@ status: active
 owner: ecs
 layer: domain/ecs
 canonical: true
-last_reviewed: 2026-07-19
+last_reviewed: 2026-08-25
 related_docs:
   - ./runenecs-extraction-boundary-design.md
   - ../../reports/investigations/runenecs-extraction-investigation.md
@@ -13,6 +13,7 @@ related_docs:
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
   - ../../workspace/specs/pt-runenecs-r1-entity-errors.ron
   - ../../workspace/planning/roadmap.md
+  - ../../reports/investigations/runenecs-issue-198-current-main-census.md
 ---
 
 # RunenECS Boundary Repair Execution Plan
@@ -26,16 +27,21 @@ This plan records the whole destination so phases compose coherently. It does no
 pre-authorize every phase. Only the next executable phase receives an active RON
 specification.
 
+The Issue 198 current-main census is the authority for this plan. It supersedes
+the former independent `R1..R9` and `ECS-001..006` sequences with the single
+canonical `C0..C9` sequence below. The historical R labels remain only in
+parentheses for traceability.
+
 ## Sequence
 
 ```text
-R1 -> R2 -> R3 -> R4 -> R5 -> R6 -> R7 -> R8 -> R9
+C0 -> C1 -> C2 -> C3 -> C4 -> C5 -> C6 -> C7 -> C8 -> C9
 ```
 
 Later phases may be investigated in parallel. Implementation cannot skip an unmet
 prerequisite or an unclosed safety/ownership decision.
 
-## R1 — Entity identity and structured core errors
+## C1 / R1 — Entity identity and structured core errors
 
 Goal:
 
@@ -51,7 +57,7 @@ scheduler, or networking.
 Exit condition: entity lifecycle is invariant-preserving and all current consumers
 compile through the reviewed public API.
 
-## R2 — Atomic structural mutation
+## C2 / R2 — Atomic structural mutation
 
 Goal:
 
@@ -62,7 +68,7 @@ Goal:
 
 Prerequisite: R1 entity/error contract.
 
-## R3 — Query and SystemParam unsafe boundaries
+## C3 / R3 — Query and SystemParam unsafe boundaries
 
 Goal:
 
@@ -74,7 +80,7 @@ Goal:
 
 Prerequisites: R1 and R2 stable lifecycle/mutation behavior.
 
-## R4 — Explicit reflection and macro migration
+## C4 / R4 — Explicit reflection and macro migration
 
 Goal:
 
@@ -86,7 +92,7 @@ Goal:
 
 Prerequisite: R3 public extension and safety contracts.
 
-## R5 — Remove spatial and geometry ownership
+## C6 / R5 — Remove spatial and geometry ownership
 
 Goal:
 
@@ -97,7 +103,7 @@ Goal:
 
 Prerequisites: R2 mutation and R4 identity/reflection facts used by consumers.
 
-## R6 — Messaging split
+## C7 / R6 — Messaging split
 
 Goal:
 
@@ -109,7 +115,7 @@ Goal:
 Prerequisite: complete local consumer map. R5 should precede broad `World` surface
 reduction to avoid conflicting migrations.
 
-## R7 — Change, ownership, and networking separation
+## C7 / R7 — Change, ownership, and networking separation
 
 Goal:
 
@@ -121,29 +127,35 @@ Goal:
 
 Prerequisites: R1 identities, R4 type registry, and R6 messaging ownership.
 
-## R8 — Neutralize `runen_schedule`
+## C5 — ECS-native schedule and access semantics (revised R8)
 
 Goal:
 
-- remove Runenwerk phase and barrier enums;
-- remove renderer/network/replay exceptions and process-global telemetry;
-- expose neutral labels, access conflicts, deterministic stages/waves, and reports;
-- keep serial reference execution;
-- leave frame/tick/product lifecycle in Runenwerk.
+- move system identity, ECS access facts, explicit ordering/sets, schedule
+  validation, and deferred-command boundaries into `runenecs`;
+- distinguish semantic order from access incompatibility;
+- remove the `ecs -> scheduler` dependency without introducing a replacement
+  generic scheduler crate;
+- keep deterministic standalone serial execution as the correctness/reference
+  behavior;
+- leave frame/tick/product lifecycle and application barriers in Runenwerk;
+- delete unsupported generic DAG/demo/DOT/telemetry residue after consumer
+  migration.
 
-Prerequisites: R3 system access and R7 lifecycle separation.
+Prerequisites: C3 system access and C7 lifecycle separation.
 
-## R9 — Standalone conformance and performance baseline
+## C8 / R9 — Standalone conformance and performance baseline
 
 Goal:
 
-- prove `runenecs`, `runenecs_macros`, and `runen_schedule` without Runenwerk;
+- prove `runenecs` and `runenecs_macros` without Runenwerk or a generic
+  scheduler dependency;
 - add downstream public consumer and standalone simulation examples;
 - complete Miri/sanitizer, stable, MSRV, Clippy, docs, benchmark, dependency, and
   feature validation;
 - record exact move/stay/redesign/delete and provenance matrices.
 
-Prerequisites: R1–R8 closed.
+Prerequisites: C1–C7 closed.
 
 R9 completion authorizes repository-creation planning, not source transfer by
 itself.
@@ -162,7 +174,7 @@ Every repair phase preserves:
 
 ## Phase-spec policy
 
-Only R1 has a concrete phase spec now.
+Only C1/R1 has a concrete phase spec now.
 
 At each closeout:
 
@@ -175,7 +187,7 @@ Do not retain R2–R9 RON contracts written against pre-R1 assumptions.
 
 ## Parallel work
 
-Allowed while R1 is implemented:
+Allowed while C1/R1 is implemented:
 
 - read-only investigation for later phases;
 - benchmark and Miri command discovery;
@@ -184,7 +196,7 @@ Allowed while R1 is implemented:
 
 Forbidden:
 
-- concurrent structural changes to R2–R8 paths;
+- concurrent structural changes to C2–C7 paths;
 - package renames or source transfer;
 - broad `World` rewrite;
 - speculative parallel executor;
@@ -192,7 +204,7 @@ Forbidden:
 
 ## Final extraction gate
 
-RunenECS repository creation remains blocked until R9 proves:
+RunenECS repository creation remains blocked until C8 proves:
 
 - framework-independent package graph;
 - public downstream use;
