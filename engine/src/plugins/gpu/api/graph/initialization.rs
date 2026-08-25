@@ -18,6 +18,7 @@ use super::{
         GpuPreparedWorkDiagnostic, GraphErrorOrigin, graph_error, graph_error_with_region,
     },
     identity::GpuPreparedWorkNodeId,
+    initial_content::GpuPreparedInitialContent,
 };
 use std::collections::BTreeMap;
 
@@ -202,19 +203,19 @@ fn coverage_for_access(access: &GpuResourceAccess) -> InitializedCoverage {
 fn descriptor_coverage(resource: &GpuResourceRef) -> InitializedCoverage {
     match resource {
         GpuResourceRef::Buffer(buffer) => match buffer.descriptor().initialization() {
-            GpuBufferInitialization::Uninitialized => InitializedCoverage::Buffer {
-                buffer: buffer.clone(),
-                values: Vec::new(),
-            },
-            GpuBufferInitialization::Zeroed | GpuBufferInitialization::Prepared(_) => {
+            GpuBufferInitialization::Uninitialized | GpuBufferInitialization::Prepared(_) => {
                 InitializedCoverage::Buffer {
                     buffer: buffer.clone(),
-                    values: vec![GpuBufferCoverage::dense(
-                        GpuBufferRange::whole(buffer)
-                            .expect("buffer descriptor has nonzero checked coverage"),
-                    )],
+                    values: Vec::new(),
                 }
             }
+            GpuBufferInitialization::Zeroed => InitializedCoverage::Buffer {
+                buffer: buffer.clone(),
+                values: vec![GpuBufferCoverage::dense(
+                    GpuBufferRange::whole(buffer)
+                        .expect("buffer descriptor has nonzero checked coverage"),
+                )],
+            },
         },
         GpuResourceRef::Texture(texture) => descriptor_texture_coverage(texture),
         GpuResourceRef::TextureView(view) => {
@@ -232,8 +233,7 @@ fn descriptor_coverage(resource: &GpuResourceRef) -> InitializedCoverage {
 fn descriptor_texture_coverage(texture: &GpuTextureHandle) -> InitializedCoverage {
     let descriptor = texture.descriptor();
     let mip_count = match descriptor.initialization() {
-        GpuTextureInitialization::Uninitialized => 0,
-        GpuTextureInitialization::Prepared(_) => 1,
+        GpuTextureInitialization::Uninitialized | GpuTextureInitialization::Prepared(_) => 0,
         GpuTextureInitialization::Zeroed => descriptor.mip_level_count(),
     };
     let layers = match descriptor.dimension() {
@@ -245,6 +245,122 @@ fn descriptor_texture_coverage(texture: &GpuTextureHandle) -> InitializedCoverag
         ranges.insert((mip, texture_aspect(texture)), vec![(0, layers)]);
     }
     InitializedCoverage::Texture(ranges)
+}
+
+fn prepared_initial_content_coverage(
+    candidate: &GpuPreparedInitialContent,
+) -> InitializedCoverage {
+    match candidate {
+        GpuPreparedInitialContent::Buffer(buffer) => InitializedCoverage::Buffer {
+            buffer: buffer.clone(),
+            values: vec![GpuBufferCoverage::dense(
+                GpuBufferRange::whole(buffer)
+                    .expect("prepared buffer descriptor has nonzero checked coverage"),
+            )],
+        },
+        GpuPreparedInitialContent::Texture(texture) => {
+            let descriptor = texture.descriptor();
+            let layers = match descriptor.dimension() {
+                GpuTextureDimension::D2 => descriptor.extent().depth_or_layers(),
+                GpuTextureDimension::D1 | GpuTextureDimension::D3 => 1,
+            };
+            let mut ranges = BTreeMap::new();
+            ranges.insert((0, texture_aspect(texture)), vec![(0, layers)]);
+            InitializedCoverage::Texture(ranges)
+        }
+    }
+}
+
+fn apply_fragment_prepared_initial_content(
+    graph_label: &str,
+    fragment: &GpuWorkFragment,
+    state: &mut BTreeMap<GpuWorkResourceId, InitializedCoverage>,
+    initial_content: &[GpuPreparedInitialContent],
+) -> Result<(), GpuWorkGraphError> {
+    for candidate in initial_content {
+        let identity = candidate.resource_identity();
+        if !fragment
+            .resources()
+            .iter()
+            .any(|resource| storage_identity(resource) == identity)
+        {
+            continue;
+        }
+        let Some(existing) = state.get_mut(&identity) else {
+            return Err(graph_error(
+                "apply prepared initial-content validation effect",
+                graph_label,
+                GraphErrorOrigin::new(Some(fragment), None),
+                None,
+                Some(identity),
+                GpuWorkGraphCause::UnknownIdentity,
+                "retain each used prepared resource in the fragment's normalized storage state",
+            ));
+        };
+        if !existing.union(&prepared_initial_content_coverage(candidate)) {
+            return Err(graph_error(
+                "apply prepared initial-content validation effect",
+                graph_label,
+                GraphErrorOrigin::new(Some(fragment), None),
+                None,
+                Some(identity),
+                GpuWorkGraphCause::OperationAccessContradiction,
+                "apply prepared initial content only to its matching normalized storage kind",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn apply_global_prepared_initial_content(
+    graph_label: &str,
+    state: &mut BTreeMap<GpuWorkResourceId, InitializedCoverage>,
+    initial_content: &[GpuPreparedInitialContent],
+) -> Result<(), GpuWorkGraphError> {
+    for candidate in initial_content {
+        let identity = candidate.resource_identity();
+        let Some(existing) = state.get_mut(&identity) else {
+            let provenance = match candidate {
+                GpuPreparedInitialContent::Buffer(buffer) => {
+                    buffer.descriptor().common().provenance().clone()
+                }
+                GpuPreparedInitialContent::Texture(texture) => {
+                    texture.descriptor().common().provenance().clone()
+                }
+            };
+            return Err(GpuWorkGraphError::invalid(
+                "apply prepared initial-content simulation effect",
+                GpuWorkGraphErrorContext::new(
+                    graph_label,
+                    None,
+                    None,
+                    None,
+                    Some(identity),
+                    None,
+                    Some(provenance),
+                ),
+                GpuWorkGraphCause::UnknownIdentity,
+                "retain each operation-used prepared resource in the normalized storage registry",
+            ));
+        };
+        if !existing.union(&prepared_initial_content_coverage(candidate)) {
+            return Err(GpuWorkGraphError::invalid(
+                "apply prepared initial-content simulation effect",
+                GpuWorkGraphErrorContext::new(
+                    graph_label,
+                    None,
+                    None,
+                    None,
+                    Some(identity),
+                    None,
+                    None,
+                ),
+                GpuWorkGraphCause::OperationAccessContradiction,
+                "apply prepared initial content only to its matching normalized storage kind",
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn texture_range_coverage(
@@ -357,11 +473,18 @@ pub(super) fn validate_fragment_initialization(
     fragments: &[GpuWorkFragment],
     fragment_order: &[usize],
     import_bindings: &ImportBindings,
+    initial_content: &[GpuPreparedInitialContent],
 ) -> Result<(), GpuWorkGraphError> {
     let mut prepared_outputs = BTreeMap::<(usize, usize), InitializedCoverage>::new();
     for &fragment_index in fragment_order {
         let fragment = &fragments[fragment_index];
         let mut state = fragment_entry_state(fragment);
+        apply_fragment_prepared_initial_content(
+            graph_label,
+            fragment,
+            &mut state,
+            initial_content,
+        )?;
         for (import_index, import) in fragment.imports().iter().enumerate() {
             let Some(binding) = import_bindings.get(&(fragment_index, import_index)) else {
                 return Err(graph_error(
@@ -1041,6 +1164,7 @@ pub(super) fn simulate_prepared_initialization(
     storage_resources: &BTreeMap<GpuWorkResourceId, GpuResourceRef>,
     node_locations: &BTreeMap<GpuPreparedWorkNodeId, (usize, usize)>,
     topological_order: &[GpuPreparedWorkNodeId],
+    initial_content: &[GpuPreparedInitialContent],
 ) -> Result<
     (
         Vec<GpuPreparedResourceInitialization>,
@@ -1064,6 +1188,7 @@ pub(super) fn simulate_prepared_initialization(
         }
     }
     let initial = state.clone();
+    apply_global_prepared_initial_content(graph_label, &mut state, initial_content)?;
     for &prepared_id in topological_order {
         let Some(&(fragment_index, node_index)) = node_locations.get(&prepared_id) else {
             return Err(GpuWorkGraphError::invalid(

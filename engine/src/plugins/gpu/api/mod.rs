@@ -35,6 +35,7 @@ pub use errors::*;
 pub(crate) use errors::{GpuWorkAuthoringErrorContext, GpuWorkGraphErrorContext};
 pub use execution::*;
 pub use graph::*;
+pub(crate) use graph::GpuPreparedInitialContent;
 pub use handles::*;
 pub use operation::{GpuRenderOperation, GpuWorkNodeKind, GpuWorkOperation};
 pub use pipeline_realization::*;

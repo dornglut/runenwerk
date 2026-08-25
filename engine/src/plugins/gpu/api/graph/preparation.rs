@@ -1,6 +1,7 @@
 use super::super::{
-    GpuCapabilityRequirements, GpuResourceLabel, GpuResourceRef, GpuWorkGraphCause,
-    GpuWorkGraphError, GpuWorkGraphErrorContext, GpuWorkGraphErrorSource, GpuWorkResourceId,
+    GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirements, GpuResourceLabel,
+    GpuResourceRef, GpuWorkGraphCause, GpuWorkGraphError, GpuWorkGraphErrorContext,
+    GpuWorkGraphErrorSource, GpuWorkResourceId,
 };
 use super::{
     authoring::{GpuWorkFragment, GpuWorkNode, GpuWorkOutput},
@@ -16,6 +17,7 @@ use super::{
         topological_node_order,
     },
     identity::GpuPreparedWorkNodeId,
+    initial_content::{GpuPreparedInitialContent, derive_prepared_initial_content},
     initialization::{
         GpuPreparedResourceInitialization, simulate_prepared_initialization,
         validate_fragment_initialization,
@@ -63,6 +65,7 @@ pub struct GpuPreparedWorkGraph {
     requirements: GpuCapabilityRequirements,
     outputs: Vec<GpuWorkOutput>,
     diagnostics: Vec<GpuPreparedWorkDiagnostic>,
+    initial_content: Vec<GpuPreparedInitialContent>,
 }
 
 impl GpuPreparedWorkGraph {
@@ -149,11 +152,13 @@ impl GpuPreparedWorkGraph {
         let topological_order =
             topological_node_order(graph_label, &fragments, &node_locations, &inferred_edges)?;
         let fragment_order = topological_fragment_order(graph_label, &fragments, &import_bindings)?;
+        let initial_content = derive_prepared_initial_content(graph_label, &fragments)?;
         validate_fragment_initialization(
             graph_label,
             &fragments,
             &fragment_order,
             &import_bindings,
+            &initial_content,
         )?;
 
         let mut requirements = GpuCapabilityRequirements::new();
@@ -178,6 +183,29 @@ impl GpuPreparedWorkGraph {
                     )
                 })?;
         }
+        if !initial_content.is_empty() {
+            requirements
+                .insert(GpuCapabilityRequirement::Required(GpuCapabilityFeature::Copy))
+                .map_err(|source| {
+                    GpuWorkGraphError::with_source(
+                        "merge prepared initial-content capability requirement",
+                        GpuWorkGraphErrorContext::new(
+                            graph_label,
+                            None,
+                            None,
+                            None,
+                            initial_content
+                                .first()
+                                .map(GpuPreparedInitialContent::resource_identity),
+                            None,
+                            None,
+                        ),
+                        GpuWorkGraphCause::MechanicalCapabilityContradiction,
+                        "permit the Copy capability required by canonical prepared initial-content transfer",
+                        GpuWorkGraphErrorSource::Capability(source),
+                    )
+                })?;
+        }
 
         let (initialization, initialization_diagnostics) = simulate_prepared_initialization(
             graph_label,
@@ -185,6 +213,7 @@ impl GpuPreparedWorkGraph {
             &storage_resources,
             &node_locations,
             &topological_order,
+            &initial_content,
         )?;
         let dependencies = inferred_edges
             .into_iter()
@@ -222,6 +251,7 @@ impl GpuPreparedWorkGraph {
             requirements,
             outputs,
             diagnostics,
+            initial_content,
         })
     }
 
@@ -255,6 +285,10 @@ impl GpuPreparedWorkGraph {
 
     pub fn diagnostics(&self) -> &[GpuPreparedWorkDiagnostic] {
         &self.diagnostics
+    }
+
+    pub(crate) fn initial_content(&self) -> &[GpuPreparedInitialContent] {
+        &self.initial_content
     }
 }
 

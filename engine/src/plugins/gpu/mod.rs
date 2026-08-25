@@ -3,7 +3,7 @@
 pub mod api;
 mod backend;
 
-pub(crate) use api::GpuWorkAuthoringErrorContext;
+pub(crate) use api::{GpuPreparedInitialContent, GpuWorkAuthoringErrorContext};
 pub use api::*;
 
 #[cfg(test)]

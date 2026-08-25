@@ -11,19 +11,22 @@ use super::health::{WgpuDeviceFaultClass, WgpuDeviceFaultEvidence};
 use super::resource_realization::map_texture_aspect;
 use super::surface::execution::WgpuSurfaceLeaseGuard;
 use crate::plugins::gpu::{
-    GpuBufferTextureLayout, GpuCapabilityAdmission, GpuClearOperation, GpuContext,
-    GpuContextAffinity, GpuCopyOperation, GpuDataLayout, GpuDispatchSize,
-    GpuExecutionLifecycleState, GpuExecutionPolicy, GpuExecutionStats, GpuPipelineRealizationError,
-    GpuPipelineRealizationErrorCategory, GpuPreparedSubmission, GpuPreparedSubmissionRejected,
+    GpuBufferInitialization, GpuBufferTextureLayout, GpuCapabilityAdmission, GpuClearOperation,
+    GpuContext, GpuContextAffinity, GpuCopyExtent, GpuCopyOperation, GpuDataLayout,
+    GpuDispatchSize, GpuExecutionLifecycleState, GpuExecutionPolicy, GpuExecutionStats,
+    GpuPipelineRealizationError, GpuPipelineRealizationErrorCategory, GpuPreparedInitialContent,
+    GpuPreparedSubmission, GpuPreparedSubmissionRejected, GpuPreparedTextureData,
     GpuPreparedWorkGraph, GpuProgramBindingRealizationError,
     GpuProgramBindingRealizationErrorCategory, GpuReadback, GpuReadbackBytes, GpuReadbackId,
     GpuReadbackStatus, GpuRealizedBindGroup, GpuRealizedBuffer, GpuRealizedComputePipeline,
-    GpuRealizedQuerySet, GpuResourceProvenance, GpuRuntimeBindingResource, GpuSubmission,
-    GpuSubmissionFailure, GpuSubmissionFailureKind, GpuSubmissionId, GpuSubmissionPreparationError,
-    GpuSubmissionPreparationErrorKind, GpuSubmissionRejectionKind, GpuSubmissionRejectionReason,
-    GpuSubmissionStatus, GpuSurfaceLeaseError, GpuSurfaceLeaseErrorCategory, GpuSurfaceLeaseId,
-    GpuTextureCopyRegion, GpuTextureFormat, GpuTransferRegion, GpuValidatedBindGroupBindings,
-    GpuWorkOperation, GpuWorkResourceId, PreparedGpuData, TransferData,
+    GpuRealizedQuerySet, GpuRealizedTexture, GpuResourceProvenance, GpuRuntimeBindingResource,
+    GpuSubmission, GpuSubmissionFailure, GpuSubmissionFailureKind, GpuSubmissionId,
+    GpuSubmissionPreparationError, GpuSubmissionPreparationErrorKind, GpuSubmissionRejectionKind,
+    GpuSubmissionRejectionReason, GpuSubmissionStatus, GpuSurfaceLeaseError,
+    GpuSurfaceLeaseErrorCategory, GpuSurfaceLeaseId, GpuTextureAspect, GpuTextureCopyRegion,
+    GpuTextureFormat, GpuTextureInitialization, GpuTextureOrigin, GpuTransferRegion,
+    GpuValidatedBindGroupBindings, GpuWorkOperation, GpuWorkResourceId, PreparedGpuData,
+    TransferData,
 };
 use core::num::NonZeroU64;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -77,6 +80,92 @@ struct PreparedExecutionPlan {
     upload_bytes: u64,
     readback_bytes: u64,
     readback_ids: Vec<GpuReadbackId>,
+    initial_content: Vec<PreparedInitialContentTransfer>,
+}
+
+#[derive(Debug, Clone)]
+struct PreparedInitialContentTransfer {
+    operation: PreparedExecutionOperation,
+    staging_bytes: u64,
+    record: PreparedInitialContentRecord,
+}
+
+#[derive(Debug, Clone)]
+enum PreparedInitialContentRecord {
+    Buffer(GpuRealizedBuffer),
+    Texture(GpuRealizedTexture),
+}
+
+impl PreparedInitialContentRecord {
+    fn needs_transfer(&self) -> bool {
+        match self {
+            Self::Buffer(buffer) => buffer.record.needs_initial_content(),
+            Self::Texture(texture) => texture.record.needs_initial_content(),
+        }
+    }
+
+    fn mark_queued(&self) -> bool {
+        match self {
+            Self::Buffer(buffer) => buffer.record.mark_initial_content_queued(),
+            Self::Texture(texture) => texture.record.mark_initial_content_queued(),
+        }
+    }
+
+    fn mark_completed(&self) {
+        match self {
+            Self::Buffer(buffer) => buffer.record.mark_initial_content_completed(),
+            Self::Texture(texture) => texture.record.mark_initial_content_completed(),
+        }
+    }
+}
+
+impl PreparedExecutionPlan {
+    fn effective_for_acceptance(&self) -> Result<Self, GpuSubmissionRejectionReason> {
+        let initial_content = self
+            .initial_content
+            .iter()
+            .filter(|candidate| candidate.record.needs_transfer())
+            .cloned()
+            .collect::<Vec<_>>();
+        let mut upload_bytes = self.upload_bytes;
+        for candidate in &initial_content {
+            upload_bytes = upload_bytes
+                .checked_add(candidate.staging_bytes)
+                .ok_or_else(|| {
+                    GpuSubmissionRejectionReason::new(
+                        GpuSubmissionRejectionKind::UploadBytesInFlightExceeded,
+                        "conditional prepared initial-content demand overflowed the normalized upload-byte domain",
+                    )
+                })?;
+        }
+        let mut operations = Vec::with_capacity(initial_content.len() + self.operations.len());
+        operations.extend(
+            initial_content
+                .iter()
+                .map(|candidate| candidate.operation.clone()),
+        );
+        operations.extend(self.operations.iter().cloned());
+        Ok(Self {
+            operations,
+            surface_uses: self.surface_uses.clone(),
+            upload_bytes,
+            readback_bytes: self.readback_bytes,
+            readback_ids: self.readback_ids.clone(),
+            initial_content,
+        })
+    }
+
+    fn mark_initial_content_queued(&self) -> bool {
+        self.initial_content
+            .iter()
+            .all(|candidate| candidate.record.mark_queued())
+    }
+
+    fn mark_initial_content_completed(&self) {
+        for candidate in &self.initial_content {
+            candidate.record.mark_completed();
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -657,9 +746,10 @@ impl WgpuExecutionState {
                 "in-flight submission capacity is occupied",
             ));
         }
+        let effective_plan = plan.effective_for_acceptance()?;
         let next_upload = inner
             .upload_bytes_in_flight
-            .checked_add(plan.upload_bytes)
+            .checked_add(effective_plan.upload_bytes)
             .filter(|value| *value <= self.policy.max_upload_bytes_in_flight())
             .ok_or_else(|| {
                 GpuSubmissionRejectionReason::new(
@@ -669,7 +759,7 @@ impl WgpuExecutionState {
             })?;
         let next_readback = inner
             .readback_bytes_in_flight
-            .checked_add(plan.readback_bytes)
+            .checked_add(effective_plan.readback_bytes)
             .filter(|value| *value <= self.policy.max_readback_bytes_in_flight())
             .ok_or_else(|| {
                 GpuSubmissionRejectionReason::new(
@@ -679,7 +769,7 @@ impl WgpuExecutionState {
             })?;
         let next_pending = inner
             .pending_readbacks
-            .checked_add(plan.readback_ids.len())
+            .checked_add(effective_plan.readback_ids.len())
             .filter(|value| *value <= self.policy.max_pending_readbacks())
             .ok_or_else(|| {
                 GpuSubmissionRejectionReason::new(
@@ -689,8 +779,8 @@ impl WgpuExecutionState {
             })?;
 
         let mut readbacks = BTreeMap::new();
-        let mut public_readbacks = Vec::with_capacity(plan.readback_ids.len());
-        for operation in &plan.operations {
+        let mut public_readbacks = Vec::with_capacity(effective_plan.readback_ids.len());
+        for operation in &effective_plan.operations {
             let (readback_id, size, metadata) = match operation {
                 PreparedExecutionOperation::Readback {
                     id, size, metadata, ..
@@ -720,24 +810,23 @@ impl WgpuExecutionState {
             );
             public_readbacks.push(GpuReadback::new(readback_id, readback_status));
         }
-        if readbacks.len() != plan.readback_ids.len() {
+        if readbacks.len() != effective_plan.readback_ids.len() {
             return Err(GpuSubmissionRejectionReason::new(
                 GpuSubmissionRejectionKind::PreparedRecordUnavailable,
                 "prepared readback metadata is incomplete",
             ));
         }
 
-        let Some(plan) = inner.prepared.remove(&prepared.ticket).flatten() else {
-            return Err(GpuSubmissionRejectionReason::new(
-                GpuSubmissionRejectionKind::PreparedRecordUnavailable,
-                "prepared submission disappeared before acceptance",
-            ));
-        };
         let Some(raw_id) = allocate_nonzero(&self.next_submission) else {
-            inner.prepared.insert(prepared.ticket, Some(plan));
             return Err(GpuSubmissionRejectionReason::new(
                 GpuSubmissionRejectionKind::IdentityExhausted,
                 "submission identity space is exhausted",
+            ));
+        };
+        let Some(Some(_)) = inner.prepared.remove(&prepared.ticket) else {
+            return Err(GpuSubmissionRejectionReason::new(
+                GpuSubmissionRejectionKind::PreparedRecordUnavailable,
+                "prepared submission disappeared before acceptance",
             ));
         };
         let id = GpuSubmissionId::from_nonzero(raw_id);
@@ -751,16 +840,16 @@ impl WgpuExecutionState {
             InFlightSubmission {
                 status: Arc::clone(&status),
                 readbacks,
-                plan: Some(plan.clone()),
+                plan: Some(effective_plan.clone()),
                 upload_staging: Vec::new(),
-                upload_bytes: plan.upload_bytes,
+                upload_bytes: effective_plan.upload_bytes,
                 submission_terminal: false,
             },
         );
 
         Ok(AcceptedPlan {
             id,
-            plan,
+            plan: effective_plan,
             status,
             readbacks: public_readbacks,
         })
@@ -836,6 +925,9 @@ impl WgpuExecutionState {
             }
             drop(status);
             record.submission_terminal = true;
+            if let Some(plan) = record.plan.as_ref() {
+                plan.mark_initial_content_completed();
+            }
             record.plan = None;
             record.upload_staging.clear();
             let release = record.upload_bytes;
@@ -1238,6 +1330,8 @@ async fn prepare_execution_plan(
     let mut texture_cache = BTreeMap::<GpuWorkResourceId, PreparedTexture>::new();
     let mut texture_view_cache = BTreeMap::<GpuWorkResourceId, PreparedTextureView>::new();
     let mut query_set_cache = BTreeMap::<GpuWorkResourceId, GpuRealizedQuerySet>::new();
+    let initial_content =
+        prepare_initial_content(context, graph, &mut buffer_cache, &mut texture_cache)?;
     let mut operations = Vec::with_capacity(graph.topological_order().len());
     let mut surface_uses = Vec::new();
     let mut presented_surface_leases = BTreeSet::<GpuSurfaceLeaseId>::new();
@@ -1561,6 +1655,229 @@ async fn prepare_execution_plan(
         upload_bytes,
         readback_bytes,
         readback_ids,
+        initial_content,
+    })
+}
+
+fn prepare_initial_content(
+    context: &GpuContext,
+    graph: &GpuPreparedWorkGraph,
+    buffer_cache: &mut BTreeMap<GpuWorkResourceId, GpuRealizedBuffer>,
+    texture_cache: &mut BTreeMap<GpuWorkResourceId, PreparedTexture>,
+) -> Result<Vec<PreparedInitialContentTransfer>, GpuSubmissionPreparationError> {
+    let mut transfers = Vec::with_capacity(graph.initial_content().len());
+    for candidate in graph.initial_content() {
+        match candidate {
+            GpuPreparedInitialContent::Buffer(buffer) => {
+                let GpuBufferInitialization::Prepared(payload) =
+                    buffer.descriptor().initialization()
+                else {
+                    return Err(GpuSubmissionPreparationError::new(
+                        GpuSubmissionPreparationErrorKind::InternalInvariant,
+                        "prepared initial-content candidate no longer carries prepared buffer data",
+                    ));
+                };
+                let size = buffer.descriptor().size_bytes();
+                validate_copy_range(0, size, copy_alignment(context)?)?;
+                let realized = realized_buffer(context, buffer_cache, buffer)?;
+                transfers.push(PreparedInitialContentTransfer {
+                    operation: PreparedExecutionOperation::Upload {
+                        destination: realized.clone(),
+                        offset: 0,
+                        payload: payload.clone(),
+                    },
+                    staging_bytes: size,
+                    record: PreparedInitialContentRecord::Buffer(realized),
+                });
+            }
+            GpuPreparedInitialContent::Texture(texture) => {
+                let GpuTextureInitialization::Prepared(source) =
+                    texture.descriptor().initialization()
+                else {
+                    return Err(GpuSubmissionPreparationError::new(
+                        GpuSubmissionPreparationErrorKind::InternalInvariant,
+                        "prepared initial-content candidate no longer carries prepared texture data",
+                    ));
+                };
+                let extent = texture.descriptor().extent();
+                let region = GpuTextureCopyRegion::new(
+                    texture,
+                    0,
+                    GpuTextureOrigin::new(0, 0, 0),
+                    GpuTextureAspect::All,
+                    GpuCopyExtent::new(
+                        extent.width(),
+                        extent.height(),
+                        extent.depth_or_layers(),
+                    )
+                    .map_err(|error| {
+                        GpuSubmissionPreparationError::new(
+                            GpuSubmissionPreparationErrorKind::InternalInvariant,
+                            error.to_string(),
+                        )
+                    })?,
+                )
+                .map_err(|error| {
+                    GpuSubmissionPreparationError::new(
+                        GpuSubmissionPreparationErrorKind::InternalInvariant,
+                        error.to_string(),
+                    )
+                })?;
+                let staging = TextureStagingLayout::new(&region)?;
+                let payload = normalize_prepared_texture_payload(source)?;
+                if payload.layout().byte_len() != staging.logical_byte_len {
+                    return Err(GpuSubmissionPreparationError::new(
+                        GpuSubmissionPreparationErrorKind::InternalInvariant,
+                        "normalized prepared texture payload no longer matches the canonical upload region",
+                    ));
+                }
+                let prepared_texture = prepare_texture(context, texture_cache, texture)?;
+                let PreparedTexture::Realized(realized) = prepared_texture else {
+                    return Err(GpuSubmissionPreparationError::new(
+                        GpuSubmissionPreparationErrorKind::InternalInvariant,
+                        "prepared initial content cannot target a surface-acquired texture",
+                    ));
+                };
+                transfers.push(PreparedInitialContentTransfer {
+                    operation: PreparedExecutionOperation::TextureUpload {
+                        destination: PreparedTexture::Realized(realized.clone()),
+                        region,
+                        staging,
+                        payload,
+                    },
+                    staging_bytes: staging.staging_byte_len,
+                    record: PreparedInitialContentRecord::Texture(realized),
+                });
+            }
+        }
+    }
+    Ok(transfers)
+}
+
+fn normalize_prepared_texture_payload(
+    source: &GpuPreparedTextureData,
+) -> Result<PreparedGpuData<TransferData>, GpuSubmissionPreparationError> {
+    let extent = source.extent();
+    let logical_row = extent
+        .width()
+        .checked_mul(source.format().bytes_per_texel())
+        .ok_or_else(|| {
+            GpuSubmissionPreparationError::new(
+                GpuSubmissionPreparationErrorKind::InternalInvariant,
+                "prepared texture logical row byte count overflowed during normalization",
+            )
+        })?;
+    let logical_len = u64::from(logical_row)
+        .checked_mul(u64::from(extent.height()))
+        .and_then(|value| value.checked_mul(u64::from(extent.depth_or_layers())))
+        .ok_or_else(|| {
+            GpuSubmissionPreparationError::new(
+                GpuSubmissionPreparationErrorKind::InternalInvariant,
+                "prepared texture logical byte count overflowed during normalization",
+            )
+        })?;
+    let capacity = usize::try_from(logical_len).map_err(|_| {
+        GpuSubmissionPreparationError::new(
+            GpuSubmissionPreparationErrorKind::InternalInvariant,
+            "prepared texture logical byte count exceeds usize during normalization",
+        )
+    })?;
+    let logical_row = usize::try_from(logical_row).map_err(|_| {
+        GpuSubmissionPreparationError::new(
+            GpuSubmissionPreparationErrorKind::InternalInvariant,
+            "prepared texture logical row byte count exceeds usize during normalization",
+        )
+    })?;
+    let bytes_per_row = usize::try_from(source.bytes_per_row()).map_err(|_| {
+        GpuSubmissionPreparationError::new(
+            GpuSubmissionPreparationErrorKind::InternalInvariant,
+            "prepared texture source row stride exceeds usize during normalization",
+        )
+    })?;
+    let rows_per_image = usize::try_from(source.rows_per_image()).map_err(|_| {
+        GpuSubmissionPreparationError::new(
+            GpuSubmissionPreparationErrorKind::InternalInvariant,
+            "prepared texture source rows-per-image exceeds usize during normalization",
+        )
+    })?;
+    let image_count = usize::try_from(extent.depth_or_layers()).map_err(|_| {
+        GpuSubmissionPreparationError::new(
+            GpuSubmissionPreparationErrorKind::InternalInvariant,
+            "prepared texture image count exceeds usize during normalization",
+        )
+    })?;
+    let row_count = usize::try_from(extent.height()).map_err(|_| {
+        GpuSubmissionPreparationError::new(
+            GpuSubmissionPreparationErrorKind::InternalInvariant,
+            "prepared texture row count exceeds usize during normalization",
+        )
+    })?;
+    let image_stride = if image_count > 1 {
+        bytes_per_row.checked_mul(rows_per_image).ok_or_else(|| {
+            GpuSubmissionPreparationError::new(
+                GpuSubmissionPreparationErrorKind::InternalInvariant,
+                "prepared texture source image stride overflowed during normalization",
+            )
+        })?
+    } else {
+        0
+    };
+    let source_bytes = source.data().as_bytes();
+    let mut normalized = Vec::with_capacity(capacity);
+    for image in 0..image_count {
+        let image_base = if image_count > 1 {
+            image.checked_mul(image_stride).ok_or_else(|| {
+                GpuSubmissionPreparationError::new(
+                    GpuSubmissionPreparationErrorKind::InternalInvariant,
+                    "prepared texture source image offset overflowed during normalization",
+                )
+            })?
+        } else {
+            0
+        };
+        for row in 0..row_count {
+            let row_offset = row.checked_mul(bytes_per_row).ok_or_else(|| {
+                GpuSubmissionPreparationError::new(
+                    GpuSubmissionPreparationErrorKind::InternalInvariant,
+                    "prepared texture source row offset overflowed during normalization",
+                )
+            })?;
+            let start = image_base.checked_add(row_offset).ok_or_else(|| {
+                GpuSubmissionPreparationError::new(
+                    GpuSubmissionPreparationErrorKind::InternalInvariant,
+                    "prepared texture source offset overflowed during normalization",
+                )
+            })?;
+            let end = start.checked_add(logical_row).ok_or_else(|| {
+                GpuSubmissionPreparationError::new(
+                    GpuSubmissionPreparationErrorKind::InternalInvariant,
+                    "prepared texture source row range overflowed during normalization",
+                )
+            })?;
+            normalized.extend_from_slice(source_bytes.get(start..end).ok_or_else(|| {
+                GpuSubmissionPreparationError::new(
+                    GpuSubmissionPreparationErrorKind::InternalInvariant,
+                    "checked prepared texture source row became out of bounds during normalization",
+                )
+            })?);
+        }
+    }
+    if normalized.len() != capacity {
+        return Err(GpuSubmissionPreparationError::new(
+            GpuSubmissionPreparationErrorKind::InternalInvariant,
+            "normalized prepared texture byte length disagrees with the logical texture extent",
+        ));
+    }
+    PreparedGpuData::<TransferData>::from_pod_transfer(
+        "prepared texture initial content",
+        &normalized,
+        source.data().provenance().clone(),
+    )
+    .map_err(|error| {
+        GpuSubmissionPreparationError::new(
+            GpuSubmissionPreparationErrorKind::InternalInvariant,
+            error.to_string(),
+        )
     })
 }
 
@@ -2283,6 +2600,18 @@ fn encode_submit_and_register(
             register_submission_completion(execution, submission, &segment.command_buffer);
         }
         backend.queue.submit([segment.command_buffer]);
+        if index == 0 && !plan.mark_initial_content_queued() {
+            backend.health.mark_scoped_internal(
+                "prepared initial-content state changed outside serialized submission acceptance",
+            );
+            if let Some(fault) = backend.health.terminal_fault() {
+                return Err(failure_from_device_fault(&fault));
+            }
+            return Err(GpuSubmissionFailure::new(
+                GpuSubmissionFailureKind::InternalInvariant,
+                "prepared initial-content state could not be marked queued after physical submission",
+            ));
+        }
         if let Some(surface) = segment.present_after {
             let guard = surface_guard.as_deref_mut().ok_or_else(|| {
                 GpuSubmissionFailure::new(
