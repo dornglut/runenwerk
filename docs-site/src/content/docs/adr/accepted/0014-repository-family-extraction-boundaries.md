@@ -269,6 +269,7 @@ Rejected:
 The program succeeds only when:
 
 - each framework validates independently;
+- Runenwerk consumes exact revisions through one-way public dependencies;
 - independent downstream consumers use public APIs;
 - framework repositories contain no Runenwerk assumptions;
 - adapters translate rather than duplicate algorithms;
