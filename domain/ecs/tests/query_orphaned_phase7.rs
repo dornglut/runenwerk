@@ -97,7 +97,7 @@ fn explicit_remove_is_not_visible_before_flush_and_visible_after_flush() {
     }
 
     let mut world = World::new();
-    let entity = world.spawn(A(1));
+    let entity = world.spawn(A(1)).expect("spawn should succeed");
     world.insert_resource(Target(entity));
     world.insert_resource(Gate(false));
     world.insert_resource(StageCounts::default());
@@ -132,7 +132,9 @@ fn despawn_with_component_is_visible_after_flush() {
     }
 
     let mut world = World::new();
-    let entity = world.spawn((A(2), B(9)));
+    let entity = world
+        .spawn((A(2), B(9)))
+        .expect("spawn should succeed");
     world.insert_resource(Target(entity));
     world.insert_resource(Gate(false));
     world.insert_resource(StageCounts::default());
@@ -169,7 +171,7 @@ fn orphaned_records_are_visible_only_for_one_stage_window() {
     }
 
     let mut world = World::new();
-    let entity = world.spawn(A(3));
+    let entity = world.spawn(A(3)).expect("spawn should succeed");
     world.insert_resource(Target(entity));
     world.insert_resource(Gate(false));
     world.insert_resource(StageCounts::default());
@@ -217,8 +219,8 @@ fn multiple_removals_in_one_stage_are_reported() {
     }
 
     let mut world = World::new();
-    let first = world.spawn(A(10));
-    let second = world.spawn(A(11));
+    let first = world.spawn(A(10)).expect("spawn should succeed");
+    let second = world.spawn(A(11)).expect("spawn should succeed");
     world.insert_resource(TargetPair(first, second));
     world.insert_resource(Gate(false));
     world.insert_resource(EntityHistory::default());
@@ -262,8 +264,12 @@ fn query_orphaned_is_component_type_isolated() {
     }
 
     let mut world = World::new();
-    let entity_a = world.spawn((A(4), B(14)));
-    let entity_b = world.spawn((A(5), B(15)));
+    let entity_a = world
+        .spawn((A(4), B(14)))
+        .expect("spawn should succeed");
+    let entity_b = world
+        .spawn((A(5), B(15)))
+        .expect("spawn should succeed");
     world.insert_resource(TargetPair(entity_a, entity_b));
     world.insert_resource(Gate(false));
     world.insert_resource(TypeIsolationCounts::default());
@@ -300,7 +306,7 @@ fn orphaned_entries_do_not_repeat_across_later_runs() {
     }
 
     let mut world = World::new();
-    let entity = world.spawn(A(6));
+    let entity = world.spawn(A(6)).expect("spawn should succeed");
     world.insert_resource(Target(entity));
     world.insert_resource(Gate(false));
     world.insert_resource(StageCounts::default());
@@ -336,7 +342,7 @@ fn repeated_iter_calls_return_same_window_snapshot() {
     }
 
     let mut world = World::new();
-    let entity = world.spawn(A(7));
+    let entity = world.spawn(A(7)).expect("spawn should succeed");
     world.insert_resource(Target(entity));
     world.insert_resource(Gate(false));
     world.insert_resource(DoubleReadCounts::default());
@@ -377,7 +383,7 @@ fn remove_then_reinsert_in_one_flush_still_reports_orphaned_removal() {
     }
 
     let mut world = World::new();
-    let entity = world.spawn(A(8));
+    let entity = world.spawn(A(8)).expect("spawn should succeed");
     world.insert_resource(Target(entity));
     world.insert_resource(Gate(false));
     world.insert_resource(WindowSnapshot::default());
@@ -413,7 +419,7 @@ fn previous_run_orphaned_window_is_visible_in_next_run_first_stage_only() {
     }
 
     let mut world = World::new();
-    let entity = world.spawn(A(9));
+    let entity = world.spawn(A(9)).expect("spawn should succeed");
     world.insert_resource(Target(entity));
     world.insert_resource(Gate(false));
     world.insert_resource(StageCounts::default());
@@ -448,7 +454,7 @@ fn query_orphaned_does_not_conflict_with_live_mut_query_access() {
     }
 
     let mut world = World::new();
-    let entity = world.spawn(A(3));
+    let entity = world.spawn(A(3)).expect("spawn should succeed");
     world.insert_resource(StageCounts::default());
 
     let mut runtime = Runtime::new();
@@ -487,8 +493,12 @@ fn batch_remove_and_despawn_preserve_orphaned_stage_window_semantics() {
     }
 
     let mut world = World::new();
-    let remove_only = world.spawn((A(20), B(1)));
-    let despawn_target = world.spawn((A(21), B(2)));
+    let remove_only = world
+        .spawn((A(20), B(1)))
+        .expect("spawn should succeed");
+    let despawn_target = world
+        .spawn((A(21), B(2)))
+        .expect("spawn should succeed");
     world.insert_resource(TargetPair(remove_only, despawn_target));
     world.insert_resource(Gate(false));
     world.insert_resource(StageCounts::default());
