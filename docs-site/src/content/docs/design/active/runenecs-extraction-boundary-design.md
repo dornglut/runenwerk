@@ -10,6 +10,7 @@ related_docs:
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
   - ../../reports/investigations/runenecs-issue-198-current-main-census.md
+  - ./runenecs-boundary-repair-execution-plan.md
   - ../../workspace/planning/roadmap.md
 ---
 
@@ -17,12 +18,15 @@ related_docs:
 
 ## Status
 
-Repository ownership direction is fixed. The complete current-main source,
-consumer, unsafe-boundary, scheduler, messaging, and networking inventory is
-recorded in the [Issue 198 current-main census](../../reports/investigations/runenecs-issue-198-current-main-census.md).
-That census is the current authority for retained facilities and sequencing.
+This design owns the durable RunenECS target boundary. The command-verified
+current-main facts supporting it are recorded in the
+[Issue 198 current-main census](../../reports/investigations/runenecs-issue-198-current-main-census.md).
+The [Boundary Repair Execution Plan](./runenecs-boundary-repair-execution-plan.md)
+owns the one canonical repair sequence. Investigation reports are evidence, not
+implementation or sequencing authority.
 
-No ECS source movement or broad repair is authorized by this document.
+No ECS source movement, package rename, dependency change, or broad repair is
+authorized by this document alone.
 
 ## Goal
 
@@ -30,22 +34,30 @@ Create an independently useful ECS repository without carrying Runenwerk geometr
 spatial policy, frame/tick lifecycle, rendering extraction, networking, replay,
 editor, or product behavior into the framework.
 
-## Candidate repository shape
+## Target repository shape
 
-Expected initial packages:
+Repository:
 
 ```text
-runenecs
-runenecs_macros
+dornglut/runen-ecs
 ```
 
-ECS-native schedule, access, ordering, validation, and deferred-command
-semantics live inside `runenecs`. There is no `runen_schedule` crate and no
-generic scheduler dependency. Runenwerk retains application and product
-lifecycle scheduling.
+Initial Cargo package and Rust crate identities:
 
-The old package names are removed only during the final coordinated cutover. No
-long-lived compatibility packages remain.
+```text
+Cargo package       Rust crate
+runen-ecs           runen_ecs
+runen-ecs-macros    runen_ecs_macros
+```
+
+The proc-macro companion is justified by the existing derive boundary and remains
+separate while Rust proc-macro packaging technically requires it. Additional
+packages require independent proof. ECS-native schedule, access, ordering,
+validation, and deferred-command semantics live inside `runen_ecs`; there is no
+`runen_schedule` or external RunenScheduler dependency.
+
+Current package names are changed only during a separately accepted cutover. No
+long-lived compatibility packages remain after cutover.
 
 ## Durable ownership
 
@@ -55,21 +67,31 @@ RunenECS owns public ECS semantics such as:
 - component/resource storage semantics and iteration guarantees;
 - queries and filters;
 - deferred structural mutation;
-- system access declarations and ECS schedule integration;
+- system identity, access declarations, explicit ordering/sets, schedule
+  validation, and deterministic serial ECS execution;
 - explicit reflection where accepted;
+- ECS-local change observation and independently justified local messaging;
 - repository-local diagnostics and public macro conformance.
 
 The durable architecture does not freeze archetypes, dense columns, sparse sets,
 or another storage mechanism as permanent public ownership.
 
-Runenwerk retains:
+RunenNet owns reusable realtime networking semantics according to its own accepted
+authority, including protocol/schema identity, replication consistency,
+session/authority semantics, delivery and recovery, transport-independent
+interfaces, and separately accepted prediction or interest semantics. RunenECS
+does not absorb those semantics merely because networking consumes ECS state.
+
+Runenwerk/application integration retains:
 
 - application, frame, fixed-step, render, startup, and shutdown policy;
 - plugin and product composition;
-- general spatial indexes and entity-to-spatial adapters;
+- general spatial indexes and ECS-to-spatial adapters;
 - ECS-to-render, scene, and world integration;
-- networking, replication, authority, prediction, rollback, and transport;
-- replay/history formats and retention;
+- concrete ECS-to-RunenNet identity/state mapping;
+- gameplay ownership, relevancy, and world/spatial policy supplied to networking;
+- host execution and product/publication barriers;
+- archival/editor replay formats and retention;
 - editor synchronization and diagnostics presentation.
 
 ## Geometry and spatial boundary
@@ -77,41 +99,79 @@ Runenwerk retains:
 RunenECS core has no Runenwerk geometry dependency.
 
 General spatial indexing is not ECS core merely because entries reference
-entities. The current ECS-owned spatial hash must be removed, migrated, or proven
-as a separate neutral facility before extraction.
+entities. The current ECS-owned spatial hash must be removed or migrated through
+the accepted RunenSpatial/Runenwerk integration boundary before extraction.
 
-RunenECS may expose generic change observation required by a Runenwerk spatial
+RunenECS may expose generic local change observation required by a spatial
 adapter, but it must not understand AABBs, coordinates, cells, or world-query
 policy.
 
 ## Scheduler boundary
 
-Three semantic owners are distinct:
+The scheduler split is semantic, not package-shaped:
 
 ```text
-runenecs
-  system identity, ECS access facts, explicit ordering/sets, schedule validation,
-  deferred-command boundaries, deterministic serial reference execution
+runen_ecs
+  system identity
+  ECS access facts
+  explicit ordering and sets
+  schedule validation
+  deferred-command boundaries
+  deterministic serial reference execution
 
 Runenwerk
-  frame/tick phases, startup/shutdown, rendering, networking, replay, product policy,
-  host execution, and product/publication barriers
+  frame/tick/startup/shutdown/render lifecycle
+  host execution
+  product/publication barriers
+  application scheduling policy
 ```
 
-Semantic ordering is not access incompatibility. The current scheduler's
-conflict matrix is evidence for the ECS access boundary; it is not a replacement
-for explicit semantic order. Generic DAG/demo/DOT/telemetry residue and
-Runenwerk-shaped phase/barrier types are deleted after consumer migration.
+Semantic ordering is not access incompatibility. An access conflict may prevent
+concurrent execution without inventing meaningful A-before-B order.
 
-Serial execution is the reference behavior until sound parallel access,
-deterministic barriers, panic/error policy, cancellation, worker ownership, and
-serial-equivalence are proven.
+The current `domain/scheduler` package is migration evidence. ECS-owned semantics
+move into `runen_ecs`; Runenwerk-owned lifecycle/product policy stays in
+Runenwerk; unsupported generic DAG/demo/DOT/filesystem/global-telemetry residue
+is deleted after consumer migration. No generic scheduler package survives as a
+required dependency.
+
+Serial execution is the correctness/reference behavior until sound parallel
+access, deterministic deferred boundaries, panic/error policy, cancellation,
+worker ownership, bounded queues, and observational equivalence are proven.
+
+## Identity and errors
+
+`Entity` is an opaque, copyable, comparable, hashable runtime handle comprising:
+
+```text
+WorldScopeId + slot/index + generation
+```
+
+Each `World` owns one opaque process-local `WorldScopeId`, and its allocator emits
+only entities carrying that scope. Every world operation validates scope before
+slot/generation. Therefore a token from another world is rejected even when its
+slot and generation equal a live local entity.
+
+World scopes are checked, non-reusing process-local runtime identities. Exhaustion
+must fail world creation rather than wrap or reuse a scope. A world scope is not
+serialized, persisted, transmitted, or promoted to stable/user-visible identity.
+Persistence, networking, replay, and editor records use separately owned stable
+identities and explicit mappings.
+
+Entity allocation/free operations are fallible where capacity, stale state,
+unknown/cross-world identity, double free, index exhaustion, or generation
+exhaustion can occur. Rejected operations do not mutate state. Generation
+exhaustion retires the slot permanently.
+
+Framework public boundaries use structured errors where callers branch on
+failure. `anyhow`, panics, and process-global telemetry do not define the public
+framework contract.
 
 ## Safety gates
 
-The complete investigation must review:
+The complete investigation reviews:
 
-- forgeable or stale entity identities and generation exhaustion;
+- forgeable or stale entity identities, world scope, and exhaustion;
 - partial bundle/spawn/command mutation;
 - every unsafe block and unsafe trait contract;
 - externally implementable query metadata that participates in aliasing safety;
@@ -119,105 +179,107 @@ The complete investigation must review:
 - world/query compatibility and escaped values;
 - panic, poisoning, terminal, and capacity behavior.
 
-The first extracted release should prefer sealed/supported low-level query and
-system-param internals unless an explicitly unsafe public extension contract is
+The first extracted release prefers sealed/supported low-level query and
+SystemParam internals unless an explicitly unsafe public extension contract is
 proven through downstream conformance and Miri/sanitizer evidence.
 
 ## Reflection
 
-Reflection authority must be explicit and instance-owned. Process-global mutable
+Reflection authority is explicit and instance-owned. Process-global mutable
 registration is not final authority.
 
-The design must distinguish process-local Rust identity, registry-local identity,
-and stable persisted/schema identity. Macros may generate descriptors but do not
-mutate hidden global state.
+The design distinguishes:
+
+```text
+Rust TypeId        process-local concrete Rust identity
+registry identity  explicit registry-local identity
+stable schema key  separately governed persistence/schema identity
+```
+
+Macros may generate descriptors but do not mutate hidden global registration
+state.
 
 ## Messaging and change tracking
 
 Current events, work queues, tick buffers, change extraction, and ownership
 routing are not automatically retained in RunenECS.
 
-Current-main classification:
+Target classification:
 
 ```text
-typed events/broadcast       RunenECS when local retention/overflow is proven
-FIFO world queues            RunenECS only for proven local semantics
-tick buffers/provenance      Runenwerk lifecycle/runtime policy
-change observation           RunenECS when local and non-network
-ownership/interest routing   Runenwerk
-network/replay packets       Runenwerk
+typed events/broadcast       RunenECS only with proven ECS-local semantics
+FIFO world queues            RunenECS only with proven ECS-local semantics
+change observation           RunenECS when local and network-neutral
+tick/frame provenance        Runenwerk lifecycle/runtime policy
+game ownership/relevancy     Runenwerk/application policy
+network protocol/replication RunenNet
+network transport semantics  RunenNet / accepted RunenNet adapters
+ECS <-> network mapping      Runenwerk/application integration
+archival/editor replay       Runenwerk/application policy
 ```
 
-Unsupported generic work/retry/ack residue is deleted. The final design follows
-the command-verified consumer map rather than current module location.
-
-## Identity and errors
-
-Entities are opaque world-local generational values. Raw entity values are not
-stable network or persistence identities. Runenwerk maps entities to product and
-network identities explicitly.
-
-Framework public boundaries use structured errors where callers branch on
-failure. `anyhow`, panics, and process-global telemetry do not define the public
-framework contract.
+Unsupported generic work/retry/ack residue is deleted. A networking consumer does
+not make network semantics ECS-owned, and Runenwerk integration does not duplicate
+RunenNet protocol authority.
 
 ## Macro policy
 
 Public derives must:
 
-- use only public RunenECS APIs;
+- use only public `runen_ecs` APIs;
 - preserve generics and where clauses;
 - emit stable compile diagnostics;
 - avoid Runenwerk paths and hidden global registration;
 - pass downstream compile-pass and compile-fail tests.
 
-## Required investigation output
+## Evidence gate
 
-Before implementation, produce:
+Before implementation, #198 requires command-verified evidence for:
 
 - complete file and public-API inventory;
 - complete package and source-consumer inventory;
 - unsafe-boundary and safety-contract inventory;
+- entity/world-scope and allocator behavior;
 - scheduler phase/barrier consumer map;
 - spatial/geometry consumer map;
 - reflection authority map;
 - messaging/change/ownership/network/replay map;
 - exact move/stay/redesign/delete matrix;
-- current test, Miri/sanitizer, Clippy, MSRV, and benchmark baseline.
+- current test, Miri/sanitizer, Clippy, MSRV, and benchmark support.
 
-## Sequence
+The Issue 198 census is the evidence record for that gate. Acceptance remains
+owned by #198 and its pull request.
 
-```text
-C0 current-main census and authority binding
-  -> C1 Entity/errors (R1)
-    -> C2 atomic structural mutation (R2)
-      -> C3 query/SystemParam safety (R3)
-        -> C4 reflection/macros (R4)
-          -> C5 ECS-native scheduling/access/deferred semantics (revised R8)
-            -> C6 spatial handoff (R5)
-              -> C7 messaging/change/lifecycle/network separation (R6/R7)
-                -> C8 standalone proof/conformance/benchmark baseline (R9/ECS-004)
-                  -> C9 accepted-repository transfer and cutover (ECS-005/006)
-```
+## Repair sequence
 
-C1 remains the first implementation slice after #198 acceptance. C9 is not
-authorized by this document.
+The single durable C0-C9 sequence, prerequisites, phase boundaries, and
+post-C9 transfer rule are owned by the
+[Boundary Repair Execution Plan](./runenecs-boundary-repair-execution-plan.md).
+This boundary design does not duplicate that sequence.
+
+C1/R1 remains the proposed first implementation slice after #198 is accepted.
+No implementation issue is activated by this design or by a retained workspace
+RON file.
 
 ## Stop conditions
 
 Stop before implementation when:
 
 - source or consumer inventory remains incomplete;
+- entity world-scope behavior is not mechanically enforceable;
 - unsafe extension contracts remain ambiguous;
 - scheduler/product ownership remains mixed;
 - messaging or change facilities lack independent ownership evidence;
-- geometry/spatial removal requires a new unapproved repository;
+- networking disposition would duplicate or contradict RunenNet authority;
+- geometry/spatial removal requires unaccepted dependency or ownership changes;
 - current main is not green for unrelated reasons;
 - the plan requires one broad rewrite or long-lived compatibility layer.
 
 ## Definition of done
 
-RunenECS is extracted only when framework packages validate independently,
-Runenwerk-specific policy is absent, downstream public conformance passes,
-Runenwerk consumes exact revisions through one-way dependencies, original
-implementations are removed, and integration/runtime validation is green.
+RunenECS is ready for external transfer only when the target packages validate
+independently, Runenwerk-specific policy and duplicate networking semantics are
+absent, downstream public conformance passes, validation/MSRV/safety/performance
+requirements are met, and a separate accepted transfer/cutover boundary can move
+source and consumers without leaving aliases, forwarding packages, mirrors, or
+duplicate implementations.
