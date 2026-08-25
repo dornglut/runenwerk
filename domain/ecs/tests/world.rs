@@ -131,10 +131,7 @@ fn spawn_query_and_entity_access_work() {
 fn query_filters_support_unified_iter_for_mutation() {
     let mut world = World::new();
     let active = world
-        .spawn((
-            Position { x: 0.0, y: 0.0 },
-            Velocity { x: 2.0, y: 1.0 },
-        ))
+        .spawn((Position { x: 0.0, y: 0.0 }, Velocity { x: 2.0, y: 1.0 }))
         .expect("spawn should succeed");
     let disabled = world
         .spawn((
@@ -484,9 +481,7 @@ fn query_support_matrix_required_forms_work() {
     let e1 = world
         .spawn((A(1), B(10), C(100), Player))
         .expect("spawn should succeed");
-    let e2 = world
-        .spawn((A(2), C(200)))
-        .expect("spawn should succeed");
+    let e2 = world.spawn((A(2), C(200))).expect("spawn should succeed");
     let e3 = world.spawn(B(30)).expect("spawn should succeed");
 
     let q_read = world.query_state::<&A, ()>();
@@ -577,9 +572,7 @@ fn query_support_matrix_required_forms_work() {
 #[test]
 fn query_optional_symmetry_forms_work() {
     let mut world = World::new();
-    let with_b = world
-        .spawn((A(1), B(10)))
-        .expect("spawn should succeed");
+    let with_b = world.spawn((A(1), B(10))).expect("spawn should succeed");
     let without_b = world.spawn(A(2)).expect("spawn should succeed");
 
     let read_optional = world.query_state::<(&A, Option<&B>), ()>();
@@ -711,9 +704,7 @@ fn broad_query_state_reuse_tracks_current_entities() {
 fn broad_without_filter_reuse_stays_correct_after_component_toggle() {
     let mut world = World::new();
     let enabled = world.spawn(A(1)).expect("spawn should succeed");
-    let muted = world
-        .spawn((A(2), Disabled))
-        .expect("spawn should succeed");
+    let muted = world.spawn((A(2), Disabled)).expect("spawn should succeed");
 
     let query = world
         .query_state::<(Entity, &A), ()>()
@@ -745,9 +736,7 @@ fn query_state_cache_rebinds_when_iterating_a_different_world() {
     assert_eq!(first_world.require::<A>(first_entity).unwrap().0, 2);
 
     let mut second_world = World::new();
-    let second_entity = second_world
-        .spawn(A(10))
-        .expect("spawn should succeed");
+    let second_entity = second_world.spawn(A(10)).expect("spawn should succeed");
     for value in query.iter(&mut second_world) {
         value.0 += 5;
     }
