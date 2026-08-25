@@ -108,8 +108,9 @@ families. `domain/ecs/src/prelude.rs` exposes a similarly broad surface.
 
 ## Entity identity and allocator evidence
 
-Current owner files are `domain/ecs/src/entity.rs`,
-`domain/ecs/src/world/entity/lifecycle.rs`, and `domain/ecs/src/errors.rs`.
+Current identity/lifecycle owner files are `domain/ecs/src/entity.rs`,
+`domain/ecs/src/world/entity/lifecycle.rs`, and `domain/ecs/src/errors.rs`;
+`domain/ecs/src/world/state.rs` owns current `World` construction/state.
 Current `Entity` is publicly forgeable as `{ id: u32, generation: u32 }`.
 `EntityAllocator::free` accepts arbitrary live-looking values, increments
 with saturating arithmetic, and has no explicit double-free or exhaustion error.
@@ -144,6 +145,9 @@ The direct C1/R1 migration inventory is:
 ```text
 domain/ecs/src/entity.rs
 domain/ecs/src/errors.rs
+domain/ecs/src/lib.rs
+domain/ecs/src/prelude.rs
+domain/ecs/src/world/state.rs
 domain/ecs/src/world/entity/lifecycle.rs
 domain/ecs/src/world/entity_handles.rs
 domain/ecs/src/query/orphaned.rs
@@ -156,6 +160,11 @@ engine/src/plugins/scene/runtime/overlay_ui.rs
 apps/runenwerk_editor/src/editor_runtime/ids.rs and its explicit mapping users
 editor persistence's separate EntityId/SceneEntityRecordV2 paths
 ```
+
+`world/state.rs`, `lib.rs`, and `prelude.rs` were already present in the verified
+104-file typed search below; listing them here corrects the direct C1 migration
+inventory to match the accepted world-scope mechanism and reviewed export surface.
+It does not extend the underlying census.
 
 The only production raw construction identified outside ECS implementation is in
 `engine/src/plugins/scene/ui/mod.rs`, where default sentinel entities are
