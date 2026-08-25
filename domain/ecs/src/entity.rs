@@ -136,8 +136,8 @@ impl EntityAllocator {
             return Ok(Entity::new(self.scope, index, slot.generation));
         }
 
-        let index = u32::try_from(self.next_index)
-            .map_err(|_| EntityAllocationError::IndexExhausted)?;
+        let index =
+            u32::try_from(self.next_index).map_err(|_| EntityAllocationError::IndexExhausted)?;
         self.next_index += 1;
         self.slots.push(EntitySlot::live());
         Ok(Entity::new(self.scope, index, 0))
@@ -263,8 +263,12 @@ mod tests {
     fn allocator_rejects_foreign_and_unknown_entities_without_mutation() {
         let mut first_allocator = EntityAllocator::new();
         let mut second_allocator = EntityAllocator::new();
-        let local = first_allocator.allocate().expect("allocation should succeed");
-        let foreign = second_allocator.allocate().expect("allocation should succeed");
+        let local = first_allocator
+            .allocate()
+            .expect("allocation should succeed");
+        let foreign = second_allocator
+            .allocate()
+            .expect("allocation should succeed");
 
         assert!(matches!(
             first_allocator.free(foreign),
@@ -291,7 +295,9 @@ mod tests {
         slot.generation = u32::MAX;
         let exhausted = Entity::new(allocator.scope, initial.index(), u32::MAX);
 
-        allocator.free(exhausted).expect("terminal free should succeed");
+        allocator
+            .free(exhausted)
+            .expect("terminal free should succeed");
         assert!(matches!(
             allocator.free(exhausted),
             Err(EntityError::AlreadyFreed { .. })

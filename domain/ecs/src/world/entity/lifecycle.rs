@@ -92,7 +92,9 @@ mod tests {
     fn fresh_worlds_never_alias_equal_local_entity_positions() {
         let mut first_world = World::new();
         let mut second_world = World::new();
-        let first = first_world.spawn(Marker).expect("first spawn should succeed");
+        let first = first_world
+            .spawn(Marker)
+            .expect("first spawn should succeed");
         let second = second_world
             .spawn(Marker)
             .expect("second spawn should succeed");

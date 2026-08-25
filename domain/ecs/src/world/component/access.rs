@@ -68,12 +68,12 @@ impl World {
     pub fn require_mut<T: Component>(&mut self, entity: Entity) -> Result<Mut<'_, T>, EntityError> {
         self.ensure_entity_exists(entity)?;
         self.mark_component_modified_by_id(entity, TypeId::of::<T>(), T::component_name());
-        let value = self
-            .archetype_component_mut_untracked::<T>(entity)
-            .ok_or(EntityError::MissingComponent {
+        let value = self.archetype_component_mut_untracked::<T>(entity).ok_or(
+            EntityError::MissingComponent {
                 entity,
                 component: type_name::<T>(),
-            })?;
+            },
+        )?;
         Ok(Mut { value })
     }
 

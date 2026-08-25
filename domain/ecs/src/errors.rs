@@ -13,9 +13,7 @@ pub enum EntityError {
     ForeignWorld { entity: Entity },
     #[error("entity {entity:?} is unknown")]
     UnknownEntity { entity: Entity },
-    #[error(
-        "entity {entity:?} has a stale generation; current generation is {current_generation}"
-    )]
+    #[error("entity {entity:?} has a stale generation; current generation is {current_generation}")]
     StaleGeneration {
         entity: Entity,
         current_generation: u32,
