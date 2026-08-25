@@ -241,18 +241,9 @@ mod tests {
     #[test]
     fn dense_entity_column_swap_remove_returns_moved_entity_when_needed() {
         let mut column = DenseEntityColumn::default();
-        let first = Entity {
-            id: 1,
-            generation: 0,
-        };
-        let second = Entity {
-            id: 2,
-            generation: 0,
-        };
-        let third = Entity {
-            id: 3,
-            generation: 0,
-        };
+        let first = Entity::test_only(1, 0);
+        let second = Entity::test_only(2, 0);
+        let third = Entity::test_only(3, 0);
         column.push(first);
         column.push(second);
         column.push(third);

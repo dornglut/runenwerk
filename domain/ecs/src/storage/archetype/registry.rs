@@ -630,14 +630,8 @@ mod tests {
         let t1 = TypeId::of::<u32>();
         let t2 = TypeId::of::<u64>();
 
-        let first = Entity {
-            id: 1,
-            generation: 0,
-        };
-        let second = Entity {
-            id: 2,
-            generation: 0,
-        };
+        let first = Entity::test_only(1, 0);
+        let second = Entity::test_only(2, 0);
 
         registry.set_entity_components(first, &[t1], &mut locations);
         registry.set_entity_components(second, &[t1], &mut locations);
@@ -657,14 +651,8 @@ mod tests {
         let mut locations = EntityLocationMap::default();
         let t1 = TypeId::of::<u32>();
 
-        let first = Entity {
-            id: 5,
-            generation: 0,
-        };
-        let second = Entity {
-            id: 6,
-            generation: 0,
-        };
+        let first = Entity::test_only(5, 0);
+        let second = Entity::test_only(6, 0);
 
         registry.set_entity_components(first, &[t1], &mut locations);
         registry.set_entity_components(second, &[t1], &mut locations);
@@ -688,10 +676,7 @@ mod tests {
         let mut registry = ArchetypeRegistry::new();
         registry.register_component_type::<StatefulTag>();
         let mut locations = EntityLocationMap::default();
-        let entity = Entity {
-            id: 42,
-            generation: 1,
-        };
+        let entity = Entity::test_only(42, 1);
 
         registry.set_entity_components(entity, &[], &mut locations);
         assert!(registry.add_component(entity, StatefulTag, 1, &mut locations));
