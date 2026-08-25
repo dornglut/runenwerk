@@ -143,11 +143,11 @@ impl EntityAllocator {
         Ok(Entity::new(self.scope, index, 0))
     }
 
-    pub fn contains(&self, entity: Entity) -> bool {
+    pub(crate) fn contains(&self, entity: Entity) -> bool {
         self.validate(entity).is_ok()
     }
 
-    pub fn validate(&self, entity: Entity) -> Result<(), EntityError> {
+    pub(crate) fn validate(&self, entity: Entity) -> Result<(), EntityError> {
         if entity.scope != self.scope {
             return Err(EntityError::ForeignWorld { entity });
         }
