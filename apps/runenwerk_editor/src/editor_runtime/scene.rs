@@ -87,12 +87,9 @@ impl<'a> SceneRuntime for RunenwerkEditorSceneRuntime<'a> {
         self.document.restore_entity(snapshot.clone())?;
 
         if self.ids.resolve_entity(snapshot.id).is_none() {
-            let ecs_entity = self
-                .world
-                .spawn(EmptyEntityBundle)
-                .map_err(|_| {
-                    EditorMutationError::runtime_rejected("failed to allocate ecs entity")
-                })?;
+            let ecs_entity = self.world.spawn(EmptyEntityBundle).map_err(|_| {
+                EditorMutationError::runtime_rejected("failed to allocate ecs entity")
+            })?;
             self.ids.register_entity(snapshot.id, ecs_entity);
         }
 
