@@ -50,9 +50,9 @@ struct QueryAddedCounts(Vec<usize>);
 #[test]
 fn dominant_query_forms_remain_correct_with_archetype_matching() {
     let mut world = World::new();
-    let e1 = world.spawn((A(1), B(10)));
-    let e2 = world.spawn(A(2));
-    let e3 = world.spawn((A(3), B(30)));
+    let e1 = world.spawn((A(1), B(10))).expect("spawn should succeed");
+    let e2 = world.spawn(A(2)).expect("spawn should succeed");
+    let e3 = world.spawn((A(3), B(30))).expect("spawn should succeed");
 
     for a in world.query_state::<&mut A, ()>().iter(&mut world) {
         a.0 += 1;
@@ -77,7 +77,7 @@ fn dominant_query_forms_remain_correct_with_archetype_matching() {
 #[test]
 fn changed_added_and_remove_reinsert_semantics_are_preserved() {
     let mut world = World::new();
-    let entity = world.spawn(A(5));
+    let entity = world.spawn(A(5)).expect("spawn should succeed");
 
     let added = world.query_state::<(Entity, &A), Added<A>>();
     assert_eq!(
@@ -123,8 +123,10 @@ fn changed_added_and_remove_reinsert_semantics_are_preserved() {
 #[test]
 fn reused_query_state_observes_new_matching_archetypes_and_fallback_forms() {
     let mut world = World::new();
-    let evolving = world.spawn(A(7));
-    let hidden = world.spawn((A(8), Disabled));
+    let evolving = world.spawn(A(7)).expect("spawn should succeed");
+    let hidden = world
+        .spawn((A(8), Disabled))
+        .expect("spawn should succeed");
 
     let dominant = world.query_state::<(&mut A, &B), ()>();
     assert!(dominant.iter(&mut world).next().is_none());
@@ -151,8 +153,8 @@ fn reused_query_state_observes_new_matching_archetypes_and_fallback_forms() {
 #[test]
 fn single_mut_query_preserves_changed_tracking() {
     let mut world = World::new();
-    let first = world.spawn(A(1));
-    let second = world.spawn(A(2));
+    let first = world.spawn(A(1)).expect("spawn should succeed");
+    let second = world.spawn(A(2)).expect("spawn should succeed");
 
     let changed = world.query_state::<(Entity, &A), Changed<A>>();
     assert_eq!(
@@ -181,8 +183,10 @@ fn single_mut_query_preserves_changed_tracking() {
 #[test]
 fn single_mut_query_with_without_filter_keeps_fallback_semantics() {
     let mut world = World::new();
-    let active = world.spawn(A(5));
-    let hidden = world.spawn((A(6), Disabled));
+    let active = world.spawn(A(5)).expect("spawn should succeed");
+    let hidden = world
+        .spawn((A(6), Disabled))
+        .expect("spawn should succeed");
 
     let query = world
         .query_state::<(Entity, &mut A), ()>()
@@ -203,7 +207,7 @@ fn single_mut_query_with_without_filter_keeps_fallback_semantics() {
 #[test]
 fn tuple_mut_read_query_marks_changed_for_mut_component() {
     let mut world = World::new();
-    let entity = world.spawn((A(3), B(4)));
+    let entity = world.spawn((A(3), B(4))).expect("spawn should succeed");
     let changed_a = world.query_state::<(Entity, &A), Changed<A>>();
     assert_eq!(
         changed_a
@@ -231,7 +235,7 @@ fn tuple_mut_read_query_marks_changed_for_mut_component() {
 #[test]
 fn tuple_double_mut_query_marks_changed_for_both_components() {
     let mut world = World::new();
-    let entity = world.spawn((A(1), B(2)));
+    let entity = world.spawn((A(1), B(2))).expect("spawn should succeed");
     let changed_a = world.query_state::<(Entity, &A), Changed<A>>();
     let changed_b = world.query_state::<(Entity, &B), Changed<B>>();
     assert!(changed_a.iter(&world).next().is_some());
@@ -263,7 +267,7 @@ fn tuple_double_mut_query_marks_changed_for_both_components() {
 #[test]
 fn reused_single_mut_query_state_stays_correct_across_archetype_migration() {
     let mut world = World::new();
-    let entity = world.spawn(A(10));
+    let entity = world.spawn(A(10)).expect("spawn should succeed");
     let query = world.query_state::<&mut A, ()>();
     let changed = world.query_state::<(Entity, &A), Changed<A>>();
 
@@ -316,7 +320,7 @@ fn reused_single_mut_query_state_stays_correct_across_archetype_migration() {
 #[test]
 fn tuple_mut_read_query_updates_only_mutable_side_change_tracking() {
     let mut world = World::new();
-    let entity = world.spawn((A(5), B(7)));
+    let entity = world.spawn((A(5), B(7))).expect("spawn should succeed");
     let changed_a = world.query_state::<(Entity, &A), Changed<A>>();
     let changed_b = world.query_state::<(Entity, &B), Changed<B>>();
 
@@ -374,8 +378,8 @@ fn tuple_mut_read_query_updates_only_mutable_side_change_tracking() {
 #[test]
 fn tuple_mut_read_query_preserves_pairing_across_component_migration() {
     let mut world = World::new();
-    let first = world.spawn((A(1), B(10)));
-    let second = world.spawn((A(2), B(20)));
+    let first = world.spawn((A(1), B(10))).expect("spawn should succeed");
+    let second = world.spawn((A(2), B(20))).expect("spawn should succeed");
     let query = world.query_state::<(&mut A, &B), ()>();
 
     let (first_b_added_before, first_b_changed_before) = world
@@ -414,7 +418,7 @@ fn tuple_mut_read_query_preserves_pairing_across_component_migration() {
 #[test]
 fn tuple_double_mut_query_updates_changed_ticks_for_both_components() {
     let mut world = World::new();
-    let entity = world.spawn((A(4), B(9)));
+    let entity = world.spawn((A(4), B(9))).expect("spawn should succeed");
     let changed_a = world.query_state::<(Entity, &A), Changed<A>>();
     let changed_b = world.query_state::<(Entity, &B), Changed<B>>();
 
@@ -479,8 +483,8 @@ fn tuple_double_mut_query_updates_changed_ticks_for_both_components() {
 #[test]
 fn tuple_double_mut_query_preserves_pairing_across_component_migration() {
     let mut world = World::new();
-    let first = world.spawn((A(1), B(10)));
-    let second = world.spawn((A(2), B(20)));
+    let first = world.spawn((A(1), B(10))).expect("spawn should succeed");
+    let second = world.spawn((A(2), B(20))).expect("spawn should succeed");
     let query = world.query_state::<(&mut A, &mut B), ()>();
 
     for (a, b) in query.iter(&mut world) {
@@ -522,7 +526,7 @@ fn tuple_double_mut_query_preserves_pairing_across_component_migration() {
 #[test]
 fn reused_double_mut_query_state_stays_correct_across_archetype_migration() {
     let mut world = World::new();
-    let entity = world.spawn((A(3), B(7)));
+    let entity = world.spawn((A(3), B(7))).expect("spawn should succeed");
     let query = world.query_state::<(&mut A, &mut B), ()>();
     let changed_a = world.query_state::<(Entity, &A), Changed<A>>();
     let changed_b = world.query_state::<(Entity, &B), Changed<B>>();
@@ -609,7 +613,7 @@ fn reused_double_mut_query_state_stays_correct_across_archetype_migration() {
 #[test]
 fn changed_filter_tracks_require_mut_using_archetype_metadata_ticks() {
     let mut world = World::new();
-    let entity = world.spawn(A(5));
+    let entity = world.spawn(A(5)).expect("spawn should succeed");
     let changed = world.query_state::<(Entity, &A), Changed<A>>();
 
     assert_eq!(
@@ -645,9 +649,9 @@ fn changed_filter_tracks_require_mut_using_archetype_metadata_ticks() {
 #[test]
 fn optional_forms_remain_correct_after_migration_churn() {
     let mut world = World::new();
-    let first = world.spawn((A(1), B(10)));
-    let second = world.spawn(A(2));
-    let third = world.spawn((A(3), C(30)));
+    let first = world.spawn((A(1), B(10))).expect("spawn should succeed");
+    let second = world.spawn(A(2)).expect("spawn should succeed");
+    let third = world.spawn((A(3), C(30))).expect("spawn should succeed");
     let query_a = world.query_state::<(Entity, &A), ()>();
     let query_b = world.query_state::<(Entity, Option<&B>), ()>();
     let query_c = world.query_state::<(Entity, Option<&C>), ()>();
@@ -714,7 +718,7 @@ fn optional_forms_remain_correct_after_migration_churn() {
 #[test]
 fn changed_filter_tracks_get_mut_using_archetype_metadata_ticks() {
     let mut world = World::new();
-    let entity = world.spawn(A(9));
+    let entity = world.spawn(A(9)).expect("spawn should succeed");
     let changed = world.query_state::<(Entity, &A), Changed<A>>();
 
     assert_eq!(
