@@ -57,18 +57,24 @@ impl World {
     }
 
     pub fn require<T: Component>(&self, entity: Entity) -> Result<&T, EntityError> {
-        self.get::<T>(entity).ok_or(EntityError::MissingComponent {
-            entity,
-            component: type_name::<T>(),
-        })
-    }
-
-    pub fn require_mut<T: Component>(&mut self, entity: Entity) -> Result<Mut<'_, T>, EntityError> {
-        self.get_mut::<T>(entity)
+        self.ensure_entity_exists(entity)?;
+        self.archetype_component::<T>(entity)
             .ok_or(EntityError::MissingComponent {
                 entity,
                 component: type_name::<T>(),
             })
+    }
+
+    pub fn require_mut<T: Component>(&mut self, entity: Entity) -> Result<Mut<'_, T>, EntityError> {
+        self.ensure_entity_exists(entity)?;
+        self.mark_component_modified_by_id(entity, TypeId::of::<T>(), T::component_name());
+        let value = self
+            .archetype_component_mut_untracked::<T>(entity)
+            .ok_or(EntityError::MissingComponent {
+                entity,
+                component: type_name::<T>(),
+            })?;
+        Ok(Mut { value })
     }
 
     #[doc(hidden)]
