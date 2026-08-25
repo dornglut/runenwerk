@@ -51,8 +51,10 @@ docs-site/   canonical documentation
 
 Runenwerk is currently a solo-maintained research and development project.
 
-Issue reports and technical discussion are welcome. External code contributions and pull requests are not currently accepted.
+Issue reports, design discussion, reviews, reproducible cases supplied through discussion, and other participation that does not add third-party repository content are welcome.
+
+Until reviewed inbound contribution terms exist that preserve the intended commercial relicensing path, external pull requests that add tracked repository content are not accepted, including code, documentation, tests, examples, build scripts, or assets.
 
 ## License
 
-Runenwerk is licensed under the [MIT License](LICENSE).
+Runenwerk is available under the GNU General Public License v3.0 only (`GPL-3.0-only`). A separate commercial license may be available from copyright holder(s) authorized to grant it. See [LICENSE](LICENSE) and [LICENSING.md](LICENSING.md).
