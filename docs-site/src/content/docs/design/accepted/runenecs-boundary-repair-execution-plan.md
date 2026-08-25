@@ -1,7 +1,7 @@
 ---
 title: RunenECS Boundary Repair Execution Plan
-description: Dependency-ordered repair roadmap from current Runenwerk ECS boundaries to independently conformant RunenECS packages.
-status: active
+description: Accepted dependency-ordered repair sequence from current Runenwerk ECS boundaries to independently conformant RunenECS packages.
+status: accepted
 owner: ecs
 layer: domain/ecs
 canonical: true
@@ -23,10 +23,10 @@ related_docs:
 Repair current ECS boundaries through small, dependency-ordered phases before any
 external source transfer.
 
-This plan owns the one durable RunenECS repair sequence. GitHub issue `#198` owns
-whether the current reconciliation work is accepted and active; investigation
-reports provide source-grounded evidence but do not authorize phases. The former
-`R1..R9` and `ECS-001..006` labels are retained only as historical mappings.
+This accepted plan owns the one durable RunenECS repair sequence. GitHub issues own
+activation and current work state for individual slices; investigation reports
+provide source-grounded evidence but do not authorize phases. The former `R1..R9`
+and `ECS-001..006` labels are retained only as historical mappings.
 
 ## Canonical sequence
 
@@ -47,7 +47,8 @@ Goal:
 - leave one durable repair sequence and one explicit next implementation slice.
 
 The command-verified evidence is recorded in the Issue 198 current-main census.
-Completion and acceptance remain owned by `#198` and its pull request.
+C0 is the planning/reconciliation provenance for this accepted sequence; it does
+not authorize C1 implementation.
 
 ## C1 / R1 — Entity identity and structured core errors
 
@@ -71,7 +72,7 @@ Goal:
 `WorldScopeId` is ECS runtime identity only. It is not serialized, persisted,
 used as a network identity, or promoted to a universal Runen identity.
 
-R1 does not redesign storage, bundles, queries, reflection, messaging, spatial,
+C1 does not redesign storage, bundles, queries, reflection, messaging, spatial,
 scheduler, or networking.
 
 Exit condition: entity lifecycle is invariant-preserving, cross-world rejection
@@ -233,7 +234,7 @@ machine-readable constraint set.
 
 ## Parallel work
 
-Allowed while C1/R1 is implemented:
+Once C1 is activated by its owning GitHub issue, parallel work is limited to:
 
 - read-only investigation for later phases;
 - benchmark, Miri, sanitizer, and MSRV command discovery;

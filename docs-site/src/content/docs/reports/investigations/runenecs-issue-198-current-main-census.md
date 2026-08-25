@@ -6,8 +6,8 @@ owner: ecs
 layer: investigation
 last_reviewed: 2026-08-25
 related_docs:
-  - ../../design/active/runenecs-extraction-boundary-design.md
-  - ../../design/active/runenecs-boundary-repair-execution-plan.md
+  - ../../design/accepted/runenecs-extraction-boundary-design.md
+  - ../../design/accepted/runenecs-boundary-repair-execution-plan.md
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
   - ../../adr/accepted/0017-cross-authority-consistency-and-graph-semantics.md
@@ -22,9 +22,9 @@ related_docs:
 
 This report is the source-grounded evidence record for GitHub issue `#198`.
 It does not own durable architecture, phase sequencing, activation, or delivery
-state. The active boundary design owns durable RunenECS ownership; the boundary
-repair execution plan owns the one canonical C0-C9 sequence; GitHub owns current
-work and acceptance state.
+state. The accepted boundary design owns durable RunenECS ownership; the accepted
+boundary repair execution plan owns the one canonical C0-C9 sequence; GitHub issues
+own current work state.
 
 This report does not authorize implementation, package renames, source movement,
 dependency changes, external-repository population, compatibility paths, or
@@ -87,6 +87,15 @@ dornglut/runen-ecs            runen-ecs           runen_ecs
 
 The proc-macro package remains separate while technically required. This report
 performs no rename or source movement.
+
+### External repository shell status
+
+Current GitHub inspection confirms that `dornglut/runen-ecs` already exists. At
+this review point its `main` root contains only `LICENSE`: there is no Cargo
+manifest, ECS source tree, package implementation, or release authority there.
+The repository is therefore an inert shell, not current RunenECS source/package
+authority. It must remain unpopulated until the separately accepted post-C9
+transfer/cutover boundary authorizes source movement.
 
 ## Deterministic source and public-surface inventory
 
@@ -216,7 +225,7 @@ Reflection is split between world-owned maps and
 Target distinction:
 
 ```text
-Rust TypeId        process-local concrete type identity
+Rust TypeId        process-local concrete Rust identity
 registry identity  explicit instance-local identity
 stable schema key  separately governed persistence/schema identity
 ```
@@ -372,7 +381,7 @@ There is no existing `runen_schedule` package to delete.
 
 ## Evidence relationship to the canonical plan
 
-This report does not duplicate the phase sequence. The active execution plan owns
+This report does not duplicate the phase sequence. The accepted execution plan owns
 C0-C9. Current evidence supports C1/R1 as the first implementation slice, C7
 lifecycle/network separation before C8 scheduler decontamination, and C9
 standalone conformance after all internal repairs.

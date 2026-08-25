@@ -8,8 +8,8 @@ last_reviewed: 2026-08-25
 related_docs:
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
-  - ../../design/active/runenecs-extraction-boundary-design.md
-  - ../../design/active/runenecs-boundary-repair-execution-plan.md
+  - ../../design/accepted/runenecs-extraction-boundary-design.md
+  - ../../design/accepted/runenecs-boundary-repair-execution-plan.md
   - ../../workspace/planning/roadmap.md
   - ../../workspace/specs/pt-runenecs-r1-entity-errors.ron
   - ./runenecs-issue-198-current-main-census.md
@@ -29,10 +29,10 @@ This is supporting investigation evidence. It does not own durable architecture,
 phase sequencing, activation, or implementation state.
 
 Durable ownership lives in the
-[RunenECS Extraction Boundary Design](../../design/active/runenecs-extraction-boundary-design.md).
+[RunenECS Extraction Boundary Design](../../design/accepted/runenecs-extraction-boundary-design.md).
 The one canonical repair sequence lives in the
-[RunenECS Boundary Repair Execution Plan](../../design/active/runenecs-boundary-repair-execution-plan.md).
-GitHub issue `#198` owns the current reconciliation work. The
+[RunenECS Boundary Repair Execution Plan](../../design/accepted/runenecs-boundary-repair-execution-plan.md).
+GitHub issues own active work. The
 [Issue 198 Current-Main Census](./runenecs-issue-198-current-main-census.md)
 records the command-verified current-main evidence that updates this earlier
 investigation.
@@ -42,7 +42,7 @@ investigation.
 ```text
 EXTRACTION CANDIDATE                 yes
 MOVE CURRENT PACKAGES AS-IS          forbidden
-ARCHITECTURAL OWNERSHIP DIRECTION    established in active design
+ARCHITECTURAL OWNERSHIP DIRECTION    established in accepted design
 COMPLETE FILE/CONSUMER INVENTORY     command-verified in Issue 198 census
 SAFETY DESIGN                        repair required; unsafe inventory verified
 FIRST IMPLEMENTATION CANDIDATE       C1/R1 entity identity and core errors
@@ -308,7 +308,7 @@ code must:
 
 ## Evidence-backed target implications
 
-The investigation supports these durable decisions, which are owned by the active
+The investigation supports these durable decisions, which are owned by the accepted
 boundary design rather than this report:
 
 - one eventual RunenECS repository with `runen-ecs` and
@@ -329,7 +329,7 @@ future parallel executor.
 ## Repair program
 
 The canonical C0-C9 order is not duplicated here. It is owned by the
-[Boundary Repair Execution Plan](../../design/active/runenecs-boundary-repair-execution-plan.md).
+[Boundary Repair Execution Plan](../../design/accepted/runenecs-boundary-repair-execution-plan.md).
 The evidence supports C1/R1 as the first implementation slice, spatial and
 messaging/lifecycle cleanup before scheduler decontamination, and standalone
 conformance after all internal repairs.
@@ -365,8 +365,8 @@ Miri, sanitizer, or ECS MSRV command was found; those remain explicit gaps.
 
 ## Next safe action
 
-After #198 is accepted, re-establish current main and create exactly one bounded
-C1/R1 implementation issue from the accepted Entity/world-scope contract. A
-retained RON spec may provide subordinate handoff detail if still useful; it does
-not activate the phase. Do not implement C2-C9, rename packages, populate the
-external repository, or move source during C1.
+After the planning authority is accepted and current main is re-established,
+create exactly one bounded C1/R1 implementation issue from the accepted
+Entity/world-scope contract. A retained RON spec may provide subordinate handoff
+detail if still useful; it does not activate the phase. Do not implement C2-C9,
+rename packages, populate the external repository, or move source during C1.

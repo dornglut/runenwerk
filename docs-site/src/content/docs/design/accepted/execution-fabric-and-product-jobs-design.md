@@ -10,6 +10,8 @@ related_adrs:
   - ../../adr/accepted/0004-separate-description-from-execution.md
   - ../../adr/accepted/0008-adopt-sdf-first-field-product-architecture.md
 related_designs:
+  - ./runenecs-extraction-boundary-design.md
+  - ./runenecs-boundary-repair-execution-plan.md
   - ./sdf-first-field-world-platform-design.md
   - ./field-product-contracts-diagnostics-and-residency-design.md
   - ./sdf-product-renderer-and-gpu-residency-design.md
@@ -27,8 +29,13 @@ Accepted execution architecture.
 
 This design defines the Runenwerk application/product execution layer without
 creating a universal scheduler. It does not own ECS-internal scheduling semantics.
+The accepted
+[RunenECS Extraction Boundary Design](./runenecs-extraction-boundary-design.md)
+owns the ECS boundary, and the accepted
+[RunenECS Boundary Repair Execution Plan](./runenecs-boundary-repair-execution-plan.md)
+owns the repair sequence.
 
-Issue #198 clarifies the durable split:
+Issue #198 established the durable split:
 
 ```text
 RunenECS
@@ -52,9 +59,8 @@ RunenNet
 There is no accepted external RunenScheduler dependency or `runen_schedule`
 package. The
 [Issue 198 current-main census](../../reports/investigations/runenecs-issue-198-current-main-census.md)
-records current source evidence; the RunenECS active boundary/repair designs own
-the durable ECS target and sequence. No implementation or source transfer is
-authorized by this clarification alone.
+records the source evidence used for that reconciliation. No implementation or
+source transfer is authorized by this clarification alone.
 
 Implementation sequence for Runenwerk product jobs is tracked by the
 [Runtime Product Job Executor Roadmap](../../engine/roadmaps/runtime-product-job-executor-roadmap.md).

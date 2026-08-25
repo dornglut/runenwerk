@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-19
+last_reviewed: 2026-08-25
 ---
 
 # Accepted Designs
@@ -50,6 +50,11 @@ Move a design to `implemented/` only after code has been checked against it and 
 - [UI Lab Direct Manipulation UX Closure Design](ui-lab-direct-manipulation-ux-closure-design.md)
 - [UI Lab Persistence API Examples Ergonomics Closure Design](ui-lab-persistence-api-examples-ergonomics-closure-design.md)
 - [UI Lab Final No Gap Certification Closeout Design](ui-lab-final-no-gap-certification-closeout-design.md)
+
+### Repository Family Extraction
+
+- [RunenECS Extraction Boundary Design](runenecs-extraction-boundary-design.md)
+- [RunenECS Boundary Repair Execution Plan](runenecs-boundary-repair-execution-plan.md)
 
 ### Workspace / Cross-Domain
 

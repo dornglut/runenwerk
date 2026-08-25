@@ -1,7 +1,7 @@
 ---
 title: RunenECS Extraction Boundary Design
-description: Provisional repository ownership and investigation gates for extracting ECS and macros without Runenwerk spatial, networking, rendering, replay, lifecycle, or product policy.
-status: active
+description: Accepted repository ownership and extraction boundary for RunenECS without Runenwerk spatial, networking, rendering, replay, lifecycle, or product policy.
+status: accepted
 owner: ecs
 layer: domain/ecs
 canonical: true
@@ -18,15 +18,16 @@ related_docs:
 
 ## Status
 
-This design owns the durable RunenECS target boundary. The command-verified
-current-main facts supporting it are recorded in the
+This accepted design owns the durable RunenECS target boundary. The command-verified
+current-main facts used to establish it are recorded in the
 [Issue 198 current-main census](../../reports/investigations/runenecs-issue-198-current-main-census.md).
 The [Boundary Repair Execution Plan](./runenecs-boundary-repair-execution-plan.md)
 owns the one canonical repair sequence. Investigation reports are evidence, not
 implementation or sequencing authority.
 
-No ECS source movement, package rename, dependency change, or broad repair is
-authorized by this document alone.
+No ECS source movement, package rename, dependency change, or implementation is
+authorized by this design alone. Each implementation slice requires its own owning
+GitHub issue.
 
 ## Goal
 
@@ -234,21 +235,14 @@ Public derives must:
 
 ## Evidence gate
 
-Before implementation, #198 requires command-verified evidence for:
+The Issue 198 current-main census records the command-verified evidence that was
+used to accept this boundary: source/public-surface and consumer inventories,
+unsafe/query/SystemParam contracts, entity/allocator behavior, scheduler and
+spatial ownership, reflection, messaging/change/network/replay disposition, and
+validation-support gaps.
 
-- complete file and public-API inventory;
-- complete package and source-consumer inventory;
-- unsafe-boundary and safety-contract inventory;
-- entity/world-scope and allocator behavior;
-- scheduler phase/barrier consumer map;
-- spatial/geometry consumer map;
-- reflection authority map;
-- messaging/change/ownership/network/replay map;
-- exact move/stay/redesign/delete matrix;
-- current test, Miri/sanitizer, Clippy, MSRV, and benchmark support.
-
-The Issue 198 census is the evidence record for that gate. Acceptance remains
-owned by #198 and its pull request.
+Future implementation slices must re-resolve accepted main and stop if material
+source, consumer, ownership, or validation drift invalidates the relevant evidence.
 
 ## Repair sequence
 
@@ -257,9 +251,9 @@ post-C9 transfer rule are owned by the
 [Boundary Repair Execution Plan](./runenecs-boundary-repair-execution-plan.md).
 This boundary design does not duplicate that sequence.
 
-C1/R1 remains the proposed first implementation slice after #198 is accepted.
-No implementation issue is activated by this design or by a retained workspace
-RON file.
+C1/R1 is the first implementation slice. It remains unauthorized until a bounded
+owning GitHub issue is created from current accepted authority. No implementation
+issue is activated by this design or by a retained workspace RON file.
 
 ## Stop conditions
 

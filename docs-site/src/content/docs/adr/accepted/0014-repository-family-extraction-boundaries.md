@@ -9,7 +9,7 @@ last_reviewed: 2026-08-25
 related_designs:
   - ../../architecture/repository-family-architecture.md
   - ../../design/active/runensdf-extraction-design.md
-  - ../../design/active/runenecs-extraction-boundary-design.md
+  - ../../design/accepted/runenecs-extraction-boundary-design.md
   - ../../design/active/runengpu-architecture-design.md
   - ../../design/active/runenrender-decomposition-design.md
 related_roadmaps:
@@ -26,7 +26,7 @@ frameworks:
 ```text
 product       repository                 package       crate
 RunenSDF      dornglut/runen-sdf         runen-sdf     runen_sdf
-RunenECS      target dornglut/runen-ecs  topology refined by active RunenECS design
+RunenECS      target dornglut/runen-ecs  topology refined by accepted RunenECS design
 RunenGPU      dornglut/runen-gpu         runen-gpu     runen_gpu
 RunenRender   dornglut/runen-render      runen-render  runen_render
 RunenUI       dornglut/runen-ui          existing workspace; current packages include runenui_core and runenui_runtime
@@ -43,7 +43,7 @@ Framework repositories must not depend on Runenwerk. Integration-specific
 translation, application lifecycle, product policy, and cross-framework
 composition remain in Runenwerk.
 
-RunenGPU and RunenRender each begin with one public package. This decision does not redefine RunenUI package topology. The RunenECS active extraction design now refines its initial topology to Cargo package `runen-ecs` / Rust crate `runen_ecs` plus the technically required Cargo package `runen-ecs-macros` / Rust crate `runen_ecs_macros` proc-macro companion. Additional packages
+RunenGPU and RunenRender each begin with one public package. This decision does not redefine RunenUI package topology. The accepted RunenECS extraction design refines its initial topology to Cargo package `runen-ecs` / Rust crate `runen_ecs` plus the technically required Cargo package `runen-ecs-macros` / Rust crate `runen_ecs_macros` proc-macro companion. Additional packages
 require independently useful dependency, backend, release, ABI, or compile-time
 pressure. Repository extraction is not itself justification for package
 proliferation.
@@ -95,7 +95,7 @@ transfer.
 ### RunenECS
 
 Internal ownership and safety repairs remain required before source movement.
-The active RunenECS extraction design and execution plan refine the target package
+The accepted RunenECS extraction design and execution plan refine the target package
 topology and ECS-native scheduling boundary without authorizing source movement.
 
 ### RunenGPU and RunenRender
