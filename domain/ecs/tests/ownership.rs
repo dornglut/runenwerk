@@ -20,7 +20,7 @@ fn spectator_routes_to_no_targets() {
     let spectator = world.create_owner(OwnerRole::Observer);
     let controller = world.create_owner(OwnerRole::Active);
 
-    let entity = world.spawn(SharedScore(0));
+    let entity = world.spawn(SharedScore(0)).expect("spawn should succeed");
     assert!(world.assign_entity_owner(entity, OwnerState::OwnedBy(controller)));
 
     assert!(world.route_owner_entities(spectator).is_empty());
@@ -36,7 +36,7 @@ fn ownership_transfer_log_tracks_entity_and_resource_changes() {
     world.insert_resource(SharedScore(10));
 
     let controller = world.create_owner(OwnerRole::Active);
-    let entity = world.spawn(SharedScore(0));
+    let entity = world.spawn(SharedScore(0)).expect("spawn should succeed");
 
     let start_sequence = world.ownership_transfer_sequence();
 

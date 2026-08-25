@@ -33,8 +33,8 @@ fn record_a_count(mut query: Query<&A>, mut counts: ResMut<SeenCounts>) {
 #[test]
 fn archetype_location_tracking_updates_on_insert_remove_and_despawn() {
     let mut world = World::new();
-    let first = world.spawn(A(1));
-    let second = world.spawn(A(2));
+    let first = world.spawn(A(1)).expect("spawn should succeed");
+    let second = world.spawn(A(2)).expect("spawn should succeed");
 
     let first_before = world
         .__entity_archetype_location(first)
@@ -96,8 +96,8 @@ fn command_flush_boundary_remains_stage_based() {
 #[test]
 fn archetype_value_and_metadata_stay_aligned_across_migration() {
     let mut world = World::new();
-    let first = world.spawn(A(11));
-    let second = world.spawn(A(22));
+    let first = world.spawn(A(11)).expect("spawn should succeed");
+    let second = world.spawn(A(22)).expect("spawn should succeed");
 
     let (added_before, changed_before) = world
         .__entity_component_ticks::<A>(first)
@@ -134,8 +134,8 @@ fn archetype_value_and_metadata_stay_aligned_across_migration() {
 #[test]
 fn despawn_clears_component_value_and_keeps_swapped_entity_access_valid() {
     let mut world = World::new();
-    let first = world.spawn(A(1));
-    let second = world.spawn(A(2));
+    let first = world.spawn(A(1)).expect("spawn should succeed");
+    let second = world.spawn(A(2)).expect("spawn should succeed");
 
     world.despawn(first).unwrap();
     assert!(world.get::<A>(first).is_none());
@@ -152,9 +152,9 @@ fn despawn_clears_component_value_and_keeps_swapped_entity_access_valid() {
 #[test]
 fn repeated_swap_remove_repair_holds_across_chained_migrations() {
     let mut world = World::new();
-    let first = world.spawn(A(1));
-    let second = world.spawn(A(2));
-    let third = world.spawn(A(3));
+    let first = world.spawn(A(1)).expect("spawn should succeed");
+    let second = world.spawn(A(2)).expect("spawn should succeed");
+    let third = world.spawn(A(3)).expect("spawn should succeed");
 
     assert_eq!(
         world
@@ -229,7 +229,7 @@ fn repeated_swap_remove_repair_holds_across_chained_migrations() {
 #[test]
 fn row_metadata_stays_consistent_across_multi_component_remove_reinsert_cycles() {
     let mut world = World::new();
-    let entity = world.spawn(A(10));
+    let entity = world.spawn(A(10)).expect("spawn should succeed");
 
     let (a_added_initial, mut a_changed_last) = world
         .__entity_component_ticks::<A>(entity)
@@ -282,14 +282,16 @@ fn row_metadata_stays_consistent_across_multi_component_remove_reinsert_cycles()
 #[test]
 fn despawn_after_multiple_migrations_preserves_swapped_entity_consistency() {
     let mut world = World::new();
-    let anchor = world.spawn(A(1));
-    let migrating = world.spawn(A(2));
+    let anchor = world.spawn(A(1)).expect("spawn should succeed");
+    let migrating = world.spawn(A(2)).expect("spawn should succeed");
 
     world.insert(migrating, B(20)).unwrap();
     world.insert(migrating, C(200)).unwrap();
     let _: B = world.remove(migrating).unwrap();
     world.insert(migrating, B(25)).unwrap();
-    let partner = world.spawn((A(3), B(30), C(300)));
+    let partner = world
+        .spawn((A(3), B(30), C(300)))
+        .expect("spawn should succeed");
 
     let partner_before = world
         .__entity_archetype_location(partner)

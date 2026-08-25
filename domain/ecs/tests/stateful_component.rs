@@ -19,7 +19,9 @@ fn stateful_component_derive_and_prelude_exports_work() {
     assert_is_stateful::<StatefulHealth>();
 
     let mut world = World::new();
-    let entity = world.spawn(StatefulHealth(1));
+    let entity = world
+        .spawn(StatefulHealth(1))
+        .expect("spawn should succeed");
     let state: ComponentState = world
         .component_state::<StatefulHealth>(entity)
         .expect("state must exist");
@@ -31,7 +33,9 @@ fn stateful_component_derive_and_prelude_exports_work() {
 #[test]
 fn read_only_access_does_not_change_component_state() {
     let mut world = World::new();
-    let entity = world.spawn(StatefulHealth(5));
+    let entity = world
+        .spawn(StatefulHealth(5))
+        .expect("spawn should succeed");
 
     let state_before = world
         .component_state::<StatefulHealth>(entity)
@@ -52,7 +56,9 @@ fn read_only_access_does_not_change_component_state() {
 #[test]
 fn state_version_only_changes_on_explicit_mark_stateful_changed() {
     let mut world = World::new();
-    let entity = world.spawn(StatefulHealth(5));
+    let entity = world
+        .spawn(StatefulHealth(5))
+        .expect("spawn should succeed");
 
     let changed = world.query_state::<(Entity, &StatefulHealth), Changed<StatefulHealth>>();
     assert_eq!(
@@ -103,7 +109,9 @@ fn state_version_only_changes_on_explicit_mark_stateful_changed() {
 #[test]
 fn ordinary_mutable_access_keeps_changed_behavior_without_state_version_bump() {
     let mut world = World::new();
-    let entity = world.spawn((StatefulHealth(10), Velocity(2)));
+    let entity = world
+        .spawn((StatefulHealth(10), Velocity(2)))
+        .expect("spawn should succeed");
 
     let changed = world.query_state::<(Entity, &StatefulHealth), Changed<StatefulHealth>>();
     assert!(changed.iter(&world).next().is_some());
@@ -136,7 +144,9 @@ fn ordinary_mutable_access_keeps_changed_behavior_without_state_version_bump() {
 #[test]
 fn remove_and_reinsert_creates_new_generation_and_resets_version() {
     let mut world = World::new();
-    let entity = world.spawn(StatefulHealth(9));
+    let entity = world
+        .spawn(StatefulHealth(9))
+        .expect("spawn should succeed");
 
     assert!(world.mark_stateful_changed::<StatefulHealth>(entity));
     assert!(world.mark_stateful_changed::<StatefulHealth>(entity));
@@ -162,7 +172,9 @@ fn remove_and_reinsert_creates_new_generation_and_resets_version() {
 #[test]
 fn archetype_moves_preserve_state_generation_and_version_within_lifetime() {
     let mut world = World::new();
-    let entity = world.spawn((StatefulHealth(1), Marker));
+    let entity = world
+        .spawn((StatefulHealth(1), Marker))
+        .expect("spawn should succeed");
 
     assert!(world.mark_stateful_changed::<StatefulHealth>(entity));
     let initial = world
@@ -188,7 +200,9 @@ fn archetype_moves_preserve_state_generation_and_version_within_lifetime() {
 #[test]
 fn non_stateful_components_keep_existing_changed_semantics() {
     let mut world = World::new();
-    let entity = world.spawn(PlainCounter(1));
+    let entity = world
+        .spawn(PlainCounter(1))
+        .expect("spawn should succeed");
 
     let changed = world.query_state::<(Entity, &PlainCounter), Changed<PlainCounter>>();
     assert_eq!(
@@ -217,8 +231,12 @@ fn non_stateful_components_keep_existing_changed_semantics() {
 #[test]
 fn mark_stateful_changed_returns_false_when_component_missing() {
     let mut world = World::new();
-    let with_state = world.spawn(StatefulHealth(1));
-    let without_state = world.spawn(PlainCounter(9));
+    let with_state = world
+        .spawn(StatefulHealth(1))
+        .expect("spawn should succeed");
+    let without_state = world
+        .spawn(PlainCounter(9))
+        .expect("spawn should succeed");
 
     assert!(world.mark_stateful_changed::<StatefulHealth>(with_state));
     assert!(!world.mark_stateful_changed::<StatefulHealth>(without_state));

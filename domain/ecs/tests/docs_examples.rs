@@ -52,11 +52,13 @@ fn docs_gameplay_signatures_compile() {
 #[test]
 fn docs_runtime_query_snippet_runs() {
     let mut world = World::new();
-    world.spawn((
-        Position { x: 1.0, y: 2.0 },
-        Velocity { x: 0.5, y: -1.0 },
-        Simulated,
-    ));
+    world
+        .spawn((
+            Position { x: 1.0, y: 2.0 },
+            Velocity { x: 0.5, y: -1.0 },
+            Simulated,
+        ))
+        .expect("spawn should succeed");
     world.insert_resource(DeltaTime(0.5));
     world.insert_resource(Frame(1));
 
@@ -91,7 +93,9 @@ fn docs_runtime_execution_snippet_runs() {
     }
 
     let mut world = World::new();
-    world.spawn(Position { x: 0.0, y: 0.0 });
+    world
+        .spawn(Position { x: 0.0, y: 0.0 })
+        .expect("spawn should succeed");
     world.insert_resource(DeltaTime(0.25));
     world.insert_resource(Frame(0));
 
@@ -107,7 +111,9 @@ fn docs_runtime_execution_snippet_runs() {
 #[test]
 fn docs_change_filter_snippet_runs() {
     let mut world = World::new();
-    let entity = world.spawn(Position { x: 0.0, y: 0.0 });
+    let entity = world
+        .spawn(Position { x: 0.0, y: 0.0 })
+        .expect("spawn should succeed");
     let changed_positions = world.query_state::<(Entity, &Position), Changed<Position>>();
 
     let first: Vec<_> = changed_positions

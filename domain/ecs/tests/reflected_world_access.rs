@@ -24,10 +24,12 @@ fn reflected_component_value_ref_reads_live_component() {
     let mut world = World::new();
     world.register_component_type::<Position>();
 
-    let entity = world.spawn(Position {
-        value: Vec2 { x: 1.0, y: 2.0 },
-        speed: 3.5,
-    });
+    let entity = world
+        .spawn(Position {
+            value: Vec2 { x: 1.0, y: 2.0 },
+            speed: 3.5,
+        })
+        .expect("spawn should succeed");
 
     let reflected = world
         .reflected_component_value_ref(entity, TypeId::of::<Position>())
@@ -51,10 +53,12 @@ fn reflected_component_value_mut_updates_live_component() {
     let mut world = World::new();
     world.register_component_type::<Position>();
 
-    let entity = world.spawn(Position {
-        value: Vec2 { x: 1.0, y: 2.0 },
-        speed: 3.5,
-    });
+    let entity = world
+        .spawn(Position {
+            value: Vec2 { x: 1.0, y: 2.0 },
+            speed: 3.5,
+        })
+        .expect("spawn should succeed");
 
     let reflected = world
         .reflected_component_value_mut(entity, TypeId::of::<Position>())
@@ -150,10 +154,12 @@ fn entity_component_introspection_reports_registered_component() {
     let mut world = World::new();
     world.register_component_type::<Position>();
 
-    let entity = world.spawn(Position {
-        value: Vec2 { x: 0.0, y: 0.0 },
-        speed: 1.0,
-    });
+    let entity = world
+        .spawn(Position {
+            value: Vec2 { x: 0.0, y: 0.0 },
+            speed: 1.0,
+        })
+        .expect("spawn should succeed");
 
     let type_id = TypeId::of::<Position>();
 
