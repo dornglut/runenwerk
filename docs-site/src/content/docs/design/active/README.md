@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-08-23
+last_reviewed: 2026-08-25
 ---
 
 # Active Designs
@@ -125,8 +125,6 @@ active design contains older conflicting target language.
 
 - [RunenSDF Extraction Design](runensdf-extraction-design.md)
 - [RunenSDF Repository Identity Decision](runensdf-repository-identity-decision.md)
-- [RunenECS Extraction Boundary Design](runenecs-extraction-boundary-design.md)
-- [RunenECS Boundary Repair Execution Plan](runenecs-boundary-repair-execution-plan.md)
 - [RunenGPU Architecture Design](runengpu-architecture-design.md)
 - [RunenGPU G3 Access and Work Graph Design](runengpu-g3-access-work-graph-design.md)
 - [RunenGPU G3R Definite Initialization Semantics Correction](runengpu-g3r-definite-initialization-correction.md)

@@ -3,7 +3,7 @@ title: Investigations
 status: active
 owner: workspace
 layer: reports
-last_reviewed: 2026-08-18
+last_reviewed: 2026-08-25
 ---
 
 # Investigations
@@ -32,6 +32,7 @@ Investigations do not authorize implementation by themselves.
 - [Repository Family Current-State Investigation](repository-family-current-state-investigation.md)
 - [RunenSDF Extraction Investigation](runensdf-extraction-investigation.md)
 - [RunenECS Extraction Investigation](runenecs-extraction-investigation.md)
+- [RunenECS Issue 198 Current-Main Census](runenecs-issue-198-current-main-census.md)
 - [RunenGPU and RunenRender Boundary Investigation](runenrender-extraction-investigation.md)
 - [GPU and Render S0 Inventory](runengpu-render-s0-inventory.md)
 - [GPU and Render S0 File Disposition](runengpu-render-s0-file-disposition.md)
@@ -54,6 +55,7 @@ Investigations do not authorize implementation by themselves.
 
 - [RunenGPU and RunenRender Application-Domain Fit](runengpu-runenrender-application-domain-fit.md)
 
-Reports in this directory remain supporting evidence. Canonical ownership and phase
-requirements live in accepted ADRs, architecture documents, active designs, and
-implementation specifications.
+Reports in this directory remain supporting evidence. Durable ownership and target
+architecture live in accepted ADRs/designs and canonical architecture documents.
+GitHub issues and the Engineering Portfolio own active work; workspace specs are
+subordinate implementation-handoff detail rather than lifecycle authority.

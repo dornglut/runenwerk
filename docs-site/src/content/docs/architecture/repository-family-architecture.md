@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: architecture
 canonical: true
-last_reviewed: 2026-07-29
+last_reviewed: 2026-08-25
 related_docs:
   - ../workspace/planning/roadmap.md
   - ../reports/investigations/repository-family-current-state-investigation.md
@@ -16,7 +16,7 @@ related_docs:
   - ../reports/closeouts/pt-runen-family-operational-hardening-closeout.md
   - ../reports/closeouts/pt-runengpu-g3-implementation-closeout.md
   - ../design/active/runensdf-extraction-design.md
-  - ../design/active/runenecs-extraction-boundary-design.md
+  - ../design/accepted/runenecs-extraction-boundary-design.md
   - ../design/active/runengpu-architecture-design.md
   - ../design/active/runengpu-g4-context-program-realization-design.md
   - ../design/active/runenrender-decomposition-design.md
@@ -36,14 +36,14 @@ related_docs:
 Runenwerk is the integration and product repository for independently useful
 framework repositories. This document owns repository-level boundaries, dependency
 direction, integration policy, family-wide operational doctrine, and clean cutovers.
-Focused framework designs own subsystem contracts.
+Focused accepted framework designs own subsystem contracts.
 
 ## Repository family
 
 ```text
 product       repository                    package       crate
 RunenSDF      dornglut/runen-sdf            runen-sdf     runen_sdf
-RunenECS      target dornglut/runen-ecs     governed separately
+RunenECS      target dornglut/runen-ecs     see accepted RunenECS design
 RunenGPU      target dornglut/runen-gpu     runen-gpu     runen_gpu
 RunenRender   target dornglut/runen-render  runen-render  runen_render
 RunenUI       dornglut/runen-ui             existing workspace topology
@@ -105,11 +105,11 @@ policy.
 ### RunenECS
 
 Owns entity/component/resource lifecycle, storage/query semantics, deferred structural
-mutation, system access contracts, explicit reflection, and ECS-local scheduling
-integration.
+mutation, system identity and access contracts, explicit ECS ordering and sets,
+schedule validation, deterministic serial reference execution, and explicit reflection.
 
-Does not own general spatial indexing, engine frame/tick policy, rendering extraction,
-networking, replay, world streaming, or product lifecycle.
+Does not own general spatial indexing, application frame/tick policy, rendering
+extraction, networking, replay, world streaming, or product lifecycle.
 
 ### RunenGPU
 
@@ -163,7 +163,8 @@ default.
 Owns:
 
 - application and engine lifecycle;
-- frame/tick and domain scheduling;
+- frame/tick and application/domain lifecycle scheduling, including when independently
+  owned RunenECS schedules are invoked;
 - windows/event loops and native host policy;
 - ECS and domain extraction;
 - scene, world, material-authoring, SDF, UI, editor, simulation, and product adapters;
@@ -176,6 +177,9 @@ Owns:
 - reproducibility bundles and persisted capture schemas;
 - offline job sequencing and artifact encoding;
 - application binaries and tools.
+
+Runenwerk does not redefine RunenECS-internal system order, access compatibility,
+schedule validation, deferred-command boundaries, or serial correctness semantics.
 
 ## Adapter rule
 
