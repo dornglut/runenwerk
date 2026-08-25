@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-19
+last_reviewed: 2026-08-12
 ---
 
 # Accepted Designs
@@ -15,6 +15,10 @@ Use this folder for designs whose architectural direction is approved.
 Move a design to `implemented/` only after code has been checked against it and known divergences are resolved or documented.
 
 ## Current Designs
+
+### Applications / Products
+
+- [Runenwerk Visual Lab Product Architecture](runenwerk-visual-lab-product-architecture.md)
 
 ### UI Domain
 
