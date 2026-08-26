@@ -1,9 +1,7 @@
 use crate::plugins::gpu::{
     GpuBindGroupLayoutDescriptor, GpuBindingKey, GpuBufferHandle, GpuContextAffinity,
-    GpuObservedFragmentOutputSignature, GpuObservedProgramInterface,
-    GpuObservedVertexInputSignature, GpuPipelineLayoutDescriptor, GpuProgramDescriptor,
-    GpuRuntimeBindingResource, GpuRuntimeBindingValue, GpuRuntimeTextureViewBinding,
-    GpuSamplerHandle,
+    GpuPipelineLayoutDescriptor, GpuProgramDescriptor, GpuRuntimeBindingResource,
+    GpuRuntimeBindingValue, GpuRuntimeTextureViewBinding, GpuSamplerHandle,
 };
 use core::num::NonZeroU64;
 use std::sync::Arc;
@@ -62,26 +60,13 @@ pub(super) fn static_bind_group_values(
         .collect()
 }
 
-/// One accepted canonical WGSL module plus the normalized evidence required by G4C3.
+/// One already-admitted program realized for this exact context/device generation.
+/// Shader/interface/stage-IO authority stays on `GpuProgramDescriptor`; this record owns only
+/// backend affinity and the private WGPU shader module.
 pub(crate) struct ProgramRealizationRecord {
     pub(super) affinity: GpuContextAffinity,
     pub(super) descriptor: GpuProgramDescriptor,
     pub(super) object: ShaderModule,
-    #[allow(
-        dead_code,
-        reason = "G4C2 retains normalized evidence for the later G4C3 pipeline-compatibility owner"
-    )]
-    pub(super) observed_interface: GpuObservedProgramInterface,
-    #[allow(
-        dead_code,
-        reason = "G4C2 retains normalized evidence for the later G4C3 pipeline-compatibility owner"
-    )]
-    pub(super) vertex_inputs: Vec<GpuObservedVertexInputSignature>,
-    #[allow(
-        dead_code,
-        reason = "G4C2 retains normalized evidence for the later G4C3 pipeline-compatibility owner"
-    )]
-    pub(super) fragment_outputs: Vec<GpuObservedFragmentOutputSignature>,
 }
 
 impl ProgramRealizationRecord {
@@ -95,30 +80,6 @@ impl ProgramRealizationRecord {
 
     pub(crate) fn wgpu_object(&self) -> &ShaderModule {
         &self.object
-    }
-
-    #[allow(
-        dead_code,
-        reason = "G4C3 will consume retained normalized program-interface evidence"
-    )]
-    pub(crate) fn observed_interface(&self) -> &GpuObservedProgramInterface {
-        &self.observed_interface
-    }
-
-    #[allow(
-        dead_code,
-        reason = "G4C3 will consume retained normalized vertex-input evidence"
-    )]
-    pub(crate) fn vertex_inputs(&self) -> &[GpuObservedVertexInputSignature] {
-        &self.vertex_inputs
-    }
-
-    #[allow(
-        dead_code,
-        reason = "G4C3 will consume retained normalized fragment-output evidence"
-    )]
-    pub(crate) fn fragment_outputs(&self) -> &[GpuObservedFragmentOutputSignature] {
-        &self.fragment_outputs
     }
 }
 
