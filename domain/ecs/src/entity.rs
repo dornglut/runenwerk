@@ -103,7 +103,6 @@ impl EntitySlot {
     }
 }
 
-#[derive(Debug)]
 pub struct EntityAllocator {
     scope: WorldScopeId,
     next_index: u64,
