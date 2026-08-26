@@ -156,9 +156,11 @@ impl PreparedExecutionPlan {
     }
 
     fn mark_initial_content_queued(&self) -> bool {
-        self.initial_content
-            .iter()
-            .all(|candidate| candidate.record.mark_queued())
+        let mut all_queued = true;
+        for candidate in &self.initial_content {
+            all_queued &= candidate.record.mark_queued();
+        }
+        all_queued
     }
 
     fn mark_initial_content_completed(&self) {
@@ -1705,17 +1707,13 @@ fn prepare_initial_content(
                     0,
                     GpuTextureOrigin::new(0, 0, 0),
                     GpuTextureAspect::All,
-                    GpuCopyExtent::new(
-                        extent.width(),
-                        extent.height(),
-                        extent.depth_or_layers(),
-                    )
-                    .map_err(|error| {
-                        GpuSubmissionPreparationError::new(
-                            GpuSubmissionPreparationErrorKind::InternalInvariant,
-                            error.to_string(),
-                        )
-                    })?,
+                    GpuCopyExtent::new(extent.width(), extent.height(), extent.depth_or_layers())
+                        .map_err(|error| {
+                            GpuSubmissionPreparationError::new(
+                                GpuSubmissionPreparationErrorKind::InternalInvariant,
+                                error.to_string(),
+                            )
+                        })?,
                 )
                 .map_err(|error| {
                     GpuSubmissionPreparationError::new(

@@ -247,9 +247,7 @@ fn descriptor_texture_coverage(texture: &GpuTextureHandle) -> InitializedCoverag
     InitializedCoverage::Texture(ranges)
 }
 
-fn prepared_initial_content_coverage(
-    candidate: &GpuPreparedInitialContent,
-) -> InitializedCoverage {
+fn prepared_initial_content_coverage(candidate: &GpuPreparedInitialContent) -> InitializedCoverage {
     match candidate {
         GpuPreparedInitialContent::Buffer(buffer) => InitializedCoverage::Buffer {
             buffer: buffer.clone(),

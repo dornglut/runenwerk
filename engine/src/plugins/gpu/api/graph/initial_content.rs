@@ -54,14 +54,20 @@ pub(super) fn derive_prepared_initial_content(
                         if matches!(
                             access.buffer().descriptor().initialization(),
                             GpuBufferInitialization::Prepared(_)
-                        ) => Some(GpuPreparedInitialContent::Buffer(access.buffer().clone())),
+                        ) =>
+                    {
+                        Some(GpuPreparedInitialContent::Buffer(access.buffer().clone()))
+                    }
                     GpuResourceAccess::Texture(access)
                         if matches!(
                             access.normalized_texture().descriptor().initialization(),
                             GpuTextureInitialization::Prepared(_)
-                        ) => Some(GpuPreparedInitialContent::Texture(
+                        ) =>
+                    {
+                        Some(GpuPreparedInitialContent::Texture(
                             access.normalized_texture().clone(),
-                        )),
+                        ))
+                    }
                     _ => None,
                 };
                 let Some(candidate) = candidate else {

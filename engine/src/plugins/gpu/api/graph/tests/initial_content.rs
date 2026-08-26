@@ -67,11 +67,9 @@ fn unused_prepared_resource_does_not_manufacture_initial_content() {
         )
         .unwrap();
 
-    let graph = GpuPreparedWorkGraph::prepare(
-        label("unused prepared graph"),
-        [fragment.finish().unwrap()],
-    )
-    .unwrap();
+    let graph =
+        GpuPreparedWorkGraph::prepare(label("unused prepared graph"), [fragment.finish().unwrap()])
+            .unwrap();
     assert!(graph.initial_content().is_empty());
     let summary = summary_for(&graph, prepared.diagnostic_identity());
     assert!(summary.initial().is_none());
@@ -139,13 +137,10 @@ fn operation_derived_prepared_read_uses_one_planned_materialization_effect() {
         .unwrap();
     let fragment = fragment.finish().unwrap();
 
-    let graph = GpuPreparedWorkGraph::prepare(
-        label("readback prepared graph"),
-        [fragment.clone()],
-    )
-    .unwrap();
-    let repeated = GpuPreparedWorkGraph::prepare(label("readback prepared graph"), [fragment])
+    let graph = GpuPreparedWorkGraph::prepare(label("readback prepared graph"), [fragment.clone()])
         .unwrap();
+    let repeated =
+        GpuPreparedWorkGraph::prepare(label("readback prepared graph"), [fragment]).unwrap();
     assert_eq!(graph.initial_content(), repeated.initial_content());
     assert_eq!(graph.initial_content().len(), 1);
     assert_eq!(
@@ -154,7 +149,9 @@ fn operation_derived_prepared_read_uses_one_planned_materialization_effect() {
     );
     assert_eq!(
         graph.requirements().get(GpuCapabilityFeature::Copy),
-        Some(GpuCapabilityRequirement::Required(GpuCapabilityFeature::Copy))
+        Some(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::Copy
+        ))
     );
     let summary = summary_for(&graph, prepared.diagnostic_identity());
     assert!(summary.initial().is_none());
@@ -218,10 +215,18 @@ fn texture_view_operation_selects_parent_materialization_and_copy_capability() {
         prepared_texture_initialization("prepared render target"),
         1,
         1,
-        [GpuTextureUsage::ColorAttachment, GpuTextureUsage::CopyDestination],
+        [
+            GpuTextureUsage::ColorAttachment,
+            GpuTextureUsage::CopyDestination,
+        ],
     );
     let range = GpuTextureSubresourceRange::whole(&prepared).unwrap();
-    let view = texture_view(&mut allocator, &prepared, "prepared render target view", range);
+    let view = texture_view(
+        &mut allocator,
+        &prepared,
+        "prepared render target view",
+        range,
+    );
     let attachment = GpuRenderColorAttachment::new(
         view.clone(),
         GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap()),
@@ -239,7 +244,9 @@ fn texture_view_operation_selects_parent_materialization_and_copy_capability() {
     fragment
         .add_node(
             label("clear through view"),
-            GpuWorkOperation::Render(GpuRenderOperation::new([attachment], None, [], None).unwrap()),
+            GpuWorkOperation::Render(
+                GpuRenderOperation::new([attachment], None, [], None).unwrap(),
+            ),
             [],
             GpuCapabilityRequirements::new(),
             GpuExecutionPreference::GraphicsRequired,
@@ -260,11 +267,15 @@ fn texture_view_operation_selects_parent_materialization_and_copy_capability() {
     );
     assert_eq!(
         graph.requirements().get(GpuCapabilityFeature::Copy),
-        Some(GpuCapabilityRequirement::Required(GpuCapabilityFeature::Copy)),
+        Some(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::Copy
+        )),
         "planned Prepared materialization must contribute the canonical Copy requirement"
     );
     assert_eq!(
-        graph.requirements().get(GpuCapabilityFeature::RenderPipeline),
+        graph
+            .requirements()
+            .get(GpuCapabilityFeature::RenderPipeline),
         Some(GpuCapabilityRequirement::Required(
             GpuCapabilityFeature::RenderPipeline
         ))
