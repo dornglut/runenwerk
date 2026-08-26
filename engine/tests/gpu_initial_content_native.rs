@@ -40,10 +40,7 @@ fn native_copy_context_with_policies(
         .unwrap();
     let descriptor = GpuContextDescriptor::new(requirements)
         .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::CopySource)
-        .require_format_role(
-            GpuTextureFormat::Rgba8Unorm,
-            GpuFormatRole::CopyDestination,
-        )
+        .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::CopyDestination)
         .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
         .with_allowed_backends([GpuBackendFamily::Vulkan])
         .with_label("G5R native prepared initial-content proof");
@@ -255,10 +252,8 @@ fn prepared_submissions_select_seed_once_during_ordered_acceptance() {
         128,
         2,
     );
-    let context = native_copy_context_with_policies(
-        GpuRealizationPolicies::default(),
-        execution_policy,
-    );
+    let context =
+        native_copy_context_with_policies(GpuRealizationPolicies::default(), execution_policy);
     let initial = (0_u8..64).collect::<Vec<_>>();
     let mut allocator = GpuWorkResourceIdAllocator::new();
     let buffer = prepared_buffer(&mut allocator, &initial);
@@ -301,24 +296,23 @@ fn conditional_seed_pressure_is_charged_only_at_acceptance_and_rejection_keeps_s
         64,
         1,
     );
-    let context = native_copy_context_with_policies(
-        GpuRealizationPolicies::default(),
-        execution_policy,
-    );
+    let context =
+        native_copy_context_with_policies(GpuRealizationPolicies::default(), execution_policy);
     let initial = (0_u8..64).collect::<Vec<_>>();
     let mut allocator = GpuWorkResourceIdAllocator::new();
     let buffer = prepared_buffer(&mut allocator, &initial);
 
     for attempt in 0..2 {
         let (graph, _) = readback_graph(&buffer);
-        let prepared = pollster::block_on(context.prepare_submission(graph))
-            .expect("conditional Prepared bytes must not consume upload pressure during preparation");
+        let prepared = pollster::block_on(context.prepare_submission(graph)).expect(
+            "conditional Prepared bytes must not consume upload pressure during preparation",
+        );
         assert_eq!(context.execution_stats().prepared_submissions(), 1);
         assert_eq!(context.execution_stats().upload_bytes_in_flight(), 0);
 
-        let rejected = context
-            .submit_prepared(prepared)
-            .expect_err("ordered acceptance must reject when the required seed exceeds upload pressure");
+        let rejected = context.submit_prepared(prepared).expect_err(
+            "ordered acceptance must reject when the required seed exceeds upload pressure",
+        );
         assert_eq!(
             rejected.reason().kind(),
             GpuSubmissionRejectionKind::UploadBytesInFlightExceeded,
@@ -337,10 +331,8 @@ fn recreated_physical_realization_receives_prepared_seed_again() {
         GpuResourceRealizationPolicy::new(NonZeroUsize::new(1).unwrap()),
         Default::default(),
     );
-    let context = native_copy_context_with_policies(
-        realization_policies,
-        GpuExecutionPolicy::default(),
-    );
+    let context =
+        native_copy_context_with_policies(realization_policies, GpuExecutionPolicy::default());
     let initial = (0_u8..64).collect::<Vec<_>>();
     let replacement = (0_u8..64).map(|value| 255 - value).collect::<Vec<_>>();
     let mut allocator = GpuWorkResourceIdAllocator::new();
@@ -416,10 +408,9 @@ fn padded_prepared_texture_materializes_through_canonical_texture_upload() {
                         .unwrap()
                 })
                 .collect::<Vec<_>>();
-            let start = usize::try_from(
-                image * BYTES_PER_ROW * ROWS_PER_IMAGE + row * BYTES_PER_ROW,
-            )
-            .unwrap();
+            let start =
+                usize::try_from(image * BYTES_PER_ROW * ROWS_PER_IMAGE + row * BYTES_PER_ROW)
+                    .unwrap();
             source[start..start + logical_row].copy_from_slice(&row_bytes);
             expected.extend_from_slice(&row_bytes);
         }

@@ -1709,11 +1709,11 @@ fn prepare_initial_content(
                     GpuTextureAspect::All,
                     GpuCopyExtent::new(extent.width(), extent.height(), extent.depth_or_layers())
                         .map_err(|error| {
-                            GpuSubmissionPreparationError::new(
-                                GpuSubmissionPreparationErrorKind::InternalInvariant,
-                                error.to_string(),
-                            )
-                        })?,
+                        GpuSubmissionPreparationError::new(
+                            GpuSubmissionPreparationErrorKind::InternalInvariant,
+                            error.to_string(),
+                        )
+                    })?,
                 )
                 .map_err(|error| {
                     GpuSubmissionPreparationError::new(

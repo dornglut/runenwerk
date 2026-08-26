@@ -1676,7 +1676,10 @@ mod tests {
         .unwrap();
         let multisample_usages = GpuTextureUsages::new(
             &label,
-            [GpuTextureUsage::ColorAttachment, GpuTextureUsage::CopyDestination],
+            [
+                GpuTextureUsage::ColorAttachment,
+                GpuTextureUsage::CopyDestination,
+            ],
         )
         .unwrap();
         let invalid_multisample_prepared = GpuTextureDescriptor::new(
