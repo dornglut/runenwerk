@@ -64,6 +64,8 @@ impl GpuExpectedVertexInputSignature {
     }
 }
 
+/// Compiler-observed vertex-input facts for one admitted entry point.
+/// Construction is private to canonical-WGSL analysis.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuObservedVertexInputSignature {
     entry_point: GpuEntryPointName,
@@ -72,7 +74,7 @@ pub struct GpuObservedVertexInputSignature {
 }
 
 impl GpuObservedVertexInputSignature {
-    pub fn new(
+    pub(crate) fn new(
         entry_point: GpuEntryPointName,
         locations: impl IntoIterator<Item = GpuShaderIoLocation>,
         builtins: impl IntoIterator<Item = GpuVertexInputBuiltin>,
@@ -123,6 +125,8 @@ impl GpuExpectedFragmentOutputSignature {
     }
 }
 
+/// Compiler-observed fragment-output facts for one admitted entry point.
+/// Construction is private to canonical-WGSL analysis.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuObservedFragmentOutputSignature {
     entry_point: GpuEntryPointName,
@@ -131,7 +135,7 @@ pub struct GpuObservedFragmentOutputSignature {
 }
 
 impl GpuObservedFragmentOutputSignature {
-    pub fn new(
+    pub(crate) fn new(
         entry_point: GpuEntryPointName,
         locations: impl IntoIterator<Item = GpuShaderIoLocation>,
         builtins: impl IntoIterator<Item = GpuFragmentOutputBuiltin>,
