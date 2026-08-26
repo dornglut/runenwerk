@@ -730,7 +730,7 @@ impl WgpuExecutionState {
         if inner.lifecycle != GpuExecutionLifecycleState::Running {
             return Err(rejection_not_running(inner.lifecycle));
         }
-        let Some(Some(plan)) = inner.prepared.get(&prepared.ticket) else {
+        let Some(Some(stored_plan)) = inner.prepared.get(&prepared.ticket) else {
             return Err(GpuSubmissionRejectionReason::new(
                 GpuSubmissionRejectionKind::PreparedRecordUnavailable,
                 "prepared submission is absent or was already consumed",
@@ -748,10 +748,10 @@ impl WgpuExecutionState {
                 "in-flight submission capacity is occupied",
             ));
         }
-        let effective_plan = plan.effective_for_acceptance()?;
+        let plan = stored_plan.effective_for_acceptance()?;
         let next_upload = inner
             .upload_bytes_in_flight
-            .checked_add(effective_plan.upload_bytes)
+            .checked_add(plan.upload_bytes)
             .filter(|value| *value <= self.policy.max_upload_bytes_in_flight())
             .ok_or_else(|| {
                 GpuSubmissionRejectionReason::new(
@@ -761,7 +761,7 @@ impl WgpuExecutionState {
             })?;
         let next_readback = inner
             .readback_bytes_in_flight
-            .checked_add(effective_plan.readback_bytes)
+            .checked_add(plan.readback_bytes)
             .filter(|value| *value <= self.policy.max_readback_bytes_in_flight())
             .ok_or_else(|| {
                 GpuSubmissionRejectionReason::new(
@@ -771,7 +771,7 @@ impl WgpuExecutionState {
             })?;
         let next_pending = inner
             .pending_readbacks
-            .checked_add(effective_plan.readback_ids.len())
+            .checked_add(plan.readback_ids.len())
             .filter(|value| *value <= self.policy.max_pending_readbacks())
             .ok_or_else(|| {
                 GpuSubmissionRejectionReason::new(
@@ -781,8 +781,8 @@ impl WgpuExecutionState {
             })?;
 
         let mut readbacks = BTreeMap::new();
-        let mut public_readbacks = Vec::with_capacity(effective_plan.readback_ids.len());
-        for operation in &effective_plan.operations {
+        let mut public_readbacks = Vec::with_capacity(plan.readback_ids.len());
+        for operation in &plan.operations {
             let (readback_id, size, metadata) = match operation {
                 PreparedExecutionOperation::Readback {
                     id, size, metadata, ..
@@ -812,23 +812,24 @@ impl WgpuExecutionState {
             );
             public_readbacks.push(GpuReadback::new(readback_id, readback_status));
         }
-        if readbacks.len() != effective_plan.readback_ids.len() {
+        if readbacks.len() != plan.readback_ids.len() {
             return Err(GpuSubmissionRejectionReason::new(
                 GpuSubmissionRejectionKind::PreparedRecordUnavailable,
                 "prepared readback metadata is incomplete",
             ));
         }
 
-        let Some(raw_id) = allocate_nonzero(&self.next_submission) else {
-            return Err(GpuSubmissionRejectionReason::new(
-                GpuSubmissionRejectionKind::IdentityExhausted,
-                "submission identity space is exhausted",
-            ));
-        };
-        let Some(Some(_)) = inner.prepared.remove(&prepared.ticket) else {
+        let Some(stored_plan) = inner.prepared.remove(&prepared.ticket).flatten() else {
             return Err(GpuSubmissionRejectionReason::new(
                 GpuSubmissionRejectionKind::PreparedRecordUnavailable,
                 "prepared submission disappeared before acceptance",
+            ));
+        };
+        let Some(raw_id) = allocate_nonzero(&self.next_submission) else {
+            inner.prepared.insert(prepared.ticket, Some(stored_plan));
+            return Err(GpuSubmissionRejectionReason::new(
+                GpuSubmissionRejectionKind::IdentityExhausted,
+                "submission identity space is exhausted",
             ));
         };
         let id = GpuSubmissionId::from_nonzero(raw_id);
@@ -842,16 +843,16 @@ impl WgpuExecutionState {
             InFlightSubmission {
                 status: Arc::clone(&status),
                 readbacks,
-                plan: Some(effective_plan.clone()),
+                plan: Some(plan.clone()),
                 upload_staging: Vec::new(),
-                upload_bytes: effective_plan.upload_bytes,
+                upload_bytes: plan.upload_bytes,
                 submission_terminal: false,
             },
         );
 
         Ok(AcceptedPlan {
             id,
-            plan: effective_plan,
+            plan,
             status,
             readbacks: public_readbacks,
         })
