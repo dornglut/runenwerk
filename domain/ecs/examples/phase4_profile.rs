@@ -323,13 +323,15 @@ fn main() {
     {
         let mut world = World::new();
         for i in 0..50_000 {
-            world.spawn((
-                Position {
-                    x: i as f32,
-                    y: 0.0,
-                },
-                Velocity { x: 1.0, y: -0.25 },
-            ));
+            world
+                .spawn((
+                    Position {
+                        x: i as f32,
+                        y: 0.0,
+                    },
+                    Velocity { x: 1.0, y: -0.25 },
+                ))
+                .expect("profile setup spawn should succeed");
         }
         let query = world.query_state::<(&mut Position, &Velocity), ()>();
         for _ in 0..8 {
@@ -351,13 +353,15 @@ fn main() {
     {
         let mut world = World::new();
         for i in 0..50_000 {
-            world.spawn((
-                Position {
-                    x: i as f32,
-                    y: 0.0,
-                },
-                Velocity { x: 1.0, y: -0.25 },
-            ));
+            world
+                .spawn((
+                    Position {
+                        x: i as f32,
+                        y: 0.0,
+                    },
+                    Velocity { x: 1.0, y: -0.25 },
+                ))
+                .expect("profile setup spawn should succeed");
         }
         let query = world.query_state::<&Position, ()>();
         let mut checksum = 0.0_f32;
@@ -380,13 +384,15 @@ fn main() {
     {
         let mut world = World::new();
         for i in 0..50_000 {
-            world.spawn((
-                Position {
-                    x: i as f32,
-                    y: 0.0,
-                },
-                Velocity { x: 1.0, y: -0.25 },
-            ));
+            world
+                .spawn((
+                    Position {
+                        x: i as f32,
+                        y: 0.0,
+                    },
+                    Velocity { x: 1.0, y: -0.25 },
+                ))
+                .expect("profile setup spawn should succeed");
         }
         let query = world.query_state::<&mut Velocity, ()>();
         let mut checksum = 0.0_f32;
@@ -413,26 +419,30 @@ fn main() {
         world.insert_resource(MixedStats::default());
         for i in 0..20_000 {
             if i % 8 == 0 {
-                world.spawn((
-                    Position {
-                        x: i as f32,
-                        y: 0.0,
-                    },
-                    Velocity { x: 1.0, y: 0.25 },
-                    Health(100),
-                    Simulated,
-                    Disabled,
-                ));
+                world
+                    .spawn((
+                        Position {
+                            x: i as f32,
+                            y: 0.0,
+                        },
+                        Velocity { x: 1.0, y: 0.25 },
+                        Health(100),
+                        Simulated,
+                        Disabled,
+                    ))
+                    .expect("profile setup spawn should succeed");
             } else {
-                world.spawn((
-                    Position {
-                        x: i as f32,
-                        y: 0.0,
-                    },
-                    Velocity { x: 1.0, y: 0.25 },
-                    Health(100),
-                    Simulated,
-                ));
+                world
+                    .spawn((
+                        Position {
+                            x: i as f32,
+                            y: 0.0,
+                        },
+                        Velocity { x: 1.0, y: 0.25 },
+                        Health(100),
+                        Simulated,
+                    ))
+                    .expect("profile setup spawn should succeed");
             }
         }
         let mut runtime = Runtime::new();
@@ -456,14 +466,16 @@ fn main() {
     {
         let mut world = World::new();
         for i in 0..20_000 {
-            world.spawn((
-                ChurnTag,
-                Position {
-                    x: i as f32,
-                    y: 0.0,
-                },
-                Velocity { x: 0.0, y: 0.0 },
-            ));
+            world
+                .spawn((
+                    ChurnTag,
+                    Position {
+                        x: i as f32,
+                        y: 0.0,
+                    },
+                    Velocity { x: 0.0, y: 0.0 },
+                ))
+                .expect("profile setup spawn should succeed");
         }
         let mut runtime = Runtime::new();
         runtime.add_systems::<W3, _, _>(&mut world, (w3_spawn, w3_despawn));
@@ -484,13 +496,15 @@ fn main() {
         let mut world = World::new();
         world.insert_resource(EventStats::default());
         for i in 0..10_000 {
-            world.spawn((
-                Position {
-                    x: i as f32,
-                    y: i as f32,
-                },
-                Velocity { x: 0.0, y: 0.0 },
-            ));
+            world
+                .spawn((
+                    Position {
+                        x: i as f32,
+                        y: i as f32,
+                    },
+                    Velocity { x: 0.0, y: 0.0 },
+                ))
+                .expect("profile setup spawn should succeed");
         }
         let mut runtime = Runtime::new();
         runtime.add_systems::<W4, _, _>(&mut world, (w4_write_events, w4_read_broadcast));
