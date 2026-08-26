@@ -67,8 +67,7 @@ impl InitialContentState {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if matches!(
             *state,
-            InitialContentMaterialization::Unmaterialized
-                | InitialContentMaterialization::Queued
+            InitialContentMaterialization::Unmaterialized | InitialContentMaterialization::Queued
         ) {
             *state = InitialContentMaterialization::Completed;
         }
