@@ -200,9 +200,7 @@ fn archetype_moves_preserve_state_generation_and_version_within_lifetime() {
 #[test]
 fn non_stateful_components_keep_existing_changed_semantics() {
     let mut world = World::new();
-    let entity = world
-        .spawn(PlainCounter(1))
-        .expect("spawn should succeed");
+    let entity = world.spawn(PlainCounter(1)).expect("spawn should succeed");
 
     let changed = world.query_state::<(Entity, &PlainCounter), Changed<PlainCounter>>();
     assert_eq!(
@@ -234,9 +232,7 @@ fn mark_stateful_changed_returns_false_when_component_missing() {
     let with_state = world
         .spawn(StatefulHealth(1))
         .expect("spawn should succeed");
-    let without_state = world
-        .spawn(PlainCounter(9))
-        .expect("spawn should succeed");
+    let without_state = world.spawn(PlainCounter(9)).expect("spawn should succeed");
 
     assert!(world.mark_stateful_changed::<StatefulHealth>(with_state));
     assert!(!world.mark_stateful_changed::<StatefulHealth>(without_state));
