@@ -2,13 +2,13 @@ use super::super::contract_diagnostics::{GpuProgramContractCause, GpuProgramCont
 use core::fmt::Debug;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum GpuVertexInputBuiltin {
+pub(crate) enum GpuVertexInputBuiltin {
     VertexIndex,
     InstanceIndex,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum GpuFragmentOutputBuiltin {
+pub(crate) enum GpuFragmentOutputBuiltin {
     FragDepth,
     SampleMask,
 }
