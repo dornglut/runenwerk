@@ -13,10 +13,10 @@ use crate::plugins::gpu::{
     GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor, GpuResourceLifetime,
     GpuRuntimeBindingResource, GpuRuntimeBindingSet, GpuRuntimeBindingValue,
     GpuRuntimeBufferBinding, GpuRuntimeTextureViewBinding, GpuSamplerClass, GpuScissorRect,
-    GpuSpecializationSchema, GpuSpecializationValueSet, GpuTextureFormat,
-    GpuTextureSampleClass, GpuTextureUsage, GpuTextureViewDimension, GpuVertexAttribute,
-    GpuVertexBufferBinding, GpuVertexBufferLayoutDescriptor, GpuVertexFormat,
-    GpuVertexInputStateDescriptor, GpuVertexStepMode, GpuViewport,
+    GpuSpecializationSchema, GpuSpecializationValueSet, GpuTextureFormat, GpuTextureSampleClass,
+    GpuTextureUsage, GpuTextureViewDimension, GpuVertexAttribute, GpuVertexBufferBinding,
+    GpuVertexBufferLayoutDescriptor, GpuVertexFormat, GpuVertexInputStateDescriptor,
+    GpuVertexStepMode, GpuViewport,
 };
 use std::num::NonZeroU64;
 
@@ -243,18 +243,16 @@ impl Renderer {
         )?;
         let vertex_entry = GpuEntryPointName::new("vs_main")?;
         let fragment_entry = GpuEntryPointName::new("fs_main")?;
-        let refinements = texture_sampler_label
-            .map(|_| {
-                Ok([
-                    GpuBindingLayoutRefinement::new(GpuBindingKey::try_new(1, 0)?)
-                        .with_texture_sample_class(GpuTextureSampleClass::FloatFilterable),
-                    GpuBindingLayoutRefinement::new(GpuBindingKey::try_new(1, 1)?)
-                        .with_sampler_class(GpuSamplerClass::Filtering),
-                ])
-            })
-            .transpose()?
-            .into_iter()
-            .flatten();
+        let refinements = if texture_sampler_label.is_some() {
+            vec![
+                GpuBindingLayoutRefinement::new(GpuBindingKey::try_new(1, 0)?)
+                    .with_texture_sample_class(GpuTextureSampleClass::FloatFilterable),
+                GpuBindingLayoutRefinement::new(GpuBindingKey::try_new(1, 1)?)
+                    .with_sampler_class(GpuSamplerClass::Filtering),
+            ]
+        } else {
+            Vec::new()
+        };
         let program_descriptor = GpuProgramDescriptor::new(
             admitted_source,
             [vertex_entry.clone(), fragment_entry.clone()],
