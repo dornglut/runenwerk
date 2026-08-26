@@ -37,6 +37,7 @@ pub struct GpuProgramContractError {
     operation: &'static str,
     label: String,
     cause: GpuProgramContractCause,
+    detail: Option<String>,
     correction: &'static str,
 }
 
@@ -51,6 +52,23 @@ impl GpuProgramContractError {
             operation,
             label: label.into(),
             cause,
+            detail: None,
+            correction,
+        }
+    }
+
+    pub(crate) fn invalid_with_detail(
+        operation: &'static str,
+        label: impl Into<String>,
+        cause: GpuProgramContractCause,
+        detail: impl Into<String>,
+        correction: &'static str,
+    ) -> Self {
+        Self {
+            operation,
+            label: label.into(),
+            cause,
+            detail: Some(detail.into()),
             correction,
         }
     }
@@ -67,6 +85,10 @@ impl GpuProgramContractError {
         self.label.as_str()
     }
 
+    pub fn detail(&self) -> Option<&str> {
+        self.detail.as_deref()
+    }
+
     pub const fn correction(&self) -> &'static str {
         self.correction
     }
@@ -76,9 +98,13 @@ impl fmt::Display for GpuProgramContractError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             formatter,
-            "cannot {} '{}': {:?}; correction: {}",
-            self.operation, self.label, self.cause, self.correction
-        )
+            "cannot {} '{}': {:?}",
+            self.operation, self.label, self.cause
+        )?;
+        if let Some(detail) = self.detail.as_deref() {
+            write!(formatter, "; detail: {detail}")?;
+        }
+        write!(formatter, "; correction: {}", self.correction)
     }
 }
 
