@@ -21,7 +21,6 @@ Use focused package checks while editing. Before merge, run:
 
 ```text
 cargo validate
-git diff --check
 ```
 
 GitHub Actions runs the same `cargo validate` baseline at the reviewed commit.

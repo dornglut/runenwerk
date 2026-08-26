@@ -9,6 +9,8 @@ mod execution;
 #[cfg(test)]
 mod execution_tests;
 mod health;
+#[cfg(test)]
+mod initial_content_tests;
 mod pipeline_realization;
 mod program_binding_realization;
 mod resource_realization;

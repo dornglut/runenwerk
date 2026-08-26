@@ -105,13 +105,30 @@ jobs:
           set -euo pipefail
           vulkaninfo --summary
 
-      - name: Run native G5B headless proof
+      - name: Run native G5 transfer and G5R initial-content proofs
         env:
           RUST_BACKTRACE: '1'
         run: |
           set -euo pipefail
           cargo +stable test -p engine --test gpu_g5b_native_runtime --locked -- --ignored --nocapture
           cargo +stable test -p engine --test gpu_g5b_native_render --locked -- --ignored --nocapture
+          cargo +stable test -p engine --test gpu_initial_content_native --locked -- --ignored --nocapture
+
+      - name: Run indexed offscreen known-pattern proof
+        env:
+          RUST_BACKTRACE: '1'
+          RUNEN_GPU_PROOF_ARTIFACT_DIR: ${{ runner.temp }}/runengpu-proof-artifacts
+        run: |
+          set -euo pipefail
+          cargo +stable test -p engine --test gpu_offscreen_indexed_native --locked -- --ignored --nocapture
+          test -s "${RUNEN_GPU_PROOF_ARTIFACT_DIR}/known-pattern-indexed-offscreen.png"
+
+      - name: Retain indexed offscreen proof artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: runengpu-known-pattern-offscreen-${{ steps.revision.outputs.expected_revision }}
+          path: ${{ runner.temp }}/runengpu-proof-artifacts/known-pattern-indexed-offscreen.png
+          if-no-files-found: error
 
       - name: Run native G7A2 surface Present proof
         env:
