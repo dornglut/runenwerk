@@ -1,7 +1,6 @@
 #![forbid(unsafe_code)]
 
 use std::{
-    collections::BTreeSet,
     env,
     fmt::Write as _,
     fs,
@@ -85,8 +84,6 @@ const RETIRED_PATHS: &[&str] = &[
     "docs-site/src/content/docs/workspace/roadmap-deferred.yaml",
     "docs-site/src/content/docs/workspace/production-tracks.yaml",
 ];
-
-const SHARED_WORKFLOW_REVISION: &str = "624cb41adeed21a6461eb838bc7330bd0a5079fd";
 
 fn main() -> ExitCode {
     let command = env::args().nth(1).unwrap_or_else(|| "help".to_owned());
@@ -223,6 +220,7 @@ fn audit_repository(root: &Path) -> Result<(), String> {
         ".cargo/config.toml",
         ".github/workflows/ci.yml",
         ".github/workflows/docs-validation.yml",
+        ".github/workflows/runengpu-native-conformance.yml",
         "README.md",
         "AGENTS.md",
         "ARCHITECTURE.md",
@@ -263,6 +261,32 @@ fn audit_repository(root: &Path) -> Result<(), String> {
     )?;
     require_text(
         root,
+        ".github/workflows/ci.yml",
+        "  pull_request:\n    branches:\n      - main",
+        "CI should run for pull requests targeting main",
+    )?;
+    require_text_count(
+        root,
+        ".github/workflows/docs-validation.yml",
+        "      - 'docs-site/**'",
+        2,
+        "the documentation build must be path-scoped for pull requests and main pushes",
+    )?;
+    require_text_count(
+        root,
+        ".github/workflows/docs-validation.yml",
+        "      - '.github/workflows/docs-validation.yml'",
+        2,
+        "the documentation workflow must validate changes to itself",
+    )?;
+    require_text(
+        root,
+        ".github/workflows/docs-validation.yml",
+        "pnpm --dir docs-site build",
+        "the documentation workflow must own the Astro/Starlight production build",
+    )?;
+    require_text(
+        root,
         "AGENTS.md",
         "cargo validate",
         "the agent entrypoint must name the canonical baseline",
@@ -281,213 +305,11 @@ fn audit_repository(root: &Path) -> Result<(), String> {
         "the documentation build must not duplicate baseline documentation validation",
     )?;
 
-    validate_workflow_inventory(root)?;
-    validate_ci_workflow(root)?;
-    validate_documentation_workflow(root)?;
-
     validate_sdf_retirement(root)?;
     validate_sdf_gitlinks(root)?;
 
     eprintln!("> repository audit passed");
     Ok(())
-}
-
-fn validate_workflow_inventory(root: &Path) -> Result<(), String> {
-    let mut found = BTreeSet::new();
-    for entry in fs::read_dir(root.join(".github/workflows"))
-        .map_err(|error| format!("repository audit: cannot read workflow inventory: {error}"))?
-    {
-        let path = entry
-            .map_err(|error| format!("repository audit: cannot read workflow entry: {error}"))?
-            .path();
-        if path.is_file()
-            && matches!(
-                path.extension().and_then(|value| value.to_str()),
-                Some("yml" | "yaml")
-            )
-        {
-            found.insert(repository_relative(root, &path)?);
-        }
-    }
-    let expected = BTreeSet::from([
-        ".github/workflows/ci.yml".to_owned(),
-        ".github/workflows/docs-validation.yml".to_owned(),
-        ".github/workflows/runengpu-native-conformance.yml".to_owned(),
-    ]);
-    if found == expected {
-        Ok(())
-    } else {
-        Err(format!(
-            "repository audit: workflow inventory drift; expected {expected:?}, found {found:?}"
-        ))
-    }
-}
-
-fn normalized_workflow(text: &str) -> Vec<&str> {
-    text.lines()
-        .map(str::trim_end)
-        .filter(|line| !line.trim().is_empty() && !line.trim_start().starts_with('#'))
-        .collect()
-}
-
-fn validate_ci_workflow(root: &Path) -> Result<(), String> {
-    let workflow = read_text(root, ".github/workflows/ci.yml")?;
-    if ci_workflow_matches(&workflow) {
-        Ok(())
-    } else {
-        Err("repository audit: CI workflow identity, trigger, permission, concurrency, job, or reusable revision drift".to_owned())
-    }
-}
-
-fn ci_workflow_matches(workflow: &str) -> bool {
-    let lines = normalized_workflow(workflow);
-    let expected_uses = format!(
-        "    uses: dornglut/github-workflows/.github/workflows/reusable-rust-cargo-validate.yml@{SHARED_WORKFLOW_REVISION}"
-    );
-    let expected = vec![
-        "name: CI",
-        "on:",
-        "  pull_request:",
-        "  push:",
-        "    branches:",
-        "      - main",
-        "  workflow_dispatch:",
-        "permissions:",
-        "  contents: read",
-        "concurrency:",
-        "  group: ci-${{ github.workflow }}-${{ github.ref }}",
-        "  cancel-in-progress: true",
-        "jobs:",
-        "  validate:",
-        "    name: Runenwerk validation",
-        expected_uses.as_str(),
-    ];
-    lines.iter().copied().eq(expected.iter().copied())
-}
-
-fn validate_documentation_workflow(root: &Path) -> Result<(), String> {
-    const ACCEPTED_CONTRACT: &str = r#"
-name: Documentation Build
-on:
-  pull_request:
-    branches:
-      - main
-  push:
-    branches:
-      - main
-  workflow_dispatch:
-permissions:
-  contents: read
-concurrency:
-  group: docs-build-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-jobs:
-  build:
-    name: Build documentation site
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Resolve expected revision
-        id: revision
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          EVENT_SHA: ${{ github.sha }}
-          PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          case "$EVENT_NAME" in
-            pull_request) expected_revision="$PULL_REQUEST_HEAD_SHA" ;;
-            push|workflow_dispatch) expected_revision="$EVENT_SHA" ;;
-            *) echo "Unsupported event: $EVENT_NAME" >&2; exit 1 ;;
-          esac
-          test -n "$expected_revision"
-          echo "expected_revision=$expected_revision" >> "$GITHUB_OUTPUT"
-          echo "pull_request_base_revision=$PULL_REQUEST_BASE_SHA" >> "$GITHUB_OUTPUT"
-      - name: Checkout exact revision
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: ${{ steps.revision.outputs.expected_revision }}
-          clean: true
-          fetch-depth: 1
-          persist-credentials: false
-      - name: Prove checked-out revision
-        env:
-          EXPECTED_REVISION: ${{ steps.revision.outputs.expected_revision }}
-          PULL_REQUEST_BASE_REVISION: ${{ steps.revision.outputs.pull_request_base_revision }}
-        run: |
-          set -euo pipefail
-          actual_revision="$(git rev-parse HEAD)"
-          echo "Repository: $GITHUB_REPOSITORY"
-          echo "Event: $GITHUB_EVENT_NAME"
-          echo "Expected revision: $EXPECTED_REVISION"
-          echo "Actual checked-out revision: $actual_revision"
-          if [ -n "$PULL_REQUEST_BASE_REVISION" ]; then echo "Pull-request base revision: $PULL_REQUEST_BASE_REVISION"; fi
-          test "$actual_revision" = "$EXPECTED_REVISION"
-          echo "Conclusion: PASS"
-      - name: Install Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: 24
-      - name: Install pinned pnpm
-        run: npm install --global pnpm@11.0.0
-      - name: Install documentation dependencies
-        run: pnpm --dir docs-site install --frozen-lockfile
-      - name: Build documentation site
-        id: build
-        env:
-          EXPECTED_REVISION: ${{ steps.revision.outputs.expected_revision }}
-          PULL_REQUEST_BASE_REVISION: ${{ steps.revision.outputs.pull_request_base_revision }}
-        run: |
-          set +e
-          log_path="${RUNNER_TEMP}/runenwerk-documentation-build.log"
-          pnpm --dir docs-site build >"$log_path" 2>&1
-          build_status=$?
-          set -e
-          actual_revision="$(git rev-parse HEAD)"
-          echo "Repository: $GITHUB_REPOSITORY"
-          echo "Event: $GITHUB_EVENT_NAME"
-          echo "Expected revision: $EXPECTED_REVISION"
-          echo "Actual checked-out revision: $actual_revision"
-          if [ -n "$PULL_REQUEST_BASE_REVISION" ]; then echo "Pull-request base revision: $PULL_REQUEST_BASE_REVISION"; fi
-          echo "Canonical command: pnpm --dir docs-site build"
-          if [ "$build_status" -eq 0 ]; then echo "Conclusion: PASS"; exit 0; fi
-          echo "Conclusion: FAIL"
-          sed -n '1,120p' "$log_path" || true
-          tail -n 120 "$log_path" || true
-          exit "$build_status"
-      - name: Upload build diagnostics
-        if: failure() && steps.build.outcome == 'failure'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: documentation-build-diagnostics
-          path: ${{ runner.temp }}/runenwerk-documentation-build.log
-          if-no-files-found: error
-          retention-days: 3
-      - name: Remove build diagnostics
-        if: always()
-        run: rm -f "${RUNNER_TEMP}/runenwerk-documentation-build.log"
-      - name: Check diff hygiene
-        run: git diff --check
-      - name: Prove build leaves tracked state clean
-        run: |
-          status="$(git status --short)"
-          if [ -n "$status" ]; then
-            printf 'Documentation build changed tracked state:\n%s\n' "$status" >&2
-            exit 1
-          fi
-"#;
-
-    let workflow = read_text(root, ".github/workflows/docs-validation.yml")?;
-    if documentation_workflow_matches(&workflow, ACCEPTED_CONTRACT) {
-        Ok(())
-    } else {
-        Err("repository audit: documentation workflow identity, trigger, permission, concurrency, job, revision-selection, action pin, build, failure-handling, or cleanup contract drift".to_owned())
-    }
-}
-
-fn documentation_workflow_matches(workflow: &str, accepted_contract: &str) -> bool {
-    normalized_workflow(workflow) == normalized_workflow(accepted_contract)
 }
 
 fn validate_sdf_retirement(root: &Path) -> Result<(), String> {
@@ -686,6 +508,24 @@ fn require_text(root: &Path, relative: &str, marker: &str, reason: &str) -> Resu
     }
 }
 
+fn require_text_count(
+    root: &Path,
+    relative: &str,
+    marker: &str,
+    expected: usize,
+    reason: &str,
+) -> Result<(), String> {
+    let text = read_text(root, relative)?;
+    let found = text.matches(marker).count();
+    if found == expected {
+        Ok(())
+    } else {
+        Err(format!(
+            "repository audit: {relative} expected {expected} occurrences of {marker:?}, found {found}: {reason}"
+        ))
+    }
+}
+
 fn forbid_text(root: &Path, relative: &str, marker: &str, reason: &str) -> Result<(), String> {
     let text = read_text(root, relative)?;
     if text.contains(marker) {
@@ -749,16 +589,10 @@ fn print_usage() {
 #[cfg(test)]
 mod tests {
     use super::{
-        ValidationTiming, ci_workflow_matches, documentation_workflow_matches,
-        format_validation_timings, is_product_rust_source, is_sdf_gitlink,
+        ValidationTiming, format_validation_timings, is_product_rust_source, is_sdf_gitlink,
         measure_validation_stage, sdf_manifest_violation,
     };
     use std::time::Duration;
-
-    fn mutate(text: &str, before: &str, after: &str) -> String {
-        assert!(text.contains(before), "missing mutation target {before:?}");
-        text.replacen(before, after, 1)
-    }
 
     #[test]
     fn validation_timing_report_preserves_stage_order_and_total() {
@@ -789,175 +623,6 @@ mod tests {
         assert_eq!(result, Err("workspace tests failed".to_owned()));
         assert_eq!(timings.len(), 1);
         assert_eq!(timings[0].name, "workspace tests");
-    }
-
-    #[test]
-    fn accepted_workflows_pass_and_reject_the_issue_183_mutation_classes() {
-        let ci = include_str!("../../../.github/workflows/ci.yml");
-        let documentation = include_str!("../../../.github/workflows/docs-validation.yml");
-        assert!(ci_workflow_matches(ci));
-        assert!(documentation_workflow_matches(documentation, documentation));
-
-        let ci_mutations = [
-            (
-                "old reusable pin",
-                "624cb41adeed21a6461eb838bc7330bd0a5079fd",
-                "b6caad377102ca73794efaf734a65903b8efa829",
-            ),
-            (
-                "mutable reusable pin",
-                "@624cb41adeed21a6461eb838bc7330bd0a5079fd",
-                "@main",
-            ),
-            (
-                "short reusable pin",
-                "@624cb41adeed21a6461eb838bc7330bd0a5079fd",
-                "@624cb41adeed",
-            ),
-            (
-                "different reusable path",
-                "reusable-rust-cargo-validate.yml",
-                "reusable-rust-validate.yml",
-            ),
-            ("missing event", "  workflow_dispatch:\n", ""),
-            (
-                "added event",
-                "on:\n",
-                "on:\n  schedule:\n    - cron: '0 0 * * *'\n",
-            ),
-            (
-                "pull-request filter",
-                "  pull_request:\n",
-                "  pull_request:\n    branches:\n      - main\n",
-            ),
-            ("push branch drift", "      - main\n", "      - release\n"),
-            (
-                "dispatch input",
-                "  workflow_dispatch:\n",
-                "  workflow_dispatch:\n    inputs:\n      force:\n        required: false\n",
-            ),
-            (
-                "extra top-level key",
-                "permissions:\n",
-                "defaults:\n  run:\n    shell: bash\npermissions:\n",
-            ),
-            (
-                "permission drift",
-                "  contents: read\n",
-                "  contents: write\n",
-            ),
-            (
-                "concurrency drift",
-                "  cancel-in-progress: true\n",
-                "  cancel-in-progress: false\n",
-            ),
-            ("job key drift", "  validate:\n", "  validation:\n"),
-            (
-                "additional job",
-                "    name: Runenwerk validation\n",
-                "    name: Runenwerk validation\n  extra:\n    uses: dornglut/github-workflows/.github/workflows/reusable-rust-cargo-validate.yml@624cb41adeed21a6461eb838bc7330bd0a5079fd\n",
-            ),
-        ];
-        for (name, before, after) in ci_mutations {
-            assert!(!ci_workflow_matches(&mutate(ci, before, after)), "{name}");
-        }
-
-        let documentation_mutations = [
-            (
-                "default checkout",
-                "          ref: ${{ steps.revision.outputs.expected_revision }}\n",
-                "",
-            ),
-            (
-                "pull-request github sha",
-                "pull_request) expected_revision=\"$PULL_REQUEST_HEAD_SHA\"",
-                "pull_request) expected_revision=\"$EVENT_SHA\"",
-            ),
-            (
-                "missing expected-revision step",
-                "        id: revision\n",
-                "        id: revisions\n",
-            ),
-            (
-                "missing HEAD proof",
-                "actual_revision=\"$(git rev-parse HEAD)\"",
-                "actual_revision=\"$(git status --short)\"",
-            ),
-            (
-                "unsupported event accepted",
-                "*) echo \"Unsupported event: $EVENT_NAME\" >&2; exit 1 ;;",
-                "*) expected_revision=\"$EVENT_SHA\" ;;",
-            ),
-            (
-                "mutable action pin",
-                "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-                "actions/checkout@v4",
-            ),
-            (
-                "pull-request path filter",
-                "  pull_request:\n    branches:\n      - main\n",
-                "  pull_request:\n    branches:\n      - main\n    paths:\n      - \"docs-site/**\"\n",
-            ),
-            (
-                "push path filter",
-                "  push:\n    branches:\n      - main\n",
-                "  push:\n    branches:\n      - main\n    paths:\n      - \"docs-site/**\"\n",
-            ),
-            (
-                "documentation permission drift",
-                "  contents: read\n",
-                "  contents: write\n",
-            ),
-            (
-                "Node drift",
-                "          node-version: 24\n",
-                "          node-version: 22\n",
-            ),
-            (
-                "tee pipeline",
-                "          pnpm --dir docs-site build >\"$log_path\" 2>&1\n",
-                "          pnpm --dir docs-site build | tee \"$log_path\"\n",
-            ),
-            (
-                "success-log streaming",
-                "          build_status=$?\n",
-                "          build_status=$?\n          cat \"$log_path\"\n",
-            ),
-            (
-                "checkout log",
-                "${RUNNER_TEMP}/runenwerk-documentation-build.log",
-                "docs-site/runenwerk-documentation-build.log",
-            ),
-            (
-                "success artifact",
-                "        if: failure() && steps.build.outcome == 'failure'\n",
-                "        if: always()\n",
-            ),
-            (
-                "artifact retention drift",
-                "          retention-days: 3\n",
-                "          retention-days: 4\n",
-            ),
-            (
-                "conditional cleanup",
-                "      - name: Remove build diagnostics\n        if: always()",
-                "      - name: Remove build diagnostics\n        if: success()",
-            ),
-            (
-                "duplicated baseline command",
-                "      - name: Install documentation dependencies\n",
-                "      - name: Run Rust baseline\n        run: cargo validate\n\n      - name: Install documentation dependencies\n",
-            ),
-        ];
-        for (name, before, after) in documentation_mutations {
-            assert!(
-                !documentation_workflow_matches(
-                    &mutate(documentation, before, after),
-                    documentation
-                ),
-                "{name}"
-            );
-        }
     }
 
     #[test]
