@@ -245,10 +245,16 @@ mod tests {
         let mut allocator = EntityAllocator::new();
         let first = allocator.allocate().expect("allocation should succeed");
         allocator.free(first).expect("free should succeed");
+        let free_count = allocator.free_list.len();
         assert!(matches!(
             allocator.free(first),
             Err(EntityError::AlreadyFreed { .. })
         ));
+        assert_eq!(
+            allocator.free_list.len(),
+            free_count,
+            "rejected double free must not duplicate reusable free-list state"
+        );
 
         let second = allocator.allocate().expect("reuse should succeed");
         assert!(matches!(
@@ -268,11 +274,17 @@ mod tests {
         let foreign = second_allocator
             .allocate()
             .expect("allocation should succeed");
+        let next_index = first_allocator.next_index;
+        let slot_count = first_allocator.slots.len();
+        let free_count = first_allocator.free_list.len();
 
         assert!(matches!(
             first_allocator.free(foreign),
             Err(EntityError::ForeignWorld { .. })
         ));
+        assert_eq!(first_allocator.next_index, next_index);
+        assert_eq!(first_allocator.slots.len(), slot_count);
+        assert_eq!(first_allocator.free_list.len(), free_count);
         assert!(first_allocator.contains(local));
 
         let unknown = Entity::new(first_allocator.scope, 99, 0);
@@ -280,6 +292,9 @@ mod tests {
             first_allocator.free(unknown),
             Err(EntityError::UnknownEntity { .. })
         ));
+        assert_eq!(first_allocator.next_index, next_index);
+        assert_eq!(first_allocator.slots.len(), slot_count);
+        assert_eq!(first_allocator.free_list.len(), free_count);
         assert!(first_allocator.contains(local));
     }
 
