@@ -8,9 +8,8 @@ use super::interface::{
 };
 use super::source::GpuAdmittedProgramSource;
 use super::stage_io::{
-    GpuFragmentOutputBuiltin, GpuObservedFragmentOutputSignature,
-    GpuObservedVertexInputSignature, GpuShaderIoLocation, GpuShaderIoScalarClass,
-    GpuShaderIoValueType, GpuVertexInputBuiltin,
+    GpuFragmentOutputBuiltin, GpuObservedFragmentOutputSignature, GpuObservedVertexInputSignature,
+    GpuShaderIoLocation, GpuShaderIoScalarClass, GpuShaderIoValueType, GpuVertexInputBuiltin,
 };
 use crate::plugins::gpu::GpuTextureFormat;
 use core::num::{NonZeroU32, NonZeroU64};
@@ -180,25 +179,24 @@ pub(crate) fn analyze_program(
         }
 
         let key = GpuBindingKey::try_new(binding.group as u64, binding.binding as u64)?;
-        let (base_type, array_count) = binding_array_type(&module, global.ty).map_err(|detail| {
-            invalid(
-                operation,
-                &format!("binding {key}"),
-                GpuProgramContractCause::ProgramInterfaceMismatch,
-                detail,
-            )
-        })?;
-        let compiler_kind =
-            compiler_binding_kind(&module, &module_info, global.space, base_type).map_err(
-                |detail| {
-                    invalid(
-                        operation,
-                        &format!("binding {key}"),
-                        GpuProgramContractCause::ProgramInterfaceMismatch,
-                        detail,
-                    )
-                },
-            )?;
+        let (base_type, array_count) =
+            binding_array_type(&module, global.ty).map_err(|detail| {
+                invalid(
+                    operation,
+                    &format!("binding {key}"),
+                    GpuProgramContractCause::ProgramInterfaceMismatch,
+                    detail,
+                )
+            })?;
+        let compiler_kind = compiler_binding_kind(&module, &module_info, global.space, base_type)
+            .map_err(|detail| {
+                invalid(
+                    operation,
+                    &format!("binding {key}"),
+                    GpuProgramContractCause::ProgramInterfaceMismatch,
+                    detail,
+                )
+            })?;
         let observed_visibility = GpuShaderStages::new(used_stages)?;
         let refinement_index = refinements
             .binary_search_by_key(&key, GpuBindingLayoutRefinement::key)
@@ -708,12 +706,14 @@ fn collect_io<B>(
             blend_src: None,
             ..
         }) => {
-            locations.push(GpuShaderIoLocation::new(*location, io_value_type(module, ty)?));
+            locations.push(GpuShaderIoLocation::new(
+                *location,
+                io_value_type(module, ty)?,
+            ));
             Ok(())
         }
         Some(Binding::Location {
-            blend_src: Some(_),
-            ..
+            blend_src: Some(_), ..
         }) => Err(
             "dual-source blend output is outside the accepted RunenGPU stage-IO vocabulary"
                 .to_string(),
@@ -751,7 +751,7 @@ const fn vector_width(size: VectorSize) -> u8 {
     size as u8
 }
 
-const fn runen_stage(stage: ShaderStage) -> GpuShaderStage {
+fn runen_stage(stage: ShaderStage) -> GpuShaderStage {
     match stage {
         ShaderStage::Compute => GpuShaderStage::Compute,
         ShaderStage::Vertex => GpuShaderStage::Vertex,
