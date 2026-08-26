@@ -124,6 +124,9 @@ fn g5b_mapping_and_completion_remain_command_buffer_local_across_g7a_segments() 
     let queue_submit = encode
         .find("backend.queue.submit([segment.command_buffer]);")
         .expect("each owned segment must be submitted by the one G5 executor");
+    let initial_content_queued = encode
+        .find("plan.mark_initial_content_queued()")
+        .expect("G5R initial-content state must advance only at the physical submission boundary");
     let present = encode
         .find(".present(&backend.queue,surface.lease(),surface.resource())")
         .expect(
@@ -133,8 +136,9 @@ fn g5b_mapping_and_completion_remain_command_buffer_local_across_g7a_segments() 
         attach < map_callbacks
             && map_callbacks < completion
             && completion < queue_submit
-            && queue_submit < present,
-        "staging publication and command-buffer-local callbacks must precede physical submit, and Present must follow the segment carrying its prior work"
+            && queue_submit < initial_content_queued
+            && initial_content_queued < present,
+        "staging publication and command-buffer-local callbacks must precede physical submit; G5R seed state must advance only after submit and before any later Present"
     );
     assert!(
         encode.contains("ifindex+1==segment_count{register_submission_completion("),
@@ -144,6 +148,20 @@ fn g5b_mapping_and_completion_remain_command_buffer_local_across_g7a_segments() 
         encode.contains("present_after:Some(source.clone())")
             && encode.contains("present_after:None"),
         "Present must terminate a physical segment and leave one final completion segment, including the terminal-Present case"
+    );
+
+    let fail_start = execution
+        .find("fnfail_submission(")
+        .expect("accepted submission failure cleanup must remain explicit");
+    let fail_end = execution[fail_start..]
+        .find("fnfail_active_for_fault(")
+        .map(|offset| fail_start + offset)
+        .expect("submission failure cleanup must end before fault-wide cleanup");
+    let fail = &execution[fail_start..fail_end];
+    assert!(
+        !fail.contains("mark_initial_content_queued(")
+            && !fail.contains("mark_initial_content_completed("),
+        "failure cleanup must not fabricate or reset physical initial-content state: pre-submit failure leaves it required, while failure after first submit preserves the queued seed"
     );
 }
 
