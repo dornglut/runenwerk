@@ -145,7 +145,7 @@ impl Commands {
 
     pub fn spawn<B: Bundle + 'static>(&mut self, bundle: B) {
         self.queue(move |world: &mut World| {
-            world.spawn(bundle);
+            let _ = world.spawn(bundle)?;
             Ok(())
         });
     }

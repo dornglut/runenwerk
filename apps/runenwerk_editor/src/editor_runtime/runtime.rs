@@ -223,7 +223,10 @@ impl RunenwerkEditorRuntime {
     where
         T: ecs::Component + 'static,
     {
-        self.scene_realities.instantiated.spawn(component)
+        self.scene_realities
+            .instantiated
+            .spawn(component)
+            .expect("test world entity spawn should succeed")
     }
 
     pub(crate) fn insert_component_for_editor_entity<T>(

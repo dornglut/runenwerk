@@ -106,13 +106,15 @@ impl SystemSet for SetC {
 fn build_world_for_w1(entity_count: usize) -> World {
     let mut world = World::new();
     for i in 0..entity_count {
-        world.spawn((
-            Position {
-                x: i as f32,
-                y: (i as f32) * 0.5,
-            },
-            Velocity { x: 1.0, y: -0.5 },
-        ));
+        world
+            .spawn((
+                Position {
+                    x: i as f32,
+                    y: (i as f32) * 0.5,
+                },
+                Velocity { x: 1.0, y: -0.5 },
+            ))
+            .expect("benchmark setup spawn should succeed");
     }
     world
 }
@@ -182,26 +184,30 @@ fn build_runtime_for_w2(entity_count: usize) -> (World, Runtime) {
     for i in 0..entity_count {
         let disabled = i % 8 == 0;
         if disabled {
-            world.spawn((
-                Position {
-                    x: i as f32,
-                    y: 0.0,
-                },
-                Velocity { x: 1.0, y: 0.25 },
-                Health(100),
-                Simulated,
-                Disabled,
-            ));
+            world
+                .spawn((
+                    Position {
+                        x: i as f32,
+                        y: 0.0,
+                    },
+                    Velocity { x: 1.0, y: 0.25 },
+                    Health(100),
+                    Simulated,
+                    Disabled,
+                ))
+                .expect("benchmark setup spawn should succeed");
         } else {
-            world.spawn((
-                Position {
-                    x: i as f32,
-                    y: 0.0,
-                },
-                Velocity { x: 1.0, y: 0.25 },
-                Health(100),
-                Simulated,
-            ));
+            world
+                .spawn((
+                    Position {
+                        x: i as f32,
+                        y: 0.0,
+                    },
+                    Velocity { x: 1.0, y: 0.25 },
+                    Health(100),
+                    Simulated,
+                ))
+                .expect("benchmark setup spawn should succeed");
         }
     }
 
@@ -254,14 +260,16 @@ fn w3_despawn(mut commands: Commands, mut query: Query<(Entity, &ChurnTag)>) {
 fn build_runtime_for_w3(entity_count: usize) -> (World, Runtime) {
     let mut world = World::new();
     for i in 0..entity_count {
-        world.spawn((
-            ChurnTag,
-            Position {
-                x: i as f32,
-                y: 0.0,
-            },
-            Velocity { x: 0.0, y: 0.0 },
-        ));
+        world
+            .spawn((
+                ChurnTag,
+                Position {
+                    x: i as f32,
+                    y: 0.0,
+                },
+                Velocity { x: 0.0, y: 0.0 },
+            ))
+            .expect("benchmark setup spawn should succeed");
     }
 
     let mut runtime = Runtime::new();
@@ -308,13 +316,15 @@ fn build_runtime_for_w4(entity_count: usize) -> (World, Runtime) {
     let mut world = World::new();
     world.insert_resource(EventStats::default());
     for i in 0..entity_count {
-        world.spawn((
-            Position {
-                x: i as f32,
-                y: i as f32,
-            },
-            Velocity { x: 0.0, y: 0.0 },
-        ));
+        world
+            .spawn((
+                Position {
+                    x: i as f32,
+                    y: i as f32,
+                },
+                Velocity { x: 0.0, y: 0.0 },
+            ))
+            .expect("benchmark setup spawn should succeed");
     }
 
     let mut runtime = Runtime::new();

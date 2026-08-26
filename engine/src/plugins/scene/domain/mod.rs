@@ -239,7 +239,7 @@ pub fn build_overlay_runtime(
         lifetime: BroadcastLifetime::FrameTransient,
         ..BroadcastStreamConfig::default()
     });
-    let mut ui = initialize_console_ui(&mut world);
+    let mut ui = initialize_console_ui(&mut world)?;
     ui.screen_size = screen_size;
     ui.scale = scale;
     if let Some(path) = registry.ui_template_path(scene) {
@@ -332,11 +332,11 @@ fn world_scene_debug_motion_system(ctx: &mut WorldSceneContext) -> Result<()> {
 pub fn build_world_scene_runtime(scene: SceneId) -> Result<WorldSceneRuntime> {
     let (gameplay_config, gameplay_config_modified) = load_gameplay_config_with_modified();
     let mut world = ecs::World::new();
-    let tick_entity = world.spawn(WorldFrameCounter { value: 0 });
+    let tick_entity = world.spawn(WorldFrameCounter { value: 0 })?;
     let debug_entity = world.spawn((
         WorldDebugPosition { x: 0.0, y: 0.0 },
         WorldDebugVelocity { x: 1.25, y: 0.75 },
-    ));
+    ))?;
     let ctx = WorldSceneContext {
         world,
         world_scene_label: scene.label().to_string(),

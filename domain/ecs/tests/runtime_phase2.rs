@@ -78,8 +78,10 @@ fn runtime_executes_1_2_and_8_param_systems() {
     }
 
     let mut world = World::new();
-    world.spawn((Position(1.0), Velocity(2.0)));
-    world.spawn(Position(2.0));
+    world
+        .spawn((Position(1.0), Velocity(2.0)))
+        .expect("spawn should succeed");
+    world.spawn(Position(2.0)).expect("spawn should succeed");
     world.insert_resource(Frame(0));
     world.insert_resource(Score(0));
     world.insert_resource(DeltaTime(0.5));

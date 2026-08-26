@@ -101,11 +101,13 @@ fn aabb3(min: [f32; 3], max: [f32; 3]) -> Aabb3 {
 #[test]
 fn spawn_query_and_entity_access_work() {
     let mut world = World::new();
-    let entity = world.spawn((
-        Player,
-        Position { x: 1.0, y: 2.0 },
-        Velocity { x: 0.5, y: -1.0 },
-    ));
+    let entity = world
+        .spawn((
+            Player,
+            Position { x: 1.0, y: 2.0 },
+            Velocity { x: 0.5, y: -1.0 },
+        ))
+        .expect("spawn should succeed");
 
     let position = world.require::<Position>(entity).unwrap();
     assert_eq!(position.x, 1.0);
@@ -128,12 +130,16 @@ fn spawn_query_and_entity_access_work() {
 #[test]
 fn query_filters_support_unified_iter_for_mutation() {
     let mut world = World::new();
-    let active = world.spawn((Position { x: 0.0, y: 0.0 }, Velocity { x: 2.0, y: 1.0 }));
-    let disabled = world.spawn((
-        Position { x: 5.0, y: 5.0 },
-        Velocity { x: 9.0, y: 9.0 },
-        Disabled,
-    ));
+    let active = world
+        .spawn((Position { x: 0.0, y: 0.0 }, Velocity { x: 2.0, y: 1.0 }))
+        .expect("spawn should succeed");
+    let disabled = world
+        .spawn((
+            Position { x: 5.0, y: 5.0 },
+            Velocity { x: 9.0, y: 9.0 },
+            Disabled,
+        ))
+        .expect("spawn should succeed");
 
     let query = world
         .query_state::<(&mut Position, &Velocity), ()>()
@@ -156,7 +162,7 @@ fn query_filters_support_unified_iter_for_mutation() {
 #[test]
 fn entity_mut_bundle_insert_and_remove_work() {
     let mut world = World::new();
-    let entity = world.spawn(Player);
+    let entity = world.spawn(Player).expect("spawn should succeed");
 
     {
         let mut entity_mut = world.entity_mut(entity).unwrap();
@@ -228,8 +234,12 @@ fn resource_lifecycle_and_change_logs_work() {
 #[test]
 fn commands_apply_spawn_insert_and_despawn() {
     let mut world = World::new();
-    let existing = world.spawn(Position { x: 1.0, y: 1.0 });
-    let doomed = world.spawn(Position { x: 99.0, y: 99.0 });
+    let existing = world
+        .spawn(Position { x: 1.0, y: 1.0 })
+        .expect("spawn should succeed");
+    let doomed = world
+        .spawn(Position { x: 99.0, y: 99.0 })
+        .expect("spawn should succeed");
 
     let mut commands = world.commands();
     commands.spawn((Position { x: 3.0, y: 4.0 }, Velocity { x: 0.0, y: 1.0 }));
@@ -253,7 +263,9 @@ fn secondary_indexes_track_updates() {
     let mut world = World::new();
     world.ensure_component_index::<Name, String>(|name| name.0.clone());
 
-    let entity = world.spawn(Name("hero".to_string()));
+    let entity = world
+        .spawn(Name("hero".to_string()))
+        .expect("spawn should succeed");
     assert_eq!(
         world.find_entity_by_index::<Name, String>(&"hero".to_string()),
         Some(entity)
@@ -278,8 +290,12 @@ fn secondary_index_reads_support_shared_world_reference() {
         name.0.chars().next().unwrap_or_default()
     });
 
-    let hero = world.spawn(Name("hero".to_string()));
-    let helper = world.spawn(Name("healer".to_string()));
+    let hero = world
+        .spawn(Name("hero".to_string()))
+        .expect("spawn should succeed");
+    let helper = world
+        .spawn(Name("healer".to_string()))
+        .expect("spawn should succeed");
     let shared_world: &World = &world;
 
     assert_eq!(
@@ -304,9 +320,15 @@ fn secondary_index_helpers_and_component_change_logs_work() {
         name.0.chars().next().unwrap_or_default()
     });
 
-    let hero = world.spawn((Name("hero".to_string()), Health(10)));
-    let helper = world.spawn((Name("healer".to_string()), Health(7)));
-    let villain = world.spawn((Name("villain".to_string()), Health(9)));
+    let hero = world
+        .spawn((Name("hero".to_string()), Health(10)))
+        .expect("spawn should succeed");
+    let helper = world
+        .spawn((Name("healer".to_string()), Health(7)))
+        .expect("spawn should succeed");
+    let villain = world
+        .spawn((Name("villain".to_string()), Health(9)))
+        .expect("spawn should succeed");
 
     assert_eq!(
         world.find_entities_by_index_named::<Name, char>("initial", &'h'),
@@ -456,9 +478,11 @@ fn tick_buffer_preserves_tick_order_and_tick_finalization_cleans_old_ticks() {
 #[test]
 fn query_support_matrix_required_forms_work() {
     let mut world = World::new();
-    let e1 = world.spawn((A(1), B(10), C(100), Player));
-    let e2 = world.spawn((A(2), C(200)));
-    let e3 = world.spawn(B(30));
+    let e1 = world
+        .spawn((A(1), B(10), C(100), Player))
+        .expect("spawn should succeed");
+    let e2 = world.spawn((A(2), C(200))).expect("spawn should succeed");
+    let e3 = world.spawn(B(30)).expect("spawn should succeed");
 
     let q_read = world.query_state::<&A, ()>();
     assert_eq!(
@@ -548,8 +572,8 @@ fn query_support_matrix_required_forms_work() {
 #[test]
 fn query_optional_symmetry_forms_work() {
     let mut world = World::new();
-    let with_b = world.spawn((A(1), B(10)));
-    let without_b = world.spawn(A(2));
+    let with_b = world.spawn((A(1), B(10))).expect("spawn should succeed");
+    let without_b = world.spawn(A(2)).expect("spawn should succeed");
 
     let read_optional = world.query_state::<(&A, Option<&B>), ()>();
     let values: Vec<_> = read_optional
@@ -581,8 +605,12 @@ fn query_optional_symmetry_forms_work() {
 #[test]
 fn changed_and_added_filters_work_and_compose() {
     let mut world = World::new();
-    let active = world.spawn((Position { x: 1.0, y: 1.0 }, Player));
-    let inactive = world.spawn((Position { x: 5.0, y: 5.0 }, Player, Disabled));
+    let active = world
+        .spawn((Position { x: 1.0, y: 1.0 }, Player))
+        .expect("spawn should succeed");
+    let inactive = world
+        .spawn((Position { x: 5.0, y: 5.0 }, Player, Disabled))
+        .expect("spawn should succeed");
 
     let changed_active = world
         .query_state::<(Entity, &Position), (Changed<Position>, With<Player>, Without<Disabled>)>();
@@ -607,8 +635,12 @@ fn changed_and_added_filters_work_and_compose() {
         world.query_state::<(Entity, &Health), (Added<Health>, Without<Disabled>)>();
     assert!(added_visible.iter(&world).next().is_none());
 
-    let visible_health = world.spawn((Health(10), Player));
-    let _hidden_health = world.spawn((Health(20), Player, Disabled));
+    let visible_health = world
+        .spawn((Health(10), Player))
+        .expect("spawn should succeed");
+    let _hidden_health = world
+        .spawn((Health(20), Player, Disabled))
+        .expect("spawn should succeed");
 
     let added_pass: Vec<_> = added_visible
         .iter(&world)
@@ -626,8 +658,12 @@ fn changed_and_added_filters_work_and_compose() {
 #[test]
 fn query_filter_tuple_composition_works() {
     let mut world = World::new();
-    let included = world.spawn((Position { x: 1.0, y: 1.0 }, Player));
-    let _excluded = world.spawn((Position { x: 2.0, y: 2.0 }, Player, Disabled));
+    let included = world
+        .spawn((Position { x: 1.0, y: 1.0 }, Player))
+        .expect("spawn should succeed");
+    let _excluded = world
+        .spawn((Position { x: 2.0, y: 2.0 }, Player, Disabled))
+        .expect("spawn should succeed");
 
     let query = world.query_state::<(Entity, &Position), ()>();
     let seen: Vec<_> = query
@@ -642,8 +678,8 @@ fn query_filter_tuple_composition_works() {
 #[test]
 fn broad_query_state_reuse_tracks_current_entities() {
     let mut world = World::new();
-    let first = world.spawn(A(1));
-    let second = world.spawn(A(2));
+    let first = world.spawn(A(1)).expect("spawn should succeed");
+    let second = world.spawn(A(2)).expect("spawn should succeed");
 
     let query = world.query_state::<(Entity, &A), ()>();
     let first_pass: Vec<_> = query
@@ -653,7 +689,7 @@ fn broad_query_state_reuse_tracks_current_entities() {
     assert_eq!(first_pass, vec![(first, 1), (second, 2)]);
 
     world.despawn(first).unwrap();
-    let third = world.spawn(A(3));
+    let third = world.spawn(A(3)).expect("spawn should succeed");
 
     let second_pass: Vec<_> = query
         .iter(&world)
@@ -667,8 +703,8 @@ fn broad_query_state_reuse_tracks_current_entities() {
 #[test]
 fn broad_without_filter_reuse_stays_correct_after_component_toggle() {
     let mut world = World::new();
-    let enabled = world.spawn(A(1));
-    let muted = world.spawn((A(2), Disabled));
+    let enabled = world.spawn(A(1)).expect("spawn should succeed");
+    let muted = world.spawn((A(2), Disabled)).expect("spawn should succeed");
 
     let query = world
         .query_state::<(Entity, &A), ()>()
@@ -692,7 +728,7 @@ fn broad_without_filter_reuse_stays_correct_after_component_toggle() {
 #[test]
 fn query_state_cache_rebinds_when_iterating_a_different_world() {
     let mut first_world = World::new();
-    let first_entity = first_world.spawn(A(1));
+    let first_entity = first_world.spawn(A(1)).expect("spawn should succeed");
     let query = first_world.query_state::<&mut A, ()>();
     for value in query.iter(&mut first_world) {
         value.0 += 1;
@@ -700,7 +736,7 @@ fn query_state_cache_rebinds_when_iterating_a_different_world() {
     assert_eq!(first_world.require::<A>(first_entity).unwrap().0, 2);
 
     let mut second_world = World::new();
-    let second_entity = second_world.spawn(A(10));
+    let second_entity = second_world.spawn(A(10)).expect("spawn should succeed");
     for value in query.iter(&mut second_world) {
         value.0 += 5;
     }
@@ -715,7 +751,7 @@ fn query_state_cache_recovers_when_store_appears_after_empty_run() {
     let query = world.query_state::<&mut A, ()>();
     assert!(query.iter(&mut world).next().is_none());
 
-    let entity = world.spawn(A(4));
+    let entity = world.spawn(A(4)).expect("spawn should succeed");
     for value in query.iter(&mut world) {
         value.0 += 3;
     }
@@ -726,8 +762,12 @@ fn query_state_cache_recovers_when_store_appears_after_empty_run() {
 #[test]
 fn query_get_respects_filters_and_changed_semantics() {
     let mut world = World::new();
-    let visible = world.spawn((Position { x: 1.0, y: 1.0 }, Player));
-    let hidden = world.spawn((Position { x: 2.0, y: 2.0 }, Player, Disabled));
+    let visible = world
+        .spawn((Position { x: 1.0, y: 1.0 }, Player))
+        .expect("spawn should succeed");
+    let hidden = world
+        .spawn((Position { x: 2.0, y: 2.0 }, Player, Disabled))
+        .expect("spawn should succeed");
 
     let visible_query = world.query_state::<&Position, (With<Player>, Without<Disabled>)>();
     assert!(visible_query.get(&world, visible).is_some());
@@ -745,7 +785,9 @@ fn query_get_respects_filters_and_changed_semantics() {
 #[test]
 fn changed_and_added_filters_handle_remove_then_reinsert() {
     let mut world = World::new();
-    let entity = world.spawn((Health(10), Player));
+    let entity = world
+        .spawn((Health(10), Player))
+        .expect("spawn should succeed");
 
     let added = world.query_state::<(Entity, &Health), Added<Health>>();
     assert_eq!(
@@ -773,7 +815,7 @@ fn changed_and_added_filters_handle_remove_then_reinsert() {
 #[test]
 fn get_mut_and_require_mut_update_changed_tracking_semantics() {
     let mut world = World::new();
-    let entity = world.spawn(Health(10));
+    let entity = world.spawn(Health(10)).expect("spawn should succeed");
     let changed = world.query_state::<(Entity, &Health), Changed<Health>>();
 
     assert_eq!(
@@ -829,7 +871,7 @@ fn get_mut_and_require_mut_update_changed_tracking_semantics() {
 fn insert_remove_and_despawn_keep_change_logs_and_lifecycle_events_in_sync() {
     let mut world = World::new();
     let start = world.current_change_tick();
-    let entity = world.spawn(Player);
+    let entity = world.spawn(Player).expect("spawn should succeed");
 
     let spawned = world.drain_broadcast_admin::<EntitySpawnedEvent>();
     assert_eq!(spawned.len(), 1);
@@ -866,8 +908,12 @@ fn component_index_rebuild_remains_correct_under_churn() {
     let mut world = World::new();
     world.ensure_component_index::<Name, String>(|name| name.0.clone());
 
-    let first = world.spawn(Name("alpha".to_string()));
-    let second = world.spawn(Name("beta".to_string()));
+    let first = world
+        .spawn(Name("alpha".to_string()))
+        .expect("spawn should succeed");
+    let second = world
+        .spawn(Name("beta".to_string()))
+        .expect("spawn should succeed");
     assert_eq!(
         world.find_entity_by_index::<Name, String>(&"alpha".to_string()),
         Some(first)
@@ -884,7 +930,9 @@ fn component_index_rebuild_remains_correct_under_churn() {
     );
 
     world.insert(first, Name("gamma".to_string())).unwrap();
-    let third = world.spawn(Name("alpha".to_string()));
+    let third = world
+        .spawn(Name("alpha".to_string()))
+        .expect("spawn should succeed");
     world.despawn(second).unwrap();
 
     assert_eq!(
@@ -953,8 +1001,8 @@ fn spatial_index_insert_and_query_overlap_work() {
         .ensure_spatial_hash_index(SpatialHashConfig { cell_size: 1.0 })
         .unwrap();
 
-    let near = world.spawn(Player);
-    let far = world.spawn(Player);
+    let near = world.spawn(Player).expect("spawn should succeed");
+    let far = world.spawn(Player).expect("spawn should succeed");
     world
         .spatial_insert(near, aabb3([0.0, 0.0, 0.0], [0.8, 0.8, 0.8]))
         .unwrap();
@@ -975,7 +1023,7 @@ fn spatial_index_update_moves_entity_between_cells() {
         .ensure_spatial_hash_index(SpatialHashConfig { cell_size: 1.0 })
         .unwrap();
 
-    let entity = world.spawn(Player);
+    let entity = world.spawn(Player).expect("spawn should succeed");
     world
         .spatial_insert(entity, aabb3([0.0, 0.0, 0.0], [0.4, 0.4, 0.4]))
         .unwrap();
@@ -1004,7 +1052,7 @@ fn spatial_index_remove_clears_query_results() {
         .ensure_spatial_hash_index(SpatialHashConfig { cell_size: 1.0 })
         .unwrap();
 
-    let entity = world.spawn(Player);
+    let entity = world.spawn(Player).expect("spawn should succeed");
     world
         .spatial_insert(entity, aabb3([1.0, 1.0, 1.0], [2.0, 2.0, 2.0]))
         .unwrap();
@@ -1025,7 +1073,7 @@ fn spatial_index_sparse_empty_space_queries_return_nothing() {
         .ensure_spatial_hash_index(SpatialHashConfig { cell_size: 2.0 })
         .unwrap();
 
-    let entity = world.spawn(Player);
+    let entity = world.spawn(Player).expect("spawn should succeed");
     world
         .spatial_insert(entity, aabb3([100.0, 100.0, 100.0], [101.0, 101.0, 101.0]))
         .unwrap();
@@ -1045,7 +1093,7 @@ fn spatial_index_deduplicates_entities_spanning_multiple_cells() {
         .ensure_spatial_hash_index(SpatialHashConfig { cell_size: 1.0 })
         .unwrap();
 
-    let entity = world.spawn(Player);
+    let entity = world.spawn(Player).expect("spawn should succeed");
     world
         .spatial_insert(entity, aabb3([0.25, 0.25, 0.25], [2.25, 2.25, 2.25]))
         .unwrap();
@@ -1063,9 +1111,9 @@ fn spatial_index_returns_multiple_entities_for_overlapping_cells() {
         .ensure_spatial_hash_index(SpatialHashConfig { cell_size: 1.0 })
         .unwrap();
 
-    let first = world.spawn(Player);
-    let second = world.spawn(Player);
-    let third = world.spawn(Player);
+    let first = world.spawn(Player).expect("spawn should succeed");
+    let second = world.spawn(Player).expect("spawn should succeed");
+    let third = world.spawn(Player).expect("spawn should succeed");
     world
         .spatial_insert(first, aabb3([0.0, 0.0, 0.0], [1.2, 1.2, 1.2]))
         .unwrap();
@@ -1089,7 +1137,7 @@ fn spatial_index_lifecycle_stays_correct_under_repeated_updates_and_despawn() {
         .ensure_spatial_hash_index(SpatialHashConfig { cell_size: 1.0 })
         .unwrap();
 
-    let entity = world.spawn(Player);
+    let entity = world.spawn(Player).expect("spawn should succeed");
     world
         .spatial_insert(entity, aabb3([0.0, 0.0, 0.0], [0.5, 0.5, 0.5]))
         .unwrap();

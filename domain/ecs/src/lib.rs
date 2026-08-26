@@ -21,7 +21,9 @@ pub use ecs_macros::{
     SystemParam,
 };
 pub use entity::{Entity, EntityAllocator};
-pub use errors::{CommandError, EntityError, QueryError, ResourceError, SpatialIndexError};
+pub use errors::{
+    CommandError, EntityAllocationError, EntityError, QueryError, ResourceError, SpatialIndexError,
+};
 pub use indexing::{DEFAULT_SPATIAL_INDEX_NAME, SpatialHashConfig, SpatialHashIndex, SpatialIndex};
 pub use query::{
     Added, Changed, Orphaned, Query, QueryAccess, QueryOrphaned, QueryOrphanedState, QueryState,

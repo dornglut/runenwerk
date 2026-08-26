@@ -12,8 +12,8 @@ struct R(u32);
 #[test]
 fn extraction_orders_component_and_resource_deltas_by_stable_keys() {
     let mut world = World::new();
-    let first = world.spawn(A(1));
-    let second = world.spawn(A(2));
+    let first = world.spawn(A(1)).expect("spawn should succeed");
+    let second = world.spawn(A(2)).expect("spawn should succeed");
     world.insert_resource(R(1));
 
     world

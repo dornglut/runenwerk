@@ -36,24 +36,28 @@ impl Plugin for Phase4RuntimeBenchPlugin {
         app.init_resource::<FrameAccumulator>();
         for i in 0..self.entity_count {
             if i % 10 == 0 {
-                app.world_mut().spawn((
-                    Position {
-                        x: i as f32,
-                        y: i as f32,
-                    },
-                    Velocity { x: 1.0, y: -0.5 },
-                    Simulated,
-                    Disabled,
-                ));
+                app.world_mut()
+                    .spawn((
+                        Position {
+                            x: i as f32,
+                            y: i as f32,
+                        },
+                        Velocity { x: 1.0, y: -0.5 },
+                        Simulated,
+                        Disabled,
+                    ))
+                    .expect("benchmark setup spawn should succeed");
             } else {
-                app.world_mut().spawn((
-                    Position {
-                        x: i as f32,
-                        y: i as f32,
-                    },
-                    Velocity { x: 1.0, y: -0.5 },
-                    Simulated,
-                ));
+                app.world_mut()
+                    .spawn((
+                        Position {
+                            x: i as f32,
+                            y: i as f32,
+                        },
+                        Velocity { x: 1.0, y: -0.5 },
+                        Simulated,
+                    ))
+                    .expect("benchmark setup spawn should succeed");
             }
         }
 

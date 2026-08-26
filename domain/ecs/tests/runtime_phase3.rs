@@ -152,7 +152,7 @@ struct SpawnMarkerDeferred(u32);
 
 impl DeferredCommand<()> for SpawnMarkerDeferred {
     fn apply(self: Box<Self>, world: &mut World) -> Result<(), ecs::CommandError> {
-        world.spawn(Marker(self.0));
+        let _ = world.spawn(Marker(self.0))?;
         Ok(())
     }
 }
@@ -774,7 +774,7 @@ fn closure_commands_queue_api_remains_functional() {
     let mut world = World::new();
     let mut commands = world.commands();
     commands.queue(|world| {
-        world.spawn(Marker(33));
+        let _ = world.spawn(Marker(33))?;
         Ok(())
     });
 
@@ -813,7 +813,7 @@ fn mixed_legacy_and_typed_commands_apply_in_deterministic_order() {
     commands.spawn(Marker(1));
     commands.defer(SpawnMarkerDeferred(2));
     commands.queue(|world| {
-        world.spawn(Marker(3));
+        let _ = world.spawn(Marker(3))?;
         Ok(())
     });
     commands.defer(SpawnMarkerDeferred(4));
@@ -836,7 +836,7 @@ fn batch_commands_apply_in_deterministic_insertion_order() {
         batch.spawn(Marker(1));
         batch.defer(SpawnMarkerDeferred(2));
         batch.queue(|world| {
-            world.spawn(Marker(3));
+            let _ = world.spawn(Marker(3))?;
             Ok(())
         });
     });
@@ -884,7 +884,7 @@ fn batch_and_non_batch_commands_share_queue_order_deterministically() {
         batch.spawn(Marker(2));
     });
     commands.queue(|world| {
-        world.spawn(Marker(3));
+        let _ = world.spawn(Marker(3))?;
         Ok(())
     });
     commands.batch(|batch| {
@@ -904,7 +904,7 @@ fn batch_and_non_batch_commands_share_queue_order_deterministically() {
 #[test]
 fn batch_supports_mixed_command_kinds() {
     let mut world = World::new();
-    let entity = world.spawn(Marker(1));
+    let entity = world.spawn(Marker(1)).expect("spawn should succeed");
     let mut commands = world.commands();
     commands.batch(|batch| {
         batch.queue(move |world| {
@@ -922,7 +922,7 @@ fn batch_supports_mixed_command_kinds() {
 #[test]
 fn batch_stops_on_first_error_and_keeps_earlier_mutations() {
     let mut world = World::new();
-    let target = world.spawn(Marker(0));
+    let target = world.spawn(Marker(0)).expect("spawn should succeed");
     let mut commands = world.commands();
     commands.batch(|batch| {
         batch.spawn(Marker(10));
@@ -1011,7 +1011,7 @@ fn typed_commands_follow_stage_boundary_visibility_contract() {
     }
 
     let mut world = World::new();
-    let target = world.spawn(Marker(1));
+    let target = world.spawn(Marker(1)).expect("spawn should succeed");
     world.insert_resource(TargetEntity(target));
     world.insert_resource(SeenCount(0));
 
@@ -1188,7 +1188,7 @@ fn flush_stage_structural_migration_is_visible_in_followup_stage() {
     }
 
     let mut world = World::new();
-    let target = world.spawn(Marker(1));
+    let target = world.spawn(Marker(1)).expect("spawn should succeed");
     world.insert_resource(TargetEntity(target));
     world.insert_resource(Step(0));
     world.insert_resource(CountHistory(Vec::new()));
@@ -1300,7 +1300,9 @@ fn event_heavy_mixed_workload_with_structural_churn_remains_stable() {
         lifetime: BroadcastLifetime::FrameTransient,
         tracing: BroadcastTracingPolicy::Disabled,
     });
-    let target = world.spawn((Marker(0), Toggle));
+    let target = world
+        .spawn((Marker(0), Toggle))
+        .expect("spawn should succeed");
     world.insert_resource(TargetEntity(target));
     world.insert_resource(Step(0));
     world.insert_resource(EventHistory(Vec::new()));
@@ -1348,8 +1350,12 @@ fn deferred_commands_keep_secondary_indexes_correct_after_apply() {
 
     let mut world = World::new();
     world.ensure_component_index::<IndexedName, String>(|name| name.0.clone());
-    let target = world.spawn(IndexedName("initial".to_string()));
-    let other = world.spawn(IndexedName("other".to_string()));
+    let target = world
+        .spawn(IndexedName("initial".to_string()))
+        .expect("spawn should succeed");
+    let other = world
+        .spawn(IndexedName("other".to_string()))
+        .expect("spawn should succeed");
     world.insert_resource(TargetEntity(target));
     world.insert_resource(Step(0));
 

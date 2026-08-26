@@ -144,42 +144,7 @@ pub struct ConsoleUiRuntimeState {
     pub template_modified: Option<std::time::SystemTime>,
 }
 
-impl Default for ConsoleUiRuntimeState {
-    fn default() -> Self {
-        Self {
-            root: Entity {
-                id: 0,
-                generation: 0,
-            },
-            scrollback: Entity {
-                id: 0,
-                generation: 0,
-            },
-            input: Entity {
-                id: 0,
-                generation: 0,
-            },
-            confirm_button: Entity {
-                id: 0,
-                generation: 0,
-            },
-            frame: UiFrame::default(),
-            presentation_mode: UiPresentationMode::Standard,
-            layout_dirty: true,
-            screen_size: (1280.0, 720.0),
-            scale: 1.0,
-            layout: ConsoleUiLayoutConfig::default(),
-            input_editor: ConsoleInputEditorState::default(),
-            log_lines: Vec::new(),
-            log_scroll_lines_from_bottom: 0,
-            max_lines: 256,
-            template_path: None,
-            template_modified: None,
-        }
-    }
-}
-
-pub fn initialize_console_ui(world: &mut World) -> ConsoleUiRuntimeState {
+pub fn initialize_console_ui(world: &mut World) -> Result<ConsoleUiRuntimeState> {
     let root = world.spawn((
         UiNode { visible: true },
         UiTransform::default(),
@@ -190,7 +155,7 @@ pub fn initialize_console_ui(world: &mut World) -> ConsoleUiRuntimeState {
             radius: 8.0,
         },
         UiDirty,
-    ));
+    ))?;
 
     let scrollback = world.spawn((
         UiNode { visible: true },
@@ -202,7 +167,7 @@ pub fn initialize_console_ui(world: &mut World) -> ConsoleUiRuntimeState {
             size: 14.0,
         },
         UiDirty,
-    ));
+    ))?;
 
     let input = world.spawn((
         UiNode { visible: true },
@@ -219,7 +184,7 @@ pub fn initialize_console_ui(world: &mut World) -> ConsoleUiRuntimeState {
             size: 14.0,
         },
         UiDirty,
-    ));
+    ))?;
 
     let confirm_button = world.spawn((
         UiNode { visible: true },
@@ -236,7 +201,7 @@ pub fn initialize_console_ui(world: &mut World) -> ConsoleUiRuntimeState {
             size: 14.0,
         },
         UiDirty,
-    ));
+    ))?;
 
     world.insert_resource(UiRenderShaderConfig::default());
 
@@ -245,10 +210,21 @@ pub fn initialize_console_ui(world: &mut World) -> ConsoleUiRuntimeState {
         scrollback,
         input,
         confirm_button,
-        ..ConsoleUiRuntimeState::default()
+        frame: UiFrame::default(),
+        presentation_mode: UiPresentationMode::Standard,
+        layout_dirty: true,
+        screen_size: (1280.0, 720.0),
+        scale: 1.0,
+        layout: ConsoleUiLayoutConfig::default(),
+        input_editor: ConsoleInputEditorState::default(),
+        log_lines: Vec::new(),
+        log_scroll_lines_from_bottom: 0,
+        max_lines: 256,
+        template_path: None,
+        template_modified: None,
     };
     ui.log_lines.push("[world] scene overlay ready".to_string());
-    ui
+    Ok(ui)
 }
 
 pub fn load_console_template(

@@ -322,11 +322,13 @@ mod tests {
         let mut world = ecs::World::new();
         world.register_component_type::<Position>();
 
-        let entity = world.spawn(Position {
-            value: Vec2 { x: 1.0, y: 2.0 },
-            speed: 3.5,
-            label: "Player".to_string(),
-        });
+        let entity = world
+            .spawn(Position {
+                value: Vec2 { x: 1.0, y: 2.0 },
+                speed: 3.5,
+                label: "Player".to_string(),
+            })
+            .expect("spawn should succeed");
 
         let bridge = StaticEcsInspectorBridge::new()
             .with_entity(EntityId(1), entity)
@@ -355,11 +357,13 @@ mod tests {
         let mut world = ecs::World::new();
         world.register_component_type::<Position>();
 
-        let entity = world.spawn(Position {
-            value: Vec2 { x: 1.0, y: 2.0 },
-            speed: 3.5,
-            label: "Player".to_string(),
-        });
+        let entity = world
+            .spawn(Position {
+                value: Vec2 { x: 1.0, y: 2.0 },
+                speed: 3.5,
+                label: "Player".to_string(),
+            })
+            .expect("spawn should succeed");
 
         let bridge = StaticEcsInspectorBridge::new()
             .with_entity(EntityId(1), entity)
@@ -417,9 +421,11 @@ mod tests {
         let mut world = ecs::World::new();
         world.register_component_type::<SpritePreview>();
 
-        let entity = world.spawn(SpritePreview {
-            filter: TextureFilter::Nearest,
-        });
+        let entity = world
+            .spawn(SpritePreview {
+                filter: TextureFilter::Nearest,
+            })
+            .expect("spawn should succeed");
 
         let bridge = StaticEcsInspectorBridge::new()
             .with_entity(EntityId(1), entity)
@@ -448,9 +454,11 @@ mod tests {
         let mut world = ecs::World::new();
         world.register_component_type::<SpritePreview>();
 
-        let entity = world.spawn(SpritePreview {
-            filter: TextureFilter::Nearest,
-        });
+        let entity = world
+            .spawn(SpritePreview {
+                filter: TextureFilter::Nearest,
+            })
+            .expect("spawn should succeed");
 
         let bridge = StaticEcsInspectorBridge::new()
             .with_entity(EntityId(1), entity)
@@ -481,11 +489,13 @@ mod tests {
         let mut world = ecs::World::new();
         world.register_component_type::<Position>();
 
-        let entity = world.spawn(Position {
-            value: Vec2 { x: 1.0, y: 2.0 },
-            speed: 3.5,
-            label: "Player".to_string(),
-        });
+        let entity = world
+            .spawn(Position {
+                value: Vec2 { x: 1.0, y: 2.0 },
+                speed: 3.5,
+                label: "Player".to_string(),
+            })
+            .expect("spawn should succeed");
 
         let bridge = StaticEcsInspectorBridge::new()
             .with_entity(EntityId(1), entity)

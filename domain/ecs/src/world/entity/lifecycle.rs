@@ -1,26 +1,26 @@
 // Owner: ecs World Entity - Lifecycle APIs
 use crate::bundle::Bundle;
 use crate::entity::Entity;
-use crate::errors::EntityError;
+use crate::errors::{EntityAllocationError, EntityError};
 use crate::world::World;
 use crate::world::change_tracking::ComponentChangeKind;
 use crate::world::messaging::{EntityDespawnedEvent, EntitySpawnedEvent};
 
 impl World {
     pub fn contains(&self, entity: Entity) -> bool {
-        self.alive_entities.contains(&entity)
+        self.allocator.contains(entity) && self.alive_entities.contains(&entity)
     }
 
-    pub fn spawn<B: Bundle>(&mut self, bundle: B) -> Entity {
+    pub fn spawn<B: Bundle>(&mut self, bundle: B) -> Result<Entity, EntityAllocationError> {
+        let entity = self.allocator.allocate()?;
         B::register(self);
-        let entity = self.allocator.allocate();
         self.alive_entities.insert(entity);
         self.place_entity_in_empty_archetype(entity);
         bundle
             .insert(self, entity)
             .expect("bundle insert should succeed for new entity");
         self.publish_broadcast(EntitySpawnedEvent { entity });
-        entity
+        Ok(entity)
     }
 
     pub fn despawn(&mut self, entity: Entity) -> Result<(), EntityError> {
@@ -39,7 +39,7 @@ impl World {
 
         self.remove_entity_from_archetype_tracking(entity);
         self.alive_entities.remove(&entity);
-        self.allocator.free(entity);
+        self.allocator.free(entity)?;
 
         for type_id in removed_types {
             let component_name = self
@@ -72,10 +72,115 @@ impl World {
     }
 
     pub(crate) fn ensure_entity_exists(&self, entity: Entity) -> Result<(), EntityError> {
-        if self.contains(entity) {
+        self.allocator.validate(entity)?;
+        if self.alive_entities.contains(&entity) {
             Ok(())
         } else {
-            Err(EntityError::NoSuchEntity { entity })
+            Err(EntityError::UnknownEntity { entity })
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(crate::Component)]
+    struct Marker;
+
+    #[derive(Debug, PartialEq, Eq, crate::Component)]
+    struct Value(u32);
+
+    #[test]
+    fn fresh_worlds_never_alias_equal_local_entity_positions() {
+        let mut first_world = World::new();
+        let mut second_world = World::new();
+        let first = first_world
+            .spawn(Marker)
+            .expect("first spawn should succeed");
+        let second = second_world
+            .spawn(Marker)
+            .expect("second spawn should succeed");
+
+        assert_eq!(first.index(), second.index());
+        assert_eq!(first.generation(), second.generation());
+        assert_ne!(first, second);
+        assert!(!first_world.contains(second));
+        assert!(matches!(
+            first_world.entity(second),
+            Err(EntityError::ForeignWorld { .. })
+        ));
+        assert!(matches!(
+            first_world.require::<Marker>(second),
+            Err(EntityError::ForeignWorld { .. })
+        ));
+        assert!(matches!(
+            first_world.despawn(second),
+            Err(EntityError::ForeignWorld { .. })
+        ));
+        assert!(first_world.contains(first));
+        assert!(second_world.contains(second));
+    }
+
+    #[test]
+    fn stale_and_double_free_entities_are_rejected_before_world_mutation() {
+        let mut world = World::new();
+        let first = world.spawn(Value(1)).expect("spawn should succeed");
+        world.despawn(first).expect("despawn should succeed");
+        assert!(matches!(
+            world.despawn(first),
+            Err(EntityError::AlreadyFreed { .. })
+        ));
+
+        let second = world.spawn(Value(7)).expect("reuse should succeed");
+        assert_eq!(first.index(), second.index());
+        assert_ne!(first.generation(), second.generation());
+
+        let third = world.spawn(Value(9)).expect("fresh slot should allocate");
+        assert_ne!(
+            third.index(),
+            first.index(),
+            "rejected double free must not duplicate the reusable slot"
+        );
+
+        assert!(world.get::<Value>(first).is_none());
+        assert!(world.get_mut::<Value>(first).is_none());
+        assert!(matches!(
+            world.entity(first),
+            Err(EntityError::StaleGeneration { .. })
+        ));
+        assert!(matches!(
+            world.require_mut::<Value>(first),
+            Err(EntityError::StaleGeneration { .. })
+        ));
+        assert!(matches!(
+            world.insert(first, Value(99)),
+            Err(EntityError::StaleGeneration { .. })
+        ));
+        assert!(matches!(
+            world.remove::<Value>(first),
+            Err(EntityError::StaleGeneration { .. })
+        ));
+        assert!(matches!(
+            world.despawn(first),
+            Err(EntityError::StaleGeneration { .. })
+        ));
+
+        assert!(world.contains(second));
+        assert!(world.contains(third));
+        assert_eq!(
+            world
+                .require::<Value>(second)
+                .expect("newer entity must remain valid")
+                .0,
+            7
+        );
+        assert_eq!(
+            world
+                .require::<Value>(third)
+                .expect("independent entity must remain valid")
+                .0,
+            9
+        );
     }
 }

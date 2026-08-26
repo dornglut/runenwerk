@@ -10,7 +10,7 @@ struct B(i32);
 #[test]
 fn same_type_double_mut_query_panics() {
     let mut world = World::new();
-    world.spawn(A(1));
+    world.spawn(A(1)).expect("spawn should succeed");
 
     let query = world.query_state::<(&mut A, &mut A), ()>();
     let panic_result = catch_unwind(AssertUnwindSafe(|| {
@@ -22,7 +22,7 @@ fn same_type_double_mut_query_panics() {
 #[test]
 fn same_type_mut_read_query_panics() {
     let mut world = World::new();
-    world.spawn(A(1));
+    world.spawn(A(1)).expect("spawn should succeed");
 
     let query = world.query_state::<(&mut A, &A), ()>();
     let panic_result = catch_unwind(AssertUnwindSafe(|| {
@@ -34,8 +34,8 @@ fn same_type_mut_read_query_panics() {
 #[test]
 fn optional_mut_query_handles_present_absent_and_repeated_iteration() {
     let mut world = World::new();
-    let with_b = world.spawn((A(1), B(10)));
-    let without_b = world.spawn(A(2));
+    let with_b = world.spawn((A(1), B(10))).expect("spawn should succeed");
+    let without_b = world.spawn(A(2)).expect("spawn should succeed");
 
     let query = world.query_state::<(&mut A, Option<&mut B>), ()>();
 

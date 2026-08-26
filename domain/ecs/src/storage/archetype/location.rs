@@ -35,10 +35,7 @@ mod tests {
     #[test]
     fn location_map_insert_lookup_and_remove() {
         let mut map = EntityLocationMap::default();
-        let entity = Entity {
-            id: 10,
-            generation: 0,
-        };
+        let entity = Entity::test_only(10, 0);
         let location = EntityLocation {
             archetype_id: ArchetypeId::new(2),
             row: 4,

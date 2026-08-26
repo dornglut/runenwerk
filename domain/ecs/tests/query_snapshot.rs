@@ -12,7 +12,9 @@ struct ViewportObservation(u64);
 #[test]
 fn query_snapshot_source_generation_changes_after_component_mutation() {
     let mut world = World::new();
-    let entity = world.spawn((Position(1), Velocity));
+    let entity = world
+        .spawn((Position(1), Velocity))
+        .expect("spawn should succeed");
     let access = QueryAccess::default().with_component_read::<Position>();
     let unrelated_access = QueryAccess::default().with_component_read::<Velocity>();
 
