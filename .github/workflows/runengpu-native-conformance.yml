@@ -130,6 +130,28 @@ jobs:
           path: ${{ runner.temp }}/runengpu-proof-artifacts/known-pattern-indexed-offscreen.png
           if-no-files-found: error
 
+      - name: Run persistent reaction-diffusion sequence proof
+        env:
+          RUST_BACKTRACE: '1'
+          RUNEN_GPU_PROOF_ARTIFACT_DIR: ${{ runner.temp }}/runengpu-proof-artifacts
+        run: |
+          set -euo pipefail
+          cargo +stable test -p engine --test gpu_reaction_diffusion_native \
+            native_reaction_diffusion_retains_bounded_png_sequences_and_manifest \
+            --locked -- --ignored --nocapture
+          root="${RUNEN_GPU_PROOF_ARTIFACT_DIR}/reaction-diffusion"
+          test -s "${root}/manifest.json"
+          test "$(find "${root}/64x64-4-iterations" -type f -name 'frame_*.png' | wc -l)" -eq 8
+          test "$(find "${root}/128x128-8-iterations" -type f -name 'frame_*.png' | wc -l)" -eq 8
+          find "${root}" -type f -name 'frame_*.png' -exec test -s {} \;
+
+      - name: Retain reaction-diffusion sequence artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: runengpu-reaction-diffusion-${{ steps.revision.outputs.expected_revision }}
+          path: ${{ runner.temp }}/runengpu-proof-artifacts/reaction-diffusion
+          if-no-files-found: error
+
       - name: Run native G7A2 surface Present proof
         env:
           RUST_BACKTRACE: '1'
@@ -137,6 +159,16 @@ jobs:
           set -euo pipefail
           xvfb-run --auto-servernum --server-args='-screen 0 1024x768x24' \
             cargo +stable test -p engine --test gpu_g7a2_native_surface --locked -- --ignored --nocapture
+
+      - name: Run reaction-diffusion surface Present proof
+        env:
+          RUST_BACKTRACE: '1'
+        run: |
+          set -euo pipefail
+          xvfb-run --auto-servernum --server-args='-screen 0 1024x768x24' \
+            cargo +stable test -p engine --test gpu_reaction_diffusion_native \
+              native_reaction_diffusion_replays_same_compute_to_render_path_to_surface_present \
+              --locked -- --ignored --nocapture
 
       - name: Check diff hygiene
         run: git diff --check
