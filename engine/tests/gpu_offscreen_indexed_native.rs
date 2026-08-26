@@ -14,8 +14,8 @@ const KNOWN_PATTERN_WGSL: &str = r#"
 fn vs_main(@builtin(vertex_index) vertex_index: u32) -> @builtin(position) vec4f {
     let positions = array<vec2f, 3>(
         vec2f(-1.0, -1.0),
-        vec2f(1.0, -1.0),
-        vec2f(-1.0, 1.0),
+        vec2f(3.0, -1.0),
+        vec2f(-1.0, 3.0),
     );
     return vec4f(positions[vertex_index], 0.0, 1.0);
 }
@@ -228,7 +228,7 @@ fn render_graph(context: &GpuContext) -> (GpuPreparedWorkGraph, GpuReadbackId) {
             GpuDrawRange::new(0, 1).unwrap(),
         ),
         GpuViewport::new(0.0, 0.0, WIDTH as f32, HEIGHT as f32, 0.0, 1.0, limits).unwrap(),
-        GpuScissorRect::new(0, 0, WIDTH, HEIGHT).unwrap(),
+        GpuScissorRect::new(0, 0, WIDTH / 2, HEIGHT).unwrap(),
         GpuBlendConstant::new(0.0, 0.0, 0.0, 0.0).unwrap(),
         0,
         limits,
@@ -356,18 +356,18 @@ fn assert_known_pattern(bytes: &GpuReadbackBytes) {
         usize::try_from(WIDTH * HEIGHT * 4).unwrap()
     );
 
-    for (x, y) in [(1, 6), (2, 6)] {
+    for (x, y) in [(1, 1), (2, 6)] {
         assert_eq!(
             pixel_at(bytes, x, y),
             DRAW_PIXEL,
-            "selected pixel ({x}, {y}) must be inside the indexed triangle"
+            "selected pixel ({x}, {y}) inside the draw scissor must contain indexed draw output"
         );
     }
-    for (x, y) in [(6, 1), (6, 2)] {
+    for (x, y) in [(5, 1), (6, 6)] {
         assert_eq!(
             pixel_at(bytes, x, y),
             CLEAR_PIXEL,
-            "selected pixel ({x}, {y}) must preserve the known clear value"
+            "selected pixel ({x}, {y}) outside the draw scissor must preserve the known clear value"
         );
     }
 }
