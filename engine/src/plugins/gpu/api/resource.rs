@@ -1429,9 +1429,9 @@ mod tests {
 
     #[test]
     fn buffer_rejects_zero_overflow_empty_usage_and_initialization_mismatch() {
-        let label = label("buffer");
-        assert!(GpuBufferUsages::new(&label, []).is_err());
-        let usages = GpuBufferUsages::new(&label, [GpuBufferUsage::Storage]).unwrap();
+        let buffer_label = label("buffer");
+        assert!(GpuBufferUsages::new(&buffer_label, []).is_err());
+        let usages = GpuBufferUsages::new(&buffer_label, [GpuBufferUsage::Storage]).unwrap();
         assert!(
             GpuBufferDescriptor::new(
                 common("buffer"),
@@ -1452,7 +1452,7 @@ mod tests {
             .is_err()
         );
         let initialized_usages = GpuBufferUsages::new(
-            &label,
+            &buffer_label,
             [GpuBufferUsage::Storage, GpuBufferUsage::CopyDestination],
         )
         .unwrap();

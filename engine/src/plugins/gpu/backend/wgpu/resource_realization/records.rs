@@ -48,11 +48,16 @@ impl InitialContentState {
             .state
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if *state != InitialContentMaterialization::Unmaterialized {
-            return false;
+        match *state {
+            InitialContentMaterialization::Unmaterialized => {
+                *state = InitialContentMaterialization::Queued;
+                true
+            }
+            InitialContentMaterialization::Completed => true,
+            InitialContentMaterialization::NotRequired | InitialContentMaterialization::Queued => {
+                false
+            }
         }
-        *state = InitialContentMaterialization::Queued;
-        true
     }
 
     fn mark_completed(&self) {
@@ -60,7 +65,11 @@ impl InitialContentState {
             .state
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if *state == InitialContentMaterialization::Queued {
+        if matches!(
+            *state,
+            InitialContentMaterialization::Unmaterialized
+                | InitialContentMaterialization::Queued
+        ) {
             *state = InitialContentMaterialization::Completed;
         }
     }
@@ -283,21 +292,65 @@ impl RealizationRecord for TextureViewRealizationRecord {
 mod tests {
     use super::*;
 
+    fn materialization(state: &InitialContentState) -> InitialContentMaterialization {
+        *state
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
     #[test]
-    fn initial_content_state_is_monotonic_and_never_requeues() {
+    fn queued_initial_content_never_requires_reseed_if_later_submission_work_fails() {
         let required = InitialContentState::required();
         assert!(required.needs_materialization());
         assert!(required.mark_queued());
+        assert_eq!(
+            materialization(&required),
+            InitialContentMaterialization::Queued
+        );
         assert!(!required.needs_materialization());
         assert!(!required.mark_queued());
-        required.mark_completed();
-        assert!(!required.needs_materialization());
-        assert!(!required.mark_queued());
+        assert_eq!(
+            materialization(&required),
+            InitialContentMaterialization::Queued,
+            "a later Present/segment failure may prevent completion but must not reopen a physically queued seed"
+        );
+    }
 
+    #[test]
+    fn completion_before_post_submit_queue_mark_is_monotonic_and_idempotent() {
+        let required = InitialContentState::required();
+        required.mark_completed();
+        assert_eq!(
+            materialization(&required),
+            InitialContentMaterialization::Completed
+        );
+        assert!(!required.needs_materialization());
+        assert!(
+            required.mark_queued(),
+            "post-submit queue acknowledgement must accept a completion callback that won the race"
+        );
+        assert_eq!(
+            materialization(&required),
+            InitialContentMaterialization::Completed
+        );
+        required.mark_completed();
+        assert_eq!(
+            materialization(&required),
+            InitialContentMaterialization::Completed
+        );
+    }
+
+    #[test]
+    fn not_required_initial_content_ignores_queue_and_completion_transitions() {
         let not_required = InitialContentState::not_required();
         assert!(!not_required.needs_materialization());
         assert!(!not_required.mark_queued());
         not_required.mark_completed();
+        assert_eq!(
+            materialization(&not_required),
+            InitialContentMaterialization::NotRequired
+        );
         assert!(!not_required.needs_materialization());
     }
 }
