@@ -146,7 +146,8 @@ pub(crate) fn analyze_program(
     }
     entry_points.sort();
 
-    let selected_stages = GpuShaderStages::new(entry_points.iter().map(GpuEntryPointDescriptor::stage))?;
+    let selected_stages =
+        GpuShaderStages::new(entry_points.iter().map(GpuEntryPointDescriptor::stage))?;
     let mut refinements = refinements.into_iter().collect::<Vec<_>>();
     refinements.sort_by_key(GpuBindingLayoutRefinement::key);
     if let Some(duplicate) = refinements
@@ -187,22 +188,21 @@ pub(crate) fn analyze_program(
                 detail,
             )
         })?;
-        let compiler_kind = compiler_binding_kind(
-            &module,
-            &module_info,
-            global.space,
-            base_type,
-        )
-        .map_err(|detail| {
-            invalid(
-                operation,
-                &format!("binding {key}"),
-                GpuProgramContractCause::ProgramInterfaceMismatch,
-                detail,
-            )
-        })?;
+        let compiler_kind =
+            compiler_binding_kind(&module, &module_info, global.space, base_type).map_err(
+                |detail| {
+                    invalid(
+                        operation,
+                        &format!("binding {key}"),
+                        GpuProgramContractCause::ProgramInterfaceMismatch,
+                        detail,
+                    )
+                },
+            )?;
         let observed_visibility = GpuShaderStages::new(used_stages)?;
-        let refinement_index = refinements.binary_search_by_key(&key, GpuBindingLayoutRefinement::key).ok();
+        let refinement_index = refinements
+            .binary_search_by_key(&key, GpuBindingLayoutRefinement::key)
+            .ok();
         let refinement = refinement_index.map(|index| {
             consumed_refinements[index] = true;
             &refinements[index]
@@ -285,7 +285,10 @@ fn effective_binding(
             "visibility refinement must include every compiler-observed stage use",
         ));
     }
-    if visibility.iter().any(|stage| !selected_stages.contains(stage)) {
+    if visibility
+        .iter()
+        .any(|stage| !selected_stages.contains(stage))
+    {
         return Err(GpuProgramContractError::invalid(
             operation,
             format!("binding {key}"),
@@ -296,7 +299,8 @@ fn effective_binding(
 
     let dynamic_offset = refinement.is_some_and(GpuBindingLayoutRefinement::dynamic_offset);
     let host_minimum_size = refinement.and_then(GpuBindingLayoutRefinement::host_minimum_size);
-    let texture_sample_class = refinement.and_then(GpuBindingLayoutRefinement::texture_sample_class);
+    let texture_sample_class =
+        refinement.and_then(GpuBindingLayoutRefinement::texture_sample_class);
     let sampler_class = refinement.and_then(GpuBindingLayoutRefinement::sampler_class);
 
     let (kind, compiler_required_minimum_size) = match compiler_kind {
@@ -333,8 +337,12 @@ fn effective_binding(
             }
             let class = match sample_class {
                 CompilerTextureSampleClass::Float => match texture_sample_class {
-                    Some(GpuTextureSampleClass::FloatFilterable) => GpuTextureSampleClass::FloatFilterable,
-                    Some(GpuTextureSampleClass::FloatUnfilterable) => GpuTextureSampleClass::FloatUnfilterable,
+                    Some(GpuTextureSampleClass::FloatFilterable) => {
+                        GpuTextureSampleClass::FloatFilterable
+                    }
+                    Some(GpuTextureSampleClass::FloatUnfilterable) => {
+                        GpuTextureSampleClass::FloatUnfilterable
+                    }
                     Some(_) => {
                         return Err(invalid_refinement(
                             key,
@@ -548,7 +556,9 @@ fn compiler_binding_kind(
                     format: storage_texture_format(format)?,
                     view_dimension: texture_view_dimension(dim, arrayed)?,
                 }),
-                ImageClass::External => Err("external textures are outside the admitted RunenGPU binding vocabulary"),
+                ImageClass::External => {
+                    Err("external textures are outside the admitted RunenGPU binding vocabulary")
+                }
             },
             _ => Err("handle-space binding has an unsupported WGSL resource type"),
         },
@@ -589,7 +599,9 @@ fn texture_view_dimension(
         (ImageDimension::D3, false) => Ok(GpuTextureViewDimension::D3),
         (ImageDimension::Cube, false) => Ok(GpuTextureViewDimension::Cube),
         (ImageDimension::Cube, true) => Ok(GpuTextureViewDimension::CubeArray),
-        _ => Err("WGSL image dimension/array combination is outside the admitted RunenGPU vocabulary"),
+        _ => Err(
+            "WGSL image dimension/array combination is outside the admitted RunenGPU vocabulary",
+        ),
     }
 }
 
@@ -700,13 +712,20 @@ fn collect_io<B>(
             Ok(())
         }
         Some(Binding::Location {
-            blend_src: Some(_), ..
-        }) => Err("dual-source blend output is outside the accepted RunenGPU stage-IO vocabulary".to_string()),
+            blend_src: Some(_),
+            ..
+        }) => Err(
+            "dual-source blend output is outside the accepted RunenGPU stage-IO vocabulary"
+                .to_string(),
+        ),
         Some(Binding::BuiltIn(builtin)) => {
             builtins.push(map_builtin(*builtin).map_err(str::to_string)?);
             Ok(())
         }
-        None => Err("entry-point IO lacks an explicit location/builtin or a typed struct member".to_string()),
+        None => Err(
+            "entry-point IO lacks an explicit location/builtin or a typed struct member"
+                .to_string(),
+        ),
     }
 }
 
@@ -737,7 +756,7 @@ const fn runen_stage(stage: ShaderStage) -> GpuShaderStage {
         ShaderStage::Compute => GpuShaderStage::Compute,
         ShaderStage::Vertex => GpuShaderStage::Vertex,
         ShaderStage::Fragment => GpuShaderStage::Fragment,
-        ShaderStage::Task | ShaderStage::Mesh => unreachable!("WGSL parser admitted unsupported mesh/task stage"),
+        _ => unreachable!("WGSL parser admitted a non-WGSL shader stage"),
     }
 }
 
@@ -745,21 +764,23 @@ fn invalid(
     operation: &'static str,
     label: &str,
     cause: GpuProgramContractCause,
-    _detail: impl Into<String>,
+    detail: impl Into<String>,
 ) -> GpuProgramContractError {
-    GpuProgramContractError::invalid(
+    GpuProgramContractError::invalid_with_detail(
         operation,
         label,
         cause,
+        detail,
         "correct canonical WGSL or the selected program contract before admission",
     )
 }
 
-fn stage_io_failure(source_label: &str, _detail: impl Into<String>) -> GpuProgramContractError {
-    GpuProgramContractError::invalid(
+fn stage_io_failure(source_label: &str, detail: impl Into<String>) -> GpuProgramContractError {
+    GpuProgramContractError::invalid_with_detail(
         "admit canonical WGSL program",
         source_label,
         GpuProgramContractCause::StageIoSignatureInvalid,
+        detail,
         "use only supported backend-neutral scalar/vector shader-stage IO signatures",
     )
 }
