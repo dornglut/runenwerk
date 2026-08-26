@@ -19,10 +19,10 @@ fn prepared_buffer(
     )
 }
 
-fn summary_for<'a>(
-    graph: &'a GpuPreparedWorkGraph,
+fn summary_for(
+    graph: &GpuPreparedWorkGraph,
     identity: GpuWorkResourceId,
-) -> &'a GpuPreparedResourceInitialization {
+) -> &GpuPreparedResourceInitialization {
     graph
         .initialization()
         .iter()
