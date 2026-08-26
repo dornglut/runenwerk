@@ -1,21 +1,32 @@
 use engine::plugins::gpu::{
-    GpuAdmittedProgramSource, GpuBindingDeclaration, GpuBindingKey, GpuBindingKind,
-    GpuBindingProvenance, GpuEntryPointDescriptor, GpuEntryPointName, GpuProgramContractCause,
-    GpuProgramDescriptor, GpuProgramInterfaceDescriptor, GpuProgramSourceIdentity,
-    GpuProgramSourceKey, GpuProgramSourceOwnerId, GpuProgramSourceProvenance,
-    GpuProgramSourceRegistry, GpuProgramSourceRevision, GpuShaderStage, GpuShaderStages,
-    GpuStorageBufferAccess,
+    GpuAdmittedProgramSource, GpuBindingKey, GpuBindingLayoutRefinement, GpuEntryPointName,
+    GpuProgramContractCause, GpuProgramDescriptor, GpuProgramSourceIdentity, GpuProgramSourceKey,
+    GpuProgramSourceOwnerId, GpuProgramSourceProvenance, GpuProgramSourceRegistry,
+    GpuProgramSourceRevision, GpuShaderStage, GpuShaderStages, GpuStorageBufferAccess,
 };
 
 const PROGRAM_WGSL: &str = r#"
-@compute @workgroup_size(1)
-fn copy_values() {}
+@group(0) @binding(0)
+var<storage, read> input_values: array<u32>;
+
+@group(0) @binding(1)
+var<storage, read_write> output_values: array<u32>;
+
+@group(0) @binding(2)
+var<storage, read> unused_values: array<u32>;
 
 @compute @workgroup_size(1)
-fn reduce_values() {}
+fn copy_values() {
+    output_values[0] = input_values[0];
+}
+
+@compute @workgroup_size(1)
+fn reduce_values() {
+    output_values[0] = input_values[0] + 1u;
+}
 "#;
 
-fn admitted_source() -> (GpuProgramSourceRegistry, GpuAdmittedProgramSource) {
+fn admitted_source_from(source_text: &str) -> (GpuProgramSourceRegistry, GpuAdmittedProgramSource) {
     let owner = GpuProgramSourceOwnerId::allocate().expect("source owner should allocate");
     let identity = GpuProgramSourceIdentity::new(
         owner,
@@ -28,71 +39,69 @@ fn admitted_source() -> (GpuProgramSourceRegistry, GpuAdmittedProgramSource) {
     let source = registry
         .admit_wgsl(
             identity,
-            PROGRAM_WGSL,
+            source_text,
             GpuProgramSourceProvenance::new("gpu-program-descriptor-test", None)
                 .expect("test source provenance should be valid"),
         )
-        .expect("test source should admit");
+        .expect("source registry admission owns identity/content bounds, not WGSL semantics");
     (registry, source)
 }
 
-fn interface(stages: GpuShaderStages, binding: u64) -> GpuProgramInterfaceDescriptor {
-    let declaration = GpuBindingDeclaration::new(
-        GpuBindingKey::try_new(0, binding).expect("test binding key should fit u32"),
-        stages,
-        GpuBindingKind::storage_buffer(GpuStorageBufferAccess::ReadWrite, false, None),
-        None,
-        format!("storage-{binding}"),
-        GpuBindingProvenance::new("gpu-program-descriptor-test", None)
-            .expect("test binding provenance should be valid"),
-    )
-    .expect("test binding declaration should be valid");
-    GpuProgramInterfaceDescriptor::new([declaration])
-        .expect("test program interface should be valid")
+fn admitted_source() -> (GpuProgramSourceRegistry, GpuAdmittedProgramSource) {
+    admitted_source_from(PROGRAM_WGSL)
 }
 
-fn entry(
-    name: &str,
-    stage: GpuShaderStage,
-    interface: GpuProgramInterfaceDescriptor,
-) -> GpuEntryPointDescriptor {
-    GpuEntryPointDescriptor::new(
-        GpuEntryPointName::new(name).expect("test entry-point name should be valid"),
-        stage,
-        interface,
-    )
+fn entry(name: &str) -> GpuEntryPointName {
+    GpuEntryPointName::new(name).expect("test entry-point name should be valid")
+}
+
+fn key(binding: u64) -> GpuBindingKey {
+    GpuBindingKey::try_new(0, binding).expect("test binding key should fit u32")
 }
 
 #[test]
-fn admitted_program_normalizes_entries_and_retains_its_source() {
+fn admitted_program_derives_entries_interface_and_static_visibility() {
     let (mut registry, source) = admitted_source();
-    let interface = interface(GpuShaderStages::one(GpuShaderStage::Compute), 0);
     let program = GpuProgramDescriptor::new(
         source,
-        interface.clone(),
-        [
-            entry("reduce_values", GpuShaderStage::Compute, interface.clone()),
-            entry("copy_values", GpuShaderStage::Compute, interface.clone()),
-        ],
+        [entry("reduce_values"), entry("copy_values")],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
     )
-    .expect("program descriptor should normalize valid entries");
+    .expect("canonical WGSL should derive the selected program contract");
 
     assert_eq!(
         program
             .entry_points()
-            .map(|entry_point| entry_point.name().as_str())
+            .map(|entry_point| (entry_point.name().as_str(), entry_point.stage()))
             .collect::<Vec<_>>(),
-        ["copy_values", "reduce_values"]
+        [
+            ("copy_values", GpuShaderStage::Compute),
+            ("reduce_values", GpuShaderStage::Compute),
+        ]
     );
     assert!(
         program
-            .entry_point(
-                GpuShaderStage::Compute,
-                &GpuEntryPointName::new("copy_values").unwrap()
-            )
+            .entry_point(GpuShaderStage::Compute, &entry("copy_values"))
             .is_some()
     );
-    assert_eq!(program.interface(), &interface);
+
+    let bindings = program.interface().bindings().collect::<Vec<_>>();
+    assert_eq!(bindings.len(), 2, "unused bound globals are not program-interface members");
+    assert_eq!(bindings[0].key(), key(0));
+    assert_eq!(bindings[1].key(), key(1));
+    assert_eq!(
+        bindings[0].kind().storage_buffer_access(),
+        Some(GpuStorageBufferAccess::ReadOnly)
+    );
+    assert_eq!(
+        bindings[1].kind().storage_buffer_access(),
+        Some(GpuStorageBufferAccess::ReadWrite)
+    );
+    assert_eq!(
+        bindings[0].visibility(),
+        GpuShaderStages::one(GpuShaderStage::Compute)
+    );
+    assert!(program.interface().binding(key(2)).is_none());
     assert!(program.is_same_record(&program.clone()));
     assert_eq!(registry.collect_unretained(), 0);
 
@@ -101,56 +110,82 @@ fn admitted_program_normalizes_entries_and_retains_its_source() {
 }
 
 #[test]
-fn admitted_program_rejects_duplicate_stage_and_name_pairs() {
+fn admitted_program_rejects_duplicate_selected_entry_names() {
     let (_registry, source) = admitted_source();
-    let interface = interface(GpuShaderStages::one(GpuShaderStage::Compute), 0);
-    let duplicate = entry("copy_values", GpuShaderStage::Compute, interface.clone());
+    let duplicate = entry("copy_values");
 
-    let error = GpuProgramDescriptor::new(source, interface, [duplicate.clone(), duplicate])
-        .expect_err("duplicate stage and name pairs must be rejected");
+    let error = GpuProgramDescriptor::new(
+        source,
+        [duplicate.clone(), duplicate],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+    .expect_err("duplicate selected names must be rejected before backend realization");
 
     assert_eq!(error.cause(), GpuProgramContractCause::DuplicateEntryPoint);
 }
 
 #[test]
-fn admitted_program_rejects_entry_interface_disagreement() {
+fn admitted_program_rejects_missing_selected_entry() {
     let (_registry, source) = admitted_source();
-    let program_interface = interface(GpuShaderStages::one(GpuShaderStage::Compute), 0);
-    let entry_interface = interface(GpuShaderStages::one(GpuShaderStage::Compute), 1);
 
     let error = GpuProgramDescriptor::new(
         source,
-        program_interface,
-        [entry(
-            "copy_values",
-            GpuShaderStage::Compute,
-            entry_interface,
-        )],
+        [entry("missing")],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
     )
-    .expect_err("entry points must use the program's one explicit interface");
+    .expect_err("missing selected entries must reject during program admission");
 
-    assert_eq!(
-        error.cause(),
-        GpuProgramContractCause::ProgramInterfaceMismatch
-    );
+    assert_eq!(error.cause(), GpuProgramContractCause::EntryPointMissing);
 }
 
 #[test]
-fn admitted_program_rejects_visibility_for_an_undeclared_stage() {
-    let (_registry, source) = admitted_source();
-    let stages = GpuShaderStages::new([GpuShaderStage::Compute, GpuShaderStage::Fragment])
-        .expect("test stage visibility should be nonempty");
-    let interface = interface(stages, 0);
+fn admitted_program_rejects_malformed_canonical_wgsl() {
+    let (_registry, source) = admitted_source_from("@compute fn broken(");
 
     let error = GpuProgramDescriptor::new(
         source,
-        interface.clone(),
-        [entry("copy_values", GpuShaderStage::Compute, interface)],
+        [entry("broken")],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
     )
-    .expect_err("binding visibility must reference declared entry stages");
+    .expect_err("WGSL syntax must be validated before backend realization");
 
-    assert_eq!(
-        error.cause(),
-        GpuProgramContractCause::ProgramInterfaceMismatch
-    );
+    assert_eq!(error.cause(), GpuProgramContractCause::CanonicalWgslInvalid);
+}
+
+#[test]
+fn refinement_cannot_resurrect_an_unused_shader_binding() {
+    let (_registry, source) = admitted_source();
+    let refinement = GpuBindingLayoutRefinement::new(key(2)).with_dynamic_offset(true);
+
+    let error = GpuProgramDescriptor::new(source, [entry("copy_values")], [refinement])
+        .expect_err("refinements must target effective selected-program bindings only");
+
+    assert_eq!(error.cause(), GpuProgramContractCause::BindingRefinementInvalid);
+}
+
+#[test]
+fn buffer_refinement_changes_only_host_layout_policy() {
+    let (_registry, source) = admitted_source();
+    let refinement = GpuBindingLayoutRefinement::new(key(0)).with_dynamic_offset(true);
+
+    let program = GpuProgramDescriptor::new(source, [entry("copy_values")], [refinement])
+        .expect("dynamic offset is valid host policy for a storage buffer");
+    let binding = program.interface().binding(key(0)).unwrap();
+
+    assert!(binding.kind().uses_dynamic_offset());
+    assert_eq!(binding.kind().storage_buffer_access(), Some(GpuStorageBufferAccess::ReadOnly));
+    assert_eq!(binding.visibility(), GpuShaderStages::one(GpuShaderStage::Compute));
+}
+
+#[test]
+fn visibility_refinement_cannot_invent_an_unselected_stage() {
+    let (_registry, source) = admitted_source();
+    let visibility = GpuShaderStages::new([GpuShaderStage::Compute, GpuShaderStage::Fragment])
+        .expect("test visibility should be nonempty");
+    let refinement = GpuBindingLayoutRefinement::new(key(0)).with_visibility(visibility);
+
+    let error = GpuProgramDescriptor::new(source, [entry("copy_values")], [refinement])
+        .expect_err("visibility may widen only within stages selected by this program");
+
+    assert_eq!(error.cause(), GpuProgramContractCause::BindingRefinementInvalid);
 }
