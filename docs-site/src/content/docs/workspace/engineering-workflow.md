@@ -71,7 +71,6 @@ Use focused package checks while implementing. Every merge requires:
 
 ```text
 cargo validate
-git diff --check
 ```
 
 `cargo validate` is the same read-only, lockfile-safe implementation used by GitHub Actions. It validates the repository tooling, workspace formatting, locked tests, strict Clippy, documentation structure, and durable repository invariants.
