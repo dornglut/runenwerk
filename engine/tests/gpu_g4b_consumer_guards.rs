@@ -5,12 +5,17 @@ const PASS_GRAPH: &str = "src/plugins/render/graph/pass_graph.rs";
 const PASS_BINDINGS: &str = "src/plugins/render/api/bindings.rs";
 const EXECUTION_PLAN: &str = "src/plugins/render/graph/execution_plan.rs";
 const RUNTIME_BINDINGS: &str = "src/plugins/render/renderer/render_flow/bindings.rs";
+const RENDERER_SETUP: &str = "src/plugins/render/renderer/setup.rs";
 const PRIMITIVE_PLAN: &str = "src/plugins/render/gpu_primitives/plan.rs";
 const PIPELINE_REALIZATION: &str =
     "src/plugins/render/renderer/render_flow/pipeline_realization.rs";
 const LOGICAL_OPERATIONS: &str = "src/plugins/render/renderer/render_flow/logical_operations.rs";
 const PIPELINE_CACHE: &str = "src/plugins/render/renderer/pipeline_cache.rs";
 const PROGRAM_SOURCES: &str = "src/plugins/render/renderer/render_flow/program_sources.rs";
+const PROGRAM_ANALYSIS: &str = "src/plugins/gpu/api/program/analysis.rs";
+const PROGRAM_REALIZATION: &str = "src/plugins/gpu/backend/wgpu/program_binding_realization/mod.rs";
+const PROGRAM_REALIZATION_RECORDS: &str =
+    "src/plugins/gpu/backend/wgpu/program_binding_realization/records.rs";
 const FRAGMENTS: &str = "src/plugins/render/composition/fragments.rs";
 const FRAGMENT_VALIDATION: &str = "src/plugins/render/composition/fragment_validation.rs";
 const FRAGMENT_MERGE: &str = "src/plugins/render/graph/merge.rs";
@@ -55,20 +60,20 @@ fn renderer_shader_binding_identity_is_explicit_and_never_vector_derived() {
     let runtime_bindings = section(
         &runtime,
         "pub(super) fn resolve_compiled_bind_group",
-        "fn gpu_pipeline_layout_for_pass(",
+        "fn resolved_binding_texture_view(",
         RUNTIME_BINDINGS,
     );
     assert!(
         !runtime_bindings.contains(".enumerate()"),
-        "runtime G4B declarations and WGPU bind-group entries must not rebuild binding identity from vector position"
+        "runtime resources and G4C2 binding values must not rebuild binding identity from vector position"
     );
     assert!(
         runtime_bindings.contains("value.key,") || runtime_bindings.contains("value.key"),
-        "runtime G4B declarations must use the retained typed key"
+        "runtime binding values must use the retained typed key"
     );
     assert!(
         runtime_bindings.contains("runtime_binding_value(value, sampler.as_ref())"),
-        "runtime G4B declarations must pass their retained typed keys into G4C2 binding realization"
+        "runtime resources must pass their retained typed keys into G4C2 binding realization"
     );
     assert!(
         runtime.contains("GpuRuntimeBindingValue::new(value.key, [resource])"),
@@ -91,6 +96,74 @@ fn renderer_shader_binding_identity_is_explicit_and_never_vector_derived() {
         !primitives.contains("fn stage_binding_resources("),
         "primitive runtime proof must not reconstruct shader bindings from read/write vector order"
     );
+}
+
+#[test]
+fn renderer_program_interface_authority_is_compiler_derived_once() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let runtime = read(&manifest_dir, RUNTIME_BINDINGS);
+    let setup = read(&manifest_dir, RENDERER_SETUP);
+    let analysis = read(&manifest_dir, PROGRAM_ANALYSIS);
+    let realization = read(&manifest_dir, PROGRAM_REALIZATION);
+    let realization_records = read(&manifest_dir, PROGRAM_REALIZATION_RECORDS);
+
+    for (path, source) in [(RUNTIME_BINDINGS, &runtime), (RENDERER_SETUP, &setup)] {
+        assert!(
+            source.contains("GpuProgramDescriptor::new("),
+            "{path} must admit programs from canonical WGSL plus selected entry names"
+        );
+        assert!(
+            source.contains("GpuPipelineLayoutDescriptor::from_interface(program")
+                || source.contains("GpuPipelineLayoutDescriptor::from_interface(\n            program"),
+            "{path} must derive pipeline layout from the admitted program interface"
+        );
+        for forbidden in [
+            "GpuProgramInterfaceDescriptor",
+            "GpuBindingDeclaration",
+            "GpuEntryPointDescriptor",
+            "gpu_shader_stages_from_wgpu",
+            "GpuShaderStage::",
+            "ShaderStages::COMPUTE",
+            "ShaderStages::VERTEX_FRAGMENT",
+        ] {
+            assert!(
+                !source.contains(forbidden),
+                "{path} must not regain caller-authored shader-interface authority through {forbidden:?}"
+            );
+        }
+    }
+
+    assert!(
+        runtime.contains("GpuBindingLayoutRefinement"),
+        "render-flow runtime policy must use sparse host/layout refinements"
+    );
+    assert!(
+        setup.contains("GpuBindingLayoutRefinement"),
+        "built-in UI setup must use sparse host/layout refinements"
+    );
+    for required in [
+        "naga::front::wgsl::parse_str",
+        "module_info.get_entry_point",
+        "GpuEntryPointDescriptor::derived",
+    ] {
+        assert!(
+            analysis.contains(required),
+            "logical program admission must own compiler analysis fact {required:?}"
+        );
+    }
+    for forbidden in [
+        "mod evidence;",
+        "naga::front::wgsl::parse_str",
+        "validate_and_normalize(",
+        "observed_interface",
+        "vertex_inputs",
+        "fragment_outputs",
+    ] {
+        assert!(
+            !realization.contains(forbidden) && !realization_records.contains(forbidden),
+            "private WGPU realization must not regain logical/reflection authority through {forbidden:?}"
+        );
+    }
 }
 
 #[test]
