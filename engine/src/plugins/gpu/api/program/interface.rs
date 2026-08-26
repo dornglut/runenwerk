@@ -4,6 +4,6 @@ mod descriptor;
 mod observed;
 
 pub use binding::*;
-pub use comparison::*;
 pub use descriptor::*;
-pub use observed::*;
+pub(crate) use comparison::*;
+pub(crate) use observed::*;
