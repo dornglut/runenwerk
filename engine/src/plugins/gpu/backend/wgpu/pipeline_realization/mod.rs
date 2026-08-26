@@ -17,7 +17,7 @@ use super::{WgpuDeviceHealth, WgpuErrorAttributionGate};
 use crate::plugins::gpu::{
     GpuContextAffinity, GpuPipelineRealizationError, GpuPipelineRealizationErrorCategory,
     GpuProgramBindingRealizationError, GpuProgramBindingRealizationErrorCategory,
-    GpuRealizedComputePipeline, GpuRealizedProgram, GpuRealizedRenderPipeline,
+    GpuRealizedComputePipeline, GpuRealizedRenderPipeline,
 };
 use compute::{ComputePipelineRequestKey, ComputeRecord};
 use diagnostics::PipelineCacheDiagnosticRegistry;
@@ -143,15 +143,6 @@ impl PipelineRealizationState {
         program_binding_state
             .validate_execution_pipeline_layout(&record.layout)
             .map_err(|error| map_execution_dependency_error(request, error))?;
-
-        let program = GpuRealizedProgram::from_record(Arc::clone(&record.program));
-        let stage_io = render_validation::validate_stage_io(record.descriptor(), &program)?;
-        if stage_io != record.stage_io {
-            return Err(execution_authority_violation(
-                request,
-                "the retained render-pipeline stage-IO evidence no longer matches its descriptor and realized program",
-            ));
-        }
         Ok(())
     }
 
