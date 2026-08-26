@@ -105,13 +105,14 @@ jobs:
           set -euo pipefail
           vulkaninfo --summary
 
-      - name: Run native G5B headless proof
+      - name: Run native G5 transfer and G5R initial-content proofs
         env:
           RUST_BACKTRACE: '1'
         run: |
           set -euo pipefail
           cargo +stable test -p engine --test gpu_g5b_native_runtime --locked -- --ignored --nocapture
           cargo +stable test -p engine --test gpu_g5b_native_render --locked -- --ignored --nocapture
+          cargo +stable test -p engine --test gpu_initial_content_native --locked -- --ignored --nocapture
 
       - name: Run native G7A2 surface Present proof
         env:

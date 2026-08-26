@@ -180,12 +180,12 @@ impl GpuContext {
                 })
             },
         )?;
-        let record = Arc::new(BufferRealizationRecord {
-            affinity: self.affinity(),
-            logical_identity: identity,
+        let record = Arc::new(BufferRealizationRecord::new(
+            self.affinity(),
+            identity,
             descriptor,
             object,
-        });
+        ));
         registries.buffers.insert(identity, Arc::clone(&record));
         Ok(GpuRealizedBuffer::from_record(record))
     }
@@ -235,13 +235,13 @@ impl GpuContext {
                 })
             },
         )?;
-        let record = Arc::new(TextureRealizationRecord {
-            affinity: self.affinity(),
-            logical_identity: identity,
+        let record = Arc::new(TextureRealizationRecord::new(
+            self.affinity(),
+            identity,
             descriptor,
             object,
-            permits_format_reinterpretation: lowered.permits_format_reinterpretation,
-        });
+            lowered.permits_format_reinterpretation,
+        ));
         registries.textures.insert(identity, Arc::clone(&record));
         Ok(GpuRealizedTexture::from_record(record))
     }

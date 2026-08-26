@@ -11,6 +11,7 @@ mod dependency;
 mod diagnostics;
 mod hazards;
 mod identity;
+mod initial_content;
 mod initialization;
 mod preparation;
 
@@ -25,6 +26,7 @@ pub use coverage::{
 pub use dependency::{GpuDependencyReason, GpuDependencyRegion, GpuWorkDependency};
 pub use diagnostics::GpuPreparedWorkDiagnostic;
 pub use identity::{GpuPreparedWorkNodeId, GpuWorkNodeId};
+pub(crate) use initial_content::GpuPreparedInitialContent;
 pub use initialization::GpuPreparedResourceInitialization;
 pub use preparation::{GpuPreparedWorkGraph, GpuPreparedWorkNode};
 
