@@ -400,7 +400,10 @@ fn write_validated_png(bytes: &GpuReadbackBytes) -> PathBuf {
             > 0,
         "proof PNG must not be empty"
     );
-    println!("RunenGPU known-pattern offscreen artifact: {}", path.display());
+    println!(
+        "RunenGPU known-pattern offscreen artifact: {}",
+        path.display()
+    );
     path
 }
 
