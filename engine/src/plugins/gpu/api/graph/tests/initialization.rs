@@ -40,26 +40,26 @@ fn descriptor_initialization_is_region_aware_and_generic_writes_do_not_initializ
         GpuBufferInitialization::Prepared(prepared_data),
         [GpuBufferUsage::Storage, GpuBufferUsage::CopyDestination],
     );
-    let mut readable = builder("prepared descriptor initialized");
+    let mut readable = builder("prepared descriptor is not entry coverage");
     readable
         .declare_resource(GpuResourceRef::Buffer(prepared.clone()))
         .unwrap();
     add_compute(
         &mut readable,
-        "read prepared",
+        "caller-only read prepared",
         [buffer_access(
             &prepared,
             GpuBufferRange::whole(&prepared).unwrap(),
             GpuBufferAccessKind::StorageRead,
         )],
     );
-    assert!(
-        GpuPreparedWorkGraph::prepare(
-            label("prepared descriptor graph"),
-            [readable.finish().unwrap()]
-        )
-        .is_ok()
-    );
+    let error = GpuPreparedWorkGraph::prepare(
+        label("prepared descriptor graph"),
+        [readable.finish().unwrap()],
+    )
+    .unwrap_err();
+    assert_eq!(error.cause(), GpuWorkGraphCause::ReadBeforeInitialization);
+    assert_eq!(error.resource(), Some(prepared.diagnostic_identity()));
 
     let uninitialized = buffer(
         &mut allocator,
@@ -97,7 +97,7 @@ fn descriptor_initialization_is_region_aware_and_generic_writes_do_not_initializ
 }
 
 #[test]
-fn texture_descriptor_initialization_distinguishes_zeroed_and_prepared_coverage() {
+fn texture_descriptor_initialization_publishes_only_established_zeroed_coverage() {
     let mut allocator = allocator();
     let zeroed = texture(
         &mut allocator,
@@ -115,16 +115,7 @@ fn texture_descriptor_initialization_distinguishes_zeroed_and_prepared_coverage(
         1,
         [GpuTextureUsage::Sampled, GpuTextureUsage::CopyDestination],
     );
-    let prepared_base = GpuTextureSubresourceRange::new(
-        prepared.descriptor().common().label(),
-        0,
-        1,
-        0,
-        1,
-        GpuTextureAspect::Color,
-    )
-    .unwrap();
-    let mut fragment = builder("initialized textures");
+    let mut fragment = builder("descriptor texture coverage");
     for resource in [&zeroed, &prepared] {
         fragment
             .declare_resource(GpuResourceRef::Texture(resource.clone()))
@@ -139,43 +130,41 @@ fn texture_descriptor_initialization_distinguishes_zeroed_and_prepared_coverage(
             GpuTextureAccessKind::SampledRead,
         )],
     );
-    add_compute(
-        &mut fragment,
-        "read prepared base",
-        [texture_access(
-            &prepared,
-            prepared_base,
-            GpuTextureAccessKind::SampledRead,
-        )],
-    );
     let graph = GpuPreparedWorkGraph::prepare(
-        label("initialized texture graph"),
+        label("descriptor texture graph"),
         [fragment.finish().unwrap()],
     )
     .unwrap();
-    let initial_mip_count = |identity| {
-        graph
-            .initialization()
-            .iter()
-            .find(|summary| summary.resource().diagnostic_identity() == identity)
-            .unwrap()
+    let zeroed_summary = graph
+        .initialization()
+        .iter()
+        .find(|summary| summary.resource().diagnostic_identity() == zeroed.diagnostic_identity())
+        .unwrap();
+    assert_eq!(
+        zeroed_summary
             .initial()
             .unwrap()
             .texture_subresource_values()
             .unwrap()
-            .len()
-    };
-    assert_eq!(initial_mip_count(zeroed.diagnostic_identity()), 2);
-    assert_eq!(initial_mip_count(prepared.diagnostic_identity()), 1);
+            .len(),
+        2
+    );
+    let prepared_summary = graph
+        .initialization()
+        .iter()
+        .find(|summary| summary.resource().diagnostic_identity() == prepared.diagnostic_identity())
+        .unwrap();
+    assert!(prepared_summary.initial().is_none());
+    assert!(prepared_summary.final_coverage().is_none());
 }
 
 #[test]
-fn texture_reads_reject_uninitialized_or_unprepared_mips() {
+fn caller_only_texture_reads_reject_prepared_metadata_and_uninitialized_storage() {
     let mut allocator = allocator();
     let prepared = texture(
         &mut allocator,
-        "partially prepared texture",
-        prepared_texture_initialization("partially prepared texture"),
+        "prepared texture",
+        prepared_texture_initialization("prepared texture"),
         2,
         1,
         [GpuTextureUsage::Sampled, GpuTextureUsage::CopyDestination],
@@ -188,6 +177,15 @@ fn texture_reads_reject_uninitialized_or_unprepared_mips() {
         1,
         [GpuTextureUsage::Sampled],
     );
+    let prepared_base = GpuTextureSubresourceRange::new(
+        prepared.descriptor().common().label(),
+        0,
+        1,
+        0,
+        1,
+        GpuTextureAspect::Color,
+    )
+    .unwrap();
     let prepared_mip_one = GpuTextureSubresourceRange::new(
         prepared.descriptor().common().label(),
         1,
@@ -198,7 +196,8 @@ fn texture_reads_reject_uninitialized_or_unprepared_mips() {
     )
     .unwrap();
     for (name, texture, range) in [
-        ("unprepared mip", prepared, prepared_mip_one),
+        ("prepared base metadata", prepared.clone(), prepared_base),
+        ("prepared higher mip metadata", prepared, prepared_mip_one),
         (
             "uninitialized texture",
             uninitialized.clone(),
@@ -211,7 +210,7 @@ fn texture_reads_reject_uninitialized_or_unprepared_mips() {
             .unwrap();
         add_compute(
             &mut fragment,
-            "invalid read",
+            "invalid caller-only read",
             [texture_access(
                 &texture,
                 range,

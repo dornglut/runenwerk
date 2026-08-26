@@ -56,11 +56,9 @@ impl GpuResourceProvenance {
     pub fn producer(&self) -> &GpuResourceLabel {
         &self.producer
     }
-
     pub const fn source_generation(&self) -> Option<u64> {
         self.source_generation
     }
-
     pub fn source_revision(&self) -> Option<&GpuResourceLabel> {
         self.source_revision.as_ref()
     }
@@ -76,7 +74,6 @@ impl GpuResourceLifetime {
     pub const fn is_transient(self) -> bool {
         matches!(self, Self::Transient)
     }
-
     pub const fn is_retained(self) -> bool {
         matches!(self, Self::Retained)
     }
@@ -677,6 +674,16 @@ impl GpuBufferDescriptor {
                 "leave imported resources uninitialized by RunenGPU",
             ));
         }
+        if matches!(initialization, GpuBufferInitialization::Prepared(_))
+            && common.memory_intent() != GpuMemoryIntent::Device
+        {
+            return Err(GpuResourceDescriptorError::invalid(
+                "construct GPU buffer descriptor",
+                label,
+                GpuResourceDescriptorCause::InvalidMemoryIntent,
+                "use Device memory intent with CopyDestination for prepared buffer initial content",
+            ));
+        }
         match common.memory_intent() {
             GpuMemoryIntent::Upload if !usages.contains(GpuBufferUsage::CopySource) => {
                 return Err(GpuResourceDescriptorError::invalid(
@@ -686,15 +693,12 @@ impl GpuBufferDescriptor {
                     "add CopySource usage to an upload buffer",
                 ));
             }
-            GpuMemoryIntent::Readback
-                if !usages.contains(GpuBufferUsage::CopyDestination)
-                    || matches!(initialization, GpuBufferInitialization::Prepared(_)) =>
-            {
+            GpuMemoryIntent::Readback if !usages.contains(GpuBufferUsage::CopyDestination) => {
                 return Err(GpuResourceDescriptorError::invalid(
                     "construct GPU buffer descriptor",
                     label,
                     GpuResourceDescriptorCause::InvalidMemoryIntent,
-                    "use CopyDestination without owned prepared initialization for a readback buffer",
+                    "add CopyDestination usage to a readback buffer",
                 ));
             }
             GpuMemoryIntent::Device
@@ -843,17 +847,23 @@ impl GpuTextureDescriptor {
                 "use a supported power-of-two sample count and one non-storage mip for multisampling",
             ));
         }
+        if matches!(initialization, GpuTextureInitialization::Prepared(_)) && sample_count != 1 {
+            return Err(GpuResourceDescriptorError::invalid(
+                "construct GPU texture descriptor",
+                label,
+                GpuResourceDescriptorCause::InvalidSampleCount,
+                "use sample_count 1 for prepared texture initial content so canonical texture upload can materialize it",
+            ));
+        }
         validate_texture_format_usages(label, format, &usages)?;
-        if matches!(
-            initialization,
-            GpuTextureInitialization::Prepared(_) | GpuTextureInitialization::Zeroed
-        ) && !usages.contains(GpuTextureUsage::CopyDestination)
+        if matches!(initialization, GpuTextureInitialization::Prepared(_))
+            && !usages.contains(GpuTextureUsage::CopyDestination)
         {
             return Err(GpuResourceDescriptorError::invalid(
                 "construct GPU texture descriptor",
                 label,
                 GpuResourceDescriptorCause::InvalidInitialization,
-                "add CopyDestination usage for owned texture initialization",
+                "add CopyDestination usage for prepared owned texture initialization",
             ));
         }
         if let GpuTextureInitialization::Prepared(data) = &initialization
@@ -1419,9 +1429,9 @@ mod tests {
 
     #[test]
     fn buffer_rejects_zero_overflow_empty_usage_and_initialization_mismatch() {
-        let label = label("buffer");
-        assert!(GpuBufferUsages::new(&label, []).is_err());
-        let usages = GpuBufferUsages::new(&label, [GpuBufferUsage::Storage]).unwrap();
+        let buffer_label = label("buffer");
+        assert!(GpuBufferUsages::new(&buffer_label, []).is_err());
+        let usages = GpuBufferUsages::new(&buffer_label, [GpuBufferUsage::Storage]).unwrap();
         assert!(
             GpuBufferDescriptor::new(
                 common("buffer"),
@@ -1442,7 +1452,7 @@ mod tests {
             .is_err()
         );
         let initialized_usages = GpuBufferUsages::new(
-            &label,
+            &buffer_label,
             [GpuBufferUsage::Storage, GpuBufferUsage::CopyDestination],
         )
         .unwrap();
@@ -1456,6 +1466,31 @@ mod tests {
         assert_eq!(
             mismatch.cause(),
             GpuResourceDescriptorCause::InitializationLengthMismatch
+        );
+
+        let upload_common = GpuResourceCommon::owned(
+            label("prepared upload"),
+            GpuResourceLifetime::Transient,
+            GpuMemoryIntent::Upload,
+            GpuReconstruction::SourceBacked,
+            provenance("prepared upload"),
+        )
+        .unwrap();
+        let upload_usages = GpuBufferUsages::new(
+            &label("prepared upload"),
+            [GpuBufferUsage::CopySource, GpuBufferUsage::CopyDestination],
+        )
+        .unwrap();
+        let invalid_prepared_upload = GpuBufferDescriptor::new(
+            upload_common,
+            4,
+            upload_usages,
+            GpuBufferInitialization::Prepared(transfer_data("prepared upload", 4)),
+        )
+        .unwrap_err();
+        assert_eq!(
+            invalid_prepared_upload.cause(),
+            GpuResourceDescriptorCause::InvalidMemoryIntent
         );
     }
 
@@ -1626,6 +1661,55 @@ mod tests {
                 single_extent,
                 32,
                 0,
+            )
+            .is_ok()
+        );
+
+        let multisample_prepared = GpuPreparedTextureData::new(
+            &label,
+            transfer_data("multisample prepared texture", 256),
+            GpuTextureFormat::Rgba8Unorm,
+            single_extent,
+            32,
+            0,
+        )
+        .unwrap();
+        let multisample_usages = GpuTextureUsages::new(
+            &label,
+            [
+                GpuTextureUsage::ColorAttachment,
+                GpuTextureUsage::CopyDestination,
+            ],
+        )
+        .unwrap();
+        let invalid_multisample_prepared = GpuTextureDescriptor::new(
+            common("multisample prepared texture"),
+            GpuTextureDimension::D2,
+            single_extent,
+            1,
+            4,
+            GpuTextureFormat::Rgba8Unorm,
+            multisample_usages,
+            GpuTextureInitialization::Prepared(multisample_prepared),
+        )
+        .unwrap_err();
+        assert_eq!(
+            invalid_multisample_prepared.cause(),
+            GpuResourceDescriptorCause::InvalidSampleCount
+        );
+
+        let zeroed_multisample_usages =
+            GpuTextureUsages::new(&label, [GpuTextureUsage::ColorAttachment]).unwrap();
+        assert!(
+            GpuTextureDescriptor::new(
+                common("zeroed multisample texture"),
+                GpuTextureDimension::D2,
+                single_extent,
+                1,
+                4,
+                GpuTextureFormat::Rgba8Unorm,
+                zeroed_multisample_usages,
+                GpuTextureInitialization::Zeroed,
             )
             .is_ok()
         );
