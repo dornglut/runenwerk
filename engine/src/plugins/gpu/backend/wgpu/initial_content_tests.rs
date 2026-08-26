@@ -51,7 +51,10 @@ fn noop_context(requirements: GpuCapabilityRequirements, name: &str) -> GpuConte
         GpuExecutionPolicy::default(),
     ))
     .expect("explicit WGPU noop seam must admit deterministic G5R preparation proof");
-    assert_eq!(context.adapter_facts().backend(), GpuBackendFamily::UnknownBackend);
+    assert_eq!(
+        context.adapter_facts().backend(),
+        GpuBackendFamily::UnknownBackend
+    );
     assert_eq!(
         context.admission_report().candidate().portability(),
         GpuPortabilityClass::Unsupported,
@@ -129,8 +132,8 @@ fn uninitialized_buffer(
 
 fn readback_graph(buffer: &GpuBufferHandle, name: &str) -> GpuPreparedWorkGraph {
     let region = GpuBufferRegion::new(buffer, GpuBufferRange::whole(buffer).unwrap()).unwrap();
-    let readback = GpuReadbackOperation::new(region.into(), GpuReadbackId::allocate().unwrap())
-        .unwrap();
+    let readback =
+        GpuReadbackOperation::new(region.into(), GpuReadbackId::allocate().unwrap()).unwrap();
     let mut builder = GpuWorkFragmentBuilder::new(label(name), provenance(name));
     builder.declare_resource(buffer.clone().into()).unwrap();
     builder
@@ -143,11 +146,8 @@ fn readback_graph(buffer: &GpuBufferHandle, name: &str) -> GpuPreparedWorkGraph 
             provenance("read prepared buffer"),
         )
         .unwrap();
-    GpuPreparedWorkGraph::prepare(
-        label(&format!("{name} graph")),
-        [builder.finish().unwrap()],
-    )
-    .unwrap()
+    GpuPreparedWorkGraph::prepare(label(&format!("{name} graph")), [builder.finish().unwrap()])
+        .unwrap()
 }
 
 fn explicit_upload_graph(
@@ -178,11 +178,8 @@ fn explicit_upload_graph(
             provenance("explicit upload"),
         )
         .unwrap();
-    GpuPreparedWorkGraph::prepare(
-        label(&format!("{name} graph")),
-        [builder.finish().unwrap()],
-    )
-    .unwrap()
+    GpuPreparedWorkGraph::prepare(label(&format!("{name} graph")), [builder.finish().unwrap()])
+        .unwrap()
 }
 
 fn binding_pipeline() -> GpuComputePipelineDescriptor {
@@ -241,10 +238,7 @@ fn binding_pipeline() -> GpuComputePipelineDescriptor {
     .unwrap()
 }
 
-fn binding_compute(
-    context: &GpuContext,
-    buffer: &GpuBufferHandle,
-) -> GpuComputeOperation {
+fn binding_compute(context: &GpuContext, buffer: &GpuBufferHandle) -> GpuComputeOperation {
     let pipeline = binding_pipeline();
     let binding = GpuRuntimeBindingValue::new(
         GpuBindingKey::try_new(0, 0).unwrap(),
@@ -338,12 +332,10 @@ fn prepared_and_explicit_buffer_uploads_share_transfer_alignment_rejection() {
         &bytes,
         [GpuBufferUsage::CopySource, GpuBufferUsage::CopyDestination],
     );
-    let prepared_error = pollster::block_on(
-        context.prepare_submission(readback_graph(
-            &prepared_buffer,
-            "unaligned prepared transfer",
-        )),
-    )
+    let prepared_error = pollster::block_on(context.prepare_submission(readback_graph(
+        &prepared_buffer,
+        "unaligned prepared transfer",
+    )))
     .expect_err("unencodable Prepared whole-buffer transfer must reject during preparation");
 
     let explicit_buffer = uninitialized_buffer(
