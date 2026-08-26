@@ -124,9 +124,7 @@ fn changed_added_and_remove_reinsert_semantics_are_preserved() {
 fn reused_query_state_observes_new_matching_archetypes_and_fallback_forms() {
     let mut world = World::new();
     let evolving = world.spawn(A(7)).expect("spawn should succeed");
-    let hidden = world
-        .spawn((A(8), Disabled))
-        .expect("spawn should succeed");
+    let hidden = world.spawn((A(8), Disabled)).expect("spawn should succeed");
 
     let dominant = world.query_state::<(&mut A, &B), ()>();
     assert!(dominant.iter(&mut world).next().is_none());
@@ -184,9 +182,7 @@ fn single_mut_query_preserves_changed_tracking() {
 fn single_mut_query_with_without_filter_keeps_fallback_semantics() {
     let mut world = World::new();
     let active = world.spawn(A(5)).expect("spawn should succeed");
-    let hidden = world
-        .spawn((A(6), Disabled))
-        .expect("spawn should succeed");
+    let hidden = world.spawn((A(6), Disabled)).expect("spawn should succeed");
 
     let query = world
         .query_state::<(Entity, &mut A), ()>()
