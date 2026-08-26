@@ -216,9 +216,14 @@ fn g5b_rejection_identity_and_owner_local_execution_order_preserve_acceptance() 
     let allocate_id = accept
         .find("allocate_nonzero(&self.next_submission)")
         .expect("submission identity must be allocated only at irreversible acceptance");
+    let restore_prepared = accept
+        .find("inner.prepared.insert(prepared.ticket,Some(stored_plan))")
+        .expect("submission-ID exhaustion must restore retryable prepared authority");
     assert!(
-        metadata < remove_prepared && remove_prepared < allocate_id,
-        "all rollback-capable metadata validation must precede prepared removal and submission-ID publication"
+        metadata < remove_prepared
+            && remove_prepared < allocate_id
+            && allocate_id < restore_prepared,
+        "all rollback-capable metadata validation must precede prepared removal and submission-ID publication, and identity exhaustion must restore retryable prepared authority"
     );
 }
 
