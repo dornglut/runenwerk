@@ -1,8 +1,10 @@
 //! Backend-neutral program, interface, and pipeline contracts.
 //!
-//! G4B grows this module by responsibility. Source admission is intentionally
-//! independent from renderer source discovery and later backend realization.
+//! Canonical WGSL program admission derives shader-defined facts before private
+//! backend realization. Source discovery and authoring-toolchain policy remain outside
+//! RunenGPU.
 
+mod analysis;
 mod contract_diagnostics;
 mod descriptor;
 mod diagnostics;
