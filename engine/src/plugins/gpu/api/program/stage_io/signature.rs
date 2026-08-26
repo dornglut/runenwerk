@@ -65,9 +65,9 @@ impl GpuExpectedVertexInputSignature {
 }
 
 /// Compiler-observed vertex-input facts for one admitted entry point.
-/// Construction is private to canonical-WGSL analysis.
+/// Construction and inspection remain private to canonical-WGSL admission and pipeline validation.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct GpuObservedVertexInputSignature {
+pub(crate) struct GpuObservedVertexInputSignature {
     entry_point: GpuEntryPointName,
     signature: GpuShaderIoSignature,
     builtins: Vec<GpuVertexInputBuiltin>,
@@ -86,15 +86,15 @@ impl GpuObservedVertexInputSignature {
         })
     }
 
-    pub fn entry_point(&self) -> &GpuEntryPointName {
+    pub(crate) fn entry_point(&self) -> &GpuEntryPointName {
         &self.entry_point
     }
 
-    pub fn locations(&self) -> impl ExactSizeIterator<Item = &GpuShaderIoLocation> {
+    pub(crate) fn locations(&self) -> impl ExactSizeIterator<Item = &GpuShaderIoLocation> {
         self.signature.locations()
     }
 
-    pub fn builtins(&self) -> impl ExactSizeIterator<Item = GpuVertexInputBuiltin> + '_ {
+    pub(crate) fn builtins(&self) -> impl ExactSizeIterator<Item = GpuVertexInputBuiltin> + '_ {
         self.builtins.iter().copied()
     }
 }
@@ -126,9 +126,9 @@ impl GpuExpectedFragmentOutputSignature {
 }
 
 /// Compiler-observed fragment-output facts for one admitted entry point.
-/// Construction is private to canonical-WGSL analysis.
+/// Construction and inspection remain private to canonical-WGSL admission and pipeline validation.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct GpuObservedFragmentOutputSignature {
+pub(crate) struct GpuObservedFragmentOutputSignature {
     entry_point: GpuEntryPointName,
     signature: GpuShaderIoSignature,
     builtins: Vec<GpuFragmentOutputBuiltin>,
@@ -147,15 +147,15 @@ impl GpuObservedFragmentOutputSignature {
         })
     }
 
-    pub fn entry_point(&self) -> &GpuEntryPointName {
+    pub(crate) fn entry_point(&self) -> &GpuEntryPointName {
         &self.entry_point
     }
 
-    pub fn locations(&self) -> impl ExactSizeIterator<Item = &GpuShaderIoLocation> {
+    pub(crate) fn locations(&self) -> impl ExactSizeIterator<Item = &GpuShaderIoLocation> {
         self.signature.locations()
     }
 
-    pub fn builtins(&self) -> impl ExactSizeIterator<Item = GpuFragmentOutputBuiltin> + '_ {
+    pub(crate) fn builtins(&self) -> impl ExactSizeIterator<Item = GpuFragmentOutputBuiltin> + '_ {
         self.builtins.iter().copied()
     }
 }
