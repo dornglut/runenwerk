@@ -1,16 +1,16 @@
 use engine::plugins::gpu::{
     GpuBindGroupLayoutDescriptor, GpuBindingDeclaration, GpuBindingKey, GpuBindingKind,
-    GpuBindingProvenance, GpuBufferDescriptor, GpuBufferInitialization, GpuBufferUsage,
-    GpuBufferUsages, GpuCapabilityProfile, GpuContext, GpuContextDescriptor,
-    GpuContextRequestError, GpuContextRequestErrorCategory, GpuEntryPointDescriptor,
+    GpuBindingLayoutRefinement, GpuBindingProvenance, GpuBufferDescriptor,
+    GpuBufferInitialization, GpuBufferUsage, GpuBufferUsages, GpuCapabilityProfile, GpuContext,
+    GpuContextDescriptor, GpuContextRequestError, GpuContextRequestErrorCategory,
     GpuEntryPointName, GpuMemoryIntent, GpuPipelineLayoutDescriptor,
     GpuProgramBindingRealizationErrorCategory, GpuProgramBindingRealizationPolicy,
-    GpuProgramDescriptor, GpuProgramInterfaceDescriptor, GpuProgramSourceIdentity,
-    GpuProgramSourceKey, GpuProgramSourceOwnerId, GpuProgramSourceProvenance,
-    GpuProgramSourceRegistry, GpuProgramSourceRevision, GpuRealizationPolicies, GpuReconstruction,
-    GpuResourceCommon, GpuResourceLabel, GpuResourceLifetime, GpuResourceProvenance,
-    GpuRuntimeBindingResource, GpuRuntimeBindingValue, GpuRuntimeBufferBinding, GpuShaderStage,
-    GpuShaderStages, GpuStorageBufferAccess, GpuWorkResourceIdAllocator,
+    GpuProgramContractCause, GpuProgramDescriptor, GpuProgramSourceIdentity, GpuProgramSourceKey,
+    GpuProgramSourceOwnerId, GpuProgramSourceProvenance, GpuProgramSourceRegistry,
+    GpuProgramSourceRevision, GpuRealizationPolicies, GpuReconstruction, GpuResourceCommon,
+    GpuResourceLabel, GpuResourceLifetime, GpuResourceProvenance, GpuRuntimeBindingResource,
+    GpuRuntimeBindingValue, GpuRuntimeBufferBinding, GpuShaderStage, GpuShaderStages,
+    GpuStorageBufferAccess, GpuWorkResourceIdAllocator,
 };
 use std::num::{NonZeroU64, NonZeroUsize};
 use std::sync::Mutex;
@@ -118,16 +118,6 @@ fn storage_binding() -> GpuBindingDeclaration {
     .expect("test storage binding should be valid")
 }
 
-fn storage_interface() -> GpuProgramInterfaceDescriptor {
-    GpuProgramInterfaceDescriptor::new([storage_binding()])
-        .expect("test storage interface should be valid")
-}
-
-fn empty_interface() -> GpuProgramInterfaceDescriptor {
-    GpuProgramInterfaceDescriptor::new(std::iter::empty::<GpuBindingDeclaration>())
-        .expect("empty program interface should be valid")
-}
-
 fn admitted_source(
     key: &str,
     canonical_wgsl: &str,
@@ -150,43 +140,26 @@ fn admitted_source(
         .expect("test source should admit")
 }
 
-fn compute_program(
-    key: &str,
-    canonical_wgsl: &str,
-    interface: GpuProgramInterfaceDescriptor,
-) -> GpuProgramDescriptor {
+fn compute_program(key: &str, canonical_wgsl: &str) -> GpuProgramDescriptor {
     let source = admitted_source(key, canonical_wgsl);
     let entry_point =
         GpuEntryPointName::new("cs_main").expect("compute entry point should be valid");
     GpuProgramDescriptor::new(
         source,
-        interface.clone(),
-        [GpuEntryPointDescriptor::new(
-            entry_point,
-            GpuShaderStage::Compute,
-            interface,
-        )],
+        [entry_point],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
     )
     .expect("test compute program descriptor should be valid")
 }
 
 fn render_program() -> GpuProgramDescriptor {
-    let interface = empty_interface();
     GpuProgramDescriptor::new(
         admitted_source("g4c2.test.render", RENDER_WGSL),
-        interface.clone(),
         [
-            GpuEntryPointDescriptor::new(
-                GpuEntryPointName::new("vs_main").expect("vertex entry point should be valid"),
-                GpuShaderStage::Vertex,
-                interface.clone(),
-            ),
-            GpuEntryPointDescriptor::new(
-                GpuEntryPointName::new("fs_main").expect("fragment entry point should be valid"),
-                GpuShaderStage::Fragment,
-                interface,
-            ),
+            GpuEntryPointName::new("vs_main").expect("vertex entry point should be valid"),
+            GpuEntryPointName::new("fs_main").expect("fragment entry point should be valid"),
         ],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
     )
     .expect("test render program descriptor should be valid")
 }
@@ -222,8 +195,7 @@ fn representative_compute_render_layout_and_bind_group_realization_reuse_records
         16
     );
 
-    let interface = storage_interface();
-    let compute = compute_program("g4c2.test.compute", COMPUTE_WGSL, interface.clone());
+    let compute = compute_program("g4c2.test.compute", COMPUTE_WGSL);
     let render = render_program();
 
     let realized_compute = pollster::block_on(context.realize_program(&compute))
@@ -287,7 +259,7 @@ fn equal_concurrent_g4c2_requests_singleflight_and_contexts_remain_isolated() {
     let Some(context) = context_or_skip(16) else {
         return;
     };
-    let program = compute_program("g4c2.test.concurrent", COMPUTE_WGSL, storage_interface());
+    let program = compute_program("g4c2.test.concurrent", COMPUTE_WGSL);
     let realized = std::thread::scope(|scope| {
         (0..4)
             .map(|_| {
@@ -407,46 +379,33 @@ fn equal_concurrent_g4c2_requests_singleflight_and_contexts_remain_isolated() {
 }
 
 #[test]
-fn failed_program_attempts_publish_nothing_and_live_handles_bound_registry_reclamation() {
+fn program_admission_failures_publish_nothing_and_live_handles_bound_registry_reclamation() {
     let _serialization = GPU_REALIZATION_TEST_LOCK
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let Some(context) = context_or_skip(4) else {
         return;
     };
-    let malformed = compute_program("g4c2.test.malformed", INVALID_WGSL, empty_interface());
-    let malformed_error = pollster::block_on(context.realize_program(&malformed))
-        .expect_err("malformed canonical WGSL must fail before publication");
+
+    let malformed_error = GpuProgramDescriptor::new(
+        admitted_source("g4c2.test.malformed", INVALID_WGSL),
+        [GpuEntryPointName::new("cs_main").expect("compute entry point should be valid")],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+    .expect_err("malformed canonical WGSL must reject at program admission");
     assert_eq!(
-        malformed_error.category(),
-        GpuProgramBindingRealizationErrorCategory::WgslParseOrValidationFailed
+        malformed_error.cause(),
+        GpuProgramContractCause::CanonicalWgslInvalid
     );
     assert_eq!(
         context
             .program_binding_realization_stats()
             .retained_records(),
-        0
+        0,
+        "program-admission failure must never publish a backend realization record"
     );
 
-    let mismatch = compute_program(
-        "g4c2.test.interface-mismatch",
-        COMPUTE_WGSL,
-        empty_interface(),
-    );
-    let mismatch_error = pollster::block_on(context.realize_program(&mismatch))
-        .expect_err("declared and observed resource interfaces must agree before publication");
-    assert_eq!(
-        mismatch_error.category(),
-        GpuProgramBindingRealizationErrorCategory::ProgramInterfaceMismatch
-    );
-    assert_eq!(
-        context
-            .program_binding_realization_stats()
-            .retained_records(),
-        0
-    );
-
-    let program = compute_program("g4c2.test.capacity", COMPUTE_WGSL, storage_interface());
+    let program = compute_program("g4c2.test.capacity", COMPUTE_WGSL);
     let realized_program = pollster::block_on(context.realize_program(&program))
         .expect("program should occupy one G4C2 record");
     let layout = GpuBindGroupLayoutDescriptor::new(0, [storage_binding()])
@@ -472,11 +431,7 @@ fn failed_program_attempts_publish_nothing_and_live_handles_bound_registry_recla
         4
     );
 
-    let replacement = compute_program(
-        "g4c2.test.capacity.replacement",
-        COMPUTE_WGSL,
-        storage_interface(),
-    );
+    let replacement = compute_program("g4c2.test.capacity.replacement", COMPUTE_WGSL);
     let capacity_error = pollster::block_on(context.realize_program(&replacement))
         .expect_err("live opaque handles must prevent registry-only reclamation");
     assert_eq!(
