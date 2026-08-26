@@ -1,8 +1,12 @@
+use super::analysis::analyze_program;
 use super::contract_diagnostics::{GpuProgramContractCause, GpuProgramContractError};
 use super::entry_point::{GpuEntryPointDescriptor, GpuEntryPointName};
-use super::interface::{GpuBindingClass, GpuProgramInterfaceDescriptor, GpuShaderStage};
+use super::interface::{
+    GpuBindingClass, GpuBindingLayoutRefinement, GpuProgramInterfaceDescriptor, GpuShaderStage,
+};
 use super::requirement_identity::hash_capability_requirements;
 use super::source::GpuAdmittedProgramSource;
+use super::stage_io::{GpuObservedFragmentOutputSignature, GpuObservedVertexInputSignature};
 use crate::plugins::gpu::{
     GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirements,
 };
@@ -14,10 +18,16 @@ struct GpuProgramDescriptorInner {
     source: GpuAdmittedProgramSource,
     interface: GpuProgramInterfaceDescriptor,
     entry_points: Vec<GpuEntryPointDescriptor>,
+    vertex_inputs: Vec<GpuObservedVertexInputSignature>,
+    fragment_outputs: Vec<GpuObservedFragmentOutputSignature>,
     requirements: GpuCapabilityRequirements,
 }
 
 /// Immutable admitted program contract retained by later realization records.
+///
+/// Canonical WGSL is parsed and validated during construction. Shader-defined entry-point,
+/// resource-interface, and stage-IO facts are compiler-derived; callers provide only selected
+/// entry-point names and sparse host/layout refinements.
 ///
 /// The record cannot be fabricated without source admission and validation:
 ///
@@ -32,67 +42,18 @@ pub struct GpuProgramDescriptor(Arc<GpuProgramDescriptorInner>);
 impl GpuProgramDescriptor {
     pub fn new(
         source: GpuAdmittedProgramSource,
-        interface: GpuProgramInterfaceDescriptor,
-        entry_points: impl IntoIterator<Item = GpuEntryPointDescriptor>,
+        selected_entry_points: impl IntoIterator<Item = GpuEntryPointName>,
+        refinements: impl IntoIterator<Item = GpuBindingLayoutRefinement>,
     ) -> Result<Self, GpuProgramContractError> {
-        let mut entry_points = entry_points.into_iter().collect::<Vec<_>>();
-        if entry_points.is_empty() {
-            return Err(GpuProgramContractError::invalid(
-                "construct admitted GPU program",
-                source.identity().diagnostic_label(),
-                GpuProgramContractCause::EntryPointMissing,
-                "declare at least one typed entry point",
-            ));
-        }
-
-        entry_points.sort_by(|left, right| {
+        let mut analysis = analyze_program(&source, selected_entry_points, refinements)?;
+        analysis.entry_points.sort_by(|left, right| {
             left.stage()
                 .cmp(&right.stage())
                 .then_with(|| left.name().cmp(right.name()))
         });
 
-        if let Some(duplicate) = entry_points
-            .windows(2)
-            .find(|pair| pair[0].stage() == pair[1].stage() && pair[0].name() == pair[1].name())
-        {
-            return Err(GpuProgramContractError::invalid(
-                "construct admitted GPU program",
-                format!("{:?}:{}", duplicate[0].stage(), duplicate[0].name()),
-                GpuProgramContractCause::DuplicateEntryPoint,
-                "declare each stage and entry-point name pair exactly once",
-            ));
-        }
-
-        if let Some(mismatch) = entry_points
-            .iter()
-            .find(|entry_point| entry_point.interface() != &interface)
-        {
-            return Err(GpuProgramContractError::invalid(
-                "construct admitted GPU program",
-                format!("{:?}:{}", mismatch.stage(), mismatch.name()),
-                GpuProgramContractCause::ProgramInterfaceMismatch,
-                "bind every entry point to the program's one explicit resource interface",
-            ));
-        }
-
-        for binding in interface.bindings() {
-            for visible_stage in binding.visibility().iter() {
-                if !entry_points
-                    .iter()
-                    .any(|entry_point| entry_point.stage() == visible_stage)
-                {
-                    return Err(GpuProgramContractError::invalid(
-                        "construct admitted GPU program",
-                        format!("binding {} visible to {visible_stage:?}", binding.key()),
-                        GpuProgramContractCause::ProgramInterfaceMismatch,
-                        "declare an entry point for every shader stage named by binding visibility",
-                    ));
-                }
-            }
-        }
-
         let mut requirements = GpuCapabilityRequirements::new();
-        for binding in interface.bindings() {
+        for binding in analysis.interface.bindings() {
             if binding.kind().class() == GpuBindingClass::StorageTexture {
                 insert_interface_requirement(
                     &mut requirements,
@@ -109,8 +70,10 @@ impl GpuProgramDescriptor {
 
         Ok(Self(Arc::new(GpuProgramDescriptorInner {
             source,
-            interface,
-            entry_points,
+            interface: analysis.interface,
+            entry_points: analysis.entry_points,
+            vertex_inputs: analysis.vertex_inputs,
+            fragment_outputs: analysis.fragment_outputs,
             requirements,
         })))
     }
@@ -142,6 +105,28 @@ impl GpuProgramDescriptor {
             })
             .ok()
             .map(|index| &self.0.entry_points[index])
+    }
+
+    pub(crate) fn observed_vertex_input_signature(
+        &self,
+        name: &GpuEntryPointName,
+    ) -> Option<&GpuObservedVertexInputSignature> {
+        self.0
+            .vertex_inputs
+            .binary_search_by(|signature| signature.entry_point().cmp(name))
+            .ok()
+            .map(|index| &self.0.vertex_inputs[index])
+    }
+
+    pub(crate) fn observed_fragment_output_signature(
+        &self,
+        name: &GpuEntryPointName,
+    ) -> Option<&GpuObservedFragmentOutputSignature> {
+        self.0
+            .fragment_outputs
+            .binary_search_by(|signature| signature.entry_point().cmp(name))
+            .ok()
+            .map(|index| &self.0.fragment_outputs[index])
     }
 
     pub fn requirements(&self) -> &GpuCapabilityRequirements {
@@ -195,6 +180,8 @@ impl PartialEq for GpuProgramDescriptor {
         self.0.source == other.0.source
             && self.0.interface == other.0.interface
             && self.0.entry_points == other.0.entry_points
+            && self.0.vertex_inputs == other.0.vertex_inputs
+            && self.0.fragment_outputs == other.0.fragment_outputs
             && self.0.requirements == other.0.requirements
     }
 }
@@ -206,6 +193,8 @@ impl Hash for GpuProgramDescriptor {
         self.0.source.hash(state);
         self.0.interface.hash(state);
         self.0.entry_points.hash(state);
+        self.0.vertex_inputs.hash(state);
+        self.0.fragment_outputs.hash(state);
         hash_capability_requirements(&self.0.requirements, state);
     }
 }
