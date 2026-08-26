@@ -362,3 +362,27 @@ fn prepared_and_explicit_buffer_uploads_share_transfer_alignment_rejection() {
         "Prepared and explicit buffer transfers must report through the same alignment authority"
     );
 }
+
+#[test]
+fn prepared_buffer_descriptor_requires_copy_destination_usage() {
+    let name = "prepared buffer without copy destination";
+    let resource_label = label(name);
+    let error = GpuBufferDescriptor::new(
+        common(name),
+        4,
+        GpuBufferUsages::new(&resource_label, [GpuBufferUsage::Storage]).unwrap(),
+        GpuBufferInitialization::Prepared(
+            PreparedGpuData::<TransferData>::from_pod_transfer(
+                format!("{name} initial bytes"),
+                &[1_u8, 2, 3, 4],
+                provenance(&format!("{name} initial bytes")),
+            )
+            .unwrap(),
+        ),
+    )
+    .expect_err("Prepared buffers without CopyDestination must reject");
+    assert_eq!(
+        error.cause(),
+        GpuResourceDescriptorCause::InvalidInitialization
+    );
+}
