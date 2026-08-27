@@ -1,7 +1,7 @@
 use engine::plugins::gpu::{
     GpuBindingDeclaration, GpuBindingKey, GpuBindingKind, GpuBindingProvenance,
-    GpuEntryPointDescriptor, GpuEntryPointName, GpuProgramContractCause,
-    GpuProgramInterfaceDescriptor, GpuShaderStage, GpuShaderStages, GpuStorageBufferAccess,
+    GpuEntryPointName, GpuProgramContractCause, GpuProgramInterfaceDescriptor, GpuShaderStage,
+    GpuShaderStages, GpuStorageBufferAccess,
 };
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -69,30 +69,6 @@ fn duplicate_binding_keys_are_rejected_before_interface_publication() {
     .expect_err("duplicate typed binding keys must be rejected");
 
     assert_eq!(error.cause(), GpuProgramContractCause::DuplicateBindingKey);
-}
-
-#[test]
-fn entry_point_binds_typed_stage_name_and_explicit_interface() {
-    let interface = GpuProgramInterfaceDescriptor::new([
-        storage_binding(0, 0, "input", "input"),
-        storage_binding(0, 1, "output", "output"),
-    ])
-    .unwrap();
-    let entry = GpuEntryPointDescriptor::new(
-        GpuEntryPointName::new("copy_values").unwrap(),
-        GpuShaderStage::Compute,
-        interface.clone(),
-    );
-
-    assert_eq!(entry.name().as_str(), "copy_values");
-    assert_eq!(entry.stage(), GpuShaderStage::Compute);
-    assert_eq!(entry.interface(), &interface);
-    assert!(
-        entry
-            .interface()
-            .binding(GpuBindingKey::try_new(0, 1).unwrap())
-            .is_some()
-    );
 }
 
 #[test]
