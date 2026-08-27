@@ -1,9 +1,9 @@
 use engine::plugins::gpu::{
-    GpuAdmittedProgramSource, GpuBindingKey, GpuBindingLayoutRefinement, GpuEntryPointName,
-    GpuProgramContractCause, GpuProgramDescriptor, GpuProgramSourceIdentity, GpuProgramSourceKey,
-    GpuProgramSourceOwnerId, GpuProgramSourceProvenance, GpuProgramSourceRegistry,
-    GpuProgramSourceRevision, GpuSamplerClass, GpuShaderStage, GpuShaderStages,
-    GpuStorageBufferAccess, GpuTextureSampleClass,
+    GpuAdmittedProgramSource, GpuBindingKey, GpuBindingLayoutRefinement, GpuCapabilityFeature,
+    GpuCapabilityRequirement, GpuEntryPointName, GpuProgramContractCause, GpuProgramDescriptor,
+    GpuProgramSourceIdentity, GpuProgramSourceKey, GpuProgramSourceOwnerId,
+    GpuProgramSourceProvenance, GpuProgramSourceRegistry, GpuProgramSourceRevision, GpuSamplerClass,
+    GpuShaderStage, GpuShaderStages, GpuStorageBufferAccess, GpuTextureSampleClass,
 };
 use std::num::NonZeroU64;
 
@@ -53,6 +53,31 @@ var sampled_sampler: sampler;
 @fragment
 fn sample_color() -> @location(0) vec4<f32> {
     return textureSample(sampled_texture, sampled_sampler, vec2<f32>(0.5, 0.5));
+}
+"#;
+
+const BINDING_ARRAY_WGSL: &str = r#"
+@group(0) @binding(0)
+var sampled_textures: binding_array<texture_2d<u32>, 3>;
+
+@compute @workgroup_size(1)
+fn inspect_textures() {
+    let dimensions = textureDimensions(sampled_textures[0]);
+}
+"#;
+
+const VISIBILITY_WGSL: &str = r#"
+@group(0) @binding(0)
+var<storage, read> values: array<u32>;
+
+@compute @workgroup_size(1)
+fn compute_values() {
+    let observed = values[0];
+}
+
+@fragment
+fn fragment_color() -> @location(0) vec4<f32> {
+    return vec4<f32>(1.0);
 }
 "#;
 
@@ -141,6 +166,36 @@ fn admitted_program_derives_entries_interface_and_static_visibility() {
 
     drop(program);
     assert_eq!(registry.collect_unretained(), 1);
+}
+
+#[test]
+fn fixed_binding_array_cardinality_and_capability_are_compiler_derived() {
+    let (_registry, source) = admitted_source_from(BINDING_ARRAY_WGSL);
+    let program = GpuProgramDescriptor::new(
+        source,
+        [entry("inspect_textures")],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+    .expect("fixed binding array should derive from canonical WGSL");
+    let binding = program.interface().binding(key(0)).unwrap();
+
+    assert_eq!(binding.array_count().map(|count| count.get()), Some(3));
+    assert_eq!(
+        binding.kind().texture_sample_class(),
+        Some(GpuTextureSampleClass::Uint)
+    );
+    assert_eq!(
+        binding.visibility(),
+        GpuShaderStages::one(GpuShaderStage::Compute)
+    );
+    assert!(matches!(
+        program
+            .requirements()
+            .get(GpuCapabilityFeature::TextureBindingArray),
+        Some(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::TextureBindingArray
+        ))
+    ));
 }
 
 #[test]
@@ -345,6 +400,36 @@ fn buffer_only_refinements_reject_on_non_buffer_bindings() {
         ],
     )
     .expect_err("dynamic offsets apply only to compiler-derived buffer bindings");
+    assert_eq!(
+        error.cause(),
+        GpuProgramContractCause::BindingRefinementInvalid
+    );
+}
+
+#[test]
+fn visibility_refinement_can_widen_only_within_selected_program_stages() {
+    let selected_visibility =
+        GpuShaderStages::new([GpuShaderStage::Compute, GpuShaderStage::Fragment]).unwrap();
+    let (_registry, source) = admitted_source_from(VISIBILITY_WGSL);
+    let program = GpuProgramDescriptor::new(
+        source,
+        [entry("compute_values"), entry("fragment_color")],
+        [GpuBindingLayoutRefinement::new(key(0)).with_visibility(selected_visibility)],
+    )
+    .expect("visibility may widen from observed compute use to another selected program stage");
+    assert_eq!(
+        program.interface().binding(key(0)).unwrap().visibility(),
+        selected_visibility
+    );
+
+    let (_registry, source) = admitted_source_from(VISIBILITY_WGSL);
+    let error = GpuProgramDescriptor::new(
+        source,
+        [entry("compute_values"), entry("fragment_color")],
+        [GpuBindingLayoutRefinement::new(key(0))
+            .with_visibility(GpuShaderStages::one(GpuShaderStage::Fragment))],
+    )
+    .expect_err("visibility refinement cannot omit the compiler-observed compute use");
     assert_eq!(
         error.cause(),
         GpuProgramContractCause::BindingRefinementInvalid
