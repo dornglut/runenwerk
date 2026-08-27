@@ -190,13 +190,13 @@ pub(crate) fn analyze_program(
             })?;
         let compiler_kind = compiler_binding_kind(&module, &module_info, global.space, base_type)
             .map_err(|detail| {
-                invalid(
-                    operation,
-                    &format!("binding {key}"),
-                    GpuProgramContractCause::ProgramInterfaceMismatch,
-                    detail,
-                )
-            })?;
+            invalid(
+                operation,
+                &format!("binding {key}"),
+                GpuProgramContractCause::ProgramInterfaceMismatch,
+                detail,
+            )
+        })?;
         let observed_visibility = GpuShaderStages::new(used_stages)?;
         let refinement_index = refinements
             .binary_search_by_key(&key, GpuBindingLayoutRefinement::key)
