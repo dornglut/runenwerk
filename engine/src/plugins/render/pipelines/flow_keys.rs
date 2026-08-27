@@ -135,21 +135,87 @@ impl From<RenderPassKind> for FlowPassKind {
 mod tests {
     use super::*;
     use crate::plugins::gpu::{
-        GpuAdmittedProgramSource, GpuBindGroupLayoutDescriptor, GpuBindingDeclaration,
-        GpuBindingKey, GpuBindingKind, GpuBindingProvenance, GpuBlendMode,
+        GpuAdmittedProgramSource, GpuBindingLayoutRefinement, GpuBlendMode,
         GpuCapabilityRequirements, GpuColorTargetStateDescriptor, GpuColorWriteMask,
-        GpuEntryPointDescriptor, GpuEntryPointName, GpuFragmentOutputStateDescriptor,
-        GpuMultisampleStateDescriptor, GpuPrimitiveStateDescriptor, GpuProgramInterfaceDescriptor,
-        GpuProgramSourceIdentity, GpuProgramSourceKey, GpuProgramSourceOwnerId,
-        GpuProgramSourceProvenance, GpuProgramSourceRegistry, GpuProgramSourceRevision,
-        GpuRenderEntryPoints, GpuSamplerClass, GpuShaderStage, GpuShaderStages,
-        GpuSpecializationDeclaration, GpuSpecializationEntry, GpuSpecializationKey,
-        GpuSpecializationSchema, GpuSpecializationValue, GpuTextureFormat, GpuVertexAttribute,
+        GpuEntryPointName, GpuFragmentOutputStateDescriptor, GpuMultisampleStateDescriptor,
+        GpuPrimitiveStateDescriptor, GpuProgramSourceIdentity, GpuProgramSourceKey,
+        GpuProgramSourceOwnerId, GpuProgramSourceProvenance, GpuProgramSourceRegistry,
+        GpuProgramSourceRevision, GpuRenderEntryPoints, GpuSpecializationDeclaration,
+        GpuSpecializationEntry, GpuSpecializationKey, GpuSpecializationSchema,
+        GpuSpecializationValue, GpuTextureFormat, GpuVertexAttribute,
         GpuVertexBufferLayoutDescriptor, GpuVertexFormat, GpuVertexInputStateDescriptor,
         GpuVertexStepMode,
     };
 
-    fn admitted_source(key: &str) -> GpuAdmittedProgramSource {
+    const BASE_RENDER_WGSL: &str = r#"
+@vertex
+fn vs_main() -> @builtin(position) vec4f {
+    return vec4f(0.0, 0.0, 0.0, 1.0);
+}
+
+@fragment
+fn fs_main() -> @location(0) vec4f {
+    return vec4f(1.0);
+}
+"#;
+
+    const GROUP0_RENDER_WGSL: &str = r#"
+struct Params {
+    value: f32,
+}
+
+@group(0) @binding(0)
+var<uniform> params: Params;
+
+@vertex
+fn vs_main() -> @builtin(position) vec4f {
+    return vec4f(params.value, 0.0, 0.0, 1.0);
+}
+
+@fragment
+fn fs_main() -> @location(0) vec4f {
+    return vec4f(1.0);
+}
+"#;
+
+    const GROUP1_RENDER_WGSL: &str = r#"
+struct Params {
+    value: f32,
+}
+
+@group(1) @binding(0)
+var<uniform> params: Params;
+
+@vertex
+fn vs_main() -> @builtin(position) vec4f {
+    return vec4f(params.value, 0.0, 0.0, 1.0);
+}
+
+@fragment
+fn fs_main() -> @location(0) vec4f {
+    return vec4f(1.0);
+}
+"#;
+
+    const VERTEX_INPUT_RENDER_WGSL: &str = r#"
+struct VertexIn {
+    @location(0) position: vec3f,
+}
+
+@vertex
+fn vs_main(input: VertexIn) -> @builtin(position) vec4f {
+    return vec4f(input.position, 1.0);
+}
+
+@fragment
+fn fs_main() -> @location(0) vec4f {
+    return vec4f(1.0);
+}
+"#;
+
+    const COMPUTE_WGSL: &str = "@compute @workgroup_size(1) fn cs_main() {}";
+
+    fn admitted_source(key: &str, canonical_wgsl: &str) -> GpuAdmittedProgramSource {
         let identity = GpuProgramSourceIdentity::new(
             GpuProgramSourceOwnerId::allocate().unwrap(),
             GpuProgramSourceKey::new(key).unwrap(),
@@ -159,30 +225,10 @@ mod tests {
         registry
             .admit_wgsl(
                 identity,
-                "fn shader_contract_test() {}",
+                canonical_wgsl,
                 GpuProgramSourceProvenance::new("flow-key-test", None).unwrap(),
             )
             .unwrap()
-    }
-
-    fn bind_group_layout(
-        group: u32,
-        bindings: impl IntoIterator<Item = GpuBindingDeclaration>,
-    ) -> GpuBindGroupLayoutDescriptor {
-        GpuBindGroupLayoutDescriptor::new(group, bindings).unwrap()
-    }
-
-    fn pipeline_layout(
-        groups: impl IntoIterator<Item = GpuBindGroupLayoutDescriptor>,
-    ) -> GpuPipelineLayoutDescriptor {
-        GpuPipelineLayoutDescriptor::new(groups).unwrap()
-    }
-
-    fn interface(layout: &GpuPipelineLayoutDescriptor) -> GpuProgramInterfaceDescriptor {
-        GpuProgramInterfaceDescriptor::new(
-            layout.groups().flat_map(|group| group.bindings().cloned()),
-        )
-        .unwrap()
     }
 
     fn empty_specialization() -> GpuSpecializationValueSet {
@@ -232,39 +278,19 @@ mod tests {
         .unwrap()
     }
 
-    fn sampler_binding(group: u64, binding: u64) -> GpuBindingDeclaration {
-        GpuBindingDeclaration::new(
-            GpuBindingKey::try_new(group, binding).unwrap(),
-            GpuShaderStages::one(GpuShaderStage::Fragment),
-            GpuBindingKind::sampler(GpuSamplerClass::Filtering),
-            None,
-            "sample-sampler",
-            GpuBindingProvenance::new("flow-key-test", None).unwrap(),
-        )
-        .unwrap()
-    }
-
     fn render_key(
         source: GpuAdmittedProgramSource,
-        layout: GpuPipelineLayoutDescriptor,
         state: GpuRenderPipelineStateDescriptor,
     ) -> FlowPassPipelineKey {
-        let interface = interface(&layout);
         let vertex = GpuEntryPointName::new("vs_main").unwrap();
         let fragment = GpuEntryPointName::new("fs_main").unwrap();
         let program = GpuProgramDescriptor::new(
             source,
-            interface.clone(),
-            [
-                GpuEntryPointDescriptor::new(
-                    vertex.clone(),
-                    GpuShaderStage::Vertex,
-                    interface.clone(),
-                ),
-                GpuEntryPointDescriptor::new(fragment.clone(), GpuShaderStage::Fragment, interface),
-            ],
+            [vertex.clone(), fragment.clone()],
+            std::iter::empty::<GpuBindingLayoutRefinement>(),
         )
         .unwrap();
+        let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
         let descriptor = GpuRenderPipelineDescriptor::new(
             program,
             GpuRenderEntryPoints::new(vertex, Some(fragment)),
@@ -287,19 +313,14 @@ mod tests {
         source: GpuAdmittedProgramSource,
         specialization: GpuSpecializationValueSet,
     ) -> FlowPassPipelineKey {
-        let layout = pipeline_layout([]);
-        let interface = interface(&layout);
         let entry_point = GpuEntryPointName::new("cs_main").unwrap();
         let program = GpuProgramDescriptor::new(
             source,
-            interface.clone(),
-            [GpuEntryPointDescriptor::new(
-                entry_point.clone(),
-                GpuShaderStage::Compute,
-                interface,
-            )],
+            [entry_point.clone()],
+            std::iter::empty::<GpuBindingLayoutRefinement>(),
         )
         .unwrap();
+        let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
         let descriptor = GpuComputePipelineDescriptor::new(
             program,
             entry_point,
@@ -318,43 +339,52 @@ mod tests {
     }
 
     #[test]
-    fn stats_key_reflects_complete_render_descriptor_semantics() {
-        let source = admitted_source("shader");
-        let base_layout = pipeline_layout([]);
+    fn stats_key_reflects_admitted_program_interface_and_render_state() {
         let base_state = render_pipeline_state(GpuVertexInputStateDescriptor::new([]).unwrap());
-        let key = render_key(source.clone(), base_layout.clone(), base_state.clone());
+        let key = render_key(
+            admitted_source("shader", BASE_RENDER_WGSL),
+            base_state.clone(),
+        );
         let same = key.clone();
         let changed_source = render_key(
-            admitted_source("other-shader"),
-            base_layout.clone(),
+            admitted_source("other-shader", BASE_RENDER_WGSL),
             base_state.clone(),
         );
-        let changed_group0_layout = render_key(
-            source.clone(),
-            pipeline_layout([bind_group_layout(0, [sampler_binding(0, 0)])]),
+        let changed_group0_interface = render_key(
+            admitted_source("shader-group0", GROUP0_RENDER_WGSL),
             base_state.clone(),
         );
-        let changed_group1_layout = render_key(
-            source.clone(),
-            pipeline_layout([bind_group_layout(1, [sampler_binding(1, 0)])]),
+        let changed_group1_interface = render_key(
+            admitted_source("shader-group1", GROUP1_RENDER_WGSL),
             base_state,
         );
         let changed_render_state = render_key(
-            source,
-            base_layout,
+            admitted_source("shader-vertex-input", VERTEX_INPUT_RENDER_WGSL),
             render_pipeline_state(vertex_input_state()),
         );
 
         assert_eq!(key.stats_key(), same.stats_key());
         assert_ne!(key.stats_key(), changed_source.stats_key());
-        assert_ne!(key.stats_key(), changed_group0_layout.stats_key());
-        assert_ne!(key.stats_key(), changed_group1_layout.stats_key());
+        assert_ne!(key.stats_key(), changed_group0_interface.stats_key());
+        assert_ne!(key.stats_key(), changed_group1_interface.stats_key());
         assert_ne!(key.stats_key(), changed_render_state.stats_key());
+        assert_ne!(
+            key.pipeline_layout_diagnostic_hash(),
+            changed_group0_interface.pipeline_layout_diagnostic_hash()
+        );
+        assert_ne!(
+            changed_group0_interface.pipeline_layout_diagnostic_hash(),
+            changed_group1_interface.pipeline_layout_diagnostic_hash()
+        );
+        assert_ne!(
+            key.render_pipeline_state_diagnostic_hash(),
+            changed_render_state.render_pipeline_state_diagnostic_hash()
+        );
     }
 
     #[test]
     fn compute_descriptor_preserves_typed_specialization_identity() {
-        let source = admitted_source("compute-shader");
+        let source = admitted_source("compute-shader", COMPUTE_WGSL);
         let default = compute_key(source.clone(), empty_specialization());
         let typed = compute_key(
             source.clone(),
