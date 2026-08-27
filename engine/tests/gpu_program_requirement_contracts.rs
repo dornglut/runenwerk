@@ -3,12 +3,11 @@ use engine::plugins::gpu::{
     GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirements,
     GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuComputePipelineDescriptor,
     GpuEntryPointName, GpuFragmentOutputStateDescriptor, GpuMultisampleStateDescriptor,
-    GpuPipelineLayoutDescriptor, GpuPrimitiveStateDescriptor, GpuProgramDescriptor,
+    GpuPipelineConfiguration, GpuPrimitiveStateDescriptor, GpuProgramDescriptor,
     GpuProgramSourceIdentity, GpuProgramSourceKey, GpuProgramSourceOwnerId,
     GpuProgramSourceProvenance, GpuProgramSourceRegistry, GpuProgramSourceRevision,
     GpuRenderEntryPoints, GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor,
-    GpuSamplerClass, GpuSpecializationSchema, GpuSpecializationValueSet, GpuTextureFormat,
-    GpuTextureSampleClass, GpuVertexInputStateDescriptor,
+    GpuSamplerClass, GpuTextureFormat, GpuTextureSampleClass, GpuVertexInputStateDescriptor,
 };
 
 const FIXED_ARRAY_WGSL: &str = r#"
@@ -101,10 +100,6 @@ fn filtering_refinements() -> [GpuBindingLayoutRefinement; 2] {
     ]
 }
 
-fn specialization() -> GpuSpecializationValueSet {
-    GpuSpecializationValueSet::new(GpuSpecializationSchema::new([]).unwrap(), []).unwrap()
-}
-
 fn assert_required(requirements: &GpuCapabilityRequirements, feature: GpuCapabilityFeature) {
     assert_eq!(
         requirements.get(feature),
@@ -134,14 +129,11 @@ fn compute_pipeline_inherits_program_interface_requirements() {
     )
     .expect("compute program requirements should derive from canonical WGSL");
     assert_fixed_array_requirements(program.requirements());
-    let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
 
     let pipeline = GpuComputePipelineDescriptor::new(
         program,
         entry_point("compute_main"),
-        layout,
-        specialization(),
-        GpuCapabilityRequirements::new(),
+        GpuPipelineConfiguration::default(),
     )
     .unwrap();
     assert_fixed_array_requirements(pipeline.requirements());
@@ -157,7 +149,6 @@ fn render_pipeline_inherits_program_interface_requirements() {
     )
     .expect("render program requirements should derive from canonical WGSL");
     assert_fixed_array_requirements(program.requirements());
-    let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
 
     let color_target = GpuColorTargetStateDescriptor::new(
         GpuTextureFormat::Rgba8Unorm,
@@ -180,9 +171,7 @@ fn render_pipeline_inherits_program_interface_requirements() {
             Some(entry_point("fragment_main")),
         ),
         state,
-        layout,
-        specialization(),
-        GpuCapabilityRequirements::new(),
+        GpuPipelineConfiguration::default(),
     )
     .unwrap();
     assert_fixed_array_requirements(pipeline.requirements());
