@@ -159,19 +159,14 @@ pub(super) fn compute_operation_with_dispatch(dispatch: GpuDispatchSize) -> GpuW
             GpuProgramSourceProvenance::new("graph-test", None).unwrap(),
         )
         .unwrap();
-    let interface = GpuProgramInterfaceDescriptor::new([]).unwrap();
     let entry_point = GpuEntryPointName::new("main").unwrap();
     let program = GpuProgramDescriptor::new(
         source,
-        interface.clone(),
-        [GpuEntryPointDescriptor::new(
-            entry_point.clone(),
-            GpuShaderStage::Compute,
-            interface,
-        )],
+        [entry_point.clone()],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
     )
     .unwrap();
-    let layout = GpuPipelineLayoutDescriptor::new([]).unwrap();
+    let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
     let specialization =
         GpuSpecializationValueSet::new(GpuSpecializationSchema::new([]).unwrap(), []).unwrap();
     let pipeline = GpuComputePipelineDescriptor::new(
