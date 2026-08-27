@@ -78,9 +78,16 @@ pub(crate) fn analyze_program(
             format!("canonical WGSL parse failed: {error}"),
         )
     })?;
+    // Permit only fixed binding-array forms that are normalized into explicit RunenGPU
+    // capability requirements; context/device admission remains responsible for backend support.
+    let analysis_capabilities = naga::valid::Capabilities::default()
+        | naga::valid::Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY
+        | naga::valid::Capabilities::BUFFER_BINDING_ARRAY
+        | naga::valid::Capabilities::STORAGE_TEXTURE_BINDING_ARRAY
+        | naga::valid::Capabilities::STORAGE_BUFFER_BINDING_ARRAY;
     let module_info = naga::valid::Validator::new(
         naga::valid::ValidationFlags::all(),
-        naga::valid::Capabilities::default(),
+        analysis_capabilities,
     )
     .validate(&module)
     .map_err(|error| {
