@@ -134,7 +134,7 @@ fn compute_pipeline_default_configuration_has_no_caller_ceremony() {
     .expect("ordinary compute pipeline descriptor should construct");
 
     assert_eq!(descriptor.layout(), &expected_layout);
-    assert_eq!(descriptor.specialization().schema().len(), 0);
+    assert_eq!(descriptor.specialization().schema().declarations().len(), 0);
     assert_eq!(descriptor.specialization().entries().len(), 0);
 }
 
