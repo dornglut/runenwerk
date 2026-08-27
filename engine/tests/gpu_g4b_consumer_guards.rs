@@ -176,10 +176,12 @@ fn renderer_program_interface_authority_is_compiler_derived_once() {
             "{path} must admit programs from canonical WGSL plus selected entry names"
         );
         assert!(
-            source.contains("GpuPipelineLayoutDescriptor::from_interface(program")
-                || source
-                    .contains("GpuPipelineLayoutDescriptor::from_interface(\n            program"),
-            "{path} must derive pipeline layout from the admitted program interface"
+            !source.contains("GpuPipelineLayoutDescriptor::from_interface("),
+            "{path} must not reconstruct a pipeline layout already owned by the pipeline descriptor"
+        );
+        assert!(
+            source.contains("GpuPipelineConfiguration::"),
+            "{path} must construct pipelines through the single descriptor-owned configuration authority"
         );
         for forbidden in [
             "GpuProgramInterfaceDescriptor",
@@ -197,6 +199,14 @@ fn renderer_program_interface_authority_is_compiler_derived_once() {
         }
     }
 
+    assert!(
+        runtime.contains("pipeline_key.pipeline_descriptor.layout()"),
+        "render-flow runtime must realize the layout owned by the completed pipeline descriptor"
+    );
+    assert!(
+        setup.contains("pipeline_descriptor.layout()"),
+        "built-in UI setup must realize the layout owned by the completed pipeline descriptor"
+    );
     assert!(
         runtime.contains("GpuBindingLayoutRefinement"),
         "render-flow runtime policy must use sparse host/layout refinements"
