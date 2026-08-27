@@ -122,12 +122,12 @@ fn public_program_api_has_one_compiler_derived_authority() {
         "    pub fn source(",
         PROGRAM_DESCRIPTOR,
     );
-    assert!(constructor.contains(
-        "selected_entry_points: impl IntoIterator<Item = GpuEntryPointName>"
-    ));
-    assert!(constructor.contains(
-        "refinements: impl IntoIterator<Item = GpuBindingLayoutRefinement>"
-    ));
+    assert!(
+        constructor.contains("selected_entry_points: impl IntoIterator<Item = GpuEntryPointName>")
+    );
+    assert!(
+        constructor.contains("refinements: impl IntoIterator<Item = GpuBindingLayoutRefinement>")
+    );
     assert!(!constructor.contains("GpuProgramInterfaceDescriptor"));
     assert!(!constructor.contains("GpuEntryPointDescriptor"));
 
