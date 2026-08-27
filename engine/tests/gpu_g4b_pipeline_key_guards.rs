@@ -150,10 +150,17 @@ fn binding_resolution_constructs_complete_descriptor_from_admitted_source() {
     );
     assert_eq!(
         bindings
-            .matches("GpuPipelineLayoutDescriptor::from_interface(program.interface())?")
+            .matches("GpuPipelineConfiguration::new(Some(specialization), None)")
             .count(),
         2,
-        "compute and render layouts must derive from the admitted program interface"
+        "compute and render paths must forward the one real specialization decision through the shared pipeline configuration authority"
+    );
+    assert_eq!(
+        bindings
+            .matches("GpuPipelineLayoutDescriptor::from_interface(program.interface())?")
+            .count(),
+        0,
+        "renderer callers must not reconstruct the program-derived pipeline layout"
     );
     assert!(
         bindings.contains("pipeline_descriptor,"),
@@ -231,7 +238,7 @@ fn renderer_runtime_hashes_are_diagnostic_only() {
 }
 
 #[test]
-fn admitted_program_interface_owns_pipeline_layout_before_descriptor_publication() {
+fn pipeline_descriptor_owns_layout_derivation_before_renderer_realization() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let flow_keys = read(&manifest_dir, FLOW_KEYS);
     let bindings = read(&manifest_dir, BINDINGS);
@@ -255,8 +262,8 @@ fn admitted_program_interface_owns_pipeline_layout_before_descriptor_publication
         bindings
             .matches("GpuPipelineLayoutDescriptor::from_interface(program.interface())?")
             .count(),
-        2,
-        "compute and render pipeline layouts must derive from admitted program interfaces"
+        0,
+        "renderer callers must leave program-derived pipeline-layout ownership to the generic descriptor"
     );
     for forbidden in [
         "GpuProgramInterfaceDescriptor",
@@ -264,11 +271,12 @@ fn admitted_program_interface_owns_pipeline_layout_before_descriptor_publication
         "GpuBindingKind",
         "GpuBindGroupLayoutDescriptor::new(",
         "GpuPipelineLayoutDescriptor::new(",
+        "GpuPipelineLayoutDescriptor::from_interface(",
         "gpu_program_interface_for_layout(",
     ] {
         assert!(
             !bindings.contains(forbidden),
-            "renderer must not regain caller-authored shader-interface/layout authority through {forbidden}"
+            "renderer must not regain caller-authored or caller-derived shader-interface/layout authority through {forbidden}"
         );
     }
     for required in [
@@ -295,7 +303,7 @@ fn admitted_program_interface_owns_pipeline_layout_before_descriptor_publication
     ] {
         assert!(
             bindings.contains(required),
-            "G4C2 descriptor realization/runtime validation must consume the admitted program-derived layout: {required}"
+            "G4C2 descriptor realization/runtime validation must consume the descriptor-owned admitted-program layout: {required}"
         );
     }
     for retired_physical_sidecar in [
