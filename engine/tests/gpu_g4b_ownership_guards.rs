@@ -4,11 +4,7 @@ use std::path::{Path, PathBuf};
 const PROGRAM_SOURCE_FORBIDDEN: &[(&str, &str)] = &[
     (
         "wgpu::",
-        "raw WGPU authority belongs to later backend realization",
-    ),
-    (
-        "naga::",
-        "reflection and translation belong to later G4C work",
+        "raw WGPU authority belongs to private backend realization",
     ),
     (
         "crate::plugins::render",
@@ -39,6 +35,8 @@ const PROGRAM_SOURCE_FORBIDDEN: &[(&str, &str)] = &[
     ),
 ];
 
+const PRIVATE_COMPILER_ANALYSIS: &str = "src/plugins/gpu/api/program/analysis.rs";
+
 #[test]
 fn g4b_program_source_remains_backend_and_renderer_neutral() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -52,16 +50,24 @@ fn g4b_program_source_remains_backend_and_renderer_neutral() {
     for file in files {
         let content = fs::read_to_string(&file).expect("G4B source should remain readable");
         let executable = without_line_comments(&content);
+        let relative = file
+            .strip_prefix(&manifest_dir)
+            .expect("G4B source should remain inside the engine crate");
+
         for (token, reason) in PROGRAM_SOURCE_FORBIDDEN {
             if executable.contains(token) {
-                let relative = file
-                    .strip_prefix(&manifest_dir)
-                    .expect("G4B source should remain inside the engine crate");
                 violations.push(format!(
                     "{} contains {token:?}: {reason}",
                     relative.display()
                 ));
             }
+        }
+
+        if executable.contains("naga::") && relative != Path::new(PRIVATE_COMPILER_ANALYSIS) {
+            violations.push(format!(
+                "{} contains \"naga::\": compiler analysis must remain private to {PRIVATE_COMPILER_ANALYSIS}",
+                relative.display()
+            ));
         }
     }
 
