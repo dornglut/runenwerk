@@ -114,7 +114,8 @@ fn renderer_program_interface_authority_is_compiler_derived_once() {
         );
         assert!(
             source.contains("GpuPipelineLayoutDescriptor::from_interface(program")
-                || source.contains("GpuPipelineLayoutDescriptor::from_interface(\n            program"),
+                || source
+                    .contains("GpuPipelineLayoutDescriptor::from_interface(\n            program"),
             "{path} must derive pipeline layout from the admitted program interface"
         );
         for forbidden in [
