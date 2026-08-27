@@ -653,14 +653,7 @@ fn offscreen_work(
         ] {
             builder.declare_resource(resource)?;
         }
-        add_initialization(
-            builder,
-            &state_a,
-            &state_b,
-            &params_buffer,
-            &seed,
-            params,
-        )?;
+        add_initialization(builder, &state_a, &state_b, &params_buffer, &seed, params)?;
 
         let mut current_is_a = true;
         for frame in 0..envelope.frames {
@@ -1043,14 +1036,7 @@ fn surface_graph(
         ] {
             builder.declare_resource(resource)?;
         }
-        add_initialization(
-            builder,
-            &state_a,
-            &state_b,
-            &params_buffer,
-            &seed,
-            params,
-        )?;
+        add_initialization(builder, &state_a, &state_b, &params_buffer, &seed, params)?;
 
         let mut current_is_a = true;
         for frame in 0..envelope.frames {
@@ -1101,8 +1087,9 @@ fn surface_graph(
     })
     .unwrap();
 
-    let graph = GpuPreparedWorkGraph::prepare(label("reaction diffusion surface graph"), [fragment])
-        .unwrap();
+    let graph =
+        GpuPreparedWorkGraph::prepare(label("reaction diffusion surface graph"), [fragment])
+            .unwrap();
     assert_prepared_graph_evidence(&graph);
     graph
 }
