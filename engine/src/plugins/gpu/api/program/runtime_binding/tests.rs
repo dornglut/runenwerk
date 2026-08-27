@@ -136,17 +136,17 @@ fn runtime_bindings_enforce_compiler_minimum_and_stronger_host_minimum() {
     );
 
     let stronger_host = NonZeroU64::new(48).unwrap();
-    let host_layout = GpuBindGroupLayoutDescriptor::new(
-        0,
-        [analyzed_storage_declaration(Some(stronger_host))],
-    )
-    .unwrap();
+    let host_layout =
+        GpuBindGroupLayoutDescriptor::new(0, [analyzed_storage_declaration(Some(stronger_host))])
+            .unwrap();
     let error = GpuValidatedBindGroupBindings::new(
         host_layout.clone(),
         [runtime_buffer_value(0, buffer.clone(), 0, 32, 0)],
         &device_facts(),
     )
-    .expect_err("runtime range satisfying compiler minimum but not stronger host minimum must reject");
+    .expect_err(
+        "runtime range satisfying compiler minimum but not stronger host minimum must reject",
+    );
     assert_eq!(
         error.cause(),
         GpuProgramContractCause::RuntimeBindingIncompatible
