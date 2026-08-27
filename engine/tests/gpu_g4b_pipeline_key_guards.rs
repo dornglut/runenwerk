@@ -426,9 +426,8 @@ fn material_shader_binding_coordinates_have_one_compiler_allocation_owner() {
         "renderer material refinements must target exact compiler-published binding coordinates"
     );
     assert!(
-        g4b_compact.contains(
-            ".with_texture_sample_class(GpuTextureSampleClass::FloatFilterable)"
-        ) && g4b_compact.contains(".with_sampler_class(GpuSamplerClass::Filtering)"),
+        g4b_compact.contains(".with_texture_sample_class(GpuTextureSampleClass::FloatFilterable)")
+            && g4b_compact.contains(".with_sampler_class(GpuSamplerClass::Filtering)"),
         "renderer material policy must remain sparse filterability/sampler refinements"
     );
     for forbidden in [
