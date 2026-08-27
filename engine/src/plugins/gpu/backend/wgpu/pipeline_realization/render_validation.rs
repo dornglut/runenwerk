@@ -74,14 +74,16 @@ pub(super) fn validate_render_descriptor(
             "the fragment entry point is absent from the descriptor-owned program",
         ));
     }
-    let expected_layout = GpuPipelineLayoutDescriptor::from_interface(descriptor.program().interface())
-        .map_err(|error| {
-            GpuPipelineRealizationError::new(
-                GpuPipelineRealizationErrorCategory::PipelineDescriptorInvalid,
-                render_request_name(descriptor),
-                error.to_string(),
-            )
-        })?;
+    let expected_layout = GpuPipelineLayoutDescriptor::from_interface(
+        descriptor.program().interface(),
+    )
+    .map_err(|error| {
+        GpuPipelineRealizationError::new(
+            GpuPipelineRealizationErrorCategory::PipelineDescriptorInvalid,
+            render_request_name(descriptor),
+            error.to_string(),
+        )
+    })?;
     if descriptor.layout() != &expected_layout {
         return Err(GpuPipelineRealizationError::new(
             GpuPipelineRealizationErrorCategory::ProgramInterfaceMismatch,
@@ -194,7 +196,11 @@ pub(super) fn wgpu_specialization_constants(
         .map(|entry| {
             let value = match entry.value() {
                 GpuSpecializationValue::Bool(value) => {
-                    if value { 1.0 } else { 0.0 }
+                    if value {
+                        1.0
+                    } else {
+                        0.0
+                    }
                 }
                 GpuSpecializationValue::U32(value) => f64::from(value),
                 GpuSpecializationValue::I32(value) => f64::from(value),
