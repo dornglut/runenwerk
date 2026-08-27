@@ -329,14 +329,10 @@ fn render_pipeline(
     .unwrap()
 }
 
-fn buffer(
-    allocator: &mut GpuWorkResourceIdAllocator,
-    name: &str,
-    byte_len: u64,
-) -> GpuBufferHandle {
+fn buffer(resources: &mut GpuResourceScope, name: &str, byte_len: u64) -> GpuBufferHandle {
     let resource_label = label(name);
-    allocator
-        .allocate_buffer_handle(
+    resources
+        .buffer(
             GpuBufferDescriptor::new(
                 common(name, GpuResourceLifetime::Retained),
                 byte_len,
@@ -449,7 +445,11 @@ fn upload_operation<T: Pod>(
     GpuUploadOperation::new(region.into(), data).unwrap()
 }
 
-fn add_operation(builder: &mut GpuWorkFragmentBuilder, name: &str, operation: GpuWorkOperation) {
+fn add_operation(
+    builder: &mut GpuWorkFragmentBuilder,
+    name: &str,
+    operation: GpuWorkOperation,
+) -> Result<(), GpuWorkAuthoringError> {
     builder
         .add_node(
             label(name),
@@ -459,11 +459,11 @@ fn add_operation(builder: &mut GpuWorkFragmentBuilder, name: &str, operation: Gp
             GpuExecutionPreference::Automatic,
             provenance(name),
         )
-        .unwrap();
+        .map(|_| ())
 }
 
 fn state_resources(
-    allocator: &mut GpuWorkResourceIdAllocator,
+    resources: &mut GpuResourceScope,
     envelope: Envelope,
 ) -> (
     GpuBufferHandle,
@@ -478,17 +478,17 @@ fn state_resources(
     let params_bytes = u64::try_from(core::mem::size_of::<ReactionParams>()).unwrap();
     (
         buffer(
-            allocator,
+            resources,
             &format!("{} state a", envelope.name),
             state_bytes,
         ),
         buffer(
-            allocator,
+            resources,
             &format!("{} state b", envelope.name),
             state_bytes,
         ),
         buffer(
-            allocator,
+            resources,
             &format!("{} params", envelope.name),
             params_bytes,
         ),
@@ -498,13 +498,13 @@ fn state_resources(
 }
 
 fn offscreen_target(
-    allocator: &mut GpuWorkResourceIdAllocator,
+    resources: &mut GpuResourceScope,
     envelope: Envelope,
 ) -> (GpuTextureHandle, GpuTextureViewHandle) {
     let name = format!("{} offscreen target", envelope.name);
     let texture_label = label(&name);
-    let texture = allocator
-        .allocate_texture_handle(
+    let texture = resources
+        .texture(
             GpuTextureDescriptor::new(
                 common(&name, GpuResourceLifetime::Transient),
                 GpuTextureDimension::D2,
@@ -541,8 +541,8 @@ fn offscreen_target(
         GpuTextureAspect::Color,
     )
     .unwrap();
-    let view = allocator
-        .allocate_texture_view_handle(
+    let view = resources
+        .texture_view(
             GpuTextureViewDescriptor::new(
                 common(
                     &format!("{} offscreen target view", envelope.name),
@@ -566,7 +566,7 @@ fn add_initialization(
     params_buffer: &GpuBufferHandle,
     seed: &[ReactionCell],
     params: ReactionParams,
-) {
+) -> Result<(), GpuWorkAuthoringError> {
     add_operation(
         builder,
         "reaction diffusion initialize state a",
@@ -575,7 +575,7 @@ fn add_initialization(
             state_a,
             seed,
         )),
-    );
+    )?;
     add_operation(
         builder,
         "reaction diffusion initialize state b",
@@ -584,7 +584,7 @@ fn add_initialization(
             state_b,
             seed,
         )),
-    );
+    )?;
     add_operation(
         builder,
         "reaction diffusion upload parameters",
@@ -593,7 +593,8 @@ fn add_initialization(
             params_buffer,
             &[params],
         )),
-    );
+    )?;
+    Ok(())
 }
 
 fn assert_prepared_graph_evidence(graph: &GpuPreparedWorkGraph) {
@@ -625,110 +626,106 @@ fn assert_prepared_graph_evidence(graph: &GpuPreparedWorkGraph) {
     }
 }
 
-fn offscreen_graph(
+fn offscreen_work(
     context: &GpuContext,
     sources: &ProgramSources,
     envelope: Envelope,
-) -> (GpuPreparedWorkGraph, Vec<GpuReadbackId>) {
+) -> (GpuResourceLabel, GpuWorkFragment, Vec<GpuReadbackId>) {
     assert!(envelope.width >= 32 && envelope.height >= 32);
     assert!(envelope.frames >= 8);
     assert!(envelope.iterations_per_frame > 0);
-    let mut allocator = GpuWorkResourceIdAllocator::new();
-    let (state_a, state_b, params_buffer, seed, params) = state_resources(&mut allocator, envelope);
-    let (texture, view) = offscreen_target(&mut allocator, envelope);
+    let mut resources = GpuResourceScope::new();
+    let (state_a, state_b, params_buffer, seed, params) = state_resources(&mut resources, envelope);
+    let (texture, view) = offscreen_target(&mut resources, envelope);
     let compute = compute_pipeline(&sources.compute);
     let render = render_pipeline(&sources.render, GpuTextureFormat::Rgba8Unorm);
 
     let name = format!("{} reaction diffusion sequence", envelope.name);
-    let mut builder = GpuWorkFragmentBuilder::new(label(&name), provenance(&name));
-    for resource in [
-        state_a.clone().into(),
-        state_b.clone().into(),
-        params_buffer.clone().into(),
-        texture.clone().into(),
-        view.clone().into(),
-    ] {
-        builder.declare_resource(resource).unwrap();
-    }
-    add_initialization(
-        &mut builder,
-        &state_a,
-        &state_b,
-        &params_buffer,
-        &seed,
-        params,
-    );
-
-    let mut current_is_a = true;
+    let graph_label = label(&format!("{} reaction diffusion graph", envelope.name));
     let mut readbacks = Vec::with_capacity(usize::try_from(envelope.frames).unwrap());
-    for frame in 0..envelope.frames {
-        for iteration in 0..envelope.iterations_per_frame {
-            let (input, output) = if current_is_a {
-                (&state_a, &state_b)
-            } else {
-                (&state_b, &state_a)
-            };
-            let operation = compute_operation(
-                context,
-                &compute,
-                input,
-                output,
-                &params_buffer,
-                envelope.width,
-                envelope.height,
-            );
-            builder
-                .compute(
+    let fragment = GpuWorkFragment::build(&name, |builder| {
+        for resource in [
+            state_a.clone().into(),
+            state_b.clone().into(),
+            params_buffer.clone().into(),
+            texture.clone().into(),
+            view.clone().into(),
+        ] {
+            builder.declare_resource(resource)?;
+        }
+        add_initialization(
+            builder,
+            &state_a,
+            &state_b,
+            &params_buffer,
+            &seed,
+            params,
+        )?;
+
+        let mut current_is_a = true;
+        for frame in 0..envelope.frames {
+            for iteration in 0..envelope.iterations_per_frame {
+                let (input, output) = if current_is_a {
+                    (&state_a, &state_b)
+                } else {
+                    (&state_b, &state_a)
+                };
+                let operation = compute_operation(
+                    context,
+                    &compute,
+                    input,
+                    output,
+                    &params_buffer,
+                    envelope.width,
+                    envelope.height,
+                );
+                builder.compute(
                     format!(
                         "{} frame {frame:03} iteration {iteration:03}",
                         envelope.name
                     ),
                     operation,
-                )
-                .unwrap();
-            current_is_a = !current_is_a;
+                )?;
+                current_is_a = !current_is_a;
+            }
+
+            let state = if current_is_a { &state_a } else { &state_b };
+            add_operation(
+                builder,
+                &format!("{} render frame {frame:03}", envelope.name),
+                GpuWorkOperation::Render(render_operation(
+                    context,
+                    &render,
+                    state,
+                    &params_buffer,
+                    &view,
+                    envelope.width,
+                    envelope.height,
+                )),
+            )?;
+            let region = GpuTextureCopyRegion::new(
+                &texture,
+                0,
+                GpuTextureOrigin::new(0, 0, 0),
+                GpuTextureAspect::Color,
+                GpuCopyExtent::new(envelope.width, envelope.height, 1).unwrap(),
+            )
+            .unwrap();
+            let readback_id = GpuReadbackId::allocate().unwrap();
+            add_operation(
+                builder,
+                &format!("{} readback frame {frame:03}", envelope.name),
+                GpuWorkOperation::Readback(
+                    GpuReadbackOperation::new(region.into(), readback_id).unwrap(),
+                ),
+            )?;
+            readbacks.push(readback_id);
         }
-
-        let state = if current_is_a { &state_a } else { &state_b };
-        add_operation(
-            &mut builder,
-            &format!("{} render frame {frame:03}", envelope.name),
-            GpuWorkOperation::Render(render_operation(
-                context,
-                &render,
-                state,
-                &params_buffer,
-                &view,
-                envelope.width,
-                envelope.height,
-            )),
-        );
-        let region = GpuTextureCopyRegion::new(
-            &texture,
-            0,
-            GpuTextureOrigin::new(0, 0, 0),
-            GpuTextureAspect::Color,
-            GpuCopyExtent::new(envelope.width, envelope.height, 1).unwrap(),
-        )
-        .unwrap();
-        let readback_id = GpuReadbackId::allocate().unwrap();
-        add_operation(
-            &mut builder,
-            &format!("{} readback frame {frame:03}", envelope.name),
-            GpuWorkOperation::Readback(
-                GpuReadbackOperation::new(region.into(), readback_id).unwrap(),
-            ),
-        );
-        readbacks.push(readback_id);
-    }
-
-    let graph = GpuPreparedWorkGraph::prepare(
-        label(&format!("{} reaction diffusion graph", envelope.name)),
-        [builder.finish().unwrap()],
-    )
+        Ok(())
+    })
     .unwrap();
-    assert_prepared_graph_evidence(&graph);
-    (graph, readbacks)
+
+    (graph_label, fragment, readbacks)
 }
 
 fn progress_to_readbacks(
@@ -855,10 +852,22 @@ fn native_reaction_diffusion_retains_bounded_png_sequences_and_manifest() {
     std::fs::create_dir_all(&root).unwrap();
 
     let mut jobs = Vec::new();
-    for envelope in ENVELOPES {
-        let (graph, ids) = offscreen_graph(&context, &sources, envelope);
-        let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
-        let submission = context.submit_prepared(prepared).unwrap();
+    for (envelope_index, envelope) in ENVELOPES.into_iter().enumerate() {
+        let (graph_label, fragment, ids) = offscreen_work(&context, &sources, envelope);
+        let (submission, submission_path) = if envelope_index == 0 {
+            let graph = GpuPreparedWorkGraph::prepare(graph_label, [fragment]).unwrap();
+            assert_prepared_graph_evidence(&graph);
+            let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
+            (
+                context.submit_prepared(prepared).unwrap(),
+                "advanced-inspected",
+            )
+        } else {
+            (
+                pollster::block_on(context.submit_work(graph_label, [fragment])).unwrap(),
+                "ordinary",
+            )
+        };
         let frames = progress_to_readbacks(&context, &submission, &ids);
         assert_eq!(frames.len(), usize::try_from(envelope.frames).unwrap());
 
@@ -890,6 +899,7 @@ fn native_reaction_diffusion_retains_bounded_png_sequences_and_manifest() {
             "iterations_per_frame": envelope.iterations_per_frame,
             "total_compute_iterations": envelope.frames * envelope.iterations_per_frame,
             "workgroup": [WORKGROUP, WORKGROUP, 1],
+            "submission_path": submission_path,
             "frames": frame_records,
         }));
     }
@@ -1016,45 +1026,41 @@ fn surface_graph(
     format: GpuTextureFormat,
 ) -> GpuPreparedWorkGraph {
     let envelope = ENVELOPES[0];
-    let mut allocator = GpuWorkResourceIdAllocator::new();
-    let (state_a, state_b, params_buffer, seed, params) = state_resources(&mut allocator, envelope);
+    let mut resources = GpuResourceScope::new();
+    let (state_a, state_b, params_buffer, seed, params) = state_resources(&mut resources, envelope);
     let compute = compute_pipeline(&sources.compute);
     let render = render_pipeline(&sources.render, format);
     let texture = image.texture().clone();
     let view = image.default_view().clone();
 
-    let mut builder = GpuWorkFragmentBuilder::new(
-        label("reaction diffusion surface replay"),
-        provenance("reaction diffusion surface replay"),
-    );
-    for resource in [
-        state_a.clone().into(),
-        state_b.clone().into(),
-        params_buffer.clone().into(),
-        texture.into(),
-        view.clone().into(),
-    ] {
-        builder.declare_resource(resource).unwrap();
-    }
-    add_initialization(
-        &mut builder,
-        &state_a,
-        &state_b,
-        &params_buffer,
-        &seed,
-        params,
-    );
+    let fragment = GpuWorkFragment::build("reaction diffusion surface replay", |builder| {
+        for resource in [
+            state_a.clone().into(),
+            state_b.clone().into(),
+            params_buffer.clone().into(),
+            texture.into(),
+            view.clone().into(),
+        ] {
+            builder.declare_resource(resource)?;
+        }
+        add_initialization(
+            builder,
+            &state_a,
+            &state_b,
+            &params_buffer,
+            &seed,
+            params,
+        )?;
 
-    let mut current_is_a = true;
-    for frame in 0..envelope.frames {
-        for iteration in 0..envelope.iterations_per_frame {
-            let (input, output) = if current_is_a {
-                (&state_a, &state_b)
-            } else {
-                (&state_b, &state_a)
-            };
-            builder
-                .compute(
+        let mut current_is_a = true;
+        for frame in 0..envelope.frames {
+            for iteration in 0..envelope.iterations_per_frame {
+                let (input, output) = if current_is_a {
+                    (&state_a, &state_b)
+                } else {
+                    (&state_b, &state_a)
+                };
+                builder.compute(
                     format!("surface frame {frame:03} iteration {iteration:03}"),
                     compute_operation(
                         context,
@@ -1065,39 +1071,38 @@ fn surface_graph(
                         envelope.width,
                         envelope.height,
                     ),
-                )
-                .unwrap();
-            current_is_a = !current_is_a;
+                )?;
+                current_is_a = !current_is_a;
+            }
         }
-    }
-    let state = if current_is_a { &state_a } else { &state_b };
-    add_operation(
-        &mut builder,
-        "reaction diffusion surface render",
-        GpuWorkOperation::Render(render_operation(
-            context,
-            &render,
-            state,
-            &params_buffer,
-            &view,
-            SURFACE_WIDTH,
-            SURFACE_HEIGHT,
-        )),
-    );
-    add_operation(
-        &mut builder,
-        "reaction diffusion surface Present",
-        GpuWorkOperation::Present(
-            GpuPresentOperation::new(view.clone().into(), view.descriptor().subresources())
-                .unwrap(),
-        ),
-    );
-
-    let graph = GpuPreparedWorkGraph::prepare(
-        label("reaction diffusion surface graph"),
-        [builder.finish().unwrap()],
-    )
+        let state = if current_is_a { &state_a } else { &state_b };
+        add_operation(
+            builder,
+            "reaction diffusion surface render",
+            GpuWorkOperation::Render(render_operation(
+                context,
+                &render,
+                state,
+                &params_buffer,
+                &view,
+                SURFACE_WIDTH,
+                SURFACE_HEIGHT,
+            )),
+        )?;
+        add_operation(
+            builder,
+            "reaction diffusion surface Present",
+            GpuWorkOperation::Present(
+                GpuPresentOperation::new(view.clone().into(), view.descriptor().subresources())
+                    .unwrap(),
+            ),
+        )?;
+        Ok(())
+    })
     .unwrap();
+
+    let graph = GpuPreparedWorkGraph::prepare(label("reaction diffusion surface graph"), [fragment])
+        .unwrap();
     assert_prepared_graph_evidence(&graph);
     graph
 }
