@@ -50,6 +50,19 @@ fn storage_declaration(binding: u32, array_count: Option<NonZeroU32>) -> GpuBind
     .unwrap()
 }
 
+fn analyzed_storage_declaration(host_minimum: Option<NonZeroU64>) -> GpuBindingDeclaration {
+    GpuBindingDeclaration::from_program_analysis(
+        GpuBindingKey::try_new(0, 0).unwrap(),
+        GpuShaderStages::one(GpuShaderStage::Compute),
+        GpuBindingKind::storage_buffer(GpuStorageBufferAccess::ReadWrite, true, host_minimum),
+        None,
+        NonZeroU64::new(32),
+        "compiler-derived-storage",
+        GpuBindingProvenance::new("runtime-binding-test", None).unwrap(),
+    )
+    .unwrap()
+}
+
 fn device_facts() -> GpuRuntimeBindingDeviceFacts {
     device_facts_with_limits(4, 8, 4)
 }
@@ -104,6 +117,47 @@ fn runtime_bindings_validate_usage_range_alignment_and_layout() {
     assert_eq!(validated.layout().group(), 0);
     assert!(validated.value(0).is_some());
     assert_eq!(validated.values().len(), 1);
+}
+
+#[test]
+fn runtime_bindings_enforce_compiler_minimum_and_stronger_host_minimum() {
+    let buffer = storage_buffer(64);
+    let compiler_only =
+        GpuBindGroupLayoutDescriptor::new(0, [analyzed_storage_declaration(None)]).unwrap();
+    let error = GpuValidatedBindGroupBindings::new(
+        compiler_only,
+        [runtime_buffer_value(0, buffer.clone(), 0, 16, 0)],
+        &device_facts(),
+    )
+    .expect_err("runtime range smaller than compiler-required minimum must reject");
+    assert_eq!(
+        error.cause(),
+        GpuProgramContractCause::RuntimeBindingIncompatible
+    );
+
+    let stronger_host = NonZeroU64::new(48).unwrap();
+    let host_layout = GpuBindGroupLayoutDescriptor::new(
+        0,
+        [analyzed_storage_declaration(Some(stronger_host))],
+    )
+    .unwrap();
+    let error = GpuValidatedBindGroupBindings::new(
+        host_layout.clone(),
+        [runtime_buffer_value(0, buffer.clone(), 0, 32, 0)],
+        &device_facts(),
+    )
+    .expect_err("runtime range satisfying compiler minimum but not stronger host minimum must reject");
+    assert_eq!(
+        error.cause(),
+        GpuProgramContractCause::RuntimeBindingIncompatible
+    );
+
+    GpuValidatedBindGroupBindings::new(
+        host_layout,
+        [runtime_buffer_value(0, buffer, 0, 48, 0)],
+        &device_facts(),
+    )
+    .expect("runtime range satisfying both compiler and host minima should validate");
 }
 
 #[test]
