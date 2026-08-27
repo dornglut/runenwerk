@@ -85,19 +85,17 @@ pub(crate) fn analyze_program(
         | naga::valid::Capabilities::BUFFER_BINDING_ARRAY
         | naga::valid::Capabilities::STORAGE_TEXTURE_BINDING_ARRAY
         | naga::valid::Capabilities::STORAGE_BUFFER_BINDING_ARRAY;
-    let module_info = naga::valid::Validator::new(
-        naga::valid::ValidationFlags::all(),
-        analysis_capabilities,
-    )
-    .validate(&module)
-    .map_err(|error| {
-        invalid(
-            operation,
-            &source_label,
-            GpuProgramContractCause::CanonicalWgslInvalid,
-            format!("canonical WGSL validation failed: {error}"),
-        )
-    })?;
+    let module_info =
+        naga::valid::Validator::new(naga::valid::ValidationFlags::all(), analysis_capabilities)
+            .validate(&module)
+            .map_err(|error| {
+                invalid(
+                    operation,
+                    &source_label,
+                    GpuProgramContractCause::CanonicalWgslInvalid,
+                    format!("canonical WGSL validation failed: {error}"),
+                )
+            })?;
 
     let mut selected_names = selected_entry_points.into_iter().collect::<Vec<_>>();
     if selected_names.is_empty() {
