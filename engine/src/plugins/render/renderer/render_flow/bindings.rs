@@ -1,13 +1,13 @@
 use super::*;
 use crate::plugins::gpu::{
     GpuAdmittedProgramSource, GpuBindingKey, GpuBindingLayoutRefinement,
-    GpuBlendMode as GpuPipelineBlendMode, GpuCapabilityRequirements,
-    GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuCompareFunction,
-    GpuComputePipelineDescriptor, GpuCullMode as GpuPipelineCullMode,
-    GpuDepthStencilStateDescriptor, GpuEntryPointName, GpuFragmentOutputStateDescriptor,
-    GpuFrontFace, GpuIndexFormat, GpuMultisampleStateDescriptor, GpuPipelineLayoutDescriptor,
-    GpuPrimitiveStateDescriptor, GpuPrimitiveTopology as GpuPipelinePrimitiveTopology,
-    GpuProgramDescriptor, GpuRealizedPipelineLayout, GpuRealizedProgram, GpuRenderEntryPoints,
+    GpuBlendMode as GpuPipelineBlendMode, GpuCapabilityRequirements, GpuColorTargetStateDescriptor,
+    GpuColorWriteMask, GpuCompareFunction, GpuComputePipelineDescriptor,
+    GpuCullMode as GpuPipelineCullMode, GpuDepthStencilStateDescriptor, GpuEntryPointName,
+    GpuFragmentOutputStateDescriptor, GpuFrontFace, GpuIndexFormat, GpuMultisampleStateDescriptor,
+    GpuPipelineLayoutDescriptor, GpuPrimitiveStateDescriptor,
+    GpuPrimitiveTopology as GpuPipelinePrimitiveTopology, GpuProgramDescriptor,
+    GpuRealizedPipelineLayout, GpuRealizedProgram, GpuRenderEntryPoints,
     GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor, GpuRuntimeBindingResource,
     GpuRuntimeBindingSet, GpuRuntimeBindingValue, GpuRuntimeBufferBinding,
     GpuRuntimeTextureViewBinding, GpuSamplerClass, GpuSamplerHandle, GpuSpecializationValueSet,
@@ -75,7 +75,8 @@ impl Renderer {
                     )?;
                     let (texture_id, texture_view, is_depth) = match resource_key.clone() {
                         RuntimeResourceKey::DynamicTexture(key) => {
-                            let texture = self.dynamic_texture_targets.texture_ref(pass_id, &key)?;
+                            let texture =
+                                self.dynamic_texture_targets.texture_ref(pass_id, &key)?;
                             (
                                 texture.id.clone(),
                                 resolved_binding_texture_view(&texture.id, texture.view_handle)?,
@@ -127,7 +128,8 @@ impl Renderer {
                     )?;
                     let (texture_id, texture_view, is_depth) = match resource_key.clone() {
                         RuntimeResourceKey::DynamicTexture(key) => {
-                            let texture = self.dynamic_texture_targets.texture_ref(pass_id, &key)?;
+                            let texture =
+                                self.dynamic_texture_targets.texture_ref(pass_id, &key)?;
                             (
                                 texture.id.clone(),
                                 resolved_binding_texture_view(&texture.id, texture.view_handle)?,
@@ -279,12 +281,9 @@ fn runtime_binding_value(
     sampler: Option<&GpuSamplerHandle>,
 ) -> Result<GpuRuntimeBindingValue> {
     let resource = match &value.resource {
-        RuntimeBindingResource::TextureView(handle) => {
-            GpuRuntimeBindingResource::TextureView(GpuRuntimeTextureViewBinding::new(
-                handle.clone(),
-                GpuTextureViewDimension::D2,
-            ))
-        }
+        RuntimeBindingResource::TextureView(handle) => GpuRuntimeBindingResource::TextureView(
+            GpuRuntimeTextureViewBinding::new(handle.clone(), GpuTextureViewDimension::D2),
+        ),
         RuntimeBindingResource::Buffer { handle, size } => {
             let size = NonZeroU64::new(*size).ok_or_else(|| {
                 anyhow::anyhow!(
@@ -326,11 +325,8 @@ fn gpu_pipeline_descriptor_for_pass(
                 bail!("compute pipeline descriptor cannot carry render state");
             }
             let entry_point = GpuEntryPointName::new("cs_main")?;
-            let program = GpuProgramDescriptor::new(
-                source.clone(),
-                [entry_point.clone()],
-                refinements,
-            )?;
+            let program =
+                GpuProgramDescriptor::new(source.clone(), [entry_point.clone()], refinements)?;
             let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface())?;
             Ok(FlowPassPipelineDescriptor::Compute(
                 GpuComputePipelineDescriptor::new(
@@ -560,8 +556,7 @@ fn gpu_render_pipeline_state_for_pass(
             if depth_format.is_some() {
                 bail!("fullscreen pass '{}' cannot carry depth state", pass_id);
             }
-            let fragment_output =
-                gpu_fragment_output_state(color_formats, RenderBlendMode::Alpha)?;
+            let fragment_output = gpu_fragment_output_state(color_formats, RenderBlendMode::Alpha)?;
             Ok(Some(GpuRenderPipelineStateDescriptor::new(
                 vertex_input,
                 Some(fragment_output),
