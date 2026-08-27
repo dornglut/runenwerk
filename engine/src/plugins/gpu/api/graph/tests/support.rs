@@ -166,15 +166,10 @@ pub(super) fn compute_operation_with_dispatch(dispatch: GpuDispatchSize) -> GpuW
         std::iter::empty::<GpuBindingLayoutRefinement>(),
     )
     .unwrap();
-    let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
-    let specialization =
-        GpuSpecializationValueSet::new(GpuSpecializationSchema::new([]).unwrap(), []).unwrap();
     let pipeline = GpuComputePipelineDescriptor::new(
         program,
         entry_point,
-        layout.clone(),
-        specialization,
-        GpuCapabilityRequirements::new(),
+        GpuPipelineConfiguration::default(),
     )
     .unwrap();
     let device_facts = GpuRuntimeBindingDeviceFacts::new(
@@ -185,7 +180,8 @@ pub(super) fn compute_operation_with_dispatch(dispatch: GpuDispatchSize) -> GpuW
         0,
         [],
     );
-    let bindings = GpuRuntimeBindingSet::new(layout, [], &device_facts).unwrap();
+    let bindings =
+        GpuRuntimeBindingSet::new(pipeline.layout().clone(), [], &device_facts).unwrap();
     let limits = GpuLimits::new(1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 65_535).unwrap();
     let dispatch = GpuDispatchIntent::direct(dispatch, limits).unwrap();
     GpuWorkOperation::Compute(GpuComputeOperation::new(pipeline, bindings, dispatch).unwrap())
