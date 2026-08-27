@@ -269,20 +269,7 @@ fn compute_pipeline(source: &GpuAdmittedProgramSource) -> GpuComputePipelineDesc
         std::iter::empty::<GpuBindingLayoutRefinement>(),
     )
     .unwrap();
-    let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
-    let specialization = GpuSpecializationValueSet::new(
-        GpuSpecializationSchema::new(std::iter::empty::<GpuSpecializationDeclaration>()).unwrap(),
-        std::iter::empty::<GpuSpecializationEntry>(),
-    )
-    .unwrap();
-    GpuComputePipelineDescriptor::new(
-        program,
-        entry,
-        layout,
-        specialization,
-        GpuCapabilityRequirements::new(),
-    )
-    .unwrap()
+    GpuComputePipelineDescriptor::new(program, entry, GpuPipelineConfiguration::default()).unwrap()
 }
 
 fn render_pipeline(
@@ -295,12 +282,6 @@ fn render_pipeline(
         source.clone(),
         [vertex.clone(), fragment.clone()],
         std::iter::empty::<GpuBindingLayoutRefinement>(),
-    )
-    .unwrap();
-    let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
-    let specialization = GpuSpecializationValueSet::new(
-        GpuSpecializationSchema::new(std::iter::empty::<GpuSpecializationDeclaration>()).unwrap(),
-        std::iter::empty::<GpuSpecializationEntry>(),
     )
     .unwrap();
     let state = GpuRenderPipelineStateDescriptor::new(
@@ -322,9 +303,7 @@ fn render_pipeline(
         program,
         GpuRenderEntryPoints::new(vertex, Some(fragment)),
         state,
-        layout,
-        specialization,
-        GpuCapabilityRequirements::new(),
+        GpuPipelineConfiguration::default(),
     )
     .unwrap()
 }

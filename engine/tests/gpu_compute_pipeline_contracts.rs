@@ -1,7 +1,7 @@
 use engine::plugins::gpu::{
-    GpuAdmittedProgramSource, GpuBindGroupLayoutDescriptor, GpuBindingLayoutRefinement,
-    GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirements,
-    GpuComputePipelineDescriptor, GpuEntryPointName, GpuPipelineLayoutDescriptor,
+    GpuAdmittedProgramSource, GpuBindingLayoutRefinement, GpuCapabilityFeature,
+    GpuCapabilityRequirement, GpuCapabilityRequirements, GpuComputePipelineDescriptor,
+    GpuEntryPointName, GpuPipelineConfiguration, GpuPipelineLayoutDescriptor,
     GpuProgramContractCause, GpuProgramDescriptor, GpuProgramSourceIdentity, GpuProgramSourceKey,
     GpuProgramSourceOwnerId, GpuProgramSourceProvenance, GpuProgramSourceRegistry,
     GpuProgramSourceRevision, GpuSpecializationDeclaration, GpuSpecializationKey,
@@ -73,9 +73,9 @@ fn hash_of(value: &impl Hash) -> u64 {
 }
 
 #[test]
-fn compute_pipeline_binds_program_layout_specialization_and_requirements() {
+fn compute_pipeline_derives_layout_and_binds_specialization_requirements() {
     let program = compute_program();
-    let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface())
+    let expected_layout = GpuPipelineLayoutDescriptor::from_interface(program.interface())
         .expect("test pipeline layout should derive");
     let mut specialization_requirements = GpuCapabilityRequirements::new();
     specialization_requirements
@@ -84,27 +84,26 @@ fn compute_pipeline_binds_program_layout_specialization_and_requirements() {
         ))
         .unwrap();
     let specialization = specialization(specialization_requirements);
+    let configuration = GpuPipelineConfiguration::new(Some(specialization.clone()), None);
 
     let descriptor = GpuComputePipelineDescriptor::new(
         program.clone(),
         GpuEntryPointName::new("main").unwrap(),
-        layout.clone(),
-        specialization.clone(),
-        GpuCapabilityRequirements::new(),
+        configuration.clone(),
     )
     .expect("valid compute pipeline descriptor should construct");
     let equivalent = GpuComputePipelineDescriptor::new(
         program,
         GpuEntryPointName::new("main").unwrap(),
-        layout,
-        specialization,
-        GpuCapabilityRequirements::new(),
+        configuration,
     )
     .unwrap();
 
     assert_eq!(descriptor, equivalent);
     assert_eq!(hash_of(&descriptor), hash_of(&equivalent));
     assert!(descriptor.is_same_record(&descriptor.clone()));
+    assert_eq!(descriptor.layout(), &expected_layout);
+    assert_eq!(descriptor.specialization(), &specialization);
     assert!(matches!(
         descriptor.requirements().get(GpuCapabilityFeature::Compute),
         Some(GpuCapabilityRequirement::Required(
@@ -122,15 +121,30 @@ fn compute_pipeline_binds_program_layout_specialization_and_requirements() {
 }
 
 #[test]
+fn compute_pipeline_default_configuration_has_no_caller_ceremony() {
+    let program = compute_program();
+    let expected_layout = GpuPipelineLayoutDescriptor::from_interface(program.interface())
+        .expect("test pipeline layout should derive");
+
+    let descriptor = GpuComputePipelineDescriptor::new(
+        program,
+        GpuEntryPointName::new("main").unwrap(),
+        GpuPipelineConfiguration::default(),
+    )
+    .expect("ordinary compute pipeline descriptor should construct");
+
+    assert_eq!(descriptor.layout(), &expected_layout);
+    assert_eq!(descriptor.specialization().schema().declarations().len(), 0);
+    assert_eq!(descriptor.specialization().entries().len(), 0);
+}
+
+#[test]
 fn compute_pipeline_rejects_a_non_compute_entry_point() {
     let program = program("vertex.pipeline", VERTEX_WGSL, "vertex_main");
-    let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
     let error = GpuComputePipelineDescriptor::new(
         program,
         GpuEntryPointName::new("vertex_main").unwrap(),
-        layout,
-        specialization(GpuCapabilityRequirements::new()),
-        GpuCapabilityRequirements::new(),
+        GpuPipelineConfiguration::default(),
     )
     .expect_err("compute pipelines must select a declared compute entry point");
 
@@ -141,31 +155,8 @@ fn compute_pipeline_rejects_a_non_compute_entry_point() {
 }
 
 #[test]
-fn compute_pipeline_rejects_a_layout_not_derived_from_the_program_interface() {
+fn compute_pipeline_rejects_conflicting_additional_requirements() {
     let program = compute_program();
-    let mismatched_group =
-        GpuBindGroupLayoutDescriptor::new(0, []).expect("empty mismatched group should construct");
-    let mismatched_layout = GpuPipelineLayoutDescriptor::new([mismatched_group])
-        .expect("mismatched test layout should construct");
-    let error = GpuComputePipelineDescriptor::new(
-        program,
-        GpuEntryPointName::new("main").unwrap(),
-        mismatched_layout,
-        specialization(GpuCapabilityRequirements::new()),
-        GpuCapabilityRequirements::new(),
-    )
-    .expect_err("pipeline layout must match the program interface");
-
-    assert_eq!(
-        error.cause(),
-        GpuProgramContractCause::PipelineDescriptorInvalid
-    );
-}
-
-#[test]
-fn compute_pipeline_rejects_conflicting_capability_requirements() {
-    let program = compute_program();
-    let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
     let mut requirements = GpuCapabilityRequirements::new();
     requirements
         .insert(GpuCapabilityRequirement::Disabled(
@@ -176,9 +167,7 @@ fn compute_pipeline_rejects_conflicting_capability_requirements() {
     let error = GpuComputePipelineDescriptor::new(
         program,
         GpuEntryPointName::new("main").unwrap(),
-        layout,
-        specialization(GpuCapabilityRequirements::new()),
-        requirements,
+        GpuPipelineConfiguration::new(None, Some(requirements)),
     )
     .expect_err("compute cannot be disabled for a compute pipeline");
 

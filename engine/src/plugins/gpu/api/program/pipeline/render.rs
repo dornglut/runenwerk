@@ -5,6 +5,7 @@ use super::super::{
     GpuPipelineLayoutDescriptor, GpuProgramDescriptor, GpuShaderStage, GpuSpecializationValueSet,
     compare_fragment_output_signatures, compare_vertex_input_signatures,
 };
+use super::GpuPipelineConfiguration;
 use super::render_state::GpuRenderPipelineStateDescriptor;
 use super::requirements::insert_pipeline_requirement;
 use crate::plugins::gpu::{
@@ -59,9 +60,7 @@ impl GpuRenderPipelineDescriptor {
         program: GpuProgramDescriptor,
         entry_points: GpuRenderEntryPoints,
         state: GpuRenderPipelineStateDescriptor,
-        layout: GpuPipelineLayoutDescriptor,
-        specialization: GpuSpecializationValueSet,
-        additional_requirements: GpuCapabilityRequirements,
+        configuration: GpuPipelineConfiguration,
     ) -> Result<Self, GpuProgramContractError> {
         let operation = "construct GPU render pipeline descriptor";
         let label = entry_points.diagnostic_label();
@@ -102,17 +101,8 @@ impl GpuRenderPipelineDescriptor {
 
         validate_stage_io(&program, &entry_points, &state)?;
 
-        let expected_layout = GpuPipelineLayoutDescriptor::from_interface(program.interface())?;
-        if layout != expected_layout {
-            return Err(GpuProgramContractError::invalid(
-                operation,
-                entry_points.diagnostic_label(),
-                GpuProgramContractCause::PipelineDescriptorInvalid,
-                "use the pipeline layout derived from the admitted program interface",
-            ));
-        }
-
-        let mut requirements = additional_requirements;
+        let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface())?;
+        let (specialization, mut requirements) = configuration.resolve()?;
         insert_pipeline_requirement(
             operation,
             entry_points.diagnostic_label(),

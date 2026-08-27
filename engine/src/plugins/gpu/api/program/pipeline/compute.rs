@@ -4,6 +4,7 @@ use super::super::{
     GpuEntryPointName, GpuPipelineLayoutDescriptor, GpuProgramDescriptor, GpuShaderStage,
     GpuSpecializationValueSet,
 };
+use super::GpuPipelineConfiguration;
 use super::requirements::insert_pipeline_requirement;
 use crate::plugins::gpu::{
     GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirements,
@@ -28,9 +29,7 @@ impl GpuComputePipelineDescriptor {
     pub fn new(
         program: GpuProgramDescriptor,
         entry_point: GpuEntryPointName,
-        layout: GpuPipelineLayoutDescriptor,
-        specialization: GpuSpecializationValueSet,
-        additional_requirements: GpuCapabilityRequirements,
+        configuration: GpuPipelineConfiguration,
     ) -> Result<Self, GpuProgramContractError> {
         if program
             .entry_point(GpuShaderStage::Compute, &entry_point)
@@ -44,18 +43,9 @@ impl GpuComputePipelineDescriptor {
             ));
         }
 
-        let expected_layout = GpuPipelineLayoutDescriptor::from_interface(program.interface())?;
-        if layout != expected_layout {
-            return Err(GpuProgramContractError::invalid(
-                "construct GPU compute pipeline descriptor",
-                entry_point.to_string(),
-                GpuProgramContractCause::PipelineDescriptorInvalid,
-                "use the pipeline layout derived from the admitted program interface",
-            ));
-        }
-
+        let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface())?;
+        let (specialization, mut requirements) = configuration.resolve()?;
         let operation = "construct GPU compute pipeline descriptor";
-        let mut requirements = additional_requirements;
         insert_pipeline_requirement(
             operation,
             entry_point.to_string(),

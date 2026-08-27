@@ -1,13 +1,12 @@
 use super::*;
 use crate::plugins::gpu::{
     GpuAdmittedProgramSource, GpuBindingKey, GpuBindingLayoutRefinement,
-    GpuBlendMode as GpuPipelineBlendMode, GpuCapabilityRequirements, GpuColorTargetStateDescriptor,
-    GpuColorWriteMask, GpuCompareFunction, GpuComputePipelineDescriptor,
-    GpuCullMode as GpuPipelineCullMode, GpuDepthStencilStateDescriptor, GpuEntryPointName,
-    GpuFragmentOutputStateDescriptor, GpuFrontFace, GpuIndexFormat, GpuMultisampleStateDescriptor,
-    GpuPipelineLayoutDescriptor, GpuPrimitiveStateDescriptor,
-    GpuPrimitiveTopology as GpuPipelinePrimitiveTopology, GpuProgramDescriptor,
-    GpuRealizedPipelineLayout, GpuRealizedProgram, GpuRenderEntryPoints,
+    GpuBlendMode as GpuPipelineBlendMode, GpuColorTargetStateDescriptor, GpuColorWriteMask,
+    GpuCompareFunction, GpuComputePipelineDescriptor, GpuCullMode as GpuPipelineCullMode,
+    GpuDepthStencilStateDescriptor, GpuEntryPointName, GpuFragmentOutputStateDescriptor,
+    GpuFrontFace, GpuIndexFormat, GpuMultisampleStateDescriptor, GpuPipelineConfiguration,
+    GpuPrimitiveStateDescriptor, GpuPrimitiveTopology as GpuPipelinePrimitiveTopology,
+    GpuProgramDescriptor, GpuRealizedPipelineLayout, GpuRealizedProgram, GpuRenderEntryPoints,
     GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor, GpuRuntimeBindingResource,
     GpuRuntimeBindingSet, GpuRuntimeBindingValue, GpuRuntimeBufferBinding,
     GpuRuntimeTextureViewBinding, GpuSamplerClass, GpuSamplerHandle, GpuSpecializationValueSet,
@@ -327,14 +326,11 @@ fn gpu_pipeline_descriptor_for_pass(
             let entry_point = GpuEntryPointName::new("cs_main")?;
             let program =
                 GpuProgramDescriptor::new(source.clone(), [entry_point.clone()], refinements)?;
-            let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface())?;
             Ok(FlowPassPipelineDescriptor::Compute(
                 GpuComputePipelineDescriptor::new(
                     program,
                     entry_point,
-                    layout,
-                    specialization,
-                    GpuCapabilityRequirements::new(),
+                    GpuPipelineConfiguration::new(Some(specialization), None),
                 )?,
             ))
         }
@@ -349,15 +345,12 @@ fn gpu_pipeline_descriptor_for_pass(
                 [vertex.clone(), fragment.clone()],
                 refinements,
             )?;
-            let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface())?;
             Ok(FlowPassPipelineDescriptor::Render(
                 GpuRenderPipelineDescriptor::new(
                     program,
                     GpuRenderEntryPoints::new(vertex, Some(fragment)),
                     render_state,
-                    layout,
-                    specialization,
-                    GpuCapabilityRequirements::new(),
+                    GpuPipelineConfiguration::new(Some(specialization), None),
                 )?,
             ))
         }

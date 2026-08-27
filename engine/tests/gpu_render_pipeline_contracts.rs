@@ -1,14 +1,13 @@
 use engine::plugins::gpu::{
-    GpuAdmittedProgramSource, GpuBindGroupLayoutDescriptor, GpuBindingLayoutRefinement,
-    GpuBlendMode, GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirements,
-    GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuCompareFunction,
-    GpuDepthStencilStateDescriptor, GpuEntryPointName, GpuFragmentOutputStateDescriptor,
-    GpuMultisampleStateDescriptor, GpuPipelineLayoutDescriptor, GpuPrimitiveStateDescriptor,
-    GpuProgramContractCause, GpuProgramDescriptor, GpuProgramSourceIdentity, GpuProgramSourceKey,
-    GpuProgramSourceOwnerId, GpuProgramSourceProvenance, GpuProgramSourceRegistry,
-    GpuProgramSourceRevision, GpuRenderEntryPoints, GpuRenderPipelineDescriptor,
-    GpuRenderPipelineStateDescriptor, GpuShaderIoScalarClass, GpuSpecializationSchema,
-    GpuSpecializationValueSet, GpuTextureFormat, GpuVertexInputStateDescriptor,
+    GpuAdmittedProgramSource, GpuBindingLayoutRefinement, GpuBlendMode, GpuCapabilityFeature,
+    GpuCapabilityRequirement, GpuCapabilityRequirements, GpuColorTargetStateDescriptor,
+    GpuColorWriteMask, GpuCompareFunction, GpuDepthStencilStateDescriptor, GpuEntryPointName,
+    GpuFragmentOutputStateDescriptor, GpuMultisampleStateDescriptor, GpuPipelineConfiguration,
+    GpuPipelineLayoutDescriptor, GpuPrimitiveStateDescriptor, GpuProgramContractCause,
+    GpuProgramDescriptor, GpuProgramSourceIdentity, GpuProgramSourceKey, GpuProgramSourceOwnerId,
+    GpuProgramSourceProvenance, GpuProgramSourceRegistry, GpuProgramSourceRevision,
+    GpuRenderEntryPoints, GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor,
+    GpuShaderIoScalarClass, GpuTextureFormat, GpuVertexInputStateDescriptor,
 };
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -50,11 +49,6 @@ fn program() -> GpuProgramDescriptor {
 
 fn entry_point(value: &str) -> GpuEntryPointName {
     GpuEntryPointName::new(value).expect("test entry-point name should be valid")
-}
-
-fn specialization() -> GpuSpecializationValueSet {
-    let schema = GpuSpecializationSchema::new([]).expect("empty specialization schema is valid");
-    GpuSpecializationValueSet::new(schema, []).expect("empty specialization values are valid")
 }
 
 fn color_target() -> GpuColorTargetStateDescriptor {
@@ -104,9 +98,9 @@ fn hash_of(value: &impl Hash) -> u64 {
 }
 
 #[test]
-fn render_pipeline_binds_all_generic_correctness_facts() {
+fn render_pipeline_derives_layout_and_binds_additional_requirements() {
     let program = program();
-    let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
+    let expected_layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
     let entry_points = GpuRenderEntryPoints::new(
         entry_point("vertex_main"),
         Some(entry_point("fragment_main")),
@@ -140,24 +134,22 @@ fn render_pipeline_binds_all_generic_correctness_facts() {
         program.clone(),
         entry_points.clone(),
         state.clone(),
-        layout.clone(),
-        specialization(),
-        requirements_a,
+        GpuPipelineConfiguration::new(None, Some(requirements_a)),
     )
     .expect("valid render descriptor should construct");
     let equivalent = GpuRenderPipelineDescriptor::new(
         program,
         entry_points,
         state,
-        layout,
-        specialization(),
-        requirements_b,
+        GpuPipelineConfiguration::new(None, Some(requirements_b)),
     )
     .unwrap();
 
     assert_eq!(descriptor, equivalent);
     assert_eq!(hash_of(&descriptor), hash_of(&equivalent));
     assert!(descriptor.is_same_record(&descriptor.clone()));
+    assert_eq!(descriptor.layout(), &expected_layout);
+    assert_eq!(descriptor.specialization().entries().len(), 0);
     assert!(matches!(
         descriptor
             .requirements()
@@ -196,7 +188,6 @@ fn render_pipeline_binds_all_generic_correctness_facts() {
 #[test]
 fn render_pipeline_rejects_wrong_stage_entry_points() {
     let program = program();
-    let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
 
     let wrong_vertex = GpuRenderPipelineDescriptor::new(
         program.clone(),
@@ -205,9 +196,7 @@ fn render_pipeline_rejects_wrong_stage_entry_points() {
             Some(entry_point("fragment_main")),
         ),
         color_and_depth_state(),
-        layout.clone(),
-        specialization(),
-        GpuCapabilityRequirements::new(),
+        GpuPipelineConfiguration::default(),
     )
     .expect_err("fragment entry points cannot be selected for the vertex stage");
     assert_eq!(
@@ -219,9 +208,7 @@ fn render_pipeline_rejects_wrong_stage_entry_points() {
         program,
         GpuRenderEntryPoints::new(entry_point("vertex_main"), Some(entry_point("vertex_main"))),
         color_and_depth_state(),
-        layout,
-        specialization(),
-        GpuCapabilityRequirements::new(),
+        GpuPipelineConfiguration::default(),
     )
     .expect_err("vertex entry points cannot be selected for the fragment stage");
     assert_eq!(
@@ -235,7 +222,6 @@ fn render_pipeline_rejects_compiler_observed_stage_io_mismatch_before_backend() 
     let program = program_from(
         "struct VertexIn { @location(0) position: vec3f }\n@vertex fn vertex_main(input: VertexIn) -> @builtin(position) vec4f { return vec4f(input.position, 1.0); }\n@fragment fn fragment_main() -> @location(0) vec4f { return vec4f(); }",
     );
-    let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
 
     let error = GpuRenderPipelineDescriptor::new(
         program,
@@ -244,9 +230,7 @@ fn render_pipeline_rejects_compiler_observed_stage_io_mismatch_before_backend() 
             Some(entry_point("fragment_main")),
         ),
         color_and_depth_state(),
-        layout,
-        specialization(),
-        GpuCapabilityRequirements::new(),
+        GpuPipelineConfiguration::default(),
     )
     .expect_err("shader vertex IO must be checked before any backend realization exists");
 
@@ -259,15 +243,12 @@ fn render_pipeline_rejects_compiler_observed_stage_io_mismatch_before_backend() 
 #[test]
 fn render_pipeline_requires_fragment_selection_and_state_parity() {
     let program = program();
-    let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
 
     let missing_selection = GpuRenderPipelineDescriptor::new(
         program.clone(),
         GpuRenderEntryPoints::new(entry_point("vertex_main"), None),
         color_and_depth_state(),
-        layout.clone(),
-        specialization(),
-        GpuCapabilityRequirements::new(),
+        GpuPipelineConfiguration::default(),
     )
     .expect_err("fragment output state requires a selected fragment entry point");
     assert_eq!(
@@ -282,9 +263,7 @@ fn render_pipeline_requires_fragment_selection_and_state_parity() {
             Some(entry_point("fragment_main")),
         ),
         depth_only_state(),
-        layout,
-        specialization(),
-        GpuCapabilityRequirements::new(),
+        GpuPipelineConfiguration::default(),
     )
     .expect_err("a selected fragment entry point requires fragment output state");
     assert_eq!(
@@ -294,31 +273,12 @@ fn render_pipeline_requires_fragment_selection_and_state_parity() {
 }
 
 #[test]
-fn render_pipeline_rejects_mismatched_layout_and_requirements() {
+fn render_pipeline_rejects_conflicting_additional_requirements() {
     let program = program();
-    let mismatched_group =
-        GpuBindGroupLayoutDescriptor::new(0, []).expect("empty mismatched group should construct");
-    let mismatched_layout = GpuPipelineLayoutDescriptor::new([mismatched_group]).unwrap();
     let entry_points = GpuRenderEntryPoints::new(
         entry_point("vertex_main"),
         Some(entry_point("fragment_main")),
     );
-
-    let layout_error = GpuRenderPipelineDescriptor::new(
-        program.clone(),
-        entry_points.clone(),
-        color_and_depth_state(),
-        mismatched_layout,
-        specialization(),
-        GpuCapabilityRequirements::new(),
-    )
-    .expect_err("the render layout must derive from the program interface");
-    assert_eq!(
-        layout_error.cause(),
-        GpuProgramContractCause::PipelineDescriptorInvalid
-    );
-
-    let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
     let mut requirements = GpuCapabilityRequirements::new();
     requirements
         .insert(GpuCapabilityRequirement::Disabled(
@@ -329,9 +289,7 @@ fn render_pipeline_rejects_mismatched_layout_and_requirements() {
         program,
         entry_points,
         color_and_depth_state(),
-        layout,
-        specialization(),
-        requirements,
+        GpuPipelineConfiguration::new(None, Some(requirements)),
     )
     .expect_err("depth attachment cannot be disabled for depth state");
     assert_eq!(
@@ -343,14 +301,11 @@ fn render_pipeline_rejects_mismatched_layout_and_requirements() {
 #[test]
 fn vertex_only_depth_pipeline_exposes_no_fragment_expectation() {
     let program = program();
-    let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
     let descriptor = GpuRenderPipelineDescriptor::new(
         program,
         GpuRenderEntryPoints::new(entry_point("vertex_main"), None),
         depth_only_state(),
-        layout,
-        specialization(),
-        GpuCapabilityRequirements::new(),
+        GpuPipelineConfiguration::default(),
     )
     .expect("vertex-only depth pipeline should construct");
 

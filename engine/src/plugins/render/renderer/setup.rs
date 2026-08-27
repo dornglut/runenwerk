@@ -5,18 +5,17 @@ use super::resource_descriptors::{
 use super::*;
 use crate::plugins::gpu::{
     GpuBindingKey, GpuBindingLayoutRefinement, GpuBlendConstant, GpuBlendMode, GpuBufferRange,
-    GpuBufferUsage, GpuCapabilityRequirements, GpuColorTargetStateDescriptor, GpuColorWriteMask,
-    GpuDrawIntent, GpuDrawRange, GpuEntryPointName, GpuFragmentOutputStateDescriptor,
-    GpuMemoryIntent, GpuMultisampleStateDescriptor, GpuPipelineLayoutDescriptor,
-    GpuPrimitiveStateDescriptor, GpuProgramDescriptor, GpuProgramSourceKey,
-    GpuProgramSourceProvenance, GpuRealizedRenderPipeline, GpuRenderDraw, GpuRenderEntryPoints,
-    GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor, GpuResourceLifetime,
-    GpuRuntimeBindingResource, GpuRuntimeBindingSet, GpuRuntimeBindingValue,
-    GpuRuntimeBufferBinding, GpuRuntimeTextureViewBinding, GpuSamplerClass, GpuScissorRect,
-    GpuSpecializationSchema, GpuSpecializationValueSet, GpuTextureFormat, GpuTextureSampleClass,
-    GpuTextureUsage, GpuTextureViewDimension, GpuVertexAttribute, GpuVertexBufferBinding,
-    GpuVertexBufferLayoutDescriptor, GpuVertexFormat, GpuVertexInputStateDescriptor,
-    GpuVertexStepMode, GpuViewport,
+    GpuBufferUsage, GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuDrawIntent, GpuDrawRange,
+    GpuEntryPointName, GpuFragmentOutputStateDescriptor, GpuMemoryIntent,
+    GpuMultisampleStateDescriptor, GpuPipelineConfiguration, GpuPrimitiveStateDescriptor,
+    GpuProgramDescriptor, GpuProgramSourceKey, GpuProgramSourceProvenance,
+    GpuRealizedRenderPipeline, GpuRenderDraw, GpuRenderEntryPoints, GpuRenderPipelineDescriptor,
+    GpuRenderPipelineStateDescriptor, GpuResourceLifetime, GpuRuntimeBindingResource,
+    GpuRuntimeBindingSet, GpuRuntimeBindingValue, GpuRuntimeBufferBinding,
+    GpuRuntimeTextureViewBinding, GpuSamplerClass, GpuScissorRect, GpuTextureFormat,
+    GpuTextureSampleClass, GpuTextureUsage, GpuTextureViewDimension, GpuVertexAttribute,
+    GpuVertexBufferBinding, GpuVertexBufferLayoutDescriptor, GpuVertexFormat,
+    GpuVertexInputStateDescriptor, GpuVertexStepMode, GpuViewport,
 };
 use std::num::NonZeroU64;
 
@@ -258,20 +257,17 @@ impl Renderer {
             [vertex_entry.clone(), fragment_entry.clone()],
             refinements,
         )?;
-        let pipeline_layout_descriptor =
-            GpuPipelineLayoutDescriptor::from_interface(program_descriptor.interface())?;
         let pipeline_descriptor = ui_render_pipeline_descriptor(
             kind,
             format,
             program_descriptor.clone(),
-            pipeline_layout_descriptor.clone(),
             vertex_entry,
             fragment_entry,
         )?;
 
         let program = pollster::block_on(context.realize_program(&program_descriptor))?;
         let pipeline_layout =
-            pollster::block_on(context.realize_pipeline_layout(&pipeline_layout_descriptor))?;
+            pollster::block_on(context.realize_pipeline_layout(pipeline_descriptor.layout()))?;
         let pipeline = pollster::block_on(context.realize_render_pipeline(
             &pipeline_descriptor,
             &program,
@@ -799,7 +795,6 @@ fn ui_render_pipeline_descriptor(
     kind: UiPipelineKind,
     format: TextureFormat,
     program: GpuProgramDescriptor,
-    layout: GpuPipelineLayoutDescriptor,
     vertex_entry: GpuEntryPointName,
     fragment_entry: GpuEntryPointName,
 ) -> Result<GpuRenderPipelineDescriptor> {
@@ -822,14 +817,11 @@ fn ui_render_pipeline_descriptor(
         None,
         GpuMultisampleStateDescriptor::default(),
     )?;
-    let specialization = GpuSpecializationValueSet::new(GpuSpecializationSchema::new([])?, [])?;
     Ok(GpuRenderPipelineDescriptor::new(
         program,
         GpuRenderEntryPoints::new(vertex_entry, Some(fragment_entry)),
         state,
-        layout,
-        specialization,
-        GpuCapabilityRequirements::new(),
+        GpuPipelineConfiguration::default(),
     )?)
 }
 
