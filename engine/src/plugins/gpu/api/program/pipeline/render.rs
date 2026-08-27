@@ -1,13 +1,13 @@
 use super::super::contract_diagnostics::{GpuProgramContractCause, GpuProgramContractError};
 use super::super::requirement_identity::hash_capability_requirements;
 use super::super::{
-    compare_fragment_output_signatures, compare_vertex_input_signatures, GpuEntryPointName,
-    GpuExpectedFragmentOutputSignature, GpuExpectedVertexInputSignature,
+    GpuEntryPointName, GpuExpectedFragmentOutputSignature, GpuExpectedVertexInputSignature,
     GpuPipelineLayoutDescriptor, GpuProgramDescriptor, GpuShaderStage, GpuSpecializationValueSet,
+    compare_fragment_output_signatures, compare_vertex_input_signatures,
 };
+use super::GpuPipelineConfiguration;
 use super::render_state::GpuRenderPipelineStateDescriptor;
 use super::requirements::insert_pipeline_requirement;
-use super::GpuPipelineConfiguration;
 use crate::plugins::gpu::{
     GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirements,
 };
