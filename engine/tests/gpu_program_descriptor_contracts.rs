@@ -2,8 +2,10 @@ use engine::plugins::gpu::{
     GpuAdmittedProgramSource, GpuBindingKey, GpuBindingLayoutRefinement, GpuEntryPointName,
     GpuProgramContractCause, GpuProgramDescriptor, GpuProgramSourceIdentity, GpuProgramSourceKey,
     GpuProgramSourceOwnerId, GpuProgramSourceProvenance, GpuProgramSourceRegistry,
-    GpuProgramSourceRevision, GpuShaderStage, GpuShaderStages, GpuStorageBufferAccess,
+    GpuProgramSourceRevision, GpuSamplerClass, GpuShaderStage, GpuShaderStages,
+    GpuStorageBufferAccess, GpuTextureSampleClass,
 };
+use std::num::NonZeroU64;
 
 const PROGRAM_WGSL: &str = r#"
 @group(0) @binding(0)
@@ -23,6 +25,34 @@ fn copy_values() {
 @compute @workgroup_size(1)
 fn reduce_values() {
     output_values[0] = input_values[0] + 1u;
+}
+"#;
+
+const FIXED_BUFFER_WGSL: &str = r#"
+struct Values {
+    first: vec4<u32>,
+    second: vec4<u32>,
+}
+
+@group(0) @binding(0)
+var<storage, read> values: Values;
+
+@compute @workgroup_size(1)
+fn fixed_values() {
+    let observed = values.second.x;
+}
+"#;
+
+const SAMPLED_TEXTURE_WGSL: &str = r#"
+@group(0) @binding(0)
+var sampled_texture: texture_2d<f32>;
+
+@group(0) @binding(1)
+var sampled_sampler: sampler;
+
+@fragment
+fn sample_color() -> @location(0) vec4<f32> {
+    return textureSample(sampled_texture, sampled_sampler, vec2<f32>(0.5, 0.5));
 }
 "#;
 
@@ -171,6 +201,20 @@ fn refinement_cannot_resurrect_an_unused_shader_binding() {
 }
 
 #[test]
+fn unknown_refinement_key_rejects() {
+    let (_registry, source) = admitted_source();
+    let refinement = GpuBindingLayoutRefinement::new(key(99));
+
+    let error = GpuProgramDescriptor::new(source, [entry("copy_values")], [refinement])
+        .expect_err("refinements must target a compiler-derived effective binding");
+
+    assert_eq!(
+        error.cause(),
+        GpuProgramContractCause::BindingRefinementInvalid
+    );
+}
+
+#[test]
 fn buffer_refinement_changes_only_host_layout_policy() {
     let (_registry, source) = admitted_source();
     let refinement = GpuBindingLayoutRefinement::new(key(0)).with_dynamic_offset(true);
@@ -187,6 +231,123 @@ fn buffer_refinement_changes_only_host_layout_policy() {
     assert_eq!(
         binding.visibility(),
         GpuShaderStages::one(GpuShaderStage::Compute)
+    );
+}
+
+#[test]
+fn compiler_and_host_buffer_minimums_remain_distinct_and_weaker_host_policy_rejects() {
+    let (_registry, source) = admitted_source_from(FIXED_BUFFER_WGSL);
+    let program = GpuProgramDescriptor::new(
+        source,
+        [entry("fixed_values")],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+    .expect("fixed-layout storage buffer should expose a compiler-required minimum");
+    let binding = program.interface().binding(key(0)).unwrap();
+    let compiler_minimum = binding
+        .compiler_required_minimum_size()
+        .expect("fixed-layout storage buffer must have a compiler-required minimum");
+    assert!(compiler_minimum.get() > 1);
+    assert_eq!(binding.kind().minimum_buffer_size(), None);
+
+    let (_registry, source) = admitted_source_from(FIXED_BUFFER_WGSL);
+    let weaker_host_minimum = NonZeroU64::new(compiler_minimum.get() - 1).unwrap();
+    let error = GpuProgramDescriptor::new(
+        source,
+        [entry("fixed_values")],
+        [GpuBindingLayoutRefinement::new(key(0))
+            .with_host_minimum_size(weaker_host_minimum)],
+    )
+    .expect_err("host layout minimum cannot be weaker than the compiler requirement");
+    assert_eq!(
+        error.cause(),
+        GpuProgramContractCause::BindingRefinementInvalid
+    );
+
+    let (_registry, source) = admitted_source_from(FIXED_BUFFER_WGSL);
+    let stronger_host_minimum = NonZeroU64::new(compiler_minimum.get() + 16).unwrap();
+    let program = GpuProgramDescriptor::new(
+        source,
+        [entry("fixed_values")],
+        [GpuBindingLayoutRefinement::new(key(0))
+            .with_host_minimum_size(stronger_host_minimum)],
+    )
+    .expect("stronger host layout minimum should remain independent policy");
+    let binding = program.interface().binding(key(0)).unwrap();
+    assert_eq!(
+        binding.compiler_required_minimum_size(),
+        Some(compiler_minimum)
+    );
+    assert_eq!(
+        binding.kind().minimum_buffer_size(),
+        Some(stronger_host_minimum)
+    );
+}
+
+#[test]
+fn ambiguous_float_texture_and_sampler_require_explicit_layout_policy() {
+    let (_registry, source) = admitted_source_from(SAMPLED_TEXTURE_WGSL);
+    let error = GpuProgramDescriptor::new(
+        source,
+        [entry("sample_color")],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+    .expect_err("WGSL float texture and ordinary sampler do not decide host filtering policy");
+    assert_eq!(
+        error.cause(),
+        GpuProgramContractCause::BindingRefinementInvalid
+    );
+
+    let (_registry, source) = admitted_source_from(SAMPLED_TEXTURE_WGSL);
+    let program = GpuProgramDescriptor::new(
+        source,
+        [entry("sample_color")],
+        [
+            GpuBindingLayoutRefinement::new(key(0))
+                .with_texture_sample_class(GpuTextureSampleClass::FloatFilterable),
+            GpuBindingLayoutRefinement::new(key(1))
+                .with_sampler_class(GpuSamplerClass::Filtering),
+        ],
+    )
+    .expect("explicit texture and sampler layout policy should complete the effective interface");
+    assert_eq!(
+        program
+            .interface()
+            .binding(key(0))
+            .unwrap()
+            .kind()
+            .texture_sample_class(),
+        Some(GpuTextureSampleClass::FloatFilterable)
+    );
+    assert_eq!(
+        program
+            .interface()
+            .binding(key(1))
+            .unwrap()
+            .kind()
+            .sampler_class(),
+        Some(GpuSamplerClass::Filtering)
+    );
+}
+
+#[test]
+fn buffer_only_refinements_reject_on_non_buffer_bindings() {
+    let (_registry, source) = admitted_source_from(SAMPLED_TEXTURE_WGSL);
+    let error = GpuProgramDescriptor::new(
+        source,
+        [entry("sample_color")],
+        [
+            GpuBindingLayoutRefinement::new(key(0))
+                .with_dynamic_offset(true)
+                .with_texture_sample_class(GpuTextureSampleClass::FloatFilterable),
+            GpuBindingLayoutRefinement::new(key(1))
+                .with_sampler_class(GpuSamplerClass::Filtering),
+        ],
+    )
+    .expect_err("dynamic offsets apply only to compiler-derived buffer bindings");
+    assert_eq!(
+        error.cause(),
+        GpuProgramContractCause::BindingRefinementInvalid
     );
 }
 
