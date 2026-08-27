@@ -34,10 +34,6 @@ fn source_from(wgsl: &str) -> (GpuProgramSourceRegistry, GpuAdmittedProgramSourc
     (registry, source)
 }
 
-fn source() -> (GpuProgramSourceRegistry, GpuAdmittedProgramSource) {
-    source_from(RENDER_WGSL)
-}
-
 fn program_from(wgsl: &str) -> GpuProgramDescriptor {
     let (_registry, source) = source_from(wgsl);
     GpuProgramDescriptor::new(
