@@ -14,18 +14,8 @@ pub enum GpuDispatchIntent {
 }
 
 impl GpuDispatchIntent {
-    pub fn direct(size: GpuDispatchSize, limits: GpuLimits) -> Result<Self, GpuWorkOperationError> {
-        let maximum = limits.max_compute_workgroups_per_dimension();
-        if size.as_array().into_iter().any(|value| value > maximum) {
-            return Err(GpuWorkOperationError::invalid(
-                "construct GPU direct dispatch intent",
-                "dispatch size",
-                None,
-                GpuWorkOperationCause::MechanicalCapabilityContradiction,
-                "keep every direct workgroup dimension within the admitted compute-workgroups-per-dimension limit",
-            ));
-        }
-        Ok(Self::Direct(size))
+    pub const fn direct(size: GpuDispatchSize) -> Self {
+        Self::Direct(size)
     }
 
     pub fn indirect(
@@ -81,6 +71,23 @@ impl GpuDispatchIntent {
     pub const fn is_indirect(&self) -> bool {
         matches!(self, Self::Indirect(_))
     }
+
+    pub(crate) fn validate_limits(&self, limits: GpuLimits) -> Result<(), GpuWorkOperationError> {
+        let Self::Direct(size) = self else {
+            return Ok(());
+        };
+        let maximum = limits.max_compute_workgroups_per_dimension();
+        if size.as_array().into_iter().any(|value| value > maximum) {
+            return Err(GpuWorkOperationError::invalid(
+                "validate GPU direct dispatch against admitted device limits",
+                "dispatch size",
+                None,
+                GpuWorkOperationCause::MechanicalCapabilityContradiction,
+                "keep every direct workgroup dimension within the admitted compute-workgroups-per-dimension limit",
+            ));
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -130,13 +137,14 @@ mod tests {
     }
 
     #[test]
-    fn direct_dispatch_admits_zero_and_rejects_dimensions_above_the_normalized_limit() {
+    fn direct_dispatch_is_logical_and_explicit_limit_validation_is_deterministic() {
         let zero = GpuDispatchSize::new(0, 4, 1).unwrap();
-        assert!(GpuDispatchIntent::direct(zero, limits(8)).is_ok());
+        assert!(GpuDispatchIntent::direct(zero).validate_limits(limits(8)).is_ok());
 
         let too_large = GpuDispatchSize::new(9, 1, 1).unwrap();
         assert_eq!(
-            GpuDispatchIntent::direct(too_large, limits(8))
+            GpuDispatchIntent::direct(too_large)
+                .validate_limits(limits(8))
                 .unwrap_err()
                 .cause(),
             GpuWorkOperationCause::MechanicalCapabilityContradiction
