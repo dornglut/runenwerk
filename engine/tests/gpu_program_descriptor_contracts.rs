@@ -86,7 +86,11 @@ fn admitted_program_derives_entries_interface_and_static_visibility() {
     );
 
     let bindings = program.interface().bindings().collect::<Vec<_>>();
-    assert_eq!(bindings.len(), 2, "unused bound globals are not program-interface members");
+    assert_eq!(
+        bindings.len(),
+        2,
+        "unused bound globals are not program-interface members"
+    );
     assert_eq!(bindings[0].key(), key(0));
     assert_eq!(bindings[1].key(), key(1));
     assert_eq!(
@@ -160,7 +164,10 @@ fn refinement_cannot_resurrect_an_unused_shader_binding() {
     let error = GpuProgramDescriptor::new(source, [entry("copy_values")], [refinement])
         .expect_err("refinements must target effective selected-program bindings only");
 
-    assert_eq!(error.cause(), GpuProgramContractCause::BindingRefinementInvalid);
+    assert_eq!(
+        error.cause(),
+        GpuProgramContractCause::BindingRefinementInvalid
+    );
 }
 
 #[test]
@@ -173,8 +180,14 @@ fn buffer_refinement_changes_only_host_layout_policy() {
     let binding = program.interface().binding(key(0)).unwrap();
 
     assert!(binding.kind().uses_dynamic_offset());
-    assert_eq!(binding.kind().storage_buffer_access(), Some(GpuStorageBufferAccess::ReadOnly));
-    assert_eq!(binding.visibility(), GpuShaderStages::one(GpuShaderStage::Compute));
+    assert_eq!(
+        binding.kind().storage_buffer_access(),
+        Some(GpuStorageBufferAccess::ReadOnly)
+    );
+    assert_eq!(
+        binding.visibility(),
+        GpuShaderStages::one(GpuShaderStage::Compute)
+    );
 }
 
 #[test]
@@ -187,5 +200,8 @@ fn visibility_refinement_cannot_invent_an_unselected_stage() {
     let error = GpuProgramDescriptor::new(source, [entry("copy_values")], [refinement])
         .expect_err("visibility may widen only within stages selected by this program");
 
-    assert_eq!(error.cause(), GpuProgramContractCause::BindingRefinementInvalid);
+    assert_eq!(
+        error.cause(),
+        GpuProgramContractCause::BindingRefinementInvalid
+    );
 }
