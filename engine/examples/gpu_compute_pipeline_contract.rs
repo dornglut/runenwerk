@@ -31,33 +31,20 @@ fn main() {
         .expect("identical source should remain idempotent");
     assert!(source.is_same_record(&repeated));
 
-    let visibility = gpu::GpuShaderStages::one(gpu::GpuShaderStage::Compute);
-    let input = binding(
-        0,
-        visibility,
-        gpu::GpuStorageBufferAccess::ReadOnly,
-        "input-values",
-    );
-    let output = binding(
-        1,
-        visibility,
-        gpu::GpuStorageBufferAccess::ReadWrite,
-        "output-values",
-    );
-    let interface = gpu::GpuProgramInterfaceDescriptor::new([input, output])
-        .expect("interface should construct");
+    let host_minimum = NonZeroU64::new(4).expect("host minimum should be nonzero");
     let program = gpu::GpuProgramDescriptor::new(
         source,
-        interface.clone(),
-        [gpu::GpuEntryPointDescriptor::new(
-            entry_point("compute_main"),
-            gpu::GpuShaderStage::Compute,
-            interface.clone(),
-        )],
+        [entry_point("compute_main")],
+        [
+            gpu::GpuBindingLayoutRefinement::new(binding_key(0))
+                .with_host_minimum_size(host_minimum),
+            gpu::GpuBindingLayoutRefinement::new(binding_key(1))
+                .with_host_minimum_size(host_minimum),
+        ],
     )
-    .expect("program should construct");
-    let layout = gpu::GpuPipelineLayoutDescriptor::from_interface(&interface)
-        .expect("layout should derive from the interface");
+    .expect("program should derive from canonical WGSL");
+    let layout = gpu::GpuPipelineLayoutDescriptor::from_interface(program.interface())
+        .expect("layout should derive from the admitted program interface");
     let pipeline = gpu::GpuComputePipelineDescriptor::new(
         program,
         entry_point("compute_main"),
@@ -77,22 +64,8 @@ fn main() {
     ));
 }
 
-fn binding(
-    binding: u64,
-    visibility: gpu::GpuShaderStages,
-    access: gpu::GpuStorageBufferAccess,
-    label: &str,
-) -> gpu::GpuBindingDeclaration {
-    gpu::GpuBindingDeclaration::new(
-        gpu::GpuBindingKey::try_new(0, binding).expect("binding key should fit u32"),
-        visibility,
-        gpu::GpuBindingKind::storage_buffer(access, false, NonZeroU64::new(4)),
-        None,
-        label,
-        gpu::GpuBindingProvenance::new("gpu-compute-contract-example", None)
-            .expect("binding provenance should be valid"),
-    )
-    .expect("binding declaration should construct")
+fn binding_key(binding: u64) -> gpu::GpuBindingKey {
+    gpu::GpuBindingKey::try_new(0, binding).expect("binding key should fit u32")
 }
 
 fn provenance(detail: &str) -> gpu::GpuProgramSourceProvenance {
