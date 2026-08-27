@@ -14,10 +14,11 @@ use std::collections::BTreeMap;
 /// Complete logical runtime binding use for one pipeline invocation.
 ///
 /// This owner is pipeline-layout shaped. Per-group resource compatibility remains owned by
-/// [`GpuValidatedBindGroupBindings`]; this type owns complete group coverage, admitted pipeline-wide
-/// bind-group/dynamic-buffer counts, exact G3 resource accesses after per-use dynamic offsets are
-/// applied, and binding-set-local writable-alias validity. Dynamic offsets remain in the retained
-/// runtime values and therefore stay per-use logical state rather than physical bind-group identity.
+/// [`GpuValidatedBindGroupBindings`]; this type owns complete group coverage, exact G3 resource
+/// accesses after per-use dynamic offsets are applied, and binding-set-local writable-alias
+/// validity. Admitted positional/dynamic limits, offset alignment, and texture-format capability
+/// checks belong to contextual submission preparation and can be exercised explicitly through the
+/// internal normalized-facts validation seam.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuRuntimeBindingSet {
     layout: GpuPipelineLayoutDescriptor,
@@ -29,10 +30,7 @@ impl GpuRuntimeBindingSet {
     pub fn new(
         layout: GpuPipelineLayoutDescriptor,
         values: impl IntoIterator<Item = GpuRuntimeBindingValue>,
-        device_facts: &GpuRuntimeBindingDeviceFacts,
     ) -> Result<Self, GpuProgramContractError> {
-        validate_pipeline_binding_limits(&layout, device_facts)?;
-
         let mut values_by_group = BTreeMap::<u32, Vec<GpuRuntimeBindingValue>>::new();
         for value in values {
             values_by_group
@@ -44,11 +42,7 @@ impl GpuRuntimeBindingSet {
         let mut groups = Vec::with_capacity(layout.groups().len());
         for group in layout.groups() {
             let values = values_by_group.remove(&group.group()).unwrap_or_default();
-            groups.push(GpuValidatedBindGroupBindings::new(
-                group.clone(),
-                values,
-                device_facts,
-            )?);
+            groups.push(GpuValidatedBindGroupBindings::new(group.clone(), values)?);
         }
 
         if let Some((&group, _)) = values_by_group.first_key_value() {
@@ -94,6 +88,17 @@ impl GpuRuntimeBindingSet {
 
     pub(crate) fn required_bind_group_slots(&self) -> u64 {
         required_bind_group_slots(&self.layout)
+    }
+
+    pub(crate) fn validate_device_facts(
+        &self,
+        device_facts: &GpuRuntimeBindingDeviceFacts,
+    ) -> Result<(), GpuProgramContractError> {
+        validate_pipeline_binding_limits(&self.layout, device_facts)?;
+        for group in &self.groups {
+            group.validate_device_facts(device_facts)?;
+        }
+        Ok(())
     }
 }
 
@@ -280,7 +285,7 @@ fn validate_pipeline_binding_limits(
 ) -> Result<(), GpuProgramContractError> {
     let required_bind_group_slots = required_bind_group_slots(layout);
     if required_bind_group_slots > u64::from(device_facts.max_bind_groups()) {
-        return Err(incompatible(
+        return Err(device_incompatible(
             "bind groups",
             "keep the highest pipeline bind-group index inside the admitted positional bind-group limit",
         ));
@@ -312,7 +317,7 @@ fn validate_pipeline_binding_limits(
     if dynamic_uniform_buffers
         > u64::from(device_facts.max_dynamic_uniform_buffers_per_pipeline_layout())
     {
-        return Err(incompatible(
+        return Err(device_incompatible(
             "dynamic uniform buffers",
             "reduce dynamic uniform-buffer declarations to the admitted pipeline-layout limit",
         ));
@@ -320,7 +325,7 @@ fn validate_pipeline_binding_limits(
     if dynamic_storage_buffers
         > u64::from(device_facts.max_dynamic_storage_buffers_per_pipeline_layout())
     {
-        return Err(incompatible(
+        return Err(device_incompatible(
             "dynamic storage buffers",
             "reduce dynamic storage-buffer declarations to the admitted pipeline-layout limit",
         ));
@@ -339,6 +344,18 @@ fn required_bind_group_slots(layout: &GpuPipelineLayoutDescriptor) -> u64 {
 fn incompatible(label: impl Into<String>, correction: &'static str) -> GpuProgramContractError {
     GpuProgramContractError::invalid(
         "construct runtime GPU binding set",
+        label,
+        GpuProgramContractCause::RuntimeBindingIncompatible,
+        correction,
+    )
+}
+
+fn device_incompatible(
+    label: impl Into<String>,
+    correction: &'static str,
+) -> GpuProgramContractError {
+    GpuProgramContractError::invalid(
+        "validate runtime GPU binding set against admitted device facts",
         label,
         GpuProgramContractCause::RuntimeBindingIncompatible,
         correction,
