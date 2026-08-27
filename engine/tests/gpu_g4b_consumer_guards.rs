@@ -73,15 +73,17 @@ fn renderer_shader_binding_identity_is_explicit_and_never_vector_derived() {
         "runtime resources and G4C2 binding values must not rebuild binding identity from vector position"
     );
     assert!(
-        runtime_bindings.contains("value.key,") || runtime_bindings.contains("value.key"),
-        "runtime binding values must use the retained typed key"
-    );
-    assert!(
         runtime_bindings.contains("runtime_binding_value(value, sampler.as_ref())"),
         "runtime resources must pass their retained typed keys into G4C2 binding realization"
     );
+    let runtime_binding_value = section(
+        &runtime,
+        "fn runtime_binding_value(",
+        "fn gpu_pipeline_descriptor_for_pass(",
+        RUNTIME_BINDINGS,
+    );
     assert!(
-        runtime.contains("GpuRuntimeBindingValue::new(value.key, [resource])"),
+        runtime_binding_value.contains("GpuRuntimeBindingValue::new(value.key, [resource])"),
         "G4C2 runtime binding values must retain the authored typed binding key"
     );
     assert!(
