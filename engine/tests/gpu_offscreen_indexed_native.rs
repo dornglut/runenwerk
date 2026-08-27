@@ -89,12 +89,6 @@ fn render_pipeline() -> GpuRenderPipelineDescriptor {
         std::iter::empty::<GpuBindingLayoutRefinement>(),
     )
     .unwrap();
-    let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
-    let specialization = GpuSpecializationValueSet::new(
-        GpuSpecializationSchema::new(std::iter::empty::<GpuSpecializationDeclaration>()).unwrap(),
-        std::iter::empty::<GpuSpecializationEntry>(),
-    )
-    .unwrap();
     let color_target = GpuColorTargetStateDescriptor::new(
         GpuTextureFormat::Rgba8Unorm,
         GpuBlendMode::Replace,
@@ -113,9 +107,7 @@ fn render_pipeline() -> GpuRenderPipelineDescriptor {
         program,
         GpuRenderEntryPoints::new(vertex, Some(fragment)),
         state,
-        layout,
-        specialization,
-        GpuCapabilityRequirements::new(),
+        GpuPipelineConfiguration::default(),
     )
     .unwrap()
 }
