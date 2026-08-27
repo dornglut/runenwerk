@@ -11,7 +11,6 @@ mod execution_tests;
 mod health;
 #[cfg(test)]
 mod initial_content_tests;
-mod ordinary_submission;
 mod pipeline_realization;
 mod program_binding_realization;
 mod resource_realization;
