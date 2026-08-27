@@ -323,7 +323,7 @@ fn canonical_execution_keeps_backend_objects_private_without_renderer_terminals(
 }
 
 #[test]
-fn g4c2_uses_one_shared_health_gate_and_the_fixed_naga_profile() {
+fn g4c2_uses_one_shared_health_gate_without_program_analysis_authority() {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let health_path = "src/plugins/gpu/backend/wgpu/health.rs";
     let health = compact(&read(&manifest, health_path));
@@ -368,10 +368,8 @@ fn g4c2_uses_one_shared_health_gate_and_the_fixed_naga_profile() {
         &manifest,
         "src/plugins/gpu/backend/wgpu/resource_realization/mod.rs",
     ));
-    let program = compact(&read(
-        &manifest,
-        "src/plugins/gpu/backend/wgpu/program_binding_realization/mod.rs",
-    ));
+    let program_path = "src/plugins/gpu/backend/wgpu/program_binding_realization/mod.rs";
+    let program = compact(&read(&manifest, program_path));
     for source in [&resource, &program] {
         assert!(source.contains("health:Arc<WgpuDeviceHealth>"));
         assert!(source.contains("error_attribution_gate:Arc<WgpuErrorAttributionGate>"));
@@ -391,15 +389,24 @@ fn g4c2_uses_one_shared_health_gate_and_the_fixed_naga_profile() {
     assert!(surface.contains("let_attribution_gate=error_attribution_gate.acquire();"));
     assert!(surface.contains("record.surface.configure(device,&native);"));
 
-    let evidence = compact(&read(
-        &manifest,
-        "src/plugins/gpu/backend/wgpu/program_binding_realization/evidence.rs",
-    ));
-    assert!(evidence.contains("ValidationFlags::all()"));
-    assert!(evidence.contains("Capabilities::default()"));
-    assert!(!evidence.contains("Capabilities::all()"));
-    assert!(!program.contains("ShaderSource::Naga"));
-    assert!(!program.contains("pollster::block_on"));
+    assert!(
+        !manifest
+            .join("src/plugins/gpu/backend/wgpu/program_binding_realization/evidence.rs")
+            .exists(),
+        "G6-SH01 must keep retired WGPU-side shader analysis evidence deleted"
+    );
+    for forbidden in [
+        "naga::",
+        "ValidationFlags",
+        "Capabilities::",
+        "ShaderSource::Naga",
+        "pollster::block_on",
+    ] {
+        assert!(
+            !program.contains(forbidden),
+            "G4C2 WGPU program realization must not regain logical shader-analysis authority through {forbidden}"
+        );
+    }
 }
 
 #[test]
