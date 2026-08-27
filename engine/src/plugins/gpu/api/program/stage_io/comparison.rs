@@ -5,7 +5,7 @@ use super::{
     GpuObservedFragmentOutputSignature, GpuObservedVertexInputSignature, GpuShaderIoLocation,
 };
 
-pub fn compare_vertex_input_signatures(
+pub(crate) fn compare_vertex_input_signatures(
     expected: &GpuExpectedVertexInputSignature,
     observed: &GpuObservedVertexInputSignature,
 ) -> Result<(), GpuProgramContractError> {
@@ -17,7 +17,7 @@ pub fn compare_vertex_input_signatures(
     compare_locations("vertex input", expected.locations(), observed.locations())
 }
 
-pub fn compare_fragment_output_signatures(
+pub(crate) fn compare_fragment_output_signatures(
     expected: &GpuExpectedFragmentOutputSignature,
     observed: &GpuObservedFragmentOutputSignature,
 ) -> Result<(), GpuProgramContractError> {

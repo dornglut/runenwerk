@@ -1,20 +1,28 @@
 use engine::plugins::gpu::{
-    GpuAdmittedProgramSource, GpuBindGroupLayoutDescriptor, GpuCapabilityFeature,
-    GpuCapabilityRequirement, GpuCapabilityRequirements, GpuComputePipelineDescriptor,
-    GpuEntryPointDescriptor, GpuEntryPointName, GpuPipelineLayoutDescriptor,
-    GpuProgramContractCause, GpuProgramDescriptor, GpuProgramInterfaceDescriptor,
-    GpuProgramSourceIdentity, GpuProgramSourceKey, GpuProgramSourceOwnerId,
-    GpuProgramSourceProvenance, GpuProgramSourceRegistry, GpuProgramSourceRevision, GpuShaderStage,
-    GpuSpecializationDeclaration, GpuSpecializationKey, GpuSpecializationSchema,
-    GpuSpecializationValue, GpuSpecializationValueSet, GpuSpecializationValueType,
+    GpuAdmittedProgramSource, GpuBindGroupLayoutDescriptor, GpuBindingLayoutRefinement,
+    GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirements,
+    GpuComputePipelineDescriptor, GpuEntryPointName, GpuPipelineLayoutDescriptor,
+    GpuProgramContractCause, GpuProgramDescriptor, GpuProgramSourceIdentity, GpuProgramSourceKey,
+    GpuProgramSourceOwnerId, GpuProgramSourceProvenance, GpuProgramSourceRegistry,
+    GpuProgramSourceRevision, GpuSpecializationDeclaration, GpuSpecializationKey,
+    GpuSpecializationSchema, GpuSpecializationValue, GpuSpecializationValueSet,
+    GpuSpecializationValueType,
 };
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-fn source() -> (GpuProgramSourceRegistry, GpuAdmittedProgramSource) {
+const COMPUTE_WGSL: &str = "@compute @workgroup_size(1) fn main() {}";
+const VERTEX_WGSL: &str = r#"
+@vertex
+fn vertex_main() -> @builtin(position) vec4<f32> {
+    return vec4<f32>(0.0, 0.0, 0.0, 1.0);
+}
+"#;
+
+fn source(key: &str, wgsl: &str) -> (GpuProgramSourceRegistry, GpuAdmittedProgramSource) {
     let identity = GpuProgramSourceIdentity::new(
         GpuProgramSourceOwnerId::allocate().expect("test source owner should allocate"),
-        GpuProgramSourceKey::new("compute.pipeline").expect("test source key should be valid"),
+        GpuProgramSourceKey::new(key).expect("test source key should be valid"),
         GpuProgramSourceRevision::try_from_raw(1).expect("test source revision should be nonzero"),
     );
     let mut registry =
@@ -22,7 +30,7 @@ fn source() -> (GpuProgramSourceRegistry, GpuAdmittedProgramSource) {
     let source = registry
         .admit_wgsl(
             identity,
-            "@compute @workgroup_size(1) fn main() {}",
+            wgsl,
             GpuProgramSourceProvenance::new("gpu-compute-pipeline-test", None)
                 .expect("test provenance should be valid"),
         )
@@ -30,20 +38,18 @@ fn source() -> (GpuProgramSourceRegistry, GpuAdmittedProgramSource) {
     (registry, source)
 }
 
-fn program(stage: GpuShaderStage, name: &str) -> GpuProgramDescriptor {
-    let (_registry, source) = source();
-    let interface =
-        GpuProgramInterfaceDescriptor::new([]).expect("empty test interface should be valid");
+fn program(source_key: &str, wgsl: &str, name: &str) -> GpuProgramDescriptor {
+    let (_registry, source) = source(source_key, wgsl);
     GpuProgramDescriptor::new(
         source,
-        interface.clone(),
-        [GpuEntryPointDescriptor::new(
-            GpuEntryPointName::new(name).expect("test entry-point name should be valid"),
-            stage,
-            interface,
-        )],
+        [GpuEntryPointName::new(name).expect("test entry-point name should be valid")],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
     )
-    .expect("test program should be valid")
+    .expect("test program should derive from canonical WGSL")
+}
+
+fn compute_program() -> GpuProgramDescriptor {
+    program("compute.pipeline", COMPUTE_WGSL, "main")
 }
 
 fn specialization(requirements: GpuCapabilityRequirements) -> GpuSpecializationValueSet {
@@ -68,7 +74,7 @@ fn hash_of(value: &impl Hash) -> u64 {
 
 #[test]
 fn compute_pipeline_binds_program_layout_specialization_and_requirements() {
-    let program = program(GpuShaderStage::Compute, "main");
+    let program = compute_program();
     let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface())
         .expect("test pipeline layout should derive");
     let mut specialization_requirements = GpuCapabilityRequirements::new();
@@ -116,8 +122,8 @@ fn compute_pipeline_binds_program_layout_specialization_and_requirements() {
 }
 
 #[test]
-fn compute_pipeline_rejects_a_non_compute_or_missing_entry_point() {
-    let program = program(GpuShaderStage::Vertex, "vertex_main");
+fn compute_pipeline_rejects_a_non_compute_entry_point() {
+    let program = program("vertex.pipeline", VERTEX_WGSL, "vertex_main");
     let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
     let error = GpuComputePipelineDescriptor::new(
         program,
@@ -136,7 +142,7 @@ fn compute_pipeline_rejects_a_non_compute_or_missing_entry_point() {
 
 #[test]
 fn compute_pipeline_rejects_a_layout_not_derived_from_the_program_interface() {
-    let program = program(GpuShaderStage::Compute, "main");
+    let program = compute_program();
     let mismatched_group =
         GpuBindGroupLayoutDescriptor::new(0, []).expect("empty mismatched group should construct");
     let mismatched_layout = GpuPipelineLayoutDescriptor::new([mismatched_group])
@@ -158,7 +164,7 @@ fn compute_pipeline_rejects_a_layout_not_derived_from_the_program_interface() {
 
 #[test]
 fn compute_pipeline_rejects_conflicting_capability_requirements() {
-    let program = program(GpuShaderStage::Compute, "main");
+    let program = compute_program();
     let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
     let mut requirements = GpuCapabilityRequirements::new();
     requirements

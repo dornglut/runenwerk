@@ -3,6 +3,7 @@ use super::super::requirement_identity::hash_capability_requirements;
 use super::super::{
     GpuEntryPointName, GpuExpectedFragmentOutputSignature, GpuExpectedVertexInputSignature,
     GpuPipelineLayoutDescriptor, GpuProgramDescriptor, GpuShaderStage, GpuSpecializationValueSet,
+    compare_fragment_output_signatures, compare_vertex_input_signatures,
 };
 use super::render_state::GpuRenderPipelineStateDescriptor;
 use super::requirements::insert_pipeline_requirement;
@@ -98,6 +99,8 @@ impl GpuRenderPipelineDescriptor {
                 "select a fragment entry point declared by the admitted program",
             ));
         }
+
+        validate_stage_io(&program, &entry_points, &state)?;
 
         let expected_layout = GpuPipelineLayoutDescriptor::from_interface(program.interface())?;
         if layout != expected_layout {
@@ -201,6 +204,47 @@ impl GpuRenderPipelineDescriptor {
 
     pub fn is_same_record(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+fn validate_stage_io(
+    program: &GpuProgramDescriptor,
+    entry_points: &GpuRenderEntryPoints,
+    state: &GpuRenderPipelineStateDescriptor,
+) -> Result<(), GpuProgramContractError> {
+    let operation = "construct GPU render pipeline descriptor";
+    let expected_vertex = state
+        .vertex_input()
+        .expected_signature(entry_points.vertex().clone())?;
+    let observed_vertex = program
+        .observed_vertex_input_signature(entry_points.vertex())
+        .ok_or_else(|| {
+            GpuProgramContractError::invalid(
+                operation,
+                entry_points.diagnostic_label(),
+                GpuProgramContractCause::PipelineStageIoMismatch,
+                "use the compiler-observed vertex entry point admitted with this program",
+            )
+        })?;
+    compare_vertex_input_signatures(&expected_vertex, observed_vertex)?;
+
+    match (entry_points.fragment(), state.fragment_output()) {
+        (Some(fragment), Some(output)) => {
+            let expected_fragment = output.expected_signature(fragment.clone())?;
+            let observed_fragment = program
+                .observed_fragment_output_signature(fragment)
+                .ok_or_else(|| {
+                    GpuProgramContractError::invalid(
+                        operation,
+                        entry_points.diagnostic_label(),
+                        GpuProgramContractCause::PipelineStageIoMismatch,
+                        "use the compiler-observed fragment entry point admitted with this program",
+                    )
+                })?;
+            compare_fragment_output_signatures(&expected_fragment, observed_fragment)
+        }
+        (None, None) => Ok(()),
+        _ => unreachable!("render descriptor construction checks fragment-stage parity first"),
     }
 }
 

@@ -186,14 +186,18 @@ fn validate_buffer(
         ));
     }
 
-    if declaration
-        .kind()
-        .minimum_buffer_size()
-        .is_some_and(|minimum| binding.size() < minimum)
-    {
+    let compiler_minimum = declaration.compiler_required_minimum_size();
+    let host_minimum = declaration.kind().minimum_buffer_size();
+    let required_minimum = match (compiler_minimum, host_minimum) {
+        (Some(compiler), Some(host)) => Some(compiler.max(host)),
+        (Some(compiler), None) => Some(compiler),
+        (None, Some(host)) => Some(host),
+        (None, None) => None,
+    };
+    if required_minimum.is_some_and(|minimum| binding.size() < minimum) {
         return Err(incompatible(
             declaration.key().to_string(),
-            "bind at least the declaration's nonzero minimum buffer size",
+            "bind at least the compiler-required shader size and any stronger host/layout minimum",
         ));
     }
 

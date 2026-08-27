@@ -1,5 +1,5 @@
 use super::contract_diagnostics::{GpuProgramContractCause, GpuProgramContractError};
-use super::interface::{GpuProgramInterfaceDescriptor, GpuShaderStage};
+use super::interface::GpuShaderStage;
 use core::fmt;
 use core::str::FromStr;
 
@@ -57,24 +57,16 @@ impl FromStr for GpuEntryPointName {
     }
 }
 
+/// One selected entry point after canonical-WGSL admission derived its shader stage.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuEntryPointDescriptor {
     name: GpuEntryPointName,
     stage: GpuShaderStage,
-    interface: GpuProgramInterfaceDescriptor,
 }
 
 impl GpuEntryPointDescriptor {
-    pub fn new(
-        name: GpuEntryPointName,
-        stage: GpuShaderStage,
-        interface: GpuProgramInterfaceDescriptor,
-    ) -> Self {
-        Self {
-            name,
-            stage,
-            interface,
-        }
+    pub(crate) const fn derived(name: GpuEntryPointName, stage: GpuShaderStage) -> Self {
+        Self { name, stage }
     }
 
     pub fn name(&self) -> &GpuEntryPointName {
@@ -83,9 +75,5 @@ impl GpuEntryPointDescriptor {
 
     pub const fn stage(&self) -> GpuShaderStage {
         self.stage
-    }
-
-    pub fn interface(&self) -> &GpuProgramInterfaceDescriptor {
-        &self.interface
     }
 }

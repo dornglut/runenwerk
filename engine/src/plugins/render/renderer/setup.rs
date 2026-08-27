@@ -4,20 +4,19 @@ use super::resource_descriptors::{
 };
 use super::*;
 use crate::plugins::gpu::{
-    GpuBindGroupLayoutDescriptor, GpuBindingDeclaration, GpuBindingKey, GpuBindingKind,
-    GpuBindingProvenance, GpuBlendConstant, GpuBlendMode, GpuBufferRange, GpuBufferUsage,
-    GpuCapabilityRequirements, GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuDrawIntent,
-    GpuDrawRange, GpuEntryPointDescriptor, GpuEntryPointName, GpuFragmentOutputStateDescriptor,
+    GpuBindingKey, GpuBindingLayoutRefinement, GpuBlendConstant, GpuBlendMode, GpuBufferRange,
+    GpuBufferUsage, GpuCapabilityRequirements, GpuColorTargetStateDescriptor, GpuColorWriteMask,
+    GpuDrawIntent, GpuDrawRange, GpuEntryPointName, GpuFragmentOutputStateDescriptor,
     GpuMemoryIntent, GpuMultisampleStateDescriptor, GpuPipelineLayoutDescriptor,
-    GpuPrimitiveStateDescriptor, GpuProgramDescriptor, GpuProgramInterfaceDescriptor,
-    GpuProgramSourceKey, GpuProgramSourceProvenance, GpuRealizedRenderPipeline, GpuRenderDraw,
-    GpuRenderEntryPoints, GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor,
-    GpuResourceLifetime, GpuRuntimeBindingResource, GpuRuntimeBindingSet, GpuRuntimeBindingValue,
+    GpuPrimitiveStateDescriptor, GpuProgramDescriptor, GpuProgramSourceKey,
+    GpuProgramSourceProvenance, GpuRealizedRenderPipeline, GpuRenderDraw, GpuRenderEntryPoints,
+    GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor, GpuResourceLifetime,
+    GpuRuntimeBindingResource, GpuRuntimeBindingSet, GpuRuntimeBindingValue,
     GpuRuntimeBufferBinding, GpuRuntimeTextureViewBinding, GpuSamplerClass, GpuScissorRect,
-    GpuShaderStage, GpuShaderStages, GpuSpecializationSchema, GpuSpecializationValueSet,
-    GpuTextureFormat, GpuTextureSampleClass, GpuTextureUsage, GpuTextureViewDimension,
-    GpuVertexAttribute, GpuVertexBufferBinding, GpuVertexBufferLayoutDescriptor, GpuVertexFormat,
-    GpuVertexInputStateDescriptor, GpuVertexStepMode, GpuViewport,
+    GpuSpecializationSchema, GpuSpecializationValueSet, GpuTextureFormat, GpuTextureSampleClass,
+    GpuTextureUsage, GpuTextureViewDimension, GpuVertexAttribute, GpuVertexBufferBinding,
+    GpuVertexBufferLayoutDescriptor, GpuVertexFormat, GpuVertexInputStateDescriptor,
+    GpuVertexStepMode, GpuViewport,
 };
 use std::num::NonZeroU64;
 
@@ -236,19 +235,6 @@ impl Renderer {
             })
             .transpose()?;
 
-        let screen_layout_descriptor = ui_screen_bind_group_layout()?;
-        let texture_layout_descriptor = texture_sampler_label
-            .map(|_| ui_texture_bind_group_layout())
-            .transpose()?;
-        let pipeline_layout_descriptor = GpuPipelineLayoutDescriptor::new(
-            std::iter::once(screen_layout_descriptor.clone())
-                .chain(texture_layout_descriptor.iter().cloned()),
-        )?;
-        let interface = GpuProgramInterfaceDescriptor::new(
-            pipeline_layout_descriptor
-                .groups()
-                .flat_map(|group| group.bindings().cloned()),
-        )?;
         let admitted_source = self.flow_pipeline_cache.admit_program_source(
             GpuProgramSourceKey::new(source_key)?,
             source_revision,
@@ -257,22 +243,23 @@ impl Renderer {
         )?;
         let vertex_entry = GpuEntryPointName::new("vs_main")?;
         let fragment_entry = GpuEntryPointName::new("fs_main")?;
+        let refinements = if texture_sampler_label.is_some() {
+            vec![
+                GpuBindingLayoutRefinement::new(GpuBindingKey::try_new(1, 0)?)
+                    .with_texture_sample_class(GpuTextureSampleClass::FloatFilterable),
+                GpuBindingLayoutRefinement::new(GpuBindingKey::try_new(1, 1)?)
+                    .with_sampler_class(GpuSamplerClass::Filtering),
+            ]
+        } else {
+            Vec::new()
+        };
         let program_descriptor = GpuProgramDescriptor::new(
             admitted_source,
-            interface.clone(),
-            [
-                GpuEntryPointDescriptor::new(
-                    vertex_entry.clone(),
-                    GpuShaderStage::Vertex,
-                    interface.clone(),
-                ),
-                GpuEntryPointDescriptor::new(
-                    fragment_entry.clone(),
-                    GpuShaderStage::Fragment,
-                    interface,
-                ),
-            ],
+            [vertex_entry.clone(), fragment_entry.clone()],
+            refinements,
         )?;
+        let pipeline_layout_descriptor =
+            GpuPipelineLayoutDescriptor::from_interface(program_descriptor.interface())?;
         let pipeline_descriptor = ui_render_pipeline_descriptor(
             kind,
             format,
@@ -805,54 +792,6 @@ fn ui_runtime_binding_set(
         pipeline.descriptor().layout().clone(),
         values,
         &device_facts,
-    )?)
-}
-
-fn ui_screen_bind_group_layout() -> Result<GpuBindGroupLayoutDescriptor> {
-    Ok(GpuBindGroupLayoutDescriptor::new(
-        0,
-        [GpuBindingDeclaration::new(
-            GpuBindingKey::try_new(0, 0)?,
-            GpuShaderStages::one(GpuShaderStage::Vertex),
-            GpuBindingKind::uniform_buffer(false, None),
-            None,
-            "ui-screen-uniform",
-            GpuBindingProvenance::new("renderer-ui-pipeline", Some("screen".to_owned()))?,
-        )?],
-    )?)
-}
-
-fn ui_texture_bind_group_layout() -> Result<GpuBindGroupLayoutDescriptor> {
-    Ok(GpuBindGroupLayoutDescriptor::new(
-        1,
-        [
-            GpuBindingDeclaration::new(
-                GpuBindingKey::try_new(1, 0)?,
-                GpuShaderStages::one(GpuShaderStage::Fragment),
-                GpuBindingKind::sampled_texture(
-                    GpuTextureSampleClass::FloatFilterable,
-                    GpuTextureViewDimension::D2,
-                    false,
-                )?,
-                None,
-                "ui-sampled-texture",
-                GpuBindingProvenance::new(
-                    "renderer-ui-pipeline",
-                    Some("sampled texture".to_owned()),
-                )?,
-            )?,
-            GpuBindingDeclaration::new(
-                GpuBindingKey::try_new(1, 1)?,
-                GpuShaderStages::one(GpuShaderStage::Fragment),
-                GpuBindingKind::sampler(GpuSamplerClass::Filtering),
-                None,
-                "ui-texture-sampler",
-                GpuBindingProvenance::new(
-                    "renderer-ui-pipeline",
-                    Some("texture sampler".to_owned()),
-                )?,
-            )?,
-        ],
     )?)
 }
 

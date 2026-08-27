@@ -1,5 +1,4 @@
 use engine::plugins::gpu;
-use std::num::NonZeroU64;
 
 const WGSL: &str = r#"
 struct ViewUniform {
@@ -46,38 +45,12 @@ fn main() {
         )
         .expect("source should admit");
 
-    let visibility =
-        gpu::GpuShaderStages::new([gpu::GpuShaderStage::Vertex, gpu::GpuShaderStage::Fragment])
-            .expect("uniform visibility should be nonempty");
-    let uniform = gpu::GpuBindingDeclaration::new(
-        gpu::GpuBindingKey::try_new(0, 0).expect("binding key should fit u32"),
-        visibility,
-        gpu::GpuBindingKind::uniform_buffer(false, NonZeroU64::new(64)),
-        None,
-        "view-uniform",
-        gpu::GpuBindingProvenance::new("gpu-render-contract-example", None)
-            .expect("binding provenance should be valid"),
-    )
-    .expect("uniform declaration should construct");
-    let interface =
-        gpu::GpuProgramInterfaceDescriptor::new([uniform]).expect("interface should construct");
     let program = gpu::GpuProgramDescriptor::new(
         source,
-        interface.clone(),
-        [
-            gpu::GpuEntryPointDescriptor::new(
-                entry_point("vertex_main"),
-                gpu::GpuShaderStage::Vertex,
-                interface.clone(),
-            ),
-            gpu::GpuEntryPointDescriptor::new(
-                entry_point("fragment_main"),
-                gpu::GpuShaderStage::Fragment,
-                interface.clone(),
-            ),
-        ],
+        [entry_point("vertex_main"), entry_point("fragment_main")],
+        std::iter::empty::<gpu::GpuBindingLayoutRefinement>(),
     )
-    .expect("program should construct");
+    .expect("program should derive interface and stage IO from canonical WGSL");
 
     let vertex_layout = gpu::GpuVertexBufferLayoutDescriptor::new(
         0,
@@ -106,9 +79,9 @@ fn main() {
         gpu::GpuMultisampleStateDescriptor::default(),
     )
     .expect("render state should construct");
-    let layout = gpu::GpuPipelineLayoutDescriptor::from_interface(&interface)
-        .expect("layout should derive from the interface");
-    let pipeline = gpu::GpuRenderPipelineDescriptor::new(
+    let layout = gpu::GpuPipelineLayoutDescriptor::from_interface(program.interface())
+        .expect("layout should derive from the admitted program interface");
+    let _pipeline = gpu::GpuRenderPipelineDescriptor::new(
         program,
         gpu::GpuRenderEntryPoints::new(
             entry_point("vertex_main"),
@@ -119,48 +92,7 @@ fn main() {
         empty_specialization(),
         gpu::GpuCapabilityRequirements::new(),
     )
-    .expect("render pipeline should construct");
-
-    compare_stage_io(&pipeline);
-}
-
-fn compare_stage_io(pipeline: &gpu::GpuRenderPipelineDescriptor) {
-    let expected_vertex = pipeline
-        .expected_vertex_input_signature()
-        .expect("expected vertex signature should derive");
-    let observed_vertex = gpu::GpuObservedVertexInputSignature::new(
-        entry_point("vertex_main"),
-        [location(0, gpu::GpuShaderIoScalarClass::Float, 3)],
-        [],
-    )
-    .expect("observed vertex signature should normalize");
-    gpu::compare_vertex_input_signatures(&expected_vertex, &observed_vertex)
-        .expect("vertex stage IO should agree");
-
-    let expected_fragment = pipeline
-        .expected_fragment_output_signature()
-        .expect("expected fragment signature should derive")
-        .expect("pipeline selects a fragment stage");
-    let observed_fragment = gpu::GpuObservedFragmentOutputSignature::new(
-        entry_point("fragment_main"),
-        [location(0, gpu::GpuShaderIoScalarClass::Float, 4)],
-        [],
-    )
-    .expect("observed fragment signature should normalize");
-    gpu::compare_fragment_output_signatures(&expected_fragment, &observed_fragment)
-        .expect("fragment stage IO should agree");
-}
-
-fn location(
-    location: u32,
-    scalar_class: gpu::GpuShaderIoScalarClass,
-    vector_width: u8,
-) -> gpu::GpuShaderIoLocation {
-    gpu::GpuShaderIoLocation::new(
-        location,
-        gpu::GpuShaderIoValueType::try_new(scalar_class, vector_width)
-            .expect("shader IO type should be valid"),
-    )
+    .expect("render pipeline should validate compiler-observed stage IO and construct");
 }
 
 fn entry_point(name: &str) -> gpu::GpuEntryPointName {

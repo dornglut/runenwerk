@@ -1,20 +1,21 @@
 use engine::plugins::gpu::{
-    GpuAdmittedProgramSource, GpuBindGroupLayoutDescriptor, GpuBlendMode, GpuCapabilityFeature,
-    GpuCapabilityRequirement, GpuCapabilityRequirements, GpuColorTargetStateDescriptor,
-    GpuColorWriteMask, GpuCompareFunction, GpuDepthStencilStateDescriptor, GpuEntryPointDescriptor,
-    GpuEntryPointName, GpuFragmentOutputStateDescriptor, GpuMultisampleStateDescriptor,
-    GpuPipelineLayoutDescriptor, GpuPrimitiveStateDescriptor, GpuProgramContractCause,
-    GpuProgramDescriptor, GpuProgramInterfaceDescriptor, GpuProgramSourceIdentity,
-    GpuProgramSourceKey, GpuProgramSourceOwnerId, GpuProgramSourceProvenance,
-    GpuProgramSourceRegistry, GpuProgramSourceRevision, GpuRenderEntryPoints,
-    GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor, GpuShaderIoScalarClass,
-    GpuShaderStage, GpuSpecializationSchema, GpuSpecializationValueSet, GpuTextureFormat,
-    GpuVertexInputStateDescriptor,
+    GpuAdmittedProgramSource, GpuBindGroupLayoutDescriptor, GpuBindingLayoutRefinement,
+    GpuBlendMode, GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirements,
+    GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuCompareFunction,
+    GpuDepthStencilStateDescriptor, GpuEntryPointName, GpuFragmentOutputStateDescriptor,
+    GpuMultisampleStateDescriptor, GpuPipelineLayoutDescriptor, GpuPrimitiveStateDescriptor,
+    GpuProgramContractCause, GpuProgramDescriptor, GpuProgramSourceIdentity, GpuProgramSourceKey,
+    GpuProgramSourceOwnerId, GpuProgramSourceProvenance, GpuProgramSourceRegistry,
+    GpuProgramSourceRevision, GpuRenderEntryPoints, GpuRenderPipelineDescriptor,
+    GpuRenderPipelineStateDescriptor, GpuShaderIoScalarClass, GpuSpecializationSchema,
+    GpuSpecializationValueSet, GpuTextureFormat, GpuVertexInputStateDescriptor,
 };
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-fn source() -> (GpuProgramSourceRegistry, GpuAdmittedProgramSource) {
+const RENDER_WGSL: &str = "@vertex fn vertex_main() -> @builtin(position) vec4f { return vec4f(); }\n@fragment fn fragment_main() -> @location(0) vec4f { return vec4f(); }";
+
+fn source_from(wgsl: &str) -> (GpuProgramSourceRegistry, GpuAdmittedProgramSource) {
     let identity = GpuProgramSourceIdentity::new(
         GpuProgramSourceOwnerId::allocate().expect("test source owner should allocate"),
         GpuProgramSourceKey::new("render.pipeline").expect("test source key should be valid"),
@@ -25,7 +26,7 @@ fn source() -> (GpuProgramSourceRegistry, GpuAdmittedProgramSource) {
     let source = registry
         .admit_wgsl(
             identity,
-            "@vertex fn vertex_main() -> @builtin(position) vec4f { return vec4f(); }\n@fragment fn fragment_main() -> @location(0) vec4f { return vec4f(); }",
+            wgsl,
             GpuProgramSourceProvenance::new("gpu-render-pipeline-test", None)
                 .expect("test provenance should be valid"),
         )
@@ -33,27 +34,18 @@ fn source() -> (GpuProgramSourceRegistry, GpuAdmittedProgramSource) {
     (registry, source)
 }
 
-fn program() -> GpuProgramDescriptor {
-    let (_registry, source) = source();
-    let interface =
-        GpuProgramInterfaceDescriptor::new([]).expect("empty test interface should be valid");
+fn program_from(wgsl: &str) -> GpuProgramDescriptor {
+    let (_registry, source) = source_from(wgsl);
     GpuProgramDescriptor::new(
         source,
-        interface.clone(),
-        [
-            GpuEntryPointDescriptor::new(
-                entry_point("fragment_main"),
-                GpuShaderStage::Fragment,
-                interface.clone(),
-            ),
-            GpuEntryPointDescriptor::new(
-                entry_point("vertex_main"),
-                GpuShaderStage::Vertex,
-                interface,
-            ),
-        ],
+        [entry_point("fragment_main"), entry_point("vertex_main")],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
     )
-    .expect("test render program should be valid")
+    .expect("test render program should derive from canonical WGSL")
+}
+
+fn program() -> GpuProgramDescriptor {
+    program_from(RENDER_WGSL)
 }
 
 fn entry_point(value: &str) -> GpuEntryPointName {
@@ -235,6 +227,32 @@ fn render_pipeline_rejects_wrong_stage_entry_points() {
     assert_eq!(
         wrong_fragment.cause(),
         GpuProgramContractCause::PipelineDescriptorInvalid
+    );
+}
+
+#[test]
+fn render_pipeline_rejects_compiler_observed_stage_io_mismatch_before_backend() {
+    let program = program_from(
+        "struct VertexIn { @location(0) position: vec3f }\n@vertex fn vertex_main(input: VertexIn) -> @builtin(position) vec4f { return vec4f(input.position, 1.0); }\n@fragment fn fragment_main() -> @location(0) vec4f { return vec4f(); }",
+    );
+    let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
+
+    let error = GpuRenderPipelineDescriptor::new(
+        program,
+        GpuRenderEntryPoints::new(
+            entry_point("vertex_main"),
+            Some(entry_point("fragment_main")),
+        ),
+        color_and_depth_state(),
+        layout,
+        specialization(),
+        GpuCapabilityRequirements::new(),
+    )
+    .expect_err("shader vertex IO must be checked before any backend realization exists");
+
+    assert_eq!(
+        error.cause(),
+        GpuProgramContractCause::PipelineStageIoMismatch
     );
 }
 

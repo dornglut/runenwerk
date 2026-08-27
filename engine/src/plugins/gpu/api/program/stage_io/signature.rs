@@ -64,36 +64,34 @@ impl GpuExpectedVertexInputSignature {
     }
 }
 
+/// Compiler-observed vertex-input locations for one admitted entry point.
+/// Supported builtins are validated during canonical-WGSL admission but are not retained because
+/// render-pipeline vertex-buffer state has no caller-authored builtin expectation to compare.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct GpuObservedVertexInputSignature {
+pub(crate) struct GpuObservedVertexInputSignature {
     entry_point: GpuEntryPointName,
     signature: GpuShaderIoSignature,
-    builtins: Vec<GpuVertexInputBuiltin>,
 }
 
 impl GpuObservedVertexInputSignature {
-    pub fn new(
+    pub(crate) fn new(
         entry_point: GpuEntryPointName,
         locations: impl IntoIterator<Item = GpuShaderIoLocation>,
         builtins: impl IntoIterator<Item = GpuVertexInputBuiltin>,
     ) -> Result<Self, GpuProgramContractError> {
+        normalize_vertex_input_builtins(builtins)?;
         Ok(Self {
             entry_point,
             signature: GpuShaderIoSignature::new("observed vertex input", locations)?,
-            builtins: normalize_vertex_input_builtins(builtins)?,
         })
     }
 
-    pub fn entry_point(&self) -> &GpuEntryPointName {
+    pub(crate) fn entry_point(&self) -> &GpuEntryPointName {
         &self.entry_point
     }
 
-    pub fn locations(&self) -> impl ExactSizeIterator<Item = &GpuShaderIoLocation> {
+    pub(crate) fn locations(&self) -> impl ExactSizeIterator<Item = &GpuShaderIoLocation> {
         self.signature.locations()
-    }
-
-    pub fn builtins(&self) -> impl ExactSizeIterator<Item = GpuVertexInputBuiltin> + '_ {
-        self.builtins.iter().copied()
     }
 }
 
@@ -123,35 +121,33 @@ impl GpuExpectedFragmentOutputSignature {
     }
 }
 
+/// Compiler-observed fragment-output locations for one admitted entry point.
+/// Supported builtins are validated during canonical-WGSL admission but are not retained because
+/// render-pipeline fragment-target state has no caller-authored builtin expectation to compare.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct GpuObservedFragmentOutputSignature {
+pub(crate) struct GpuObservedFragmentOutputSignature {
     entry_point: GpuEntryPointName,
     signature: GpuShaderIoSignature,
-    builtins: Vec<GpuFragmentOutputBuiltin>,
 }
 
 impl GpuObservedFragmentOutputSignature {
-    pub fn new(
+    pub(crate) fn new(
         entry_point: GpuEntryPointName,
         locations: impl IntoIterator<Item = GpuShaderIoLocation>,
         builtins: impl IntoIterator<Item = GpuFragmentOutputBuiltin>,
     ) -> Result<Self, GpuProgramContractError> {
+        normalize_fragment_output_builtins(builtins)?;
         Ok(Self {
             entry_point,
             signature: GpuShaderIoSignature::new("observed fragment output", locations)?,
-            builtins: normalize_fragment_output_builtins(builtins)?,
         })
     }
 
-    pub fn entry_point(&self) -> &GpuEntryPointName {
+    pub(crate) fn entry_point(&self) -> &GpuEntryPointName {
         &self.entry_point
     }
 
-    pub fn locations(&self) -> impl ExactSizeIterator<Item = &GpuShaderIoLocation> {
+    pub(crate) fn locations(&self) -> impl ExactSizeIterator<Item = &GpuShaderIoLocation> {
         self.signature.locations()
-    }
-
-    pub fn builtins(&self) -> impl ExactSizeIterator<Item = GpuFragmentOutputBuiltin> + '_ {
-        self.builtins.iter().copied()
     }
 }

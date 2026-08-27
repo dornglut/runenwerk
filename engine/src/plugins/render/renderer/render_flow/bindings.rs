@@ -1,20 +1,18 @@
 use super::*;
 use crate::plugins::gpu::{
-    GpuAdmittedProgramSource, GpuBindGroupLayoutDescriptor, GpuBindingClass, GpuBindingDeclaration,
-    GpuBindingKey, GpuBindingKind, GpuBindingProvenance, GpuBlendMode as GpuPipelineBlendMode,
-    GpuCapabilityRequirements, GpuColorTargetStateDescriptor, GpuColorWriteMask,
-    GpuCompareFunction, GpuComputePipelineDescriptor, GpuCullMode as GpuPipelineCullMode,
-    GpuDepthStencilStateDescriptor, GpuEntryPointDescriptor, GpuEntryPointName,
+    GpuAdmittedProgramSource, GpuBindingKey, GpuBindingLayoutRefinement,
+    GpuBlendMode as GpuPipelineBlendMode, GpuCapabilityRequirements, GpuColorTargetStateDescriptor,
+    GpuColorWriteMask, GpuCompareFunction, GpuComputePipelineDescriptor,
+    GpuCullMode as GpuPipelineCullMode, GpuDepthStencilStateDescriptor, GpuEntryPointName,
     GpuFragmentOutputStateDescriptor, GpuFrontFace, GpuIndexFormat, GpuMultisampleStateDescriptor,
     GpuPipelineLayoutDescriptor, GpuPrimitiveStateDescriptor,
     GpuPrimitiveTopology as GpuPipelinePrimitiveTopology, GpuProgramDescriptor,
-    GpuProgramInterfaceDescriptor, GpuRealizedPipelineLayout, GpuRealizedProgram,
-    GpuRenderEntryPoints, GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor,
-    GpuRuntimeBindingResource, GpuRuntimeBindingSet, GpuRuntimeBindingValue,
-    GpuRuntimeBufferBinding, GpuRuntimeTextureViewBinding, GpuSamplerClass, GpuSamplerHandle,
-    GpuShaderStage, GpuShaderStages, GpuSpecializationValueSet, GpuStorageBufferAccess,
-    GpuStorageTextureAccess, GpuTextureFormat, GpuTextureSampleClass, GpuTextureViewDimension,
-    GpuTextureViewHandle, GpuVertexAttribute, GpuVertexBufferLayoutDescriptor, GpuVertexFormat,
+    GpuRealizedPipelineLayout, GpuRealizedProgram, GpuRenderEntryPoints,
+    GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor, GpuRuntimeBindingResource,
+    GpuRuntimeBindingSet, GpuRuntimeBindingValue, GpuRuntimeBufferBinding,
+    GpuRuntimeTextureViewBinding, GpuSamplerClass, GpuSamplerHandle, GpuSpecializationValueSet,
+    GpuTextureFormat, GpuTextureSampleClass, GpuTextureViewDimension, GpuTextureViewHandle,
+    GpuVertexAttribute, GpuVertexBufferLayoutDescriptor, GpuVertexFormat,
     GpuVertexInputStateDescriptor, GpuVertexStepMode,
 };
 use crate::plugins::render::pipelines::FlowPassPipelineDescriptor;
@@ -31,12 +29,13 @@ enum RuntimeBindingResource {
         handle: crate::plugins::gpu::GpuBufferHandle,
         size: u64,
     },
+    Sampler,
 }
 
 struct RuntimeBindingResolved {
     key: GpuBindingKey,
-    kind: GpuBindingKind,
-    resource: Option<RuntimeBindingResource>,
+    resource: RuntimeBindingResource,
+    refinement: Option<GpuBindingLayoutRefinement>,
 }
 
 /// G4C2/G4C3 program and pipeline-layout realization plus canonical runtime binding descriptors.
@@ -60,7 +59,6 @@ impl Renderer {
         program_source: &GpuAdmittedProgramSource,
         specialization: GpuSpecializationValueSet,
         bindings: &CompiledPassBindings,
-        visibility: ShaderStages,
         allow_depth_sampling: bool,
         color_formats: Vec<TextureFormat>,
         depth_format: Option<TextureFormat>,
@@ -102,58 +100,48 @@ impl Renderer {
                             texture_id
                         );
                     }
-                    let sample_class = if is_depth {
-                        GpuTextureSampleClass::Depth
-                    } else {
-                        GpuTextureSampleClass::FloatFilterable
-                    };
+                    let refinement = (!is_depth).then(|| {
+                        GpuBindingLayoutRefinement::new(*key)
+                            .with_texture_sample_class(GpuTextureSampleClass::FloatFilterable)
+                    });
                     resolved_entries.push(RuntimeBindingResolved {
                         key: *key,
-                        kind: GpuBindingKind::sampled_texture(
-                            sample_class,
-                            GpuTextureViewDimension::D2,
-                            false,
-                        )?,
-                        resource: Some(texture_view),
+                        resource: texture_view,
+                        refinement,
                     });
                 }
                 CompiledBindingEntry::Sampler { key } => {
                     resolved_entries.push(RuntimeBindingResolved {
                         key: *key,
-                        kind: GpuBindingKind::sampler(GpuSamplerClass::Filtering),
-                        resource: None,
+                        resource: RuntimeBindingResource::Sampler,
+                        refinement: Some(
+                            GpuBindingLayoutRefinement::new(*key)
+                                .with_sampler_class(GpuSamplerClass::Filtering),
+                        ),
                     });
                 }
-                CompiledBindingEntry::StorageTexture {
-                    key,
-                    resource,
-                    access,
-                } => {
+                CompiledBindingEntry::StorageTexture { key, resource, .. } => {
                     let resource_key = runtime_resources.resolve_resource_key(
                         pass_id,
                         resource,
                         "storage_texture",
                     )?;
-                    let (texture_id, texture_view, texture_format, is_depth) = match resource_key
-                        .clone()
-                    {
+                    let (texture_id, texture_view, is_depth) = match resource_key.clone() {
                         RuntimeResourceKey::DynamicTexture(key) => {
                             let texture =
                                 self.dynamic_texture_targets.texture_ref(pass_id, &key)?;
                             (
                                 texture.id.clone(),
                                 resolved_binding_texture_view(&texture.id, texture.view_handle)?,
-                                texture.format,
                                 texture.is_depth,
                             )
                         }
                         _ => {
-                            let (view_handle, format, is_depth) = runtime_resources
+                            let (view_handle, _format, is_depth) = runtime_resources
                                 .resolve_logical_texture_binding(pass_id, resource_key.clone())?;
                             (
                                 resource_key,
                                 RuntimeBindingResource::TextureView(view_handle.clone()),
-                                format,
                                 is_depth,
                             )
                         }
@@ -167,12 +155,8 @@ impl Renderer {
                     }
                     resolved_entries.push(RuntimeBindingResolved {
                         key: *key,
-                        kind: GpuBindingKind::storage_texture(
-                            gpu_storage_texture_access(*access),
-                            gpu_texture_format_from_wgpu(texture_format)?,
-                            GpuTextureViewDimension::D2,
-                        )?,
-                        resource: Some(texture_view),
+                        resource: texture_view,
+                        refinement: None,
                     });
                 }
                 CompiledBindingEntry::UniformBuffer { key, resource } => {
@@ -180,63 +164,42 @@ impl Renderer {
                         runtime_resources.resolve_uniform_buffer_for_pass(pass_id, *resource)?;
                     resolved_entries.push(RuntimeBindingResolved {
                         key: *key,
-                        kind: GpuBindingKind::uniform_buffer(false, None),
-                        resource: Some(RuntimeBindingResource::Buffer {
+                        resource: RuntimeBindingResource::Buffer {
                             handle: buffer.handle.clone(),
                             size: buffer.size,
-                        }),
+                        },
+                        refinement: None,
                     });
                 }
-                CompiledBindingEntry::StorageBuffer {
-                    key,
-                    resource,
-                    access,
-                } => {
+                CompiledBindingEntry::StorageBuffer { key, resource, .. } => {
                     let buffer = runtime_resources.resolve_storage_buffer_ref(pass_id, resource)?;
                     resolved_entries.push(RuntimeBindingResolved {
                         key: *key,
-                        kind: GpuBindingKind::storage_buffer(
-                            gpu_storage_buffer_access(*access),
-                            false,
-                            None,
-                        ),
-                        resource: Some(RuntimeBindingResource::Buffer {
+                        resource: RuntimeBindingResource::Buffer {
                             handle: buffer.handle.clone(),
                             size: buffer.size,
-                        }),
+                        },
+                        refinement: None,
                     });
                 }
             }
         }
 
-        let gpu_visibility = gpu_shader_stages_from_wgpu(visibility)?;
-        let binding_declarations = resolved_entries
+        let mut refinements = resolved_entries
             .iter()
-            .map(|value| {
-                Ok(GpuBindingDeclaration::new(
-                    value.key,
-                    gpu_visibility,
-                    value.kind,
-                    None,
-                    format!("pass-{pass_id}-binding-{}", value.key.binding()),
-                    GpuBindingProvenance::new(
-                        "render-flow-primary-bind-group",
-                        Some(format!("pass {pass_id}")),
-                    )?,
-                )?)
-            })
-            .collect::<Result<Vec<_>>>()?;
-        let primary_bind_group_layout = GpuBindGroupLayoutDescriptor::new(0, binding_declarations)?;
-        let pipeline_layout =
-            gpu_pipeline_layout_for_pass(packet, flow, pass_id, &primary_bind_group_layout)?;
+            .filter_map(|entry| entry.refinement.clone())
+            .collect::<Vec<_>>();
+        refinements.extend(gpu_material_binding_refinements_for_pass(
+            packet, flow, pass_id,
+        )?);
         let render_pipeline_state =
             gpu_render_pipeline_state_for_pass(flow, pass_id, &color_formats, depth_format)?;
         let pipeline_descriptor = gpu_pipeline_descriptor_for_pass(
             program_source,
             pass_kind,
-            pipeline_layout,
             render_pipeline_state,
             specialization,
+            refinements,
         )?;
 
         let pipeline_key = FlowPassPipelineKey {
@@ -249,7 +212,7 @@ impl Renderer {
 
         let sampler = if resolved_entries
             .iter()
-            .any(|entry| entry.kind.class() == GpuBindingClass::Sampler)
+            .any(|entry| matches!(entry.resource, RuntimeBindingResource::Sampler))
         {
             Some(
                 self.flow_pipeline_cache
@@ -317,14 +280,11 @@ fn runtime_binding_value(
     value: &RuntimeBindingResolved,
     sampler: Option<&GpuSamplerHandle>,
 ) -> Result<GpuRuntimeBindingValue> {
-    let resource = match value.resource.as_ref() {
-        Some(RuntimeBindingResource::TextureView(handle)) => {
-            GpuRuntimeBindingResource::TextureView(GpuRuntimeTextureViewBinding::new(
-                handle.clone(),
-                GpuTextureViewDimension::D2,
-            ))
-        }
-        Some(RuntimeBindingResource::Buffer { handle, size }) => {
+    let resource = match &value.resource {
+        RuntimeBindingResource::TextureView(handle) => GpuRuntimeBindingResource::TextureView(
+            GpuRuntimeTextureViewBinding::new(handle.clone(), GpuTextureViewDimension::D2),
+        ),
+        RuntimeBindingResource::Buffer { handle, size } => {
             let size = NonZeroU64::new(*size).ok_or_else(|| {
                 anyhow::anyhow!(
                     "runtime binding '{}' resolved a zero-sized buffer, which cannot form a G4C2 binding range",
@@ -338,83 +298,36 @@ fn runtime_binding_value(
                 None,
             ))
         }
-        None if value.kind.class() == GpuBindingClass::Sampler => {
-            GpuRuntimeBindingResource::Sampler(
-                sampler
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "render-flow sampler binding '{}' lacks its G4C1 sampler handle",
-                            value.key
-                        )
-                    })?
-                    .clone(),
-            )
-        }
-        None => bail!(
-            "render-flow binding '{}' lacks a typed runtime resource before G4C2 realization",
-            value.key
+        RuntimeBindingResource::Sampler => GpuRuntimeBindingResource::Sampler(
+            sampler
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "render-flow sampler binding '{}' lacks its G4C1 sampler handle",
+                        value.key
+                    )
+                })?
+                .clone(),
         ),
     };
     Ok(GpuRuntimeBindingValue::new(value.key, [resource])?)
 }
 
-fn gpu_pipeline_layout_for_pass(
-    packet: &RendererPreparedPacket,
-    flow: &CompiledRenderFlowPlan,
-    pass_id: RenderPassId,
-    primary_bind_group_layout: &GpuBindGroupLayoutDescriptor,
-) -> Result<GpuPipelineLayoutDescriptor> {
-    let pass = flow
-        .execution
-        .passes
-        .iter()
-        .find(|pass| execution_pass_id(pass) == pass_id)
-        .ok_or_else(|| {
-            anyhow::anyhow!("pass '{pass_id}' is missing from compiled execution plan")
-        })?;
-
-    let material_group = gpu_material_bind_group_layout_for_pass(packet, pass)?;
-    let mut groups = Vec::new();
-    if primary_bind_group_layout.bindings().len() != 0 {
-        groups.push(primary_bind_group_layout.clone());
-    }
-    if let Some(material_group) = material_group {
-        groups.push(material_group);
-    }
-    Ok(GpuPipelineLayoutDescriptor::new(groups)?)
-}
-
-fn gpu_program_interface_for_layout(
-    layout: &GpuPipelineLayoutDescriptor,
-) -> Result<GpuProgramInterfaceDescriptor> {
-    Ok(GpuProgramInterfaceDescriptor::new(
-        layout.groups().flat_map(|group| group.bindings().cloned()),
-    )?)
-}
-
 fn gpu_pipeline_descriptor_for_pass(
     source: &GpuAdmittedProgramSource,
     pass_kind: FlowPassKind,
-    layout: GpuPipelineLayoutDescriptor,
     render_state: Option<GpuRenderPipelineStateDescriptor>,
     specialization: GpuSpecializationValueSet,
+    refinements: Vec<GpuBindingLayoutRefinement>,
 ) -> Result<FlowPassPipelineDescriptor> {
-    let interface = gpu_program_interface_for_layout(&layout)?;
     match pass_kind {
         FlowPassKind::Compute => {
             if render_state.is_some() {
                 bail!("compute pipeline descriptor cannot carry render state");
             }
             let entry_point = GpuEntryPointName::new("cs_main")?;
-            let program = GpuProgramDescriptor::new(
-                source.clone(),
-                interface.clone(),
-                [GpuEntryPointDescriptor::new(
-                    entry_point.clone(),
-                    GpuShaderStage::Compute,
-                    interface,
-                )],
-            )?;
+            let program =
+                GpuProgramDescriptor::new(source.clone(), [entry_point.clone()], refinements)?;
+            let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface())?;
             Ok(FlowPassPipelineDescriptor::Compute(
                 GpuComputePipelineDescriptor::new(
                     program,
@@ -433,20 +346,10 @@ fn gpu_pipeline_descriptor_for_pass(
             let fragment = GpuEntryPointName::new("fs_main")?;
             let program = GpuProgramDescriptor::new(
                 source.clone(),
-                interface.clone(),
-                [
-                    GpuEntryPointDescriptor::new(
-                        vertex.clone(),
-                        GpuShaderStage::Vertex,
-                        interface.clone(),
-                    ),
-                    GpuEntryPointDescriptor::new(
-                        fragment.clone(),
-                        GpuShaderStage::Fragment,
-                        interface,
-                    ),
-                ],
+                [vertex.clone(), fragment.clone()],
+                refinements,
             )?;
+            let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface())?;
             Ok(FlowPassPipelineDescriptor::Render(
                 GpuRenderPipelineDescriptor::new(
                     program,
@@ -462,32 +365,29 @@ fn gpu_pipeline_descriptor_for_pass(
     }
 }
 
-fn gpu_material_bind_group_layout_for_pass(
+fn gpu_material_binding_refinements_for_pass(
     packet: &RendererPreparedPacket,
-    pass: &CompiledPassExecutionPlan,
-) -> Result<Option<GpuBindGroupLayoutDescriptor>> {
+    flow: &CompiledRenderFlowPlan,
+    pass_id: RenderPassId,
+) -> Result<Vec<GpuBindingLayoutRefinement>> {
+    let pass = flow
+        .execution
+        .passes
+        .iter()
+        .find(|pass| execution_pass_id(pass) == pass_id)
+        .ok_or_else(|| {
+            anyhow::anyhow!("pass '{pass_id}' is missing from compiled execution plan")
+        })?;
     if !pass_consumes_material_resources(
         execution_pass_feature_id(pass),
         execution_pass_shader_reference(pass),
     ) {
-        return Ok(None);
+        return Ok(Vec::new());
     }
     let Some(material) = packet.prepared_material.as_ref() else {
-        return Ok(None);
+        return Ok(Vec::new());
     };
-
-    gpu_material_bind_group_layout(material)
-}
-
-fn gpu_material_bind_group_layout(
-    material: &crate::plugins::render::PreparedMaterialFeatureContribution,
-) -> Result<Option<GpuBindGroupLayoutDescriptor>> {
-    let declarations = gpu_material_binding_declarations(material)?;
-    if declarations.is_empty() {
-        return Ok(None);
-    }
-
-    Ok(Some(GpuBindGroupLayoutDescriptor::new(1, declarations)?))
+    gpu_material_binding_refinements(material)
 }
 
 fn sorted_material_texture_bindings(
@@ -588,57 +488,42 @@ fn gpu_material_runtime_binding_values_for_pass(
     Ok(values)
 }
 
-fn gpu_material_binding_declarations(
+fn gpu_material_binding_refinements(
     material: &crate::plugins::render::PreparedMaterialFeatureContribution,
-) -> Result<Vec<GpuBindingDeclaration>> {
+) -> Result<Vec<GpuBindingLayoutRefinement>> {
     let bindings = sorted_material_texture_bindings(material);
-
-    let visibility = GpuShaderStages::one(GpuShaderStage::Fragment);
-    let mut declarations = Vec::with_capacity(bindings.len() * 2);
+    let mut refinements = Vec::with_capacity(bindings.len() * 2);
     for binding in bindings {
-        let view_dimension = match binding.texture_kind {
-            crate::plugins::render::PreparedMaterialTextureKind::Texture2D => {
-                GpuTextureViewDimension::D2
-            }
-            crate::plugins::render::PreparedMaterialTextureKind::Texture3D => {
-                GpuTextureViewDimension::D3
-            }
-        };
-        declarations.push(GpuBindingDeclaration::new(
-            GpuBindingKey::try_new(
+        if binding.bind_group != 1 {
+            bail!(
+                "material runtime binding uses group {}, but the renderer material contract requires exact group 1",
+                binding.bind_group
+            );
+        }
+        refinements.push(
+            GpuBindingLayoutRefinement::new(GpuBindingKey::try_new(
                 u64::from(binding.bind_group),
                 u64::from(binding.texture_binding),
-            )?,
-            visibility,
-            GpuBindingKind::sampled_texture(
-                GpuTextureSampleClass::FloatFilterable,
-                view_dimension,
-                false,
-            )?,
-            None,
-            format!("material-texture-slot-{}", binding.resource_slot_index),
-            GpuBindingProvenance::new(
-                "render-material-resource-bind-group",
-                Some(format!("resource slot {}", binding.resource_slot_index)),
-            )?,
-        )?);
-        declarations.push(GpuBindingDeclaration::new(
-            GpuBindingKey::try_new(
+            )?)
+            .with_texture_sample_class(GpuTextureSampleClass::FloatFilterable),
+        );
+        refinements.push(
+            GpuBindingLayoutRefinement::new(GpuBindingKey::try_new(
                 u64::from(binding.bind_group),
                 u64::from(binding.sampler_binding),
-            )?,
-            visibility,
-            GpuBindingKind::sampler(GpuSamplerClass::Filtering),
-            None,
-            format!("material-sampler-slot-{}", binding.resource_slot_index),
-            GpuBindingProvenance::new(
-                "render-material-resource-bind-group",
-                Some(format!("resource slot {}", binding.resource_slot_index)),
-            )?,
-        )?);
+            )?)
+            .with_sampler_class(GpuSamplerClass::Filtering),
+        );
     }
-
-    Ok(declarations)
+    refinements.sort_by_key(GpuBindingLayoutRefinement::key);
+    if let Some(duplicate) = refinements
+        .windows(2)
+        .find(|pair| pair[0].key() == pair[1].key())
+        .map(|pair| pair[0].key())
+    {
+        bail!("material runtime bindings duplicate final GPU key {duplicate}");
+    }
+    Ok(refinements)
 }
 
 fn gpu_render_pipeline_state_for_pass(
@@ -832,43 +717,6 @@ fn gpu_vertex_format(value: RenderVertexFormat) -> GpuVertexFormat {
     }
 }
 
-fn gpu_shader_stages_from_wgpu(visibility: ShaderStages) -> Result<GpuShaderStages> {
-    let supported = ShaderStages::COMPUTE | ShaderStages::VERTEX | ShaderStages::FRAGMENT;
-    let unsupported = visibility.difference(supported);
-    if !unsupported.is_empty() {
-        bail!(
-            "current render binding visibility contains unsupported backend stages: {unsupported:?}"
-        );
-    }
-
-    Ok(GpuShaderStages::new(
-        [
-            (ShaderStages::COMPUTE, GpuShaderStage::Compute),
-            (ShaderStages::VERTEX, GpuShaderStage::Vertex),
-            (ShaderStages::FRAGMENT, GpuShaderStage::Fragment),
-        ]
-        .into_iter()
-        .filter_map(|(wgpu_stage, gpu_stage)| visibility.contains(wgpu_stage).then_some(gpu_stage)),
-    )?)
-}
-
-fn gpu_storage_buffer_access(access: CompiledStorageAccess) -> GpuStorageBufferAccess {
-    match access {
-        CompiledStorageAccess::ReadOnly => GpuStorageBufferAccess::ReadOnly,
-        CompiledStorageAccess::WriteOnly | CompiledStorageAccess::ReadWrite => {
-            GpuStorageBufferAccess::ReadWrite
-        }
-    }
-}
-
-fn gpu_storage_texture_access(access: CompiledStorageAccess) -> GpuStorageTextureAccess {
-    match access {
-        CompiledStorageAccess::ReadOnly => GpuStorageTextureAccess::ReadOnly,
-        CompiledStorageAccess::WriteOnly => GpuStorageTextureAccess::WriteOnly,
-        CompiledStorageAccess::ReadWrite => GpuStorageTextureAccess::ReadWrite,
-    }
-}
-
 fn gpu_texture_format_from_wgpu(format: TextureFormat) -> Result<GpuTextureFormat> {
     match format {
         TextureFormat::R8Unorm => Ok(GpuTextureFormat::R8Unorm),
@@ -947,44 +795,39 @@ mod tests {
     }
 
     #[test]
-    fn material_group_one_declarations_use_transported_compiler_coordinates() {
+    fn material_group_one_refinements_use_transported_compiler_coordinates() {
         let material = material_with_bindings(vec![texture_binding(91, 1, 31, 47)]);
 
-        let declarations =
-            gpu_material_binding_declarations(&material).expect("typed declarations should form");
-        let keys = declarations
-            .iter()
-            .map(|declaration| declaration.key())
-            .collect::<Vec<_>>();
-        assert_eq!(keys.len(), 2);
-        assert_eq!(keys[0].group(), 1);
-        assert_eq!(keys[0].binding(), 31);
-        assert_eq!(keys[1].group(), 1);
-        assert_eq!(keys[1].binding(), 47);
-
-        let layout = gpu_material_bind_group_layout(&material)
-            .expect("typed group-one layout should form")
-            .expect("one material binding should publish a layout");
-        assert_eq!(layout.group(), 1);
-        assert!(layout.binding(31).is_some());
-        assert!(layout.binding(47).is_some());
-        assert!(layout.binding(182).is_none());
+        let refinements =
+            gpu_material_binding_refinements(&material).expect("typed refinements should form");
+        assert_eq!(refinements.len(), 2);
+        assert_eq!(refinements[0].key().group(), 1);
+        assert_eq!(refinements[0].key().binding(), 31);
+        assert_eq!(
+            refinements[0].texture_sample_class(),
+            Some(GpuTextureSampleClass::FloatFilterable)
+        );
+        assert_eq!(refinements[1].key().group(), 1);
+        assert_eq!(refinements[1].key().binding(), 47);
+        assert_eq!(
+            refinements[1].sampler_class(),
+            Some(GpuSamplerClass::Filtering)
+        );
     }
 
     #[test]
-    fn material_group_one_layout_rejects_invalid_or_duplicate_transported_keys() {
+    fn material_group_one_refinements_reject_invalid_or_duplicate_transported_keys() {
         let invalid_group = material_with_bindings(vec![texture_binding(0, 2, 31, 47)]);
-        let error = gpu_material_bind_group_layout(&invalid_group).expect_err(
-            "material group-one layout must reject a non-group-one compiler coordinate",
-        );
-        assert!(error.to_string().contains("exact group"));
+        let error = gpu_material_binding_refinements(&invalid_group)
+            .expect_err("material refinements must reject a non-group-one compiler coordinate");
+        assert!(error.to_string().contains("exact group 1"));
 
         let duplicate = material_with_bindings(vec![
             texture_binding(0, 1, 31, 47),
             texture_binding(1, 1, 31, 47),
         ]);
-        let error = gpu_material_bind_group_layout(&duplicate)
-            .expect_err("material group-one layout must reject duplicate final GPU keys");
-        assert!(error.to_string().contains("DuplicateBindingKey"));
+        let error = gpu_material_binding_refinements(&duplicate)
+            .expect_err("material refinements must reject duplicate final GPU keys");
+        assert!(error.to_string().contains("duplicate final GPU key"));
     }
 }

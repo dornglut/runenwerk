@@ -143,24 +143,16 @@ fn admit_builtin_program_source(cache: &mut FlowPipelineArtifactCache, key: &str
 mod tests {
     use super::*;
     use crate::plugins::gpu::{
-        GpuBindingDeclaration, GpuEntryPointDescriptor, GpuEntryPointName, GpuProgramDescriptor,
-        GpuProgramInterfaceDescriptor, GpuShaderStage,
+        GpuBindingLayoutRefinement, GpuEntryPointName, GpuProgramDescriptor,
     };
 
     fn compute_program(source: GpuAdmittedProgramSource) -> GpuProgramDescriptor {
-        let interface =
-            GpuProgramInterfaceDescriptor::new(std::iter::empty::<GpuBindingDeclaration>())
-                .expect("empty test program interface should construct");
         let entry_point = GpuEntryPointName::new("cs_main")
             .expect("test compute entry-point name should be valid");
         GpuProgramDescriptor::new(
             source,
-            interface.clone(),
-            [GpuEntryPointDescriptor::new(
-                entry_point,
-                GpuShaderStage::Compute,
-                interface,
-            )],
+            [entry_point],
+            std::iter::empty::<GpuBindingLayoutRefinement>(),
         )
         .expect("test program descriptor should retain its admitted source")
     }

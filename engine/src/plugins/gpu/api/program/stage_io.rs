@@ -3,7 +3,8 @@ mod comparison;
 mod fact;
 mod signature;
 
-pub use builtin::*;
-pub use comparison::*;
+pub(crate) use builtin::*;
+pub(crate) use comparison::*;
 pub use fact::*;
-pub use signature::*;
+pub use signature::{GpuExpectedFragmentOutputSignature, GpuExpectedVertexInputSignature};
+pub(crate) use signature::{GpuObservedFragmentOutputSignature, GpuObservedVertexInputSignature};

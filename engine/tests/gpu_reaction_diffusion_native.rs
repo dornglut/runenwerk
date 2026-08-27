@@ -261,54 +261,12 @@ fn admitted_sources() -> ProgramSources {
     ProgramSources { compute, render }
 }
 
-fn binding_declaration(
-    binding: u32,
-    stage: GpuShaderStage,
-    access: GpuStorageBufferAccess,
-    semantic: &str,
-) -> GpuBindingDeclaration {
-    GpuBindingDeclaration::new(
-        GpuBindingKey::try_new(0, u64::from(binding)).unwrap(),
-        GpuShaderStages::one(stage),
-        GpuBindingKind::storage_buffer(access, false, None),
-        None,
-        semantic,
-        GpuBindingProvenance::new("reaction-diffusion-native-proof", None).unwrap(),
-    )
-    .unwrap()
-}
-
 fn compute_pipeline(source: &GpuAdmittedProgramSource) -> GpuComputePipelineDescriptor {
-    let interface = GpuProgramInterfaceDescriptor::new([
-        binding_declaration(
-            0,
-            GpuShaderStage::Compute,
-            GpuStorageBufferAccess::ReadOnly,
-            "state_in",
-        ),
-        binding_declaration(
-            1,
-            GpuShaderStage::Compute,
-            GpuStorageBufferAccess::ReadWrite,
-            "state_out",
-        ),
-        binding_declaration(
-            2,
-            GpuShaderStage::Compute,
-            GpuStorageBufferAccess::ReadOnly,
-            "params",
-        ),
-    ])
-    .unwrap();
     let entry = GpuEntryPointName::new("cs_main").unwrap();
     let program = GpuProgramDescriptor::new(
         source.clone(),
-        interface.clone(),
-        [GpuEntryPointDescriptor::new(
-            entry.clone(),
-            GpuShaderStage::Compute,
-            interface,
-        )],
+        [entry.clone()],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
     )
     .unwrap();
     let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
@@ -331,30 +289,12 @@ fn render_pipeline(
     source: &GpuAdmittedProgramSource,
     format: GpuTextureFormat,
 ) -> GpuRenderPipelineDescriptor {
-    let interface = GpuProgramInterfaceDescriptor::new([
-        binding_declaration(
-            0,
-            GpuShaderStage::Fragment,
-            GpuStorageBufferAccess::ReadOnly,
-            "state",
-        ),
-        binding_declaration(
-            1,
-            GpuShaderStage::Fragment,
-            GpuStorageBufferAccess::ReadOnly,
-            "params",
-        ),
-    ])
-    .unwrap();
     let vertex = GpuEntryPointName::new("vs_main").unwrap();
     let fragment = GpuEntryPointName::new("fs_main").unwrap();
     let program = GpuProgramDescriptor::new(
         source.clone(),
-        interface.clone(),
-        [
-            GpuEntryPointDescriptor::new(vertex.clone(), GpuShaderStage::Vertex, interface.clone()),
-            GpuEntryPointDescriptor::new(fragment.clone(), GpuShaderStage::Fragment, interface),
-        ],
+        [vertex.clone(), fragment.clone()],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
     )
     .unwrap();
     let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();

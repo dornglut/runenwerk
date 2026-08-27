@@ -1,8 +1,5 @@
 //! Private ready-plus-in-flight single-flight registries for G4C2 authority.
 
-use super::evidence::{
-    G4C2_NAGA_VALIDATION_PROFILE_REVISION, G4C2_WGPU_REALIZATION_COMPATIBILITY_REVISION,
-};
 use super::records::{
     BindGroupLayoutRealizationRecord, BindGroupRealizationRecord, PipelineLayoutRealizationRecord,
     ProgramRealizationRecord, StaticBindGroupValue, static_bind_group_values,
@@ -18,12 +15,13 @@ use std::hash::Hash;
 use std::sync::{Arc, Mutex};
 use tokio::sync::Notify;
 
+const G4C2_WGPU_REALIZATION_COMPATIBILITY_REVISION: u32 = 2;
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(super) struct ProgramRequestKey {
     affinity: GpuContextAffinity,
     descriptor: GpuProgramDescriptor,
     source_digest: GpuProgramSourceDigest,
-    naga_validation_profile_revision: u32,
     wgpu_realization_compatibility_revision: u32,
 }
 
@@ -33,7 +31,6 @@ impl ProgramRequestKey {
             affinity,
             source_digest: descriptor.source().digest(),
             descriptor,
-            naga_validation_profile_revision: G4C2_NAGA_VALIDATION_PROFILE_REVISION,
             wgpu_realization_compatibility_revision: G4C2_WGPU_REALIZATION_COMPATIBILITY_REVISION,
         }
     }
@@ -456,11 +453,11 @@ where
 mod tests {
     use super::*;
     use crate::plugins::gpu::{
-        GpuBindGroupLayoutDescriptor, GpuContextAffinity, GpuContextId, GpuDeviceGeneration,
-        GpuEntryPointDescriptor, GpuEntryPointName, GpuProgramBindingRealizationErrorCategory,
-        GpuProgramDescriptor, GpuProgramInterfaceDescriptor, GpuProgramSourceIdentity,
-        GpuProgramSourceKey, GpuProgramSourceOwnerId, GpuProgramSourceProvenance,
-        GpuProgramSourceRegistry, GpuProgramSourceRevision, GpuShaderStage,
+        GpuBindGroupLayoutDescriptor, GpuBindingLayoutRefinement, GpuContextAffinity, GpuContextId,
+        GpuDeviceGeneration, GpuEntryPointName, GpuProgramBindingRealizationErrorCategory,
+        GpuProgramDescriptor, GpuProgramSourceIdentity, GpuProgramSourceKey,
+        GpuProgramSourceOwnerId, GpuProgramSourceProvenance, GpuProgramSourceRegistry,
+        GpuProgramSourceRevision,
     };
     use core::future::Future;
     use core::task::{Context, Poll};
@@ -507,19 +504,11 @@ mod tests {
                     .expect("test source provenance"),
             )
             .expect("test source admission");
-        let interface = GpuProgramInterfaceDescriptor::new(std::iter::empty::<
-            crate::plugins::gpu::GpuBindingDeclaration,
-        >())
-        .expect("empty test interface");
         let entry = GpuEntryPointName::new("cs_main").expect("test entry point");
         let descriptor = GpuProgramDescriptor::new(
             source,
-            interface.clone(),
-            [GpuEntryPointDescriptor::new(
-                entry,
-                GpuShaderStage::Compute,
-                interface,
-            )],
+            [entry],
+            std::iter::empty::<GpuBindingLayoutRefinement>(),
         )
         .expect("test program descriptor");
         ProgramRequestKey::new(affinity(), descriptor)

@@ -1,19 +1,17 @@
 use super::G4C3_WGPU_PIPELINE_COMPATIBILITY_REVISION;
-use super::records::{RenderPipelineRealizationRecord, RenderStageIoEvidence};
+use super::records::RenderPipelineRealizationRecord;
 use crate::plugins::gpu::{
     GpuAlignmentFacts, GpuAlignmentKind, GpuCapabilityFeature, GpuContext, GpuContextAffinity,
     GpuFormatRole, GpuLimits, GpuPipelineLayoutDescriptor, GpuPipelineRealizationError,
     GpuPipelineRealizationErrorCategory, GpuProgramBindingRealizationError,
-    GpuProgramBindingRealizationErrorCategory, GpuRealizedProgram, GpuRenderPipelineDescriptor,
-    GpuShaderStage, GpuSpecializationValue, GpuTextureFormat, compare_fragment_output_signatures,
-    compare_vertex_input_signatures,
+    GpuProgramBindingRealizationErrorCategory, GpuRenderPipelineDescriptor, GpuShaderStage,
+    GpuSpecializationValue, GpuTextureFormat,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(super) struct RenderPipelineRequestKey {
     affinity: GpuContextAffinity,
     descriptor: GpuRenderPipelineDescriptor,
-    stage_io: RenderStageIoEvidence,
     admitted_format_roles: Vec<(GpuTextureFormat, GpuFormatRole)>,
     enabled_features: Vec<GpuCapabilityFeature>,
     device_limits: GpuLimits,
@@ -24,16 +22,11 @@ pub(super) struct RenderPipelineRequestKey {
 }
 
 impl RenderPipelineRequestKey {
-    pub(super) fn new(
-        context: &GpuContext,
-        descriptor: &GpuRenderPipelineDescriptor,
-        stage_io: RenderStageIoEvidence,
-    ) -> Self {
+    pub(super) fn new(context: &GpuContext, descriptor: &GpuRenderPipelineDescriptor) -> Self {
         let device = context.device_facts();
         Self {
             affinity: context.affinity(),
             descriptor: descriptor.clone(),
-            stage_io,
             admitted_format_roles: relevant_format_roles(descriptor),
             enabled_features: device.enabled_features().collect(),
             device_limits: device.device_limits().values(),
@@ -47,7 +40,6 @@ impl RenderPipelineRequestKey {
     pub(super) fn matches_record(&self, record: &RenderPipelineRealizationRecord) -> bool {
         record.affinity() == self.affinity
             && record.descriptor() == &self.descriptor
-            && record.stage_io == self.stage_io
             && record.program.affinity() == self.affinity
             && record.program.descriptor() == self.descriptor.program()
             && record.layout.affinity() == self.affinity
@@ -96,7 +88,7 @@ pub(super) fn validate_render_descriptor(
         return Err(GpuPipelineRealizationError::new(
             GpuPipelineRealizationErrorCategory::ProgramInterfaceMismatch,
             render_request_name(descriptor),
-            "the render pipeline layout does not match the program's explicit resource interface",
+            "the render pipeline layout does not match the admitted program resource interface",
         ));
     }
     descriptor
@@ -109,83 +101,6 @@ pub(super) fn validate_render_descriptor(
                 error.to_string(),
             )
         })
-}
-
-pub(super) fn validate_stage_io(
-    descriptor: &GpuRenderPipelineDescriptor,
-    program: &GpuRealizedProgram,
-) -> Result<RenderStageIoEvidence, GpuPipelineRealizationError> {
-    let expected_vertex = descriptor
-        .expected_vertex_input_signature()
-        .map_err(|error| stage_descriptor_error(descriptor, error.to_string()))?;
-    let observed_vertex = program
-        .record
-        .vertex_inputs()
-        .iter()
-        .find(|signature| signature.entry_point() == descriptor.entry_points().vertex())
-        .cloned()
-        .ok_or_else(|| {
-            GpuPipelineRealizationError::new(
-                GpuPipelineRealizationErrorCategory::ProgramInterfaceMismatch,
-                render_request_name(descriptor),
-                "the realized program has no observed vertex-input signature for the selected entry point",
-            )
-        })?;
-    compare_vertex_input_signatures(&expected_vertex, &observed_vertex).map_err(|error| {
-        GpuPipelineRealizationError::new(
-            GpuPipelineRealizationErrorCategory::PipelineStageIoMismatch,
-            render_request_name(descriptor),
-            error.to_string(),
-        )
-    })?;
-
-    let expected_fragment = descriptor
-        .expected_fragment_output_signature()
-        .map_err(|error| stage_descriptor_error(descriptor, error.to_string()))?;
-    let observed_fragment = match descriptor.entry_points().fragment() {
-        Some(fragment) => Some(
-            program
-                .record
-                .fragment_outputs()
-                .iter()
-                .find(|signature| signature.entry_point() == fragment)
-                .cloned()
-                .ok_or_else(|| {
-                    GpuPipelineRealizationError::new(
-                        GpuPipelineRealizationErrorCategory::ProgramInterfaceMismatch,
-                        render_request_name(descriptor),
-                        "the realized program has no observed fragment-output signature for the selected entry point",
-                    )
-                })?,
-        ),
-        None => None,
-    };
-    match (&expected_fragment, &observed_fragment) {
-        (Some(expected), Some(observed)) => {
-            compare_fragment_output_signatures(expected, observed).map_err(|error| {
-                GpuPipelineRealizationError::new(
-                    GpuPipelineRealizationErrorCategory::PipelineStageIoMismatch,
-                    render_request_name(descriptor),
-                    error.to_string(),
-                )
-            })?;
-        }
-        (None, None) => {}
-        _ => {
-            return Err(GpuPipelineRealizationError::new(
-                GpuPipelineRealizationErrorCategory::ProgramInterfaceMismatch,
-                render_request_name(descriptor),
-                "fragment-stage presence disagrees between the accepted descriptor and observed program evidence",
-            ));
-        }
-    }
-
-    Ok(RenderStageIoEvidence {
-        expected_vertex,
-        observed_vertex,
-        expected_fragment,
-        observed_fragment,
-    })
 }
 
 pub(super) fn validate_admitted_format_roles(
@@ -315,15 +230,4 @@ fn relevant_format_roles(
     roles.sort_unstable();
     roles.dedup();
     roles
-}
-
-fn stage_descriptor_error(
-    descriptor: &GpuRenderPipelineDescriptor,
-    detail: String,
-) -> GpuPipelineRealizationError {
-    GpuPipelineRealizationError::new(
-        GpuPipelineRealizationErrorCategory::PipelineDescriptorInvalid,
-        render_request_name(descriptor),
-        detail,
-    )
 }

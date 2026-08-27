@@ -2,7 +2,7 @@ use super::super::super::contract_diagnostics::{GpuProgramContractCause, GpuProg
 use super::key::GpuBindingKey;
 use super::kind::GpuBindingKind;
 use super::stage::GpuShaderStages;
-use core::num::NonZeroU32;
+use core::num::{NonZeroU32, NonZeroU64};
 
 const MAX_DIAGNOSTIC_FIELD_BYTES: usize = 256;
 
@@ -40,11 +40,16 @@ pub struct GpuBindingDeclaration {
     visibility: GpuShaderStages,
     kind: GpuBindingKind,
     array_count: Option<NonZeroU32>,
+    compiler_required_minimum_size: Option<NonZeroU64>,
     label: String,
     provenance: GpuBindingProvenance,
 }
 
 impl GpuBindingDeclaration {
+    /// Constructs an explicit typed layout declaration.
+    ///
+    /// The `GpuBindingKind` minimum-size field is host/layout policy. Compiler-required
+    /// shader minima are attached only by canonical-WGSL program admission.
     pub fn new(
         key: GpuBindingKey,
         visibility: GpuShaderStages,
@@ -53,13 +58,40 @@ impl GpuBindingDeclaration {
         label: impl Into<String>,
         provenance: GpuBindingProvenance,
     ) -> Result<Self, GpuProgramContractError> {
+        Self::from_program_analysis(key, visibility, kind, array_count, None, label, provenance)
+    }
+
+    pub(crate) fn from_program_analysis(
+        key: GpuBindingKey,
+        visibility: GpuShaderStages,
+        kind: GpuBindingKind,
+        array_count: Option<NonZeroU32>,
+        compiler_required_minimum_size: Option<NonZeroU64>,
+        label: impl Into<String>,
+        provenance: GpuBindingProvenance,
+    ) -> Result<Self, GpuProgramContractError> {
         let label = label.into();
         validate_diagnostic_text("binding label", &label)?;
+        if let (Some(host), Some(compiler)) =
+            (kind.minimum_buffer_size(), compiler_required_minimum_size)
+            && host < compiler
+        {
+            return Err(GpuProgramContractError::invalid(
+                "construct GPU binding declaration",
+                format!(
+                    "binding {key}: host_minimum={} compiler_minimum={}",
+                    host, compiler
+                ),
+                GpuProgramContractCause::BindingDeclarationInvalid,
+                "use a host/layout minimum at least as large as the compiler-required shader minimum",
+            ));
+        }
         Ok(Self {
             key,
             visibility,
             kind,
             array_count,
+            compiler_required_minimum_size,
             label,
             provenance,
         })
@@ -81,6 +113,10 @@ impl GpuBindingDeclaration {
         self.array_count
     }
 
+    pub const fn compiler_required_minimum_size(&self) -> Option<NonZeroU64> {
+        self.compiler_required_minimum_size
+    }
+
     pub fn label(&self) -> &str {
         self.label.as_str()
     }
@@ -96,6 +132,7 @@ impl PartialEq for GpuBindingDeclaration {
             && self.visibility == other.visibility
             && self.kind == other.kind
             && self.array_count == other.array_count
+            && self.compiler_required_minimum_size == other.compiler_required_minimum_size
     }
 }
 
@@ -109,12 +146,20 @@ impl PartialOrd for GpuBindingDeclaration {
 
 impl Ord for GpuBindingDeclaration {
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-        (&self.key, &self.visibility, &self.kind, &self.array_count).cmp(&(
-            &other.key,
-            &other.visibility,
-            &other.kind,
-            &other.array_count,
-        ))
+        (
+            &self.key,
+            &self.visibility,
+            &self.kind,
+            &self.array_count,
+            &self.compiler_required_minimum_size,
+        )
+            .cmp(&(
+                &other.key,
+                &other.visibility,
+                &other.kind,
+                &other.array_count,
+                &other.compiler_required_minimum_size,
+            ))
     }
 }
 
@@ -124,6 +169,7 @@ impl core::hash::Hash for GpuBindingDeclaration {
         self.visibility.hash(state);
         self.kind.hash(state);
         self.array_count.hash(state);
+        self.compiler_required_minimum_size.hash(state);
     }
 }
 

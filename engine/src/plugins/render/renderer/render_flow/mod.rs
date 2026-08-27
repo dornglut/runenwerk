@@ -9,7 +9,7 @@ use crate::plugins::render::graph::{
     CompiledBindingEntry, CompiledBuiltinImport, CompiledComputeExecutionPlan,
     CompiledCopyExecutionPlan, CompiledFixedStepRegion, CompiledPassBindings,
     CompiledPassExecutionPlan, CompiledPresentExecutionPlan, CompiledRenderFlowPlan,
-    CompiledResourceRef, CompiledStorageAccess, CompiledTargetPlan, RenderShaderReference,
+    CompiledResourceRef, CompiledTargetPlan, RenderShaderReference,
     preflight_prepared_render_frame,
 };
 use crate::plugins::render::inspect::{

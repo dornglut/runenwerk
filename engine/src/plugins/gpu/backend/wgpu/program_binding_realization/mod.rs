@@ -1,6 +1,5 @@
 //! Context/device-generation-bound G4C2 program, layout, and bind-group realization.
 
-mod evidence;
 mod lowering;
 mod records;
 mod registry;
@@ -167,7 +166,7 @@ impl GpuContext {
         self.backend.program_binding_realization.stats()
     }
 
-    /// Parses, validates, compares, and realizes one admitted canonical WGSL program.
+    /// Realizes one already-admitted canonical WGSL program for this device generation.
     pub async fn realize_program(
         &self,
         descriptor: &GpuProgramDescriptor,
@@ -343,16 +342,13 @@ impl GpuContext {
         &self,
         descriptor: &GpuProgramDescriptor,
     ) -> Result<Arc<ProgramRecord>, GpuProgramBindingRealizationError> {
-        let evidence = evidence::validate_and_normalize(descriptor)?;
         let label = descriptor.source().identity().diagnostic_label();
         let object = scoped_create(
             &self.backend.device,
             &self.backend.program_binding_realization,
             program_request_name(descriptor),
             GpuProgramBindingRealizationErrorCategory::ShaderValidationPathMismatch,
-            Some(
-                "direct Naga parse/validation and G4B interface agreement accepted the canonical WGSL",
-            ),
+            Some("canonical WGSL program admission accepted the source before private WGPU realization"),
             || {
                 self.backend
                     .device
@@ -369,9 +365,6 @@ impl GpuContext {
             affinity: self.affinity(),
             descriptor: descriptor.clone(),
             object,
-            observed_interface: evidence.observed_interface,
-            vertex_inputs: evidence.vertex_inputs,
-            fragment_outputs: evidence.fragment_outputs,
         }))
     }
 

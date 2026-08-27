@@ -277,27 +277,13 @@ fn admitted_compute_source() -> GpuAdmittedProgramSource {
 }
 
 fn dynamic_compute_pipeline() -> GpuComputePipelineDescriptor {
-    let binding = GpuBindingDeclaration::new(
-        GpuBindingKey::try_new(0, 0).unwrap(),
-        GpuShaderStages::one(GpuShaderStage::Compute),
-        GpuBindingKind::storage_buffer(GpuStorageBufferAccess::ReadWrite, true, NonZeroU64::new(4)),
-        None,
-        "values",
-        GpuBindingProvenance::new("g5b-noop-direct-compute", None).unwrap(),
-    )
-    .unwrap();
-    let interface = GpuProgramInterfaceDescriptor::new([binding]).unwrap();
     let entry = GpuEntryPointName::new("cs_main").unwrap();
-    let program = GpuProgramDescriptor::new(
-        admitted_compute_source(),
-        interface.clone(),
-        [GpuEntryPointDescriptor::new(
-            entry.clone(),
-            GpuShaderStage::Compute,
-            interface,
-        )],
-    )
-    .unwrap();
+    let refinement = GpuBindingLayoutRefinement::new(GpuBindingKey::try_new(0, 0).unwrap())
+        .with_dynamic_offset(true)
+        .with_host_minimum_size(NonZeroU64::new(4).unwrap());
+    let program =
+        GpuProgramDescriptor::new(admitted_compute_source(), [entry.clone()], [refinement])
+            .unwrap();
     let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
     let specialization = GpuSpecializationValueSet::new(
         GpuSpecializationSchema::new(std::iter::empty::<GpuSpecializationDeclaration>()).unwrap(),

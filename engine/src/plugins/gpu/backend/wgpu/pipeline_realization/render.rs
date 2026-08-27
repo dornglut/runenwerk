@@ -1,12 +1,12 @@
 use super::diagnostics::PipelineCacheFamily;
 use super::publication::{ensure_available, scoped_create};
-use super::records::{RenderPipelineRealizationRecord, RenderStageIoEvidence};
+use super::records::RenderPipelineRealizationRecord;
 use super::registry::{self, InFlightOutcome, Reservation};
 use super::render_lowering::{LoweredRenderPipeline, lower_render_pipeline};
 use super::render_validation::{
     RenderPipelineRequestKey, map_dependency_error, render_request_name,
     validate_admitted_format_roles, validate_dependency_affinity, validate_render_descriptor,
-    validate_stage_io, wgpu_specialization_constants,
+    wgpu_specialization_constants,
 };
 use crate::plugins::gpu::{
     GpuCapabilityAdmission, GpuContext, GpuPipelineRealizationError,
@@ -19,8 +19,8 @@ use wgpu::{FragmentState, PipelineCompilationOptions, RenderPipelineDescriptor, 
 pub(super) type RenderRecord = RenderPipelineRealizationRecord;
 
 impl GpuContext {
-    /// Realizes one complete accepted G4B render-pipeline request against exact G4C2 program and
-    /// pipeline-layout realizations after deterministic stage-IO and admitted-state validation.
+    /// Realizes one already-validated render-pipeline request against exact private program and
+    /// pipeline-layout realizations plus current device capability/limit facts.
     pub async fn realize_render_pipeline(
         &self,
         descriptor: &GpuRenderPipelineDescriptor,
@@ -64,7 +64,6 @@ impl GpuContext {
             ));
         }
 
-        let stage_io = validate_stage_io(descriptor, program)?;
         validate_admitted_format_roles(self, descriptor, &request)?;
         GpuCapabilityAdmission::evaluate(
             render_request_name(descriptor),
@@ -80,14 +79,15 @@ impl GpuContext {
             )
         })?;
 
-        // Complete private lowering also validates current device limits and attachment sample
-        // support before the WGPU creation call.
+        // Complete private lowering validates current device limits and attachment sample support
+        // before the WGPU creation call. Shader-stage IO was already validated by the logical
+        // render-pipeline descriptor against the admitted program.
         let lowered = lower_render_pipeline(self, descriptor, &request)?;
 
         loop {
             let request = render_request_name(descriptor);
             ensure_available(&self.backend.pipeline_realization, request.clone())?;
-            let key = RenderPipelineRequestKey::new(self, descriptor, stage_io.clone());
+            let key = RenderPipelineRequestKey::new(self, descriptor);
             let (reservation, observation) = registry::reserve(
                 &self.backend.pipeline_realization.render,
                 self.backend.pipeline_realization.max_records,
@@ -115,13 +115,7 @@ impl GpuContext {
                 },
                 Reservation::Owner(owner) => {
                     let outcome = self
-                        .realize_render_pipeline_owner(
-                            descriptor,
-                            program,
-                            layout,
-                            stage_io.clone(),
-                            &lowered,
-                        )
+                        .realize_render_pipeline_owner(descriptor, program, layout, &lowered)
                         .await;
                     return owner
                         .finish(outcome)
@@ -136,7 +130,6 @@ impl GpuContext {
         descriptor: &GpuRenderPipelineDescriptor,
         program: &GpuRealizedProgram,
         layout: &GpuRealizedPipelineLayout,
-        stage_io: RenderStageIoEvidence,
         lowered: &LoweredRenderPipeline,
     ) -> Result<Arc<RenderRecord>, GpuPipelineRealizationError> {
         let constants = wgpu_specialization_constants(descriptor);
@@ -190,7 +183,6 @@ impl GpuContext {
             object,
             program: Arc::clone(&program.record),
             layout: Arc::clone(&layout.record),
-            stage_io,
         }))
     }
 }
