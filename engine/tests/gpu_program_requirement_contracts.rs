@@ -1,18 +1,67 @@
-use core::num::NonZeroU32;
 use engine::plugins::gpu::{
-    GpuAdmittedProgramSource, GpuBindingDeclaration, GpuBindingKey, GpuBindingKind,
-    GpuBindingProvenance, GpuBlendMode, GpuCapabilityFeature, GpuCapabilityRequirement,
-    GpuCapabilityRequirements, GpuColorTargetStateDescriptor, GpuColorWriteMask,
-    GpuComputePipelineDescriptor, GpuEntryPointDescriptor, GpuEntryPointName,
-    GpuFragmentOutputStateDescriptor, GpuMultisampleStateDescriptor, GpuPipelineLayoutDescriptor,
-    GpuPrimitiveStateDescriptor, GpuProgramDescriptor, GpuProgramInterfaceDescriptor,
+    GpuAdmittedProgramSource, GpuBindingKey, GpuBindingLayoutRefinement, GpuBlendMode,
+    GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirements,
+    GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuComputePipelineDescriptor,
+    GpuEntryPointName, GpuFragmentOutputStateDescriptor, GpuMultisampleStateDescriptor,
+    GpuPipelineLayoutDescriptor, GpuPrimitiveStateDescriptor, GpuProgramDescriptor,
     GpuProgramSourceIdentity, GpuProgramSourceKey, GpuProgramSourceOwnerId,
     GpuProgramSourceProvenance, GpuProgramSourceRegistry, GpuProgramSourceRevision,
     GpuRenderEntryPoints, GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor,
-    GpuSamplerClass, GpuShaderStage, GpuShaderStages, GpuSpecializationSchema,
-    GpuSpecializationValueSet, GpuStorageBufferAccess, GpuStorageTextureAccess, GpuTextureFormat,
-    GpuTextureSampleClass, GpuTextureViewDimension, GpuVertexInputStateDescriptor,
+    GpuSamplerClass, GpuSpecializationSchema, GpuSpecializationValueSet, GpuTextureFormat,
+    GpuTextureSampleClass, GpuVertexInputStateDescriptor,
 };
+
+const FIXED_ARRAY_WGSL: &str = r#"
+struct UniformValue {
+    value: vec4<f32>,
+}
+
+struct StorageValue {
+    value: vec4<f32>,
+}
+
+@group(0) @binding(0)
+var<uniform> uniform_values: binding_array<UniformValue, 2>;
+
+@group(0) @binding(1)
+var<storage, read> storage_values: binding_array<StorageValue, 2>;
+
+@group(0) @binding(2)
+var sampled_textures: binding_array<texture_2d<f32>, 2>;
+
+@group(0) @binding(3)
+var storage_textures: binding_array<texture_storage_2d<rgba8unorm, write>, 2>;
+
+@group(0) @binding(4)
+var sampling_samplers: binding_array<sampler, 2>;
+
+fn resource_value() -> vec4<f32> {
+    let sampled = textureSampleLevel(
+        sampled_textures[0],
+        sampling_samplers[0],
+        vec2<f32>(0.5, 0.5),
+        0.0,
+    );
+    return uniform_values[0].value + storage_values[0].value + sampled;
+}
+
+@compute @workgroup_size(1)
+fn compute_main() {
+    textureStore(storage_textures[0], vec2<i32>(0, 0), resource_value());
+}
+
+@vertex
+fn vertex_main() -> @builtin(position) vec4<f32> {
+    return vec4<f32>(0.0, 0.0, 0.0, 1.0);
+}
+
+@fragment
+fn fragment_main() -> @location(0) vec4<f32> {
+    let value = resource_value();
+    textureStore(storage_textures[0], vec2<i32>(0, 0), value);
+    return value;
+}
+"#;
 
 fn admitted_source(key: &str) -> (GpuProgramSourceRegistry, GpuAdmittedProgramSource) {
     let identity = GpuProgramSourceIdentity::new(
@@ -25,7 +74,7 @@ fn admitted_source(key: &str) -> (GpuProgramSourceRegistry, GpuAdmittedProgramSo
     let source = registry
         .admit_wgsl(
             identity,
-            "@compute @workgroup_size(1) fn compute_main() {}\n@vertex fn vertex_main() -> @builtin(position) vec4f { return vec4f(); }\n@fragment fn fragment_main() -> @location(0) vec4f { return vec4f(); }",
+            FIXED_ARRAY_WGSL,
             GpuProgramSourceProvenance::new("gpu-program-requirement-test", None)
                 .expect("test source provenance should be valid"),
         )
@@ -33,79 +82,21 @@ fn admitted_source(key: &str) -> (GpuProgramSourceRegistry, GpuAdmittedProgramSo
     (registry, source)
 }
 
-fn fixed_array_declaration(
-    binding: u64,
-    stages: GpuShaderStages,
-    kind: GpuBindingKind,
-    label: &str,
-) -> GpuBindingDeclaration {
-    GpuBindingDeclaration::new(
-        GpuBindingKey::try_new(0, binding).unwrap(),
-        stages,
-        kind,
-        NonZeroU32::new(2),
-        label,
-        GpuBindingProvenance::new("gpu-program-requirement-test", None).unwrap(),
-    )
-    .unwrap()
-}
-
-fn fixed_array_interface(stages: GpuShaderStages) -> GpuProgramInterfaceDescriptor {
-    GpuProgramInterfaceDescriptor::new([
-        fixed_array_declaration(
-            0,
-            stages,
-            GpuBindingKind::uniform_buffer(false, None),
-            "uniform-array",
-        ),
-        fixed_array_declaration(
-            1,
-            stages,
-            GpuBindingKind::storage_buffer(GpuStorageBufferAccess::ReadOnly, false, None),
-            "storage-buffer-array",
-        ),
-        fixed_array_declaration(
-            2,
-            stages,
-            GpuBindingKind::sampled_texture(
-                GpuTextureSampleClass::FloatFilterable,
-                GpuTextureViewDimension::D2,
-                false,
-            )
-            .unwrap(),
-            "sampled-texture-array",
-        ),
-        fixed_array_declaration(
-            3,
-            stages,
-            GpuBindingKind::storage_texture(
-                GpuStorageTextureAccess::WriteOnly,
-                GpuTextureFormat::Rgba8Unorm,
-                GpuTextureViewDimension::D2,
-            )
-            .unwrap(),
-            "storage-texture-array",
-        ),
-        fixed_array_declaration(
-            4,
-            stages,
-            GpuBindingKind::sampler(GpuSamplerClass::Filtering),
-            "sampler-array",
-        ),
-    ])
-    .unwrap()
-}
-
 fn entry_point(name: &str) -> GpuEntryPointName {
     GpuEntryPointName::new(name).expect("test entry-point name should be valid")
 }
 
-fn entry(
-    name: &str,
-    stage: GpuShaderStage,
-    interface: GpuProgramInterfaceDescriptor,
-) -> GpuEntryPointDescriptor {
-    GpuEntryPointDescriptor::new(entry_point(name), stage, interface)
+fn binding_key(binding: u64) -> GpuBindingKey {
+    GpuBindingKey::try_new(0, binding).expect("test binding key should fit u32")
+}
+
+fn filtering_refinements() -> [GpuBindingLayoutRefinement; 2] {
+    [
+        GpuBindingLayoutRefinement::new(binding_key(2))
+            .with_texture_sample_class(GpuTextureSampleClass::FloatFilterable),
+        GpuBindingLayoutRefinement::new(binding_key(4))
+            .with_sampler_class(GpuSamplerClass::Filtering),
+    ]
 }
 
 fn specialization() -> GpuSpecializationValueSet {
@@ -134,23 +125,19 @@ fn assert_fixed_array_requirements(requirements: &GpuCapabilityRequirements) {
 #[test]
 fn compute_pipeline_inherits_program_interface_requirements() {
     let (_registry, source) = admitted_source("compute.program-requirements");
-    let interface = fixed_array_interface(GpuShaderStages::one(GpuShaderStage::Compute));
     let program = GpuProgramDescriptor::new(
         source,
-        interface.clone(),
-        [entry(
-            "compute_main",
-            GpuShaderStage::Compute,
-            interface.clone(),
-        )],
+        [entry_point("compute_main")],
+        filtering_refinements(),
     )
-    .unwrap();
+    .expect("compute program requirements should derive from canonical WGSL");
     assert_fixed_array_requirements(program.requirements());
+    let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
 
     let pipeline = GpuComputePipelineDescriptor::new(
         program,
         entry_point("compute_main"),
-        GpuPipelineLayoutDescriptor::from_interface(&interface).unwrap(),
+        layout,
         specialization(),
         GpuCapabilityRequirements::new(),
     )
@@ -161,17 +148,14 @@ fn compute_pipeline_inherits_program_interface_requirements() {
 #[test]
 fn render_pipeline_inherits_program_interface_requirements() {
     let (_registry, source) = admitted_source("render.program-requirements");
-    let interface = fixed_array_interface(GpuShaderStages::one(GpuShaderStage::Fragment));
     let program = GpuProgramDescriptor::new(
         source,
-        interface.clone(),
-        [
-            entry("vertex_main", GpuShaderStage::Vertex, interface.clone()),
-            entry("fragment_main", GpuShaderStage::Fragment, interface.clone()),
-        ],
+        [entry_point("vertex_main"), entry_point("fragment_main")],
+        filtering_refinements(),
     )
-    .unwrap();
+    .expect("render program requirements should derive from canonical WGSL");
     assert_fixed_array_requirements(program.requirements());
+    let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
 
     let color_target = GpuColorTargetStateDescriptor::new(
         GpuTextureFormat::Rgba8Unorm,
@@ -194,7 +178,7 @@ fn render_pipeline_inherits_program_interface_requirements() {
             Some(entry_point("fragment_main")),
         ),
         state,
-        GpuPipelineLayoutDescriptor::from_interface(&interface).unwrap(),
+        layout,
         specialization(),
         GpuCapabilityRequirements::new(),
     )
