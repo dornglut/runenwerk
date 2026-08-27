@@ -35,10 +35,8 @@ impl GpuPipelineConfiguration {
 
     fn resolve(
         self,
-    ) -> Result<
-        (GpuSpecializationValueSet, GpuCapabilityRequirements),
-        GpuProgramContractError,
-    > {
+    ) -> Result<(GpuSpecializationValueSet, GpuCapabilityRequirements), GpuProgramContractError>
+    {
         let specialization = match self.specialization {
             Some(specialization) => specialization,
             None => {
