@@ -4,8 +4,8 @@ use super::super::{
     GpuEntryPointName, GpuPipelineLayoutDescriptor, GpuProgramDescriptor, GpuShaderStage,
     GpuSpecializationValueSet,
 };
-use super::requirements::insert_pipeline_requirement;
 use super::GpuPipelineConfiguration;
+use super::requirements::insert_pipeline_requirement;
 use crate::plugins::gpu::{
     GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirements,
 };
