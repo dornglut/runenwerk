@@ -1,9 +1,9 @@
 use super::{
     GpuBufferDescriptor, GpuBufferHandle, GpuQuerySetDescriptor, GpuQuerySetHandle,
     GpuSamplerDescriptor, GpuSamplerHandle, GpuSubmissionPreparationError,
-    GpuSubmissionRejectionReason, GpuTextureDescriptor, GpuTextureHandle,
-    GpuTextureViewDescriptor, GpuTextureViewHandle, GpuWorkGraphError,
-    GpuWorkResourceIdAllocationError, GpuWorkResourceIdAllocator,
+    GpuSubmissionRejectionReason, GpuTextureDescriptor, GpuTextureHandle, GpuTextureViewDescriptor,
+    GpuTextureViewHandle, GpuWorkGraphError, GpuWorkResourceIdAllocationError,
+    GpuWorkResourceIdAllocator,
 };
 use core::fmt;
 
@@ -56,9 +56,7 @@ macro_rules! ordinary_handle_constructor {
             /// RunenGPU allocates the opaque process-local identity internally.
             /// Advanced callers that deliberately need one shared diagnostic
             /// owner scope may still use [`GpuWorkResourceIdAllocator`] directly.
-            pub fn new(
-                descriptor: $descriptor,
-            ) -> Result<Self, GpuWorkResourceIdAllocationError> {
+            pub fn new(descriptor: $descriptor) -> Result<Self, GpuWorkResourceIdAllocationError> {
                 let mut allocator = GpuWorkResourceIdAllocator::new();
                 allocator.$allocate(descriptor)
             }
@@ -67,13 +65,21 @@ macro_rules! ordinary_handle_constructor {
 }
 
 ordinary_handle_constructor!(GpuBufferHandle, GpuBufferDescriptor, allocate_buffer_handle);
-ordinary_handle_constructor!(GpuTextureHandle, GpuTextureDescriptor, allocate_texture_handle);
+ordinary_handle_constructor!(
+    GpuTextureHandle,
+    GpuTextureDescriptor,
+    allocate_texture_handle
+);
 ordinary_handle_constructor!(
     GpuTextureViewHandle,
     GpuTextureViewDescriptor,
     allocate_texture_view_handle
 );
-ordinary_handle_constructor!(GpuSamplerHandle, GpuSamplerDescriptor, allocate_sampler_handle);
+ordinary_handle_constructor!(
+    GpuSamplerHandle,
+    GpuSamplerDescriptor,
+    allocate_sampler_handle
+);
 ordinary_handle_constructor!(
     GpuQuerySetHandle,
     GpuQuerySetDescriptor,
