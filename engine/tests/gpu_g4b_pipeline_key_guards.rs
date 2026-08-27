@@ -150,16 +150,20 @@ fn binding_resolution_constructs_complete_descriptor_from_admitted_source() {
     );
     assert_eq!(
         bindings
-            .matches("GpuProgramInterfaceDescriptor::new(")
+            .matches("GpuPipelineLayoutDescriptor::from_interface(program.interface())?")
             .count(),
-        1,
-        "the admitted program interface must be derived once from the typed logical layout"
+        2,
+        "compute and render layouts must derive from the admitted program interface"
     );
     assert!(
         bindings.contains("pipeline_descriptor,"),
         "the complete generic descriptor must enter the renderer key exactly once"
     );
     for forbidden in [
+        "GpuProgramInterfaceDescriptor",
+        "GpuBindingDeclaration",
+        "GpuBindGroupLayoutDescriptor::new(",
+        "GpuPipelineLayoutDescriptor::new(",
         "program_source_identity: &GpuProgramSourceIdentity",
         "program_source_identity: program_source_identity.clone(),",
         "pipeline_variant: FlowPassPipelineVariant",
@@ -227,66 +231,71 @@ fn renderer_runtime_hashes_are_diagnostic_only() {
 }
 
 #[test]
-fn complete_pipeline_layout_is_typed_before_pipeline_descriptor_publication() {
+fn admitted_program_interface_owns_pipeline_layout_before_descriptor_publication() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let flow_keys = read(&manifest_dir, FLOW_KEYS);
     let bindings = read(&manifest_dir, BINDINGS);
     let execute = read(&manifest_dir, EXECUTE);
     let render_flow_mod = read(&manifest_dir, RENDER_FLOW_MOD);
 
-    assert!(
-        bindings.contains("kind: GpuBindingKind"),
-        "resolved primary bindings must retain typed G4B binding kinds"
-    );
+    for required in [
+        "key: GpuBindingKey",
+        "refinement: Option<GpuBindingLayoutRefinement>",
+        "GpuBindingLayoutRefinement::new(*key)",
+        ".with_texture_sample_class(GpuTextureSampleClass::FloatFilterable)",
+        ".with_sampler_class(GpuSamplerClass::Filtering)",
+        "gpu_material_binding_refinements_for_pass(",
+    ] {
+        assert!(
+            bindings.contains(required),
+            "renderer binding resolution must retain typed keys and sparse host/layout policy: {required}"
+        );
+    }
     assert_eq!(
         bindings
-            .matches("GpuBindGroupLayoutDescriptor::new(0, binding_declarations)?")
+            .matches("GpuPipelineLayoutDescriptor::from_interface(program.interface())?")
             .count(),
-        1,
-        "binding resolution must construct one complete typed group-0 layout"
+        2,
+        "compute and render pipeline layouts must derive from admitted program interfaces"
     );
-    assert_eq!(
-        bindings
-            .matches("GpuBindGroupLayoutDescriptor::new(1, declarations)?")
-            .count(),
-        1,
-        "material resource declarations must normalize to one typed group-1 layout"
-    );
-    assert_eq!(
-        bindings
-            .matches("GpuPipelineLayoutDescriptor::new(groups)?")
-            .count(),
-        1,
-        "binding resolution must construct one complete logical typed pipeline layout"
-    );
-    assert!(
-        bindings.contains("gpu_program_interface_for_layout(&layout)?"),
-        "complete program-interface truth must derive from the accepted typed layout"
-    );
+    for forbidden in [
+        "GpuProgramInterfaceDescriptor",
+        "GpuBindingDeclaration",
+        "GpuBindingKind",
+        "GpuBindGroupLayoutDescriptor::new(",
+        "GpuPipelineLayoutDescriptor::new(",
+        "gpu_program_interface_for_layout(",
+    ] {
+        assert!(
+            !bindings.contains(forbidden),
+            "renderer must not regain caller-authored shader-interface/layout authority through {forbidden}"
+        );
+    }
     for required in [
         "GpuBindingKey::try_new(",
         "u64::from(binding.bind_group)",
         "u64::from(binding.texture_binding)",
         "u64::from(binding.sampler_binding)",
-        "GpuBindingKind::sampled_texture(",
         "GpuTextureSampleClass::FloatFilterable",
-        "GpuBindingKind::sampler(GpuSamplerClass::Filtering)",
+        "GpuSamplerClass::Filtering",
         "GpuTextureViewDimension::D2",
         "GpuTextureViewDimension::D3",
     ] {
         assert!(
             bindings.contains(required),
-            "material group-1 layout is not normalized through the expected typed G4B vocabulary: {required}"
+            "material runtime/refinement lowering must consume compiler-published typed coordinates: {required}"
         );
     }
     for required in [
         "context.realize_program(pipeline_key.pipeline_descriptor.program())",
         "context.realize_pipeline_layout(pipeline_key.pipeline_descriptor.layout())",
+        "GpuRuntimeBindingSet::new(",
+        "pipeline_key.pipeline_descriptor.layout().clone()",
         "runtime_bindings,",
     ] {
         assert!(
             bindings.contains(required),
-            "G4C2 descriptor realization must retain the complete typed binding contract: {required}"
+            "G4C2 descriptor realization/runtime validation must consume the admitted program-derived layout: {required}"
         );
     }
     for retired_physical_sidecar in [
@@ -362,13 +371,13 @@ fn material_shader_binding_coordinates_have_one_compiler_allocation_owner() {
         .map(|(production, _)| production)
         .expect("Material Lab handoff must keep its test module separate from production code");
     let handoff_compact = compact(handoff_production);
-    let g4b_lowerer = section(
+    let g4b_refinements = section(
         &g4b,
-        "fn gpu_material_binding_declarations(",
+        "fn gpu_material_binding_refinements(",
         "fn gpu_render_pipeline_state_for_pass(",
         BINDINGS,
     );
-    let g4b_compact = compact(g4b_lowerer);
+    let g4b_compact = compact(g4b_refinements);
     let material_prepare = section(
         &renderer_prepare,
         "fn prepare_material_gpu_resources(",
@@ -410,11 +419,17 @@ fn material_shader_binding_coordinates_have_one_compiler_allocation_owner() {
     );
     assert!(
         g4b_compact.contains(
-            "GpuBindingKey::try_new(u64::from(binding.bind_group),u64::from(binding.texture_binding),)?"
+            "GpuBindingLayoutRefinement::new(GpuBindingKey::try_new(u64::from(binding.bind_group),u64::from(binding.texture_binding),)?)"
         ) && g4b_compact.contains(
-            "GpuBindingKey::try_new(u64::from(binding.bind_group),u64::from(binding.sampler_binding),)?"
+            "GpuBindingLayoutRefinement::new(GpuBindingKey::try_new(u64::from(binding.bind_group),u64::from(binding.sampler_binding),)?)"
         ),
-        "G4B group-one declarations must construct typed keys from transported compiler coordinates"
+        "renderer material refinements must target exact compiler-published binding coordinates"
+    );
+    assert!(
+        g4b_compact.contains(
+            ".with_texture_sample_class(GpuTextureSampleClass::FloatFilterable)"
+        ) && g4b_compact.contains(".with_sampler_class(GpuSamplerClass::Filtering)"),
+        "renderer material policy must remain sparse filterability/sampler refinements"
     );
     for forbidden in [
         "material_wgpu_binding_indices",
