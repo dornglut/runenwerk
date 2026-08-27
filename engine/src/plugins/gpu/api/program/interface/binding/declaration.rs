@@ -58,15 +58,7 @@ impl GpuBindingDeclaration {
         label: impl Into<String>,
         provenance: GpuBindingProvenance,
     ) -> Result<Self, GpuProgramContractError> {
-        Self::from_program_analysis(
-            key,
-            visibility,
-            kind,
-            array_count,
-            None,
-            label,
-            provenance,
-        )
+        Self::from_program_analysis(key, visibility, kind, array_count, None, label, provenance)
     }
 
     pub(crate) fn from_program_analysis(
@@ -86,7 +78,10 @@ impl GpuBindingDeclaration {
         {
             return Err(GpuProgramContractError::invalid(
                 "construct GPU binding declaration",
-                format!("binding {key}: host_minimum={} compiler_minimum={}", host, compiler),
+                format!(
+                    "binding {key}: host_minimum={} compiler_minimum={}",
+                    host, compiler
+                ),
                 GpuProgramContractCause::BindingDeclarationInvalid,
                 "use a host/layout minimum at least as large as the compiler-required shader minimum",
             ));
