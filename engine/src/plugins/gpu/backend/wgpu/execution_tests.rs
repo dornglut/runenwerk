@@ -281,12 +281,9 @@ fn dynamic_compute_pipeline() -> GpuComputePipelineDescriptor {
     let refinement = GpuBindingLayoutRefinement::new(GpuBindingKey::try_new(0, 0).unwrap())
         .with_dynamic_offset(true)
         .with_host_minimum_size(NonZeroU64::new(4).unwrap());
-    let program = GpuProgramDescriptor::new(
-        admitted_compute_source(),
-        [entry.clone()],
-        [refinement],
-    )
-    .unwrap();
+    let program =
+        GpuProgramDescriptor::new(admitted_compute_source(), [entry.clone()], [refinement])
+            .unwrap();
     let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
     let specialization = GpuSpecializationValueSet::new(
         GpuSpecializationSchema::new(std::iter::empty::<GpuSpecializationDeclaration>()).unwrap(),
