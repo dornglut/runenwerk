@@ -19,10 +19,7 @@ fn vertex_main() -> @builtin(position) vec4<f32> {
 }
 "#;
 
-fn source(
-    key: &str,
-    wgsl: &str,
-) -> (GpuProgramSourceRegistry, GpuAdmittedProgramSource) {
+fn source(key: &str, wgsl: &str) -> (GpuProgramSourceRegistry, GpuAdmittedProgramSource) {
     let identity = GpuProgramSourceIdentity::new(
         GpuProgramSourceOwnerId::allocate().expect("test source owner should allocate"),
         GpuProgramSourceKey::new(key).expect("test source key should be valid"),
