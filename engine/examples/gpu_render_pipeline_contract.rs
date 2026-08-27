@@ -79,8 +79,6 @@ fn main() {
         gpu::GpuMultisampleStateDescriptor::default(),
     )
     .expect("render state should construct");
-    let layout = gpu::GpuPipelineLayoutDescriptor::from_interface(program.interface())
-        .expect("layout should derive from the admitted program interface");
     let _pipeline = gpu::GpuRenderPipelineDescriptor::new(
         program,
         gpu::GpuRenderEntryPoints::new(
@@ -88,20 +86,11 @@ fn main() {
             Some(entry_point("fragment_main")),
         ),
         state,
-        layout,
-        empty_specialization(),
-        gpu::GpuCapabilityRequirements::new(),
+        gpu::GpuPipelineConfiguration::default(),
     )
     .expect("render pipeline should validate compiler-observed stage IO and construct");
 }
 
 fn entry_point(name: &str) -> gpu::GpuEntryPointName {
     gpu::GpuEntryPointName::new(name).expect("entry-point name should be valid")
-}
-
-fn empty_specialization() -> gpu::GpuSpecializationValueSet {
-    let schema =
-        gpu::GpuSpecializationSchema::new([]).expect("empty specialization schema should be valid");
-    gpu::GpuSpecializationValueSet::new(schema, [])
-        .expect("empty specialization value set should be valid")
 }
