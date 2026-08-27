@@ -2,8 +2,9 @@ use engine::plugins::gpu::{
     GpuAdmittedProgramSource, GpuBindingKey, GpuBindingLayoutRefinement, GpuCapabilityFeature,
     GpuCapabilityRequirement, GpuEntryPointName, GpuProgramContractCause, GpuProgramDescriptor,
     GpuProgramSourceIdentity, GpuProgramSourceKey, GpuProgramSourceOwnerId,
-    GpuProgramSourceProvenance, GpuProgramSourceRegistry, GpuProgramSourceRevision, GpuSamplerClass,
-    GpuShaderStage, GpuShaderStages, GpuStorageBufferAccess, GpuTextureSampleClass,
+    GpuProgramSourceProvenance, GpuProgramSourceRegistry, GpuProgramSourceRevision,
+    GpuSamplerClass, GpuShaderStage, GpuShaderStages, GpuStorageBufferAccess,
+    GpuTextureSampleClass,
 };
 use std::num::NonZeroU64;
 
@@ -310,8 +311,7 @@ fn compiler_and_host_buffer_minimums_remain_distinct_and_weaker_host_policy_reje
     let error = GpuProgramDescriptor::new(
         source,
         [entry("fixed_values")],
-        [GpuBindingLayoutRefinement::new(key(0))
-            .with_host_minimum_size(weaker_host_minimum)],
+        [GpuBindingLayoutRefinement::new(key(0)).with_host_minimum_size(weaker_host_minimum)],
     )
     .expect_err("host layout minimum cannot be weaker than the compiler requirement");
     assert_eq!(
@@ -324,8 +324,7 @@ fn compiler_and_host_buffer_minimums_remain_distinct_and_weaker_host_policy_reje
     let program = GpuProgramDescriptor::new(
         source,
         [entry("fixed_values")],
-        [GpuBindingLayoutRefinement::new(key(0))
-            .with_host_minimum_size(stronger_host_minimum)],
+        [GpuBindingLayoutRefinement::new(key(0)).with_host_minimum_size(stronger_host_minimum)],
     )
     .expect("stronger host layout minimum should remain independent policy");
     let binding = program.interface().binding(key(0)).unwrap();
@@ -360,8 +359,7 @@ fn ambiguous_float_texture_and_sampler_require_explicit_layout_policy() {
         [
             GpuBindingLayoutRefinement::new(key(0))
                 .with_texture_sample_class(GpuTextureSampleClass::FloatFilterable),
-            GpuBindingLayoutRefinement::new(key(1))
-                .with_sampler_class(GpuSamplerClass::Filtering),
+            GpuBindingLayoutRefinement::new(key(1)).with_sampler_class(GpuSamplerClass::Filtering),
         ],
     )
     .expect("explicit texture and sampler layout policy should complete the effective interface");
@@ -395,8 +393,7 @@ fn buffer_only_refinements_reject_on_non_buffer_bindings() {
             GpuBindingLayoutRefinement::new(key(0))
                 .with_dynamic_offset(true)
                 .with_texture_sample_class(GpuTextureSampleClass::FloatFilterable),
-            GpuBindingLayoutRefinement::new(key(1))
-                .with_sampler_class(GpuSamplerClass::Filtering),
+            GpuBindingLayoutRefinement::new(key(1)).with_sampler_class(GpuSamplerClass::Filtering),
         ],
     )
     .expect_err("dynamic offsets apply only to compiler-derived buffer bindings");
