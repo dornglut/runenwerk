@@ -12,6 +12,8 @@ use engine::plugins::gpu::{
 };
 
 const FIXED_ARRAY_WGSL: &str = r#"
+enable wgpu_binding_array;
+
 struct UniformValue {
     value: vec4<f32>,
 }
