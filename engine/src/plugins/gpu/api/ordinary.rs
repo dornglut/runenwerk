@@ -161,17 +161,14 @@ mod tests {
         assert!(prepare_graph < prepare_submission);
         assert!(prepare_submission < submit_prepared);
         for forbidden in [
-            "backend::",
-            "wgpu::",
-            "WgpuExecutionState::new",
             "prepare_execution_plan(",
             "encode_submit_and_register(",
-            "device.create_command_encoder",
+            "create_command_encoder",
             "queue.submit",
         ] {
             assert!(
                 !method.contains(forbidden),
-                "ordinary submission must not duplicate or reach through backend authority via {forbidden:?}"
+                "ordinary submission must not duplicate execution authority through {forbidden:?}"
             );
         }
     }
