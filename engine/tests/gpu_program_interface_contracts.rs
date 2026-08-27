@@ -1,7 +1,7 @@
 use engine::plugins::gpu::{
-    GpuBindingDeclaration, GpuBindingKey, GpuBindingKind, GpuBindingProvenance,
-    GpuEntryPointName, GpuProgramContractCause, GpuProgramInterfaceDescriptor, GpuShaderStage,
-    GpuShaderStages, GpuStorageBufferAccess,
+    GpuBindingDeclaration, GpuBindingKey, GpuBindingKind, GpuBindingProvenance, GpuEntryPointName,
+    GpuProgramContractCause, GpuProgramInterfaceDescriptor, GpuShaderStage, GpuShaderStages,
+    GpuStorageBufferAccess,
 };
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
