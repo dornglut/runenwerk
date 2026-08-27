@@ -1,16 +1,16 @@
 use engine::plugins::gpu::{
     GpuBindGroupLayoutDescriptor, GpuBindingDeclaration, GpuBindingKey, GpuBindingKind,
-    GpuBindingLayoutRefinement, GpuBindingProvenance, GpuBufferDescriptor,
-    GpuBufferInitialization, GpuBufferUsage, GpuBufferUsages, GpuCapabilityProfile, GpuContext,
-    GpuContextDescriptor, GpuContextRequestError, GpuContextRequestErrorCategory,
-    GpuEntryPointName, GpuMemoryIntent, GpuPipelineLayoutDescriptor,
-    GpuProgramBindingRealizationErrorCategory, GpuProgramBindingRealizationPolicy,
-    GpuProgramContractCause, GpuProgramDescriptor, GpuProgramSourceIdentity, GpuProgramSourceKey,
-    GpuProgramSourceOwnerId, GpuProgramSourceProvenance, GpuProgramSourceRegistry,
-    GpuProgramSourceRevision, GpuRealizationPolicies, GpuReconstruction, GpuResourceCommon,
-    GpuResourceLabel, GpuResourceLifetime, GpuResourceProvenance, GpuRuntimeBindingResource,
-    GpuRuntimeBindingValue, GpuRuntimeBufferBinding, GpuShaderStage, GpuShaderStages,
-    GpuStorageBufferAccess, GpuWorkResourceIdAllocator,
+    GpuBindingLayoutRefinement, GpuBindingProvenance, GpuBufferDescriptor, GpuBufferInitialization,
+    GpuBufferUsage, GpuBufferUsages, GpuCapabilityProfile, GpuContext, GpuContextDescriptor,
+    GpuContextRequestError, GpuContextRequestErrorCategory, GpuEntryPointName, GpuMemoryIntent,
+    GpuPipelineLayoutDescriptor, GpuProgramBindingRealizationErrorCategory,
+    GpuProgramBindingRealizationPolicy, GpuProgramContractCause, GpuProgramDescriptor,
+    GpuProgramSourceIdentity, GpuProgramSourceKey, GpuProgramSourceOwnerId,
+    GpuProgramSourceProvenance, GpuProgramSourceRegistry, GpuProgramSourceRevision,
+    GpuRealizationPolicies, GpuReconstruction, GpuResourceCommon, GpuResourceLabel,
+    GpuResourceLifetime, GpuResourceProvenance, GpuRuntimeBindingResource, GpuRuntimeBindingValue,
+    GpuRuntimeBufferBinding, GpuShaderStage, GpuShaderStages, GpuStorageBufferAccess,
+    GpuWorkResourceIdAllocator,
 };
 use std::num::{NonZeroU64, NonZeroUsize};
 use std::sync::Mutex;
