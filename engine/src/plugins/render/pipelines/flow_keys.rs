@@ -138,11 +138,11 @@ mod tests {
         GpuAdmittedProgramSource, GpuBindingLayoutRefinement, GpuBlendMode,
         GpuCapabilityRequirements, GpuColorTargetStateDescriptor, GpuColorWriteMask,
         GpuEntryPointName, GpuFragmentOutputStateDescriptor, GpuMultisampleStateDescriptor,
-        GpuPrimitiveStateDescriptor, GpuProgramSourceIdentity, GpuProgramSourceKey,
-        GpuProgramSourceOwnerId, GpuProgramSourceProvenance, GpuProgramSourceRegistry,
-        GpuProgramSourceRevision, GpuRenderEntryPoints, GpuSpecializationDeclaration,
-        GpuSpecializationEntry, GpuSpecializationKey, GpuSpecializationSchema,
-        GpuSpecializationValue, GpuTextureFormat, GpuVertexAttribute,
+        GpuPipelineConfiguration, GpuPrimitiveStateDescriptor, GpuProgramSourceIdentity,
+        GpuProgramSourceKey, GpuProgramSourceOwnerId, GpuProgramSourceProvenance,
+        GpuProgramSourceRegistry, GpuProgramSourceRevision, GpuRenderEntryPoints,
+        GpuSpecializationDeclaration, GpuSpecializationEntry, GpuSpecializationKey,
+        GpuSpecializationSchema, GpuSpecializationValue, GpuTextureFormat, GpuVertexAttribute,
         GpuVertexBufferLayoutDescriptor, GpuVertexFormat, GpuVertexInputStateDescriptor,
         GpuVertexStepMode,
     };
@@ -231,10 +231,6 @@ fn fs_main() -> @location(0) vec4f {
             .unwrap()
     }
 
-    fn empty_specialization() -> GpuSpecializationValueSet {
-        GpuSpecializationValueSet::new(GpuSpecializationSchema::new([]).unwrap(), []).unwrap()
-    }
-
     fn specialization(name: &str, value: GpuSpecializationValue) -> GpuSpecializationValueSet {
         let key = GpuSpecializationKey::new(name).unwrap();
         let schema = GpuSpecializationSchema::new([GpuSpecializationDeclaration::new(
@@ -290,14 +286,11 @@ fn fs_main() -> @location(0) vec4f {
             std::iter::empty::<GpuBindingLayoutRefinement>(),
         )
         .unwrap();
-        let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
         let descriptor = GpuRenderPipelineDescriptor::new(
             program,
             GpuRenderEntryPoints::new(vertex, Some(fragment)),
             state,
-            layout,
-            empty_specialization(),
-            GpuCapabilityRequirements::new(),
+            GpuPipelineConfiguration::default(),
         )
         .unwrap();
         FlowPassPipelineKey {
@@ -311,7 +304,7 @@ fn fs_main() -> @location(0) vec4f {
 
     fn compute_key(
         source: GpuAdmittedProgramSource,
-        specialization: GpuSpecializationValueSet,
+        specialization: Option<GpuSpecializationValueSet>,
     ) -> FlowPassPipelineKey {
         let entry_point = GpuEntryPointName::new("cs_main").unwrap();
         let program = GpuProgramDescriptor::new(
@@ -320,13 +313,10 @@ fn fs_main() -> @location(0) vec4f {
             std::iter::empty::<GpuBindingLayoutRefinement>(),
         )
         .unwrap();
-        let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
         let descriptor = GpuComputePipelineDescriptor::new(
             program,
             entry_point,
-            layout,
-            specialization,
-            GpuCapabilityRequirements::new(),
+            GpuPipelineConfiguration::new(specialization, None),
         )
         .unwrap();
         FlowPassPipelineKey {
@@ -385,14 +375,14 @@ fn fs_main() -> @location(0) vec4f {
     #[test]
     fn compute_descriptor_preserves_typed_specialization_identity() {
         let source = admitted_source("compute-shader", COMPUTE_WGSL);
-        let default = compute_key(source.clone(), empty_specialization());
+        let default = compute_key(source.clone(), None);
         let typed = compute_key(
             source.clone(),
-            specialization("COUNT", GpuSpecializationValue::U32(4)),
+            Some(specialization("COUNT", GpuSpecializationValue::U32(4))),
         );
         let signed = compute_key(
             source,
-            specialization("COUNT", GpuSpecializationValue::I32(4)),
+            Some(specialization("COUNT", GpuSpecializationValue::I32(4))),
         );
 
         assert_ne!(default, typed);
