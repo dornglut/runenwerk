@@ -81,16 +81,12 @@ fn admitted_render_source() -> GpuAdmittedProgramSource {
 }
 
 fn render_pipeline() -> GpuRenderPipelineDescriptor {
-    let interface = GpuProgramInterfaceDescriptor::new([]).unwrap();
     let vertex = GpuEntryPointName::new("vs_main").unwrap();
     let fragment = GpuEntryPointName::new("fs_main").unwrap();
     let program = GpuProgramDescriptor::new(
         admitted_render_source(),
-        interface.clone(),
-        [
-            GpuEntryPointDescriptor::new(vertex.clone(), GpuShaderStage::Vertex, interface.clone()),
-            GpuEntryPointDescriptor::new(fragment.clone(), GpuShaderStage::Fragment, interface),
-        ],
+        [vertex.clone(), fragment.clone()],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
     )
     .unwrap();
     let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface()).unwrap();
