@@ -12,7 +12,12 @@ const PIPELINE_REALIZATION: &str =
 const LOGICAL_OPERATIONS: &str = "src/plugins/render/renderer/render_flow/logical_operations.rs";
 const PIPELINE_CACHE: &str = "src/plugins/render/renderer/pipeline_cache.rs";
 const PROGRAM_SOURCES: &str = "src/plugins/render/renderer/render_flow/program_sources.rs";
+const PROGRAM_MODULE: &str = "src/plugins/gpu/api/program.rs";
 const PROGRAM_ANALYSIS: &str = "src/plugins/gpu/api/program/analysis.rs";
+const PROGRAM_DESCRIPTOR: &str = "src/plugins/gpu/api/program/descriptor.rs";
+const PROGRAM_ENTRY_POINT: &str = "src/plugins/gpu/api/program/entry_point.rs";
+const PROGRAM_INTERFACE: &str = "src/plugins/gpu/api/program/interface.rs";
+const PROGRAM_STAGE_IO: &str = "src/plugins/gpu/api/program/stage_io.rs";
 const PROGRAM_REALIZATION: &str = "src/plugins/gpu/backend/wgpu/program_binding_realization/mod.rs";
 const PROGRAM_REALIZATION_RECORDS: &str =
     "src/plugins/gpu/backend/wgpu/program_binding_realization/records.rs";
@@ -96,6 +101,62 @@ fn renderer_shader_binding_identity_is_explicit_and_never_vector_derived() {
         !primitives.contains("fn stage_binding_resources("),
         "primitive runtime proof must not reconstruct shader bindings from read/write vector order"
     );
+}
+
+#[test]
+fn public_program_api_has_one_compiler_derived_authority() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let program_module = read(&manifest_dir, PROGRAM_MODULE);
+    let descriptor = read(&manifest_dir, PROGRAM_DESCRIPTOR);
+    let entry_point = read(&manifest_dir, PROGRAM_ENTRY_POINT);
+    let interface = read(&manifest_dir, PROGRAM_INTERFACE);
+    let stage_io = read(&manifest_dir, PROGRAM_STAGE_IO);
+
+    assert!(program_module.contains("mod analysis;"));
+    assert!(!program_module.contains("pub mod analysis;"));
+    assert!(!program_module.contains("pub use analysis"));
+
+    let constructor = section(
+        &descriptor,
+        "    pub fn new(",
+        "    pub fn source(",
+        PROGRAM_DESCRIPTOR,
+    );
+    assert!(constructor.contains(
+        "selected_entry_points: impl IntoIterator<Item = GpuEntryPointName>"
+    ));
+    assert!(constructor.contains(
+        "refinements: impl IntoIterator<Item = GpuBindingLayoutRefinement>"
+    ));
+    assert!(!constructor.contains("GpuProgramInterfaceDescriptor"));
+    assert!(!constructor.contains("GpuEntryPointDescriptor"));
+
+    let entry_descriptor = entry_point
+        .split_once("impl GpuEntryPointDescriptor {")
+        .map(|(_, tail)| tail)
+        .expect("entry-point inspection record implementation must remain present");
+    assert!(entry_descriptor.contains("pub(crate) const fn derived("));
+    assert!(!entry_descriptor.contains("pub fn new("));
+
+    assert!(!interface.contains("mod observed;"));
+    assert!(!interface.contains("mod comparison;"));
+    assert!(stage_io.contains("pub(crate) use signature::{GpuObserved"));
+    assert!(!stage_io.contains("pub use signature::{GpuObserved"));
+    assert!(!stage_io.contains("pub use builtin::*"));
+    assert!(!stage_io.contains("pub use comparison::*"));
+
+    for (path, source) in [
+        (PROGRAM_MODULE, &program_module),
+        (PROGRAM_DESCRIPTOR, &descriptor),
+        (PROGRAM_ENTRY_POINT, &entry_point),
+        (PROGRAM_INTERFACE, &interface),
+        (PROGRAM_STAGE_IO, &stage_io),
+    ] {
+        assert!(
+            !source.contains("naga::") && !source.contains("wgpu::"),
+            "{path} must not leak Naga or WGPU through the public program API surface"
+        );
+    }
 }
 
 #[test]
