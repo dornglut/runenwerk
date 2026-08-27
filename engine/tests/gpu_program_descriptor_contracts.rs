@@ -58,6 +58,8 @@ fn sample_color() -> @location(0) vec4<f32> {
 "#;
 
 const BINDING_ARRAY_WGSL: &str = r#"
+enable wgpu_binding_array;
+
 @group(0) @binding(0)
 var sampled_textures: binding_array<texture_2d<u32>, 3>;
 
