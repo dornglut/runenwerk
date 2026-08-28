@@ -101,7 +101,6 @@ fn dynamic_compute_pipeline() -> GpuComputePipelineDescriptor {
 }
 
 fn dynamic_compute_bindings(
-    context: &GpuContext,
     pipeline: &GpuComputePipelineDescriptor,
     buffer: &GpuBufferHandle,
     dynamic_offset: u64,
@@ -118,25 +117,17 @@ fn dynamic_compute_bindings(
         )],
     )
     .unwrap();
-    let facts = context
-        .runtime_binding_device_facts()
-        .expect("admitted compute context must publish dynamic binding facts");
-    GpuRuntimeBindingSet::new(pipeline.layout().clone(), [binding], &facts).unwrap()
+    GpuRuntimeBindingSet::new(pipeline.layout().clone(), [binding]).unwrap()
 }
 
 fn dynamic_compute_operation(
-    context: &GpuContext,
     pipeline: &GpuComputePipelineDescriptor,
     buffer: &GpuBufferHandle,
     dynamic_offset: u64,
     x: u32,
 ) -> GpuComputeOperation {
-    let bindings = dynamic_compute_bindings(context, pipeline, buffer, dynamic_offset);
-    let dispatch = GpuDispatchIntent::direct(
-        GpuDispatchSize::new(x, 1, 1).unwrap(),
-        context.device_facts().workload_budget().limits(),
-    )
-    .unwrap();
+    let bindings = dynamic_compute_bindings(pipeline, buffer, dynamic_offset);
+    let dispatch = GpuDispatchIntent::direct(GpuDispatchSize::new(x, 1, 1).unwrap());
     GpuComputeOperation::new(pipeline.clone(), bindings, dispatch).unwrap()
 }
 
@@ -220,9 +211,9 @@ fn dynamic_compute_graph(
     let readback = GpuReadbackOperation::new(whole.into(), readback_id).unwrap();
 
     let pipeline = dynamic_compute_pipeline();
-    let first = dynamic_compute_operation(context, &pipeline, &values_buffer, 0, 1);
-    let second = dynamic_compute_operation(context, &pipeline, &values_buffer, dynamic_stride, 1);
-    let zero = dynamic_compute_operation(context, &pipeline, &values_buffer, 0, 0);
+    let first = dynamic_compute_operation(&pipeline, &values_buffer, 0, 1);
+    let second = dynamic_compute_operation(&pipeline, &values_buffer, dynamic_stride, 1);
+    let zero = dynamic_compute_operation(&pipeline, &values_buffer, 0, 0);
 
     let name = "native dynamic compute";
     let mut builder = GpuWorkFragmentBuilder::new(label(name), provenance(name));
@@ -1087,7 +1078,6 @@ fn timestamp_resolve_buffer(
 }
 
 fn timestamp_query_graph(
-    context: &GpuContext,
     destination_offset: u64,
     include_readback: bool,
 ) -> (GpuPreparedWorkGraph, Option<GpuReadbackId>) {
@@ -1127,7 +1117,7 @@ fn timestamp_query_graph(
     .unwrap();
 
     let timestamps = GpuTimestampWrites::new(&query_set, Some(0), Some(1)).unwrap();
-    let compute = dynamic_compute_operation(context, &dynamic_compute_pipeline(), &values, 0, 0)
+    let compute = dynamic_compute_operation(&dynamic_compute_pipeline(), &values, 0, 0)
         .with_timestamp_writes(timestamps);
     let resolve = GpuQueryResolveOperation::new(
         &query_set,
@@ -1199,7 +1189,7 @@ fn native_zero_dispatch_timestamp_writes_and_resolve_execute_without_extra_stagi
         1,
     );
     let context = native_timestamp_context(policy);
-    let (graph, readback_id) = timestamp_query_graph(&context, 0, true);
+    let (graph, readback_id) = timestamp_query_graph(0, true);
     let readback_id = readback_id.unwrap();
 
     let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
@@ -1240,7 +1230,7 @@ fn native_zero_dispatch_timestamp_writes_and_resolve_execute_without_extra_stagi
 #[ignore = "requires a real Vulkan fallback adapter; executed by RunenGPU Native Conformance CI"]
 fn native_query_resolve_rejects_private_wgpu_offset_alignment_before_acceptance() {
     let context = native_timestamp_context(GpuExecutionPolicy::default());
-    let (graph, _) = timestamp_query_graph(&context, 8, false);
+    let (graph, _) = timestamp_query_graph(8, false);
 
     let error = pollster::block_on(context.prepare_submission(graph))
         .expect_err("misaligned WGPU query resolve must reject during preparation");
