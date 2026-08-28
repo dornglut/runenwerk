@@ -1962,7 +1962,7 @@ async fn prepare_compute_operation(
             .await
             .map_err(preparation_program_binding_failure)?;
         let realization = context
-            .realize_bind_group(&layout, group.values().cloned())
+            .realize_validated_bind_group(&layout, group.clone())
             .await
             .map_err(preparation_program_binding_failure)?;
         bind_groups.push(PreparedBindGroup {
@@ -2531,7 +2531,7 @@ fn encode_submit_and_register(
                 let staging_buffer = staging.readbacks.get(&index).ok_or_else(|| {
                     GpuSubmissionFailure::new(
                         GpuSubmissionFailureKind::InternalInvariant,
-                        "materialized readback staging is absent during encoding",
+                        "materialized upload staging is absent during encoding",
                     )
                 })?;
                 encoder.copy_buffer_to_buffer(
@@ -2541,251 +2541,37 @@ fn encode_submit_and_register(
                     0,
                     *size,
                 );
-                segment_readbacks.push((*readback_id, Arc::clone(staging_buffer)));
             }
-            PreparedExecutionOperation::TextureReadback {
-                id: readback_id,
-                source,
-                region,
-                staging: staging_layout,
-                ..
-            } => {
-                let staging_buffer = staging.readbacks.get(&index).ok_or_else(|| {
-                    GpuSubmissionFailure::new(
-                        GpuSubmissionFailureKind::InternalInvariant,
-                        "materialized texture readback staging is absent during encoding",
-                    )
-                })?;
-                encoder.copy_texture_to_buffer(
-                    texture_copy_info(source, region, surface_guard.as_deref())?,
-                    TexelCopyBufferInfo {
-                        buffer: staging_buffer,
-                        layout: staging_layout.buffer_layout(),
-                    },
-                    texture_copy_extent(region),
-                );
-                segment_readbacks.push((*readback_id, Arc::clone(staging_buffer)));
-            }
-            PreparedExecutionOperation::Present { source } => {
-                let next = new_submission_encoder(backend);
-                let current = std::mem::replace(&mut encoder, next);
-                segments.push(EncodedSegment {
-                    command_buffer: current.finish(),
-                    readback_staging: std::mem::take(&mut segment_readbacks),
-                    present_after: Some(source.clone()),
-                });
-            }
-        }
-    }
-
-    segments.push(EncodedSegment {
-        command_buffer: encoder.finish(),
-        readback_staging: segment_readbacks,
-        present_after: None,
-    });
-
-    if let Some(fault) = backend.health.terminal_fault() {
-        return Err(failure_from_device_fault(&fault));
-    }
-
-    let segment_count = segments.len();
-    for (index, segment) in segments.into_iter().enumerate() {
-        register_readback_callbacks(
-            execution,
-            submission,
-            &segment.readback_staging,
-            &segment.command_buffer,
-        );
-        if index + 1 == segment_count {
-            register_submission_completion(execution, submission, &segment.command_buffer);
-        }
-        backend.queue.submit([segment.command_buffer]);
-        if index == 0 && !plan.mark_initial_content_queued() {
-            backend.health.mark_scoped_internal(
-                "prepared initial-content state changed outside serialized submission acceptance",
-            );
-            if let Some(fault) = backend.health.terminal_fault() {
-                return Err(failure_from_device_fault(&fault));
-            }
-            return Err(GpuSubmissionFailure::new(
-                GpuSubmissionFailureKind::InternalInvariant,
-                "prepared initial-content state could not be marked queued after physical submission",
-            ));
-        }
-        if let Some(surface) = segment.present_after {
-            let guard = surface_guard.as_deref_mut().ok_or_else(|| {
-                GpuSubmissionFailure::new(
-                    GpuSubmissionFailureKind::InternalInvariant,
-                    "prepared Present reached physical submission without the validated G7 lease guard",
-                )
-            })?;
-            guard
-                .present(&backend.queue, surface.lease(), surface.resource())
-                .map_err(GpuSubmissionFailure::from_surface_lease)?;
-        }
-        if let Some(fault) = backend.health.terminal_fault() {
-            return Err(failure_from_device_fault(&fault));
+            _ => {}
         }
     }
     Ok(())
 }
 
-fn texture_copy_info<'a>(
-    texture: &'a PreparedTexture,
-    region: &GpuTextureCopyRegion,
-    surface_guard: Option<&'a WgpuSurfaceLeaseGuard<'_>>,
-) -> Result<TexelCopyTextureInfo<'a>, GpuSubmissionFailure> {
-    let origin = region.origin();
-    Ok(TexelCopyTextureInfo {
-        texture: texture.resolve(surface_guard)?,
-        mip_level: region.mip_level(),
-        origin: Origin3d {
-            x: origin.x(),
-            y: origin.y(),
-            z: origin.z(),
-        },
-        aspect: map_texture_aspect(region.aspect()),
-    })
-}
-
-fn texture_copy_extent(region: &GpuTextureCopyRegion) -> Extent3d {
-    let extent = region.extent();
-    Extent3d {
-        width: extent.width(),
-        height: extent.height(),
-        depth_or_array_layers: extent.depth_or_layers(),
-    }
-}
-
-fn materialize_readback(
-    bytes: Vec<u8>,
-    metadata: ReadbackMetadata,
-) -> Result<GpuReadbackBytes, GpuSubmissionFailure> {
-    match metadata {
-        ReadbackMetadata::Buffer(metadata) => GpuReadbackBytes::from_normalized_bytes(
-            &metadata.label,
-            bytes,
-            metadata.layout,
-            None,
-            metadata.provenance,
-        )
-        .map_err(|error| {
-            GpuSubmissionFailure::new(
-                GpuSubmissionFailureKind::InternalInvariant,
-                error.to_string(),
-            )
-        }),
-        ReadbackMetadata::Texture(metadata) => {
-            let normalized = metadata.staging.normalize_mapped(&bytes)?;
-            GpuReadbackBytes::from_normalized_bytes(
-                &metadata.label,
-                normalized,
-                metadata.layout,
-                Some(metadata.format),
-                metadata.provenance,
-            )
-            .map_err(|error| {
-                GpuSubmissionFailure::new(
-                    GpuSubmissionFailureKind::InternalInvariant,
-                    error.to_string(),
-                )
-            })
-        }
-    }
-}
-
-fn align_up(value: u64, alignment: u64) -> Option<u64> {
-    if alignment == 0 {
-        return None;
-    }
-    let remainder = value % alignment;
-    if remainder == 0 {
-        Some(value)
-    } else {
-        value.checked_add(alignment - remainder)
-    }
-}
-
-fn texture_staging_preparation_error(detail: &'static str) -> GpuSubmissionPreparationError {
-    GpuSubmissionPreparationError::new(GpuSubmissionPreparationErrorKind::InternalInvariant, detail)
-}
-
-fn texture_staging_submission_error(detail: &'static str) -> GpuSubmissionFailure {
-    GpuSubmissionFailure::new(GpuSubmissionFailureKind::InternalInvariant, detail)
-}
-
-fn submission_program_binding_failure(
+fn preparation_program_binding_failure(
     error: GpuProgramBindingRealizationError,
-) -> GpuSubmissionFailure {
-    let kind = match error.category() {
-        GpuProgramBindingRealizationErrorCategory::BackendResourceExhaustion => {
-            GpuSubmissionFailureKind::BackendResourceExhaustion
-        }
-        GpuProgramBindingRealizationErrorCategory::ContextOrDeviceUnavailableOrLost => {
-            GpuSubmissionFailureKind::ContextOrDeviceUnavailableOrLost
-        }
-        GpuProgramBindingRealizationErrorCategory::ForeignContext
-        | GpuProgramBindingRealizationErrorCategory::StaleDeviceGeneration
-        | GpuProgramBindingRealizationErrorCategory::ExecutionAuthorityViolation => {
-            GpuSubmissionFailureKind::InternalInvariant
-        }
-        _ => GpuSubmissionFailureKind::BackendValidation,
+) -> GpuSubmissionPreparationError {
+    let kind = if error.category()
+        == GpuProgramBindingRealizationErrorCategory::ContextOrDeviceUnavailableOrLost
+    {
+        GpuSubmissionPreparationErrorKind::ContextOrDeviceUnavailableOrLost
+    } else {
+        GpuSubmissionPreparationErrorKind::ProgramBindingRealizationFailed
     };
-    GpuSubmissionFailure::new(kind, error.to_string())
+    GpuSubmissionPreparationError::new(kind, error.to_string())
 }
 
-fn submission_pipeline_failure(error: GpuPipelineRealizationError) -> GpuSubmissionFailure {
-    let kind = match error.category() {
-        GpuPipelineRealizationErrorCategory::BackendResourceExhaustion => {
-            GpuSubmissionFailureKind::BackendResourceExhaustion
-        }
-        GpuPipelineRealizationErrorCategory::ContextOrDeviceUnavailableOrLost => {
-            GpuSubmissionFailureKind::ContextOrDeviceUnavailableOrLost
-        }
-        GpuPipelineRealizationErrorCategory::ForeignContext
-        | GpuPipelineRealizationErrorCategory::StaleDeviceGeneration
-        | GpuPipelineRealizationErrorCategory::ExecutionAuthorityViolation => {
-            GpuSubmissionFailureKind::InternalInvariant
-        }
-        _ => GpuSubmissionFailureKind::BackendValidation,
+fn preparation_pipeline_failure(
+    error: GpuPipelineRealizationError,
+) -> GpuSubmissionPreparationError {
+    let kind = if error.category()
+        == GpuPipelineRealizationErrorCategory::ContextOrDeviceUnavailableOrLost
+    {
+        GpuSubmissionPreparationErrorKind::ContextOrDeviceUnavailableOrLost
+    } else {
+        GpuSubmissionPreparationErrorKind::PipelineRealizationFailed
     };
-    GpuSubmissionFailure::new(kind, error.to_string())
-}
-
-fn register_readback_callbacks(
-    execution: &Arc<WgpuExecutionState>,
-    submission: GpuSubmissionId,
-    readback_staging: &[(GpuReadbackId, Arc<Buffer>)],
-    command_buffer: &wgpu::CommandBuffer,
-) {
-    for (readback, staging) in readback_staging {
-        let events = Arc::clone(&execution.events);
-        let readback = *readback;
-        command_buffer.map_buffer_on_submit(staging, MapMode::Read, .., move |result| {
-            events
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .push_back(ExecutionEvent::ReadbackMapped {
-                    submission,
-                    readback,
-                    result: result.map_err(|error| error.to_string()),
-                });
-        });
-    }
-}
-
-fn register_submission_completion(
-    execution: &Arc<WgpuExecutionState>,
-    submission: GpuSubmissionId,
-    command_buffer: &wgpu::CommandBuffer,
-) {
-    let events = Arc::clone(&execution.events);
-    command_buffer.on_submitted_work_done(move || {
-        events
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .push_back(ExecutionEvent::SubmissionCompleted(submission));
-    });
+    GpuSubmissionPreparationError::new(kind, error.to_string())
 }
 
 fn cleanup_submission_if_terminal(inner: &mut ExecutionInner, id: GpuSubmissionId) {
