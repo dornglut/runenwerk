@@ -36,11 +36,7 @@ impl GpuTextureCopyRegion {
             0,
             GpuTextureOrigin::new(0, 0, 0),
             GpuTextureAspect::All,
-            GpuCopyExtent::new(
-                extent.width(),
-                extent.height(),
-                extent.depth_or_layers(),
-            )?,
+            GpuCopyExtent::new(extent.width(), extent.height(), extent.depth_or_layers())?,
         )
     }
 }
