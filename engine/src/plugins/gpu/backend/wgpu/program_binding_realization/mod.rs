@@ -287,11 +287,6 @@ impl GpuContext {
         values: impl IntoIterator<Item = GpuRuntimeBindingValue>,
     ) -> Result<GpuRealizedBindGroup, GpuProgramBindingRealizationError> {
         let request = format!("bind group group={}", layout.descriptor().group());
-        super::health::validate_program_affinity(
-            self.affinity(),
-            request.clone(),
-            layout.affinity(),
-        )?;
         let validated = GpuValidatedBindGroupBindings::new(layout.descriptor().clone(), values)
             .and_then(|validated| {
                 validated
@@ -301,10 +296,34 @@ impl GpuContext {
             .map_err(|error| {
                 GpuProgramBindingRealizationError::new(
                     GpuProgramBindingRealizationErrorCategory::RuntimeBindingIncompatible,
-                    request.clone(),
+                    request,
                     error.to_string(),
                 )
             })?;
+        self.realize_validated_bind_group(layout, validated).await
+    }
+
+    /// Realizes a bind group whose logical and admitted-device facts were already validated by
+    /// canonical contextual submission preparation. This is crate-private execution plumbing, not
+    /// an unchecked public realization path.
+    pub(super) async fn realize_validated_bind_group(
+        &self,
+        layout: &GpuRealizedBindGroupLayout,
+        validated: GpuValidatedBindGroupBindings,
+    ) -> Result<GpuRealizedBindGroup, GpuProgramBindingRealizationError> {
+        let request = format!("bind group group={}", layout.descriptor().group());
+        super::health::validate_program_affinity(
+            self.affinity(),
+            request.clone(),
+            layout.affinity(),
+        )?;
+        if validated.layout() != layout.descriptor() {
+            return Err(GpuProgramBindingRealizationError::new(
+                GpuProgramBindingRealizationErrorCategory::RuntimeBindingIncompatible,
+                request,
+                "validated runtime binding layout does not match the realized bind-group layout",
+            ));
+        }
         let values = validated.values().cloned().collect::<Vec<_>>();
         loop {
             self.backend
