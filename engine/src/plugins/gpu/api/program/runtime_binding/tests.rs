@@ -108,6 +108,24 @@ fn runtime_buffer_value(
 }
 
 #[test]
+fn whole_buffer_binding_is_exact_explicit_whole_range_without_dynamic_offset() {
+    let buffer = storage_buffer(64);
+    let whole = GpuRuntimeBufferBinding::whole(&buffer);
+    let explicit = GpuRuntimeBufferBinding::new(
+        buffer.clone(),
+        0,
+        NonZeroU64::new(buffer.descriptor().size_bytes()).unwrap(),
+        None,
+    );
+
+    assert_eq!(whole, explicit);
+    assert_eq!(whole.handle(), &buffer);
+    assert_eq!(whole.offset(), 0);
+    assert_eq!(whole.size().get(), buffer.descriptor().size_bytes());
+    assert_eq!(whole.dynamic_offset(), None);
+}
+
+#[test]
 fn runtime_bindings_validate_logical_usage_range_and_layout_then_admitted_alignment() {
     let layout = GpuBindGroupLayoutDescriptor::new(0, [declaration(None)]).unwrap();
     let validated = GpuValidatedBindGroupBindings::new(layout, [runtime_value(16)])
