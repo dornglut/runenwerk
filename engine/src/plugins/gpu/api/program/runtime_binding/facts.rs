@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 /// Device-dependent facts required by backend-neutral runtime binding validation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuRuntimeBindingDeviceFacts {
-    uniform_buffer_offset_alignment: NonZeroU64,
-    storage_buffer_offset_alignment: NonZeroU64,
+    uniform_buffer_offset_alignment: Option<NonZeroU64>,
+    storage_buffer_offset_alignment: Option<NonZeroU64>,
     max_bind_groups: u32,
     max_dynamic_uniform_buffers_per_pipeline_layout: u32,
     max_dynamic_storage_buffers_per_pipeline_layout: u32,
@@ -15,8 +15,8 @@ pub struct GpuRuntimeBindingDeviceFacts {
 
 impl GpuRuntimeBindingDeviceFacts {
     pub fn new(
-        uniform_buffer_offset_alignment: NonZeroU64,
-        storage_buffer_offset_alignment: NonZeroU64,
+        uniform_buffer_offset_alignment: Option<NonZeroU64>,
+        storage_buffer_offset_alignment: Option<NonZeroU64>,
         max_bind_groups: u32,
         max_dynamic_uniform_buffers_per_pipeline_layout: u32,
         max_dynamic_storage_buffers_per_pipeline_layout: u32,
@@ -32,11 +32,11 @@ impl GpuRuntimeBindingDeviceFacts {
         }
     }
 
-    pub const fn uniform_buffer_offset_alignment(&self) -> NonZeroU64 {
+    pub const fn uniform_buffer_offset_alignment(&self) -> Option<NonZeroU64> {
         self.uniform_buffer_offset_alignment
     }
 
-    pub const fn storage_buffer_offset_alignment(&self) -> NonZeroU64 {
+    pub const fn storage_buffer_offset_alignment(&self) -> Option<NonZeroU64> {
         self.storage_buffer_offset_alignment
     }
 
