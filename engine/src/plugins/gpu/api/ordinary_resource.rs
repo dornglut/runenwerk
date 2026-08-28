@@ -256,14 +256,8 @@ mod tests {
             GpuResourceLifetime::Transient,
             GpuResourceProvenance::new(parent_label.clone(), Some(1), None),
         );
-        let extent = GpuTextureExtent::new(
-            &parent_label,
-            GpuTextureDimension::D2,
-            64,
-            32,
-            1,
-        )
-        .unwrap();
+        let extent =
+            GpuTextureExtent::new(&parent_label, GpuTextureDimension::D2, 64, 32, 1).unwrap();
         let usages =
             GpuTextureUsages::new(&parent_label, [GpuTextureUsage::ColorAttachment]).unwrap();
         let texture_descriptor = GpuTextureDescriptor::new(
@@ -282,8 +276,8 @@ mod tests {
             .allocate_texture_handle(texture_descriptor)
             .unwrap();
 
-        let error = GpuTextureViewDescriptor::ordinary_full_owned("imported view", &texture)
-            .unwrap_err();
+        let error =
+            GpuTextureViewDescriptor::ordinary_full_owned("imported view", &texture).unwrap_err();
 
         assert_eq!(
             error.cause(),
