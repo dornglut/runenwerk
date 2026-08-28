@@ -104,6 +104,22 @@ impl GpuRuntimeBindingValue {
         Ok(Self { key, resources })
     }
 
+    /// Binds one complete buffer at an explicit shader group/binding location.
+    ///
+    /// This is the ordinary singleton-buffer case. Buffer subranges, dynamic offsets,
+    /// arrays, textures, and samplers remain available through [`Self::new`].
+    pub fn whole_buffer(group: u32, binding: u32, handle: &GpuBufferHandle) -> Self {
+        let key = GpuBindingKey::try_new(u64::from(group), u64::from(binding))
+            .expect("u32 binding locations are representable by GpuBindingKey");
+        Self::new(
+            key,
+            [GpuRuntimeBindingResource::Buffer(
+                GpuRuntimeBufferBinding::whole(handle),
+            )],
+        )
+        .expect("a singleton whole-buffer runtime binding is nonempty")
+    }
+
     pub const fn key(&self) -> GpuBindingKey {
         self.key
     }
