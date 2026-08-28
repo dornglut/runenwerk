@@ -122,9 +122,11 @@ mod tests {
             operation.source_access().requested_subresources(),
             view.descriptor().subresources()
         );
-        assert_eq!(
-            operation.source_access().normalized_subresources(),
-            view.descriptor().subresources()
-        );
+        let normalized = operation.source_access().normalized_subresources();
+        assert_eq!(normalized.base_mip_level(), 0);
+        assert_eq!(normalized.mip_level_count(), 1);
+        assert_eq!(normalized.base_array_layer(), 0);
+        assert_eq!(normalized.array_layer_count(), 1);
+        assert_eq!(normalized.aspect(), GpuTextureAspect::Color);
     }
 }
