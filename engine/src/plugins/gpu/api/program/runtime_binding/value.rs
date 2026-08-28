@@ -26,6 +26,12 @@ impl GpuRuntimeBufferBinding {
         }
     }
 
+    pub fn whole(handle: &GpuBufferHandle) -> Self {
+        let size = NonZeroU64::new(handle.descriptor().size_bytes())
+            .expect("validated GPU buffer descriptors are nonzero");
+        Self::new(handle.clone(), 0, size, None)
+    }
+
     pub fn handle(&self) -> &GpuBufferHandle {
         &self.handle
     }
