@@ -110,8 +110,11 @@ fn fs_main() -> @location(0) vec4<f32> {
             .unwrap();
         resources
             .texture_view(
-                GpuTextureViewDescriptor::ordinary_full_owned("ordinary render target view", &texture)
-                    .unwrap(),
+                GpuTextureViewDescriptor::ordinary_full_owned(
+                    "ordinary render target view",
+                    &texture,
+                )
+                .unwrap(),
             )
             .unwrap()
     }
@@ -151,7 +154,10 @@ fn fs_main() -> @location(0) vec4<f32> {
             operation.color_attachments()[0].load(),
             GpuColorAttachmentLoad::Clear(clear)
         );
-        assert_eq!(operation.color_attachments()[0].store(), GpuAttachmentStore::Store);
+        assert_eq!(
+            operation.color_attachments()[0].store(),
+            GpuAttachmentStore::Store
+        );
         assert_eq!(operation.color_attachments()[0].resolve_target(), None);
         assert_eq!(operation.depth_stencil_attachment(), None);
         assert_eq!(operation.timestamp_writes(), None);
@@ -188,6 +194,9 @@ fn fs_main() -> @location(0) vec4<f32> {
         )
         .unwrap_err();
 
-        assert_eq!(error.cause(), crate::plugins::gpu::GpuWorkOperationCause::InvalidDraw);
+        assert_eq!(
+            error.cause(),
+            crate::plugins::gpu::GpuWorkOperationCause::InvalidDraw
+        );
     }
 }
