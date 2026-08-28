@@ -129,12 +129,15 @@ impl GpuWorkFragmentBuilder {
     /// fragment inputs, imports, outputs, and advanced caller-declared accesses.
     /// Additional capability requirements, non-default execution preference, and
     /// explicit provenance remain available through [`GpuWorkFragmentBuilder::add_node`].
-    pub fn operation(
+    pub fn operation<L>(
         &mut self,
-        label: GpuResourceLabel,
+        label: L,
         operation: GpuWorkOperation,
-    ) -> Result<GpuWorkNodeId, GpuWorkAuthoringError> {
-        self.add_lexical_operation(label, operation)
+    ) -> Result<GpuWorkNodeId, GpuWorkAuthoringError>
+    where
+        L: AsRef<str>,
+    {
+        self.add_checked_lexical_operation(label, operation)
     }
 }
 
@@ -310,21 +313,22 @@ mod tests {
     }
 
     #[test]
-    fn ordinary_operation_delegates_to_lexical_canonical_authoring() {
+    fn ordinary_operation_delegates_to_checked_lexical_canonical_authoring() {
         let source = include_str!("ordinary.rs");
         let method = source
-            .split_once("    pub fn operation(")
+            .split_once("    pub fn operation<L>(")
             .expect("ordinary operation method must remain present")
             .1
             .split_once("\n    }\n}")
             .expect("ordinary operation method must remain bounded")
             .0;
 
-        assert!(method.contains("self.add_lexical_operation(label, operation)"));
-        for forbidden in ["self.add_node(", "declare_resource("] {
+        assert!(method.contains("L: AsRef<str>"));
+        assert!(method.contains("self.add_checked_lexical_operation(label, operation)"));
+        for forbidden in ["self.add_node(", "declare_resource(", "GpuResourceLabel::new("] {
             assert!(
                 !method.contains(forbidden),
-                "ordinary operation must not duplicate canonical lexical authoring through {forbidden:?}"
+                "ordinary operation must not duplicate canonical checked authoring through {forbidden:?}"
             );
         }
     }
