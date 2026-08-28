@@ -288,7 +288,6 @@ fn dynamic_compute_pipeline() -> GpuComputePipelineDescriptor {
 }
 
 fn dynamic_compute_bindings(
-    context: &GpuContext,
     pipeline: &GpuComputePipelineDescriptor,
     buffer: &GpuBufferHandle,
     dynamic_offset: u64,
@@ -305,37 +304,28 @@ fn dynamic_compute_bindings(
         )],
     )
     .unwrap();
-    let facts = context
-        .runtime_binding_device_facts()
-        .expect("admitted compute context must publish dynamic binding facts");
-    GpuRuntimeBindingSet::new(pipeline.layout().clone(), [binding], &facts).unwrap()
+    GpuRuntimeBindingSet::new(pipeline.layout().clone(), [binding]).unwrap()
 }
 
 fn dynamic_compute_operation(
-    context: &GpuContext,
     pipeline: &GpuComputePipelineDescriptor,
     buffer: &GpuBufferHandle,
     dynamic_offset: u64,
     x: u32,
 ) -> GpuComputeOperation {
-    let bindings = dynamic_compute_bindings(context, pipeline, buffer, dynamic_offset);
-    let dispatch = GpuDispatchIntent::direct(
-        GpuDispatchSize::new(x, 1, 1).unwrap(),
-        context.device_facts().workload_budget().limits(),
-    )
-    .unwrap();
+    let bindings = dynamic_compute_bindings(pipeline, buffer, dynamic_offset);
+    let dispatch = GpuDispatchIntent::direct(GpuDispatchSize::new(x, 1, 1).unwrap());
     GpuComputeOperation::new(pipeline.clone(), bindings, dispatch).unwrap()
 }
 
 fn indirect_compute_operation(
-    context: &GpuContext,
     pipeline: &GpuComputePipelineDescriptor,
     buffer: &GpuBufferHandle,
     dynamic_offset: u64,
     arguments: &GpuBufferHandle,
     indirect_offset: u64,
 ) -> GpuComputeOperation {
-    let bindings = dynamic_compute_bindings(context, pipeline, buffer, dynamic_offset);
+    let bindings = dynamic_compute_bindings(pipeline, buffer, dynamic_offset);
     let dispatch = GpuDispatchIntent::indirect(arguments, indirect_offset).unwrap();
     GpuComputeOperation::new(pipeline.clone(), bindings, dispatch).unwrap()
 }
@@ -401,9 +391,9 @@ fn dynamic_compute_graph(context: &GpuContext) -> (GpuPreparedWorkGraph, GpuRead
     let readback = GpuReadbackOperation::new(whole.into(), readback_id).unwrap();
 
     let pipeline = dynamic_compute_pipeline();
-    let first = dynamic_compute_operation(context, &pipeline, &values_buffer, 0, 1);
-    let second = dynamic_compute_operation(context, &pipeline, &values_buffer, dynamic_stride, 1);
-    let zero = dynamic_compute_operation(context, &pipeline, &values_buffer, 0, 0);
+    let first = dynamic_compute_operation(&pipeline, &values_buffer, 0, 1);
+    let second = dynamic_compute_operation(&pipeline, &values_buffer, dynamic_stride, 1);
+    let zero = dynamic_compute_operation(&pipeline, &values_buffer, 0, 0);
 
     let name = "noop dynamic compute";
     let mut builder = GpuWorkFragmentBuilder::new(label(name), provenance(name));
@@ -449,7 +439,7 @@ fn dynamic_compute_graph(context: &GpuContext) -> (GpuPreparedWorkGraph, GpuRead
     )
 }
 
-fn indirect_compute_graph(context: &GpuContext) -> (GpuPreparedWorkGraph, GpuReadbackId, [u32; 1]) {
+fn indirect_compute_graph() -> (GpuPreparedWorkGraph, GpuReadbackId, [u32; 1]) {
     let values = [41_u32];
     let arguments = [1_u32, 1, 1];
     let mut allocator = GpuWorkResourceIdAllocator::new();
@@ -488,8 +478,7 @@ fn indirect_compute_graph(context: &GpuContext) -> (GpuPreparedWorkGraph, GpuRea
     let readback_id = GpuReadbackId::allocate().unwrap();
     let readback = GpuReadbackOperation::new(values_region.into(), readback_id).unwrap();
     let pipeline = dynamic_compute_pipeline();
-    let compute =
-        indirect_compute_operation(context, &pipeline, &values_buffer, 0, &arguments_buffer, 0);
+    let compute = indirect_compute_operation(&pipeline, &values_buffer, 0, &arguments_buffer, 0);
 
     let name = "noop indirect compute";
     let mut builder = GpuWorkFragmentBuilder::new(label(name), provenance(name));
@@ -633,7 +622,7 @@ fn noop_backend_proves_direct_compute_encoding_and_dynamic_bind_group_reuse() {
 #[test]
 fn noop_backend_proves_indirect_compute_preparation_encoding_and_lifecycle() {
     let context = noop_indirect_compute_context();
-    let (graph, readback_id, expected) = indirect_compute_graph(&context);
+    let (graph, readback_id, expected) = indirect_compute_graph();
 
     let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
     assert_eq!(context.execution_stats().prepared_submissions(), 1);
