@@ -73,8 +73,8 @@ fn device_facts_with_limits(
     max_dynamic_storage_buffers: u32,
 ) -> GpuRuntimeBindingDeviceFacts {
     GpuRuntimeBindingDeviceFacts::new(
-        NonZeroU64::new(16).unwrap(),
-        NonZeroU64::new(16).unwrap(),
+        NonZeroU64::new(16),
+        NonZeroU64::new(16),
         max_bind_groups,
         max_dynamic_uniform_buffers,
         max_dynamic_storage_buffers,
@@ -168,6 +168,29 @@ fn runtime_bindings_defer_dynamic_offset_alignment_to_explicit_device_validation
         .validate_device_facts(&device_facts())
         .expect_err("unaligned dynamic offsets must reject against admitted device facts");
 
+    assert_eq!(
+        error.cause(),
+        GpuProgramContractCause::RuntimeBindingIncompatible
+    );
+}
+
+#[test]
+fn runtime_bindings_require_only_the_alignment_fact_the_binding_uses() {
+    let empty_layout = GpuPipelineLayoutDescriptor::new([]).unwrap();
+    let empty = GpuRuntimeBindingSet::new(empty_layout, [])
+        .expect("empty runtime bindings should construct logically");
+    let no_alignments = GpuRuntimeBindingDeviceFacts::new(None, None, 4, 8, 4, []);
+    empty
+        .validate_device_facts(&no_alignments)
+        .expect("binding-free work must not require unrelated alignment facts");
+
+    let group = GpuBindGroupLayoutDescriptor::new(0, [declaration(None)]).unwrap();
+    let layout = GpuPipelineLayoutDescriptor::new([group]).unwrap();
+    let storage = GpuRuntimeBindingSet::new(layout, [runtime_value(16)])
+        .expect("storage binding should construct independently of device facts");
+    let error = storage
+        .validate_device_facts(&no_alignments)
+        .expect_err("storage binding must require its admitted storage alignment fact");
     assert_eq!(
         error.cause(),
         GpuProgramContractCause::RuntimeBindingIncompatible
