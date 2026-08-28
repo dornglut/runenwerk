@@ -247,4 +247,47 @@ mod tests {
             texture.descriptor().common().reconstruction()
         );
     }
+
+    #[test]
+    fn ordinary_full_owned_view_does_not_adopt_imported_parent_ownership() {
+        let parent_label = GpuResourceLabel::new("imported target").unwrap();
+        let parent_common = GpuResourceCommon::imported(
+            parent_label.clone(),
+            GpuResourceLifetime::Transient,
+            GpuResourceProvenance::new(parent_label.clone(), Some(1), None),
+        );
+        let extent = GpuTextureExtent::new(
+            &parent_label,
+            GpuTextureDimension::D2,
+            64,
+            32,
+            1,
+        )
+        .unwrap();
+        let usages =
+            GpuTextureUsages::new(&parent_label, [GpuTextureUsage::ColorAttachment]).unwrap();
+        let texture_descriptor = GpuTextureDescriptor::new(
+            parent_common,
+            GpuTextureDimension::D2,
+            extent,
+            1,
+            1,
+            GpuTextureFormat::Rgba8Unorm,
+            usages,
+            GpuTextureInitialization::Uninitialized,
+        )
+        .unwrap();
+        let mut identities = GpuWorkResourceIdAllocator::new();
+        let texture = identities
+            .allocate_texture_handle(texture_descriptor)
+            .unwrap();
+
+        let error = GpuTextureViewDescriptor::ordinary_full_owned("imported view", &texture)
+            .unwrap_err();
+
+        assert_eq!(
+            error.cause(),
+            GpuResourceDescriptorCause::ParentLeaseMismatch
+        );
+    }
 }
