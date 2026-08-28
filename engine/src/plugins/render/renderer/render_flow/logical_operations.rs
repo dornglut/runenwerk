@@ -19,7 +19,6 @@ use crate::plugins::render::{RenderDepthPolicy, RenderIndirectDrawArgsKind};
 /// exact pipeline descriptor and complete logical runtime binding set are consumed from G4C2/C3
 /// realization, and all access/capability meaning is subsequently derived by `GpuWorkOperation`.
 pub(super) fn project_compute_operation(
-    context: &GpuContext,
     pass: &CompiledComputeExecutionPlan,
     flow_inputs: &PreparedFlowInputs,
     pipeline: &PreparedPipelinePass,
@@ -41,10 +40,11 @@ pub(super) fn project_compute_operation(
                 pass.pass_id
             )
         })?;
-    let dispatch = GpuDispatchIntent::direct(
-        GpuDispatchSize::new(dispatch[0], dispatch[1], dispatch[2])?,
-        context.device_facts().device_limits().values(),
-    )?;
+    let dispatch = GpuDispatchIntent::direct(GpuDispatchSize::new(
+        dispatch[0],
+        dispatch[1],
+        dispatch[2],
+    )?);
     let mut operation = GpuComputeOperation::new(
         realized_pipeline.descriptor().clone(),
         pipeline.bindings.runtime_bindings.clone(),
@@ -63,7 +63,6 @@ pub(super) fn project_compute_operation(
 /// compatibility paths and unsupported surface-depth imports remain residual rather than receiving
 /// invented placeholder identities.
 pub(super) fn project_render_operation(
-    context: &GpuContext,
     runtime_resources: &FlowRuntimeResources,
     pass: &CompiledPassExecutionPlan,
     pipeline: &PreparedPipelinePass,
@@ -161,14 +160,12 @@ pub(super) fn project_render_operation(
         None
     };
 
-    let limits = context.device_facts().device_limits().values();
     let draw = project_render_draw(
         runtime_resources,
         pass,
         realized_pipeline.descriptor().clone(),
         pipeline.bindings.runtime_bindings.clone(),
         color_target.size,
-        limits,
     )?;
     let timestamp_writes = timing
         .map(|(timing, indices)| timestamp_writes(timing, indices))
@@ -187,7 +184,6 @@ fn project_render_draw(
     pipeline: crate::plugins::gpu::GpuRenderPipelineDescriptor,
     bindings: crate::plugins::gpu::GpuRuntimeBindingSet,
     target_size: (u32, u32),
-    limits: crate::plugins::gpu::GpuLimits,
 ) -> Result<GpuRenderDraw> {
     let pass_id = execution_pass_id(pass);
     let (vertex_buffers, index_buffer, draw) = match pass {
@@ -293,11 +289,10 @@ fn project_render_draw(
         vertex_buffers,
         index_buffer,
         draw,
-        GpuViewport::new(0.0, 0.0, width as f32, height as f32, 0.0, 1.0, limits)?,
+        GpuViewport::new(0.0, 0.0, width as f32, height as f32, 0.0, 1.0)?,
         GpuScissorRect::new(0, 0, width, height)?,
         GpuBlendConstant::new(0.0, 0.0, 0.0, 0.0)?,
         0,
-        limits,
     )?)
 }
 

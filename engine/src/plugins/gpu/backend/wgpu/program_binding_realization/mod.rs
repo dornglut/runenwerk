@@ -279,8 +279,8 @@ impl GpuContext {
         }
     }
 
-    /// Validates typed runtime values, resolves their G4C1 resource records, and realizes one
-    /// exact bind group against a realized G4C2 layout.
+    /// Validates typed runtime values against this admitted device, resolves their G4C1 resource
+    /// records, and realizes one exact bind group against a realized G4C2 layout.
     pub async fn realize_bind_group(
         &self,
         layout: &GpuRealizedBindGroupLayout,
@@ -292,16 +292,19 @@ impl GpuContext {
             request.clone(),
             layout.affinity(),
         )?;
-        let device_facts = lowering::runtime_device_facts(self)?;
-        let validated =
-            GpuValidatedBindGroupBindings::new(layout.descriptor().clone(), values, &device_facts)
-                .map_err(|error| {
-                    GpuProgramBindingRealizationError::new(
-                        GpuProgramBindingRealizationErrorCategory::RuntimeBindingIncompatible,
-                        request.clone(),
-                        error.to_string(),
-                    )
-                })?;
+        let validated = GpuValidatedBindGroupBindings::new(layout.descriptor().clone(), values)
+            .and_then(|validated| {
+                validated
+                    .validate_device_facts(&self.runtime_binding_device_facts())
+                    .map(|()| validated)
+            })
+            .map_err(|error| {
+                GpuProgramBindingRealizationError::new(
+                    GpuProgramBindingRealizationErrorCategory::RuntimeBindingIncompatible,
+                    request.clone(),
+                    error.to_string(),
+                )
+            })?;
         let values = validated.values().cloned().collect::<Vec<_>>();
         loop {
             self.backend

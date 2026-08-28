@@ -487,6 +487,9 @@ fn validate_direct_vertex_ranges(
             instances,
         } => (*vertices, *instances),
         GpuDrawIntent::Indexed { instances, .. } => {
+            // Indexed draws do not expose the runtime index values used for vertex fetch. Instance
+            // coverage is still host-known and can be admitted here; vertex fetch validity remains
+            // runtime GPU data and backend robustness territory.
             for (layout, binding) in pipeline.state().vertex_input().layouts().zip(bindings) {
                 if layout.step_mode() == GpuVertexStepMode::Instance {
                     validate_stepped_range(instances.end(), layout, binding)?;

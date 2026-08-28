@@ -2,11 +2,10 @@
 
 use crate::plugins::gpu::{
     GpuBindGroupLayoutDescriptor, GpuBindingClass, GpuBindingDeclaration, GpuContext,
-    GpuProgramBindingRealizationError, GpuProgramBindingRealizationErrorCategory,
-    GpuRuntimeBindingDeviceFacts, GpuSamplerClass, GpuStorageBufferAccess, GpuStorageTextureAccess,
-    GpuTextureFormat, GpuTextureSampleClass, GpuTextureViewDimension,
+    GpuProgramBindingRealizationError, GpuProgramBindingRealizationErrorCategory, GpuSamplerClass,
+    GpuStorageBufferAccess, GpuStorageTextureAccess, GpuTextureFormat, GpuTextureSampleClass,
+    GpuTextureViewDimension,
 };
-use core::num::NonZeroU64;
 use wgpu::{
     BindGroupLayoutEntry, BindingType, BufferBindingType, SamplerBindingType, ShaderStages,
     StorageTextureAccess, TextureFormat, TextureSampleType, TextureViewDimension,
@@ -34,38 +33,6 @@ pub(super) fn layout_entries(
         .bindings()
         .map(|binding| layout_entry(context, descriptor, binding))
         .collect()
-}
-
-pub(super) fn runtime_device_facts(
-    context: &GpuContext,
-) -> Result<GpuRuntimeBindingDeviceFacts, GpuProgramBindingRealizationError> {
-    let device_limits = context.device_facts().device_limits();
-    let alignments = device_limits.alignments();
-    let limits = device_limits.values();
-    let uniform = NonZeroU64::new(alignments.uniform_dynamic_offset.ok_or_else(|| {
-        GpuProgramBindingRealizationError::new(
-            GpuProgramBindingRealizationErrorCategory::LayoutDescriptorInvalid,
-            "construct runtime bind-group device facts",
-            "the admitted device lacks a nonzero uniform dynamic-offset alignment",
-        )
-    })?)
-    .expect("a present admitted alignment is nonzero");
-    let storage = NonZeroU64::new(alignments.storage_dynamic_offset.ok_or_else(|| {
-        GpuProgramBindingRealizationError::new(
-            GpuProgramBindingRealizationErrorCategory::LayoutDescriptorInvalid,
-            "construct runtime bind-group device facts",
-            "the admitted device lacks a nonzero storage dynamic-offset alignment",
-        )
-    })?)
-    .expect("a present admitted alignment is nonzero");
-    Ok(GpuRuntimeBindingDeviceFacts::new(
-        uniform,
-        storage,
-        limits.max_bind_groups(),
-        limits.max_dynamic_uniform_buffers_per_pipeline_layout(),
-        limits.max_dynamic_storage_buffers_per_pipeline_layout(),
-        context.adapter_facts().supported().formats(),
-    ))
 }
 
 fn layout_entry(

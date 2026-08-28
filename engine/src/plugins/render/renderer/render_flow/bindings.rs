@@ -235,16 +235,9 @@ impl Renderer {
             .map(|value| runtime_binding_value(value, sampler.as_ref()))
             .collect::<Result<Vec<_>>>()?;
         let material_values = gpu_material_runtime_binding_values_for_pass(packet, flow, pass_id)?;
-        let device_facts = context.runtime_binding_device_facts().ok_or_else(|| {
-            anyhow::anyhow!(
-                "pass '{}' cannot validate runtime bindings because admitted device binding facts are incomplete",
-                pass_id
-            )
-        })?;
         let runtime_bindings = GpuRuntimeBindingSet::new(
             pipeline_key.pipeline_descriptor.layout().clone(),
             primary_values.into_iter().chain(material_values),
-            &device_facts,
         )?;
 
         let program = pollster::block_on(
