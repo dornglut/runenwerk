@@ -325,7 +325,11 @@ mod tests {
 
         assert!(method.contains("L: AsRef<str>"));
         assert!(method.contains("self.add_checked_lexical_operation(label, operation)"));
-        for forbidden in ["self.add_node(", "declare_resource(", "GpuResourceLabel::new("] {
+        for forbidden in [
+            "self.add_node(",
+            "declare_resource(",
+            "GpuResourceLabel::new(",
+        ] {
             assert!(
                 !method.contains(forbidden),
                 "ordinary operation must not duplicate canonical checked authoring through {forbidden:?}"
