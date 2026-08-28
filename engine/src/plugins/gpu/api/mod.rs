@@ -12,6 +12,7 @@ mod graph;
 mod handles;
 mod operation;
 mod ordinary;
+mod ordinary_render;
 mod ordinary_resource;
 mod ordinary_transfer;
 mod pipeline_realization;
