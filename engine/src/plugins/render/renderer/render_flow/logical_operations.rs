@@ -40,11 +40,8 @@ pub(super) fn project_compute_operation(
                 pass.pass_id
             )
         })?;
-    let dispatch = GpuDispatchIntent::direct(GpuDispatchSize::new(
-        dispatch[0],
-        dispatch[1],
-        dispatch[2],
-    )?);
+    let dispatch =
+        GpuDispatchIntent::direct(GpuDispatchSize::new(dispatch[0], dispatch[1], dispatch[2])?);
     let mut operation = GpuComputeOperation::new(
         realized_pipeline.descriptor().clone(),
         pipeline.bindings.runtime_bindings.clone(),
@@ -463,7 +460,7 @@ mod tests {
                 whole_texture_view_descriptor("canonical surface color view", &texture)
                     .expect("surface-like view descriptor should be valid"),
             )
-            .expect("surface-like view handle should allocate");
+            .expect("surface-like texture view handle should allocate");
         let runtime_resources = FlowRuntimeResources::default();
 
         let target = logical_texture_target(
