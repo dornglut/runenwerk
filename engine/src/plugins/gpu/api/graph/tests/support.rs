@@ -119,24 +119,33 @@ pub(super) fn depth_texture(
     let resource_label = label(name);
     allocator
         .allocate_texture_handle(
-            GpuTextureDescriptor::new(
+            GpuBufferDescriptor::new(
                 common(name),
-                GpuTextureDimension::D2,
-                GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, 8, 8, 1).unwrap(),
-                1,
-                1,
-                GpuTextureFormat::Depth32Float,
-                GpuTextureUsages::new(
-                    &resource_label,
-                    [
-                        GpuTextureUsage::DepthStencilAttachment,
-                        GpuTextureUsage::Sampled,
-                    ],
-                )
-                .unwrap(),
-                GpuTextureInitialization::Uninitialized,
+                64,
+                GpuBufferUsages::new(&resource_label, [GpuBufferUsage::Storage]).unwrap(),
+                GpuBufferInitialization::Uninitialized,
             )
-            .unwrap(),
+            .err()
+            .map(|_| ())
+            .and_then(|_| None)
+            .unwrap_or_else(|| {
+                GpuTextureDescriptor::new(
+                    common(name),
+                    GpuTextureDimension::D2,
+                    GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, 8, 8, 1)
+                        .unwrap(),
+                    1,
+                    1,
+                    GpuTextureFormat::Depth32Float,
+                    GpuTextureUsages::new(
+                        &resource_label,
+                        [GpuTextureUsage::DepthStencilAttachment, GpuTextureUsage::Sampled],
+                    )
+                    .unwrap(),
+                    GpuTextureInitialization::Uninitialized,
+                )
+                .unwrap()
+            }),
         )
         .unwrap()
 }
@@ -250,7 +259,10 @@ fn ordinary_operation_defaults_match_explicit_node_administration() {
     assert_eq!(ordinary.operation(), explicit.operation());
     assert_eq!(ordinary.accesses(), explicit.accesses());
     assert_eq!(ordinary.requirements(), explicit.requirements());
-    assert_eq!(ordinary.execution_preference(), explicit.execution_preference());
+    assert_eq!(
+        ordinary.execution_preference(),
+        explicit.execution_preference()
+    );
     assert_eq!(ordinary.label(), explicit.label());
     assert_eq!(ordinary.provenance(), explicit.provenance());
 }
