@@ -67,13 +67,8 @@ impl GpuTextureDescriptor {
         initialization: GpuTextureInitialization,
     ) -> Result<Self, GpuResourceDescriptorError> {
         let common = ordinary_owned_common(label, lifetime, reconstruction)?;
-        let extent = GpuTextureExtent::new(
-            common.label(),
-            GpuTextureDimension::D2,
-            width,
-            height,
-            1,
-        )?;
+        let extent =
+            GpuTextureExtent::new(common.label(), GpuTextureDimension::D2, width, height, 1)?;
         let usages = GpuTextureUsages::new(common.label(), usages)?;
         Self::new(
             common,
@@ -89,13 +84,13 @@ impl GpuTextureDescriptor {
 }
 
 impl GpuTextureViewDescriptor {
-    /// Constructs the ordinary full-resource view for an owned reconstructable
-    /// texture, preserving the parent's lifetime and reconstruction policy.
+    /// Constructs the ordinary full-resource view for an owned texture,
+    /// preserving the parent's lifetime and reconstruction policy.
     ///
     /// Parent format, dimension, mip range, array-layer range, and aspect are
     /// derived structurally. Canonical common/view validation still rejects
-    /// imported/surface ownership mismatches and retained non-reconstructable
-    /// policy that requires explicit risk acceptance.
+    /// imported/surface ownership mismatches, while retained non-reconstructable
+    /// policy continues to require explicit risk acceptance on the advanced path.
     pub fn ordinary_full_owned(
         label: impl AsRef<str>,
         texture: &GpuTextureHandle,
@@ -118,13 +113,7 @@ impl GpuTextureViewDescriptor {
             array_layer_count,
             GpuTextureAspect::All,
         )?;
-        Self::new(
-            common,
-            texture,
-            None,
-            parent.dimension(),
-            subresources,
-        )
+        Self::new(common, texture, None, parent.dimension(), subresources)
     }
 }
 
@@ -198,7 +187,10 @@ mod tests {
             64,
             32,
             GpuTextureFormat::Rgba8Unorm,
-            [GpuTextureUsage::ColorAttachment, GpuTextureUsage::CopySource],
+            [
+                GpuTextureUsage::ColorAttachment,
+                GpuTextureUsage::CopySource,
+            ],
             GpuTextureInitialization::Uninitialized,
         )
         .unwrap();
