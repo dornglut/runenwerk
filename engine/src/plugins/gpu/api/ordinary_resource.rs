@@ -230,7 +230,7 @@ mod tests {
 
         let view = GpuTextureViewDescriptor::ordinary_full_owned("target view", &texture).unwrap();
 
-        assert_eq!(view.texture().id(), texture.id());
+        assert_eq!(view.texture(), &texture);
         assert_eq!(view.format(), None);
         assert_eq!(view.dimension(), GpuTextureDimension::D2);
         assert_eq!(view.subresources().base_mip_level(), 0);
