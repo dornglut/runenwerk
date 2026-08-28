@@ -1172,6 +1172,7 @@ impl GpuContext {
             )
         })?;
 
+        self.validate_prepared_work_device_facts(&graph)?;
         let reservation = self.backend.execution.reserve_prepared()?;
         let plan = prepare_execution_plan(self, &graph).await?;
         validate_plan_policy(
