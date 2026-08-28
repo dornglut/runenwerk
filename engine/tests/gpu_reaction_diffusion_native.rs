@@ -217,6 +217,7 @@ fn reaction_params(width: u32, height: u32) -> ReactionParams {
         _pad: 0.0,
     }
 }
+
 fn fixed_seed(width: u32, height: u32) -> Vec<ReactionCell> {
     let mut cells = vec![ReactionCell { a: 1.0, b: 0.0 }; usize::try_from(width * height).unwrap()];
     let half_w = width / 2;
@@ -401,7 +402,8 @@ fn state_resources(
         ),
         seed,
         params,
-    )}
+    )
+}
 
 fn offscreen_target(
     resources: &mut GpuResourceScope,
