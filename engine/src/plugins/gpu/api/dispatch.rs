@@ -139,7 +139,11 @@ mod tests {
     #[test]
     fn direct_dispatch_is_logical_and_explicit_limit_validation_is_deterministic() {
         let zero = GpuDispatchSize::new(0, 4, 1).unwrap();
-        assert!(GpuDispatchIntent::direct(zero).validate_limits(limits(8)).is_ok());
+        assert!(
+            GpuDispatchIntent::direct(zero)
+                .validate_limits(limits(8))
+                .is_ok()
+        );
 
         let too_large = GpuDispatchSize::new(9, 1, 1).unwrap();
         assert_eq!(

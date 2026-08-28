@@ -358,7 +358,9 @@ fn validate_storage_texture_structure(
         .storage_texture_access()
         .expect("storage-texture declarations carry access");
     let usage_compatible = match access {
-        GpuStorageTextureAccess::ReadOnly => texture.usages().contains(GpuTextureUsage::StorageRead),
+        GpuStorageTextureAccess::ReadOnly => {
+            texture.usages().contains(GpuTextureUsage::StorageRead)
+        }
         GpuStorageTextureAccess::WriteOnly => {
             texture.usages().contains(GpuTextureUsage::StorageWrite)
         }

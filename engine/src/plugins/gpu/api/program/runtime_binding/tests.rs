@@ -152,11 +152,8 @@ fn runtime_bindings_enforce_compiler_minimum_and_stronger_host_minimum_without_d
         GpuProgramContractCause::RuntimeBindingIncompatible
     );
 
-    GpuValidatedBindGroupBindings::new(
-        host_layout,
-        [runtime_buffer_value(0, buffer, 0, 48, 0)],
-    )
-    .expect("runtime range satisfying both compiler and host minima should construct");
+    GpuValidatedBindGroupBindings::new(host_layout, [runtime_buffer_value(0, buffer, 0, 48, 0)])
+        .expect("runtime range satisfying both compiler and host minima should construct");
 }
 
 #[test]
