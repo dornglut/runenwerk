@@ -114,7 +114,7 @@ var<storage, read> state: array<vec2<f32>>;
 var<storage, read> params: Params;
 
 @vertex
-fn vs_main(@builtin(vertex_index) vertex_index: u32) -> @location(0) vec4<f32> {
+fn vs_main(@builtin(vertex_index) vertex_index: u32) -> @builtin(position) vec4<f32> {
     let positions = array<vec2<f32>, 3>(
         vec2<f32>(-1.0, -1.0),
         vec2<f32>(3.0, -1.0),
