@@ -89,8 +89,7 @@ pub fn admit_static_wgsl_sources<const N: usize>(
     // as a zero-byte registry policy error.
     let mut registry = GpuProgramSourceRegistry::new(N, total_source_bytes.max(1))?;
     let owner = GpuProgramSourceOwnerId::allocate()?;
-    let provenance =
-        GpuProgramSourceProvenance::new(STATIC_WGSL_PROVENANCE_PRODUCER, None)?;
+    let provenance = GpuProgramSourceProvenance::new(STATIC_WGSL_PROVENANCE_PRODUCER, None)?;
     let mut admitted = Vec::with_capacity(N);
     for (key, revision, canonical_wgsl) in checked {
         admitted.push(registry.admit_wgsl(
@@ -232,11 +231,7 @@ mod tests {
     #[test]
     fn static_wgsl_sources_retain_registry_conflict_authority() {
         let error = admit_static_wgsl_sources([
-            (
-                "proof.same",
-                1,
-                "@compute @workgroup_size(1) fn first() {}",
-            ),
+            ("proof.same", 1, "@compute @workgroup_size(1) fn first() {}"),
             (
                 "proof.same",
                 1,
@@ -251,16 +246,8 @@ mod tests {
     #[test]
     fn static_wgsl_sources_reuse_equal_revision_records() {
         let [first, second] = admit_static_wgsl_sources([
-            (
-                "proof.same",
-                2,
-                "@compute @workgroup_size(1) fn main() {}",
-            ),
-            (
-                "proof.same",
-                2,
-                "@compute @workgroup_size(1) fn main() {}",
-            ),
+            ("proof.same", 2, "@compute @workgroup_size(1) fn main() {}"),
+            ("proof.same", 2, "@compute @workgroup_size(1) fn main() {}"),
         ])
         .unwrap();
 
