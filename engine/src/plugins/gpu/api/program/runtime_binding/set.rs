@@ -90,11 +90,18 @@ impl GpuRuntimeBindingSet {
         required_bind_group_slots(&self.layout)
     }
 
+    pub(crate) fn validate_pipeline_device_facts(
+        &self,
+        device_facts: &GpuRuntimeBindingDeviceFacts,
+    ) -> Result<(), GpuProgramContractError> {
+        validate_pipeline_binding_limits(&self.layout, device_facts)
+    }
+
     pub(crate) fn validate_device_facts(
         &self,
         device_facts: &GpuRuntimeBindingDeviceFacts,
     ) -> Result<(), GpuProgramContractError> {
-        validate_pipeline_binding_limits(&self.layout, device_facts)?;
+        self.validate_pipeline_device_facts(device_facts)?;
         for group in &self.groups {
             group.validate_device_facts(device_facts)?;
         }
