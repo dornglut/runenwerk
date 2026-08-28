@@ -119,33 +119,24 @@ pub(super) fn depth_texture(
     let resource_label = label(name);
     allocator
         .allocate_texture_handle(
-            GpuBufferDescriptor::new(
+            GpuTextureDescriptor::new(
                 common(name),
-                64,
-                GpuBufferUsages::new(&resource_label, [GpuBufferUsage::Storage]).unwrap(),
-                GpuBufferInitialization::Uninitialized,
-            )
-            .err()
-            .map(|_| ())
-            .and_then(|_| None)
-            .unwrap_or_else(|| {
-                GpuTextureDescriptor::new(
-                    common(name),
-                    GpuTextureDimension::D2,
-                    GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, 8, 8, 1)
-                        .unwrap(),
-                    1,
-                    1,
-                    GpuTextureFormat::Depth32Float,
-                    GpuTextureUsages::new(
-                        &resource_label,
-                        [GpuTextureUsage::DepthStencilAttachment, GpuTextureUsage::Sampled],
-                    )
-                    .unwrap(),
-                    GpuTextureInitialization::Uninitialized,
+                GpuTextureDimension::D2,
+                GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, 8, 8, 1).unwrap(),
+                1,
+                1,
+                GpuTextureFormat::Depth32Float,
+                GpuTextureUsages::new(
+                    &resource_label,
+                    [
+                        GpuTextureUsage::DepthStencilAttachment,
+                        GpuTextureUsage::Sampled,
+                    ],
                 )
-                .unwrap()
-            }),
+                .unwrap(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap(),
         )
         .unwrap()
 }
