@@ -217,7 +217,6 @@ fn reaction_params(width: u32, height: u32) -> ReactionParams {
         _pad: 0.0,
     }
 }
-
 fn fixed_seed(width: u32, height: u32) -> Vec<ReactionCell> {
     let mut cells = vec![ReactionCell { a: 1.0, b: 0.0 }; usize::try_from(width * height).unwrap()];
     let half_w = width / 2;
@@ -250,50 +249,15 @@ fn admitted_sources() -> ProgramSources {
 }
 
 fn compute_pipeline(source: &GpuAdmittedProgramSource) -> GpuComputePipelineDescriptor {
-    let entry = GpuEntryPointName::new("cs_main").unwrap();
-    let program = GpuProgramDescriptor::new(
-        source.clone(),
-        [entry.clone()],
-        std::iter::empty::<GpuBindingLayoutRefinement>(),
-    )
-    .unwrap();
-    GpuComputePipelineDescriptor::new(program, entry, GpuPipelineConfiguration::default()).unwrap()
+    GpuComputePipelineDescriptor::ordinary(source.clone(), "cs_main").unwrap()
 }
 
 fn render_pipeline(
     source: &GpuAdmittedProgramSource,
     format: GpuTextureFormat,
 ) -> GpuRenderPipelineDescriptor {
-    let vertex = GpuEntryPointName::new("vs_main").unwrap();
-    let fragment = GpuEntryPointName::new("fs_main").unwrap();
-    let program = GpuProgramDescriptor::new(
-        source.clone(),
-        [vertex.clone(), fragment.clone()],
-        std::iter::empty::<GpuBindingLayoutRefinement>(),
-    )
-    .unwrap();
-    let state = GpuRenderPipelineStateDescriptor::new(
-        GpuVertexInputStateDescriptor::new([]).unwrap(),
-        Some(GpuFragmentOutputStateDescriptor::new([
-            GpuColorTargetStateDescriptor::new(
-                format,
-                GpuBlendMode::Replace,
-                GpuColorWriteMask::ALL,
-            )
-            .unwrap(),
-        ])),
-        GpuPrimitiveStateDescriptor::default(),
-        None,
-        GpuMultisampleStateDescriptor::default(),
-    )
-    .unwrap();
-    GpuRenderPipelineDescriptor::new(
-        program,
-        GpuRenderEntryPoints::new(vertex, Some(fragment)),
-        state,
-        GpuPipelineConfiguration::default(),
-    )
-    .unwrap()
+    GpuRenderPipelineDescriptor::ordinary_color(source.clone(), "vs_main", "fs_main", format)
+        .unwrap()
 }
 
 fn buffer(resources: &mut GpuResourceScope, name: &str, byte_len: u64) -> GpuBufferHandle {
@@ -437,8 +401,7 @@ fn state_resources(
         ),
         seed,
         params,
-    )
-}
+    )}
 
 fn offscreen_target(
     resources: &mut GpuResourceScope,
