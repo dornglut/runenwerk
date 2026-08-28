@@ -128,32 +128,29 @@ impl GpuContext {
         &self.device
     }
 
-    pub(crate) fn runtime_binding_device_facts(&self) -> Option<GpuRuntimeBindingDeviceFacts> {
+    pub(crate) fn runtime_binding_device_facts(&self) -> GpuRuntimeBindingDeviceFacts {
         let device_limits = self.device.device_limits();
         let alignments = device_limits.alignments();
-        let uniform_buffer_offset_alignment = NonZeroU64::new(alignments.uniform_dynamic_offset?)?;
-        let storage_buffer_offset_alignment = NonZeroU64::new(alignments.storage_dynamic_offset?)?;
         let limits = device_limits.values();
-        Some(GpuRuntimeBindingDeviceFacts::new(
-            uniform_buffer_offset_alignment,
-            storage_buffer_offset_alignment,
+        GpuRuntimeBindingDeviceFacts::new(
+            alignments
+                .uniform_dynamic_offset
+                .and_then(NonZeroU64::new),
+            alignments
+                .storage_dynamic_offset
+                .and_then(NonZeroU64::new),
             limits.max_bind_groups(),
             limits.max_dynamic_uniform_buffers_per_pipeline_layout(),
             limits.max_dynamic_storage_buffers_per_pipeline_layout(),
             self.adapter.supported().formats(),
-        ))
+        )
     }
 
     pub(crate) fn validate_prepared_work_device_facts(
         &self,
         graph: &GpuPreparedWorkGraph,
     ) -> Result<(), GpuSubmissionPreparationError> {
-        let binding_facts = self.runtime_binding_device_facts().ok_or_else(|| {
-            GpuSubmissionPreparationError::new(
-                GpuSubmissionPreparationErrorKind::WorkNotAdmitted,
-                "admitted context does not expose the normalized alignment facts required for runtime binding validation",
-            )
-        })?;
+        let binding_facts = self.runtime_binding_device_facts();
         let limits = self.device_facts().workload_budget().limits();
 
         for prepared in graph.nodes() {
