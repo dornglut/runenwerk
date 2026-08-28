@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 /// Internal normalized device facts for contextual runtime-binding validation.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GpuRuntimeBindingDeviceFacts {
+pub(crate) struct GpuRuntimeBindingDeviceFacts {
     uniform_buffer_offset_alignment: Option<NonZeroU64>,
     storage_buffer_offset_alignment: Option<NonZeroU64>,
     max_bind_groups: u32,
