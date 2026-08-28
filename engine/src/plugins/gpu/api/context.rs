@@ -149,15 +149,12 @@ impl GpuContext {
         let binding_facts = self.runtime_binding_device_facts();
         let limits = self.device_facts().workload_budget().limits();
 
-        // Pipeline-wide binding limits belong to the invocation and are checked here before
-        // reservation. Per-group offset/format facts remain owned by contextual bind-group
-        // realization, so canonical preparation enforces each admitted-device invariant once.
         for prepared in graph.nodes() {
             match prepared.node().operation() {
                 GpuWorkOperation::Compute(operation) => {
                     operation
                         .bindings()
-                        .validate_pipeline_device_facts(&binding_facts)
+                        .validate_device_facts(&binding_facts)
                         .map_err(|error| work_not_admitted(prepared, error.to_string()))?;
                     operation
                         .dispatch()
@@ -167,7 +164,7 @@ impl GpuContext {
                 GpuWorkOperation::Render(operation) => {
                     for draw in operation.draws() {
                         draw.bindings()
-                            .validate_pipeline_device_facts(&binding_facts)
+                            .validate_device_facts(&binding_facts)
                             .map_err(|error| work_not_admitted(prepared, error.to_string()))?;
                         draw.validate_limits(limits)
                             .map_err(|error| work_not_admitted(prepared, error.to_string()))?;
