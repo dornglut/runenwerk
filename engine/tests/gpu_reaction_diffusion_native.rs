@@ -1,7 +1,6 @@
 use bytemuck::{Pod, Zeroable};
 use engine::plugins::gpu::*;
 use serde_json::json;
-use std::num::NonZeroU64;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -115,7 +114,7 @@ var<storage, read> state: array<vec2<f32>>;
 var<storage, read> params: Params;
 
 @vertex
-fn vs_main(@builtin(vertex_index) vertex_index: u32) -> @builtin(position) vec4<f32> {
+fn vs_main(@builtin(vertex_index) vertex_index: u32) -> @location(0) vec4<f32> {
     let positions = array<vec2<f32>, 3>(
         vec2<f32>(-1.0, -1.0),
         vec2<f32>(3.0, -1.0),
@@ -331,12 +330,7 @@ fn runtime_binding(binding: u32, buffer: &GpuBufferHandle) -> GpuRuntimeBindingV
     GpuRuntimeBindingValue::new(
         GpuBindingKey::try_new(0, u64::from(binding)).unwrap(),
         [GpuRuntimeBindingResource::Buffer(
-            GpuRuntimeBufferBinding::new(
-                buffer.clone(),
-                0,
-                NonZeroU64::new(buffer.descriptor().size_bytes()).unwrap(),
-                None,
-            ),
+            GpuRuntimeBufferBinding::whole(buffer),
         )],
     )
     .unwrap()
