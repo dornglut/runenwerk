@@ -13,6 +13,7 @@ mod handles;
 mod operation;
 mod ordinary;
 mod ordinary_resource;
+mod ordinary_transfer;
 mod pipeline_realization;
 mod program;
 mod readback_id;
