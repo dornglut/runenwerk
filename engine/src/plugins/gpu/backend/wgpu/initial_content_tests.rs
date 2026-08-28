@@ -204,7 +204,7 @@ fn binding_pipeline() -> GpuComputePipelineDescriptor {
     GpuComputePipelineDescriptor::new(program, entry, GpuPipelineConfiguration::default()).unwrap()
 }
 
-fn binding_compute(context: &GpuContext, buffer: &GpuBufferHandle) -> GpuComputeOperation {
+fn binding_compute(buffer: &GpuBufferHandle) -> GpuComputeOperation {
     let pipeline = binding_pipeline();
     let binding = GpuRuntimeBindingValue::new(
         GpuBindingKey::try_new(0, 0).unwrap(),
@@ -218,15 +218,8 @@ fn binding_compute(context: &GpuContext, buffer: &GpuBufferHandle) -> GpuCompute
         )],
     )
     .unwrap();
-    let facts = context
-        .runtime_binding_device_facts()
-        .expect("admitted compute context must publish runtime binding facts");
-    let bindings = GpuRuntimeBindingSet::new(pipeline.layout().clone(), [binding], &facts).unwrap();
-    let dispatch = GpuDispatchIntent::direct(
-        GpuDispatchSize::new(1, 1, 1).unwrap(),
-        context.device_facts().workload_budget().limits(),
-    )
-    .unwrap();
+    let bindings = GpuRuntimeBindingSet::new(pipeline.layout().clone(), [binding]).unwrap();
+    let dispatch = GpuDispatchIntent::direct(GpuDispatchSize::new(1, 1, 1).unwrap());
     GpuComputeOperation::new(pipeline, bindings, dispatch).unwrap()
 }
 
@@ -245,7 +238,7 @@ fn binding_only_prepared_buffer_is_selected_and_lowered_before_compute_work() {
         &bytes,
         [GpuBufferUsage::Storage, GpuBufferUsage::CopyDestination],
     );
-    let compute = binding_compute(&context, &buffer);
+    let compute = binding_compute(&buffer);
     let mut builder = GpuWorkFragmentBuilder::new(
         label("binding-only prepared compute"),
         provenance("binding-only prepared compute"),
