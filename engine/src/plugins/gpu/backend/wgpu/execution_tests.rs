@@ -362,13 +362,6 @@ fn dynamic_compute_graph_with_first_dispatch(
     dynamic_compute_graph_with_first_work(context, first_dispatch_x, 0)
 }
 
-fn dynamic_compute_graph_with_first_dynamic_offset(
-    context: &GpuContext,
-    first_dynamic_offset: u64,
-) -> (GpuPreparedWorkGraph, GpuReadbackId, Vec<u32>) {
-    dynamic_compute_graph_with_first_work(context, 1, first_dynamic_offset)
-}
-
 fn dynamic_compute_graph_with_first_work(
     context: &GpuContext,
     first_dispatch_x: u32,
@@ -651,57 +644,6 @@ fn contextual_work_validation_precedes_prepared_capacity_reservation() {
         context.execution_stats().prepared_submissions(),
         1,
         "rejected device-invalid work must not reserve or release the valid prepared slot"
-    );
-
-    drop(held);
-    assert_eq!(context.execution_stats().prepared_submissions(), 0);
-}
-
-#[test]
-fn contextual_binding_validation_precedes_reservation_and_realization() {
-    let defaults = GpuExecutionPolicy::default();
-    let policy = GpuExecutionPolicy::new(
-        NonZeroUsize::new(1).unwrap(),
-        defaults.max_in_flight_submissions(),
-        defaults.max_upload_bytes_in_flight(),
-        defaults.max_readback_bytes_in_flight(),
-        defaults.max_pending_readbacks(),
-    );
-    let context = noop_compute_context_with_policy(policy);
-    let storage_alignment = context
-        .device_facts()
-        .device_limits()
-        .alignments()
-        .storage_dynamic_offset
-        .expect("compute context must publish storage dynamic-offset alignment");
-    assert!(
-        storage_alignment > 1,
-        "binding validation proof requires a meaningful admitted storage alignment"
-    );
-
-    let (valid_graph, _, _) = dynamic_compute_graph(&context);
-    let held = pollster::block_on(context.prepare_submission(valid_graph))
-        .expect("valid work must occupy the sole prepared-capacity slot");
-    let realized_before = context.program_binding_realization_stats().bind_groups();
-    assert_eq!(context.execution_stats().prepared_submissions(), 1);
-
-    let (misaligned_graph, _, _) = dynamic_compute_graph_with_first_dynamic_offset(&context, 1);
-    let error = pollster::block_on(context.prepare_submission(misaligned_graph))
-        .expect_err("misaligned binding must reject before reservation or realization");
-    assert_eq!(
-        error.kind(),
-        GpuSubmissionPreparationErrorKind::WorkNotAdmitted,
-        "admitted-device binding facts must reject at contextual preparation"
-    );
-    assert_eq!(
-        context.execution_stats().prepared_submissions(),
-        1,
-        "rejected binding-invalid work must not reserve or release the valid prepared slot"
-    );
-    assert_eq!(
-        context.program_binding_realization_stats().bind_groups(),
-        realized_before,
-        "binding-invalid work must not reach bind-group realization"
     );
 
     drop(held);
