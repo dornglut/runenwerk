@@ -172,17 +172,8 @@ pub(super) fn compute_operation_with_dispatch(dispatch: GpuDispatchSize) -> GpuW
         GpuPipelineConfiguration::default(),
     )
     .unwrap();
-    let device_facts = GpuRuntimeBindingDeviceFacts::new(
-        NonZeroU64::new(1).unwrap(),
-        NonZeroU64::new(1).unwrap(),
-        1,
-        0,
-        0,
-        [],
-    );
-    let bindings = GpuRuntimeBindingSet::new(pipeline.layout().clone(), [], &device_facts).unwrap();
-    let limits = GpuLimits::new(1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 65_535).unwrap();
-    let dispatch = GpuDispatchIntent::direct(dispatch, limits).unwrap();
+    let bindings = GpuRuntimeBindingSet::new(pipeline.layout().clone(), []).unwrap();
+    let dispatch = GpuDispatchIntent::direct(dispatch);
     GpuWorkOperation::Compute(GpuComputeOperation::new(pipeline, bindings, dispatch).unwrap())
 }
 
