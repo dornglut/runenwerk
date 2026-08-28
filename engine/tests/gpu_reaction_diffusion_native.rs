@@ -413,16 +413,7 @@ fn add_operation(
     name: &str,
     operation: GpuWorkOperation,
 ) -> Result<(), GpuWorkAuthoringError> {
-    builder
-        .add_node(
-            label(name),
-            operation,
-            [],
-            GpuCapabilityRequirements::new(),
-            GpuExecutionPreference::Automatic,
-            provenance(name),
-        )
-        .map(|_| ())
+    builder.operation(label(name), operation).map(|_| ())
 }
 
 fn state_resources(
