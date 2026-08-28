@@ -1,9 +1,11 @@
 use super::{
-    GpuBufferDescriptor, GpuBufferHandle, GpuContext, GpuPreparedWorkGraph, GpuQuerySetDescriptor,
-    GpuQuerySetHandle, GpuResourceLabel, GpuSamplerDescriptor, GpuSamplerHandle, GpuSubmission,
+    GpuBufferDescriptor, GpuBufferHandle, GpuCapabilityRequirements, GpuContext,
+    GpuExecutionPreference, GpuPreparedWorkGraph, GpuQuerySetDescriptor, GpuQuerySetHandle,
+    GpuResourceLabel, GpuResourceProvenance, GpuSamplerDescriptor, GpuSamplerHandle, GpuSubmission,
     GpuSubmissionPreparationError, GpuSubmissionRejectionReason, GpuTextureDescriptor,
-    GpuTextureHandle, GpuTextureViewDescriptor, GpuTextureViewHandle, GpuWorkFragment,
-    GpuWorkGraphError, GpuWorkResourceIdAllocationError, GpuWorkResourceIdAllocator,
+    GpuTextureHandle, GpuTextureViewDescriptor, GpuTextureViewHandle, GpuWorkAuthoringError,
+    GpuWorkFragment, GpuWorkFragmentBuilder, GpuWorkGraphError, GpuWorkNodeId, GpuWorkOperation,
+    GpuWorkResourceIdAllocationError, GpuWorkResourceIdAllocator,
 };
 use core::fmt;
 
@@ -62,6 +64,29 @@ impl GpuContext {
             let (_, reason) = rejected.into_parts();
             GpuWorkSubmissionError::SubmissionRejected(reason)
         })
+    }
+}
+
+impl GpuWorkFragmentBuilder {
+    /// Adds an ordinary checked operation using the existing advanced node authority.
+    ///
+    /// Caller-declared accesses, additional capability requirements, non-default
+    /// execution preference, and explicit provenance remain available through
+    /// [`GpuWorkFragmentBuilder::add_node`].
+    pub fn operation(
+        &mut self,
+        label: GpuResourceLabel,
+        operation: GpuWorkOperation,
+    ) -> Result<GpuWorkNodeId, GpuWorkAuthoringError> {
+        let provenance = GpuResourceProvenance::new(label.clone(), None, None);
+        self.add_node(
+            label,
+            operation,
+            [],
+            GpuCapabilityRequirements::new(),
+            GpuExecutionPreference::Automatic,
+            provenance,
+        )
     }
 }
 
@@ -169,6 +194,30 @@ mod tests {
             assert!(
                 !method.contains(forbidden),
                 "ordinary submission must not duplicate execution authority through {forbidden:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn ordinary_operation_delegates_to_the_existing_node_authority() {
+        let source = include_str!("ordinary.rs");
+        let method = source
+            .split_once("    pub fn operation(")
+            .expect("ordinary operation method must remain present")
+            .1
+            .split_once("\n    }\n}")
+            .expect("ordinary operation method must remain bounded")
+            .0;
+
+        for required in [
+            "GpuResourceProvenance::new(label.clone(), None, None)",
+            "self.add_node(",
+            "GpuCapabilityRequirements::new()",
+            "GpuExecutionPreference::Automatic",
+        ] {
+            assert!(
+                method.contains(required),
+                "ordinary operation must lower through canonical node defaults: {required}"
             );
         }
     }
