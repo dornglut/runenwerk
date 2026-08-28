@@ -8,6 +8,7 @@ use super::GpuPipelineConfiguration;
 use super::requirements::insert_pipeline_requirement;
 use crate::plugins::gpu::{
     GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirements,
+    GpuRuntimeBindingSet, GpuRuntimeBindingValue,
 };
 use core::hash::Hash;
 use std::sync::Arc;
@@ -88,6 +89,19 @@ impl GpuComputePipelineDescriptor {
 
     pub fn layout(&self) -> &GpuPipelineLayoutDescriptor {
         &self.0.layout
+    }
+
+    /// Validates runtime binding values against this pipeline's exact derived layout.
+    ///
+    /// Callers state binding locations and resources; they do not need to clone and
+    /// restate the layout already owned by the pipeline. Compatibility, effective
+    /// access derivation, and writable-alias checks remain owned by
+    /// [`GpuRuntimeBindingSet::new`].
+    pub fn runtime_bindings(
+        &self,
+        values: impl IntoIterator<Item = GpuRuntimeBindingValue>,
+    ) -> Result<GpuRuntimeBindingSet, GpuProgramContractError> {
+        GpuRuntimeBindingSet::new(self.layout().clone(), values)
     }
 
     pub fn specialization(&self) -> &GpuSpecializationValueSet {
