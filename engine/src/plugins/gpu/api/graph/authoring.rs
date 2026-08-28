@@ -439,8 +439,19 @@ impl GpuWorkFragmentBuilder {
     where
         L: AsRef<str>,
     {
+        self.add_checked_lexical_operation(label, GpuWorkOperation::Compute(compute))
+    }
+
+    pub(crate) fn add_checked_lexical_operation<L>(
+        &mut self,
+        label: L,
+        operation: GpuWorkOperation,
+    ) -> Result<GpuWorkNodeId, GpuWorkAuthoringError>
+    where
+        L: AsRef<str>,
+    {
         let label = checked_node_label(&self.label, label.as_ref())?;
-        self.add_lexical_operation(label, GpuWorkOperation::Compute(compute))
+        self.add_lexical_operation(label, operation)
     }
 
     pub(crate) fn add_lexical_operation(
