@@ -97,6 +97,7 @@ impl GpuRuntimeBindingSet {
         validate_pipeline_binding_limits(&self.layout, device_facts)
     }
 
+    #[cfg(test)]
     pub(crate) fn validate_device_facts(
         &self,
         device_facts: &GpuRuntimeBindingDeviceFacts,
