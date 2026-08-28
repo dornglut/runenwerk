@@ -348,7 +348,6 @@ impl Renderer {
             .dynamic_texture_targets
             .prepare_uploads(&prepared_frame.dynamic_texture_uploads);
         let (viewport, product_surface) = self.realize_ui_dynamic_bind_groups(
-            context,
             &packet.prepared_ui,
             &packet.viewport_surface_bindings,
         )?;
@@ -357,7 +356,6 @@ impl Renderer {
             product_surface,
         };
         let builtin_ui_draws = self.lower_ui_draws(
-            context,
             &packet.prepared_ui,
             &packet.viewport_surface_bindings,
             &packet.ui_dynamic_bind_groups.viewport,
@@ -637,7 +635,6 @@ impl Renderer {
                             })
                             .collect::<Vec<_>>();
                         let canonical_resolution = resolve_canonical_invocation(
-                            context,
                             flow,
                             &invocation.inputs,
                             runtime_resources,
