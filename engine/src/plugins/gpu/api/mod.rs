@@ -12,6 +12,7 @@ mod graph;
 mod handles;
 mod operation;
 mod ordinary;
+mod ordinary_resource;
 mod pipeline_realization;
 mod program;
 mod readback_id;

@@ -194,17 +194,6 @@ fn provenance(value: &str) -> GpuResourceProvenance {
     GpuResourceProvenance::new(label(value), None, None)
 }
 
-fn common(value: &str, lifetime: GpuResourceLifetime) -> GpuResourceCommon {
-    GpuResourceCommon::owned(
-        label(value),
-        lifetime,
-        GpuMemoryIntent::Device,
-        GpuReconstruction::SourceBacked,
-        provenance(value),
-    )
-    .unwrap()
-}
-
 fn reaction_params(width: u32, height: u32) -> ReactionParams {
     ReactionParams {
         width,
@@ -262,17 +251,14 @@ fn render_pipeline(
 }
 
 fn buffer(resources: &mut GpuResourceScope, name: &str, byte_len: u64) -> GpuBufferHandle {
-    let resource_label = label(name);
     resources
         .buffer(
-            GpuBufferDescriptor::new(
-                common(name, GpuResourceLifetime::Retained),
+            GpuBufferDescriptor::ordinary_owned(
+                name,
+                GpuResourceLifetime::Retained,
+                GpuReconstruction::SourceBacked,
                 byte_len,
-                GpuBufferUsages::new(
-                    &resource_label,
-                    [GpuBufferUsage::Storage, GpuBufferUsage::CopyDestination],
-                )
-                .unwrap(),
+                [GpuBufferUsage::Storage, GpuBufferUsage::CopyDestination],
                 GpuBufferInitialization::Uninitialized,
             )
             .unwrap(),
@@ -410,56 +396,29 @@ fn offscreen_target(
     envelope: Envelope,
 ) -> (GpuTextureHandle, GpuTextureViewHandle) {
     let name = format!("{} offscreen target", envelope.name);
-    let texture_label = label(&name);
     let texture = resources
         .texture(
-            GpuTextureDescriptor::new(
-                common(&name, GpuResourceLifetime::Transient),
-                GpuTextureDimension::D2,
-                GpuTextureExtent::new(
-                    &texture_label,
-                    GpuTextureDimension::D2,
-                    envelope.width,
-                    envelope.height,
-                    1,
-                )
-                .unwrap(),
-                1,
-                1,
+            GpuTextureDescriptor::ordinary_owned_2d(
+                &name,
+                GpuResourceLifetime::Transient,
+                GpuReconstruction::SourceBacked,
+                envelope.width,
+                envelope.height,
                 GpuTextureFormat::Rgba8Unorm,
-                GpuTextureUsages::new(
-                    &texture_label,
-                    [
-                        GpuTextureUsage::ColorAttachment,
-                        GpuTextureUsage::CopySource,
-                    ],
-                )
-                .unwrap(),
+                [
+                    GpuTextureUsage::ColorAttachment,
+                    GpuTextureUsage::CopySource,
+                ],
                 GpuTextureInitialization::Uninitialized,
             )
             .unwrap(),
         )
         .unwrap();
-    let subresources = GpuTextureSubresourceRange::new(
-        texture.descriptor().common().label(),
-        0,
-        1,
-        0,
-        1,
-        GpuTextureAspect::Color,
-    )
-    .unwrap();
     let view = resources
         .texture_view(
-            GpuTextureViewDescriptor::new(
-                common(
-                    &format!("{} offscreen target view", envelope.name),
-                    GpuResourceLifetime::Transient,
-                ),
+            GpuTextureViewDescriptor::ordinary_full_owned(
+                format!("{} offscreen target view", envelope.name),
                 &texture,
-                None,
-                GpuTextureDimension::D2,
-                subresources,
             )
             .unwrap(),
         )
