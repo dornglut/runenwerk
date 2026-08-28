@@ -159,16 +159,11 @@ fn render_target(
     (texture, view)
 }
 
-fn render_graph(context: &GpuContext) -> (GpuPreparedWorkGraph, GpuReadbackId) {
+fn render_graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
     let mut allocator = GpuWorkResourceIdAllocator::new();
     let (texture, view) = render_target(&mut allocator);
     let pipeline = render_pipeline();
-    let binding_facts = context
-        .runtime_binding_device_facts()
-        .expect("admitted render context must publish runtime binding facts");
-    let bindings =
-        GpuRuntimeBindingSet::new(pipeline.layout().clone(), [], &binding_facts).unwrap();
-    let limits = context.device_facts().workload_budget().limits();
+    let bindings = GpuRuntimeBindingSet::new(pipeline.layout().clone(), []).unwrap();
     let draw = GpuRenderDraw::new(
         pipeline,
         bindings,
@@ -178,11 +173,10 @@ fn render_graph(context: &GpuContext) -> (GpuPreparedWorkGraph, GpuReadbackId) {
             GpuDrawRange::new(0, 3).unwrap(),
             GpuDrawRange::new(0, 1).unwrap(),
         ),
-        GpuViewport::new(0.0, 0.0, WIDTH as f32, HEIGHT as f32, 0.0, 1.0, limits).unwrap(),
+        GpuViewport::new(0.0, 0.0, WIDTH as f32, HEIGHT as f32, 0.0, 1.0).unwrap(),
         GpuScissorRect::new(0, 0, WIDTH, HEIGHT).unwrap(),
         GpuBlendConstant::new(0.0, 0.0, 0.0, 0.0).unwrap(),
         0,
-        limits,
     )
     .unwrap();
     let attachment = GpuRenderColorAttachment::new(
@@ -286,7 +280,7 @@ fn progress_to_readback(
 #[ignore = "requires a real Vulkan fallback adapter; executed by RunenGPU Native Conformance CI"]
 fn native_offscreen_render_executes_shader_and_reads_back_color() {
     let context = native_render_context();
-    let (graph, readback_id) = render_graph(&context);
+    let (graph, readback_id) = render_graph();
 
     let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
     let submission = context.submit_prepared(prepared).unwrap();
