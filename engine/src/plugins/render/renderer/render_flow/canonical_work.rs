@@ -136,7 +136,6 @@ pub(super) fn resolve_canonical_frame(
 /// GPU node is authored only to preserve occurrence identity. If an operation is residual, no
 /// partial canonical node set or terminal-Present control metadata from this invocation is retained.
 pub(super) fn resolve_canonical_invocation(
-    context: &GpuContext,
     flow: &CompiledRenderFlowPlan,
     flow_inputs: &PreparedFlowInputs,
     runtime_resources: &FlowRuntimeResources,
@@ -205,7 +204,7 @@ pub(super) fn resolve_canonical_invocation(
                     )
                 })?;
                 let timing = timestamp_projection(timing, projected.timestamp_indices)?;
-                project_compute_operation(context, pass, flow_inputs, pipeline, timing)?
+                project_compute_operation(pass, flow_inputs, pipeline, timing)?
             }
             CompiledPassExecutionPlan::Fullscreen(_) | CompiledPassExecutionPlan::Graphics(_) => {
                 let pipeline = projected.pipeline.ok_or_else(|| {
@@ -216,7 +215,6 @@ pub(super) fn resolve_canonical_invocation(
                 })?;
                 let timing = timestamp_projection(timing, projected.timestamp_indices)?;
                 let Some(operation) = project_render_operation(
-                    context,
                     runtime_resources,
                     projected.pass,
                     pipeline,
