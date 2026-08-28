@@ -402,7 +402,7 @@ fn add_operation(
     name: &str,
     operation: GpuWorkOperation,
 ) -> Result<(), GpuWorkAuthoringError> {
-    builder.operation(label(name), operation).map(|_| ())
+    builder.operation(name, operation).map(|_| ())
 }
 
 fn state_resources(
