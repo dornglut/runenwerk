@@ -451,7 +451,6 @@ impl Renderer {
 
     pub(super) fn ensure_glyph_atlas_gpu(
         &mut self,
-        context: &GpuContext,
         atlas: &crate::plugins::render::features::UiFontAtlasResource,
         texture_id: u64,
         pending_operations: &mut RendererPendingOperations,
