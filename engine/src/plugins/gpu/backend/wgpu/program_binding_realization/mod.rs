@@ -287,6 +287,11 @@ impl GpuContext {
         values: impl IntoIterator<Item = GpuRuntimeBindingValue>,
     ) -> Result<GpuRealizedBindGroup, GpuProgramBindingRealizationError> {
         let request = format!("bind group group={}", layout.descriptor().group());
+        super::health::validate_program_affinity(
+            self.affinity(),
+            request.clone(),
+            layout.affinity(),
+        )?;
         let validated = GpuValidatedBindGroupBindings::new(layout.descriptor().clone(), values)
             .and_then(|validated| {
                 validated
