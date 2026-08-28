@@ -85,12 +85,12 @@ mod tests {
     use super::*;
     use crate::plugins::gpu::{
         GpuAdmittedProgramSource, GpuAttachmentStore, GpuBindingLayoutRefinement,
-        GpuBufferInitialization, GpuColorAttachmentLoad, GpuColorClearValue,
-        GpuColorTargetStateDescriptor, GpuEntryPointName, GpuFragmentOutputStateDescriptor,
-        GpuPipelineConfiguration, GpuProgramDescriptor, GpuReconstruction, GpuRenderEntryPoints,
+        GpuColorAttachmentLoad, GpuColorClearValue, GpuColorTargetStateDescriptor, GpuDrawRange,
+        GpuEntryPointName, GpuFragmentOutputStateDescriptor, GpuPipelineConfiguration,
+        GpuProgramDescriptor, GpuReconstruction, GpuRenderEntryPoints,
         GpuRenderPipelineStateDescriptor, GpuResourceLifetime, GpuResourceScope,
         GpuRuntimeBindingValue, GpuTextureDescriptor, GpuTextureFormat, GpuTextureInitialization,
-        GpuTextureUsage, GpuTextureViewDescriptor, GpuVertexInputStateDescriptor, GpuDrawRange,
+        GpuTextureUsage, GpuTextureViewDescriptor, GpuVertexInputStateDescriptor,
         admit_static_wgsl_sources,
     };
 
@@ -112,8 +112,8 @@ fn fs_main() -> @location(0) vec4<f32> {
 "#;
 
     fn source() -> GpuAdmittedProgramSource {
-        let [source] = admit_static_wgsl_sources([("proof.render.full-target", 1, RENDER_WGSL)])
-            .unwrap();
+        let [source] =
+            admit_static_wgsl_sources([("proof.render.full-target", 1, RENDER_WGSL)]).unwrap();
         source
     }
 
@@ -146,9 +146,7 @@ fn fs_main() -> @location(0) vec4<f32> {
             .unwrap();
         GpuRenderColorAttachment::new(
             view,
-            GpuColorAttachmentLoad::Clear(
-                GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
-            ),
+            GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap()),
             GpuAttachmentStore::Store,
             None,
         )
@@ -164,9 +162,13 @@ fn fs_main() -> @location(0) vec4<f32> {
 
     #[test]
     fn ordinary_color_full_target_derives_only_documented_render_administration() {
-        let pipeline =
-            GpuRenderPipelineDescriptor::ordinary_color(source(), "vs_main", "fs_main", GpuTextureFormat::Rgba8Unorm)
-                .unwrap();
+        let pipeline = GpuRenderPipelineDescriptor::ordinary_color(
+            source(),
+            "vs_main",
+            "fs_main",
+            GpuTextureFormat::Rgba8Unorm,
+        )
+        .unwrap();
         let bindings = pipeline
             .runtime_bindings(std::iter::empty::<GpuRuntimeBindingValue>())
             .unwrap();
@@ -187,12 +189,18 @@ fn fs_main() -> @location(0) vec4<f32> {
         let draw = &operation.draws()[0];
         assert!(draw.vertex_buffers().is_empty());
         assert!(draw.index_buffer().is_none());
-        assert_eq!(draw.viewport().values(), [0.0, 0.0, 32.0, 16.0, 0.0, 1.0]);
+        assert_eq!(
+            draw.viewport().values(),
+            [0.0, 0.0, 32.0, 16.0, 0.0, 1.0]
+        );
         assert_eq!(draw.scissor().x(), 0);
         assert_eq!(draw.scissor().y(), 0);
         assert_eq!(draw.scissor().width(), 32);
         assert_eq!(draw.scissor().height(), 16);
-        assert_eq!(draw.blend_constant().components(), [0.0, 0.0, 0.0, 0.0]);
+        assert_eq!(
+            draw.blend_constant().components(),
+            [0.0, 0.0, 0.0, 0.0]
+        );
         assert_eq!(draw.stencil_reference(), 0);
     }
 
