@@ -63,7 +63,7 @@ impl From<GpuSubmissionPreparationError> for GpuWorkSubmissionError {
 /// owners that need later admissions or explicit provenance should use
 /// [`GpuProgramSourceRegistry`] directly.
 pub fn admit_static_wgsl_sources<const N: usize>(
-    sources: [(&str, u64, &str); N],
+    sources: [(&'static str, u64, &'static str); N],
 ) -> Result<[GpuAdmittedProgramSource; N], GpuProgramSourceError> {
     let mut total_source_bytes = 0usize;
     let mut checked = Vec::with_capacity(N);
