@@ -242,7 +242,6 @@ impl Renderer {
                 continue;
             };
             if !self.ensure_glyph_atlas_gpu(
-                context,
                 atlas_resource,
                 instance.texture_id,
                 pending_operations,
@@ -1097,7 +1096,6 @@ fn hash_prepared_feature_contribution(
         crate::plugins::render::PreparedFeaturePayload::Ui(value) => {
             "ui".hash(&mut hasher);
             value.submissions.len().hash(&mut hasher);
-
             for submission in &value.submissions {
                 submission.producer_id.hash(&mut hasher);
                 submission.route.hash(&mut hasher);
