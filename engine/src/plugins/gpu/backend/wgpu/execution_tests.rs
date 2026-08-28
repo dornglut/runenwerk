@@ -1,6 +1,6 @@
 use super::device_request::{enforce_runengpu_instance_flags, request_with_instance};
 use crate::plugins::gpu::*;
-use std::num::NonZeroU64;
+use std::num::{NonZeroU64, NonZeroUsize};
 use std::time::{Duration, Instant};
 use wgpu::{Backends, Instance, InstanceDescriptor, NoopBackendOptions};
 
@@ -209,6 +209,10 @@ fn noop_context() -> GpuContext {
 }
 
 fn noop_compute_context() -> GpuContext {
+    noop_compute_context_with_policy(GpuExecutionPolicy::default())
+}
+
+fn noop_compute_context_with_policy(policy: GpuExecutionPolicy) -> GpuContext {
     let mut requirements = GpuCapabilityProfile::ComputeBaseline.requirements();
     requirements
         .insert(GpuCapabilityRequirement::Required(
@@ -224,7 +228,7 @@ fn noop_compute_context() -> GpuContext {
         descriptor,
         None,
         GpuRealizationPolicies::default(),
-        GpuExecutionPolicy::default(),
+        policy,
     ))
     .expect("explicitly enabled WGPU noop backend must admit the direct-compute G5B test context");
     assert_noop_test_context_truth(&context);
@@ -348,6 +352,13 @@ fn checked_least_common_multiple(left: u64, right: u64) -> Option<u64> {
 }
 
 fn dynamic_compute_graph(context: &GpuContext) -> (GpuPreparedWorkGraph, GpuReadbackId, Vec<u32>) {
+    dynamic_compute_graph_with_first_dispatch(context, 1)
+}
+
+fn dynamic_compute_graph_with_first_dispatch(
+    context: &GpuContext,
+    first_dispatch_x: u32,
+) -> (GpuPreparedWorkGraph, GpuReadbackId, Vec<u32>) {
     let storage_alignment = context
         .device_facts()
         .device_limits()
@@ -391,7 +402,7 @@ fn dynamic_compute_graph(context: &GpuContext) -> (GpuPreparedWorkGraph, GpuRead
     let readback = GpuReadbackOperation::new(whole.into(), readback_id).unwrap();
 
     let pipeline = dynamic_compute_pipeline();
-    let first = dynamic_compute_operation(&pipeline, &values_buffer, 0, 1);
+    let first = dynamic_compute_operation(&pipeline, &values_buffer, 0, first_dispatch_x);
     let second = dynamic_compute_operation(&pipeline, &values_buffer, dynamic_stride, 1);
     let zero = dynamic_compute_operation(&pipeline, &values_buffer, 0, 0);
 
@@ -581,6 +592,49 @@ fn noop_backend_buffer_round_trip_proves_first_g5b_checkpoint_runtime() {
     assert_eq!(stats.upload_bytes_in_flight(), 0);
     assert_eq!(stats.readback_bytes_in_flight(), 0);
     assert_eq!(stats.pending_readbacks(), 0);
+}
+
+#[test]
+fn contextual_work_validation_precedes_prepared_capacity_reservation() {
+    let defaults = GpuExecutionPolicy::default();
+    let policy = GpuExecutionPolicy::new(
+        NonZeroUsize::new(1).unwrap(),
+        defaults.max_in_flight_submissions(),
+        defaults.max_upload_bytes_in_flight(),
+        defaults.max_readback_bytes_in_flight(),
+        defaults.max_pending_readbacks(),
+    );
+    let context = noop_compute_context_with_policy(policy);
+    let (valid_graph, _, _) = dynamic_compute_graph(&context);
+    let held = pollster::block_on(context.prepare_submission(valid_graph))
+        .expect("valid work must occupy the sole prepared-capacity slot");
+    assert_eq!(context.execution_stats().prepared_submissions(), 1);
+
+    let admitted_max = context
+        .device_facts()
+        .workload_budget()
+        .limits()
+        .max_compute_workgroups_per_dimension();
+    let invalid_dispatch = admitted_max
+        .checked_add(1)
+        .expect("noop compute limit must leave room for one invalid dispatch value");
+    let (invalid_graph, _, _) =
+        dynamic_compute_graph_with_first_dispatch(&context, invalid_dispatch);
+    let error = pollster::block_on(context.prepare_submission(invalid_graph))
+        .expect_err("device-invalid work must reject before prepared-capacity reservation");
+    assert_eq!(
+        error.kind(),
+        GpuSubmissionPreparationErrorKind::WorkNotAdmitted,
+        "contextual work validation must outrank prepared-capacity exhaustion"
+    );
+    assert_eq!(
+        context.execution_stats().prepared_submissions(),
+        1,
+        "rejected device-invalid work must not reserve or release the valid prepared slot"
+    );
+
+    drop(held);
+    assert_eq!(context.execution_stats().prepared_submissions(), 0);
 }
 
 #[test]
