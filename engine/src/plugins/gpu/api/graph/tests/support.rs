@@ -220,3 +220,37 @@ pub(super) fn texture_access(
         .unwrap(),
     )
 }
+
+#[test]
+fn ordinary_operation_defaults_match_explicit_node_administration() {
+    let operation = compute_operation();
+    let node_label = label("ordinary operation defaults");
+
+    let mut ordinary_builder = builder("ordinary operation fragment");
+    ordinary_builder
+        .operation(node_label.clone(), operation.clone())
+        .unwrap();
+    let ordinary = ordinary_builder.finish().unwrap();
+
+    let mut explicit_builder = builder("explicit operation fragment");
+    explicit_builder
+        .add_node(
+            node_label,
+            operation,
+            [],
+            GpuCapabilityRequirements::new(),
+            GpuExecutionPreference::Automatic,
+            provenance("ordinary operation defaults"),
+        )
+        .unwrap();
+    let explicit = explicit_builder.finish().unwrap();
+
+    let ordinary = &ordinary.nodes()[0];
+    let explicit = &explicit.nodes()[0];
+    assert_eq!(ordinary.operation(), explicit.operation());
+    assert_eq!(ordinary.accesses(), explicit.accesses());
+    assert_eq!(ordinary.requirements(), explicit.requirements());
+    assert_eq!(ordinary.execution_preference(), explicit.execution_preference());
+    assert_eq!(ordinary.label(), explicit.label());
+    assert_eq!(ordinary.provenance(), explicit.provenance());
+}
