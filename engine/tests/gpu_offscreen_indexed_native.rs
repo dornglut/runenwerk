@@ -188,17 +188,12 @@ fn prepared_index_buffer(allocator: &mut GpuWorkResourceIdAllocator) -> GpuBuffe
         .unwrap()
 }
 
-fn render_graph(context: &GpuContext) -> (GpuPreparedWorkGraph, GpuReadbackId) {
+fn render_graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
     let mut allocator = GpuWorkResourceIdAllocator::new();
     let (texture, view) = render_target(&mut allocator);
     let index_buffer = prepared_index_buffer(&mut allocator);
     let pipeline = render_pipeline();
-    let binding_facts = context
-        .runtime_binding_device_facts()
-        .expect("admitted render context must publish runtime binding facts");
-    let bindings =
-        GpuRuntimeBindingSet::new(pipeline.layout().clone(), [], &binding_facts).unwrap();
-    let limits = context.device_facts().workload_budget().limits();
+    let bindings = GpuRuntimeBindingSet::new(pipeline.layout().clone(), []).unwrap();
     let index_binding = GpuIndexBufferBinding::new(
         &index_buffer,
         GpuBufferRange::whole(&index_buffer).unwrap(),
@@ -215,11 +210,10 @@ fn render_graph(context: &GpuContext) -> (GpuPreparedWorkGraph, GpuReadbackId) {
             0,
             GpuDrawRange::new(0, 1).unwrap(),
         ),
-        GpuViewport::new(0.0, 0.0, WIDTH as f32, HEIGHT as f32, 0.0, 1.0, limits).unwrap(),
+        GpuViewport::new(0.0, 0.0, WIDTH as f32, HEIGHT as f32, 0.0, 1.0).unwrap(),
         GpuScissorRect::new(0, 0, WIDTH / 2, HEIGHT).unwrap(),
         GpuBlendConstant::new(0.0, 0.0, 0.0, 0.0).unwrap(),
         0,
-        limits,
     )
     .unwrap();
     let attachment = GpuRenderColorAttachment::new(
@@ -399,7 +393,7 @@ fn write_validated_png(bytes: &GpuReadbackBytes) -> PathBuf {
 #[ignore = "requires a real Vulkan fallback adapter; executed by RunenGPU Conformance CI"]
 fn indexed_offscreen_draw_matches_known_pattern_and_writes_png() {
     let context = native_render_context();
-    let (graph, readback_id) = render_graph(&context);
+    let (graph, readback_id) = render_graph();
 
     let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
     let submission = context.submit_prepared(prepared).unwrap();

@@ -1,6 +1,6 @@
 use super::device_request::{enforce_runengpu_instance_flags, request_with_instance};
 use crate::plugins::gpu::*;
-use std::num::NonZeroU64;
+use std::num::{NonZeroU64, NonZeroUsize};
 use std::time::{Duration, Instant};
 use wgpu::{Backends, Instance, InstanceDescriptor, NoopBackendOptions};
 
@@ -209,6 +209,10 @@ fn noop_context() -> GpuContext {
 }
 
 fn noop_compute_context() -> GpuContext {
+    noop_compute_context_with_policy(GpuExecutionPolicy::default())
+}
+
+fn noop_compute_context_with_policy(policy: GpuExecutionPolicy) -> GpuContext {
     let mut requirements = GpuCapabilityProfile::ComputeBaseline.requirements();
     requirements
         .insert(GpuCapabilityRequirement::Required(
@@ -224,7 +228,7 @@ fn noop_compute_context() -> GpuContext {
         descriptor,
         None,
         GpuRealizationPolicies::default(),
-        GpuExecutionPolicy::default(),
+        policy,
     ))
     .expect("explicitly enabled WGPU noop backend must admit the direct-compute G5B test context");
     assert_noop_test_context_truth(&context);
@@ -288,7 +292,6 @@ fn dynamic_compute_pipeline() -> GpuComputePipelineDescriptor {
 }
 
 fn dynamic_compute_bindings(
-    context: &GpuContext,
     pipeline: &GpuComputePipelineDescriptor,
     buffer: &GpuBufferHandle,
     dynamic_offset: u64,
@@ -305,37 +308,28 @@ fn dynamic_compute_bindings(
         )],
     )
     .unwrap();
-    let facts = context
-        .runtime_binding_device_facts()
-        .expect("admitted compute context must publish dynamic binding facts");
-    GpuRuntimeBindingSet::new(pipeline.layout().clone(), [binding], &facts).unwrap()
+    GpuRuntimeBindingSet::new(pipeline.layout().clone(), [binding]).unwrap()
 }
 
 fn dynamic_compute_operation(
-    context: &GpuContext,
     pipeline: &GpuComputePipelineDescriptor,
     buffer: &GpuBufferHandle,
     dynamic_offset: u64,
     x: u32,
 ) -> GpuComputeOperation {
-    let bindings = dynamic_compute_bindings(context, pipeline, buffer, dynamic_offset);
-    let dispatch = GpuDispatchIntent::direct(
-        GpuDispatchSize::new(x, 1, 1).unwrap(),
-        context.device_facts().workload_budget().limits(),
-    )
-    .unwrap();
+    let bindings = dynamic_compute_bindings(pipeline, buffer, dynamic_offset);
+    let dispatch = GpuDispatchIntent::direct(GpuDispatchSize::new(x, 1, 1).unwrap());
     GpuComputeOperation::new(pipeline.clone(), bindings, dispatch).unwrap()
 }
 
 fn indirect_compute_operation(
-    context: &GpuContext,
     pipeline: &GpuComputePipelineDescriptor,
     buffer: &GpuBufferHandle,
     dynamic_offset: u64,
     arguments: &GpuBufferHandle,
     indirect_offset: u64,
 ) -> GpuComputeOperation {
-    let bindings = dynamic_compute_bindings(context, pipeline, buffer, dynamic_offset);
+    let bindings = dynamic_compute_bindings(pipeline, buffer, dynamic_offset);
     let dispatch = GpuDispatchIntent::indirect(arguments, indirect_offset).unwrap();
     GpuComputeOperation::new(pipeline.clone(), bindings, dispatch).unwrap()
 }
@@ -358,6 +352,21 @@ fn checked_least_common_multiple(left: u64, right: u64) -> Option<u64> {
 }
 
 fn dynamic_compute_graph(context: &GpuContext) -> (GpuPreparedWorkGraph, GpuReadbackId, Vec<u32>) {
+    dynamic_compute_graph_with_first_work(context, 1, 0)
+}
+
+fn dynamic_compute_graph_with_first_dispatch(
+    context: &GpuContext,
+    first_dispatch_x: u32,
+) -> (GpuPreparedWorkGraph, GpuReadbackId, Vec<u32>) {
+    dynamic_compute_graph_with_first_work(context, first_dispatch_x, 0)
+}
+
+fn dynamic_compute_graph_with_first_work(
+    context: &GpuContext,
+    first_dispatch_x: u32,
+    first_dynamic_offset: u64,
+) -> (GpuPreparedWorkGraph, GpuReadbackId, Vec<u32>) {
     let storage_alignment = context
         .device_facts()
         .device_limits()
@@ -401,9 +410,14 @@ fn dynamic_compute_graph(context: &GpuContext) -> (GpuPreparedWorkGraph, GpuRead
     let readback = GpuReadbackOperation::new(whole.into(), readback_id).unwrap();
 
     let pipeline = dynamic_compute_pipeline();
-    let first = dynamic_compute_operation(context, &pipeline, &values_buffer, 0, 1);
-    let second = dynamic_compute_operation(context, &pipeline, &values_buffer, dynamic_stride, 1);
-    let zero = dynamic_compute_operation(context, &pipeline, &values_buffer, 0, 0);
+    let first = dynamic_compute_operation(
+        &pipeline,
+        &values_buffer,
+        first_dynamic_offset,
+        first_dispatch_x,
+    );
+    let second = dynamic_compute_operation(&pipeline, &values_buffer, dynamic_stride, 1);
+    let zero = dynamic_compute_operation(&pipeline, &values_buffer, 0, 0);
 
     let name = "noop dynamic compute";
     let mut builder = GpuWorkFragmentBuilder::new(label(name), provenance(name));
@@ -449,7 +463,7 @@ fn dynamic_compute_graph(context: &GpuContext) -> (GpuPreparedWorkGraph, GpuRead
     )
 }
 
-fn indirect_compute_graph(context: &GpuContext) -> (GpuPreparedWorkGraph, GpuReadbackId, [u32; 1]) {
+fn indirect_compute_graph() -> (GpuPreparedWorkGraph, GpuReadbackId, [u32; 1]) {
     let values = [41_u32];
     let arguments = [1_u32, 1, 1];
     let mut allocator = GpuWorkResourceIdAllocator::new();
@@ -488,8 +502,7 @@ fn indirect_compute_graph(context: &GpuContext) -> (GpuPreparedWorkGraph, GpuRea
     let readback_id = GpuReadbackId::allocate().unwrap();
     let readback = GpuReadbackOperation::new(values_region.into(), readback_id).unwrap();
     let pipeline = dynamic_compute_pipeline();
-    let compute =
-        indirect_compute_operation(context, &pipeline, &values_buffer, 0, &arguments_buffer, 0);
+    let compute = indirect_compute_operation(&pipeline, &values_buffer, 0, &arguments_buffer, 0);
 
     let name = "noop indirect compute";
     let mut builder = GpuWorkFragmentBuilder::new(label(name), provenance(name));
@@ -595,6 +608,49 @@ fn noop_backend_buffer_round_trip_proves_first_g5b_checkpoint_runtime() {
 }
 
 #[test]
+fn contextual_work_validation_precedes_prepared_capacity_reservation() {
+    let defaults = GpuExecutionPolicy::default();
+    let policy = GpuExecutionPolicy::new(
+        NonZeroUsize::new(1).unwrap(),
+        defaults.max_in_flight_submissions(),
+        defaults.max_upload_bytes_in_flight(),
+        defaults.max_readback_bytes_in_flight(),
+        defaults.max_pending_readbacks(),
+    );
+    let context = noop_compute_context_with_policy(policy);
+    let (valid_graph, _, _) = dynamic_compute_graph(&context);
+    let held = pollster::block_on(context.prepare_submission(valid_graph))
+        .expect("valid work must occupy the sole prepared-capacity slot");
+    assert_eq!(context.execution_stats().prepared_submissions(), 1);
+
+    let admitted_max = context
+        .device_facts()
+        .workload_budget()
+        .limits()
+        .max_compute_workgroups_per_dimension();
+    let invalid_dispatch = admitted_max
+        .checked_add(1)
+        .expect("noop compute limit must leave room for one invalid dispatch value");
+    let (invalid_graph, _, _) =
+        dynamic_compute_graph_with_first_dispatch(&context, invalid_dispatch);
+    let error = pollster::block_on(context.prepare_submission(invalid_graph))
+        .expect_err("device-invalid work must reject before prepared-capacity reservation");
+    assert_eq!(
+        error.kind(),
+        GpuSubmissionPreparationErrorKind::WorkNotAdmitted,
+        "contextual work validation must outrank prepared-capacity exhaustion"
+    );
+    assert_eq!(
+        context.execution_stats().prepared_submissions(),
+        1,
+        "rejected device-invalid work must not reserve or release the valid prepared slot"
+    );
+
+    drop(held);
+    assert_eq!(context.execution_stats().prepared_submissions(), 0);
+}
+
+#[test]
 fn noop_backend_proves_direct_compute_encoding_and_dynamic_bind_group_reuse() {
     let context = noop_compute_context();
     let (graph, readback_id, expected) = dynamic_compute_graph(&context);
@@ -633,7 +689,7 @@ fn noop_backend_proves_direct_compute_encoding_and_dynamic_bind_group_reuse() {
 #[test]
 fn noop_backend_proves_indirect_compute_preparation_encoding_and_lifecycle() {
     let context = noop_indirect_compute_context();
-    let (graph, readback_id, expected) = indirect_compute_graph(&context);
+    let (graph, readback_id, expected) = indirect_compute_graph();
 
     let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
     assert_eq!(context.execution_stats().prepared_submissions(), 1);

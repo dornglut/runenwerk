@@ -22,7 +22,6 @@ impl GpuValidatedBindGroupBindings {
     pub fn new(
         layout: GpuBindGroupLayoutDescriptor,
         values: impl IntoIterator<Item = GpuRuntimeBindingValue>,
-        device_facts: &GpuRuntimeBindingDeviceFacts,
     ) -> Result<Self, GpuProgramContractError> {
         let mut values = values.into_iter().collect::<Vec<_>>();
         values.sort_by_key(GpuRuntimeBindingValue::key);
@@ -70,7 +69,7 @@ impl GpuValidatedBindGroupBindings {
             }
 
             for resource in value.resources() {
-                validate_resource(declaration, resource, device_facts)?;
+                validate_resource_structure(declaration, resource)?;
             }
         }
 
@@ -91,36 +90,40 @@ impl GpuValidatedBindGroupBindings {
             .ok()
             .map(|index| &self.values[index])
     }
+
+    pub(crate) fn validate_device_facts(
+        &self,
+        device_facts: &GpuRuntimeBindingDeviceFacts,
+    ) -> Result<(), GpuProgramContractError> {
+        for declaration in self.layout.bindings() {
+            let value = self
+                .value(declaration.key().binding())
+                .expect("checked bind-group bindings retain every declaration");
+            for resource in value.resources() {
+                validate_resource_device(declaration, resource, device_facts)?;
+            }
+        }
+        Ok(())
+    }
 }
 
-fn validate_resource(
+fn validate_resource_structure(
     declaration: &GpuBindingDeclaration,
     resource: &GpuRuntimeBindingResource,
-    device_facts: &GpuRuntimeBindingDeviceFacts,
 ) -> Result<(), GpuProgramContractError> {
     let kind = *declaration.kind();
     match (kind.class(), resource) {
         (GpuBindingClass::UniformBuffer, GpuRuntimeBindingResource::Buffer(binding)) => {
-            validate_buffer(
-                declaration,
-                binding,
-                GpuBufferUsage::Uniform,
-                device_facts.uniform_buffer_offset_alignment().get(),
-            )
+            validate_buffer_structure(declaration, binding, GpuBufferUsage::Uniform)
         }
         (GpuBindingClass::StorageBuffer, GpuRuntimeBindingResource::Buffer(binding)) => {
-            validate_buffer(
-                declaration,
-                binding,
-                GpuBufferUsage::Storage,
-                device_facts.storage_buffer_offset_alignment().get(),
-            )
+            validate_buffer_structure(declaration, binding, GpuBufferUsage::Storage)
         }
         (GpuBindingClass::SampledTexture, GpuRuntimeBindingResource::TextureView(binding)) => {
-            validate_sampled_texture(declaration, binding, device_facts)
+            validate_sampled_texture_structure(declaration, binding)
         }
         (GpuBindingClass::StorageTexture, GpuRuntimeBindingResource::TextureView(binding)) => {
-            validate_storage_texture(declaration, binding, device_facts)
+            validate_storage_texture_structure(declaration, binding)
         }
         (GpuBindingClass::Sampler, GpuRuntimeBindingResource::Sampler(handle)) => {
             validate_sampler(declaration, handle)
@@ -132,11 +135,52 @@ fn validate_resource(
     }
 }
 
-fn validate_buffer(
+fn validate_resource_device(
+    declaration: &GpuBindingDeclaration,
+    resource: &GpuRuntimeBindingResource,
+    device_facts: &GpuRuntimeBindingDeviceFacts,
+) -> Result<(), GpuProgramContractError> {
+    match (declaration.kind().class(), resource) {
+        (GpuBindingClass::UniformBuffer, GpuRuntimeBindingResource::Buffer(binding)) => {
+            let alignment = device_facts
+                .uniform_buffer_offset_alignment()
+                .ok_or_else(|| {
+                    incompatible(
+                        declaration.key().to_string(),
+                        "use a context whose admitted device reports the uniform-buffer offset alignment required by this binding",
+                    )
+                })?;
+            validate_buffer_alignment(declaration, binding, alignment.get())
+        }
+        (GpuBindingClass::StorageBuffer, GpuRuntimeBindingResource::Buffer(binding)) => {
+            let alignment = device_facts
+                .storage_buffer_offset_alignment()
+                .ok_or_else(|| {
+                    incompatible(
+                        declaration.key().to_string(),
+                        "use a context whose admitted device reports the storage-buffer offset alignment required by this binding",
+                    )
+                })?;
+            validate_buffer_alignment(declaration, binding, alignment.get())
+        }
+        (GpuBindingClass::SampledTexture, GpuRuntimeBindingResource::TextureView(binding)) => {
+            validate_sampled_texture_device(declaration, binding, device_facts)
+        }
+        (GpuBindingClass::StorageTexture, GpuRuntimeBindingResource::TextureView(binding)) => {
+            validate_storage_texture_device(declaration, binding, device_facts)
+        }
+        (GpuBindingClass::Sampler, GpuRuntimeBindingResource::Sampler(_)) => Ok(()),
+        _ => Err(incompatible(
+            declaration.key().to_string(),
+            "retain structurally validated resources before admitted-device validation",
+        )),
+    }
+}
+
+fn validate_buffer_structure(
     declaration: &GpuBindingDeclaration,
     binding: &GpuRuntimeBufferBinding,
     required_usage: GpuBufferUsage,
-    alignment: u64,
 ) -> Result<(), GpuProgramContractError> {
     let descriptor = binding.handle().descriptor();
     if !descriptor.usages().contains(required_usage) {
@@ -151,17 +195,6 @@ fn validate_buffer(
         return Err(incompatible(
             declaration.key().to_string(),
             "match the declaration's dynamic-offset policy exactly",
-        ));
-    }
-
-    if !binding.offset().is_multiple_of(alignment)
-        || binding
-            .dynamic_offset()
-            .is_some_and(|offset| !offset.is_multiple_of(alignment))
-    {
-        return Err(incompatible(
-            declaration.key().to_string(),
-            "align static and dynamic buffer offsets to the admitted device requirement",
         ));
     }
 
@@ -204,10 +237,27 @@ fn validate_buffer(
     Ok(())
 }
 
-fn validate_sampled_texture(
+fn validate_buffer_alignment(
+    declaration: &GpuBindingDeclaration,
+    binding: &GpuRuntimeBufferBinding,
+    alignment: u64,
+) -> Result<(), GpuProgramContractError> {
+    if !binding.offset().is_multiple_of(alignment)
+        || binding
+            .dynamic_offset()
+            .is_some_and(|offset| !offset.is_multiple_of(alignment))
+    {
+        return Err(incompatible(
+            declaration.key().to_string(),
+            "align static and dynamic buffer offsets to the admitted device requirement",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_sampled_texture_structure(
     declaration: &GpuBindingDeclaration,
     binding: &GpuRuntimeTextureViewBinding,
-    device_facts: &GpuRuntimeBindingDeviceFacts,
 ) -> Result<(), GpuProgramContractError> {
     let (format, sample_count) = validate_texture_view_shape(declaration, binding)?;
     let texture = binding.handle().descriptor().texture().descriptor();
@@ -215,19 +265,6 @@ fn validate_sampled_texture(
         return Err(incompatible(
             declaration.key().to_string(),
             "bind a texture view whose source texture carries Sampled usage",
-        ));
-    }
-
-    let capabilities = device_facts.format_capabilities(format).ok_or_else(|| {
-        incompatible(
-            declaration.key().to_string(),
-            "supply admitted format capabilities for the bound texture format",
-        )
-    })?;
-    if !capabilities.sampled {
-        return Err(incompatible(
-            declaration.key().to_string(),
-            "bind a texture format admitted for sampled access",
         ));
     }
 
@@ -243,16 +280,15 @@ fn validate_sampled_texture(
         .kind()
         .texture_sample_class()
         .expect("sampled-texture declarations carry a sample class");
-    let compatible = match sample_class {
-        GpuTextureSampleClass::FloatFilterable => {
-            is_float_format(format) && capabilities.filterable
+    let structurally_compatible = match sample_class {
+        GpuTextureSampleClass::FloatFilterable | GpuTextureSampleClass::FloatUnfilterable => {
+            is_float_format(format)
         }
-        GpuTextureSampleClass::FloatUnfilterable => is_float_format(format),
         GpuTextureSampleClass::Depth => format.is_depth(),
         GpuTextureSampleClass::Sint => false,
         GpuTextureSampleClass::Uint => format == GpuTextureFormat::R32Uint,
     };
-    if !compatible {
+    if !structurally_compatible {
         return Err(incompatible(
             declaration.key().to_string(),
             "bind a texture whose normalized sample class matches the declaration",
@@ -262,10 +298,40 @@ fn validate_sampled_texture(
     Ok(())
 }
 
-fn validate_storage_texture(
+fn validate_sampled_texture_device(
     declaration: &GpuBindingDeclaration,
     binding: &GpuRuntimeTextureViewBinding,
     device_facts: &GpuRuntimeBindingDeviceFacts,
+) -> Result<(), GpuProgramContractError> {
+    let view = binding.handle().descriptor();
+    let texture = view.texture().descriptor();
+    let format = view.format().unwrap_or(texture.format());
+    let capabilities = device_facts.format_capabilities(format).ok_or_else(|| {
+        incompatible(
+            declaration.key().to_string(),
+            "supply admitted format capabilities for the bound texture format",
+        )
+    })?;
+    if !capabilities.sampled {
+        return Err(incompatible(
+            declaration.key().to_string(),
+            "bind a texture format admitted for sampled access",
+        ));
+    }
+    if declaration.kind().texture_sample_class() == Some(GpuTextureSampleClass::FloatFilterable)
+        && !capabilities.filterable
+    {
+        return Err(incompatible(
+            declaration.key().to_string(),
+            "bind a texture format admitted for filterable sampled access",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_storage_texture_structure(
+    declaration: &GpuBindingDeclaration,
+    binding: &GpuRuntimeTextureViewBinding,
 ) -> Result<(), GpuProgramContractError> {
     let (format, sample_count) = validate_texture_view_shape(declaration, binding)?;
     if sample_count != 1 {
@@ -287,6 +353,40 @@ fn validate_storage_texture(
     }
 
     let texture = binding.handle().descriptor().texture().descriptor();
+    let access = declaration
+        .kind()
+        .storage_texture_access()
+        .expect("storage-texture declarations carry access");
+    let usage_compatible = match access {
+        GpuStorageTextureAccess::ReadOnly => {
+            texture.usages().contains(GpuTextureUsage::StorageRead)
+        }
+        GpuStorageTextureAccess::WriteOnly => {
+            texture.usages().contains(GpuTextureUsage::StorageWrite)
+        }
+        GpuStorageTextureAccess::ReadWrite => {
+            texture.usages().contains(GpuTextureUsage::StorageRead)
+                && texture.usages().contains(GpuTextureUsage::StorageWrite)
+        }
+    };
+    if !usage_compatible {
+        return Err(incompatible(
+            declaration.key().to_string(),
+            "bind a storage texture whose logical usage satisfies the declared access",
+        ));
+    }
+
+    Ok(())
+}
+
+fn validate_storage_texture_device(
+    declaration: &GpuBindingDeclaration,
+    binding: &GpuRuntimeTextureViewBinding,
+    device_facts: &GpuRuntimeBindingDeviceFacts,
+) -> Result<(), GpuProgramContractError> {
+    let view = binding.handle().descriptor();
+    let texture = view.texture().descriptor();
+    let format = view.format().unwrap_or(texture.format());
     let capabilities = device_facts.format_capabilities(format).ok_or_else(|| {
         incompatible(
             declaration.key().to_string(),
@@ -298,26 +398,18 @@ fn validate_storage_texture(
         .storage_texture_access()
         .expect("storage-texture declarations carry access");
     let compatible = match access {
-        GpuStorageTextureAccess::ReadOnly => {
-            texture.usages().contains(GpuTextureUsage::StorageRead) && capabilities.storage_read
-        }
-        GpuStorageTextureAccess::WriteOnly => {
-            texture.usages().contains(GpuTextureUsage::StorageWrite) && capabilities.storage_write
-        }
+        GpuStorageTextureAccess::ReadOnly => capabilities.storage_read,
+        GpuStorageTextureAccess::WriteOnly => capabilities.storage_write,
         GpuStorageTextureAccess::ReadWrite => {
-            texture.usages().contains(GpuTextureUsage::StorageRead)
-                && texture.usages().contains(GpuTextureUsage::StorageWrite)
-                && capabilities.storage_read
-                && capabilities.storage_write
+            capabilities.storage_read && capabilities.storage_write
         }
     };
     if !compatible {
         return Err(incompatible(
             declaration.key().to_string(),
-            "bind a storage texture whose usage and admitted format capabilities satisfy access",
+            "bind a storage texture whose admitted format capabilities satisfy access",
         ));
     }
-
     Ok(())
 }
 

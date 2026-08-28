@@ -1172,6 +1172,7 @@ impl GpuContext {
             )
         })?;
 
+        self.validate_prepared_work_device_facts(&graph)?;
         let reservation = self.backend.execution.reserve_prepared()?;
         let plan = prepare_execution_plan(self, &graph).await?;
         validate_plan_policy(
@@ -1961,7 +1962,7 @@ async fn prepare_compute_operation(
             .await
             .map_err(preparation_program_binding_failure)?;
         let realization = context
-            .realize_bind_group(&layout, group.values().cloned())
+            .realize_validated_bind_group(&layout, group.clone())
             .await
             .map_err(preparation_program_binding_failure)?;
         bind_groups.push(PreparedBindGroup {

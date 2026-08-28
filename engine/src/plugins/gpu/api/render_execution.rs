@@ -133,7 +133,6 @@ impl GpuViewport {
         height: f32,
         min_depth: f32,
         max_depth: f32,
-        limits: GpuLimits,
     ) -> Result<Self, GpuWorkOperationError> {
         let values = [x, y, width, height, min_depth, max_depth];
         if values.iter().any(|value| !value.is_finite()) {
@@ -142,17 +141,21 @@ impl GpuViewport {
                 "provide finite viewport coordinates, extent, and depth bounds",
             ));
         }
-        let max_dimension = limits.max_texture_dimension_2d() as f32;
-        let valid_extent = x >= 0.0
-            && y >= 0.0
-            && width >= 0.0
-            && height >= 0.0
-            && x + width <= max_dimension
-            && y + height <= max_dimension;
-        if !valid_extent || min_depth < 0.0 || max_depth > 1.0 || min_depth > max_depth {
+        let end_x = x + width;
+        let end_y = y + height;
+        if x < 0.0
+            || y < 0.0
+            || width < 0.0
+            || height < 0.0
+            || !end_x.is_finite()
+            || !end_y.is_finite()
+            || min_depth < 0.0
+            || max_depth > 1.0
+            || min_depth > max_depth
+        {
             return Err(invalid_dynamic_state(
                 "viewport",
-                "keep viewport coordinates and extent inside the admitted 2D dimension bound and depth inside 0 through 1",
+                "keep viewport coordinates and extent inside the finite nonnegative domain and depth inside 0 through 1",
             ));
         }
         Ok(Self {
@@ -162,6 +165,18 @@ impl GpuViewport {
 
     pub fn values(self) -> [f32; 6] {
         self.bits.map(f32::from_bits)
+    }
+
+    pub(crate) fn validate_limits(self, limits: GpuLimits) -> Result<(), GpuWorkOperationError> {
+        let [x, y, width, height, _, _] = self.values();
+        let max_dimension = limits.max_texture_dimension_2d() as f32;
+        if x + width > max_dimension || y + height > max_dimension {
+            return Err(invalid_dynamic_state(
+                "viewport",
+                "keep viewport coordinates and extent inside the admitted 2D dimension bound",
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -282,7 +297,6 @@ impl GpuRenderDraw {
         scissor: GpuScissorRect,
         blend_constant: GpuBlendConstant,
         stencil_reference: u32,
-        limits: GpuLimits,
     ) -> Result<Self, GpuWorkOperationError> {
         if pipeline.layout() != bindings.layout() {
             return Err(invalid_draw(
@@ -317,19 +331,6 @@ impl GpuRenderDraw {
             return Err(invalid_draw(
                 "vertex buffers",
                 "bind exactly the vertex-buffer slots declared by the render pipeline",
-            ));
-        }
-        let vertex_buffer_slots = vertex_buffers
-            .last()
-            .map(|binding| u64::from(binding.slot()) + 1)
-            .unwrap_or(0);
-        if vertex_buffer_slots > u64::from(limits.max_vertex_buffers())
-            || vertex_buffer_slots + bindings.required_bind_group_slots()
-                > u64::from(limits.max_bind_groups_plus_vertex_buffers())
-        {
-            return Err(invalid_draw(
-                "vertex buffers",
-                "keep positional vertex-buffer and bind-group slots inside the admitted execution limits",
             ));
         }
 
@@ -433,6 +434,25 @@ impl GpuRenderDraw {
 
     pub fn requirements(&self) -> &GpuCapabilityRequirements {
         self.pipeline.requirements()
+    }
+
+    pub(crate) fn validate_limits(&self, limits: GpuLimits) -> Result<(), GpuWorkOperationError> {
+        self.viewport.validate_limits(limits)?;
+        let vertex_buffer_slots = self
+            .vertex_buffers
+            .last()
+            .map(|binding| u64::from(binding.slot()) + 1)
+            .unwrap_or(0);
+        if vertex_buffer_slots > u64::from(limits.max_vertex_buffers())
+            || vertex_buffer_slots + self.bindings.required_bind_group_slots()
+                > u64::from(limits.max_bind_groups_plus_vertex_buffers())
+        {
+            return Err(invalid_draw(
+                "vertex buffers",
+                "keep positional vertex-buffer and bind-group slots inside the admitted execution limits",
+            ));
+        }
+        Ok(())
     }
 }
 

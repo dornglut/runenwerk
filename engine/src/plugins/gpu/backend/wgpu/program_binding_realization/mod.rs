@@ -279,8 +279,8 @@ impl GpuContext {
         }
     }
 
-    /// Validates typed runtime values, resolves their G4C1 resource records, and realizes one
-    /// exact bind group against a realized G4C2 layout.
+    /// Validates typed runtime values against this admitted device, resolves their G4C1 resource
+    /// records, and realizes one exact bind group against a realized G4C2 layout.
     pub async fn realize_bind_group(
         &self,
         layout: &GpuRealizedBindGroupLayout,
@@ -292,16 +292,43 @@ impl GpuContext {
             request.clone(),
             layout.affinity(),
         )?;
-        let device_facts = lowering::runtime_device_facts(self)?;
-        let validated =
-            GpuValidatedBindGroupBindings::new(layout.descriptor().clone(), values, &device_facts)
-                .map_err(|error| {
-                    GpuProgramBindingRealizationError::new(
-                        GpuProgramBindingRealizationErrorCategory::RuntimeBindingIncompatible,
-                        request.clone(),
-                        error.to_string(),
-                    )
-                })?;
+        let validated = GpuValidatedBindGroupBindings::new(layout.descriptor().clone(), values)
+            .and_then(|validated| {
+                validated
+                    .validate_device_facts(&self.runtime_binding_device_facts())
+                    .map(|()| validated)
+            })
+            .map_err(|error| {
+                GpuProgramBindingRealizationError::new(
+                    GpuProgramBindingRealizationErrorCategory::RuntimeBindingIncompatible,
+                    request,
+                    error.to_string(),
+                )
+            })?;
+        self.realize_validated_bind_group(layout, validated).await
+    }
+
+    /// Realizes a bind group whose logical and admitted-device facts were already validated by
+    /// canonical contextual submission preparation. This is crate-private execution plumbing, not
+    /// an unchecked public realization path.
+    pub(super) async fn realize_validated_bind_group(
+        &self,
+        layout: &GpuRealizedBindGroupLayout,
+        validated: GpuValidatedBindGroupBindings,
+    ) -> Result<GpuRealizedBindGroup, GpuProgramBindingRealizationError> {
+        let request = format!("bind group group={}", layout.descriptor().group());
+        super::health::validate_program_affinity(
+            self.affinity(),
+            request.clone(),
+            layout.affinity(),
+        )?;
+        if validated.layout() != layout.descriptor() {
+            return Err(GpuProgramBindingRealizationError::new(
+                GpuProgramBindingRealizationErrorCategory::RuntimeBindingIncompatible,
+                request,
+                "validated runtime binding layout does not match the realized bind-group layout",
+            ));
+        }
         let values = validated.values().cloned().collect::<Vec<_>>();
         loop {
             self.backend

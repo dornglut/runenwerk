@@ -312,11 +312,8 @@ impl Renderer {
             "engine_ui_screen_uniform",
             None,
         )?;
-        let runtime_bindings = ui_runtime_binding_set(
-            context,
-            &artifacts.pipeline,
-            [artifacts.screen_binding.clone()],
-        )?;
+        let runtime_bindings =
+            ui_runtime_binding_set(&artifacts.pipeline, [artifacts.screen_binding.clone()])?;
 
         self.rect_pass = Some(RectPass {
             pipeline: artifacts.pipeline,
@@ -346,11 +343,8 @@ impl Renderer {
             "engine_ui_stroke_screen_uniform",
             None,
         )?;
-        let runtime_bindings = ui_runtime_binding_set(
-            context,
-            &artifacts.pipeline,
-            [artifacts.screen_binding.clone()],
-        )?;
+        let runtime_bindings =
+            ui_runtime_binding_set(&artifacts.pipeline, [artifacts.screen_binding.clone()])?;
 
         self.stroke_pass = Some(StrokePass {
             pipeline: artifacts.pipeline,
@@ -457,7 +451,6 @@ impl Renderer {
 
     pub(super) fn ensure_glyph_atlas_gpu(
         &mut self,
-        context: &GpuContext,
         atlas: &crate::plugins::render::features::UiFontAtlasResource,
         texture_id: u64,
         pending_operations: &mut RendererPendingOperations,
@@ -498,7 +491,6 @@ impl Renderer {
         let logical_values =
             ui_texture_bind_group_values(view._handle.clone(), texture_sampler._handle.clone())?;
         let runtime_bindings = ui_runtime_binding_set(
-            context,
             &glyph_pass.pipeline,
             std::iter::once(glyph_pass.screen_binding.clone())
                 .chain(logical_values.iter().cloned()),
@@ -546,14 +538,12 @@ impl Renderer {
     /// comes from the exact acquired surface attachment extent.
     pub(super) fn lower_ui_draws(
         &self,
-        context: &GpuContext,
         prepared: &UiPreparedDraws,
         viewport_surface_bindings: &ViewportSurfaceBindingRegistry,
         viewport_bind_groups: &UiViewportBindGroups,
         product_surface_bind_groups: &UiProductSurfaceBindGroups,
         acquired_surface_extent: (u32, u32),
     ) -> Result<Vec<GpuRenderDraw>> {
-        let limits = context.device_facts().device_limits().values();
         let viewport = GpuViewport::new(
             0.0,
             0.0,
@@ -561,7 +551,6 @@ impl Renderer {
             acquired_surface_extent.1 as f32,
             0.0,
             1.0,
-            limits,
         )?;
         let mut draws = Vec::with_capacity(prepared.draw_plan.len());
         for command in &prepared.draw_plan {
@@ -662,7 +651,6 @@ impl Renderer {
                 GpuScissorRect::new(scissor.0, scissor.1, scissor.2, scissor.3)?,
                 GpuBlendConstant::new(0.0, 0.0, 0.0, 0.0)?,
                 0,
-                limits,
             )?);
         }
         Ok(draws)
@@ -670,7 +658,6 @@ impl Renderer {
 
     pub(super) fn realize_ui_dynamic_bind_groups(
         &self,
-        context: &GpuContext,
         prepared: &UiPreparedDraws,
         viewport_surface_bindings: &ViewportSurfaceBindingRegistry,
     ) -> Result<(UiViewportBindGroups, UiProductSurfaceBindGroups)> {
@@ -711,7 +698,6 @@ impl Renderer {
                         viewport_embed_pass.texture_sampler._handle.clone(),
                     )?;
                     let runtime_bindings = ui_runtime_binding_set(
-                        context,
                         &viewport_embed_pass.pipeline,
                         std::iter::once(viewport_embed_pass.screen_binding.clone())
                             .chain(logical_values.iter().cloned()),
@@ -748,7 +734,6 @@ impl Renderer {
                         product_surface_pass.texture_sampler._handle.clone(),
                     )?;
                     let runtime_bindings = ui_runtime_binding_set(
-                        context,
                         &product_surface_pass.pipeline,
                         std::iter::once(product_surface_pass.screen_binding.clone())
                             .chain(logical_values.iter().cloned()),
@@ -775,19 +760,12 @@ struct UiProgramBindingArtifacts {
 }
 
 fn ui_runtime_binding_set(
-    context: &GpuContext,
     pipeline: &GpuRealizedRenderPipeline,
     values: impl IntoIterator<Item = GpuRuntimeBindingValue>,
 ) -> Result<GpuRuntimeBindingSet> {
-    let device_facts = context.runtime_binding_device_facts().ok_or_else(|| {
-        anyhow::anyhow!(
-            "UI pipeline cannot validate runtime bindings because admitted device binding facts are incomplete"
-        )
-    })?;
     Ok(GpuRuntimeBindingSet::new(
         pipeline.descriptor().layout().clone(),
         values,
-        &device_facts,
     )?)
 }
 

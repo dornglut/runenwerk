@@ -73,8 +73,8 @@ fn device_facts_with_limits(
     max_dynamic_storage_buffers: u32,
 ) -> GpuRuntimeBindingDeviceFacts {
     GpuRuntimeBindingDeviceFacts::new(
-        NonZeroU64::new(16).unwrap(),
-        NonZeroU64::new(16).unwrap(),
+        NonZeroU64::new(16),
+        NonZeroU64::new(16),
         max_bind_groups,
         max_dynamic_uniform_buffers,
         max_dynamic_storage_buffers,
@@ -108,11 +108,13 @@ fn runtime_buffer_value(
 }
 
 #[test]
-fn runtime_bindings_validate_usage_range_alignment_and_layout() {
+fn runtime_bindings_validate_logical_usage_range_and_layout_then_admitted_alignment() {
     let layout = GpuBindGroupLayoutDescriptor::new(0, [declaration(None)]).unwrap();
-    let validated =
-        GpuValidatedBindGroupBindings::new(layout, [runtime_value(16)], &device_facts())
-            .expect("compatible runtime binding should validate");
+    let validated = GpuValidatedBindGroupBindings::new(layout, [runtime_value(16)])
+        .expect("compatible runtime binding should construct logically");
+    validated
+        .validate_device_facts(&device_facts())
+        .expect("compatible runtime binding should satisfy admitted alignment");
 
     assert_eq!(validated.layout().group(), 0);
     assert!(validated.value(0).is_some());
@@ -120,14 +122,13 @@ fn runtime_bindings_validate_usage_range_alignment_and_layout() {
 }
 
 #[test]
-fn runtime_bindings_enforce_compiler_minimum_and_stronger_host_minimum() {
+fn runtime_bindings_enforce_compiler_minimum_and_stronger_host_minimum_without_device_facts() {
     let buffer = storage_buffer(64);
     let compiler_only =
         GpuBindGroupLayoutDescriptor::new(0, [analyzed_storage_declaration(None)]).unwrap();
     let error = GpuValidatedBindGroupBindings::new(
         compiler_only,
         [runtime_buffer_value(0, buffer.clone(), 0, 16, 0)],
-        &device_facts(),
     )
     .expect_err("runtime range smaller than compiler-required minimum must reject");
     assert_eq!(
@@ -142,7 +143,6 @@ fn runtime_bindings_enforce_compiler_minimum_and_stronger_host_minimum() {
     let error = GpuValidatedBindGroupBindings::new(
         host_layout.clone(),
         [runtime_buffer_value(0, buffer.clone(), 0, 32, 0)],
-        &device_facts(),
     )
     .expect_err(
         "runtime range satisfying compiler minimum but not stronger host minimum must reject",
@@ -152,19 +152,18 @@ fn runtime_bindings_enforce_compiler_minimum_and_stronger_host_minimum() {
         GpuProgramContractCause::RuntimeBindingIncompatible
     );
 
-    GpuValidatedBindGroupBindings::new(
-        host_layout,
-        [runtime_buffer_value(0, buffer, 0, 48, 0)],
-        &device_facts(),
-    )
-    .expect("runtime range satisfying both compiler and host minima should validate");
+    GpuValidatedBindGroupBindings::new(host_layout, [runtime_buffer_value(0, buffer, 0, 48, 0)])
+        .expect("runtime range satisfying both compiler and host minima should construct");
 }
 
 #[test]
-fn runtime_bindings_reject_unaligned_dynamic_offsets() {
+fn runtime_bindings_defer_dynamic_offset_alignment_to_explicit_device_validation() {
     let layout = GpuBindGroupLayoutDescriptor::new(0, [declaration(None)]).unwrap();
-    let error = GpuValidatedBindGroupBindings::new(layout, [runtime_value(4)], &device_facts())
-        .expect_err("unaligned dynamic offsets must be rejected");
+    let validated = GpuValidatedBindGroupBindings::new(layout, [runtime_value(4)])
+        .expect("unaligned dynamic offsets remain valid logical values before device admission");
+    let error = validated
+        .validate_device_facts(&device_facts())
+        .expect_err("unaligned dynamic offsets must reject against admitted device facts");
 
     assert_eq!(
         error.cause(),
@@ -173,9 +172,32 @@ fn runtime_bindings_reject_unaligned_dynamic_offsets() {
 }
 
 #[test]
-fn runtime_bindings_reject_missing_values() {
+fn runtime_bindings_require_only_the_alignment_fact_the_binding_uses() {
+    let empty_layout = GpuPipelineLayoutDescriptor::new([]).unwrap();
+    let empty = GpuRuntimeBindingSet::new(empty_layout, [])
+        .expect("empty runtime bindings should construct logically");
+    let no_alignments = GpuRuntimeBindingDeviceFacts::new(None, None, 4, 8, 4, []);
+    empty
+        .validate_device_facts(&no_alignments)
+        .expect("binding-free work must not require unrelated alignment facts");
+
+    let group = GpuBindGroupLayoutDescriptor::new(0, [declaration(None)]).unwrap();
+    let layout = GpuPipelineLayoutDescriptor::new([group]).unwrap();
+    let storage = GpuRuntimeBindingSet::new(layout, [runtime_value(16)])
+        .expect("storage binding should construct independently of device facts");
+    let error = storage
+        .validate_device_facts(&no_alignments)
+        .expect_err("storage binding must require its admitted storage alignment fact");
+    assert_eq!(
+        error.cause(),
+        GpuProgramContractCause::RuntimeBindingIncompatible
+    );
+}
+
+#[test]
+fn runtime_bindings_reject_missing_values_without_device_facts() {
     let layout = GpuBindGroupLayoutDescriptor::new(0, [declaration(None)]).unwrap();
-    let error = GpuValidatedBindGroupBindings::new(layout, [], &device_facts())
+    let error = GpuValidatedBindGroupBindings::new(layout, [])
         .expect_err("every declaration needs one runtime value");
 
     assert_eq!(
@@ -186,12 +208,10 @@ fn runtime_bindings_reject_missing_values() {
 
 #[test]
 fn runtime_bindings_reject_wrong_fixed_array_cardinality_before_backend_realization() {
-    // This proves only G4B's logical resource-count compatibility. Native array
-    // feature admission and backend group restrictions belong to G4C2.
     let layout =
         GpuBindGroupLayoutDescriptor::new(0, [declaration(Some(NonZeroU32::new(2).unwrap()))])
             .unwrap();
-    let error = GpuValidatedBindGroupBindings::new(layout, [runtime_value(16)], &device_facts())
+    let error = GpuValidatedBindGroupBindings::new(layout, [runtime_value(16)])
         .expect_err("fixed binding arrays require exact cardinality");
 
     assert_eq!(
@@ -204,8 +224,11 @@ fn runtime_bindings_reject_wrong_fixed_array_cardinality_before_backend_realizat
 fn runtime_binding_set_is_complete_pipeline_shaped_logical_use() {
     let group = GpuBindGroupLayoutDescriptor::new(0, [declaration(None)]).unwrap();
     let layout = GpuPipelineLayoutDescriptor::new([group]).unwrap();
-    let bindings = GpuRuntimeBindingSet::new(layout.clone(), [runtime_value(16)], &device_facts())
-        .expect("one complete dynamic storage binding should validate");
+    let bindings = GpuRuntimeBindingSet::new(layout.clone(), [runtime_value(16)])
+        .expect("one complete dynamic storage binding should construct logically");
+    bindings
+        .validate_device_facts(&device_facts())
+        .expect("logical binding set should satisfy admitted facts");
 
     assert_eq!(bindings.layout(), &layout);
     assert_eq!(bindings.groups().len(), 1);
@@ -221,10 +244,13 @@ fn runtime_binding_set_is_complete_pipeline_shaped_logical_use() {
 }
 
 #[test]
-fn runtime_binding_set_rejects_sparse_group_above_admitted_positional_limit() {
+fn runtime_binding_set_defers_sparse_group_limit_to_explicit_device_validation() {
     let sparse = GpuBindGroupLayoutDescriptor::new(1, []).unwrap();
     let layout = GpuPipelineLayoutDescriptor::new([sparse]).unwrap();
-    let error = GpuRuntimeBindingSet::new(layout, [], &device_facts_with_limits(1, 8, 4))
+    let bindings = GpuRuntimeBindingSet::new(layout, [])
+        .expect("sparse group identity is valid independent of an admitted device");
+    let error = bindings
+        .validate_device_facts(&device_facts_with_limits(1, 8, 4))
         .expect_err(
             "group one requires two positional slots and must reject against a limit of one",
         );
@@ -237,15 +263,14 @@ fn runtime_binding_set_rejects_sparse_group_above_admitted_positional_limit() {
 }
 
 #[test]
-fn runtime_binding_set_rejects_dynamic_storage_when_admitted_limit_is_zero() {
+fn runtime_binding_set_defers_dynamic_storage_limit_to_explicit_device_validation() {
     let group = GpuBindGroupLayoutDescriptor::new(0, [declaration(None)]).unwrap();
     let layout = GpuPipelineLayoutDescriptor::new([group]).unwrap();
-    let error = GpuRuntimeBindingSet::new(
-        layout,
-        [runtime_value(16)],
-        &device_facts_with_limits(4, 8, 0),
-    )
-    .expect_err("zero admitted dynamic-storage capacity must reject the declaration");
+    let bindings = GpuRuntimeBindingSet::new(layout, [runtime_value(16)])
+        .expect("dynamic storage declaration is logical before device admission");
+    let error = bindings
+        .validate_device_facts(&device_facts_with_limits(4, 8, 0))
+        .expect_err("zero admitted dynamic-storage capacity must reject the declaration");
 
     assert_eq!(
         error.cause(),
@@ -255,7 +280,7 @@ fn runtime_binding_set_rejects_dynamic_storage_when_admitted_limit_is_zero() {
 }
 
 #[test]
-fn runtime_binding_set_rejects_overlapping_writable_ranges_with_exact_evidence() {
+fn runtime_binding_set_rejects_overlapping_writable_ranges_without_device_facts() {
     let buffer = storage_buffer(96);
     let group = GpuBindGroupLayoutDescriptor::new(
         0,
@@ -269,7 +294,6 @@ fn runtime_binding_set_rejects_overlapping_writable_ranges_with_exact_evidence()
             runtime_buffer_value(0, buffer.clone(), 0, 32, 0),
             runtime_buffer_value(1, buffer, 16, 32, 0),
         ],
-        &device_facts(),
     )
     .expect_err("one binding use cannot contain overlapping writable effective ranges");
 
@@ -282,7 +306,7 @@ fn runtime_binding_set_rejects_overlapping_writable_ranges_with_exact_evidence()
 }
 
 #[test]
-fn runtime_binding_set_accepts_disjoint_writable_ranges() {
+fn runtime_binding_set_accepts_disjoint_writable_ranges_without_device_facts() {
     let buffer = storage_buffer(96);
     let group = GpuBindGroupLayoutDescriptor::new(
         0,
@@ -296,7 +320,6 @@ fn runtime_binding_set_accepts_disjoint_writable_ranges() {
             runtime_buffer_value(0, buffer.clone(), 0, 32, 0),
             runtime_buffer_value(1, buffer, 32, 32, 0),
         ],
-        &device_facts(),
     )
     .expect("disjoint writable binding ranges are valid");
 

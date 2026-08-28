@@ -300,6 +300,7 @@ impl fmt::Debug for GpuSubmission {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GpuSubmissionPreparationErrorKind {
     CapabilityNotAdmitted,
+    WorkNotAdmitted,
     PreparedCapacityExceeded,
     UploadDemandExceedsPolicy,
     ReadbackDemandExceedsPolicy,

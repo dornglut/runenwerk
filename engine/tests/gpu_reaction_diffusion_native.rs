@@ -343,7 +343,6 @@ fn runtime_binding(binding: u32, buffer: &GpuBufferHandle) -> GpuRuntimeBindingV
 }
 
 fn compute_operation(
-    context: &GpuContext,
     pipeline: &GpuComputePipelineDescriptor,
     input: &GpuBufferHandle,
     output: &GpuBufferHandle,
@@ -351,7 +350,6 @@ fn compute_operation(
     width: u32,
     height: u32,
 ) -> GpuComputeOperation {
-    let facts = context.runtime_binding_device_facts().unwrap();
     let bindings = GpuRuntimeBindingSet::new(
         pipeline.layout().clone(),
         [
@@ -359,19 +357,15 @@ fn compute_operation(
             runtime_binding(1, output),
             runtime_binding(2, params),
         ],
-        &facts,
     )
     .unwrap();
     let dispatch = GpuDispatchIntent::direct(
         GpuDispatchSize::new(width.div_ceil(WORKGROUP), height.div_ceil(WORKGROUP), 1).unwrap(),
-        context.device_facts().workload_budget().limits(),
-    )
-    .unwrap();
+    );
     GpuComputeOperation::new(pipeline.clone(), bindings, dispatch).unwrap()
 }
 
 fn render_operation(
-    context: &GpuContext,
     pipeline: &GpuRenderPipelineDescriptor,
     state: &GpuBufferHandle,
     params: &GpuBufferHandle,
@@ -379,14 +373,11 @@ fn render_operation(
     width: u32,
     height: u32,
 ) -> GpuRenderOperation {
-    let facts = context.runtime_binding_device_facts().unwrap();
     let bindings = GpuRuntimeBindingSet::new(
         pipeline.layout().clone(),
         [runtime_binding(0, state), runtime_binding(1, params)],
-        &facts,
     )
     .unwrap();
-    let limits = context.device_facts().workload_budget().limits();
     let draw = GpuRenderDraw::new(
         pipeline.clone(),
         bindings,
@@ -396,11 +387,10 @@ fn render_operation(
             GpuDrawRange::new(0, 3).unwrap(),
             GpuDrawRange::new(0, 1).unwrap(),
         ),
-        GpuViewport::new(0.0, 0.0, width as f32, height as f32, 0.0, 1.0, limits).unwrap(),
+        GpuViewport::new(0.0, 0.0, width as f32, height as f32, 0.0, 1.0).unwrap(),
         GpuScissorRect::new(0, 0, width, height).unwrap(),
         GpuBlendConstant::new(0.0, 0.0, 0.0, 0.0).unwrap(),
         0,
-        limits,
     )
     .unwrap();
     let attachment = GpuRenderColorAttachment::new(
@@ -606,7 +596,6 @@ fn assert_prepared_graph_evidence(graph: &GpuPreparedWorkGraph) {
 }
 
 fn offscreen_work(
-    context: &GpuContext,
     sources: &ProgramSources,
     envelope: Envelope,
 ) -> (GpuResourceLabel, GpuWorkFragment, Vec<GpuReadbackId>) {
@@ -643,7 +632,6 @@ fn offscreen_work(
                     (&state_b, &state_a)
                 };
                 let operation = compute_operation(
-                    context,
                     &compute,
                     input,
                     output,
@@ -666,7 +654,6 @@ fn offscreen_work(
                 builder,
                 &format!("{} render frame {frame:03}", envelope.name),
                 GpuWorkOperation::Render(render_operation(
-                    context,
                     &render,
                     state,
                     &params_buffer,
@@ -825,7 +812,7 @@ fn native_reaction_diffusion_retains_bounded_png_sequences_and_manifest() {
 
     let mut jobs = Vec::new();
     for (envelope_index, envelope) in ENVELOPES.into_iter().enumerate() {
-        let (graph_label, fragment, ids) = offscreen_work(&context, &sources, envelope);
+        let (graph_label, fragment, ids) = offscreen_work(&sources, envelope);
         let (submission, submission_path) = if envelope_index == 0 {
             let graph = GpuPreparedWorkGraph::prepare(graph_label, [fragment]).unwrap();
             assert_prepared_graph_evidence(&graph);
@@ -992,7 +979,6 @@ fn native_surface_context(window: Arc<Window>) -> (GpuContext, GpuSurfaceHandle,
 }
 
 fn surface_graph(
-    context: &GpuContext,
     sources: &ProgramSources,
     image: &GpuAcquiredSurfaceImage,
     format: GpuTextureFormat,
@@ -1028,7 +1014,6 @@ fn surface_graph(
                 builder.compute(
                     format!("surface frame {frame:03} iteration {iteration:03}"),
                     compute_operation(
-                        context,
                         &compute,
                         input,
                         output,
@@ -1045,7 +1030,6 @@ fn surface_graph(
             builder,
             "reaction diffusion surface render",
             GpuWorkOperation::Render(render_operation(
-                context,
                 &render,
                 state,
                 &params_buffer,
@@ -1093,7 +1077,7 @@ fn run_surface_proof(window: Arc<Window>) {
     let (context, surface, format) = native_surface_context(window);
     let image = context.acquire_surface_image(surface).unwrap();
     let sources = admitted_sources();
-    let graph = surface_graph(&context, &sources, &image, format);
+    let graph = surface_graph(&sources, &image, format);
     let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
     let submission = context.submit_prepared(prepared).unwrap();
     progress_to_completion(&context, &submission);

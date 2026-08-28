@@ -3,7 +3,11 @@
 //! This module is the public namespace only.  Each admission concern has one
 //! implementation owner below it; it is not a compatibility layer.
 
-use super::{GpuExecutionPolicy, GpuRealizationPolicies, GpuRuntimeBindingDeviceFacts};
+use super::{
+    GpuExecutionPolicy, GpuPreparedWorkGraph, GpuPreparedWorkNode, GpuRealizationPolicies,
+    GpuRuntimeBindingDeviceFacts, GpuSubmissionPreparationError, GpuSubmissionPreparationErrorKind,
+    GpuWorkOperation,
+};
 use core::num::NonZeroU64;
 
 mod admission;
@@ -124,24 +128,57 @@ impl GpuContext {
         &self.device
     }
 
-    /// Projects the admitted device facts needed by backend-neutral runtime binding validation.
-    ///
-    /// This is derived entirely from accepted RunenGPU context facts. It does not expose private
-    /// backend objects or re-query mutable backend state.
-    pub fn runtime_binding_device_facts(&self) -> Option<GpuRuntimeBindingDeviceFacts> {
+    pub(crate) fn runtime_binding_device_facts(&self) -> GpuRuntimeBindingDeviceFacts {
         let device_limits = self.device.device_limits();
         let alignments = device_limits.alignments();
-        let uniform_buffer_offset_alignment = NonZeroU64::new(alignments.uniform_dynamic_offset?)?;
-        let storage_buffer_offset_alignment = NonZeroU64::new(alignments.storage_dynamic_offset?)?;
         let limits = device_limits.values();
-        Some(GpuRuntimeBindingDeviceFacts::new(
-            uniform_buffer_offset_alignment,
-            storage_buffer_offset_alignment,
+        GpuRuntimeBindingDeviceFacts::new(
+            alignments.uniform_dynamic_offset.and_then(NonZeroU64::new),
+            alignments.storage_dynamic_offset.and_then(NonZeroU64::new),
             limits.max_bind_groups(),
             limits.max_dynamic_uniform_buffers_per_pipeline_layout(),
             limits.max_dynamic_storage_buffers_per_pipeline_layout(),
             self.adapter.supported().formats(),
-        ))
+        )
+    }
+
+    pub(crate) fn validate_prepared_work_device_facts(
+        &self,
+        graph: &GpuPreparedWorkGraph,
+    ) -> Result<(), GpuSubmissionPreparationError> {
+        let binding_facts = self.runtime_binding_device_facts();
+        let limits = self.device_facts().workload_budget().limits();
+
+        for prepared in graph.nodes() {
+            match prepared.node().operation() {
+                GpuWorkOperation::Compute(operation) => {
+                    operation
+                        .bindings()
+                        .validate_device_facts(&binding_facts)
+                        .map_err(|error| work_not_admitted(prepared, error.to_string()))?;
+                    operation
+                        .dispatch()
+                        .validate_limits(limits)
+                        .map_err(|error| work_not_admitted(prepared, error.to_string()))?;
+                }
+                GpuWorkOperation::Render(operation) => {
+                    for draw in operation.draws() {
+                        draw.bindings()
+                            .validate_device_facts(&binding_facts)
+                            .map_err(|error| work_not_admitted(prepared, error.to_string()))?;
+                        draw.validate_limits(limits)
+                            .map_err(|error| work_not_admitted(prepared, error.to_string()))?;
+                    }
+                }
+                GpuWorkOperation::Copy(_)
+                | GpuWorkOperation::Clear(_)
+                | GpuWorkOperation::Resolve(_)
+                | GpuWorkOperation::Present(_)
+                | GpuWorkOperation::Upload(_)
+                | GpuWorkOperation::Readback(_) => {}
+            }
+        }
+        Ok(())
     }
 
     pub fn admission_report(&self) -> &GpuContextAdmissionReport {
@@ -154,4 +191,19 @@ impl GpuContext {
     ) -> Result<(), GpuContextAffinityError> {
         identity::validate_affinity(self.affinity(), affinity)
     }
+}
+
+fn work_not_admitted(
+    prepared: &GpuPreparedWorkNode,
+    detail: String,
+) -> GpuSubmissionPreparationError {
+    GpuSubmissionPreparationError::new(
+        GpuSubmissionPreparationErrorKind::WorkNotAdmitted,
+        format!(
+            "fragment={:?} node={:?} prepared_node={:?}: {detail}",
+            prepared.fragment_label().as_str(),
+            prepared.node().label().as_str(),
+            prepared.id(),
+        ),
+    )
 }
