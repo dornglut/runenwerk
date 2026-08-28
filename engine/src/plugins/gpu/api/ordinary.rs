@@ -1,6 +1,9 @@
 use super::{
-    GpuBufferDescriptor, GpuBufferHandle, GpuContext, GpuPreparedWorkGraph, GpuQuerySetDescriptor,
-    GpuQuerySetHandle, GpuResourceLabel, GpuSamplerDescriptor, GpuSamplerHandle, GpuSubmission,
+    GpuAdmittedProgramSource, GpuBufferDescriptor, GpuBufferHandle, GpuContext,
+    GpuPreparedWorkGraph, GpuProgramSourceCause, GpuProgramSourceError, GpuProgramSourceIdentity,
+    GpuProgramSourceKey, GpuProgramSourceOwnerId, GpuProgramSourceProvenance,
+    GpuProgramSourceRegistry, GpuProgramSourceRevision, GpuQuerySetDescriptor, GpuQuerySetHandle,
+    GpuResourceLabel, GpuSamplerDescriptor, GpuSamplerHandle, GpuSubmission,
     GpuSubmissionPreparationError, GpuSubmissionRejectionReason, GpuTextureDescriptor,
     GpuTextureHandle, GpuTextureViewDescriptor, GpuTextureViewHandle, GpuWorkAuthoringError,
     GpuWorkFragment, GpuWorkFragmentBuilder, GpuWorkGraphError, GpuWorkNodeId, GpuWorkOperation,
@@ -47,6 +50,70 @@ impl From<GpuSubmissionPreparationError> for GpuWorkSubmissionError {
     fn from(error: GpuSubmissionPreparationError) -> Self {
         Self::SubmissionPreparation(error)
     }
+}
+
+/// Admits one complete static/embedded WGSL source set through the canonical
+/// bounded source-consistency registry without making ordinary callers manage
+/// owner IDs, registry capacities, identity assembly, or provenance records.
+///
+/// Source key, nonzero revision, and canonical WGSL remain explicit semantic
+/// inputs. Dynamic/reloadable source owners that need later admissions should
+/// use [`GpuProgramSourceRegistry`] directly.
+pub fn admit_static_wgsl_sources<const N: usize>(
+    producer: impl Into<String>,
+    sources: [(&str, u64, &str); N],
+) -> Result<[GpuAdmittedProgramSource; N], GpuProgramSourceError> {
+    if N == 0 {
+        return Err(GpuProgramSourceError::invalid(
+            "admit static GPU program sources",
+            "source_count=0",
+            GpuProgramSourceCause::SourceAdmissionCapacityExceeded,
+            "provide at least one static canonical WGSL source",
+        ));
+    }
+
+    let provenance = GpuProgramSourceProvenance::new(producer, None)?;
+    let owner = GpuProgramSourceOwnerId::allocate()?;
+    let mut total_source_bytes = 0usize;
+    let mut checked = Vec::with_capacity(N);
+
+    for (key, revision, canonical_wgsl) in sources {
+        let key = GpuProgramSourceKey::new(key)?;
+        let revision = GpuProgramSourceRevision::try_from_raw(revision)?;
+        if canonical_wgsl.trim().is_empty() {
+            return Err(GpuProgramSourceError::invalid(
+                "admit static GPU program sources",
+                format!("{}@{}", key, revision),
+                GpuProgramSourceCause::EmptyCanonicalWgsl,
+                "provide non-empty canonical WGSL source text",
+            ));
+        }
+        total_source_bytes = total_source_bytes
+            .checked_add(canonical_wgsl.len())
+            .ok_or_else(|| {
+                GpuProgramSourceError::invalid(
+                    "admit static GPU program sources",
+                    "source byte total overflow",
+                    GpuProgramSourceCause::SourceAdmissionCapacityExceeded,
+                    "reduce the static source set",
+                )
+            })?;
+        checked.push((key, revision, canonical_wgsl));
+    }
+
+    let mut registry = GpuProgramSourceRegistry::new(N, total_source_bytes)?;
+    let mut admitted = Vec::with_capacity(N);
+    for (key, revision, canonical_wgsl) in checked {
+        admitted.push(registry.admit_wgsl(
+            GpuProgramSourceIdentity::new(owner, key, revision),
+            canonical_wgsl,
+            provenance.clone(),
+        )?);
+    }
+
+    Ok(admitted
+        .try_into()
+        .unwrap_or_else(|_| unreachable!("static source admission preserves source count")))
 }
 
 impl GpuContext {
@@ -141,6 +208,58 @@ impl GpuResourceScope {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn static_wgsl_sources_share_one_owner_and_preserve_semantic_inputs() {
+        let [compute, render] = admit_static_wgsl_sources(
+            "ordinary-static-proof",
+            [
+                ("proof.compute", 3, "@compute @workgroup_size(1) fn main() {}"),
+                (
+                    "proof.render",
+                    7,
+                    "@vertex fn main() -> @builtin(position) vec4<f32> { return vec4<f32>(); }",
+                ),
+            ],
+        )
+        .unwrap();
+
+        assert_eq!(compute.identity().owner(), render.identity().owner());
+        assert_eq!(compute.identity().key().as_str(), "proof.compute");
+        assert_eq!(compute.identity().revision().get(), 3);
+        assert_eq!(render.identity().key().as_str(), "proof.render");
+        assert_eq!(render.identity().revision().get(), 7);
+        assert_eq!(compute.provenance().producer(), "ordinary-static-proof");
+        assert_eq!(render.provenance().producer(), "ordinary-static-proof");
+    }
+
+    #[test]
+    fn static_wgsl_sources_retain_registry_conflict_authority() {
+        let error = admit_static_wgsl_sources(
+            "ordinary-static-proof",
+            [
+                ("proof.same", 1, "@compute @workgroup_size(1) fn first() {}"),
+                ("proof.same", 1, "@compute @workgroup_size(1) fn second() {}"),
+            ],
+        )
+        .unwrap_err();
+
+        assert_eq!(error.cause(), GpuProgramSourceCause::SourceRevisionConflict);
+    }
+
+    #[test]
+    fn static_wgsl_sources_reuse_equal_revision_records() {
+        let [first, second] = admit_static_wgsl_sources(
+            "ordinary-static-proof",
+            [
+                ("proof.same", 2, "@compute @workgroup_size(1) fn main() {}"),
+                ("proof.same", 2, "@compute @workgroup_size(1) fn main() {}"),
+            ],
+        )
+        .unwrap();
+
+        assert!(first.is_same_record(&second));
+    }
 
     #[test]
     fn ordinary_resource_scope_retains_one_owner_scope() {
