@@ -189,18 +189,12 @@ fn fs_main() -> @location(0) vec4<f32> {
         let draw = &operation.draws()[0];
         assert!(draw.vertex_buffers().is_empty());
         assert!(draw.index_buffer().is_none());
-        assert_eq!(
-            draw.viewport().values(),
-            [0.0, 0.0, 32.0, 16.0, 0.0, 1.0]
-        );
+        assert_eq!(draw.viewport().values(), [0.0, 0.0, 32.0, 16.0, 0.0, 1.0]);
         assert_eq!(draw.scissor().x(), 0);
         assert_eq!(draw.scissor().y(), 0);
         assert_eq!(draw.scissor().width(), 32);
         assert_eq!(draw.scissor().height(), 16);
-        assert_eq!(
-            draw.blend_constant().components(),
-            [0.0, 0.0, 0.0, 0.0]
-        );
+        assert_eq!(draw.blend_constant().components(), [0.0, 0.0, 0.0, 0.0]);
         assert_eq!(draw.stencil_reference(), 0);
     }
 
