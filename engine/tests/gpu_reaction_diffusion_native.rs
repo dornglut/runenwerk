@@ -233,30 +233,19 @@ fn fixed_seed(width: u32, height: u32) -> Vec<ReactionCell> {
 }
 
 fn admitted_sources() -> ProgramSources {
-    let owner = GpuProgramSourceOwnerId::allocate().unwrap();
-    let mut sources = GpuProgramSourceRegistry::new(4, 64 * 1024).unwrap();
-    let compute = sources
-        .admit_wgsl(
-            GpuProgramSourceIdentity::new(
-                owner,
-                GpuProgramSourceKey::new(COMPUTE_SOURCE_KEY).unwrap(),
-                GpuProgramSourceRevision::try_from_raw(SOURCE_REVISION).unwrap(),
-            ),
+    let [compute, render] = admit_static_wgsl_sources([
+        (
+            COMPUTE_SOURCE_KEY,
+            SOURCE_REVISION,
             REACTION_DIFFUSION_COMPUTE_WGSL,
-            GpuProgramSourceProvenance::new("reaction-diffusion-native-proof", None).unwrap(),
-        )
-        .unwrap();
-    let render = sources
-        .admit_wgsl(
-            GpuProgramSourceIdentity::new(
-                owner,
-                GpuProgramSourceKey::new(RENDER_SOURCE_KEY).unwrap(),
-                GpuProgramSourceRevision::try_from_raw(SOURCE_REVISION).unwrap(),
-            ),
+        ),
+        (
+            RENDER_SOURCE_KEY,
+            SOURCE_REVISION,
             REACTION_DIFFUSION_RENDER_WGSL,
-            GpuProgramSourceProvenance::new("reaction-diffusion-native-proof", None).unwrap(),
-        )
-        .unwrap();
+        ),
+    ])
+    .unwrap();
     ProgramSources { compute, render }
 }
 
