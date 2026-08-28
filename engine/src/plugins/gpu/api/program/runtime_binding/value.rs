@@ -26,6 +26,7 @@ impl GpuRuntimeBufferBinding {
         }
     }
 
+    /// Binds the complete descriptor-backed buffer with zero static offset and no dynamic offset.
     pub fn whole(handle: &GpuBufferHandle) -> Self {
         let size = NonZeroU64::new(handle.descriptor().size_bytes())
             .expect("validated GPU buffer descriptors are nonzero");
