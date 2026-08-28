@@ -142,18 +142,26 @@ fn validate_resource_device(
 ) -> Result<(), GpuProgramContractError> {
     match (declaration.kind().class(), resource) {
         (GpuBindingClass::UniformBuffer, GpuRuntimeBindingResource::Buffer(binding)) => {
-            validate_buffer_alignment(
-                declaration,
-                binding,
-                device_facts.uniform_buffer_offset_alignment().get(),
-            )
+            let alignment = device_facts
+                .uniform_buffer_offset_alignment()
+                .ok_or_else(|| {
+                    incompatible(
+                        declaration.key().to_string(),
+                        "use a context whose admitted device reports the uniform-buffer offset alignment required by this binding",
+                    )
+                })?;
+            validate_buffer_alignment(declaration, binding, alignment.get())
         }
         (GpuBindingClass::StorageBuffer, GpuRuntimeBindingResource::Buffer(binding)) => {
-            validate_buffer_alignment(
-                declaration,
-                binding,
-                device_facts.storage_buffer_offset_alignment().get(),
-            )
+            let alignment = device_facts
+                .storage_buffer_offset_alignment()
+                .ok_or_else(|| {
+                    incompatible(
+                        declaration.key().to_string(),
+                        "use a context whose admitted device reports the storage-buffer offset alignment required by this binding",
+                    )
+                })?;
+            validate_buffer_alignment(declaration, binding, alignment.get())
         }
         (GpuBindingClass::SampledTexture, GpuRuntimeBindingResource::TextureView(binding)) => {
             validate_sampled_texture_device(declaration, binding, device_facts)
@@ -390,7 +398,9 @@ fn validate_storage_texture_device(
     let compatible = match access {
         GpuStorageTextureAccess::ReadOnly => capabilities.storage_read,
         GpuStorageTextureAccess::WriteOnly => capabilities.storage_write,
-        GpuStorageTextureAccess::ReadWrite => capabilities.storage_read && capabilities.storage_write,
+        GpuStorageTextureAccess::ReadWrite => {
+            capabilities.storage_read && capabilities.storage_write
+        }
     };
     if !compatible {
         return Err(incompatible(
