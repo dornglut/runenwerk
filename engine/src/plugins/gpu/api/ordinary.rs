@@ -1,13 +1,18 @@
 use super::{
-    GpuAdmittedProgramSource, GpuBufferDescriptor, GpuBufferHandle, GpuContext,
-    GpuPreparedWorkGraph, GpuProgramSourceCause, GpuProgramSourceError, GpuProgramSourceIdentity,
-    GpuProgramSourceKey, GpuProgramSourceOwnerId, GpuProgramSourceProvenance,
-    GpuProgramSourceRegistry, GpuProgramSourceRevision, GpuQuerySetDescriptor, GpuQuerySetHandle,
-    GpuResourceLabel, GpuSamplerDescriptor, GpuSamplerHandle, GpuSubmission,
-    GpuSubmissionPreparationError, GpuSubmissionRejectionReason, GpuTextureDescriptor,
-    GpuTextureHandle, GpuTextureViewDescriptor, GpuTextureViewHandle, GpuWorkAuthoringError,
-    GpuWorkFragment, GpuWorkFragmentBuilder, GpuWorkGraphError, GpuWorkNodeId, GpuWorkOperation,
-    GpuWorkResourceIdAllocationError, GpuWorkResourceIdAllocator,
+    GpuAdmittedProgramSource, GpuBindingLayoutRefinement, GpuBlendMode, GpuBufferDescriptor,
+    GpuBufferHandle, GpuColorTargetStateDescriptor, GpuColorWriteMask,
+    GpuComputePipelineDescriptor, GpuContext, GpuEntryPointName, GpuFragmentOutputStateDescriptor,
+    GpuMultisampleStateDescriptor, GpuPipelineConfiguration, GpuPreparedWorkGraph,
+    GpuPrimitiveStateDescriptor, GpuProgramContractError, GpuProgramDescriptor,
+    GpuProgramSourceCause, GpuProgramSourceError, GpuProgramSourceIdentity, GpuProgramSourceKey,
+    GpuProgramSourceOwnerId, GpuProgramSourceProvenance, GpuProgramSourceRegistry,
+    GpuProgramSourceRevision, GpuQuerySetDescriptor, GpuQuerySetHandle, GpuRenderEntryPoints,
+    GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor, GpuResourceLabel,
+    GpuSamplerDescriptor, GpuSamplerHandle, GpuSubmission, GpuSubmissionPreparationError,
+    GpuSubmissionRejectionReason, GpuTextureDescriptor, GpuTextureFormat, GpuTextureHandle,
+    GpuTextureViewDescriptor, GpuTextureViewHandle, GpuVertexInputStateDescriptor,
+    GpuWorkAuthoringError, GpuWorkFragment, GpuWorkFragmentBuilder, GpuWorkGraphError,
+    GpuWorkNodeId, GpuWorkOperation, GpuWorkResourceIdAllocationError, GpuWorkResourceIdAllocator,
 };
 use core::fmt;
 
@@ -102,6 +107,72 @@ pub fn admit_static_wgsl_sources<const N: usize>(
     Ok(admitted
         .try_into()
         .unwrap_or_else(|_| unreachable!("static source admission preserves source count")))
+}
+
+impl GpuComputePipelineDescriptor {
+    /// Constructs the ordinary unrefined compute-pipeline case from one admitted
+    /// source and one compute entry point.
+    ///
+    /// Binding-layout refinements, specialization values, and additional capability
+    /// requirements are intentionally absent here. Use [`GpuProgramDescriptor::new`]
+    /// plus [`GpuComputePipelineDescriptor::new`] when those semantics are material.
+    pub fn ordinary(
+        source: GpuAdmittedProgramSource,
+        entry_point: impl AsRef<str>,
+    ) -> Result<Self, GpuProgramContractError> {
+        let entry_point = GpuEntryPointName::new(entry_point.as_ref())?;
+        let program = GpuProgramDescriptor::new(
+            source,
+            [entry_point.clone()],
+            std::iter::empty::<GpuBindingLayoutRefinement>(),
+        )?;
+        Self::new(program, entry_point, GpuPipelineConfiguration::default())
+    }
+}
+
+impl GpuRenderPipelineDescriptor {
+    /// Constructs the ordinary single-color render-pipeline case from one admitted
+    /// source, vertex/fragment entry points, and the target format.
+    ///
+    /// The constrained defaults are no host vertex buffers, replacement blending,
+    /// full color writes, triangle-list primitive state with no culling, no depth,
+    /// single-sample rendering, no binding-layout refinements, and default pipeline
+    /// configuration. Canonical stage-IO validation still rejects shaders that do
+    /// not match those choices. Use the explicit program/state/pipeline constructors
+    /// when any of those semantics are material.
+    pub fn ordinary_color(
+        source: GpuAdmittedProgramSource,
+        vertex_entry_point: impl AsRef<str>,
+        fragment_entry_point: impl AsRef<str>,
+        format: GpuTextureFormat,
+    ) -> Result<Self, GpuProgramContractError> {
+        let vertex_entry_point = GpuEntryPointName::new(vertex_entry_point.as_ref())?;
+        let fragment_entry_point = GpuEntryPointName::new(fragment_entry_point.as_ref())?;
+        let program = GpuProgramDescriptor::new(
+            source,
+            [vertex_entry_point.clone(), fragment_entry_point.clone()],
+            std::iter::empty::<GpuBindingLayoutRefinement>(),
+        )?;
+        let state = GpuRenderPipelineStateDescriptor::new(
+            GpuVertexInputStateDescriptor::new([])?,
+            Some(GpuFragmentOutputStateDescriptor::new([
+                GpuColorTargetStateDescriptor::new(
+                    format,
+                    GpuBlendMode::Replace,
+                    GpuColorWriteMask::ALL,
+                )?,
+            ])),
+            GpuPrimitiveStateDescriptor::default(),
+            None,
+            GpuMultisampleStateDescriptor::default(),
+        )?;
+        Self::new(
+            program,
+            GpuRenderEntryPoints::new(vertex_entry_point, Some(fragment_entry_point)),
+            state,
+            GpuPipelineConfiguration::default(),
+        )
+    }
 }
 
 impl GpuContext {
@@ -199,6 +270,7 @@ impl GpuResourceScope {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::gpu::GpuProgramContractCause;
 
     #[test]
     fn static_wgsl_sources_share_one_owner_and_preserve_semantic_inputs() {
@@ -261,6 +333,106 @@ mod tests {
     fn static_wgsl_empty_source_uses_canonical_source_validation() {
         let error = admit_static_wgsl_sources([("proof.empty", 1, "")]).unwrap_err();
         assert_eq!(error.cause(), GpuProgramSourceCause::EmptyCanonicalWgsl);
+    }
+
+    #[test]
+    fn ordinary_compute_pipeline_lowers_through_canonical_program_and_pipeline() {
+        let [source] = admit_static_wgsl_sources([(
+            "proof.pipeline.compute",
+            1,
+            "@compute @workgroup_size(1) fn main() {}",
+        )])
+        .unwrap();
+
+        let pipeline = GpuComputePipelineDescriptor::ordinary(source.clone(), "main").unwrap();
+
+        assert!(pipeline.program().source().is_same_record(&source));
+        assert_eq!(pipeline.entry_point().as_str(), "main");
+    }
+
+    #[test]
+    fn ordinary_color_pipeline_materializes_only_the_documented_defaults() {
+        let [source] = admit_static_wgsl_sources([(
+            "proof.pipeline.render",
+            1,
+            r#"
+@vertex
+fn vs_main(@builtin(vertex_index) vertex_index: u32) -> @builtin(position) vec4<f32> {
+    return vec4<f32>(f32(vertex_index), 0.0, 0.0, 1.0);
+}
+
+@fragment
+fn fs_main() -> @location(0) vec4<f32> {
+    return vec4<f32>(1.0, 0.0, 0.0, 1.0);
+}
+"#,
+        )])
+        .unwrap();
+
+        let pipeline = GpuRenderPipelineDescriptor::ordinary_color(
+            source.clone(),
+            "vs_main",
+            "fs_main",
+            GpuTextureFormat::Rgba8Unorm,
+        )
+        .unwrap();
+        let state = pipeline.state();
+        let target = state
+            .fragment_output()
+            .unwrap()
+            .color_targets()
+            .next()
+            .unwrap();
+
+        assert!(pipeline.program().source().is_same_record(&source));
+        assert_eq!(pipeline.entry_points().vertex().as_str(), "vs_main");
+        assert_eq!(
+            pipeline.entry_points().fragment().unwrap().as_str(),
+            "fs_main"
+        );
+        assert_eq!(state.vertex_input().layouts().len(), 0);
+        assert_eq!(target.format(), GpuTextureFormat::Rgba8Unorm);
+        assert_eq!(target.blend(), GpuBlendMode::Replace);
+        assert_eq!(target.write_mask(), GpuColorWriteMask::ALL);
+        assert_eq!(state.primitive(), GpuPrimitiveStateDescriptor::default());
+        assert_eq!(state.depth_stencil(), None);
+        assert_eq!(
+            state.multisample(),
+            GpuMultisampleStateDescriptor::default()
+        );
+    }
+
+    #[test]
+    fn ordinary_color_pipeline_retains_stage_io_validation() {
+        let [source] = admit_static_wgsl_sources([(
+            "proof.pipeline.vertex-input",
+            1,
+            r#"
+@vertex
+fn vs_main(@location(0) position: vec2<f32>) -> @builtin(position) vec4<f32> {
+    return vec4<f32>(position, 0.0, 1.0);
+}
+
+@fragment
+fn fs_main() -> @location(0) vec4<f32> {
+    return vec4<f32>(1.0, 0.0, 0.0, 1.0);
+}
+"#,
+        )])
+        .unwrap();
+
+        let error = GpuRenderPipelineDescriptor::ordinary_color(
+            source,
+            "vs_main",
+            "fs_main",
+            GpuTextureFormat::Rgba8Unorm,
+        )
+        .unwrap_err();
+
+        assert_eq!(
+            error.cause(),
+            GpuProgramContractCause::PipelineStageIoMismatch
+        );
     }
 
     #[test]
