@@ -2,7 +2,7 @@ use crate::plugins::gpu::{GpuTextureFormat, GpuTextureFormatCapabilities};
 use core::num::NonZeroU64;
 use std::collections::BTreeMap;
 
-/// Device-dependent facts required by backend-neutral runtime binding validation.
+/// Internal normalized device facts for contextual runtime-binding validation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuRuntimeBindingDeviceFacts {
     uniform_buffer_offset_alignment: Option<NonZeroU64>,
@@ -14,7 +14,7 @@ pub struct GpuRuntimeBindingDeviceFacts {
 }
 
 impl GpuRuntimeBindingDeviceFacts {
-    pub fn new(
+    pub(crate) fn new(
         uniform_buffer_offset_alignment: Option<NonZeroU64>,
         storage_buffer_offset_alignment: Option<NonZeroU64>,
         max_bind_groups: u32,
@@ -32,27 +32,27 @@ impl GpuRuntimeBindingDeviceFacts {
         }
     }
 
-    pub const fn uniform_buffer_offset_alignment(&self) -> Option<NonZeroU64> {
+    pub(crate) const fn uniform_buffer_offset_alignment(&self) -> Option<NonZeroU64> {
         self.uniform_buffer_offset_alignment
     }
 
-    pub const fn storage_buffer_offset_alignment(&self) -> Option<NonZeroU64> {
+    pub(crate) const fn storage_buffer_offset_alignment(&self) -> Option<NonZeroU64> {
         self.storage_buffer_offset_alignment
     }
 
-    pub const fn max_bind_groups(&self) -> u32 {
+    pub(crate) const fn max_bind_groups(&self) -> u32 {
         self.max_bind_groups
     }
 
-    pub const fn max_dynamic_uniform_buffers_per_pipeline_layout(&self) -> u32 {
+    pub(crate) const fn max_dynamic_uniform_buffers_per_pipeline_layout(&self) -> u32 {
         self.max_dynamic_uniform_buffers_per_pipeline_layout
     }
 
-    pub const fn max_dynamic_storage_buffers_per_pipeline_layout(&self) -> u32 {
+    pub(crate) const fn max_dynamic_storage_buffers_per_pipeline_layout(&self) -> u32 {
         self.max_dynamic_storage_buffers_per_pipeline_layout
     }
 
-    pub fn format_capabilities(
+    pub(crate) fn format_capabilities(
         &self,
         format: GpuTextureFormat,
     ) -> Option<GpuTextureFormatCapabilities> {
