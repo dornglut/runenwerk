@@ -2,7 +2,7 @@ use super::{
     GpuAttachmentStore, GpuBlendConstant, GpuColorAttachmentLoad, GpuDrawIntent, GpuDrawRange,
     GpuRenderColorAttachment, GpuRenderDraw, GpuRenderOperation, GpuRenderPassSignature,
     GpuRenderPipelineDescriptor, GpuRuntimeBindingSet, GpuScissorRect, GpuTextureViewHandle,
-    GpuViewport, GpuWorkOperationError,
+    GpuViewport, GpuWorkOperationCause, GpuWorkOperationError,
 };
 
 impl GpuRenderOperation {
@@ -12,13 +12,14 @@ impl GpuRenderOperation {
     /// bindings, target view, attachment load/store semantics, vertex range, and instance range.
     /// This constrained ordinary path derives only administration fixed by the operation shape:
     /// no resolve/depth/timestamp attachments, no host vertex/index buffers, a full-target
-    /// viewport/scissor, zero blend constant, and zero stencil reference.
+    /// viewport/scissor, zero blend constant, and zero stencil reference. The target must be
+    /// single-sampled so omitting multisample resolve cannot hide a workload decision.
     ///
     /// Target compatibility, pipeline/pass compatibility, runtime bindings, draw ranges, resource
     /// accesses, and render-pass usage remain validated by the existing canonical constructors.
-    /// Indexed/indirect drawing, partial viewport/scissor state, resolve/depth/timestamp work, host
-    /// vertex/index buffers, and explicit dynamic blend/stencil state remain available through
-    /// [`GpuRenderDraw::new`] and [`GpuRenderOperation::new`].
+    /// Indexed/indirect drawing, multisample resolve, partial viewport/scissor state,
+    /// depth/timestamp work, host vertex/index buffers, and explicit dynamic blend/stencil state
+    /// remain available through [`GpuRenderDraw::new`] and [`GpuRenderOperation::new`].
     pub fn ordinary_color_full_target_direct(
         pipeline: &GpuRenderPipelineDescriptor,
         bindings: GpuRuntimeBindingSet,
@@ -31,6 +32,15 @@ impl GpuRenderOperation {
         let attachment = GpuRenderColorAttachment::new(target.clone(), load, store, None)?;
         let signature =
             GpuRenderPassSignature::from_attachments(std::slice::from_ref(&attachment), None)?;
+        if signature.sample_count() != 1 {
+            return Err(GpuWorkOperationError::invalid(
+                "construct ordinary full-target direct GPU color render",
+                format!("sample_count={}", signature.sample_count()),
+                None,
+                GpuWorkOperationCause::InvalidAttachment,
+                "use a single-sampled target or construct multisample resolve explicitly",
+            ));
+        }
         let extent = signature.extent();
         let draw = GpuRenderDraw::new(
             pipeline.clone(),
@@ -58,9 +68,11 @@ impl GpuRenderOperation {
 mod tests {
     use super::*;
     use crate::plugins::gpu::{
-        GpuColorClearValue, GpuReconstruction, GpuResourceLifetime, GpuResourceScope,
-        GpuRuntimeBindingValue, GpuTextureDescriptor, GpuTextureFormat, GpuTextureInitialization,
-        GpuTextureUsage, GpuTextureViewDescriptor, admit_static_wgsl_sources,
+        GpuColorClearValue, GpuMemoryIntent, GpuReconstruction, GpuResourceCommon,
+        GpuResourceLabel, GpuResourceLifetime, GpuResourceProvenance, GpuResourceScope,
+        GpuRuntimeBindingValue, GpuTextureDescriptor, GpuTextureDimension, GpuTextureExtent,
+        GpuTextureFormat, GpuTextureInitialization, GpuTextureUsage, GpuTextureUsages,
+        GpuTextureViewDescriptor, admit_static_wgsl_sources,
     };
 
     const RENDER_WGSL: &str = r#"
@@ -112,6 +124,45 @@ fn fs_main() -> @location(0) vec4<f32> {
             .texture_view(
                 GpuTextureViewDescriptor::ordinary_full_owned(
                     "ordinary render target view",
+                    &texture,
+                )
+                .unwrap(),
+            )
+            .unwrap()
+    }
+
+    fn multisample_target(
+        resources: &mut GpuResourceScope,
+        sample_count: u32,
+    ) -> GpuTextureViewHandle {
+        let label = GpuResourceLabel::new("multisample ordinary render target").unwrap();
+        let common = GpuResourceCommon::owned(
+            label.clone(),
+            GpuResourceLifetime::Transient,
+            GpuMemoryIntent::Device,
+            GpuReconstruction::SourceBacked,
+            GpuResourceProvenance::new(label.clone(), None, None),
+        )
+        .unwrap();
+        let texture = resources
+            .texture(
+                GpuTextureDescriptor::new(
+                    common,
+                    GpuTextureDimension::D2,
+                    GpuTextureExtent::new(&label, GpuTextureDimension::D2, 8, 8, 1).unwrap(),
+                    1,
+                    sample_count,
+                    GpuTextureFormat::Rgba8Unorm,
+                    GpuTextureUsages::new(&label, [GpuTextureUsage::ColorAttachment]).unwrap(),
+                    GpuTextureInitialization::Uninitialized,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        resources
+            .texture_view(
+                GpuTextureViewDescriptor::ordinary_full_owned(
+                    "multisample ordinary render target view",
                     &texture,
                 )
                 .unwrap(),
@@ -194,9 +245,30 @@ fn fs_main() -> @location(0) vec4<f32> {
         )
         .unwrap_err();
 
-        assert_eq!(
-            error.cause(),
-            crate::plugins::gpu::GpuWorkOperationCause::InvalidDraw
-        );
+        assert_eq!(error.cause(), GpuWorkOperationCause::InvalidDraw);
+    }
+
+    #[test]
+    fn ordinary_full_target_direct_rejects_hidden_multisample_resolve_choice() {
+        let pipeline = pipeline(GpuTextureFormat::Rgba8Unorm);
+        let bindings = pipeline
+            .runtime_bindings(std::iter::empty::<GpuRuntimeBindingValue>())
+            .unwrap();
+        let mut resources = GpuResourceScope::new();
+        let target = multisample_target(&mut resources, 4);
+        let (vertices, instances) = draw_ranges();
+
+        let error = GpuRenderOperation::ordinary_color_full_target_direct(
+            &pipeline,
+            bindings,
+            &target,
+            GpuColorAttachmentLoad::Load,
+            GpuAttachmentStore::Store,
+            vertices,
+            instances,
+        )
+        .unwrap_err();
+
+        assert_eq!(error.cause(), GpuWorkOperationCause::InvalidAttachment);
     }
 }
