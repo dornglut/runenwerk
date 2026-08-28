@@ -257,3 +257,53 @@ fn ordinary_operation_defaults_match_explicit_node_administration() {
     assert_eq!(ordinary.label(), explicit.label());
     assert_eq!(ordinary.provenance(), explicit.provenance());
 }
+
+#[test]
+fn ordinary_operation_registers_non_compute_resources_from_derived_accesses() {
+    let mut allocator = allocator();
+    let buffer = buffer(
+        &mut allocator,
+        "ordinary lexical clear",
+        GpuBufferInitialization::Uninitialized,
+        [GpuBufferUsage::CopyDestination],
+    );
+    let region = GpuBufferRegion::new(&buffer, GpuBufferRange::whole(&buffer).unwrap()).unwrap();
+    let operation = GpuWorkOperation::Clear(GpuClearOperation::buffer_zero(region).unwrap());
+    let node_label = label("ordinary lexical clear");
+
+    let mut ordinary_builder = builder("ordinary lexical operation fragment");
+    ordinary_builder
+        .operation(node_label.clone(), operation.clone())
+        .unwrap();
+    let ordinary = ordinary_builder.finish().unwrap();
+    assert_eq!(
+        ordinary.resources(),
+        [GpuResourceRef::Buffer(buffer.clone())]
+    );
+
+    let mut explicit_builder = builder("explicit lexical operation fragment");
+    explicit_builder
+        .declare_resource(GpuResourceRef::Buffer(buffer))
+        .unwrap();
+    explicit_builder
+        .add_node(
+            node_label,
+            operation,
+            [],
+            GpuCapabilityRequirements::new(),
+            GpuExecutionPreference::Automatic,
+            provenance("ordinary lexical clear"),
+        )
+        .unwrap();
+    let explicit = explicit_builder.finish().unwrap();
+
+    assert_eq!(ordinary.resources(), explicit.resources());
+    assert_eq!(
+        ordinary.nodes()[0].accesses(),
+        explicit.nodes()[0].accesses()
+    );
+    assert_eq!(
+        ordinary.nodes()[0].requirements(),
+        explicit.nodes()[0].requirements()
+    );
+}

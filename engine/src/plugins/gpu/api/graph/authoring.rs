@@ -440,11 +440,18 @@ impl GpuWorkFragmentBuilder {
         L: AsRef<str>,
     {
         let label = checked_node_label(&self.label, label.as_ref())?;
+        self.add_lexical_operation(label, GpuWorkOperation::Compute(compute))
+    }
+
+    pub(crate) fn add_lexical_operation(
+        &mut self,
+        label: GpuResourceLabel,
+        operation: GpuWorkOperation,
+    ) -> Result<GpuWorkNodeId, GpuWorkAuthoringError> {
         let provenance = GpuResourceProvenance::new(label.clone(), None, None);
-        let operation = GpuWorkOperation::Compute(compute);
         let derived = operation.derived_accesses().map_err(|source| {
             GpuWorkAuthoringError::with_source(
-                "derive lexical GPU compute resources",
+                "derive lexical GPU operation resources",
                 GpuWorkAuthoringErrorContext::new(
                     Some(self.label.as_str().to_string()),
                     Some(label.as_str().to_string()),
@@ -453,7 +460,7 @@ impl GpuWorkFragmentBuilder {
                     Some(provenance.clone()),
                 ),
                 GpuWorkAuthoringCause::OperationAccessContradiction,
-                "use one internally consistent checked compute operation",
+                "use one internally consistent checked operation",
                 GpuWorkAuthoringErrorSource::Operation(source),
             )
         })?;

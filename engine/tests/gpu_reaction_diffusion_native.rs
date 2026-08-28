@@ -597,15 +597,6 @@ fn offscreen_work(
     let graph_label = label(&format!("{} reaction diffusion graph", envelope.name));
     let mut readbacks = Vec::with_capacity(usize::try_from(envelope.frames).unwrap());
     let fragment = GpuWorkFragment::build(&name, |builder| {
-        for resource in [
-            state_a.clone().into(),
-            state_b.clone().into(),
-            params_buffer.clone().into(),
-            texture.clone().into(),
-            view.clone().into(),
-        ] {
-            builder.declare_resource(resource)?;
-        }
         add_initialization(builder, &state_a, &state_b, &params_buffer, &seed, params)?;
 
         let mut current_is_a = true;
@@ -973,19 +964,9 @@ fn surface_graph(
     let (state_a, state_b, params_buffer, seed, params) = state_resources(&mut resources, envelope);
     let compute = compute_pipeline(&sources.compute);
     let render = render_pipeline(&sources.render, format);
-    let texture = image.texture().clone();
     let view = image.default_view().clone();
 
     let fragment = GpuWorkFragment::build("reaction diffusion surface replay", |builder| {
-        for resource in [
-            state_a.clone().into(),
-            state_b.clone().into(),
-            params_buffer.clone().into(),
-            texture.into(),
-            view.clone().into(),
-        ] {
-            builder.declare_resource(resource)?;
-        }
         add_initialization(builder, &state_a, &state_b, &params_buffer, &seed, params)?;
 
         let mut current_is_a = true;

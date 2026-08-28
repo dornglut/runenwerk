@@ -1,7 +1,6 @@
 use super::{
-    GpuBufferDescriptor, GpuBufferHandle, GpuCapabilityRequirements, GpuContext,
-    GpuExecutionPreference, GpuPreparedWorkGraph, GpuQuerySetDescriptor, GpuQuerySetHandle,
-    GpuResourceLabel, GpuResourceProvenance, GpuSamplerDescriptor, GpuSamplerHandle, GpuSubmission,
+    GpuBufferDescriptor, GpuBufferHandle, GpuContext, GpuPreparedWorkGraph, GpuQuerySetDescriptor,
+    GpuQuerySetHandle, GpuResourceLabel, GpuSamplerDescriptor, GpuSamplerHandle, GpuSubmission,
     GpuSubmissionPreparationError, GpuSubmissionRejectionReason, GpuTextureDescriptor,
     GpuTextureHandle, GpuTextureViewDescriptor, GpuTextureViewHandle, GpuWorkAuthoringError,
     GpuWorkFragment, GpuWorkFragmentBuilder, GpuWorkGraphError, GpuWorkNodeId, GpuWorkOperation,
@@ -68,25 +67,19 @@ impl GpuContext {
 }
 
 impl GpuWorkFragmentBuilder {
-    /// Adds an ordinary checked operation using the existing advanced node authority.
+    /// Adds ordinary checked operation work through the existing node authority.
     ///
-    /// Caller-declared accesses, additional capability requirements, non-default
-    /// execution preference, and explicit provenance remain available through
-    /// [`GpuWorkFragmentBuilder::add_node`].
+    /// Resources referenced by the typed operation are registered lexically from
+    /// its derived accesses. Explicit resource declaration remains available for
+    /// fragment inputs, imports, outputs, and advanced caller-declared accesses.
+    /// Additional capability requirements, non-default execution preference, and
+    /// explicit provenance remain available through [`GpuWorkFragmentBuilder::add_node`].
     pub fn operation(
         &mut self,
         label: GpuResourceLabel,
         operation: GpuWorkOperation,
     ) -> Result<GpuWorkNodeId, GpuWorkAuthoringError> {
-        let provenance = GpuResourceProvenance::new(label.clone(), None, None);
-        self.add_node(
-            label,
-            operation,
-            [],
-            GpuCapabilityRequirements::new(),
-            GpuExecutionPreference::Automatic,
-            provenance,
-        )
+        self.add_lexical_operation(label, operation)
     }
 }
 
@@ -199,7 +192,7 @@ mod tests {
     }
 
     #[test]
-    fn ordinary_operation_delegates_to_the_existing_node_authority() {
+    fn ordinary_operation_delegates_to_lexical_canonical_authoring() {
         let source = include_str!("ordinary.rs");
         let method = source
             .split_once("    pub fn operation(")
@@ -209,15 +202,11 @@ mod tests {
             .expect("ordinary operation method must remain bounded")
             .0;
 
-        for required in [
-            "GpuResourceProvenance::new(label.clone(), None, None)",
-            "self.add_node(",
-            "GpuCapabilityRequirements::new()",
-            "GpuExecutionPreference::Automatic",
-        ] {
+        assert!(method.contains("self.add_lexical_operation(label, operation)"));
+        for forbidden in ["self.add_node(", "declare_resource("] {
             assert!(
-                method.contains(required),
-                "ordinary operation must lower through canonical node defaults: {required}"
+                !method.contains(forbidden),
+                "ordinary operation must not duplicate canonical lexical authoring through {forbidden:?}"
             );
         }
     }
