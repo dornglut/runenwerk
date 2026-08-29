@@ -24,6 +24,7 @@ use super::{
         CaveLightingScopeResource, CavePortalGraphResource, CaveSectorResource,
         CollisionQueryServiceResource, OperationLogResource, PartitionConfigResource,
         RegionInvalidationJournalResource, ReplicationStateResource, SdfChunkStoreResource,
+        WorldQuantizationScaleResource,
     },
     chunks::{DirtyChunkMapResource, lifecycle::WorldChunkRuntimeMapResource},
     queries::nav::WorldNavSummaryResource,
@@ -120,6 +121,7 @@ impl Plugin for WorldPlugin {
         app.init_resource::<WorldRuntimeState>();
         app.init_resource::<WorldAuthorityState>();
         app.init_resource::<PartitionConfigResource>();
+        app.init_resource::<WorldQuantizationScaleResource>();
         app.init_resource::<WorldChunkRuntimeMapResource>();
         app.init_resource::<DirtyChunkMapResource>();
         app.init_resource::<WorldRenderCacheInvalidationQueueResource>();
