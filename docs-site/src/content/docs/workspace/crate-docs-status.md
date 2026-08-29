@@ -38,7 +38,6 @@ Status labels:
 | `ecs` | `domain/ecs` | current | [`../domain/ecs/README.md`](../domain/ecs/README.md) |
 | `ecs_macros` | `domain/ecs_macros` | thin | [`../domain/ecs-macros/README.md`](../domain/ecs-macros/README.md) |
 | `geometry` | `domain/geometry` | current | [`../domain/geometry/README.md`](../domain/geometry/README.md) |
-| `spatial` | `domain/spatial` | thin | [`../domain/spatial/README.md`](../domain/spatial/README.md) |
 | `asset` | `domain/asset` | thin | [`../domain/00-overview.md`](../domain/00-overview.md) |
 | `product` | `domain/product` | thin | [`../domain/00-overview.md`](../domain/00-overview.md) |
 | `world_ops` | `domain/world_ops` | thin | [`../domain/world-ops/README.md`](../domain/world-ops/README.md) |
