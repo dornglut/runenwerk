@@ -163,11 +163,7 @@ fn ingress_rejects_operations_in_client_replica_mode() {
             },
             material_channel: 1,
         },
-        quantize_aabb(
-            [0.0, 0.0, 0.0],
-            [0.0, 0.0, 0.0],
-            quantization_scale,
-        ),
+        quantize_aabb([0.0, 0.0, 0.0], [0.0, 0.0, 0.0], quantization_scale),
         WorldEditIngressMeta {
             planet_id: WorldId::new(0),
             deterministic_seed: 404,
@@ -241,8 +237,8 @@ fn world_runtime_mode_tracks_authority_role() {
 fn ingress_invalidation_uses_world_quantization_scale() {
     let mut app = App::headless();
     app.add_plugin(WorldPlugin);
-    let quantization_scale = WorldQuantizationScale::try_new(1)
-        .expect("test quantization scale should be valid");
+    let quantization_scale =
+        WorldQuantizationScale::try_new(1).expect("test quantization scale should be valid");
     {
         let configured_scale = app
             .world_mut()
@@ -258,11 +254,7 @@ fn ingress_invalidation_uses_world_quantization_scale() {
             anchor_q: Default::default(),
             payload: vec![1, 2, 3],
         },
-        quantize_aabb(
-            [40.0, 0.0, 0.0],
-            [40.0, 0.0, 0.0],
-            quantization_scale,
-        ),
+        quantize_aabb([40.0, 0.0, 0.0], [40.0, 0.0, 0.0], quantization_scale),
         WorldEditIngressMeta {
             planet_id: WorldId::new(0),
             deterministic_seed: 77,
@@ -426,12 +418,7 @@ fn dirty_reasons_while_rebuilding_are_preserved_for_followup_build() {
             target_chunk_revision: ChunkRevision(5),
             target_build_generation: BuildGeneration(5),
             staleness: WorldBuildStaleness::Current,
-            chunk_payload: sdf_chunk_payload(
-                chunk_id,
-                ChunkRevision(5),
-                ChunkGeneration(5),
-                0,
-            ),
+            chunk_payload: sdf_chunk_payload(chunk_id, ChunkRevision(5), ChunkGeneration(5), 0),
             region_summary: RegionSdfSummary::default(),
         });
     }
@@ -474,11 +461,7 @@ fn stamp_operation_produces_authoritative_chunk_payload() {
             anchor_q: Default::default(),
             payload: vec![9, 9, 9],
         },
-        quantize_aabb(
-            [0.0, 0.0, 0.0],
-            [0.0, 0.0, 0.0],
-            quantization_scale,
-        ),
+        quantize_aabb([0.0, 0.0, 0.0], [0.0, 0.0, 0.0], quantization_scale),
         WorldEditIngressMeta {
             planet_id: WorldId::new(0),
             deterministic_seed: 101,
@@ -531,11 +514,7 @@ fn material_field_edit_preserves_existing_chunk_solidity() {
             },
             material_channel: 1,
         },
-        quantize_aabb(
-            [0.0, 0.0, 0.0],
-            [0.0, 0.0, 0.0],
-            quantization_scale,
-        ),
+        quantize_aabb([0.0, 0.0, 0.0], [0.0, 0.0, 0.0], quantization_scale),
         WorldEditIngressMeta {
             planet_id: WorldId::new(0),
             deterministic_seed: 201,
@@ -550,19 +529,11 @@ fn material_field_edit_preserves_existing_chunk_solidity() {
     let edit_op = submit_world_operation(
         app.world_mut(),
         Operation::MaterialFieldEdit {
-            bounds_q: quantize_aabb(
-                [0.0, 0.0, 0.0],
-                [0.0, 0.0, 0.0],
-                quantization_scale,
-            ),
+            bounds_q: quantize_aabb([0.0, 0.0, 0.0], [0.0, 0.0, 0.0], quantization_scale),
             channel_mask: 0b0100,
             payload: vec![1],
         },
-        quantize_aabb(
-            [0.0, 0.0, 0.0],
-            [0.0, 0.0, 0.0],
-            quantization_scale,
-        ),
+        quantize_aabb([0.0, 0.0, 0.0], [0.0, 0.0, 0.0], quantization_scale),
         WorldEditIngressMeta {
             planet_id: WorldId::new(0),
             deterministic_seed: 202,
@@ -634,12 +605,7 @@ fn integration_drops_output_when_payload_revision_contract_mismatches() {
             target_chunk_revision: ChunkRevision(11),
             target_build_generation: BuildGeneration(11),
             staleness: WorldBuildStaleness::Current,
-            chunk_payload: sdf_chunk_payload(
-                chunk_id,
-                ChunkRevision(10),
-                ChunkGeneration(11),
-                0,
-            ),
+            chunk_payload: sdf_chunk_payload(chunk_id, ChunkRevision(10), ChunkGeneration(11), 0),
             region_summary: RegionSdfSummary::default(),
         });
     }
