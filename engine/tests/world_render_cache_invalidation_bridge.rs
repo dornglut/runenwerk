@@ -2,7 +2,9 @@ use engine::plugins::render::RenderGpuCacheHandle;
 use engine::plugins::render::features::world::runtime_cache::{
     WorldGpuResidencyEntry, WorldRuntimeCacheResource,
 };
-use engine::plugins::world::adapters::resources::PartitionConfigResource;
+use engine::plugins::world::adapters::resources::{
+    PartitionConfigResource, WorldQuantizationScaleResource,
+};
 use engine::plugins::world::chunks::DirtyChunkMapResource;
 use engine::plugins::world::chunks::render_cache_bridge::{
     WorldRenderCacheInvalidationQueueResource, WorldRenderInvalidationSource,
@@ -10,19 +12,29 @@ use engine::plugins::world::chunks::render_cache_bridge::{
 use engine::plugins::world::edits::ingress::{WorldEditIngressMeta, submit_world_operation};
 use engine::plugins::world::plugin::WorldPlugin;
 use engine::prelude::{App, SimulationTick};
-use spatial::{ChunkCoord3, ChunkId, WorldId};
-use world_ops::{DirtyReason, Operation, QuantizedAabb, quantize_aabb, quantize_position};
+use runen_spatial::{ChunkCoord3, ChunkId, WorldId};
+use world_ops::{
+    DirtyReason, Operation, QuantizedAabb, WorldQuantizationScale, quantize_aabb,
+    quantize_position,
+};
 
-fn test_stamp_operation(fixed_point_scale: i32) -> Operation {
+fn test_stamp_operation(quantization_scale: WorldQuantizationScale) -> Operation {
     Operation::Stamp {
         stamp_id: "tests.world.render-cache-bridge".to_string(),
-        anchor_q: quantize_position([0.5, 0.5, 0.5], fixed_point_scale),
+        anchor_q: quantize_position([0.5, 0.5, 0.5], quantization_scale),
         payload: vec![1, 2, 3, 4],
     }
 }
 
-fn default_bounds_q(fixed_point_scale: i32) -> QuantizedAabb {
-    quantize_aabb([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], fixed_point_scale)
+fn default_bounds_q(quantization_scale: WorldQuantizationScale) -> QuantizedAabb {
+    quantize_aabb([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], quantization_scale)
+}
+
+fn world_quantization_scale(app: &App) -> WorldQuantizationScale {
+    **app
+        .world()
+        .resource::<WorldQuantizationScaleResource>()
+        .expect("world quantization scale should exist")
 }
 
 #[test]
@@ -32,17 +44,13 @@ fn ingress_bounds_marks_render_cache_stale_next_fixed_tick() {
     app.world_mut()
         .insert_resource(WorldRuntimeCacheResource::default());
 
-    let fixed_point_scale = app
-        .world()
-        .resource::<PartitionConfigResource>()
-        .expect("world partition config should exist")
-        .quantization_scale();
+    let quantization_scale = world_quantization_scale(&app);
     let op_id = submit_world_operation(
         app.world_mut(),
-        test_stamp_operation(fixed_point_scale),
-        default_bounds_q(fixed_point_scale),
+        test_stamp_operation(quantization_scale),
+        default_bounds_q(quantization_scale),
         WorldEditIngressMeta {
-            planet_id: WorldId(0),
+            planet_id: WorldId::new(0),
             deterministic_seed: 7,
         },
     );
@@ -56,7 +64,7 @@ fn ingress_bounds_marks_render_cache_stale_next_fixed_tick() {
         .world()
         .resource::<WorldRuntimeCacheResource>()
         .expect("world runtime cache should exist");
-    let expected = ChunkId::new(WorldId(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
+    let expected = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
     assert!(
         runtime_cache.stale_chunks.contains(&expected),
         "expected ingress invalidation to mark target chunk stale"
@@ -70,19 +78,15 @@ fn duplicate_edits_same_chunk_dedupe_invalidation() {
     app.world_mut()
         .insert_resource(WorldRuntimeCacheResource::default());
 
-    let fixed_point_scale = app
-        .world()
-        .resource::<PartitionConfigResource>()
-        .expect("world partition config should exist")
-        .quantization_scale();
-    let bounds_q = default_bounds_q(fixed_point_scale);
+    let quantization_scale = world_quantization_scale(&app);
+    let bounds_q = default_bounds_q(quantization_scale);
     for seed in [11_u64, 12_u64] {
         let op_id = submit_world_operation(
             app.world_mut(),
-            test_stamp_operation(fixed_point_scale),
+            test_stamp_operation(quantization_scale),
             bounds_q,
             WorldEditIngressMeta {
-                planet_id: WorldId(0),
+                planet_id: WorldId::new(0),
                 deterministic_seed: seed,
             },
         );
@@ -97,7 +101,7 @@ fn duplicate_edits_same_chunk_dedupe_invalidation() {
         .world()
         .resource::<WorldRuntimeCacheResource>()
         .expect("world runtime cache should exist");
-    let expected = ChunkId::new(WorldId(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
+    let expected = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
     assert_eq!(
         runtime_cache.stale_chunks.len(),
         1,
@@ -113,17 +117,13 @@ fn multi_chunk_bounds_invalidation_marks_all_touched_chunks_stale() {
     app.world_mut()
         .insert_resource(WorldRuntimeCacheResource::default());
 
-    let fixed_point_scale = app
-        .world()
-        .resource::<PartitionConfigResource>()
-        .expect("world partition config should exist")
-        .quantization_scale();
+    let quantization_scale = world_quantization_scale(&app);
     let op_id = submit_world_operation(
         app.world_mut(),
-        test_stamp_operation(fixed_point_scale),
-        quantize_aabb([0.0, 0.0, 0.0], [40.0, 1.0, 1.0], fixed_point_scale),
+        test_stamp_operation(quantization_scale),
+        quantize_aabb([0.0, 0.0, 0.0], [40.0, 1.0, 1.0], quantization_scale),
         WorldEditIngressMeta {
-            planet_id: WorldId(0),
+            planet_id: WorldId::new(0),
             deterministic_seed: 99,
         },
     );
@@ -137,8 +137,8 @@ fn multi_chunk_bounds_invalidation_marks_all_touched_chunks_stale() {
         .world()
         .resource::<WorldRuntimeCacheResource>()
         .expect("world runtime cache should exist");
-    let chunk_a = ChunkId::new(WorldId(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
-    let chunk_b = ChunkId::new(WorldId(0), ChunkCoord3 { x: 1, y: 0, z: 0 });
+    let chunk_a = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
+    let chunk_b = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 1, y: 0, z: 0 });
     assert!(
         runtime_cache.stale_chunks.contains(&chunk_a),
         "expected lower bound chunk to be marked stale"
@@ -156,7 +156,7 @@ fn integrated_build_output_marks_chunk_stale() {
     app.world_mut()
         .insert_resource(WorldRuntimeCacheResource::default());
 
-    let target = ChunkId::new(WorldId(0), ChunkCoord3 { x: 2, y: -1, z: 4 });
+    let target = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 2, y: -1, z: 4 });
     {
         let dirty = app
             .world_mut()
@@ -184,17 +184,13 @@ fn bridge_does_not_drop_queue_without_render_cache_resource() {
     let mut app = App::headless();
     app.add_plugin(WorldPlugin);
 
-    let fixed_point_scale = app
-        .world()
-        .resource::<PartitionConfigResource>()
-        .expect("world partition config should exist")
-        .quantization_scale();
+    let quantization_scale = world_quantization_scale(&app);
     let op_id = submit_world_operation(
         app.world_mut(),
-        test_stamp_operation(fixed_point_scale),
-        default_bounds_q(fixed_point_scale),
+        test_stamp_operation(quantization_scale),
+        default_bounds_q(quantization_scale),
         WorldEditIngressMeta {
-            planet_id: WorldId(0),
+            planet_id: WorldId::new(0),
             deterministic_seed: 77,
         },
     );
@@ -208,7 +204,7 @@ fn bridge_does_not_drop_queue_without_render_cache_resource() {
         .world()
         .resource::<WorldRenderCacheInvalidationQueueResource>()
         .expect("render-cache invalidation queue should exist");
-    let expected = ChunkId::new(WorldId(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
+    let expected = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
     let record = queue
         .pending_records
         .front()
@@ -247,17 +243,13 @@ fn missing_render_cache_then_recreate_flushes_pending_invalidation() {
     let mut app = App::headless();
     app.add_plugin(WorldPlugin);
 
-    let fixed_point_scale = app
-        .world()
-        .resource::<PartitionConfigResource>()
-        .expect("world partition config should exist")
-        .quantization_scale();
+    let quantization_scale = world_quantization_scale(&app);
     let op_id = submit_world_operation(
         app.world_mut(),
-        test_stamp_operation(fixed_point_scale),
-        default_bounds_q(fixed_point_scale),
+        test_stamp_operation(quantization_scale),
+        default_bounds_q(quantization_scale),
         WorldEditIngressMeta {
-            planet_id: WorldId(0),
+            planet_id: WorldId::new(0),
             deterministic_seed: 121,
         },
     );
@@ -292,7 +284,7 @@ fn missing_render_cache_then_recreate_flushes_pending_invalidation() {
         .world()
         .resource::<WorldRuntimeCacheResource>()
         .expect("world runtime cache should exist");
-    let expected = ChunkId::new(WorldId(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
+    let expected = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
     assert!(
         runtime_cache.stale_chunks.contains(&expected),
         "restored render cache should receive stale mark from queued invalidation records"
@@ -312,7 +304,7 @@ fn world_render_cache_invalidates_matching_typed_gpu_cache_entry() {
     let mut app = App::headless();
     app.add_plugin(WorldPlugin);
 
-    let target = ChunkId::new(WorldId(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
+    let target = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
     let mut runtime_cache = WorldRuntimeCacheResource::default();
     runtime_cache.upsert_entry(WorldGpuResidencyEntry {
         chunk_id: target,
@@ -324,17 +316,13 @@ fn world_render_cache_invalidates_matching_typed_gpu_cache_entry() {
     });
     app.world_mut().insert_resource(runtime_cache);
 
-    let fixed_point_scale = app
-        .world()
-        .resource::<PartitionConfigResource>()
-        .expect("world partition config should exist")
-        .quantization_scale();
+    let quantization_scale = world_quantization_scale(&app);
     let op_id = submit_world_operation(
         app.world_mut(),
-        test_stamp_operation(fixed_point_scale),
-        default_bounds_q(fixed_point_scale),
+        test_stamp_operation(quantization_scale),
+        default_bounds_q(quantization_scale),
         WorldEditIngressMeta {
-            planet_id: WorldId(0),
+            planet_id: WorldId::new(0),
             deterministic_seed: 123,
         },
     );
@@ -360,7 +348,7 @@ fn integrated_build_without_render_cache_enqueues_build_sourced_record() {
     let mut app = App::headless();
     app.add_plugin(WorldPlugin);
 
-    let target = ChunkId::new(WorldId(0), ChunkCoord3 { x: 2, y: -1, z: 4 });
+    let target = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 2, y: -1, z: 4 });
     {
         let dirty = app
             .world_mut()
