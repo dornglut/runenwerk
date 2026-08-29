@@ -28,21 +28,13 @@ jobs:
 
           sdf_path = Path("apps/runenwerk_editor/src/editor_app/sdf_operations.rs")
           sdf = sdf_path.read_text()
-          old = '''        let fixed_point_scale = self.lowering_context.fixed_point_scale();
-          for lowered in &mut candidate.records {
-              let op_id = self.committed_operation_log.append(lowered.record.clone());
-              lowered.record.op_id = op_id;
-              mark_dirty_chunks_from_quantized_bounds(
-                  &mut self.dirty_chunks,
-                  &self.lowering_context.partition,
-                  lowered.record.affected_bounds_q,
-                  lowered.record.planet_id,
-                  fixed_point_scale,
-                  dirty_reason_for_operation(&lowered.record.operation),
-              );
-          }
-          '''
-          new = '''        let fixed_point_scale = self.lowering_context.fixed_point_scale();
+          start_marker = "        let fixed_point_scale = self.lowering_context.fixed_point_scale();\n"
+          end_marker = "        let formation = form_sdf_field_preview_products(\n"
+          if sdf.count(start_marker) != 1 or sdf.count(end_marker) != 1:
+              raise SystemExit("expected unique SDF commit markers")
+          start = sdf.index(start_marker)
+          end = sdf.index(end_marker, start)
+          new_block = '''        let fixed_point_scale = self.lowering_context.fixed_point_scale();
           let mut staged_dirty_chunks = self.dirty_chunks.clone();
           for lowered in &candidate.records {
               mark_dirty_chunks_from_quantized_bounds(
@@ -65,9 +57,7 @@ jobs:
           }
           self.dirty_chunks = staged_dirty_chunks;
           '''
-          if sdf.count(old) != 1:
-              raise SystemExit("expected exactly one SDF commit block")
-          sdf_path.write_text(sdf.replace(old, new))
+          sdf_path.write_text(sdf[:start] + new_block + sdf[end:])
 
           projection_path = Path("domain/editor/editor_scene/src/sdf_authoring/projection.rs")
           projection = projection_path.read_text()
@@ -77,15 +67,17 @@ jobs:
               raise SystemExit("expected exactly one projection world_ops import")
           projection = projection.replace(old_import, new_import)
 
-          old_context = '''        let context = SdfOperationLoweringContext {
-              partition: GridPartitionConfig {
-                  chunk_edge_meters: 1.0,
-                  fixed_point_scale: 8,
-                  ..GridPartitionConfig::default()
-              },
-              ..SdfOperationLoweringContext::default()
-          };
-          '''
+          context_start_marker = "        let context = SdfOperationLoweringContext {\n"
+          context_end_marker = "\n        let first = lower_sdf_operation_document(&document, &context);\n"
+          if projection.count(context_start_marker) < 1 or projection.count(context_end_marker) != 1:
+              raise SystemExit("expected projection context markers")
+          context_end = projection.index(context_end_marker)
+          context_start = projection.rfind(context_start_marker, 0, context_end)
+          if context_start < 0:
+              raise SystemExit("expected legacy projection context before lowering assertion")
+          old_context = projection[context_start:context_end]
+          if "fixed_point_scale: 8" not in old_context or "chunk_edge_meters: 1.0" not in old_context:
+              raise SystemExit("projection context no longer matches the legacy semantic pair")
           new_context = '''        let context = SdfOperationLoweringContext {
               partition: GridPartitionConfig::try_new(1.0, [8, 8, 8])
                   .expect("test partition configuration is valid"),
@@ -94,9 +86,9 @@ jobs:
               ..SdfOperationLoweringContext::default()
           };
           '''
-          if projection.count(old_context) != 1:
-              raise SystemExit("expected exactly one legacy projection context")
-          projection_path.write_text(projection.replace(old_context, new_context))
+          projection_path.write_text(
+              projection[:context_start] + new_context + projection[context_end:]
+          )
           PY
 
       - name: Format repair
