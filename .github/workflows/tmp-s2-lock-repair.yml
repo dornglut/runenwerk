@@ -1,4 +1,4 @@
-name: Temporary S2 lock repair
+name: Temporary S2 source repair
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  repair-lock:
+  repair-source:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-24.04
     steps:
@@ -18,26 +18,40 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install stable Rust
-        run: rustup toolchain install stable --profile minimal
-
-      - name: Resolve from accepted-main lock
+      - name: Apply procgen coordinate-width repair
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin main
-          git show origin/main:Cargo.lock > Cargo.lock
-          cargo +stable metadata --format-version 1 > /dev/null
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('domain/procgen/src/field_preview.rs')
+          text = path.read_text()
+          old = '''fn corner_noise(
+              document: &ProcgenDocument,
+              chunk_id: ChunkId,
+              x: i32,
+              z: i32,
+          '''
+          new = '''fn corner_noise(
+              document: &ProcgenDocument,
+              chunk_id: ChunkId,
+              x: i64,
+              z: i64,
+          '''
+          if text.count(old) != 1:
+              raise SystemExit('expected corner_noise signature not found exactly once')
+          path.write_text(text.replace(old, new))
+          PY
           changed="$(git diff --name-only)"
-          test "$changed" = "Cargo.lock"
+          test "$changed" = "domain/procgen/src/field_preview.rs"
 
-      - name: Commit repaired lock only
+      - name: Commit source repair only
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Cargo.lock
+          git add domain/procgen/src/field_preview.rs
           git diff --cached --quiet && exit 0
-          git commit -m "chore: resolve S2 lock from accepted main"
+          git commit -m "spatial: widen procgen corner offsets"
           git push origin HEAD:tmp-s2-lock-repair-366
