@@ -1,0 +1,133 @@
+name: Temporary S2 closure validation
+
+on:
+  push:
+    branches:
+      - tmp-364-final-closure-5745
+
+permissions:
+  contents: write
+
+jobs:
+  repair-and-validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out exact temporary branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 1
+
+      - name: Install maintained Rust toolchain
+        run: rustup toolchain install stable --profile minimal --component rustfmt,clippy
+
+      - name: Apply bounded S2 closure repair
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          sdf_path = Path("apps/runenwerk_editor/src/editor_app/sdf_operations.rs")
+          sdf = sdf_path.read_text()
+          old = '''        let fixed_point_scale = self.lowering_context.fixed_point_scale();
+          for lowered in &mut candidate.records {
+              let op_id = self.committed_operation_log.append(lowered.record.clone());
+              lowered.record.op_id = op_id;
+              mark_dirty_chunks_from_quantized_bounds(
+                  &mut self.dirty_chunks,
+                  &self.lowering_context.partition,
+                  lowered.record.affected_bounds_q,
+                  lowered.record.planet_id,
+                  fixed_point_scale,
+                  dirty_reason_for_operation(&lowered.record.operation),
+              );
+          }
+          '''
+          new = '''        let fixed_point_scale = self.lowering_context.fixed_point_scale();
+          let mut staged_dirty_chunks = self.dirty_chunks.clone();
+          for lowered in &candidate.records {
+              mark_dirty_chunks_from_quantized_bounds(
+                  &mut staged_dirty_chunks,
+                  &self.lowering_context.partition,
+                  lowered.record.affected_bounds_q,
+                  lowered.record.planet_id,
+                  fixed_point_scale,
+                  dirty_reason_for_operation(&lowered.record.operation),
+              )
+              .map_err(|_| {
+                  EditorMutationError::runtime_rejected(
+                      "SDF operation window could not map into spatial chunks",
+                  )
+              })?;
+          }
+          for lowered in &mut candidate.records {
+              let op_id = self.committed_operation_log.append(lowered.record.clone());
+              lowered.record.op_id = op_id;
+          }
+          self.dirty_chunks = staged_dirty_chunks;
+          '''
+          if sdf.count(old) != 1:
+              raise SystemExit("expected exactly one SDF commit block")
+          sdf_path.write_text(sdf.replace(old, new))
+
+          projection_path = Path("domain/editor/editor_scene/src/sdf_authoring/projection.rs")
+          projection = projection_path.read_text()
+          old_import = "    use world_ops::{CsgBooleanMode, Operation};\n"
+          new_import = "    use world_ops::{CsgBooleanMode, Operation, WorldQuantizationScale};\n"
+          if projection.count(old_import) != 1:
+              raise SystemExit("expected exactly one projection world_ops import")
+          projection = projection.replace(old_import, new_import)
+
+          old_context = '''        let context = SdfOperationLoweringContext {
+              partition: GridPartitionConfig {
+                  chunk_edge_meters: 1.0,
+                  fixed_point_scale: 8,
+                  ..GridPartitionConfig::default()
+              },
+              ..SdfOperationLoweringContext::default()
+          };
+          '''
+          new_context = '''        let context = SdfOperationLoweringContext {
+              partition: GridPartitionConfig::try_new(1.0, [8, 8, 8])
+                  .expect("test partition configuration is valid"),
+              quantization_scale: WorldQuantizationScale::try_new(8)
+                  .expect("positive quantization scale is valid"),
+              ..SdfOperationLoweringContext::default()
+          };
+          '''
+          if projection.count(old_context) != 1:
+              raise SystemExit("expected exactly one legacy projection context")
+          projection_path.write_text(projection.replace(old_context, new_context))
+          PY
+
+      - name: Format repair
+        run: cargo +stable fmt --all
+
+      - name: Validate repository
+        run: cargo +stable validate
+
+      - name: Prove bounded repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected=$(printf '%s\n' \
+            apps/runenwerk_editor/src/editor_app/sdf_operations.rs \
+            domain/editor/editor_scene/src/sdf_authoring/projection.rs)
+          actual=$(git diff --name-only | sort)
+          if [[ "$actual" != "$expected" ]]; then
+            echo "Unexpected temporary repair diff:" >&2
+            git diff --name-status >&2
+            exit 1
+          fi
+          git diff --check
+
+      - name: Commit validated product repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            apps/runenwerk_editor/src/editor_app/sdf_operations.rs \
+            domain/editor/editor_scene/src/sdf_authoring/projection.rs
+          git commit -m "spatial: propagate checked SDF mapping"
+          git push origin HEAD:tmp-364-final-closure-5745
