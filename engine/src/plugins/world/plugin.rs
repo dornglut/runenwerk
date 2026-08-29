@@ -21,7 +21,6 @@ use super::streaming::replication::{
 };
 use super::{
     adapters::resources::{
-        BuildGraphResource, BuildQueueResource, CameraRelativeFrameResource,
         CaveLightingScopeResource, CavePortalGraphResource, CaveSectorResource,
         CollisionQueryServiceResource, OperationLogResource, PartitionConfigResource,
         RegionInvalidationJournalResource, ReplicationStateResource, SdfChunkStoreResource,
@@ -29,7 +28,6 @@ use super::{
     chunks::{DirtyChunkMapResource, lifecycle::WorldChunkRuntimeMapResource},
     queries::nav::WorldNavSummaryResource,
 };
-use crate::plugins::world::adapters::WorldFrameResource;
 use world_ops::WorldRevision;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource, Default)]
@@ -122,8 +120,6 @@ impl Plugin for WorldPlugin {
         app.init_resource::<WorldRuntimeState>();
         app.init_resource::<WorldAuthorityState>();
         app.init_resource::<PartitionConfigResource>();
-        app.init_resource::<WorldFrameResource>();
-        app.init_resource::<CameraRelativeFrameResource>();
         app.init_resource::<WorldChunkRuntimeMapResource>();
         app.init_resource::<DirtyChunkMapResource>();
         app.init_resource::<WorldRenderCacheInvalidationQueueResource>();

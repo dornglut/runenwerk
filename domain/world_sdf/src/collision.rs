@@ -1,9 +1,9 @@
 use crate::storage::{
     SDF_PAGE_EDGE_BRICKS, SdfBrickRecord, SdfChunkPayload, SdfChunkStore, SdfPageCoord3,
 };
+use runen_spatial::WorldLocalPosition;
+use runen_spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, WorldId};
 use serde::{Deserialize, Serialize};
-use spatial::WorldLocalPosition;
-use spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, WorldId};
 #[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CollisionSample {
     pub chunk_id: ChunkId,
@@ -140,7 +140,7 @@ impl CollisionQueryService {
         let sweep_delta = sub3(query.end, query.start);
         let sweep_length = length3(sweep_delta);
         let step_size_meters =
-            (partition.chunk_edge_meters.max(1.0) / (SDF_PAGE_EDGE_BRICKS as f32 * 2.0)).max(0.05);
+            (partition.chunk_edge_meters() as f32 / (SDF_PAGE_EDGE_BRICKS as f32 * 2.0)).max(0.05);
         let sweep_steps = ((sweep_length / step_size_meters).ceil() as usize).clamp(1, 512);
 
         let start_sample = self
@@ -299,7 +299,7 @@ fn payload_brick_lookup(
     world_position: [f32; 3],
 ) -> Option<(SdfPageCoord3, [u8; 3], [f32; 3])> {
     let (min_page, max_page) = payload_page_bounds(payload)?;
-    let edge = partition.chunk_edge_meters.max(1.0);
+    let edge = partition.chunk_edge_meters() as f32;
     let local = chunk_local_position(partition, chunk_id, world_position);
     let local_clamped = [
         local[0].clamp(0.0, edge * (1.0 - 1.0e-6)),
@@ -512,7 +512,7 @@ fn estimate_hit_normal(
     query: &SphereSweep,
     hit_position: [f32; 3],
 ) -> [f32; 3] {
-    let epsilon = (partition.chunk_edge_meters.max(1.0) / 64.0).clamp(0.01, 0.5);
+    let epsilon = (partition.chunk_edge_meters() as f32 / 64.0).clamp(0.01, 0.5);
     let sample_with_offset = |offset: [f32; 3]| -> f32 {
         let position = [
             hit_position[0] + offset[0],
@@ -548,7 +548,7 @@ fn chunk_local_position(
     chunk_id: ChunkId,
     world_position: [f32; 3],
 ) -> [f32; 3] {
-    let edge = partition.chunk_edge_meters.max(1.0);
+    let edge = partition.chunk_edge_meters() as f32;
     let chunk_min = [
         chunk_id.coord.x as f32 * edge,
         chunk_id.coord.y as f32 * edge,
@@ -664,13 +664,10 @@ mod tests {
     #[test]
     fn sweep_readiness_reports_first_missing_chunk_in_path_bounds() {
         let service = CollisionQueryService;
-        let partition = GridPartitionConfig {
-            chunk_edge_meters: 1.0,
-            region_chunk_dims: [8, 8, 8],
-            fixed_point_scale: 1024,
-        };
+        let partition = GridPartitionConfig::try_new(1.0, [8, 8, 8])
+            .expect("test partition configuration is valid");
         let mut store = SdfChunkStore::default();
-        let planet_id = WorldId(0);
+        let planet_id = WorldId::new(0);
         let loaded_chunks = [
             ChunkId::new(planet_id, ChunkCoord3 { x: 0, y: 0, z: 0 }),
             ChunkId::new(planet_id, ChunkCoord3 { x: 2, y: 0, z: 0 }),
@@ -700,13 +697,10 @@ mod tests {
     #[test]
     fn sweep_readiness_is_ready_when_all_required_chunks_are_loaded() {
         let service = CollisionQueryService;
-        let partition = GridPartitionConfig {
-            chunk_edge_meters: 1.0,
-            region_chunk_dims: [8, 8, 8],
-            fixed_point_scale: 1024,
-        };
+        let partition = GridPartitionConfig::try_new(1.0, [8, 8, 8])
+            .expect("test partition configuration is valid");
         let mut store = SdfChunkStore::default();
-        let planet_id = WorldId(0);
+        let planet_id = WorldId::new(0);
 
         for x in 0..=2 {
             let chunk_id = ChunkId::new(planet_id, ChunkCoord3 { x, y: 0, z: 0 });
@@ -729,13 +723,10 @@ mod tests {
     #[test]
     fn sweep_hits_first_occupied_chunk_along_path_bounds() {
         let service = CollisionQueryService;
-        let partition = GridPartitionConfig {
-            chunk_edge_meters: 1.0,
-            region_chunk_dims: [8, 8, 8],
-            fixed_point_scale: 1024,
-        };
+        let partition = GridPartitionConfig::try_new(1.0, [8, 8, 8])
+            .expect("test partition configuration is valid");
         let mut store = SdfChunkStore::default();
-        let planet_id = WorldId(0);
+        let planet_id = WorldId::new(0);
         let chunk0 = ChunkId::new(planet_id, ChunkCoord3 { x: 0, y: 0, z: 0 });
         let chunk1 = ChunkId::new(planet_id, ChunkCoord3 { x: 1, y: 0, z: 0 });
         let chunk2 = ChunkId::new(planet_id, ChunkCoord3 { x: 2, y: 0, z: 0 });
@@ -765,13 +756,10 @@ mod tests {
     #[test]
     fn sample_signed_distance_respects_brick_octant_occupancy() {
         let service = CollisionQueryService;
-        let partition = GridPartitionConfig {
-            chunk_edge_meters: 1.0,
-            region_chunk_dims: [8, 8, 8],
-            fixed_point_scale: 1024,
-        };
+        let partition = GridPartitionConfig::try_new(1.0, [8, 8, 8])
+            .expect("test partition configuration is valid");
         let mut store = SdfChunkStore::default();
-        let planet_id = WorldId(0);
+        let planet_id = WorldId::new(0);
         let chunk_id = ChunkId::new(planet_id, ChunkCoord3::default());
         store
             .chunks
@@ -797,13 +785,10 @@ mod tests {
     #[test]
     fn sweep_can_stay_clear_inside_partial_occupancy_chunk() {
         let service = CollisionQueryService;
-        let partition = GridPartitionConfig {
-            chunk_edge_meters: 1.0,
-            region_chunk_dims: [8, 8, 8],
-            fixed_point_scale: 1024,
-        };
+        let partition = GridPartitionConfig::try_new(1.0, [8, 8, 8])
+            .expect("test partition configuration is valid");
         let mut store = SdfChunkStore::default();
-        let planet_id = WorldId(0);
+        let planet_id = WorldId::new(0);
         let chunk_id = ChunkId::new(planet_id, ChunkCoord3::default());
         store
             .chunks
@@ -829,12 +814,9 @@ mod tests {
     #[test]
     fn authoritative_sweep_outcome_distinguishes_clear_and_missing_payload() {
         let service = CollisionQueryService;
-        let partition = GridPartitionConfig {
-            chunk_edge_meters: 1.0,
-            region_chunk_dims: [8, 8, 8],
-            fixed_point_scale: 1024,
-        };
-        let planet_id = WorldId(0);
+        let partition = GridPartitionConfig::try_new(1.0, [8, 8, 8])
+            .expect("test partition configuration is valid");
+        let planet_id = WorldId::new(0);
 
         let clear_chunk0 = ChunkId::new(planet_id, ChunkCoord3 { x: 0, y: 0, z: 0 });
         let clear_chunk1 = ChunkId::new(planet_id, ChunkCoord3 { x: 1, y: 0, z: 0 });
@@ -881,7 +863,7 @@ mod tests {
 
     #[test]
     fn payload_serialization_roundtrip_keeps_store_data() {
-        let chunk_id = ChunkId::new(WorldId(1), ChunkCoord3 { x: 3, y: -2, z: 7 });
+        let chunk_id = ChunkId::new(WorldId::new(1), ChunkCoord3 { x: 3, y: -2, z: 7 });
         let payload = occupied_payload(chunk_id);
         let mut store = SdfChunkStore::default();
         store.chunks.insert(chunk_id, payload.clone());

@@ -1,4 +1,4 @@
-use runen_spatial::*;
+use runen_runen_spatial::*;
 use std::ops::{Deref, DerefMut};
 use world_ops::{
     BuildGraph, BuildQueue, DirtyChunkMap, OperationLog, RegionInvalidationJournal,

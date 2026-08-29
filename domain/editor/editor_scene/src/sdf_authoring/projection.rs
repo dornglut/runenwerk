@@ -113,7 +113,7 @@ fn primitive_kind_label(kind: crate::SdfPrimitiveKind) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use spatial::GridPartitionConfig;
+    use runen_spatial::GridPartitionConfig;
     use world_ops::{CsgBooleanMode, Operation};
 
     use crate::{

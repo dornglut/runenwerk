@@ -1,4 +1,4 @@
-use runen_spatial::{ChunkId, RegionId};
+use runen_runen_spatial::{ChunkId, RegionId};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use world_ops::{ChunkGeneration, ChunkRevision, OperationId};
@@ -70,7 +70,7 @@ pub struct SdfChunkStore {
 #[cfg(test)]
 mod tests {
     use super::SdfChunkPayload;
-    use runen_spatial::{ChunkCoord3, ChunkId, WorldId};
+    use runen_runen_spatial::{ChunkCoord3, ChunkId, WorldId};
     use std::collections::BTreeMap;
     use world_ops::{ChunkGeneration, ChunkRevision};
 

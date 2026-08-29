@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use graph::{GraphDefinition, NodeId};
 use product::{ProductIdentity, ProductScope};
-use spatial::{ChunkId, RegionId, WorldId};
+use runen_spatial::{ChunkId, RegionId, WorldId};
 use world_ops::{QuantizedAabb, WorldRevision};
 
 use crate::{
@@ -121,7 +121,10 @@ impl ProcgenScope {
             .map(|chunk| {
                 format!(
                     "world:{}:chunk:{}:{}:{}",
-                    chunk.world_id.0, chunk.coord.x, chunk.coord.y, chunk.coord.z
+                    chunk.world_id.get(),
+                    chunk.coord.x,
+                    chunk.coord.y,
+                    chunk.coord.z
                 )
             })
             .collect()
@@ -133,7 +136,10 @@ impl ProcgenScope {
             .map(|region| {
                 format!(
                     "world:{}:region:{}:{}:{}",
-                    region.world_id.0, region.coord.x, region.coord.y, region.coord.z
+                    region.world_id.get(),
+                    region.coord.x,
+                    region.coord.y,
+                    region.coord.z
                 )
             })
             .collect()

@@ -1,7 +1,7 @@
 //! File: domain/procgen/src/field_preview.rs
 //! Purpose: Deterministic CPU field-preview formation for procgen documents.
 
-use spatial::ChunkId;
+use runen_spatial::ChunkId;
 use world_ops::QuantizedAabb;
 use world_sdf::{
     FieldPreviewGrid, FieldPreviewPayload, FieldPreviewProduct, FieldProductDescriptor,
@@ -509,14 +509,17 @@ fn quantize_distance(distance: f32, fixed_point_scale: i32) -> i16 {
 fn chunk_label(chunk_id: ChunkId) -> String {
     format!(
         "world:{}:chunk:{}:{}:{}",
-        chunk_id.world_id.0, chunk_id.coord.x, chunk_id.coord.y, chunk_id.coord.z
+        chunk_id.world_id.get(),
+        chunk_id.coord.x,
+        chunk_id.coord.y,
+        chunk_id.coord.z
     )
 }
 
 #[cfg(test)]
 mod tests {
     use product::{ProductIdentity, ratify_product_publication};
-    use spatial::{ChunkCoord3, ChunkId};
+    use runen_spatial::{ChunkCoord3, ChunkId};
     use world_ops::QuantizedVec3;
     use world_sdf::{FieldProductKind, ratify_field_preview_product};
 

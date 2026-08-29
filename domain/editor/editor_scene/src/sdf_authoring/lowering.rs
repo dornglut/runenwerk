@@ -3,7 +3,7 @@
 
 use std::collections::BTreeSet;
 
-use spatial::{ChunkId, GridPartitionConfig, WorldId};
+use runen_spatial::{ChunkId, GridPartitionConfig, WorldId};
 use world_ops::{
     BrushShape, CsgBooleanMode, CsgBrushOperation, Operation, OperationId, OperationRecord,
     QuantizedAabb, QuantizedVec3, ReplayWindow, WorldRevision, quantize_aabb,
@@ -27,7 +27,7 @@ impl Default for SdfOperationLoweringContext {
     fn default() -> Self {
         Self {
             base_world_revision: WorldRevision(0),
-            planet_id: WorldId(1),
+            planet_id: WorldId::new(1),
             partition: GridPartitionConfig::default(),
         }
     }

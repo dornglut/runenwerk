@@ -1,6 +1,6 @@
 use foundation_ratification::{RatificationIssue, RatificationReport};
+use runen_spatial::ChunkId;
 use serde::{Deserialize, Serialize};
-use spatial::ChunkId;
 
 use crate::{
     FieldProductCandidate, FieldProductDescriptor, FieldProductIssueCode, FieldProductKind,
@@ -139,7 +139,7 @@ pub fn ratify_field_preview_product(
 
 #[cfg(test)]
 mod tests {
-    use spatial::{ChunkCoord3, ChunkId, WorldId};
+    use runen_spatial::{ChunkCoord3, ChunkId, WorldId};
 
     use super::*;
     use crate::{FieldProductId, FieldProductLineage, FieldProductScope};
@@ -155,7 +155,7 @@ mod tests {
 
     #[test]
     fn preview_product_ratifier_accepts_descriptor_payload_match() {
-        let chunk_id = ChunkId::new(WorldId(1), ChunkCoord3 { x: 0, y: 0, z: 0 });
+        let chunk_id = ChunkId::new(WorldId::new(1), ChunkCoord3 { x: 0, y: 0, z: 0 });
         let grid = FieldPreviewGrid::new(chunk_id, [2, 2, 2]);
         let product = FieldPreviewProduct::new(
             descriptor(chunk_id, FieldProductKind::ScalarDistance),
@@ -170,7 +170,7 @@ mod tests {
 
     #[test]
     fn preview_product_ratifier_rejects_kind_and_sample_mismatch() {
-        let chunk_id = ChunkId::new(WorldId(1), ChunkCoord3 { x: 0, y: 0, z: 0 });
+        let chunk_id = ChunkId::new(WorldId::new(1), ChunkCoord3 { x: 0, y: 0, z: 0 });
         let grid = FieldPreviewGrid::new(chunk_id, [2, 2, 2]);
         let product = FieldPreviewProduct::new(
             descriptor(chunk_id, FieldProductKind::VectorGradient),

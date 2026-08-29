@@ -102,13 +102,9 @@ mod tests {
             .expect("test partition configuration is valid");
         let scale = WorldQuantizationScale::try_new(1).expect("positive scale is valid");
         let bounds = quantize_aabb([0.2, 0.2, 0.2], [2.1, 0.8, 0.8], scale);
-        let chunks = touched_chunks_from_quantized_bounds(
-            &partition,
-            bounds,
-            WorldId::new(0),
-            scale,
-        )
-        .expect("test bounds map into spatial coordinates");
+        let chunks =
+            touched_chunks_from_quantized_bounds(&partition, bounds, WorldId::new(0), scale)
+                .expect("test bounds map into spatial coordinates");
         assert_eq!(chunks.len(), 12);
     }
 

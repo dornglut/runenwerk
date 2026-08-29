@@ -5,7 +5,7 @@ use super::super::chunks::lifecycle::{ChunkLifecycleState, WorldChunkRuntimeMapR
 use super::super::debug::metrics::WorldDebugMetricsResource;
 use super::integration::{WorldCompletedBuildOutput, WorldCompletedBuildQueueResource};
 use crate::runtime::{Res, ResMut};
-use spatial::{ChunkId, GridPartitionConfig};
+use runen_spatial::{ChunkId, GridPartitionConfig};
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 use world_ops::{

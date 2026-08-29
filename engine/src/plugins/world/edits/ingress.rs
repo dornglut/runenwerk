@@ -6,7 +6,7 @@ use super::super::chunks::render_cache_bridge::WorldRenderCacheInvalidationQueue
 use super::super::debug::metrics::WorldDebugMetricsResource;
 use super::super::{WorldAuthorityState, WorldRuntimeConfig, WorldRuntimeMode};
 use ecs::World;
-use spatial::WorldId;
+use runen_spatial::WorldId;
 use world_ops::{
     Operation, OperationId, OperationRecord, QuantizedAabb, dirty_reason_for_operation,
     mark_dirty_chunks_from_quantized_bounds,
@@ -21,7 +21,7 @@ pub struct WorldEditIngressMeta {
 impl Default for WorldEditIngressMeta {
     fn default() -> Self {
         Self {
-            planet_id: WorldId(0),
+            planet_id: WorldId::new(0),
             deterministic_seed: 0,
         }
     }

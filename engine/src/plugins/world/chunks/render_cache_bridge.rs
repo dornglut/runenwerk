@@ -1,6 +1,6 @@
 use crate::plugins::render::features::world::runtime_cache::WorldRuntimeCacheResource;
 use crate::runtime::WorldMut;
-use spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, RegionId, WorldId};
+use runen_spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, RegionId, WorldId};
 use std::collections::{BTreeSet, VecDeque};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

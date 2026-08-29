@@ -7,7 +7,7 @@ use super::super::debug::metrics::WorldDebugMetricsResource;
 use super::super::plugin::{WorldAuthorityState, WorldRuntimeState};
 use super::jobs::WorldBuildStaleness;
 use crate::runtime::{Res, ResMut};
-use spatial::ChunkId;
+use runen_spatial::ChunkId;
 use std::collections::VecDeque;
 use world_ops::{BuildGeneration, ChunkGeneration, ChunkRevision};
 use world_sdf::{RegionSdfSummary, SdfChunkPayload};

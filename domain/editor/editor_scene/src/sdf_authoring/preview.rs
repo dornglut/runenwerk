@@ -177,7 +177,7 @@ struct EvaluatedPoint {
 fn sample_chunk(
     document: &SdfOperationDocument,
     context: &SdfOperationLoweringContext,
-    chunk_id: spatial::ChunkId,
+    chunk_id: runen_spatial::ChunkId,
     grid_edge: u16,
 ) -> ChunkSamples {
     let mut samples = ChunkSamples::default();
@@ -221,7 +221,7 @@ fn sample_chunk(
 fn preview_descriptor(
     product_id: FieldProductId,
     kind: FieldProductKind,
-    chunk_id: spatial::ChunkId,
+    chunk_id: runen_spatial::ChunkId,
     source_revision: u64,
     grid_edge: u16,
 ) -> FieldProductDescriptor {
@@ -478,7 +478,7 @@ fn rotated_axis_y(rotation: SceneQuat) -> Vec3 {
 
 #[cfg(test)]
 mod tests {
-    use spatial::GridPartitionConfig;
+    use runen_spatial::GridPartitionConfig;
     use world_sdf::FieldProductKind;
 
     use super::*;

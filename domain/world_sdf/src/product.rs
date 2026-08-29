@@ -3,7 +3,7 @@ use ::product::{
     ProductFreshness, ProductIdentity, ProductKind, ProductLineage, ProductQueryPolicy,
     ProductRebuildPolicy, ProductResidency, ProductRetentionPolicy, ProductScaleBand, ProductScope,
 };
-use runen_spatial::{ChunkId, RegionId};
+use runen_runen_spatial::{ChunkId, RegionId};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
@@ -316,13 +316,19 @@ impl FieldProductCandidate {
 fn format_chunk_id(chunk_id: &ChunkId) -> String {
     format!(
         "world:{}:chunk:{},{},{}",
-        chunk_id.world_id.get(), chunk_id.coord.x, chunk_id.coord.y, chunk_id.coord.z
+        chunk_id.world_id.get(),
+        chunk_id.coord.x,
+        chunk_id.coord.y,
+        chunk_id.coord.z
     )
 }
 
 fn format_region_id(region_id: &RegionId) -> String {
     format!(
         "world:{}:region:{},{},{}",
-        region_id.world_id.get(), region_id.coord.x, region_id.coord.y, region_id.coord.z
+        region_id.world_id.get(),
+        region_id.coord.x,
+        region_id.coord.y,
+        region_id.coord.z
     )
 }
