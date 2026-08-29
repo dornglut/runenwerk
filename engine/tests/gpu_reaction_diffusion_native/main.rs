@@ -1,4 +1,9 @@
-use bytemuck::{Pod, Zeroable};
+//! Native conformance harness for the representative reaction-diffusion workload.
+//!
+//! The public-API authoring surface reviewed for G6-E01 lives in `workload.rs`.
+
+mod workload;
+
 use engine::plugins::gpu::*;
 use serde_json::json;
 use std::path::{Path, PathBuf};
@@ -11,13 +16,9 @@ use winit::event_loop::{ActiveEventLoop, EventLoop};
 #[cfg(target_os = "linux")]
 use winit::platform::x11::EventLoopBuilderExtX11;
 use winit::window::{Window, WindowId};
+use workload::*;
 
-const COMPUTE_SOURCE_KEY: &str = "proof.reaction-diffusion.compute";
-const RENDER_SOURCE_KEY: &str = "proof.reaction-diffusion.render";
-const SOURCE_REVISION: u64 = 1;
 const MANIFEST_SCHEMA_VERSION: u32 = 1;
-const WORKGROUP: u32 = 8;
-const FRAME_COUNT: u32 = 8;
 const SURFACE_WIDTH: u32 = 64;
 const SURFACE_HEIGHT: u32 = 64;
 const SURFACE_FORMAT_CANDIDATES: [GpuTextureFormat; 4] = [
@@ -27,389 +28,8 @@ const SURFACE_FORMAT_CANDIDATES: [GpuTextureFormat; 4] = [
     GpuTextureFormat::Rgba8Unorm,
 ];
 
-const REACTION_DIFFUSION_COMPUTE_WGSL: &str = r#"
-struct Params {
-    width: u32,
-    height: u32,
-    dt: f32,
-    feed: f32,
-    kill: f32,
-    diffusion_a: f32,
-    diffusion_b: f32,
-    _pad: f32,
-}
-
-@group(0) @binding(0)
-var<storage, read> state_in: array<vec2<f32>>;
-
-@group(0) @binding(1)
-var<storage, read_write> state_out: array<vec2<f32>>;
-
-@group(0) @binding(2)
-var<storage, read> params: Params;
-
-fn wrapped_index(x: i32, y: i32) -> u32 {
-    let width = i32(params.width);
-    let height = i32(params.height);
-    let wx = (x + width) % width;
-    let wy = (y + height) % height;
-    return u32(wy) * params.width + u32(wx);
-}
-
-fn sample(x: i32, y: i32) -> vec2<f32> {
-    return state_in[wrapped_index(x, y)];
-}
-
-@compute @workgroup_size(8, 8, 1)
-fn cs_main(@builtin(global_invocation_id) gid: vec3<u32>) {
-    if (gid.x >= params.width || gid.y >= params.height) {
-        return;
-    }
-
-    let x = i32(gid.x);
-    let y = i32(gid.y);
-    let center = sample(x, y);
-
-    let cardinal =
-        sample(x - 1, y) + sample(x + 1, y) +
-        sample(x, y - 1) + sample(x, y + 1);
-    let diagonal =
-        sample(x - 1, y - 1) + sample(x + 1, y - 1) +
-        sample(x - 1, y + 1) + sample(x + 1, y + 1);
-    let laplacian = center * -1.0 + cardinal * 0.2 + diagonal * 0.05;
-
-    let a = center.x;
-    let b = center.y;
-    let reaction = a * b * b;
-    let next_a = clamp(
-        a + (params.diffusion_a * laplacian.x - reaction + params.feed * (1.0 - a)) * params.dt,
-        0.0,
-        1.0,
-    );
-    let next_b = clamp(
-        b + (params.diffusion_b * laplacian.y + reaction - (params.kill + params.feed) * b) * params.dt,
-        0.0,
-        1.0,
-    );
-    state_out[gid.y * params.width + gid.x] = vec2<f32>(next_a, next_b);
-}
-"#;
-
-const REACTION_DIFFUSION_RENDER_WGSL: &str = r#"
-struct Params {
-    width: u32,
-    height: u32,
-    dt: f32,
-    feed: f32,
-    kill: f32,
-    diffusion_a: f32,
-    diffusion_b: f32,
-    _pad: f32,
-}
-
-@group(0) @binding(0)
-var<storage, read> state: array<vec2<f32>>;
-
-@group(0) @binding(1)
-var<storage, read> params: Params;
-
-@vertex
-fn vs_main(@builtin(vertex_index) vertex_index: u32) -> @builtin(position) vec4<f32> {
-    let positions = array<vec2<f32>, 3>(
-        vec2<f32>(-1.0, -1.0),
-        vec2<f32>(3.0, -1.0),
-        vec2<f32>(-1.0, 3.0),
-    );
-    return vec4<f32>(positions[vertex_index], 0.0, 1.0);
-}
-
-@fragment
-fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
-    let x = min(u32(position.x), params.width - 1u);
-    let y = min(u32(position.y), params.height - 1u);
-    let cell = state[y * params.width + x];
-    let b = clamp(cell.y, 0.0, 1.0);
-    let contrast = clamp((cell.x - cell.y) * 0.5 + 0.5, 0.0, 1.0);
-    return vec4<f32>(b, b * b, contrast, 1.0);
-}
-"#;
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Pod, Zeroable)]
-struct ReactionCell {
-    a: f32,
-    b: f32,
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Pod, Zeroable)]
-struct ReactionParams {
-    width: u32,
-    height: u32,
-    dt: f32,
-    feed: f32,
-    kill: f32,
-    diffusion_a: f32,
-    diffusion_b: f32,
-    _pad: f32,
-}
-
-#[derive(Debug, Clone, Copy)]
-struct Envelope {
-    name: &'static str,
-    width: u32,
-    height: u32,
-    frames: u32,
-    iterations_per_frame: u32,
-}
-
-const ENVELOPES: [Envelope; 2] = [
-    Envelope {
-        name: "64x64-4-iterations",
-        width: 64,
-        height: 64,
-        frames: FRAME_COUNT,
-        iterations_per_frame: 4,
-    },
-    Envelope {
-        name: "128x128-8-iterations",
-        width: 128,
-        height: 128,
-        frames: FRAME_COUNT,
-        iterations_per_frame: 8,
-    },
-];
-
-#[derive(Clone)]
-struct ProgramSources {
-    compute: GpuAdmittedProgramSource,
-    render: GpuAdmittedProgramSource,
-}
-
 fn label(value: &str) -> GpuResourceLabel {
     GpuResourceLabel::new(value).unwrap()
-}
-
-fn reaction_params(width: u32, height: u32) -> ReactionParams {
-    ReactionParams {
-        width,
-        height,
-        dt: 1.0,
-        feed: 0.055,
-        kill: 0.062,
-        diffusion_a: 1.0,
-        diffusion_b: 0.5,
-        _pad: 0.0,
-    }
-}
-
-fn fixed_seed(width: u32, height: u32) -> Vec<ReactionCell> {
-    let mut cells = vec![ReactionCell { a: 1.0, b: 0.0 }; usize::try_from(width * height).unwrap()];
-    let half_w = width / 2;
-    let half_h = height / 2;
-    let radius = (width.min(height) / 10).max(2);
-    for y in (half_h - radius)..(half_h + radius) {
-        for x in (half_w - radius)..(half_w + radius) {
-            let index = usize::try_from(y * width + x).unwrap();
-            cells[index] = ReactionCell { a: 0.0, b: 1.0 };
-        }
-    }
-    cells
-}
-
-fn admitted_sources() -> ProgramSources {
-    let [compute, render] = admit_static_wgsl_sources([
-        (
-            COMPUTE_SOURCE_KEY,
-            SOURCE_REVISION,
-            REACTION_DIFFUSION_COMPUTE_WGSL,
-        ),
-        (
-            RENDER_SOURCE_KEY,
-            SOURCE_REVISION,
-            REACTION_DIFFUSION_RENDER_WGSL,
-        ),
-    ])
-    .unwrap();
-    ProgramSources { compute, render }
-}
-
-fn compute_pipeline(source: &GpuAdmittedProgramSource) -> GpuComputePipelineDescriptor {
-    GpuComputePipelineDescriptor::ordinary(source.clone(), "cs_main").unwrap()
-}
-
-fn render_pipeline(
-    source: &GpuAdmittedProgramSource,
-    format: GpuTextureFormat,
-) -> GpuRenderPipelineDescriptor {
-    GpuRenderPipelineDescriptor::ordinary_color(source.clone(), "vs_main", "fs_main", format)
-        .unwrap()
-}
-
-fn buffer(resources: &mut GpuResourceScope, name: &str, byte_len: u64) -> GpuBufferHandle {
-    resources
-        .buffer(
-            GpuBufferDescriptor::ordinary_owned(
-                name,
-                GpuResourceLifetime::Retained,
-                GpuReconstruction::SourceBacked,
-                byte_len,
-                [GpuBufferUsage::Storage, GpuBufferUsage::CopyDestination],
-                GpuBufferInitialization::Uninitialized,
-            )
-            .unwrap(),
-        )
-        .unwrap()
-}
-
-fn compute_operation(
-    pipeline: &GpuComputePipelineDescriptor,
-    input: &GpuBufferHandle,
-    output: &GpuBufferHandle,
-    params: &GpuBufferHandle,
-    width: u32,
-    height: u32,
-) -> GpuComputeOperation {
-    let bindings = pipeline
-        .runtime_bindings([
-            GpuRuntimeBindingValue::whole_buffer(0, 0, input),
-            GpuRuntimeBindingValue::whole_buffer(0, 1, output),
-            GpuRuntimeBindingValue::whole_buffer(0, 2, params),
-        ])
-        .unwrap();
-    let dispatch = GpuDispatchIntent::direct(GpuDispatchSize::new(
-        width.div_ceil(WORKGROUP),
-        height.div_ceil(WORKGROUP),
-        1,
-    ));
-    GpuComputeOperation::new(pipeline.clone(), bindings, dispatch).unwrap()
-}
-
-fn render_operation(
-    pipeline: &GpuRenderPipelineDescriptor,
-    state: &GpuBufferHandle,
-    params: &GpuBufferHandle,
-    view: &GpuTextureViewHandle,
-) -> GpuRenderOperation {
-    let bindings = pipeline
-        .runtime_bindings([
-            GpuRuntimeBindingValue::whole_buffer(0, 0, state),
-            GpuRuntimeBindingValue::whole_buffer(0, 1, params),
-        ])
-        .unwrap();
-    GpuRenderOperation::ordinary_color_full_target_direct(
-        pipeline,
-        bindings,
-        view,
-        GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap()),
-        GpuAttachmentStore::Store,
-        GpuDrawRange::new(0, 3).unwrap(),
-        GpuDrawRange::new(0, 1).unwrap(),
-    )
-    .unwrap()
-}
-
-fn state_resources(
-    resources: &mut GpuResourceScope,
-    envelope: Envelope,
-) -> (
-    GpuBufferHandle,
-    GpuBufferHandle,
-    GpuBufferHandle,
-    PreparedGpuData<TransferData>,
-    PreparedGpuData<TransferData>,
-) {
-    let seed_values = fixed_seed(envelope.width, envelope.height);
-    let seed = PreparedGpuData::<TransferData>::ordinary_pod_transfer(
-        "reaction diffusion seed",
-        &seed_values,
-    )
-    .unwrap();
-    let params_value = reaction_params(envelope.width, envelope.height);
-    let params = PreparedGpuData::<TransferData>::ordinary_pod_transfer(
-        "reaction diffusion parameters",
-        &[params_value],
-    )
-    .unwrap();
-    let state_bytes = seed.layout().byte_len();
-    let params_bytes = params.layout().byte_len();
-    (
-        buffer(
-            resources,
-            &format!("{} state a", envelope.name),
-            state_bytes,
-        ),
-        buffer(
-            resources,
-            &format!("{} state b", envelope.name),
-            state_bytes,
-        ),
-        buffer(
-            resources,
-            &format!("{} params", envelope.name),
-            params_bytes,
-        ),
-        seed,
-        params,
-    )
-}
-
-fn offscreen_target(
-    resources: &mut GpuResourceScope,
-    envelope: Envelope,
-) -> (GpuTextureHandle, GpuTextureViewHandle) {
-    let name = format!("{} offscreen target", envelope.name);
-    let texture = resources
-        .texture(
-            GpuTextureDescriptor::ordinary_owned_2d(
-                &name,
-                GpuResourceLifetime::Transient,
-                GpuReconstruction::SourceBacked,
-                envelope.width,
-                envelope.height,
-                GpuTextureFormat::Rgba8Unorm,
-                [
-                    GpuTextureUsage::ColorAttachment,
-                    GpuTextureUsage::CopySource,
-                ],
-                GpuTextureInitialization::Uninitialized,
-            )
-            .unwrap(),
-        )
-        .unwrap();
-    let view = resources
-        .texture_view(
-            GpuTextureViewDescriptor::ordinary_full_owned(
-                format!("{} offscreen target view", envelope.name),
-                &texture,
-            )
-            .unwrap(),
-        )
-        .unwrap();
-    (texture, view)
-}
-
-fn add_initialization(
-    builder: &mut GpuWorkFragmentBuilder,
-    state_a: &GpuBufferHandle,
-    state_b: &GpuBufferHandle,
-    params_buffer: &GpuBufferHandle,
-    seed: PreparedGpuData<TransferData>,
-    params: PreparedGpuData<TransferData>,
-) -> Result<(), GpuWorkAuthoringError> {
-    builder.operation(
-        "reaction diffusion initialize state a",
-        GpuUploadOperation::whole_buffer(state_a, seed.clone()).unwrap(),
-    )?;
-    builder.operation(
-        "reaction diffusion initialize state b",
-        GpuUploadOperation::whole_buffer(state_b, seed).unwrap(),
-    )?;
-    builder.operation(
-        "reaction diffusion upload parameters",
-        GpuUploadOperation::whole_buffer(params_buffer, params).unwrap(),
-    )?;
-    Ok(())
 }
 
 fn assert_prepared_graph_evidence(graph: &GpuPreparedWorkGraph) {
@@ -439,72 +59,6 @@ fn assert_prepared_graph_evidence(graph: &GpuPreparedWorkGraph) {
             "prepared graph must mechanically require {feature:?}"
         );
     }
-}
-
-fn offscreen_work(
-    sources: &ProgramSources,
-    envelope: Envelope,
-) -> (String, GpuWorkFragment, Vec<GpuReadbackId>) {
-    assert!(envelope.width >= 32 && envelope.height >= 32);
-    assert!(envelope.frames >= 8);
-    assert!(envelope.iterations_per_frame > 0);
-    let mut resources = GpuResourceScope::new();
-    let (state_a, state_b, params_buffer, seed, params) = state_resources(&mut resources, envelope);
-    let (texture, view) = offscreen_target(&mut resources, envelope);
-    let compute = compute_pipeline(&sources.compute);
-    let render = render_pipeline(&sources.render, GpuTextureFormat::Rgba8Unorm);
-
-    let name = format!("{} reaction diffusion sequence", envelope.name);
-    let graph_label = format!("{} reaction diffusion graph", envelope.name);
-    let mut readbacks = Vec::with_capacity(usize::try_from(envelope.frames).unwrap());
-    let fragment = GpuWorkFragment::build(&name, |builder| {
-        add_initialization(builder, &state_a, &state_b, &params_buffer, seed, params)?;
-
-        let mut current_is_a = true;
-        for frame in 0..envelope.frames {
-            for iteration in 0..envelope.iterations_per_frame {
-                let (input, output) = if current_is_a {
-                    (&state_a, &state_b)
-                } else {
-                    (&state_b, &state_a)
-                };
-                let operation = compute_operation(
-                    &compute,
-                    input,
-                    output,
-                    &params_buffer,
-                    envelope.width,
-                    envelope.height,
-                );
-                builder.operation(
-                    format!(
-                        "{} frame {frame:03} iteration {iteration:03}",
-                        envelope.name
-                    ),
-                    operation,
-                )?;
-                current_is_a = !current_is_a;
-            }
-
-            let state = if current_is_a { &state_a } else { &state_b };
-            builder.operation(
-                format!("{} render frame {frame:03}", envelope.name),
-                render_operation(&render, state, &params_buffer, &view),
-            )?;
-            let region = GpuTextureCopyRegion::whole_base_mip(&texture).unwrap();
-            let readback = GpuReadbackOperation::ordinary(region.into()).unwrap();
-            let readback_id = readback.id();
-            builder.operation(
-                format!("{} readback frame {frame:03}", envelope.name),
-                readback,
-            )?;
-            readbacks.push(readback_id);
-        }
-        Ok(())
-    })
-    .unwrap();
-
-    (graph_label, fragment, readbacks)
 }
 
 fn progress_to_readbacks(
@@ -607,14 +161,20 @@ fn native_offscreen_context() -> GpuContext {
         .merge(&GpuCapabilityProfile::OffscreenGraphicsBaseline.requirements())
         .unwrap();
     let descriptor = GpuContextDescriptor::new(requirements)
-        .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::ColorAttachment)
+        .require_format_role(
+            GpuTextureFormat::Rgba8Unorm,
+            GpuFormatRole::ColorAttachment,
+        )
         .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::CopySource)
         .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
         .with_allowed_backends([GpuBackendFamily::Vulkan])
         .with_label("reaction-diffusion offscreen sequence proof");
     let context = pollster::block_on(GpuContext::request(descriptor))
         .expect("native conformance environment must provide a Vulkan fallback adapter");
-    assert_eq!(context.adapter_facts().backend(), GpuBackendFamily::Vulkan);
+    assert_eq!(
+        context.adapter_facts().backend(),
+        GpuBackendFamily::Vulkan
+    );
     assert_eq!(
         context.adapter_facts().fallback(),
         GpuFallbackStatus::ConfirmedFallback
@@ -798,63 +358,6 @@ fn native_surface_context(window: Arc<Window>) -> (GpuContext, GpuSurfaceHandle,
     (context, surface, format)
 }
 
-fn surface_graph(
-    sources: &ProgramSources,
-    image: &GpuAcquiredSurfaceImage,
-    format: GpuTextureFormat,
-) -> GpuPreparedWorkGraph {
-    let envelope = ENVELOPES[0];
-    let mut resources = GpuResourceScope::new();
-    let (state_a, state_b, params_buffer, seed, params) = state_resources(&mut resources, envelope);
-    let compute = compute_pipeline(&sources.compute);
-    let render = render_pipeline(&sources.render, format);
-    let view = image.default_view().clone();
-
-    let fragment = GpuWorkFragment::build("reaction diffusion surface replay", |builder| {
-        add_initialization(builder, &state_a, &state_b, &params_buffer, seed, params)?;
-
-        let mut current_is_a = true;
-        for frame in 0..envelope.frames {
-            for iteration in 0..envelope.iterations_per_frame {
-                let (input, output) = if current_is_a {
-                    (&state_a, &state_b)
-                } else {
-                    (&state_b, &state_a)
-                };
-                builder.operation(
-                    format!("surface frame {frame:03} iteration {iteration:03}"),
-                    compute_operation(
-                        &compute,
-                        input,
-                        output,
-                        &params_buffer,
-                        envelope.width,
-                        envelope.height,
-                    ),
-                )?;
-                current_is_a = !current_is_a;
-            }
-        }
-        let state = if current_is_a { &state_a } else { &state_b };
-        builder.operation(
-            "reaction diffusion surface render",
-            render_operation(&render, state, &params_buffer, &view),
-        )?;
-        builder.operation(
-            "reaction diffusion surface Present",
-            GpuPresentOperation::whole_view(&view).unwrap(),
-        )?;
-        Ok(())
-    })
-    .unwrap();
-
-    let graph =
-        GpuPreparedWorkGraph::prepare(label("reaction diffusion surface graph"), [fragment])
-            .unwrap();
-    assert_prepared_graph_evidence(&graph);
-    graph
-}
-
 fn progress_to_completion(context: &GpuContext, submission: &GpuSubmission) {
     let deadline = Instant::now() + Duration::from_secs(30);
     loop {
@@ -875,7 +378,9 @@ fn run_surface_proof(window: Arc<Window>) {
     let (context, surface, format) = native_surface_context(window);
     let image = context.acquire_surface_image(surface).unwrap();
     let sources = admitted_sources();
-    let graph = surface_graph(&sources, &image, format);
+    let (graph_label, fragment) = surface_work(&sources, &image, format);
+    let graph = GpuPreparedWorkGraph::prepare(label(&graph_label), [fragment]).unwrap();
+    assert_prepared_graph_evidence(&graph);
     let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
     let submission = context.submit_prepared(prepared).unwrap();
     progress_to_completion(&context, &submission);
