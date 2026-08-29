@@ -182,7 +182,7 @@ fn sample_chunk(
 ) -> ChunkSamples {
     let mut samples = ChunkSamples::default();
     let operations = enabled_operations(document);
-    let edge = context.partition.chunk_edge_meters.max(1.0);
+    let edge = context.partition.chunk_edge_meters() as f32;
     let grid_edge_f = f32::from(grid_edge.max(1));
     let step = edge / grid_edge_f;
     let base = Vec3::new(
@@ -422,8 +422,8 @@ fn smooth_intersect(a: f32, b: f32, k: f32) -> f32 {
     b + (a - b) * h + k * h * (1.0 - h)
 }
 
-fn quantize_distance(distance: f32, fixed_point_scale: i32) -> i16 {
-    (distance * fixed_point_scale.max(1) as f32)
+fn quantize_distance(distance: f32, fixed_point_scale: world_ops::WorldQuantizationScale) -> i16 {
+    (distance * fixed_point_scale.get() as f32)
         .round()
         .clamp(i16::MIN as f32, i16::MAX as f32) as i16
 }
@@ -502,11 +502,10 @@ mod tests {
             .add_operation(layer_id, "Sphere", sphere(SdfBooleanIntent::Add), 2)
             .expect("add operation");
         let context = SdfOperationLoweringContext {
-            partition: GridPartitionConfig {
-                chunk_edge_meters: 1.0,
-                fixed_point_scale: 8,
-                ..GridPartitionConfig::default()
-            },
+            partition: GridPartitionConfig::try_new(1.0, [8, 8, 8])
+                .expect("test partition configuration is valid"),
+            quantization_scale: world_ops::WorldQuantizationScale::try_new(8)
+                .expect("test quantization scale is valid"),
             ..SdfOperationLoweringContext::default()
         };
 
