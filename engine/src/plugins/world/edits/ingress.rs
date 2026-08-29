@@ -44,12 +44,12 @@ pub fn submit_world_operation(
         .unwrap_or_default();
     let dirty_reason = dirty_reason_for_operation(&operation);
     let partition = world.resource::<PartitionConfigResource>().ok()?.clone();
-    let quantization_scale = *world.resource::<WorldQuantizationScaleResource>().ok()?;
+    let quantization_scale = **world.resource::<WorldQuantizationScaleResource>().ok()?;
     let touched_chunks = touched_chunks_from_quantized_bounds(
         &partition,
         affected_bounds_q,
         meta.planet_id,
-        *quantization_scale,
+        quantization_scale,
     )
     .ok()?;
 
