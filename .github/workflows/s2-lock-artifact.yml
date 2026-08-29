@@ -20,60 +20,97 @@ jobs:
           fetch-depth: 1
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: Apply asserted mechanical S2 migration
+      - name: Apply asserted editor quantization separation
         shell: python
         run: |
           from pathlib import Path
-          import re
 
-          roots = [
-              Path("domain/world_sdf/src"),
-              Path("domain/procgen/src"),
-              Path("domain/editor/editor_scene/src"),
-              Path("engine/src/plugins/world"),
-          ]
-          changed = []
-          for root in roots:
-              for path in root.rglob("*.rs"):
-                  old = path.read_text()
-                  new = old.replace("spatial::", "runen_spatial::")
-                  new = new.replace(".world_id.0", ".world_id.get()")
-                  new = re.sub(r"\bWorldId\((\d+)\)", r"WorldId::new(\1)", new)
-                  if new != old:
-                      path.write_text(new)
-                      changed.append(str(path))
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected exactly one match, found {count}")
+              return text.replace(old, new, 1)
 
-          plugin = Path("engine/src/plugins/world/plugin.rs")
-          text = plugin.read_text()
-          for old in [
-              "BuildGraphResource, BuildQueueResource, CameraRelativeFrameResource,\n        ",
-              "        app.init_resource::<WorldFrameResource>();\n",
-              "        app.init_resource::<CameraRelativeFrameResource>();\n",
-              "use crate::plugins::world::adapters::WorldFrameResource;\n",
-          ]:
-              if old not in text:
-                  raise SystemExit(f"expected plugin text not found: {old!r}")
-              text = text.replace(old, "", 1)
-          plugin.write_text(text)
-
-          collision = Path("domain/world_sdf/src/collision.rs")
-          text = collision.read_text()
-          old_partition = """GridPartitionConfig {
-                      chunk_edge_meters: 1.0,
-                      region_chunk_dims: [8, 8, 8],
-                      fixed_point_scale: 1024,
-                  }"""
-          count = text.count(old_partition)
-          if count < 1:
-              raise SystemExit("expected collision partition literals not found")
-          text = text.replace(
-              old_partition,
-              'GridPartitionConfig::try_new(1.0, [8, 8, 8])\n            .expect("test partition configuration is valid")',
+          lowering = Path("domain/editor/editor_scene/src/sdf_authoring/lowering.rs")
+          text = lowering.read_text()
+          text = replace_once(
+              text,
+              "    QuantizedAabb, QuantizedVec3, ReplayWindow, WorldRevision, quantize_aabb,\n",
+              "    QuantizedAabb, QuantizedVec3, ReplayWindow, WorldQuantizationScale, WorldRevision,\n    quantize_aabb,\n",
+              "world_ops import",
           )
-          text = text.replace("partition.chunk_edge_meters.max(1.0)", "partition.chunk_edge_meters() as f32")
-          collision.write_text(text)
+          text = replace_once(
+              text,
+              "    SdfOperationIssueSeverity, SdfOperationLayerId, SdfOperationRatificationReport,\n    SdfPrimitiveKind, ratify_sdf_operation_document,\n",
+              "    SdfOperationIssue, SdfOperationIssueCode, SdfOperationIssueSeverity,\n    SdfOperationIssueSubject, SdfOperationLayerId, SdfOperationRatificationReport, SdfPrimitiveKind,\n    ratify_sdf_operation_document,\n",
+              "editor issue imports",
+          )
+          text = replace_once(
+              text,
+              "    pub partition: GridPartitionConfig,\n",
+              "    pub partition: GridPartitionConfig,\n    pub quantization_scale: WorldQuantizationScale,\n",
+              "lowering context field",
+          )
+          text = replace_once(
+              text,
+              "            partition: GridPartitionConfig::default(),\n",
+              "            partition: GridPartitionConfig::default(),\n            quantization_scale: WorldQuantizationScale::default(),\n",
+              "lowering context default",
+          )
+          text = replace_once(
+              text,
+              "impl SdfOperationLoweringContext {\n    pub fn fixed_point_scale(&self) -> i32 {\n        self.partition.quantization_scale()\n    }\n}\n",
+              "impl SdfOperationLoweringContext {\n    pub const fn fixed_point_scale(&self) -> WorldQuantizationScale {\n        self.quantization_scale\n    }\n}\n",
+              "lowering context scale accessor",
+          )
+          old_touch = """            touched_chunks.extend(touched_chunks_from_quantized_bounds(
+                &context.partition,
+                record.record.affected_bounds_q,
+                context.planet_id,
+                fixed_point_scale,
+            ));
+            records.push(record);
+"""
+          new_touch = """            match touched_chunks_from_quantized_bounds(
+                &context.partition,
+                record.record.affected_bounds_q,
+                context.planet_id,
+                fixed_point_scale,
+            ) {
+                Ok(chunks) => touched_chunks.extend(chunks),
+                Err(error) => {
+                    ratification.issues.push(SdfOperationIssue::error(
+                        SdfOperationIssueCode::SpatialMappingError,
+                        SdfOperationIssueSubject::Operation(record.source.operation_id.raw()),
+                        format!("SDF operation bounds cannot map to spatial chunks: {error}"),
+                    ));
+                    continue;
+                }
+            }
+            records.push(record);
+"""
+          text = replace_once(text, old_touch, new_touch, "checked touched-chunk mapping")
+          type_count = text.count("fixed_point_scale: i32")
+          if type_count < 1:
+              raise SystemExit("expected lowering helper scale parameters")
+          text = text.replace("fixed_point_scale: i32", "fixed_point_scale: WorldQuantizationScale")
+          text = replace_once(
+              text,
+              "((value.max(0.001)) * fixed_point_scale.max(1) as f32)\n",
+              "((value.max(0.001)) * fixed_point_scale.get() as f32)\n",
+              "validated scale use",
+          )
+          lowering.write_text(text)
 
-          print("mechanically updated", len(set(changed)) + 2, "files")
+          ratification = Path("domain/editor/editor_scene/src/sdf_authoring/ratification.rs")
+          text = ratification.read_text()
+          text = replace_once(
+              text,
+              "    InvalidSmoothRadius,\n    GraphStructuralError,\n",
+              "    InvalidSmoothRadius,\n    SpatialMappingError,\n    GraphStructuralError,\n",
+              "spatial mapping issue code",
+          )
+          ratification.write_text(text)
 
       - name: Install stable Rust
         run: rustup toolchain install stable --profile minimal --component rustfmt
@@ -83,18 +120,18 @@ jobs:
           cargo +stable fmt --all
           cargo +stable generate-lockfile
 
-      - name: Commit mechanical migration
+      - name: Commit editor policy separation
         shell: bash
         env:
           HEAD_BRANCH: ${{ github.head_ref }}
         run: |
           set -euo pipefail
           if git diff --quiet; then
-            echo "No mechanical migration changes remain"
+            echo "No editor migration changes remain"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "spatial: finish mechanical consumer cutover"
+          git commit -m "spatial: separate editor quantization policy"
           git push origin "HEAD:${HEAD_BRANCH}"
