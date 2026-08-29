@@ -6,14 +6,15 @@ use std::collections::BTreeSet;
 use runen_spatial::{ChunkId, GridPartitionConfig, WorldId};
 use world_ops::{
     BrushShape, CsgBooleanMode, CsgBrushOperation, Operation, OperationId, OperationRecord,
-    QuantizedAabb, QuantizedVec3, ReplayWindow, WorldRevision, quantize_aabb,
-    touched_chunks_from_quantized_bounds,
+    QuantizedAabb, QuantizedVec3, ReplayWindow, WorldQuantizationScale, WorldRevision,
+    quantize_aabb, touched_chunks_from_quantized_bounds,
 };
 
 use crate::{
     SceneTransform, SdfBooleanIntent, SdfOperationDocument, SdfOperationEntry, SdfOperationEntryId,
-    SdfOperationIssueSeverity, SdfOperationLayerId, SdfOperationRatificationReport,
-    SdfPrimitiveKind, ratify_sdf_operation_document,
+    SdfOperationIssue, SdfOperationIssueCode, SdfOperationIssueSeverity, SdfOperationIssueSubject,
+    SdfOperationLayerId, SdfOperationRatificationReport, SdfPrimitiveKind,
+    ratify_sdf_operation_document,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -21,6 +22,7 @@ pub struct SdfOperationLoweringContext {
     pub base_world_revision: WorldRevision,
     pub planet_id: WorldId,
     pub partition: GridPartitionConfig,
+    pub quantization_scale: WorldQuantizationScale,
 }
 
 impl Default for SdfOperationLoweringContext {
@@ -29,13 +31,14 @@ impl Default for SdfOperationLoweringContext {
             base_world_revision: WorldRevision(0),
             planet_id: WorldId::new(1),
             partition: GridPartitionConfig::default(),
+            quantization_scale: WorldQuantizationScale::default(),
         }
     }
 }
 
 impl SdfOperationLoweringContext {
-    pub fn fixed_point_scale(&self) -> i32 {
-        self.partition.quantization_scale()
+    pub const fn fixed_point_scale(&self) -> WorldQuantizationScale {
+        self.quantization_scale
     }
 }
 
@@ -99,12 +102,22 @@ pub fn lower_sdf_operation_document(
             ) else {
                 continue;
             };
-            touched_chunks.extend(touched_chunks_from_quantized_bounds(
+            match touched_chunks_from_quantized_bounds(
                 &context.partition,
                 record.record.affected_bounds_q,
                 context.planet_id,
                 fixed_point_scale,
-            ));
+            ) {
+                Ok(chunks) => touched_chunks.extend(chunks),
+                Err(error) => {
+                    ratification.issues.push(SdfOperationIssue::error(
+                        SdfOperationIssueCode::SpatialMappingError,
+                        SdfOperationIssueSubject::Operation(record.source.operation_id.raw()),
+                        format!("SDF operation bounds cannot map to spatial chunks: {error}"),
+                    ));
+                    continue;
+                }
+            }
             records.push(record);
         }
     }
@@ -126,7 +139,7 @@ fn lower_operation(
     layer_id: SdfOperationLayerId,
     operation: &SdfOperationEntry,
     context: &SdfOperationLoweringContext,
-    fixed_point_scale: i32,
+    fixed_point_scale: WorldQuantizationScale,
     ratification: &mut SdfOperationRatificationReport,
 ) -> Option<SdfLoweredOperationRecord> {
     let brush = brush_shape_for_primitive(operation, fixed_point_scale)?;
@@ -164,7 +177,7 @@ fn lower_operation(
 
 fn boolean_mode_for_operation(
     operation: &SdfOperationEntry,
-    fixed_point_scale: i32,
+    fixed_point_scale: WorldQuantizationScale,
     _ratification: &mut SdfOperationRatificationReport,
 ) -> Option<CsgBooleanMode> {
     let smooth_radius_q = || {
@@ -192,7 +205,7 @@ fn boolean_mode_for_operation(
 
 fn brush_shape_for_primitive(
     operation: &SdfOperationEntry,
-    fixed_point_scale: i32,
+    fixed_point_scale: WorldQuantizationScale,
 ) -> Option<BrushShape> {
     let transform = operation.primitive.transform;
     let center_q = quantized_translation(transform, fixed_point_scale);
@@ -277,7 +290,7 @@ fn brush_shape_for_primitive(
 
 fn affected_bounds_for_primitive(
     operation: &SdfOperationEntry,
-    fixed_point_scale: i32,
+    fixed_point_scale: WorldQuantizationScale,
 ) -> QuantizedAabb {
     let transform = operation.primitive.transform;
     let radius = match operation.primitive.kind {
@@ -314,7 +327,10 @@ fn affected_bounds_for_primitive(
     )
 }
 
-fn quantized_translation(transform: SceneTransform, fixed_point_scale: i32) -> QuantizedVec3 {
+fn quantized_translation(
+    transform: SceneTransform,
+    fixed_point_scale: WorldQuantizationScale,
+) -> QuantizedVec3 {
     quantize_vec3(
         [
             transform.translation.x,
@@ -325,17 +341,20 @@ fn quantized_translation(transform: SceneTransform, fixed_point_scale: i32) -> Q
     )
 }
 
-fn quantize_vec3(value: [f32; 3], fixed_point_scale: i32) -> QuantizedVec3 {
+fn quantize_vec3(value: [f32; 3], fixed_point_scale: WorldQuantizationScale) -> QuantizedVec3 {
     world_ops::quantize_position(value, fixed_point_scale)
 }
 
-fn quantize_extent(value: f32, fixed_point_scale: i32) -> i32 {
-    ((value.max(0.001)) * fixed_point_scale.max(1) as f32)
+fn quantize_extent(value: f32, fixed_point_scale: WorldQuantizationScale) -> i32 {
+    ((value.max(0.001)) * fixed_point_scale.get() as f32)
         .round()
         .max(1.0) as i32
 }
 
-fn quantize_unit_vec3(value: [f32; 3], fixed_point_scale: i32) -> QuantizedVec3 {
+fn quantize_unit_vec3(
+    value: [f32; 3],
+    fixed_point_scale: WorldQuantizationScale,
+) -> QuantizedVec3 {
     quantize_vec3(value, fixed_point_scale)
 }
 
