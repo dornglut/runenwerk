@@ -7,4 +7,4 @@ license.workspace = true
 
 [dependencies]
 serde = { version = "1.0.228", features = ["derive"] }
-spatial = { path = "../spatial" }
+runen-spatial.workspace = true
