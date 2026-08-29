@@ -1,4 +1,4 @@
-use spatial::*;
+use runen_spatial::*;
 use std::ops::{Deref, DerefMut};
 use world_ops::{
     BuildGraph, BuildQueue, DirtyChunkMap, OperationLog, RegionInvalidationJournal,
@@ -30,8 +30,6 @@ macro_rules! resource_wrapper {
 }
 
 resource_wrapper!(PartitionConfigResource, GridPartitionConfig);
-resource_wrapper!(WorldFrameResource, WorldFrame);
-resource_wrapper!(CameraRelativeFrameResource, CameraRelativeFrame);
 resource_wrapper!(DirtyChunkMapResource, DirtyChunkMap);
 resource_wrapper!(SdfChunkStoreResource, SdfChunkStore);
 resource_wrapper!(OperationLogResource, OperationLog);
