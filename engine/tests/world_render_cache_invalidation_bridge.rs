@@ -14,8 +14,7 @@ use engine::plugins::world::plugin::WorldPlugin;
 use engine::prelude::{App, SimulationTick};
 use runen_spatial::{ChunkCoord3, ChunkId, WorldId};
 use world_ops::{
-    DirtyReason, Operation, QuantizedAabb, WorldQuantizationScale, quantize_aabb,
-    quantize_position,
+    DirtyReason, Operation, QuantizedAabb, WorldQuantizationScale, quantize_aabb, quantize_position,
 };
 
 fn test_stamp_operation(quantization_scale: WorldQuantizationScale) -> Operation {
