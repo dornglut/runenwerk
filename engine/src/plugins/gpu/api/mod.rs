@@ -43,6 +43,7 @@ pub use graph::*;
 pub use handles::*;
 pub use operation::{GpuRenderOperation, GpuWorkNodeKind, GpuWorkOperation};
 pub use ordinary::*;
+pub use ordinary_transfer::*;
 pub use pipeline_realization::*;
 pub use program::*;
 pub use readback_id::*;

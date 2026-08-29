@@ -7,12 +7,13 @@ use super::{
     GpuProgramSourceCause, GpuProgramSourceError, GpuProgramSourceIdentity, GpuProgramSourceKey,
     GpuProgramSourceOwnerId, GpuProgramSourceProvenance, GpuProgramSourceRegistry,
     GpuProgramSourceRevision, GpuQuerySetDescriptor, GpuQuerySetHandle, GpuRenderEntryPoints,
-    GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor, GpuResourceLabel,
-    GpuSamplerDescriptor, GpuSamplerHandle, GpuSubmission, GpuSubmissionPreparationError,
-    GpuSubmissionRejectionReason, GpuTextureDescriptor, GpuTextureFormat, GpuTextureHandle,
-    GpuTextureViewDescriptor, GpuTextureViewHandle, GpuVertexInputStateDescriptor,
-    GpuWorkAuthoringError, GpuWorkFragment, GpuWorkFragmentBuilder, GpuWorkGraphError,
-    GpuWorkNodeId, GpuWorkOperation, GpuWorkResourceIdAllocationError, GpuWorkResourceIdAllocator,
+    GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor, GpuResourceDescriptorError,
+    GpuResourceLabel, GpuSamplerDescriptor, GpuSamplerHandle, GpuSubmission,
+    GpuSubmissionPreparationError, GpuSubmissionRejectionReason, GpuTextureDescriptor,
+    GpuTextureFormat, GpuTextureHandle, GpuTextureViewDescriptor, GpuTextureViewHandle,
+    GpuVertexInputStateDescriptor, GpuWorkAuthoringError, GpuWorkFragment, GpuWorkFragmentBuilder,
+    GpuWorkGraphError, GpuWorkNodeId, GpuWorkOperation, GpuWorkResourceIdAllocationError,
+    GpuWorkResourceIdAllocator,
 };
 use core::fmt;
 
@@ -20,11 +21,12 @@ const STATIC_WGSL_PROVENANCE_PRODUCER: &str = "runengpu-static-wgsl";
 
 /// Rejection from the ordinary build-and-submit path.
 ///
-/// The variants preserve the existing graph, execution-preparation, and
+/// The variants preserve the existing label, graph, execution-preparation, and
 /// submission-rejection authorities rather than flattening them into one
 /// backend-specific diagnostic.
 #[derive(Debug)]
 pub enum GpuWorkSubmissionError {
+    Label(GpuResourceDescriptorError),
     GraphPreparation(GpuWorkGraphError),
     SubmissionPreparation(GpuSubmissionPreparationError),
     SubmissionRejected(GpuSubmissionRejectionReason),
@@ -33,6 +35,7 @@ pub enum GpuWorkSubmissionError {
 impl fmt::Display for GpuWorkSubmissionError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Label(error) => error.fmt(formatter),
             Self::GraphPreparation(error) => error.fmt(formatter),
             Self::SubmissionPreparation(error) => error.fmt(formatter),
             Self::SubmissionRejected(reason) => write!(
@@ -46,6 +49,12 @@ impl fmt::Display for GpuWorkSubmissionError {
 }
 
 impl std::error::Error for GpuWorkSubmissionError {}
+
+impl From<GpuResourceDescriptorError> for GpuWorkSubmissionError {
+    fn from(error: GpuResourceDescriptorError) -> Self {
+        Self::Label(error)
+    }
+}
 
 impl From<GpuWorkGraphError> for GpuWorkSubmissionError {
     fn from(error: GpuWorkGraphError) -> Self {
@@ -178,17 +187,69 @@ impl GpuRenderPipelineDescriptor {
 impl GpuContext {
     /// Prepares, validates, and submits ordinary authored GPU work through the
     /// same canonical authorities as the explicit advanced path.
+    ///
+    /// Ordinary callers provide a diagnostic label as text; RunenGPU preserves the canonical
+    /// checked label and graph-preparation authorities internally.
     pub async fn submit_work(
         &self,
-        label: GpuResourceLabel,
+        label: impl AsRef<str>,
         fragments: impl IntoIterator<Item = GpuWorkFragment>,
     ) -> Result<GpuSubmission, GpuWorkSubmissionError> {
+        let label = GpuResourceLabel::new(label.as_ref())?;
         let graph = GpuPreparedWorkGraph::prepare(label, fragments)?;
         let prepared = self.prepare_submission(graph).await?;
         self.submit_prepared(prepared).map_err(|rejected| {
             let (_, reason) = rejected.into_parts();
             GpuWorkSubmissionError::SubmissionRejected(reason)
         })
+    }
+}
+
+impl From<super::GpuComputeOperation> for GpuWorkOperation {
+    fn from(operation: super::GpuComputeOperation) -> Self {
+        Self::Compute(operation)
+    }
+}
+
+impl From<super::GpuRenderOperation> for GpuWorkOperation {
+    fn from(operation: super::GpuRenderOperation) -> Self {
+        Self::Render(operation)
+    }
+}
+
+impl From<super::GpuCopyOperation> for GpuWorkOperation {
+    fn from(operation: super::GpuCopyOperation) -> Self {
+        Self::Copy(operation)
+    }
+}
+
+impl From<super::GpuClearOperation> for GpuWorkOperation {
+    fn from(operation: super::GpuClearOperation) -> Self {
+        Self::Clear(operation)
+    }
+}
+
+impl From<super::GpuQueryResolveOperation> for GpuWorkOperation {
+    fn from(operation: super::GpuQueryResolveOperation) -> Self {
+        Self::Resolve(operation)
+    }
+}
+
+impl From<super::GpuPresentOperation> for GpuWorkOperation {
+    fn from(operation: super::GpuPresentOperation) -> Self {
+        Self::Present(operation)
+    }
+}
+
+impl From<super::GpuUploadOperation> for GpuWorkOperation {
+    fn from(operation: super::GpuUploadOperation) -> Self {
+        Self::Upload(operation)
+    }
+}
+
+impl From<super::GpuReadbackOperation> for GpuWorkOperation {
+    fn from(operation: super::GpuReadbackOperation) -> Self {
+        Self::Readback(operation)
     }
 }
 
@@ -203,12 +264,12 @@ impl GpuWorkFragmentBuilder {
     pub fn operation<L>(
         &mut self,
         label: L,
-        operation: GpuWorkOperation,
+        operation: impl Into<GpuWorkOperation>,
     ) -> Result<GpuWorkNodeId, GpuWorkAuthoringError>
     where
         L: AsRef<str>,
     {
-        self.add_checked_lexical_operation(label, operation)
+        self.add_checked_lexical_operation(label, operation.into())
     }
 }
 
@@ -455,10 +516,13 @@ fn fs_main() -> @location(0) vec4<f32> {
             .split_once("    pub async fn submit_work(")
             .expect("ordinary submission method must remain present")
             .1
-            .split_once("\n    }\n}")
+            .split_once("\n}\n\nimpl From<super::GpuComputeOperation> for GpuWorkOperation {")
             .expect("ordinary submission method must remain bounded")
             .0;
 
+        let validate_label = method
+            .find("GpuResourceLabel::new(label.as_ref())?")
+            .expect("ordinary submission must validate its text label through the canonical label authority");
         let prepare_graph = method
             .find("GpuPreparedWorkGraph::prepare(label, fragments)?")
             .expect("ordinary work must use canonical graph preparation");
@@ -469,6 +533,7 @@ fn fs_main() -> @location(0) vec4<f32> {
             .find("self.submit_prepared(prepared)")
             .expect("ordinary work must use canonical prepared submission");
 
+        assert!(validate_label < prepare_graph);
         assert!(prepare_graph < prepare_submission);
         assert!(prepare_submission < submit_prepared);
         for forbidden in [
@@ -491,12 +556,13 @@ fn fs_main() -> @location(0) vec4<f32> {
             .split_once("    pub fn operation<L>(")
             .expect("ordinary operation method must remain present")
             .1
-            .split_once("\n    }\n}")
+            .split_once("\n}\n\n/// Owns one bounded logical RunenGPU resource scope")
             .expect("ordinary operation method must remain bounded")
             .0;
 
         assert!(method.contains("L: AsRef<str>"));
-        assert!(method.contains("self.add_checked_lexical_operation(label, operation)"));
+        assert!(method.contains("operation: impl Into<GpuWorkOperation>"));
+        assert!(method.contains("self.add_checked_lexical_operation(label, operation.into())"));
         for forbidden in [
             "self.add_node(",
             "declare_resource(",

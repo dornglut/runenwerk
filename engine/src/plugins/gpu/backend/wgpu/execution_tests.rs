@@ -318,7 +318,7 @@ fn dynamic_compute_operation(
     x: u32,
 ) -> GpuComputeOperation {
     let bindings = dynamic_compute_bindings(pipeline, buffer, dynamic_offset);
-    let dispatch = GpuDispatchIntent::direct(GpuDispatchSize::new(x, 1, 1).unwrap());
+    let dispatch = GpuDispatchIntent::direct(GpuDispatchSize::new(x, 1, 1));
     GpuComputeOperation::new(pipeline.clone(), bindings, dispatch).unwrap()
 }
 
