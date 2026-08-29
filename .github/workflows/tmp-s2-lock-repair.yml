@@ -1,4 +1,4 @@
-name: Temporary S2 source repair
+name: Temporary S2 editor closure
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  repair-source:
+  repair-editor:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-24.04
     steps:
@@ -18,40 +18,76 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Apply procgen coordinate-width repair
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt
+
+      - name: Apply editor consumer closure
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
-          path = Path('domain/procgen/src/field_preview.rs')
-          text = path.read_text()
-          old = '''fn corner_noise(
-              document: &ProcgenDocument,
-              chunk_id: ChunkId,
-              x: i32,
-              z: i32,
-          '''
-          new = '''fn corner_noise(
-              document: &ProcgenDocument,
-              chunk_id: ChunkId,
-              x: i64,
-              z: i64,
-          '''
-          if text.count(old) != 1:
-              raise SystemExit('expected corner_noise signature not found exactly once')
-          path.write_text(text.replace(old, new))
-          PY
-          changed="$(git diff --name-only)"
-          test "$changed" = "domain/procgen/src/field_preview.rs"
 
-      - name: Commit source repair only
+          manifest = Path('apps/runenwerk_editor/Cargo.toml')
+          text = manifest.read_text()
+          needle = 'resource_ref.workspace = true\ntexture.workspace = true\n'
+          replacement = 'resource_ref.workspace = true\nrunen-spatial.workspace = true\ntexture.workspace = true\n'
+          if 'runen-spatial.workspace = true' not in text:
+              if text.count(needle) != 1:
+                  raise SystemExit('editor manifest insertion point not found exactly once')
+              text = text.replace(needle, replacement)
+          manifest.write_text(text)
+
+          jobs = Path('apps/runenwerk_editor/src/asset_pipeline/field_product_jobs.rs')
+          text = jobs.read_text()
+          replacements = {
+              'use spatial::{ChunkCoord3, ChunkId, WorldId};': 'use runen_spatial::{ChunkCoord3, ChunkId, WorldId};',
+              'WorldId(1)': 'WorldId::new(1)',
+          }
+          for old, new in replacements.items():
+              if text.count(old) != 1:
+                  raise SystemExit(f'expected field-product pattern not found exactly once: {old}')
+              text = text.replace(old, new)
+          jobs.write_text(text)
+
+          runtime = Path('apps/runenwerk_editor/src/runtime/procgen/mod.rs')
+          text = runtime.read_text()
+          replacements = {
+              'use spatial::{ChunkCoord3, ChunkId, RegionCoord3, RegionId, WorldId};': 'use runen_spatial::{ChunkCoord3, ChunkId, RegionCoord3, RegionId, WorldId};',
+              'scope.world_id.0': 'scope.world_id.get()',
+          }
+          for old, new in replacements.items():
+              if text.count(old) != 1:
+                  raise SystemExit(f'expected procgen pattern not found exactly once: {old}')
+              text = text.replace(old, new)
+          runtime.write_text(text)
+          PY
+
+          if grep -R -nE '(^|[^[:alnum:]_])spatial::|use spatial|world_id\.0|WorldId\(' apps/runenwerk_editor/src; then
+            echo 'legacy spatial representation residue remains in runenwerk_editor' >&2
+            exit 1
+          fi
+
+          changed="$(git diff --name-only | sort)"
+          expected=$'apps/runenwerk_editor/Cargo.toml\napps/runenwerk_editor/src/asset_pipeline/field_product_jobs.rs\napps/runenwerk_editor/src/runtime/procgen/mod.rs'
+          test "$changed" = "$expected"
+
+      - name: Format and compile editor
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +stable fmt --all --check
+          cargo +stable check -p runenwerk_editor --locked
+
+      - name: Commit editor closure only
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add domain/procgen/src/field_preview.rs
+          git add apps/runenwerk_editor/Cargo.toml \
+            apps/runenwerk_editor/src/asset_pipeline/field_product_jobs.rs \
+            apps/runenwerk_editor/src/runtime/procgen/mod.rs
           git diff --cached --quiet && exit 0
-          git commit -m "spatial: widen procgen corner offsets"
+          git commit -m "spatial: close editor consumers over RunenSpatial"
           git push origin HEAD:tmp-s2-lock-repair-366
