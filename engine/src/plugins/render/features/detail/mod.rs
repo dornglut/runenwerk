@@ -1,4 +1,4 @@
-use spatial::ChunkId;
+use runen_spatial::ChunkId;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, ecs::Resource)]
