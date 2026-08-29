@@ -226,6 +226,6 @@ fn inspect_page_coord(coord: SdfPageCoord3) -> [i16; 3] {
 fn inspect_chunk_id(chunk_id: ChunkId) -> String {
     format!(
         "world:{}:{}:{}:{}",
-        chunk_id.world_id.0, chunk_id.coord.x, chunk_id.coord.y, chunk_id.coord.z
+        chunk_id.world_id.get(), chunk_id.coord.x, chunk_id.coord.y, chunk_id.coord.z
     )
 }
