@@ -2740,6 +2740,7 @@ dependencies = [
  "product",
  "resource_ref",
  "ron",
+ "runen-spatial",
  "rustls",
  "scene",
  "serde",

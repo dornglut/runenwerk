@@ -217,9 +217,9 @@ mod tests {
         );
         job.output_products.clear();
         let publication = ProductPublicationOutcome::ready(job, [], 1);
-        let chunk = spatial::ChunkId::new(
-            spatial::WorldId(1),
-            spatial::ChunkCoord3 { x: 0, y: 0, z: 0 },
+        let chunk = runen_spatial::ChunkId::new(
+            runen_spatial::WorldId::new(1),
+            runen_spatial::ChunkCoord3 { x: 0, y: 0, z: 0 },
         );
         let candidate = FieldProductCandidate::new(world_sdf::FieldProductDescriptor::new(
             FieldProductId(10),
@@ -255,9 +255,9 @@ mod tests {
     #[test]
     fn field_product_publication_duplicate_product_id_matches_exact_published_job_entry() {
         let mut app = RunenwerkEditorApp::new();
-        let chunk = spatial::ChunkId::new(
-            spatial::WorldId(1),
-            spatial::ChunkCoord3 { x: 0, y: 0, z: 0 },
+        let chunk = runen_spatial::ChunkId::new(
+            runen_spatial::WorldId::new(1),
+            runen_spatial::ChunkCoord3 { x: 0, y: 0, z: 0 },
         );
         let candidate = FieldProductCandidate::new(world_sdf::FieldProductDescriptor::new(
             FieldProductId(10),
