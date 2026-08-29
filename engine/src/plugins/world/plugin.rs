@@ -21,10 +21,10 @@ use super::streaming::replication::{
 };
 use super::{
     adapters::resources::{
-        CaveLightingScopeResource, CavePortalGraphResource, CaveSectorResource,
-        CollisionQueryServiceResource, OperationLogResource, PartitionConfigResource,
-        RegionInvalidationJournalResource, ReplicationStateResource, SdfChunkStoreResource,
-        WorldQuantizationScaleResource,
+        BuildGraphResource, BuildQueueResource, CaveLightingScopeResource, CavePortalGraphResource,
+        CaveSectorResource, CollisionQueryServiceResource, OperationLogResource,
+        PartitionConfigResource, RegionInvalidationJournalResource, ReplicationStateResource,
+        SdfChunkStoreResource, WorldQuantizationScaleResource,
     },
     chunks::{DirtyChunkMapResource, lifecycle::WorldChunkRuntimeMapResource},
     queries::nav::WorldNavSummaryResource,
