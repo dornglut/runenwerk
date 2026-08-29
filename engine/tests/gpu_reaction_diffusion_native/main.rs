@@ -161,20 +161,14 @@ fn native_offscreen_context() -> GpuContext {
         .merge(&GpuCapabilityProfile::OffscreenGraphicsBaseline.requirements())
         .unwrap();
     let descriptor = GpuContextDescriptor::new(requirements)
-        .require_format_role(
-            GpuTextureFormat::Rgba8Unorm,
-            GpuFormatRole::ColorAttachment,
-        )
+        .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::ColorAttachment)
         .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::CopySource)
         .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
         .with_allowed_backends([GpuBackendFamily::Vulkan])
         .with_label("reaction-diffusion offscreen sequence proof");
     let context = pollster::block_on(GpuContext::request(descriptor))
         .expect("native conformance environment must provide a Vulkan fallback adapter");
-    assert_eq!(
-        context.adapter_facts().backend(),
-        GpuBackendFamily::Vulkan
-    );
+    assert_eq!(context.adapter_facts().backend(), GpuBackendFamily::Vulkan);
     assert_eq!(
         context.adapter_facts().fallback(),
         GpuFallbackStatus::ConfirmedFallback

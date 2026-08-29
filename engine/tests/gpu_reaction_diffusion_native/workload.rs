@@ -81,8 +81,7 @@ fn reaction_params(width: u32, height: u32) -> ReactionParams {
 }
 
 fn fixed_seed(width: u32, height: u32) -> Vec<ReactionCell> {
-    let mut cells =
-        vec![ReactionCell { a: 1.0, b: 0.0 }; usize::try_from(width * height).unwrap()];
+    let mut cells = vec![ReactionCell { a: 1.0, b: 0.0 }; usize::try_from(width * height).unwrap()];
     let half_w = width / 2;
     let half_h = height / 2;
     let radius = (width.min(height) / 10).max(2);
@@ -299,8 +298,7 @@ pub(crate) fn offscreen_work(
     assert!(envelope.iterations_per_frame > 0);
 
     let mut resources = GpuResourceScope::new();
-    let (state_a, state_b, params_buffer, seed, params) =
-        state_resources(&mut resources, envelope);
+    let (state_a, state_b, params_buffer, seed, params) = state_resources(&mut resources, envelope);
     let (texture, view) = offscreen_target(&mut resources, envelope);
     let compute = compute_pipeline(&sources.compute);
     let render = render_pipeline(&sources.render, GpuTextureFormat::Rgba8Unorm);
@@ -309,14 +307,7 @@ pub(crate) fn offscreen_work(
     let graph_label = format!("{} reaction diffusion graph", envelope.name);
     let mut readbacks = Vec::with_capacity(usize::try_from(envelope.frames).unwrap());
     let fragment = GpuWorkFragment::build(&name, |builder| {
-        add_initialization(
-            builder,
-            &state_a,
-            &state_b,
-            &params_buffer,
-            seed,
-            params,
-        )?;
+        add_initialization(builder, &state_a, &state_b, &params_buffer, seed, params)?;
 
         let mut current_is_a = true;
         for frame in 0..envelope.frames {
@@ -372,21 +363,13 @@ pub(crate) fn surface_work(
 ) -> (String, GpuWorkFragment) {
     let envelope = ENVELOPES[0];
     let mut resources = GpuResourceScope::new();
-    let (state_a, state_b, params_buffer, seed, params) =
-        state_resources(&mut resources, envelope);
+    let (state_a, state_b, params_buffer, seed, params) = state_resources(&mut resources, envelope);
     let compute = compute_pipeline(&sources.compute);
     let render = render_pipeline(&sources.render, format);
     let view = image.default_view().clone();
 
     let fragment = GpuWorkFragment::build("reaction diffusion surface replay", |builder| {
-        add_initialization(
-            builder,
-            &state_a,
-            &state_b,
-            &params_buffer,
-            seed,
-            params,
-        )?;
+        add_initialization(builder, &state_a, &state_b, &params_buffer, seed, params)?;
 
         let mut current_is_a = true;
         for frame in 0..envelope.frames {
