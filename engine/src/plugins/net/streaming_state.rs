@@ -4,7 +4,7 @@ use crate::plugins::world::chunks::lifecycle::WorldChunkRuntimeMapResource;
 use crate::runtime::WorldMut;
 use ecs::OwnerRole;
 use engine_net::{ConnectionId, ServerSessionState};
-use spatial::ChunkId;
+use runen_spatial::ChunkId;
 use std::collections::{BTreeMap, BTreeSet};
 use world_ops::SyncCursor;
 
