@@ -346,8 +346,8 @@ fn terrain_height(
 fn corner_noise(
     document: &ProcgenDocument,
     chunk_id: ChunkId,
-    x: i32,
-    z: i32,
+    x: i64,
+    z: i64,
     node: &ProcgenNodeParameters,
     determinism_key: &str,
 ) -> f32 {
