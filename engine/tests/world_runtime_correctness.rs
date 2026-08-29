@@ -1,5 +1,5 @@
 use engine::plugins::world::adapters::resources::{
-    OperationLogResource, PartitionConfigResource, SdfChunkStoreResource,
+    OperationLogResource, SdfChunkStoreResource, WorldQuantizationScaleResource,
 };
 use engine::plugins::world::chunks::DirtyChunkMapResource;
 use engine::plugins::world::chunks::lifecycle::{
@@ -18,19 +18,39 @@ use engine::plugins::world::{
 };
 use engine::prelude::{App, AuthorityRole};
 use engine_sim::SimulationTick;
-use spatial::{ChunkCoord3, ChunkId, WorldId};
+use runen_spatial::{ChunkCoord3, ChunkId, WorldId};
 use world_ops::{
     BrushShape, BuildGeneration, ChunkGeneration, ChunkRevision, DirtyReason, Operation,
-    quantize_aabb, quantize_position,
+    WorldQuantizationScale, quantize_aabb, quantize_position,
 };
 use world_sdf::{RegionSdfSummary, SdfChunkPayload};
+
+fn test_quantization_scale() -> WorldQuantizationScale {
+    WorldQuantizationScale::try_new(1024).expect("test quantization scale is valid")
+}
+
+fn sdf_chunk_payload(
+    chunk_id: ChunkId,
+    chunk_revision: ChunkRevision,
+    chunk_generation: ChunkGeneration,
+    checksum: u64,
+) -> SdfChunkPayload {
+    SdfChunkPayload {
+        chunk_id,
+        chunk_revision,
+        chunk_generation,
+        page_table: Default::default(),
+        hierarchy_revision: 0,
+        checksum,
+    }
+}
 
 #[test]
 fn dirty_chunk_without_runtime_record_is_bootstrapped_and_built() {
     let mut app = App::headless();
     app.add_plugin(WorldPlugin);
 
-    let chunk_id = ChunkId::new(WorldId(0), ChunkCoord3 { x: 2, y: -1, z: 4 });
+    let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 2, y: -1, z: 4 });
     {
         let dirty = app
             .world_mut()
@@ -76,7 +96,7 @@ fn ratified_world_sdf_payload_package_flows_through_runtime_intake() {
     let mut app = App::headless();
     app.add_plugin(WorldPlugin);
 
-    let chunk_id = ChunkId::new(WorldId(0), ChunkCoord3 { x: 1, y: 2, z: 3 });
+    let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 1, y: 2, z: 3 });
     {
         let mut completed = app
             .world_mut()
@@ -91,13 +111,12 @@ fn ratified_world_sdf_payload_package_flows_through_runtime_intake() {
                 &mut completed,
                 chunks,
                 WorldSdfRuntimePayloadPackage::new(
-                    vec![SdfChunkPayload {
+                    vec![sdf_chunk_payload(
                         chunk_id,
-                        chunk_revision: ChunkRevision(11),
-                        chunk_generation: ChunkGeneration(12),
-                        checksum: 99,
-                        ..SdfChunkPayload::default()
-                    }],
+                        ChunkRevision(11),
+                        ChunkGeneration(12),
+                        99,
+                    )],
                     RegionSdfSummary::default(),
                 ),
             )
@@ -134,18 +153,23 @@ fn ingress_rejects_operations_in_client_replica_mode() {
         world_runtime.mode = WorldRuntimeMode::ReadOnly;
     }
 
+    let quantization_scale = test_quantization_scale();
     let op_id = submit_world_operation(
         app.world_mut(),
         Operation::CsgAdd {
             brush: BrushShape::Sphere {
-                center_q: quantize_position([0.0, 0.0, 0.0], 1024),
+                center_q: quantize_position([0.0, 0.0, 0.0], quantization_scale),
                 radius_q: 256,
             },
             material_channel: 1,
         },
-        quantize_aabb([0.0, 0.0, 0.0], [0.0, 0.0, 0.0], 1024),
+        quantize_aabb(
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            quantization_scale,
+        ),
         WorldEditIngressMeta {
-            planet_id: WorldId(0),
+            planet_id: WorldId::new(0),
             deterministic_seed: 404,
         },
     );
@@ -214,27 +238,33 @@ fn world_runtime_mode_tracks_authority_role() {
 }
 
 #[test]
-fn ingress_invalidation_uses_partition_quantization_scale() {
+fn ingress_invalidation_uses_world_quantization_scale() {
     let mut app = App::headless();
     app.add_plugin(WorldPlugin);
+    let quantization_scale = WorldQuantizationScale::try_new(1)
+        .expect("test quantization scale should be valid");
     {
-        let partition = app
+        let configured_scale = app
             .world_mut()
-            .resource_mut::<PartitionConfigResource>()
-            .expect("world partition config should be available");
-        partition.fixed_point_scale = 1;
+            .resource_mut::<WorldQuantizationScaleResource>()
+            .expect("world quantization scale should be available");
+        **configured_scale = quantization_scale;
     }
 
     let op_id = submit_world_operation(
         app.world_mut(),
         Operation::Stamp {
-            stamp_id: "tests.partition-scale-ingress".to_string(),
+            stamp_id: "tests.world-quantization-scale-ingress".to_string(),
             anchor_q: Default::default(),
             payload: vec![1, 2, 3],
         },
-        quantize_aabb([40.0, 0.0, 0.0], [40.0, 0.0, 0.0], 1),
+        quantize_aabb(
+            [40.0, 0.0, 0.0],
+            [40.0, 0.0, 0.0],
+            quantization_scale,
+        ),
         WorldEditIngressMeta {
-            planet_id: WorldId(0),
+            planet_id: WorldId::new(0),
             deterministic_seed: 77,
         },
     );
@@ -244,10 +274,10 @@ fn ingress_invalidation_uses_partition_quantization_scale() {
         .world()
         .resource::<DirtyChunkMapResource>()
         .expect("world dirty map should be available");
-    let expected_chunk = ChunkId::new(WorldId(0), ChunkCoord3 { x: 1, y: 0, z: 0 });
+    let expected_chunk = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 1, y: 0, z: 0 });
     assert!(
         dirty.by_chunk.contains_key(&expected_chunk),
-        "ingress invalidation must dequantize bounds using world partition quantization scale"
+        "ingress invalidation must dequantize bounds using Runenwerk world quantization policy"
     );
 }
 
@@ -256,7 +286,7 @@ fn world_revision_advances_only_for_integrated_outputs() {
     let mut app = App::headless();
     app.add_plugin(WorldPlugin);
 
-    let chunk_id = ChunkId::new(WorldId(0), ChunkCoord3 { x: 1, y: 1, z: 1 });
+    let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 1, y: 1, z: 1 });
     {
         let dirty = app
             .world_mut()
@@ -315,11 +345,12 @@ fn world_revision_advances_only_for_integrated_outputs() {
             target_chunk_revision: ChunkRevision(99),
             target_build_generation: BuildGeneration(8),
             staleness: WorldBuildStaleness::Current,
-            chunk_payload: SdfChunkPayload {
+            chunk_payload: sdf_chunk_payload(
                 chunk_id,
-                chunk_revision: ChunkRevision(99),
-                ..SdfChunkPayload::default()
-            },
+                ChunkRevision(99),
+                ChunkGeneration::default(),
+                0,
+            ),
             region_summary: RegionSdfSummary::default(),
         });
     }
@@ -358,7 +389,7 @@ fn dirty_reasons_while_rebuilding_are_preserved_for_followup_build() {
     let mut app = App::headless();
     app.add_plugin(WorldPlugin);
 
-    let chunk_id = ChunkId::new(WorldId(0), ChunkCoord3 { x: 3, y: 2, z: -1 });
+    let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 3, y: 2, z: -1 });
     {
         let runtime_chunks = app
             .world_mut()
@@ -395,12 +426,12 @@ fn dirty_reasons_while_rebuilding_are_preserved_for_followup_build() {
             target_chunk_revision: ChunkRevision(5),
             target_build_generation: BuildGeneration(5),
             staleness: WorldBuildStaleness::Current,
-            chunk_payload: SdfChunkPayload {
+            chunk_payload: sdf_chunk_payload(
                 chunk_id,
-                chunk_revision: ChunkRevision(5),
-                chunk_generation: ChunkGeneration(5),
-                ..SdfChunkPayload::default()
-            },
+                ChunkRevision(5),
+                ChunkGeneration(5),
+                0,
+            ),
             region_summary: RegionSdfSummary::default(),
         });
     }
@@ -435,6 +466,7 @@ fn stamp_operation_produces_authoritative_chunk_payload() {
     let mut app = App::headless();
     app.add_plugin(WorldPlugin);
 
+    let quantization_scale = test_quantization_scale();
     let op_id = submit_world_operation(
         app.world_mut(),
         Operation::Stamp {
@@ -442,9 +474,13 @@ fn stamp_operation_produces_authoritative_chunk_payload() {
             anchor_q: Default::default(),
             payload: vec![9, 9, 9],
         },
-        quantize_aabb([0.0, 0.0, 0.0], [0.0, 0.0, 0.0], 1024),
+        quantize_aabb(
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            quantization_scale,
+        ),
         WorldEditIngressMeta {
-            planet_id: WorldId(0),
+            planet_id: WorldId::new(0),
             deterministic_seed: 101,
         },
     );
@@ -460,7 +496,7 @@ fn stamp_operation_produces_authoritative_chunk_payload() {
         .world()
         .resource::<SdfChunkStoreResource>()
         .expect("sdf store should exist after integration");
-    let chunk_id = ChunkId::new(WorldId(0), ChunkCoord3::default());
+    let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3::default());
     let payload = store
         .chunks
         .get(&chunk_id)
@@ -485,6 +521,7 @@ fn material_field_edit_preserves_existing_chunk_solidity() {
     let mut app = App::headless();
     app.add_plugin(WorldPlugin);
 
+    let quantization_scale = test_quantization_scale();
     let add_op = submit_world_operation(
         app.world_mut(),
         Operation::CsgAdd {
@@ -494,9 +531,13 @@ fn material_field_edit_preserves_existing_chunk_solidity() {
             },
             material_channel: 1,
         },
-        quantize_aabb([0.0, 0.0, 0.0], [0.0, 0.0, 0.0], 1024),
+        quantize_aabb(
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            quantization_scale,
+        ),
         WorldEditIngressMeta {
-            planet_id: WorldId(0),
+            planet_id: WorldId::new(0),
             deterministic_seed: 201,
         },
     );
@@ -509,13 +550,21 @@ fn material_field_edit_preserves_existing_chunk_solidity() {
     let edit_op = submit_world_operation(
         app.world_mut(),
         Operation::MaterialFieldEdit {
-            bounds_q: quantize_aabb([0.0, 0.0, 0.0], [0.0, 0.0, 0.0], 1024),
+            bounds_q: quantize_aabb(
+                [0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0],
+                quantization_scale,
+            ),
             channel_mask: 0b0100,
             payload: vec![1],
         },
-        quantize_aabb([0.0, 0.0, 0.0], [0.0, 0.0, 0.0], 1024),
+        quantize_aabb(
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            quantization_scale,
+        ),
         WorldEditIngressMeta {
-            planet_id: WorldId(0),
+            planet_id: WorldId::new(0),
             deterministic_seed: 202,
         },
     );
@@ -528,7 +577,7 @@ fn material_field_edit_preserves_existing_chunk_solidity() {
         .world()
         .resource::<SdfChunkStoreResource>()
         .expect("sdf store should exist");
-    let chunk_id = ChunkId::new(WorldId(0), ChunkCoord3::default());
+    let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3::default());
     let payload = store
         .chunks
         .get(&chunk_id)
@@ -555,7 +604,7 @@ fn integration_drops_output_when_payload_revision_contract_mismatches() {
     let mut app = App::headless();
     app.add_plugin(WorldPlugin);
 
-    let chunk_id = ChunkId::new(WorldId(0), ChunkCoord3 { x: 6, y: 0, z: -2 });
+    let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 6, y: 0, z: -2 });
     {
         let runtime_chunks = app
             .world_mut()
@@ -585,12 +634,12 @@ fn integration_drops_output_when_payload_revision_contract_mismatches() {
             target_chunk_revision: ChunkRevision(11),
             target_build_generation: BuildGeneration(11),
             staleness: WorldBuildStaleness::Current,
-            chunk_payload: SdfChunkPayload {
+            chunk_payload: sdf_chunk_payload(
                 chunk_id,
-                chunk_revision: ChunkRevision(10),
-                chunk_generation: ChunkGeneration(11),
-                ..SdfChunkPayload::default()
-            },
+                ChunkRevision(10),
+                ChunkGeneration(11),
+                0,
+            ),
             region_summary: RegionSdfSummary::default(),
         });
     }
@@ -634,8 +683,8 @@ fn integration_drops_output_when_payload_chunk_id_contract_mismatches() {
     let mut app = App::headless();
     app.add_plugin(WorldPlugin);
 
-    let chunk_id = ChunkId::new(WorldId(0), ChunkCoord3 { x: -4, y: 1, z: 3 });
-    let wrong_chunk_id = ChunkId::new(WorldId(0), ChunkCoord3 { x: -3, y: 1, z: 3 });
+    let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: -4, y: 1, z: 3 });
+    let wrong_chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: -3, y: 1, z: 3 });
     {
         let runtime_chunks = app
             .world_mut()
@@ -665,12 +714,12 @@ fn integration_drops_output_when_payload_chunk_id_contract_mismatches() {
             target_chunk_revision: ChunkRevision(3),
             target_build_generation: BuildGeneration(3),
             staleness: WorldBuildStaleness::Current,
-            chunk_payload: SdfChunkPayload {
-                chunk_id: wrong_chunk_id,
-                chunk_revision: ChunkRevision(3),
-                chunk_generation: ChunkGeneration(3),
-                ..SdfChunkPayload::default()
-            },
+            chunk_payload: sdf_chunk_payload(
+                wrong_chunk_id,
+                ChunkRevision(3),
+                ChunkGeneration(3),
+                0,
+            ),
             region_summary: RegionSdfSummary::default(),
         });
     }
