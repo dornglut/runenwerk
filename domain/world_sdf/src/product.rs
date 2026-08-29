@@ -3,7 +3,7 @@ use ::product::{
     ProductFreshness, ProductIdentity, ProductKind, ProductLineage, ProductQueryPolicy,
     ProductRebuildPolicy, ProductResidency, ProductRetentionPolicy, ProductScaleBand, ProductScope,
 };
-use runen_runen_spatial::{ChunkId, RegionId};
+use runen_spatial::{ChunkId, RegionId};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
