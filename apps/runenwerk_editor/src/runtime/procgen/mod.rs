@@ -34,7 +34,7 @@ use product::{
     ProductPublicationOutcome, ProductPublicationReport, ProductQueryPolicy, ProductResidency,
     QuerySnapshotProductDescriptor, QuerySnapshotPublicationReport, QuerySnapshotPublicationStatus,
 };
-use spatial::{ChunkCoord3, ChunkId, RegionCoord3, RegionId, WorldId};
+use runen_spatial::{ChunkCoord3, ChunkId, RegionCoord3, RegionId, WorldId};
 use world_ops::{QuantizedAabb, QuantizedVec3, WorldRevision};
 use world_sdf::{FieldPreviewPayload, FieldPreviewProduct, FieldProductId};
 
@@ -1099,7 +1099,7 @@ fn descriptor_generation_key(descriptors: &[ProductDescriptorCore]) -> Option<St
 }
 
 fn default_procgen_document() -> ProcgenDocument {
-    let world_id = WorldId(1);
+    let world_id = WorldId::new(1);
     let density_target = ProcgenWriteTarget::density("density-main", default_bounds());
     let material_target =
         ProcgenWriteTarget::material_channel("material-main", default_bounds(), 2);
@@ -1236,7 +1236,7 @@ fn default_bounds() -> QuantizedAabb {
 fn scope_summary(scope: &ProcgenScope) -> String {
     format!(
         "world={} chunks={} regions={}",
-        scope.world_id.0,
+        scope.world_id.get(),
         scope.chunk_ids.len(),
         scope.region_ids.len()
     )
@@ -1353,7 +1353,7 @@ mod tests {
         let baked_descriptor_count = app.procgen_runtime().published_descriptors().len();
         let baked_product_count = app.procgen_runtime().formed_preview_products().len();
 
-        app.procgen_runtime_mut().document_mut().scope = ProcgenScope::new(WorldId(1), [], []);
+        app.procgen_runtime_mut().document_mut().scope = ProcgenScope::new(WorldId::new(1), [], []);
         publish_procgen_products(
             &mut app,
             &mut publications,
@@ -1436,7 +1436,7 @@ mod tests {
         assert_eq!(app.procgen_runtime().published_descriptors().len(), 3);
         assert_eq!(app.procgen_runtime().formed_preview_products().len(), 2);
 
-        app.procgen_runtime_mut().document_mut().scope = ProcgenScope::new(WorldId(1), [], []);
+        app.procgen_runtime_mut().document_mut().scope = ProcgenScope::new(WorldId::new(1), [], []);
 
         let report = publish_procgen_products(
             &mut app,
@@ -1476,7 +1476,7 @@ mod tests {
             .unwrap();
         assert_eq!(state.selected_overlay_product_ids, active_ids);
 
-        app.procgen_runtime_mut().document_mut().scope = ProcgenScope::new(WorldId(1), [], []);
+        app.procgen_runtime_mut().document_mut().scope = ProcgenScope::new(WorldId::new(1), [], []);
         publish_procgen_products(
             &mut app,
             &mut publications,
