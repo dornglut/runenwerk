@@ -1,0 +1,43 @@
+name: Temporary S2 lock repair
+
+on:
+  push:
+    branches:
+      - tmp-s2-lock-repair-366
+
+permissions:
+  contents: write
+
+jobs:
+  repair-lock:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repair branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Resolve from accepted-main lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git show origin/main:Cargo.lock > Cargo.lock
+          cargo +stable metadata --format-version 1 > /dev/null
+          changed="$(git diff --name-only)"
+          test "$changed" = "Cargo.lock"
+
+      - name: Commit repaired lock only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.lock
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: resolve S2 lock from accepted main"
+          git push origin HEAD:tmp-s2-lock-repair-366
