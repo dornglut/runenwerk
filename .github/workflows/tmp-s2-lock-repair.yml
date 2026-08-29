@@ -91,16 +91,16 @@ jobs:
             exit 1
           fi
 
-          changed="$(git diff --name-only | sort)"
-          expected=$'apps/runenwerk_editor/Cargo.toml\napps/runenwerk_editor/src/asset_pipeline/field_product_jobs.rs\napps/runenwerk_editor/src/asset_pipeline/product_publication.rs\napps/runenwerk_editor/src/runtime/procgen/mod.rs'
-          test "$changed" = "$expected"
-
-      - name: Format and compile editor
+      - name: Resolve direct dependency edge and compile editor
         shell: bash
         run: |
           set -euo pipefail
+          cargo +stable metadata --format-version 1 > /dev/null
           cargo +stable fmt --all --check
           cargo +stable check -p runenwerk_editor --locked
+          changed="$(git diff --name-only | sort)"
+          expected=$'Cargo.lock\napps/runenwerk_editor/Cargo.toml\napps/runenwerk_editor/src/asset_pipeline/field_product_jobs.rs\napps/runenwerk_editor/src/asset_pipeline/product_publication.rs\napps/runenwerk_editor/src/runtime/procgen/mod.rs'
+          test "$changed" = "$expected"
 
       - name: Commit editor closure only
         shell: bash
@@ -108,7 +108,8 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/runenwerk_editor/Cargo.toml \
+          git add Cargo.lock \
+            apps/runenwerk_editor/Cargo.toml \
             apps/runenwerk_editor/src/asset_pipeline/field_product_jobs.rs \
             apps/runenwerk_editor/src/asset_pipeline/product_publication.rs \
             apps/runenwerk_editor/src/runtime/procgen/mod.rs
