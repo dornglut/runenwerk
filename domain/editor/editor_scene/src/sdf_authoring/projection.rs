@@ -114,7 +114,7 @@ fn primitive_kind_label(kind: crate::SdfPrimitiveKind) -> &'static str {
 #[cfg(test)]
 mod tests {
     use runen_spatial::GridPartitionConfig;
-    use world_ops::{CsgBooleanMode, Operation};
+    use world_ops::{CsgBooleanMode, Operation, WorldQuantizationScale};
 
     use crate::{
         SceneQuat, SceneTransform, SceneVec3, SdfBooleanIntent, SdfLayerMoveDirection,
@@ -183,11 +183,10 @@ mod tests {
             .add_operation(layer_id, "Sphere", sphere(SdfBooleanIntent::Add), 7)
             .expect("add operation");
         let context = SdfOperationLoweringContext {
-            partition: GridPartitionConfig {
-                chunk_edge_meters: 1.0,
-                fixed_point_scale: 8,
-                ..GridPartitionConfig::default()
-            },
+            partition: GridPartitionConfig::try_new(1.0, [8, 8, 8])
+                .expect("test partition configuration is valid"),
+            quantization_scale: WorldQuantizationScale::try_new(8)
+                .expect("test quantization scale is valid"),
             ..SdfOperationLoweringContext::default()
         };
 
