@@ -4,6 +4,7 @@ pub struct WorldDebugMetricsResource {
     pub background_queue_depth: usize,
     pub enqueued_build_jobs: u64,
     pub completed_build_jobs: u64,
+    pub build_spatial_mapping_failures: u64,
     pub integrated_build_outputs: u64,
     pub dropped_stale_build_outputs: u64,
     pub op_log_count: u64,
