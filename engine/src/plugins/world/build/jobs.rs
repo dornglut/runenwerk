@@ -1,5 +1,6 @@
 use super::super::adapters::resources::{
     BuildGraphResource, BuildQueueResource, OperationLogResource, PartitionConfigResource,
+    WorldQuantizationScaleResource,
 };
 use super::super::chunks::lifecycle::{ChunkLifecycleState, WorldChunkRuntimeMapResource};
 use super::super::debug::metrics::WorldDebugMetricsResource;
@@ -11,7 +12,7 @@ use std::hash::{Hash, Hasher};
 use world_ops::{
     BuildGeneration, BuildGraphNode, BuildGraphPhase, BuildQueueClass, BuildQueueItem,
     ChunkGeneration, ChunkRevision, CsgBooleanMode, DirtyReasonSet, Operation, OperationId,
-    OperationLog, OperationRecord, touched_chunks_from_quantized_bounds,
+    OperationLog, OperationRecord, WorldQuantizationScale, touched_chunks_from_quantized_bounds,
 };
 use world_sdf::{
     RegionSdfSummary, SdfBrickMetadata, SdfBrickRecord, SdfBrickSamples, SdfChunkPayload,
@@ -58,6 +59,7 @@ pub fn dispatch_world_build_jobs_system(
     mut runtime: ResMut<WorldBuildJobRuntimeResource>,
     mut completed: ResMut<WorldCompletedBuildQueueResource>,
     partition: Res<PartitionConfigResource>,
+    quantization_scale: Res<WorldQuantizationScaleResource>,
     op_log: Res<OperationLogResource>,
 ) {
     queue_dirty_chunks(&chunks, &mut queue, &mut runtime);
@@ -97,7 +99,7 @@ pub fn dispatch_world_build_jobs_system(
             target_build_generation,
             &partition,
             &op_log,
-            partition.quantization_scale(),
+            **quantization_scale,
         );
         let region_summary = summarize_region_from_payload(&payload);
         completed.outputs.push_back(WorldCompletedBuildOutput {
@@ -196,10 +198,9 @@ fn build_chunk_payload_from_op_window(
     target_build_generation: BuildGeneration,
     partition: &GridPartitionConfig,
     op_log: &OperationLog,
-    fixed_point_scale: i32,
+    fixed_point_scale: WorldQuantizationScale,
 ) -> SdfChunkPayload {
-    let affecting_ops =
-        operations_affecting_chunk(op_log, partition, chunk_id, fixed_point_scale.max(1));
+    let affecting_ops = operations_affecting_chunk(op_log, partition, chunk_id, fixed_point_scale);
     let (solid_payload, last_op_id, material_channel_mask) =
         chunk_solid_state_from_operations(&affecting_ops);
     let mut page_table = BTreeMap::<SdfPageCoord3, SdfPageRecord>::new();
@@ -249,7 +250,7 @@ fn operations_affecting_chunk<'a>(
     op_log: &'a OperationLog,
     partition: &GridPartitionConfig,
     chunk_id: ChunkId,
-    fixed_point_scale: i32,
+    fixed_point_scale: WorldQuantizationScale,
 ) -> Vec<&'a OperationRecord> {
     op_log
         .operations
@@ -264,7 +265,8 @@ fn operations_affecting_chunk<'a>(
                 chunk_id.world_id,
                 fixed_point_scale,
             )
-            .contains(&chunk_id)
+            .map(|chunks| chunks.contains(&chunk_id))
+            .unwrap_or(false)
         })
         .collect()
 }

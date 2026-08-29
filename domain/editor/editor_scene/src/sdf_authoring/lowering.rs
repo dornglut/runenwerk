@@ -351,10 +351,7 @@ fn quantize_extent(value: f32, fixed_point_scale: WorldQuantizationScale) -> i32
         .max(1.0) as i32
 }
 
-fn quantize_unit_vec3(
-    value: [f32; 3],
-    fixed_point_scale: WorldQuantizationScale,
-) -> QuantizedVec3 {
+fn quantize_unit_vec3(value: [f32; 3], fixed_point_scale: WorldQuantizationScale) -> QuantizedVec3 {
     quantize_vec3(value, fixed_point_scale)
 }
 
