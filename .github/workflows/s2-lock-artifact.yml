@@ -1,4 +1,4 @@
-name: S2 Finalizer
+name: S2 Authority Cleanup
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  finalize:
+  cleanup:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
@@ -20,81 +20,55 @@ jobs:
           fetch-depth: 1
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: Apply asserted build quantization separation
+      - name: Remove duplicate spatial authority and stale current-state docs
         shell: python
         run: |
           from pathlib import Path
+          import shutil
 
-          def replace_once(text, old, new, label):
-              count = text.count(old)
+          def remove_once(path, line):
+              text = path.read_text()
+              count = text.count(line)
               if count != 1:
-                  raise SystemExit(f"{label}: expected exactly one match, found {count}")
-              return text.replace(old, new, 1)
+                  raise SystemExit(f"{path}: expected exactly one obsolete row, found {count}")
+              path.write_text(text.replace(line, "", 1))
 
-          path = Path("engine/src/plugins/world/build/jobs.rs")
-          text = path.read_text()
-          text = replace_once(
-              text,
-              "    BuildGraphResource, BuildQueueResource, OperationLogResource, PartitionConfigResource,\n",
-              "    BuildGraphResource, BuildQueueResource, OperationLogResource, PartitionConfigResource,\n    WorldQuantizationScaleResource,\n",
-              "engine resource import",
+          remove_once(
+              Path("docs-site/src/content/docs/workspace/crate-inventory.md"),
+              "| `spatial` | `domain/spatial` | domain | Spatial coordinate contracts. | evolving |\n",
           )
-          text = replace_once(
-              text,
-              "    OperationLog, OperationRecord, touched_chunks_from_quantized_bounds,\n",
-              "    OperationLog, OperationRecord, WorldQuantizationScale,\n    touched_chunks_from_quantized_bounds,\n",
-              "world_ops scale import",
+          remove_once(
+              Path("docs-site/src/content/docs/workspace/crate-docs-status.md"),
+              "| `spatial` | `domain/spatial` | thin | [`../domain/spatial/README.md`](../domain/spatial/README.md) |\n",
           )
-          text = replace_once(
-              text,
-              "    partition: Res<PartitionConfigResource>,\n    op_log: Res<OperationLogResource>,\n",
-              "    partition: Res<PartitionConfigResource>,\n    quantization_scale: Res<WorldQuantizationScaleResource>,\n    op_log: Res<OperationLogResource>,\n",
-              "dispatch scale resource",
-          )
-          text = replace_once(
-              text,
-              "            &op_log,\n            partition.quantization_scale(),\n",
-              "            &op_log,\n            **quantization_scale,\n",
-              "build call scale",
-          )
-          if text.count("fixed_point_scale: i32") != 2:
-              raise SystemExit("expected two build helper i32 scale parameters")
-          text = text.replace(
-              "fixed_point_scale: i32",
-              "fixed_point_scale: WorldQuantizationScale",
-          )
-          text = replace_once(
-              text,
-              "        operations_affecting_chunk(op_log, partition, chunk_id, fixed_point_scale.max(1));\n",
-              "        operations_affecting_chunk(op_log, partition, chunk_id, fixed_point_scale);\n",
-              "validated build scale",
-          )
-          text = replace_once(
-              text,
-              "            )\n            .contains(&chunk_id)\n",
-              "            )\n            .map(|chunks| chunks.contains(&chunk_id))\n            .unwrap_or(false)\n",
-              "checked read-side spatial mapping",
-          )
-          path.write_text(text)
 
-      - name: Install stable Rust
-        run: rustup toolchain install stable --profile minimal --component rustfmt
+          for path in [
+              Path("domain/spatial"),
+              Path("docs-site/src/content/docs/domain/spatial"),
+          ]:
+              if not path.exists():
+                  raise SystemExit(f"expected S2 deletion path missing before cleanup: {path}")
+              shutil.rmtree(path)
 
-      - name: Format workspace
-        run: cargo +stable fmt --all
+      - name: Prove local spatial authority is gone
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e domain/spatial
+          test ! -e docs-site/src/content/docs/domain/spatial
+          ! grep -Fq '"domain/spatial"' Cargo.toml
+          ! grep -Eq '^[[:space:]]*spatial[[:space:]]*=' Cargo.toml
+          ! grep -Fq '| `spatial` | `domain/spatial` |' docs-site/src/content/docs/workspace/crate-inventory.md
+          ! grep -Fq '| `spatial` | `domain/spatial` |' docs-site/src/content/docs/workspace/crate-docs-status.md
 
-      - name: Commit finalizer output
+      - name: Commit authority cleanup
         shell: bash
         env:
           HEAD_BRANCH: ${{ github.head_ref }}
         run: |
           set -euo pipefail
-          if git diff --quiet; then
-            echo "No finalizer changes remain"
-            exit 0
-          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "spatial: format and finish build policy cutover"
+          git commit -m "spatial: delete duplicate foundation authority"
           git push origin "HEAD:${HEAD_BRANCH}"
