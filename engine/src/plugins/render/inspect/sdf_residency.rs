@@ -1,5 +1,5 @@
 use product::FieldProductDiagnostic;
-use spatial::ChunkId;
+use runen_spatial::ChunkId;
 use world_sdf::SdfPageCoord3;
 
 use crate::plugins::render::features::world::sdf_residency::{
