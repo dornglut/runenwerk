@@ -25,6 +25,7 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           sdf_path = Path("apps/runenwerk_editor/src/editor_app/sdf_operations.rs")
           sdf = sdf_path.read_text()
@@ -89,6 +90,156 @@ jobs:
           projection_path.write_text(
               projection[:context_start] + new_context + projection[context_end:]
           )
+
+          engine_path = Path("engine/tests/world_runtime_correctness.rs")
+          engine = engine_path.read_text()
+          old_resource_import = '''use engine::plugins::world::adapters::resources::{
+              OperationLogResource, PartitionConfigResource, SdfChunkStoreResource,
+          };
+          '''
+          new_resource_import = '''use engine::plugins::world::adapters::resources::{
+              OperationLogResource, SdfChunkStoreResource, WorldQuantizationScaleResource,
+          };
+          '''
+          if engine.count(old_resource_import) != 1:
+              raise SystemExit("expected legacy engine resource import")
+          engine = engine.replace(old_resource_import, new_resource_import)
+
+          old_spatial_import = "use spatial::{ChunkCoord3, ChunkId, WorldId};\n"
+          new_spatial_import = "use runen_spatial::{ChunkCoord3, ChunkId, WorldId};\n"
+          if engine.count(old_spatial_import) != 1:
+              raise SystemExit("expected legacy engine spatial import")
+          engine = engine.replace(old_spatial_import, new_spatial_import)
+
+          old_world_ops_import = '''use world_ops::{
+              BrushShape, BuildGeneration, ChunkGeneration, ChunkRevision, DirtyReason, Operation,
+              quantize_aabb, quantize_position,
+          };
+          '''
+          new_world_ops_import = '''use world_ops::{
+              BrushShape, BuildGeneration, ChunkGeneration, ChunkRevision, DirtyReason, Operation,
+              WorldQuantizationScale, quantize_aabb, quantize_position,
+          };
+          '''
+          if engine.count(old_world_ops_import) != 1:
+              raise SystemExit("expected engine world_ops import")
+          engine = engine.replace(old_world_ops_import, new_world_ops_import)
+
+          helper_marker = "use world_sdf::{RegionSdfSummary, SdfChunkPayload};\n\n"
+          helper = '''use world_sdf::{RegionSdfSummary, SdfChunkPayload};
+
+          fn test_quantization_scale(value: i32) -> WorldQuantizationScale {
+              WorldQuantizationScale::try_new(value).expect("test quantization scale must be positive")
+          }
+
+          '''
+          if engine.count(helper_marker) != 1:
+              raise SystemExit("expected engine helper insertion marker")
+          engine = engine.replace(helper_marker, helper)
+
+          engine = re.sub(r"\bWorldId\((\d+)\)", r"WorldId::new(\1)", engine)
+          engine = re.sub(
+              r"quantize_position\((\[[^\n]+\]), (1024|1)\)",
+              lambda m: f"quantize_position({m.group(1)}, test_quantization_scale({m.group(2)}))",
+              engine,
+          )
+          engine = re.sub(
+              r"quantize_aabb\((\[[^\n]+\]), (\[[^\n]+\]), (1024|1)\)",
+              lambda m: (
+                  f"quantize_aabb({m.group(1)}, {m.group(2)}, "
+                  f"test_quantization_scale({m.group(3)}))"
+              ),
+              engine,
+          )
+
+          old_scale_block = '''    {
+              let partition = app
+                  .world_mut()
+                  .resource_mut::<PartitionConfigResource>()
+                  .expect("world partition config should be available");
+              partition.fixed_point_scale = 1;
+          }
+          '''
+          new_scale_block = '''    {
+              let quantization_scale = app
+                  .world_mut()
+                  .resource_mut::<WorldQuantizationScaleResource>()
+                  .expect("world quantization scale should be available");
+              quantization_scale.0 = test_quantization_scale(1);
+          }
+          '''
+          if engine.count(old_scale_block) != 1:
+              raise SystemExit("expected legacy partition-owned quantization block")
+          engine = engine.replace(old_scale_block, new_scale_block)
+          engine = engine.replace(
+              "fn ingress_invalidation_uses_partition_quantization_scale()",
+              "fn ingress_invalidation_uses_world_quantization_scale()",
+          )
+          engine = engine.replace(
+              '"tests.partition-scale-ingress"',
+              '"tests.quantization-scale-ingress"',
+          )
+          engine = engine.replace(
+              '"ingress invalidation must dequantize bounds using world partition quantization scale"',
+              '"ingress invalidation must dequantize bounds using the world quantization scale"',
+          )
+
+          first_payload_pattern = re.compile(
+              r"(?m)^(\s*)checksum: 99,\n\1\.\.SdfChunkPayload::default\(\)$"
+          )
+          engine, count = first_payload_pattern.subn(
+              lambda m: (
+                  f"{m.group(1)}page_table: Default::default(),\n"
+                  f"{m.group(1)}hierarchy_revision: 0,\n"
+                  f"{m.group(1)}checksum: 99,"
+              ),
+              engine,
+          )
+          if count != 1:
+              raise SystemExit(f"expected one checksum payload default, found {count}")
+
+          missing_generation_pattern = re.compile(
+              r"(?m)^(\s*)chunk_revision: ChunkRevision\(99\),\n\1\.\.SdfChunkPayload::default\(\)$"
+          )
+          engine, count = missing_generation_pattern.subn(
+              lambda m: (
+                  f"{m.group(1)}chunk_revision: ChunkRevision(99),\n"
+                  f"{m.group(1)}chunk_generation: ChunkGeneration::default(),\n"
+                  f"{m.group(1)}page_table: Default::default(),\n"
+                  f"{m.group(1)}hierarchy_revision: 0,\n"
+                  f"{m.group(1)}checksum: 0,"
+              ),
+              engine,
+          )
+          if count != 1:
+              raise SystemExit(f"expected one revision-only payload default, found {count}")
+
+          remaining_default_pattern = re.compile(
+              r"(?m)^(\s*)\.\.SdfChunkPayload::default\(\)$"
+          )
+          engine, count = remaining_default_pattern.subn(
+              lambda m: (
+                  f"{m.group(1)}page_table: Default::default(),\n"
+                  f"{m.group(1)}hierarchy_revision: 0,\n"
+                  f"{m.group(1)}checksum: 0,"
+              ),
+              engine,
+          )
+          if count != 3:
+              raise SystemExit(f"expected three remaining payload defaults, found {count}")
+
+          forbidden = [
+              "use spatial::",
+              "PartitionConfigResource",
+              "fixed_point_scale",
+              "SdfChunkPayload::default()",
+          ]
+          for token in forbidden:
+              if token in engine:
+                  raise SystemExit(f"legacy engine test token remains: {token}")
+          if re.search(r"\bWorldId\(\d+\)", engine):
+              raise SystemExit("legacy WorldId tuple construction remains in engine test")
+          engine_path.write_text(engine)
           PY
 
       - name: Format repair
@@ -103,7 +254,8 @@ jobs:
           set -euo pipefail
           expected=$(printf '%s\n' \
             apps/runenwerk_editor/src/editor_app/sdf_operations.rs \
-            domain/editor/editor_scene/src/sdf_authoring/projection.rs)
+            domain/editor/editor_scene/src/sdf_authoring/projection.rs \
+            engine/tests/world_runtime_correctness.rs)
           actual=$(git diff --name-only | sort)
           if [[ "$actual" != "$expected" ]]; then
             echo "Unexpected temporary repair diff:" >&2
@@ -120,6 +272,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add \
             apps/runenwerk_editor/src/editor_app/sdf_operations.rs \
-            domain/editor/editor_scene/src/sdf_authoring/projection.rs
-          git commit -m "spatial: propagate checked SDF mapping"
+            domain/editor/editor_scene/src/sdf_authoring/projection.rs \
+            engine/tests/world_runtime_correctness.rs
+          git commit -m "spatial: close checked runtime test migration"
           git push origin HEAD:tmp-364-final-closure-5745
