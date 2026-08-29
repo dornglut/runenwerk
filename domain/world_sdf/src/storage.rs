@@ -1,5 +1,5 @@
+use runen_spatial::{ChunkId, RegionId};
 use serde::{Deserialize, Serialize};
-use spatial::{ChunkId, RegionId};
 use std::collections::BTreeMap;
 use world_ops::{ChunkGeneration, ChunkRevision, OperationId};
 
@@ -43,7 +43,7 @@ pub struct SdfPageRecord {
     pub bricks: BTreeMap<[u8; 3], SdfBrickRecord>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SdfChunkPayload {
     pub chunk_id: ChunkId,
     pub chunk_revision: ChunkRevision,
@@ -70,14 +70,19 @@ pub struct SdfChunkStore {
 #[cfg(test)]
 mod tests {
     use super::SdfChunkPayload;
-    use spatial::{ChunkCoord3, ChunkId, WorldId};
+    use runen_spatial::{ChunkCoord3, ChunkId, WorldId};
+    use std::collections::BTreeMap;
+    use world_ops::{ChunkGeneration, ChunkRevision};
 
     #[test]
     fn payload_roundtrip_postcard() {
         let payload = SdfChunkPayload {
-            chunk_id: ChunkId::new(WorldId(1), ChunkCoord3 { x: 2, y: 3, z: 4 }),
+            chunk_id: ChunkId::new(WorldId::new(1), ChunkCoord3 { x: 2, y: 3, z: 4 }),
+            chunk_revision: ChunkRevision::default(),
+            chunk_generation: ChunkGeneration::default(),
+            page_table: BTreeMap::new(),
+            hierarchy_revision: 0,
             checksum: 77,
-            ..SdfChunkPayload::default()
         };
         let bytes = postcard::to_allocvec(&payload).expect("serialize payload");
         let decoded = postcard::from_bytes::<SdfChunkPayload>(&bytes).expect("decode payload");
