@@ -1,4 +1,4 @@
-name: S2 Lock Artifact
+name: S2 Migration Helper
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  generate:
+  migrate:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
@@ -20,32 +20,81 @@ jobs:
           fetch-depth: 1
           ref: ${{ github.event.pull_request.head.sha }}
 
+      - name: Apply asserted mechanical S2 migration
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          roots = [
+              Path("domain/world_sdf/src"),
+              Path("domain/procgen/src"),
+              Path("domain/editor/editor_scene/src"),
+              Path("engine/src/plugins/world"),
+          ]
+          changed = []
+          for root in roots:
+              for path in root.rglob("*.rs"):
+                  old = path.read_text()
+                  new = old.replace("spatial::", "runen_spatial::")
+                  new = new.replace(".world_id.0", ".world_id.get()")
+                  new = re.sub(r"\bWorldId\((\d+)\)", r"WorldId::new(\1)", new)
+                  if new != old:
+                      path.write_text(new)
+                      changed.append(str(path))
+
+          plugin = Path("engine/src/plugins/world/plugin.rs")
+          text = plugin.read_text()
+          for old in [
+              "BuildGraphResource, BuildQueueResource, CameraRelativeFrameResource,\n        ",
+              "        app.init_resource::<WorldFrameResource>();\n",
+              "        app.init_resource::<CameraRelativeFrameResource>();\n",
+              "use crate::plugins::world::adapters::WorldFrameResource;\n",
+          ]:
+              if old not in text:
+                  raise SystemExit(f"expected plugin text not found: {old!r}")
+              text = text.replace(old, "", 1)
+          plugin.write_text(text)
+
+          collision = Path("domain/world_sdf/src/collision.rs")
+          text = collision.read_text()
+          old_partition = """GridPartitionConfig {
+                      chunk_edge_meters: 1.0,
+                      region_chunk_dims: [8, 8, 8],
+                      fixed_point_scale: 1024,
+                  }"""
+          count = text.count(old_partition)
+          if count < 1:
+              raise SystemExit("expected collision partition literals not found")
+          text = text.replace(
+              old_partition,
+              'GridPartitionConfig::try_new(1.0, [8, 8, 8])\n            .expect("test partition configuration is valid")',
+          )
+          text = text.replace("partition.chunk_edge_meters.max(1.0)", "partition.chunk_edge_meters() as f32")
+          collision.write_text(text)
+
+          print("mechanically updated", len(set(changed)) + 2, "files")
+
       - name: Install stable Rust
-        run: rustup toolchain install stable --profile minimal
+        run: rustup toolchain install stable --profile minimal --component rustfmt
 
-      - name: Generate lockfile
-        run: cargo +stable generate-lockfile
+      - name: Format and refresh lockfile
+        run: |
+          cargo +stable fmt --all
+          cargo +stable generate-lockfile
 
-      - name: Commit generated lockfile
+      - name: Commit mechanical migration
         shell: bash
         env:
           HEAD_BRANCH: ${{ github.head_ref }}
         run: |
           set -euo pipefail
-          if git diff --quiet -- Cargo.lock; then
-            echo "Cargo.lock is already current"
+          if git diff --quiet; then
+            echo "No mechanical migration changes remain"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Cargo.lock
-          git commit -m "spatial: refresh lockfile"
+          git add -A
+          git commit -m "spatial: finish mechanical consumer cutover"
           git push origin "HEAD:${HEAD_BRANCH}"
-
-      - name: Upload generated lockfile
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: s2-cargo-lock
-          path: Cargo.lock
-          if-no-files-found: error
-          retention-days: 1
