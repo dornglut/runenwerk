@@ -232,18 +232,27 @@ impl SdfOperationWorkspaceState {
             ));
         }
         let fixed_point_scale = self.lowering_context.fixed_point_scale();
+        let mut next_operation_log = self.committed_operation_log.clone();
+        let mut next_dirty_chunks = self.dirty_chunks.clone();
         for lowered in &mut candidate.records {
-            let op_id = self.committed_operation_log.append(lowered.record.clone());
+            let op_id = next_operation_log.append(lowered.record.clone());
             lowered.record.op_id = op_id;
             mark_dirty_chunks_from_quantized_bounds(
-                &mut self.dirty_chunks,
+                &mut next_dirty_chunks,
                 &self.lowering_context.partition,
                 lowered.record.affected_bounds_q,
                 lowered.record.planet_id,
                 fixed_point_scale,
                 dirty_reason_for_operation(&lowered.record.operation),
-            );
+            )
+            .map_err(|_| {
+                EditorMutationError::runtime_rejected(
+                    "SDF operation bounds cannot map to spatial chunks",
+                )
+            })?;
         }
+        self.committed_operation_log = next_operation_log;
+        self.dirty_chunks = next_dirty_chunks;
         let formation = form_sdf_field_preview_products(
             &self.document,
             &self.lowering_context,
