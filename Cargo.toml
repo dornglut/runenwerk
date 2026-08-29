@@ -5,9 +5,6 @@ members = [
     "domain/ecs_macros",
     "domain/geometry",
     "domain/spatial",
-    "domain/spatial_index",
-    "domain/chunking",
-    "domain/world_streaming",
     "domain/asset",
     "domain/product",
     "domain/world_ops",
@@ -85,7 +82,6 @@ members = [
     "apps/runenwerk_draw",
     "apps/runenwerk_runtime_preview",
 
-    "adapters/godot_chunking_addon",
     "adapters/native_tablet_input",
 ]
 
@@ -102,7 +98,6 @@ product = { path = "domain/product" }
 spatial = { path = "domain/spatial" }
 world_ops = { path = "domain/world_ops" }
 world_sdf = { path = "domain/world_sdf" }
-world_streaming = { path = "domain/world_streaming" }
 
 ui_math = { path = "domain/ui/ui_math" }
 ui_input = { path = "domain/ui/ui_input" }

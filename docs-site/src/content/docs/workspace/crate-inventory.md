@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-24
+last_reviewed: 2026-08-29
 related_docs:
   - ../../../CRATES.md
   - ./crate-docs-status.md
@@ -40,9 +40,6 @@ This document records active workspace crates and their intended layer. Update i
 | `resource_ref` | `foundation/resource_ref` | foundation | Portable external resource references. | evolving |
 | `geometry` | `domain/geometry` | domain | Geometric primitives and queries. | evolving |
 | `spatial` | `domain/spatial` | domain | Spatial coordinate contracts. | evolving |
-| `spatial_index` | `domain/spatial_index` | domain | Spatial index traits and spatial hash implementation. | evolving |
-| `chunking` | `domain/chunking` | domain | Chunk streaming focus, policy, set, diff, and streamer logic. | evolving |
-| `world_streaming` | `domain/world_streaming` | domain | Payload-neutral chunk lifecycle and stream requests. | evolving |
 | `asset` | `domain/asset` | domain | Asset identity, descriptors, import planning, dependency graph, diagnostics, and ratification contracts. | evolving |
 | `product` | `domain/product` | domain | Shared formed-product descriptors, product jobs, query snapshots, diagnostics, policies, and ratification contracts. | evolving |
 | `world_ops` | `domain/world_ops` | domain | Chunk/world operation logs, dirty tracking, build queues, invalidation, and replication deltas. | evolving |
@@ -84,7 +81,6 @@ This document records active workspace crates and their intended layer. Update i
 | `runenwerk_editor` | `apps/runenwerk_editor` | app | Runnable editor app and authoring workflows. | internal/evolving |
 | `runenwerk_draw` | `apps/runenwerk_draw` | app | Focused drawing app shell and shared engine/UI/render runtime integration. | internal/evolving |
 | `runenwerk_runtime_preview` | `apps/runenwerk_runtime_preview` | app | External runtime preview child process and preview/play app shell. | internal/evolving |
-| `godot_chunking_addon` | `adapters/godot_chunking_addon` | adapter/tool | Godot bridge for chunking/spatial integration. | internal |
 | `native_tablet_input` | `adapters/native_tablet_input` | adapter/tool | Native tablet packet normalization proof for platform-neutral `ui_input` stylus events. | internal/evolving |
 
 ## Documentation status
