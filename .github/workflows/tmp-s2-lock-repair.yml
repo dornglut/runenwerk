@@ -50,16 +50,39 @@ jobs:
               text = text.replace(old, new)
           jobs.write_text(text)
 
+          publication = Path('apps/runenwerk_editor/src/asset_pipeline/product_publication.rs')
+          text = publication.read_text()
+          expected = {
+              'spatial::ChunkId::new(': 2,
+              'spatial::WorldId(1)': 2,
+              'spatial::ChunkCoord3 { x: 0, y: 0, z: 0 }': 2,
+          }
+          for pattern, count in expected.items():
+              if text.count(pattern) != count:
+                  raise SystemExit(f'expected publication pattern count {count}, got {text.count(pattern)}: {pattern}')
+          text = text.replace('spatial::ChunkId::new(', 'runen_spatial::ChunkId::new(')
+          text = text.replace('spatial::WorldId(1)', 'runen_spatial::WorldId::new(1)')
+          text = text.replace(
+              'spatial::ChunkCoord3 { x: 0, y: 0, z: 0 }',
+              'runen_spatial::ChunkCoord3 { x: 0, y: 0, z: 0 }',
+          )
+          publication.write_text(text)
+
           runtime = Path('apps/runenwerk_editor/src/runtime/procgen/mod.rs')
           text = runtime.read_text()
-          replacements = {
-              'use spatial::{ChunkCoord3, ChunkId, RegionCoord3, RegionId, WorldId};': 'use runen_spatial::{ChunkCoord3, ChunkId, RegionCoord3, RegionId, WorldId};',
-              'scope.world_id.0': 'scope.world_id.get()',
-          }
-          for old, new in replacements.items():
-              if text.count(old) != 1:
-                  raise SystemExit(f'expected procgen pattern not found exactly once: {old}')
-              text = text.replace(old, new)
+          import_old = 'use spatial::{ChunkCoord3, ChunkId, RegionCoord3, RegionId, WorldId};'
+          if text.count(import_old) != 1:
+              raise SystemExit('expected procgen import not found exactly once')
+          text = text.replace(
+              import_old,
+              'use runen_spatial::{ChunkCoord3, ChunkId, RegionCoord3, RegionId, WorldId};',
+          )
+          if text.count('scope.world_id.0') != 1:
+              raise SystemExit('expected procgen world_id reach-through not found exactly once')
+          text = text.replace('scope.world_id.0', 'scope.world_id.get()')
+          if text.count('WorldId(1)') != 4:
+              raise SystemExit(f'expected four tuple WorldId constructions, got {text.count("WorldId(1)")}')
+          text = text.replace('WorldId(1)', 'WorldId::new(1)')
           runtime.write_text(text)
           PY
 
@@ -69,7 +92,7 @@ jobs:
           fi
 
           changed="$(git diff --name-only | sort)"
-          expected=$'apps/runenwerk_editor/Cargo.toml\napps/runenwerk_editor/src/asset_pipeline/field_product_jobs.rs\napps/runenwerk_editor/src/runtime/procgen/mod.rs'
+          expected=$'apps/runenwerk_editor/Cargo.toml\napps/runenwerk_editor/src/asset_pipeline/field_product_jobs.rs\napps/runenwerk_editor/src/asset_pipeline/product_publication.rs\napps/runenwerk_editor/src/runtime/procgen/mod.rs'
           test "$changed" = "$expected"
 
       - name: Format and compile editor
@@ -87,6 +110,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add apps/runenwerk_editor/Cargo.toml \
             apps/runenwerk_editor/src/asset_pipeline/field_product_jobs.rs \
+            apps/runenwerk_editor/src/asset_pipeline/product_publication.rs \
             apps/runenwerk_editor/src/runtime/procgen/mod.rs
           git diff --cached --quiet && exit 0
           git commit -m "spatial: close editor consumers over RunenSpatial"
