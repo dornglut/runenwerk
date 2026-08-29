@@ -1,5 +1,5 @@
 use crate::plugins::render::RenderGpuCacheHandle;
-use spatial::ChunkId;
+use runen_spatial::ChunkId;
 use std::collections::{BTreeMap, BTreeSet};
 use world_ops::{ChunkGeneration, ChunkRevision};
 
