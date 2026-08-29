@@ -6,7 +6,7 @@ use crate::plugins::render::features::{
     PROCEDURAL_WORLD_RENDER_FEATURE_ID, PreparedUiFrameContribution, SCENE_ROUTE_RENDER_FEATURE_ID,
     UI_RENDER_FEATURE_ID, WIND_FIELDS_RENDER_FEATURE_ID, WORLD_DRAW_RENDER_FEATURE_ID,
 };
-use spatial::ChunkId;
+use runen_spatial::ChunkId;
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
