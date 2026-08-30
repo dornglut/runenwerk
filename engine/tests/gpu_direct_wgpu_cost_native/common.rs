@@ -202,8 +202,15 @@ impl CallbackState {
 
 pub(crate) struct DirectSubmissionResult {
     pub(crate) mapped: Vec<Vec<u8>>,
+    pub(crate) readback_registration_us: f64,
     pub(crate) submit_call_us: f64,
     pub(crate) completion_readback_us: f64,
+}
+
+impl DirectSubmissionResult {
+    pub(crate) fn boundary_submit_us(&self) -> f64 {
+        self.readback_registration_us + self.submit_call_us
+    }
 }
 
 pub(crate) fn submit_and_map(
@@ -211,6 +218,7 @@ pub(crate) fn submit_and_map(
     command_buffer: wgpu::CommandBuffer,
     readbacks: &[&wgpu::Buffer],
 ) -> DirectSubmissionResult {
+    let registration_start = Instant::now();
     let states = readbacks
         .iter()
         .map(|buffer| {
@@ -230,6 +238,7 @@ pub(crate) fn submit_and_map(
     command_buffer.on_submitted_work_done(move || {
         completed_callback.store(true, Ordering::Release);
     });
+    let readback_registration_us = micros(registration_start.elapsed());
 
     let submit_start = Instant::now();
     context.queue.submit([command_buffer]);
@@ -276,6 +285,7 @@ pub(crate) fn submit_and_map(
 
     DirectSubmissionResult {
         mapped,
+        readback_registration_us,
         submit_call_us,
         completion_readback_us,
     }
