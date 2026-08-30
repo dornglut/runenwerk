@@ -238,10 +238,7 @@ fn author_scan(
     mode: ScanMode,
 ) -> (GpuWorkFragment, GpuReadbackId, GpuReadbackId) {
     let [level_0_blocks, level_1_blocks, level_2_blocks] = hierarchy_counts();
-    assert_eq!(
-        [level_0_blocks, level_1_blocks, level_2_blocks],
-        [65, 2, 1]
-    );
+    assert_eq!([level_0_blocks, level_1_blocks, level_2_blocks], [65, 2, 1]);
 
     let mut resources = GpuResourceScope::new();
     let input_values = vec![1_u32; usize::try_from(ELEMENT_COUNT).unwrap()];
