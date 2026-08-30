@@ -75,9 +75,16 @@ mod tests {
     use world_ops::{ChunkGeneration, ChunkRevision};
 
     #[test]
-    fn payload_roundtrip_postcard() {
+    fn payload_roundtrip_postcard_preserves_i64_chunk_coordinates() {
         let payload = SdfChunkPayload {
-            chunk_id: ChunkId::new(WorldId::new(1), ChunkCoord3 { x: 2, y: 3, z: 4 }),
+            chunk_id: ChunkId::new(
+                WorldId::new(1),
+                ChunkCoord3 {
+                    x: i64::from(i32::MAX) + 1,
+                    y: i64::from(i32::MIN) - 1,
+                    z: 4,
+                },
+            ),
             chunk_revision: ChunkRevision::default(),
             chunk_generation: ChunkGeneration::default(),
             page_table: BTreeMap::new(),
