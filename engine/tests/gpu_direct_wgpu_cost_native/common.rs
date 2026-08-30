@@ -253,7 +253,6 @@ pub(crate) fn submit_and_map(
         );
         std::thread::yield_now();
     }
-    let completion_readback_us = micros(completion_start.elapsed());
 
     for state in &states {
         if let Some(error) = state.error.lock().unwrap().take() {
@@ -270,6 +269,7 @@ pub(crate) fn submit_and_map(
             bytes
         })
         .collect();
+    let completion_readback_us = micros(completion_start.elapsed());
 
     DirectSubmissionResult {
         mapped,
