@@ -340,7 +340,9 @@ async fn await_server_transport_close(
     poll_fn(
         |cx| match connection.poll(cx, &mut host.negotiation, &mut host.delivery) {
             Poll::Pending => Poll::Pending,
-            Poll::Ready(Err(error)) if error.kind() == ConnectionErrorKind::EstablishedTransport => {
+            Poll::Ready(Err(error))
+                if error.kind() == ConnectionErrorKind::EstablishedTransport =>
+            {
                 Poll::Ready(Ok(()))
             }
             Poll::Ready(Err(error)) => Poll::Ready(Err(anyhow!(
