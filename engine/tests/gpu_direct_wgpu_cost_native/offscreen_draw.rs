@@ -15,7 +15,7 @@ const DRAW_PIXEL: [u8; 4] = [255, 0, 0, 255];
 const INDICES: [u32; 3] = [0, 1, 2];
 
 // Byte-for-byte copy of the retained G6-C01 inline shader. Before G6-P01 acceptance this
-// fixture should be extracted into shared test support so the retained proof and comparison
+// fixture must be extracted into shared test support so the retained proof and comparison
 // consume one source of shader truth.
 const KNOWN_PATTERN_WGSL: &str = r#"
 @vertex
@@ -118,7 +118,9 @@ fn render_pipeline() -> GpuRenderPipelineDescriptor {
     .unwrap()
 }
 
-fn runengpu_fragment() -> (GpuWorkFragment, GpuReadbackId) {
+fn runengpu_fragment(
+    pipeline: &GpuRenderPipelineDescriptor,
+) -> (GpuWorkFragment, GpuReadbackId) {
     let mut allocator = GpuWorkResourceIdAllocator::new();
     let texture_label = label("direct-cost indexed offscreen color target");
     let texture = allocator
@@ -133,7 +135,10 @@ fn runengpu_fragment() -> (GpuWorkFragment, GpuReadbackId) {
                 GpuTextureFormat::Rgba8Unorm,
                 GpuTextureUsages::new(
                     &texture_label,
-                    [GpuTextureUsage::ColorAttachment, GpuTextureUsage::CopySource],
+                    [
+                        GpuTextureUsage::ColorAttachment,
+                        GpuTextureUsage::CopySource,
+                    ],
                 )
                 .unwrap(),
                 GpuTextureInitialization::Uninitialized,
@@ -185,7 +190,6 @@ fn runengpu_fragment() -> (GpuWorkFragment, GpuReadbackId) {
         )
         .unwrap();
 
-    let pipeline = render_pipeline();
     let bindings = GpuRuntimeBindingSet::new(pipeline.layout().clone(), []).unwrap();
     let index_binding = GpuIndexBufferBinding::new(
         &index_buffer,
@@ -194,7 +198,7 @@ fn runengpu_fragment() -> (GpuWorkFragment, GpuReadbackId) {
     )
     .unwrap();
     let draw = GpuRenderDraw::new(
-        pipeline,
+        pipeline.clone(),
         bindings,
         [],
         Some(index_binding),
@@ -268,20 +272,18 @@ fn progress_runengpu(
     loop {
         context.progress();
         match readback.status() {
-            GpuReadbackStatus::Ready(bytes) => {
-                loop {
-                    context.progress();
-                    match submission.status() {
-                        GpuSubmissionStatus::Completed => return bytes,
-                        GpuSubmissionStatus::Failed(failure) => {
-                            panic!("RunenGPU known-pattern submission failed: {failure:?}")
-                        }
-                        GpuSubmissionStatus::Accepted => {}
+            GpuReadbackStatus::Ready(bytes) => loop {
+                context.progress();
+                match submission.status() {
+                    GpuSubmissionStatus::Completed => return bytes,
+                    GpuSubmissionStatus::Failed(failure) => {
+                        panic!("RunenGPU known-pattern submission failed: {failure:?}")
                     }
-                    assert!(Instant::now() < deadline, "RunenGPU completion timed out");
-                    std::thread::yield_now();
+                    GpuSubmissionStatus::Accepted => {}
                 }
-            }
+                assert!(Instant::now() < deadline, "RunenGPU completion timed out");
+                std::thread::yield_now();
+            },
             GpuReadbackStatus::Failed(failure) => {
                 panic!("RunenGPU known-pattern readback failed: {failure:?}")
             }
@@ -310,18 +312,19 @@ fn assert_known_pattern(bytes: &[u8]) {
     }
 }
 
-fn runengpu_sample(context: &GpuContext) -> BTreeMap<String, f64> {
+fn runengpu_sample(
+    context: &GpuContext,
+    pipeline: &GpuRenderPipelineDescriptor,
+) -> BTreeMap<String, f64> {
     let total_start = Instant::now();
     let author_start = Instant::now();
-    let (fragment, readback_id) = runengpu_fragment();
+    let (fragment, readback_id) = runengpu_fragment(pipeline);
     let author_us = micros(author_start.elapsed());
 
     let prepare_start = Instant::now();
-    let graph = GpuPreparedWorkGraph::prepare(
-        label("G6-P01 known-pattern RunenGPU graph"),
-        [fragment],
-    )
-    .unwrap();
+    let graph =
+        GpuPreparedWorkGraph::prepare(label("G6-P01 known-pattern RunenGPU graph"), [fragment])
+            .unwrap();
     let graph_prepare_us = micros(prepare_start.elapsed());
 
     let backend_prepare_start = Instant::now();
@@ -359,10 +362,12 @@ struct DirectPipeline {
 
 fn direct_pipeline(context: &DirectWgpuContext) -> DirectPipeline {
     let start = Instant::now();
-    let shader = context.device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("G6-P01 known-pattern shader"),
-        source: wgpu::ShaderSource::Wgsl(KNOWN_PATTERN_WGSL.into()),
-    });
+    let shader = context
+        .device
+        .create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("G6-P01 known-pattern shader"),
+            source: wgpu::ShaderSource::Wgsl(KNOWN_PATTERN_WGSL.into()),
+        });
     let layout = context
         .device
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -517,10 +522,7 @@ fn direct_sample(
 
     let mut phases = BTreeMap::new();
     phases.insert("resource_setup".to_owned(), resource_setup_us);
-    phases.insert(
-        "boundary_prepare_or_record".to_owned(),
-        command_record_us,
-    );
+    phases.insert("boundary_prepare_or_record".to_owned(), command_record_us);
     phases.insert("command_record".to_owned(), command_record_us);
     phases.insert("submit_call".to_owned(), submitted.submit_call_us);
     phases.insert(
@@ -538,18 +540,21 @@ pub(crate) fn compare() -> Value {
     let runengpu_context_start = Instant::now();
     let runengpu_context = runengpu_context();
     let runengpu_context_us = micros(runengpu_context_start.elapsed());
+    let runengpu_pipeline_start = Instant::now();
+    let runengpu_pipeline = render_pipeline();
+    let runengpu_pipeline_descriptor_us = micros(runengpu_pipeline_start.elapsed());
 
     let mut runengpu_cold = None;
     let mut direct_cold = None;
     for _ in 0..WARMUP_SAMPLES {
-        runengpu_cold = Some(runengpu_sample(&runengpu_context));
+        runengpu_cold = Some(runengpu_sample(&runengpu_context, &runengpu_pipeline));
         direct_cold = Some(direct_sample(&direct_context, &direct_pipeline.pipeline));
     }
 
     let mut runengpu = Measurements::default();
     let mut direct = Measurements::default();
     for _ in 0..MEASURED_SAMPLES {
-        runengpu.push(runengpu_sample(&runengpu_context));
+        runengpu.push(runengpu_sample(&runengpu_context, &runengpu_pipeline));
         direct.push(direct_sample(&direct_context, &direct_pipeline.pipeline));
     }
     assert_eq!(runengpu.len(), MEASURED_SAMPLES);
@@ -573,10 +578,17 @@ pub(crate) fn compare() -> Value {
         },
         "cold": {
             "runengpu_context_us": runengpu_context_us,
+            "runengpu_pipeline_descriptor_us": runengpu_pipeline_descriptor_us,
             "direct_context_us": direct_context.setup_us,
             "direct_pipeline_us": direct_pipeline.cold_pipeline_us,
             "runengpu_first_submission_phases_us": runengpu_cold,
             "direct_first_submission_phases_us": direct_cold,
+        },
+        "warm_lifecycle": {
+            "runengpu_program_pipeline_identity_reused": true,
+            "direct_wgpu_pipeline_reused": true,
+            "per_sample_resources_recreated": true,
+            "per_sample_logical_graph_or_command_recording": true,
         },
         "runengpu": runengpu.to_json(),
         "direct_wgpu": direct.to_json(),
