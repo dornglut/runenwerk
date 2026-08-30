@@ -172,19 +172,17 @@ fn representative_world_sdf_product() -> RuntimeProductPayload {
 async fn next_preview_event(
     connection: &mut PreviewProcessConnection,
 ) -> Result<editor_preview::PreviewEventEnvelope> {
-    loop {
-        let event = tokio::time::timeout(EVENT_TIMEOUT, connection.next_event())
-            .await
-            .map_err(|_| anyhow!("timed out waiting for preview connection event"))?
-            .ok_or_else(|| anyhow!("preview connection event stream closed"))?;
-        match event {
-            PreviewConnectionEvent::Preview(event) => return Ok(event),
-            PreviewConnectionEvent::Closed => {
-                return Err(anyhow!("preview connection closed before expected event"));
-            }
-            PreviewConnectionEvent::Error(message) => {
-                return Err(anyhow!("preview connection failed: {message}"));
-            }
+    let event = tokio::time::timeout(EVENT_TIMEOUT, connection.next_event())
+        .await
+        .map_err(|_| anyhow!("timed out waiting for preview connection event"))?
+        .ok_or_else(|| anyhow!("preview connection event stream closed"))?;
+    match event {
+        PreviewConnectionEvent::Preview(event) => Ok(event),
+        PreviewConnectionEvent::Closed => {
+            Err(anyhow!("preview connection closed before expected event"))
+        }
+        PreviewConnectionEvent::Error(message) => {
+            Err(anyhow!("preview connection failed: {message}"))
         }
     }
 }
