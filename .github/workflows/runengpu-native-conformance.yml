@@ -87,6 +87,25 @@ jobs:
       - name: Cache Cargo data
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
 
+      - name: Run CPU graph preparation scale characterization
+        env:
+          RUST_BACKTRACE: '1'
+          RUNEN_GPU_PROOF_ARTIFACT_DIR: ${{ runner.temp }}/runengpu-proof-artifacts
+          RUNEN_GPU_PROOF_REVISION: ${{ steps.revision.outputs.expected_revision }}
+        run: |
+          set -euo pipefail
+          cargo +stable test -p engine --test gpu_graph_scale \
+            graph_preparation_scale_characterization_records_structural_and_timing_evidence \
+            --locked -- --ignored --nocapture
+          test -s "${RUNEN_GPU_PROOF_ARTIFACT_DIR}/graph-scale/report.json"
+
+      - name: Retain graph preparation scale report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: runengpu-graph-scale-${{ steps.revision.outputs.expected_revision }}
+          path: ${{ runner.temp }}/runengpu-proof-artifacts/graph-scale/report.json
+          if-no-files-found: error
+
       - name: Install Mesa Vulkan fallback and virtual X display
         run: |
           set -euo pipefail
