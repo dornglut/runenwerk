@@ -5,7 +5,7 @@ status: active
 owner: domain
 layer: domain
 canonical: true
-last_reviewed: 2026-08-29
+last_reviewed: 2026-08-30
 ---
 
 # Domain Layer Overview
@@ -40,7 +40,7 @@ Domain crates must not depend on:
 | Materials and textures | `domain/material_graph`, `domain/texture` | [`material-graph/README.md`](./material-graph/README.md), [`texture/README.md`](./texture/README.md) |
 | Procedural generation | `domain/procgen` | [`procgen/README.md`](./procgen/README.md) for generator documents, planning lifecycle, reservations, deterministic lowering, and product-output boundaries |
 | Drawing | `domain/drawing` | [`drawing/README.md`](./drawing/README.md) |
-| Spatial / world data | `domain/spatial`, `domain/world_ops`, `domain/world_sdf` | [`spatial/README.md`](./spatial/README.md), [`world-ops/README.md`](./world-ops/README.md), [`world-sdf/README.md`](./world-sdf/README.md) |
+| Spatial / world data | `domain/world_ops`, `domain/world_sdf` | Standalone [RunenSpatial](https://github.com/dornglut/runen-spatial) owns reusable spatial mechanics; Runenwerk retains [`world-ops/README.md`](./world-ops/README.md) and [`world-sdf/README.md`](./world-sdf/README.md) integration/domain policy. |
 | UI substrate and definitions | `domain/ui/*`, including `domain/ui/ui_definition` | [`ui/README.md`](./ui/README.md), [`ui/architecture.md`](./ui/architecture.md), [`ui/roadmap.md`](./ui/roadmap.md) |
 | Editor domains and definitions | `domain/editor/*`, including `domain/editor/editor_definition` | [`editor/README.md`](./editor/README.md) |
 
@@ -91,6 +91,7 @@ Start here when working in the domain layer:
 - Scheduler: [`scheduler/README.md`](./scheduler/README.md)
 - Geometry: [`geometry/README.md`](./geometry/README.md)
 - Asset/product contracts: [`../design/accepted/field-product-contracts-diagnostics-and-residency-design.md`](../design/accepted/field-product-contracts-diagnostics-and-residency-design.md)
+- Spatial mechanics: standalone [RunenSpatial](https://github.com/dornglut/runen-spatial); Runenwerk retains world-operation, SDF, and runtime integration policy.
 - Signed-field mathematics: standalone [RunenSDF](https://github.com/dornglut/runen-sdf); Runenwerk retains only product/world integration such as [`world-sdf/README.md`](./world-sdf/README.md).
 - Material graph: [`material-graph/README.md`](./material-graph/README.md)
 - Texture: [`texture/README.md`](./texture/README.md)
@@ -109,7 +110,6 @@ For workspace-wide ownership, see:
 The following domain areas still need deeper crate-level usage and architecture docs beyond the current landing pages:
 
 - `domain/scene`
-- `domain/spatial`
 - `domain/asset`
 - `domain/product`
 - `domain/world_ops`
