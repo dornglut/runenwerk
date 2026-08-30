@@ -170,6 +170,27 @@ jobs:
           path: ${{ runner.temp }}/runengpu-proof-artifacts/reaction-diffusion
           if-no-files-found: error
 
+      - name: Run bounded offscreen boids proof
+        env:
+          RUST_BACKTRACE: '1'
+          RUNEN_GPU_PROOF_ARTIFACT_DIR: ${{ runner.temp }}/runengpu-proof-artifacts
+        run: |
+          set -euo pipefail
+          cargo +stable test -p engine --test gpu_boids_native \
+            native_boids_proves_bounded_compute_to_instanced_render_sequence \
+            --locked -- --ignored --nocapture
+          root="${RUNEN_GPU_PROOF_ARTIFACT_DIR}/boids"
+          test -s "${root}/manifest.json"
+          test "$(find "${root}" -maxdepth 1 -type f -name 'frame_*.png' | wc -l)" -eq 8
+          find "${root}" -maxdepth 1 -type f -name 'frame_*.png' -exec test -s {} \;
+
+      - name: Retain bounded boids proof artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: runengpu-bounded-boids-${{ steps.revision.outputs.expected_revision }}
+          path: ${{ runner.temp }}/runengpu-proof-artifacts/boids
+          if-no-files-found: error
+
       - name: Run native G7A2 surface Present proof
         env:
           RUST_BACKTRACE: '1'
