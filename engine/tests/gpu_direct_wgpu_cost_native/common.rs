@@ -25,7 +25,9 @@ pub(crate) struct Measurements {
 impl Measurements {
     pub(crate) fn push(&mut self, phases: BTreeMap<String, f64>) {
         assert!(
-            phases.values().all(|value| value.is_finite() && *value >= 0.0),
+            phases
+                .values()
+                .all(|value| value.is_finite() && *value >= 0.0),
             "all timing samples must be finite and non-negative"
         );
         self.samples.push(phases);
@@ -100,19 +102,16 @@ pub(crate) fn ratio_summary(
                 .iter()
                 .filter_map(|sample| sample.get(*phase).copied())
                 .collect::<Vec<_>>();
-            if runengpu_values.len() != direct_values.len() || runengpu_values.is_empty() {
+            if runengpu_values.len() != direct_values.len()
+                || runengpu_values.is_empty()
+                || direct_values.iter().any(|value| *value == 0.0)
+            {
                 return None;
             }
             let values = runengpu_values
                 .iter()
                 .zip(&direct_values)
-                .map(|(runengpu_value, direct_value)| {
-                    if *direct_value == 0.0 {
-                        0.0
-                    } else {
-                        runengpu_value / direct_value
-                    }
-                })
+                .map(|(runengpu_value, direct_value)| runengpu_value / direct_value)
                 .collect::<Vec<_>>();
             Some(((*phase).to_owned(), summarize(&values)))
         })
@@ -121,7 +120,6 @@ pub(crate) fn ratio_summary(
 }
 
 pub(crate) struct DirectWgpuContext {
-    pub(crate) instance: Instance,
     pub(crate) device: Device,
     pub(crate) queue: Queue,
     pub(crate) adapter_info: wgpu::AdapterInfo,
@@ -152,14 +150,9 @@ impl DirectWgpuContext {
             "direct comparison must execute through Vulkan"
         );
         let timestamp_supported = adapter.features().contains(Features::TIMESTAMP_QUERY);
-        let required_features = if timestamp_supported {
-            Features::TIMESTAMP_QUERY
-        } else {
-            Features::empty()
-        };
         let (device, queue) = pollster::block_on(adapter.request_device(&DeviceDescriptor {
             label: Some(label),
-            required_features,
+            required_features: Features::empty(),
             required_limits: Limits::defaults(),
             experimental_features: ExperimentalFeatures::disabled(),
             memory_hints: MemoryHints::Performance,
@@ -168,7 +161,6 @@ impl DirectWgpuContext {
         .expect("direct-WGPU comparison device request must succeed");
         let setup_us = micros(start.elapsed());
         Self {
-            instance,
             device,
             queue,
             adapter_info,
@@ -181,9 +173,9 @@ impl DirectWgpuContext {
         json!({
             "backend": format!("{:?}", self.adapter_info.backend),
             "device_type": format!("{:?}", self.adapter_info.device_type),
-            "name": self.adapter_info.name,
-            "driver": self.adapter_info.driver,
-            "driver_info": self.adapter_info.driver_info,
+            "name": &self.adapter_info.name,
+            "driver": &self.adapter_info.driver,
+            "driver_info": &self.adapter_info.driver_info,
             "forced_fallback_adapter": true,
             "timestamp_query_supported": self.timestamp_supported,
             "timestamp_period_ns": self.queue.get_timestamp_period(),
