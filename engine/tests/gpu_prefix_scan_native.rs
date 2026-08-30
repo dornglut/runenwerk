@@ -238,7 +238,10 @@ fn author_scan(
     mode: ScanMode,
 ) -> (GpuWorkFragment, GpuReadbackId, GpuReadbackId) {
     let [level_0_blocks, level_1_blocks, level_2_blocks] = hierarchy_counts();
-    assert_eq!([level_0_blocks, level_1_blocks, level_2_blocks], [65, 2, 1]);
+    assert_eq!(
+        [level_0_blocks, level_1_blocks, level_2_blocks],
+        [65, 2, 1]
+    );
 
     let mut resources = GpuResourceScope::new();
     let input_values = vec![1_u32; usize::try_from(ELEMENT_COUNT).unwrap()];
@@ -300,13 +303,7 @@ fn author_scan(
         |work| {
             work.operation(
                 "prefix scan level 0",
-                scan_operation(
-                    &scan_0,
-                    &input,
-                    &output,
-                    &block_sums_0,
-                    level_0_blocks,
-                ),
+                scan_operation(&scan_0, &input, &output, &block_sums_0, level_0_blocks),
             )?;
             work.operation(
                 "prefix scan level 1",
@@ -339,12 +336,7 @@ fn author_scan(
             )?;
             work.operation(
                 "prefix scan apply level 0 offsets",
-                apply_offsets_operation(
-                    &apply_0,
-                    &output,
-                    &block_offsets_0,
-                    level_0_blocks,
-                ),
+                apply_offsets_operation(&apply_0, &output, &block_offsets_0, level_0_blocks),
             )?;
 
             let output_readback = readback_operation(&output);
