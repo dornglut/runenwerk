@@ -347,7 +347,7 @@ fn runengpu_sample(
 
     let submit_start = Instant::now();
     let submission = context.submit_prepared(prepared).unwrap();
-    let submit_call_us = micros(submit_start.elapsed());
+    let submit_encode_and_queue_us = micros(submit_start.elapsed());
 
     let completion_start = Instant::now();
     let bytes = progress_runengpu(context, &submission, readback_id);
@@ -363,7 +363,14 @@ fn runengpu_sample(
         "boundary_prepare_or_record".to_owned(),
         graph_prepare_us + backend_prepare_us,
     );
-    phases.insert("submit_call".to_owned(), submit_call_us);
+    phases.insert(
+        "submit_encode_and_queue".to_owned(),
+        submit_encode_and_queue_us,
+    );
+    phases.insert(
+        "boundary_prepare_record_submit".to_owned(),
+        graph_prepare_us + backend_prepare_us + submit_encode_and_queue_us,
+    );
     phases.insert("completion_readback".to_owned(), completion_readback_us);
     phases.insert("total".to_owned(), micros(total_start.elapsed()));
     phases
@@ -541,7 +548,11 @@ fn direct_sample(
         resource_setup_us + command_record_us,
     );
     phases.insert("command_record".to_owned(), command_record_us);
-    phases.insert("submit_call".to_owned(), submitted.submit_call_us);
+    phases.insert("queue_submit".to_owned(), submitted.submit_call_us);
+    phases.insert(
+        "boundary_prepare_record_submit".to_owned(),
+        resource_setup_us + command_record_us + submitted.submit_call_us,
+    );
     phases.insert(
         "completion_readback".to_owned(),
         submitted.completion_readback_us,
@@ -628,7 +639,7 @@ pub(crate) fn compare() -> Value {
                 "direct_context_us": direct_context.setup_us,
                 "direct_physical_pipeline_us": direct_pipeline.cold_pipeline_us,
                 "direct_first_submission_phases_us": direct_cold,
-                "note": "RunenGPU physical pipeline realization occurs during first backend_prepare; direct WGPU physical pipeline creation is reported before its first submission. Compare the normalized end-to-end boundary, not these component fields pairwise.",
+                "note": "RunenGPU physical pipeline realization occurs during first backend_prepare and submit_prepared also owns physical encoding/submission. Direct WGPU exposes resource creation, command recording, and queue submission separately. Compare normalized boundary/total fields, not unlike component fields pairwise.",
             },
         },
         "warm_lifecycle": {
@@ -639,12 +650,18 @@ pub(crate) fn compare() -> Value {
             "per_sample_resources_recreated": true,
             "per_sample_logical_graph_or_command_recording": true,
         },
+        "phase_comparability": {
+            "ratio_phases": ["boundary_prepare_record_submit", "completion_readback", "total"],
+            "runengpu_submit_component": "submit_prepared combines acceptance, physical encoding and queue submission and is not separable through the public boundary",
+            "direct_queue_submit_component": "queue.submit call only",
+            "queue_submit_ratio_status": "unavailable because the RunenGPU public submit boundary intentionally combines additional execution work",
+        },
         "runengpu": runengpu.to_json(),
         "direct_wgpu": direct.to_json(),
         "runengpu_over_direct_ratio": ratio_summary(
             &runengpu,
             &direct,
-            &["boundary_prepare_or_record", "submit_call", "completion_readback", "total"],
+            &["boundary_prepare_record_submit", "completion_readback", "total"],
         ),
         "timestamp_evidence": {
             "supported_by_direct_adapter": direct_context.timestamp_supported,
