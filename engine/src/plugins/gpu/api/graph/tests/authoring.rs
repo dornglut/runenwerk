@@ -457,7 +457,7 @@ fn duplicate_resource_declaration_is_transactional_and_authoring_can_continue() 
 
 #[test]
 fn canonical_compute_builder_accepts_only_execution_complete_operation_state() {
-    let operation = compute_operation_with_dispatch(GpuDispatchSize::new(4, 1, 1).unwrap());
+    let operation = compute_operation_with_dispatch(GpuDispatchSize::new(4, 1, 1));
     let GpuWorkOperation::Compute(compute) = operation.clone() else {
         panic!("test fixture must create compute work");
     };

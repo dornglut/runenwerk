@@ -219,7 +219,7 @@ fn binding_compute(buffer: &GpuBufferHandle) -> GpuComputeOperation {
     )
     .unwrap();
     let bindings = GpuRuntimeBindingSet::new(pipeline.layout().clone(), [binding]).unwrap();
-    let dispatch = GpuDispatchIntent::direct(GpuDispatchSize::new(1, 1, 1).unwrap());
+    let dispatch = GpuDispatchIntent::direct(GpuDispatchSize::new(1, 1, 1));
     GpuComputeOperation::new(pipeline, bindings, dispatch).unwrap()
 }
 

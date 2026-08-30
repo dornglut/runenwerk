@@ -188,8 +188,8 @@ fn clear_values_keep_color_generic_depth_normalized_and_signed_zero_canonical() 
 
 #[test]
 fn dispatch_draw_and_indirect_access_are_checked() {
-    assert_eq!(GpuDispatchSize::new(0, 1, 1).unwrap().as_array(), [0, 1, 1]);
-    assert_eq!(GpuDispatchSize::new(2, 3, 4).unwrap().as_array(), [2, 3, 4]);
+    assert_eq!(GpuDispatchSize::new(0, 1, 1).as_array(), [0, 1, 1]);
+    assert_eq!(GpuDispatchSize::new(2, 3, 4).as_array(), [2, 3, 4]);
     assert!(GpuDrawRange::new(0, 0).is_err());
     let mut allocator = allocator();
     let arguments = buffer(&mut allocator, "arguments", 64, [GpuBufferUsage::Indirect]);

@@ -142,7 +142,7 @@ pub(super) fn depth_texture(
 }
 
 pub(super) fn compute_operation() -> GpuWorkOperation {
-    compute_operation_with_dispatch(GpuDispatchSize::new(1, 1, 1).unwrap())
+    compute_operation_with_dispatch(GpuDispatchSize::new(1, 1, 1))
 }
 
 pub(super) fn compute_operation_with_dispatch(dispatch: GpuDispatchSize) -> GpuWorkOperation {

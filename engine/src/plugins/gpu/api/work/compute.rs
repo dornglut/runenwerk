@@ -11,8 +11,12 @@ pub struct GpuDispatchSize {
 }
 
 impl GpuDispatchSize {
-    pub const fn new(x: u32, y: u32, z: u32) -> Result<Self, GpuWorkOperationError> {
-        Ok(Self { x, y, z })
+    /// Constructs an exact logical direct-dispatch size.
+    ///
+    /// Zero dimensions are valid logical no-op dimensions. Device-specific maximums are checked
+    /// later against the admitted context, so construction itself has no failure condition.
+    pub const fn new(x: u32, y: u32, z: u32) -> Self {
+        Self { x, y, z }
     }
 
     pub const fn x(self) -> u32 {
