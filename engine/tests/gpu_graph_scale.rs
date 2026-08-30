@@ -55,12 +55,15 @@ fn label(value: impl AsRef<str>) -> GpuResourceLabel {
     GpuResourceLabel::new(value.as_ref()).unwrap()
 }
 
-fn scale_buffer(resources: &mut GpuResourceScope, topology: Topology, index: usize) -> GpuBufferHandle {
+fn scale_buffer(
+    resources: &mut GpuResourceScope,
+    topology: Topology,
+    index: usize,
+) -> GpuBufferHandle {
     let usages = match topology {
-        Topology::SerialCopyChain => vec![
-            GpuBufferUsage::CopySource,
-            GpuBufferUsage::CopyDestination,
-        ],
+        Topology::SerialCopyChain => {
+            vec![GpuBufferUsage::CopySource, GpuBufferUsage::CopyDestination]
+        }
         Topology::DisjointClears => vec![GpuBufferUsage::CopyDestination],
     };
     resources
@@ -92,8 +95,10 @@ fn author_case(topology: Topology, node_count: usize) -> GpuWorkFragment {
                 Topology::SerialCopyChain => {
                     work.operation(
                         "clear chain source",
-                        GpuClearOperation::buffer_zero(GpuBufferRegion::whole(&buffers[0]).unwrap())
-                            .unwrap(),
+                        GpuClearOperation::buffer_zero(
+                            GpuBufferRegion::whole(&buffers[0]).unwrap(),
+                        )
+                        .unwrap(),
                     )?;
                     for index in 0..(node_count - 1) {
                         work.operation(
@@ -122,9 +127,16 @@ fn author_case(topology: Topology, node_count: usize) -> GpuWorkFragment {
     .unwrap()
 }
 
-fn prepare_case(topology: Topology, node_count: usize, fragment: GpuWorkFragment) -> GpuPreparedWorkGraph {
+fn prepare_case(
+    topology: Topology,
+    node_count: usize,
+    fragment: GpuWorkFragment,
+) -> GpuPreparedWorkGraph {
     GpuPreparedWorkGraph::prepare(
-        label(format!("graph scale prepared {} {node_count}", topology.key())),
+        label(format!(
+            "graph scale prepared {} {node_count}",
+            topology.key()
+        )),
         [fragment],
     )
     .unwrap()
@@ -138,7 +150,10 @@ fn assert_structure(
     prepared: &GpuPreparedWorkGraph,
 ) {
     assert_eq!(authored_resource_count, node_count);
-    assert_eq!(authored_access_count, topology.expected_access_count(node_count));
+    assert_eq!(
+        authored_access_count,
+        topology.expected_access_count(node_count)
+    );
     assert_eq!(prepared.nodes().len(), node_count);
     assert_eq!(prepared.topological_order().len(), node_count);
     assert_eq!(
@@ -155,7 +170,11 @@ fn summarize(samples: &[u64]) -> (u64, u64, u64) {
     assert!(!samples.is_empty());
     let mut ordered = samples.to_vec();
     ordered.sort_unstable();
-    (ordered[0], ordered[ordered.len() / 2], *ordered.last().unwrap())
+    (
+        ordered[0],
+        ordered[ordered.len() / 2],
+        *ordered.last().unwrap(),
+    )
 }
 
 fn measure_case(topology: Topology, node_count: usize) -> CaseEvidence {
@@ -172,7 +191,13 @@ fn measure_case(topology: Topology, node_count: usize) -> CaseEvidence {
     for _ in 0..WARMUP_SAMPLES {
         let candidate = fragment.clone();
         let prepared = prepare_case(topology, node_count, candidate);
-        assert_structure(topology, node_count, resource_count, access_count, &prepared);
+        assert_structure(
+            topology,
+            node_count,
+            resource_count,
+            access_count,
+            &prepared,
+        );
     }
 
     let mut samples = Vec::with_capacity(MEASURED_SAMPLES);
@@ -184,7 +209,13 @@ fn measure_case(topology: Topology, node_count: usize) -> CaseEvidence {
         let started = Instant::now();
         let prepared = prepare_case(topology, node_count, candidate);
         let elapsed_ns = nanos(started);
-        assert_structure(topology, node_count, resource_count, access_count, &prepared);
+        assert_structure(
+            topology,
+            node_count,
+            resource_count,
+            access_count,
+            &prepared,
+        );
         dependency_count = Some(prepared.dependencies().len());
         samples.push(elapsed_ns);
     }
