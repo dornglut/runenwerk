@@ -20,9 +20,9 @@ use runen_net::{
     },
 };
 use runen_net_quic::{
-    ClientEndpoint, ClientTrust, Connection, ConnectionEvent, EndpointConfig, FlowRejectionReason,
-    FlowTerminationCause, FlowTerminationOrigin, InboundFlowConfig, OutboundFlowConfig,
-    ProfileConfig, SemanticRole, SubmitOutcome,
+    ClientEndpoint, ClientTrust, Connection, ConnectionErrorKind, ConnectionEvent, EndpointConfig,
+    FlowRejectionReason, FlowTerminationCause, FlowTerminationOrigin, InboundFlowConfig,
+    OutboundFlowConfig, ProfileConfig, SemanticRole, SubmitOutcome,
 };
 use std::{
     future::poll_fn,
@@ -324,11 +324,34 @@ async fn run_connection(
         }
     }
 
+    await_server_transport_close(&mut connection, &mut host).await?;
+
     let teardown = connection.teardown(&mut host.negotiation, &mut host.delivery);
     if let Some(error) = teardown.cleanup_error() {
         return Err(anyhow!("runtime-preview client cleanup failed: {error}"));
     }
     Ok(())
+}
+
+async fn await_server_transport_close(
+    connection: &mut Connection,
+    host: &mut HostState,
+) -> Result<()> {
+    poll_fn(
+        |cx| match connection.poll(cx, &mut host.negotiation, &mut host.delivery) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(Err(error)) if error.kind() == ConnectionErrorKind::EstablishedTransport => {
+                Poll::Ready(Ok(()))
+            }
+            Poll::Ready(Err(error)) => Poll::Ready(Err(anyhow!(
+                "runtime-preview connection failed while awaiting server shutdown: {error}"
+            ))),
+            Poll::Ready(Ok(event)) => Poll::Ready(Err(anyhow!(
+                "runtime-preview produced an unexpected event after normal flow shutdown: {event:?}"
+            ))),
+        },
+    )
+    .await
 }
 
 fn finish_outbound(
