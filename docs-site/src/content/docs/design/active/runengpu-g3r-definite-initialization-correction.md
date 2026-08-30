@@ -5,10 +5,11 @@ status: active
 owner: gpu
 layer: framework/gpu
 canonical: true
-last_reviewed: 2026-08-15
+last_reviewed: 2026-08-30
 related_docs:
   - ./runengpu-g3-access-work-graph-design.md
   - ./runengpu-architecture-design.md
+  - ./runengpu-post-g5c-hardening-design.md
   - ../../workspace/planning/roadmap.md
   - ../../adr/accepted/0015-separate-gpu-execution-from-rendering.md
 ---
@@ -23,6 +24,11 @@ This document is a narrow semantic correction to the accepted
 It supersedes that design where initialization simulation treats a coarse access envelope as exact
 initialized-content truth. G3 access, hazard, identity, composition, dependency, deterministic
 preparation, and phase ownership otherwise remain unchanged.
+
+The later accepted G5R correction in
+[RunenGPU Post-G5C Hardening Design](runengpu-post-g5c-hardening-design.md) supersedes exactly one
+G3R descriptor-entry rule: prepared descriptor metadata requests initial content but does not itself
+establish initialized coverage. The G3R requirement/effect separation remains authoritative.
 
 The corrected model has three distinct facts:
 
@@ -191,15 +197,20 @@ initialization requirement/effect coverage.
 
 ## Corrected requirement and effect rules
 
-Descriptor and graph-entry evidence remains accepted state:
+Current descriptor and graph-entry evidence is:
 
 ```text
 Zeroed descriptor        -> complete descriptor-defined initialized coverage
-Prepared descriptor      -> checked prepared coverage
+Prepared descriptor      -> declarative initial-content request + retained source material
+                             metadata alone establishes no initialized coverage
+                             completed canonical materialization establishes coverage
 Uninitialized descriptor -> no initialized coverage
 GpuWorkResourceInput     -> exact explicit entry coverage
 validated import         -> exact producer-export coverage
 ```
+
+The prepared-descriptor rule above is the accepted G5R supersession. It changes only descriptor-entry
+materialization; it does not collapse access, requirement, and definite-effect truth back together.
 
 Current operation semantics are classified as follows:
 
