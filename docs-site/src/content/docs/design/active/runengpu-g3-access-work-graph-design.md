@@ -5,10 +5,12 @@ status: active
 owner: gpu
 layer: framework/gpu
 canonical: true
-last_reviewed: 2026-07-28
+last_reviewed: 2026-08-30
 related_docs:
   - ../../adr/accepted/0015-separate-gpu-execution-from-rendering.md
   - ./runengpu-architecture-design.md
+  - ./runengpu-g3r-definite-initialization-correction.md
+  - ./runengpu-post-g5c-hardening-design.md
   - ./runenrender-internal-decomposition-execution-plan.md
   - ../../reports/investigations/runengpu-g3-access-work-graph-investigation.md
   - ../../reports/closeouts/pt-runengpu-g3-implementation-closeout.md
@@ -20,28 +22,27 @@ related_docs:
 
 ## Status
 
-```text
-G2 logical resources and prepared data     accepted
-G3 decision phase                          accepted at 5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8
-G3 Rust implementation                    candidate corrected after independent review
-G4-G7                                      deferred and not implemented by G3
-external runen-gpu package                 not authorized
-```
+This document owns the durable G3 access, hazard, causality, immutable-work, and deterministic
+correctness-preparation contract. G3 planning was accepted at
+`5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8`; the G3 Rust implementation was accepted at
+`39d6fe65a334502bdfba0b1a2ce3b365099fcf28`.
 
-This document binds G3 architecture. The implementation specification binds exact
-modules, types, migration, deletion, tests, validation, and stop conditions. Issue
-`#177` implemented the bounded slice from accepted base
-`1c645b2bbfcece44dd6ae151cc97559793afa2c2`. The first independent exact-head review
-of `38abac6bd234d9db3a4544aedbf2dba149538e36` required corrections. Corrected code
-candidate `905c506e33202405d1bea8c160a05ac92c326c43` remains open, draft, and unmerged in
-PR `#181` pending fresh exact-head validation and independent review. No G3 merge SHA
-is asserted before merge.
+Later accepted corrections refine initialization semantics without replacing G3's access/hazard or
+dependency authority:
+
+- G3R separates access envelopes from exact initialization requirements and definite effects;
+- G5R makes prepared descriptor data an initial-content request whose metadata alone establishes no
+  initialized coverage.
+
+Current implementation/frontier state belongs to RunenGPU tracker #167 and the roadmap, not this
+phase design. Phase-local references below describe the G3 boundary and its ownership, not the live
+repository frontier.
 
 ## Mission
 
 G3 answers:
 
-> Given immutable GPU work contributed by independent consumers, which precise resource regions are read or written, which content is initialized, which nodes depend on which others, and is the resulting work valid and deterministic before a backend exists?
+> Given immutable GPU work contributed by independent consumers, which precise resource regions may be read or written, which exact content requirements and operation-guaranteed effects apply, which nodes depend on which others, and is the resulting work valid and deterministic before a backend exists?
 
 G3 does not create a GPU context, realize WGPU objects, admit shaders or pipelines, encode commands, submit work, preserve execution state, read back data, retire resources, or present surfaces.
 
@@ -157,7 +158,7 @@ store
     Discard
 ```
 
-The derived access records only `Load` versus `Clear`, because the clear value does not change hazards or initialization coverage. `Load` reads prior content. `Clear(value)` establishes complete initialized attachment coverage with an exact canonical value. `Store` preserves post-node coverage. `Discard` removes later readable coverage.
+The derived access records only `Load` versus `Clear`, because the clear value does not change hazards or initialization coverage. `Load` reads prior content. `Clear(value)` is operation semantics that can establish complete initialized attachment coverage under the corrected initialization authority. `Store` preserves post-node coverage. `Discard` removes later readable coverage.
 
 The accepted G2 format vocabulary currently has color formats and `Depth32Float`, but no stencil format. G3 therefore defines no stencil load, clear value, access mode, or standalone stencil clear authority.
 
@@ -169,7 +170,8 @@ Timestamp query use has a checked query-index range.
 
 ```text
 WriteTimestamp
-    writes and initializes exact query indices
+    write-capable hazard/access evidence for exact query indices
+    definite initialization comes only from checked operation-owned timestamp semantics
 
 ResolveSource
     reads initialized query indices through a typed query-set resolve operation
@@ -181,31 +183,41 @@ Samplers are immutable input evidence and do not create data hazards by themselv
 
 ## Initialization flow
 
-Graph-time initialization is region-aware:
+Initialization has three distinct authorities:
 
 ```text
-Zeroed descriptor                 -> complete initialized coverage
-Prepared descriptor               -> checked prepared coverage
-Uninitialized descriptor          -> no initialized coverage
-pure write                        -> initialize written coverage
-buffer copy destination           -> initialize destination coverage
-standalone buffer zero            -> initialize exact destination bytes
-query timestamp write             -> initialize written query indices
-query resolve destination         -> initialize exact destination buffer bytes
-attachment Load                   -> require prior attachment coverage
-attachment Clear(value)           -> establish attachment coverage
-attachment write/draw             -> preserve/write attachment coverage
-multisample resolve destination   -> establish destination coverage
-attachment Store                  -> preserve source attachment coverage
-attachment Discard                -> remove source attachment coverage
-read-write                        -> require prior coverage, then preserve/write it
+resource access
+    may-read / may-write usage and hazard envelope
+
+initialization requirement
+    exact content that must already be established
+
+definite initialization effect
+    exact content a checked operation guarantees afterward
 ```
 
-Query sets begin with no initialized indices unless explicit graph-entry evidence exists. `ResolveSource` requires initialized coverage established by accepted timestamp writes or explicit input evidence.
+G3 owns the access envelope and consumes initialization truth during deterministic correctness
+preparation. The accepted
+[RunenGPU G3R Initialization Semantics Correction](runengpu-g3r-definite-initialization-correction.md)
+owns exact requirement/effect semantics. The accepted G5R correction in
+[RunenGPU Post-G5C Hardening Design](runengpu-post-g5c-hardening-design.md) owns the later
+materialization rule that prepared descriptor metadata requests initial content but establishes no
+initialized coverage until canonical materialization completes.
 
-Imported or retained prior-epoch content enters only through explicit `GpuWorkResourceInput` evidence. Lifetime, labels, or the presence of a current runtime allocation never imply initialized content.
+Consequently, a generic shader write remains write-capable access for hazard analysis but does not by
+itself establish definite initialized coverage. Access names are never converted into content effects
+merely because they imply a write.
 
-G3 validates graph-time evidence. G5 later proves whether execution actually uploaded, preserved, synchronized, completed, resolved, copied, or retired backend state.
+Query sets begin with no initialized indices unless explicit graph-entry evidence exists. A query
+resolve requires initialized source coverage established by checked timestamp operation semantics or
+explicit input/import evidence.
+
+Imported or retained prior-epoch content enters only through explicit `GpuWorkResourceInput` or
+validated import evidence. Lifetime, labels, prepared descriptor metadata, or the presence of a
+runtime allocation never imply initialized content.
+
+Detailed descriptor, copy, attachment, query, upload/materialization, compact buffer-coverage, and
+retained-content rules remain in their focused correction owners rather than being duplicated here.
 
 ## Overlap and hazards
 
@@ -297,7 +309,7 @@ Present
 
 G3 nodes are pre-admission work intent. They include operation kind, exact access, capability requirements, backend-neutral operation shape, execution preference, label, and provenance.
 
-Current render shader/pipeline payload remains in a temporary render-owned sidecar keyed by prepared node identity. G4 replaces this seam with admitted generic shader/pipeline/interface authority. The sidecar cannot alter G3 hazard truth.
+At the G3 phase boundary, render shader/pipeline payload could remain in a temporary render-owned sidecar keyed by prepared node identity. G4 owns replacement of that seam with admitted generic shader/pipeline/interface authority. The sidecar cannot alter G3 hazard truth.
 
 An empty render draw list is valid only when an attachment uses `Clear(value)` or render-side query writes make the pass meaningful. `Store` alone preserves content and is not work.
 
@@ -333,7 +345,7 @@ GpuPreparedWorkNodeId {
 
 Node identities are process-local typed references and diagnostics. They are not stable persistence, replay, network, wire, ABI, or cache values and do not reuse `GpuWorkResourceId`.
 
-The existing `RenderFlowId`-derived resource-owner bridge remains exactly one crate-private adapter seam during G3. G4 context/work-scope authority must delete it. G3 does not introduce a global mutable context or public owner-scope constructor.
+The G3 phase boundary admitted one crate-private adapter seam deriving temporary resource ownership from `RenderFlowId`; the owning later context/work-scope cutover deletes that migration seam. G3 itself does not introduce a global mutable context or public owner-scope constructor.
 
 ## Imports and exports
 
@@ -363,27 +375,27 @@ Cross-fragment explicit node edges are deferred. Existing render passes needing 
 
 ## Prepared graph
 
-`GpuPreparedWorkGraph::prepare(...)` is the single advanced authority. There is no public mutable graph and no reduced validator.
+`GpuPreparedWorkGraph::prepare(...)` is the single advanced correctness-preparation authority. There is no public mutable graph and no reduced validator.
 
 Preparation:
 
 1. accepts immutable fragments;
 2. validates identities, descriptors, usages, ranges, view parents, attachments, clear values, queries, query resolves, and imports/exports;
 3. normalizes operation-derived and caller-declared access;
-4. derives initial coverage and merged capability requirements;
+4. derives exact initialization requirements/effects and graph-entry coverage through the current G3R/G5R authority, plus merged capability requirements;
 5. infers RAW/WAR/WAW edges retaining exact typed overlap regions;
 6. adds non-redundant explicit non-data edges;
 7. rejects missing cross-fragment causality, ambiguity, conflict, redundant explicit order, and cycles;
 8. produces deterministic prepared IDs and topological order;
 9. publishes normalized access, edges with typed causes and regions, coverage summaries, requirements, exports, diagnostics, and provenance.
 
-Independent ready nodes are ordered deterministically for inspection without promising concurrent or parallel execution.
+Independent ready nodes are ordered deterministically for inspection. That deterministic prepared order is not a permanent physical scheduling authority and does not promise concurrent or parallel execution; downstream execution planning may choose any legal realization that preserves the prepared correctness constraints.
 
-Preparation performs no context admission, backend realization, command encoding, submission, runtime retirement check, or surface action. G5 ordinary submission must invoke the same preparation authority internally; G4/G5 reject stale-generation or retired backend values at admission/submission time.
+Preparation performs no context admission, backend realization, physical execution planning, command encoding, submission, runtime retirement check, or surface action. Ordinary submission must invoke the same correctness-preparation authority internally; later admission/submission stages reject stale-generation or retired backend values at their owning boundaries.
 
 ## Render and GPU-primitive adapter
 
-One temporary adapter is added:
+One temporary adapter is added at the G3 migration boundary:
 
 ```text
 engine/src/plugins/render/adapters/gpu_work.rs
@@ -442,12 +454,10 @@ G3 stops before:
 ## Acceptance
 
 G3 planning was accepted through issue `#174` and PR `#175` at merge
-`5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8`. Issue `#177` then reverified the
-exact accepted implementation base, authorized one bounded Rust cutover, and
-produced draft PR `#181`.
+`5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8`. The bounded G3 Rust cutover was subsequently
+accepted at `39d6fe65a334502bdfba0b1a2ce3b365099fcf28` after exact-head review and validation.
 
-The branch implementation is an implementation candidate corrected after independent
-review. It is not accepted or review-complete until the corrected exact head passes
-required workflows and a new independent review, and it is not repository-complete
-until merged. G4-G7, external extraction, and a new package remain separately
-authorized future work.
+Later accepted G3R/G5R corrections supersede only their explicit initialization/materialization rules;
+they do not replace G3 access, overlap, hazard, causality, dependency, or deterministic preparation
+authority. Current RunenGPU work state and later-phase activation belong to tracker #167 and the
+roadmap rather than this historical acceptance section.
