@@ -192,7 +192,11 @@ fn validate_runengpu_frames(frames: &[GpuReadbackBytes], envelope: retained::Env
             validate_frame_bytes(frame.as_bytes(), envelope)
         })
         .collect::<Vec<_>>();
-    assert_ne!(hashes.first(), hashes.last(), "retained sequence must evolve");
+    assert_ne!(
+        hashes.first(),
+        hashes.last(),
+        "retained sequence must evolve"
+    );
 }
 
 fn validate_direct_frames(frames: &[Vec<u8>], envelope: retained::Envelope) {
@@ -377,11 +381,7 @@ fn readback_staging_bytes(envelope: retained::Envelope) -> u64 {
     u64::from(physical_row) * u64::from(envelope.height - 1) + u64::from(logical_row)
 }
 
-fn storage_buffer(
-    context: &DirectWgpuContext,
-    label: &str,
-    size: u64,
-) -> wgpu::Buffer {
+fn storage_buffer(context: &DirectWgpuContext, label: &str, size: u64) -> wgpu::Buffer {
     context.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some(label),
         size,
@@ -442,72 +442,80 @@ fn direct_resources(
     let target_view = target.create_view(&wgpu::TextureViewDescriptor::default());
 
     let compute_layout = pipelines.compute.get_bind_group_layout(0);
-    let compute_ab = context.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("G6-P01 reaction compute A to B"),
-        layout: &compute_layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: state_a.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: state_b.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: params.as_entire_binding(),
-            },
-        ],
-    });
-    let compute_ba = context.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("G6-P01 reaction compute B to A"),
-        layout: &compute_layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: state_b.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: state_a.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: params.as_entire_binding(),
-            },
-        ],
-    });
+    let compute_ab = context
+        .device
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("G6-P01 reaction compute A to B"),
+            layout: &compute_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: state_a.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: state_b.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: params.as_entire_binding(),
+                },
+            ],
+        });
+    let compute_ba = context
+        .device
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("G6-P01 reaction compute B to A"),
+            layout: &compute_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: state_b.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: state_a.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: params.as_entire_binding(),
+                },
+            ],
+        });
 
     let render_layout = pipelines.render.get_bind_group_layout(0);
-    let render_a = context.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("G6-P01 reaction render state A"),
-        layout: &render_layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: state_a.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: params.as_entire_binding(),
-            },
-        ],
-    });
-    let render_b = context.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("G6-P01 reaction render state B"),
-        layout: &render_layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: state_b.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: params.as_entire_binding(),
-            },
-        ],
-    });
+    let render_a = context
+        .device
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("G6-P01 reaction render state A"),
+            layout: &render_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: state_a.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: params.as_entire_binding(),
+                },
+            ],
+        });
+    let render_b = context
+        .device
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("G6-P01 reaction render state B"),
+            layout: &render_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: state_b.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: params.as_entire_binding(),
+                },
+            ],
+        });
 
     let readback_size = readback_staging_bytes(envelope);
     let readbacks = (0..envelope.frames)
@@ -699,10 +707,14 @@ fn direct_envelope_sample(
             resource_setup_us + command_record_us,
         ),
         ("command_record".to_owned(), command_record_us),
+        (
+            "readback_registration".to_owned(),
+            submitted.readback_registration_us,
+        ),
         ("queue_submit".to_owned(), submitted.submit_call_us),
         (
             "boundary_prepare_record_submit".to_owned(),
-            resource_setup_us + command_record_us + submitted.submit_call_us,
+            resource_setup_us + command_record_us + submitted.boundary_submit_us(),
         ),
         ("readback_row_unpack".to_owned(), row_unpack_us),
         ("completion_readback".to_owned(), completion_readback_us),
@@ -725,7 +737,8 @@ fn direct_sample(
 fn envelope_json(envelope: retained::Envelope) -> Value {
     let state = state_bytes(envelope);
     let params = params_bytes();
-    let target = u64::from(envelope.width) * u64::from(envelope.height) * u64::from(BYTES_PER_PIXEL);
+    let target =
+        u64::from(envelope.width) * u64::from(envelope.height) * u64::from(BYTES_PER_PIXEL);
     let readback = readback_staging_bytes(envelope);
     json!({
         "name": envelope.name,
@@ -826,7 +839,7 @@ pub(crate) fn compare() -> Value {
                 "direct_context_us": direct_context.setup_us,
                 "direct_physical_pipeline_us": direct_pipelines.cold_pipeline_us,
                 "direct_first_workload_phases_us": direct_cold,
-                "note": "RunenGPU physical pipeline and binding realization occurs inside backend_prepare and submit_prepared also owns physical encoding/submission. Direct WGPU exposes resource/bind-group setup, command recording, and queue submission separately. Compare normalized boundary/total fields, not unlike component fields pairwise.",
+                "note": "RunenGPU physical pipeline and binding realization occurs inside backend_prepare and submit_prepared also owns physical encoding/submission. Direct WGPU exposes resource/bind-group setup, command recording, readback callback registration, and queue submission separately. Compare normalized boundary/total fields, not unlike component fields pairwise.",
             },
         },
         "warm_lifecycle": {
@@ -835,12 +848,13 @@ pub(crate) fn compare() -> Value {
             "runengpu_context_and_physical_pipeline_cache_reused": true,
             "direct_wgpu_pipeline_reused": true,
             "per_sample_resources_recreated": true,
-            "ping_pong_resources_persist_across_all_frames_inside_each envelope": true,
+            "ping_pong_resources_persist_across_all_frames_inside_each_envelope": true,
             "per_sample_two_envelope_submissions": true,
         },
         "phase_comparability": {
             "ratio_phases": ["boundary_prepare_record_submit", "completion_readback", "total"],
-            "runengpu_submit_component": "submit_prepared combines acceptance, physical encoding and queue submission and is not separable through the public boundary",
+            "runengpu_submit_component": "submit_prepared combines acceptance, physical encoding, readback callback registration, and queue submission and is not separable through the public boundary",
+            "direct_readback_registration_component": "map_buffer_on_submit plus submitted-work-done callback registration",
             "direct_queue_submit_component": "queue.submit call only",
             "direct_completion_component": "submission completion + eight map callbacks per envelope + mapped host-byte copies + row normalization",
             "queue_submit_ratio_status": "unavailable because the RunenGPU public submit boundary intentionally combines additional execution work",
