@@ -54,6 +54,10 @@ impl Default for WorldBuildJobRuntimeResource {
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "ECS resources are injected independently; quantization policy must remain separate from partition topology"
+)]
 pub fn dispatch_world_build_jobs_system(
     mut chunks: ResMut<WorldChunkRuntimeMapResource>,
     mut queue: ResMut<BuildQueueResource>,
@@ -178,9 +182,9 @@ fn build_priority_score(chunk_id: ChunkId, class: BuildQueueClass, gameplay_lock
         BuildQueueClass::Background => 100_i64,
     };
     let lock_bonus = if gameplay_locked { 500 } else { 0 };
-    let coord_hash = (chunk_id.coord.x as i64).wrapping_mul(73856093)
-        ^ (chunk_id.coord.y as i64).wrapping_mul(19349663)
-        ^ (chunk_id.coord.z as i64).wrapping_mul(83492791);
+    let coord_hash = chunk_id.coord.x.wrapping_mul(73856093)
+        ^ chunk_id.coord.y.wrapping_mul(19349663)
+        ^ chunk_id.coord.z.wrapping_mul(83492791);
     base.saturating_add(lock_bonus)
         .saturating_add(coord_hash.abs() % 97)
 }
