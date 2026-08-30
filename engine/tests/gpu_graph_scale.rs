@@ -127,19 +127,8 @@ fn author_case(topology: Topology, node_count: usize) -> GpuWorkFragment {
     .unwrap()
 }
 
-fn prepare_case(
-    topology: Topology,
-    node_count: usize,
-    fragment: GpuWorkFragment,
-) -> GpuPreparedWorkGraph {
-    GpuPreparedWorkGraph::prepare(
-        label(format!(
-            "graph scale prepared {} {node_count}",
-            topology.key()
-        )),
-        [fragment],
-    )
-    .unwrap()
+fn prepare_case(label: GpuResourceLabel, fragment: GpuWorkFragment) -> GpuPreparedWorkGraph {
+    GpuPreparedWorkGraph::prepare(label, [fragment]).unwrap()
 }
 
 fn assert_structure(
@@ -181,6 +170,10 @@ fn measure_case(topology: Topology, node_count: usize) -> CaseEvidence {
     let author_started = Instant::now();
     let fragment = author_case(topology, node_count);
     let author_ns = nanos(author_started);
+    let prepared_label = label(format!(
+        "graph scale prepared {} {node_count}",
+        topology.key()
+    ));
     let resource_count = fragment.resources().len();
     let access_count = fragment
         .nodes()
@@ -190,7 +183,8 @@ fn measure_case(topology: Topology, node_count: usize) -> CaseEvidence {
 
     for _ in 0..WARMUP_SAMPLES {
         let candidate = fragment.clone();
-        let prepared = prepare_case(topology, node_count, candidate);
+        let graph_label = prepared_label.clone();
+        let prepared = prepare_case(graph_label, candidate);
         assert_structure(
             topology,
             node_count,
@@ -202,12 +196,15 @@ fn measure_case(topology: Topology, node_count: usize) -> CaseEvidence {
 
     let mut samples = Vec::with_capacity(MEASURED_SAMPLES);
     let mut dependency_count = None;
+    let mut topological_order_count = None;
     for _ in 0..MEASURED_SAMPLES {
-        // Clone deliberately occurs outside the measured interval. The retained metric is the
-        // canonical graph preparation/validation authority, not immutable-fragment duplication.
+        // Immutable input duplication and graph-label duplication deliberately occur outside the
+        // measured interval. The retained metric is only the canonical graph
+        // preparation/validation authority.
         let candidate = fragment.clone();
+        let graph_label = prepared_label.clone();
         let started = Instant::now();
-        let prepared = prepare_case(topology, node_count, candidate);
+        let prepared = prepare_case(graph_label, candidate);
         let elapsed_ns = nanos(started);
         assert_structure(
             topology,
@@ -217,6 +214,7 @@ fn measure_case(topology: Topology, node_count: usize) -> CaseEvidence {
             &prepared,
         );
         dependency_count = Some(prepared.dependencies().len());
+        topological_order_count = Some(prepared.topological_order().len());
         samples.push(elapsed_ns);
     }
 
@@ -232,7 +230,7 @@ fn measure_case(topology: Topology, node_count: usize) -> CaseEvidence {
             "resource_count": resource_count,
             "access_count": access_count,
             "dependency_count": dependency_count.unwrap(),
-            "topological_order_count": node_count,
+            "topological_order_count": topological_order_count.unwrap(),
             "authoring_ns": author_ns,
             "warmup_samples": WARMUP_SAMPLES,
             "measured_samples": MEASURED_SAMPLES,
@@ -292,7 +290,7 @@ fn graph_preparation_scale_characterization_records_structural_and_timing_eviden
         "schema_version": REPORT_SCHEMA_VERSION,
         "requirement": "G6-S01",
         "subject": "canonical RunenGPU work-graph preparation scaling",
-        "git_revision": std::env::var("GITHUB_SHA").ok(),
+        "git_revision": std::env::var("RUNEN_GPU_PROOF_REVISION").ok(),
         "runner": {
             "os": std::env::var("RUNNER_OS").ok(),
             "arch": std::env::var("RUNNER_ARCH").ok(),
@@ -312,6 +310,7 @@ fn graph_preparation_scale_characterization_records_structural_and_timing_eviden
         "measurement_boundary": {
             "timed": "GpuPreparedWorkGraph::prepare including its canonical validation work",
             "fragment_clone": "excluded from timed interval",
+            "graph_label_clone": "excluded from timed interval",
             "separate_validation_timing_available": false,
             "separate_validation_timing_reason": "the accepted public path performs graph validation inside GpuPreparedWorkGraph::prepare and exposes no standalone validation phase",
             "allocation_or_memory_high_water_available": false,
