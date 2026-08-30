@@ -132,7 +132,7 @@ jobs:
         run: |
           set -euo pipefail
           cargo +stable test -p engine --test gpu_direct_wgpu_cost_native \
-            --locked -- --ignored --nocapture
+            --locked -- --ignored --nocapture --test-threads=1
 
       - name: Run retained G5-C01 prefix scan proof
         env:
