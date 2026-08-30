@@ -43,13 +43,17 @@ Focused accepted framework designs own subsystem contracts.
 ```text
 product       repository                    package       crate
 RunenSDF      dornglut/runen-sdf            runen-sdf     runen_sdf
-RunenSpatial  dornglut/runen-spatial        runen-spatial runen_spatial
+RunenSpatial  dornglut/runen-spatial        existing workspace topology
 RunenECS      target dornglut/runen-ecs     see accepted RunenECS design
 RunenGPU      target dornglut/runen-gpu     runen-gpu     runen_gpu
 RunenRender   target dornglut/runen-render  runen-render  runen_render
 RunenUI       dornglut/runen-ui             existing workspace topology
 Runenwerk     dornglut/runenwerk            workspace      integration/product
 ```
+
+RunenSpatial already has separately owned foundation, demand-planning, and availability
+lifecycle packages. A Runenwerk consumer depends only on the package whose semantics it
+actually consumes; repository ownership does not imply a dependency on every package.
 
 RunenGPU and RunenRender each begin with one public package. Internal modules carry
 responsibility boundaries until a real second consumer, backend, release unit, ABI, or
@@ -306,11 +310,12 @@ RunenRender, or RunenGPU.
 ## One-package initial rule
 
 Do not create speculative package trees merely to draw architecture boundaries.
-Initial targets remain:
+RunenSpatial's established multi-package topology is already separately proven and is
+not governed by this initial-target list. Initial one-package targets for the remaining
+extraction tracks are:
 
 ```text
 runen-sdf
-runen-spatial
 runen-ecs
 runen-gpu
 runen-render
