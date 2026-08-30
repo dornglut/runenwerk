@@ -126,6 +126,15 @@ jobs:
           set -euo pipefail
           vulkaninfo --summary
 
+      - name: Run retained G5-C01 prefix scan proof
+        env:
+          RUST_BACKTRACE: '1'
+        run: |
+          set -euo pipefail
+          cargo +stable test -p engine --test gpu_prefix_scan_native \
+            native_prefix_scan_proves_exact_4097_element_inclusive_and_exclusive_results \
+            --locked -- --ignored --nocapture
+
       - name: Run native G5 transfer and G5R initial-content proofs
         env:
           RUST_BACKTRACE: '1'
