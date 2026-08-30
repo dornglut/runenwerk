@@ -246,9 +246,7 @@ impl PreviewProcessManager {
         match event {
             PreviewConnectionEvent::Preview(event) => self.ingest_preview_event(event.event),
             PreviewConnectionEvent::Error(message) => self.last_error = Some(message),
-            PreviewConnectionEvent::Closed => {
-                self.last_error = Some("preview connection closed".to_string());
-            }
+            PreviewConnectionEvent::Closed => {}
         }
     }
 
@@ -468,6 +466,17 @@ mod tests {
         assert_eq!(manager.last_heartbeat_session(), Some(session_id));
         assert_eq!(manager.last_shutdown_ack(), Some(session_id));
         assert_eq!(manager.received_statuses().len(), 1);
+    }
+
+    #[test]
+    fn clean_connection_close_does_not_create_or_erase_an_error() {
+        let mut manager = PreviewProcessManager::new();
+        manager.ingest_connection_event(PreviewConnectionEvent::Closed);
+        assert_eq!(manager.last_error(), None);
+
+        manager.ingest_connection_event(PreviewConnectionEvent::Error("transport failed".into()));
+        manager.ingest_connection_event(PreviewConnectionEvent::Closed);
+        assert_eq!(manager.last_error(), Some("transport failed"));
     }
 
     fn preview_server_event(envelope: PreviewEventEnvelope) -> PreviewConnectionEvent {
