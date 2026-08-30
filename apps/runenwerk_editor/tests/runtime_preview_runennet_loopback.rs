@@ -30,9 +30,16 @@ async fn preview_control_channel_round_trips_over_standalone_runennet() -> Resul
     };
     let bootstrap = host.bootstrap().clone();
     let server_task = tokio::spawn(async move {
-        let exit = host.run_command_loop().await?;
-        host.shutdown().await?;
-        Ok::<RuntimePreviewLoopExit, anyhow::Error>(exit)
+        let run_result = host.run_command_loop().await;
+        let shutdown_result = host.shutdown().await;
+        match (run_result, shutdown_result) {
+            (Ok(exit), Ok(())) => Ok(exit),
+            (Err(error), Ok(())) => Err(error),
+            (Ok(_), Err(error)) => Err(error),
+            (Err(run_error), Err(shutdown_error)) => Err(anyhow!(
+                "runtime-preview server failed: {run_error:#}; shutdown also failed: {shutdown_error:#}"
+            )),
+        }
     });
 
     let mut connection = PreviewProcessConnection::connect(&bootstrap).await?;
