@@ -77,7 +77,11 @@ fn hierarchy_counts() -> [u32; 3] {
 
 fn admitted_sources() -> ProgramSources {
     let [scan, apply_offsets] = admit_static_wgsl_sources([
-        ("proof.direct-cost.prefix-scan.scan", SOURCE_REVISION, SCAN_WGSL),
+        (
+            "proof.direct-cost.prefix-scan.scan",
+            SOURCE_REVISION,
+            SCAN_WGSL,
+        ),
         (
             "proof.direct-cost.prefix-scan.apply-offsets",
             SOURCE_REVISION,
@@ -291,7 +295,10 @@ fn author_scan(
     );
     let block_offsets_0 = zeroed_u32_buffer(
         &mut resources,
-        &format!("direct-cost prefix scan {} level 0 block offsets", mode.key()),
+        &format!(
+            "direct-cost prefix scan {} level 0 block offsets",
+            mode.key()
+        ),
         level_0_blocks,
         false,
     );
@@ -303,7 +310,10 @@ fn author_scan(
     );
     let block_offsets_1 = zeroed_u32_buffer(
         &mut resources,
-        &format!("direct-cost prefix scan {} level 1 block offsets", mode.key()),
+        &format!(
+            "direct-cost prefix scan {} level 1 block offsets",
+            mode.key()
+        ),
         level_1_blocks,
         false,
     );
@@ -438,7 +448,10 @@ fn progress_to_readbacks(
             GpuSubmissionStatus::Completed if all_ready => break,
             GpuSubmissionStatus::Accepted | GpuSubmissionStatus::Completed => {}
         }
-        assert!(Instant::now() < deadline, "prefix-scan comparison timed out");
+        assert!(
+            Instant::now() < deadline,
+            "prefix-scan comparison timed out"
+        );
         std::thread::yield_now();
     }
     handles
@@ -539,10 +552,7 @@ fn sum_phases(
     result
 }
 
-fn runengpu_sample(
-    context: &GpuContext,
-    pipelines: &RunenGpuPipelines,
-) -> BTreeMap<String, f64> {
+fn runengpu_sample(context: &GpuContext, pipelines: &RunenGpuPipelines) -> BTreeMap<String, f64> {
     let total_start = Instant::now();
     let exclusive = runengpu_mode_sample(context, pipelines, ScanMode::Exclusive);
     let inclusive = runengpu_mode_sample(context, pipelines, ScanMode::Inclusive);
@@ -710,14 +720,13 @@ fn direct_storage_buffer(
 fn direct_resources(context: &DirectWgpuContext, mode: ScanMode) -> DirectResources {
     let [level_0_blocks, level_1_blocks, level_2_blocks] = hierarchy_counts();
     let input_values = vec![1_u32; usize::try_from(ELEMENT_COUNT).unwrap()];
-    let input_upload =
-        context
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("G6-P01 prefix scan input upload"),
-                contents: bytemuck::cast_slice(&input_values),
-                usage: wgpu::BufferUsages::COPY_SRC,
-            });
+    let input_upload = context
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("G6-P01 prefix scan input upload"),
+            contents: bytemuck::cast_slice(&input_values),
+            usage: wgpu::BufferUsages::COPY_SRC,
+        });
     let input = context.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("G6-P01 prefix scan input"),
         size: buffer_size_u32(ELEMENT_COUNT),
@@ -795,24 +804,26 @@ fn direct_scan_bind_group(
     block_sums: &wgpu::Buffer,
 ) -> wgpu::BindGroup {
     let layout = pipeline.get_bind_group_layout(0);
-    context.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("G6-P01 prefix scan bind group"),
-        layout: &layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: input.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: output.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: block_sums.as_entire_binding(),
-            },
-        ],
-    })
+    context
+        .device
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("G6-P01 prefix scan bind group"),
+            layout: &layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: input.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: output.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: block_sums.as_entire_binding(),
+                },
+            ],
+        })
 }
 
 fn direct_apply_bind_group(
@@ -822,20 +833,22 @@ fn direct_apply_bind_group(
     offsets: &wgpu::Buffer,
 ) -> wgpu::BindGroup {
     let layout = pipeline.get_bind_group_layout(0);
-    context.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("G6-P01 prefix apply-offsets bind group"),
-        layout: &layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: output.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: offsets.as_entire_binding(),
-            },
-        ],
-    })
+    context
+        .device
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("G6-P01 prefix apply-offsets bind group"),
+            layout: &layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: output.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: offsets.as_entire_binding(),
+                },
+            ],
+        })
 }
 
 fn direct_dispatch(
