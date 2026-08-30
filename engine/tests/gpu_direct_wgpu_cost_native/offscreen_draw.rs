@@ -70,6 +70,41 @@ fn runengpu_context() -> GpuContext {
     context
 }
 
+fn assert_equivalent_adapter_selection(
+    runengpu_context: &GpuContext,
+    direct_context: &DirectWgpuContext,
+) {
+    let runengpu = runengpu_context.adapter_facts();
+    assert_eq!(runengpu.backend(), GpuBackendFamily::Vulkan);
+    assert_eq!(runengpu.fallback(), GpuFallbackStatus::ConfirmedFallback);
+    assert_eq!(direct_context.adapter_info.backend, wgpu::Backend::Vulkan);
+    assert_eq!(
+        runengpu.vendor(),
+        Some(direct_context.adapter_info.vendor),
+        "RunenGPU and direct-WGPU comparison paths must select the same adapter vendor"
+    );
+    assert_eq!(
+        runengpu.device(),
+        Some(direct_context.adapter_info.device),
+        "RunenGPU and direct-WGPU comparison paths must select the same adapter device"
+    );
+}
+
+fn runengpu_adapter_facts_json(context: &GpuContext) -> Value {
+    let facts = context.adapter_facts();
+    json!({
+        "backend": format!("{:?}", facts.backend()),
+        "class": format!("{:?}", facts.class()),
+        "software": format!("{:?}", facts.software()),
+        "fallback": format!("{:?}", facts.fallback()),
+        "name": facts.diagnostic_name(),
+        "driver": facts.driver(),
+        "driver_info": facts.driver_info(),
+        "vendor": facts.vendor(),
+        "device": facts.device(),
+    })
+}
+
 fn admitted_render_source() -> GpuAdmittedProgramSource {
     let identity = GpuProgramSourceIdentity::new(
         GpuProgramSourceOwnerId::allocate().unwrap(),
@@ -538,6 +573,8 @@ pub(crate) fn compare() -> Value {
     let runengpu_context_start = Instant::now();
     let runengpu_context = runengpu_context();
     let runengpu_context_us = micros(runengpu_context_start.elapsed());
+    assert_equivalent_adapter_selection(&runengpu_context, &direct_context);
+
     let runengpu_pipeline_start = Instant::now();
     let runengpu_pipeline = render_pipeline();
     let runengpu_pipeline_descriptor_us = micros(runengpu_pipeline_start.elapsed());
@@ -548,6 +585,15 @@ pub(crate) fn compare() -> Value {
         runengpu_cold = Some(runengpu_sample(&runengpu_context, &runengpu_pipeline));
         direct_cold = Some(direct_sample(&direct_context, &direct_pipeline.pipeline));
     }
+    let runengpu_cold = runengpu_cold.expect("one RunenGPU first-use sample is required");
+    let direct_cold = direct_cold.expect("one direct-WGPU first-use sample is required");
+    let runengpu_cold_end_to_end_us = runengpu_context_us
+        + runengpu_pipeline_descriptor_us
+        + runengpu_cold.get("total").copied().unwrap();
+    let direct_cold_end_to_end_us = direct_context.setup_us
+        + direct_pipeline.cold_pipeline_us
+        + direct_cold.get("total").copied().unwrap();
+    assert!(direct_cold_end_to_end_us > 0.0);
 
     let mut runengpu = Measurements::default();
     let mut direct = Measurements::default();
@@ -574,13 +620,32 @@ pub(crate) fn compare() -> Value {
             "direct_readback_staging_bytes": padded_bytes_per_row(WIDTH * 4) * HEIGHT,
             "index_upload_bytes": core::mem::size_of_val(&INDICES),
         },
+        "adapter_equivalence": {
+            "criteria": "Vulkan forced-fallback selection with equal vendor/device identity",
+            "runengpu": runengpu_adapter_facts_json(&runengpu_context),
+            "direct_wgpu": {
+                "facts": direct_context.facts_json(),
+                "vendor": direct_context.adapter_info.vendor,
+                "device": direct_context.adapter_info.device,
+            },
+        },
         "cold": {
-            "runengpu_context_us": runengpu_context_us,
-            "runengpu_pipeline_descriptor_us": runengpu_pipeline_descriptor_us,
-            "direct_context_us": direct_context.setup_us,
-            "direct_pipeline_us": direct_pipeline.cold_pipeline_us,
-            "runengpu_first_submission_phases_us": runengpu_cold,
-            "direct_first_submission_phases_us": direct_cold,
+            "scope": "fresh path context/device plus path-specific program/pipeline setup plus first complete submission/readback within one test process",
+            "construction_order": ["direct_wgpu", "runengpu"],
+            "normalized_end_to_end_us": {
+                "runengpu": runengpu_cold_end_to_end_us,
+                "direct_wgpu": direct_cold_end_to_end_us,
+                "runengpu_over_direct_ratio": runengpu_cold_end_to_end_us / direct_cold_end_to_end_us,
+            },
+            "component_observations": {
+                "runengpu_context_us": runengpu_context_us,
+                "runengpu_program_pipeline_descriptor_us": runengpu_pipeline_descriptor_us,
+                "runengpu_first_submission_phases_us": runengpu_cold,
+                "direct_context_us": direct_context.setup_us,
+                "direct_physical_pipeline_us": direct_pipeline.cold_pipeline_us,
+                "direct_first_submission_phases_us": direct_cold,
+                "note": "RunenGPU physical pipeline realization occurs during first backend_prepare; direct WGPU physical pipeline creation is reported before its first submission. Compare the normalized end-to-end boundary, not these component fields pairwise.",
+            },
         },
         "warm_lifecycle": {
             "runengpu_program_pipeline_identity_reused": true,
@@ -595,7 +660,6 @@ pub(crate) fn compare() -> Value {
             &direct,
             &["boundary_prepare_or_record", "submit_call", "completion_readback", "total"],
         ),
-        "direct_adapter": direct_context.facts_json(),
         "timestamp_evidence": {
             "supported_by_direct_adapter": direct_context.timestamp_supported,
             "status": "not-yet-instrumented-in-first implementation slice",
