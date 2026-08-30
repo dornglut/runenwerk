@@ -717,8 +717,9 @@ mod tests {
 
     #[test]
     fn runtime_job_work_stealing_executor_matches_serial_results() {
-        let mut executor =
-            RuntimeJobExecutorResource::with_config(RuntimeJobExecutorConfig::work_stealing(2, 8));
+        let mut config = RuntimeJobExecutorConfig::work_stealing(2, 8);
+        config.completion_drain_budget = 1;
+        let mut executor = RuntimeJobExecutorResource::with_config(config);
 
         for id in 1..=4 {
             executor
@@ -922,8 +923,9 @@ mod tests {
         expected: usize,
     ) -> Vec<RuntimeJobCompletion<T>> {
         let started = Instant::now();
+        let mut completions = Vec::with_capacity(expected);
         loop {
-            let completions = executor.drain_completed::<T>();
+            completions.extend(executor.drain_completed::<T>());
             if completions.len() >= expected {
                 return completions;
             }
