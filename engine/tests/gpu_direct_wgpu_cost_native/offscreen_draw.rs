@@ -118,9 +118,7 @@ fn render_pipeline() -> GpuRenderPipelineDescriptor {
     .unwrap()
 }
 
-fn runengpu_fragment(
-    pipeline: &GpuRenderPipelineDescriptor,
-) -> (GpuWorkFragment, GpuReadbackId) {
+fn runengpu_fragment(pipeline: &GpuRenderPipelineDescriptor) -> (GpuWorkFragment, GpuReadbackId) {
     let mut allocator = GpuWorkResourceIdAllocator::new();
     let texture_label = label("direct-cost indexed offscreen color target");
     let texture = allocator
