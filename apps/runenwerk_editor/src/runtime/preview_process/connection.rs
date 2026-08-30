@@ -47,6 +47,7 @@ const CLIENT_OUTBOUND_COMMANDS: u64 = 1;
 const CLIENT_INBOUND_EVENTS: u64 = 2;
 const NETWORK_CHANNEL_CAPACITY: usize = 128;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug)]
 enum ClientNetworkCommand {
@@ -324,13 +325,23 @@ async fn run_connection(
         }
     }
 
-    await_server_transport_close(&mut connection, &mut host).await?;
+    let transport_close_result = match tokio::time::timeout(
+        SHUTDOWN_TIMEOUT,
+        await_server_transport_close(&mut connection, &mut host),
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(_) => Err(anyhow!(
+            "timed out waiting for runtime-preview server transport shutdown"
+        )),
+    };
 
     let teardown = connection.teardown(&mut host.negotiation, &mut host.delivery);
     if let Some(error) = teardown.cleanup_error() {
         return Err(anyhow!("runtime-preview client cleanup failed: {error}"));
     }
-    Ok(())
+    transport_close_result
 }
 
 async fn await_server_transport_close(
