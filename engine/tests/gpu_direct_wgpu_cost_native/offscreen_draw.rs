@@ -531,7 +531,7 @@ fn direct_sample(
             layout: wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(physical_row),
-                rows_per_image: Some(HEIGHT),
+                rows_per_image: None,
             },
         },
         wgpu::Extent3d {
@@ -557,10 +557,14 @@ fn direct_sample(
         resource_setup_us + command_record_us,
     );
     phases.insert("command_record".to_owned(), command_record_us);
+    phases.insert(
+        "readback_registration".to_owned(),
+        submitted.readback_registration_us,
+    );
     phases.insert("queue_submit".to_owned(), submitted.submit_call_us);
     phases.insert(
         "boundary_prepare_record_submit".to_owned(),
-        resource_setup_us + command_record_us + submitted.submit_call_us,
+        resource_setup_us + command_record_us + submitted.boundary_submit_us(),
     );
     phases.insert("readback_row_unpack".to_owned(), row_unpack_us);
     phases.insert("completion_readback".to_owned(), completion_readback_us);
@@ -646,7 +650,7 @@ pub(crate) fn compare() -> Value {
                 "direct_context_us": direct_context.setup_us,
                 "direct_physical_pipeline_us": direct_pipeline.cold_pipeline_us,
                 "direct_first_submission_phases_us": direct_cold,
-                "note": "RunenGPU physical pipeline realization occurs during first backend_prepare and submit_prepared also owns physical encoding/submission. Direct WGPU exposes resource creation, command recording, and queue submission separately. Direct completion/readback includes mapped host-byte materialization and texture row-unpadding. Compare normalized boundary/total fields, not unlike component fields pairwise.",
+                "note": "RunenGPU physical pipeline realization occurs during first backend_prepare and submit_prepared also owns physical encoding/readback registration/submission. Direct WGPU exposes resource creation, command recording, readback callback registration, and queue submission separately. Direct completion/readback includes mapped host-byte materialization and texture row-unpadding. Compare normalized boundary/total fields, not unlike component fields pairwise.",
             },
         },
         "warm_lifecycle": {
@@ -659,7 +663,8 @@ pub(crate) fn compare() -> Value {
         },
         "phase_comparability": {
             "ratio_phases": ["boundary_prepare_record_submit", "completion_readback", "total"],
-            "runengpu_submit_component": "submit_prepared combines acceptance, physical encoding and queue submission and is not separable through the public boundary",
+            "runengpu_submit_component": "submit_prepared combines acceptance, physical encoding, readback callback registration, and queue submission and is not separable through the public boundary",
+            "direct_readback_registration_component": "map_buffer_on_submit plus submitted-work-done callback registration",
             "direct_queue_submit_component": "queue.submit call only",
             "direct_completion_component": "submission completion + map callback + mapped host-byte copy + texture row-unpadding",
             "queue_submit_ratio_status": "unavailable because the RunenGPU public submit boundary intentionally combines additional execution work",
