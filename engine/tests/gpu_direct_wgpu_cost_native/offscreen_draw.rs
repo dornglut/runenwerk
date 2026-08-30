@@ -13,8 +13,7 @@ const HEIGHT: u32 = 8;
 const CLEAR_PIXEL: [u8; 4] = [0, 0, 0, 255];
 const DRAW_PIXEL: [u8; 4] = [255, 0, 0, 255];
 const INDICES: [u32; 3] = [0, 1, 2];
-const KNOWN_PATTERN_WGSL: &str =
-    include_str!("../gpu_offscreen_indexed_native/known_pattern.wgsl");
+const KNOWN_PATTERN_WGSL: &str = include_str!("../gpu_offscreen_indexed_native/known_pattern.wgsl");
 
 fn label(value: &str) -> GpuResourceLabel {
     GpuResourceLabel::new(value).unwrap()
@@ -537,7 +536,10 @@ fn direct_sample(
 
     let mut phases = BTreeMap::new();
     phases.insert("resource_setup".to_owned(), resource_setup_us);
-    phases.insert("boundary_prepare_or_record".to_owned(), command_record_us);
+    phases.insert(
+        "boundary_prepare_or_record".to_owned(),
+        resource_setup_us + command_record_us,
+    );
     phases.insert("command_record".to_owned(), command_record_us);
     phases.insert("submit_call".to_owned(), submitted.submit_call_us);
     phases.insert(
@@ -630,6 +632,8 @@ pub(crate) fn compare() -> Value {
             },
         },
         "warm_lifecycle": {
+            "warmup_samples": WARMUP_SAMPLES,
+            "measured_samples": MEASURED_SAMPLES,
             "runengpu_program_pipeline_identity_reused": true,
             "direct_wgpu_pipeline_reused": true,
             "per_sample_resources_recreated": true,
