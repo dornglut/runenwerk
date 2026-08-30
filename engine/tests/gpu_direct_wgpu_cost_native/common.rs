@@ -262,7 +262,10 @@ pub(crate) fn submit_and_map(
     let mapped = readbacks
         .iter()
         .map(|buffer| {
-            let view = buffer.slice(..).get_mapped_range();
+            let view = buffer
+                .slice(..)
+                .get_mapped_range()
+                .expect("completed direct-WGPU readback must expose a mapped range");
             let bytes = view.to_vec();
             drop(view);
             buffer.unmap();
