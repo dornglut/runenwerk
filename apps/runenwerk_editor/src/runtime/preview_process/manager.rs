@@ -279,6 +279,7 @@ impl PreviewProcessManager {
 
     pub async fn shutdown(&mut self) -> Result<()> {
         let shutdown_session = self.shutdown_session_id();
+        let mut connection_result = Ok(());
         if self.connection.is_some() {
             if let Some(connection) = &self.connection {
                 let _ = connection
@@ -299,18 +300,29 @@ impl PreviewProcessManager {
                 tokio::time::sleep(POLL_SLEEP).await;
             }
             if let Some(connection) = &self.connection {
-                let _ = connection.shutdown().await;
+                connection_result = connection
+                    .shutdown()
+                    .await
+                    .context("runtime preview connection shutdown failed");
             }
         }
-        if let Some(child) = &mut self.child {
-            wait_child_until_exit(child, self.shutdown_grace_period).await?;
-            if child.try_wait()?.is_none() {
-                kill_and_wait(child)?;
-            }
-        }
+
+        let child_result = if let Some(child) = &mut self.child {
+            shutdown_child(child, self.shutdown_grace_period).await
+        } else {
+            Ok(())
+        };
+
         self.child = None;
         self.connection = None;
-        Ok(())
+
+        match (connection_result, child_result) {
+            (Ok(()), Ok(())) => Ok(()),
+            (Err(error), Ok(())) | (Ok(()), Err(error)) => Err(error),
+            (Err(connection_error), Err(child_error)) => Err(anyhow!(
+                "runtime preview shutdown failed: {connection_error:#}; child cleanup also failed: {child_error:#}"
+            )),
+        }
     }
 
     async fn flush_pending_commands(&mut self) -> Result<()> {
@@ -352,6 +364,14 @@ impl Default for PreviewProcessManager {
             shutdown_grace_period: DEFAULT_SHUTDOWN_GRACE_PERIOD,
         }
     }
+}
+
+async fn shutdown_child(child: &mut Child, timeout: Duration) -> Result<()> {
+    wait_child_until_exit(child, timeout).await?;
+    if child.try_wait()?.is_none() {
+        kill_and_wait(child)?;
+    }
+    Ok(())
 }
 
 async fn wait_child_until_exit(child: &mut Child, timeout: Duration) -> Result<()> {
