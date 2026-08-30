@@ -185,8 +185,10 @@ mod tests {
         let payload = SdfChunkPayload {
             chunk_id: chunk,
             chunk_revision: world_ops::ChunkRevision(4),
+            chunk_generation: world_ops::ChunkGeneration(4),
+            page_table: Default::default(),
+            hierarchy_revision: 0,
             checksum: 44,
-            ..SdfChunkPayload::default()
         };
         descriptor
             .payload_refs
