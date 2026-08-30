@@ -13,26 +13,8 @@ const HEIGHT: u32 = 8;
 const CLEAR_PIXEL: [u8; 4] = [0, 0, 0, 255];
 const DRAW_PIXEL: [u8; 4] = [255, 0, 0, 255];
 const INDICES: [u32; 3] = [0, 1, 2];
-
-// Byte-for-byte copy of the retained G6-C01 inline shader. Before G6-P01 acceptance this
-// fixture must be extracted into shared test support so the retained proof and comparison
-// consume one source of shader truth.
-const KNOWN_PATTERN_WGSL: &str = r#"
-@vertex
-fn vs_main(@builtin(vertex_index) vertex_index: u32) -> @builtin(position) vec4f {
-    let positions = array<vec2f, 3>(
-        vec2f(-1.0, -1.0),
-        vec2f(3.0, -1.0),
-        vec2f(-1.0, 3.0),
-    );
-    return vec4f(positions[vertex_index], 0.0, 1.0);
-}
-
-@fragment
-fn fs_main() -> @location(0) vec4f {
-    return vec4f(1.0, 0.0, 0.0, 1.0);
-}
-"#;
+const KNOWN_PATTERN_WGSL: &str =
+    include_str!("../gpu_offscreen_indexed_native/known_pattern.wgsl");
 
 fn label(value: &str) -> GpuResourceLabel {
     GpuResourceLabel::new(value).unwrap()
@@ -615,7 +597,7 @@ pub(crate) fn compare() -> Value {
             "draw": "one indexed triangle",
             "viewport": [0, 0, WIDTH, HEIGHT],
             "scissor": [0, 0, WIDTH / 2, HEIGHT],
-            "shader_source": "byte-equivalent to retained inline G6-C01 WGSL",
+            "shader_source": "shared retained G6-C01 fixture",
             "readback_logical_bytes": WIDTH * HEIGHT * 4,
             "direct_readback_staging_bytes": padded_bytes_per_row(WIDTH * 4) * HEIGHT,
             "index_upload_bytes": core::mem::size_of_val(&INDICES),
