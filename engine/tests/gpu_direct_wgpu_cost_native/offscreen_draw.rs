@@ -34,6 +34,12 @@ fn common(value: &str) -> GpuResourceCommon {
     .unwrap()
 }
 
+fn readback_staging_size() -> u64 {
+    let logical_row = WIDTH * 4;
+    let physical_row = padded_bytes_per_row(logical_row);
+    u64::from(physical_row) * u64::from(HEIGHT - 1) + u64::from(logical_row)
+}
+
 fn runengpu_context() -> GpuContext {
     let descriptor =
         GpuContextDescriptor::new(GpuCapabilityProfile::OffscreenGraphicsBaseline.requirements())
@@ -465,7 +471,7 @@ fn direct_sample(
             usage: wgpu::BufferUsages::COPY_SRC,
         });
     let physical_row = padded_bytes_per_row(WIDTH * 4);
-    let readback_size = u64::from(physical_row) * u64::from(HEIGHT);
+    let readback_size = readback_staging_size();
     let readback = context.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("G6-P01 known-pattern readback"),
         size: readback_size,
@@ -613,7 +619,7 @@ pub(crate) fn compare() -> Value {
             "scissor": [0, 0, WIDTH / 2, HEIGHT],
             "shader_source": "shared retained G6-C01 fixture",
             "readback_logical_bytes": WIDTH * HEIGHT * 4,
-            "direct_readback_staging_bytes": padded_bytes_per_row(WIDTH * 4) * HEIGHT,
+            "readback_staging_bytes_per_path": readback_staging_size(),
             "index_upload_bytes": core::mem::size_of_val(&INDICES),
         },
         "adapter_equivalence": {
