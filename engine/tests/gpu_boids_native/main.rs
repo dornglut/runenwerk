@@ -176,7 +176,10 @@ fn progress_to_readbacks(
             GpuSubmissionStatus::Completed if all_ready => break,
             GpuSubmissionStatus::Accepted | GpuSubmissionStatus::Completed => {}
         }
-        assert!(Instant::now() < deadline, "boids submission/readbacks timed out");
+        assert!(
+            Instant::now() < deadline,
+            "boids submission/readbacks timed out"
+        );
         std::thread::yield_now();
     }
     handles
@@ -238,7 +241,11 @@ fn validate_agents(bytes: &GpuReadbackBytes) {
         let position = [f32_at(chunk, 0), f32_at(chunk, 4)];
         let velocity = [f32_at(chunk, 8), f32_at(chunk, 12)];
         let heading = [f32_at(chunk, 16), f32_at(chunk, 20)];
-        assert!(position.iter().all(|value| value.is_finite() && (0.0..1.0).contains(value)));
+        assert!(
+            position
+                .iter()
+                .all(|value| value.is_finite() && (0.0..1.0).contains(value))
+        );
         assert!(velocity.iter().all(|value| value.is_finite()));
         assert!(heading.iter().all(|value| value.is_finite()));
         let speed = velocity[0].hypot(velocity[1]);
@@ -274,7 +281,10 @@ fn validate_grid(
         assert_eq!(offsets[cell], offsets[cell - 1] + counts[cell - 1]);
     }
     assert_eq!(offsets.last().unwrap() + counts.last().unwrap(), BOID_COUNT);
-    assert_eq!(cursors, counts, "scatter cursors must finish at each cell count");
+    assert_eq!(
+        cursors, counts,
+        "scatter cursors must finish at each cell count"
+    );
     assert!(indices.iter().all(|index| *index < BOID_COUNT));
     indices.sort_unstable();
     assert_eq!(indices, (0..BOID_COUNT).collect::<Vec<_>>());
@@ -384,7 +394,11 @@ fn native_boids_proves_bounded_compute_to_instanced_render_sequence() {
         "frames": frame_records,
     });
     let manifest_path = root.join("manifest.json");
-    std::fs::write(&manifest_path, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
+    std::fs::write(
+        &manifest_path,
+        serde_json::to_vec_pretty(&manifest).unwrap(),
+    )
+    .unwrap();
     assert!(manifest_path.metadata().unwrap().len() > 0);
 
     let stats = context.execution_stats();
