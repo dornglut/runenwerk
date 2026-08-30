@@ -232,20 +232,17 @@ fn render_target(scope: &mut GpuResourceScope) -> (GpuTextureHandle, GpuTextureV
             GpuTextureDescriptor::new(
                 common("compute-generated indirect target"),
                 GpuTextureDimension::D2,
-                GpuTextureExtent::new(
-                    &texture_label,
-                    GpuTextureDimension::D2,
-                    WIDTH,
-                    HEIGHT,
-                    1,
-                )
-                .unwrap(),
+                GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, WIDTH, HEIGHT, 1)
+                    .unwrap(),
                 1,
                 1,
                 GpuTextureFormat::Rgba8Unorm,
                 GpuTextureUsages::new(
                     &texture_label,
-                    [GpuTextureUsage::ColorAttachment, GpuTextureUsage::CopySource],
+                    [
+                        GpuTextureUsage::ColorAttachment,
+                        GpuTextureUsage::CopySource,
+                    ],
                 )
                 .unwrap(),
                 GpuTextureInitialization::Uninitialized,
@@ -294,12 +291,8 @@ fn render_operation(
     target: &GpuTextureViewHandle,
 ) -> GpuRenderOperation {
     let bindings = GpuRuntimeBindingSet::new(pipeline.layout().clone(), []).unwrap();
-    let vertex_binding = GpuVertexBufferBinding::new(
-        0,
-        vertices,
-        GpuBufferRange::whole(vertices).unwrap(),
-    )
-    .unwrap();
+    let vertex_binding =
+        GpuVertexBufferBinding::new(0, vertices, GpuBufferRange::whole(vertices).unwrap()).unwrap();
     let draw = GpuRenderDraw::new(
         pipeline.clone(),
         bindings,
@@ -364,10 +357,7 @@ fn graph() -> (
     (graph, readback_id, args, vertices)
 }
 
-fn assert_required(
-    requirements: &GpuCapabilityRequirements,
-    feature: GpuCapabilityFeature,
-) {
+fn assert_required(requirements: &GpuCapabilityRequirements, feature: GpuCapabilityFeature) {
     assert_eq!(
         requirements.get(feature),
         Some(GpuCapabilityRequirement::Required(feature)),
@@ -375,12 +365,12 @@ fn assert_required(
     );
 }
 
-fn assert_prepared_materialization(
-    graph: &GpuPreparedWorkGraph,
-    buffer: &GpuBufferHandle,
-) {
+fn assert_prepared_materialization(graph: &GpuPreparedWorkGraph, buffer: &GpuBufferHandle) {
     assert!(
-        matches!(buffer.descriptor().initialization(), GpuBufferInitialization::Prepared(_)),
+        matches!(
+            buffer.descriptor().initialization(),
+            GpuBufferInitialization::Prepared(_)
+        ),
         "proof buffers must enter through the accepted Prepared initial-content contract"
     );
     let summary = graph
@@ -397,9 +387,11 @@ fn assert_prepared_materialization(
         .expect("canonical Prepared materialization must leave readable buffer coverage");
     assert_eq!(
         final_coverage.buffer_values(),
-        Some(&[GpuBufferCoverage::Dense(
-            GpuBufferRange::whole(buffer).unwrap()
-        )][..]),
+        Some(
+            &[GpuBufferCoverage::Dense(
+                GpuBufferRange::whole(buffer).unwrap()
+            )][..]
+        ),
         "canonical initial-content materialization must establish exact whole-buffer coverage before compute mutates it"
     );
 }
@@ -428,24 +420,30 @@ fn assert_graph_contract(
         .find(|prepared| prepared.node().label().as_str() == "consume generated indirect draw")
         .expect("prepared graph must retain the render consumer");
 
-    assert!(render.node().accesses().iter().any(|access| {
-        matches!(
-            access,
-            GpuResourceAccess::Buffer(access)
-                if access.resource_identity() == args.diagnostic_identity()
-                    && access.kind() == GpuBufferAccessKind::IndirectRead
-                    && access.range() == GpuBufferRange::whole(args).unwrap()
-        )
-    }), "indirect draw intent must mechanically derive the exact IndirectRead access");
-    assert!(render.node().accesses().iter().any(|access| {
-        matches!(
-            access,
-            GpuResourceAccess::Buffer(access)
-                if access.resource_identity() == vertices.diagnostic_identity()
-                    && access.kind() == GpuBufferAccessKind::VertexRead
-                    && access.range() == GpuBufferRange::whole(vertices).unwrap()
-        )
-    }), "vertex-buffer binding must mechanically derive the exact VertexRead access");
+    assert!(
+        render.node().accesses().iter().any(|access| {
+            matches!(
+                access,
+                GpuResourceAccess::Buffer(access)
+                    if access.resource_identity() == args.diagnostic_identity()
+                        && access.kind() == GpuBufferAccessKind::IndirectRead
+                        && access.range() == GpuBufferRange::whole(args).unwrap()
+            )
+        }),
+        "indirect draw intent must mechanically derive the exact IndirectRead access"
+    );
+    assert!(
+        render.node().accesses().iter().any(|access| {
+            matches!(
+                access,
+                GpuResourceAccess::Buffer(access)
+                    if access.resource_identity() == vertices.diagnostic_identity()
+                        && access.kind() == GpuBufferAccessKind::VertexRead
+                        && access.range() == GpuBufferRange::whole(vertices).unwrap()
+            )
+        }),
+        "vertex-buffer binding must mechanically derive the exact VertexRead access"
+    );
 
     let dependency = graph
         .dependencies()
@@ -461,15 +459,19 @@ fn assert_graph_contract(
     );
     for buffer in [args, vertices] {
         let whole = GpuBufferRange::whole(buffer).unwrap();
-        assert!(dependency.reasons().iter().any(|reason| {
-            matches!(
-                reason,
-                GpuDependencyReason::ReadAfterWrite {
-                    resource,
-                    region: GpuDependencyRegion::Buffer(range),
-                } if *resource == buffer.diagnostic_identity() && *range == whole
-            )
-        }), "compute -> render dependency must contain a whole-buffer RAW reason for {}", buffer.descriptor().common().label().as_str());
+        assert!(
+            dependency.reasons().iter().any(|reason| {
+                matches!(
+                    reason,
+                    GpuDependencyReason::ReadAfterWrite {
+                        resource,
+                        region: GpuDependencyRegion::Buffer(range),
+                    } if *resource == buffer.diagnostic_identity() && *range == whole
+                )
+            }),
+            "compute -> render dependency must contain a whole-buffer RAW reason for {}",
+            buffer.descriptor().common().label().as_str()
+        );
     }
 
     assert_prepared_materialization(graph, args);
@@ -494,7 +496,10 @@ fn progress_to_readback(
         if let GpuSubmissionStatus::Failed(failure) = submission.status() {
             panic!("compute-generated indirect submission failed before readback: {failure:?}");
         }
-        assert!(Instant::now() < deadline, "compute-generated indirect readback timed out");
+        assert!(
+            Instant::now() < deadline,
+            "compute-generated indirect readback timed out"
+        );
         std::thread::yield_now();
     };
 
@@ -568,7 +573,10 @@ fn write_validated_png(bytes: &GpuReadbackBytes) -> PathBuf {
             > 0,
         "proof PNG must not be empty"
     );
-    println!("RunenGPU compute-generated indirect artifact: {}", path.display());
+    println!(
+        "RunenGPU compute-generated indirect artifact: {}",
+        path.display()
+    );
     path
 }
 
