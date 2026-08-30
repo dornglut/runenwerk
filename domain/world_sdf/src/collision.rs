@@ -299,12 +299,14 @@ fn payload_default_signed_distance(payload: &SdfChunkPayload) -> f32 {
     }
 }
 
+type PayloadBrickLookup = (SdfPageCoord3, [u8; 3], [f32; 3]);
+
 fn payload_brick_lookup(
     partition: &GridPartitionConfig,
     payload: &SdfChunkPayload,
     chunk_id: ChunkId,
     world_position: [f32; 3],
-) -> Result<Option<(SdfPageCoord3, [u8; 3], [f32; 3])>, SpatialMathError> {
+) -> Result<Option<PayloadBrickLookup>, SpatialMathError> {
     let Some((min_page, max_page)) = payload_page_bounds(payload) else {
         return Ok(None);
     };
