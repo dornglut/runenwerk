@@ -5,7 +5,7 @@ status: active
 owner: world-sdf
 layer: domain
 canonical: true
-last_reviewed: 2026-05-09
+last_reviewed: 2026-08-30
 ---
 
 # World SDF
@@ -34,12 +34,15 @@ summaries for chunked world data.
 ## Ownership Boundary
 
 `world_sdf` owns SDF payload structure, field-preview payload structure, and
-domain collision query contracts. It does not own edit operation logs, streaming
-decisions, renderer resource upload, GPU texture handles, or app/editor
-commands.
+domain collision query contracts. Reusable world-qualified spatial identity,
+addressing, and partition mechanics come from RunenSpatial. `world_sdf` does not
+own edit operation logs, spatial demand/availability policy, renderer resource
+upload, GPU texture handles, or app/editor commands.
 
 ## Related Crates
 
-- `sdf` owns analytic field math and sampling contracts.
-- `world_ops` owns edit invalidation and build queues.
-- `spatial` supplies chunk/page coordinate vocabulary.
+- `runen-spatial` supplies world-qualified chunk/region identities and checked
+  partition/addressing mechanics used by collision queries.
+- `world_ops` owns edit invalidation, world-operation quantization, and build
+  queues.
+- `engine` owns runtime resource wrapping and product integration.
