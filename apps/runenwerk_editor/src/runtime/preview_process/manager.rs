@@ -279,7 +279,8 @@ impl PreviewProcessManager {
 
     pub async fn shutdown(&mut self) -> Result<()> {
         let shutdown_session = self.shutdown_session_id();
-        let mut connection_result = Ok(());
+        let mut errors = Vec::new();
+
         if self.connection.is_some() {
             if let Some(connection) = &self.connection {
                 let _ = connection
@@ -293,36 +294,35 @@ impl PreviewProcessManager {
             }
             let deadline = Instant::now() + self.shutdown_grace_period;
             while Instant::now() < deadline {
-                self.poll_events()?;
+                match self.poll_events() {
+                    Ok(_) => {}
+                    Err(error) => {
+                        errors.push(error.context("runtime preview shutdown event polling failed"));
+                        break;
+                    }
+                }
                 if self.last_shutdown_ack == Some(shutdown_session) {
                     break;
                 }
                 tokio::time::sleep(POLL_SLEEP).await;
             }
-            if let Some(connection) = &self.connection {
-                connection_result = connection
-                    .shutdown()
-                    .await
-                    .context("runtime preview connection shutdown failed");
+            if let Some(connection) = &self.connection
+                && let Err(error) = connection.shutdown().await
+            {
+                errors.push(error.context("runtime preview connection shutdown failed"));
             }
         }
 
-        let child_result = if let Some(child) = &mut self.child {
-            shutdown_child(child, self.shutdown_grace_period).await
-        } else {
-            Ok(())
-        };
+        if let Some(child) = &mut self.child
+            && let Err(error) = shutdown_child(child, self.shutdown_grace_period).await
+        {
+            errors.push(error.context("runtime preview child cleanup failed"));
+        }
 
         self.child = None;
         self.connection = None;
 
-        match (connection_result, child_result) {
-            (Ok(()), Ok(())) => Ok(()),
-            (Err(error), Ok(())) | (Ok(()), Err(error)) => Err(error),
-            (Err(connection_error), Err(child_error)) => Err(anyhow!(
-                "runtime preview shutdown failed: {connection_error:#}; child cleanup also failed: {child_error:#}"
-            )),
-        }
+        shutdown_result(errors)
     }
 
     async fn flush_pending_commands(&mut self) -> Result<()> {
@@ -364,6 +364,24 @@ impl Default for PreviewProcessManager {
             shutdown_grace_period: DEFAULT_SHUTDOWN_GRACE_PERIOD,
         }
     }
+}
+
+fn shutdown_result(mut errors: Vec<anyhow::Error>) -> Result<()> {
+    if errors.is_empty() {
+        return Ok(());
+    }
+    let first = errors.remove(0);
+    if errors.is_empty() {
+        return Err(first.context("runtime preview shutdown failed"));
+    }
+    let additional = errors
+        .into_iter()
+        .map(|error| format!("{error:#}"))
+        .collect::<Vec<_>>()
+        .join("; ");
+    Err(first.context(format!(
+        "runtime preview shutdown failed; additional cleanup failures: {additional}"
+    )))
 }
 
 async fn shutdown_child(child: &mut Child, timeout: Duration) -> Result<()> {
