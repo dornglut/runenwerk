@@ -97,9 +97,7 @@ pub(crate) fn admitted_sources() -> ProgramSources {
 
 fn fixed_seed() -> Vec<BoidAgent> {
     fn hash_u32(value: u32) -> u32 {
-        let mut x = value
-            .wrapping_mul(747_796_405)
-            .wrapping_add(2_891_336_453);
+        let mut x = value.wrapping_mul(747_796_405).wrapping_add(2_891_336_453);
         x = ((x >> ((x >> 28) + 4)) ^ x).wrapping_mul(277_803_737);
         (x >> 22) ^ x
     }
@@ -186,7 +184,9 @@ fn prepared_buffer<T: Pod>(
         .unwrap()
 }
 
-fn proof_resources(resources: &mut GpuResourceScope) -> (ProofResources, GpuBufferHandle, GpuBufferHandle) {
+fn proof_resources(
+    resources: &mut GpuResourceScope,
+) -> (ProofResources, GpuBufferHandle, GpuBufferHandle) {
     let seed = fixed_seed();
     let zeros_cells = vec![0_u32; usize::try_from(GRID_CELL_COUNT).unwrap()];
     let zeros_indices = vec![0_u32; usize::try_from(BOID_COUNT).unwrap()];
@@ -194,7 +194,11 @@ fn proof_resources(resources: &mut GpuResourceScope) -> (ProofResources, GpuBuff
         resources,
         "boids state a",
         &seed,
-        [GpuBufferUsage::Storage, GpuBufferUsage::Vertex, GpuBufferUsage::CopySource],
+        [
+            GpuBufferUsage::Storage,
+            GpuBufferUsage::Vertex,
+            GpuBufferUsage::CopySource,
+        ],
     );
     let state_b = prepared_buffer(
         resources,
@@ -375,7 +379,10 @@ fn offscreen_target(resources: &mut GpuResourceScope) -> (GpuTextureHandle, GpuT
                 WIDTH,
                 HEIGHT,
                 GpuTextureFormat::Rgba8Unorm,
-                [GpuTextureUsage::ColorAttachment, GpuTextureUsage::CopySource],
+                [
+                    GpuTextureUsage::ColorAttachment,
+                    GpuTextureUsage::CopySource,
+                ],
                 GpuTextureInitialization::Uninitialized,
             )
             .unwrap(),
@@ -483,7 +490,9 @@ pub(crate) fn offscreen_work(sources: &ProgramSources) -> OffscreenWork {
                 render_operation(&render, &proof_resources, &draw_params_buffer, &view),
             )?;
             let readback = GpuReadbackOperation::ordinary(
-                GpuTextureCopyRegion::whole_base_mip(&texture).unwrap().into(),
+                GpuTextureCopyRegion::whole_base_mip(&texture)
+                    .unwrap()
+                    .into(),
             )
             .unwrap();
             frame_readbacks.push(readback.id());
@@ -493,9 +502,21 @@ pub(crate) fn offscreen_work(sources: &ProgramSources) -> OffscreenWork {
         for (name, buffer, slot) in [
             ("state", &proof_resources.state_a, &mut state_readback),
             ("counts", &proof_resources.cell_counts, &mut counts_readback),
-            ("offsets", &proof_resources.cell_offsets, &mut offsets_readback),
-            ("cursors", &proof_resources.cell_cursors, &mut cursors_readback),
-            ("indices", &proof_resources.sorted_indices, &mut indices_readback),
+            (
+                "offsets",
+                &proof_resources.cell_offsets,
+                &mut offsets_readback,
+            ),
+            (
+                "cursors",
+                &proof_resources.cell_cursors,
+                &mut cursors_readback,
+            ),
+            (
+                "indices",
+                &proof_resources.sorted_indices,
+                &mut indices_readback,
+            ),
         ] {
             let readback = whole_buffer_readback(buffer);
             *slot = Some(readback.id());
