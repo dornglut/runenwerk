@@ -5,13 +5,15 @@ status: active
 owner: gpu
 layer: framework/gpu
 canonical: true
-last_reviewed: 2026-08-10
+last_reviewed: 2026-08-30
 related_docs:
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
   - ../../adr/accepted/0015-separate-gpu-execution-from-rendering.md
   - ./runengpu-g3-access-work-graph-design.md
+  - ./runengpu-g3r-definite-initialization-correction.md
   - ./runengpu-g4-context-program-realization-design.md
+  - ./runengpu-post-g5c-hardening-design.md
   - ./runenrender-decomposition-design.md
   - ./runenrender-internal-decomposition-execution-plan.md
   - ./runen-family-operational-hardening-design.md
@@ -34,45 +36,35 @@ related_docs:
 
 ## Status
 
-The repository identity, ownership boundary, one-package target shape, dependency
-direction, WGPU placement, host boundary, public experience, operational doctrine, and
-extraction sequence are fixed.
+This document owns RunenGPU's durable broad architecture: repository/package target, ownership and
+dependency direction, semantic work/execution boundaries, backend containment, public experience,
+operational doctrine, and extraction shape.
+
+Live accepted-delivery state and the current implementation frontier belong to RunenGPU tracker #167,
+the roadmap, active bounded issues, and their pull requests. They are deliberately not copied into
+this architecture document.
+
+Focused phase designs own exact semantic contracts for their bounded areas. Historical phase-local
+migration and deletion wording below records ownership boundaries and cutover intent; it is not a
+claim that a named migration seam still exists in current source.
+
+The durable sequence remains:
 
 ```text
-S0 inventory                         complete
-G1A logical work-resource identity   complete
-G2 capabilities and resources        complete at 709aa6aced020ee99405e1e1c3dde7703c77a4d4
-G3 decision phase                    complete at 5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8
-operational hardening                complete at 90d24abb93bff4b1d3f5b4743056bc00ff80d4b6
-G3 Rust implementation               accepted at 39d6fe65a334502bdfba0b1a2ce3b365099fcf28
-verified-head maintenance            accepted at 6bbd341691a34763ef54c8ca059940cac8981265
-G4 decision phase                    accepted at 62c3949d31a7c03f1f554f8108120d9767139123
-G4A context admission                accepted at 501b9fd58e56d33708573e47faf0e5026b5a1ff2
-G4B program/interface contracts      accepted at 2095afd624979a9f386254d44e082b7eeb0a18a1
-G4C1 final contract correction       issue #224 only; source implementation blocked
-G4C2/G4C3/G5-G8                      separately blocked or unauthorized
-GX external extraction               blocked on accepted G2-G8 evidence
+S0 inventory
+    -> G1A logical work-resource identity
+        -> G2 capabilities/resources/data
+            -> G3 correctness preparation and work graph
+                -> G4 context/program/resource admission and reusable realization
+                    -> G5 execution/progress/readback/retirement
+                        -> G6 representative breadth/scale/ergonomics/cost proof
+                            -> G7 surface/generation/loss/reconstruction semantics
+                                -> G8 operational/backend-neutrality conformance
+                                    -> GX standalone extraction
 ```
 
-The commit after accepted G3 changes only verified-head validation and workflow
-authority. It changes no RunenGPU or render source, dependency, manifest, lockfile, or
-architecture decision.
-
-The implementation remains inside Runenwerk until each internal future public boundary
-is accepted. This document defines broad architecture. Focused phase designs,
-specifications, and owning issues authorize bounded implementation.
-
-G4 is decomposed and ordered:
-
-```text
-G4A context and adapter/device admission
- -> G4B program, interface, binding and pipeline contracts
- -> G4C WGPU realization, cache compatibility and cutover
-```
-
-The three slices must not be collapsed into one implementation issue or pull request.
-G4C remains the ordered `G4C1 -> G4C2 -> G4C3 -> G5` continuation; no child starts
-before its predecessor is accepted and accepted-main verified.
+The implementation remains inside Runenwerk until the clean GX cutover is accepted. No phase-local
+status table in this document supersedes #167 or the roadmap.
 
 ## Mission
 
@@ -316,10 +308,112 @@ RunenECS owns generic ECS semantics. Runenwerk adapters extract required state i
 prepared domain and GPU values. RunenGPU neither stores ECS entities/components nor
 schedules ECS systems.
 
+## Execution architecture
+
+RunenGPU has one logical GPU work and execution authority. Ordinary and advanced authoring produce
+the same typed resources and operations and pass through the same durable execution spine:
+
+```text
+typed GPU work
+    -> correctness preparation
+    -> validated work representation
+    -> execution planning
+    -> private command / execution realization
+    -> submission / progress / terminal outcome
+```
+
+These are architectural responsibilities, not required one-to-one public Rust types, runtime objects,
+caches, threads, command buffers, or packages.
+
+Context/program/resource admission and reusable backend-object realization are supporting
+responsibilities rather than physical scheduling authority. In particular, accepted G4 resources,
+programs, layouts, bind groups, and pipelines may be realized and cached before a particular
+execution plan is chosen. Future transient realization may instead be influenced by execution
+planning when evidence justifies it. Neither arrangement creates another semantic work model.
+
+### Correctness preparation
+
+The validated work graph is the shared internal correctness and inspection authority. It determines
+whether composed GPU work is legal before backend execution and preserves the facts needed to explain
+that decision, including:
+
+- typed resources and operations;
+- normalized resource accesses;
+- exact initialization requirements and definite initialization effects under their focused owners;
+- inferred data dependencies;
+- explicit non-data ordering constraints;
+- capability requirements;
+- provenance and diagnostic causes.
+
+Focused RunenGPU designs own the exact semantics of those facts. Access/hazard truth,
+initialization requirements, and definite initialization effects remain distinct authorities.
+
+The validated work representation constrains legal execution. It does not prescribe one permanent
+physical schedule, backend synchronization strategy, command-buffer layout, queue assignment, or
+allocation strategy.
+
+### Execution planning
+
+Execution planning consumes validated work plus admitted environment facts and selects one legal
+physical execution realization.
+
+A planner must preserve every applicable correctness constraint established by preparation. It may
+not reinterpret logical resource identity, invent or remove semantic dependencies, weaken
+initialization requirements, bypass capability admission, or create a second work-graph authority.
+
+The baseline planner may directly follow deterministic prepared order. More sophisticated planning is
+permitted only where evidence justifies it. Such planning may, when semantically equivalent, choose a
+different legal ordering or use backend-appropriate command grouping, synchronization granularity,
+transition batching, transient realization, queue assignment, or reuse of previously derived
+structural planning information.
+
+Those choices are realization strategies, not new GPU semantics.
+
+Semantic access precision and backend synchronization granularity are deliberately distinct.
+RunenGPU may preserve exact byte ranges, texture subresources, or other regions for correctness and
+diagnostics while using a coarser physical synchronization strategy when that strategy preserves the
+same legal behavior.
+
+### Private realization
+
+Reusable backend-object realization and per-execution command realization both remain private.
+Reusable resources/programs/layouts/bind groups/pipelines may be cached according to their accepted
+compatibility contracts. Per-execution realization maps a legal plan to private backend commands,
+synchronization operations, submissions, and completion mechanisms.
+
+WGPU is the initial backend. Its object model, synchronization vocabulary, memory behavior, or
+feature enumeration does not become public RunenGPU semantic authority merely because the initial
+implementation requires it.
+
+There is no broad raw-device, raw-queue, or raw-command-encoder escape around the validated execution
+authority.
+
+### Stable execution invariants
+
+1. **One semantic work model.** Ordinary helpers, advanced authoring, inspected work, and future
+   optimized execution lower through the same typed resource, operation, access, and correctness
+   authorities.
+2. **Correctness is not scheduling.** Dependency and validity constraints define which executions
+   are legal; physical ordering and synchronization are realization choices within those constraints.
+3. **Semantic precision is not backend granularity.** Exact semantic regions may be retained for
+   correctness and diagnostics without requiring equally fine backend synchronization.
+4. **Planning does not create semantics.** Execution planning may optimize a valid workload but may
+   not invent application meaning, resource authority, causality, initialization truth, or capability
+   guarantees.
+5. **Higher-level semantics remain above RunenGPU.** Rendering methods, scenes, materials,
+   simulation policy, ECS scheduling, UI, fixed-time behavior, shader-source workflow, and product
+   recovery remain owned by their respective consumers/frameworks.
+6. **Backend machinery remains below RunenGPU.** Reusable backend realization and per-execution
+   command realization stay private unless a separately accepted bounded extension proves a portable
+   RunenGPU contract is required.
+7. **Optimization mechanisms are evidence-gated.** Reusable planning, transient aliasing,
+   multi-queue scheduling, pass fusion, aggressive graph optimization, and similar mechanisms are not
+   architectural requirements merely because the architecture leaves room for them.
+
 ## Public experience
 
 The validated work graph is the shared internal correctness and inspection authority.
-It is not mandatory common-path ceremony.
+It is not mandatory common-path ceremony and is not the permanent physical schedule.
 
 Directional ordinary path:
 
@@ -338,9 +432,9 @@ inspect(prepared.diagnostics());
 let submission = context.submit_prepared(prepared)?;
 ```
 
-G4 establishes context admission, programs, interfaces, and realizations. G5 establishes
-the ordinary prepare/submit terminal. These examples are directional and do not
-authorize later-phase implementation early.
+G4 establishes context admission, programs, interfaces, and reusable realizations. G5 establishes
+the ordinary prepare/submit terminal. These examples are directional and do not make internal
+planning representations part of ordinary API ceremony.
 
 Ergonomic invariants:
 
@@ -533,9 +627,9 @@ parent texture and checked mip/layer/aspect range and cannot exceed parent lifet
 lease, generation, or subresource range.
 
 G3 owns exact work-time ranges, access categories, graph-entry initialization, hazards,
-attachment relationships, query resolution, and causality. G4A/G4C add backend limit,
-format, alignment, context, and generation admission. G5 adds runtime lease and
-retirement checks.
+attachment relationships, query resolution, and causality. G3R/G5R own the corrected
+requirement/effect/materialization semantics. G4A/G4C add backend limit, format, alignment,
+context, and generation admission. G5 adds runtime lease and retirement checks.
 
 ## Typed GPU data
 
@@ -577,12 +671,18 @@ Present    logical texture consumption only
 
 `GpuPreparedWorkGraph` composes bounded fragments and owns deterministic typed
 resolution, operation/access/requirement consistency, inferred hazards and dependencies,
-topological order, graph-entry initialization, logical lifetime validation, admission
-inputs, backend compilation inputs, and output/completion contracts.
+deterministic correctness order, graph-entry initialization, logical lifetime validation,
+admission inputs, backend execution inputs, and output/completion contracts.
 
 It rejects duplicate, unknown, foreign, cyclic, ambiguous, contradictory, invalid, and
 read-before-initialization states. Fragment collection position is not scheduling
 authority. Cross-fragment overlapping writes require typed producer/consumer causality.
+
+The prepared graph is the correctness representation, not the permanent physical execution plan.
+Its deterministic topological order supports validation, diagnostics, testing, and the baseline
+execution strategy. Downstream execution planning may add conservative order or choose another legal
+ordering where the graph leaves nodes independent, but may not weaken or reinterpret prepared
+correctness constraints.
 
 The graph contains no ECS systems, gameplay actions, UI routes, SDF nodes, material
 graphs, renderer feature meaning, or product lifecycle policy.
@@ -678,6 +778,11 @@ copies, staging, query resolution, map/poll, and readback remain G5 work.
 `create_buffer_init`, `queue.write_buffer`, and `queue.write_texture` cannot establish
 a second G4C1 transfer authority.
 
+G4 reusable-object realization is deliberately distinct from per-execution planning. A resource,
+program, layout, bind group, or pipeline may already have a valid cached realization when execution
+planning begins. Conversely, future evidence may justify plan-directed transient realization. Neither
+case makes G4 caches or registries the physical scheduling authority.
+
 ## G4C seam distinction
 
 Exactly one object-reference migration bridge may remain at each accepted G4C boundary:
@@ -714,14 +819,21 @@ residual payload during encoding/submission cutover.
 Execution lifecycle:
 
 ```text
-collect fragments
-    -> prepare and compose                         G3
-    -> admit context/programs and realize backend  G4
-    -> encode and submit                           G5
-    -> progress, complete, read back               G5
-    -> retire transient/backend state safely       G5
-    -> acquire/present/reconstruct surfaces         G7
+collect typed fragments
+    -> correctness prepare and compose                    G3
+    -> admit context/program/resource compatibility       G4
+    -> realize/reuse backend objects as required          G4
+    -> execution planning                                 execution responsibility
+       (baseline may follow prepared order)
+    -> realize commands and submit                        G5
+    -> progress, complete, read back                      G5
+    -> retire transient/backend state safely              G5
+    -> acquire/present/reconstruct surfaces               G7
 ```
+
+The execution-planning responsibility is architectural rather than a new phase code or required Rust
+type. More sophisticated planning remains evidence-gated; the current baseline may simply consume the
+prepared deterministic order.
 
 WGPU is private implementation for:
 
@@ -734,12 +846,12 @@ WGPU is private implementation for:
 No public `Device`, `Queue`, resource, shader module, layout, bind group, pipeline,
 surface, or raw enum becomes stable RunenGPU authority.
 
-The current Winit-coupled `WgpuCtx` and renderer-owned WGPU caches are migration
-evidence. G4A detaches headless context admission while retaining at most one temporary
-host-compatible selection seam. Ordered G4C removes reusable renderer-owned
-realization; its separate `CurrentRenderDeviceQueue` operation loan remains only until
-G5 removes the final operation users. G7 removes the remaining surface compatibility
-seam.
+The Winit-coupled `WgpuCtx` and renderer-owned WGPU caches were migration evidence. G4A detaches
+headless context admission while retaining at most one temporary host-compatible selection seam.
+Ordered G4C removes reusable renderer-owned realization; its separate
+`CurrentRenderDeviceQueue` operation loan remains only until G5 removes the final operation users.
+G7 removes the remaining surface compatibility seam. Current-source presence of any historical seam
+is owned by code and tracker evidence, not this phase-boundary description.
 
 ## Surface boundary
 
@@ -925,24 +1037,25 @@ current-main subset. Before source changes, the owning issue:
 
 ## Extraction sequence
 
+The durable extraction sequence is:
+
 ```text
-S0 complete inventory                                      complete
-G1A owner-scoped logical GPU work-resource identity         complete
-G2 capabilities, resources, typed handles, prepared data    complete
-G3 planning and implementation                              complete
-operational hardening                                       complete
-G4A context and adapter/device admission                    next after accepted G4 planning
-G4B program/interface/binding/layout contracts              blocked by accepted G4A
-G4C WGPU realization/cache/cutover                          blocked by accepted G4B
-G5 execution/progress/readback/retirement                   pending
-G6 offscreen graphics/shared consumers/direct baseline     pending
-G7 surfaces/generations/loss/reconstruction                 pending
-G8 operational conformance/diagnostics/shutdown/audit       pending
-GX external dornglut/runen-gpu clean cutover                blocked
+S0 complete inventory
+    -> G1A owner-scoped logical GPU work-resource identity
+        -> G2 capabilities, resources, typed handles, prepared data
+            -> G3 correctness preparation and work graph
+                -> G4 context/program/interface/backend reusable realization
+                    -> G5 execution/progress/readback/retirement
+                        -> G6 representative proof, ergonomics, scale, and direct-backend cost
+                            -> G7 surfaces/generations/loss/reconstruction
+                                -> G8 operational conformance/diagnostics/backend-neutrality audit
+                                    -> GX external dornglut/runen-gpu clean cutover
 ```
 
-Only one implementation authority is active at a time. G2-G7 migrate and delete
-replaced authority incrementally. G8 is final conformance, not delayed bulk cleanup.
+This is sequencing authority only. Completion state, accepted SHAs, active issues, and the current
+frontier live in tracker #167 and the roadmap. Only one implementation authority is active at a time.
+G2-G7 migrate and delete replaced authority incrementally. G8 is final conformance, not delayed bulk
+cleanup.
 
 ## External cutover
 
