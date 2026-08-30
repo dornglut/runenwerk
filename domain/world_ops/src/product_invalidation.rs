@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
+use runen_spatial::{ChunkId, GridPartitionConfig};
 use serde::{Deserialize, Serialize};
-use spatial::{ChunkId, GridPartitionConfig};
 
 use crate::{
     BuildGeneration, BuildGraph, BuildGraphNode, BuildGraphPhase, BuildQueue, BuildQueueClass,
@@ -121,11 +121,11 @@ impl ProductInvalidationPlan {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use spatial::{ChunkCoord3, WorldId};
+    use runen_spatial::{ChunkCoord3, WorldId};
 
     #[test]
     fn product_invalidation_enqueues_touched_chunks_once() {
-        let chunk = ChunkId::new(WorldId(1), ChunkCoord3 { x: 1, y: 0, z: 0 });
+        let chunk = ChunkId::new(WorldId::new(1), ChunkCoord3 { x: 1, y: 0, z: 0 });
         let plan = ProductInvalidationPlan::new(
             ProductInvalidationSource::AssetSourceChanged,
             WorldRevision(3),
@@ -143,7 +143,7 @@ mod tests {
 
     #[test]
     fn changed_source_invalidation_records_regions_and_build_graph() {
-        let chunk = ChunkId::new(WorldId(1), ChunkCoord3 { x: 2, y: 0, z: -1 });
+        let chunk = ChunkId::new(WorldId::new(1), ChunkCoord3 { x: 2, y: 0, z: -1 });
         let partition = GridPartitionConfig::default();
         let mut journal = RegionInvalidationJournal {
             max_records: 8,

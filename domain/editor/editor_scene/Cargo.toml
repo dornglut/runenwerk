@@ -13,6 +13,6 @@ editor_inspector.workspace = true
 glam.workspace = true
 graph.workspace = true
 schema.workspace = true
-spatial.workspace = true
+runen-spatial.workspace = true
 world_ops.workspace = true
 world_sdf.workspace = true

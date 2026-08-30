@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: guidelines
 canonical: true
-last_reviewed: 2026-07-22
+last_reviewed: 2026-08-30
 related_docs:
   - ../architecture/repository-family-architecture.md
   - ../adr/accepted/0014-repository-family-extraction-boundaries.md
@@ -17,12 +17,13 @@ related_docs:
 ## Repository direction
 
 ```text
-RunenSDF ----+
-RunenECS ----+--> Runenwerk adapters/integration --> applications
-RunenUI -----+
-                  |
-                  +--> RunenRender --> RunenGPU
-                  +--> non-render RunenGPU workloads
+RunenSDF -----+
+RunenSpatial -+
+RunenECS -----+--> Runenwerk adapters/integration --> applications
+RunenUI ------+
+                   |
+                   +--> RunenRender --> RunenGPU
+                   +--> non-render RunenGPU workloads
 ```
 
 Framework repositories do not depend on Runenwerk. A direct framework dependency requires an accepted ADR proving correct ownership and independent value.
@@ -62,9 +63,10 @@ RunenRender depends on RunenGPU. It may own prepared render scenes, views and lo
 
 RunenRender does not depend directly on WGPU, Winit, Runenwerk, RunenSDF, RunenECS, RunenUI, source scene/material/editor domains, or application lifecycle.
 
-### RunenSDF, RunenECS, and RunenUI
+### RunenSDF, RunenSpatial, RunenECS, and RunenUI
 
 - RunenSDF remains backend-neutral and owns field and numerical semantics.
+- RunenSpatial remains host-neutral and owns reusable spatial identity, addressing and coordinate mechanics, bounded spatial-demand planning, and content-agnostic availability lifecycle mechanics.
 - RunenECS owns ECS lifecycle, query, storage, and system semantics.
 - RunenUI owns semantic UI, state/actions, focus/accessibility, layout/style/text, hit testing, and renderer-neutral paint output.
 

@@ -1,5 +1,5 @@
+use runen_spatial::ChunkId;
 use serde::{Deserialize, Serialize};
-use spatial::ChunkId;
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]

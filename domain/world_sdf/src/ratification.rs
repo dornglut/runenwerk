@@ -111,7 +111,7 @@ pub fn ratify_field_product_candidate(
 
 #[cfg(test)]
 mod tests {
-    use spatial::{ChunkCoord3, ChunkId, WorldId};
+    use runen_spatial::{ChunkCoord3, ChunkId, WorldId};
 
     use super::*;
     use crate::{
@@ -139,7 +139,7 @@ mod tests {
 
     #[test]
     fn field_product_ratifier_accepts_scoped_preview_product() {
-        let chunk = ChunkId::new(WorldId(1), ChunkCoord3 { x: 0, y: 0, z: 0 });
+        let chunk = ChunkId::new(WorldId::new(1), ChunkCoord3 { x: 0, y: 0, z: 0 });
         let descriptor = FieldProductDescriptor::new(
             FieldProductId(1),
             FieldProductKind::ScalarDistance,
@@ -155,7 +155,7 @@ mod tests {
 
     #[test]
     fn field_product_core_maps_preview_surface_sdf_contract() {
-        let chunk = ChunkId::new(WorldId(1), ChunkCoord3 { x: 0, y: 0, z: 0 });
+        let chunk = ChunkId::new(WorldId::new(1), ChunkCoord3 { x: 0, y: 0, z: 0 });
         let descriptor = FieldProductDescriptor::new(
             FieldProductId(7),
             FieldProductKind::ScalarDistance,
@@ -173,7 +173,7 @@ mod tests {
 
     #[test]
     fn field_product_core_maps_payload_products_to_strict_contract() {
-        let chunk = ChunkId::new(WorldId(1), ChunkCoord3 { x: 0, y: 0, z: 0 });
+        let chunk = ChunkId::new(WorldId::new(1), ChunkCoord3 { x: 0, y: 0, z: 0 });
         let mut descriptor = FieldProductDescriptor::new(
             FieldProductId(9),
             FieldProductKind::WorldSdfChunkPages,
@@ -185,8 +185,10 @@ mod tests {
         let payload = SdfChunkPayload {
             chunk_id: chunk,
             chunk_revision: world_ops::ChunkRevision(4),
+            chunk_generation: world_ops::ChunkGeneration(4),
+            page_table: Default::default(),
+            hierarchy_revision: 0,
             checksum: 44,
-            ..SdfChunkPayload::default()
         };
         descriptor
             .payload_refs

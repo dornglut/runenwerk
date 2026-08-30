@@ -20,6 +20,7 @@ It is the integration and product repository for the wider Runen framework famil
 Runenwerk is being decomposed into focused peer frameworks:
 
 - **RunenSDF** — signed-distance and implicit-field foundations;
+- **RunenSpatial** — host-neutral spatial identity, addressing, demand planning, and availability lifecycle mechanics;
 - **RunenECS** — ECS and scheduling foundations;
 - **RunenGPU** — shared GPU execution;
 - **RunenRender** — image formation and rendering;

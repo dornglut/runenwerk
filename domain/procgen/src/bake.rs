@@ -212,7 +212,7 @@ fn rejected_bake_with_diagnostics(
 #[cfg(test)]
 mod tests {
     use product::{ProductJobBudgetClass, ProductRetentionPolicy, ProductScaleBand};
-    use spatial::WorldId;
+    use runen_spatial::WorldId;
 
     use super::*;
     use crate::{ProcgenScope, test_fixtures::valid_document};
@@ -247,7 +247,7 @@ mod tests {
     #[test]
     fn invalid_document_rejects_without_rollback_point() {
         let mut document = valid_document();
-        document.scope = ProcgenScope::new(WorldId(1), [], []);
+        document.scope = ProcgenScope::new(WorldId::new(1), [], []);
         document.refresh_cache_lineage();
 
         let outcome = bake_procgen_document(

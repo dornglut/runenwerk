@@ -6,7 +6,7 @@ use crate::plugins::render::features::{
     PROCEDURAL_WORLD_RENDER_FEATURE_ID, PreparedUiFrameContribution, SCENE_ROUTE_RENDER_FEATURE_ID,
     UI_RENDER_FEATURE_ID, WIND_FIELDS_RENDER_FEATURE_ID, WORLD_DRAW_RENDER_FEATURE_ID,
 };
-use spatial::ChunkId;
+use runen_spatial::ChunkId;
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
@@ -339,7 +339,7 @@ pub struct PreparedWorldFeatureContribution {
     pub residency_intents: Vec<PreparedWorldResidencyIntent>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct PreparedWorldChunkContribution {
     pub chunk_id: ChunkId,
     pub chunk_revision: u64,
@@ -347,12 +347,12 @@ pub struct PreparedWorldChunkContribution {
     pub draw_batch_ref: PreparedWorldDrawBatchRef,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct PreparedWorldDrawBatchRef {
     pub chunk_id: ChunkId,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct PreparedWorldResidencyIntent {
     pub chunk_id: ChunkId,
     pub priority: i32,
@@ -370,7 +370,7 @@ pub struct PreparedDetailFeatureContribution {
     pub cells: Vec<PreparedDetailCellContribution>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct PreparedDetailCellContribution {
     pub cell_id: String,
     pub chunk_id: ChunkId,

@@ -4,7 +4,6 @@ members = [
     "domain/ecs",
     "domain/ecs_macros",
     "domain/geometry",
-    "domain/spatial",
     "domain/asset",
     "domain/product",
     "domain/world_ops",
@@ -95,7 +94,7 @@ ktx2 = "0.5.0"
 scene = { path = "domain/scene" }
 asset = { path = "domain/asset" }
 product = { path = "domain/product" }
-spatial = { path = "domain/spatial" }
+runen-spatial = { git = "https://github.com/dornglut/runen-spatial", rev = "2bb6b2ed89894aefaa39bf0e39d296b703916821" }
 world_ops = { path = "domain/world_ops" }
 world_sdf = { path = "domain/world_sdf" }
 

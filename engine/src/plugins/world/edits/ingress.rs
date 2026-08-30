@@ -1,15 +1,16 @@
 use super::super::adapters::resources::{
     OperationLogResource, PartitionConfigResource, RegionInvalidationJournalResource,
+    WorldQuantizationScaleResource,
 };
 use super::super::chunks::DirtyChunkMapResource;
 use super::super::chunks::render_cache_bridge::WorldRenderCacheInvalidationQueueResource;
 use super::super::debug::metrics::WorldDebugMetricsResource;
 use super::super::{WorldAuthorityState, WorldRuntimeConfig, WorldRuntimeMode};
 use ecs::World;
-use spatial::WorldId;
+use runen_spatial::WorldId;
 use world_ops::{
     Operation, OperationId, OperationRecord, QuantizedAabb, dirty_reason_for_operation,
-    mark_dirty_chunks_from_quantized_bounds,
+    touched_chunks_from_quantized_bounds,
 };
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -21,7 +22,7 @@ pub struct WorldEditIngressMeta {
 impl Default for WorldEditIngressMeta {
     fn default() -> Self {
         Self {
-            planet_id: WorldId(0),
+            planet_id: WorldId::new(0),
             deterministic_seed: 0,
         }
     }
@@ -42,6 +43,15 @@ pub fn submit_world_operation(
         .map(|value| value.world_revision)
         .unwrap_or_default();
     let dirty_reason = dirty_reason_for_operation(&operation);
+    let partition = world.resource::<PartitionConfigResource>().ok()?.clone();
+    let quantization_scale = **world.resource::<WorldQuantizationScaleResource>().ok()?;
+    let touched_chunks = touched_chunks_from_quantized_bounds(
+        &partition,
+        affected_bounds_q,
+        meta.planet_id,
+        quantization_scale,
+    )
+    .ok()?;
 
     let op_id = {
         let op_log = world.resource_mut::<OperationLogResource>().ok()?;
@@ -55,19 +65,12 @@ pub fn submit_world_operation(
         })
     };
 
-    let partition = world.resource::<PartitionConfigResource>().ok()?.clone();
-    let fixed_point_scale = partition.quantization_scale();
-    let touched_chunks = {
+    {
         let dirty = world.resource_mut::<DirtyChunkMapResource>().ok()?;
-        mark_dirty_chunks_from_quantized_bounds(
-            dirty,
-            &partition,
-            affected_bounds_q,
-            meta.planet_id,
-            fixed_point_scale,
-            dirty_reason,
-        )
-    };
+        for chunk_id in touched_chunks.iter().copied() {
+            dirty.mark_dirty(chunk_id, dirty_reason);
+        }
+    }
     let invalidated_chunk_count = touched_chunks.len() as u64;
 
     if let Ok(queue) = world.resource_mut::<WorldRenderCacheInvalidationQueueResource>() {

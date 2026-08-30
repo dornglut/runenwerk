@@ -1,6 +1,29 @@
 use crate::{OperationId, WorldRevision};
+use runen_spatial::WorldId;
 use serde::{Deserialize, Serialize};
-use spatial::WorldId;
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct WorldQuantizationScale(i32);
+
+impl WorldQuantizationScale {
+    pub const DEFAULT: Self = Self(1024);
+
+    #[must_use]
+    pub const fn try_new(value: i32) -> Option<Self> {
+        if value > 0 { Some(Self(value)) } else { None }
+    }
+
+    #[must_use]
+    pub const fn get(self) -> i32 {
+        self.0
+    }
+}
+
+impl Default for WorldQuantizationScale {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct QuantizedVec3 {
@@ -119,15 +142,17 @@ pub enum Operation {
 pub struct OperationRecord {
     pub op_id: OperationId,
     pub base_world_revision: WorldRevision,
-    #[serde(default)]
     pub planet_id: WorldId,
     pub operation: Operation,
     pub affected_bounds_q: QuantizedAabb,
     pub deterministic_seed: u64,
 }
 
-pub fn quantize_position(position_meters: [f32; 3], fixed_point_scale: i32) -> QuantizedVec3 {
-    let scale = fixed_point_scale.max(1) as f32;
+pub fn quantize_position(
+    position_meters: [f32; 3],
+    scale: WorldQuantizationScale,
+) -> QuantizedVec3 {
+    let scale = scale.get() as f32;
     QuantizedVec3 {
         x: (position_meters[0] * scale).round() as i32,
         y: (position_meters[1] * scale).round() as i32,
@@ -138,26 +163,35 @@ pub fn quantize_position(position_meters: [f32; 3], fixed_point_scale: i32) -> Q
 pub fn quantize_aabb(
     min_meters: [f32; 3],
     max_meters: [f32; 3],
-    fixed_point_scale: i32,
+    scale: WorldQuantizationScale,
 ) -> QuantizedAabb {
     QuantizedAabb {
-        min: quantize_position(min_meters, fixed_point_scale),
-        max: quantize_position(max_meters, fixed_point_scale),
+        min: quantize_position(min_meters, scale),
+        max: quantize_position(max_meters, scale),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        BrushShape, CsgBooleanMode, CsgBrushOperation, Operation, QuantizedVec3, quantize_position,
+        BrushShape, CsgBooleanMode, CsgBrushOperation, Operation, QuantizedVec3,
+        WorldQuantizationScale, quantize_position,
     };
 
     #[test]
     fn quantization_rounds_to_fixed_scale() {
+        let scale = WorldQuantizationScale::try_new(4).expect("positive scale is valid");
         assert_eq!(
-            quantize_position([1.25, -2.25, 0.0], 4),
+            quantize_position([1.25, -2.25, 0.0], scale),
             QuantizedVec3 { x: 5, y: -9, z: 0 }
         );
+    }
+
+    #[test]
+    fn quantization_scale_rejects_non_positive_values() {
+        assert!(WorldQuantizationScale::try_new(0).is_none());
+        assert!(WorldQuantizationScale::try_new(-1).is_none());
+        assert_eq!(WorldQuantizationScale::default().get(), 1024);
     }
 
     #[test]

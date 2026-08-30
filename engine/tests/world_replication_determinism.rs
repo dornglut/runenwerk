@@ -6,38 +6,43 @@ use engine::net::prelude::{
 use engine::plugins::net::NetStreamingStateResource;
 use engine::plugins::net::{enqueue_server_inbox_from, update_connection_closed};
 use engine::plugins::world::adapters::resources::{
-    PartitionConfigResource, ReplicationStateResource,
+    PartitionConfigResource, ReplicationStateResource, WorldQuantizationScaleResource,
 };
 use engine::plugins::world::edits::ingress::{WorldEditIngressMeta, submit_world_operation};
 use engine::plugins::world::plugin::{WorldAuthorityState, WorldPlugin};
 use engine::prelude::App;
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
+use runen_spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, WorldId};
 use serde::{Deserialize, Serialize};
-use spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, WorldId};
 use std::io;
 use world_ops::{
     BrushShape, DirtyChunkMap, Operation, OperationId, OperationLog, OperationRecord,
-    RegionInvalidationDelta, ReplayWindow, SyncCursor, WorldRevision,
+    RegionInvalidationDelta, ReplayWindow, SyncCursor, WorldQuantizationScale, WorldRevision,
     mark_dirty_chunks_from_operation_log, operations_for_replay_window, quantize_aabb,
     quantize_position,
 };
 
+fn test_quantization_scale() -> WorldQuantizationScale {
+    WorldQuantizationScale::try_new(1024).expect("test quantization scale is valid")
+}
+
 fn build_test_log() -> OperationLog {
     let mut log = OperationLog::default();
+    let scale = test_quantization_scale();
     let operations = [
         Operation::CsgSubtract {
             brush: BrushShape::Sphere {
-                center_q: quantize_position([2.0, 0.0, -1.0], 1024),
+                center_q: quantize_position([2.0, 0.0, -1.0], scale),
                 radius_q: 1536,
             },
         },
         Operation::Smooth {
-            bounds_q: quantize_aabb([-6.0, -2.0, -6.0], [6.0, 2.0, 6.0], 1024),
+            bounds_q: quantize_aabb([-6.0, -2.0, -6.0], [6.0, 2.0, 6.0], scale),
             kernel_radius_q: 512,
             strength_q: 192,
         },
         Operation::MaterialFieldEdit {
-            bounds_q: quantize_aabb([-4.0, -1.0, -4.0], [4.0, 1.0, 4.0], 1024),
+            bounds_q: quantize_aabb([-4.0, -1.0, -4.0], [4.0, 1.0, 4.0], scale),
             channel_mask: 0b0011,
             payload: vec![1, 2, 3, 4],
         },
@@ -46,16 +51,16 @@ fn build_test_log() -> OperationLog {
     for operation in operations {
         let bounds_q = match &operation {
             Operation::CsgSubtract { .. } => {
-                quantize_aabb([-3.0, -3.0, -3.0], [3.0, 3.0, 3.0], 1024)
+                quantize_aabb([-3.0, -3.0, -3.0], [3.0, 3.0, 3.0], scale)
             }
             Operation::Smooth { bounds_q, .. } => *bounds_q,
             Operation::MaterialFieldEdit { bounds_q, .. } => *bounds_q,
-            _ => quantize_aabb([-1.0, -1.0, -1.0], [1.0, 1.0, 1.0], 1024),
+            _ => quantize_aabb([-1.0, -1.0, -1.0], [1.0, 1.0, 1.0], scale),
         };
         let _ = log.append(OperationRecord {
             op_id: OperationId(0),
             base_world_revision: WorldRevision(1),
-            planet_id: WorldId(0),
+            planet_id: WorldId::new(0),
             operation,
             affected_bounds_q: bounds_q,
             deterministic_seed: 1337,
@@ -166,10 +171,13 @@ fn op_log_replay_and_invalidation_are_deterministic() {
     assert_eq!(replay_a, replay_b, "replay output must be deterministic");
 
     let partition = GridPartitionConfig::default();
+    let scale = test_quantization_scale();
     let mut dirty_a = DirtyChunkMap::default();
     let mut dirty_b = DirtyChunkMap::default();
-    mark_dirty_chunks_from_operation_log(&mut dirty_a, &partition, &log_a, 1024);
-    mark_dirty_chunks_from_operation_log(&mut dirty_b, &partition, &log_b, 1024);
+    mark_dirty_chunks_from_operation_log(&mut dirty_a, &partition, &log_a, scale)
+        .expect("test operation bounds should map to chunks");
+    mark_dirty_chunks_from_operation_log(&mut dirty_b, &partition, &log_b, scale)
+        .expect("test operation bounds should map to chunks");
     assert_eq!(
         dirty_a.by_chunk, dirty_b.by_chunk,
         "dirty invalidation set must be deterministic for identical op logs"
@@ -181,11 +189,10 @@ fn world_replication_state_is_built_from_world_runtime() {
     let mut app = App::headless();
     app.add_plugin(WorldPlugin);
 
-    let fixed_point_scale = app
+    let fixed_point_scale = **app
         .world()
-        .resource::<PartitionConfigResource>()
-        .expect("world partition config should exist")
-        .quantization_scale();
+        .resource::<WorldQuantizationScaleResource>()
+        .expect("world quantization scale should exist");
     let op_id = submit_world_operation(
         app.world_mut(),
         Operation::Stamp {
@@ -195,7 +202,7 @@ fn world_replication_state_is_built_from_world_runtime() {
         },
         quantize_aabb([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], fixed_point_scale),
         WorldEditIngressMeta {
-            planet_id: WorldId(0),
+            planet_id: WorldId::new(0),
             deterministic_seed: 99,
         },
     );
@@ -254,7 +261,7 @@ fn world_replication_state_is_built_from_world_runtime() {
         .world()
         .resource::<PartitionConfigResource>()
         .expect("world partition config should exist");
-    let expected_chunk = ChunkId::new(WorldId(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
+    let expected_chunk = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
     let expected_region = partition.region_id_from_chunk_id(expected_chunk);
     assert!(
         replication
@@ -278,11 +285,10 @@ fn world_region_invalidation_projection_is_deterministic() {
     fn run_projection() -> Vec<RegionInvalidationDelta> {
         let mut app = App::headless();
         app.add_plugin(WorldPlugin);
-        let fixed_point_scale = app
+        let fixed_point_scale = **app
             .world()
-            .resource::<PartitionConfigResource>()
-            .expect("world partition config should exist")
-            .quantization_scale();
+            .resource::<WorldQuantizationScaleResource>()
+            .expect("world quantization scale should exist");
         let operations = [
             (
                 quantize_aabb([0.0, 0.0, 0.0], [40.0, 1.0, 1.0], fixed_point_scale),
@@ -303,7 +309,7 @@ fn world_region_invalidation_projection_is_deterministic() {
                 },
                 bounds_q,
                 WorldEditIngressMeta {
-                    planet_id: WorldId(0),
+                    planet_id: WorldId::new(0),
                     deterministic_seed: seed,
                 },
             );
@@ -345,11 +351,10 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
         session.active_connections.insert(connection_id);
     }
 
-    let fixed_point_scale = app
+    let fixed_point_scale = **app
         .world()
-        .resource::<PartitionConfigResource>()
-        .expect("world partition config should exist")
-        .quantization_scale();
+        .resource::<WorldQuantizationScaleResource>()
+        .expect("world quantization scale should exist");
     let _ = submit_world_operation(
         app.world_mut(),
         Operation::Stamp {
@@ -359,7 +364,7 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
         },
         quantize_aabb([-1.0, -1.0, -1.0], [3.0, 1.0, 3.0], fixed_point_scale),
         WorldEditIngressMeta {
-            planet_id: WorldId(0),
+            planet_id: WorldId::new(0),
             deterministic_seed: 17,
         },
     );
@@ -420,7 +425,7 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
         .run_for_ticks(next_tick)
         .expect("ack tick should update world streaming cursor state");
 
-    let second_chunk = ChunkId::new(WorldId(0), ChunkCoord3 { x: 2, y: 0, z: 0 });
+    let second_chunk = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 2, y: 0, z: 0 });
     {
         let interest = app
             .world()
@@ -446,7 +451,7 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
         },
         quantize_aabb([80.0, 0.0, 0.0], [80.0, 0.0, 0.0], fixed_point_scale),
         WorldEditIngressMeta {
-            planet_id: WorldId(0),
+            planet_id: WorldId::new(0),
             deterministic_seed: 18,
         },
     );

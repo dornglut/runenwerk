@@ -1,5 +1,5 @@
 use crate::{BuildGeneration, ChunkRevision};
-use spatial::ChunkId;
+use runen_spatial::ChunkId;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum BuildGraphPhase {

@@ -5,7 +5,7 @@ use product::{
     ProductAuthorityClass, ProductFreshness, ProductIdentity, ProductQueryPolicy, ProductResidency,
     ProductScaleBand, RenderProductSelection, RenderResidencyRequest, RenderSelectedProduct,
 };
-use spatial::ChunkId;
+use runen_spatial::ChunkId;
 use world_sdf::{SdfBrickRecord, SdfChunkPayload, SdfPageCoord3};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

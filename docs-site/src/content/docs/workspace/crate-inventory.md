@@ -39,7 +39,6 @@ This document records active workspace crates and their intended layer. Update i
 | `commands` | `foundation/commands` | foundation | Portable command contract vocabulary. | evolving |
 | `resource_ref` | `foundation/resource_ref` | foundation | Portable external resource references. | evolving |
 | `geometry` | `domain/geometry` | domain | Geometric primitives and queries. | evolving |
-| `spatial` | `domain/spatial` | domain | Spatial coordinate contracts. | evolving |
 | `asset` | `domain/asset` | domain | Asset identity, descriptors, import planning, dependency graph, diagnostics, and ratification contracts. | evolving |
 | `product` | `domain/product` | domain | Shared formed-product descriptors, product jobs, query snapshots, diagnostics, policies, and ratification contracts. | evolving |
 | `world_ops` | `domain/world_ops` | domain | Chunk/world operation logs, dirty tracking, build queues, invalidation, and replication deltas. | evolving |

@@ -19,6 +19,7 @@ pub enum SdfOperationIssueCode {
     UnsupportedBooleanIntent,
     MissingSmoothRadius,
     InvalidSmoothRadius,
+    SpatialMappingError,
     GraphStructuralError,
     MissingGraphOutput,
     MissingGraphNodeSemantics,

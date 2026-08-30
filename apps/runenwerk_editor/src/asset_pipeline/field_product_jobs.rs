@@ -6,7 +6,7 @@ use asset::{
     ImportSettings, asset_artifact_id, product_job_descriptor_for_import, ratify_asset_artifact,
 };
 use product::{ProductJobDescriptor, ProductPublicationOutcome, ratify_product_job};
-use spatial::{ChunkCoord3, ChunkId, WorldId};
+use runen_spatial::{ChunkCoord3, ChunkId, WorldId};
 use world_sdf::{
     FieldProductCandidate, FieldProductDescriptor, FieldProductId, FieldProductKind,
     FieldProductLineage, FieldProductScope, ratify_field_product_candidate,
@@ -31,7 +31,7 @@ pub fn run_field_product_job(
     project_root: &Path,
     cache_root: &Path,
 ) -> Result<FieldProductJobOutcome> {
-    let chunk = ChunkId::new(WorldId(1), ChunkCoord3 { x: 0, y: 0, z: 0 });
+    let chunk = ChunkId::new(WorldId::new(1), ChunkCoord3 { x: 0, y: 0, z: 0 });
     let mut lineage = FieldProductLineage::new(
         source.revision_id.raw(),
         "runenwerk_editor.field_product_jobs",

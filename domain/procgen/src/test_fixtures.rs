@@ -3,7 +3,7 @@ use graph::{
     PortDefinition, PortDirection, PortId, PortTypeId,
 };
 use product::ProductIdentity;
-use spatial::{ChunkCoord3, ChunkId, RegionCoord3, RegionId, WorldId};
+use runen_spatial::{ChunkCoord3, ChunkId, RegionCoord3, RegionId, WorldId};
 use world_ops::{QuantizedAabb, QuantizedVec3, WorldRevision};
 
 use crate::{
@@ -82,7 +82,7 @@ pub(crate) fn valid_graph() -> GraphDefinition {
 }
 
 pub(crate) fn valid_document() -> ProcgenDocument {
-    let world_id = WorldId(1);
+    let world_id = WorldId::new(1);
     let density_target = ProcgenWriteTarget::density("density-main", bounds());
     let material_target = ProcgenWriteTarget::material_channel("material-main", bounds(), 2);
     let mut document = ProcgenDocument::new(

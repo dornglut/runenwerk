@@ -1,6 +1,6 @@
 use super::DirtyChunkMapResource;
 use crate::runtime::{ResMut, WorldMut};
-use spatial::ChunkId;
+use runen_spatial::ChunkId;
 use std::collections::BTreeMap;
 use world_ops::{BuildGeneration, ChunkGeneration, ChunkRevision, DirtyReasonSet};
 

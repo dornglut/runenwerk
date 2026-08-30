@@ -10,7 +10,7 @@ use product::{
     ProductQueryPolicy, ProductResidency, ProductScaleBand, RenderProductSelection,
     RenderResidencyRequest, RenderSelectedProduct,
 };
-use spatial::{ChunkCoord3, ChunkId, WorldId};
+use runen_spatial::{ChunkCoord3, ChunkId, WorldId};
 use world_ops::{ChunkGeneration, ChunkRevision, OperationId};
 use world_sdf::{
     SdfBrickMetadata, SdfBrickRecord, SdfBrickSamples, SdfChunkPayload, SdfPageCoord3,
@@ -82,7 +82,7 @@ fn payload(
     }
 
     SdfChunkPayload {
-        chunk_id: ChunkId::new(WorldId(1), ChunkCoord3 { x: 2, y: 3, z: 4 }),
+        chunk_id: ChunkId::new(WorldId::new(1), ChunkCoord3 { x: 2, y: 3, z: 4 }),
         chunk_revision: ChunkRevision(chunk_revision),
         chunk_generation: ChunkGeneration(chunk_revision + 100),
         page_table,
