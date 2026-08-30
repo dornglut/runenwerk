@@ -132,6 +132,22 @@ jobs:
           path: ${{ runner.temp }}/runengpu-proof-artifacts/known-pattern-indexed-offscreen.png
           if-no-files-found: error
 
+      - name: Run compute-generated indirect drawing proof
+        env:
+          RUST_BACKTRACE: '1'
+          RUNEN_GPU_PROOF_ARTIFACT_DIR: ${{ runner.temp }}/runengpu-proof-artifacts
+        run: |
+          set -euo pipefail
+          cargo +stable test -p engine --test gpu_compute_generated_indirect_native --locked -- --ignored --nocapture
+          test -s "${RUNEN_GPU_PROOF_ARTIFACT_DIR}/compute-generated-indirect-offscreen.png"
+
+      - name: Retain compute-generated indirect proof artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: runengpu-compute-generated-indirect-${{ steps.revision.outputs.expected_revision }}
+          path: ${{ runner.temp }}/runengpu-proof-artifacts/compute-generated-indirect-offscreen.png
+          if-no-files-found: error
+
       - name: Run persistent reaction-diffusion sequence proof
         env:
           RUST_BACKTRACE: '1'
