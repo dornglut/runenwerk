@@ -20,7 +20,7 @@ pub use invalidation::{
 pub use operation_log::OperationLog;
 pub use operations::{
     BrushShape, CsgBooleanMode, CsgBrushOperation, Operation, OperationRecord, QuantizedAabb,
-    QuantizedVec3, quantize_aabb, quantize_position,
+    QuantizedVec3, WorldQuantizationScale, quantize_aabb, quantize_position,
 };
 pub use product_invalidation::{ProductInvalidationPlan, ProductInvalidationSource};
 pub use region_invalidation::{

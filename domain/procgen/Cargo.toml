@@ -9,6 +9,6 @@ license.workspace = true
 graph = { path = "../graph" }
 product.workspace = true
 ratification = { path = "../../foundation/ratification" }
-spatial.workspace = true
+runen-spatial.workspace = true
 world_ops.workspace = true
 world_sdf.workspace = true

@@ -1,17 +1,18 @@
 use super::super::adapters::resources::{
     BuildGraphResource, BuildQueueResource, OperationLogResource, PartitionConfigResource,
+    WorldQuantizationScaleResource,
 };
 use super::super::chunks::lifecycle::{ChunkLifecycleState, WorldChunkRuntimeMapResource};
 use super::super::debug::metrics::WorldDebugMetricsResource;
 use super::integration::{WorldCompletedBuildOutput, WorldCompletedBuildQueueResource};
 use crate::runtime::{Res, ResMut};
-use spatial::{ChunkId, GridPartitionConfig};
+use runen_spatial::{ChunkId, GridPartitionConfig, SpatialMathError};
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 use world_ops::{
     BuildGeneration, BuildGraphNode, BuildGraphPhase, BuildQueueClass, BuildQueueItem,
     ChunkGeneration, ChunkRevision, CsgBooleanMode, DirtyReasonSet, Operation, OperationId,
-    OperationLog, OperationRecord, touched_chunks_from_quantized_bounds,
+    OperationLog, OperationRecord, WorldQuantizationScale, touched_chunks_from_quantized_bounds,
 };
 use world_sdf::{
     RegionSdfSummary, SdfBrickMetadata, SdfBrickRecord, SdfBrickSamples, SdfChunkPayload,
@@ -38,6 +39,7 @@ pub struct WorldBuildJobRuntimeResource {
     pub enqueued_jobs: u64,
     pub completed_jobs: u64,
     pub dropped_jobs: u64,
+    pub spatial_mapping_failures: u64,
 }
 
 impl Default for WorldBuildJobRuntimeResource {
@@ -47,10 +49,15 @@ impl Default for WorldBuildJobRuntimeResource {
             enqueued_jobs: 0,
             completed_jobs: 0,
             dropped_jobs: 0,
+            spatial_mapping_failures: 0,
         }
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "ECS resources are injected independently; quantization policy must remain separate from partition topology"
+)]
 pub fn dispatch_world_build_jobs_system(
     mut chunks: ResMut<WorldChunkRuntimeMapResource>,
     mut queue: ResMut<BuildQueueResource>,
@@ -58,6 +65,7 @@ pub fn dispatch_world_build_jobs_system(
     mut runtime: ResMut<WorldBuildJobRuntimeResource>,
     mut completed: ResMut<WorldCompletedBuildQueueResource>,
     partition: Res<PartitionConfigResource>,
+    quantization_scale: Res<WorldQuantizationScaleResource>,
     op_log: Res<OperationLogResource>,
 ) {
     queue_dirty_chunks(&chunks, &mut queue, &mut runtime);
@@ -67,19 +75,41 @@ pub fn dispatch_world_build_jobs_system(
             break;
         };
 
-        let record = chunks.ensure_chunk(item.chunk_id);
-        if !matches!(
-            record.lifecycle,
-            ChunkLifecycleState::Dirty | ChunkLifecycleState::Rebuilding
-        ) {
-            runtime.dropped_jobs = runtime.dropped_jobs.saturating_add(1);
-            continue;
-        }
+        let (target_chunk_revision, target_build_generation) = {
+            let record = chunks.ensure_chunk(item.chunk_id);
+            if !matches!(
+                record.lifecycle,
+                ChunkLifecycleState::Dirty | ChunkLifecycleState::Rebuilding
+            ) {
+                runtime.dropped_jobs = runtime.dropped_jobs.saturating_add(1);
+                continue;
+            }
+            (
+                ChunkRevision(record.chunk_revision.0.saturating_add(1)),
+                BuildGeneration(record.build_generation.0.saturating_add(1)),
+            )
+        };
 
-        let target_chunk_revision = ChunkRevision(record.chunk_revision.0.saturating_add(1));
-        let target_build_generation = BuildGeneration(record.build_generation.0.saturating_add(1));
-        // Dirty reasons are consumed by this build generation. Any new dirty reasons that arrive
-        // while rebuilding will be merged back by lifecycle and trigger follow-up rebuilds.
+        let payload = match build_chunk_payload_from_op_window(
+            item.chunk_id,
+            target_chunk_revision,
+            target_build_generation,
+            &partition,
+            &op_log,
+            **quantization_scale,
+        ) {
+            Ok(payload) => payload,
+            Err(_) => {
+                runtime.dropped_jobs = runtime.dropped_jobs.saturating_add(1);
+                runtime.spatial_mapping_failures =
+                    runtime.spatial_mapping_failures.saturating_add(1);
+                continue;
+            }
+        };
+
+        let record = chunks.ensure_chunk(item.chunk_id);
+        // Consume dirty state only after checked spatial mapping succeeds. A mapping failure leaves
+        // the chunk Dirty and retryable instead of silently treating the operation as unrelated.
         record.dirty_reasons = DirtyReasonSet::default();
         record.pending_build_generation = Some(target_build_generation);
         record.lifecycle = ChunkLifecycleState::Rebuilding;
@@ -91,14 +121,6 @@ pub fn dispatch_world_build_jobs_system(
             target_build_generation,
         );
 
-        let payload = build_chunk_payload_from_op_window(
-            item.chunk_id,
-            target_chunk_revision,
-            target_build_generation,
-            &partition,
-            &op_log,
-            partition.quantization_scale(),
-        );
         let region_summary = summarize_region_from_payload(&payload);
         completed.outputs.push_back(WorldCompletedBuildOutput {
             chunk_id: item.chunk_id,
@@ -122,6 +144,7 @@ pub fn sync_world_build_debug_metrics_system(
     debug.background_queue_depth = background_depth;
     debug.enqueued_build_jobs = runtime.enqueued_jobs;
     debug.completed_build_jobs = runtime.completed_jobs;
+    debug.build_spatial_mapping_failures = runtime.spatial_mapping_failures;
 }
 
 fn queue_dirty_chunks(
@@ -159,9 +182,9 @@ fn build_priority_score(chunk_id: ChunkId, class: BuildQueueClass, gameplay_lock
         BuildQueueClass::Background => 100_i64,
     };
     let lock_bonus = if gameplay_locked { 500 } else { 0 };
-    let coord_hash = (chunk_id.coord.x as i64).wrapping_mul(73856093)
-        ^ (chunk_id.coord.y as i64).wrapping_mul(19349663)
-        ^ (chunk_id.coord.z as i64).wrapping_mul(83492791);
+    let coord_hash = chunk_id.coord.x.wrapping_mul(73856093)
+        ^ chunk_id.coord.y.wrapping_mul(19349663)
+        ^ chunk_id.coord.z.wrapping_mul(83492791);
     base.saturating_add(lock_bonus)
         .saturating_add(coord_hash.abs() % 97)
 }
@@ -196,10 +219,9 @@ fn build_chunk_payload_from_op_window(
     target_build_generation: BuildGeneration,
     partition: &GridPartitionConfig,
     op_log: &OperationLog,
-    fixed_point_scale: i32,
-) -> SdfChunkPayload {
-    let affecting_ops =
-        operations_affecting_chunk(op_log, partition, chunk_id, fixed_point_scale.max(1));
+    fixed_point_scale: WorldQuantizationScale,
+) -> Result<SdfChunkPayload, SpatialMathError> {
+    let affecting_ops = operations_affecting_chunk(op_log, partition, chunk_id, fixed_point_scale)?;
     let (solid_payload, last_op_id, material_channel_mask) =
         chunk_solid_state_from_operations(&affecting_ops);
     let mut page_table = BTreeMap::<SdfPageCoord3, SdfPageRecord>::new();
@@ -235,38 +257,38 @@ fn build_chunk_payload_from_op_window(
         operation_signature(record).hash(&mut checksum_hasher);
     }
 
-    SdfChunkPayload {
+    Ok(SdfChunkPayload {
         chunk_id,
         chunk_revision: target_chunk_revision,
         chunk_generation: ChunkGeneration(target_build_generation.0),
         page_table,
         hierarchy_revision: last_op_id.0.max(target_build_generation.0),
         checksum: checksum_hasher.finish(),
-    }
+    })
 }
 
 fn operations_affecting_chunk<'a>(
     op_log: &'a OperationLog,
     partition: &GridPartitionConfig,
     chunk_id: ChunkId,
-    fixed_point_scale: i32,
-) -> Vec<&'a OperationRecord> {
-    op_log
-        .operations
-        .iter()
-        .filter(|record| {
-            if record.planet_id != chunk_id.world_id {
-                return false;
-            }
-            touched_chunks_from_quantized_bounds(
-                partition,
-                record.affected_bounds_q,
-                chunk_id.world_id,
-                fixed_point_scale,
-            )
-            .contains(&chunk_id)
-        })
-        .collect()
+    fixed_point_scale: WorldQuantizationScale,
+) -> Result<Vec<&'a OperationRecord>, SpatialMathError> {
+    let mut affecting = Vec::new();
+    for record in &op_log.operations {
+        if record.planet_id != chunk_id.world_id {
+            continue;
+        }
+        let touched_chunks = touched_chunks_from_quantized_bounds(
+            partition,
+            record.affected_bounds_q,
+            chunk_id.world_id,
+            fixed_point_scale,
+        )?;
+        if touched_chunks.contains(&chunk_id) {
+            affecting.push(record);
+        }
+    }
+    Ok(affecting)
 }
 
 fn chunk_solid_state_from_operations(records: &[&OperationRecord]) -> (bool, OperationId, u16) {

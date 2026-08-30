@@ -1,4 +1,4 @@
-use spatial::ChunkId;
+use runen_spatial::ChunkId;
 use std::cmp::Ordering;
 use std::collections::{BTreeSet, BinaryHeap};
 

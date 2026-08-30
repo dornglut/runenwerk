@@ -5,12 +5,13 @@ Runenwerk is the integration and product repository for a family of focused Rust
 ## Repository family
 
 ```text
-RunenSDF ----+
-RunenECS ----+--> Runenwerk adapters/integration --> applications
-RunenUI -----+
-                  |
-                  +--> RunenRender --> RunenGPU
-                  +--> non-render RunenGPU workloads
+RunenSDF -----+
+RunenSpatial -+
+RunenECS -----+--> Runenwerk adapters/integration --> applications
+RunenUI ------+
+                   |
+                   +--> RunenRender --> RunenGPU
+                   +--> non-render RunenGPU workloads
 ```
 
 Framework repositories must not depend on Runenwerk. The accepted direct framework dependency is:
@@ -22,6 +23,7 @@ RunenRender -> RunenGPU
 - **RunenGPU** owns general GPU execution, WGPU realization, resources, workloads, submissions, uploads/readback, surfaces, and device outcomes.
 - **RunenRender** owns image formation, prepared render scenes, views, materials/media, visibility, transport, reconstruction, overlays, presentation intent, and lowering into RunenGPU workloads.
 - **RunenSDF** owns reusable signed-distance and implicit-field mathematics and reference queries.
+- **RunenSpatial** owns host-neutral spatial identity, addressing and coordinate mechanics, bounded spatial-demand planning, and content-agnostic availability lifecycle mechanics.
 - **RunenECS** owns reusable entity/component/resource, query, and scheduling semantics.
 - **RunenUI** owns renderer-neutral semantic UI, state/actions, layout, text, focus, accessibility, and paint output.
 - **Runenwerk** retains application lifecycle, windows/event-loop policy, cross-framework adapters, editor/runtime integration, product policy, diagnostics presentation, and applications.

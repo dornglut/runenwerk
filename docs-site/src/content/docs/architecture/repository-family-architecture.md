@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: architecture
 canonical: true
-last_reviewed: 2026-08-25
+last_reviewed: 2026-08-30
 related_docs:
   - ../workspace/planning/roadmap.md
   - ../reports/investigations/repository-family-current-state-investigation.md
@@ -43,12 +43,17 @@ Focused accepted framework designs own subsystem contracts.
 ```text
 product       repository                    package       crate
 RunenSDF      dornglut/runen-sdf            runen-sdf     runen_sdf
+RunenSpatial  dornglut/runen-spatial        existing workspace topology
 RunenECS      target dornglut/runen-ecs     see accepted RunenECS design
 RunenGPU      target dornglut/runen-gpu     runen-gpu     runen_gpu
 RunenRender   target dornglut/runen-render  runen-render  runen_render
 RunenUI       dornglut/runen-ui             existing workspace topology
 Runenwerk     dornglut/runenwerk            workspace      integration/product
 ```
+
+RunenSpatial already has separately owned foundation, demand-planning, and availability
+lifecycle packages. A Runenwerk consumer depends only on the package whose semantics it
+actually consumes; repository ownership does not imply a dependency on every package.
 
 RunenGPU and RunenRender each begin with one public package. Internal modules carry
 responsibility boundaries until a real second consumer, backend, release unit, ABI, or
@@ -60,12 +65,13 @@ framework revisions directly or through explicit Runenwerk-owned adapters.
 ## Dependency direction
 
 ```text
-RunenSDF ----+
-RunenECS ----+--> Runenwerk adapters/integration --> applications
-RunenUI -----+
-                  |
-                  +--> RunenRender --> RunenGPU
-                  +--> non-render RunenGPU workloads
+RunenSDF -----+
+RunenSpatial -+
+RunenECS -----+--> Runenwerk adapters/integration --> applications
+RunenUI ------+
+                   |
+                   +--> RunenRender --> RunenGPU
+                   +--> non-render RunenGPU workloads
 ```
 
 ADR 0015 accepts one direct foundational framework dependency:
@@ -81,6 +87,7 @@ No dependency cycle is allowed.
 | Framework | Current state | Authorized work |
 |---|---|---|
 | RunenSDF | standalone authority in `dornglut/runen-sdf`; duplicate Runenwerk source retired through issue `#133` / PR `#157` | standalone roadmap and independently accepted adapters only |
+| RunenSpatial | standalone host-neutral spatial authority in `dornglut/runen-spatial`; downstream integration consumes accepted public contracts | standalone roadmap and independently accepted downstream adapters/integration only |
 | RunenECS | internal ownership and safety repair required | separately bounded investigation, design, and repair |
 | RunenGPU | S0, G1A, G2, G3 planning, operational hardening, and G3 implementation accepted; G3 merged as `39d6fe65a334502bdfba0b1a2ce3b365099fcf28`; exact current accepted main for G4 planning is `6bbd341691a34763ef54c8ca059940cac8981265` | issue `#182` / PR `#185` owns G4 planning only; after acceptance, only G4A may become active; G4B is blocked by accepted G4A and G4C by accepted G4B |
 | RunenRender | architecture corrected to consume RunenGPU; operational/provider/incremental-scene requirements accepted | S0/design only; implementation remains independently owned and waits for accepted RunenGPU cutover plus separately bounded R-phase work |
@@ -101,6 +108,16 @@ bounds, composition, transforms, capabilities, and CPU reference queries.
 
 Does not own world streaming, ECS, rendering, GPU resources, materials, or product
 policy.
+
+### RunenSpatial
+
+Owns host-neutral spatial identity, world-qualified positions and frames, checked
+chunk/region addressing and partition topology, hierarchy/clipmap/ring/hash mechanics,
+bounded spatial-demand planning, and content-agnostic availability lifecycle mechanics.
+
+Does not own Runenwerk world selection, quantization, rendering/camera origin policy,
+ECS, SDF payloads, persistence/replication policy, networking, gameplay, or product
+lifecycle.
 
 ### RunenECS
 
@@ -293,7 +310,9 @@ RunenRender, or RunenGPU.
 ## One-package initial rule
 
 Do not create speculative package trees merely to draw architecture boundaries.
-Initial targets remain:
+RunenSpatial's established multi-package topology is already separately proven and is
+not governed by this initial-target list. Initial one-package targets for the remaining
+extraction tracks are:
 
 ```text
 runen-sdf

@@ -12,7 +12,7 @@ use product::{
     ProductAuthorityClass, ProductFreshness, ProductIdentity, ProductQueryPolicy, ProductResidency,
     ProductScaleBand, RenderProductSelection, RenderResidencyRequest, RenderSelectedProduct,
 };
-use spatial::{ChunkCoord3, ChunkId, WorldId};
+use runen_spatial::{ChunkCoord3, ChunkId, WorldId};
 use world_ops::{ChunkGeneration, ChunkRevision, OperationId};
 use world_sdf::{
     SdfBrickMetadata, SdfBrickRecord, SdfBrickSamples, SdfChunkPayload, SdfPageCoord3,
@@ -75,9 +75,9 @@ fn payload(product_index: u64, page_count: usize) -> SdfChunkPayload {
     }
     SdfChunkPayload {
         chunk_id: ChunkId::new(
-            WorldId(1),
+            WorldId::new(1),
             ChunkCoord3 {
-                x: i32::try_from(product_index).expect("test product index fits in i32"),
+                x: i64::try_from(product_index).expect("test product index fits in i64"),
                 y: 0,
                 z: 0,
             },

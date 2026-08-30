@@ -2,8 +2,8 @@ use crate::{
     ChunkGeneration, ChunkRevision, OperationId, OperationRecord, RegionInvalidationSource,
     WorldRevision,
 };
+use runen_spatial::{ChunkId, RegionId};
 use serde::{Deserialize, Serialize};
-use spatial::{ChunkId, RegionId};
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

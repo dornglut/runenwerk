@@ -1,6 +1,6 @@
 use crate::{OperationId, WorldRevision};
+use runen_spatial::{ChunkId, GridPartitionConfig, RegionId};
 use serde::{Deserialize, Serialize};
-use spatial::{ChunkId, GridPartitionConfig, RegionId};
 use std::collections::{BTreeSet, VecDeque};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -102,14 +102,14 @@ impl RegionInvalidationJournal {
 mod tests {
     use super::RegionInvalidationJournal;
     use crate::{OperationId, WorldRevision};
-    use spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, WorldId};
+    use runen_spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, WorldId};
     use std::collections::BTreeSet;
 
     #[test]
     fn append_ingress_records_dedupe_regions_for_touched_chunks() {
         let mut journal = RegionInvalidationJournal::default();
         let partition = GridPartitionConfig::default();
-        let planet = WorldId(0);
+        let planet = WorldId::new(0);
         let mut touched_chunks = BTreeSet::new();
         touched_chunks.insert(ChunkId::new(planet, ChunkCoord3 { x: 0, y: 0, z: 0 }));
         touched_chunks.insert(ChunkId::new(planet, ChunkCoord3 { x: 1, y: 0, z: 0 }));
@@ -136,7 +136,7 @@ mod tests {
             ..Default::default()
         };
         let partition = GridPartitionConfig::default();
-        let chunk = ChunkId::new(WorldId(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
+        let chunk = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
 
         journal.append_integration_record(&partition, chunk, WorldRevision(1));
         journal.append_integration_record(&partition, chunk, WorldRevision(2));
