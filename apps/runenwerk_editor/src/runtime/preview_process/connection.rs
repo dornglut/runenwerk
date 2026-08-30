@@ -378,27 +378,21 @@ fn finish_outbound(
 }
 
 async fn drive_client_established(connection: &mut Connection, host: &mut HostState) -> Result<()> {
-    loop {
-        match next_connection_event(connection, host).await? {
-            ConnectionEvent::Established { connection: handle } => {
-                if handle != CLIENT_CONNECTION {
-                    return Err(anyhow!(
-                        "runtime-preview established the wrong client connection"
-                    ));
-                }
-                return Ok(());
-            }
-            ConnectionEvent::AuthoritySelectionRequired { .. } => {
+    match next_connection_event(connection, host).await? {
+        ConnectionEvent::Established { connection: handle } => {
+            if handle != CLIENT_CONNECTION {
                 return Err(anyhow!(
-                    "runtime-preview non-authority client was asked to select authority"
+                    "runtime-preview established the wrong client connection"
                 ));
             }
-            event => {
-                return Err(anyhow!(
-                    "unexpected runtime-preview client event during compatibility establishment: {event:?}"
-                ));
-            }
+            Ok(())
         }
+        ConnectionEvent::AuthoritySelectionRequired { .. } => Err(anyhow!(
+            "runtime-preview non-authority client was asked to select authority"
+        )),
+        event => Err(anyhow!(
+            "unexpected runtime-preview client event during compatibility establishment: {event:?}"
+        )),
     }
 }
 

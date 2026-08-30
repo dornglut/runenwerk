@@ -51,15 +51,14 @@ pub(crate) enum ServerNetworkEvent {
     Error(String),
 }
 
-pub(crate) fn spawn(
-    bind_addr: SocketAddr,
-    server_name: &str,
-) -> Result<(
+pub(crate) type SpawnedServerNetwork = (
     Sender<ServerNetworkCommand>,
     Receiver<ServerNetworkEvent>,
     PreviewBootstrap,
     JoinHandle<Result<()>>,
-)> {
+);
+
+pub(crate) fn spawn(bind_addr: SocketAddr, server_name: &str) -> Result<SpawnedServerNetwork> {
     let endpoint_config = endpoint_config()?;
     let (certificate, private_key) = generated_identity(server_name)?;
     let endpoint = ServerEndpoint::bind(

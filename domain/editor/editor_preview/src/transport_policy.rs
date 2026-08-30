@@ -1,9 +1,9 @@
 /// Application-owned resource policy for the local editor/runtime-preview channel.
 ///
-/// This limit is deliberately not derived from the retired framing width or from RunenNet. Preview
-/// products may contain variable-size WorldSDF payloads, so the product protocol needs one explicit
-/// finite message ceiling. Products larger than this must be partitioned by Runenwerk product logic
-/// rather than expanding transport staging without bound.
+/// This is a finite host staging limit, not a WorldSDF/product-format maximum and not a value
+/// derived from the retired framing width or from RunenNet. N1 deliberately preserves the current
+/// one-command-per-message preview protocol; if a product producer requires logical partitioning,
+/// that policy belongs above this transport boundary rather than in RunenNet delivery semantics.
 pub const PREVIEW_TRANSPORT_MAX_MESSAGE_BYTES: usize = 64 * 1024 * 1024;
 
 /// Maximum number of messages RunenNet delivery may retain for one preview flow/scope.
