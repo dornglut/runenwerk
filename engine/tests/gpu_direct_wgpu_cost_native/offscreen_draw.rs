@@ -538,7 +538,10 @@ fn direct_sample(
     let command_record_us = micros(record_start.elapsed());
 
     let submitted = submit_and_map(context, command_buffer, &[&readback]);
+    let row_unpack_start = Instant::now();
     let bytes = tightly_pack_texture_rows(&submitted.mapped[0], WIDTH, HEIGHT, 4, physical_row);
+    let row_unpack_us = micros(row_unpack_start.elapsed());
+    let completion_readback_us = submitted.completion_readback_us + row_unpack_us;
     assert_known_pattern(&bytes);
 
     let mut phases = BTreeMap::new();
@@ -553,10 +556,8 @@ fn direct_sample(
         "boundary_prepare_record_submit".to_owned(),
         resource_setup_us + command_record_us + submitted.submit_call_us,
     );
-    phases.insert(
-        "completion_readback".to_owned(),
-        submitted.completion_readback_us,
-    );
+    phases.insert("readback_row_unpack".to_owned(), row_unpack_us);
+    phases.insert("completion_readback".to_owned(), completion_readback_us);
     phases.insert("total".to_owned(), micros(total_start.elapsed()));
     phases
 }
@@ -639,7 +640,7 @@ pub(crate) fn compare() -> Value {
                 "direct_context_us": direct_context.setup_us,
                 "direct_physical_pipeline_us": direct_pipeline.cold_pipeline_us,
                 "direct_first_submission_phases_us": direct_cold,
-                "note": "RunenGPU physical pipeline realization occurs during first backend_prepare and submit_prepared also owns physical encoding/submission. Direct WGPU exposes resource creation, command recording, and queue submission separately. Compare normalized boundary/total fields, not unlike component fields pairwise.",
+                "note": "RunenGPU physical pipeline realization occurs during first backend_prepare and submit_prepared also owns physical encoding/submission. Direct WGPU exposes resource creation, command recording, and queue submission separately. Direct completion/readback includes mapped host-byte materialization and texture row-unpadding. Compare normalized boundary/total fields, not unlike component fields pairwise.",
             },
         },
         "warm_lifecycle": {
@@ -654,6 +655,7 @@ pub(crate) fn compare() -> Value {
             "ratio_phases": ["boundary_prepare_record_submit", "completion_readback", "total"],
             "runengpu_submit_component": "submit_prepared combines acceptance, physical encoding and queue submission and is not separable through the public boundary",
             "direct_queue_submit_component": "queue.submit call only",
+            "direct_completion_component": "submission completion + map callback + mapped host-byte copy + texture row-unpadding",
             "queue_submit_ratio_status": "unavailable because the RunenGPU public submit boundary intentionally combines additional execution work",
         },
         "runengpu": runengpu.to_json(),
