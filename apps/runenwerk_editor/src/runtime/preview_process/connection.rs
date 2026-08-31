@@ -393,9 +393,9 @@ fn finish_active_connection(
     match (result, teardown.cleanup_error()) {
         (Ok(()), None) => Ok(()),
         (Err(error), None) => Err(error),
-        (Ok(()), Some(cleanup_error)) => {
-            Err(anyhow!("runtime-preview client cleanup failed: {cleanup_error}"))
-        }
+        (Ok(()), Some(cleanup_error)) => Err(anyhow!(
+            "runtime-preview client cleanup failed: {cleanup_error}"
+        )),
         (Err(error), Some(cleanup_error)) => Err(anyhow!(
             "runtime-preview client failed: {error:#}; cleanup also failed: {cleanup_error}"
         )),
