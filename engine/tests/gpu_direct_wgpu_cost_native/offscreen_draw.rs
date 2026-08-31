@@ -1,7 +1,6 @@
 use super::common::{
     DirectWgpuContext, MEASURED_SAMPLES, Measurements, WARMUP_SAMPLES, micros,
-    padded_bytes_per_row, ratio_summary, submit_and_map, summarize_u64,
-    tightly_pack_texture_rows,
+    padded_bytes_per_row, ratio_summary, submit_and_map, summarize_u64, tightly_pack_texture_rows,
 };
 use engine::plugins::gpu::*;
 use serde_json::{Value, json};
@@ -165,10 +164,7 @@ struct RunenGpuFragment {
     timestamp_readback: Option<GpuReadbackId>,
 }
 
-fn runengpu_fragment(
-    pipeline: &GpuRenderPipelineDescriptor,
-    timestamp: bool,
-) -> RunenGpuFragment {
+fn runengpu_fragment(pipeline: &GpuRenderPipelineDescriptor, timestamp: bool) -> RunenGpuFragment {
     let mut allocator = GpuWorkResourceIdAllocator::new();
     let texture_label = label("direct-cost indexed offscreen color target");
     let texture = allocator
