@@ -84,6 +84,11 @@ fn summarize(values: &[f64]) -> Value {
     })
 }
 
+pub(crate) fn summarize_u64(values: &[u64]) -> Value {
+    let values = values.iter().map(|value| *value as f64).collect::<Vec<_>>();
+    summarize(&values)
+}
+
 pub(crate) fn ratio_summary(
     runengpu: &Measurements,
     direct: &Measurements,
