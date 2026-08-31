@@ -53,6 +53,11 @@ pub(crate) enum ServerNetworkEvent {
     Error(String),
 }
 
+enum PhaseOutcome<T> {
+    Complete(T),
+    ShutdownRequested,
+}
+
 pub(super) struct SpawnedServerNetwork {
     pub(super) command_tx: Sender<ServerNetworkCommand>,
     pub(super) shutdown_tx: watch::Sender<bool>,
@@ -132,12 +137,13 @@ async fn run_connection(
     event_tx: Sender<ServerNetworkEvent>,
 ) -> Result<()> {
     let ready = tokio::select! {
+        biased;
+        _ = shutdown_rx.wait_for(|shutdown| *shutdown) => return Ok(()),
         ready = endpoint.accept(profile(endpoint_config, SemanticRole::Authority)?) => {
             ready
                 .map_err(|error| anyhow!("runtime-preview ProfileReady accept failed: {error}"))?
                 .ok_or_else(|| anyhow!("runtime-preview endpoint closed before ProfileReady"))?
         }
-        _ = shutdown_rx.wait_for(|shutdown| *shutdown) => return Ok(()),
         command = command_rx.recv() => {
             match command {
                 Some(ServerNetworkCommand::Send(_)) => {
@@ -158,14 +164,25 @@ async fn run_connection(
         )
         .map_err(|error| anyhow!("runtime-preview compatibility activation failed: {error}"))?;
 
-    drive_server_established(&mut connection, &mut host).await?;
-    let (outbound, inbound) = establish_flows(&mut connection, &mut host).await?;
+    match drive_server_established(&mut connection, &mut host, &mut shutdown_rx).await? {
+        PhaseOutcome::Complete(()) => {}
+        PhaseOutcome::ShutdownRequested => return teardown_connection(connection, &mut host),
+    }
+    let (outbound, inbound) =
+        match establish_flows(&mut connection, &mut host, &mut shutdown_rx).await? {
+            PhaseOutcome::Complete(flows) => flows,
+            PhaseOutcome::ShutdownRequested => return teardown_connection(connection, &mut host),
+        };
+    if *shutdown_rx.borrow() {
+        return teardown_connection(connection, &mut host);
+    }
 
     let mut closing = false;
     let mut outbound_finished = false;
     let mut inbound_finished = false;
     while !(outbound_finished && inbound_finished) {
         tokio::select! {
+            biased;
             _ = shutdown_rx.wait_for(|shutdown| *shutdown), if !closing => {
                 finish_outbound(&mut connection, &mut host, outbound)?;
                 closing = true;
@@ -233,6 +250,10 @@ async fn run_connection(
         }
     }
 
+    teardown_connection(connection, &mut host)
+}
+
+fn teardown_connection(connection: Connection, host: &mut HostState) -> Result<()> {
     let teardown = connection.teardown(&mut host.negotiation, &mut host.delivery);
     if let Some(error) = teardown.cleanup_error() {
         return Err(anyhow!(
@@ -252,9 +273,20 @@ fn finish_outbound(
         .map_err(|error| anyhow!("failed to finish runtime-preview event flow: {error}"))
 }
 
-async fn drive_server_established(connection: &mut Connection, host: &mut HostState) -> Result<()> {
+async fn drive_server_established(
+    connection: &mut Connection,
+    host: &mut HostState,
+    shutdown_rx: &mut watch::Receiver<bool>,
+) -> Result<PhaseOutcome<()>> {
     loop {
-        match next_connection_event(connection, host).await? {
+        let event = tokio::select! {
+            biased;
+            _ = shutdown_rx.wait_for(|shutdown| *shutdown) => {
+                return Ok(PhaseOutcome::ShutdownRequested);
+            }
+            event = next_connection_event(connection, host) => event?,
+        };
+        match event {
             ConnectionEvent::AuthoritySelectionRequired { connection: handle } => {
                 if handle != SERVER_CONNECTION {
                     return Err(anyhow!(
@@ -271,7 +303,7 @@ async fn drive_server_established(connection: &mut Connection, host: &mut HostSt
                 if handle != SERVER_CONNECTION {
                     return Err(anyhow!("runtime-preview established the wrong connection"));
                 }
-                return Ok(());
+                return Ok(PhaseOutcome::Complete(()));
             }
             event => {
                 return Err(anyhow!(
@@ -285,7 +317,8 @@ async fn drive_server_established(connection: &mut Connection, host: &mut HostSt
 async fn establish_flows(
     connection: &mut Connection,
     host: &mut HostState,
-) -> Result<(DeliveryFlowKey, DeliveryFlowKey)> {
+    shutdown_rx: &mut watch::Receiver<bool>,
+) -> Result<PhaseOutcome<(DeliveryFlowKey, DeliveryFlowKey)>> {
     let outbound = DeliveryFlowKey::new(
         SERVER_CONNECTION,
         FlowDirection::Outbound,
@@ -311,7 +344,14 @@ async fn establish_flows(
     let mut outbound_ready = false;
     let mut inbound_ready = false;
     while !(outbound_ready && inbound_ready) {
-        match next_connection_event(connection, host).await? {
+        let event = tokio::select! {
+            biased;
+            _ = shutdown_rx.wait_for(|shutdown| *shutdown) => {
+                return Ok(PhaseOutcome::ShutdownRequested);
+            }
+            event = next_connection_event(connection, host) => event?,
+        };
+        match event {
             ConnectionEvent::IncomingFlowRequested { request } => {
                 if inbound_ready
                     || request.mode() != DeliveryMode::ReliableOrdered
@@ -359,7 +399,7 @@ async fn establish_flows(
             }
         }
     }
-    Ok((outbound, inbound))
+    Ok(PhaseOutcome::Complete((outbound, inbound)))
 }
 
 fn drain_commands(
