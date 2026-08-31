@@ -5,6 +5,7 @@ use ecs::{OwnerRole, TickBufferProvenance, WorkQueueEnqueueError, World};
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 use engine_net::*;
 use engine_sim::{AuthorityRole, SimulationProfileConfig, SimulationTick};
+use runen_net::identity::ConnectionHandle;
 use world_ops::SyncCursor;
 
 // engine/src/plugins/net/prediction.rs
@@ -27,6 +28,22 @@ fn enqueue_work_queue_writer_with_backpressure<T: 'static>(
         );
     }
     result
+}
+
+fn active_connections(world: &World) -> Vec<ConnectionHandle> {
+    let mut connections = world
+        .resource::<RunenNetSessionProjection>()
+        .map(|projection| projection.active_connections().collect::<Vec<_>>())
+        .unwrap_or_default();
+    connections.sort_by_key(|connection| connection.get());
+    connections
+}
+
+fn sole_active_connection(world: &World) -> Option<ConnectionHandle> {
+    let projection = world.resource::<RunenNetSessionProjection>().ok()?;
+    let mut connections = projection.active_connections();
+    let first = connections.next()?;
+    connections.next().is_none().then_some(first)
 }
 
 pub fn replication_step_system<TDriver>(
@@ -68,28 +85,19 @@ where
         *cursor
     };
 
-    let active_connections = world
-        .resource::<ServerSessionState>()
-        .map(|session| {
-            session
-                .active_connections
-                .iter()
-                .copied()
-                .collect::<Vec<ConnectionId>>()
-        })
-        .unwrap_or_default();
+    let active_connections = active_connections(&world);
 
     let mut outbound = Vec::<OutboundServerMessage>::new();
-    let mut world_streaming_updates = Vec::<(ConnectionId, SyncCursor, bool)>::new();
+    let mut world_streaming_updates = Vec::<(ConnectionHandle, SyncCursor, bool)>::new();
     if !active_connections.is_empty() {
-        let mut snapshots_for_connections = Vec::<(ConnectionId, TDriver::Snapshot)>::new();
-        for connection_id in &active_connections {
-            let captured_snapshot =
-                TDriver::capture_snapshot_for_connection(&world, *connection_id).map_err(|e| {
-                    map_driver_error::<TDriver>(e, "capture snapshot for connection")
+        let mut snapshots_for_connections = Vec::<(ConnectionHandle, TDriver::Snapshot)>::new();
+        for connection in &active_connections {
+            let captured_snapshot = TDriver::capture_snapshot_for_connection(&world, *connection)
+                .map_err(|error| {
+                    map_driver_error::<TDriver>(error, "capture snapshot for connection")
                 })?;
             if let Some(snapshot) = captured_snapshot {
-                snapshots_for_connections.push((*connection_id, snapshot));
+                snapshots_for_connections.push((*connection, snapshot));
             }
         }
 
@@ -97,33 +105,33 @@ where
         state.latest_tick = tick;
         state
             .checkpoints
-            .retain(|connection_id, _| active_connections.contains(connection_id));
+            .retain(|connection, _| active_connections.contains(connection));
         state
             .snapshot_history_per_connection
-            .retain(|connection_id, _| active_connections.contains(connection_id));
+            .retain(|connection, _| active_connections.contains(connection));
         state
             .latest_snapshot_per_connection
-            .retain(|connection_id, _| active_connections.contains(connection_id));
+            .retain(|connection, _| active_connections.contains(connection));
 
         let mut first_snapshot_for_tick: Option<TDriver::Snapshot> = None;
 
-        for (connection_id, snapshot) in snapshots_for_connections {
+        for (connection, snapshot) in snapshots_for_connections {
             if first_snapshot_for_tick.is_none() {
                 first_snapshot_for_tick = Some(snapshot.clone());
             }
 
             state
                 .latest_snapshot_per_connection
-                .insert(connection_id, snapshot.clone());
+                .insert(connection, snapshot.clone());
             state
                 .snapshot_history_per_connection
-                .entry(connection_id)
+                .entry(connection)
                 .or_default()
                 .insert(cursor, snapshot.clone());
-            prune_snapshot_history_for_connection(state, connection_id);
+            prune_snapshot_history_for_connection(state, connection);
 
             let (last_ack_cursor, needs_full_resync) = {
-                let checkpoint = state.checkpoints.entry(connection_id).or_default();
+                let checkpoint = state.checkpoints.entry(connection).or_default();
                 (checkpoint.last_ack_cursor, checkpoint.needs_full_resync)
             };
 
@@ -132,7 +140,7 @@ where
 
             let message = if send_full {
                 let payload = TDriver::encode_snapshot(&snapshot)
-                    .map_err(|e| map_driver_error::<TDriver>(e, "encode snapshot"))?;
+                    .map_err(|error| map_driver_error::<TDriver>(error, "encode snapshot"))?;
                 ServerMessage::Snapshot(Snapshot {
                     tick,
                     cursor,
@@ -142,12 +150,12 @@ where
                 })
             } else if let Some(base_snapshot) = state
                 .snapshot_history_per_connection
-                .get(&connection_id)
+                .get(&connection)
                 .and_then(|history| history.get(&last_ack_cursor))
             {
                 let delta = TDriver::build_delta(base_snapshot, &snapshot);
                 let payload = TDriver::encode_delta(&delta)
-                    .map_err(|e| map_driver_error::<TDriver>(e, "encode delta"))?;
+                    .map_err(|error| map_driver_error::<TDriver>(error, "encode delta"))?;
                 ServerMessage::DeltaSnapshot(DeltaSnapshot {
                     tick,
                     base: last_ack_cursor,
@@ -157,8 +165,9 @@ where
                 })
             } else {
                 send_full = true;
-                let payload = TDriver::encode_snapshot(&snapshot)
-                    .map_err(|e| map_driver_error::<TDriver>(e, "encode fallback snapshot"))?;
+                let payload = TDriver::encode_snapshot(&snapshot).map_err(|error| {
+                    map_driver_error::<TDriver>(error, "encode fallback snapshot")
+                })?;
                 ServerMessage::Snapshot(Snapshot {
                     tick,
                     cursor,
@@ -168,14 +177,15 @@ where
                 })
             };
 
-            {
-                let checkpoint = state.checkpoints.entry(connection_id).or_default();
-                checkpoint.mark_snapshot_sent(cursor, tick, send_full);
-            }
-            world_streaming_updates.push((connection_id, SyncCursor(cursor.0), send_full));
+            state
+                .checkpoints
+                .entry(connection)
+                .or_default()
+                .mark_snapshot_sent(cursor, tick, send_full);
+            world_streaming_updates.push((connection, SyncCursor(cursor.0), send_full));
 
             outbound.push(OutboundServerMessage::ToConnection {
-                connection_id,
+                connection,
                 message,
             });
         }
@@ -188,20 +198,19 @@ where
     }
 
     if !world_streaming_updates.is_empty()
-        && let Ok(streaming_interest) = world.resource_mut::<NetStreamingStateResource>()
+        && let Ok(streaming_state) = world.resource_mut::<NetStreamingStateResource>()
     {
-        for (connection_id, cursor, sent_full_snapshot) in world_streaming_updates {
-            streaming_interest.mark_snapshot_sent(connection_id, cursor, sent_full_snapshot);
+        for (connection, cursor, sent_full_snapshot) in world_streaming_updates {
+            streaming_state.mark_snapshot_sent(connection, cursor, sent_full_snapshot);
         }
     }
 
     for message in &outbound {
-        let enqueue_result = enqueue_work_queue_writer_with_backpressure(
+        if let Err(error) = enqueue_work_queue_writer_with_backpressure(
             &mut server_outbox,
             "NetworkServerOutbox",
             message.clone(),
-        );
-        if let Err(error) = enqueue_result {
+        ) {
             tracing::warn!(error = ?error, "failed to enqueue replication server outbox message");
         }
     }
@@ -239,16 +248,12 @@ where
         .unwrap_or(AuthorityRole::Local);
 
     let commands = TDriver::take_local_input(&mut world)
-        .map_err(|e| map_driver_error::<TDriver>(e, "take local input"))?;
+        .map_err(|error| map_driver_error::<TDriver>(error, "take local input"))?;
     if !commands.is_empty() {
         let provenance = if matches!(authority, AuthorityRole::Client | AuthorityRole::Peer) {
-            if let Some(connection_id) = world
-                .resource::<NetworkSessionStatus>()
-                .ok()
-                .and_then(|status| status.connection_id)
-            {
+            if let Some(connection) = sole_active_connection(&world) {
                 let controller =
-                    ensure_owner_for_connection(&mut world, connection_id, OwnerRole::Active);
+                    ensure_owner_for_connection(&mut world, connection, OwnerRole::Active);
                 owner_tick_buffer_provenance(controller)
             } else {
                 TickBufferProvenance::UNSPECIFIED
@@ -270,7 +275,7 @@ where
 
     if matches!(authority, AuthorityRole::Client | AuthorityRole::Peer) && !commands.is_empty() {
         let payload = TDriver::encode_input(&commands)
-            .map_err(|e| map_driver_error::<TDriver>(e, "encode input"))?;
+            .map_err(|error| map_driver_error::<TDriver>(error, "encode input"))?;
 
         if let Err(error) = enqueue_work_queue_writer_with_backpressure(
             &mut client_outbox,
@@ -305,139 +310,9 @@ where
     }
 
     TDriver::apply_input(&mut world, &inputs_to_apply)
-        .map_err(|e| map_driver_error::<TDriver>(e, "apply streamed input"))?;
+        .map_err(|error| map_driver_error::<TDriver>(error, "apply streamed input"))?;
 
     Ok(())
-}
-
-pub fn update_connection_closed<TSnapshot>(
-    world: &mut World,
-    connection_id: Option<ConnectionId>,
-    reason: Option<DisconnectReason>,
-) where
-    TSnapshot: Clone + PartialEq + 'static,
-{
-    let authority = world
-        .resource::<SimulationProfileConfig>()
-        .map(|config| config.authority)
-        .unwrap_or(AuthorityRole::Local);
-
-    if matches!(authority, AuthorityRole::Server) {
-        let mut active_connection = None;
-        let mut has_active_connections = false;
-        let mut active_connections = Vec::<ConnectionId>::new();
-
-        if let Ok(session) = world.resource_mut::<ServerSessionState>() {
-            match connection_id {
-                Some(connection_id) => {
-                    remove_server_connection(session, connection_id, reason.clone());
-                }
-                None => {
-                    session.active_connections.clear();
-                    session.active_connection = None;
-                    session.phase = SessionPhase::Closed;
-                    session.last_disconnect = reason.clone();
-                }
-            }
-
-            active_connection = session.active_connection;
-            has_active_connections = !session.active_connections.is_empty();
-            active_connections.extend(session.active_connections.iter().copied());
-        }
-
-        if let Ok(status) = world.resource_mut::<NetworkSessionStatus>() {
-            status.connected = has_active_connections;
-            status.phase = if has_active_connections {
-                SessionPhase::Active
-            } else {
-                SessionPhase::Closed
-            };
-            status.connection_id = active_connection;
-            status.last_disconnect = reason.clone();
-        }
-
-        if let Ok(state) = world.resource_mut::<ServerSnapshotReplicationState<TSnapshot>>() {
-            match connection_id {
-                Some(connection_id) => {
-                    state.checkpoints.remove(&connection_id);
-                    state.snapshot_history_per_connection.remove(&connection_id);
-                    state.latest_snapshot_per_connection.remove(&connection_id);
-                }
-                None => {
-                    state.checkpoints.clear();
-                    state.snapshot_history.clear();
-                    state.snapshot_history_per_connection.clear();
-                    state.latest_snapshot = None;
-                    state.latest_snapshot_per_connection.clear();
-                    state.latest_tick = SimulationTick::default();
-                }
-            }
-            state
-                .checkpoints
-                .retain(|connection_id, _| active_connections.contains(connection_id));
-            state
-                .snapshot_history_per_connection
-                .retain(|connection_id, _| active_connections.contains(connection_id));
-            state
-                .latest_snapshot_per_connection
-                .retain(|connection_id, _| active_connections.contains(connection_id));
-        }
-
-        if let Ok(streaming_interest) = world.resource_mut::<NetStreamingStateResource>() {
-            match connection_id {
-                Some(connection_id) => {
-                    streaming_interest.per_connection.remove(&connection_id);
-                }
-                None => {
-                    streaming_interest.per_connection.clear();
-                }
-            }
-            streaming_interest
-                .per_connection
-                .retain(|connection_id, _| active_connections.contains(connection_id));
-        }
-
-        match connection_id {
-            Some(connection_id) => {
-                if let Some(controller) = remove_owner_for_connection(world, connection_id) {
-                    let _ = world.transfer_owned_targets_to_world(controller);
-                }
-            }
-            None => {
-                let controllers = world
-                    .resource::<NetworkOwnerRouting>()
-                    .ok()
-                    .map(|routing| routing.by_connection.values().copied().collect::<Vec<_>>())
-                    .unwrap_or_default();
-                for controller in controllers {
-                    let _ = world.transfer_owned_targets_to_world(controller);
-                }
-                if let Ok(routing) = world.resource_mut::<NetworkOwnerRouting>() {
-                    routing.by_connection.clear();
-                    routing.by_owner.clear();
-                }
-            }
-        }
-    } else {
-        if let Ok(status) = world.resource_mut::<NetworkSessionStatus>() {
-            status.connected = false;
-            status.phase = SessionPhase::Closed;
-            status.last_disconnect = reason.clone();
-        }
-        if let Ok(state) = world.resource_mut::<ClientSnapshotReplicationState<TSnapshot>>() {
-            reset_client_replication_state(state);
-        }
-        if let Some(connection_id) = connection_id
-            && let Some(controller) = remove_owner_for_connection(world, connection_id)
-        {
-            let _ = world.transfer_owned_targets_to_world(controller);
-        }
-    }
-
-    if let Ok(health) = world.resource_mut::<ConnectionHealth>() {
-        health.connected = false;
-        health.close_events = health.close_events.saturating_add(1);
-    }
 }
 
 pub fn apply_authoritative_snapshot<TDriver>(
@@ -455,11 +330,11 @@ where
     let snapshot = match snapshot {
         Some(snapshot) => snapshot,
         None => TDriver::decode_snapshot(payload)
-            .map_err(|e| map_driver_error::<TDriver>(e, "decode snapshot"))?,
+            .map_err(|error| map_driver_error::<TDriver>(error, "decode snapshot"))?,
     };
 
     let corrected = TDriver::apply_snapshot(world, tick, snapshot.clone())
-        .map_err(|e| map_driver_error::<TDriver>(e, "apply snapshot"))?;
+        .map_err(|error| map_driver_error::<TDriver>(error, "apply snapshot"))?;
 
     if let Ok(tick_resource) = world.resource_mut::<SimulationTick>() {
         *tick_resource = tick;
@@ -495,7 +370,7 @@ where
     TDriver::Input: Clone + PartialEq,
 {
     let delta = TDriver::decode_delta(payload)
-        .map_err(|e| map_driver_error::<TDriver>(e, "decode delta"))?;
+        .map_err(|error| map_driver_error::<TDriver>(error, "decode delta"))?;
 
     let (expected_base, base_snapshot) = {
         let state = world.resource::<ClientSnapshotReplicationState<TDriver::Snapshot>>()?;
@@ -530,10 +405,11 @@ where
     let rebuilt_snapshot = TDriver::apply_delta_to_snapshot(&base_snapshot, &delta);
     let corrected = if base == expected_base {
         TDriver::apply_delta(world, tick, delta.clone())
-            .map_err(|e| map_driver_error::<TDriver>(e, "apply authoritative delta"))?
+            .map_err(|error| map_driver_error::<TDriver>(error, "apply authoritative delta"))?
     } else {
-        TDriver::apply_snapshot(world, tick, rebuilt_snapshot.clone())
-            .map_err(|e| map_driver_error::<TDriver>(e, "apply delta via snapshot fallback"))?
+        TDriver::apply_snapshot(world, tick, rebuilt_snapshot.clone()).map_err(|error| {
+            map_driver_error::<TDriver>(error, "apply delta via snapshot fallback")
+        })?
     };
 
     if let Ok(tick_resource) = world.resource_mut::<SimulationTick>() {
@@ -578,7 +454,7 @@ where
     for frame in pending_frames {
         replayed_commands = replayed_commands.saturating_add(frame.commands.len() as u64);
         TDriver::apply_input(world, &frame.commands)
-            .map_err(|e| map_driver_error::<TDriver>(e, error_context))?;
+            .map_err(|error| map_driver_error::<TDriver>(error, error_context))?;
     }
     if replayed_commands > 0
         && let Ok(diagnostics) = world.resource_mut::<PredictionDiagnostics>()
@@ -587,17 +463,6 @@ where
     }
 
     Ok(())
-}
-
-fn reset_client_replication_state<TSnapshot>(state: &mut ClientSnapshotReplicationState<TSnapshot>)
-where
-    TSnapshot: Clone + PartialEq,
-{
-    state.last_acknowledged_cursor = SnapshotCursor::default();
-    state.last_received_tick = SimulationTick::default();
-    state.applied_snapshots = 0;
-    state.last_received_snapshot = None;
-    state.snapshot_history.clear();
 }
 
 fn prune_snapshot_history<TSnapshot>(state: &mut ServerSnapshotReplicationState<TSnapshot>)
@@ -614,14 +479,11 @@ where
 
 fn prune_snapshot_history_for_connection<TSnapshot>(
     state: &mut ServerSnapshotReplicationState<TSnapshot>,
-    connection_id: ConnectionId,
+    connection: ConnectionHandle,
 ) where
     TSnapshot: Clone + PartialEq,
 {
-    let Some(history) = state
-        .snapshot_history_per_connection
-        .get_mut(&connection_id)
-    else {
+    let Some(history) = state.snapshot_history_per_connection.get_mut(&connection) else {
         return;
     };
     while history.len() > MAX_SERVER_SNAPSHOT_HISTORY {
