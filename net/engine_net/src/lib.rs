@@ -4,7 +4,6 @@ pub mod prelude;
 pub mod protocol;
 pub mod replication;
 pub mod runtime;
-pub mod session;
 pub mod simulation;
 pub mod transport;
 
@@ -15,9 +14,8 @@ pub use engine_sim::{
     SimulationRng, SimulationSeed, SimulationSessionId, SimulationTick, WorldSimulationCodec,
 };
 
-// Re- exports
+// Re-exports retained only for the remaining replication/prediction migration surface.
 pub use protocol::*;
 pub use replication::*;
-pub use session::*;
 pub use simulation::*;
 pub use transport::*;
