@@ -385,18 +385,17 @@ mod tests {
 
         core.admit_established(&mut projection, bound_participant, bound_connection)
             .expect("bound participant must be admitted");
-        core.admit_established(
-            &mut projection,
-            retained_participant,
-            retained_connection,
-        )
-        .expect("retained participant must be admitted");
+        core.admit_established(&mut projection, retained_participant, retained_connection)
+            .expect("retained participant must be admitted");
 
         assert_eq!(
             core.remove_participant(&mut projection, bound_participant),
             Ok(MembershipState::Bound(bound_connection))
         );
-        assert_eq!(projection.participant_for_connection(bound_connection), None);
+        assert_eq!(
+            projection.participant_for_connection(bound_connection),
+            None
+        );
 
         let duration = RecoveryDuration::new(NonZeroU64::new(2).expect("non-zero recovery span"));
         core.connection_lost(
@@ -411,7 +410,10 @@ mod tests {
             Ok(vec![retained_participant])
         );
         assert_eq!(core.membership_state(retained_participant), None);
-        assert_eq!(projection.participant_for_connection(retained_connection), None);
+        assert_eq!(
+            projection.participant_for_connection(retained_connection),
+            None
+        );
     }
 
     #[test]

@@ -197,7 +197,10 @@ where
         let connection = incoming.connection;
         let message = incoming.message;
 
-        if matches!(message, ClientMessage::Ack(_) | ClientMessage::InputFrame(_)) {
+        if matches!(
+            message,
+            ClientMessage::Ack(_) | ClientMessage::InputFrame(_)
+        ) {
             let Some(connection) = connection else {
                 tracing::warn!("ignoring replication input without a RunenNet connection handle");
                 continue;

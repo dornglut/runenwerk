@@ -87,11 +87,7 @@ impl NetStreamingStateResource {
         }
     }
 
-    pub fn mark_snapshot_acknowledged(
-        &mut self,
-        connection: ConnectionHandle,
-        cursor: SyncCursor,
-    ) {
+    pub fn mark_snapshot_acknowledged(&mut self, connection: ConnectionHandle, cursor: SyncCursor) {
         let state = self.state_for_connection_mut(connection);
         if cursor.0 < state.last_ack_cursor.0 {
             return;

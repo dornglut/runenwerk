@@ -94,8 +94,8 @@ where
         for connection in &active_connections {
             let captured_snapshot = TDriver::capture_snapshot_for_connection(&world, *connection)
                 .map_err(|error| {
-                    map_driver_error::<TDriver>(error, "capture snapshot for connection")
-                })?;
+                map_driver_error::<TDriver>(error, "capture snapshot for connection")
+            })?;
             if let Some(snapshot) = captured_snapshot {
                 snapshots_for_connections.push((*connection, snapshot));
             }
