@@ -124,11 +124,20 @@ pub(crate) struct DirectWgpuContext {
     pub(crate) queue: Queue,
     pub(crate) adapter_info: wgpu::AdapterInfo,
     pub(crate) timestamp_supported: bool,
+    pub(crate) enabled_features: Features,
     pub(crate) setup_us: f64,
 }
 
 impl DirectWgpuContext {
     pub(crate) fn request(label: &str) -> Self {
+        Self::request_with_features(label, Features::empty())
+    }
+
+    pub(crate) fn request_timestamp(label: &str) -> Self {
+        Self::request_with_features(label, Features::TIMESTAMP_QUERY)
+    }
+
+    fn request_with_features(label: &str, required_features: Features) -> Self {
         let start = Instant::now();
         let mut descriptor = InstanceDescriptor::new_without_display_handle_from_env();
         descriptor
@@ -149,10 +158,15 @@ impl DirectWgpuContext {
             Backend::Vulkan,
             "direct comparison must execute through Vulkan"
         );
-        let timestamp_supported = adapter.features().contains(Features::TIMESTAMP_QUERY);
+        let adapter_features = adapter.features();
+        let timestamp_supported = adapter_features.contains(Features::TIMESTAMP_QUERY);
+        assert!(
+            adapter_features.contains(required_features),
+            "direct-WGPU comparison adapter must support every explicitly requested feature"
+        );
         let (device, queue) = pollster::block_on(adapter.request_device(&DeviceDescriptor {
             label: Some(label),
-            required_features: Features::empty(),
+            required_features,
             required_limits: Limits::defaults(),
             experimental_features: ExperimentalFeatures::disabled(),
             memory_hints: MemoryHints::Performance,
@@ -165,6 +179,7 @@ impl DirectWgpuContext {
             queue,
             adapter_info,
             timestamp_supported,
+            enabled_features: required_features,
             setup_us,
         }
     }
@@ -179,6 +194,7 @@ impl DirectWgpuContext {
             "forced_fallback_adapter": true,
             "timestamp_query_supported": self.timestamp_supported,
             "timestamp_period_ns": self.queue.get_timestamp_period(),
+            "enabled_features": format!("{:?}", self.enabled_features),
             "device_request_limits": "wgpu::Limits::defaults()",
             "memory_hints": "Performance",
             "trace": "Off",
