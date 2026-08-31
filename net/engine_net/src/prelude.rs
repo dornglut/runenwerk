@@ -1,14 +1,15 @@
 pub use crate::protocol::*;
 pub use crate::replication::{
-    AuthorityModel, BandwidthPriority, InputDriver, InterestContext, InterestPolicy, LaneRouteTrace,
-    NetComponentMetadata, NetEntity, NetEntityMap, NetEntityMapEvent, NetEntityMetadata,
-    NetResourceMetadata, PredictionMode, ReconciliationResult, Reliability, Replicate, Replicated,
-    ReplicatedComponentDescriptor, ReplicatedEntityDescriptor, ReplicatedResourceDescriptor,
-    ReplicationDriver, ReplicationExtractionFilter, ReplicationPredictionState, ReplicationProfile,
-    ReplicationProfilePreset, ReplicationRegistry, ReplicationSemantics,
-    ReplicationSemanticsOverrides, ReplicationStats, SnapshotAckOutcome, SnapshotAckRejection,
-    SnapshotApplyDriver, SnapshotCursor, SnapshotTimeline, allows_replication, apply_delta_payload,
-    delta_debug_dump, extract_replication_deltas, normalize_delta_payload, snapshot_debug_dump,
+    AuthorityModel, BandwidthPriority, InputDriver, InterestContext, InterestPolicy,
+    LaneRouteTrace, NetComponentMetadata, NetEntity, NetEntityMap, NetEntityMapEvent,
+    NetEntityMetadata, NetResourceMetadata, PredictionMode, ReconciliationResult, Reliability,
+    Replicate, Replicated, ReplicatedComponentDescriptor, ReplicatedEntityDescriptor,
+    ReplicatedResourceDescriptor, ReplicationDriver, ReplicationExtractionFilter,
+    ReplicationPredictionState, ReplicationProfile, ReplicationProfilePreset, ReplicationRegistry,
+    ReplicationSemantics, ReplicationSemanticsOverrides, ReplicationStats, SnapshotAckOutcome,
+    SnapshotAckRejection, SnapshotApplyDriver, SnapshotCursor, SnapshotTimeline,
+    allows_replication, apply_delta_payload, delta_debug_dump, extract_replication_deltas,
+    normalize_delta_payload, snapshot_debug_dump,
 };
 pub use crate::runtime::{ReplicationRuntimeCommand, ReplicationRuntimeEvent};
 pub use crate::simulation::*;
