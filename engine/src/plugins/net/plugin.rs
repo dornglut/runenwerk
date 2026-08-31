@@ -9,7 +9,7 @@ use crate::plugins::world::plugin::{WorldRuntimeConfig, world_runtime_mode_for_a
 
 use super::config::{NetPluginConfig, NetRole};
 use super::resources::{
-    configure_client_role, configure_prediction, configure_replication, configure_runtime_bridge,
+    configure_client_role, configure_prediction, configure_replication, configure_replication_io,
     configure_server_role,
 };
 
@@ -70,7 +70,7 @@ where
             }
         }
 
-        configure_runtime_bridge::<TDriver>(app);
+        configure_replication_io::<TDriver>(app);
         configure_replication::<TDriver>(app);
         configure_prediction::<TDriver>(app);
     }
