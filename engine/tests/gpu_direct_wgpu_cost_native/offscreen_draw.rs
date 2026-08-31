@@ -1,6 +1,7 @@
 use super::common::{
     DirectWgpuContext, MEASURED_SAMPLES, Measurements, WARMUP_SAMPLES, micros,
-    padded_bytes_per_row, ratio_summary, submit_and_map, tightly_pack_texture_rows,
+    padded_bytes_per_row, ratio_summary, submit_and_map, summarize_u64,
+    tightly_pack_texture_rows,
 };
 use engine::plugins::gpu::*;
 use serde_json::{Value, json};
@@ -13,6 +14,7 @@ const HEIGHT: u32 = 8;
 const CLEAR_PIXEL: [u8; 4] = [0, 0, 0, 255];
 const DRAW_PIXEL: [u8; 4] = [255, 0, 0, 255];
 const INDICES: [u32; 3] = [0, 1, 2];
+const TIMESTAMP_BYTES: u64 = 16;
 const KNOWN_PATTERN_WGSL: &str = include_str!("../gpu_offscreen_indexed_native/known_pattern.wgsl");
 
 fn label(value: &str) -> GpuResourceLabel {
@@ -40,19 +42,36 @@ fn readback_staging_size() -> u64 {
     u64::from(physical_row) * u64::from(HEIGHT - 1) + u64::from(logical_row)
 }
 
-fn runengpu_context() -> GpuContext {
-    let descriptor =
-        GpuContextDescriptor::new(GpuCapabilityProfile::OffscreenGraphicsBaseline.requirements())
-            .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::ColorAttachment)
-            .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::CopySource)
-            .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
-            .with_allowed_backends([GpuBackendFamily::Vulkan])
-            .with_label("G6-P01 known-pattern RunenGPU comparison");
+fn runengpu_context(timestamp: bool) -> GpuContext {
+    let mut requirements = GpuCapabilityProfile::OffscreenGraphicsBaseline.requirements();
+    if timestamp {
+        requirements
+            .insert(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::TimestampQuery,
+            ))
+            .unwrap();
+    }
+    let descriptor = GpuContextDescriptor::new(requirements)
+        .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::ColorAttachment)
+        .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::CopySource)
+        .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
+        .with_allowed_backends([GpuBackendFamily::Vulkan])
+        .with_label(if timestamp {
+            "G6-P01 known-pattern RunenGPU timestamp evidence"
+        } else {
+            "G6-P01 known-pattern RunenGPU comparison"
+        });
     let context = pollster::block_on(GpuContext::request(descriptor)).unwrap();
     assert_eq!(context.adapter_facts().backend(), GpuBackendFamily::Vulkan);
     assert_eq!(
         context.adapter_facts().fallback(),
         GpuFallbackStatus::ConfirmedFallback
+    );
+    assert_eq!(
+        context
+            .device_facts()
+            .is_enabled(GpuCapabilityFeature::TimestampQuery),
+        timestamp
     );
     context
 }
@@ -140,7 +159,16 @@ fn render_pipeline() -> GpuRenderPipelineDescriptor {
     .unwrap()
 }
 
-fn runengpu_fragment(pipeline: &GpuRenderPipelineDescriptor) -> (GpuWorkFragment, GpuReadbackId) {
+struct RunenGpuFragment {
+    fragment: GpuWorkFragment,
+    image_readback: GpuReadbackId,
+    timestamp_readback: Option<GpuReadbackId>,
+}
+
+fn runengpu_fragment(
+    pipeline: &GpuRenderPipelineDescriptor,
+    timestamp: bool,
+) -> RunenGpuFragment {
     let mut allocator = GpuWorkResourceIdAllocator::new();
     let texture_label = label("direct-cost indexed offscreen color target");
     let texture = allocator
@@ -210,6 +238,36 @@ fn runengpu_fragment(pipeline: &GpuRenderPipelineDescriptor) -> (GpuWorkFragment
         )
         .unwrap();
 
+    let timestamp_resources = timestamp.then(|| {
+        let query_set = allocator
+            .allocate_query_set_handle(
+                GpuQuerySetDescriptor::new(
+                    common("direct-cost indexed offscreen timestamp query set"),
+                    GpuQueryKind::Timestamp,
+                    2,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let resolve_label = label("direct-cost indexed offscreen timestamp resolve");
+        let resolve = allocator
+            .allocate_buffer_handle(
+                GpuBufferDescriptor::new(
+                    common("direct-cost indexed offscreen timestamp resolve"),
+                    TIMESTAMP_BYTES,
+                    GpuBufferUsages::new(
+                        &resolve_label,
+                        [GpuBufferUsage::QueryResolve, GpuBufferUsage::CopySource],
+                    )
+                    .unwrap(),
+                    GpuBufferInitialization::Uninitialized,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        (query_set, resolve)
+    });
+
     let bindings = GpuRuntimeBindingSet::new(pipeline.layout().clone(), []).unwrap();
     let index_binding = GpuIndexBufferBinding::new(
         &index_buffer,
@@ -240,8 +298,13 @@ fn runengpu_fragment(pipeline: &GpuRenderPipelineDescriptor) -> (GpuWorkFragment
         None,
     )
     .unwrap();
-    let render = GpuRenderOperation::new([attachment], None, [draw], None).unwrap();
-    let readback_region = GpuTextureCopyRegion::new(
+    let timestamp_writes = timestamp_resources
+        .as_ref()
+        .map(|(query_set, _)| GpuTimestampWrites::new(query_set, Some(0), Some(1)).unwrap());
+    let render =
+        GpuRenderOperation::new([attachment], None, [draw], timestamp_writes).unwrap();
+
+    let image_region = GpuTextureCopyRegion::new(
         &texture,
         0,
         GpuTextureOrigin::new(0, 0, 0),
@@ -249,8 +312,13 @@ fn runengpu_fragment(pipeline: &GpuRenderPipelineDescriptor) -> (GpuWorkFragment
         GpuCopyExtent::new(WIDTH, HEIGHT, 1).unwrap(),
     )
     .unwrap();
-    let readback_id = GpuReadbackId::allocate().unwrap();
-    let readback = GpuReadbackOperation::new(readback_region.into(), readback_id).unwrap();
+    let image_readback = GpuReadbackId::allocate().unwrap();
+    let image_operation = GpuReadbackOperation::new(image_region.into(), image_readback).unwrap();
+
+    let timestamp_readback = timestamp_resources.as_ref().map(|(_, resolve)| {
+        let id = GpuReadbackId::allocate().unwrap();
+        (id, GpuReadbackOperation::new(GpuBufferRegion::whole(resolve).unwrap().into(), id).unwrap())
+    });
 
     let mut builder = GpuWorkFragmentBuilder::new(
         label("direct-cost indexed offscreen fragment"),
@@ -259,6 +327,10 @@ fn runengpu_fragment(pipeline: &GpuRenderPipelineDescriptor) -> (GpuWorkFragment
     builder.declare_resource(texture.into()).unwrap();
     builder.declare_resource(view.into()).unwrap();
     builder.declare_resource(index_buffer.into()).unwrap();
+    if let Some((query_set, resolve)) = &timestamp_resources {
+        builder.declare_resource(query_set.clone().into()).unwrap();
+        builder.declare_resource(resolve.clone().into()).unwrap();
+    }
     builder
         .add_node(
             label("direct-cost indexed offscreen draw"),
@@ -269,52 +341,97 @@ fn runengpu_fragment(pipeline: &GpuRenderPipelineDescriptor) -> (GpuWorkFragment
             provenance("direct-cost indexed offscreen draw"),
         )
         .unwrap();
+    if let Some((query_set, resolve)) = &timestamp_resources {
+        let resolve_operation = GpuQueryResolveOperation::new(
+            query_set,
+            GpuQueryRange::new(query_set, 0, 2).unwrap(),
+            resolve,
+            0,
+        )
+        .unwrap();
+        builder
+            .add_node(
+                label("direct-cost indexed offscreen timestamp resolve"),
+                GpuWorkOperation::Resolve(resolve_operation),
+                [],
+                GpuCapabilityRequirements::new(),
+                GpuExecutionPreference::Automatic,
+                provenance("direct-cost indexed offscreen timestamp resolve"),
+            )
+            .unwrap();
+    }
     builder
         .add_node(
             label("direct-cost indexed offscreen readback"),
-            GpuWorkOperation::Readback(readback),
+            GpuWorkOperation::Readback(image_operation),
             [],
             GpuCapabilityRequirements::new(),
             GpuExecutionPreference::Automatic,
             provenance("direct-cost indexed offscreen readback"),
         )
         .unwrap();
-    (builder.finish().unwrap(), readback_id)
+    if let Some((_, operation)) = timestamp_readback.as_ref() {
+        builder
+            .add_node(
+                label("direct-cost indexed offscreen timestamp readback"),
+                GpuWorkOperation::Readback(operation.clone()),
+                [],
+                GpuCapabilityRequirements::new(),
+                GpuExecutionPreference::Automatic,
+                provenance("direct-cost indexed offscreen timestamp readback"),
+            )
+            .unwrap();
+    }
+
+    RunenGpuFragment {
+        fragment: builder.finish().unwrap(),
+        image_readback,
+        timestamp_readback: timestamp_readback.map(|(id, _)| id),
+    }
 }
 
 fn progress_runengpu(
     context: &GpuContext,
     submission: &GpuSubmission,
-    readback_id: GpuReadbackId,
-) -> GpuReadbackBytes {
-    let readback = submission.readback(readback_id).unwrap().clone();
+    readback_ids: &[GpuReadbackId],
+) -> Vec<GpuReadbackBytes> {
+    let readbacks = readback_ids
+        .iter()
+        .map(|id| submission.readback(*id).unwrap().clone())
+        .collect::<Vec<_>>();
     let deadline = Instant::now() + Duration::from_secs(30);
     loop {
         context.progress();
-        match readback.status() {
-            GpuReadbackStatus::Ready(bytes) => loop {
-                context.progress();
-                match submission.status() {
-                    GpuSubmissionStatus::Completed => return bytes,
-                    GpuSubmissionStatus::Failed(failure) => {
-                        panic!("RunenGPU known-pattern submission failed: {failure:?}")
-                    }
-                    GpuSubmissionStatus::Accepted => {}
+        let mut all_ready = true;
+        for readback in &readbacks {
+            match readback.status() {
+                GpuReadbackStatus::Ready(_) => {}
+                GpuReadbackStatus::Failed(failure) => {
+                    panic!("RunenGPU known-pattern readback failed: {failure:?}")
                 }
-                assert!(Instant::now() < deadline, "RunenGPU completion timed out");
-                std::thread::yield_now();
-            },
-            GpuReadbackStatus::Failed(failure) => {
-                panic!("RunenGPU known-pattern readback failed: {failure:?}")
+                GpuReadbackStatus::Pending => all_ready = false,
             }
-            GpuReadbackStatus::Pending => {}
         }
-        if let GpuSubmissionStatus::Failed(failure) = submission.status() {
-            panic!("RunenGPU known-pattern submission failed: {failure:?}");
+        match submission.status() {
+            GpuSubmissionStatus::Failed(failure) => {
+                panic!("RunenGPU known-pattern submission failed: {failure:?}")
+            }
+            GpuSubmissionStatus::Completed if all_ready => break,
+            GpuSubmissionStatus::Accepted | GpuSubmissionStatus::Completed => {}
         }
-        assert!(Instant::now() < deadline, "RunenGPU readback timed out");
+        assert!(
+            Instant::now() < deadline,
+            "RunenGPU known-pattern completion/readback timed out"
+        );
         std::thread::yield_now();
     }
+    readbacks
+        .into_iter()
+        .map(|readback| match readback.status() {
+            GpuReadbackStatus::Ready(bytes) => bytes,
+            other => panic!("terminal RunenGPU known-pattern readback must be ready: {other:?}"),
+        })
+        .collect()
 }
 
 fn pixel_at(bytes: &[u8], x: u32, y: u32) -> [u8; 4] {
@@ -332,19 +449,31 @@ fn assert_known_pattern(bytes: &[u8]) {
     }
 }
 
+fn timestamp_delta(bytes: &[u8]) -> u64 {
+    let (timestamps, remainder) = bytes.as_chunks::<8>();
+    assert!(remainder.is_empty());
+    assert_eq!(timestamps.len(), 2);
+    let beginning = u64::from_ne_bytes(timestamps[0]);
+    let end = u64::from_ne_bytes(timestamps[1]);
+    assert!(end >= beginning, "timestamp end must not precede beginning");
+    end - beginning
+}
+
 fn runengpu_sample(
     context: &GpuContext,
     pipeline: &GpuRenderPipelineDescriptor,
 ) -> BTreeMap<String, f64> {
     let total_start = Instant::now();
     let author_start = Instant::now();
-    let (fragment, readback_id) = runengpu_fragment(pipeline);
+    let authored = runengpu_fragment(pipeline, false);
     let author_us = micros(author_start.elapsed());
 
     let prepare_start = Instant::now();
-    let graph =
-        GpuPreparedWorkGraph::prepare(label("G6-P01 known-pattern RunenGPU graph"), [fragment])
-            .unwrap();
+    let graph = GpuPreparedWorkGraph::prepare(
+        label("G6-P01 known-pattern RunenGPU graph"),
+        [authored.fragment],
+    )
+    .unwrap();
     let graph_prepare_us = micros(prepare_start.elapsed());
 
     let backend_prepare_start = Instant::now();
@@ -356,10 +485,10 @@ fn runengpu_sample(
     let submit_encode_and_queue_us = micros(submit_start.elapsed());
 
     let completion_start = Instant::now();
-    let bytes = progress_runengpu(context, &submission, readback_id);
+    let readbacks = progress_runengpu(context, &submission, &[authored.image_readback]);
     let completion_readback_us = micros(completion_start.elapsed());
-    assert_eq!(bytes.texture_format(), Some(GpuTextureFormat::Rgba8Unorm));
-    assert_known_pattern(bytes.as_bytes());
+    assert_eq!(readbacks[0].texture_format(), Some(GpuTextureFormat::Rgba8Unorm));
+    assert_known_pattern(readbacks[0].as_bytes());
 
     let mut phases = BTreeMap::new();
     phases.insert("authoring".to_owned(), author_us);
@@ -380,6 +509,31 @@ fn runengpu_sample(
     phases.insert("completion_readback".to_owned(), completion_readback_us);
     phases.insert("total".to_owned(), micros(total_start.elapsed()));
     phases
+}
+
+fn runengpu_timestamp_sample(
+    context: &GpuContext,
+    pipeline: &GpuRenderPipelineDescriptor,
+) -> u64 {
+    let authored = runengpu_fragment(pipeline, true);
+    let timestamp_id = authored
+        .timestamp_readback
+        .expect("timestamp evidence fragment must expose timestamp readback");
+    let graph = GpuPreparedWorkGraph::prepare(
+        label("G6-P01 known-pattern RunenGPU timestamp graph"),
+        [authored.fragment],
+    )
+    .unwrap();
+    let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
+    let submission = context.submit_prepared(prepared).unwrap();
+    let readbacks = progress_runengpu(
+        context,
+        &submission,
+        &[authored.image_readback, timestamp_id],
+    );
+    assert_eq!(readbacks[0].texture_format(), Some(GpuTextureFormat::Rgba8Unorm));
+    assert_known_pattern(readbacks[0].as_bytes());
+    timestamp_delta(readbacks[1].as_bytes())
 }
 
 struct DirectPipeline {
@@ -436,12 +590,15 @@ fn direct_pipeline(context: &DirectWgpuContext) -> DirectPipeline {
     }
 }
 
-fn direct_sample(
-    context: &DirectWgpuContext,
-    pipeline: &wgpu::RenderPipeline,
-) -> BTreeMap<String, f64> {
-    let total_start = Instant::now();
-    let resource_start = Instant::now();
+struct DirectResources {
+    texture: wgpu::Texture,
+    view: wgpu::TextureView,
+    index_buffer: wgpu::Buffer,
+    index_upload: wgpu::Buffer,
+    image_readback: wgpu::Buffer,
+}
+
+fn direct_resources(context: &DirectWgpuContext) -> DirectResources {
     let texture = context.device.create_texture(&wgpu::TextureDescriptor {
         label: Some("G6-P01 known-pattern target"),
         size: wgpu::Extent3d {
@@ -470,32 +627,37 @@ fn direct_sample(
             contents: bytemuck::cast_slice(&INDICES),
             usage: wgpu::BufferUsages::COPY_SRC,
         });
-    let physical_row = padded_bytes_per_row(WIDTH * 4);
-    let readback_size = readback_staging_size();
-    let readback = context.device.create_buffer(&wgpu::BufferDescriptor {
+    let image_readback = context.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("G6-P01 known-pattern readback"),
-        size: readback_size,
+        size: readback_staging_size(),
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
     });
-    let resource_setup_us = micros(resource_start.elapsed());
+    DirectResources {
+        texture,
+        view,
+        index_buffer,
+        index_upload,
+        image_readback,
+    }
+}
 
-    let record_start = Instant::now();
-    let mut encoder = context
-        .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("G6-P01 known-pattern encoder"),
-        });
+fn record_known_pattern(
+    encoder: &mut wgpu::CommandEncoder,
+    pipeline: &wgpu::RenderPipeline,
+    resources: &DirectResources,
+    timestamps: Option<(&wgpu::QuerySet, u32, u32)>,
+) {
     encoder.copy_buffer_to_buffer(
-        &index_upload,
+        &resources.index_upload,
         0,
-        &index_buffer,
+        &resources.index_buffer,
         0,
         u64::try_from(core::mem::size_of_val(&INDICES)).unwrap(),
     );
     {
         let color_attachments = [Some(wgpu::RenderPassColorAttachment {
-            view: &view,
+            view: &resources.view,
             depth_slice: None,
             resolve_target: None,
             ops: wgpu::Operations {
@@ -503,31 +665,39 @@ fn direct_sample(
                 store: wgpu::StoreOp::Store,
             },
         })];
+        let timestamp_writes = timestamps.map(|(query_set, beginning, end)| {
+            wgpu::RenderPassTimestampWrites {
+                query_set,
+                beginning_of_pass_write_index: Some(beginning),
+                end_of_pass_write_index: Some(end),
+            }
+        });
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("G6-P01 known-pattern pass"),
             color_attachments: &color_attachments,
             depth_stencil_attachment: None,
-            timestamp_writes: None,
+            timestamp_writes,
             occlusion_query_set: None,
             multiview_mask: None,
         });
         pass.set_pipeline(pipeline);
-        pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        pass.set_index_buffer(resources.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         pass.set_viewport(0.0, 0.0, WIDTH as f32, HEIGHT as f32, 0.0, 1.0);
         pass.set_scissor_rect(0, 0, WIDTH / 2, HEIGHT);
         pass.set_blend_constant(wgpu::Color::TRANSPARENT);
         pass.set_stencil_reference(0);
         pass.draw_indexed(0..u32::try_from(INDICES.len()).unwrap(), 0, 0..1);
     }
+    let physical_row = padded_bytes_per_row(WIDTH * 4);
     encoder.copy_texture_to_buffer(
         wgpu::TexelCopyTextureInfo {
-            texture: &texture,
+            texture: &resources.texture,
             mip_level: 0,
             origin: wgpu::Origin3d::ZERO,
             aspect: wgpu::TextureAspect::All,
         },
         wgpu::TexelCopyBufferInfo {
-            buffer: &readback,
+            buffer: &resources.image_readback,
             layout: wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(physical_row),
@@ -540,12 +710,37 @@ fn direct_sample(
             depth_or_array_layers: 1,
         },
     );
+}
+
+fn direct_sample(
+    context: &DirectWgpuContext,
+    pipeline: &wgpu::RenderPipeline,
+) -> BTreeMap<String, f64> {
+    let total_start = Instant::now();
+    let resource_start = Instant::now();
+    let resources = direct_resources(context);
+    let resource_setup_us = micros(resource_start.elapsed());
+
+    let record_start = Instant::now();
+    let mut encoder = context
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("G6-P01 known-pattern encoder"),
+        });
+    record_known_pattern(&mut encoder, pipeline, &resources, None);
     let command_buffer = encoder.finish();
     let command_record_us = micros(record_start.elapsed());
 
-    let submitted = submit_and_map(context, command_buffer, &[&readback]);
+    let submitted = submit_and_map(context, command_buffer, &[&resources.image_readback]);
+    let physical_row = padded_bytes_per_row(WIDTH * 4);
     let row_unpack_start = Instant::now();
-    let bytes = tightly_pack_texture_rows(&submitted.mapped[0], WIDTH, HEIGHT, 4, physical_row);
+    let bytes = tightly_pack_texture_rows(
+        &submitted.mapped[0],
+        WIDTH,
+        HEIGHT,
+        4,
+        physical_row,
+    );
     let row_unpack_us = micros(row_unpack_start.elapsed());
     let completion_readback_us = submitted.completion_readback_us + row_unpack_us;
     assert_known_pattern(&bytes);
@@ -572,12 +767,130 @@ fn direct_sample(
     phases
 }
 
+fn direct_timestamp_sample(
+    context: &DirectWgpuContext,
+    pipeline: &wgpu::RenderPipeline,
+) -> u64 {
+    let resources = direct_resources(context);
+    let query_set = context.device.create_query_set(&wgpu::QuerySetDescriptor {
+        label: Some("G6-P01 known-pattern direct timestamp query set"),
+        ty: wgpu::QueryType::Timestamp,
+        count: 2,
+    });
+    let resolve = context.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("G6-P01 known-pattern direct timestamp resolve"),
+        size: TIMESTAMP_BYTES,
+        usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+    });
+    let timestamp_readback = context.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("G6-P01 known-pattern direct timestamp readback"),
+        size: TIMESTAMP_BYTES,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    let mut encoder = context
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("G6-P01 known-pattern direct timestamp encoder"),
+        });
+    record_known_pattern(&mut encoder, pipeline, &resources, Some((&query_set, 0, 1)));
+    encoder.resolve_query_set(&query_set, 0..2, &resolve, 0);
+    encoder.copy_buffer_to_buffer(&resolve, 0, &timestamp_readback, 0, TIMESTAMP_BYTES);
+    let command_buffer = encoder.finish();
+    let submitted = submit_and_map(
+        context,
+        command_buffer,
+        &[&resources.image_readback, &timestamp_readback],
+    );
+    let physical_row = padded_bytes_per_row(WIDTH * 4);
+    let image = tightly_pack_texture_rows(
+        &submitted.mapped[0],
+        WIDTH,
+        HEIGHT,
+        4,
+        physical_row,
+    );
+    assert_known_pattern(&image);
+    timestamp_delta(&submitted.mapped[1])
+}
+
+fn timestamp_evidence(
+    wall_runengpu: &GpuContext,
+    wall_direct: &DirectWgpuContext,
+) -> Value {
+    assert!(
+        wall_direct.timestamp_supported,
+        "accepted G6-P01 Lavapipe adapter reports timestamp-query support"
+    );
+    let runengpu_context = runengpu_context(true);
+    let direct_context = DirectWgpuContext::request_timestamp(
+        "G6-P01 known-pattern direct WGPU timestamp evidence",
+    );
+    assert_equivalent_adapter_selection(&runengpu_context, &direct_context);
+    assert_eq!(
+        wall_runengpu.adapter_facts().vendor(),
+        runengpu_context.adapter_facts().vendor()
+    );
+    assert_eq!(
+        wall_runengpu.adapter_facts().device(),
+        runengpu_context.adapter_facts().device()
+    );
+    assert_eq!(wall_direct.adapter_info.vendor, direct_context.adapter_info.vendor);
+    assert_eq!(wall_direct.adapter_info.device, direct_context.adapter_info.device);
+
+    let runengpu_pipeline = render_pipeline();
+    let direct_pipeline = direct_pipeline(&direct_context);
+    for _ in 0..WARMUP_SAMPLES {
+        let _ = runengpu_timestamp_sample(&runengpu_context, &runengpu_pipeline);
+        let _ = direct_timestamp_sample(&direct_context, &direct_pipeline.pipeline);
+    }
+    let mut runengpu_ticks = Vec::with_capacity(MEASURED_SAMPLES);
+    let mut direct_ticks = Vec::with_capacity(MEASURED_SAMPLES);
+    for _ in 0..MEASURED_SAMPLES {
+        runengpu_ticks.push(runengpu_timestamp_sample(
+            &runengpu_context,
+            &runengpu_pipeline,
+        ));
+        direct_ticks.push(direct_timestamp_sample(
+            &direct_context,
+            &direct_pipeline.pipeline,
+        ));
+    }
+    let direct_period_ns = f64::from(direct_context.queue.get_timestamp_period());
+    let direct_ns = direct_ticks
+        .iter()
+        .map(|ticks| *ticks as f64 * direct_period_ns)
+        .collect::<Vec<_>>();
+
+    json!({
+        "status": "measured",
+        "separate_from_wall_clock_samples": true,
+        "pass_boundaries": "beginning/end of the one retained indexed render pass",
+        "warmup_samples": WARMUP_SAMPLES,
+        "measured_samples": MEASURED_SAMPLES,
+        "runengpu": {
+            "raw_delta_ticks": runengpu_ticks,
+            "summary_ticks": summarize_u64(&runengpu_ticks),
+            "timestamp_period_ns": null,
+            "timestamp_period_status": "not exposed by public RunenGPU device facts",
+        },
+        "direct_wgpu": {
+            "raw_delta_ticks": direct_ticks,
+            "summary_ticks": summarize_u64(&direct_ticks),
+            "timestamp_period_ns": direct_period_ns,
+            "delta_ns": direct_ns,
+        },
+        "interpretation": "Both paths write timestamps at equivalent retained render-pass boundaries on the same Vulkan fallback adapter. RunenGPU raw ticks are retained without fabricating a period that its public device facts do not expose.",
+    })
+}
+
 pub(crate) fn compare() -> Value {
     let direct_context = DirectWgpuContext::request("G6-P01 known-pattern direct WGPU");
     let direct_pipeline = direct_pipeline(&direct_context);
 
     let runengpu_context_start = Instant::now();
-    let runengpu_context = runengpu_context();
+    let runengpu_context = runengpu_context(false);
     let runengpu_context_us = micros(runengpu_context_start.elapsed());
     assert_equivalent_adapter_selection(&runengpu_context, &direct_context);
 
@@ -609,6 +922,7 @@ pub(crate) fn compare() -> Value {
     }
     assert_eq!(runengpu.len(), MEASURED_SAMPLES);
     assert_eq!(direct.len(), MEASURED_SAMPLES);
+    let timestamps = timestamp_evidence(&runengpu_context, &direct_context);
 
     json!({
         "workload": "G6-C01-known-pattern-offscreen-draw",
@@ -616,7 +930,7 @@ pub(crate) fn compare() -> Value {
             "width": WIDTH,
             "height": HEIGHT,
             "format": "Rgba8Unorm",
-            "clear": [0, 0, 0, 255],
+            "clear": CLEAR_PIXEL,
             "indices": INDICES,
             "draw": "one indexed triangle",
             "viewport": [0, 0, WIDTH, HEIGHT],
@@ -676,11 +990,8 @@ pub(crate) fn compare() -> Value {
             &direct,
             &["boundary_prepare_record_submit", "completion_readback", "total"],
         ),
-        "timestamp_evidence": {
-            "supported_by_direct_adapter": direct_context.timestamp_supported,
-            "status": "not-yet-instrumented-in-first implementation slice",
-        },
-        "correctness": "passed exact retained selected-pixel oracle on every sample",
+        "timestamp_evidence": timestamps,
+        "correctness": "passed exact retained selected-pixel oracle on every wall-clock and timestamp sample",
         "allocation_bytes": null,
         "allocation_bytes_status": "unavailable without new backend allocator instrumentation",
     })
