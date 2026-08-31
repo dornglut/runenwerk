@@ -126,14 +126,25 @@ jobs:
           set -euo pipefail
           vulkaninfo --summary
 
-      - name: Run optimized G6-P01 direct-WGPU comparison proofs
+      - name: Run optimized G6-P01 direct-WGPU portfolio proof
         env:
           RUST_BACKTRACE: '1'
+          RUNEN_GPU_PROOF_ARTIFACT_DIR: ${{ runner.temp }}/runengpu-proof-artifacts
           RUNEN_GPU_PROOF_BUILD_PROFILE: release
+          RUNEN_GPU_PROOF_REVISION: ${{ steps.revision.outputs.expected_revision }}
         run: |
           set -euo pipefail
           cargo +stable test --release -p engine --test gpu_direct_wgpu_cost_native \
+            report::direct_wgpu_cost_portfolio_retains_report \
             --locked -- --ignored --nocapture --test-threads=1
+          test -s "${RUNEN_GPU_PROOF_ARTIFACT_DIR}/direct-wgpu-cost/report.json"
+
+      - name: Retain G6-P01 direct-WGPU cost report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: runengpu-direct-wgpu-cost-${{ steps.revision.outputs.expected_revision }}
+          path: ${{ runner.temp }}/runengpu-proof-artifacts/direct-wgpu-cost/report.json
+          if-no-files-found: error
 
       - name: Run retained G5-C01 prefix scan proof
         env:
