@@ -265,7 +265,7 @@ fn runengpu_timestamp_sample(
     let passes = timed_passes(envelope);
     let query_count = query_count(&passes);
     let graph = GpuPreparedWorkGraph::prepare(
-        label(format!(
+        label(&format!(
             "G6-P01 reaction diffusion {} timestamp graph",
             envelope.name
         )),
@@ -485,11 +485,7 @@ fn direct_timestamp_sample(
     deltas
 }
 
-fn aggregate_ticks(
-    samples: &[Vec<u64>],
-    passes: &[TimedPass],
-    period_ns: Option<f64>,
-) -> Value {
+fn aggregate_ticks(samples: &[Vec<u64>], passes: &[TimedPass], period_ns: Option<f64>) -> Value {
     assert_eq!(samples.len(), MEASURED_SAMPLES);
     assert!(samples.iter().all(|sample| sample.len() == passes.len()));
 
