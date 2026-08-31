@@ -170,10 +170,8 @@ async fn preview_control_channel_rejects_mismatched_trusted_certificate() -> Res
     };
 
     let mut bootstrap = server.bootstrap().clone();
-    bootstrap.trusted_certificate_der_hex = other_server
-        .bootstrap()
-        .trusted_certificate_der_hex
-        .clone();
+    bootstrap.trusted_certificate_der_hex =
+        other_server.bootstrap().trusted_certificate_der_hex.clone();
 
     let connect_result = PreviewProcessConnection::connect(&bootstrap).await;
     let server_cleanup = server.shutdown().await;
