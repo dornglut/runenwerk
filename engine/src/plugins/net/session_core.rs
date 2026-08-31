@@ -39,6 +39,10 @@ impl RunenNetSessionProjection {
     fn remove_binding(&mut self, connection: ConnectionHandle) {
         self.bindings.remove(&connection);
     }
+
+    fn clear(&mut self) {
+        self.bindings.clear();
+    }
 }
 
 /// Engine-owned placement of the accepted RunenNet negotiation and session owners.
@@ -122,6 +126,11 @@ impl RunenNetSessionCore {
         Ok(outcome)
     }
 
+    pub fn close(&mut self, projection: &mut RunenNetSessionProjection) {
+        self.session.close();
+        projection.clear();
+    }
+
     pub fn participant_for_connection(
         &self,
         connection: ConnectionHandle,
@@ -166,7 +175,8 @@ mod tests {
 
     fn session() -> Session {
         let limit = NonZeroUsize::new(4).expect("non-zero session limit");
-        let limits = SessionLimits::new(limit, limit).expect("matching session limits must be valid");
+        let limits =
+            SessionLimits::new(limit, limit).expect("matching session limits must be valid");
         Session::new(SessionId::new(1), limits)
     }
 
@@ -223,7 +233,10 @@ mod tests {
 
         core.admit_established(&mut projection, participant, connection)
             .expect("established connection must be admitted");
-        assert_eq!(core.participant_for_connection(connection), Some(participant));
+        assert_eq!(
+            core.participant_for_connection(connection),
+            Some(participant)
+        );
         assert_eq!(
             projection.participant_for_connection(connection),
             Some(participant)
@@ -271,7 +284,10 @@ mod tests {
         core.bind_replacement(&mut projection, participant, new_connection)
             .expect("new established connection must rebind retained membership");
         assert_eq!(core.participant_for_connection(old_connection), None);
-        assert_eq!(core.participant_for_connection(new_connection), Some(participant));
+        assert_eq!(
+            core.participant_for_connection(new_connection),
+            Some(participant)
+        );
         assert_eq!(
             projection.participant_for_connection(new_connection),
             Some(participant)
@@ -280,5 +296,22 @@ mod tests {
             core.membership_state(participant),
             Some(MembershipState::Bound(new_connection))
         );
+    }
+
+    #[test]
+    fn closing_core_clears_engine_projection_after_runennet_closure() {
+        let connection = ConnectionHandle::new(1);
+        let participant = ParticipantId::new(1);
+        let mut negotiation = negotiation_manager();
+        establish(&mut negotiation, connection);
+        let mut core = RunenNetSessionCore::new(negotiation, session());
+        let mut projection = RunenNetSessionProjection::default();
+
+        core.admit_established(&mut projection, participant, connection)
+            .expect("established connection must be admitted");
+        core.close(&mut projection);
+
+        assert_eq!(core.participant_for_connection(connection), None);
+        assert_eq!(projection.active_connection_count(), 0);
     }
 }
