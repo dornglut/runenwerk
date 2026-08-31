@@ -4,6 +4,9 @@ mod common;
 mod offscreen_draw;
 #[path = "gpu_direct_wgpu_cost_native/prefix_scan.rs"]
 mod prefix_scan;
+// The retained workload module also contains the surface-present proof path, which this
+// offscreen-only comparison intentionally does not execute.
+#[allow(dead_code)]
 #[path = "gpu_direct_wgpu_cost_native/reaction_diffusion.rs"]
 mod reaction_diffusion;
 
