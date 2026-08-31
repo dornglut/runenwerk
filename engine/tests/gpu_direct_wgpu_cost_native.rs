@@ -10,11 +10,16 @@ mod prefix_scan;
 #[path = "gpu_direct_wgpu_cost_native/reaction_diffusion.rs"]
 mod reaction_diffusion;
 
+#[cfg(debug_assertions)]
+fn require_optimized_build() {
+    panic!("G6-P01 performance evidence must run from an optimized Cargo test profile");
+}
+
+#[cfg(not(debug_assertions))]
+fn require_optimized_build() {}
+
 fn retain_measurement_profile(evidence: &mut serde_json::Value) {
-    assert!(
-        !cfg!(debug_assertions),
-        "G6-P01 performance evidence must run from an optimized Cargo test profile"
-    );
+    require_optimized_build();
     let profile = std::env::var("RUNEN_GPU_PROOF_BUILD_PROFILE")
         .expect("G6-P01 conformance must declare its Cargo build profile");
     assert_eq!(
