@@ -3,6 +3,43 @@ use runen_net::protocol::{NegotiationManager, NegotiationManagerError};
 use runen_net::session::{
     ConnectionLossOutcome, MembershipState, RetentionPolicy, Session, SessionError,
 };
+use std::collections::HashMap;
+
+/// Read-only engine projection of bindings already accepted by RunenNet [`Session`].
+///
+/// This projection exists because the accepted Core intentionally does not expose membership
+/// iteration. It is updated only after successful Core lifecycle operations and is suitable for
+/// engine scheduling, owner routing, diagnostics, and presentation. It is never consulted to
+/// authorize admission, loss, retention, replacement, or expiry.
+#[derive(Debug, Clone, Default, PartialEq, Eq, ecs::Component, ecs::Resource)]
+pub struct RunenNetSessionProjection {
+    bindings: HashMap<ConnectionHandle, ParticipantId>,
+}
+
+impl RunenNetSessionProjection {
+    pub fn active_connections(&self) -> impl Iterator<Item = ConnectionHandle> + '_ {
+        self.bindings.keys().copied()
+    }
+
+    pub fn participant_for_connection(
+        &self,
+        connection: ConnectionHandle,
+    ) -> Option<ParticipantId> {
+        self.bindings.get(&connection).copied()
+    }
+
+    pub fn active_connection_count(&self) -> usize {
+        self.bindings.len()
+    }
+
+    fn record_binding(&mut self, connection: ConnectionHandle, participant: ParticipantId) {
+        self.bindings.insert(connection, participant);
+    }
+
+    fn remove_binding(&mut self, connection: ConnectionHandle) {
+        self.bindings.remove(&connection);
+    }
+}
 
 /// Engine-owned placement of the accepted RunenNet negotiation and session owners.
 ///
@@ -38,6 +75,7 @@ impl RunenNetSessionCore {
 
     pub fn admit_established(
         &mut self,
+        projection: &mut RunenNetSessionProjection,
         participant: ParticipantId,
         connection: ConnectionHandle,
     ) -> Result<(), RunenNetSessionCoreError> {
@@ -47,11 +85,14 @@ impl RunenNetSessionCore {
             .map_err(RunenNetSessionCoreError::Negotiation)?;
         self.session
             .admit_new(participant, established)
-            .map_err(RunenNetSessionCoreError::Session)
+            .map_err(RunenNetSessionCoreError::Session)?;
+        projection.record_binding(connection, participant);
+        Ok(())
     }
 
     pub fn bind_replacement(
         &mut self,
+        projection: &mut RunenNetSessionProjection,
         participant: ParticipantId,
         connection: ConnectionHandle,
     ) -> Result<(), RunenNetSessionCoreError> {
@@ -61,18 +102,24 @@ impl RunenNetSessionCore {
             .map_err(RunenNetSessionCoreError::Negotiation)?;
         self.session
             .bind_replacement(participant, established)
-            .map_err(RunenNetSessionCoreError::Session)
+            .map_err(RunenNetSessionCoreError::Session)?;
+        projection.record_binding(connection, participant);
+        Ok(())
     }
 
     pub fn connection_lost(
         &mut self,
+        projection: &mut RunenNetSessionProjection,
         participant: ParticipantId,
         connection: ConnectionHandle,
         policy: RetentionPolicy,
     ) -> Result<ConnectionLossOutcome, RunenNetSessionCoreError> {
-        self.session
+        let outcome = self
+            .session
             .connection_lost(participant, connection, policy)
-            .map_err(RunenNetSessionCoreError::Session)
+            .map_err(RunenNetSessionCoreError::Session)?;
+        projection.remove_binding(connection);
+        Ok(outcome)
     }
 
     pub fn participant_for_connection(
@@ -151,16 +198,18 @@ mod tests {
     #[test]
     fn admission_requires_runennet_established_negotiation() {
         let mut core = RunenNetSessionCore::new(negotiation_manager(), session());
+        let mut projection = RunenNetSessionProjection::default();
         let participant = ParticipantId::new(1);
         let connection = ConnectionHandle::new(1);
 
         assert_eq!(
-            core.admit_established(participant, connection),
+            core.admit_established(&mut projection, participant, connection),
             Err(RunenNetSessionCoreError::Negotiation(
                 NegotiationManagerError::UnknownConnection,
             ))
         );
         assert_eq!(core.session().live_memberships(), 0);
+        assert_eq!(projection.active_connection_count(), 0);
     }
 
     #[test]
@@ -170,17 +219,28 @@ mod tests {
         let mut negotiation = negotiation_manager();
         establish(&mut negotiation, connection);
         let mut core = RunenNetSessionCore::new(negotiation, session());
+        let mut projection = RunenNetSessionProjection::default();
 
-        core.admit_established(participant, connection)
+        core.admit_established(&mut projection, participant, connection)
             .expect("established connection must be admitted");
         assert_eq!(core.participant_for_connection(connection), Some(participant));
+        assert_eq!(
+            projection.participant_for_connection(connection),
+            Some(participant)
+        );
 
         assert_eq!(
-            core.connection_lost(participant, connection, RetentionPolicy::Terminate),
+            core.connection_lost(
+                &mut projection,
+                participant,
+                connection,
+                RetentionPolicy::Terminate,
+            ),
             Ok(ConnectionLossOutcome::Terminated)
         );
         assert_eq!(core.participant_for_connection(connection), None);
         assert_eq!(core.membership_state(participant), None);
+        assert_eq!(projection.participant_for_connection(connection), None);
     }
 
     #[test]
@@ -192,23 +252,30 @@ mod tests {
         establish(&mut negotiation, old_connection);
         establish(&mut negotiation, new_connection);
         let mut core = RunenNetSessionCore::new(negotiation, session());
+        let mut projection = RunenNetSessionProjection::default();
 
-        core.admit_established(participant, old_connection)
+        core.admit_established(&mut projection, participant, old_connection)
             .expect("old connection must be admitted");
         let duration = RecoveryDuration::new(NonZeroU64::new(1).expect("non-zero recovery span"));
         assert!(matches!(
             core.connection_lost(
+                &mut projection,
                 participant,
                 old_connection,
                 RetentionPolicy::RetainForRecovery { duration },
             ),
             Ok(ConnectionLossOutcome::Retained { .. })
         ));
+        assert_eq!(projection.participant_for_connection(old_connection), None);
 
-        core.bind_replacement(participant, new_connection)
+        core.bind_replacement(&mut projection, participant, new_connection)
             .expect("new established connection must rebind retained membership");
         assert_eq!(core.participant_for_connection(old_connection), None);
         assert_eq!(core.participant_for_connection(new_connection), Some(participant));
+        assert_eq!(
+            projection.participant_for_connection(new_connection),
+            Some(participant)
+        );
         assert_eq!(
             core.membership_state(participant),
             Some(MembershipState::Bound(new_connection))
