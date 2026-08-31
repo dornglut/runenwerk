@@ -29,7 +29,10 @@ use runen_net_quic::{
 use rustls_pki_types::PrivatePkcs8KeyDer;
 use std::{future::poll_fn, net::SocketAddr, num::NonZeroUsize, task::Poll};
 use tokio::{
-    sync::mpsc::{Receiver, Sender, channel},
+    sync::{
+        mpsc::{Receiver, Sender, channel},
+        watch,
+    },
     task::JoinHandle,
 };
 
@@ -41,7 +44,6 @@ const NETWORK_CHANNEL_CAPACITY: usize = 128;
 #[derive(Debug)]
 pub(crate) enum ServerNetworkCommand {
     Send(PreviewEventEnvelope),
-    Shutdown,
 }
 
 #[derive(Debug)]
@@ -51,12 +53,13 @@ pub(crate) enum ServerNetworkEvent {
     Error(String),
 }
 
-pub(crate) type SpawnedServerNetwork = (
-    Sender<ServerNetworkCommand>,
-    Receiver<ServerNetworkEvent>,
-    PreviewBootstrap,
-    JoinHandle<Result<()>>,
-);
+pub(super) struct SpawnedServerNetwork {
+    pub(super) command_tx: Sender<ServerNetworkCommand>,
+    pub(super) shutdown_tx: watch::Sender<bool>,
+    pub(super) event_rx: Receiver<ServerNetworkEvent>,
+    pub(super) bootstrap: PreviewBootstrap,
+    pub(super) network_task: JoinHandle<Result<()>>,
+}
 
 pub(crate) fn spawn(bind_addr: SocketAddr, server_name: &str) -> Result<SpawnedServerNetwork> {
     let endpoint_config = endpoint_config()?;
@@ -78,30 +81,52 @@ pub(crate) fn spawn(bind_addr: SocketAddr, server_name: &str) -> Result<SpawnedS
     };
 
     let (command_tx, command_rx) = channel(NETWORK_CHANNEL_CAPACITY);
+    let (shutdown_tx, shutdown_rx) = watch::channel(false);
     let (event_tx, event_rx) = channel(NETWORK_CHANNEL_CAPACITY);
     let error_tx = event_tx.clone();
     let network_task = tokio::spawn(async move {
-        let result = run(endpoint, endpoint_config, command_rx, event_tx).await;
+        let result = run(
+            endpoint,
+            endpoint_config,
+            command_rx,
+            shutdown_rx,
+            event_tx,
+        )
+        .await;
         if let Err(error) = &result {
             let _ = error_tx.try_send(ServerNetworkEvent::Error(error.to_string()));
         }
         result
     });
 
-    Ok((command_tx, event_rx, bootstrap, network_task))
+    Ok(SpawnedServerNetwork {
+        command_tx,
+        shutdown_tx,
+        event_rx,
+        bootstrap,
+        network_task,
+    })
 }
 
 async fn run(
     endpoint: ServerEndpoint,
     endpoint_config: EndpointConfig,
     command_rx: Receiver<ServerNetworkCommand>,
+    shutdown_rx: watch::Receiver<bool>,
     event_tx: Sender<ServerNetworkEvent>,
 ) -> Result<()> {
-    let result = run_connection(&endpoint, endpoint_config, command_rx, event_tx.clone()).await;
+    let result = run_connection(
+        &endpoint,
+        endpoint_config,
+        command_rx,
+        shutdown_rx,
+        event_tx.clone(),
+    )
+    .await;
     endpoint.close();
     endpoint.wait_idle().await;
     if result.is_ok() {
-        let _ = event_tx.send(ServerNetworkEvent::Closed).await;
+        let _ = event_tx.try_send(ServerNetworkEvent::Closed);
     }
     result
 }
@@ -110,6 +135,7 @@ async fn run_connection(
     endpoint: &ServerEndpoint,
     endpoint_config: EndpointConfig,
     mut command_rx: Receiver<ServerNetworkCommand>,
+    mut shutdown_rx: watch::Receiver<bool>,
     event_tx: Sender<ServerNetworkEvent>,
 ) -> Result<()> {
     let ready = tokio::select! {
@@ -118,12 +144,13 @@ async fn run_connection(
                 .map_err(|error| anyhow!("runtime-preview ProfileReady accept failed: {error}"))?
                 .ok_or_else(|| anyhow!("runtime-preview endpoint closed before ProfileReady"))?
         }
+        _ = shutdown_rx.wait_for(|shutdown| *shutdown) => return Ok(()),
         command = command_rx.recv() => {
             match command {
-                Some(ServerNetworkCommand::Shutdown) | None => return Ok(()),
                 Some(ServerNetworkCommand::Send(_)) => {
                     return Err(anyhow!("runtime-preview event queued before a connection was established"));
                 }
+                None => return Ok(()),
             }
         }
     };
@@ -146,13 +173,17 @@ async fn run_connection(
     let mut inbound_finished = false;
     while !(outbound_finished && inbound_finished) {
         tokio::select! {
+            _ = shutdown_rx.wait_for(|shutdown| *shutdown), if !closing => {
+                finish_outbound(&mut connection, &mut host, outbound)?;
+                closing = true;
+            }
             command = command_rx.recv(), if !closing => {
                 match command {
                     Some(ServerNetworkCommand::Send(event)) => {
                         let payload = encode_preview_event_bytes(&event)?;
                         submit(&mut connection, &mut host, outbound, payload)?;
                     }
-                    Some(ServerNetworkCommand::Shutdown) | None => {
+                    None => {
                         finish_outbound(&mut connection, &mut host, outbound)?;
                         closing = true;
                     }

@@ -7,13 +7,14 @@ use editor_preview::{
 };
 use engine::app::App;
 use engine::plugins::default_plugins;
-use network::{ServerNetworkCommand, ServerNetworkEvent};
+use network::{ServerNetworkCommand, ServerNetworkEvent, SpawnedServerNetwork};
 use std::collections::BTreeMap;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tokio::{
     sync::{
         Mutex,
         mpsc::{Receiver, Sender},
+        watch,
     },
     task::JoinHandle,
 };
@@ -50,6 +51,7 @@ impl Default for RuntimePreviewConfig {
 
 pub struct RuntimePreviewHost {
     command_tx: Sender<ServerNetworkCommand>,
+    shutdown_tx: watch::Sender<bool>,
     event_rx: Receiver<ServerNetworkEvent>,
     bootstrap: PreviewBootstrap,
     network_task: Mutex<Option<JoinHandle<Result<()>>>>,
@@ -57,10 +59,16 @@ pub struct RuntimePreviewHost {
 
 impl RuntimePreviewHost {
     pub fn spawn(config: RuntimePreviewConfig) -> Result<Self> {
-        let (command_tx, event_rx, bootstrap, network_task) =
-            network::spawn(config.bind_addr, &config.server_name)?;
+        let SpawnedServerNetwork {
+            command_tx,
+            shutdown_tx,
+            event_rx,
+            bootstrap,
+            network_task,
+        } = network::spawn(config.bind_addr, &config.server_name)?;
         Ok(Self {
             command_tx,
+            shutdown_tx,
             event_rx,
             bootstrap,
             network_task: Mutex::new(Some(network_task)),
@@ -121,7 +129,7 @@ impl RuntimePreviewHost {
         let Some(task) = task else {
             return Ok(());
         };
-        let _ = self.command_tx.send(ServerNetworkCommand::Shutdown).await;
+        let _ = self.shutdown_tx.send(true);
         task.await
             .map_err(|error| anyhow!("runtime preview server task failed: {error}"))?
     }

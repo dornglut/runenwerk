@@ -36,6 +36,7 @@ use tokio::{
     sync::{
         Mutex,
         mpsc::{Receiver, Sender, channel},
+        watch,
     },
     task::JoinHandle,
 };
@@ -48,12 +49,6 @@ const CLIENT_INBOUND_EVENTS: u64 = 2;
 const NETWORK_CHANNEL_CAPACITY: usize = 128;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(5);
-
-#[derive(Debug)]
-enum ClientNetworkCommand {
-    Send(PreviewCommandEnvelope),
-    Shutdown,
-}
 
 #[derive(Debug)]
 pub enum PreviewConnectionEvent {
@@ -71,7 +66,8 @@ enum ClientTaskEvent {
 }
 
 pub struct PreviewProcessConnection {
-    command_tx: Sender<ClientNetworkCommand>,
+    command_tx: Sender<PreviewCommandEnvelope>,
+    shutdown_tx: watch::Sender<bool>,
     event_rx: Receiver<ClientTaskEvent>,
     network_task: Mutex<Option<JoinHandle<Result<()>>>>,
 }
@@ -93,6 +89,7 @@ impl PreviewProcessConnection {
         .map_err(|error| anyhow!("runtime-preview client bind failed: {error}"))?;
 
         let (command_tx, command_rx) = channel(NETWORK_CHANNEL_CAPACITY);
+        let (shutdown_tx, shutdown_rx) = watch::channel(false);
         let (event_tx, mut event_rx) = channel(NETWORK_CHANNEL_CAPACITY);
         let error_tx = event_tx.clone();
         let server_name = bootstrap.server_name.clone();
@@ -103,6 +100,7 @@ impl PreviewProcessConnection {
                 remote_addr,
                 server_name,
                 command_rx,
+                shutdown_rx,
                 event_tx,
             )
             .await;
@@ -135,6 +133,7 @@ impl PreviewProcessConnection {
         match first_event {
             ClientTaskEvent::Ready => Ok(Self {
                 command_tx,
+                shutdown_tx,
                 event_rx,
                 network_task: Mutex::new(Some(network_task)),
             }),
@@ -160,7 +159,7 @@ impl PreviewProcessConnection {
 
     pub async fn send_preview_command(&self, command: PreviewCommandEnvelope) -> Result<()> {
         self.command_tx
-            .send(ClientNetworkCommand::Send(command))
+            .send(command)
             .await
             .map_err(|_| anyhow!("preview process command channel closed"))
     }
@@ -182,7 +181,7 @@ impl PreviewProcessConnection {
         let Some(task) = task else {
             return Ok(());
         };
-        let _ = self.command_tx.send(ClientNetworkCommand::Shutdown).await;
+        let _ = self.shutdown_tx.send(true);
         task.await
             .map_err(|error| anyhow!("runtime-preview client task failed: {error}"))?
     }
@@ -204,7 +203,8 @@ async fn run_client(
     endpoint_config: EndpointConfig,
     remote_addr: SocketAddr,
     server_name: String,
-    command_rx: Receiver<ClientNetworkCommand>,
+    command_rx: Receiver<PreviewCommandEnvelope>,
+    shutdown_rx: watch::Receiver<bool>,
     event_tx: Sender<ClientTaskEvent>,
 ) -> Result<()> {
     let result = run_connection(
@@ -213,6 +213,7 @@ async fn run_client(
         remote_addr,
         &server_name,
         command_rx,
+        shutdown_rx,
         event_tx.clone(),
     )
     .await;
@@ -229,7 +230,8 @@ async fn run_connection(
     endpoint_config: EndpointConfig,
     remote_addr: SocketAddr,
     server_name: &str,
-    mut command_rx: Receiver<ClientNetworkCommand>,
+    mut command_rx: Receiver<PreviewCommandEnvelope>,
+    mut shutdown_rx: watch::Receiver<bool>,
     event_tx: Sender<ClientTaskEvent>,
 ) -> Result<()> {
     let ready = endpoint
@@ -262,13 +264,17 @@ async fn run_connection(
     let mut inbound_finished = false;
     while !(outbound_finished && inbound_finished) {
         tokio::select! {
+            _ = shutdown_rx.wait_for(|shutdown| *shutdown), if !closing => {
+                finish_outbound(&mut connection, &mut host, outbound)?;
+                closing = true;
+            }
             command = command_rx.recv(), if !closing => {
                 match command {
-                    Some(ClientNetworkCommand::Send(command)) => {
+                    Some(command) => {
                         let payload = encode_preview_command_bytes(&command)?;
                         submit(&mut connection, &mut host, outbound, payload)?;
                     }
-                    Some(ClientNetworkCommand::Shutdown) | None => {
+                    None => {
                         finish_outbound(&mut connection, &mut host, outbound)?;
                         closing = true;
                     }
