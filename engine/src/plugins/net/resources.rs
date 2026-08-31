@@ -214,7 +214,7 @@ pub fn route_connection_targets(
     world.route_owner_targets(owner_id)
 }
 
-pub(crate) fn configure_runtime_bridge<TDriver>(app: &mut App)
+pub(crate) fn configure_replication_io<TDriver>(app: &mut App)
 where
     TDriver: ReplicationDriver + SnapshotApplyDriver + InputDriver + Send + Sync + 'static,
     TDriver::Snapshot: Clone + PartialEq,
@@ -243,8 +243,6 @@ pub(crate) fn configure_client_role(app: &mut App) {
     app.init_resource::<NetworkInboundQueue>();
     app.init_resource::<NetworkOutboundQueue>();
     configure_session_projection(app);
-    app.init_resource::<NetworkAdmissionState>();
-    app.init_resource::<NetSessionView>();
     app.init_resource::<NetDiagnosticsView>();
     app.init_resource::<ConnectionHealth>();
     app.init_resource::<RoundTripMetrics>();
@@ -265,8 +263,6 @@ pub(crate) fn configure_server_role(app: &mut App) {
     app.init_resource::<NetworkInboundQueue>();
     app.init_resource::<NetworkOutboundQueue>();
     configure_session_projection(app);
-    app.init_resource::<NetworkAdmissionState>();
-    app.init_resource::<NetSessionView>();
     app.init_resource::<NetDiagnosticsView>();
     app.init_resource::<ConnectionHealth>();
     app.init_resource::<RoundTripMetrics>();
@@ -429,57 +425,6 @@ pub struct NetworkSessionStatus {
 pub struct NetworkOwnerRouting {
     pub by_connection: HashMap<ConnectionHandle, OwnerId>,
     pub by_owner: BTreeMap<OwnerId, ConnectionHandle>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, ecs::Component, ecs::Resource)]
-pub struct NetworkAdmissionState {
-    pub authoritative_join: Option<AuthoritativeJoinState>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
-pub struct NetSessionView {
-    pub admitted: bool,
-    pub lobby_id: Option<String>,
-    pub roster_player_codes: Vec<String>,
-    pub max_players: u8,
-    pub ai_fill_target: u8,
-    pub settings_json: Option<String>,
-}
-
-impl Default for NetSessionView {
-    fn default() -> Self {
-        Self {
-            admitted: false,
-            lobby_id: None,
-            roster_player_codes: Vec::new(),
-            max_players: 1,
-            ai_fill_target: 1,
-            settings_json: None,
-        }
-    }
-}
-
-impl NetSessionView {
-    pub fn clear(&mut self) {
-        *self = Self::default();
-    }
-
-    pub fn apply_authoritative_join(&mut self, join: &AuthoritativeJoinState) {
-        let roster_size = join.roster_player_codes.len().clamp(1, u8::MAX as usize) as u8;
-        let max_players = join.max_players.max(roster_size).max(1);
-        let ai_fill_target = if join.ai_fill_target == 0 {
-            max_players
-        } else {
-            join.ai_fill_target.clamp(roster_size, max_players)
-        };
-
-        self.admitted = true;
-        self.lobby_id = join.lobby_id.clone();
-        self.roster_player_codes = join.roster_player_codes.clone();
-        self.max_players = max_players;
-        self.ai_fill_target = ai_fill_target;
-        self.settings_json = join.settings_json.clone();
-    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, ecs::Component, ecs::Resource)]
