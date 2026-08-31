@@ -73,7 +73,6 @@ members = [
 
     "net/engine_net",
     "net/engine_net_macros",
-    "net/engine_net_quic",
     "net/engine_sim",
     "net/engine_history",
 
@@ -94,6 +93,8 @@ ktx2 = "0.5.0"
 scene = { path = "domain/scene" }
 asset = { path = "domain/asset" }
 product = { path = "domain/product" }
+runen-net = { git = "https://github.com/dornglut/runen-net", rev = "42f2f65fa8006e787bfb089764ce40d96488ecad" }
+runen-net-quic = { git = "https://github.com/dornglut/runen-net", rev = "42f2f65fa8006e787bfb089764ce40d96488ecad" }
 runen-spatial = { git = "https://github.com/dornglut/runen-spatial", rev = "2bb6b2ed89894aefaa39bf0e39d296b703916821" }
 world_ops = { path = "domain/world_ops" }
 world_sdf = { path = "domain/world_sdf" }

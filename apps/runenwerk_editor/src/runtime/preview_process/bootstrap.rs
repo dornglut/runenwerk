@@ -1,5 +1,5 @@
 use editor_preview::{PreviewBootstrap, PreviewHexError, decode_lower_hex};
-use rustls::pki_types::CertificateDer;
+use runen_net_quic::CertificateDer;
 use std::fmt::{Display, Formatter};
 
 pub fn trusted_certificate_from_bootstrap(
@@ -38,11 +38,8 @@ mod tests {
     fn decodes_trusted_certificate_from_bootstrap_hex() {
         let bootstrap = PreviewBootstrap {
             endpoint: "127.0.0.1:7777".to_string(),
-            server_id: "srv".to_string(),
             server_name: "preview.local".to_string(),
-            certificate_fingerprint_sha256: "abc".to_string(),
             trusted_certificate_der_hex: "00010aFf".to_string(),
-            join_ticket: "ticket".to_string(),
         };
 
         let certificate =

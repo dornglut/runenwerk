@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-08-29
+last_reviewed: 2026-08-31
 ---
 
 # Crate Documentation Status
@@ -61,7 +61,6 @@ Status labels:
 | `engine_sim` | `net/engine_sim` | current | [`../net/engine-sim/README.md`](../net/engine-sim/README.md) |
 | `engine_net` | `net/engine_net` | current | [`../net/engine-net/README.md`](../net/engine-net/README.md) |
 | `engine_net_macros` | `net/engine_net_macros` | current | [`../net/engine-net-macros/README.md`](../net/engine-net-macros/README.md) |
-| `engine_net_quic` | `net/engine_net_quic` | current | [`../net/engine-net-quic/README.md`](../net/engine-net-quic/README.md) |
 | `engine_replay` | `net/engine_history` | current | [`../net/engine-history/README.md`](../net/engine-history/README.md) |
 
 ## Apps And Adapters

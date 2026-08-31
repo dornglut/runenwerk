@@ -9,6 +9,15 @@ pub const PREVIEW_COMMAND_TYPE: &str = "runenwerk.editor_preview.PreviewCommandE
 pub const PREVIEW_EVENT_TYPE: &str = "runenwerk.editor_preview.PreviewEventEnvelope";
 pub const PREVIEW_PROTOCOL_VERSION: u16 = 1;
 
+// Stable application-controlled compatibility identities. They are raw values here so
+// editor_preview remains transport/framework independent; networking integration maps them into
+// its typed protocol/schema identities at the app boundary.
+pub const PREVIEW_TRANSPORT_PROTOCOL_ID: u128 = 0x72756e656e7765726b5f707265765f31;
+pub const PREVIEW_TRANSPORT_PROTOCOL_REVISION: u128 = 1;
+pub const PREVIEW_TRANSPORT_SCHEMA_ID: u128 = 0x72756e656e7765726b5f7363686d5f31;
+pub const PREVIEW_TRANSPORT_SCHEMA_CONTRACT_ID: u128 = 0x72756e656e7765726b5f637472635f31;
+pub const PREVIEW_TRANSPORT_CODEC_ID: u128 = 0x72756e656e7765726b5f706f73746331;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreviewProtocolPayload {
     pub channel: String,
@@ -39,10 +48,27 @@ pub fn encode_preview_command(
     encode_preview_payload(PREVIEW_COMMAND_TYPE, command)
 }
 
+pub fn encode_preview_command_bytes(
+    command: &PreviewCommandEnvelope,
+) -> Result<Vec<u8>, PreviewProtocolError> {
+    Ok(encode_preview_command(command)?.payload)
+}
+
 pub fn decode_preview_command(
     payload: &PreviewProtocolPayload,
 ) -> Result<PreviewCommandEnvelope, PreviewProtocolError> {
     decode_preview_payload(payload, PREVIEW_COMMAND_TYPE)
+}
+
+pub fn decode_preview_command_bytes(
+    payload: &[u8],
+) -> Result<PreviewCommandEnvelope, PreviewProtocolError> {
+    decode_preview_command_parts(
+        PREVIEW_CHANNEL,
+        PREVIEW_COMMAND_TYPE,
+        PREVIEW_PROTOCOL_VERSION,
+        payload,
+    )
 }
 
 pub fn decode_preview_command_parts(
@@ -65,10 +91,27 @@ pub fn encode_preview_event(
     encode_preview_payload(PREVIEW_EVENT_TYPE, event)
 }
 
+pub fn encode_preview_event_bytes(
+    event: &PreviewEventEnvelope,
+) -> Result<Vec<u8>, PreviewProtocolError> {
+    Ok(encode_preview_event(event)?.payload)
+}
+
 pub fn decode_preview_event(
     payload: &PreviewProtocolPayload,
 ) -> Result<PreviewEventEnvelope, PreviewProtocolError> {
     decode_preview_payload(payload, PREVIEW_EVENT_TYPE)
+}
+
+pub fn decode_preview_event_bytes(
+    payload: &[u8],
+) -> Result<PreviewEventEnvelope, PreviewProtocolError> {
+    decode_preview_event_parts(
+        PREVIEW_CHANNEL,
+        PREVIEW_EVENT_TYPE,
+        PREVIEW_PROTOCOL_VERSION,
+        payload,
+    )
 }
 
 pub fn decode_preview_event_parts(
@@ -200,6 +243,10 @@ mod tests {
         assert_eq!(decoded, command);
         assert_eq!(payload.channel, PREVIEW_CHANNEL);
         assert_eq!(payload.type_name, PREVIEW_COMMAND_TYPE);
+        assert_eq!(
+            decode_preview_command_bytes(&payload.payload).expect("command bytes should decode"),
+            command
+        );
     }
 
     #[test]
@@ -216,6 +263,10 @@ mod tests {
 
         assert_eq!(decoded, event);
         assert_eq!(payload.type_name, PREVIEW_EVENT_TYPE);
+        assert_eq!(
+            decode_preview_event_bytes(&payload.payload).expect("event bytes should decode"),
+            event
+        );
     }
 
     #[test]
