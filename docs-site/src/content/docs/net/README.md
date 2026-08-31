@@ -5,33 +5,28 @@ status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-05-05
+last_reviewed: 2026-08-31
 ---
 
 # net
 
-`net/` is the networking domain workspace subtree.
+`net/` is the legacy Runenwerk networking/simulation/history workspace subtree being reduced during the RN8 RunenNet cutover.
 
-It owns the transport-agnostic multiplayer contract crate, the QUIC runtime adapter crate, simulation-facing identity and deterministic vocabulary shared with networking, and replay/history primitives used for recovery, recording, and validation.
+Standalone realtime networking semantics and transport realization are owned by RunenNet. Runenwerk retains product integration and the still-unmigrated `engine_net` surface until later RN8 cuts remove that duplicate authority. `engine_sim` and `engine_history` remain adjacent simulation/history owners rather than transport implementations.
 
 Pinned direction and architecture goals are defined in [goals.md](goals.md).
 
 ## Crates
 
 - `engine_net/`
-  - Transport-agnostic multiplayer contracts.
-  - Owns protocol, replication, session, transport-lane semantics, and runtime-facing client/server contracts.
+  - Remaining Runenwerk networking contracts and runtime-facing integration pending later RN8 migration.
+  - Must not gain new standalone networking authority while the RunenNet cutover is in progress.
   - README: [engine_net/README.md](engine-net/README.md)
 
 - `engine_net_macros/`
-  - Declarative replication macros for gameplay/component mapping.
-  - Owns `#[net_component(...)]` and `#[net_entity]` attribute generation for `engine_net` metadata traits.
+  - Declarative replication macros for gameplay/component mapping pending their later RN8 disposition.
+  - Owns `#[net_component(...)]` and `#[net_entity]` attribute generation for current `engine_net` metadata traits.
   - README: [engine_net_macros/README.md](engine-net-macros/README.md)
-
-- `engine_net_quic/`
-  - Quinn-based QUIC runtime adapter for `engine_net`.
-  - Owns QUIC transport/runtime wiring, connection lifecycle, routing, framing, trust, and admission over QUIC.
-  - README: [engine_net_quic/README.md](engine-net-quic/README.md)
 
 - `engine_sim/`
   - Shared simulation identity and deterministic vocabulary.
@@ -45,15 +40,13 @@ Pinned direction and architecture goals are defined in [goals.md](goals.md).
 
 ## Domain Boundaries
 
-- `engine_net`
-  - Defines shared contracts and model vocabulary.
-  - Does not perform concrete transport I/O.
-  - Is the single source of truth for transport-agnostic protocol/session/replication/runtime contracts.
+- RunenNet
+  - Owns standalone sessions/connections, protocol/schema compatibility, delivery semantics, transport realization, and consuming connection teardown.
+  - Is consumed by Runenwerk rather than redefined inside `net/`.
 
-- `engine_net_quic`
-  - Implements concrete transport/runtime behavior over QUIC.
-  - Maps QUIC events and connection behavior to `engine_net` contracts.
-  - Must not own gameplay replication semantics.
+- `engine_net`
+  - Is retained only for still-unmigrated Runenwerk consumers during RN8.
+  - Must not be treated as the long-term standalone networking authority.
 
 - `engine_sim`
   - Supplies simulation-facing identity, deterministic vocabulary, and supporting helpers consumed by networking/history.
@@ -65,51 +58,28 @@ Pinned direction and architecture goals are defined in [goals.md](goals.md).
 
 ## Current Internal Shape
 
-The `net/` subtree is organized around explicit subdomain modules.
-
 ### `engine_net`
 
-`engine_net` is structured as a contract-first crate:
+`engine_net` remains structured as a contract-first crate while its consumers are migrated:
 
 - `engine_net/src/protocol/`
-  - Protocol envelopes, IDs, versioning, control/input/snapshot/ack types
+  - Legacy protocol envelopes, IDs, versioning, control/input/snapshot/ack types
 - `engine_net/src/replication/`
-  - Replication model, profile vocabulary, timeline, prediction, interest, diagnostics
+  - Legacy replication model, profile vocabulary, timeline, prediction, interest, diagnostics
 - `engine_net/src/session/`
-  - Admission, handoff, and session identity contracts
+  - Legacy admission, handoff, and session identity contracts
 - `engine_net/src/simulation/`
-  - Frame/tick vocabulary that bridges simulation and networking
+  - Frame/tick vocabulary bridging simulation and networking
 - `engine_net/src/transport/`
-  - Lane semantics and transport-facing contract vocabulary
+  - Legacy lane semantics and transport-facing vocabulary
 - `engine_net/src/runtime/`
-  - Runtime-facing client/server contract surfaces and events
+  - Remaining runtime-facing client/server integration surfaces
 
 ### `engine_net_macros`
 
 - `engine_net_macros/src/lib.rs`
-  - Attribute macro generation for replication metadata
+  - Attribute macro generation for current replication metadata
   - Expands gameplay annotations into `engine_net::replication::NetComponentMetadata` and `NetEntity` implementations
-
-### `engine_net_quic`
-
-`engine_net_quic` is structured as a runtime adapter crate:
-
-- `engine_net_quic/src/client/`
-  - Client bootstrap, policy, and runtime
-- `engine_net_quic/src/server/`
-  - Server accept/admission/peer/policy/runtime concerns
-- `engine_net_quic/src/runtime/`
-  - Command/event buses, connection lifecycle, reconnect, routing, handles
-  - Current modules: `command_bus.rs`, `connection.rs`, `event_bus.rs`,
-    `event_dispatch.rs`, `handles.rs`, `join_rejection.rs`,
-    `message_transport.rs`, `reconnect.rs`, `reconnect_backoff.rs`, and
-    `routing.rs`
-- `engine_net_quic/src/transport/`
-  - QUIC framing, certificates, trust, lane mapping, endpoint creation
-- `engine_net_quic/src/driver/`
-  - Driver loop / runtime execution entrypoints
-- `engine_net_quic/src/config/`
-  - Client/server/transport configuration
 
 ### `engine_history`
 
@@ -124,7 +94,7 @@ The `net/` subtree is organized around explicit subdomain modules.
 
 ## Module Structure Rules
 
-Within each `net/*` crate, organize code by subdomain responsibility using explicit module trees.
+Within each remaining `net/*` crate, organize code by subdomain responsibility using explicit module trees.
 
 Follow the repository-wide guidance in:
 
@@ -142,18 +112,16 @@ Avoid:
 - `_internal` module suffixes
 - catch-all files such as `utils.rs`, `helpers.rs`, or `misc.rs` when a more specific name is possible
 
-The QUIC runtime no longer keeps broad transitional runtime buckets. New
-runtime code should go into explicit ownership modules such as connection,
-transport, routing, reconnect, command bus, or event dispatch.
+Do not recreate a generic Runenwerk transport/runtime adapter that duplicates RunenNet during the RN8 cutover.
 
-## Typical Flow
+## Current Migration Direction
 
-1. Define protocol/session/replication/runtime contracts in `engine_net`.
-2. Implement concrete transport/runtime behavior in `engine_net_quic`.
-3. Use `engine_sim` identities/ticks/hashes/seed vocabulary for deterministic interoperability.
-4. Record, restore, and validate sessions with `engine_history`.
-5. Bridge the selected runtime into engine schedules through `engine/src/plugins/net/`.
-6. Keep gameplay replication mapping, correction, smoothing, and tuning in the owning gameplay domain/app modules, not in transport/runtime adapter crates.
+1. Consume standalone RunenNet directly at bounded Runenwerk product/integration boundaries.
+2. Preserve application/ECS/simulation/history policy in its existing owning Runenwerk domain.
+3. Remove duplicate `engine_net` semantics only when the corresponding maintained consumers have migrated.
+4. Keep `engine_sim` identities/ticks/hashes/seed vocabulary under simulation ownership.
+5. Keep `engine_history` under replay/history ownership.
+6. Bridge networking into engine schedules only as Runenwerk integration; do not redefine RunenNet semantics there.
 
 ## Architecture Docs
 
@@ -163,7 +131,7 @@ transport, routing, reconnect, command bus, or event dispatch.
 
 ## Canonical Design Package
 
-Use these active design documents for long-term networking architecture:
+Use these active design documents for Runenwerk-side networking integration and migration context:
 
 - Authoritative replication protocol: [../design/active/net-authoritative-replication-protocol.md](../design/active/net-authoritative-replication-protocol.md)
 - Prediction and reconciliation boundary: [../design/active/net-prediction-reconciliation-boundary.md](../design/active/net-prediction-reconciliation-boundary.md)

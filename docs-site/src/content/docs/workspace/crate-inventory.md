@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-08-29
+last_reviewed: 2026-08-31
 related_docs:
   - ../../../CRATES.md
   - ./crate-docs-status.md
@@ -75,7 +75,6 @@ This document records active workspace crates and their intended layer. Update i
 | `engine_sim` | `net/engine_sim` | net | Simulation identity, tick, hash, profile, RNG, command-frame, and codec vocabulary. | evolving |
 | `engine_net` | `net/engine_net` | net | Transport-agnostic protocol, replication, session, runtime, simulation, and transport contracts. | evolving |
 | `engine_net_macros` | `net/engine_net_macros` | net | Attribute macros for network component/entity metadata. | evolving |
-| `engine_net_quic` | `net/engine_net_quic` | net | QUIC transport/runtime adapter for `engine_net`. | evolving |
 | `engine_replay` | `net/engine_history` | net | Replay archive, recorder, controller, policy, and validation substrate. | evolving |
 | `runenwerk_editor` | `apps/runenwerk_editor` | app | Runnable editor app and authoring workflows. | internal/evolving |
 | `runenwerk_draw` | `apps/runenwerk_draw` | app | Focused drawing app shell and shared engine/UI/render runtime integration. | internal/evolving |

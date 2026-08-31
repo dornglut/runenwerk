@@ -31,6 +31,8 @@ material_graph.workspace = true
 procgen.workspace = true
 product.workspace = true
 resource_ref.workspace = true
+runen-net.workspace = true
+runen-net-quic.workspace = true
 runen-spatial.workspace = true
 texture.workspace = true
 world_ops.workspace = true
@@ -61,14 +63,12 @@ ecs.workspace = true
 scene.workspace = true
 glam.workspace = true
 ron = "0.8.1"
-engine_net = { path = "../../net/engine_net" }
-engine_net_quic = { path = "../../net/engine_net_quic" }
-rustls = "0.23.37"
 tokio = { version = "1.48.0", features = ["macros", "rt", "sync", "time"] }
 
 [dev-dependencies]
 ktx2.workspace = true
 naga = { version = "30.0.0", features = ["wgsl-in"] }
+runenwerk_runtime_preview = { path = "../runenwerk_runtime_preview" }
 tempfile = "3.25.0"
 
 [[test]]

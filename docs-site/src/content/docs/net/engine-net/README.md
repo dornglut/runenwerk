@@ -5,12 +5,12 @@ status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-05-05
+last_reviewed: 2026-08-31
 ---
 
 # engine_net
 
-`engine_net` is the transport-agnostic networking contract crate.
+`engine_net` is the transport-agnostic networking contract crate retained for the engine consumers that have not yet migrated to standalone RunenNet.
 
 ## Canonical Import Surface
 
@@ -67,10 +67,8 @@ Implemented substrate:
 
 Partial contracts:
 
-- declarative metadata does not yet replace driver implementations for
-  normal gameplay;
-- lower-level server runtime ACK validation still needs sent-cursor
-  hardening;
+- declarative metadata does not yet replace driver implementations for normal gameplay;
+- lower-level server runtime ACK validation still needs sent-cursor hardening;
 - component/resource extraction and apply remain integration work.
 
 Design details:
@@ -81,5 +79,4 @@ Design details:
 
 ## Ownership
 
-`engine_net` defines contracts only. Concrete transport/runtime I/O lives
-in adapter crates such as `engine_net_quic`.
+Standalone RunenNet is the reusable realtime networking semantic and QUIC authority. `engine_net` remains migration evidence only for current engine consumers and must not gain a replacement transport adapter or new reusable networking authority. The editor/runtime-preview channel no longer consumes this crate; later RN8 slices own migration of the remaining engine consumers before `engine_net` is deleted.

@@ -3,14 +3,16 @@ use std::fmt::{Display, Formatter};
 
 pub const PREVIEW_BOOTSTRAP_PREFIX: &str = "RUNENWERK_RUNTIME_PREVIEW_BOOTSTRAP";
 
+/// Process bootstrap needed to establish the editor/runtime-preview transport.
+///
+/// Product/session compatibility is negotiated after TLS establishment. The bootstrap therefore
+/// carries only transport coordinates and the explicit self-signed trust anchor; it does not carry
+/// the retired generic server-id/ticket handshake or a second certificate-fingerprint authority.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PreviewBootstrap {
     pub endpoint: String,
-    pub server_id: String,
     pub server_name: String,
-    pub certificate_fingerprint_sha256: String,
     pub trusted_certificate_der_hex: String,
-    pub join_ticket: String,
 }
 
 impl PreviewBootstrap {
@@ -44,24 +46,13 @@ impl PreviewBootstrap {
         if self.endpoint.trim().is_empty() {
             return Err(PreviewBootstrapParseError::EmptyField("endpoint"));
         }
-        if self.server_id.trim().is_empty() {
-            return Err(PreviewBootstrapParseError::EmptyField("server_id"));
-        }
         if self.server_name.trim().is_empty() {
             return Err(PreviewBootstrapParseError::EmptyField("server_name"));
-        }
-        if self.certificate_fingerprint_sha256.trim().is_empty() {
-            return Err(PreviewBootstrapParseError::EmptyField(
-                "certificate_fingerprint_sha256",
-            ));
         }
         if self.trusted_certificate_der_hex.trim().is_empty() {
             return Err(PreviewBootstrapParseError::EmptyField(
                 "trusted_certificate_der_hex",
             ));
-        }
-        if self.join_ticket.trim().is_empty() {
-            return Err(PreviewBootstrapParseError::EmptyField("join_ticket"));
         }
         Ok(())
     }
@@ -149,11 +140,8 @@ mod tests {
     fn bootstrap_line_round_trips() {
         let bootstrap = PreviewBootstrap {
             endpoint: "127.0.0.1:7777".to_string(),
-            server_id: "srv".to_string(),
             server_name: "preview.local".to_string(),
-            certificate_fingerprint_sha256: "abc".to_string(),
             trusted_certificate_der_hex: "010203".to_string(),
-            join_ticket: "ticket".to_string(),
         };
 
         let line = bootstrap

@@ -3,7 +3,6 @@ use editor_preview::{
     PreviewBootstrap, PreviewCommand, PreviewCommandEnvelope, PreviewEvent, PreviewMode,
     PreviewSessionId, ReloadStatus, RuntimeProductRef, preview_session_id,
 };
-use engine_net::{ClientMessage, ServerMessage, SessionRuntimeEvent};
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
@@ -11,7 +10,7 @@ use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
 
-use crate::runtime::preview_process::{PreviewProcessConnection, preview_payload_from_typed};
+use crate::runtime::preview_process::{PreviewConnectionEvent, PreviewProcessConnection};
 
 const DEFAULT_PENDING_COMMAND_CAPACITY: usize = 128;
 const DEFAULT_BOOTSTRAP_TIMEOUT: Duration = Duration::from_secs(5);
@@ -203,7 +202,7 @@ impl PreviewProcessManager {
     ) -> Result<()> {
         self.queue_or_send(PreviewCommandEnvelope::new(
             sequence,
-            editor_preview::PreviewCommand::ChangeMode { session_id, mode },
+            PreviewCommand::ChangeMode { session_id, mode },
         ))
         .await
     }
@@ -237,37 +236,18 @@ impl PreviewProcessManager {
             let Some(event) = event else {
                 break;
             };
-            self.ingest_runtime_event(event)?;
+            self.ingest_connection_event(event);
             drained = drained.saturating_add(1);
         }
         Ok(drained)
     }
 
-    pub fn ingest_runtime_event(&mut self, event: SessionRuntimeEvent) -> Result<()> {
+    pub fn ingest_connection_event(&mut self, event: PreviewConnectionEvent) {
         match event {
-            SessionRuntimeEvent::ServerMessage(ServerMessage::TypedPayload(payload)) => {
-                let event =
-                    editor_preview::decode_preview_event(&preview_payload_from_typed(&payload))?;
-                self.ingest_preview_event(event.event);
-            }
-            SessionRuntimeEvent::Error { message } => {
-                self.last_error = Some(message);
-            }
-            SessionRuntimeEvent::ConnectionClosed { reason, .. } => {
-                self.last_error =
-                    reason.map(|reason| format!("preview connection closed: {reason:?}"));
-            }
-            SessionRuntimeEvent::ClientMessage {
-                message: ClientMessage::TypedPayload(payload),
-                ..
-            } => {
-                let event =
-                    editor_preview::decode_preview_event(&preview_payload_from_typed(&payload))?;
-                self.ingest_preview_event(event.event);
-            }
-            _ => {}
+            PreviewConnectionEvent::Preview(event) => self.ingest_preview_event(event.event),
+            PreviewConnectionEvent::Error(message) => self.last_error = Some(message),
+            PreviewConnectionEvent::Closed => {}
         }
-        Ok(())
     }
 
     fn ingest_preview_event(&mut self, event: PreviewEvent) {
@@ -299,6 +279,8 @@ impl PreviewProcessManager {
 
     pub async fn shutdown(&mut self) -> Result<()> {
         let shutdown_session = self.shutdown_session_id();
+        let mut errors = Vec::new();
+
         if self.connection.is_some() {
             if let Some(connection) = &self.connection {
                 let _ = connection
@@ -312,25 +294,35 @@ impl PreviewProcessManager {
             }
             let deadline = Instant::now() + self.shutdown_grace_period;
             while Instant::now() < deadline {
-                self.poll_events()?;
+                match self.poll_events() {
+                    Ok(_) => {}
+                    Err(error) => {
+                        errors.push(error.context("runtime preview shutdown event polling failed"));
+                        break;
+                    }
+                }
                 if self.last_shutdown_ack == Some(shutdown_session) {
                     break;
                 }
                 tokio::time::sleep(POLL_SLEEP).await;
             }
-            if let Some(connection) = &self.connection {
-                let _ = connection.shutdown().await;
+            if let Some(connection) = &self.connection
+                && let Err(error) = connection.shutdown().await
+            {
+                errors.push(error.context("runtime preview connection shutdown failed"));
             }
         }
-        if let Some(child) = &mut self.child {
-            wait_child_until_exit(child, self.shutdown_grace_period).await?;
-            if child.try_wait()?.is_none() {
-                kill_and_wait(child)?;
-            }
+
+        if let Some(child) = &mut self.child
+            && let Err(error) = shutdown_child(child, self.shutdown_grace_period).await
+        {
+            errors.push(error.context("runtime preview child cleanup failed"));
         }
+
         self.child = None;
         self.connection = None;
-        Ok(())
+
+        shutdown_result(errors)
     }
 
     async fn flush_pending_commands(&mut self) -> Result<()> {
@@ -374,6 +366,32 @@ impl Default for PreviewProcessManager {
     }
 }
 
+fn shutdown_result(mut errors: Vec<anyhow::Error>) -> Result<()> {
+    if errors.is_empty() {
+        return Ok(());
+    }
+    let first = errors.remove(0);
+    if errors.is_empty() {
+        return Err(first.context("runtime preview shutdown failed"));
+    }
+    let additional = errors
+        .into_iter()
+        .map(|error| format!("{error:#}"))
+        .collect::<Vec<_>>()
+        .join("; ");
+    Err(first.context(format!(
+        "runtime preview shutdown failed; additional cleanup failures: {additional}"
+    )))
+}
+
+async fn shutdown_child(child: &mut Child, timeout: Duration) -> Result<()> {
+    wait_child_until_exit(child, timeout).await?;
+    if child.try_wait()?.is_none() {
+        kill_and_wait(child)?;
+    }
+    Ok(())
+}
+
 async fn wait_child_until_exit(child: &mut Child, timeout: Duration) -> Result<()> {
     let deadline = Instant::now() + timeout;
     while Instant::now() < deadline {
@@ -396,11 +414,7 @@ fn kill_and_wait(child: &mut Child) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use editor_preview::{
-        PreviewEventEnvelope, ReloadDecision, ReloadSubject, ReloadSubjectKind,
-        encode_preview_event, preview_session_id,
-    };
-    use engine_net::{ServerMessage, TypedPayloadMessage};
+    use editor_preview::{PreviewEventEnvelope, ReloadDecision, ReloadSubject, ReloadSubjectKind};
 
     #[tokio::test]
     async fn commands_queue_until_connection_exists() {
@@ -448,49 +462,39 @@ mod tests {
     }
 
     #[test]
-    fn ingest_runtime_event_records_preview_event_state() {
+    fn ingest_connection_event_records_preview_event_state() {
         let mut manager = PreviewProcessManager::new();
         let session_id = preview_session_id(7);
-        manager
-            .ingest_runtime_event(preview_server_event(PreviewEventEnvelope::new(
-                1,
-                PreviewEvent::Ready { session_id },
-            )))
-            .expect("ready event should ingest");
-        manager
-            .ingest_runtime_event(preview_server_event(PreviewEventEnvelope::new(
-                2,
-                PreviewEvent::ModeChanged {
-                    session_id,
-                    mode: PreviewMode::Simulate,
-                },
-            )))
-            .expect("mode event should ingest");
-        manager
-            .ingest_runtime_event(preview_server_event(PreviewEventEnvelope::new(
-                3,
-                PreviewEvent::Heartbeat { session_id },
-            )))
-            .expect("heartbeat event should ingest");
-        manager
-            .ingest_runtime_event(preview_server_event(PreviewEventEnvelope::new(
-                4,
-                PreviewEvent::ReloadStatus {
-                    session_id,
-                    status: Box::new(ReloadStatus::new(
-                        ReloadSubject::new(ReloadSubjectKind::Shader, "shader"),
-                        ReloadDecision::LiveReload,
-                        "shader reloaded",
-                    )),
-                },
-            )))
-            .expect("reload event should ingest");
-        manager
-            .ingest_runtime_event(preview_server_event(PreviewEventEnvelope::new(
-                5,
-                PreviewEvent::ShutdownAck { session_id },
-            )))
-            .expect("shutdown event should ingest");
+        manager.ingest_connection_event(preview_server_event(PreviewEventEnvelope::new(
+            1,
+            PreviewEvent::Ready { session_id },
+        )));
+        manager.ingest_connection_event(preview_server_event(PreviewEventEnvelope::new(
+            2,
+            PreviewEvent::ModeChanged {
+                session_id,
+                mode: PreviewMode::Simulate,
+            },
+        )));
+        manager.ingest_connection_event(preview_server_event(PreviewEventEnvelope::new(
+            3,
+            PreviewEvent::Heartbeat { session_id },
+        )));
+        manager.ingest_connection_event(preview_server_event(PreviewEventEnvelope::new(
+            4,
+            PreviewEvent::ReloadStatus {
+                session_id,
+                status: Box::new(ReloadStatus::new(
+                    ReloadSubject::new(ReloadSubjectKind::Shader, "shader"),
+                    ReloadDecision::LiveReload,
+                    "shader reloaded",
+                )),
+            },
+        )));
+        manager.ingest_connection_event(preview_server_event(PreviewEventEnvelope::new(
+            5,
+            PreviewEvent::ShutdownAck { session_id },
+        )));
 
         assert_eq!(manager.last_ready_session(), Some(session_id));
         assert_eq!(
@@ -502,13 +506,18 @@ mod tests {
         assert_eq!(manager.received_statuses().len(), 1);
     }
 
-    fn preview_server_event(envelope: PreviewEventEnvelope) -> SessionRuntimeEvent {
-        let payload = encode_preview_event(&envelope).expect("preview event should encode");
-        SessionRuntimeEvent::ServerMessage(ServerMessage::TypedPayload(TypedPayloadMessage::new(
-            payload.channel,
-            payload.type_name,
-            payload.schema_version,
-            payload.payload,
-        )))
+    #[test]
+    fn clean_connection_close_does_not_create_or_erase_an_error() {
+        let mut manager = PreviewProcessManager::new();
+        manager.ingest_connection_event(PreviewConnectionEvent::Closed);
+        assert_eq!(manager.last_error(), None);
+
+        manager.ingest_connection_event(PreviewConnectionEvent::Error("transport failed".into()));
+        manager.ingest_connection_event(PreviewConnectionEvent::Closed);
+        assert_eq!(manager.last_error(), Some("transport failed"));
+    }
+
+    fn preview_server_event(envelope: PreviewEventEnvelope) -> PreviewConnectionEvent {
+        PreviewConnectionEvent::Preview(envelope)
     }
 }

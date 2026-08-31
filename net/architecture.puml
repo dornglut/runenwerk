@@ -1,14 +1,13 @@
 @startuml
-title net workspace architecture (current)
+title net workspace architecture (current after RN8 N1)
 
 skinparam componentStyle rectangle
 skinparam packageStyle rectangle
 left to right direction
 
-package "game / scene" {
-  [Concrete Replication Driver] as game_driver
-  [Gameplay Input Schema] as game_input
-  [Authoritative State] as game_state
+package "apps / editor integration" {
+  [Runenwerk Editor Preview Client] as preview_client
+  [Runtime Preview Host] as preview_host
 }
 
 package "engine" {
@@ -18,7 +17,12 @@ package "engine" {
   [Replay Systems] as engine_replay
 }
 
-package "net" {
+package "external RunenNet" {
+  [runen-net Core] as runennet_core
+  [runen-net-quic] as runennet_quic
+}
+
+package "net (remaining Runenwerk migration evidence)" {
   package "engine_sim" {
     [profile] as sim_profile
     [identity] as sim_identity
@@ -33,16 +37,11 @@ package "net" {
     [replication] as net_replication
     [runtime contracts] as net_runtime
     [simulation] as net_simulation
-    [transport] as net_transport
+    [transport contracts] as net_transport
   }
 
-  package "engine_net_quic" {
-    [config] as quic_config
-    [transport] as quic_transport
-    [runtime] as quic_runtime
-    [client] as quic_client
-    [server] as quic_server
-    [driver net_loop] as quic_driver
+  package "engine_net_macros" {
+    [network authoring macros] as net_macros
   }
 
   package "engine_history" {
@@ -55,9 +54,9 @@ package "net" {
   }
 }
 
-game_input --> game_driver
-game_state --> game_driver
-game_driver --> net_replication : implements ReplicationDriver
+preview_client --> runennet_quic : preview control client
+preview_host --> runennet_quic : preview control server
+runennet_quic --> runennet_core
 
 engine_runtime --> net_runtime
 engine_replication --> net_replication
@@ -66,32 +65,22 @@ engine_session --> net_session
 engine_replay --> history_recorder
 engine_replay --> history_validation
 
-quic_client --> net_protocol
-quic_client --> net_session
-quic_server --> net_protocol
-quic_server --> net_session
-quic_runtime --> net_runtime
-quic_transport --> net_transport
-quic_driver --> quic_runtime
-
 net_protocol --> sim_identity
 net_simulation --> sim_identity
 net_replication --> sim_codec
 history_model --> sim_identity
 
-engine_runtime --> quic_runtime : runtime adapter
-engine_replay --> history_archive
-
-note right of quic_driver
-Live datagram loop
-for active QUIC
-connections.
+note right of runennet_quic
+Standalone RunenNet is the sole
+QUIC authority for the migrated
+editor/runtime-preview channel.
 end note
 
 note right of net_runtime
-SessionRuntimeEvent /
-SessionRuntimeCommand
-bridge host adapters.
+engine_net remains only for
+unmigrated engine consumers.
+Later RN8 slices must migrate
+those consumers before deletion.
 end note
 
 @enduml

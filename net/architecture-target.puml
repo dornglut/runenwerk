@@ -1,76 +1,68 @@
 @startuml
-title net workspace architecture (target)
+title realtime networking architecture (RN8 target)
 
 skinparam componentStyle rectangle
 skinparam packageStyle rectangle
 left to right direction
 
 package "game / domain" {
-  [Game Simulation Driver]
-  [Game Snapshot Codec]
-  [Game Input Schema]
+  [Gameplay Simulation] as game_sim
+  [Replicated View / Projection] as replicated_view
+  [World / Relevancy Policy] as world_policy
 }
 
-package "engine" {
-  [Runtime Bridge]
-  [Session Runtime]
-  [Replication Runtime]
-  [Prediction Runtime]
-  [History Runtime]
+package "Runenwerk integration" {
+  [Application / Session Lifecycle] as app_lifecycle
+  [ECS <-> RunenNet Adapter] as ecs_adapter
+  [Preview Integration] as preview_integration
+  [Presentation / Diagnostics] as presentation
 }
 
-package "net core" {
-  package "engine_sim" {
-    [Identity + Profile]
-    [Command + RNG]
-    [Codec Traits]
-  }
-
-  package "engine_net" {
-    [Protocol]
-    [Session Contracts]
-    [Replication Contracts]
-    [Runtime Contracts]
-    [Transport Contracts]
-  }
-
-  package "engine_history" {
-    [Recorder]
-    [Archive]
-    [Controller]
-    [Validation]
-  }
+package "external RunenNet" {
+  [identity + protocol + session] as runennet_session
+  [delivery] as runennet_delivery
+  [replication] as runennet_replication
+  [input / prediction contracts] as runennet_prediction
+  [runen-net-quic] as runennet_quic
 }
 
-package "net transports" {
-  [engine_net_quic]
-  [future transport adapters]
+package "retained non-network Runenwerk concerns" {
+  [engine_sim] as engine_sim
+  [engine_history] as engine_history
 }
 
-[Game Input Schema] --> [Game Simulation Driver]
-[Game Snapshot Codec] --> [Game Simulation Driver]
-[Game Simulation Driver] --> [Replication Contracts]
-[Game Simulation Driver] --> [Codec Traits]
+game_sim --> replicated_view
+replicated_view --> ecs_adapter
+world_policy --> ecs_adapter
+app_lifecycle --> ecs_adapter
+ecs_adapter --> runennet_session
+ecs_adapter --> runennet_delivery
+ecs_adapter --> runennet_replication
+ecs_adapter --> runennet_prediction
+preview_integration --> runennet_delivery
+preview_integration --> runennet_quic
+runennet_quic --> runennet_session
+runennet_quic --> runennet_delivery
+presentation --> ecs_adapter
 
-[Session Runtime] --> [Session Contracts]
-[Replication Runtime] --> [Replication Contracts]
-[Prediction Runtime] --> [Replication Contracts]
-[Runtime Bridge] --> [Runtime Contracts]
-[History Runtime] --> [Recorder]
-[History Runtime] --> [Validation]
+engine_sim --> game_sim : host simulation vocabulary
+engine_history --> app_lifecycle : archive / replay integration
 
-[engine_net_quic] --> [Protocol]
-[engine_net_quic] --> [Session Contracts]
-[engine_net_quic] --> [Runtime Contracts]
-[future transport adapters] --> [Transport Contracts]
+note right of runennet_replication
+RunenNet is the sole reusable
+realtime networking semantic authority.
+end note
 
-[engine] --> [engine_net_quic]
-[engine] --> [engine_history]
+note right of ecs_adapter
+Runenwerk owns concrete ECS/game/world
+mapping and lifecycle composition,
+not duplicate networking semantics.
+end note
 
-note right of [future transport adapters]
-Additional adapters should reuse
-engine_net runtime contracts
-without changing gameplay code.
+note bottom of engine_history
+engine_net, engine_net_quic, and old
+network authoring macros are absent
+once their maintained consumers migrate.
 end note
 
 @enduml
