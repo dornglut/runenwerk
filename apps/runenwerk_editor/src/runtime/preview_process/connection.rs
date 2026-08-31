@@ -65,6 +65,11 @@ enum ClientTaskEvent {
     Error(String),
 }
 
+enum PhaseOutcome<T> {
+    Complete(T),
+    ShutdownRequested,
+}
+
 pub struct PreviewProcessConnection {
     command_tx: Sender<PreviewCommandEnvelope>,
     shutdown_tx: watch::Sender<bool>,
@@ -122,8 +127,15 @@ impl PreviewProcessConnection {
                 ));
             }
             Err(_) => {
-                network_task.abort();
-                let _ = network_task.await;
+                let _ = shutdown_tx.send(true);
+                let cleanup = network_task
+                    .await
+                    .map_err(|error| anyhow!("runtime-preview client task failed: {error}"))?;
+                if let Err(error) = cleanup {
+                    return Err(anyhow!(
+                        "timed out establishing runtime-preview RunenNet connection; cleanup failed: {error}"
+                    ));
+                }
                 return Err(anyhow!(
                     "timed out establishing runtime-preview RunenNet connection"
                 ));
@@ -148,7 +160,7 @@ impl PreviewProcessConnection {
                 ))
             }
             ClientTaskEvent::Preview(_) => {
-                network_task.abort();
+                let _ = shutdown_tx.send(true);
                 let _ = network_task.await;
                 Err(anyhow!(
                     "runtime-preview produced an application event before establishment"
@@ -234,14 +246,15 @@ async fn run_connection(
     mut shutdown_rx: watch::Receiver<bool>,
     event_tx: Sender<ClientTaskEvent>,
 ) -> Result<()> {
-    let ready = endpoint
-        .connect(
+    let ready = tokio::select! {
+        biased;
+        _ = shutdown_rx.wait_for(|shutdown| *shutdown) => return Ok(()),
+        ready = endpoint.connect(
             remote_addr,
             server_name,
             profile(endpoint_config, SemanticRole::NonAuthority)?,
-        )
-        .await
-        .map_err(|error| anyhow!("runtime-preview ProfileReady connect failed: {error}"))?;
+        ) => ready.map_err(|error| anyhow!("runtime-preview ProfileReady connect failed: {error}"))?,
+    };
     let mut host = host_state()?;
     let mut connection = ready
         .activate(
@@ -252,17 +265,28 @@ async fn run_connection(
         )
         .map_err(|error| anyhow!("runtime-preview compatibility activation failed: {error}"))?;
 
-    drive_client_established(&mut connection, &mut host).await?;
-    let (outbound, inbound) = establish_flows(&mut connection, &mut host).await?;
-    event_tx
-        .try_send(ClientTaskEvent::Ready)
-        .map_err(|error| anyhow!("runtime-preview client event queue rejected ready state: {error}"))?;
+    match drive_client_established(&mut connection, &mut host, &mut shutdown_rx).await? {
+        PhaseOutcome::Complete(()) => {}
+        PhaseOutcome::ShutdownRequested => return teardown_connection(connection, &mut host),
+    }
+    let (outbound, inbound) =
+        match establish_flows(&mut connection, &mut host, &mut shutdown_rx).await? {
+            PhaseOutcome::Complete(flows) => flows,
+            PhaseOutcome::ShutdownRequested => return teardown_connection(connection, &mut host),
+        };
+    if *shutdown_rx.borrow() {
+        return teardown_connection(connection, &mut host);
+    }
+    event_tx.try_send(ClientTaskEvent::Ready).map_err(|error| {
+        anyhow!("runtime-preview client event queue rejected ready state: {error}")
+    })?;
 
     let mut closing = false;
     let mut outbound_finished = false;
     let mut inbound_finished = false;
     while !(outbound_finished && inbound_finished) {
         tokio::select! {
+            biased;
             _ = shutdown_rx.wait_for(|shutdown| *shutdown), if !closing => {
                 finish_outbound(&mut connection, &mut host, outbound)?;
                 closing = true;
@@ -342,11 +366,16 @@ async fn run_connection(
         )),
     };
 
+    teardown_connection(connection, &mut host)?;
+    transport_close_result
+}
+
+fn teardown_connection(connection: Connection, host: &mut HostState) -> Result<()> {
     let teardown = connection.teardown(&mut host.negotiation, &mut host.delivery);
     if let Some(error) = teardown.cleanup_error() {
         return Err(anyhow!("runtime-preview client cleanup failed: {error}"));
     }
-    transport_close_result
+    Ok(())
 }
 
 async fn await_server_transport_close(
@@ -382,15 +411,26 @@ fn finish_outbound(
         .map_err(|error| anyhow!("failed to finish runtime-preview command flow: {error}"))
 }
 
-async fn drive_client_established(connection: &mut Connection, host: &mut HostState) -> Result<()> {
-    match next_connection_event(connection, host).await? {
+async fn drive_client_established(
+    connection: &mut Connection,
+    host: &mut HostState,
+    shutdown_rx: &mut watch::Receiver<bool>,
+) -> Result<PhaseOutcome<()>> {
+    let event = tokio::select! {
+        biased;
+        _ = shutdown_rx.wait_for(|shutdown| *shutdown) => {
+            return Ok(PhaseOutcome::ShutdownRequested);
+        }
+        event = next_connection_event(connection, host) => event?,
+    };
+    match event {
         ConnectionEvent::Established { connection: handle } => {
             if handle != CLIENT_CONNECTION {
                 return Err(anyhow!(
                     "runtime-preview established the wrong client connection"
                 ));
             }
-            Ok(())
+            Ok(PhaseOutcome::Complete(()))
         }
         ConnectionEvent::AuthoritySelectionRequired { .. } => Err(anyhow!(
             "runtime-preview non-authority client was asked to select authority"
@@ -404,7 +444,8 @@ async fn drive_client_established(connection: &mut Connection, host: &mut HostSt
 async fn establish_flows(
     connection: &mut Connection,
     host: &mut HostState,
-) -> Result<(DeliveryFlowKey, DeliveryFlowKey)> {
+    shutdown_rx: &mut watch::Receiver<bool>,
+) -> Result<PhaseOutcome<(DeliveryFlowKey, DeliveryFlowKey)>> {
     let outbound = DeliveryFlowKey::new(
         CLIENT_CONNECTION,
         FlowDirection::Outbound,
@@ -430,7 +471,14 @@ async fn establish_flows(
     let mut outbound_ready = false;
     let mut inbound_ready = false;
     while !(outbound_ready && inbound_ready) {
-        match next_connection_event(connection, host).await? {
+        let event = tokio::select! {
+            biased;
+            _ = shutdown_rx.wait_for(|shutdown| *shutdown) => {
+                return Ok(PhaseOutcome::ShutdownRequested);
+            }
+            event = next_connection_event(connection, host) => event?,
+        };
+        match event {
             ConnectionEvent::IncomingFlowRequested { request } => {
                 if inbound_ready
                     || request.mode() != DeliveryMode::ReliableOrdered
@@ -478,7 +526,7 @@ async fn establish_flows(
             }
         }
     }
-    Ok((outbound, inbound))
+    Ok(PhaseOutcome::Complete((outbound, inbound)))
 }
 
 fn drain_events(
@@ -495,9 +543,11 @@ fn drain_events(
             return Ok(());
         };
         let event = decode_preview_event_bytes(exposed.payload())?;
-        event_tx.try_send(ClientTaskEvent::Preview(event)).map_err(|error| {
-            anyhow!("runtime-preview client event queue rejected delivery: {error}")
-        })?;
+        event_tx
+            .try_send(ClientTaskEvent::Preview(event))
+            .map_err(|error| {
+                anyhow!("runtime-preview client event queue rejected delivery: {error}")
+            })?;
     }
 }
 
