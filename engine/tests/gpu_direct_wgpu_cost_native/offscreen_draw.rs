@@ -301,8 +301,7 @@ fn runengpu_fragment(
     let timestamp_writes = timestamp_resources
         .as_ref()
         .map(|(query_set, _)| GpuTimestampWrites::new(query_set, Some(0), Some(1)).unwrap());
-    let render =
-        GpuRenderOperation::new([attachment], None, [draw], timestamp_writes).unwrap();
+    let render = GpuRenderOperation::new([attachment], None, [draw], timestamp_writes).unwrap();
 
     let image_region = GpuTextureCopyRegion::new(
         &texture,
@@ -317,7 +316,10 @@ fn runengpu_fragment(
 
     let timestamp_readback = timestamp_resources.as_ref().map(|(_, resolve)| {
         let id = GpuReadbackId::allocate().unwrap();
-        (id, GpuReadbackOperation::new(GpuBufferRegion::whole(resolve).unwrap().into(), id).unwrap())
+        (
+            id,
+            GpuReadbackOperation::new(GpuBufferRegion::whole(resolve).unwrap().into(), id).unwrap(),
+        )
     });
 
     let mut builder = GpuWorkFragmentBuilder::new(
@@ -487,7 +489,10 @@ fn runengpu_sample(
     let completion_start = Instant::now();
     let readbacks = progress_runengpu(context, &submission, &[authored.image_readback]);
     let completion_readback_us = micros(completion_start.elapsed());
-    assert_eq!(readbacks[0].texture_format(), Some(GpuTextureFormat::Rgba8Unorm));
+    assert_eq!(
+        readbacks[0].texture_format(),
+        Some(GpuTextureFormat::Rgba8Unorm)
+    );
     assert_known_pattern(readbacks[0].as_bytes());
 
     let mut phases = BTreeMap::new();
@@ -511,10 +516,7 @@ fn runengpu_sample(
     phases
 }
 
-fn runengpu_timestamp_sample(
-    context: &GpuContext,
-    pipeline: &GpuRenderPipelineDescriptor,
-) -> u64 {
+fn runengpu_timestamp_sample(context: &GpuContext, pipeline: &GpuRenderPipelineDescriptor) -> u64 {
     let authored = runengpu_fragment(pipeline, true);
     let timestamp_id = authored
         .timestamp_readback
@@ -531,7 +533,10 @@ fn runengpu_timestamp_sample(
         &submission,
         &[authored.image_readback, timestamp_id],
     );
-    assert_eq!(readbacks[0].texture_format(), Some(GpuTextureFormat::Rgba8Unorm));
+    assert_eq!(
+        readbacks[0].texture_format(),
+        Some(GpuTextureFormat::Rgba8Unorm)
+    );
     assert_known_pattern(readbacks[0].as_bytes());
     timestamp_delta(readbacks[1].as_bytes())
 }
@@ -665,13 +670,14 @@ fn record_known_pattern(
                 store: wgpu::StoreOp::Store,
             },
         })];
-        let timestamp_writes = timestamps.map(|(query_set, beginning, end)| {
-            wgpu::RenderPassTimestampWrites {
-                query_set,
-                beginning_of_pass_write_index: Some(beginning),
-                end_of_pass_write_index: Some(end),
-            }
-        });
+        let timestamp_writes =
+            timestamps.map(
+                |(query_set, beginning, end)| wgpu::RenderPassTimestampWrites {
+                    query_set,
+                    beginning_of_pass_write_index: Some(beginning),
+                    end_of_pass_write_index: Some(end),
+                },
+            );
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("G6-P01 known-pattern pass"),
             color_attachments: &color_attachments,
@@ -734,13 +740,7 @@ fn direct_sample(
     let submitted = submit_and_map(context, command_buffer, &[&resources.image_readback]);
     let physical_row = padded_bytes_per_row(WIDTH * 4);
     let row_unpack_start = Instant::now();
-    let bytes = tightly_pack_texture_rows(
-        &submitted.mapped[0],
-        WIDTH,
-        HEIGHT,
-        4,
-        physical_row,
-    );
+    let bytes = tightly_pack_texture_rows(&submitted.mapped[0], WIDTH, HEIGHT, 4, physical_row);
     let row_unpack_us = micros(row_unpack_start.elapsed());
     let completion_readback_us = submitted.completion_readback_us + row_unpack_us;
     assert_known_pattern(&bytes);
@@ -767,10 +767,7 @@ fn direct_sample(
     phases
 }
 
-fn direct_timestamp_sample(
-    context: &DirectWgpuContext,
-    pipeline: &wgpu::RenderPipeline,
-) -> u64 {
+fn direct_timestamp_sample(context: &DirectWgpuContext, pipeline: &wgpu::RenderPipeline) -> u64 {
     let resources = direct_resources(context);
     let query_set = context.device.create_query_set(&wgpu::QuerySetDescriptor {
         label: Some("G6-P01 known-pattern direct timestamp query set"),
@@ -804,29 +801,19 @@ fn direct_timestamp_sample(
         &[&resources.image_readback, &timestamp_readback],
     );
     let physical_row = padded_bytes_per_row(WIDTH * 4);
-    let image = tightly_pack_texture_rows(
-        &submitted.mapped[0],
-        WIDTH,
-        HEIGHT,
-        4,
-        physical_row,
-    );
+    let image = tightly_pack_texture_rows(&submitted.mapped[0], WIDTH, HEIGHT, 4, physical_row);
     assert_known_pattern(&image);
     timestamp_delta(&submitted.mapped[1])
 }
 
-fn timestamp_evidence(
-    wall_runengpu: &GpuContext,
-    wall_direct: &DirectWgpuContext,
-) -> Value {
+fn timestamp_evidence(wall_runengpu: &GpuContext, wall_direct: &DirectWgpuContext) -> Value {
     assert!(
         wall_direct.timestamp_supported,
         "accepted G6-P01 Lavapipe adapter reports timestamp-query support"
     );
     let runengpu_context = runengpu_context(true);
-    let direct_context = DirectWgpuContext::request_timestamp(
-        "G6-P01 known-pattern direct WGPU timestamp evidence",
-    );
+    let direct_context =
+        DirectWgpuContext::request_timestamp("G6-P01 known-pattern direct WGPU timestamp evidence");
     assert_equivalent_adapter_selection(&runengpu_context, &direct_context);
     assert_eq!(
         wall_runengpu.adapter_facts().vendor(),
@@ -836,8 +823,14 @@ fn timestamp_evidence(
         wall_runengpu.adapter_facts().device(),
         runengpu_context.adapter_facts().device()
     );
-    assert_eq!(wall_direct.adapter_info.vendor, direct_context.adapter_info.vendor);
-    assert_eq!(wall_direct.adapter_info.device, direct_context.adapter_info.device);
+    assert_eq!(
+        wall_direct.adapter_info.vendor,
+        direct_context.adapter_info.vendor
+    );
+    assert_eq!(
+        wall_direct.adapter_info.device,
+        direct_context.adapter_info.device
+    );
 
     let runengpu_pipeline = render_pipeline();
     let direct_pipeline = direct_pipeline(&direct_context);
