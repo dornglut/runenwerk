@@ -5,6 +5,16 @@ use std::path::PathBuf;
 const REPORT_SCHEMA_VERSION: u32 = 1;
 const REQUIRED_WORKLOADS: usize = 3;
 
+fn has_correctness_outcome(value: &Value) -> bool {
+    value.as_str().is_some_and(|text| !text.is_empty())
+        || value.as_object().is_some_and(|outcomes| {
+            !outcomes.is_empty()
+                && outcomes
+                    .values()
+                    .all(|outcome| outcome.as_str().is_some_and(|text| !text.is_empty()))
+        })
+}
+
 fn assert_workload_evidence(evidence: &Value, expected_workload: &str) {
     assert_eq!(evidence["workload"], expected_workload);
     assert_eq!(
@@ -25,33 +35,38 @@ fn assert_workload_evidence(evidence: &Value, expected_workload: &str) {
         false
     );
     assert!(
-        evidence["correctness"]
-            .as_str()
-            .is_some_and(|value| !value.is_empty()),
-        "retained workload evidence must state its correctness outcome"
+        has_correctness_outcome(&evidence["correctness"]),
+        "retained workload evidence must state a non-empty correctness outcome"
     );
+    assert!(evidence["comparison_envelope"].is_object());
+    assert!(evidence["adapter_equivalence"].is_object());
+    assert!(evidence["cold"].is_object());
+    assert!(evidence["warm_lifecycle"].is_object());
+    assert!(evidence["runengpu_over_direct_ratio"].is_object());
 }
 
 fn workload_evidence() -> Vec<Value> {
     let mut known_pattern = offscreen_draw::compare();
     retain_measurement_profile(&mut known_pattern);
-    assert_workload_evidence(
-        &known_pattern,
-        "G6-C01-known-pattern-offscreen-draw",
-    );
+    assert_workload_evidence(&known_pattern, "G6-C01-known-pattern-offscreen-draw");
 
-    let mut prefix_scan = prefix_scan::compare();
-    prefix_scan["timestamp_evidence"] = prefix_scan::timestamp::evidence(&prefix_scan);
-    retain_measurement_profile(&mut prefix_scan);
-    assert_workload_evidence(&prefix_scan, "G5-C01-4097-u32-prefix-scan");
+    let mut prefix_scan_evidence = prefix_scan::compare();
+    prefix_scan_evidence["timestamp_evidence"] =
+        prefix_scan::timestamp::evidence(&prefix_scan_evidence);
+    retain_measurement_profile(&mut prefix_scan_evidence);
+    assert_workload_evidence(&prefix_scan_evidence, "G5-C01-4097-u32-prefix-scan");
 
-    let mut reaction_diffusion = reaction_diffusion::compare();
-    reaction_diffusion["timestamp_evidence"] =
-        reaction_diffusion::timestamp::evidence(&reaction_diffusion);
-    retain_measurement_profile(&mut reaction_diffusion);
-    assert_workload_evidence(&reaction_diffusion, "G6-I01-reaction-diffusion");
+    let mut reaction_diffusion_evidence = reaction_diffusion::compare();
+    reaction_diffusion_evidence["timestamp_evidence"] =
+        reaction_diffusion::timestamp::evidence(&reaction_diffusion_evidence);
+    retain_measurement_profile(&mut reaction_diffusion_evidence);
+    assert_workload_evidence(&reaction_diffusion_evidence, "G6-I01-reaction-diffusion");
 
-    vec![known_pattern, prefix_scan, reaction_diffusion]
+    vec![
+        known_pattern,
+        prefix_scan_evidence,
+        reaction_diffusion_evidence,
+    ]
 }
 
 fn artifact_path() -> PathBuf {
