@@ -2,7 +2,7 @@
 mod common;
 #[path = "gpu_direct_wgpu_cost_native/offscreen_draw.rs"]
 mod offscreen_draw;
-#[path = "gpu_direct_wgpu_cost_native/prefix_scan.rs"]
+#[path = "gpu_direct_wgpu_cost_native/prefix_scan_module.rs"]
 mod prefix_scan;
 // The retained workload module also contains the surface-present proof path, which this
 // offscreen-only comparison intentionally does not execute.
@@ -54,6 +54,8 @@ fn known_pattern_direct_wgpu_boundary_cost_is_measurable_and_correct() {
 #[ignore = "requires a real Vulkan fallback adapter; executed by focused G6-P01 CI while the comparison portfolio is built"]
 fn prefix_scan_direct_wgpu_boundary_cost_is_measurable_and_correct() {
     let mut evidence = prefix_scan::compare();
+    let timestamps = prefix_scan::timestamp::evidence(&evidence);
+    evidence["timestamp_evidence"] = timestamps;
     retain_measurement_profile(&mut evidence);
     assert_eq!(evidence["workload"], "G5-C01-4097-u32-prefix-scan");
     assert_eq!(
@@ -64,6 +66,7 @@ fn prefix_scan_direct_wgpu_boundary_cost_is_measurable_and_correct() {
         evidence["direct_wgpu"]["count"].as_u64().unwrap(),
         u64::try_from(common::MEASURED_SAMPLES).unwrap()
     );
+    assert_eq!(evidence["timestamp_evidence"]["status"], "measured");
     println!("{}", serde_json::to_string_pretty(&evidence).unwrap());
 }
 
