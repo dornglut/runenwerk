@@ -1,162 +1,129 @@
 ---
 title: "net Goals"
-description: "Documentation for net Goals."
+description: "Target ownership and dependency rules for Runenwerk realtime networking."
 status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-05-05
+last_reviewed: 2026-09-01
 ---
 
 # net Goals
 
-This document pins the intended networking direction for the `net/` domain.
+This document pins the intended Runenwerk networking ownership model.
 
-## Primary Architecture Goal
+## Primary Goal
 
-- Dedicated authoritative server with connected clients.
-- The server is the source of truth for simulation state.
-- Clients are predictive/rendering participants, not authorities.
+Runenwerk should use standalone RunenNet as its reusable realtime networking semantic layer while keeping engine/game/world integration inside Runenwerk.
 
-## Pinned Networking Stack
+The architecture must support authoritative multiplayer without making Runenwerk maintain a second connection/session/protocol runtime.
 
-The networking architecture should converge on this explicit 4-part stack:
+## Ownership Model
 
-1. Network Contract Layer
-  - `net/engine_net`
-  - Defines transport-agnostic protocol, replication, session, simulation-facing network vocabulary, transport-lane semantics, and runtime contracts.
+### Standalone RunenNet
 
-2. Transport Adapter Layer
-  - `net/engine_net_quic`
-  - Implements QUIC transport/runtime behavior for `engine_net` contracts.
-  - Owns connection lifecycle, framing, trust, routing, admission, and transport mapping.
+Owns reusable networking semantics:
 
-3. Engine Integration Layer
-  - `engine/src/plugins/net/`
-  - Bridges engine schedules/resources/events to the selected runtime adapter.
-  - Owns engine-side commands, events, resources, prediction hooks, runtime I/O, and schedules.
-  - Must remain gameplay-agnostic.
+- connection and participant/session identity;
+- protocol/schema compatibility negotiation;
+- session membership, admission/binding, loss, retention, replacement, expiry, and closure;
+- delivery identity and ordering/reliability semantics;
+- recovery/resynchronization contracts;
+- reusable replication and input/prediction contracts as RN8 migration reaches those boundaries;
+- transport abstraction.
 
-4. Gameplay Networking Layer
-  - owning gameplay domain/app modules
-  - Owns gameplay-specific replication mapping, correction, smoothing, interpolation, tuning, and presentation-side multiplayer behavior.
+`runen-net-quic` owns concrete QUIC realization where a maintained consumer requires it.
+
+### Runenwerk engine integration
+
+`engine/src/plugins/net/` owns:
+
+- placement and progression of RunenNet owners in engine schedules;
+- ECS resources/projections derived from accepted RunenNet state;
+- mapping connections/participants to Runenwerk owner/routing state;
+- product/session metadata not standardized by RunenNet;
+- reconnect timing/attempt/deployment policy;
+- engine diagnostics and presentation views;
+- retained replication/prediction integration while those later RN8 cuts remain incomplete.
+
+These integration resources must not become alternate networking authority.
+
+### Gameplay and world domains
+
+Own:
+
+- gameplay replication mapping and correction policy;
+- world/spatial relevancy inputs;
+- team/ownership/game rules;
+- smoothing/interpolation/presentation policy;
+- simulation architecture.
+
+### Retained `engine_net`
+
+`engine_net` is temporary migration evidence only. After RN8 N2 it may retain evidence-backed replication/prediction/protocol-payload/macro support, but it must not own connection identity, compatibility negotiation, sessions, admission, reconnect semantics, or transport runtime.
 
 ## Dependency Direction
 
-Pinned direction:
+Required direction:
 
-- gameplay domain/app networking modules -> `engine` + `net/engine_net`
-- `engine/src/plugins/net/` -> `engine` + `net/engine_net` + selected transport adapter
-- `net/engine_net_quic` -> `net/engine_net` + transport dependencies
-- `net/engine_net` -> no gameplay-specific dependency
-- `engine_sim` / `engine_history` -> supporting net-domain crates without gameplay ownership
+```text
+gameplay / world
+      |
+      v
+Runenwerk engine integration
+      |
+      +--> standalone RunenNet
+      |
+      +--> temporary engine_net replication residue
 
-Lower layers must not depend on higher-layer gameplay semantics.
+runen-net-quic --> standalone RunenNet
+```
 
-In particular:
+Rules:
 
-- `engine_net` must not depend on game-specific logic
-- `engine_net_quic` must not depend on engine/game crates
-- engine integration must not become a second home for game replication policy
+- RunenNet never depends on Runenwerk ECS, scheduler, gameplay, world, or product policy.
+- Runenwerk may adapt public RunenNet state into engine-owned projections, but must not copy its state machines.
+- `engine_net` must not forward or alias RunenNet APIs as a compatibility facade.
+- Concrete transport adapters are introduced only for real consumers.
 
-## Replication Model Goals
+## Runtime Principles
 
-- Server publishes authoritative snapshots/deltas on a simulation timeline.
-- Clients send input commands tagged with simulation tick/frame identity.
-- Replication remains transport-agnostic at the `engine_net` contract level.
-- Interest management controls what each client receives.
-- Client-side prediction and reconciliation are first-class paths.
-- Correction/smoothing policies are gameplay-owned (in the owning domain/app module), not transport-owned.
+1. Server-authoritative simulation is the default multiplayer model.
+2. Clients send intent/input, not authoritative world state.
+3. Connection/session authorization is decided by RunenNet Core.
+4. Engine replication consumes only authorized connection identity.
+5. Replication/prediction behavior changes occur only in their owning RN8 boundary, not during lifecycle plumbing cuts.
+6. Interest/relevancy vocabulary must remain separate from gameplay/world policy inputs.
+7. Transport details must not define gameplay or session semantics.
+8. History/replay remains a Runenwerk concern unless a reusable networking contract is explicitly owned by RunenNet.
 
-Current design details are split into:
+## Current RN8 State
 
-- [../design/active/net-authoritative-replication-protocol.md](../design/active/net-authoritative-replication-protocol.md)
-- [../design/active/net-prediction-reconciliation-boundary.md](../design/active/net-prediction-reconciliation-boundary.md)
-- [../design/active/ecs-net-replication-boundary.md](../design/active/ecs-net-replication-boundary.md)
-- [../design/active/net-interest-streaming-design.md](../design/active/net-interest-streaming-design.md)
-- [../design/active/net-transport-lanes-delivery.md](../design/active/net-transport-lanes-delivery.md)
+After N2, the engine connection/session boundary is intended to be:
 
-## Session and Transport Goals
+```text
+RunenNet NegotiationManager + Session
+               |
+               v
+RunenNetSessionProjection (read-only engine projection)
+               |
+        +------+------+
+        |             |
+ owner routing   status/diagnostics
+        |
+ retained replication integration
+```
 
-- Session lifecycle is explicit: admission, active play, handoff/reconnect, teardown.
-- Runtime adapters map concrete transport events to `engine_net` runtime contracts.
-- Transport concerns (QUIC handshake, trust, framing, lanes, endpoint policy) stay outside gameplay rules.
-- Reconnect should recover from history/checkpoints without changing authority semantics.
+The projection is not consulted to authorize lifecycle mutations. RunenNet remains the authority.
 
-## Determinism and History Goals
+## End State
 
-- Shared identity/tick/hash vocabulary comes from `engine_sim`.
-- Replay/checkpoint/validation flows in `engine_history` (`engine_replay`) support:
-  - reconnect recovery
-  - divergence detection
-  - deterministic verification
-  - archive/controller/recorder workflows
+The steady-state architecture contains:
 
-## Ownership Rules
+1. standalone RunenNet for reusable realtime networking semantics;
+2. `runen-net-quic` or other RunenNet transport adapters only where required;
+3. Runenwerk engine integration for ECS/scheduling/product/host policy;
+4. gameplay/world domains for game-specific simulation and replication policy;
+5. `engine_sim` and `engine_history` as independent Runenwerk simulation/history owners.
 
-- `engine_net`
-  - Protocol/session/replication/runtime contracts only.
-  - The single source of truth for transport-agnostic network semantics.
-
-- `engine_net_quic`
-  - Concrete QUIC transport/runtime adapter.
-  - Owns QUIC-specific transport/runtime behavior only.
-
-- `engine_sim`
-  - Simulation identity and deterministic core vocabulary.
-
-- `engine_history` (`engine_replay`)
-  - Replay/checkpoint/archive/controller/validation substrate.
-
-- `engine/src/plugins/net/`
-  - Engine integration bridge only.
-  - Owns engine-side resources/events/commands/schedules and runtime wiring.
-  - Must not own game replication semantics.
-
-- gameplay domain/app networking modules
-  - Gameplay replication mapping, correction policy, smoothing/interpolation, and presentation behavior.
-
-## Structural Goals Inside `net/*` Crates
-
-Within `net/*` crates:
-
-- organize by explicit subdomain responsibility
-- prefer subdomain folders with `mod.rs` boundaries for larger concerns
-- keep public surfaces narrow and intentional
-
-Avoid:
-
-- `include!` module composition
-- `_internal` module suffixes
-- ambiguous catch-all buckets when a more precise module name is available
-
-Repository-wide guidance lives in:
-
-- `../guidelines/module-structure-guidelines.md`
-
-## Non-Goals
-
-- No gameplay rule ownership in transport/runtime adapter crates.
-- No transport-specific protocol semantics leaking into `engine_net` core contracts.
-- No client-authoritative state model as the default architecture.
-- No correction/smoothing policy ownership in engine-generic or transport crates.
-
-## Practical Steady-State Model
-
-The intended steady-state ownership is:
-
-1. `engine_net`
-  - defines the language
-
-2. `engine_net_quic`
-  - moves bytes and owns transport/runtime adaptation
-
-3. `engine/src/plugins/net/`
-  - bridges runtime adapters into engine scheduling/resources/events
-
-4. gameplay domain/app networking modules
-  - defines what multiplayer means for a specific game
-
-This is the model new work in the networking domain should reinforce.
-
-Implementation order is tracked separately in [multiplayer-replication-implementation-roadmap.md](multiplayer-replication-implementation-roadmap.md).
+`engine_net` and its old networking authority disappear once their maintained migration consumers are removed. Clean deletion is preferred over long-lived compatibility layers.
