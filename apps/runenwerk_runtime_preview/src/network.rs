@@ -85,14 +85,7 @@ pub(super) fn spawn(bind_addr: SocketAddr, server_name: &str) -> Result<SpawnedS
     let (event_tx, event_rx) = channel(NETWORK_CHANNEL_CAPACITY);
     let error_tx = event_tx.clone();
     let network_task = tokio::spawn(async move {
-        let result = run(
-            endpoint,
-            endpoint_config,
-            command_rx,
-            shutdown_rx,
-            event_tx,
-        )
-        .await;
+        let result = run(endpoint, endpoint_config, command_rx, shutdown_rx, event_tx).await;
         if let Err(error) = &result {
             let _ = error_tx.try_send(ServerNetworkEvent::Error(error.to_string()));
         }
@@ -192,7 +185,7 @@ async fn run_connection(
             event = next_connection_event(&mut connection, &mut host) => {
                 match event? {
                     ConnectionEvent::DataReady { key, .. } if key == inbound => {
-                        drain_commands(&mut host, inbound, &event_tx).await?;
+                        drain_commands(&mut host, inbound, &event_tx)?;
                     }
                     ConnectionEvent::FlowTerminated {
                         key,
@@ -369,7 +362,7 @@ async fn establish_flows(
     Ok((outbound, inbound))
 }
 
-async fn drain_commands(
+fn drain_commands(
     host: &mut HostState,
     inbound: DeliveryFlowKey,
     event_tx: &Sender<ServerNetworkEvent>,
@@ -384,9 +377,10 @@ async fn drain_commands(
         };
         let command = decode_preview_command_bytes(exposed.payload())?;
         event_tx
-            .send(ServerNetworkEvent::Command(command))
-            .await
-            .map_err(|_| anyhow!("runtime-preview command event channel closed"))?;
+            .try_send(ServerNetworkEvent::Command(command))
+            .map_err(|error| {
+                anyhow!("runtime-preview command event queue rejected delivery: {error}")
+            })?;
     }
 }
 
