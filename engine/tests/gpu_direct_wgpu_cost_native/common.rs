@@ -70,7 +70,7 @@ fn summarize(values: &[f64]) -> Value {
     assert!(!values.is_empty(), "summary requires at least one sample");
     let mut sorted = values.to_vec();
     sorted.sort_by(f64::total_cmp);
-    let median = if sorted.len() % 2 == 0 {
+    let median = if sorted.len().is_multiple_of(2) {
         let high = sorted.len() / 2;
         (sorted[high - 1] + sorted[high]) * 0.5
     } else {
@@ -104,7 +104,7 @@ pub(crate) fn ratio_summary(
                 .collect::<Vec<_>>();
             if runengpu_values.len() != direct_values.len()
                 || runengpu_values.is_empty()
-                || direct_values.iter().any(|value| *value == 0.0)
+                || direct_values.contains(&0.0)
             {
                 return None;
             }
@@ -224,7 +224,7 @@ pub(crate) fn submit_and_map(
         .map(|buffer| {
             let state = CallbackState::new();
             let callback = Arc::clone(&state);
-            command_buffer.map_buffer_on_submit(*buffer, MapMode::Read, .., move |result| {
+            command_buffer.map_buffer_on_submit(buffer, MapMode::Read, .., move |result| {
                 if let Err(error) = result {
                     *callback.error.lock().unwrap() = Some(error.to_string());
                 }
