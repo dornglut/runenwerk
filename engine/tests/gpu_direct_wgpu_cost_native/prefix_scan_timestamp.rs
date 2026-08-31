@@ -188,8 +188,10 @@ fn timestamp_deltas(bytes: &[u8]) -> Vec<u64> {
     let (timestamps, remainder) = bytes.as_chunks::<8>();
     assert!(remainder.is_empty());
     assert_eq!(timestamps.len(), usize::try_from(QUERY_COUNT).unwrap());
-    timestamps
-        .chunks_exact(2)
+    let (pairs, pair_remainder) = timestamps.as_chunks::<2>();
+    assert!(pair_remainder.is_empty());
+    pairs
+        .iter()
         .map(|pair| {
             let beginning = u64::from_ne_bytes(pair[0]);
             let end = u64::from_ne_bytes(pair[1]);
