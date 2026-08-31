@@ -146,6 +146,31 @@ async fn preview_control_channel_round_trips_over_standalone_runennet() -> Resul
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn preview_control_channel_rejects_invalid_trust_material() -> Result<()> {
+    let host = match RuntimePreviewHost::spawn(RuntimePreviewConfig::headless()) {
+        Ok(host) => host,
+        Err(error) if is_permission_denied(&error) => {
+            eprintln!("skipping preview RunenNet trust proof: local socket bind is denied");
+            return Ok(());
+        }
+        Err(error) => return Err(error.context("preview server spawn failed")),
+    };
+    let mut bootstrap = host.bootstrap().clone();
+    bootstrap.trusted_certificate_der_hex = "00".to_string();
+
+    let connection_result = PreviewProcessConnection::connect(&bootstrap).await;
+    let shutdown_result = host.shutdown().await;
+
+    if connection_result.is_ok() {
+        return Err(anyhow!(
+            "runtime-preview connection accepted invalid bootstrap trust material"
+        ));
+    }
+    shutdown_result?;
+    Ok(())
+}
+
 fn representative_world_sdf_product() -> RuntimeProductPayload {
     let chunk_id = ChunkId::new(WorldId::new(1), ChunkCoord3 { x: 0, y: 0, z: 0 });
     let chunk = SdfChunkPayload {
