@@ -20,17 +20,51 @@ pub(super) fn infer_fragment_hazards(
     edges: &mut DependencyEdges,
 ) -> Result<(), GpuWorkGraphError> {
     for (fragment_index, fragment) in fragments.iter().enumerate() {
-        for earlier_index in 0..fragment.nodes().len() {
-            for later_index in (earlier_index + 1)..fragment.nodes().len() {
-                let earlier = &fragment.nodes()[earlier_index];
-                let later = &fragment.nodes()[later_index];
-                let reasons = hazard_reasons(earlier, later);
-                if reasons.is_empty() {
+        let prepared_nodes = fragment
+            .nodes()
+            .iter()
+            .map(|node| prepared_node_id(graph_label, fragment_index, fragment, node))
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut accesses_by_resource =
+            BTreeMap::<GpuWorkResourceId, Vec<(usize, &GpuResourceAccess)>>::new();
+
+        for (later_index, later) in fragment.nodes().iter().enumerate() {
+            for later_access in later.accesses() {
+                if matches!(later_access, GpuResourceAccess::Sampler(_)) {
                     continue;
                 }
-                let before = prepared_node_id(graph_label, fragment_index, fragment, earlier)?;
-                let after = prepared_node_id(graph_label, fragment_index, fragment, later)?;
-                edges.entry((before, after)).or_default().extend(reasons);
+                let resource = later_access.resource_identity();
+                if let Some(earlier_accesses) = accesses_by_resource.get(&resource) {
+                    for &(earlier_index, earlier_access) in earlier_accesses {
+                        if earlier_index == later_index
+                            || (!earlier_access.writes() && !later_access.writes())
+                        {
+                            continue;
+                        }
+                        let Some((resource, region)) =
+                            access_intersection(earlier_access, later_access)
+                        else {
+                            continue;
+                        };
+                        let reasons = access_pair_hazard_reasons(
+                            earlier_access,
+                            later_access,
+                            resource,
+                            region,
+                        );
+                        if reasons.is_empty() {
+                            continue;
+                        }
+                        edges
+                            .entry((prepared_nodes[earlier_index], prepared_nodes[later_index]))
+                            .or_default()
+                            .extend(reasons);
+                    }
+                }
+                accesses_by_resource
+                    .entry(resource)
+                    .or_default()
+                    .push((later_index, later_access));
             }
         }
     }
@@ -138,24 +172,6 @@ pub(super) fn infer_cross_fragment_hazards(
         }
     }
     Ok(())
-}
-
-fn hazard_reasons(earlier: &GpuWorkNode, later: &GpuWorkNode) -> BTreeSet<GpuDependencyReason> {
-    let mut reasons = BTreeSet::new();
-    for earlier_access in earlier.accesses() {
-        for later_access in later.accesses() {
-            let Some((resource, region)) = access_intersection(earlier_access, later_access) else {
-                continue;
-            };
-            reasons.extend(access_pair_hazard_reasons(
-                earlier_access,
-                later_access,
-                resource,
-                region,
-            ));
-        }
-    }
-    reasons
 }
 
 fn access_pair_hazard_reasons(
