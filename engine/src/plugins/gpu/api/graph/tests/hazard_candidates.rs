@@ -35,12 +35,7 @@ fn texture_view_candidates_use_normalized_parent_texture_identity() {
         GpuTextureAspect::Color,
     )
     .unwrap();
-    let view = texture_view(
-        &mut allocator,
-        &texture,
-        "candidate texture view",
-        range,
-    );
+    let view = texture_view(&mut allocator, &texture, "candidate texture view", range);
 
     let mut fragment = builder("normalized texture candidates");
     fragment
