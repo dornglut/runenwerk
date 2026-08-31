@@ -9,7 +9,7 @@ const PASS_NAMES: [&str; 5] = [
     "apply_level_0_offsets",
 ];
 const QUERY_COUNT: u32 = 10;
-const TIMESTAMP_BYTES: u64 = u64::from(QUERY_COUNT) * 8;
+const TIMESTAMP_BYTES: u64 = QUERY_COUNT as u64 * 8;
 
 fn timestamp_context() -> GpuContext {
     let mut requirements = GpuCapabilityRequirements::new();
@@ -93,7 +93,10 @@ fn timestamp_fragment(pipelines: &RunenGpuPipelines, mode: ScanMode) -> Timestam
     let timestamp_readback = timestamp_readback_operation.id();
 
     let fragment = GpuWorkFragment::build(
-        format!("direct-cost prefix scan {} timestamp comparison", mode.key()),
+        format!(
+            "direct-cost prefix scan {} timestamp comparison",
+            mode.key()
+        ),
         |work| {
             for (index, node) in base.nodes().iter().enumerate() {
                 if index < PASS_NAMES.len() {
@@ -102,15 +105,11 @@ fn timestamp_fragment(pipelines: &RunenGpuPipelines, mode: ScanMode) -> Timestam
                     };
                     let beginning = u32::try_from(index * 2).unwrap();
                     let end = beginning + 1;
-                    let writes = GpuTimestampWrites::new(
-                        &query_set,
-                        Some(beginning),
-                        Some(end),
-                    )
-                    .unwrap();
+                    let writes =
+                        GpuTimestampWrites::new(&query_set, Some(beginning), Some(end)).unwrap();
                     work.operation(
                         node.label().as_str(),
-                        operation.clone().with_timestamp_writes(writes).unwrap(),
+                        operation.clone().with_timestamp_writes(writes),
                     )?;
                     if index + 1 == PASS_NAMES.len() {
                         work.operation("prefix scan timestamp resolve", resolve_operation.clone())?;
@@ -123,7 +122,10 @@ fn timestamp_fragment(pipelines: &RunenGpuPipelines, mode: ScanMode) -> Timestam
                     work.operation(node.label().as_str(), node.operation().clone())?;
                 }
             }
-            work.operation("prefix scan timestamp readback", timestamp_readback_operation)?;
+            work.operation(
+                "prefix scan timestamp readback",
+                timestamp_readback_operation,
+            )?;
             Ok(())
         },
     )
@@ -380,13 +382,7 @@ fn direct_mode_timestamp_sample(
         0,
         buffer_size_u32(level_2_blocks),
     );
-    encoder.copy_buffer_to_buffer(
-        &resolve,
-        0,
-        &timestamp_readback,
-        0,
-        TIMESTAMP_BYTES,
-    );
+    encoder.copy_buffer_to_buffer(&resolve, 0, &timestamp_readback, 0, TIMESTAMP_BYTES);
     let command_buffer = encoder.finish();
     let submitted = submit_and_map(
         context,
@@ -405,7 +401,11 @@ fn direct_mode_timestamp_sample(
 
 fn pass_evidence(samples: &[Vec<u64>], period_ns: Option<f64>) -> Value {
     assert_eq!(samples.len(), MEASURED_SAMPLES);
-    assert!(samples.iter().all(|sample| sample.len() == PASS_NAMES.len()));
+    assert!(
+        samples
+            .iter()
+            .all(|sample| sample.len() == PASS_NAMES.len())
+    );
 
     let mut raw = serde_json::Map::new();
     let mut summaries = serde_json::Map::new();
@@ -420,10 +420,12 @@ fn pass_evidence(samples: &[Vec<u64>], period_ns: Option<f64>) -> Value {
         if let Some(period_ns) = period_ns {
             ns.insert(
                 (*pass_name).to_owned(),
-                json!(values
-                    .iter()
-                    .map(|ticks| *ticks as f64 * period_ns)
-                    .collect::<Vec<_>>()),
+                json!(
+                    values
+                        .iter()
+                        .map(|ticks| *ticks as f64 * period_ns)
+                        .collect::<Vec<_>>()
+                ),
             );
         }
     }
@@ -451,8 +453,7 @@ fn expected_adapter_identity(wall_evidence: &Value) -> (u64, u64) {
 
 pub(crate) fn evidence(wall_evidence: &Value) -> Value {
     assert_eq!(
-        wall_evidence["timestamp_evidence"]["supported_by_direct_adapter"],
-        true,
+        wall_evidence["timestamp_evidence"]["supported_by_direct_adapter"], true,
         "accepted G6-P01 Lavapipe adapter reports timestamp-query support"
     );
     let (expected_vendor, expected_device) = expected_adapter_identity(wall_evidence);
@@ -469,8 +470,14 @@ pub(crate) fn evidence(wall_evidence: &Value) -> Value {
         runengpu_context.adapter_facts().device().map(u64::from),
         Some(expected_device)
     );
-    assert_eq!(u64::from(direct_context.adapter_info.vendor), expected_vendor);
-    assert_eq!(u64::from(direct_context.adapter_info.device), expected_device);
+    assert_eq!(
+        u64::from(direct_context.adapter_info.vendor),
+        expected_vendor
+    );
+    assert_eq!(
+        u64::from(direct_context.adapter_info.device),
+        expected_device
+    );
 
     let sources = admitted_sources();
     let runengpu_pipelines = runengpu_pipelines(&sources);
@@ -487,16 +494,10 @@ pub(crate) fn evidence(wall_evidence: &Value) -> Value {
             &runengpu_pipelines,
             ScanMode::Inclusive,
         );
-        let _ = direct_mode_timestamp_sample(
-            &direct_context,
-            &direct_pipelines,
-            ScanMode::Exclusive,
-        );
-        let _ = direct_mode_timestamp_sample(
-            &direct_context,
-            &direct_pipelines,
-            ScanMode::Inclusive,
-        );
+        let _ =
+            direct_mode_timestamp_sample(&direct_context, &direct_pipelines, ScanMode::Exclusive);
+        let _ =
+            direct_mode_timestamp_sample(&direct_context, &direct_pipelines, ScanMode::Inclusive);
     }
 
     let mut runengpu_exclusive = Vec::with_capacity(MEASURED_SAMPLES);
