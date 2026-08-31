@@ -159,15 +159,17 @@ async fn preview_control_channel_rejects_invalid_trust_material() -> Result<()> 
     let mut bootstrap = host.bootstrap().clone();
     bootstrap.trusted_certificate_der_hex = "00".to_string();
 
-    let connection_result = PreviewProcessConnection::connect(&bootstrap).await;
-    let shutdown_result = host.shutdown().await;
-
-    if connection_result.is_ok() {
-        return Err(anyhow!(
-            "runtime-preview connection accepted invalid bootstrap trust material"
-        ));
+    match PreviewProcessConnection::connect(&bootstrap).await {
+        Ok(connection) => {
+            let server_cleanup = host.shutdown().await;
+            let client_cleanup = connection.shutdown().await;
+            return Err(anyhow!(
+                "runtime-preview connection accepted invalid bootstrap trust material; server cleanup: {server_cleanup:?}; client cleanup: {client_cleanup:?}"
+            ));
+        }
+        Err(_) => host.shutdown().await?,
     }
-    shutdown_result?;
+
     Ok(())
 }
 
