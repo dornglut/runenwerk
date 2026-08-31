@@ -993,10 +993,14 @@ fn direct_mode_sample(
             resource_setup_us + command_record_us,
         ),
         ("command_record".to_owned(), command_record_us),
+        (
+            "readback_registration".to_owned(),
+            submitted.readback_registration_us,
+        ),
         ("queue_submit".to_owned(), submitted.submit_call_us),
         (
             "boundary_prepare_record_submit".to_owned(),
-            resource_setup_us + command_record_us + submitted.submit_call_us,
+            resource_setup_us + command_record_us + submitted.boundary_submit_us(),
         ),
         (
             "completion_readback".to_owned(),
@@ -1144,7 +1148,7 @@ pub(crate) fn compare() -> Value {
                 "direct_context_us": direct_context.setup_us,
                 "direct_physical_pipeline_us": direct_pipelines.cold_pipeline_us,
                 "direct_first_workload_phases_us": direct_cold,
-                "note": "RunenGPU physical pipeline realization occurs during first backend_prepare and submit_prepared also owns physical encoding/submission. Direct WGPU exposes resource creation, command recording, and queue submission separately. Compare normalized boundary/total fields, not unlike component fields pairwise."
+                "note": "RunenGPU physical pipeline realization occurs during first backend_prepare and submit_prepared owns readback callback registration, physical encoding, and queue submission. Direct WGPU exposes resource creation, command recording, callback registration, and queue submission separately. Compare normalized boundary/total fields, not unlike component fields pairwise."
             },
         },
         "warm_lifecycle": {
@@ -1157,7 +1161,8 @@ pub(crate) fn compare() -> Value {
         },
         "phase_comparability": {
             "ratio_phases": ["boundary_prepare_record_submit", "completion_readback", "total"],
-            "runengpu_submit_component": "submit_prepared combines acceptance, physical encoding and queue submission and is not separable through the public boundary",
+            "runengpu_submit_component": "submit_prepared combines acceptance, readback callback registration, physical encoding and queue submission and is not separable through the public boundary",
+            "direct_submit_boundary_component": "readback callback registration plus queue.submit call",
             "direct_queue_submit_component": "queue.submit call only",
             "queue_submit_ratio_status": "unavailable because the RunenGPU public submit boundary intentionally combines additional execution work",
         },
