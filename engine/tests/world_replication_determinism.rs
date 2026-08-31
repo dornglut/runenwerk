@@ -1,7 +1,7 @@
 use engine::SimulationTick;
 use engine::net::prelude::{Ack, ClientMessage, NetPlugin, NetRole, SnapshotCursor};
 use engine::plugins::net::{
-    NetStreamingStateResource, RunenNetSessionCore, RunenNetSessionProjection,
+    NetStreamingStateResource, NetworkOwnerRouting, RunenNetSessionCore, RunenNetSessionProjection,
     enqueue_server_inbox_from, sync_runennet_session_projection,
 };
 use engine::plugins::world::adapters::resources::{
@@ -135,6 +135,9 @@ struct ReplicationProbeDelta {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 struct ReplicationProbeInput;
+
+#[derive(Debug, Clone, Copy, ecs::Component)]
+struct ReplicationInterestTarget;
 
 struct ReplicationProbeDriver;
 
@@ -401,6 +404,24 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
     establish_runennet_connection(&mut core, &mut projection, participant, connection);
     app.world_mut().insert_resource(projection.clone());
     sync_runennet_session_projection(app.world_mut());
+
+    let owner = app
+        .world()
+        .resource::<NetworkOwnerRouting>()
+        .expect("RunenNet projection should create network owner routing")
+        .by_connection
+        .get(&connection)
+        .copied()
+        .expect("admitted connection should have an active engine owner");
+    let interest_target = app
+        .world_mut()
+        .spawn(ReplicationInterestTarget)
+        .expect("streaming test target should spawn");
+    assert!(
+        app.world_mut()
+            .assign_entity_owner(interest_target, ecs::OwnerState::OwnedBy(owner)),
+        "streaming test target should be routed to the admitted connection owner"
+    );
 
     let fixed_point_scale = **app
         .world()
