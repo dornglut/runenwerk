@@ -255,9 +255,8 @@ async fn run_connection(
     drive_client_established(&mut connection, &mut host).await?;
     let (outbound, inbound) = establish_flows(&mut connection, &mut host).await?;
     event_tx
-        .send(ClientTaskEvent::Ready)
-        .await
-        .map_err(|_| anyhow!("runtime-preview client event channel closed"))?;
+        .try_send(ClientTaskEvent::Ready)
+        .map_err(|error| anyhow!("runtime-preview client event queue rejected ready state: {error}"))?;
 
     let mut closing = false;
     let mut outbound_finished = false;
@@ -283,7 +282,7 @@ async fn run_connection(
             event = next_connection_event(&mut connection, &mut host) => {
                 match event? {
                     ConnectionEvent::DataReady { key, .. } if key == inbound => {
-                        drain_events(&mut host, inbound, &event_tx).await?;
+                        drain_events(&mut host, inbound, &event_tx)?;
                     }
                     ConnectionEvent::FlowTerminated {
                         key,
@@ -482,7 +481,7 @@ async fn establish_flows(
     Ok((outbound, inbound))
 }
 
-async fn drain_events(
+fn drain_events(
     host: &mut HostState,
     inbound: DeliveryFlowKey,
     event_tx: &Sender<ClientTaskEvent>,
@@ -496,10 +495,9 @@ async fn drain_events(
             return Ok(());
         };
         let event = decode_preview_event_bytes(exposed.payload())?;
-        event_tx
-            .send(ClientTaskEvent::Preview(event))
-            .await
-            .map_err(|_| anyhow!("runtime-preview client event channel closed"))?;
+        event_tx.try_send(ClientTaskEvent::Preview(event)).map_err(|error| {
+            anyhow!("runtime-preview client event queue rejected delivery: {error}")
+        })?;
     }
 }
 
