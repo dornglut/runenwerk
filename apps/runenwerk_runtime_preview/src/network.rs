@@ -61,7 +61,7 @@ pub(super) struct SpawnedServerNetwork {
     pub(super) network_task: JoinHandle<Result<()>>,
 }
 
-pub(crate) fn spawn(bind_addr: SocketAddr, server_name: &str) -> Result<SpawnedServerNetwork> {
+pub(super) fn spawn(bind_addr: SocketAddr, server_name: &str) -> Result<SpawnedServerNetwork> {
     let endpoint_config = endpoint_config()?;
     let (certificate, private_key) = generated_identity(server_name)?;
     let endpoint = ServerEndpoint::bind(
