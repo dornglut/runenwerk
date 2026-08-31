@@ -111,6 +111,13 @@ impl RunenNetSessionCore {
         Ok(())
     }
 
+    /// Apply RunenNet session loss policy and release the old connection's compatibility state.
+    ///
+    /// RunenNet's transport teardown releases connection-scoped negotiation state independently
+    /// from the higher-level session retention decision. This Core-only engine composition does
+    /// the same: the participant may remain retained, but the lost connection's established
+    /// negotiation cannot remain live and a replacement must establish compatibility on a
+    /// different [`ConnectionHandle`].
     pub fn connection_lost(
         &mut self,
         projection: &mut RunenNetSessionProjection,
@@ -122,10 +129,22 @@ impl RunenNetSessionCore {
             .session
             .connection_lost(participant, connection, policy)
             .map_err(RunenNetSessionCoreError::Session)?;
+
+        // Session state has already accepted the loss, so the read-only engine projection must
+        // follow it even if releasing the separate connection-scoped negotiation owner exposes an
+        // unexpected manager-state error.
         projection.remove_binding(connection);
+        self.negotiation
+            .terminate(connection)
+            .map_err(RunenNetSessionCoreError::NegotiationCleanup)?;
         Ok(outcome)
     }
 
+    /// Close session membership only.
+    ///
+    /// Transport/connection teardown remains a separate host responsibility. Clearing the
+    /// projection prevents closed session membership from being treated as authorized engine
+    /// routing state without pretending that `Session::close` also closes a transport.
     pub fn close(&mut self, projection: &mut RunenNetSessionProjection) {
         self.session.close();
         projection.clear();
@@ -147,6 +166,7 @@ impl RunenNetSessionCore {
 pub enum RunenNetSessionCoreError {
     Negotiation(NegotiationManagerError),
     Session(SessionError),
+    NegotiationCleanup(NegotiationManagerError),
 }
 
 #[cfg(test)]
@@ -254,6 +274,7 @@ mod tests {
         assert_eq!(core.participant_for_connection(connection), None);
         assert_eq!(core.membership_state(participant), None);
         assert_eq!(projection.participant_for_connection(connection), None);
+        assert_eq!(core.negotiation().established_connections(), 0);
     }
 
     #[test]
@@ -280,6 +301,7 @@ mod tests {
             Ok(ConnectionLossOutcome::Retained { .. })
         ));
         assert_eq!(projection.participant_for_connection(old_connection), None);
+        assert_eq!(core.negotiation().established_connections(), 1);
 
         core.bind_replacement(&mut projection, participant, new_connection)
             .expect("new established connection must rebind retained membership");
@@ -313,5 +335,6 @@ mod tests {
 
         assert_eq!(core.participant_for_connection(connection), None);
         assert_eq!(projection.active_connection_count(), 0);
+        assert_eq!(core.negotiation().established_connections(), 1);
     }
 }
