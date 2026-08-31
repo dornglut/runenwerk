@@ -5,6 +5,8 @@ use anyhow::Context;
 use ecs::{OwnerRole, WorkQueueEnqueueError, World};
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 use engine_net::*;
+use runen_net::identity::ConnectionHandle;
+use std::collections::HashSet;
 use world_ops::SyncCursor;
 
 // engine/src/plugins/net/runtime_io.rs
@@ -159,6 +161,14 @@ where
     Ok(())
 }
 
+fn connection_is_admitted(world: &World, connection: ConnectionHandle) -> bool {
+    world
+        .resource::<RunenNetSessionProjection>()
+        .ok()
+        .and_then(|projection| projection.participant_for_connection(connection))
+        .is_some()
+}
+
 pub fn server_receive_system<TDriver>(
     mut world: WorldMut,
     mut server_inbox: WorkQueueDrainer<InboundClientMessage>,
@@ -186,6 +196,20 @@ where
     for incoming in messages {
         let connection = incoming.connection;
         let message = incoming.message;
+
+        if matches!(message, ClientMessage::Ack(_) | ClientMessage::InputFrame(_)) {
+            let Some(connection) = connection else {
+                tracing::warn!("ignoring replication input without a RunenNet connection handle");
+                continue;
+            };
+            if !connection_is_admitted(&world, connection) {
+                tracing::warn!(
+                    connection = connection.get(),
+                    "ignoring replication input from a connection not admitted by RunenNet session"
+                );
+                continue;
+            }
+        }
 
         if let ClientMessage::Ack(ack) = &message
             && let Some(connection) = connection
@@ -280,24 +304,71 @@ pub fn record_network_error(world: &mut World, message: impl Into<String>) {
     }
 }
 
-fn sync_session_projection(world: &mut World) {
-    let active_connection_count = world
+/// Reconcile engine-owned routing/status projections from RunenNet-authorized session bindings.
+///
+/// This function never decides admission or loss. The authoritative input is
+/// [`RunenNetSessionProjection`], which is itself updated only after accepted RunenNet Core
+/// lifecycle operations. Engine owner routing and diagnostics are derived outputs.
+pub fn sync_runennet_session_projection(world: &mut World) {
+    let mut active_connections = world
         .resource::<RunenNetSessionProjection>()
-        .map(RunenNetSessionProjection::active_connection_count)
-        .unwrap_or(0);
-    let connected = active_connection_count > 0;
+        .map(|projection| projection.active_connections().collect::<Vec<_>>())
+        .unwrap_or_default();
+    active_connections.sort_by_key(|connection| connection.get());
+    let active_set = active_connections.iter().copied().collect::<HashSet<_>>();
 
+    let existing_connections = world
+        .resource::<NetworkOwnerRouting>()
+        .map(|routing| routing.by_connection.keys().copied().collect::<Vec<_>>())
+        .unwrap_or_default();
+    let existing_set = existing_connections.iter().copied().collect::<HashSet<_>>();
+
+    let newly_active = active_connections
+        .iter()
+        .filter(|connection| !existing_set.contains(connection))
+        .count();
+    let mut stale_connections = existing_connections
+        .into_iter()
+        .filter(|connection| !active_set.contains(connection))
+        .collect::<Vec<_>>();
+    stale_connections.sort_by_key(|connection| connection.get());
+
+    for connection in stale_connections.iter().copied() {
+        if let Some(owner) = remove_owner_for_connection(world, connection) {
+            let _ = world.transfer_owned_targets_to_world(owner);
+        }
+    }
+    for connection in active_connections.iter().copied() {
+        let _ = ensure_owner_for_connection(world, connection, OwnerRole::Active);
+    }
+
+    let active_connection_count = active_connections.len();
+    let connected = active_connection_count > 0;
     if let Ok(status) = world.resource_mut::<NetworkSessionStatus>() {
         status.connected = connected;
         status.active_connection_count = active_connection_count;
     }
     if let Ok(health) = world.resource_mut::<ConnectionHealth>() {
         health.connected = connected;
+        health.close_events = health
+            .close_events
+            .saturating_add(stale_connections.len() as u64);
+    }
+    if newly_active > 0
+        && let Ok(diagnostics) = world.resource_mut::<NetworkDiagnostics>()
+    {
+        diagnostics.accepted_connections = diagnostics
+            .accepted_connections
+            .saturating_add(newly_active as u64);
     }
 }
 
+pub fn sync_runennet_session_projection_system(mut world: WorldMut) {
+    sync_runennet_session_projection(&mut world);
+}
+
 fn sync_net_diagnostics_view(world: &mut World) {
-    sync_session_projection(world);
+    sync_runennet_session_projection(world);
 
     let status = world.resource::<NetworkSessionStatus>().ok().cloned();
     let health = world.resource::<ConnectionHealth>().ok().cloned();
