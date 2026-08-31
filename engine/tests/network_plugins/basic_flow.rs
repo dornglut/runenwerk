@@ -5,18 +5,22 @@ fn network_client_plugin_drains_server_messages_and_flushes_client_messages() {
     app.add_plugin(NetworkClientPlugin);
     enqueue_client_inbox(
         app.world_mut(),
-        ServerMessage::Hello(Hello {
-            protocol: ProtocolVersion::new(1, 1, 1),
-            transport: TransportKind::Quic,
-        }),
+        ServerMessage::TypedPayload(TypedPayloadMessage::new(
+            "test/server",
+            "ServerProbe",
+            1,
+            vec![1],
+        )),
     )
     .expect("client inbox enqueue should succeed");
     enqueue_client_outbox(
         app.world_mut(),
-        ClientMessage::Hello(Hello {
-            protocol: ProtocolVersion::new(1, 1, 1),
-            transport: TransportKind::Quic,
-        }),
+        ClientMessage::TypedPayload(TypedPayloadMessage::new(
+            "test/client",
+            "ClientProbe",
+            1,
+            vec![2],
+        )),
     )
     .expect("client outbox enqueue should succeed");
 
@@ -38,18 +42,22 @@ fn network_server_plugin_drains_client_messages_and_flushes_server_messages() {
     app.add_plugin(NetworkServerPlugin);
     enqueue_server_inbox(
         app.world_mut(),
-        ClientMessage::Hello(Hello {
-            protocol: ProtocolVersion::new(1, 1, 1),
-            transport: TransportKind::Quic,
-        }),
+        ClientMessage::TypedPayload(TypedPayloadMessage::new(
+            "test/client",
+            "ClientProbe",
+            1,
+            vec![3],
+        )),
     )
     .expect("server inbox enqueue should succeed");
     enqueue_server_outbox_broadcast(
         app.world_mut(),
-        ServerMessage::Hello(Hello {
-            protocol: ProtocolVersion::new(1, 1, 1),
-            transport: TransportKind::Quic,
-        }),
+        ServerMessage::TypedPayload(TypedPayloadMessage::new(
+            "test/server",
+            "ServerProbe",
+            1,
+            vec![4],
+        )),
     )
     .expect("server outbox enqueue should succeed");
 
@@ -59,7 +67,7 @@ fn network_server_plugin_drains_client_messages_and_flushes_server_messages() {
 
     let diagnostics = app.world().resource::<NetworkDiagnostics>().unwrap();
     assert_eq!(diagnostics.processed_client_messages_last_frame, 1);
-    assert!(diagnostics.flushed_server_messages_last_frame >= 2);
+    assert_eq!(diagnostics.flushed_server_messages_last_frame, 1);
     assert_eq!(diagnostics.flush_count, 1);
     assert!(server_inbox_is_empty(app.world()));
     assert_eq!(server_outbox_len(app.world()), 0);
@@ -93,145 +101,43 @@ fn replication_and_prediction_plugins_run_on_fixed_update() {
 }
 
 #[test]
-fn client_bootstrap_session_queues_join_handshake() {
-    let mut app = App::headless();
-    app.add_plugin(NetworkClientPlugin);
-    let messages = {
-        let session = app
-            .world_mut()
-            .resource_mut::<ClientSessionState>()
-            .unwrap();
-        begin_client_session(
-            session,
-            ClientSessionTarget {
-                server_id: "srv-local".to_string(),
-                server_endpoint: "127.0.0.1:7000".to_string(),
-                transport: TransportKind::Quic,
-                protocol: ProtocolVersion::new(1, 1, 1),
-                server_cert_fingerprint_sha256: "a".repeat(64),
-                ticket: "ticket-1".to_string(),
-            },
-        )
-    };
-    for message in messages {
-        enqueue_client_outbox(app.world_mut(), message)
-            .expect("client outbox enqueue should succeed");
-    }
-
-    let app = app
-        .run_for_frames(1)
-        .expect("client bootstrap frame should run");
-    let session = app.world().resource::<ClientSessionState>().unwrap();
-    assert_eq!(session.phase, SessionPhase::Handshaking);
-    let diagnostics = app.world().resource::<NetworkDiagnostics>().unwrap();
-    assert_eq!(diagnostics.flushed_client_messages_last_frame, 2);
-}
-
-#[test]
-fn server_plugin_accepts_valid_join_requests() {
+fn runennet_admission_drives_engine_session_projection_and_owner_routing() {
     let mut app = App::headless();
     app.add_plugin(NetworkServerPlugin);
-    app.world_mut().insert_resource(ServerSessionConfig {
-        server_id: "srv-local".to_string(),
-        protocol: ProtocolVersion::new(1, 1, 1),
-        tick_rate_hz: 60,
-    });
-    enqueue_server_inbox(
-        app.world_mut(),
-        ClientMessage::Hello(Hello {
-            protocol: ProtocolVersion::new(1, 1, 1),
-            transport: TransportKind::Quic,
-        }),
-    )
-    .expect("server inbox enqueue should succeed");
-    enqueue_server_inbox(
-        app.world_mut(),
-        ClientMessage::JoinRequest(engine_net::JoinRequest {
-            protocol: ProtocolVersion::new(1, 1, 1),
-            server_id: "srv-local".to_string(),
-            ticket: "ticket-1".to_string(),
-        }),
-    )
-    .expect("server inbox enqueue should succeed");
+    let connection = ConnectionHandle::new(7);
+    let participant = ParticipantId::new(3);
 
-    let app = app
-        .run_for_frames(1)
-        .expect("server bootstrap frame should run");
-    let session = app
-        .world()
-        .resource::<engine_net::ServerSessionState>()
-        .unwrap();
-    assert_eq!(session.phase, SessionPhase::Active);
-    assert_eq!(session.active_connection, Some(engine_net::ConnectionId(1)));
+    install_runennet_connections(&mut app, &[(connection, participant)]);
+
+    let projection = app.world().resource::<RunenNetSessionProjection>().unwrap();
+    assert_eq!(
+        projection.participant_for_connection(connection),
+        Some(participant)
+    );
+    let status = app.world().resource::<NetworkSessionStatus>().unwrap();
+    assert!(status.connected);
+    assert_eq!(status.active_connection_count, 1);
+    let routing = app.world().resource::<NetworkOwnerRouting>().unwrap();
+    assert!(routing.by_connection.contains_key(&connection));
     let diagnostics = app.world().resource::<NetworkDiagnostics>().unwrap();
-    assert_eq!(diagnostics.processed_client_messages_last_frame, 2);
     assert_eq!(diagnostics.accepted_connections, 1);
-    assert!(diagnostics.flushed_server_messages_last_frame >= 2);
 }
 
 #[test]
-fn client_plugin_marks_session_active_on_join_accept() {
+fn reconnect_attempt_is_host_policy_not_session_authority() {
     let mut app = App::headless();
     app.add_plugin(NetworkClientPlugin);
-    enqueue_client_inbox(
-        app.world_mut(),
-        ServerMessage::Hello(Hello {
-            protocol: ProtocolVersion::new(1, 1, 1),
-            transport: TransportKind::Quic,
-        }),
-    )
-    .expect("client inbox enqueue should succeed");
-    enqueue_client_inbox(
-        app.world_mut(),
-        ServerMessage::JoinAccepted(engine_net::JoinAccepted {
-            connection_id: 7,
-            tick_rate_hz: 60,
-            join_state: engine_net::AuthoritativeJoinState {
-                lobby_id: Some("lobby-1".to_string()),
-                roster_player_codes: vec!["P1".to_string(), "P2".to_string()],
-                max_players: 4,
-                ai_fill_target: 4,
-                settings_json: Some("{\"difficulty\":\"normal\"}".to_string()),
-            },
-        }),
-    )
-    .expect("client inbox enqueue should succeed");
 
-    let app = app
-        .run_for_frames(1)
-        .expect("client receive frame should run");
-    let session = app.world().resource::<ClientSessionState>().unwrap();
-    assert_eq!(session.phase, SessionPhase::Active);
-    assert_eq!(session.connection_id, Some(engine_net::ConnectionId(7)));
-    let admission = app.world().resource::<NetworkAdmissionState>().unwrap();
-    assert_eq!(
-        admission
-            .authoritative_join
-            .as_ref()
-            .and_then(|state| state.lobby_id.as_deref()),
-        Some("lobby-1")
-    );
-    let session = app
-        .world()
-        .resource::<engine::plugins::net::NetSessionView>()
-        .unwrap();
-    assert!(session.admitted);
-    assert_eq!(session.lobby_id.as_deref(), Some("lobby-1"));
-    assert_eq!(session.roster_player_codes, vec!["P1", "P2"]);
-    assert_eq!(session.max_players, 4);
-    assert_eq!(session.ai_fill_target, 4);
-    assert_eq!(
-        session.settings_json.as_deref(),
-        Some("{\"difficulty\":\"normal\"}")
-    );
+    record_reconnect_attempt(app.world_mut(), 2);
+
+    let status = app.world().resource::<NetworkSessionStatus>().unwrap();
+    assert!(!status.connected);
+    assert_eq!(status.active_connection_count, 0);
+    assert_eq!(status.reconnect_attempt, Some(2));
+    let projection = app.world().resource::<RunenNetSessionProjection>().unwrap();
+    assert_eq!(projection.active_connection_count(), 0);
     let diagnostics = app.world().resource::<NetworkDiagnostics>().unwrap();
-    assert_eq!(diagnostics.accepted_connections, 1);
-    let runtime_status = app.world().resource::<NetworkSessionStatus>().unwrap();
-    assert_eq!(runtime_status.phase, SessionPhase::Active);
-    assert_eq!(
-        runtime_status.connection_id,
-        Some(engine_net::ConnectionId(7))
-    );
+    assert_eq!(diagnostics.reconnect_attempts, 1);
 }
 
 #[test]
