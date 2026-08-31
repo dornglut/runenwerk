@@ -1,18 +1,25 @@
 use engine::net::prelude::*;
 use engine::plugins::net::{
     ClientSnapshotReplicationState, NetworkAdmissionState, NetworkClientInbox, NetworkClientOutbox,
-    NetworkDiagnostics, NetworkOutboundQueue, NetworkRuntimeHandle, NetworkServerInbox,
+    NetworkDiagnostics, NetworkOutboundQueue, NetworkOwnerRouting, NetworkServerInbox,
     NetworkServerOutbox, NetworkSessionStatus, OutboundServerMessage, PredictionDiagnostics,
-    PredictionState as NetPredictionState, ReplicationDiagnostics, ServerSnapshotReplicationState,
-    client_inbox_is_empty, client_outbox_len, enqueue_client_inbox, enqueue_client_outbox,
-    enqueue_server_inbox, enqueue_server_inbox_from, enqueue_server_outbox_broadcast,
-    server_inbox_is_empty, server_outbox_len,
+    PredictionState as NetPredictionState, ReplicationDiagnostics, RunenNetSessionCore,
+    RunenNetSessionProjection, ServerSnapshotReplicationState, client_inbox_is_empty,
+    client_outbox_len, enqueue_client_inbox, enqueue_client_outbox, enqueue_server_inbox,
+    enqueue_server_inbox_from, enqueue_server_outbox_broadcast, record_reconnect_attempt,
+    server_inbox_is_empty, server_outbox_len, sync_runennet_session_projection,
 };
 use engine::plugins::{ScenePlugin, default_plugins};
 use engine::prelude::*;
-use runen_net::identity::ConnectionHandle;
+use runen_net::identity::{ConnectionHandle, ParticipantId, SessionId};
+use runen_net::protocol::{
+    CompatibilityOffer, NegotiatedContract, NegotiationManager, NegotiationManagerLimits,
+    NegotiationRequirements, OfferLimits, ProtocolContract, ProtocolId, ProtocolRevision,
+};
+use runen_net::session::{Session, SessionLimits};
 use serde::{Deserialize, Serialize};
 use std::io;
+use std::num::NonZeroUsize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 struct MoveCommand {
@@ -181,6 +188,70 @@ impl Plugin for NetworkHostPlugin {
         app.init_resource::<PlayerCommandBuffer>();
         app.add_plugin(NetPlugin::<TestReplicationDriver>::new(NetRole::Host));
     }
+}
+
+fn test_protocol_contract() -> ProtocolContract {
+    ProtocolContract::new(ProtocolId::new(1), ProtocolRevision::new(1))
+}
+
+fn test_compatibility_offer() -> CompatibilityOffer {
+    CompatibilityOffer::new(vec![test_protocol_contract()], vec![], vec![], None)
+}
+
+fn test_runennet_session_core() -> RunenNetSessionCore {
+    let negotiation = NegotiationManager::new(
+        OfferLimits::default(),
+        NegotiationManagerLimits::default(),
+    )
+    .expect("test negotiation limits must be valid");
+    let capacity = NonZeroUsize::new(16).expect("test session capacity must be non-zero");
+    let limits = SessionLimits::new(capacity, capacity).expect("test session limits must be valid");
+    let session = Session::new(SessionId::new(1), limits);
+    RunenNetSessionCore::new(negotiation, session)
+}
+
+fn establish_runennet_connection(
+    core: &mut RunenNetSessionCore,
+    projection: &mut RunenNetSessionProjection,
+    participant: ParticipantId,
+    connection: ConnectionHandle,
+) {
+    core.negotiation_mut()
+        .start(
+            connection,
+            test_compatibility_offer(),
+            test_compatibility_offer(),
+        )
+        .expect("compatible test negotiation must start");
+    core.negotiation_mut()
+        .propose(
+            connection,
+            NegotiatedContract::new(test_protocol_contract()),
+            &NegotiationRequirements::default(),
+        )
+        .expect("compatible test contract must be proposed");
+    core.negotiation_mut()
+        .validate_authority(connection)
+        .expect("authority validation must succeed");
+    core.negotiation_mut()
+        .validate_peer(connection)
+        .expect("peer validation must establish compatibility");
+    core.admit_established(projection, participant, connection)
+        .expect("established RunenNet connection must be admitted");
+}
+
+fn install_runennet_connections(
+    app: &mut App,
+    bindings: &[(ConnectionHandle, ParticipantId)],
+) {
+    let mut core = test_runennet_session_core();
+    let mut projection = RunenNetSessionProjection::default();
+    for (connection, participant) in bindings.iter().copied() {
+        establish_runennet_connection(&mut core, &mut projection, participant, connection);
+    }
+    app.world_mut().insert_resource(core);
+    app.world_mut().insert_resource(projection);
+    sync_runennet_session_projection(app.world_mut());
 }
 
 include!("network_plugins/basic_flow.rs");
