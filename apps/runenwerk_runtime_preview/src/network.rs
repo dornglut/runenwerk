@@ -132,7 +132,7 @@ async fn run(
 async fn run_connection(
     endpoint: &ServerEndpoint,
     endpoint_config: EndpointConfig,
-    mut command_rx: Receiver<ServerNetworkCommand>,
+    command_rx: Receiver<ServerNetworkCommand>,
     mut shutdown_rx: watch::Receiver<bool>,
     event_tx: Sender<ServerNetworkEvent>,
 ) -> Result<()> {
@@ -164,17 +164,34 @@ async fn run_connection(
         )
         .map_err(|error| anyhow!("runtime-preview compatibility activation failed: {error}"))?;
 
-    match drive_server_established(&mut connection, &mut host, &mut shutdown_rx).await? {
+    let result = drive_active_connection(
+        &mut connection,
+        &mut host,
+        command_rx,
+        &mut shutdown_rx,
+        event_tx,
+    )
+    .await;
+    finish_active_connection(connection, &mut host, result)
+}
+
+async fn drive_active_connection(
+    connection: &mut Connection,
+    host: &mut HostState,
+    mut command_rx: Receiver<ServerNetworkCommand>,
+    shutdown_rx: &mut watch::Receiver<bool>,
+    event_tx: Sender<ServerNetworkEvent>,
+) -> Result<()> {
+    match drive_server_established(connection, host, shutdown_rx).await? {
         PhaseOutcome::Complete(()) => {}
-        PhaseOutcome::ShutdownRequested => return teardown_connection(connection, &mut host),
+        PhaseOutcome::ShutdownRequested => return Ok(()),
     }
-    let (outbound, inbound) =
-        match establish_flows(&mut connection, &mut host, &mut shutdown_rx).await? {
-            PhaseOutcome::Complete(flows) => flows,
-            PhaseOutcome::ShutdownRequested => return teardown_connection(connection, &mut host),
-        };
+    let (outbound, inbound) = match establish_flows(connection, host, shutdown_rx).await? {
+        PhaseOutcome::Complete(flows) => flows,
+        PhaseOutcome::ShutdownRequested => return Ok(()),
+    };
     if *shutdown_rx.borrow() {
-        return teardown_connection(connection, &mut host);
+        return Ok(());
     }
 
     let mut closing = false;
@@ -184,25 +201,25 @@ async fn run_connection(
         tokio::select! {
             biased;
             _ = shutdown_rx.wait_for(|shutdown| *shutdown), if !closing => {
-                finish_outbound(&mut connection, &mut host, outbound)?;
+                finish_outbound(connection, host, outbound)?;
                 closing = true;
             }
             command = command_rx.recv(), if !closing => {
                 match command {
                     Some(ServerNetworkCommand::Send(event)) => {
                         let payload = encode_preview_event_bytes(&event)?;
-                        submit(&mut connection, &mut host, outbound, payload)?;
+                        submit(connection, host, outbound, payload)?;
                     }
                     None => {
-                        finish_outbound(&mut connection, &mut host, outbound)?;
+                        finish_outbound(connection, host, outbound)?;
                         closing = true;
                     }
                 }
             }
-            event = next_connection_event(&mut connection, &mut host) => {
+            event = next_connection_event(connection, host) => {
                 match event? {
                     ConnectionEvent::DataReady { key, .. } if key == inbound => {
-                        drain_commands(&mut host, inbound, &event_tx)?;
+                        drain_commands(host, inbound, &event_tx)?;
                     }
                     ConnectionEvent::FlowTerminated {
                         key,
@@ -221,7 +238,7 @@ async fn run_connection(
                     } if key == inbound => {
                         inbound_finished = true;
                         if !closing {
-                            finish_outbound(&mut connection, &mut host, outbound)?;
+                            finish_outbound(connection, host, outbound)?;
                             closing = true;
                         }
                     }
@@ -250,17 +267,25 @@ async fn run_connection(
         }
     }
 
-    teardown_connection(connection, &mut host)
+    Ok(())
 }
 
-fn teardown_connection(connection: Connection, host: &mut HostState) -> Result<()> {
+fn finish_active_connection(
+    connection: Connection,
+    host: &mut HostState,
+    result: Result<()>,
+) -> Result<()> {
     let teardown = connection.teardown(&mut host.negotiation, &mut host.delivery);
-    if let Some(error) = teardown.cleanup_error() {
-        return Err(anyhow!(
-            "runtime-preview connection cleanup failed: {error}"
-        ));
+    match (result, teardown.cleanup_error()) {
+        (Ok(()), None) => Ok(()),
+        (Err(error), None) => Err(error),
+        (Ok(()), Some(cleanup_error)) => Err(anyhow!(
+            "runtime-preview connection cleanup failed: {cleanup_error}"
+        )),
+        (Err(error), Some(cleanup_error)) => Err(anyhow!(
+            "runtime-preview connection failed: {error:#}; cleanup also failed: {cleanup_error}"
+        )),
     }
-    Ok(())
 }
 
 fn finish_outbound(
