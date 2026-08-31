@@ -56,8 +56,7 @@ pub(super) fn infer_fragment_hazards(
                             fragment,
                             &fragment.nodes()[earlier_index],
                         )?;
-                        let after =
-                            prepared_node_id(graph_label, fragment_index, fragment, later)?;
+                        let after = prepared_node_id(graph_label, fragment_index, fragment, later)?;
                         edges.entry((before, after)).or_default().extend(reasons);
                     }
                 }
