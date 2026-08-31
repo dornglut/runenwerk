@@ -10,6 +10,7 @@ use engine::plugins::net::{
 };
 use engine::plugins::{ScenePlugin, default_plugins};
 use engine::prelude::*;
+use runen_net::identity::ConnectionHandle;
 use serde::{Deserialize, Serialize};
 use std::io;
 
@@ -132,7 +133,7 @@ impl SnapshotApplyDriver for TestReplicationDriver {
 impl InputDriver for TestReplicationDriver {
     fn receive_remote_input(
         _world: &mut World,
-        _connection_id: ConnectionId,
+        _connection: ConnectionHandle,
         _tick: engine_sim::SimulationTick,
         _input: Vec<Self::Input>,
     ) -> Result<(), Self::Error> {
