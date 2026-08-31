@@ -20,11 +20,6 @@ pub(super) fn infer_fragment_hazards(
     edges: &mut DependencyEdges,
 ) -> Result<(), GpuWorkGraphError> {
     for (fragment_index, fragment) in fragments.iter().enumerate() {
-        let prepared_nodes = fragment
-            .nodes()
-            .iter()
-            .map(|node| prepared_node_id(graph_label, fragment_index, fragment, node))
-            .collect::<Result<Vec<_>, _>>()?;
         let mut accesses_by_resource =
             BTreeMap::<GpuWorkResourceId, Vec<(usize, &GpuResourceAccess)>>::new();
 
@@ -55,10 +50,15 @@ pub(super) fn infer_fragment_hazards(
                         if reasons.is_empty() {
                             continue;
                         }
-                        edges
-                            .entry((prepared_nodes[earlier_index], prepared_nodes[later_index]))
-                            .or_default()
-                            .extend(reasons);
+                        let before = prepared_node_id(
+                            graph_label,
+                            fragment_index,
+                            fragment,
+                            &fragment.nodes()[earlier_index],
+                        )?;
+                        let after =
+                            prepared_node_id(graph_label, fragment_index, fragment, later)?;
+                        edges.entry((before, after)).or_default().extend(reasons);
                     }
                 }
                 accesses_by_resource
