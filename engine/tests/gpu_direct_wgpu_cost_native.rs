@@ -9,6 +9,8 @@ mod prefix_scan;
 #[allow(dead_code)]
 #[path = "gpu_direct_wgpu_cost_native/reaction_diffusion_module.rs"]
 mod reaction_diffusion;
+#[path = "gpu_direct_wgpu_cost_native/report.rs"]
+mod report;
 
 #[cfg(debug_assertions)]
 fn require_optimized_build() {
@@ -34,7 +36,7 @@ fn retain_measurement_profile(evidence: &mut serde_json::Value) {
 }
 
 #[test]
-#[ignore = "requires a real Vulkan fallback adapter; executed by focused G6-P01 CI while the comparison portfolio is built"]
+#[ignore = "focused G6-P01 diagnostic; permanent conformance executes the retained portfolio report"]
 fn known_pattern_direct_wgpu_boundary_cost_is_measurable_and_correct() {
     let mut evidence = offscreen_draw::compare();
     retain_measurement_profile(&mut evidence);
@@ -51,7 +53,7 @@ fn known_pattern_direct_wgpu_boundary_cost_is_measurable_and_correct() {
 }
 
 #[test]
-#[ignore = "requires a real Vulkan fallback adapter; executed by focused G6-P01 CI while the comparison portfolio is built"]
+#[ignore = "focused G6-P01 diagnostic; permanent conformance executes the retained portfolio report"]
 fn prefix_scan_direct_wgpu_boundary_cost_is_measurable_and_correct() {
     let mut evidence = prefix_scan::compare();
     let timestamps = prefix_scan::timestamp::evidence(&evidence);
@@ -71,7 +73,7 @@ fn prefix_scan_direct_wgpu_boundary_cost_is_measurable_and_correct() {
 }
 
 #[test]
-#[ignore = "requires a real Vulkan fallback adapter; executed by focused G6-P01 CI while the comparison portfolio is built"]
+#[ignore = "focused G6-P01 diagnostic; permanent conformance executes the retained portfolio report"]
 fn reaction_diffusion_direct_wgpu_boundary_cost_is_measurable_and_correct() {
     let mut evidence = reaction_diffusion::compare();
     let timestamps = reaction_diffusion::timestamp::evidence(&evidence);
