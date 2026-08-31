@@ -199,11 +199,9 @@ fn test_compatibility_offer() -> CompatibilityOffer {
 }
 
 fn test_runennet_session_core() -> RunenNetSessionCore {
-    let negotiation = NegotiationManager::new(
-        OfferLimits::default(),
-        NegotiationManagerLimits::default(),
-    )
-    .expect("test negotiation limits must be valid");
+    let negotiation =
+        NegotiationManager::new(OfferLimits::default(), NegotiationManagerLimits::default())
+            .expect("test negotiation limits must be valid");
     let capacity = NonZeroUsize::new(16).expect("test session capacity must be non-zero");
     let limits = SessionLimits::new(capacity, capacity).expect("test session limits must be valid");
     let session = Session::new(SessionId::new(1), limits);
@@ -240,10 +238,7 @@ fn establish_runennet_connection(
         .expect("established RunenNet connection must be admitted");
 }
 
-fn install_runennet_connections(
-    app: &mut App,
-    bindings: &[(ConnectionHandle, ParticipantId)],
-) {
+fn install_runennet_connections(app: &mut App, bindings: &[(ConnectionHandle, ParticipantId)]) {
     let mut core = test_runennet_session_core();
     let mut projection = RunenNetSessionProjection::default();
     for (connection, participant) in bindings.iter().copied() {
