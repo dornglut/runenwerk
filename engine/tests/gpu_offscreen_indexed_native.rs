@@ -8,23 +8,7 @@ const CLEAR_PIXEL: [u8; 4] = [0, 0, 0, 255];
 const DRAW_PIXEL: [u8; 4] = [255, 0, 0, 255];
 const INDICES: [u32; 3] = [0, 1, 2];
 const ARTIFACT_NAME: &str = "known-pattern-indexed-offscreen.png";
-
-const KNOWN_PATTERN_WGSL: &str = r#"
-@vertex
-fn vs_main(@builtin(vertex_index) vertex_index: u32) -> @builtin(position) vec4f {
-    let positions = array<vec2f, 3>(
-        vec2f(-1.0, -1.0),
-        vec2f(3.0, -1.0),
-        vec2f(-1.0, 3.0),
-    );
-    return vec4f(positions[vertex_index], 0.0, 1.0);
-}
-
-@fragment
-fn fs_main() -> @location(0) vec4f {
-    return vec4f(1.0, 0.0, 0.0, 1.0);
-}
-"#;
+const KNOWN_PATTERN_WGSL: &str = include_str!("gpu_offscreen_indexed_native/known_pattern.wgsl");
 
 fn label(value: &str) -> GpuResourceLabel {
     GpuResourceLabel::new(value).unwrap()
