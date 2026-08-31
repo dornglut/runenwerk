@@ -132,7 +132,7 @@ async fn run(
 async fn run_connection(
     endpoint: &ServerEndpoint,
     endpoint_config: EndpointConfig,
-    command_rx: Receiver<ServerNetworkCommand>,
+    mut command_rx: Receiver<ServerNetworkCommand>,
     mut shutdown_rx: watch::Receiver<bool>,
     event_tx: Sender<ServerNetworkEvent>,
 ) -> Result<()> {
