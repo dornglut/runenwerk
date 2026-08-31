@@ -147,8 +147,8 @@ async fn preview_control_channel_round_trips_over_standalone_runennet() -> Resul
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn preview_control_channel_rejects_invalid_trust_material() -> Result<()> {
-    let host = match RuntimePreviewHost::spawn(RuntimePreviewConfig::headless()) {
+async fn preview_control_channel_rejects_mismatched_trusted_certificate() -> Result<()> {
+    let server = match RuntimePreviewHost::spawn(RuntimePreviewConfig::headless()) {
         Ok(host) => host,
         Err(error) if is_permission_denied(&error) => {
             eprintln!("skipping preview RunenNet trust proof: local socket bind is denied");
@@ -156,20 +156,38 @@ async fn preview_control_channel_rejects_invalid_trust_material() -> Result<()> 
         }
         Err(error) => return Err(error.context("preview server spawn failed")),
     };
-    let mut bootstrap = host.bootstrap().clone();
-    bootstrap.trusted_certificate_der_hex = "00".to_string();
-
-    match PreviewProcessConnection::connect(&bootstrap).await {
-        Ok(connection) => {
-            let server_cleanup = host.shutdown().await;
-            let client_cleanup = connection.shutdown().await;
-            return Err(anyhow!(
-                "runtime-preview connection accepted invalid bootstrap trust material; server cleanup: {server_cleanup:?}; client cleanup: {client_cleanup:?}"
-            ));
+    let other_server = match RuntimePreviewHost::spawn(RuntimePreviewConfig::headless()) {
+        Ok(host) => host,
+        Err(error) if is_permission_denied(&error) => {
+            server.shutdown().await?;
+            eprintln!("skipping preview RunenNet trust proof: second local socket bind is denied");
+            return Ok(());
         }
-        Err(_) => host.shutdown().await?,
+        Err(error) => {
+            server.shutdown().await?;
+            return Err(error.context("second preview server spawn failed"));
+        }
+    };
+
+    let mut bootstrap = server.bootstrap().clone();
+    bootstrap.trusted_certificate_der_hex = other_server
+        .bootstrap()
+        .trusted_certificate_der_hex
+        .clone();
+
+    let connect_result = PreviewProcessConnection::connect(&bootstrap).await;
+    let server_cleanup = server.shutdown().await;
+    let other_server_cleanup = other_server.shutdown().await;
+
+    if let Ok(connection) = connect_result {
+        let client_cleanup = connection.shutdown().await;
+        return Err(anyhow!(
+            "runtime-preview connection accepted a different valid trust anchor; server cleanup: {server_cleanup:?}; second server cleanup: {other_server_cleanup:?}; client cleanup: {client_cleanup:?}"
+        ));
     }
 
+    server_cleanup?;
+    other_server_cleanup?;
     Ok(())
 }
 
