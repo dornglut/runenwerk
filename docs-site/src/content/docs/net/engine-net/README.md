@@ -1,82 +1,75 @@
 ---
 title: "engine_net"
-description: "Documentation for engine_net."
+description: "Remaining engine_net replication and prediction migration evidence."
 status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-08-31
+last_reviewed: 2026-09-01
 ---
 
 # engine_net
 
-`engine_net` is the transport-agnostic networking contract crate retained for the engine consumers that have not yet migrated to standalone RunenNet.
+`engine_net` is temporary Runenwerk migration evidence for replication, prediction, protocol payloads, and network-authoring metadata that still have maintained engine consumers.
 
-## Canonical Import Surface
+It is **not** a connection, protocol-negotiation, session, admission, reconnect, or transport-runtime authority. Those reusable realtime networking semantics belong to standalone RunenNet.
 
-Use `engine_net::prelude::*` for macro + runtime contracts in one place.
+## Current Public Surface
 
-It re-exports:
+`engine_net::prelude::*` exposes the remaining migration contracts:
 
-- protocol message types
-- session/runtime commands and events
-- replication contracts (driver traits, model/interest/profile)
-- transport identities (`ConnectionId`, lanes, semantics)
-- simulation types/macros (`#[net_component]`, `#[net_entity]`)
+- snapshot, delta, ACK, input-frame, and typed-payload envelopes;
+- replication driver, model, profile, interest, mapping, and prediction contracts;
+- replication-runtime command/event evidence;
+- transport-lane and delivery-semantics vocabulary still consumed by retained replication code;
+- simulation-facing networking metadata and macros.
 
-## Multi-Client Runtime Contracts
+Connection-scoped retained state uses RunenNet `ConnectionHandle` directly. There is no `engine_net::ConnectionId` compatibility identity.
 
-`SessionRuntimeCommand` is explicit:
+## Explicitly Removed in RN8 N2
 
-- `Client(ClientMessage)`
-- `ServerToConnection { connection_id, message }`
-- `ServerBroadcast(ServerMessage)`
-- `SetDrainMode`
-- `DisconnectConnection`
-- `Shutdown`
+The active crate no longer owns or exports:
 
-This replaces the old broadcast-only server command shape.
+- `ProtocolVersion` compatibility authority;
+- `ConnectionId`;
+- `SessionPhase`;
+- client/server session state machines;
+- Hello/Join admission messages;
+- `SessionRuntimeCommand` / `SessionRuntimeEvent` lifecycle bridges;
+- client/server connection runtime implementations;
+- transport connection identity or transport realization.
 
-## Replication Contracts
+Do not restore these through aliases, forwarding modules, or wrapper state machines.
 
-Driver traits are defined in `src/replication/driver.rs`:
+## Replication Boundary
 
-- `ReplicationDriver`
-- `SnapshotApplyDriver`
-- `InputDriver`
+The retained driver traits are:
 
-`InputDriver::receive_remote_input` is sender-aware:
+- `ReplicationDriver`;
+- `SnapshotApplyDriver`;
+- `InputDriver`.
+
+`InputDriver::receive_remote_input` is connection-aware through RunenNet identity:
 
 ```rust
 fn receive_remote_input(
     world: &mut World,
-    connection_id: ConnectionId,
+    connection: ConnectionHandle,
     tick: SimulationTick,
     input: Vec<Self::Input>,
 ) -> Result<(), Self::Error>;
 ```
 
-## Implemented vs Partial
+Engine scheduling, owner routing, session projections, and product metadata live in `engine/src/plugins/net`. RunenNet owns whether a connection/participant is admitted and remains live. Retained `engine_net` replication code may consume that accepted identity but must not recreate lifecycle authority.
 
-Implemented substrate:
+## Ownership
 
-- protocol envelopes, snapshots, deltas, ACKs, cursors, and input frames;
-- profile, interest, authority, prediction, and lane vocabulary;
-- snapshot timeline helpers and runtime client/server contract helpers;
-- low-level driver traits for custom replication.
+Standalone RunenNet is the reusable realtime networking semantic authority. `runen-net-quic` is the concrete QUIC adapter where a maintained consumer requires it.
 
-Partial contracts:
-
-- declarative metadata does not yet replace driver implementations for normal gameplay;
-- lower-level server runtime ACK validation still needs sent-cursor hardening;
-- component/resource extraction and apply remain integration work.
+`engine_net` remains only until later RN8 cuts migrate its evidence-backed replication/prediction consumers. New reusable networking semantics must not be added here.
 
 Design details:
 
 - [../../design/active/net-authoritative-replication-protocol.md](../../design/active/net-authoritative-replication-protocol.md)
 - [../../design/active/ecs-net-replication-boundary.md](../../design/active/ecs-net-replication-boundary.md)
 - [../../design/active/net-declarative-replication-authoring.md](../../design/active/net-declarative-replication-authoring.md)
-
-## Ownership
-
-Standalone RunenNet is the reusable realtime networking semantic and QUIC authority. `engine_net` remains migration evidence only for current engine consumers and must not gain a replacement transport adapter or new reusable networking authority. The editor/runtime-preview channel no longer consumes this crate; later RN8 slices own migration of the remaining engine consumers before `engine_net` is deleted.

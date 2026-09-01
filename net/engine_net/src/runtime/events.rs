@@ -1,13 +1,15 @@
 use crate::protocol::{DeltaSnapshot, InputFrame, Snapshot};
 use crate::replication::ReplicationProfilePreset;
-use crate::transport::ConnectionId;
 use engine_sim::SimulationTick;
-use serde::{Deserialize, Serialize};
+use runen_net::identity::ConnectionHandle;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Retained local replication-runtime evidence.
+///
+/// ConnectionHandle is local runtime identity and deliberately has no wire/serde meaning.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReplicationRuntimeEvent {
     InputAccepted {
-        connection_id: ConnectionId,
+        connection: ConnectionHandle,
         tick: SimulationTick,
     },
     SnapshotBuilt {
@@ -17,11 +19,11 @@ pub enum ReplicationRuntimeEvent {
         tick: SimulationTick,
     },
     FullSnapshotSent {
-        connection_id: ConnectionId,
+        connection: ConnectionHandle,
         cursor: crate::replication::SnapshotCursor,
     },
     DeltaSnapshotSent {
-        connection_id: ConnectionId,
+        connection: ConnectionHandle,
         cursor: crate::replication::SnapshotCursor,
     },
     SnapshotApplied {
@@ -40,10 +42,10 @@ pub enum ReplicationRuntimeEvent {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReplicationRuntimeCommand {
     IngestInput {
-        connection_id: ConnectionId,
+        connection: ConnectionHandle,
         frame: InputFrame,
     },
     BuildSnapshot {
@@ -51,11 +53,11 @@ pub enum ReplicationRuntimeCommand {
         payload: crate::protocol::SnapshotPayload,
     },
     SendSnapshot {
-        connection_id: ConnectionId,
+        connection: ConnectionHandle,
         snapshot: Snapshot,
     },
     SendDelta {
-        connection_id: ConnectionId,
+        connection: ConnectionHandle,
         delta: DeltaSnapshot,
     },
 }

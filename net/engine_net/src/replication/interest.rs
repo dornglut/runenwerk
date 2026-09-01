@@ -1,4 +1,4 @@
-use crate::transport::ConnectionId;
+use runen_net::identity::ConnectionHandle;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -10,10 +10,10 @@ pub enum InterestPolicy {
     Distance,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct InterestContext {
-    pub viewer: ConnectionId,
-    pub owner: Option<ConnectionId>,
+    pub viewer: ConnectionHandle,
+    pub owner: Option<ConnectionHandle>,
     pub same_team: bool,
     pub within_distance: bool,
     pub in_spatial_aoi: bool,
@@ -32,12 +32,12 @@ pub fn allows_replication(policy: InterestPolicy, ctx: InterestContext) -> bool 
 #[cfg(test)]
 mod tests {
     use super::{InterestContext, InterestPolicy, allows_replication};
-    use crate::transport::ConnectionId;
+    use runen_net::identity::ConnectionHandle;
 
     #[test]
     fn owner_only_blocks_non_owner_connections() {
-        let owner = ConnectionId(5);
-        let viewer = ConnectionId(8);
+        let owner = ConnectionHandle::new(5);
+        let viewer = ConnectionHandle::new(8);
         assert!(!allows_replication(
             InterestPolicy::OwnerOnly,
             InterestContext {
@@ -55,7 +55,7 @@ mod tests {
         assert!(allows_replication(
             InterestPolicy::Global,
             InterestContext {
-                viewer: ConnectionId(1),
+                viewer: ConnectionHandle::new(1),
                 owner: None,
                 same_team: false,
                 within_distance: false,

@@ -1,11 +1,11 @@
-use super::{owner_for_connection, route_connection_targets};
+use super::{RunenNetSessionProjection, owner_for_connection, route_connection_targets};
 use crate::plugins::world::adapters::resources::RegionInvalidationJournalResource;
 use crate::plugins::world::chunks::lifecycle::WorldChunkRuntimeMapResource;
 use crate::runtime::WorldMut;
 use ecs::OwnerRole;
-use engine_net::{ConnectionId, ServerSessionState};
+use runen_net::identity::ConnectionHandle;
 use runen_spatial::ChunkId;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use world_ops::SyncCursor;
 
 const MAX_PENDING_CURSOR_MARKERS: usize = 256;
@@ -47,24 +47,24 @@ impl Default for ConnectionStreamingState {
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
 pub struct NetStreamingStateResource {
-    pub per_connection: BTreeMap<ConnectionId, ConnectionStreamingState>,
+    pub per_connection: HashMap<ConnectionHandle, ConnectionStreamingState>,
 }
 
 impl NetStreamingStateResource {
     pub fn state_for_connection_mut(
         &mut self,
-        connection_id: ConnectionId,
+        connection: ConnectionHandle,
     ) -> &mut ConnectionStreamingState {
-        self.per_connection.entry(connection_id).or_default()
+        self.per_connection.entry(connection).or_default()
     }
 
     pub fn mark_snapshot_sent(
         &mut self,
-        connection_id: ConnectionId,
+        connection: ConnectionHandle,
         cursor: SyncCursor,
         sent_full_snapshot: bool,
     ) {
-        let state = self.state_for_connection_mut(connection_id);
+        let state = self.state_for_connection_mut(connection);
         if cursor.0 >= state.last_sent_cursor.0 {
             state.last_sent_cursor = cursor;
         }
@@ -87,8 +87,8 @@ impl NetStreamingStateResource {
         }
     }
 
-    pub fn mark_snapshot_acknowledged(&mut self, connection_id: ConnectionId, cursor: SyncCursor) {
-        let state = self.state_for_connection_mut(connection_id);
+    pub fn mark_snapshot_acknowledged(&mut self, connection: ConnectionHandle, cursor: SyncCursor) {
+        let state = self.state_for_connection_mut(connection);
         if cursor.0 < state.last_ack_cursor.0 {
             return;
         }
@@ -120,17 +120,19 @@ impl NetStreamingStateResource {
         }
     }
 
-    pub fn mark_needs_full_resync(&mut self, connection_id: ConnectionId) {
-        let state = self.state_for_connection_mut(connection_id);
-        state.needs_full_resync = true;
+    pub fn mark_needs_full_resync(&mut self, connection: ConnectionHandle) {
+        self.state_for_connection_mut(connection).needs_full_resync = true;
     }
 }
 
 pub fn sync_connection_streaming_state_system(mut world: WorldMut) {
-    let Ok(session) = world.resource::<ServerSessionState>() else {
-        return;
-    };
-    let active_connections = session.active_connections.clone();
+    let mut active_connections = world
+        .resource::<RunenNetSessionProjection>()
+        .map(|projection| projection.active_connections().collect::<Vec<_>>())
+        .unwrap_or_default();
+    active_connections.sort_by_key(|connection| connection.get());
+    let active_connection_set = active_connections.iter().copied().collect::<HashSet<_>>();
+
     let (runtime_chunks, gameplay_locked_chunks) =
         if let Ok(chunk_runtime) = world.resource::<WorldChunkRuntimeMapResource>() {
             let mut runtime_chunks = BTreeSet::<ChunkId>::new();
@@ -163,36 +165,33 @@ pub fn sync_connection_streaming_state_system(mut world: WorldMut) {
     let connection_roles = active_connections
         .iter()
         .copied()
-        .map(|connection_id| {
-            let role = owner_for_connection(&world, connection_id)
+        .map(|connection| {
+            let role = owner_for_connection(&world, connection)
                 .and_then(|owner_id| world.owner_role(owner_id));
-            (connection_id, role)
+            (connection, role)
         })
-        .collect::<BTreeMap<_, _>>();
+        .collect::<HashMap<_, _>>();
 
     let owned_target_counts = active_connections
         .iter()
         .copied()
-        .map(|connection_id| {
-            let count = route_connection_targets(&world, connection_id).len();
-            (connection_id, count)
+        .map(|connection| {
+            let count = route_connection_targets(&world, connection).len();
+            (connection, count)
         })
-        .collect::<BTreeMap<_, _>>();
+        .collect::<HashMap<_, _>>();
 
     let Ok(streaming_state) = world.resource_mut::<NetStreamingStateResource>() else {
         return;
     };
     streaming_state
         .per_connection
-        .retain(|connection_id, _| active_connections.contains(connection_id));
+        .retain(|connection, _| active_connection_set.contains(connection));
 
-    for connection_id in active_connections {
-        let state = streaming_state.state_for_connection_mut(connection_id);
-        let role = connection_roles.get(&connection_id).copied().flatten();
-        let owned_target_count = owned_target_counts
-            .get(&connection_id)
-            .copied()
-            .unwrap_or(0);
+    for connection in active_connections {
+        let state = streaming_state.state_for_connection_mut(connection);
+        let role = connection_roles.get(&connection).copied().flatten();
+        let owned_target_count = owned_target_counts.get(&connection).copied().unwrap_or(0);
 
         if matches!(role, Some(OwnerRole::Observer))
             || (matches!(role, Some(OwnerRole::Active)) && owned_target_count == 0)

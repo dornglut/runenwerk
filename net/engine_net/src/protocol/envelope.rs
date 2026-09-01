@@ -1,9 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{
-    Ack, DeltaSnapshot, DisconnectReason, Hello, InputFrame, JoinAccepted, JoinRejected,
-    JoinRequest, Snapshot,
-};
+use super::{Ack, DeltaSnapshot, InputFrame, Snapshot};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunEvent {
@@ -59,26 +56,29 @@ impl TypedPayloadMessage {
     }
 }
 
+/// Retained replication/input migration envelope.
+///
+/// Connection/session negotiation and admission are owned by standalone RunenNet Core and are not
+/// represented here. This enum remains only until the later replication cut disposes the old
+/// payload family.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ClientMessage {
-    Hello(Hello),
-    JoinRequest(JoinRequest),
     InputFrame(InputFrame),
     Ack(Ack),
     TypedPayload(TypedPayloadMessage),
 }
 
+/// Retained replication/application migration envelope.
+///
+/// Handshake, join, rejection, and disconnect lifecycle variants were removed in RN8 N2; those
+/// semantics are now exclusively RunenNet Core concerns.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ServerMessage {
-    Hello(Hello),
-    JoinAccepted(JoinAccepted),
-    JoinRejected(JoinRejected),
     Snapshot(Snapshot),
     DeltaSnapshot(DeltaSnapshot),
     RunEvent(RunEvent),
     RunResult(RunResult),
     TypedPayload(TypedPayloadMessage),
-    Disconnect(DisconnectReason),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

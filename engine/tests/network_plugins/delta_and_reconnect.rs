@@ -1,4 +1,4 @@
-// Owner: Engine Networking Tests - Delta and Reconnect
+// Owner: Engine Networking Tests - Delta and Connection-Scoped Replication
 #[derive(Debug, Copy, Clone, Default, ecs::Resource)]
 struct NetworkTestFrameDelta(f32);
 
@@ -45,25 +45,8 @@ fn server_delta_snapshot_applies_cleanly_on_client() {
     let mut server = App::headless();
     server.add_plugins(default_plugins());
     server.add_plugins((ScenePlugin, NetworkServerPlugin));
-
-    enqueue_server_inbox(
-        server.world_mut(),
-        ClientMessage::Hello(Hello {
-            protocol: ProtocolVersion::new(1, 1, 1),
-            transport: TransportKind::Quic,
-        }),
-    )
-    .expect("server inbox enqueue should succeed");
-    enqueue_server_inbox(
-        server.world_mut(),
-        ClientMessage::JoinRequest(engine_net::JoinRequest {
-            protocol: ProtocolVersion::new(1, 1, 1),
-            server_id: "srv-local".to_string(),
-            ticket: "ticket-1".to_string(),
-        }),
-    )
-    .expect("server inbox enqueue should succeed");
-    let server = server.run_for_frames(1).expect("join handshake should run");
+    let connection = ConnectionHandle::new(1);
+    install_runennet_connections(&mut server, &[(connection, ParticipantId::new(1))]);
 
     let server = server
         .run_for_ticks(1)
@@ -76,17 +59,17 @@ fn server_delta_snapshot_applies_cleanly_on_client() {
         .iter()
         .find_map(|message| match message {
             OutboundServerMessage::ToConnection {
-                connection_id,
+                connection: target,
                 message: ServerMessage::Snapshot(snapshot),
-            } if *connection_id == ConnectionId(1) => Some(snapshot.clone()),
+            } if *target == connection => Some(snapshot.clone()),
             _ => None,
         })
-        .expect("server should emit a full snapshot for connection 1");
+        .expect("server should emit a full snapshot for the admitted connection");
 
     let mut server = server;
     enqueue_server_inbox_from(
         server.world_mut(),
-        Some(ConnectionId(1)),
+        Some(connection),
         ClientMessage::Ack(Ack {
             cursor: full_snapshot.cursor,
             last_received_tick: full_snapshot.tick,
@@ -119,12 +102,12 @@ fn server_delta_snapshot_applies_cleanly_on_client() {
         .iter()
         .find_map(|message| match message {
             OutboundServerMessage::ToConnection {
-                connection_id,
+                connection: target,
                 message: ServerMessage::DeltaSnapshot(snapshot),
-            } if *connection_id == ConnectionId(1) => Some(snapshot.clone()),
+            } if *target == connection => Some(snapshot.clone()),
             _ => None,
         })
-        .expect("server should emit a delta snapshot for connection 1");
+        .expect("server should emit a delta snapshot for the admitted connection");
     let authoritative_second_snapshot = server
         .world()
         .resource::<ServerSnapshotState>()
@@ -150,8 +133,11 @@ fn server_delta_snapshot_applies_cleanly_on_client() {
         .run_for_frames(1)
         .expect("client should accept the full snapshot");
 
-    enqueue_client_inbox(client.world_mut(), ServerMessage::DeltaSnapshot(delta_snapshot))
-        .expect("client inbox enqueue should succeed");
+    enqueue_client_inbox(
+        client.world_mut(),
+        ServerMessage::DeltaSnapshot(delta_snapshot),
+    )
+    .expect("client inbox enqueue should succeed");
     let client = client
         .run_for_frames(1)
         .expect("client should apply the delta snapshot");
@@ -176,32 +162,15 @@ fn server_rejects_future_snapshot_ack_without_mutating_baseline() {
     let mut server = App::headless();
     server.add_plugins(default_plugins());
     server.add_plugins((ScenePlugin, NetworkServerPlugin));
-
-    enqueue_server_inbox(
-        server.world_mut(),
-        ClientMessage::Hello(Hello {
-            protocol: ProtocolVersion::new(1, 1, 1),
-            transport: TransportKind::Quic,
-        }),
-    )
-    .expect("server inbox enqueue should succeed");
-    enqueue_server_inbox(
-        server.world_mut(),
-        ClientMessage::JoinRequest(engine_net::JoinRequest {
-            protocol: ProtocolVersion::new(1, 1, 1),
-            server_id: "srv-local".to_string(),
-            ticket: "ticket-1".to_string(),
-        }),
-    )
-    .expect("server inbox enqueue should succeed");
-    let server = server.run_for_frames(1).expect("join handshake should run");
+    let connection = ConnectionHandle::new(1);
+    install_runennet_connections(&mut server, &[(connection, ParticipantId::new(1))]);
 
     let mut server = server
         .run_for_ticks(1)
         .expect("first server replication tick should run");
     enqueue_server_inbox_from(
         server.world_mut(),
-        Some(ConnectionId(1)),
+        Some(connection),
         ClientMessage::Ack(Ack {
             cursor: SnapshotCursor(99),
             last_received_tick: SimulationTick(99),
@@ -219,7 +188,7 @@ fn server_rejects_future_snapshot_ack_without_mutating_baseline() {
     let replication = server.world().resource::<ServerSnapshotState>().unwrap();
     let checkpoint = replication
         .checkpoints
-        .get(&ConnectionId(1))
+        .get(&connection)
         .expect("connection checkpoint should exist");
     assert_eq!(checkpoint.last_ack_cursor, SnapshotCursor::default());
 
@@ -231,9 +200,9 @@ fn server_rejects_future_snapshot_ack_without_mutating_baseline() {
         matches!(
             message,
             OutboundServerMessage::ToConnection {
-                connection_id,
+                connection: target,
                 message: ServerMessage::Snapshot(snapshot),
-            } if *connection_id == ConnectionId(1)
+            } if *target == connection
                 && snapshot.cursor == SnapshotCursor(2)
                 && snapshot.last_applied == SnapshotCursor::default()
         )
@@ -243,9 +212,9 @@ fn server_rejects_future_snapshot_ack_without_mutating_baseline() {
             matches!(
                 message,
                 OutboundServerMessage::ToConnection {
-                    connection_id,
+                    connection: target,
                     message: ServerMessage::DeltaSnapshot(snapshot),
-                } if *connection_id == ConnectionId(1) && snapshot.base == SnapshotCursor(99)
+                } if *target == connection && snapshot.base == SnapshotCursor(99)
             )
         }),
         "rejected future ACK must not become a delta baseline"
@@ -257,6 +226,8 @@ fn server_tracks_lagged_input_frames_in_replication_diagnostics() {
     let mut app = App::headless();
     app.add_plugins(default_plugins());
     app.add_plugins((ScenePlugin, NetworkServerPlugin));
+    let connection = ConnectionHandle::new(1);
+    install_runennet_connections(&mut app, &[(connection, ParticipantId::new(1))]);
     app.world_mut().set_current_buffer_tick(5);
 
     let payload =
@@ -268,7 +239,7 @@ fn server_tracks_lagged_input_frames_in_replication_diagnostics() {
 
     enqueue_server_inbox_from(
         app.world_mut(),
-        Some(ConnectionId(1)),
+        Some(connection),
         ClientMessage::InputFrame(InputFrame {
             tick: SimulationTick(4),
             payload,
@@ -284,39 +255,26 @@ fn server_tracks_lagged_input_frames_in_replication_diagnostics() {
 }
 
 #[test]
-fn server_tracks_per_connection_baselines_across_reconnects() {
+fn server_tracks_per_connection_baselines_for_runennet_connections() {
     let mut app = App::headless();
     app.add_plugins(default_plugins());
     app.add_plugins((ScenePlugin, NetworkServerPlugin));
     install_network_test_clock(&mut app);
-    app.world_mut().insert_resource(ServerSessionConfig {
-        server_id: "srv-local".to_string(),
-        protocol: ProtocolVersion::new(1, 1, 1),
-        tick_rate_hz: 60,
-    });
+    let connection_a = ConnectionHandle::new(1);
+    let connection_b = ConnectionHandle::new(2);
+    install_runennet_connections(
+        &mut app,
+        &[
+            (connection_a, ParticipantId::new(1)),
+            (connection_b, ParticipantId::new(2)),
+        ],
+    );
 
-    enqueue_server_inbox(
-        app.world_mut(),
-        ClientMessage::Hello(Hello {
-            protocol: ProtocolVersion::new(1, 1, 1),
-            transport: TransportKind::Quic,
-        }),
-    )
-    .expect("server inbox enqueue should succeed");
-    enqueue_server_inbox(
-        app.world_mut(),
-        ClientMessage::JoinRequest(engine_net::JoinRequest {
-            protocol: ProtocolVersion::new(1, 1, 1),
-            server_id: "srv-local".to_string(),
-            ticket: "ticket-1".to_string(),
-        }),
-    )
-    .expect("server inbox enqueue should succeed");
-    let app = run_network_protocol_frame(app, "first join should run");
+    let app = run_network_protocol_frame(app, "RunenNet projection frame should run");
     assert_eq!(
         *app.world().resource::<SimulationTick>().unwrap(),
         SimulationTick(0),
-        "protocol-only join frame must not advance fixed time"
+        "session projection frame must not advance fixed time"
     );
     let mut app = run_network_fixed_tick(app, "first replication tick should run");
     assert_eq!(
@@ -326,47 +284,19 @@ fn server_tracks_per_connection_baselines_across_reconnects() {
 
     enqueue_server_inbox_from(
         app.world_mut(),
-        Some(ConnectionId(1)),
+        Some(connection_a),
         ClientMessage::Ack(Ack {
             cursor: SnapshotCursor(1),
             last_received_tick: SimulationTick(1),
         }),
     )
     .expect("server inbox enqueue should succeed");
-    let mut app = run_network_protocol_frame(app, "ack frame should run");
+    let app = run_network_protocol_frame(app, "ack frame should run");
     assert_eq!(
         *app.world().resource::<SimulationTick>().unwrap(),
         SimulationTick(1),
         "protocol-only ACK frame must not advance fixed time"
     );
-
-    enqueue_server_inbox(
-        app.world_mut(),
-        ClientMessage::Hello(Hello {
-            protocol: ProtocolVersion::new(1, 1, 1),
-            transport: TransportKind::Quic,
-        }),
-    )
-    .expect("server inbox enqueue should succeed");
-    enqueue_server_inbox(
-        app.world_mut(),
-        ClientMessage::JoinRequest(engine_net::JoinRequest {
-            protocol: ProtocolVersion::new(1, 1, 1),
-            server_id: "srv-local".to_string(),
-            ticket: "ticket-2".to_string(),
-        }),
-    )
-    .expect("server inbox enqueue should succeed");
-    let app = run_network_protocol_frame(app, "second join should run");
-    assert_eq!(
-        *app.world().resource::<SimulationTick>().unwrap(),
-        SimulationTick(1),
-        "protocol-only reconnect frame must not advance fixed time"
-    );
-
-    let session = app.world().resource::<engine_net::ServerSessionState>().unwrap();
-    assert!(session.active_connections.contains(&ConnectionId(1)));
-    assert!(session.active_connections.contains(&ConnectionId(2)));
 
     let app = run_network_fixed_tick(app, "second replication tick should run");
     assert_eq!(
@@ -378,9 +308,9 @@ fn server_tracks_per_connection_baselines_across_reconnects() {
         matches!(
             message,
             OutboundServerMessage::ToConnection {
-                connection_id,
+                connection,
                 message: ServerMessage::DeltaSnapshot(snapshot),
-            } if *connection_id == ConnectionId(1)
+            } if *connection == connection_a
                 && snapshot.base == SnapshotCursor(1)
                 && snapshot.cursor == SnapshotCursor(2)
         )
@@ -389,20 +319,20 @@ fn server_tracks_per_connection_baselines_across_reconnects() {
         matches!(
             message,
             OutboundServerMessage::ToConnection {
-                connection_id,
+                connection,
                 message: ServerMessage::Snapshot(snapshot),
-            } if *connection_id == ConnectionId(2) && snapshot.cursor == SnapshotCursor(2)
+            } if *connection == connection_b && snapshot.cursor == SnapshotCursor(2)
         )
     }));
 
     let replication = app.world().resource::<ServerSnapshotState>().unwrap();
     let checkpoint_a = replication
         .checkpoints
-        .get(&ConnectionId(1))
+        .get(&connection_a)
         .expect("connection 1 checkpoint should exist");
     let checkpoint_b = replication
         .checkpoints
-        .get(&ConnectionId(2))
+        .get(&connection_b)
         .expect("connection 2 checkpoint should exist");
     assert_eq!(checkpoint_a.last_ack_cursor, SnapshotCursor(1));
     assert_eq!(checkpoint_b.last_full_snapshot_cursor, SnapshotCursor(2));

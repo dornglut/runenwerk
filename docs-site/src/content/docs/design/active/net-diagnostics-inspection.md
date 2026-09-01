@@ -1,11 +1,11 @@
 ---
 title: "Net Diagnostics and Inspection Design"
-description: "Design for networking diagnostics, replication inspection, and desync triage surfaces."
+description: "Current diagnostics boundary for RunenNet lifecycle projections, retained replication/prediction state, and host-owned networking policy."
 status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-05-05
+last_reviewed: 2026-09-01
 related_roadmaps:
   - ../../net/multiplayer-replication-implementation-roadmap.md
 ---
@@ -14,84 +14,93 @@ related_roadmaps:
 
 ## Purpose
 
-This design defines diagnostics and inspection surfaces for networking,
-replication, prediction, transport, and recovery without making
-diagnostics a second source of truth.
+This design defines diagnostics and inspection surfaces for the current RunenNet/Runenwerk integration without allowing diagnostics, ECS resources, or presentation views to become a second source of networking truth.
+
+## Current Authority
+
+Standalone RunenNet owns connection/session lifecycle truth. Engine diagnostics may project successful RunenNet bindings and lifecycle outcomes, but they do not authorize admission, loss, retention, replacement, expiry, or closure.
+
+Runenwerk host/application policy owns reconnect attempts, timing, deployment, and presentation. Those diagnostics must remain distinct from RunenNet retention/recovery semantics.
+
+Retained Runenwerk replication/prediction state may continue to expose diagnostics while its maintained consumers remain.
 
 ## Implemented Substrate
 
 Implemented now:
 
-- `SnapshotDebugDump` and `DeltaDebugDump`.
-- `LaneRouteTrace`.
-- `EntityMapTrace`.
-- `ReplicationStats` in `engine_net`.
-- Engine plugin `NetworkDiagnostics`, `ReplicationDiagnostics`,
-  `PredictionDiagnostics`, `ConnectionHealth`, `RoundTripMetrics`, and
-  `NetDiagnosticsView`.
-- ECS messaging diagnostics for work queues and tick buffers.
-- Replay validation mismatch reports in `engine_history`.
-- QUIC runtime event and error surfaces.
+- retained `SnapshotDebugDump`, `DeltaDebugDump`, `LaneRouteTrace`, `EntityMapTrace`, and replication statistics;
+- engine `NetworkDiagnostics`, `ReplicationDiagnostics`, `PredictionDiagnostics`, `ConnectionHealth`, `RoundTripMetrics`, and `NetDiagnosticsView`;
+- `NetworkSessionStatus` as a read-only engine status/host-policy projection whose connected/count fields are synchronized from `RunenNetSessionProjection`;
+- engine owner-routing state reconciled from RunenNet-authorized connection bindings;
+- ECS messaging diagnostics for work queues and tick buffers;
+- replay validation mismatch reports in `engine_history`;
+- transport-specific diagnostics in the separately maintained transport consumers that actually own them.
+
+The old engine `SessionPhase`, admission state machine, JoinAccepted projection, session runtime events, and generic engine transport runtime are not diagnostics surfaces in the current architecture because that duplicate lifecycle authority has been removed.
 
 ## Partial Contracts
 
 Partial now:
 
-- Rejection reasons are counted coarsely in some layers.
-- Per-connection replication health is split between engine plugin
-  checkpoint resources and aggregate diagnostics.
-- Interest decisions are not yet explainable per entity/component.
-- Queue and lane backpressure is warning-heavy and not yet exposed as a
-  complete inspection model.
-- Replay validation does not yet include all network cursor and queue
-  state.
+- rejection reasons are counted coarsely in some retained replication layers;
+- per-connection replication health remains split between engine checkpoint resources and aggregate diagnostics;
+- interest decisions are not yet explainable per entity/component;
+- queue and retained lane pressure is warning-heavy and not yet a complete inspection model;
+- replay validation does not include all retained network cursor/queue state.
 
 ## Ownership Rules
 
 Diagnostics may observe:
 
-- runtime queues;
-- snapshot/delta payload shape;
-- lane routing;
-- ACK, resync, and correction counters;
-- session and transport events;
-- replay validation reports.
+- RunenNet-derived active connection/participant projections;
+- host-owned reconnect attempts and errors;
+- retained replication cursors, baselines, ACK/resync outcomes, prediction counters, and owner routing;
+- runtime work queues;
+- retained snapshot/delta payload shape and lane routing;
+- replay validation reports;
+- transport events only at the concrete maintained transport consumer that produces them.
 
 Diagnostics must not:
 
-- mutate authoritative gameplay state;
+- mutate RunenNet membership/lifecycle state;
+- infer admission from a presentation flag instead of RunenNet Core;
+- recreate a session phase state machine;
 - silently recover from protocol errors;
 - hide missing baselines;
-- become the only place where protocol invariants are enforced.
+- become the only place where networking invariants are enforced.
 
 ## Inspection Surfaces
 
-Recommended long-term inspection views:
+Useful current or future views may include:
 
-- session view: phase, connection, admission, reconnect status;
-- replication view: latest cursor, per-connection baseline, last sent,
-  last ACK, resync reason;
+- lifecycle projection: active RunenNet connection count/bindings plus host reconnect/error policy, without a duplicate admission/phase authority;
+- replication view: latest cursor, per-connection baseline, last sent, last ACK, and resync reason;
 - prediction view: pending frames, replayed count, corrected count;
 - interest view: inclusion/exclusion reason per entity/component;
-- transport view: lane, delivery guarantee, dropped/backpressure counts;
-- history view: checkpoint tick, hash, mismatch cause.
+- delivery view: retained lane/profile routing and pressure where still applicable;
+- history view: checkpoint tick, hash, and mismatch cause;
+- concrete transport view only in an actual transport-owning consumer.
 
-## Future Work
+## Invariants
 
-Future work:
+- Diagnostics are observational/projection state, not networking semantic authority.
+- Connected/active engine status is derived from accepted RunenNet bindings.
+- Host reconnect counters do not redefine RunenNet retention/replacement semantics.
+- Per-connection replication diagnostics use RunenNet connection identity.
+- Transport diagnostics remain with real transport consumers rather than implying a generic engine transport runtime.
 
-1. Add structured rejection reason enums.
-2. Add per-connection replication diagnostics snapshots.
-3. Add interest explanation traces.
-4. Add queue/lane pressure inspection APIs.
-5. Include stream cursors and ownership state in replay mismatch reports.
-6. Add docs for standard desync triage workflow.
+## Future Work Constraints
+
+Potential future work includes structured rejection reasons, richer per-connection replication snapshots, interest explanations, queue pressure inspection, and history correlation. Those improvements must follow the owning boundary and must not be used to pre-authorize a later RN8 migration slice.
 
 ## Validation Plan
 
-Required validation:
+For the current boundary, validate as applicable:
 
-- unit tests for counters and debug dumps;
-- engine plugin diagnostics view tests;
+- engine session-projection/diagnostics tests;
+- retained replication and prediction diagnostics tests;
+- owner-routing and connection-loss projection tests;
 - replay validation tests;
+- transport diagnostics tests only in the maintained transport consumer;
+- repository canonical validation;
 - docs validation.

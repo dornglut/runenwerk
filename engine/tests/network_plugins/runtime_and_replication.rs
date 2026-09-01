@@ -1,112 +1,24 @@
 // Owner: Engine Networking Tests - Runtime and Replication
 #[test]
-fn network_runtime_handle_events_flow_into_engine_state() {
-    let mut app = App::headless();
-    app.add_plugin(NetworkClientPlugin);
-    let (command_tx, _command_rx) = tokio::sync::mpsc::channel(16);
-    let (event_tx, event_rx) = tokio::sync::mpsc::channel(16);
-    event_tx
-        .try_send(engine_net::SessionRuntimeEvent::Connected {
-            connection_id: Some(engine_net::ConnectionId(9)),
-        })
-        .unwrap();
-    event_tx
-        .try_send(engine_net::SessionRuntimeEvent::ServerMessage(
-            ServerMessage::JoinAccepted(engine_net::JoinAccepted {
-                connection_id: 9,
-                tick_rate_hz: 60,
-                join_state: engine_net::AuthoritativeJoinState::default(),
-            }),
-        ))
-        .unwrap();
-    event_tx
-        .try_send(engine_net::SessionRuntimeEvent::RttUpdated { millis: 14 })
-        .unwrap();
-    app.world_mut()
-        .insert_resource(NetworkRuntimeHandle::new(command_tx, event_rx));
-
-    let app = app
-        .run_for_frames(1)
-        .expect("runtime bridge frame should run");
-    let status = app.world().resource::<NetworkSessionStatus>().unwrap();
-    assert!(status.connected);
-    assert_eq!(status.connection_id, Some(engine_net::ConnectionId(9)));
-    assert_eq!(status.phase, SessionPhase::Active);
-    assert_eq!(
-        app.world()
-            .resource::<RoundTripMetrics>()
-            .unwrap()
-            .last_rtt_millis,
-        Some(14)
-    );
-}
-
-#[test]
-fn reconnecting_event_updates_client_runtime_status() {
-    let mut app = App::headless();
-    app.add_plugin(NetworkClientPlugin);
-    let (command_tx, _command_rx) = tokio::sync::mpsc::channel(16);
-    let (event_tx, event_rx) = tokio::sync::mpsc::channel(16);
-    event_tx
-        .try_send(engine_net::SessionRuntimeEvent::Reconnecting { attempt: 2 })
-        .unwrap();
-    app.world_mut()
-        .insert_resource(NetworkRuntimeHandle::new(command_tx, event_rx));
-
-    let app = app
-        .run_for_frames(1)
-        .expect("runtime reconnect frame should run");
-    let status = app.world().resource::<NetworkSessionStatus>().unwrap();
-    assert!(!status.connected);
-    assert_eq!(status.reconnect_attempt, Some(2));
-    assert_eq!(status.phase, SessionPhase::Handshaking);
-    assert_eq!(
-        app.world()
-            .resource::<NetworkDiagnostics>()
-            .unwrap()
-            .reconnect_attempts,
-        1
-    );
-}
-
-#[test]
-fn server_replication_emits_scene_snapshot_payloads() {
+fn server_replication_emits_scene_snapshot_payloads_for_runennet_connection() {
     let mut app = App::headless();
     app.add_plugins(default_plugins());
     app.add_plugins((ScenePlugin, NetworkServerPlugin));
-    enqueue_server_inbox(
-        app.world_mut(),
-        ClientMessage::Hello(Hello {
-            protocol: ProtocolVersion::new(1, 1, 1),
-            transport: TransportKind::Quic,
-        }),
-    )
-    .expect("server inbox enqueue should succeed");
-    enqueue_server_inbox(
-        app.world_mut(),
-        ClientMessage::JoinRequest(engine_net::JoinRequest {
-            protocol: ProtocolVersion::new(1, 1, 1),
-            server_id: "srv-local".to_string(),
-            ticket: "ticket-1".to_string(),
-        }),
-    )
-    .expect("server inbox enqueue should succeed");
+    let connection = ConnectionHandle::new(1);
+    install_runennet_connections(&mut app, &[(connection, ParticipantId::new(1))]);
 
     let app = app
-        .run_for_frames(1)
-        .expect("server join frame should run")
         .run_for_ticks(1)
-        .expect("server tick should run");
+        .expect("server replication tick should run");
     let outbound = app.world().resource::<NetworkOutboundQueue>().unwrap();
     let message = outbound
         .server_messages()
         .iter()
         .find_map(|message| match message {
             OutboundServerMessage::ToConnection {
+                connection: target,
                 message: ServerMessage::Snapshot(snapshot),
-                ..
-            }
-            | OutboundServerMessage::Broadcast(ServerMessage::Snapshot(snapshot)) => Some(snapshot),
+            } if *target == connection => Some(snapshot),
             _ => None,
         })
         .expect("server should emit an initial full snapshot");
@@ -121,27 +33,8 @@ fn client_snapshot_application_sends_ack_and_reconciles_prediction() {
     let mut server = App::headless();
     server.add_plugins(default_plugins());
     server.add_plugins((ScenePlugin, NetworkServerPlugin));
-    enqueue_server_inbox(
-        server.world_mut(),
-        ClientMessage::Hello(Hello {
-            protocol: ProtocolVersion::new(1, 1, 1),
-            transport: TransportKind::Quic,
-        }),
-    )
-    .expect("server inbox enqueue should succeed");
-    enqueue_server_inbox(
-        server.world_mut(),
-        ClientMessage::JoinRequest(engine_net::JoinRequest {
-            protocol: ProtocolVersion::new(1, 1, 1),
-            server_id: "srv-local".to_string(),
-            ticket: "ticket-1".to_string(),
-        }),
-    )
-    .expect("server inbox enqueue should succeed");
-    let server = server
-        .run_for_frames(1)
-        .expect("server join frame should run");
-    let mut server = server;
+    let connection = ConnectionHandle::new(1);
+    install_runennet_connections(&mut server, &[(connection, ParticipantId::new(1))]);
     server
         .world_mut()
         .resource_mut::<PlayerCommandBuffer>()
@@ -159,12 +52,9 @@ fn client_snapshot_application_sends_ack_and_reconciles_prediction() {
         .iter()
         .find_map(|message| match message {
             OutboundServerMessage::ToConnection {
+                connection: target,
                 message: ServerMessage::Snapshot(snapshot),
-                ..
-            }
-            | OutboundServerMessage::Broadcast(ServerMessage::Snapshot(snapshot)) => {
-                Some(snapshot.clone())
-            }
+            } if *target == connection => Some(snapshot.clone()),
             _ => None,
         })
         .expect("server should emit a snapshot");

@@ -1,11 +1,11 @@
 ---
 title: "ECS Net Replication Boundary Design"
-description: "Design for separating ECS events, tick-buffered input, replicated state, and network protocol contracts."
+description: "Design for separating ECS events, tick-buffered input, retained replicated state, and RunenNet-authorized connection identity."
 status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-05-05
+last_reviewed: 2026-09-01
 related_roadmaps:
   - ../../net/multiplayer-replication-implementation-roadmap.md
 ---
@@ -14,50 +14,54 @@ related_roadmaps:
 
 ## Purpose
 
-This design defines the boundary between ECS runtime primitives and
-network replication. It prevents net code from duplicating ECS runtime
-behavior and prevents ECS events from becoming the network truth path.
+This design defines the boundary between Runenwerk ECS runtime primitives and retained network replication integration. It prevents networking code from duplicating ECS runtime behavior and prevents ECS events or engine projections from becoming networking lifecycle truth.
 
 ## Core Split
 
-Multiplayer uses separate flows:
+Multiplayer integration keeps separate flows:
 
-- replicated state: authoritative server state sent by snapshots/deltas;
-- input streams: tick-buffered client intent sent to authority;
-- ECS events: local fan-out notifications and optional runtime signals;
-- runtime bridge queues: transport/session messages between engine and
-  runtime adapters.
+- replicated state: authoritative simulation state represented by retained snapshot/delta contracts;
+- input streams: tick-buffered client intent applied by the authoritative simulation;
+- ECS events: local fan-out notifications and runtime signals;
+- replication/application work queues: engine-local staging for retained network payloads;
+- RunenNet lifecycle state: compatibility, participant membership, connection binding/loss/replacement, and lifecycle identity owned by standalone RunenNet Core.
 
-These flows may interact, but they must not collapse into one generic
-event system.
+These flows may interact, but they must not collapse into one generic event system or a second Runenwerk session state machine.
 
 ## Implemented Substrate
 
 Implemented now:
 
-- ECS `Broadcast*`, `WorkQueue*`, and `TickBuffer*` primitives.
-- Engine net plugin work queues for inbound/outbound network messages.
-- Tick-buffer registration for driver input type.
-- `ReplicationExtractionFilter` over ECS structural deltas.
-- `ReplicationRegistry` and component/entity/resource descriptors.
-- `SnapshotApplyDriver`, `InputDriver`, and `ReplicationDriver` escape
-  hatches for custom integration.
-- ECS ownership and controller routing helpers used by the engine net
-  plugin.
+- ECS `Broadcast*`, `WorkQueue*`, and `TickBuffer*` primitives;
+- engine networking work queues for retained replication/application payload staging;
+- tick-buffer registration for driver input types;
+- `ReplicationExtractionFilter` over ECS structural deltas;
+- `ReplicationRegistry` and component/entity/resource descriptors;
+- `SnapshotApplyDriver`, `InputDriver`, and `ReplicationDriver` escape hatches for custom integration;
+- ECS ownership and controller routing helpers used by the engine networking integration;
+- `RunenNetSessionProjection` as a read-only engine projection of successful RunenNet bindings;
+- RunenNet `ConnectionHandle` as the connection identity used by owner routing and retained replication state.
+
+There is no engine session/runtime bridge that owns admission, connection lifetime, or transport teardown semantics.
 
 ## Partial Contracts
 
 Partial now:
 
-- Standardized component payload extraction is not yet the normal
-  gameplay-facing path.
-- Resource snapshot extraction remains partial.
-- Component metadata exists, but runtime extraction/application still
-  depends on custom drivers.
-- Generic interest and ownership resolvers are available as contracts,
-  but not yet a complete declarative ECS replication pipeline.
+- standardized component payload extraction is not yet the normal gameplay-facing path;
+- resource snapshot extraction remains partial;
+- component metadata exists, but runtime extraction/application still depends on custom drivers;
+- generic interest and ownership resolvers exist as retained migration contracts, but not yet as a complete declarative ECS replication pipeline;
+- the eventual Replicated View boundary remains separately sequenced and must not be frozen by this design.
 
 ## Ownership Rules
+
+Standalone RunenNet owns:
+
+- connection identity;
+- compatibility negotiation;
+- session/participant membership and connection binding/lifecycle;
+- reusable networking semantics adopted by later authorized RN8 cuts.
 
 ECS/domain crates own:
 
@@ -67,51 +71,53 @@ ECS/domain crates own:
 - event, queue, and tick-buffer primitives;
 - ownership target state.
 
-`engine_net` owns:
-
-- protocol contracts;
-- replication metadata vocabulary;
-- interest/profile vocabulary;
-- transport-agnostic runtime contracts.
+Retained `engine_net` currently owns only evidence-backed replication/prediction migration contracts still required by maintained consumers. It must not own connection/session lifecycle or transport runtime semantics.
 
 `engine/src/plugins/net` owns:
 
-- schedule/resource bridge;
-- driver invocation;
-- input buffering and replay integration.
+- schedule/resource integration;
+- read-only projection of accepted RunenNet bindings into owner routing and diagnostics;
+- retained driver invocation;
+- input buffering and replay integration;
+- retained replication work queues and per-connection state.
 
 Gameplay/app modules own:
 
 - component semantics;
 - input meaning;
-- ownership policies beyond generic connection routing;
+- ownership and relevancy policy beyond generic integration routing;
 - state correction and smoothing.
 
 ## Negative Doctrine
 
-- Do not serialize raw ECS entity IDs over the network.
+- Do not serialize raw ECS entity IDs as reusable network identity.
 - Do not use ECS events as the primary source of replicated truth.
-- Do not copy ECS work queues or tick buffers into `engine_net`.
-- Do not put game-specific component semantics in `engine_net`.
+- Do not copy ECS work queues or tick buffers into reusable networking semantics.
+- Do not put game-specific component semantics in RunenNet or retained `engine_net`.
 - Do not make transport own extraction or interest policy.
+- Do not use `RunenNetSessionProjection` to authorize RunenNet lifecycle mutations; it is derived state only.
+- Do not recreate deleted engine session/runtime authority through generic bridge or facade types.
 
-## Future Work
+## Future Work Constraints
 
-Future work:
+Potential future replication work includes standard ECS extraction/apply and lower-boilerplate authoring, but its owning RN8 slice must be derived from current authority when prerequisites permit it.
 
-1. Define a standard component extraction/apply bridge using existing ECS
-   structural deltas.
-2. Add resource snapshot and delta contracts where justified.
-3. Add metadata lookup APIs that are ergonomic for extractors and tools.
-4. Add tests proving ECS events, input streams, and replicated state stay
-   separate.
-5. Add examples for common component replication without custom drivers.
+Any later change must preserve:
+
+- RunenNet lifecycle authority;
+- ECS/scheduler/gameplay ownership in Runenwerk;
+- separation of input, replicated state, ECS events, and diagnostics;
+- the independently sequenced RunenECS/Replicated View program.
+
+This design does not authorize or sequence the next RN8 slice.
 
 ## Validation Plan
 
-Required validation:
+For the current boundary, validate as applicable:
 
 - ECS structural extraction tests;
-- engine net plugin input stream tests;
+- engine networking input/replication tests;
+- RunenNet admission/projection/owner-routing tests;
 - replication metadata registry tests;
+- repository canonical validation;
 - docs validation after boundary changes.
