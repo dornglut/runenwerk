@@ -1,4 +1,3 @@
-use crate::transport::lanes::{TransportLane, lane_for_profile};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -92,25 +91,5 @@ impl ReplicationProfile {
                 priority: BandwidthPriority::Low,
             },
         }
-    }
-
-    pub fn default_lane(&self) -> TransportLane {
-        lane_for_profile(self.preset)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{ReplicationProfile, ReplicationProfilePreset};
-    use crate::transport::TransportLane;
-
-    #[test]
-    fn profile_presets_map_to_expected_lanes() {
-        let predicted =
-            ReplicationProfile::from_preset(ReplicationProfilePreset::PredictedMovement);
-        assert_eq!(predicted.default_lane(), TransportLane::UnreliableSequenced);
-
-        let reliable = ReplicationProfile::from_preset(ReplicationProfilePreset::ReliableState);
-        assert_eq!(reliable.default_lane(), TransportLane::Reliable);
     }
 }
