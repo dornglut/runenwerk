@@ -328,7 +328,6 @@ fn apply_global_prepared_initial_content(
             };
             return Err(GpuWorkGraphError::invalid(
                 "apply prepared initial-content simulation effect",
-                graph_label,
                 GpuWorkGraphErrorContext::new(
                     graph_label,
                     None,
