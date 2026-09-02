@@ -66,6 +66,7 @@ pub struct GpuPreparedWorkGraph {
     outputs: Vec<GpuWorkOutput>,
     diagnostics: Vec<GpuPreparedWorkDiagnostic>,
     initial_content: Vec<GpuPreparedInitialContent>,
+    retained_seed: Vec<GpuInitialCoverage>,
 }
 
 impl GpuPreparedWorkGraph {
@@ -152,6 +153,20 @@ impl GpuPreparedWorkGraph {
             }
         }
 
+        let retained_seed = retained_coverage
+            .iter()
+            .filter(|coverage| {
+                let seed_storage = canonical_storage_resource(coverage.resource());
+                storage_resources
+                    .get(&coverage.storage_resource)
+                    .is_some_and(|current_storage| {
+                        current_storage.common().lifetime().is_retained()
+                            && seed_storage.common().lifetime().is_retained()
+                    })
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+
         let output_bindings = collect_output_bindings(graph_label, &fragments)?;
         let (import_bindings, relations) = bind_imports(graph_label, &fragments, &output_bindings)?;
         validate_boundary_access_intents(graph_label, &fragments)?;
@@ -172,7 +187,7 @@ impl GpuPreparedWorkGraph {
             &fragment_order,
             &import_bindings,
             &initial_content,
-            retained_coverage,
+            &retained_seed,
         )?;
 
         let mut requirements = GpuCapabilityRequirements::new();
@@ -228,7 +243,7 @@ impl GpuPreparedWorkGraph {
             &node_locations,
             &topological_order,
             &initial_content,
-            retained_coverage,
+            &retained_seed,
         )?;
         let dependencies = inferred_edges
             .into_iter()
@@ -267,6 +282,7 @@ impl GpuPreparedWorkGraph {
             outputs,
             diagnostics,
             initial_content,
+            retained_seed,
         })
     }
 
@@ -304,6 +320,10 @@ impl GpuPreparedWorkGraph {
 
     pub(crate) fn initial_content(&self) -> &[GpuPreparedInitialContent] {
         &self.initial_content
+    }
+
+    pub(crate) fn retained_seed(&self) -> &[GpuInitialCoverage] {
+        &self.retained_seed
     }
 }
 
