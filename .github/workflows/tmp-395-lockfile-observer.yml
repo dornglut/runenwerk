@@ -1,0 +1,29 @@
+name: Temporary #395 Lockfile Observer
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  observe-lockfile:
+    if: github.head_ref == 'fix/395-runennet-peer-close'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal
+      - name: Resolve branch manifest without changing dependencies unnecessarily
+        run: cargo +stable metadata --format-version 1 > /dev/null
+      - name: Show lockfile-only delta
+        run: git diff -- Cargo.lock
+      - name: Upload generated lockfile
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: runenwerk-395-cargo-lock
+          path: Cargo.lock
+          retention-days: 1
