@@ -129,7 +129,7 @@ pub(crate) fn evidence() -> Value {
     let growth = growth_summary(&smaller, &larger);
 
     json!({
-        "purpose": "G6 remaining-host-cost characterization after accepted graph hazard correction",
+        "purpose": "G6 retained host-cost characterization at the measured repository revision",
         "measurement_boundary": {
             "path": "existing canonical RunenGPU reaction-diffusion authoring -> GpuPreparedWorkGraph::prepare -> prepare_submission -> submit_prepared -> completion/readback",
             "production_instrumentation_added": false,
@@ -142,7 +142,8 @@ pub(crate) fn evidence() -> Value {
             "measured_samples_per_envelope": MEASURED_SAMPLES,
         },
         "source_audit": {
-            "authoring_transaction_snapshot_per_lexical_operation": true,
+            "authoring_whole_builder_snapshot_per_lexical_operation": false,
+            "authoring_transaction_mechanism": "bounded newly inserted resource journal with rollback on failed lexical insertion",
             "prepare_node_access_membership_scans_fragment_resources": true,
             "canonical_prepare_initialization_passes": [
                 "validate_fragment_initialization",
@@ -150,7 +151,7 @@ pub(crate) fn evidence() -> Value {
             ],
             "retained_workload_fragment_count": 1,
             "cross_fragment_hazard_path_exercised": false,
-            "status": "observations to correlate with retained timings; not optimization authorization",
+            "status": "observations at the measured repository revision; correction sequencing remains issue-owned",
         },
         "envelopes": [smaller, larger],
         "larger_over_smaller": growth,
