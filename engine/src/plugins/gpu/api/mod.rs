@@ -38,7 +38,9 @@ pub use dispatch::*;
 pub use errors::*;
 pub(crate) use errors::{GpuWorkAuthoringErrorContext, GpuWorkGraphErrorContext};
 pub use execution::*;
-pub(crate) use graph::GpuPreparedInitialContent;
+pub(crate) use graph::{
+    GpuPreparedInitialContent, initial_coverage_contains, initial_coverage_intersection,
+};
 pub use graph::*;
 pub use handles::*;
 pub use operation::{GpuRenderOperation, GpuWorkNodeKind, GpuWorkOperation};
