@@ -1,6 +1,4 @@
-use super::{
-    envelope_json, label, retained, runengpu_context, runengpu_envelope_sample,
-};
+use super::{envelope_json, label, retained, runengpu_context, runengpu_envelope_sample};
 use crate::common::{MEASURED_SAMPLES, Measurements, WARMUP_SAMPLES};
 use engine::plugins::gpu::{GpuContext, GpuPreparedWorkGraph};
 use serde_json::{Value, json};
