@@ -4,7 +4,10 @@ pub mod api;
 mod backend;
 
 pub use api::*;
-pub(crate) use api::{GpuPreparedInitialContent, GpuWorkAuthoringErrorContext};
+pub(crate) use api::{
+    GpuPreparedInitialContent, GpuWorkAuthoringErrorContext, initial_coverage_contains,
+    initial_coverage_intersection,
+};
 
 #[cfg(test)]
 mod tests {
