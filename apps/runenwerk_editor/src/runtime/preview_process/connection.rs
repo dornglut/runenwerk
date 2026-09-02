@@ -350,6 +350,18 @@ async fn drive_active_connection(
                         if key == inbound || key == outbound => {
                             return Err(anyhow!("runtime-preview delivery flow terminated: {cause:?}"));
                         }
+                    ConnectionEvent::PeerClosed { connection: handle }
+                        if handle == CLIENT_CONNECTION => {
+                            // NO_ERROR is connection-lifecycle evidence, not proof that every flow
+                            // emitted its normal termination event first. Consuming teardown below
+                            // retains any residual delivery-obligation evidence.
+                            return Ok(());
+                        }
+                    ConnectionEvent::PeerClosed { connection: handle } => {
+                        return Err(anyhow!(
+                            "runtime-preview peer close used the wrong connection: {handle:?}"
+                        ));
+                    }
                     ConnectionEvent::IncomingFlowRequested { request } => {
                         connection
                             .reject_incoming_flow(request, FlowRejectionReason::ResourceLimit)
@@ -365,7 +377,6 @@ async fn drive_active_connection(
                     | ConnectionEvent::OutboundFlowRejected { .. }
                     | ConnectionEvent::DataReady { .. }
                     | ConnectionEvent::FlowTerminated { .. } => {}
-                    _ => {}
                 }
             }
         }
@@ -385,7 +396,30 @@ fn finish_active_connection(
     result: Result<()>,
 ) -> Result<()> {
     let teardown = connection.teardown(&mut host.negotiation, &mut host.delivery);
-    match (result, teardown.cleanup_error()) {
+    let cleanup_error = teardown.cleanup_error();
+
+    if let Some(termination) = teardown
+        .flow_terminations()
+        .iter()
+        .find(|termination| termination.reliable_obligation_failed)
+    {
+        let teardown_error = match cleanup_error {
+            Some(cleanup_error) => anyhow!(
+                "runtime-preview reliable delivery obligation failed during connection teardown: {termination:?}; cleanup also failed: {cleanup_error}"
+            ),
+            None => anyhow!(
+                "runtime-preview reliable delivery obligation failed during connection teardown: {termination:?}"
+            ),
+        };
+        return match result {
+            Ok(()) => Err(teardown_error),
+            Err(error) => Err(anyhow!(
+                "runtime-preview client failed: {error:#}; teardown also failed: {teardown_error:#}"
+            )),
+        };
+    }
+
+    match (result, cleanup_error) {
         (Ok(()), None) => Ok(()),
         (Err(error), None) => Err(error),
         (Ok(()), Some(cleanup_error)) => Err(anyhow!(
