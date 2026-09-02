@@ -106,6 +106,25 @@ jobs:
           path: ${{ runner.temp }}/runengpu-proof-artifacts/graph-scale/report.json
           if-no-files-found: error
 
+      - name: Run G6 host-cost graph preparation phase characterization
+        env:
+          RUST_BACKTRACE: '1'
+          RUNEN_GPU_PROOF_ARTIFACT_DIR: ${{ runner.temp }}/runengpu-proof-artifacts
+          RUNEN_GPU_PROOF_REVISION: ${{ steps.revision.outputs.expected_revision }}
+        run: |
+          set -euo pipefail
+          cargo +stable test --release -p engine --lib \
+            graph_preparation_phase_characterization_retains_report \
+            --locked -- --ignored --nocapture --test-threads=1
+          test -s "${RUNEN_GPU_PROOF_ARTIFACT_DIR}/graph-preparation-phases/report.json"
+
+      - name: Retain G6 host-cost graph preparation phase report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: runengpu-graph-preparation-phases-${{ steps.revision.outputs.expected_revision }}
+          path: ${{ runner.temp }}/runengpu-proof-artifacts/graph-preparation-phases/report.json
+          if-no-files-found: error
+
       - name: Install Mesa Vulkan fallback and virtual X display
         run: |
           set -euo pipefail
