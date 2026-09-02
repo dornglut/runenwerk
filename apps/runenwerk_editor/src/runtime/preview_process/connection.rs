@@ -48,6 +48,7 @@ const CLIENT_OUTBOUND_COMMANDS: u64 = 1;
 const CLIENT_INBOUND_EVENTS: u64 = 2;
 const NETWORK_CHANNEL_CAPACITY: usize = 128;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug)]
 pub enum PreviewConnectionEvent {
@@ -265,6 +266,7 @@ async fn run_connection(
         .map_err(|error| anyhow!("runtime-preview compatibility activation failed: {error}"))?;
 
     let result = drive_active_connection(
+        endpoint,
         &mut connection,
         &mut host,
         command_rx,
@@ -276,6 +278,7 @@ async fn run_connection(
 }
 
 async fn drive_active_connection(
+    endpoint: &ClientEndpoint,
     connection: &mut Connection,
     host: &mut HostState,
     mut command_rx: Receiver<PreviewCommandEnvelope>,
@@ -370,6 +373,9 @@ async fn drive_active_connection(
         }
     }
 
+    tokio::time::timeout(SHUTDOWN_TIMEOUT, endpoint.wait_idle())
+        .await
+        .map_err(|_| anyhow!("timed out waiting for runtime-preview server endpoint shutdown"))?;
     Ok(())
 }
 
