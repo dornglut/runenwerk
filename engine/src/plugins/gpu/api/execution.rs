@@ -1,4 +1,7 @@
-use super::{GpuContextAffinity, GpuReadbackBytes, GpuReadbackId, GpuSurfaceLeaseError};
+use super::{
+    GpuContextAffinity, GpuInitialCoverage, GpuReadbackBytes, GpuReadbackId, GpuResourceRef,
+    GpuSurfaceLeaseError,
+};
 use core::fmt;
 use core::num::{NonZeroU64, NonZeroUsize};
 use std::sync::{Arc, Mutex, Weak};
@@ -132,6 +135,62 @@ impl GpuSubmissionId {
 impl fmt::Display for GpuSubmissionId {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.get().fmt(formatter)
+    }
+}
+
+/// Opaque current-content continuity for one retained logical storage resource.
+///
+/// This fact deliberately does not imply initialized coverage or reconstructability.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GpuOpaqueContentContinuity {
+    /// No completed retained-state write has established coherent current content.
+    Unestablished,
+    /// The last successfully completed retained-state write establishing current content.
+    Established {
+        last_completed_write: GpuSubmissionId,
+    },
+    /// A possibly executed failed/lost write made current content indeterminate.
+    Unknown,
+}
+
+/// Point-in-time retained-state continuity owned by one context/device generation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GpuRetainedResourceContinuity {
+    affinity: GpuContextAffinity,
+    resource: GpuResourceRef,
+    initialized_coverage: Option<GpuInitialCoverage>,
+    opaque_content: GpuOpaqueContentContinuity,
+}
+
+impl GpuRetainedResourceContinuity {
+    pub(crate) fn new(
+        affinity: GpuContextAffinity,
+        resource: GpuResourceRef,
+        initialized_coverage: Option<GpuInitialCoverage>,
+        opaque_content: GpuOpaqueContentContinuity,
+    ) -> Self {
+        Self {
+            affinity,
+            resource,
+            initialized_coverage,
+            opaque_content,
+        }
+    }
+
+    pub const fn affinity(&self) -> GpuContextAffinity {
+        self.affinity
+    }
+
+    pub fn resource(&self) -> &GpuResourceRef {
+        &self.resource
+    }
+
+    pub fn initialized_coverage(&self) -> Option<&GpuInitialCoverage> {
+        self.initialized_coverage.as_ref()
+    }
+
+    pub const fn opaque_content(&self) -> GpuOpaqueContentContinuity {
+        self.opaque_content
     }
 }
 
@@ -379,6 +438,7 @@ impl std::error::Error for GpuSubmissionPreparationError {}
 pub enum GpuSubmissionRejectionKind {
     ForeignContext,
     StaleDeviceGeneration,
+    RetainedContinuityChanged,
     PreparedRecordUnavailable,
     InFlightCapacityExceeded,
     UploadBytesInFlightExceeded,
