@@ -365,6 +365,7 @@ fn graph_preparation_phase_characterization_retains_report() {
     let revision = std::env::var("RUNEN_GPU_PROOF_REVISION")
         .expect("retained #393 characterization must declare the exact repository revision");
     assert!(!revision.trim().is_empty());
+    let _surface_work_remains_compiled = retained::surface_work;
 
     let sources = retained::admitted_sources();
     let evidence = retained::ENVELOPES
