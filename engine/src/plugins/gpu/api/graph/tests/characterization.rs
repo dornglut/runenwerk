@@ -6,8 +6,8 @@ use super::super::{
     },
     coverage::{canonical_storage_resource, storage_identity},
     hazards::{
-        DependencyEdges, add_explicit_orders, infer_cross_fragment_hazards,
-        infer_fragment_hazards, topological_node_order,
+        DependencyEdges, add_explicit_orders, infer_cross_fragment_hazards, infer_fragment_hazards,
+        topological_node_order,
     },
     identity::GpuPreparedWorkNodeId,
     initial_content::derive_prepared_initial_content,
@@ -174,11 +174,14 @@ fn measure_envelope(
         .map(|node| node.accesses().len())
         .sum::<usize>();
 
-    let prepared = GpuPreparedWorkGraph::prepare(graph_resource_label.clone(), fragments.clone())
-        .unwrap();
+    let prepared =
+        GpuPreparedWorkGraph::prepare(graph_resource_label.clone(), fragments.clone()).unwrap();
     assert_eq!(prepared.nodes().len(), node_count);
     assert_eq!(prepared.topological_order().len(), node_count);
-    assert_eq!(readback_ids.len(), usize::try_from(envelope.frames).unwrap());
+    assert_eq!(
+        readback_ids.len(),
+        usize::try_from(envelope.frames).unwrap()
+    );
 
     let node_locations = prepared_node_locations(&fragments);
     let storage_resources = normalized_storage_resources(&fragments);
@@ -192,13 +195,8 @@ fn measure_envelope(
 
     let mut dependency_edges = DependencyEdges::new();
     infer_fragment_hazards(&graph_label, &fragments, &mut dependency_edges).unwrap();
-    infer_cross_fragment_hazards(
-        &graph_label,
-        &fragments,
-        &relations,
-        &mut dependency_edges,
-    )
-    .unwrap();
+    infer_cross_fragment_hazards(&graph_label, &fragments, &relations, &mut dependency_edges)
+        .unwrap();
     add_explicit_orders(&graph_label, &fragments, &mut dependency_edges).unwrap();
     assert_eq!(dependency_edges.len(), prepared.dependencies().len());
     let topological_order =
@@ -263,16 +261,12 @@ fn measure_envelope(
     );
     timings.insert(
         "dependency_derivation",
-        measure_with_setup(
-            DependencyEdges::new,
-            |mut edges| {
-                infer_fragment_hazards(&graph_label, black_box(&fragments), &mut edges).unwrap();
-                infer_cross_fragment_hazards(&graph_label, &fragments, &relations, &mut edges)
-                    .unwrap();
-                add_explicit_orders(&graph_label, &fragments, &mut edges).unwrap();
-                black_box(edges.len());
-            },
-        ),
+        measure_with_setup(DependencyEdges::new, |mut edges| {
+            infer_fragment_hazards(&graph_label, black_box(&fragments), &mut edges).unwrap();
+            infer_cross_fragment_hazards(&graph_label, &fragments, &relations, &mut edges).unwrap();
+            add_explicit_orders(&graph_label, &fragments, &mut edges).unwrap();
+            black_box(edges.len());
+        }),
     );
     timings.insert(
         "node_topological_order",
