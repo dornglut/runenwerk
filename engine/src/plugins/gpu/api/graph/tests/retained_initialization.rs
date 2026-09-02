@@ -1,9 +1,6 @@
 use super::support::*;
 
-fn retained_buffer(
-    allocator: &mut GpuWorkResourceIdAllocator,
-    name: &str,
-) -> GpuBufferHandle {
+fn retained_buffer(allocator: &mut GpuWorkResourceIdAllocator, name: &str) -> GpuBufferHandle {
     let resource_label = label(name);
     let common = GpuResourceCommon::owned(
         resource_label.clone(),
@@ -18,11 +15,7 @@ fn retained_buffer(
             GpuBufferDescriptor::new(
                 common,
                 64,
-                GpuBufferUsages::new(
-                    &resource_label,
-                    [GpuBufferUsage::Storage],
-                )
-                .unwrap(),
+                GpuBufferUsages::new(&resource_label, [GpuBufferUsage::Storage]).unwrap(),
                 GpuBufferInitialization::Uninitialized,
             )
             .unwrap(),
@@ -35,11 +28,8 @@ fn retained_coverage_seeds_canonical_read_validation_and_initial_summary() {
     let mut allocator = allocator();
     let buffer = retained_buffer(&mut allocator, "retained history");
     let initialized = GpuBufferRange::new(&buffer, 0, 16).unwrap();
-    let retained = GpuInitialCoverage::buffer(
-        &buffer,
-        [GpuBufferCoverage::dense(initialized)],
-    )
-    .unwrap();
+    let retained =
+        GpuInitialCoverage::buffer(&buffer, [GpuBufferCoverage::dense(initialized)]).unwrap();
 
     let mut fragment = builder("retained reader");
     fragment
@@ -56,12 +46,13 @@ fn retained_coverage_seeds_canonical_read_validation_and_initial_summary() {
     );
     let fragment = fragment.finish().unwrap();
 
-    let unseeded = GpuPreparedWorkGraph::prepare(
-        label("unseeded retained read"),
-        [fragment.clone()],
-    )
-    .unwrap_err();
-    assert_eq!(unseeded.cause(), GpuWorkGraphCause::ReadBeforeInitialization);
+    let unseeded =
+        GpuPreparedWorkGraph::prepare(label("unseeded retained read"), [fragment.clone()])
+            .unwrap_err();
+    assert_eq!(
+        unseeded.cause(),
+        GpuWorkGraphCause::ReadBeforeInitialization
+    );
 
     let prepared = GpuPreparedWorkGraph::prepare_with_retained_coverage(
         label("seeded retained read"),
@@ -97,11 +88,9 @@ fn retained_seed_cannot_initialize_current_transient_storage_with_equal_identity
 
     let current_range = GpuBufferRange::new(&transient, 0, 16).unwrap();
     let retained_range = GpuBufferRange::new(&retained_source, 0, 16).unwrap();
-    let invalid_seed = GpuInitialCoverage::buffer(
-        &retained_source,
-        [GpuBufferCoverage::dense(retained_range)],
-    )
-    .unwrap();
+    let invalid_seed =
+        GpuInitialCoverage::buffer(&retained_source, [GpuBufferCoverage::dense(retained_range)])
+            .unwrap();
 
     let mut fragment = builder("transient reader");
     fragment
@@ -133,11 +122,8 @@ fn generic_shader_write_does_not_expand_retained_initialized_coverage() {
     let retained_range = GpuBufferRange::new(&buffer, 0, 16).unwrap();
     let shader_written = GpuBufferRange::new(&buffer, 16, 16).unwrap();
     let combined_read = GpuBufferRange::new(&buffer, 0, 32).unwrap();
-    let retained = GpuInitialCoverage::buffer(
-        &buffer,
-        [GpuBufferCoverage::dense(retained_range)],
-    )
-    .unwrap();
+    let retained =
+        GpuInitialCoverage::buffer(&buffer, [GpuBufferCoverage::dense(retained_range)]).unwrap();
 
     let mut fragment = builder("generic retained write");
     fragment
