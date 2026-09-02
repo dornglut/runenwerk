@@ -328,6 +328,7 @@ fn apply_global_prepared_initial_content(
             };
             return Err(GpuWorkGraphError::invalid(
                 "apply prepared initial-content simulation effect",
+                graph_label,
                 GpuWorkGraphErrorContext::new(
                     graph_label,
                     None,
@@ -445,6 +446,31 @@ fn initial_coverage_value(coverage: &GpuInitialCoverage) -> InitializedCoverage 
     }
 }
 
+pub(crate) fn initial_coverage_contains(
+    have: &GpuInitialCoverage,
+    required: &GpuInitialCoverage,
+) -> bool {
+    have.storage_resource == required.storage_resource
+        && initial_coverage_value(have).contains(&initial_coverage_value(required))
+}
+
+pub(crate) fn initial_coverage_intersection(
+    resource: &GpuResourceRef,
+    left: &GpuInitialCoverage,
+    right: &GpuInitialCoverage,
+) -> Option<GpuInitialCoverage> {
+    if left.storage_resource != right.storage_resource {
+        return None;
+    }
+    let mut intersection = initial_coverage_value(left);
+    if !intersect_coverage(&mut intersection, &initial_coverage_value(right)) {
+        return None;
+    }
+    coverage_to_public("retained continuity", resource, &intersection)
+        .ok()
+        .flatten()
+}
+
 fn apply_retained_initial_coverage(
     graph_label: &str,
     state: &mut BTreeMap<GpuWorkResourceId, InitializedCoverage>,
@@ -486,6 +512,7 @@ pub struct GpuPreparedResourceInitialization {
     resource: GpuResourceRef,
     initial: Option<GpuInitialCoverage>,
     final_coverage: Option<GpuInitialCoverage>,
+    failure_preserved_coverage: Option<GpuInitialCoverage>,
 }
 
 impl GpuPreparedResourceInitialization {
@@ -499,6 +526,10 @@ impl GpuPreparedResourceInitialization {
 
     pub fn final_coverage(&self) -> Option<&GpuInitialCoverage> {
         self.final_coverage.as_ref()
+    }
+
+    pub(crate) fn failure_preserved_coverage(&self) -> Option<&GpuInitialCoverage> {
+        self.failure_preserved_coverage.as_ref()
     }
 }
 
@@ -1252,6 +1283,7 @@ pub(super) fn simulate_prepared_initialization(
         }
     }
     let initial = state.clone();
+    let mut failure_preserved = initial.clone();
     apply_global_prepared_initial_content(graph_label, &mut state, initial_content)?;
     for &prepared_id in topological_order {
         let Some(&(fragment_index, node_index)) = node_locations.get(&prepared_id) else {
@@ -1273,6 +1305,22 @@ pub(super) fn simulate_prepared_initialization(
         let fragment = &fragments[fragment_index];
         let node = &fragment.nodes()[node_index];
         apply_node_initialization(graph_label, fragment, node, prepared_id, &mut state)?;
+        for discarded in operation_discard_regions(node.operation()) {
+            let Some(coverage) = failure_preserved.get_mut(&discarded.resource) else {
+                continue;
+            };
+            if !coverage.remove(&discarded.coverage) {
+                return Err(graph_error(
+                    "derive GPU failure-preserved initialization coverage",
+                    graph_label,
+                    GraphErrorOrigin::new(Some(fragment), Some(node)),
+                    Some(prepared_id),
+                    Some(discarded.resource),
+                    GpuWorkGraphCause::OperationAccessContradiction,
+                    "apply possible discard invalidation only to matching normalized texture storage",
+                ));
+            }
+        }
     }
     let mut summaries = Vec::new();
     for (identity, resource) in storage_resources {
@@ -1284,10 +1332,19 @@ pub(super) fn simulate_prepared_initialization(
             .get(identity)
             .cloned()
             .unwrap_or_else(|| InitializedCoverage::empty_for(resource));
+        let failure_preserved_value = failure_preserved
+            .get(identity)
+            .cloned()
+            .unwrap_or_else(|| InitializedCoverage::empty_for(resource));
         let summary = GpuPreparedResourceInitialization {
             resource: resource.clone(),
             initial: coverage_to_public(graph_label, resource, &initial_value)?,
             final_coverage: coverage_to_public(graph_label, resource, &final_value)?,
+            failure_preserved_coverage: coverage_to_public(
+                graph_label,
+                resource,
+                &failure_preserved_value,
+            )?,
         };
         summaries.push(summary);
     }
