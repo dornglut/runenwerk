@@ -79,34 +79,46 @@ fn retained_coverage_seeds_canonical_read_validation_and_initial_summary() {
 }
 
 #[test]
-fn transient_coverage_cannot_enter_retained_seed_path() {
-    let mut allocator = allocator();
-    let buffer = buffer(
-        &mut allocator,
-        "transient storage",
+fn retained_seed_cannot_initialize_current_transient_storage_with_equal_identity() {
+    let mut transient_allocator = allocator();
+    let transient = buffer(
+        &mut transient_allocator,
+        "current transient storage",
         GpuBufferInitialization::Uninitialized,
         [GpuBufferUsage::Storage],
     );
-    let range = GpuBufferRange::new(&buffer, 0, 16).unwrap();
-    let invalid_seed =
-        GpuInitialCoverage::buffer(&buffer, [GpuBufferCoverage::dense(range)]).unwrap();
+    let mut retained_allocator = allocator();
+    let retained_source = retained_buffer(&mut retained_allocator, "foreign retained descriptor");
+    assert_eq!(
+        transient.diagnostic_identity(),
+        retained_source.diagnostic_identity(),
+        "the proof requires equal process-local diagnostic identity with different descriptors"
+    );
+
+    let current_range = GpuBufferRange::new(&transient, 0, 16).unwrap();
+    let retained_range = GpuBufferRange::new(&retained_source, 0, 16).unwrap();
+    let invalid_seed = GpuInitialCoverage::buffer(
+        &retained_source,
+        [GpuBufferCoverage::dense(retained_range)],
+    )
+    .unwrap();
 
     let mut fragment = builder("transient reader");
     fragment
-        .declare_resource(GpuResourceRef::Buffer(buffer.clone()))
+        .declare_resource(GpuResourceRef::Buffer(transient.clone()))
         .unwrap();
     add_compute(
         &mut fragment,
         "read transient storage",
         [buffer_access(
-            &buffer,
-            range,
+            &transient,
+            current_range,
             GpuBufferAccessKind::StorageRead,
         )],
     );
 
     let error = GpuPreparedWorkGraph::prepare_with_retained_coverage(
-        label("invalid transient retained seed"),
+        label("equal identity retained seed versus transient storage"),
         [fragment.finish().unwrap()],
         &[invalid_seed],
     )
