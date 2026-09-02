@@ -107,19 +107,22 @@ fn summarize(mut samples_us: Vec<f64>) -> TimingSummary {
     }
 }
 
-fn measure_with_setup<S>(
+fn measure_with_setup<S, R>(
     mut setup: impl FnMut() -> S,
-    mut operation: impl FnMut(S),
+    mut operation: impl FnMut(S) -> R,
 ) -> TimingSummary {
     for _ in 0..WARMUP_SAMPLES {
-        operation(setup());
+        black_box(operation(setup()));
     }
     let mut samples = Vec::with_capacity(MEASURED_SAMPLES);
     for _ in 0..MEASURED_SAMPLES {
         let state = setup();
         let started = Instant::now();
-        operation(state);
-        samples.push(micros(started.elapsed()));
+        let outcome = operation(state);
+        let elapsed = started.elapsed();
+        black_box(&outcome);
+        samples.push(micros(elapsed));
+        drop(outcome);
     }
     summarize(samples)
 }
@@ -226,23 +229,14 @@ fn measure_envelope(
     let mut timings = BTreeMap::new();
     timings.insert(
         "authoring",
-        measure_with_setup(
-            || (),
-            |_| {
-                let (_, fragment, readbacks) = retained::offscreen_work(sources, envelope);
-                black_box(fragment.nodes().len());
-                black_box(readbacks.len());
-            },
-        ),
+        measure_with_setup(|| (), |_| retained::offscreen_work(sources, envelope)),
     );
     timings.insert(
         "canonical_prepare",
         measure_with_setup(
             || (graph_resource_label.clone(), fragments[0].clone()),
             |(graph_label, fragment)| {
-                let prepared = GpuPreparedWorkGraph::prepare(graph_label, [fragment]).unwrap();
-                black_box(prepared.dependencies().len());
-                black_box(prepared.initialization().len());
+                GpuPreparedWorkGraph::prepare(graph_label, [fragment]).unwrap()
             },
         ),
     );
@@ -252,10 +246,10 @@ fn measure_envelope(
             || (),
             |_| {
                 let outputs = collect_output_bindings(&graph_label, black_box(&fragments)).unwrap();
-                let (imports, _) = bind_imports(&graph_label, &fragments, &outputs).unwrap();
+                let (imports, relations) = bind_imports(&graph_label, &fragments, &outputs).unwrap();
                 validate_boundary_access_intents(&graph_label, &fragments).unwrap();
                 let order = topological_fragment_order(&graph_label, &fragments, &imports).unwrap();
-                black_box(order.len());
+                (outputs, imports, relations, order)
             },
         ),
     );
@@ -265,7 +259,7 @@ fn measure_envelope(
             infer_fragment_hazards(&graph_label, black_box(&fragments), &mut edges).unwrap();
             infer_cross_fragment_hazards(&graph_label, &fragments, &relations, &mut edges).unwrap();
             add_explicit_orders(&graph_label, &fragments, &mut edges).unwrap();
-            black_box(edges.len());
+            edges
         }),
     );
     timings.insert(
@@ -273,14 +267,13 @@ fn measure_envelope(
         measure_with_setup(
             || (),
             |_| {
-                let order = topological_node_order(
+                topological_node_order(
                     &graph_label,
                     black_box(&fragments),
                     &node_locations,
                     &dependency_edges,
                 )
-                .unwrap();
-                black_box(order.len());
+                .unwrap()
             },
         ),
     );
@@ -288,11 +281,7 @@ fn measure_envelope(
         "prepared_initial_content_derivation",
         measure_with_setup(
             || (),
-            |_| {
-                let content =
-                    derive_prepared_initial_content(&graph_label, black_box(&fragments)).unwrap();
-                black_box(content.len());
-            },
+            |_| derive_prepared_initial_content(&graph_label, black_box(&fragments)).unwrap(),
         ),
     );
     timings.insert(
@@ -307,7 +296,7 @@ fn measure_envelope(
                     &import_bindings,
                     &initial_content,
                 )
-                .unwrap();
+                .unwrap()
             },
         ),
     );
@@ -316,7 +305,7 @@ fn measure_envelope(
         measure_with_setup(
             || (),
             |_| {
-                let (initialization, diagnostics) = simulate_prepared_initialization(
+                simulate_prepared_initialization(
                     &graph_label,
                     black_box(&fragments),
                     &storage_resources,
@@ -324,9 +313,7 @@ fn measure_envelope(
                     &topological_order,
                     &initial_content,
                 )
-                .unwrap();
-                black_box(initialization.len());
-                black_box(diagnostics.len());
+                .unwrap()
             },
         ),
     );
@@ -407,6 +394,7 @@ fn graph_preparation_phase_characterization_retains_report() {
             "hosted_ci_timing_is_characterization_only": true,
             "performance_pass_fail_threshold": null,
             "setup_for_each_phase_is_excluded_from_its_timed_interval": true,
+            "result_destruction_is_excluded_from_each_timed_interval": true,
             "phase_samples_are_independent_and_not_an_additive_timing_budget": true,
         },
         "measurement_boundary": {
