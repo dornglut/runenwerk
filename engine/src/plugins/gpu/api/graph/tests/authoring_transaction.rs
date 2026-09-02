@@ -27,10 +27,7 @@ fn failed_lexical_resource_transaction_rolls_back_and_preserves_next_node_identi
         &mut allocator,
         "tentative source",
         GpuBufferInitialization::Uninitialized,
-        [
-            GpuBufferUsage::CopySource,
-            GpuBufferUsage::CopyDestination,
-        ],
+        [GpuBufferUsage::CopySource, GpuBufferUsage::CopyDestination],
     );
     let conflicting_destination = colliding_buffer(&retained, "conflicting destination");
     assert_ne!(
