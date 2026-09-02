@@ -296,7 +296,6 @@ impl GpuWorkFragment {
     pub fn imports(&self) -> &[GpuWorkImport] {
         &self.imports
     }
-
     pub fn outputs(&self) -> &[GpuWorkOutput] {
         &self.outputs
     }
@@ -476,24 +475,33 @@ impl GpuWorkFragmentBuilder {
             )
         })?;
 
-        let mut staged = self.transaction_snapshot();
+        let mut inserted_resources = Vec::with_capacity(derived.len());
         for access in &derived {
-            staged.declare_lexical_resource(
+            match self.declare_lexical_resource(
                 declared_resource_for_access(access),
                 &label,
                 &provenance,
-            )?;
+            ) {
+                Ok(Some(identity)) => inserted_resources.push(identity),
+                Ok(None) => {}
+                Err(error) => {
+                    self.rollback_lexical_resources(&inserted_resources);
+                    return Err(error);
+                }
+            }
         }
-        let id = staged.add_node(
+        let result = self.add_node(
             label,
             operation,
             [],
             GpuCapabilityRequirements::new(),
             GpuExecutionPreference::Automatic,
             provenance,
-        )?;
-        *self = staged;
-        Ok(id)
+        );
+        if result.is_err() {
+            self.rollback_lexical_resources(&inserted_resources);
+        }
+        result
     }
 
     pub fn add_node(
@@ -642,34 +650,19 @@ impl GpuWorkFragmentBuilder {
         })
     }
 
-    fn transaction_snapshot(&self) -> Self {
-        Self {
-            identity: Arc::clone(&self.identity),
-            label: self.label.clone(),
-            resources: self.resources.clone(),
-            inputs: self.inputs.clone(),
-            imports: self.imports.clone(),
-            outputs: self.outputs.clone(),
-            nodes: self.nodes.clone(),
-            explicit_orders: self.explicit_orders.clone(),
-            next_node: self.next_node,
-            provenance: self.provenance.clone(),
-        }
-    }
-
     fn declare_lexical_resource(
         &mut self,
         resource: GpuResourceRef,
         node_label: &GpuResourceLabel,
         provenance: &GpuResourceProvenance,
-    ) -> Result<(), GpuWorkAuthoringError> {
+    ) -> Result<Option<GpuWorkResourceId>, GpuWorkAuthoringError> {
         let identity = resource.diagnostic_identity();
         match self.resources.entry(identity) {
             Entry::Vacant(entry) => {
                 entry.insert(resource);
-                Ok(())
+                Ok(Some(identity))
             }
-            Entry::Occupied(entry) if entry.get() == &resource => Ok(()),
+            Entry::Occupied(entry) if entry.get() == &resource => Ok(None),
             Entry::Occupied(_) => Err(GpuWorkAuthoringError::invalid(
                 "declare lexical GPU work resource",
                 GpuWorkAuthoringErrorContext::new(
@@ -682,6 +675,13 @@ impl GpuWorkFragmentBuilder {
                 GpuWorkAuthoringCause::InvalidResourceKind,
                 "use the exact kind-preserving resource already declared by the fragment",
             )),
+        }
+    }
+
+    fn rollback_lexical_resources(&mut self, inserted: &[GpuWorkResourceId]) {
+        for identity in inserted.iter().rev() {
+            let removed = self.resources.remove(identity);
+            debug_assert!(removed.is_some());
         }
     }
 
@@ -898,7 +898,6 @@ fn storage_buffer_kinds_merge(left: GpuBufferAccessKind, right: GpuBufferAccessK
             | (StorageWrite, StorageReadWrite)
     )
 }
-
 fn storage_texture_kinds_merge(left: GpuTextureAccessKind, right: GpuTextureAccessKind) -> bool {
     use GpuTextureAccessKind::{StorageRead, StorageReadWrite, StorageWrite};
     matches!(
