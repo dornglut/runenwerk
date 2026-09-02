@@ -876,6 +876,7 @@ dependencies = [
  "raw-window-handle",
  "resource_ref",
  "ron",
+ "runen-net",
  "runen-spatial",
  "rusttype",
  "scheduler",
@@ -920,6 +921,7 @@ dependencies = [
  "engine_net_macros",
  "engine_sim",
  "postcard",
+ "runen-net",
  "serde",
 ]
 

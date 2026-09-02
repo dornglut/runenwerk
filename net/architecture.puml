@@ -1,19 +1,21 @@
 @startuml
-title net workspace architecture (current after RN8 N1)
+title net workspace architecture (current after RN8 N2)
 
 skinparam componentStyle rectangle
 skinparam packageStyle rectangle
 left to right direction
 
-package "apps / editor integration" {
+package "apps / preview integration" {
   [Runenwerk Editor Preview Client] as preview_client
   [Runtime Preview Host] as preview_host
 }
 
-package "engine" {
-  [Network Runtime Systems] as engine_runtime
-  [Replication Systems] as engine_replication
-  [Session Systems] as engine_session
+package "engine integration" {
+  [Application / Session Lifecycle] as engine_session
+  [RunenNet Session Projection] as session_projection
+  [Owner / Routing Projection] as owner_routing
+  [Replication + Prediction Systems] as engine_replication
+  [Replication I/O Staging] as engine_io
   [Replay Systems] as engine_replay
 }
 
@@ -24,20 +26,14 @@ package "external RunenNet" {
 
 package "net (remaining Runenwerk migration evidence)" {
   package "engine_sim" {
-    [profile] as sim_profile
-    [identity] as sim_identity
-    [rng] as sim_rng
-    [command] as sim_command
-    [codec] as sim_codec
+    [simulation vocabulary] as sim
   }
 
   package "engine_net" {
-    [protocol] as net_protocol
-    [session] as net_session
-    [replication] as net_replication
-    [runtime contracts] as net_runtime
-    [simulation] as net_simulation
-    [transport contracts] as net_transport
+    [snapshot / ack / input envelopes] as net_protocol
+    [replication + prediction contracts] as net_replication
+    [replication runtime evidence] as net_runtime
+    [lane / delivery vocabulary] as net_transport
   }
 
   package "engine_net_macros" {
@@ -45,12 +41,7 @@ package "net (remaining Runenwerk migration evidence)" {
   }
 
   package "engine_history" {
-    [model] as history_model
-    [policy] as history_policy
-    [archive] as history_archive
-    [recorder] as history_recorder
-    [controller] as history_controller
-    [validation] as history_validation
+    [replay / archive / validation] as history
   }
 }
 
@@ -58,29 +49,39 @@ preview_client --> runennet_quic : preview control client
 preview_host --> runennet_quic : preview control server
 runennet_quic --> runennet_core
 
-engine_runtime --> net_runtime
+engine_session --> runennet_core : negotiation + session lifecycle
+engine_session --> session_projection : accepted bindings only
+session_projection --> owner_routing
+session_projection --> engine_replication : authorized ConnectionHandle set
 engine_replication --> net_replication
-engine_session --> net_protocol
-engine_session --> net_session
-engine_replay --> history_recorder
-engine_replay --> history_validation
+engine_io --> net_protocol
+engine_replay --> history
 
-net_protocol --> sim_identity
-net_simulation --> sim_identity
-net_replication --> sim_codec
-history_model --> sim_identity
+net_replication --> runennet_core : ConnectionHandle identity
+net_runtime --> net_replication
+net_replication --> sim
+history --> sim
+net_macros --> net_replication
 
-note right of runennet_quic
-Standalone RunenNet is the sole
-QUIC authority for the migrated
-editor/runtime-preview channel.
+note right of runennet_core
+Standalone RunenNet is the sole reusable
+connection/session/protocol lifecycle authority.
 end note
 
-note right of net_runtime
-engine_net remains only for
-unmigrated engine consumers.
-Later RN8 slices must migrate
-those consumers before deletion.
+note right of session_projection
+Iterable engine projection only.
+It does not authorize lifecycle mutations.
+end note
+
+note right of net_replication
+engine_net is temporary replication/prediction
+migration evidence. Session authority, ConnectionId,
+Hello/Join lifecycle, and transport runtime are gone.
+end note
+
+note right of runennet_quic
+Concrete QUIC exists for the already-migrated
+preview channel. N2 adds no engine transport adapter.
 end note
 
 @enduml

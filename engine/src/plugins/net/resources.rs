@@ -7,8 +7,8 @@ use ecs::{
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 use engine_net::*;
 use engine_sim::SimulationTick;
-use std::collections::{BTreeMap, BTreeSet};
-use tokio::sync::mpsc::{Receiver, Sender, error::TryRecvError};
+use runen_net::identity::ConnectionHandle;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 // engine/src/plugins/net/resources.rs
 
@@ -71,14 +71,14 @@ pub fn enqueue_server_inbox(
 
 pub fn enqueue_server_inbox_from(
     world: &mut World,
-    connection_id: Option<ConnectionId>,
+    connection: Option<ConnectionHandle>,
     message: ClientMessage,
 ) -> Result<(), WorkQueueEnqueueError> {
     enqueue_work_queue_with_backpressure(
         world,
         "NetworkServerInbox",
         InboundClientMessage {
-            connection_id,
+            connection,
             message,
         },
     )
@@ -131,13 +131,13 @@ pub fn enqueue_server_outbox_broadcast(
 
 pub fn enqueue_server_outbox_to(
     world: &mut World,
-    connection_id: ConnectionId,
+    connection: ConnectionHandle,
     message: ServerMessage,
 ) -> Result<(), WorkQueueEnqueueError> {
     enqueue_server_outbox(
         world,
         OutboundServerMessage::ToConnection {
-            connection_id,
+            connection,
             message,
         },
     )
@@ -157,11 +157,11 @@ pub fn drain_server_outbox(world: &mut World) -> Vec<OutboundServerMessage> {
 
 pub fn ensure_owner_for_connection(
     world: &mut World,
-    connection_id: ConnectionId,
+    connection: ConnectionHandle,
     role: OwnerRole,
 ) -> OwnerId {
     if let Ok(routing) = world.resource::<NetworkOwnerRouting>()
-        && let Some(owner_id) = routing.by_connection.get(&connection_id).copied()
+        && let Some(owner_id) = routing.by_connection.get(&connection).copied()
     {
         world.set_owner_role(owner_id, role);
         return owner_id;
@@ -169,17 +169,17 @@ pub fn ensure_owner_for_connection(
 
     let owner_id = world.create_owner(role);
     if let Ok(routing) = world.resource_mut::<NetworkOwnerRouting>() {
-        routing.by_connection.insert(connection_id, owner_id);
-        routing.by_owner.insert(owner_id, connection_id);
+        routing.by_connection.insert(connection, owner_id);
+        routing.by_owner.insert(owner_id, connection);
     }
     owner_id
 }
 
-pub fn owner_for_connection(world: &World, connection_id: ConnectionId) -> Option<OwnerId> {
+pub fn owner_for_connection(world: &World, connection: ConnectionHandle) -> Option<OwnerId> {
     world
         .resource::<NetworkOwnerRouting>()
         .ok()
-        .and_then(|routing| routing.by_connection.get(&connection_id).copied())
+        .and_then(|routing| routing.by_connection.get(&connection).copied())
 }
 
 pub fn server_tick_buffer_provenance() -> TickBufferProvenance {
@@ -192,11 +192,11 @@ pub fn owner_tick_buffer_provenance(owner_id: OwnerId) -> TickBufferProvenance {
 
 pub fn remove_owner_for_connection(
     world: &mut World,
-    connection_id: ConnectionId,
+    connection: ConnectionHandle,
 ) -> Option<OwnerId> {
     let mut removed = None;
     if let Ok(routing) = world.resource_mut::<NetworkOwnerRouting>()
-        && let Some(owner_id) = routing.by_connection.remove(&connection_id)
+        && let Some(owner_id) = routing.by_connection.remove(&connection)
     {
         routing.by_owner.remove(&owner_id);
         removed = Some(owner_id);
@@ -206,24 +206,20 @@ pub fn remove_owner_for_connection(
 
 pub fn route_connection_targets(
     world: &World,
-    connection_id: ConnectionId,
+    connection: ConnectionHandle,
 ) -> Vec<OwnershipTarget> {
-    let Some(owner_id) = owner_for_connection(world, connection_id) else {
+    let Some(owner_id) = owner_for_connection(world, connection) else {
         return Vec::new();
     };
     world.route_owner_targets(owner_id)
 }
 
-pub(crate) fn configure_runtime_bridge<TDriver>(app: &mut App)
+pub(crate) fn configure_replication_io<TDriver>(app: &mut App)
 where
     TDriver: ReplicationDriver + SnapshotApplyDriver + InputDriver + Send + Sync + 'static,
     TDriver::Snapshot: Clone + PartialEq,
     TDriver::Input: Clone + PartialEq,
 {
-    app.add_systems(
-        PreUpdate,
-        network_runtime_receive_system::<TDriver>.in_set(NetPreUpdateSet::Receive),
-    );
     app.add_systems(
         PreUpdate,
         client_receive_system::<TDriver>.in_set(NetPreUpdateSet::Receive),
@@ -234,20 +230,22 @@ where
     );
 }
 
+fn configure_session_projection(app: &mut App) {
+    app.init_resource::<RunenNetSessionProjection>();
+    app.init_resource::<NetworkSessionStatus>();
+    app.init_resource::<NetworkOwnerRouting>();
+}
+
 pub(crate) fn configure_client_role(app: &mut App) {
     configure_network_message_queues(app.world_mut());
     app.init_resource::<NetworkClientInbox>();
     app.init_resource::<NetworkClientOutbox>();
     app.init_resource::<NetworkInboundQueue>();
     app.init_resource::<NetworkOutboundQueue>();
-    app.init_resource::<NetworkSessionStatus>();
-    app.init_resource::<NetworkAdmissionState>();
-    app.init_resource::<NetSessionView>();
+    configure_session_projection(app);
     app.init_resource::<NetDiagnosticsView>();
     app.init_resource::<ConnectionHealth>();
     app.init_resource::<RoundTripMetrics>();
-    app.init_resource::<ClientSessionState>();
-    app.init_resource::<NetworkOwnerRouting>();
     app.init_resource::<NetworkReplicationMetadata>();
     app.init_resource::<NetStreamingStateResource>();
     app.init_resource::<NetworkDiagnostics>();
@@ -264,15 +262,10 @@ pub(crate) fn configure_server_role(app: &mut App) {
     app.init_resource::<NetworkServerOutbox>();
     app.init_resource::<NetworkInboundQueue>();
     app.init_resource::<NetworkOutboundQueue>();
-    app.init_resource::<NetworkSessionStatus>();
-    app.init_resource::<NetworkAdmissionState>();
-    app.init_resource::<NetSessionView>();
+    configure_session_projection(app);
     app.init_resource::<NetDiagnosticsView>();
     app.init_resource::<ConnectionHealth>();
     app.init_resource::<RoundTripMetrics>();
-    app.init_resource::<ServerSessionConfig>();
-    app.init_resource::<ServerSessionState>();
-    app.init_resource::<NetworkOwnerRouting>();
     app.init_resource::<NetworkReplicationMetadata>();
     app.init_resource::<NetStreamingStateResource>();
     app.init_resource::<NetworkDiagnostics>();
@@ -339,7 +332,7 @@ pub struct NetworkClientOutbox;
 #[derive(Debug, Clone, PartialEq)]
 pub enum OutboundServerMessage {
     ToConnection {
-        connection_id: ConnectionId,
+        connection: ConnectionHandle,
         message: ServerMessage,
     },
     Broadcast(ServerMessage),
@@ -356,7 +349,7 @@ pub struct NetworkInboundQueue {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct InboundClientMessage {
-    pub connection_id: Option<ConnectionId>,
+    pub connection: Option<ConnectionHandle>,
     pub message: ClientMessage,
 }
 
@@ -366,9 +359,9 @@ impl NetworkInboundQueue {
         self.server_messages.clear();
     }
 
-    pub fn push_client(&mut self, connection_id: Option<ConnectionId>, message: ClientMessage) {
+    pub fn push_client(&mut self, connection: Option<ConnectionHandle>, message: ClientMessage) {
         self.client_messages.push(InboundClientMessage {
-            connection_id,
+            connection,
             message,
         });
     }
@@ -415,103 +408,23 @@ impl NetworkOutboundQueue {
     }
 }
 
-#[derive(ecs::Component, ecs::Resource)]
-pub struct NetworkRuntimeHandle {
-    command_tx: Sender<SessionRuntimeCommand>,
-    event_rx: Receiver<SessionRuntimeEvent>,
-}
-
-impl NetworkRuntimeHandle {
-    pub fn new(
-        command_tx: Sender<SessionRuntimeCommand>,
-        event_rx: Receiver<SessionRuntimeEvent>,
-    ) -> Self {
-        Self {
-            command_tx,
-            event_rx,
-        }
-    }
-
-    pub fn send(&self, command: SessionRuntimeCommand) -> Result<(), String> {
-        self.command_tx
-            .try_send(command)
-            .map_err(|error| format!("network runtime send failed: {error}"))
-    }
-
-    pub fn try_recv(&mut self) -> Result<Option<SessionRuntimeEvent>, TryRecvError> {
-        match self.event_rx.try_recv() {
-            Ok(event) => Ok(Some(event)),
-            Err(TryRecvError::Empty) => Ok(None),
-            Err(error) => Err(error),
-        }
-    }
-}
-
+/// Engine-owned status/diagnostic projection.
+///
+/// This does not authorize membership or connection lifecycle. `connected` and
+/// `active_connection_count` are synchronized from [`RunenNetSessionProjection`]; reconnect
+/// attempts and errors are host policy/diagnostics only.
 #[derive(Debug, Clone, Default, PartialEq, Eq, ecs::Component, ecs::Resource)]
 pub struct NetworkSessionStatus {
-    pub phase: SessionPhase,
-    pub connection_id: Option<ConnectionId>,
-    pub last_disconnect: Option<DisconnectReason>,
-    pub last_error: Option<String>,
     pub connected: bool,
+    pub active_connection_count: usize,
+    pub last_error: Option<String>,
     pub reconnect_attempt: Option<u32>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, ecs::Component, ecs::Resource)]
 pub struct NetworkOwnerRouting {
-    pub by_connection: BTreeMap<ConnectionId, OwnerId>,
-    pub by_owner: BTreeMap<OwnerId, ConnectionId>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, ecs::Component, ecs::Resource)]
-pub struct NetworkAdmissionState {
-    pub authoritative_join: Option<AuthoritativeJoinState>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
-pub struct NetSessionView {
-    pub admitted: bool,
-    pub lobby_id: Option<String>,
-    pub roster_player_codes: Vec<String>,
-    pub max_players: u8,
-    pub ai_fill_target: u8,
-    pub settings_json: Option<String>,
-}
-
-impl Default for NetSessionView {
-    fn default() -> Self {
-        Self {
-            admitted: false,
-            lobby_id: None,
-            roster_player_codes: Vec::new(),
-            max_players: 1,
-            ai_fill_target: 1,
-            settings_json: None,
-        }
-    }
-}
-
-impl NetSessionView {
-    pub fn clear(&mut self) {
-        *self = Self::default();
-    }
-
-    pub fn apply_authoritative_join(&mut self, join: &AuthoritativeJoinState) {
-        let roster_size = join.roster_player_codes.len().clamp(1, u8::MAX as usize) as u8;
-        let max_players = join.max_players.max(roster_size).max(1);
-        let ai_fill_target = if join.ai_fill_target == 0 {
-            max_players
-        } else {
-            join.ai_fill_target.clamp(roster_size, max_players)
-        };
-
-        self.admitted = true;
-        self.lobby_id = join.lobby_id.clone();
-        self.roster_player_codes = join.roster_player_codes.clone();
-        self.max_players = max_players;
-        self.ai_fill_target = ai_fill_target;
-        self.settings_json = join.settings_json.clone();
-    }
+    pub by_connection: HashMap<ConnectionHandle, OwnerId>,
+    pub by_owner: BTreeMap<OwnerId, ConnectionHandle>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, ecs::Component, ecs::Resource)]
@@ -630,12 +543,12 @@ pub struct ServerSnapshotReplicationState<TSnapshot>
 where
     TSnapshot: Clone + PartialEq + 'static,
 {
-    pub checkpoints: BTreeMap<ConnectionId, ConnectionBaselineCheckpoint>,
+    pub checkpoints: HashMap<ConnectionHandle, ConnectionBaselineCheckpoint>,
     pub snapshot_history: BTreeMap<SnapshotCursor, TSnapshot>,
     pub snapshot_history_per_connection:
-        BTreeMap<ConnectionId, BTreeMap<SnapshotCursor, TSnapshot>>,
+        HashMap<ConnectionHandle, BTreeMap<SnapshotCursor, TSnapshot>>,
     pub latest_snapshot: Option<TSnapshot>,
-    pub latest_snapshot_per_connection: BTreeMap<ConnectionId, TSnapshot>,
+    pub latest_snapshot_per_connection: HashMap<ConnectionHandle, TSnapshot>,
     pub latest_tick: SimulationTick,
 }
 
@@ -645,11 +558,11 @@ where
 {
     fn default() -> Self {
         Self {
-            checkpoints: BTreeMap::new(),
+            checkpoints: HashMap::new(),
             snapshot_history: BTreeMap::new(),
-            snapshot_history_per_connection: BTreeMap::new(),
+            snapshot_history_per_connection: HashMap::new(),
             latest_snapshot: None,
-            latest_snapshot_per_connection: BTreeMap::new(),
+            latest_snapshot_per_connection: HashMap::new(),
             latest_tick: SimulationTick::default(),
         }
     }
@@ -753,7 +666,7 @@ pub struct PredictionDiagnostics {
 #[derive(Debug, Clone, Default, PartialEq, Eq, ecs::Component, ecs::Resource)]
 pub struct NetDiagnosticsView {
     pub connected: bool,
-    pub connection_id: Option<ConnectionId>,
+    pub active_connection_count: usize,
     pub accepted_connections: u64,
     pub rejected_connections: u64,
     pub reconnect_attempts: u64,

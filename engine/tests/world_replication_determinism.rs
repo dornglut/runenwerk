@@ -1,10 +1,9 @@
 use engine::SimulationTick;
-use engine::net::prelude::{
-    Ack, ClientMessage, ConnectionId, NetPlugin, NetRole, ServerSessionState, SessionPhase,
-    SnapshotCursor,
+use engine::net::prelude::{Ack, ClientMessage, NetPlugin, NetRole, SnapshotCursor};
+use engine::plugins::net::{
+    NetStreamingStateResource, NetworkOwnerRouting, RunenNetSessionCore, RunenNetSessionProjection,
+    enqueue_server_inbox_from, sync_runennet_session_projection,
 };
-use engine::plugins::net::NetStreamingStateResource;
-use engine::plugins::net::{enqueue_server_inbox_from, update_connection_closed};
 use engine::plugins::world::adapters::resources::{
     PartitionConfigResource, ReplicationStateResource, WorldQuantizationScaleResource,
 };
@@ -12,9 +11,16 @@ use engine::plugins::world::edits::ingress::{WorldEditIngressMeta, submit_world_
 use engine::plugins::world::plugin::{WorldAuthorityState, WorldPlugin};
 use engine::prelude::App;
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
+use runen_net::identity::{ConnectionHandle, ParticipantId, SessionId};
+use runen_net::protocol::{
+    CompatibilityOffer, NegotiatedContract, NegotiationManager, NegotiationManagerLimits,
+    NegotiationRequirements, OfferLimits, ProtocolContract, ProtocolId, ProtocolRevision,
+};
+use runen_net::session::{RetentionPolicy, Session, SessionLimits};
 use runen_spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, WorldId};
 use serde::{Deserialize, Serialize};
 use std::io;
+use std::num::NonZeroUsize;
 use world_ops::{
     BrushShape, DirtyChunkMap, Operation, OperationId, OperationLog, OperationRecord,
     RegionInvalidationDelta, ReplayWindow, SyncCursor, WorldQuantizationScale, WorldRevision,
@@ -24,6 +30,54 @@ use world_ops::{
 
 fn test_quantization_scale() -> WorldQuantizationScale {
     WorldQuantizationScale::try_new(1024).expect("test quantization scale is valid")
+}
+
+fn test_protocol_contract() -> ProtocolContract {
+    ProtocolContract::new(ProtocolId::new(1), ProtocolRevision::new(1))
+}
+
+fn test_compatibility_offer() -> CompatibilityOffer {
+    CompatibilityOffer::new(vec![test_protocol_contract()], vec![], vec![], None)
+}
+
+fn test_runennet_session_core() -> RunenNetSessionCore {
+    let negotiation =
+        NegotiationManager::new(OfferLimits::default(), NegotiationManagerLimits::default())
+            .expect("test negotiation limits must be valid");
+    let capacity = NonZeroUsize::new(4).expect("test session capacity must be non-zero");
+    let limits = SessionLimits::new(capacity, capacity).expect("test session limits must be valid");
+    let session = Session::new(SessionId::new(1), limits);
+    RunenNetSessionCore::new(negotiation, session)
+}
+
+fn establish_runennet_connection(
+    core: &mut RunenNetSessionCore,
+    projection: &mut RunenNetSessionProjection,
+    participant: ParticipantId,
+    connection: ConnectionHandle,
+) {
+    core.negotiation_mut()
+        .start(
+            connection,
+            test_compatibility_offer(),
+            test_compatibility_offer(),
+        )
+        .expect("compatible test negotiation must start");
+    core.negotiation_mut()
+        .propose(
+            connection,
+            NegotiatedContract::new(test_protocol_contract()),
+            &NegotiationRequirements::default(),
+        )
+        .expect("compatible test contract must be proposed");
+    core.negotiation_mut()
+        .validate_authority(connection)
+        .expect("authority validation must succeed");
+    core.negotiation_mut()
+        .validate_peer(connection)
+        .expect("peer validation must establish compatibility");
+    core.admit_established(projection, participant, connection)
+        .expect("established RunenNet connection must be admitted");
 }
 
 fn build_test_log() -> OperationLog {
@@ -81,6 +135,9 @@ struct ReplicationProbeDelta {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 struct ReplicationProbeInput;
+
+#[derive(Debug, Clone, Copy, ecs::Component)]
+struct ReplicationInterestTarget;
 
 struct ReplicationProbeDriver;
 
@@ -140,7 +197,7 @@ impl SnapshotApplyDriver for ReplicationProbeDriver {
 impl InputDriver for ReplicationProbeDriver {
     fn receive_remote_input(
         _world: &mut ecs::World,
-        _connection_id: ConnectionId,
+        _connection: ConnectionHandle,
         _tick: SimulationTick,
         _input: Vec<Self::Input>,
     ) -> Result<(), Self::Error> {
@@ -340,16 +397,31 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
     app.add_plugin(WorldPlugin);
     app.add_plugin(NetPlugin::<ReplicationProbeDriver>::new(NetRole::Server));
 
-    let connection_id = ConnectionId(55);
-    {
-        let session = app
-            .world_mut()
-            .resource_mut::<ServerSessionState>()
-            .expect("net server session state should exist");
-        session.phase = SessionPhase::Active;
-        session.active_connection = Some(connection_id);
-        session.active_connections.insert(connection_id);
-    }
+    let connection = ConnectionHandle::new(55);
+    let participant = ParticipantId::new(55);
+    let mut core = test_runennet_session_core();
+    let mut projection = RunenNetSessionProjection::default();
+    establish_runennet_connection(&mut core, &mut projection, participant, connection);
+    app.world_mut().insert_resource(projection.clone());
+    sync_runennet_session_projection(app.world_mut());
+
+    let owner = app
+        .world()
+        .resource::<NetworkOwnerRouting>()
+        .expect("RunenNet projection should create network owner routing")
+        .by_connection
+        .get(&connection)
+        .copied()
+        .expect("admitted connection should have an active engine owner");
+    let interest_target = app
+        .world_mut()
+        .spawn(ReplicationInterestTarget)
+        .expect("streaming test target should spawn");
+    assert!(
+        app.world_mut()
+            .assign_entity_owner(interest_target, ecs::OwnerState::OwnedBy(owner)),
+        "streaming test target should be routed to the admitted connection owner"
+    );
 
     let fixed_point_scale = **app
         .world()
@@ -380,7 +452,7 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
             .expect("world streaming interest should exist");
         let per_connection = interest
             .per_connection
-            .get(&connection_id)
+            .get(&connection)
             .expect("active connection should have streaming interest");
         assert!(
             !per_connection.relevant_chunks.is_empty(),
@@ -408,7 +480,7 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
 
     enqueue_server_inbox_from(
         app.world_mut(),
-        Some(connection_id),
+        Some(connection),
         ClientMessage::Ack(Ack {
             cursor: SnapshotCursor(1),
             last_received_tick: SimulationTick(9),
@@ -433,7 +505,7 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
             .expect("world streaming interest should exist");
         let per_connection = interest
             .per_connection
-            .get(&connection_id)
+            .get(&connection)
             .expect("active connection should have streaming interest");
         assert_eq!(
             per_connection.last_ack_cursor,
@@ -472,7 +544,7 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
             .expect("world streaming interest should exist");
         let per_connection = interest
             .per_connection
-            .get(&connection_id)
+            .get(&connection)
             .expect("active connection should have streaming interest");
         assert_eq!(
             per_connection.last_ack_cursor,
@@ -485,18 +557,32 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
         );
     }
 
-    update_connection_closed::<ReplicationProbeSnapshot>(
-        app.world_mut(),
-        Some(connection_id),
-        None,
-    );
+    core.connection_lost(
+        &mut projection,
+        participant,
+        connection,
+        RetentionPolicy::Terminate,
+    )
+    .expect("RunenNet terminal connection loss should succeed");
+    app.world_mut().insert_resource(projection);
+    sync_runennet_session_projection(app.world_mut());
+
+    let cleanup_tick = app
+        .world()
+        .resource::<SimulationTick>()
+        .expect("simulation tick should exist")
+        .0
+        .saturating_add(1);
+    app = app
+        .run_for_ticks(cleanup_tick)
+        .expect("post-loss tick should clean streaming projection state");
 
     let interest = app
         .world()
         .resource::<NetStreamingStateResource>()
         .expect("world streaming interest should exist");
     assert!(
-        !interest.per_connection.contains_key(&connection_id),
-        "streaming interest must drop entries for closed server connections"
+        !interest.per_connection.contains_key(&connection),
+        "streaming interest must drop entries after RunenNet terminal connection loss"
     );
 }

@@ -1,78 +1,83 @@
 ---
 title: "Replication Pipeline"
-description: "Documentation for Replication Pipeline."
+description: "Current retained replication pipeline during the RunenNet cutover."
 status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-05-05
+last_reviewed: 2026-09-01
 ---
 
 # Replication Pipeline
 
-This document describes the authoritative replication model used by
-`engine_net` contracts and consumed by engine/plugin runtime bridges.
+This document describes the retained Runenwerk replication path after RN8 N2.
 
-Canonical design:
+Connection/session lifecycle is not part of this pipeline. RunenNet Core authorizes participant/connection bindings first; retained replication consumes those bindings through RunenNet `ConnectionHandle` identity.
 
-- [../../design/active/net-authoritative-replication-protocol.md](../../design/active/net-authoritative-replication-protocol.md)
-- [../../design/active/net-plugin-runtime-bridge.md](../../design/active/net-plugin-runtime-bridge.md)
-
-## Server Pipeline (Per Connection)
+## Server Pipeline
 
 For each fixed tick:
 
-1. Capture authoritative snapshot.
-2. For each active `ConnectionId`, read its baseline checkpoint.
-3. Choose payload:
-   - full snapshot if `needs_full_resync` or missing baseline
-   - delta snapshot when `last_ack_cursor` baseline is available
-4. Emit targeted delivery command (`ServerToConnection`).
-5. Update checkpoint cursors.
+1. Read active connections from the engine `RunenNetSessionProjection`.
+2. Capture authoritative state for each authorized `ConnectionHandle`.
+3. Read that connection's retained baseline checkpoint.
+4. Choose a full snapshot when full resync is required or no acknowledged baseline is available.
+5. Otherwise build a delta from the acknowledged retained baseline.
+6. Stage the snapshot/delta as `OutboundServerMessage::ToConnection`.
+7. Record sent cursors and streaming markers for that connection.
 
-Per-connection checkpoint fields:
+Per-connection checkpoint state includes:
 
-- `last_ack_cursor`
-- `needs_full_resync`
+- last acknowledged cursor;
+- last sent cursor;
+- last full-snapshot cursor/tick;
+- full-resync requirement;
+- retained sent cursors and baselines.
 
-This allows baseline divergence between clients without forcing global
-fallback behavior.
+Different clients may therefore advance independently without global fallback.
 
-Implementation note: the current `AuthoritativeServerRuntime` stores
-`last_acknowledged` and `force_full_snapshot` per connection. It does not
-yet expose separate sent/full cursor diagnostics; those remain richer
-per-connection observability work.
+## Admission Rule
 
-Engine plugin checkpoint resources also track `last_sent_cursor`,
-`last_full_snapshot_cursor`, and `last_full_snapshot_tick`. That broader
-state belongs to the engine bridge layer until the lower-level
-`engine_net` runtime contract is expanded.
+ACK and input processing is accepted only when:
+
+- the inbound message identifies a `ConnectionHandle`; and
+- that handle is still bound in the RunenNet-authorized engine projection.
+
+The replication layer does not decide whether a connection should be admitted or retained.
+
+## ACK Handling
+
+An ACK is rejected when its cursor is stale, in the future, was never sent, or no longer has a retained baseline. Rejected ACKs do not become delta baselines.
+
+Accepted ACKs advance the connection checkpoint and the corresponding streaming cursor marker.
 
 ## Client Apply Pipeline
 
 On authoritative receive:
 
-1. Validate ordering and cursor progression.
-2. For delta snapshots, validate `base` cursor against the client's
-   current local cursor.
-3. Apply via driver:
-   - full: `SnapshotApplyDriver::apply_snapshot`
-   - delta: `SnapshotApplyDriver::apply_delta`
-4. Update local replication cursor state.
-5. Store the merged baseline for future delta validation.
-6. Ack authoritative cursor back to server.
+1. Validate cursor/tick progression.
+2. For a delta, validate the declared base against retained client state.
+3. Decode and apply through `SnapshotApplyDriver`.
+4. Update the local retained snapshot/baseline state.
+5. Stage an ACK for the applied cursor.
+6. Reconcile retained prediction state through the existing engine integration.
 
-Implementation note: `ClientReplicationRuntime` currently returns an
-operation plan and maintains cursor/baseline state. Concrete ECS mutation
-and predicted-input replay belong to the owning runtime/game integration
-layer.
+N2 does not redesign prediction or replicated-view semantics.
+
+## Streaming Integration
+
+`NetStreamingStateResource` is keyed by `ConnectionHandle` and synchronized from the RunenNet session projection.
+
+When RunenNet lifecycle behavior removes a projected binding, the normal fixed-update streaming synchronization removes that connection's retained streaming state. No replication-specific connection-close authority is required.
 
 ## Failure / Recovery Rules
 
-- Missing/evicted baseline on server forces full resync for that
-  connection only.
-- Base-cursor mismatch on client rejects delta apply.
-- Malformed deltas request full resync.
-- Duplicate cursors and stale ticks are rejected and counted.
-- Connection close removes only the affected connection checkpoint; other
-  peers continue with independent baselines.
+- Missing or evicted server baseline forces a full snapshot for that connection.
+- Invalid/future/stale ACKs never mutate the accepted baseline.
+- Delta base mismatch or malformed payload does not redefine connection/session state.
+- Connection loss is decided by RunenNet; retained replication state is reconciled from the resulting engine projection.
+- Host reconnect scheduling remains Runenwerk policy and is distinct from RunenNet session retention.
+
+## Scope
+
+This pipeline remains migration evidence until later RN8 replication/prediction cuts. It must not acquire replacement session, protocol-negotiation, connection identity, or transport-runtime semantics.

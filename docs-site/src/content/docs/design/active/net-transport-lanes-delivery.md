@@ -1,11 +1,11 @@
 ---
 title: "Net Transport Lanes and Delivery Design"
-description: "Design for profile-to-lane mapping, delivery semantics, and transport adapter boundaries."
+description: "Current boundary for retained Runenwerk replication delivery vocabulary and standalone RunenNet transport realization."
 status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-05-05
+last_reviewed: 2026-09-01
 related_roadmaps:
   - ../../net/multiplayer-replication-implementation-roadmap.md
 ---
@@ -14,86 +14,90 @@ related_roadmaps:
 
 ## Purpose
 
-This design defines the boundary between replication delivery intent and
-concrete transport implementation.
+This design records the current boundary between retained Runenwerk replication delivery vocabulary and concrete transport realization during RN8.
+
+It does not authorize a new engine transport adapter or define a future transport migration slice.
+
+## Current Boundary
+
+Standalone RunenNet owns reusable transport abstraction and networking delivery semantics. Concrete RunenNet transport adapters such as `runen-net-quic` own their realization for maintained consumers.
+
+Runenwerk currently retains a narrower set of replication migration contracts:
+
+- `TransportLane` labels still consumed by retained replication/profile code;
+- retained `DeliveryGuarantee` / lane semantics vocabulary;
+- profile-to-lane mapping and route diagnostics used by current replication code;
+- engine outbound work queues that stage retained replication/application messages but do not constitute a transport runtime.
+
+The engine connection/session cut does not add `runen-net-quic`. The engine has no maintained concrete transport consumer at the N2 boundary.
+
+The runtime-preview control channel is a separate N1 consumer of standalone RunenNet QUIC and must not be generalized into an engine networking runtime.
 
 ## Implemented Substrate
 
 Implemented now:
 
-- `TransportLane` vocabulary in `engine_net`.
-- Delivery semantics for reliable, unreliable, unreliable sequenced, and
-  input stream lanes.
-- `ReplicationProfilePreset` to lane mapping.
-- `LaneRouteTrace` diagnostics.
-- `engine_net_quic` lane mapping and QUIC datagram/stream runtime
-  behavior.
-- Session runtime commands for targeted server-to-connection delivery and
-  broadcast delivery.
+- retained `TransportLane` vocabulary in `engine_net`;
+- retained lane semantics for reliable, unreliable, unreliable-sequenced, and input-stream labels;
+- retained replication-profile-to-lane mapping;
+- retained route diagnostics;
+- engine replication/application outbound staging keyed where necessary by RunenNet `ConnectionHandle`;
+- standalone RunenNet QUIC realization for the separately maintained preview control-channel consumer.
+
+The former `engine_net_quic`, engine session runtime commands, and Runenwerk-owned connection/transport runtime are not part of the current architecture.
 
 ## Partial Contracts
 
 Partial now:
 
-- Bandwidth priority exists in profiles, but budgeted packet selection is
-  not yet a complete scheduler.
-- `InputStream` is a transport lane label, while ECS tick buffers own
-  simulation input buffering.
-- Per-lane backpressure diagnostics are still thin.
-- End-to-end delivery tests across the QUIC adapter are not yet complete
-  for all replication failure modes.
+- retained lane/profile vocabulary is migration residue pending later RN8 disposition;
+- bandwidth priority exists in retained profiles, but budgeted selection is not a complete scheduler;
+- `InputStream` remains a retained delivery label while ECS tick buffers own simulation input buffering;
+- generic per-lane diagnostics are incomplete;
+- the steady-state relationship between RunenNet delivery contracts and Runenwerk replication authoring must be derived in a later authorized boundary rather than guessed here.
 
 ## Ownership Rules
 
-`engine_net` owns:
+Standalone RunenNet owns reusable networking delivery semantics and transport abstraction.
 
-- lane names;
-- lane semantics;
-- profile-to-lane mapping;
-- route diagnostics;
-- protocol envelopes.
+Concrete transport adapters own:
 
-`engine_net_quic` owns:
+- endpoint/connection realization for their actual consumers;
+- framing and byte transport;
+- adapter-specific send/receive mechanics;
+- adapter-specific diagnostics.
 
-- QUIC endpoints;
-- stream/datagram framing;
-- trust and admission;
-- concrete send/receive loops;
-- reconnect/backoff mechanics.
+Runenwerk engine/gameplay integration owns:
 
-Replication/runtime code owns:
+- which retained replication/application payload should be staged;
+- simulation/gameplay relevancy and replication policy;
+- ECS scheduling and input buffering;
+- presentation and host policy.
 
-- which message should be sent;
-- which profile applies;
-- whether a full snapshot or delta is appropriate.
-
-Transport does not own gameplay interest, replication policy, or
-correction policy.
+Retained `engine_net` lane/profile contracts are temporary migration evidence only. They must not grow into a replacement transport framework or a forwarding facade around RunenNet.
 
 ## Invariants
 
-- Profile routing must be deterministic.
-- Transport lanes move bytes; they do not decide game visibility.
-- QUIC-specific details must not leak into `engine_net` protocol
-  contracts.
-- ECS input buffering and transport input lanes must stay distinct.
+- Transport does not decide gameplay visibility or authoritative replication policy.
+- ECS input buffering and transport/delivery labels remain distinct concerns.
+- RunenNet lifecycle identity is not recreated in retained lane vocabulary.
+- Engine outbound staging is not transport authority.
+- No engine transport adapter is added without a proven maintained consumer.
+- The separate preview transport consumer does not authorize a generic engine QUIC dependency.
 
-## Future Work
+## Future Work Constraints
 
-Future work:
+Possible later work includes delivery budgeting, richer pressure diagnostics, and migration of retained lane/profile vocabulary. Its owning RN8 slice must be derived from live repository and RunenNet authority after prerequisite cuts are accepted.
 
-1. Add delivery budget and priority scheduling above transport lanes.
-2. Add per-lane dropped/backpressure counters.
-3. Add tests for profile/lane mapping across engine_net and
-   engine_net_quic.
-4. Add integration tests for unreliable sequenced delta reorder/loss.
-5. Document adapter requirements for any future non-QUIC transport.
+This document does not pre-authorize that work or select the next RN8 boundary.
 
 ## Validation Plan
 
-Required validation:
+For changes to the current retained delivery boundary, validate as applicable:
 
-- profile-to-lane unit tests;
-- QUIC framing tests;
-- runtime command routing tests;
+- retained profile/lane mapping tests;
+- engine outbound routing/staging tests;
+- exact connection routing through RunenNet `ConnectionHandle`;
+- transport-specific tests only in repositories/apps that actually consume that adapter;
+- repository canonical validation;
 - docs validation.

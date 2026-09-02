@@ -1,12 +1,8 @@
-//! Runtime-facing network contracts.
+//! Retained replication-runtime migration contracts.
 //!
-//! This module is intentionally small in this migration step. Concrete runtime
-//! behavior remains in host adapters while contracts stay in `engine_net`.
+//! RunenNet owns connection/session lifecycle. This module remains only for the old replication
+//! payload/runtime evidence that will be removed by the later replication cut.
 
-pub mod client;
 pub mod events;
-pub mod server;
 
-pub use client::*;
 pub use events::*;
-pub use server::*;

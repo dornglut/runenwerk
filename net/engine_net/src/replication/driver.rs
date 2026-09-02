@@ -1,6 +1,6 @@
-use crate::ConnectionId;
 use ecs::World;
 use engine_sim::SimulationTick;
+use runen_net::identity::ConnectionHandle;
 
 pub trait ReplicationDriver {
     type Snapshot: serde::Serialize
@@ -17,9 +17,9 @@ pub trait ReplicationDriver {
 
     fn capture_snapshot_for_connection(
         world: &World,
-        connection_id: ConnectionId,
+        connection: ConnectionHandle,
     ) -> Result<Option<Self::Snapshot>, Self::Error> {
-        let _ = connection_id;
+        let _ = connection;
         Self::capture_snapshot(world)
     }
 
@@ -71,7 +71,7 @@ pub trait SnapshotApplyDriver: ReplicationDriver {
 pub trait InputDriver: ReplicationDriver {
     fn receive_remote_input(
         world: &mut World,
-        connection_id: ConnectionId,
+        connection: ConnectionHandle,
         tick: SimulationTick,
         input: Vec<Self::Input>,
     ) -> Result<(), Self::Error>;

@@ -12,7 +12,6 @@ pub use crate::replication::{
     normalize_delta_payload, snapshot_debug_dump,
 };
 pub use crate::runtime::{ReplicationRuntimeCommand, ReplicationRuntimeEvent};
-pub use crate::session::*;
 pub use crate::simulation::*;
 pub use crate::transport::*;
 pub use crate::{
