@@ -4,8 +4,8 @@ use editor_preview::{
     PREVIEW_TRANSPORT_MAX_PENDING_MESSAGES, PREVIEW_TRANSPORT_MAX_PENDING_PAYLOAD_BYTES,
     PREVIEW_TRANSPORT_PROTOCOL_ID, PREVIEW_TRANSPORT_PROTOCOL_REVISION,
     PREVIEW_TRANSPORT_SCHEMA_CONTRACT_ID, PREVIEW_TRANSPORT_SCHEMA_ID, PreviewBootstrap,
-    PreviewCommandEnvelope, PreviewEventEnvelope, decode_preview_event_bytes,
-    encode_preview_command_bytes,
+    PreviewCommand, PreviewCommandEnvelope, PreviewEvent, PreviewEventEnvelope, PreviewSessionId,
+    decode_preview_event_bytes, encode_preview_command_bytes,
 };
 use runen_net::{
     delivery::{
@@ -20,9 +20,9 @@ use runen_net::{
     },
 };
 use runen_net_quic::{
-    ClientEndpoint, ClientTrust, Connection, ConnectionErrorKind, ConnectionEvent, EndpointConfig,
-    FlowRejectionReason, FlowTerminationCause, FlowTerminationOrigin, InboundFlowConfig,
-    OutboundFlowConfig, ProfileConfig, SemanticRole, SubmitOutcome,
+    ClientEndpoint, ClientTrust, Connection, ConnectionEvent, EndpointConfig, FlowRejectionReason,
+    FlowTerminationCause, FlowTerminationOrigin, InboundFlowConfig, OutboundFlowConfig, ProfileConfig,
+    SemanticRole, SubmitOutcome,
 };
 use std::{
     future::poll_fn,
@@ -301,6 +301,8 @@ async fn drive_active_connection(
     let mut closing = false;
     let mut outbound_finished = false;
     let mut inbound_finished = false;
+    let mut shutdown_session = None;
+    let mut shutdown_acknowledged = false;
     while !(outbound_finished && inbound_finished) {
         tokio::select! {
             biased;
@@ -311,6 +313,9 @@ async fn drive_active_connection(
             command = command_rx.recv(), if !closing => {
                 match command {
                     Some(command) => {
+                        if let PreviewCommand::Shutdown { session_id } = &command.command {
+                            shutdown_session = Some(*session_id);
+                        }
                         let payload = encode_preview_command_bytes(&command)?;
                         submit(connection, host, outbound, payload)?;
                     }
@@ -323,7 +328,23 @@ async fn drive_active_connection(
             event = next_connection_event(connection, host) => {
                 match event? {
                     ConnectionEvent::DataReady { key, .. } if key == inbound => {
-                        drain_events(host, inbound, &event_tx)?;
+                        if let Some(ack_session) = drain_events(host, inbound, &event_tx)? {
+                            match shutdown_session {
+                                Some(request_session) if request_session == ack_session => {
+                                    shutdown_acknowledged = true;
+                                }
+                                Some(request_session) => {
+                                    return Err(anyhow!(
+                                        "runtime-preview ShutdownAck session {ack_session:?} did not match Shutdown request {request_session:?}"
+                                    ));
+                                }
+                                None => {
+                                    return Err(anyhow!(
+                                        "runtime-preview received ShutdownAck without a prior Shutdown command"
+                                    ));
+                                }
+                            }
+                        }
                     }
                     ConnectionEvent::FlowTerminated {
                         key,
@@ -350,6 +371,11 @@ async fn drive_active_connection(
                         if key == inbound || key == outbound => {
                             return Err(anyhow!("runtime-preview delivery flow terminated: {cause:?}"));
                         }
+                    ConnectionEvent::PeerClosed { .. } => {
+                        return Err(anyhow!(
+                            "runtime-preview peer closed before application shutdown completed"
+                        ));
+                    }
                     ConnectionEvent::IncomingFlowRequested { request } => {
                         connection
                             .reject_incoming_flow(request, FlowRejectionReason::ResourceLimit)
@@ -371,15 +397,16 @@ async fn drive_active_connection(
         }
     }
 
-    match tokio::time::timeout(
-        SHUTDOWN_TIMEOUT,
-        await_server_transport_close(connection, host),
-    )
-    .await
-    {
+    if !shutdown_acknowledged {
+        return Err(anyhow!(
+            "runtime-preview delivery flows closed without a matching ShutdownAck"
+        ));
+    }
+
+    match tokio::time::timeout(SHUTDOWN_TIMEOUT, await_server_peer_close(connection, host)).await {
         Ok(result) => result,
         Err(_) => Err(anyhow!(
-            "timed out waiting for runtime-preview server transport shutdown"
+            "timed out waiting for runtime-preview server peer close"
         )),
     }
 }
@@ -402,20 +429,23 @@ fn finish_active_connection(
     }
 }
 
-async fn await_server_transport_close(
+async fn await_server_peer_close(
     connection: &mut Connection,
     host: &mut HostState,
 ) -> Result<()> {
     poll_fn(
         |cx| match connection.poll(cx, &mut host.negotiation, &mut host.delivery) {
             Poll::Pending => Poll::Pending,
-            Poll::Ready(Err(error))
-                if error.kind() == ConnectionErrorKind::EstablishedTransport =>
+            Poll::Ready(Ok(ConnectionEvent::PeerClosed { connection }))
+                if connection == CLIENT_CONNECTION =>
             {
                 Poll::Ready(Ok(()))
             }
+            Poll::Ready(Ok(ConnectionEvent::PeerClosed { connection })) => Poll::Ready(Err(
+                anyhow!("runtime-preview peer close used wrong connection {connection:?}"),
+            )),
             Poll::Ready(Err(error)) => Poll::Ready(Err(anyhow!(
-                "runtime-preview connection failed while awaiting server shutdown: {error}"
+                "runtime-preview connection failed while awaiting server peer close: {error}"
             ))),
             Poll::Ready(Ok(event)) => Poll::Ready(Err(anyhow!(
                 "runtime-preview produced an unexpected event after normal flow shutdown: {event:?}"
@@ -557,16 +587,24 @@ fn drain_events(
     host: &mut HostState,
     inbound: DeliveryFlowKey,
     event_tx: &Sender<ClientTaskEvent>,
-) -> Result<()> {
+) -> Result<Option<PreviewSessionId>> {
+    let mut shutdown_ack = None;
     loop {
         let exposed = host
             .delivery
             .poll_exposure(inbound)
             .map_err(|error| anyhow!("runtime-preview event exposure failed: {error:?}"))?;
         let Some(exposed) = exposed else {
-            return Ok(());
+            return Ok(shutdown_ack);
         };
         let event = decode_preview_event_bytes(exposed.payload())?;
+        if let PreviewEvent::ShutdownAck { session_id } = &event.event {
+            if shutdown_ack.replace(*session_id).is_some() {
+                return Err(anyhow!(
+                    "runtime-preview received multiple ShutdownAck events in one delivery drain"
+                ));
+            }
+        }
         event_tx
             .try_send(ClientTaskEvent::Preview(event))
             .map_err(|error| {
