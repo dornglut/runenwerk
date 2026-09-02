@@ -9,7 +9,7 @@ use super::{
         bind_imports, collect_output_bindings, topological_fragment_order,
         validate_boundary_access_intents,
     },
-    coverage::{canonical_storage_resource, storage_identity},
+    coverage::{GpuInitialCoverage, canonical_storage_resource, storage_identity},
     dependency::{GpuDependencyReason, GpuWorkDependency},
     diagnostics::{GpuPreparedWorkDiagnostic, GraphErrorOrigin, graph_error},
     hazards::{
@@ -72,6 +72,14 @@ impl GpuPreparedWorkGraph {
     pub fn prepare(
         label: GpuResourceLabel,
         fragments: impl IntoIterator<Item = GpuWorkFragment>,
+    ) -> Result<Self, GpuWorkGraphError> {
+        Self::prepare_with_retained_coverage(label, fragments, &[])
+    }
+
+    pub(crate) fn prepare_with_retained_coverage(
+        label: GpuResourceLabel,
+        fragments: impl IntoIterator<Item = GpuWorkFragment>,
+        retained_coverage: &[GpuInitialCoverage],
     ) -> Result<Self, GpuWorkGraphError> {
         let fragments = fragments.into_iter().collect::<Vec<_>>();
         let graph_label = label.as_str();
@@ -164,6 +172,7 @@ impl GpuPreparedWorkGraph {
             &fragment_order,
             &import_bindings,
             &initial_content,
+            retained_coverage,
         )?;
 
         let mut requirements = GpuCapabilityRequirements::new();
@@ -219,6 +228,7 @@ impl GpuPreparedWorkGraph {
             &node_locations,
             &topological_order,
             &initial_content,
+            retained_coverage,
         )?;
         let dependencies = inferred_edges
             .into_iter()
