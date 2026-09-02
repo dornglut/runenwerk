@@ -2,25 +2,27 @@ use std::{collections::BTreeMap, io::ErrorKind, time::Duration};
 
 use anyhow::{Result, anyhow};
 use editor_preview::{
-    PreviewCommand, PreviewCommandEnvelope, PreviewEvent, PreviewMode, ReloadDecision,
-    ReloadStatus, ReloadSubject, ReloadSubjectKind, RuntimeProductKind, RuntimeProductPayload,
-    RuntimeProductRef, WorldSdfPayloadPackage, preview_session_id,
+    PreviewCommand, PreviewCommandEnvelope, PreviewEvent, PreviewMode, PreviewSessionId,
+    ReloadDecision, ReloadStatus, ReloadSubject, ReloadSubjectKind, RuntimeProductKind,
+    RuntimeProductPayload, RuntimeProductRef, WorldSdfPayloadPackage, preview_session_id,
 };
 use runen_spatial::{ChunkCoord3, ChunkId, WorldId};
 use runenwerk_editor::runtime::preview_process::{
     PreviewConnectionEvent, PreviewProcessConnection,
 };
 use runenwerk_runtime_preview::{RuntimePreviewConfig, RuntimePreviewHost, RuntimePreviewLoopExit};
+use tokio::task::JoinHandle;
 use world_sdf::{
     SdfBrickRecord, SdfBrickSamples, SdfChunkPayload, SdfPageCoord3, SdfPageRecord,
     WorldSdfPayloadRef,
 };
 
 const EVENT_TIMEOUT: Duration = Duration::from_secs(5);
+const SHUTDOWN_STRESS_ITERATIONS: u64 = 8;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn preview_control_channel_round_trips_over_standalone_runennet() -> Result<()> {
-    let mut host = match RuntimePreviewHost::spawn(RuntimePreviewConfig::headless()) {
+    let host = match RuntimePreviewHost::spawn(RuntimePreviewConfig::headless()) {
         Ok(host) => host,
         Err(error) if is_permission_denied(&error) => {
             eprintln!("skipping preview RunenNet loopback proof: local socket bind is denied");
@@ -29,42 +31,11 @@ async fn preview_control_channel_round_trips_over_standalone_runennet() -> Resul
         Err(error) => return Err(error.context("preview server spawn failed")),
     };
     let bootstrap = host.bootstrap().clone();
-    let server_task = tokio::spawn(async move {
-        let run_result = host.run_command_loop().await;
-        let shutdown_result = host.shutdown().await;
-        match (run_result, shutdown_result) {
-            (Ok(exit), Ok(())) => Ok(exit),
-            (Err(error), Ok(())) => Err(error),
-            (Ok(_), Err(error)) => Err(error),
-            (Err(run_error), Err(shutdown_error)) => Err(anyhow!(
-                "runtime-preview server failed: {run_error:#}; shutdown also failed: {shutdown_error:#}"
-            )),
-        }
-    });
+    let server_task = spawn_server_task(host);
 
     let mut connection = PreviewProcessConnection::connect(&bootstrap).await?;
     let session_id = preview_session_id(1);
-
-    connection
-        .send_preview_command(PreviewCommandEnvelope::new(
-            1,
-            PreviewCommand::StartSession {
-                session_id,
-                mode: PreviewMode::Preview,
-            },
-        ))
-        .await?;
-    assert!(matches!(
-        next_preview_event(&mut connection).await?.event,
-        PreviewEvent::Ready { session_id: id } if id == session_id
-    ));
-    assert!(matches!(
-        next_preview_event(&mut connection).await?.event,
-        PreviewEvent::ModeChanged {
-            session_id: id,
-            mode: PreviewMode::Preview,
-        } if id == session_id
-    ));
+    start_preview_session(&mut connection, session_id).await?;
 
     connection
         .send_preview_command(PreviewCommandEnvelope::new(
@@ -117,30 +88,68 @@ async fn preview_control_channel_round_trips_over_standalone_runennet() -> Resul
         } if id == session_id && *product == expected_product
     ));
 
-    connection
-        .send_preview_command(PreviewCommandEnvelope::new(
-            5,
-            PreviewCommand::Shutdown { session_id },
-        ))
-        .await?;
-    assert!(matches!(
-        next_preview_event(&mut connection).await?.event,
-        PreviewEvent::ShutdownAck { session_id: id } if id == session_id
-    ));
-
+    request_application_shutdown(&mut connection, session_id, 5).await?;
     connection.shutdown().await?;
-
-    let server_result = tokio::time::timeout(EVENT_TIMEOUT, server_task)
-        .await
-        .map_err(|_| anyhow!("timed out waiting for runtime-preview server shutdown"))?
-        .map_err(|error| anyhow!("runtime-preview server task join failed: {error}"))?;
-    let exit =
-        server_result.map_err(|error| error.context("runtime-preview server task failed"))?;
     assert_eq!(
-        exit,
+        await_server_exit(server_task).await?,
         RuntimePreviewLoopExit::ShutdownRequested {
             session_id: Some(session_id),
         }
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn preview_shutdown_lifecycle_repeats_without_transport_eof_dependency() -> Result<()> {
+    for iteration in 1..=SHUTDOWN_STRESS_ITERATIONS {
+        let host = match RuntimePreviewHost::spawn(RuntimePreviewConfig::headless()) {
+            Ok(host) => host,
+            Err(error) if is_permission_denied(&error) => {
+                eprintln!("skipping preview RunenNet shutdown stress proof: local socket bind is denied");
+                return Ok(());
+            }
+            Err(error) => return Err(error.context("preview server spawn failed")),
+        };
+        let bootstrap = host.bootstrap().clone();
+        let server_task = spawn_server_task(host);
+        let mut connection = PreviewProcessConnection::connect(&bootstrap).await?;
+        let session_id = preview_session_id(iteration);
+
+        start_preview_session(&mut connection, session_id).await?;
+        request_application_shutdown(&mut connection, session_id, 2).await?;
+        connection.shutdown().await?;
+        assert_eq!(
+            await_server_exit(server_task).await?,
+            RuntimePreviewLoopExit::ShutdownRequested {
+                session_id: Some(session_id),
+            }
+        );
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn preview_transport_close_without_shutdown_is_not_application_shutdown() -> Result<()> {
+    let host = match RuntimePreviewHost::spawn(RuntimePreviewConfig::headless()) {
+        Ok(host) => host,
+        Err(error) if is_permission_denied(&error) => {
+            eprintln!("skipping preview RunenNet close proof: local socket bind is denied");
+            return Ok(());
+        }
+        Err(error) => return Err(error.context("preview server spawn failed")),
+    };
+    let bootstrap = host.bootstrap().clone();
+    let server_task = spawn_server_task(host);
+    let mut connection = PreviewProcessConnection::connect(&bootstrap).await?;
+    let session_id = preview_session_id(1);
+
+    start_preview_session(&mut connection, session_id).await?;
+    connection.shutdown().await?;
+    assert_eq!(
+        await_server_exit(server_task).await?,
+        RuntimePreviewLoopExit::TransportClosed
     );
 
     Ok(())
@@ -190,6 +199,76 @@ async fn preview_control_channel_rejects_mismatched_trusted_certificate() -> Res
     let _ = server_cleanup;
     other_server_cleanup?;
     Ok(())
+}
+
+async fn start_preview_session(
+    connection: &mut PreviewProcessConnection,
+    session_id: PreviewSessionId,
+) -> Result<()> {
+    connection
+        .send_preview_command(PreviewCommandEnvelope::new(
+            1,
+            PreviewCommand::StartSession {
+                session_id,
+                mode: PreviewMode::Preview,
+            },
+        ))
+        .await?;
+    assert!(matches!(
+        next_preview_event(connection).await?.event,
+        PreviewEvent::Ready { session_id: id } if id == session_id
+    ));
+    assert!(matches!(
+        next_preview_event(connection).await?.event,
+        PreviewEvent::ModeChanged {
+            session_id: id,
+            mode: PreviewMode::Preview,
+        } if id == session_id
+    ));
+    Ok(())
+}
+
+async fn request_application_shutdown(
+    connection: &mut PreviewProcessConnection,
+    session_id: PreviewSessionId,
+    sequence: u64,
+) -> Result<()> {
+    connection
+        .send_preview_command(PreviewCommandEnvelope::new(
+            sequence,
+            PreviewCommand::Shutdown { session_id },
+        ))
+        .await?;
+    assert!(matches!(
+        next_preview_event(connection).await?.event,
+        PreviewEvent::ShutdownAck { session_id: id } if id == session_id
+    ));
+    Ok(())
+}
+
+fn spawn_server_task(mut host: RuntimePreviewHost) -> JoinHandle<Result<RuntimePreviewLoopExit>> {
+    tokio::spawn(async move {
+        let run_result = host.run_command_loop().await;
+        let shutdown_result = host.shutdown().await;
+        match (run_result, shutdown_result) {
+            (Ok(exit), Ok(())) => Ok(exit),
+            (Err(error), Ok(())) => Err(error),
+            (Ok(_), Err(error)) => Err(error),
+            (Err(run_error), Err(shutdown_error)) => Err(anyhow!(
+                "runtime-preview server failed: {run_error:#}; shutdown also failed: {shutdown_error:#}"
+            )),
+        }
+    })
+}
+
+async fn await_server_exit(
+    server_task: JoinHandle<Result<RuntimePreviewLoopExit>>,
+) -> Result<RuntimePreviewLoopExit> {
+    let server_result = tokio::time::timeout(EVENT_TIMEOUT, server_task)
+        .await
+        .map_err(|_| anyhow!("timed out waiting for runtime-preview server shutdown"))?
+        .map_err(|error| anyhow!("runtime-preview server task join failed: {error}"))?;
+    server_result.map_err(|error| error.context("runtime-preview server task failed"))
 }
 
 fn representative_world_sdf_product() -> RuntimeProductPayload {

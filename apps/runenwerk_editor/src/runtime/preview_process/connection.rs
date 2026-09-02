@@ -20,9 +20,9 @@ use runen_net::{
     },
 };
 use runen_net_quic::{
-    ClientEndpoint, ClientTrust, Connection, ConnectionErrorKind, ConnectionEvent, EndpointConfig,
-    FlowRejectionReason, FlowTerminationCause, FlowTerminationOrigin, InboundFlowConfig,
-    OutboundFlowConfig, ProfileConfig, SemanticRole, SubmitOutcome,
+    ClientEndpoint, ClientTrust, Connection, ConnectionEvent, EndpointConfig, FlowRejectionReason,
+    FlowTerminationCause, FlowTerminationOrigin, InboundFlowConfig, OutboundFlowConfig,
+    ProfileConfig, SemanticRole, SubmitOutcome,
 };
 use std::{
     future::poll_fn,
@@ -48,7 +48,6 @@ const CLIENT_OUTBOUND_COMMANDS: u64 = 1;
 const CLIENT_INBOUND_EVENTS: u64 = 2;
 const NETWORK_CHANNEL_CAPACITY: usize = 128;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
-const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug)]
 pub enum PreviewConnectionEvent {
@@ -371,17 +370,7 @@ async fn drive_active_connection(
         }
     }
 
-    match tokio::time::timeout(
-        SHUTDOWN_TIMEOUT,
-        await_server_transport_close(connection, host),
-    )
-    .await
-    {
-        Ok(result) => result,
-        Err(_) => Err(anyhow!(
-            "timed out waiting for runtime-preview server transport shutdown"
-        )),
-    }
+    Ok(())
 }
 
 fn finish_active_connection(
@@ -400,29 +389,6 @@ fn finish_active_connection(
             "runtime-preview client failed: {error:#}; cleanup also failed: {cleanup_error}"
         )),
     }
-}
-
-async fn await_server_transport_close(
-    connection: &mut Connection,
-    host: &mut HostState,
-) -> Result<()> {
-    poll_fn(
-        |cx| match connection.poll(cx, &mut host.negotiation, &mut host.delivery) {
-            Poll::Pending => Poll::Pending,
-            Poll::Ready(Err(error))
-                if error.kind() == ConnectionErrorKind::EstablishedTransport =>
-            {
-                Poll::Ready(Ok(()))
-            }
-            Poll::Ready(Err(error)) => Poll::Ready(Err(anyhow!(
-                "runtime-preview connection failed while awaiting server shutdown: {error}"
-            ))),
-            Poll::Ready(Ok(event)) => Poll::Ready(Err(anyhow!(
-                "runtime-preview produced an unexpected event after normal flow shutdown: {event:?}"
-            ))),
-        },
-    )
-    .await
 }
 
 fn finish_outbound(
