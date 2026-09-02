@@ -59,8 +59,11 @@ fn workload_evidence() -> Vec<Value> {
     let mut reaction_diffusion_evidence = reaction_diffusion::compare();
     reaction_diffusion_evidence["timestamp_evidence"] =
         reaction_diffusion::timestamp::evidence(&reaction_diffusion_evidence);
+    reaction_diffusion_evidence["host_characterization"] =
+        reaction_diffusion::host_characterization::evidence();
     retain_measurement_profile(&mut reaction_diffusion_evidence);
     assert_workload_evidence(&reaction_diffusion_evidence, "G6-I01-reaction-diffusion");
+    assert!(reaction_diffusion_evidence["host_characterization"].is_object());
 
     vec![
         known_pattern,
