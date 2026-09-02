@@ -106,7 +106,9 @@ async fn preview_shutdown_lifecycle_repeats_without_transport_eof_dependency() -
         let host = match RuntimePreviewHost::spawn(RuntimePreviewConfig::headless()) {
             Ok(host) => host,
             Err(error) if is_permission_denied(&error) => {
-                eprintln!("skipping preview RunenNet shutdown stress proof: local socket bind is denied");
+                eprintln!(
+                    "skipping preview RunenNet shutdown stress proof: local socket bind is denied"
+                );
                 return Ok(());
             }
             Err(error) => return Err(error.context("preview server spawn failed")),
