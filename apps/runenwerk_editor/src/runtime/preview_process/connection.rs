@@ -20,9 +20,9 @@ use runen_net::{
     },
 };
 use runen_net_quic::{
-    ClientEndpoint, ClientTrust, Connection, ConnectionErrorKind, ConnectionEvent, EndpointConfig,
-    FlowRejectionReason, FlowTerminationCause, FlowTerminationOrigin, InboundFlowConfig,
-    OutboundFlowConfig, ProfileConfig, SemanticRole, SubmitOutcome,
+    ClientEndpoint, ClientTrust, Connection, ConnectionEvent, EndpointConfig, FlowRejectionReason,
+    FlowTerminationCause, FlowTerminationOrigin, InboundFlowConfig, OutboundFlowConfig,
+    ProfileConfig, SemanticRole, SubmitOutcome,
 };
 use std::{
     future::poll_fn,
@@ -350,6 +350,18 @@ async fn drive_active_connection(
                         if key == inbound || key == outbound => {
                             return Err(anyhow!("runtime-preview delivery flow terminated: {cause:?}"));
                         }
+                    ConnectionEvent::PeerClosed { connection: handle }
+                        if handle == CLIENT_CONNECTION => {
+                            // NO_ERROR is connection-lifecycle evidence, not proof that every flow
+                            // emitted its normal termination event first. Consuming teardown below
+                            // retains any residual delivery-obligation evidence.
+                            return Ok(());
+                        }
+                    ConnectionEvent::PeerClosed { connection: handle } => {
+                        return Err(anyhow!(
+                            "runtime-preview peer close used the wrong connection: {handle:?}"
+                        ));
+                    }
                     ConnectionEvent::IncomingFlowRequested { request } => {
                         connection
                             .reject_incoming_flow(request, FlowRejectionReason::ResourceLimit)
@@ -371,15 +383,10 @@ async fn drive_active_connection(
         }
     }
 
-    match tokio::time::timeout(
-        SHUTDOWN_TIMEOUT,
-        await_server_transport_close(connection, host),
-    )
-    .await
-    {
+    match tokio::time::timeout(SHUTDOWN_TIMEOUT, await_server_peer_close(connection, host)).await {
         Ok(result) => result,
         Err(_) => Err(anyhow!(
-            "timed out waiting for runtime-preview server transport shutdown"
+            "timed out waiting for runtime-preview server peer close"
         )),
     }
 }
@@ -390,7 +397,30 @@ fn finish_active_connection(
     result: Result<()>,
 ) -> Result<()> {
     let teardown = connection.teardown(&mut host.negotiation, &mut host.delivery);
-    match (result, teardown.cleanup_error()) {
+    let cleanup_error = teardown.cleanup_error();
+
+    if let Some(termination) = teardown
+        .flow_terminations()
+        .iter()
+        .find(|termination| termination.reliable_obligation_failed)
+    {
+        let teardown_error = match cleanup_error {
+            Some(cleanup_error) => anyhow!(
+                "runtime-preview reliable delivery obligation failed during connection teardown: {termination:?}; cleanup also failed: {cleanup_error}"
+            ),
+            None => anyhow!(
+                "runtime-preview reliable delivery obligation failed during connection teardown: {termination:?}"
+            ),
+        };
+        return match result {
+            Ok(()) => Err(teardown_error),
+            Err(error) => Err(anyhow!(
+                "runtime-preview client failed: {error:#}; teardown also failed: {teardown_error:#}"
+            )),
+        };
+    }
+
+    match (result, cleanup_error) {
         (Ok(()), None) => Ok(()),
         (Err(error), None) => Err(error),
         (Ok(()), Some(cleanup_error)) => Err(anyhow!(
@@ -402,27 +432,16 @@ fn finish_active_connection(
     }
 }
 
-async fn await_server_transport_close(
-    connection: &mut Connection,
-    host: &mut HostState,
-) -> Result<()> {
-    poll_fn(
-        |cx| match connection.poll(cx, &mut host.negotiation, &mut host.delivery) {
-            Poll::Pending => Poll::Pending,
-            Poll::Ready(Err(error))
-                if error.kind() == ConnectionErrorKind::EstablishedTransport =>
-            {
-                Poll::Ready(Ok(()))
-            }
-            Poll::Ready(Err(error)) => Poll::Ready(Err(anyhow!(
-                "runtime-preview connection failed while awaiting server shutdown: {error}"
-            ))),
-            Poll::Ready(Ok(event)) => Poll::Ready(Err(anyhow!(
-                "runtime-preview produced an unexpected event after normal flow shutdown: {event:?}"
-            ))),
-        },
-    )
-    .await
+async fn await_server_peer_close(connection: &mut Connection, host: &mut HostState) -> Result<()> {
+    match next_connection_event(connection, host).await? {
+        ConnectionEvent::PeerClosed { connection: handle } if handle == CLIENT_CONNECTION => Ok(()),
+        ConnectionEvent::PeerClosed { connection: handle } => Err(anyhow!(
+            "runtime-preview peer close used the wrong connection: {handle:?}"
+        )),
+        event => Err(anyhow!(
+            "runtime-preview produced an unexpected event after normal flow shutdown: {event:?}"
+        )),
+    }
 }
 
 fn finish_outbound(

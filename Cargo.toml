@@ -93,8 +93,8 @@ ktx2 = "0.5.0"
 scene = { path = "domain/scene" }
 asset = { path = "domain/asset" }
 product = { path = "domain/product" }
-runen-net = { git = "https://github.com/dornglut/runen-net", rev = "42f2f65fa8006e787bfb089764ce40d96488ecad" }
-runen-net-quic = { git = "https://github.com/dornglut/runen-net", rev = "42f2f65fa8006e787bfb089764ce40d96488ecad" }
+runen-net = { git = "https://github.com/dornglut/runen-net", rev = "2af5700b2889f6503395ffb72ae85f37629f2625" }
+runen-net-quic = { git = "https://github.com/dornglut/runen-net", rev = "2af5700b2889f6503395ffb72ae85f37629f2625" }
 runen-spatial = { git = "https://github.com/dornglut/runen-spatial", rev = "2bb6b2ed89894aefaa39bf0e39d296b703916821" }
 world_ops = { path = "domain/world_ops" }
 world_sdf = { path = "domain/world_sdf" }
