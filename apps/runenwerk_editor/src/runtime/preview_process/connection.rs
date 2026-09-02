@@ -377,6 +377,7 @@ async fn drive_active_connection(
                     | ConnectionEvent::OutboundFlowRejected { .. }
                     | ConnectionEvent::DataReady { .. }
                     | ConnectionEvent::FlowTerminated { .. } => {}
+                    _ => {}
                 }
             }
         }
