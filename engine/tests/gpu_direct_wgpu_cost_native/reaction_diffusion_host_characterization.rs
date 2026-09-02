@@ -11,6 +11,16 @@ const PHASES: [&str; 6] = [
     "completion_readback",
     "total",
 ];
+const STRUCTURE_COUNTS: [&str; 8] = [
+    "resource_count",
+    "node_count",
+    "access_count",
+    "dependency_count",
+    "topological_order_count",
+    "initialization_summary_count",
+    "diagnostic_count",
+    "readback_count",
+];
 
 fn graph_structure(sources: &retained::ProgramSources, envelope: retained::Envelope) -> Value {
     let (graph_label, fragment, readbacks) = retained::offscreen_work(sources, envelope);
@@ -88,15 +98,25 @@ fn growth_summary(smaller: &Value, larger: &Value) -> Value {
             )
         })
         .collect::<serde_json::Map<_, _>>();
-
-    let smaller_nodes = structure_count(smaller, "node_count");
-    let larger_nodes = structure_count(larger, "node_count");
-    let smaller_accesses = structure_count(smaller, "access_count");
-    let larger_accesses = structure_count(larger, "access_count");
+    let structure_growth = STRUCTURE_COUNTS
+        .into_iter()
+        .map(|name| {
+            let smaller_count = structure_count(smaller, name);
+            let larger_count = structure_count(larger, name);
+            assert!(smaller_count > 0.0);
+            (
+                name.to_owned(),
+                json!({
+                    "smaller": smaller_count,
+                    "larger": larger_count,
+                    "larger_over_smaller_ratio": larger_count / smaller_count,
+                }),
+            )
+        })
+        .collect::<serde_json::Map<_, _>>();
 
     json!({
-        "node_count_ratio": larger_nodes / smaller_nodes,
-        "access_count_ratio": larger_accesses / smaller_accesses,
+        "structure_growth": structure_growth,
         "phase_median_growth": phase_growth,
     })
 }
@@ -123,6 +143,7 @@ pub(crate) fn evidence() -> Value {
         },
         "source_audit": {
             "authoring_transaction_snapshot_per_lexical_operation": true,
+            "prepare_node_access_membership_scans_fragment_resources": true,
             "canonical_prepare_initialization_passes": [
                 "validate_fragment_initialization",
                 "simulate_prepared_initialization",
