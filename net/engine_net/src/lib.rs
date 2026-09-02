@@ -3,9 +3,7 @@ extern crate self as engine_net;
 pub mod prelude;
 pub mod protocol;
 pub mod replication;
-pub mod runtime;
 pub mod simulation;
-pub mod transport;
 
 pub use engine_net_macros::{net_component, net_entity};
 pub use engine_sim::{
@@ -14,8 +12,7 @@ pub use engine_sim::{
     SimulationRng, SimulationSeed, SimulationSessionId, SimulationTick, WorldSimulationCodec,
 };
 
-// Re-exports retained only for the remaining replication/prediction migration surface.
+// Re-exports retained only for the remaining live replication/prediction migration surface.
 pub use protocol::*;
 pub use replication::*;
 pub use simulation::*;
-pub use transport::*;

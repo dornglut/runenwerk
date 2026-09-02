@@ -1,5 +1,5 @@
 @startuml
-title net workspace architecture (current after RN8 N2)
+title net workspace architecture (current through RN8 N4)
 
 skinparam componentStyle rectangle
 skinparam packageStyle rectangle
@@ -31,9 +31,8 @@ package "net (remaining Runenwerk migration evidence)" {
 
   package "engine_net" {
     [snapshot / ack / input envelopes] as net_protocol
-    [replication + prediction contracts] as net_replication
-    [replication runtime evidence] as net_runtime
-    [lane / delivery vocabulary] as net_transport
+    [live replication / input contracts] as net_replication
+    [declarative replication metadata] as net_authoring
   }
 
   package "engine_net_macros" {
@@ -58,14 +57,15 @@ engine_io --> net_protocol
 engine_replay --> history
 
 net_replication --> runennet_core : ConnectionHandle identity
-net_runtime --> net_replication
 net_replication --> sim
+net_authoring --> net_replication
 history --> sim
-net_macros --> net_replication
+net_macros --> net_authoring
 
 note right of runennet_core
 Standalone RunenNet is the sole reusable
-connection/session/protocol lifecycle authority.
+connection/session/delivery/replication/prediction
+semantic authority.
 end note
 
 note right of session_projection
@@ -74,14 +74,19 @@ It does not authorize lifecycle mutations.
 end note
 
 note right of net_replication
-engine_net is temporary replication/prediction
-migration evidence. Session authority, ConnectionId,
-Hello/Join lifecycle, and transport runtime are gone.
+engine_net is temporary live migration evidence.
+Dead runtime commands/events, synthetic transport lanes,
+and snapshot-payload prediction scaffolding are gone.
+end note
+
+note right of engine_io
+Engine work queues stage retained messages.
+Queue admission is not RunenNet DeliveryAcceptance.
 end note
 
 note right of runennet_quic
 Concrete QUIC exists for the already-migrated
-preview channel. N2 adds no engine transport adapter.
+preview channel. The engine has no generic transport adapter.
 end note
 
 @enduml

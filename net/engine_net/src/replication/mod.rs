@@ -3,13 +3,12 @@ pub mod driver;
 pub mod extraction;
 pub mod interest;
 pub mod model;
-pub mod prediction;
 pub mod profile;
 pub mod timeline;
 
 pub use diagnostics::{
-    DeltaDebugDump, EntityMapTrace, LaneRouteTrace, ReplicationStats, SnapshotAckOutcome,
-    SnapshotAckRejection, SnapshotDebugDump, delta_debug_dump, snapshot_debug_dump,
+    DeltaDebugDump, EntityMapTrace, ReplicationStats, SnapshotAckOutcome, SnapshotAckRejection,
+    SnapshotDebugDump, delta_debug_dump, snapshot_debug_dump,
 };
 pub use driver::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 pub use extraction::{ReplicationExtractionFilter, extract_replication_deltas};
@@ -20,7 +19,6 @@ pub use model::{
     ReplicatedEntityDescriptor, ReplicatedResourceDescriptor, ReplicationRegistry,
     ReplicationSemantics, ReplicationSemanticsOverrides,
 };
-pub use prediction::{PredictionState as ReplicationPredictionState, ReconciliationResult};
 pub use profile::{
     BandwidthPriority, PredictionMode, Reliability, ReplicationDirection, ReplicationProfile,
     ReplicationProfilePreset,
