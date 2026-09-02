@@ -28,7 +28,7 @@ Retained Runenwerk replication/prediction state may continue to expose diagnosti
 
 Implemented now:
 
-- retained `SnapshotDebugDump`, `DeltaDebugDump`, `LaneRouteTrace`, `EntityMapTrace`, and replication statistics;
+- retained `SnapshotDebugDump`, `DeltaDebugDump`, `EntityMapTrace`, and replication statistics;
 - engine `NetworkDiagnostics`, `ReplicationDiagnostics`, `PredictionDiagnostics`, `ConnectionHealth`, `RoundTripMetrics`, and `NetDiagnosticsView`;
 - `NetworkSessionStatus` as a read-only engine status/host-policy projection whose connected/count fields are synchronized from `RunenNetSessionProjection`;
 - engine owner-routing state reconciled from RunenNet-authorized connection bindings;
@@ -36,7 +36,7 @@ Implemented now:
 - replay validation mismatch reports in `engine_history`;
 - transport-specific diagnostics in the separately maintained transport consumers that actually own them.
 
-The old engine `SessionPhase`, admission state machine, JoinAccepted projection, session runtime events, and generic engine transport runtime are not diagnostics surfaces in the current architecture because that duplicate lifecycle authority has been removed.
+The old engine `SessionPhase`, admission state machine, JoinAccepted projection, session runtime events, generic engine transport runtime, synthetic lane-route trace, and replication-runtime event vocabulary are not current diagnostics surfaces because those duplicate/dead authorities have been removed.
 
 ## Partial Contracts
 
@@ -45,7 +45,7 @@ Partial now:
 - rejection reasons are counted coarsely in some retained replication layers;
 - per-connection replication health remains split between engine checkpoint resources and aggregate diagnostics;
 - interest decisions are not yet explainable per entity/component;
-- queue and retained lane pressure is warning-heavy and not yet a complete inspection model;
+- queue pressure is warning-heavy and not yet a complete inspection model;
 - replay validation does not include all retained network cursor/queue state.
 
 ## Ownership Rules
@@ -56,7 +56,7 @@ Diagnostics may observe:
 - host-owned reconnect attempts and errors;
 - retained replication cursors, baselines, ACK/resync outcomes, prediction counters, and owner routing;
 - runtime work queues;
-- retained snapshot/delta payload shape and lane routing;
+- retained snapshot/delta payload shape;
 - replay validation reports;
 - transport events only at the concrete maintained transport consumer that produces them.
 
@@ -65,6 +65,7 @@ Diagnostics must not:
 - mutate RunenNet membership/lifecycle state;
 - infer admission from a presentation flag instead of RunenNet Core;
 - recreate a session phase state machine;
+- recreate retired lane/delivery semantics for inspection convenience;
 - silently recover from protocol errors;
 - hide missing baselines;
 - become the only place where networking invariants are enforced.
@@ -77,7 +78,7 @@ Useful current or future views may include:
 - replication view: latest cursor, per-connection baseline, last sent, last ACK, and resync reason;
 - prediction view: pending frames, replayed count, corrected count;
 - interest view: inclusion/exclusion reason per entity/component;
-- delivery view: retained lane/profile routing and pressure where still applicable;
+- delivery view only when backed by an actual RunenNet delivery consumer rather than retired engine lane labels;
 - history view: checkpoint tick, hash, and mismatch cause;
 - concrete transport view only in an actual transport-owning consumer.
 
@@ -87,7 +88,7 @@ Useful current or future views may include:
 - Connected/active engine status is derived from accepted RunenNet bindings.
 - Host reconnect counters do not redefine RunenNet retention/replacement semantics.
 - Per-connection replication diagnostics use RunenNet connection identity.
-- Transport diagnostics remain with real transport consumers rather than implying a generic engine transport runtime.
+- Transport/delivery diagnostics remain with real consumers rather than implying a generic engine transport runtime.
 
 ## Future Work Constraints
 

@@ -1,6 +1,5 @@
 use crate::protocol::{DeltaSnapshot, DeltaSnapshotPayload, Snapshot, SnapshotPayload};
-use crate::replication::{NetEntityMapEvent, ReplicationProfilePreset};
-use crate::transport::{DeliveryGuarantee, TransportLane, lane_for_profile, semantics_for_lane};
+use crate::replication::NetEntityMapEvent;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -26,27 +25,6 @@ pub struct DeltaDebugDump {
     pub upsert_count: usize,
     pub remove_count: usize,
     pub payload_bytes: usize,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct LaneRouteTrace {
-    pub profile: ReplicationProfilePreset,
-    pub lane: TransportLane,
-    pub guarantee: DeliveryGuarantee,
-    pub ordered: bool,
-}
-
-impl LaneRouteTrace {
-    pub fn from_profile(profile: ReplicationProfilePreset) -> Self {
-        let lane = lane_for_profile(profile);
-        let semantics = semantics_for_lane(lane);
-        Self {
-            profile,
-            lane,
-            guarantee: semantics.guarantee,
-            ordered: semantics.ordered,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -146,9 +124,9 @@ pub fn delta_debug_dump(delta: &DeltaSnapshot, payload: &DeltaSnapshotPayload) -
 
 #[cfg(test)]
 mod tests {
-    use super::{LaneRouteTrace, ReplicationStats, snapshot_debug_dump};
+    use super::{ReplicationStats, snapshot_debug_dump};
     use crate::protocol::{Snapshot, SnapshotPayload};
-    use crate::replication::{ReplicationProfilePreset, SnapshotCursor};
+    use crate::replication::SnapshotCursor;
     use engine_sim::{NetEntityId, SimulationTick};
 
     #[test]
@@ -166,12 +144,6 @@ mod tests {
         assert_eq!(dump.cursor, 4);
         assert_eq!(dump.entity_count, 1);
         assert_eq!(dump.payload_bytes, 3);
-    }
-
-    #[test]
-    fn lane_trace_maps_profile_to_expected_lane() {
-        let trace = LaneRouteTrace::from_profile(ReplicationProfilePreset::InputCommand);
-        assert_eq!(trace.lane, crate::transport::TransportLane::InputStream);
     }
 
     #[test]

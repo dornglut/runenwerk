@@ -34,7 +34,7 @@ Current networking ownership and architecture are defined by:
 - [networking architecture](net-architecture.md);
 - [engine integration design](../design/active/net-plugin-runtime-bridge.md).
 
-## Current Baseline After RN8 N2
+## Current Baseline Through RN8 N4
 
 Connection/session authority has moved out of retained `engine_net` and into standalone RunenNet Core.
 
@@ -42,18 +42,18 @@ Current boundary:
 
 - RunenNet `ConnectionHandle` is the connection identity used by engine routing and retained replication state;
 - RunenNet compatibility negotiation and `Session` own admission/binding/loss/retention/replacement/expiry/closure semantics;
-- `engine/src/plugins/net` owns engine scheduling, read-only projections, owner routing, host reconnect policy, diagnostics, and retained replication/prediction integration;
-- retained `engine_net` contains only evidence-backed replication/prediction/protocol-payload/macro migration contracts;
-- the old `engine_net` session state machines, `ConnectionId`, `ProtocolVersion`, Hello/Join admission, session runtime bridge, and client/server connection runtimes are removed;
+- `engine/src/plugins/net` owns engine scheduling, read-only projections, owner routing, host reconnect policy, diagnostics, and retained live replication/input/prediction integration;
+- retained `engine_net` contains only evidence-backed live replication/protocol-payload/input/authoring migration contracts;
+- old connection/session lifecycle state, replication-runtime command/events, synthetic transport-lane/delivery-guarantee mappings, lane-route diagnostics, and the standalone snapshot-payload prediction helper are removed;
 - no engine `runen-net-quic` or replacement transport runtime is introduced because the engine currently has no maintained concrete transport consumer;
 - `engine_sim` and `engine_history` remain independent Runenwerk simulation/history owners.
 
-Retained replication substrate includes:
+Retained live replication substrate includes:
 
 - snapshot, delta, ACK, input-frame, and typed-payload envelopes;
 - per-connection baseline/checkpoint state keyed by RunenNet `ConnectionHandle`;
 - snapshot/delta construction and apply driver contracts;
-- prediction/input integration;
+- live pending-input prediction/replay integration in the engine plugin;
 - interest/streaming state and diagnostics;
 - declarative replication metadata/macros pending later disposition.
 
@@ -71,17 +71,30 @@ It established retained replication invariants that RN8 lifecycle cuts must pres
 
 These completed phases do not authorize restoring their former `engine_net` session/runtime placement.
 
+## Post-N2 Integration Constraints
+
+Accepted N3 investigation #390 established that the remaining live semantic migration is not one implementation-ready replication/prediction cut:
+
+- RunenNet prediction observes `ClientReplicationSet`, so prediction cannot lead without creating a replication mirror;
+- authority replication needs actual RunenNet `DeliveryAcceptance`; engine work-queue admission is not equivalent;
+- client replication needs unambiguous lineage routing plus truthful finite retained-state accounting/limits;
+- authority input needs an accepted finite input-window/future-horizon/resource policy;
+- declarative profile/reliability/interest/authoring disposition remains coupled to #322/RunenECS rather than the deleted synthetic lane mapping.
+
+These are prerequisite ownership questions, not missing RunenNet semantics. Do not solve them with aliases, guessed defaults, or interim runtimes.
+
 ## Remaining Replication Work
 
 The following concerns remain real, but their owning RN8 slice must be derived from current authority when prerequisites permit it:
 
+- migration of live client/authority replication consistency state to RunenNet;
+- participant input authority and prediction/reconciliation integration;
 - standard ECS component/resource extraction and apply;
 - declarative replication authoring beyond low-level driver escape hatches;
-- prediction/reconciliation and input-ack clarity;
 - richer interest/relevancy resolution and explanation;
 - recovery/history integration where it is not already standardized by RunenNet;
 - per-connection diagnostics and desync inspection;
-- eventual removal of retained `engine_net` replication/prediction residue after its maintained consumers migrate.
+- eventual removal of retained `engine_net` live residue after its maintained consumers migrate.
 
 This list is a capability inventory, not an implementation sequence.
 
@@ -93,6 +106,7 @@ Future work must preserve these boundaries:
 - Runenwerk owns ECS/scheduler/gameplay/world/product policy and presentation.
 - Replication work must follow the available RunenECS boundary rather than freezing a future Replicated View contract early.
 - Transport realization is added only for a proven maintained consumer.
+- Engine work queues are staging, not RunenNet delivery acceptance.
 - Host reconnect scheduling remains separate from RunenNet session retention/recovery semantics.
 - `engine_net` is migration residue, not the destination for new reusable networking semantics.
 - Clean migration/deletion is preferred over aliases, forwarding APIs, compatibility runtimes, or parallel authority.
@@ -113,4 +127,4 @@ Any later replication migration must continue to prove, as applicable:
 
 Do not use this roadmap to infer or pre-publish the next RN8 implementation issue.
 
-After N2 is merged and accepted-main validation is green, re-establish current Runenwerk, RunenNet, RunenECS, and active architecture authority. Then derive exactly one next RN8 boundary from the remaining consumer graph and prerequisite state.
+After each RN8 child is merged and accepted-main validation is green, re-establish current Runenwerk, RunenNet, RunenECS, and active architecture authority. Then derive exactly one next RN8 boundary from the remaining consumer graph and prerequisite state.
