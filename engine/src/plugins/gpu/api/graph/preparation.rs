@@ -92,7 +92,7 @@ impl GpuPreparedWorkGraph {
                     "prepare fewer fragments in one bounded graph",
                 )
             })?;
-            register_fragment_resources(
+            let fragment_resource_identities = register_fragment_resources(
                 graph_label,
                 fragment,
                 &mut declared_resources,
@@ -115,7 +115,12 @@ impl GpuPreparedWorkGraph {
                         "retain nodes allocated monotonically by their originating fragment builder",
                     ));
                 }
-                validate_node_resources(graph_label, fragment, node)?;
+                validate_node_resources(
+                    graph_label,
+                    fragment,
+                    node,
+                    &fragment_resource_identities,
+                )?;
                 let id = GpuPreparedWorkNodeId::new(fragment_ordinal, node.id().local);
                 if node_locations
                     .insert(id, (fragment_index, node_index))
@@ -297,7 +302,8 @@ fn register_fragment_resources(
     fragment: &GpuWorkFragment,
     declared: &mut BTreeMap<GpuWorkResourceId, GpuResourceRef>,
     storage: &mut BTreeMap<GpuWorkResourceId, GpuResourceRef>,
-) -> Result<(), GpuWorkGraphError> {
+) -> Result<BTreeSet<GpuWorkResourceId>, GpuWorkGraphError> {
+    let mut fragment_resource_identities = BTreeSet::new();
     for resource in fragment.resources() {
         let identity = resource.diagnostic_identity();
         if declared
@@ -332,14 +338,16 @@ fn register_fragment_resources(
             ));
         }
         storage.entry(storage_identity).or_insert(storage_resource);
+        fragment_resource_identities.insert(resource.diagnostic_identity());
     }
-    Ok(())
+    Ok(fragment_resource_identities)
 }
 
 fn validate_node_resources(
     graph_label: &str,
     fragment: &GpuWorkFragment,
     node: &GpuWorkNode,
+    fragment_resource_identities: &BTreeSet<GpuWorkResourceId>,
 ) -> Result<(), GpuWorkGraphError> {
     node.operation().validate_shape().map_err(|source| {
         GpuWorkGraphError::with_source(
@@ -360,11 +368,7 @@ fn validate_node_resources(
     })?;
     for access in node.accesses() {
         let identity = access.declared_resource_identity();
-        if !fragment
-            .resources()
-            .iter()
-            .any(|resource| resource.diagnostic_identity() == identity)
-        {
+        if !fragment_resource_identities.contains(&identity) {
             return Err(graph_error(
                 "validate GPU work-node resource identity",
                 graph_label,

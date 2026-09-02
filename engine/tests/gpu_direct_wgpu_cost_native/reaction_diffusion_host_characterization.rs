@@ -144,7 +144,8 @@ pub(crate) fn evidence() -> Value {
         "source_audit": {
             "authoring_whole_builder_snapshot_per_lexical_operation": false,
             "authoring_transaction_mechanism": "bounded newly inserted resource journal with rollback on failed lexical insertion",
-            "prepare_node_access_membership_scans_fragment_resources": true,
+            "prepare_node_access_membership_scans_fragment_resources": false,
+            "prepare_resource_membership_mechanism": "fragment-local diagnostic-identity index built during canonical fragment resource registration",
             "canonical_prepare_initialization_passes": [
                 "validate_fragment_initialization",
                 "simulate_prepared_initialization",
