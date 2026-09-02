@@ -20,9 +20,9 @@ use runen_net::{
     },
 };
 use runen_net_quic::{
-    ClientEndpoint, ClientTrust, Connection, ConnectionErrorKind, ConnectionEvent, EndpointConfig,
-    FlowRejectionReason, FlowTerminationCause, FlowTerminationOrigin, InboundFlowConfig,
-    OutboundFlowConfig, ProfileConfig, SemanticRole, SubmitOutcome,
+    ClientEndpoint, ClientTrust, Connection, ConnectionEvent, EndpointConfig, FlowRejectionReason,
+    FlowTerminationCause, FlowTerminationOrigin, InboundFlowConfig, OutboundFlowConfig,
+    ProfileConfig, SemanticRole, SubmitOutcome,
 };
 use std::{
     future::poll_fn,
@@ -371,15 +371,10 @@ async fn drive_active_connection(
         }
     }
 
-    match tokio::time::timeout(
-        SHUTDOWN_TIMEOUT,
-        await_server_transport_close(connection, host),
-    )
-    .await
-    {
+    match tokio::time::timeout(SHUTDOWN_TIMEOUT, await_server_peer_close(connection, host)).await {
         Ok(result) => result,
         Err(_) => Err(anyhow!(
-            "timed out waiting for runtime-preview server transport shutdown"
+            "timed out waiting for runtime-preview server peer close"
         )),
     }
 }
@@ -402,27 +397,16 @@ fn finish_active_connection(
     }
 }
 
-async fn await_server_transport_close(
-    connection: &mut Connection,
-    host: &mut HostState,
-) -> Result<()> {
-    poll_fn(
-        |cx| match connection.poll(cx, &mut host.negotiation, &mut host.delivery) {
-            Poll::Pending => Poll::Pending,
-            Poll::Ready(Err(error))
-                if error.kind() == ConnectionErrorKind::EstablishedTransport =>
-            {
-                Poll::Ready(Ok(()))
-            }
-            Poll::Ready(Err(error)) => Poll::Ready(Err(anyhow!(
-                "runtime-preview connection failed while awaiting server shutdown: {error}"
-            ))),
-            Poll::Ready(Ok(event)) => Poll::Ready(Err(anyhow!(
-                "runtime-preview produced an unexpected event after normal flow shutdown: {event:?}"
-            ))),
-        },
-    )
-    .await
+async fn await_server_peer_close(connection: &mut Connection, host: &mut HostState) -> Result<()> {
+    match next_connection_event(connection, host).await? {
+        ConnectionEvent::PeerClosed { connection: handle } if handle == CLIENT_CONNECTION => Ok(()),
+        ConnectionEvent::PeerClosed { connection: handle } => Err(anyhow!(
+            "runtime-preview peer close used the wrong connection: {handle:?}"
+        )),
+        event => Err(anyhow!(
+            "runtime-preview produced an unexpected event after normal flow shutdown: {event:?}"
+        )),
+    }
 }
 
 fn finish_outbound(
