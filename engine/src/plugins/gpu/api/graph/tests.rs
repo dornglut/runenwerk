@@ -5,4 +5,5 @@ mod hazards;
 mod initial_content;
 mod initialization;
 mod preparation_resource_membership;
+mod retained_initialization;
 mod support;
