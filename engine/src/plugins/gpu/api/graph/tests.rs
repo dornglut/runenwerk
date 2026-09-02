@@ -1,4 +1,5 @@
 mod authoring;
+mod characterization;
 mod composition;
 mod hazards;
 mod initial_content;
