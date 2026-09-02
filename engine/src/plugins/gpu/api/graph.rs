@@ -27,8 +27,8 @@ pub use dependency::{GpuDependencyReason, GpuDependencyRegion, GpuWorkDependency
 pub use diagnostics::GpuPreparedWorkDiagnostic;
 pub use identity::{GpuPreparedWorkNodeId, GpuWorkNodeId};
 pub(crate) use initial_content::GpuPreparedInitialContent;
-pub(crate) use initialization::{initial_coverage_contains, initial_coverage_intersection};
 pub use initialization::GpuPreparedResourceInitialization;
+pub(crate) use initialization::{initial_coverage_contains, initial_coverage_intersection};
 pub use preparation::{GpuPreparedWorkGraph, GpuPreparedWorkNode};
 
 #[cfg(test)]
