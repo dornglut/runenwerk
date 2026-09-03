@@ -42,7 +42,7 @@ The audit asks four questions:
 1. How should every externally meaningful public concept family be classified?
 2. Does runtime program admission depend on filesystem/module/package/compiler-process or authoring-language policy?
 3. Does ordinary/public RunenGPU expose raw backend reach-through or duplicate execution/interface authority?
-4. Which concrete findings require a later bounded correction rather than being silently absorbed into this audit?
+4. Does any current public concept require correction before later G8 proof or GX extraction?
 
 ## Evidence inspected
 
@@ -61,7 +61,7 @@ Primary code evidence on the accepted base includes the public GPU root and the 
 - `engine/src/plugins/gpu/api/graph.rs` and relevant `api/graph/*`
 - `engine/src/plugins/gpu/api/handles.rs`
 - `engine/src/plugins/gpu/api/operation.rs`
-- `engine/src/plugins/gpu/api/ordinary.rs` and ordinary transfer/resource/render helpers through their public exports
+- `engine/src/plugins/gpu/api/ordinary.rs` and ordinary helper modules through their public exports/inherent methods
 - `engine/src/plugins/gpu/api/pipeline_realization.rs`
 - `engine/src/plugins/gpu/api/program.rs` and relevant `api/program/*`
 - `engine/src/plugins/gpu/api/readback_id.rs`
@@ -76,7 +76,7 @@ Primary code evidence on the accepted base includes the public GPU root and the 
 - `engine/src/plugins/gpu/api/work.rs`
 - `engine/src/plugins/gpu/api/work_resource_id.rs`
 - `engine/src/plugins/gpu/backend/mod.rs`
-- relevant private `engine/src/plugins/gpu/backend/wgpu/*` execution/continuity realization terminals
+- relevant private `engine/src/plugins/gpu/backend/wgpu/*` execution/continuity/realization terminals
 - `engine/Cargo.toml`
 
 Accepted semantic evidence:
@@ -116,13 +116,13 @@ external authoring/toolchain owner
 
 No reviewed public program contract owns filesystem paths, package/module discovery, compiler subprocesses, WESL/Slang source variants, source watching, reload scheduling, or last-known-good policy.
 
-One material public-authority inconsistency remains: retained continuity/reconstruction observation accepts `GpuWorkResourceId`, even though the handle contract defines that identity as diagnostic-only and says ordinary APIs should use typed resource authority. That correction is split to blocked follow-up `#420`. The internal identity/map key and accepted G7B lifecycle semantics remain valid.
+No material G8-N01/N02 correction was found after complete review.
 
-No second material G8-N01/N02 correction was found.
+A candidate concern about retained lifecycle observation was rejected on re-review: `diagnostic_identity()` is explicitly allowed for process-local diagnostic/correlation use, the retained methods in question only return lifecycle evidence, and the state-changing reconstruction path already accepts typed `GpuResourceRef` targets through canonical work. Replacing those observation keys would add API churn without correcting backend leakage or resource authority.
 
 ## Complete public-concept classification
 
-The table groups related types by one semantic owner. A family is not accepted merely because it resembles WGPU/WebGPU terminology; it is accepted only where the public meaning is independently implementable without exposing the private backend object or mechanism.
+The tables group related types by semantic owner. A family is not accepted merely because it resembles WGPU/WebGPU terminology; it is accepted only where the public meaning is independently implementable without exposing the private backend object or mechanism.
 
 ### Context admission, capability, device facts, and limits
 
@@ -134,7 +134,7 @@ The table groups related types by one semantic owner. A family is not accepted m
 | normalized limits, alignments, format roles, workload budgets | portable baseline | Accepted. The vocabulary is deliberately closed around current work-admission needs. |
 | backend family | industry/backend-shaped but independently implementable | Accepted as selection/evidence policy. Vulkan, Metal, D3D12, OpenGL and browser WebGPU family identity does not expose backend machinery. |
 | adapter class, power preference, software fallback and portability policy | portable baseline | Accepted. Another provider can implement the same request/evidence semantics. |
-| crate-private `WgpuContextState` stored by opaque `GpuContext` | WGPU-specific private implementation detail | Accepted private representation; not public semantic authority. |
+| crate-private `WgpuContextState` stored by opaque `GpuContext` | WGPU-specific private implementation detail | Accepted private representation; public vocabulary does not expose it. |
 
 ### Resources, typed handles, formats, access, and lifecycle
 
@@ -146,9 +146,9 @@ The table groups related types by one semantic owner. A family is not accepted m
 | buffer/texture usages, dimensions, extents, aspects, view/sampler/query descriptors | portable GPU baseline | Accepted. These are independently implementable GPU resource semantics. |
 | normalized texture formats and format capability roles | portable baseline / industry-shaped | Accepted because support is negotiated and the set is deliberately normalized rather than exposing the backend enum. |
 | typed buffer/texture accesses, ranges/subresources and access kinds | genuinely generic correctness contract | Accepted. They feed the single work/hazard authority. |
-| `GpuWorkResourceId` | generic process-local logical/map identity with diagnostic public observation | Accepted internally and diagnostically; **not accepted as ordinary operational lookup authority**. See F1 / `#420`. |
+| `GpuWorkResourceId` and diagnostic identity exposure | generic process-local logical/correlation identity | Accepted. Numeric components have no persistence/replay/wire/ABI/cache promise; diagnostic observation does not replace typed resource authority for work. |
 
-The handle contract is explicit that diagnostic identities are not persistence, replay, wire, ABI, cache, or content identities. `GpuResourceRef` is appropriate for kind-preserving relationships/inspection; ordinary operational APIs should retain typed resource authority.
+The handle contract deliberately distinguishes typed operational resource authority from process-local diagnostic identity. `GpuResourceRef` remains the kind-preserving reference used where a generic resource relationship is actually required.
 
 ### CPU/GPU data, transfer, upload, and readback
 
@@ -186,7 +186,7 @@ A source revision permits an external source owner to publish a later canonical 
 | direct/indirect dispatch intent and draw intent/ranges | portable GPU execution semantics | Accepted. Indirect argument access is represented through typed resource access rather than a backend command. |
 | render attachments, load/store, depth/stencil, vertex/index, primitive/blend/multisample state | portable GPU render-pass/pipeline baseline | Accepted. These are industry/WebGPU-shaped but independently implementable and contain no raw WGPU pass/encoder object. |
 | graph preparation, dependency/hazard/initialization validation and prepared work | genuinely generic correctness authority | Accepted. There remains one canonical preparation path. |
-| operation/access/authoring/graph errors | genuinely generic structured correctness diagnostics | Accepted. Causes name logical contract failures and may carry diagnostic resource correlation without granting raw identity construction. |
+| operation/access/authoring/graph errors | genuinely generic structured correctness diagnostics | Accepted. Causes name logical contract failures and may carry diagnostic resource correlation without granting raw resource construction. |
 | ordinary authoring helpers and `submit_work` | generic convenience facade | Accepted because they delegate into the same canonical graph/preparation/submission authority rather than creating a second path. |
 
 ### Submission, completion, failure, execution pressure, and observation
@@ -197,8 +197,8 @@ A source revision permits an external source owner to publish a later canonical 
 | execution lifecycle state, pressure policy and execution stats | genuinely generic operational contract | Accepted. Record/staging/readback counts are RunenGPU authority, not backend residency promises. |
 | structured preparation/rejection/failure categories | genuinely generic normalized failure contract | Accepted. Backend-validation/resource-exhaustion categories report failure class without exposing backend error types. |
 | retained initialized coverage and opaque content continuity | genuinely generic generation-local lifecycle facts | Accepted G7B authority; they remain independent from reconstruction evidence. |
+| retained lifecycle/reconstruction lookup by `GpuWorkResourceId` | diagnostic observation | Accepted. The lookup returns point-in-time evidence; it does not mutate resource state or grant reconstruction authority. |
 | private `WgpuExecutionState` referenced inside opaque prepared values | WGPU-specific private implementation detail | Accepted private representation. |
-| retained continuity/reconstruction observation by diagnostic ID | public-authority mismatch | **Bounded correction required** in `#420`, after this audit is accepted. |
 
 ### Realization and pipeline-realization observation
 
@@ -228,14 +228,14 @@ The word `backend` in a normalized failure category is not itself public backend
 |---|---|---|
 | retained reconstruction requirement/state | genuinely generic generation-aware lifecycle evidence | Accepted. Source materialization, deterministic replay, external reimport and permanent-unavailability requirements are owner/recovery facts, not backend recreation commands. |
 | explicit device-generation replacement result/error | genuinely generic normalized lifecycle operation | Accepted. It reports generation-aware replacement failure without choosing application recovery policy. |
-| reconstruction work preparation | genuinely generic canonical-work integration | Accepted because reconstruction becomes established only through the same preparation/submission/completion authority. |
+| reconstruction work preparation with typed `GpuResourceRef` targets | genuinely generic canonical-work integration | Accepted. State-changing reconstruction uses typed resource references and becomes established only through the same preparation/submission/completion authority. |
 | automatic reset/replay/retry/degrade/abort policy | outside RunenGPU | Correctly absent. Application/Runenwerk remains the policy owner. |
 
 ### Diagnostics, provenance, and correlation
 
-Across the families above, labels, provenance, candidate/submission/readback/context/surface correlation, structured causes, corrections, and point-in-time stats are classified as **genuinely generic diagnostic/operational facts** when they remain bounded and process-local as documented.
+Across the families above, labels, provenance, candidate/submission/readback/context/surface/resource correlation, structured causes, corrections, and point-in-time stats are classified as **genuinely generic diagnostic/operational facts** when they remain bounded and process-local as documented.
 
-Diagnostic IDs do not become persistence or operational authority merely because they are visible in errors or reports. F1 exists precisely because retained lifecycle lookup crossed that boundary.
+Diagnostic observation by a process-local ID is not equivalent to operational resource authority. The latter remains typed at work/resource/reconstruction boundaries.
 
 ## G8-N01 — authoring-toolchain independence
 
@@ -319,9 +319,17 @@ This is **WGPU-specific private implementation detail**, not public-semantic lea
 
 - callers cannot access or name those private values through the public API;
 - public semantics are expressed by normalized context/generation/submission/status/error contracts;
-- a future provider may replace the private representation without requiring the public vocabulary to expose WGPU.
+- a future provider need not expose WGPU vocabulary to preserve the public contract.
 
-G8 does not need a public backend trait or a second backend merely to hide an implementation already hidden by the crate boundary.
+Any future private implementation change must of course preserve whatever public Rust trait/behavior guarantees are intentionally supported; that does not justify a public backend abstraction today.
+
+### Diagnostic observation versus operational authority
+
+The earlier candidate finding that produced `#420` does not survive the full audit.
+
+`diagnostic_identity()` is documented for process-local diagnostics/correlation. Retained continuity/reconstruction lookup uses that identity only to retrieve point-in-time evidence. `GpuRetainedReconstructionRequirement` explicitly describes itself as lifecycle evidence and grants neither initialized coverage nor continuity. The action path `prepare_reconstruction_work_graph` accepts `GpuResourceRef` targets and re-establishes state only through canonical work.
+
+Therefore observation-by-ID does not bypass typed resource authority. `#420` was closed `not_planned`; no API correction is justified without a concrete future consumer/ergonomic failure.
 
 ### Duplicate-authority census
 
@@ -337,36 +345,21 @@ No second ordinary authority was found:
 
 Verdict: **one logical work/execution authority and one effective program-interface authority remain**.
 
-### F1 — diagnostic resource identity used as operational retained-state lookup
-
-**Classification:** bounded correction required.
-
-Evidence:
-
-- typed handles document `diagnostic_identity()` as process-local diagnostics only, with no persistence/replay/wire/ABI/cache guarantee;
-- `GpuResourceRef` says ordinary APIs should accept kind-specific handles;
-- `GpuWorkResourceId` documents only process-local logical identity and diagnostic numeric components;
-- retained continuity/reconstruction observation accepts the ID directly as the public lookup argument.
-
-This does not invalidate the lifecycle semantics or make them backend-specific. The private retained map may continue to key by `GpuWorkResourceId`. The defect is the **public authority shape**: callers are asked to promote a diagnostic identity into an operational lookup argument.
-
-Disposition: `#420` owns the smallest typed-observation correction **after #419 is accepted**. It must not redesign retained state, persistence identity, or generation semantics.
-
 ### G8-N02 verdict
 
-**Pass with one bounded follow-up finding.**
+**Pass at the current public/runtime boundary.**
 
-The existing public concept model is broadly backend-neutral; WGPU-specific machinery is private. The sole material public-boundary mismatch found is F1 / `#420`.
+The reviewed public concept model is backend-neutral at the level this proof role requires: backend-specific machinery is private, WGPU/WebGPU-shaped public concepts have independent GPU semantics, and no unexplained raw-backend or duplicate authority remains.
 
 ## Findings and dispositions
 
 | ID | Finding | Disposition |
 |---|---|---|
-| F1 | retained lifecycle observation accepts diagnostic `GpuWorkResourceId` as operational lookup authority | **bounded correction required** — `#420`, blocked until this audit is accepted |
-| F2 | opaque public context/prepared values contain private WGPU state | **private implementation detail** — no correction |
-| F3 | backend families, present modes, formats, render-pass and pipeline concepts visibly follow current GPU/WebGPU industry semantics | **accepted portable / independently implementable contract** — support is normalized/negotiated and raw objects remain private |
-| F4 | Naga parses/validates canonical WGSL | **compiler-specific private implementation detail** — accepted by shader-boundary design |
-| F5 | source registry supports revisions and later admissions | **accepted runtime artifact authority** — discovery/reload/toolchain policy remains external |
+| F1 | opaque public context/prepared values contain private WGPU state | **private implementation detail** — no correction |
+| F2 | backend families, present modes, formats, render-pass and pipeline concepts visibly follow current GPU/WebGPU industry semantics | **accepted portable / independently implementable contract** — support is normalized/negotiated and raw objects remain private |
+| F3 | Naga parses/validates canonical WGSL | **compiler-specific private implementation detail** — accepted by shader-boundary design |
+| F4 | source registry supports revisions and later admissions | **accepted runtime artifact authority** — discovery/reload/toolchain policy remains external |
+| F5 | retained lifecycle/reconstruction observation is keyed by process-local diagnostic identity while reconstruction work uses typed resource references | **accepted diagnostic/operational separation** — no correction; retracted `#420` |
 | F6 | `engine/Cargo.toml` contains many non-GPU dependencies | **evidence-attribution constraint** — the monolithic host manifest is not future RunenGPU package authority; prove the minimal manifest at GX |
 | F7 | prepared data/transfer/readback public contracts describe byte layout, staging intent and decoding | **accepted portable contract** — no backend staging/mapping object is public |
 | F8 | reconstruction requirement/state and device-generation replacement are public | **accepted generic lifecycle evidence** — application recovery policy remains external |
@@ -380,6 +373,7 @@ This audit does **not** justify:
 - introducing a second backend only as proof theater;
 - adding a public backend trait before a second implementation requires it;
 - moving every `impl GpuContext` method physically out of `backend/wgpu` when its public semantics are normalized and its concrete state is private;
+- replacing diagnostic retained-state lookup solely with new typed overloads/traits when state-changing reconstruction already uses typed resource references;
 - creating a standalone `runen-gpu` manifest before GX;
 - deleting source revision/provenance because external source owners can use them without ceding toolchain ownership;
 - turning Naga into a public interface;
@@ -399,9 +393,7 @@ Those changes would add abstraction without evidence and risk duplicate authorit
 
 Accept `#419` as the G8-N01/N02 audit only after this report-only delivery is reviewed on one unchanged head and repository validation/diff hygiene pass.
 
-After merge, observe accepted-main validation before closing `#419`. Then activate **`#420` first**, because it is the concrete public-authority inconsistency discovered by this audit. Do not start diagnostics/observability/browser/reproducibility expansion in parallel merely because later G8 proof roles exist.
-
-After `#420` is accepted on main, reassess the remaining G8 proof matrix and choose the next smallest evidence-driven slice.
+After merge, observe accepted-main validation before closing `#419`. Then reassess the remaining G8 proof matrix from accepted main and choose the next smallest evidence-driven slice. Do not pre-activate diagnostics, browser, operational, reproducibility, or GX work from this audit branch.
 
 ## Acceptance checklist for #419
 
@@ -412,9 +404,9 @@ After `#420` is accepted on main, reassess the remaining G8 proof matrix and cho
 - [x] private compiler analysis distinguished from authoring ownership;
 - [x] raw backend reach-through census completed;
 - [x] duplicate-authority census completed;
-- [x] material finding split to bounded follow-up `#420`;
+- [x] candidate typed-observation correction critically re-reviewed and rejected as unnecessary;
 - [x] standalone-manifest evidence gap recorded without pre-creating GX work;
 - [ ] report delivery reviewed on one unchanged branch head;
 - [ ] repository `cargo validate` / documentation validation green on that head;
 - [ ] diff hygiene and tracked-state cleanliness observed;
-- [ ] accepted-main validation observed before closing `#419` and activating `#420`.
+- [ ] accepted-main validation observed before closing `#419` and activating any later G8 slice.
