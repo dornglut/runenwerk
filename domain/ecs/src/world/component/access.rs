@@ -77,8 +77,7 @@ impl World {
         Ok(Mut { value })
     }
 
-    #[doc(hidden)]
-    pub fn __insert_component<T: Component>(
+    pub(crate) fn __insert_component<T: Component>(
         &mut self,
         entity: Entity,
         component: T,
@@ -125,8 +124,10 @@ impl World {
         self.record_component_change(entity, component_type, T::component_name(), kind);
     }
 
-    #[doc(hidden)]
-    pub fn __remove_component<T: Component>(&mut self, entity: Entity) -> Result<T, EntityError> {
+    pub(crate) fn __remove_component<T: Component>(
+        &mut self,
+        entity: Entity,
+    ) -> Result<T, EntityError> {
         self.ensure_entity_exists(entity)?;
         let value = self
             .archetype_registry
