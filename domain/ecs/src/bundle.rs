@@ -26,7 +26,7 @@ impl BundleComponentDescriptor {
         }
     }
 
-    pub(crate) const fn type_id(self) -> TypeId {
+    pub(crate) const fn component_type_id(self) -> TypeId {
         self.type_id
     }
 
@@ -96,7 +96,7 @@ impl BundleComponentValue {
     }
 
     fn into_typed<T: Component>(self) -> Option<T> {
-        if self.descriptor.type_id() != TypeId::of::<T>() {
+        if self.descriptor.component_type_id() != TypeId::of::<T>() {
             return None;
         }
         let value = self.value.downcast::<Box<T>>().ok()?;
@@ -131,7 +131,7 @@ impl BundleComponents {
         let index = self
             .components
             .iter()
-            .position(|component| component.descriptor().type_id() == type_id)?;
+            .position(|component| component.descriptor().component_type_id() == type_id)?;
         self.components.remove(index).into_typed::<T>()
     }
 
@@ -202,8 +202,8 @@ pub(crate) fn prepare_bundle<B: Bundle>(bundle: B) -> PreparedBundle {
     );
     for (descriptor, value) in descriptors.iter().zip(&values) {
         assert_eq!(
-            descriptor.type_id(),
-            value.descriptor().type_id(),
+            descriptor.component_type_id(),
+            value.descriptor().component_type_id(),
             "Bundle descriptor/value type order must match"
         );
     }
