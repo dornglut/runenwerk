@@ -84,8 +84,12 @@ impl GpuRetainedReconstructionSeed {
 /// Replacement is explicit and transactional: a failed request leaves the current context intact.
 #[derive(Debug)]
 pub enum GpuDeviceGenerationReplacementError {
-    /// Submitted GPU work is still nonterminal, so the retained-state handoff is not stable yet.
-    ActiveExecution { in_flight_submissions: usize },
+    /// Submitted GPU execution or readback observation is still nonterminal, so the retained-state
+    /// handoff is not stable yet. Merely prepared, unsubmitted work does not block replacement.
+    ExecutionNotQuiescent {
+        in_flight_submissions: usize,
+        pending_readbacks: usize,
+    },
     /// The process-local generation counter cannot advance without wrapping.
     GenerationExhausted,
     /// Fresh adapter/device admission failed; the current generation remains owned by the caller.
@@ -95,11 +99,12 @@ pub enum GpuDeviceGenerationReplacementError {
 impl fmt::Display for GpuDeviceGenerationReplacementError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::ActiveExecution {
+            Self::ExecutionNotQuiescent {
                 in_flight_submissions,
+                pending_readbacks,
             } => write!(
                 formatter,
-                "GPU device-generation replacement requires quiescent submitted work; in-flight submissions: {in_flight_submissions}"
+                "GPU device-generation replacement requires quiescent submitted work and readback observation; in-flight submissions: {in_flight_submissions}, pending readbacks: {pending_readbacks}"
             ),
             Self::GenerationExhausted => formatter.write_str(
                 "GPU device-generation replacement exhausted the process-local generation identity space",
@@ -116,7 +121,7 @@ impl std::error::Error for GpuDeviceGenerationReplacementError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::ContextRequest(error) => Some(error),
-            Self::ActiveExecution { .. } | Self::GenerationExhausted => None,
+            Self::ExecutionNotQuiescent { .. } | Self::GenerationExhausted => None,
         }
     }
 }
