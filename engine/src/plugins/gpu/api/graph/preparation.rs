@@ -68,6 +68,7 @@ pub struct GpuPreparedWorkGraph {
     diagnostics: Vec<GpuPreparedWorkDiagnostic>,
     initial_content: Vec<GpuPreparedInitialContent>,
     retained_seed: Vec<GpuRetainedInitializationSeed>,
+    reconstruction_targets: BTreeSet<GpuWorkResourceId>,
     failure_preserved_coverage: BTreeMap<GpuWorkResourceId, GpuInitialCoverage>,
 }
 
@@ -83,6 +84,20 @@ impl GpuPreparedWorkGraph {
         label: GpuResourceLabel,
         fragments: impl IntoIterator<Item = GpuWorkFragment>,
         retained_coverage: &[GpuRetainedInitializationSeed],
+    ) -> Result<Self, GpuWorkGraphError> {
+        Self::prepare_with_retained_coverage_and_reconstruction(
+            label,
+            fragments,
+            retained_coverage,
+            &[],
+        )
+    }
+
+    pub(crate) fn prepare_with_retained_coverage_and_reconstruction(
+        label: GpuResourceLabel,
+        fragments: impl IntoIterator<Item = GpuWorkFragment>,
+        retained_coverage: &[GpuRetainedInitializationSeed],
+        reconstruction_targets: &[GpuResourceRef],
     ) -> Result<Self, GpuWorkGraphError> {
         let fragments = fragments.into_iter().collect::<Vec<_>>();
         let graph_label = label.as_str();
@@ -155,6 +170,11 @@ impl GpuPreparedWorkGraph {
             }
         }
 
+        let reconstruction_targets = validate_reconstruction_targets(
+            graph_label,
+            reconstruction_targets,
+            &storage_resources,
+        )?;
         let retained_seed = retained_coverage
             .iter()
             .filter(|seed| {
@@ -191,6 +211,12 @@ impl GpuPreparedWorkGraph {
                     .any(|seed| seed.resource_identity() == candidate.resource_identity())
             })
             .collect::<Vec<_>>();
+        validate_reconstruction_participation(
+            graph_label,
+            &reconstruction_targets,
+            &prepared_nodes,
+            &initial_content,
+        )?;
         validate_fragment_initialization(
             graph_label,
             &fragments,
@@ -294,6 +320,7 @@ impl GpuPreparedWorkGraph {
             diagnostics,
             initial_content,
             retained_seed,
+            reconstruction_targets,
             failure_preserved_coverage,
         })
     }
@@ -338,12 +365,102 @@ impl GpuPreparedWorkGraph {
         &self.retained_seed
     }
 
+    pub(crate) fn reconstruction_targets(&self) -> &BTreeSet<GpuWorkResourceId> {
+        &self.reconstruction_targets
+    }
+
     pub(crate) fn failure_preserved_coverage(
         &self,
         resource: GpuWorkResourceId,
     ) -> Option<&GpuInitialCoverage> {
         self.failure_preserved_coverage.get(&resource)
     }
+}
+
+fn validate_reconstruction_targets(
+    graph_label: &str,
+    targets: &[GpuResourceRef],
+    storage: &BTreeMap<GpuWorkResourceId, GpuResourceRef>,
+) -> Result<BTreeSet<GpuWorkResourceId>, GpuWorkGraphError> {
+    let mut validated = BTreeSet::new();
+    for target in targets {
+        let target = canonical_storage_resource(target);
+        let identity = storage_identity(&target);
+        if !target.common().lifetime().is_retained()
+            || !matches!(
+                &target,
+                GpuResourceRef::Buffer(_)
+                    | GpuResourceRef::Texture(_)
+                    | GpuResourceRef::QuerySet(_)
+            )
+        {
+            return Err(graph_error(
+                "validate retained reconstruction target",
+                graph_label,
+                GraphErrorOrigin::new(None, None),
+                None,
+                Some(identity),
+                GpuWorkGraphCause::UnknownIdentity,
+                "target only retained storage resources for current-state reconstruction",
+            ));
+        }
+        let Some(declared) = storage.get(&identity) else {
+            return Err(graph_error(
+                "validate retained reconstruction target",
+                graph_label,
+                GraphErrorOrigin::new(None, None),
+                None,
+                Some(identity),
+                GpuWorkGraphCause::UnknownIdentity,
+                "declare the exact reconstruction target in the prepared work graph",
+            ));
+        };
+        if !same_resource_descriptor(declared, &target) {
+            return Err(graph_error(
+                "validate retained reconstruction target",
+                graph_label,
+                GraphErrorOrigin::new(None, None),
+                None,
+                Some(identity),
+                GpuWorkGraphCause::UnknownIdentity,
+                "use the exact declared descriptor for the reconstruction target identity",
+            ));
+        }
+        validated.insert(identity);
+    }
+    Ok(validated)
+}
+
+fn validate_reconstruction_participation(
+    graph_label: &str,
+    targets: &BTreeSet<GpuWorkResourceId>,
+    nodes: &[GpuPreparedWorkNode],
+    initial_content: &[GpuPreparedInitialContent],
+) -> Result<(), GpuWorkGraphError> {
+    let participating = nodes
+        .iter()
+        .flat_map(|prepared| prepared.node().accesses().iter())
+        .map(|access| access.resource_identity())
+        .chain(
+            initial_content
+                .iter()
+                .map(GpuPreparedInitialContent::resource_identity),
+        )
+        .collect::<BTreeSet<_>>();
+    for &target in targets {
+        if !participating.contains(&target) {
+            return Err(graph_error(
+                "validate retained reconstruction participation",
+                graph_label,
+                GraphErrorOrigin::new(None, None),
+                None,
+                Some(target),
+                GpuWorkGraphCause::OperationAccessContradiction,
+                "make each reconstruction target participate in canonical initialization or accepted work",
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn register_fragment_resources(

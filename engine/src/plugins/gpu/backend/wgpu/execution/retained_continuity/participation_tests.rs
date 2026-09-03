@@ -171,6 +171,7 @@ fn retained_state_seed_preserves_lifecycle_presence_without_initialized_coverage
                 initial: None,
                 final_coverage: None,
                 failure_preserved_coverage: None,
+                reconstruction: PreparedReconstructionEvidence::default(),
             },
         )]
         .into_iter()
@@ -204,6 +205,7 @@ fn context_free_transition_is_rejected_after_zero_coverage_lifecycle_appears() {
                 initial: None,
                 final_coverage: None,
                 failure_preserved_coverage: None,
+                reconstruction: PreparedReconstructionEvidence::default(),
             },
         )]
         .into_iter()
@@ -229,6 +231,7 @@ fn context_free_transition_is_rejected_after_zero_coverage_lifecycle_appears() {
                 initial: None,
                 final_coverage: None,
                 failure_preserved_coverage: None,
+                reconstruction: PreparedReconstructionEvidence::default(),
             },
         )]
         .into_iter()
