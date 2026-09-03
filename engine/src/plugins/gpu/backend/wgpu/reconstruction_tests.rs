@@ -59,6 +59,15 @@ fn noop_context(name: &str) -> GpuContext {
     context
 }
 
+fn transfer_data(name: &str, values: &[u32]) -> PreparedGpuData<TransferData> {
+    PreparedGpuData::<TransferData>::from_pod_transfer(
+        format!("{name} transfer source"),
+        values,
+        provenance(&format!("{name} transfer source")),
+    )
+    .unwrap()
+}
+
 fn retained_prepared_buffer(name: &str, values: &[u32]) -> GpuBufferHandle {
     let resource_label = label(name);
     let common = GpuResourceCommon::owned(
@@ -69,12 +78,7 @@ fn retained_prepared_buffer(name: &str, values: &[u32]) -> GpuBufferHandle {
         provenance(name),
     )
     .unwrap();
-    let data = PreparedGpuData::<TransferData>::from_pod_transfer(
-        format!("{name} prepared source"),
-        values,
-        provenance(&format!("{name} prepared source")),
-    )
-    .unwrap();
+    let data = transfer_data(name, values);
     let byte_len = u64::try_from(std::mem::size_of_val(values)).unwrap();
     let descriptor = GpuBufferDescriptor::new(
         common,
@@ -85,6 +89,55 @@ fn retained_prepared_buffer(name: &str, values: &[u32]) -> GpuBufferHandle {
         )
         .unwrap(),
         GpuBufferInitialization::Prepared(data),
+    )
+    .unwrap();
+    GpuWorkResourceIdAllocator::new()
+        .allocate_buffer_handle(descriptor)
+        .unwrap()
+}
+
+fn retained_external_buffer(name: &str, byte_len: u64) -> GpuBufferHandle {
+    let resource_label = label(name);
+    let common = GpuResourceCommon::owned(
+        resource_label.clone(),
+        GpuResourceLifetime::Retained,
+        GpuMemoryIntent::Device,
+        GpuReconstruction::ExternallyReconstructed,
+        provenance(name),
+    )
+    .unwrap();
+    let descriptor = GpuBufferDescriptor::new(
+        common,
+        byte_len,
+        GpuBufferUsages::new(
+            &resource_label,
+            [GpuBufferUsage::CopySource, GpuBufferUsage::CopyDestination],
+        )
+        .unwrap(),
+        GpuBufferInitialization::Uninitialized,
+    )
+    .unwrap();
+    GpuWorkResourceIdAllocator::new()
+        .allocate_buffer_handle(descriptor)
+        .unwrap()
+}
+
+fn retained_non_reconstructable_buffer(name: &str, byte_len: u64) -> GpuBufferHandle {
+    let resource_label = label(name);
+    let common = GpuResourceCommon::owned_retained_non_reconstructable(
+        resource_label.clone(),
+        GpuMemoryIntent::Device,
+        provenance(name),
+    );
+    let descriptor = GpuBufferDescriptor::new(
+        common,
+        byte_len,
+        GpuBufferUsages::new(
+            &resource_label,
+            [GpuBufferUsage::CopySource, GpuBufferUsage::CopyDestination],
+        )
+        .unwrap(),
+        GpuBufferInitialization::Uninitialized,
     )
     .unwrap();
     GpuWorkResourceIdAllocator::new()
@@ -121,13 +174,43 @@ fn readback_fragment(buffer: &GpuBufferHandle, name: &str) -> (GpuWorkFragment, 
     (builder.finish().unwrap(), readback_id)
 }
 
+fn upload_and_readback_fragment(
+    buffer: &GpuBufferHandle,
+    values: &[u32],
+    name: &str,
+) -> (GpuWorkFragment, GpuReadbackId) {
+    let upload_region =
+        GpuBufferRegion::new(buffer, GpuBufferRange::whole(buffer).unwrap()).unwrap();
+    let readback_region = upload_region.clone();
+    let upload = GpuUploadOperation::new(upload_region.into(), transfer_data(name, values)).unwrap();
+    let readback_id = GpuReadbackId::allocate().unwrap();
+    let readback = GpuReadbackOperation::new(readback_region.into(), readback_id).unwrap();
+    let mut builder = GpuWorkFragmentBuilder::new(label(name), provenance(name));
+    builder
+        .declare_resource(GpuResourceRef::Buffer(buffer.clone()))
+        .unwrap();
+    add_operation(
+        &mut builder,
+        &format!("{name} upload"),
+        GpuWorkOperation::Upload(upload),
+    );
+    add_operation(
+        &mut builder,
+        &format!("{name} readback"),
+        GpuWorkOperation::Readback(readback),
+    );
+    (builder.finish().unwrap(), readback_id)
+}
+
 fn zero_and_readback_fragment(
     buffer: &GpuBufferHandle,
     name: &str,
 ) -> (GpuWorkFragment, GpuReadbackId) {
-    let region = GpuBufferRegion::new(buffer, GpuBufferRange::whole(buffer).unwrap()).unwrap();
+    let clear_region = GpuBufferRegion::new(buffer, GpuBufferRange::whole(buffer).unwrap()).unwrap();
+    let readback_region = clear_region.clone();
+    let clear = GpuClearOperation::buffer_zero(clear_region).unwrap();
     let readback_id = GpuReadbackId::allocate().unwrap();
-    let readback = GpuReadbackOperation::new(region.clone().into(), readback_id).unwrap();
+    let readback = GpuReadbackOperation::new(readback_region.into(), readback_id).unwrap();
     let mut builder = GpuWorkFragmentBuilder::new(label(name), provenance(name));
     builder
         .declare_resource(GpuResourceRef::Buffer(buffer.clone()))
@@ -135,7 +218,7 @@ fn zero_and_readback_fragment(
     add_operation(
         &mut builder,
         &format!("{name} zero"),
-        GpuWorkOperation::Clear(GpuClearOperation::BufferZero(region)),
+        GpuWorkOperation::Clear(clear),
     );
     add_operation(
         &mut builder,
@@ -395,4 +478,138 @@ fn exact_gpu_mutation_makes_original_seed_insufficient_until_replay_completes() 
         .unwrap();
     let (_, bytes) = submit_and_readback(&context, ordinary_graph, ordinary_readback);
     assert_u32_bytes(&bytes, &expected_current);
+}
+
+#[test]
+fn external_state_requires_designated_canonical_reimport_after_generation_loss() {
+    let external = [21_u32];
+    let mut context = noop_context("G7B external reimport");
+    let buffer = retained_external_buffer(
+        "externally reconstructed retained state",
+        u64::try_from(std::mem::size_of_val(&external)).unwrap(),
+    );
+    let identity = buffer.diagnostic_identity();
+
+    let (initial_fragment, initial_readback) =
+        upload_and_readback_fragment(&buffer, &external, "initial external import");
+    let initial_graph = context
+        .prepare_work_graph(label("initial external import graph"), [initial_fragment])
+        .unwrap();
+    let (_, bytes) = submit_and_readback(&context, initial_graph, initial_readback);
+    assert_u32_bytes(&bytes, &external);
+
+    pollster::block_on(context.replace_device_generation(context_descriptor(
+        "G7B external reimport successor",
+    )))
+    .unwrap();
+    assert!(context.retained_resource_continuity(identity).is_none());
+    let requirement = context
+        .retained_resource_reconstruction_requirement(identity)
+        .expect("externally reconstructed retained state must remain unavailable after loss");
+    assert_eq!(
+        requirement.resource().common().reconstruction(),
+        GpuReconstruction::ExternallyReconstructed
+    );
+
+    let (ordinary_fragment, _) =
+        upload_and_readback_fragment(&buffer, &external, "undesignated external reimport");
+    let ordinary_graph = context
+        .prepare_work_graph(
+            label("undesignated external reimport graph"),
+            [ordinary_fragment],
+        )
+        .unwrap();
+    let ordinary_prepared = pollster::block_on(context.prepare_submission(ordinary_graph)).unwrap();
+    let ordinary_rejection = context.submit_prepared(ordinary_prepared).unwrap_err();
+    assert_eq!(
+        ordinary_rejection.reason().kind(),
+        GpuSubmissionRejectionKind::RetainedContinuityChanged
+    );
+    assert!(
+        context
+            .retained_resource_reconstruction_requirement(identity)
+            .is_some()
+    );
+
+    let (reimport_fragment, reimport_readback) =
+        upload_and_readback_fragment(&buffer, &external, "designated external reimport");
+    let reimport_graph = context
+        .prepare_reconstruction_work_graph(
+            label("designated external reimport graph"),
+            [reimport_fragment],
+            [GpuResourceRef::Buffer(buffer.clone())],
+        )
+        .unwrap();
+    let (reimport_submission, bytes) =
+        submit_and_readback(&context, reimport_graph, reimport_readback);
+    assert_u32_bytes(&bytes, &external);
+    assert!(
+        context
+            .retained_resource_reconstruction_requirement(identity)
+            .is_none()
+    );
+    let continuity = context.retained_resource_continuity(identity).unwrap();
+    assert_eq!(
+        continuity.opaque_content(),
+        GpuOpaqueContentContinuity::Established {
+            last_completed_write: reimport_submission,
+        }
+    );
+}
+
+#[test]
+fn non_reconstructable_loss_cannot_be_certified_by_same_identity_canonical_write() {
+    let state = [34_u32];
+    let mut context = noop_context("G7B non-reconstructable loss");
+    let buffer = retained_non_reconstructable_buffer(
+        "non-reconstructable retained state",
+        u64::try_from(std::mem::size_of_val(&state)).unwrap(),
+    );
+    let identity = buffer.diagnostic_identity();
+
+    let (initial_fragment, initial_readback) =
+        upload_and_readback_fragment(&buffer, &state, "initial non-reconstructable state");
+    let initial_graph = context
+        .prepare_work_graph(
+            label("initial non-reconstructable state graph"),
+            [initial_fragment],
+        )
+        .unwrap();
+    let (_, bytes) = submit_and_readback(&context, initial_graph, initial_readback);
+    assert_u32_bytes(&bytes, &state);
+
+    pollster::block_on(context.replace_device_generation(context_descriptor(
+        "G7B non-reconstructable successor",
+    )))
+    .unwrap();
+    assert!(context.retained_resource_continuity(identity).is_none());
+    let requirement = context
+        .retained_resource_reconstruction_requirement(identity)
+        .expect("non-reconstructable retained state must remain explicitly lost");
+    assert_eq!(
+        requirement.resource().common().reconstruction(),
+        GpuReconstruction::NonReconstructable
+    );
+
+    let (attempt_fragment, _) =
+        upload_and_readback_fragment(&buffer, &state, "attempted same-identity reset");
+    let attempt_graph = context
+        .prepare_reconstruction_work_graph(
+            label("attempted same-identity reset graph"),
+            [attempt_fragment],
+            [GpuResourceRef::Buffer(buffer.clone())],
+        )
+        .unwrap();
+    let attempt_prepared = pollster::block_on(context.prepare_submission(attempt_graph)).unwrap();
+    let rejection = context.submit_prepared(attempt_prepared).unwrap_err();
+    assert_eq!(
+        rejection.reason().kind(),
+        GpuSubmissionRejectionKind::RetainedContinuityChanged
+    );
+    assert!(context.retained_resource_continuity(identity).is_none());
+    assert!(
+        context
+            .retained_resource_reconstruction_requirement(identity)
+            .is_some()
+    );
 }
