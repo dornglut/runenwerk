@@ -102,3 +102,11 @@ impl GpuRetainedInitializationSeed {
         self.initialized_coverage.as_ref()
     }
 }
+
+#[cfg(test)]
+impl PartialEq<GpuInitialCoverage> for GpuRetainedInitializationSeed {
+    fn eq(&self, other: &GpuInitialCoverage) -> bool {
+        self.resource_identity() == other.storage_resource
+            && self.initialized_coverage.as_ref() == Some(other)
+    }
+}
