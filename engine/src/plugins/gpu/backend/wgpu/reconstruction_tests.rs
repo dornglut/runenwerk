@@ -182,7 +182,8 @@ fn upload_and_readback_fragment(
     let upload_region =
         GpuBufferRegion::new(buffer, GpuBufferRange::whole(buffer).unwrap()).unwrap();
     let readback_region = upload_region.clone();
-    let upload = GpuUploadOperation::new(upload_region.into(), transfer_data(name, values)).unwrap();
+    let upload =
+        GpuUploadOperation::new(upload_region.into(), transfer_data(name, values)).unwrap();
     let readback_id = GpuReadbackId::allocate().unwrap();
     let readback = GpuReadbackOperation::new(readback_region.into(), readback_id).unwrap();
     let mut builder = GpuWorkFragmentBuilder::new(label(name), provenance(name));
@@ -206,7 +207,8 @@ fn zero_and_readback_fragment(
     buffer: &GpuBufferHandle,
     name: &str,
 ) -> (GpuWorkFragment, GpuReadbackId) {
-    let clear_region = GpuBufferRegion::new(buffer, GpuBufferRange::whole(buffer).unwrap()).unwrap();
+    let clear_region =
+        GpuBufferRegion::new(buffer, GpuBufferRange::whole(buffer).unwrap()).unwrap();
     let readback_region = clear_region.clone();
     let clear = GpuClearOperation::buffer_zero(clear_region).unwrap();
     let readback_id = GpuReadbackId::allocate().unwrap();
@@ -498,9 +500,9 @@ fn external_state_requires_designated_canonical_reimport_after_generation_loss()
     let (_, bytes) = submit_and_readback(&context, initial_graph, initial_readback);
     assert_u32_bytes(&bytes, &external);
 
-    pollster::block_on(context.replace_device_generation(context_descriptor(
-        "G7B external reimport successor",
-    )))
+    pollster::block_on(
+        context.replace_device_generation(context_descriptor("G7B external reimport successor")),
+    )
     .unwrap();
     assert!(context.retained_resource_continuity(identity).is_none());
     let requirement = context
@@ -578,9 +580,9 @@ fn non_reconstructable_loss_cannot_be_certified_by_same_identity_canonical_write
     let (_, bytes) = submit_and_readback(&context, initial_graph, initial_readback);
     assert_u32_bytes(&bytes, &state);
 
-    pollster::block_on(context.replace_device_generation(context_descriptor(
-        "G7B non-reconstructable successor",
-    )))
+    pollster::block_on(
+        context.replace_device_generation(context_descriptor("G7B non-reconstructable successor")),
+    )
     .unwrap();
     assert!(context.retained_resource_continuity(identity).is_none());
     let requirement = context
