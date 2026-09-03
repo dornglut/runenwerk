@@ -10,6 +10,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Mutex;
 
 #[cfg(test)]
+mod storage_scope_tests;
+#[cfg(test)]
 mod tests;
 
 #[derive(Debug, Clone)]
