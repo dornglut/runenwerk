@@ -145,7 +145,8 @@ impl PreparedExecutionPlan {
                 })?;
         }
         let mut operations = Vec::with_capacity(initial_content.len() + self.operations.len());
-        let mut retained_writes = Vec::with_capacity(initial_content.len() + self.retained_writes.len());
+        let mut retained_writes =
+            Vec::with_capacity(initial_content.len() + self.retained_writes.len());
         for candidate in &initial_content {
             operations.push(candidate.operation.clone());
             retained_writes.push(candidate.retained_write.into_iter().collect());
@@ -350,7 +351,7 @@ impl TextureStagingLayout {
                 texture_staging_submission_error("texture upload source range overflowed")
             })?;
             let destination_end = destination_start.checked_add(logical_row).ok_or_else(|| {
-                texture_staging_submission_error("texture upload staging offset overflowed")
+                texture_staging_submission_error("texture upload staging range overflowed")
             })?;
             let source_row = source.get(source_start..source_end).ok_or_else(|| {
                 texture_staging_submission_error("texture upload source row is out of bounds")
@@ -844,7 +845,10 @@ impl WgpuExecutionState {
                 "submission identity space is exhausted",
             ));
         };
-        if let Err(reason) = self.retained.validate_and_reserve(&plan.retained_continuity) {
+        if let Err(reason) = self
+            .retained
+            .validate_and_reserve(&plan.retained_continuity)
+        {
             inner.prepared.insert(prepared.ticket, Some(stored_plan));
             return Err(reason);
         }
