@@ -15,6 +15,8 @@ use std::sync::Mutex;
 #[cfg(test)]
 mod participation_tests;
 #[cfg(test)]
+mod quiescence_tests;
+#[cfg(test)]
 mod storage_scope_tests;
 #[cfg(test)]
 mod terminal_boundary_tests;
@@ -388,16 +390,15 @@ impl RetainedContinuityState {
                 .map_or(GpuOpaqueContentContinuity::Unestablished, |record| {
                     record.opaque_content
                 });
-            let descriptor_initial_state_matches_required_contents = if prepared
-                .reconstruction
-                .explicit_write
-            {
-                false
-            } else {
-                previous.map_or(prepared.reconstruction.fresh_descriptor_initial_state, |record| {
-                    record.descriptor_initial_state_matches_required_contents
-                })
-            };
+            let descriptor_initial_state_matches_required_contents =
+                if prepared.reconstruction.explicit_write {
+                    false
+                } else {
+                    previous.map_or(
+                        prepared.reconstruction.fresh_descriptor_initial_state,
+                        |record| record.descriptor_initial_state_matches_required_contents,
+                    )
+                };
             records.insert(
                 identity,
                 RetainedContinuityRecord {
@@ -450,21 +451,20 @@ impl RetainedContinuityState {
             } else {
                 previous_opaque
             };
-            let descriptor_initial_state_matches_required_contents = if prepared
-                .reconstruction
-                .explicit_write
-            {
-                false
-            } else if prepared.reconstruction.target {
-                required.is_some_and(|required| {
-                    required.descriptor_initial_state_matches_required_contents()
-                        && prepared.reconstruction.fresh_descriptor_initial_state
-                })
-            } else {
-                previous.map_or(prepared.reconstruction.fresh_descriptor_initial_state, |record| {
-                    record.descriptor_initial_state_matches_required_contents
-                })
-            };
+            let descriptor_initial_state_matches_required_contents =
+                if prepared.reconstruction.explicit_write {
+                    false
+                } else if prepared.reconstruction.target {
+                    required.is_some_and(|required| {
+                        required.descriptor_initial_state_matches_required_contents()
+                            && prepared.reconstruction.fresh_descriptor_initial_state
+                    })
+                } else {
+                    previous.map_or(
+                        prepared.reconstruction.fresh_descriptor_initial_state,
+                        |record| record.descriptor_initial_state_matches_required_contents,
+                    )
+                };
 
             records.insert(
                 identity,
@@ -504,16 +504,14 @@ impl RetainedContinuityState {
                     continue;
                 };
                 let preserved = failure_safe_coverage(prepared);
-                let descriptor_initial_state_matches_required_contents = if prepared
-                    .reconstruction
-                    .target
-                {
-                    obligations.get(&identity).is_some_and(|seed| {
-                        seed.descriptor_initial_state_matches_required_contents()
-                    })
-                } else {
-                    false
-                };
+                let descriptor_initial_state_matches_required_contents =
+                    if prepared.reconstruction.target {
+                        obligations.get(&identity).is_some_and(|seed| {
+                            seed.descriptor_initial_state_matches_required_contents()
+                        })
+                    } else {
+                        false
+                    };
                 records.insert(
                     identity,
                     RetainedContinuityRecord {
@@ -547,15 +545,24 @@ impl RetainedContinuityState {
     }
 }
 
+fn generation_replacement_is_quiescent(
+    in_flight_submissions: usize,
+    pending_readbacks: usize,
+) -> bool {
+    in_flight_submissions == 0 && pending_readbacks == 0
+}
+
 impl GpuContext {
     /// Requests and atomically installs the next physical device generation for this logical
     /// process-local context identity.
     ///
-    /// Submitted GPU work must be quiescent before the retained-state handoff is captured. A failed
-    /// or cancelled successor request leaves this generation intact. Realization/execution policies
-    /// are preserved; physical realizations and surfaces are not migrated. The current private WGPU
-    /// instance is reused so backend-environment admission does not silently change. Old initialized
-    /// coverage and opaque continuity are never reused as new-generation current state.
+    /// Submitted GPU work and readback observation must be quiescent before the retained-state
+    /// handoff is captured. Merely prepared, unsubmitted work may remain and becomes stale after a
+    /// successful replacement. A failed or cancelled successor request leaves this generation
+    /// intact. Realization/execution policies are preserved; physical realizations and surfaces are
+    /// not migrated. The current private WGPU instance is reused so backend-environment admission
+    /// does not silently change. Old initialized coverage and opaque continuity are never reused as
+    /// new-generation current state.
     pub async fn replace_device_generation(
         &mut self,
         descriptor: GpuContextDescriptor,
@@ -565,9 +572,13 @@ impl GpuContext {
             .next()
             .ok_or(GpuDeviceGenerationReplacementError::GenerationExhausted)?;
         let stats = self.progress();
-        if stats.in_flight_submissions() != 0 {
-            return Err(GpuDeviceGenerationReplacementError::ActiveExecution {
+        if !generation_replacement_is_quiescent(
+            stats.in_flight_submissions(),
+            stats.pending_readbacks(),
+        ) {
+            return Err(GpuDeviceGenerationReplacementError::ExecutionNotQuiescent {
                 in_flight_submissions: stats.in_flight_submissions(),
+                pending_readbacks: stats.pending_readbacks(),
             });
         }
 
@@ -579,7 +590,7 @@ impl GpuContext {
         );
         let execution_policy = self.execution_policy();
         let reconstruction = self.backend.execution.retained.reconstruction_seed();
-        let replacement = crate::plugins::gpu::backend::request_generation_with_instance(
+        let replacement = super::super::device_request::request_generation_with_instance(
             instance,
             descriptor,
             realization_policies,
@@ -623,10 +634,7 @@ impl GpuContext {
         let retained = self.backend.execution.retained.coverage_seed();
         let targets = targets.into_iter().collect::<Vec<_>>();
         GpuPreparedWorkGraph::prepare_with_retained_coverage_and_reconstruction(
-            label,
-            fragments,
-            &retained,
-            &targets,
+            label, fragments, &retained, &targets,
         )
     }
 }
