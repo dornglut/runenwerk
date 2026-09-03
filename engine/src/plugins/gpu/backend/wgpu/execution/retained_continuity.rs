@@ -7,6 +7,9 @@ use crate::plugins::gpu::{
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Mutex;
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug, Clone)]
 pub(super) struct PreparedRetainedContinuity {
     resources: BTreeMap<GpuWorkResourceId, PreparedRetainedResource>,
