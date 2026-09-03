@@ -27,6 +27,37 @@ fn retained_buffer(allocator: &mut GpuWorkResourceIdAllocator, name: &str) -> Gp
         .unwrap()
 }
 
+fn retained_texture(allocator: &mut GpuWorkResourceIdAllocator, name: &str) -> GpuTextureHandle {
+    let resource_label = label(name);
+    let common = GpuResourceCommon::owned(
+        resource_label.clone(),
+        GpuResourceLifetime::Retained,
+        GpuMemoryIntent::Device,
+        GpuReconstruction::SourceBacked,
+        provenance(name),
+    )
+    .unwrap();
+    allocator
+        .allocate_texture_handle(
+            GpuTextureDescriptor::new(
+                common,
+                GpuTextureDimension::D2,
+                GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, 8, 8, 1).unwrap(),
+                1,
+                1,
+                GpuTextureFormat::Rgba8Unorm,
+                GpuTextureUsages::new(
+                    &resource_label,
+                    [GpuTextureUsage::ColorAttachment, GpuTextureUsage::Sampled],
+                )
+                .unwrap(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
+        .unwrap()
+}
+
 #[test]
 fn retained_coverage_seeds_canonical_read_validation_and_initial_summary() {
     let mut allocator = allocator();
@@ -124,6 +155,62 @@ fn exact_clear_expands_retained_initialized_coverage_through_canonical_simulatio
         [GpuBufferCoverage::dense(
             GpuBufferRange::new(&buffer, 0, 32).unwrap()
         )]
+    );
+}
+
+#[test]
+fn possible_discard_does_not_remain_failure_preserved_initialization_evidence() {
+    let mut allocator = allocator();
+    let texture = retained_texture(&mut allocator, "retained discard");
+    let range = GpuTextureSubresourceRange::whole(&texture).unwrap();
+    let view = texture_view(&mut allocator, &texture, "retained discard view", range);
+    let retained = GpuInitialCoverage::texture_subresources(
+        &GpuTextureAccessResource::Texture(texture.clone()),
+        [range],
+    )
+    .unwrap();
+    let render = GpuRenderOperation::new(
+        [GpuRenderColorAttachment::new(
+            view.clone(),
+            GpuColorAttachmentLoad::Clear(
+                GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
+            ),
+            GpuAttachmentStore::Discard,
+            None,
+        )
+        .unwrap()],
+        None,
+        [],
+        None,
+    )
+    .unwrap();
+
+    let mut fragment = builder("retained discard");
+    fragment
+        .declare_resource(GpuResourceRef::Texture(texture.clone()))
+        .unwrap();
+    fragment
+        .declare_resource(GpuResourceRef::TextureView(view))
+        .unwrap();
+    fragment.operation("discard retained attachment", render).unwrap();
+
+    let prepared = GpuPreparedWorkGraph::prepare_with_retained_coverage(
+        label("retained discard graph"),
+        [fragment.finish().unwrap()],
+        std::slice::from_ref(&retained),
+    )
+    .unwrap();
+    let summary = prepared
+        .initialization()
+        .iter()
+        .find(|summary| summary.resource().diagnostic_identity() == texture.diagnostic_identity())
+        .unwrap();
+    assert_eq!(summary.initial(), Some(&retained));
+    assert!(summary.final_coverage().is_none());
+    assert!(
+        prepared
+            .failure_preserved_coverage(texture.diagnostic_identity())
+            .is_none()
     );
 }
 
