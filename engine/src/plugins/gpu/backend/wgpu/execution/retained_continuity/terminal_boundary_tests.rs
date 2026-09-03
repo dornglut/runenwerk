@@ -164,6 +164,35 @@ fn first_queue_submitted_write_is_unknown_without_inventing_initialized_coverage
 }
 
 #[test]
+fn first_queue_submitted_write_preserves_preexisting_failure_safe_coverage() {
+    let buffer = retained_buffer();
+    let initialized = coverage(&buffer, 0, 16);
+    let state = RetainedContinuityState::new(affinity());
+    let prepared = transition(
+        &buffer,
+        None,
+        Some(initialized.clone()),
+        Some(initialized.clone()),
+        Some(initialized.clone()),
+    );
+    let writes = BTreeSet::from([buffer.diagnostic_identity()]);
+    state.validate_and_reserve(&prepared).unwrap();
+
+    state.mark_may_execute(&prepared, &writes);
+    let in_flight = state.snapshot(buffer.diagnostic_identity()).unwrap();
+    assert_eq!(
+        in_flight.opaque_content(),
+        GpuOpaqueContentContinuity::Unknown
+    );
+    assert_eq!(in_flight.initialized_coverage(), Some(&initialized));
+
+    state.fail_after_acceptance(&prepared, &writes);
+    let failed = state.snapshot(buffer.diagnostic_identity()).unwrap();
+    assert_eq!(failed.opaque_content(), GpuOpaqueContentContinuity::Unknown);
+    assert_eq!(failed.initialized_coverage(), Some(&initialized));
+}
+
+#[test]
 fn first_queue_submitted_write_establishes_only_after_successful_completion() {
     let buffer = retained_buffer();
     let initialized = coverage(&buffer, 0, 16);
