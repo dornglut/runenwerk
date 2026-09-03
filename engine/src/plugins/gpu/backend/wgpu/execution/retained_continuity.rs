@@ -56,17 +56,17 @@ fn is_retained_storage_resource(resource: &GpuResourceRef) -> bool {
 
 impl PreparedRetainedContinuity {
     pub(super) fn from_graph(graph: &GpuPreparedWorkGraph) -> Self {
+        let descriptor_materializations = graph
+            .initial_content()
+            .iter()
+            .map(|candidate| candidate.resource_identity())
+            .collect::<BTreeSet<_>>();
         let participating = graph
             .nodes()
             .iter()
             .flat_map(|prepared| prepared.node().accesses().iter())
             .map(|access| access.resource_identity())
-            .chain(
-                graph
-                    .initial_content()
-                    .iter()
-                    .map(|candidate| candidate.resource_identity()),
-            )
+            .chain(descriptor_materializations.iter().copied())
             .collect::<BTreeSet<_>>();
         let explicit_writes = graph
             .nodes()
@@ -93,6 +93,33 @@ impl PreparedRetainedContinuity {
                 let consumed_seed = retained_seed
                     .and_then(|seed| seed.initialized_coverage())
                     .cloned();
+                let fresh_descriptor_initial_state = if consumed_lifecycle {
+                    false
+                } else {
+                    match &resource {
+                        GpuResourceRef::Buffer(buffer) => match buffer.descriptor().initialization() {
+                            crate::plugins::gpu::GpuBufferInitialization::Uninitialized => false,
+                            crate::plugins::gpu::GpuBufferInitialization::Zeroed => true,
+                            crate::plugins::gpu::GpuBufferInitialization::Prepared(_) => {
+                                descriptor_materializations.contains(&identity)
+                            }
+                        },
+                        GpuResourceRef::Texture(texture) => {
+                            match texture.descriptor().initialization() {
+                                crate::plugins::gpu::GpuTextureInitialization::Uninitialized => {
+                                    false
+                                }
+                                crate::plugins::gpu::GpuTextureInitialization::Zeroed => true,
+                                crate::plugins::gpu::GpuTextureInitialization::Prepared(_) => {
+                                    descriptor_materializations.contains(&identity)
+                                }
+                            }
+                        }
+                        GpuResourceRef::TextureView(_)
+                        | GpuResourceRef::Sampler(_)
+                        | GpuResourceRef::QuerySet(_) => false,
+                    }
+                };
                 (
                     identity,
                     PreparedRetainedResource {
@@ -107,8 +134,7 @@ impl PreparedRetainedContinuity {
                         reconstruction: PreparedReconstructionEvidence {
                             target: graph.reconstruction_targets().contains(&identity),
                             explicit_write: explicit_writes.contains(&identity),
-                            fresh_descriptor_initial_state: !consumed_lifecycle
-                                && summary.initial().is_some(),
+                            fresh_descriptor_initial_state,
                         },
                     },
                 )
