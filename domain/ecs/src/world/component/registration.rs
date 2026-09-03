@@ -1,4 +1,5 @@
 // Owner: ecs World Component - Registration and Secondary Index APIs
+use crate::bundle::BundleComponentDescriptor;
 use crate::component::Component;
 use crate::entity::Entity;
 use crate::world::World;
@@ -10,21 +11,33 @@ use std::any::TypeId;
 impl World {
     #[doc(hidden)]
     pub fn __register_component<T: Component>(&mut self) {
-        self.ensure_component_registered::<T>();
+        self.__register_component_descriptor(BundleComponentDescriptor::of::<T>());
     }
 
-    fn ensure_component_registered<T: Component>(&mut self) {
-        self.archetype_registry.register_component_type::<T>();
+    pub(crate) fn __register_component_descriptor(
+        &mut self,
+        descriptor: BundleComponentDescriptor,
+    ) {
+        descriptor.register_storage(&mut self.archetype_registry);
         self.component_type_registry
-            .entry(TypeId::of::<T>())
+            .entry(descriptor.type_id())
             .or_insert_with(|| {
                 let id = self.next_component_id;
                 self.next_component_id = self.next_component_id.saturating_add(1);
                 crate::world::change_tracking::ComponentMeta {
                     id: crate::world::change_tracking::ComponentTypeKey(id),
-                    name: T::component_name(),
+                    name: descriptor.component_name(),
                 }
             });
+    }
+
+    pub(crate) fn register_bundle_descriptors(
+        &mut self,
+        descriptors: &[BundleComponentDescriptor],
+    ) {
+        for descriptor in descriptors {
+            self.__register_component_descriptor(*descriptor);
+        }
     }
 
     pub fn ensure_component_index<T: Component, K: Ord + Clone + 'static>(
