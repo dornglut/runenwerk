@@ -166,6 +166,7 @@ fn retained_state_seed_preserves_lifecycle_presence_without_initialized_coverage
             identity,
             PreparedRetainedResource {
                 resource: GpuResourceRef::Buffer(buffer.clone()),
+                consumed_lifecycle: false,
                 consumed_seed: None,
                 initial: None,
                 final_coverage: None,
@@ -183,4 +184,56 @@ fn retained_state_seed_preserves_lifecycle_presence_without_initialized_coverage
     assert_eq!(seeds.len(), 1);
     assert_eq!(seeds[0].resource_identity(), identity);
     assert!(seeds[0].initialized_coverage().is_none());
+}
+
+#[test]
+fn context_free_transition_is_rejected_after_zero_coverage_lifecycle_appears() {
+    let buffer = retained_buffer(
+        "stale context-free retained state",
+        GpuBufferInitialization::Uninitialized,
+        [GpuBufferUsage::Storage],
+    );
+    let identity = buffer.diagnostic_identity();
+    let unseeded = PreparedRetainedContinuity {
+        resources: [(
+            identity,
+            PreparedRetainedResource {
+                resource: GpuResourceRef::Buffer(buffer.clone()),
+                consumed_lifecycle: false,
+                consumed_seed: None,
+                initial: None,
+                final_coverage: None,
+                failure_preserved_coverage: None,
+            },
+        )]
+        .into_iter()
+        .collect(),
+    };
+    let state = RetainedContinuityState::new(affinity());
+    state.validate_and_reserve(&unseeded).unwrap();
+    state.complete(submission(2), &unseeded, &BTreeSet::from([identity]));
+
+    let error = state.validate_and_reserve(&unseeded).unwrap_err();
+    assert_eq!(
+        error.kind(),
+        GpuSubmissionRejectionKind::RetainedContinuityChanged
+    );
+
+    let seeded = PreparedRetainedContinuity {
+        resources: [(
+            identity,
+            PreparedRetainedResource {
+                resource: GpuResourceRef::Buffer(buffer),
+                consumed_lifecycle: true,
+                consumed_seed: None,
+                initial: None,
+                final_coverage: None,
+                failure_preserved_coverage: None,
+            },
+        )]
+        .into_iter()
+        .collect(),
+    };
+    state.validate_and_reserve(&seeded).unwrap();
+    state.fail_after_acceptance(&seeded, &BTreeSet::new());
 }
