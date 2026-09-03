@@ -112,10 +112,7 @@ fn retained_lifecycle_without_coverage_does_not_replay_prepared_initial_content(
     let buffer = retained_buffer(
         "retained prepared",
         GpuBufferInitialization::Prepared(data),
-        [
-            GpuBufferUsage::CopySource,
-            GpuBufferUsage::CopyDestination,
-        ],
+        [GpuBufferUsage::CopySource, GpuBufferUsage::CopyDestination],
     );
 
     let first = GpuPreparedWorkGraph::prepare(
@@ -149,11 +146,9 @@ fn unused_retained_declaration_does_not_enter_continuity() {
     fragment
         .declare_resource(GpuResourceRef::Buffer(buffer))
         .unwrap();
-    let graph = GpuPreparedWorkGraph::prepare(
-        label("unused retained graph"),
-        [fragment.finish().unwrap()],
-    )
-    .unwrap();
+    let graph =
+        GpuPreparedWorkGraph::prepare(label("unused retained graph"), [fragment.finish().unwrap()])
+            .unwrap();
 
     assert!(PreparedRetainedContinuity::from_graph(&graph).is_empty());
 }
