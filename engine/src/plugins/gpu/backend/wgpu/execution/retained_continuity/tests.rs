@@ -27,12 +27,7 @@ fn buffer_with_lifetime(
     name: &str,
     lifetime: GpuResourceLifetime,
 ) -> GpuBufferHandle {
-    retained_or_transient_buffer(
-        allocator,
-        name,
-        lifetime,
-        GpuReconstruction::SourceBacked,
-    )
+    retained_or_transient_buffer(allocator, name, lifetime, GpuReconstruction::SourceBacked)
 }
 
 fn retained_or_transient_buffer(
@@ -749,17 +744,17 @@ fn failed_reconstruction_keeps_original_requirement_evidence() {
         },
     );
     state.validate_and_reserve(&replay).unwrap();
-    state.fail_after_acceptance(
-        &replay,
-        &BTreeSet::from([buffer.diagnostic_identity()]),
-    );
+    state.fail_after_acceptance(&replay, &BTreeSet::from([buffer.diagnostic_identity()]));
 
     let requirement = state
         .reconstruction_requirement(buffer.diagnostic_identity())
         .unwrap();
     assert!(requirement.descriptor_initial_state_matches_required_contents());
     let snapshot = state.snapshot(buffer.diagnostic_identity()).unwrap();
-    assert_eq!(snapshot.opaque_content(), GpuOpaqueContentContinuity::Unknown);
+    assert_eq!(
+        snapshot.opaque_content(),
+        GpuOpaqueContentContinuity::Unknown
+    );
 }
 
 #[test]
