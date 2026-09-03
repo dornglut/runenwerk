@@ -493,8 +493,7 @@ fn apply_retained_initial_coverage(
     for seed in retained_state {
         let seed_storage = canonical_storage_resource(seed.resource());
         let identity = seed.resource_identity();
-        if !retained_storage.contains(&identity)
-            || !seed_storage.common().lifetime().is_retained()
+        if !retained_storage.contains(&identity) || !seed_storage.common().lifetime().is_retained()
         {
             continue;
         }
