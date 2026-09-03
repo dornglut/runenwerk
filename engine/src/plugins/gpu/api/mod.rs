@@ -68,3 +68,37 @@ pub use work::{
 pub use work_resource_id::{
     GpuWorkResourceId, GpuWorkResourceIdAllocationError, GpuWorkResourceIdAllocator,
 };
+
+/// Context-generation-local retained entry-state evidence passed into canonical graph preparation.
+///
+/// Presence is significant even when initialized coverage is absent: once a retained lifecycle
+/// record exists, creation-time descriptor initialization must not be reasserted on later work.
+#[derive(Debug, Clone)]
+pub(crate) struct GpuRetainedInitializationSeed {
+    resource: GpuResourceRef,
+    initialized_coverage: Option<GpuInitialCoverage>,
+}
+
+impl GpuRetainedInitializationSeed {
+    pub(crate) fn new(
+        resource: GpuResourceRef,
+        initialized_coverage: Option<GpuInitialCoverage>,
+    ) -> Self {
+        Self {
+            resource,
+            initialized_coverage,
+        }
+    }
+
+    pub(crate) fn resource(&self) -> &GpuResourceRef {
+        &self.resource
+    }
+
+    pub(crate) fn resource_identity(&self) -> GpuWorkResourceId {
+        self.resource.diagnostic_identity()
+    }
+
+    pub(crate) fn initialized_coverage(&self) -> Option<&GpuInitialCoverage> {
+        self.initialized_coverage.as_ref()
+    }
+}
