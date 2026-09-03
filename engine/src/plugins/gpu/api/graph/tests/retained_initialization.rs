@@ -66,6 +66,10 @@ fn retained_texture(allocator: &mut GpuWorkResourceIdAllocator, name: &str) -> G
         .unwrap()
 }
 
+fn retained_seed(coverage: GpuInitialCoverage) -> GpuRetainedInitializationSeed {
+    GpuRetainedInitializationSeed::new(coverage.resource().clone(), Some(coverage))
+}
+
 #[test]
 fn retained_coverage_seeds_canonical_read_validation_and_initial_summary() {
     let mut allocator = allocator();
@@ -97,10 +101,11 @@ fn retained_coverage_seeds_canonical_read_validation_and_initial_summary() {
         GpuWorkGraphCause::ReadBeforeInitialization
     );
 
+    let seed = retained_seed(retained.clone());
     let prepared = GpuPreparedWorkGraph::prepare_with_retained_coverage(
         label("seeded retained read"),
         [fragment],
-        std::slice::from_ref(&retained),
+        std::slice::from_ref(&seed),
     )
     .unwrap();
     let summary = prepared
@@ -146,7 +151,7 @@ fn exact_clear_expands_retained_initialized_coverage_through_canonical_simulatio
     let prepared = GpuPreparedWorkGraph::prepare_with_retained_coverage(
         label("retained exact expansion graph"),
         [fragment.finish().unwrap()],
-        &[retained],
+        &[retained_seed(retained)],
     )
     .unwrap();
     let final_coverage = prepared
@@ -202,10 +207,11 @@ fn possible_discard_does_not_remain_failure_preserved_initialization_evidence() 
         .operation("discard retained attachment", render)
         .unwrap();
 
+    let seed = retained_seed(retained.clone());
     let prepared = GpuPreparedWorkGraph::prepare_with_retained_coverage(
         label("retained discard graph"),
         [fragment.finish().unwrap()],
-        std::slice::from_ref(&retained),
+        std::slice::from_ref(&seed),
     )
     .unwrap();
     let summary = prepared
@@ -262,7 +268,7 @@ fn retained_seed_cannot_initialize_current_transient_storage_with_equal_identity
     let error = GpuPreparedWorkGraph::prepare_with_retained_coverage(
         label("equal identity retained seed versus transient storage"),
         [fragment.finish().unwrap()],
-        &[invalid_seed],
+        &[retained_seed(invalid_seed)],
     )
     .unwrap_err();
     assert_eq!(error.cause(), GpuWorkGraphCause::ReadBeforeInitialization);
@@ -300,7 +306,7 @@ fn retained_seed_with_changed_descriptor_is_ignored_before_canonical_simulation(
     let error = GpuPreparedWorkGraph::prepare_with_retained_coverage(
         label("changed retained descriptor graph"),
         [fragment.finish().unwrap()],
-        &[stale_seed],
+        &[retained_seed(stale_seed)],
     )
     .unwrap_err();
     assert_eq!(error.cause(), GpuWorkGraphCause::ReadBeforeInitialization);
@@ -343,7 +349,7 @@ fn generic_shader_write_does_not_expand_retained_initialized_coverage() {
     let error = GpuPreparedWorkGraph::prepare_with_retained_coverage(
         label("generic write retained coverage"),
         [fragment.finish().unwrap()],
-        &[retained],
+        &[retained_seed(retained)],
     )
     .unwrap_err();
     assert_eq!(error.cause(), GpuWorkGraphCause::ReadBeforeInitialization);
