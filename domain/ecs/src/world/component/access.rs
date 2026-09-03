@@ -77,17 +77,6 @@ impl World {
         Ok(Mut { value })
     }
 
-    pub(crate) fn __insert_component<T: Component>(
-        &mut self,
-        entity: Entity,
-        component: T,
-    ) -> Result<(), EntityError> {
-        self.ensure_entity_exists(entity)?;
-        self.__register_component::<T>();
-        self.__commit_insert_component(entity, component);
-        Ok(())
-    }
-
     pub(crate) fn __commit_insert_component<T: Component>(&mut self, entity: Entity, component: T) {
         debug_assert!(self.contains(entity));
         let kind = if self.contains_component::<T>(entity) {
@@ -122,29 +111,6 @@ impl World {
             "preflighted archetype component insert/update must succeed"
         );
         self.record_component_change(entity, component_type, T::component_name(), kind);
-    }
-
-    pub(crate) fn __remove_component<T: Component>(
-        &mut self,
-        entity: Entity,
-    ) -> Result<T, EntityError> {
-        self.ensure_entity_exists(entity)?;
-        let value = self
-            .archetype_registry
-            .remove_component::<T>(entity, &mut self.entity_locations)
-            .ok_or(EntityError::MissingComponent {
-                entity,
-                component: type_name::<T>(),
-            })?;
-
-        self.record_component_change(
-            entity,
-            TypeId::of::<T>(),
-            T::component_name(),
-            crate::world::change_tracking::ComponentChangeKind::Removed,
-        );
-
-        Ok(value)
     }
 
     pub(crate) fn __commit_remove_component<T: Component>(&mut self, entity: Entity) -> T {
