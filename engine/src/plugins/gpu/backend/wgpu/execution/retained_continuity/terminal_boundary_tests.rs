@@ -164,11 +164,40 @@ fn first_queue_submitted_write_is_unknown_without_inventing_initialized_coverage
 }
 
 #[test]
+fn first_queue_submitted_write_establishes_only_after_successful_completion() {
+    let buffer = retained_buffer();
+    let initialized = coverage(&buffer, 0, 16);
+    let state = RetainedContinuityState::new(affinity());
+    let prepared = transition(&buffer, None, None, Some(initialized.clone()), None);
+    let writes = BTreeSet::from([buffer.diagnostic_identity()]);
+    state.validate_and_reserve(&prepared).unwrap();
+
+    state.mark_may_execute(&prepared, &writes);
+    let in_flight = state.snapshot(buffer.diagnostic_identity()).unwrap();
+    assert_eq!(
+        in_flight.opaque_content(),
+        GpuOpaqueContentContinuity::Unknown
+    );
+    assert!(in_flight.initialized_coverage().is_none());
+
+    let completed_write = submission(3);
+    state.complete(completed_write, &prepared, &writes);
+    let completed = state.snapshot(buffer.diagnostic_identity()).unwrap();
+    assert_eq!(completed.initialized_coverage(), Some(&initialized));
+    assert_eq!(
+        completed.opaque_content(),
+        GpuOpaqueContentContinuity::Established {
+            last_completed_write: completed_write,
+        }
+    );
+}
+
+#[test]
 fn ordinary_success_after_revocation_does_not_reestablish_opaque_history() {
     let buffer = retained_buffer();
     let initialized = coverage(&buffer, 0, 32);
     let state = RetainedContinuityState::new(affinity());
-    establish(&state, &buffer, &initialized, submission(3));
+    establish(&state, &buffer, &initialized, submission(4));
     let writes = BTreeSet::from([buffer.diagnostic_identity()]);
 
     let failed_write = transition(
@@ -195,7 +224,7 @@ fn ordinary_success_after_revocation_does_not_reestablish_opaque_history() {
     );
     state.validate_and_reserve(&later_write).unwrap();
     state.mark_may_execute(&later_write, &writes);
-    state.complete(submission(4), &later_write, &writes);
+    state.complete(submission(5), &later_write, &writes);
 
     let completed = state.snapshot(buffer.diagnostic_identity()).unwrap();
     assert_eq!(completed.opaque_content(), GpuOpaqueContentContinuity::Unknown);
