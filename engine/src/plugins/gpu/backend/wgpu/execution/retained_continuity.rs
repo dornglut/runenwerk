@@ -1,10 +1,14 @@
+use super::WgpuExecutionState;
 use crate::plugins::gpu::api::{
     initial_coverage_contains, initial_coverage_intersection, same_resource_descriptor,
 };
 use crate::plugins::gpu::{
-    GpuContextAffinity, GpuInitialCoverage, GpuOpaqueContentContinuity, GpuPreparedWorkGraph,
-    GpuResourceRef, GpuRetainedInitializationSeed, GpuRetainedResourceContinuity, GpuSubmissionId,
-    GpuSubmissionRejectionKind, GpuSubmissionRejectionReason, GpuWorkResourceId,
+    GpuContext, GpuContextAffinity, GpuContextDescriptor, GpuContextRequestError,
+    GpuContextRequestErrorCategory, GpuExecutionPolicy, GpuInitialCoverage,
+    GpuOpaqueContentContinuity, GpuPreparedWorkGraph, GpuRealizationPolicies, GpuReconstruction,
+    GpuResourceLabel, GpuResourceRef, GpuRetainedInitializationSeed,
+    GpuRetainedResourceContinuity, GpuSubmissionId, GpuSubmissionRejectionKind,
+    GpuSubmissionRejectionReason, GpuWorkFragment, GpuWorkGraphError, GpuWorkResourceId,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Mutex;
@@ -31,6 +35,8 @@ struct PreparedRetainedResource {
     initial: Option<GpuInitialCoverage>,
     final_coverage: Option<GpuInitialCoverage>,
     failure_preserved_coverage: Option<GpuInitialCoverage>,
+    reconstruction_target: bool,
+    reconstruction_effect_proven: bool,
 }
 
 fn is_retained_storage_resource(resource: &GpuResourceRef) -> bool {
@@ -47,6 +53,19 @@ impl PreparedRetainedContinuity {
             .nodes()
             .iter()
             .flat_map(|prepared| prepared.node().accesses().iter())
+            .map(|access| access.resource_identity())
+            .chain(
+                graph
+                    .initial_content()
+                    .iter()
+                    .map(|candidate| candidate.resource_identity()),
+            )
+            .collect::<BTreeSet<_>>();
+        let writes = graph
+            .nodes()
+            .iter()
+            .flat_map(|prepared| prepared.node().accesses().iter())
+            .filter(|access| access.writes())
             .map(|access| access.resource_identity())
             .chain(
                 graph
@@ -73,6 +92,7 @@ impl PreparedRetainedContinuity {
                 let consumed_seed = retained_seed
                     .and_then(|seed| seed.initialized_coverage())
                     .cloned();
+                let reconstruction_target = graph.reconstruction_targets().contains(&identity);
                 (
                     identity,
                     PreparedRetainedResource {
@@ -84,6 +104,10 @@ impl PreparedRetainedContinuity {
                         failure_preserved_coverage: graph
                             .failure_preserved_coverage(identity)
                             .cloned(),
+                        reconstruction_target,
+                        reconstruction_effect_proven: reconstruction_target
+                            && (writes.contains(&identity)
+                                || (!consumed_lifecycle && summary.initial().is_some())),
                     },
                 )
             })
@@ -112,16 +136,48 @@ struct RetainedContinuityRecord {
 pub(super) struct RetainedContinuityState {
     affinity: GpuContextAffinity,
     records: Mutex<BTreeMap<GpuWorkResourceId, RetainedContinuityRecord>>,
+    reconstruction_required: Mutex<BTreeMap<GpuWorkResourceId, GpuResourceRef>>,
     reserved: Mutex<BTreeSet<GpuWorkResourceId>>,
 }
 
 impl RetainedContinuityState {
     pub(super) fn new(affinity: GpuContextAffinity) -> Self {
+        Self::with_reconstruction_obligations(affinity, [])
+    }
+
+    pub(super) fn with_reconstruction_obligations(
+        affinity: GpuContextAffinity,
+        resources: impl IntoIterator<Item = GpuResourceRef>,
+    ) -> Self {
+        let reconstruction_required = resources
+            .into_iter()
+            .filter(is_retained_storage_resource)
+            .map(|resource| (resource.diagnostic_identity(), resource))
+            .collect();
         Self {
             affinity,
             records: Mutex::new(BTreeMap::new()),
+            reconstruction_required: Mutex::new(reconstruction_required),
             reserved: Mutex::new(BTreeSet::new()),
         }
+    }
+
+    pub(super) fn reconstruction_seed(&self) -> Vec<GpuResourceRef> {
+        let records = self
+            .records
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let obligations = self
+            .reconstruction_required
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut resources = obligations.clone();
+        for (&identity, record) in records.iter() {
+            resources
+                .entry(identity)
+                .or_insert_with(|| record.resource.clone());
+        }
+        resources.into_values().collect()
     }
 
     pub(super) fn coverage_seed(&self) -> Vec<GpuRetainedInitializationSeed> {
@@ -142,20 +198,35 @@ impl RetainedContinuityState {
         &self,
         resource: GpuWorkResourceId,
     ) -> Option<GpuRetainedResourceContinuity> {
-        self.records
+        if let Some(record) = self
+            .records
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .get(&resource)
-            .map(|record| {
+            .cloned()
+        {
+            return Some(GpuRetainedResourceContinuity::new(
+                self.affinity,
+                record.resource,
+                record.initialized_coverage,
+                if record.write_pending {
+                    GpuOpaqueContentContinuity::Unknown
+                } else {
+                    record.opaque_content
+                },
+            ));
+        }
+        self.reconstruction_required
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&resource)
+            .cloned()
+            .map(|resource| {
                 GpuRetainedResourceContinuity::new(
                     self.affinity,
-                    record.resource.clone(),
-                    record.initialized_coverage.clone(),
-                    if record.write_pending {
-                        GpuOpaqueContentContinuity::Unknown
-                    } else {
-                        record.opaque_content
-                    },
+                    resource,
+                    None,
+                    GpuOpaqueContentContinuity::Unknown,
                 )
             })
     }
@@ -170,6 +241,10 @@ impl RetainedContinuityState {
 
         let records = self
             .records
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let reconstruction_required = self
+            .reconstruction_required
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut reserved = self
@@ -192,6 +267,32 @@ impl RetainedContinuityState {
                     identity,
                     "the retained resource descriptor changed for the same logical identity",
                 ));
+            }
+            let reconstruction = reconstruction_required.get(&identity);
+            if let Some(required) = reconstruction
+                && !same_resource_descriptor(required, &prepared.resource)
+            {
+                return Err(continuity_changed(
+                    identity,
+                    "the reconstruction obligation names a different descriptor for this logical identity",
+                ));
+            }
+            if reconstruction.is_some() && !prepared.reconstruction_target {
+                return Err(reconstruction_required_reason(identity));
+            }
+            if prepared.reconstruction_target {
+                if prepared.resource.common().reconstruction() == GpuReconstruction::NonReconstructable
+                {
+                    return Err(reconstruction_unavailable(identity));
+                }
+                if !prepared.reconstruction_effect_proven {
+                    return Err(GpuSubmissionRejectionReason::new(
+                        GpuSubmissionRejectionKind::RetainedReconstructionRequired,
+                        format!(
+                            "retained resource {identity}: declared reconstruction work has no accepted write or fresh-generation initialization effect establishing current contents"
+                        ),
+                    ));
+                }
             }
             if current.is_some() != prepared.consumed_lifecycle {
                 let detail = if current.is_some() {
@@ -280,13 +381,19 @@ impl RetainedContinuityState {
             .records
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut reconstructed = BTreeSet::new();
         for (&identity, prepared) in &transition.resources {
             let previous_opaque = records
                 .get(&identity)
                 .map_or(GpuOpaqueContentContinuity::Unestablished, |record| {
                     record.opaque_content
                 });
-            let opaque_content = if submitted_writes.contains(&identity) {
+            let opaque_content = if prepared.reconstruction_target {
+                reconstructed.insert(identity);
+                GpuOpaqueContentContinuity::Established {
+                    last_completed_write: submission,
+                }
+            } else if submitted_writes.contains(&identity) {
                 match previous_opaque {
                     GpuOpaqueContentContinuity::Unknown => GpuOpaqueContentContinuity::Unknown,
                     GpuOpaqueContentContinuity::Unestablished
@@ -310,6 +417,15 @@ impl RetainedContinuityState {
             );
         }
         drop(records);
+        if !reconstructed.is_empty() {
+            let mut obligations = self
+                .reconstruction_required
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for identity in reconstructed {
+                obligations.remove(&identity);
+            }
+        }
         self.release(transition);
     }
 
@@ -321,6 +437,10 @@ impl RetainedContinuityState {
         if !submitted_writes.is_empty() {
             let mut records = self
                 .records
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut obligations = self
+                .reconstruction_required
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             for &identity in submitted_writes {
@@ -337,6 +457,7 @@ impl RetainedContinuityState {
                         write_pending: false,
                     },
                 );
+                obligations.insert(identity, prepared.resource.clone());
             }
         }
         self.release(transition);
@@ -350,6 +471,83 @@ impl RetainedContinuityState {
         for identity in transition.resources.keys() {
             reserved.remove(identity);
         }
+    }
+}
+
+impl WgpuExecutionState {
+    pub(crate) fn new_with_reconstruction_obligations(
+        affinity: GpuContextAffinity,
+        policy: GpuExecutionPolicy,
+        resources: impl IntoIterator<Item = GpuResourceRef>,
+    ) -> Self {
+        let mut state = Self::new(affinity, policy);
+        state.retained = RetainedContinuityState::with_reconstruction_obligations(
+            affinity,
+            resources,
+        );
+        state
+    }
+}
+
+impl GpuContext {
+    /// Consumes this physical device generation and requests the next generation for the same
+    /// process-local logical context identity.
+    ///
+    /// Realization/execution policies are preserved. The caller supplies a fresh explicit context
+    /// descriptor so adapter/device admission remains policy owned by the caller. Surface state and
+    /// physical realizations are not migrated. Retained resources that had lifecycle state become
+    /// reconstruction obligations in the returned generation; their old initialized coverage and
+    /// opaque continuity are never carried forward as current state.
+    pub async fn replace_device_generation(
+        self,
+        descriptor: GpuContextDescriptor,
+    ) -> Result<Self, GpuContextRequestError> {
+        let id = self.id;
+        let generation = self.generation.next().ok_or_else(|| {
+            GpuContextRequestError::new(
+                GpuContextRequestErrorCategory::IdentityExhausted,
+                "device-generation identity space is exhausted for this logical context",
+            )
+        })?;
+        let realization_policies = GpuRealizationPolicies::new(
+            self.resource_realization_policy(),
+            self.program_binding_realization_policy(),
+        );
+        let execution_policy = self.execution_policy();
+        let reconstruction = self.backend.execution.retained.reconstruction_seed();
+        drop(self);
+        crate::plugins::gpu::backend::request_headless_generation(
+            descriptor,
+            realization_policies,
+            execution_policy,
+            id,
+            generation,
+            reconstruction,
+        )
+        .await
+    }
+
+    /// Prepares explicit current-state reconstruction work against this generation's canonical
+    /// initialization authority.
+    ///
+    /// Targets remain ordinary retained resources in the one work graph. Successful completion may
+    /// clear an outstanding reconstruction obligation only when the prepared graph proves a fresh
+    /// initialization effect or contains a retained write for that target. The caller remains owner
+    /// of the reconstruction recipe or external reimport data.
+    pub fn prepare_reconstruction_work_graph(
+        &self,
+        label: GpuResourceLabel,
+        fragments: impl IntoIterator<Item = GpuWorkFragment>,
+        targets: impl IntoIterator<Item = GpuResourceRef>,
+    ) -> Result<GpuPreparedWorkGraph, GpuWorkGraphError> {
+        let retained = self.backend.execution.retained.coverage_seed();
+        let targets = targets.into_iter().collect::<Vec<_>>();
+        GpuPreparedWorkGraph::prepare_with_retained_coverage_and_reconstruction(
+            label,
+            fragments,
+            &retained,
+            &targets,
+        )
     }
 }
 
@@ -367,6 +565,24 @@ fn continuity_changed(
         GpuSubmissionRejectionKind::RetainedContinuityChanged,
         format!(
             "retained resource {resource}: {detail}; prepare the work again against current continuity"
+        ),
+    )
+}
+
+fn reconstruction_required_reason(resource: GpuWorkResourceId) -> GpuSubmissionRejectionReason {
+    GpuSubmissionRejectionReason::new(
+        GpuSubmissionRejectionKind::RetainedReconstructionRequired,
+        format!(
+            "retained resource {resource}: current required contents belong to a lost or revoked state; submit explicit canonical reconstruction work before ordinary use"
+        ),
+    )
+}
+
+fn reconstruction_unavailable(resource: GpuWorkResourceId) -> GpuSubmissionRejectionReason {
+    GpuSubmissionRejectionReason::new(
+        GpuSubmissionRejectionKind::RetainedReconstructionUnavailable,
+        format!(
+            "retained resource {resource}: its NonReconstructable contract cannot certify recovery of lost current contents; allocate a new logical state identity for an explicit reset"
         ),
     )
 }
