@@ -1,5 +1,7 @@
 use crate::component::Component;
+use crate::entity::Entity;
 use crate::storage::ArchetypeRegistry;
+use crate::world::World;
 use std::any::{Any, TypeId};
 
 #[doc(hidden)]
@@ -8,6 +10,8 @@ pub struct BundleComponentDescriptor {
     type_id: TypeId,
     component_name: &'static str,
     register_storage: fn(&mut ArchetypeRegistry),
+    insert_value: fn(&mut World, Entity, Box<dyn Any>),
+    remove_value: fn(&mut World, Entity) -> Box<dyn Any>,
 }
 
 impl BundleComponentDescriptor {
@@ -17,6 +21,8 @@ impl BundleComponentDescriptor {
             type_id: TypeId::of::<T>(),
             component_name: T::component_name(),
             register_storage: register_storage::<T>,
+            insert_value: insert_value::<T>,
+            remove_value: remove_value::<T>,
         }
     }
 
@@ -31,10 +37,30 @@ impl BundleComponentDescriptor {
     pub(crate) fn register_storage(self, registry: &mut ArchetypeRegistry) {
         (self.register_storage)(registry);
     }
+
+    pub(crate) fn insert_value(self, world: &mut World, entity: Entity, value: Box<dyn Any>) {
+        (self.insert_value)(world, entity, value);
+    }
+
+    pub(crate) fn remove_value(self, world: &mut World, entity: Entity) -> Box<dyn Any> {
+        (self.remove_value)(world, entity)
+    }
 }
 
 fn register_storage<T: Component>(registry: &mut ArchetypeRegistry) {
     registry.register_component_type::<T>();
+}
+
+fn insert_value<T: Component>(world: &mut World, entity: Entity, value: Box<dyn Any>) {
+    let value = value
+        .downcast::<Box<T>>()
+        .expect("prepared bundle value must match its descriptor");
+    world.__commit_insert_component(entity, **value);
+}
+
+fn remove_value<T: Component>(world: &mut World, entity: Entity) -> Box<dyn Any> {
+    let value = world.__commit_remove_component::<T>(entity);
+    Box::new(Box::new(value))
 }
 
 pub(crate) struct BundleComponentValue {
@@ -54,15 +80,19 @@ impl BundleComponentValue {
         self.descriptor
     }
 
-    pub(crate) fn into_storage_value(self) -> Box<dyn Any> {
-        self.value
+    pub(crate) fn commit_insert(self, world: &mut World, entity: Entity) {
+        self.descriptor.insert_value(world, entity, self.value);
     }
 
-    pub(crate) fn from_storage_value(
+    pub(crate) fn from_removed(
         descriptor: BundleComponentDescriptor,
-        value: Box<dyn Any>,
+        world: &mut World,
+        entity: Entity,
     ) -> Self {
-        Self { descriptor, value }
+        Self {
+            descriptor,
+            value: descriptor.remove_value(world, entity),
+        }
     }
 
     fn into_typed<T: Component>(self) -> Option<T> {
