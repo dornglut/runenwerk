@@ -212,14 +212,14 @@ fn possible_write_failure_revokes_opaque_content_without_erasing_provable_covera
         Some(initialized.clone()),
     );
     state.validate_and_reserve(&prepared).unwrap();
-    state.fail_after_acceptance(
-        &prepared,
-        &BTreeSet::from([buffer.diagnostic_identity()]),
-    );
+    state.fail_after_acceptance(&prepared, &BTreeSet::from([buffer.diagnostic_identity()]));
 
     let snapshot = state.snapshot(buffer.diagnostic_identity()).unwrap();
     assert_eq!(snapshot.initialized_coverage(), Some(&initialized));
-    assert_eq!(snapshot.opaque_content(), GpuOpaqueContentContinuity::Unknown);
+    assert_eq!(
+        snapshot.opaque_content(),
+        GpuOpaqueContentContinuity::Unknown
+    );
 }
 
 #[test]
@@ -253,13 +253,13 @@ fn possible_write_failure_isolated_to_resources_that_may_have_executed() {
     ]);
     let prepared = PreparedRetainedContinuity { resources };
     state.validate_and_reserve(&prepared).unwrap();
-    state.fail_after_acceptance(
-        &prepared,
-        &BTreeSet::from([first.diagnostic_identity()]),
-    );
+    state.fail_after_acceptance(&prepared, &BTreeSet::from([first.diagnostic_identity()]));
 
     let affected = state.snapshot(first.diagnostic_identity()).unwrap();
-    assert_eq!(affected.opaque_content(), GpuOpaqueContentContinuity::Unknown);
+    assert_eq!(
+        affected.opaque_content(),
+        GpuOpaqueContentContinuity::Unknown
+    );
     assert_eq!(affected.initialized_coverage(), Some(&first_coverage));
 
     let unaffected = state.snapshot(second.diagnostic_identity()).unwrap();
@@ -363,15 +363,16 @@ fn prepared_transition_excludes_transient_storage() {
         "transient storage",
         GpuResourceLifetime::Transient,
     );
-    let mut fragment = GpuWorkFragmentBuilder::new(label("transient fragment"), provenance("transient fragment"));
+    let mut fragment = GpuWorkFragmentBuilder::new(
+        label("transient fragment"),
+        provenance("transient fragment"),
+    );
     fragment
         .declare_resource(GpuResourceRef::Buffer(transient))
         .unwrap();
-    let graph = GpuPreparedWorkGraph::prepare(
-        label("transient graph"),
-        [fragment.finish().unwrap()],
-    )
-    .unwrap();
+    let graph =
+        GpuPreparedWorkGraph::prepare(label("transient graph"), [fragment.finish().unwrap()])
+            .unwrap();
 
     assert!(PreparedRetainedContinuity::from_graph(&graph).is_empty());
 }
