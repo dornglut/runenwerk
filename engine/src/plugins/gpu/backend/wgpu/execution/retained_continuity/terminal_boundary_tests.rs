@@ -98,6 +98,10 @@ fn establish(
     );
 }
 
+fn execution_source() -> &'static str {
+    include_str!("../../execution.rs")
+}
+
 #[test]
 fn queue_submission_makes_current_opaque_content_unknown_until_completion() {
     let buffer = retained_buffer();
@@ -235,4 +239,57 @@ fn ordinary_success_after_revocation_does_not_reestablish_opaque_history() {
         GpuOpaqueContentContinuity::Unknown
     );
     assert_eq!(completed.initialized_coverage(), Some(&initialized));
+}
+
+#[test]
+fn execution_spine_marks_retained_writes_only_after_queue_submission() {
+    let source = execution_source();
+    let start = source
+        .find("fn encode_submit_and_register(")
+        .expect("execution submission helper must exist");
+    let end = source[start..]
+        .find("\nfn texture_copy_info")
+        .map(|offset| start + offset)
+        .expect("execution submission helper must end before texture_copy_info");
+    let body = &source[start..end];
+    let queue_submit = body
+        .find("backend.queue.submit([segment.command_buffer]);")
+        .expect("physical queue submission must remain explicit");
+    let mark_may_execute = body
+        .find("execution.mark_segment_may_execute(submission, &segment.retained_writes);")
+        .expect("retained may-execute transition must remain explicit");
+
+    assert!(queue_submit < mark_may_execute);
+}
+
+#[test]
+fn progress_serializes_and_consumes_completion_before_terminal_fault_failure() {
+    let source = execution_source();
+    let start = source
+        .find("pub fn progress(&self) -> GpuExecutionStats {")
+        .expect("GpuContext::progress must exist");
+    let end = source[start..]
+        .find("\n}\n\nasync fn prepare_execution_plan")
+        .map(|offset| start + offset)
+        .expect("GpuContext::progress must end before execution-plan preparation");
+    let body = &source[start..end];
+    let submission_order = body
+        .find(".submission_order")
+        .expect("progress must share submission-order serialization");
+    let poll = body
+        .find(".device.poll(PollType::Poll)")
+        .expect("progress must poll the device");
+    let drains = body
+        .match_indices("self.backend.execution.drain_events();")
+        .map(|(offset, _)| offset)
+        .collect::<Vec<_>>();
+    let terminal_fault = body
+        .find("self.backend.health.terminal_fault()")
+        .expect("progress must inspect terminal device fault state");
+
+    assert_eq!(drains.len(), 2);
+    assert!(submission_order < drains[0]);
+    assert!(drains[0] < poll);
+    assert!(poll < drains[1]);
+    assert!(drains[1] < terminal_fault);
 }
