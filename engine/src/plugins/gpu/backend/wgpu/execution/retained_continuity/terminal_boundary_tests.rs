@@ -212,7 +212,10 @@ fn ordinary_success_after_revocation_does_not_reestablish_opaque_history() {
     state.fail_after_acceptance(&failed_write, &writes);
 
     let revoked = state.snapshot(buffer.diagnostic_identity()).unwrap();
-    assert_eq!(revoked.opaque_content(), GpuOpaqueContentContinuity::Unknown);
+    assert_eq!(
+        revoked.opaque_content(),
+        GpuOpaqueContentContinuity::Unknown
+    );
     assert_eq!(revoked.initialized_coverage(), Some(&initialized));
 
     let later_write = transition(
@@ -227,6 +230,9 @@ fn ordinary_success_after_revocation_does_not_reestablish_opaque_history() {
     state.complete(submission(5), &later_write, &writes);
 
     let completed = state.snapshot(buffer.diagnostic_identity()).unwrap();
-    assert_eq!(completed.opaque_content(), GpuOpaqueContentContinuity::Unknown);
+    assert_eq!(
+        completed.opaque_content(),
+        GpuOpaqueContentContinuity::Unknown
+    );
     assert_eq!(completed.initialized_coverage(), Some(&initialized));
 }
