@@ -9,8 +9,7 @@ use crate::world::component_indexes::{
 use std::any::TypeId;
 
 impl World {
-    #[doc(hidden)]
-    pub fn __register_component<T: Component>(&mut self) {
+    pub(crate) fn __register_component<T: Component>(&mut self) {
         self.__register_component_descriptor(BundleComponentDescriptor::of::<T>());
     }
 
