@@ -511,7 +511,6 @@ pub struct GpuPreparedResourceInitialization {
     resource: GpuResourceRef,
     initial: Option<GpuInitialCoverage>,
     final_coverage: Option<GpuInitialCoverage>,
-    failure_preserved_coverage: Option<GpuInitialCoverage>,
 }
 
 impl GpuPreparedResourceInitialization {
@@ -525,10 +524,6 @@ impl GpuPreparedResourceInitialization {
 
     pub fn final_coverage(&self) -> Option<&GpuInitialCoverage> {
         self.final_coverage.as_ref()
-    }
-
-    pub(crate) fn failure_preserved_coverage(&self) -> Option<&GpuInitialCoverage> {
-        self.failure_preserved_coverage.as_ref()
     }
 }
 
@@ -1247,6 +1242,7 @@ pub(super) fn simulate_prepared_initialization(
     (
         Vec<GpuPreparedResourceInitialization>,
         Vec<GpuPreparedWorkDiagnostic>,
+        BTreeMap<GpuWorkResourceId, GpuInitialCoverage>,
     ),
     GpuWorkGraphError,
 > {
@@ -1322,6 +1318,7 @@ pub(super) fn simulate_prepared_initialization(
         }
     }
     let mut summaries = Vec::new();
+    let mut failure_preserved_coverage = BTreeMap::new();
     for (identity, resource) in storage_resources {
         let initial_value = initial
             .get(identity)
@@ -1335,15 +1332,17 @@ pub(super) fn simulate_prepared_initialization(
             .get(identity)
             .cloned()
             .unwrap_or_else(|| InitializedCoverage::empty_for(resource));
+        if retained_storage.contains(identity) {
+            if let Some(coverage) =
+                coverage_to_public(graph_label, resource, &failure_preserved_value)?
+            {
+                failure_preserved_coverage.insert(*identity, coverage);
+            }
+        }
         let summary = GpuPreparedResourceInitialization {
             resource: resource.clone(),
             initial: coverage_to_public(graph_label, resource, &initial_value)?,
             final_coverage: coverage_to_public(graph_label, resource, &final_value)?,
-            failure_preserved_coverage: coverage_to_public(
-                graph_label,
-                resource,
-                &failure_preserved_value,
-            )?,
         };
         summaries.push(summary);
     }
@@ -1352,7 +1351,7 @@ pub(super) fn simulate_prepared_initialization(
         .cloned()
         .map(GpuPreparedWorkDiagnostic::ResourceInitialization)
         .collect();
-    Ok((summaries, diagnostics))
+    Ok((summaries, diagnostics, failure_preserved_coverage))
 }
 
 fn coverage_to_public(
