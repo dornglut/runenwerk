@@ -61,6 +61,29 @@ fn retained_buffer(allocator: &mut GpuWorkResourceIdAllocator, name: &str) -> Gp
     buffer_with_lifetime(allocator, name, GpuResourceLifetime::Retained)
 }
 
+fn surface_acquired_texture(
+    allocator: &mut GpuWorkResourceIdAllocator,
+    name: &str,
+) -> GpuTextureHandle {
+    let resource_label = label(name);
+    let common = GpuResourceCommon::surface_acquired(resource_label.clone(), provenance(name));
+    allocator
+        .allocate_texture_handle(
+            GpuTextureDescriptor::new(
+                common,
+                GpuTextureDimension::D2,
+                GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, 8, 8, 1).unwrap(),
+                1,
+                1,
+                GpuTextureFormat::Rgba8Unorm,
+                GpuTextureUsages::new(&resource_label, [GpuTextureUsage::ColorAttachment]).unwrap(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
+        .unwrap()
+}
+
 fn coverage(buffer: &GpuBufferHandle, offset: u64, size: u64) -> GpuInitialCoverage {
     GpuInitialCoverage::buffer(
         buffer,
@@ -373,6 +396,35 @@ fn prepared_transition_excludes_transient_storage() {
     let graph =
         GpuPreparedWorkGraph::prepare(label("transient graph"), [fragment.finish().unwrap()])
             .unwrap();
+
+    assert!(PreparedRetainedContinuity::from_graph(&graph).is_empty());
+}
+
+#[test]
+fn prepared_transition_excludes_surface_acquired_storage() {
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let surface = surface_acquired_texture(&mut allocator, "surface-acquired storage");
+    assert_eq!(
+        surface.descriptor().common().ownership(),
+        GpuResourceOwnership::SurfaceAcquired
+    );
+    assert_eq!(
+        surface.descriptor().common().lifetime(),
+        GpuResourceLifetime::Transient
+    );
+
+    let mut fragment = GpuWorkFragmentBuilder::new(
+        label("surface-acquired fragment"),
+        provenance("surface-acquired fragment"),
+    );
+    fragment
+        .declare_resource(GpuResourceRef::Texture(surface))
+        .unwrap();
+    let graph = GpuPreparedWorkGraph::prepare(
+        label("surface-acquired graph"),
+        [fragment.finish().unwrap()],
+    )
+    .unwrap();
 
     assert!(PreparedRetainedContinuity::from_graph(&graph).is_empty());
 }
