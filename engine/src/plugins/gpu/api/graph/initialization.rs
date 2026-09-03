@@ -12,7 +12,8 @@ use super::{
     coverage::{
         GpuInitialCoverage, GpuInitialCoverageData, buffer_coverage_contains,
         canonical_storage_resource, canonical_texture_aspect, coverage_source_error,
-        normalize_buffer_coverage, normalize_u32_intervals, storage_identity, texture_aspect,
+        intersect_buffer_coverage, normalize_buffer_coverage, normalize_u32_intervals,
+        storage_identity, texture_aspect,
     },
     diagnostics::{
         GpuPreparedWorkDiagnostic, GraphErrorOrigin, graph_error, graph_error_with_region,
@@ -378,7 +379,19 @@ fn texture_range_coverage(
 
 fn intersect_coverage(left: &mut InitializedCoverage, right: &InitializedCoverage) -> bool {
     match (left, right) {
-        (InitializedCoverage::Buffer { .. }, InitializedCoverage::Buffer { .. }) => true,
+        (
+            InitializedCoverage::Buffer {
+                buffer: left_buffer,
+                values: left_values,
+            },
+            InitializedCoverage::Buffer {
+                buffer: right_buffer,
+                values: right_values,
+            },
+        ) if left_buffer == right_buffer => {
+            *left_values = intersect_buffer_coverage(left_buffer, left_values, right_values);
+            true
+        }
         (InitializedCoverage::Texture(left), InitializedCoverage::Texture(right)) => {
             left.retain(|key, left_intervals| {
                 let Some(right_intervals) = right.get(key) else {
