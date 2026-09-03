@@ -26,6 +26,16 @@ struct DerivedPair {
 }
 
 #[test]
+fn framework_owned_empty_bundle_spawns_and_preserves_empty_archetype() {
+    let mut world = World::new();
+    let entity = world.spawn(()).expect("empty spawn should succeed");
+
+    assert!(world.contains(entity));
+    assert_eq!(world.__entity_archetype_component_count(entity), Some(0));
+    assert!(world.component_changes_since(0).is_empty());
+}
+
+#[test]
 fn failed_multi_component_removal_preserves_all_components_and_observations() {
     let mut world = World::new();
     let entity = world.spawn(A(7)).expect("spawn should succeed");
