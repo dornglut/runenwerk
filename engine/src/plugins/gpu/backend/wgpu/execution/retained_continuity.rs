@@ -83,6 +83,7 @@ struct RetainedContinuityRecord {
     resource: GpuResourceRef,
     initialized_coverage: Option<GpuInitialCoverage>,
     opaque_content: GpuOpaqueContentContinuity,
+    write_pending: bool,
 }
 
 #[derive(Debug)]
@@ -123,7 +124,11 @@ impl RetainedContinuityState {
                     self.affinity,
                     record.resource.clone(),
                     record.initialized_coverage.clone(),
-                    record.opaque_content,
+                    if record.write_pending {
+                        GpuOpaqueContentContinuity::Unknown
+                    } else {
+                        record.opaque_content
+                    },
                 )
             })
     }
@@ -212,13 +217,19 @@ impl RetainedContinuityState {
             let Some(prepared) = transition.resources.get(&identity) else {
                 continue;
             };
-            let preserved = failure_safe_coverage(records.get(&identity), prepared);
+            let previous = records.get(&identity);
+            let preserved = failure_safe_coverage(previous, prepared);
+            let previous_opaque = previous.map_or(
+                GpuOpaqueContentContinuity::Unestablished,
+                |record| record.opaque_content,
+            );
             records.insert(
                 identity,
                 RetainedContinuityRecord {
                     resource: prepared.resource.clone(),
                     initialized_coverage: preserved,
-                    opaque_content: GpuOpaqueContentContinuity::Unknown,
+                    opaque_content: previous_opaque,
+                    write_pending: true,
                 },
             );
         }
@@ -240,18 +251,26 @@ impl RetainedContinuityState {
                 .map_or(GpuOpaqueContentContinuity::Unestablished, |record| {
                     record.opaque_content
                 });
+            let opaque_content = if submitted_writes.contains(&identity) {
+                match previous_opaque {
+                    GpuOpaqueContentContinuity::Unknown => GpuOpaqueContentContinuity::Unknown,
+                    GpuOpaqueContentContinuity::Unestablished
+                    | GpuOpaqueContentContinuity::Established { .. } => {
+                        GpuOpaqueContentContinuity::Established {
+                            last_completed_write: submission,
+                        }
+                    }
+                }
+            } else {
+                previous_opaque
+            };
             records.insert(
                 identity,
                 RetainedContinuityRecord {
                     resource: prepared.resource.clone(),
                     initialized_coverage: prepared.final_coverage.clone(),
-                    opaque_content: if submitted_writes.contains(&identity) {
-                        GpuOpaqueContentContinuity::Established {
-                            last_completed_write: submission,
-                        }
-                    } else {
-                        previous_opaque
-                    },
+                    opaque_content,
+                    write_pending: false,
                 },
             );
         }
@@ -280,6 +299,7 @@ impl RetainedContinuityState {
                         resource: prepared.resource.clone(),
                         initialized_coverage: preserved,
                         opaque_content: GpuOpaqueContentContinuity::Unknown,
+                        write_pending: false,
                     },
                 );
             }
