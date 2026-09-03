@@ -923,6 +923,10 @@ impl WgpuExecutionState {
             record
                 .submitted_retained_writes
                 .extend(retained_writes.iter().copied());
+            if let Some(plan) = record.plan.as_ref() {
+                self.retained
+                    .mark_may_execute(&plan.retained_continuity, retained_writes);
+            }
         }
     }
 
@@ -1386,15 +1390,22 @@ impl GpuContext {
     }
 
     pub fn progress(&self) -> GpuExecutionStats {
+        let _submission_order = self
+            .backend
+            .execution
+            .submission_order
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        self.backend.execution.drain_events();
         if let Err(error) = self.backend.device.poll(PollType::Poll) {
             self.backend
                 .health
                 .mark_scoped_internal(format!("nonblocking WGPU progress poll failed: {error}"));
         }
+        self.backend.execution.drain_events();
         if let Some(fault) = self.backend.health.terminal_fault() {
             self.backend.execution.fail_active_for_fault(fault);
         }
-        self.backend.execution.drain_events();
         self.backend.execution.stats()
     }
 }
@@ -2714,8 +2725,8 @@ fn encode_submit_and_register(
         if index + 1 == segment_count {
             register_submission_completion(execution, submission, &segment.command_buffer);
         }
-        execution.mark_segment_may_execute(submission, &segment.retained_writes);
         backend.queue.submit([segment.command_buffer]);
+        execution.mark_segment_may_execute(submission, &segment.retained_writes);
         if index == 0 && !plan.mark_initial_content_queued() {
             backend.health.mark_scoped_internal(
                 "prepared initial-content state changed outside serialized submission acceptance",
