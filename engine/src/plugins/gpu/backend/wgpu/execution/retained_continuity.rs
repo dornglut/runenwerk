@@ -1,4 +1,6 @@
-use crate::plugins::gpu::api::{initial_coverage_contains, initial_coverage_intersection};
+use crate::plugins::gpu::api::{
+    initial_coverage_contains, initial_coverage_intersection, same_resource_descriptor,
+};
 use crate::plugins::gpu::{
     GpuContextAffinity, GpuInitialCoverage, GpuOpaqueContentContinuity, GpuPreparedWorkGraph,
     GpuResourceRef, GpuRetainedResourceContinuity, GpuSubmissionId, GpuSubmissionRejectionKind,
@@ -140,7 +142,7 @@ impl RetainedContinuityState {
             }
             let current = records.get(&identity);
             if let Some(current) = current
-                && current.resource != prepared.resource
+                && !same_resource_descriptor(&current.resource, &prepared.resource)
             {
                 return Err(continuity_changed(
                     identity,
