@@ -172,9 +172,7 @@ fn possible_discard_does_not_remain_failure_preserved_initialization_evidence() 
     let render = GpuRenderOperation::new(
         [GpuRenderColorAttachment::new(
             view.clone(),
-            GpuColorAttachmentLoad::Clear(
-                GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
-            ),
+            GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap()),
             GpuAttachmentStore::Discard,
             None,
         )
@@ -192,7 +190,9 @@ fn possible_discard_does_not_remain_failure_preserved_initialization_evidence() 
     fragment
         .declare_resource(GpuResourceRef::TextureView(view))
         .unwrap();
-    fragment.operation("discard retained attachment", render).unwrap();
+    fragment
+        .operation("discard retained attachment", render)
+        .unwrap();
 
     let prepared = GpuPreparedWorkGraph::prepare_with_retained_coverage(
         label("retained discard graph"),
