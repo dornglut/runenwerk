@@ -462,7 +462,10 @@ fn acceptance_rejects_changed_descriptor_for_same_logical_identity() {
         "replacement retained descriptor",
         32,
     );
-    assert_eq!(original.diagnostic_identity(), replacement.diagnostic_identity());
+    assert_eq!(
+        original.diagnostic_identity(),
+        replacement.diagnostic_identity()
+    );
     assert_ne!(original.descriptor(), replacement.descriptor());
 
     let initialized = coverage(&original, 0, 16);
