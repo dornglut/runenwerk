@@ -17,13 +17,21 @@ impl GpuContextId {
     }
 }
 
-/// Opaque device generation. G4A creates generation one and never replaces it.
+/// Opaque device generation for one process-local logical GPU context.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuDeviceGeneration(pub(super) NonZeroU64);
 
 impl GpuDeviceGeneration {
     pub const fn first() -> Self {
         Self(NonZeroU64::MIN)
+    }
+
+    pub(crate) fn next(self) -> Option<Self> {
+        self.0
+            .get()
+            .checked_add(1)
+            .and_then(NonZeroU64::new)
+            .map(Self)
     }
 
     #[cfg(test)]
@@ -138,6 +146,22 @@ mod tests {
             exhausted.allocate(),
             Err(error) if error.category() == GpuContextRequestErrorCategory::IdentityExhausted
         ));
+    }
+
+    #[test]
+    fn device_generation_advances_monotonically_without_wraparound() {
+        let first = GpuDeviceGeneration::first();
+        let second = first.next().unwrap();
+        assert!(second > first);
+        assert_eq!(
+            second,
+            GpuDeviceGeneration::test_value(NonZeroU64::new(2).unwrap())
+        );
+        assert!(
+            GpuDeviceGeneration::test_value(NonZeroU64::new(u64::MAX).unwrap())
+                .next()
+                .is_none()
+        );
     }
 
     #[test]
