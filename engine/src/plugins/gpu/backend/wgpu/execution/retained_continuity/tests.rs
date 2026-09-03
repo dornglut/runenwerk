@@ -158,7 +158,10 @@ fn completion_carries_initialized_coverage_and_read_only_completion_preserves_op
     let first_write = submission(1);
     establish(&state, &buffer, &initialized, first_write);
 
-    assert_eq!(state.coverage_seed(), vec![initialized.clone()]);
+    let seeds = state.coverage_seed();
+    assert_eq!(seeds.len(), 1);
+    assert_eq!(seeds[0].resource_identity(), buffer.diagnostic_identity());
+    assert_eq!(seeds[0].initialized_coverage(), Some(&initialized));
     let snapshot = state.snapshot(buffer.diagnostic_identity()).unwrap();
     assert_eq!(snapshot.initialized_coverage(), Some(&initialized));
     assert_eq!(
@@ -257,7 +260,6 @@ fn possible_write_failure_isolated_to_resources_that_may_have_executed() {
     let second_write = submission(6);
     establish(&state, &first, &first_coverage, first_write);
     establish(&state, &second, &second_coverage, second_write);
-
     let resources = BTreeMap::from([
         prepared_resource(
             &first,
