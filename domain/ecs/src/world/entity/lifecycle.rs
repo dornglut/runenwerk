@@ -1,5 +1,5 @@
 // Owner: ecs World Entity - Lifecycle APIs
-use crate::bundle::Bundle;
+use crate::bundle::{Bundle, prepare_bundle};
 use crate::entity::Entity;
 use crate::errors::{EntityAllocationError, EntityError};
 use crate::world::World;
@@ -12,13 +12,16 @@ impl World {
     }
 
     pub fn spawn<B: Bundle>(&mut self, bundle: B) -> Result<Entity, EntityAllocationError> {
+        let prepared = prepare_bundle(bundle);
         let entity = self.allocator.allocate()?;
-        B::register(self);
+
+        self.register_bundle_descriptors(prepared.descriptors());
         self.alive_entities.insert(entity);
         self.place_entity_in_empty_archetype(entity);
-        bundle
-            .insert(self, entity)
-            .expect("bundle insert should succeed for new entity");
+        for component in prepared.into_components() {
+            component.commit_insert(self, entity);
+        }
+
         self.publish_broadcast(EntitySpawnedEvent { entity });
         Ok(entity)
     }
