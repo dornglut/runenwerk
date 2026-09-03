@@ -1,5 +1,6 @@
 const PRELUDE_RS: &str = include_str!("../src/prelude.rs");
 const QUERY_MOD_RS: &str = include_str!("../src/query/mod.rs");
+const BUNDLE_RS: &str = include_str!("../src/bundle.rs");
 
 #[test]
 fn prelude_remains_gameplay_focused() {
@@ -21,4 +22,12 @@ fn prelude_remains_gameplay_focused() {
 fn query_data_trait_stays_internal() {
     assert!(!QUERY_MOD_RS.contains("pub use traits_and_state::QueryData"));
     assert!(!QUERY_MOD_RS.contains("QueryData"));
+}
+
+#[test]
+fn bundle_extension_boundary_is_unsafe_and_does_not_delegate_world_mutation() {
+    assert!(BUNDLE_RS.contains("pub unsafe trait Bundle"));
+    assert!(!BUNDLE_RS.contains("fn register(world: &mut World)"));
+    assert!(!BUNDLE_RS.contains("fn insert(self, world: &mut World"));
+    assert!(!BUNDLE_RS.contains("fn remove(world: &mut World"));
 }
