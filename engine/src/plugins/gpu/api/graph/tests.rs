@@ -1,5 +1,6 @@
 mod authoring;
 mod authoring_transaction;
+mod buffer_coverage_intersection;
 mod composition;
 mod hazards;
 mod initial_content;
