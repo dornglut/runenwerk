@@ -15,7 +15,11 @@ fn retained_buffer(allocator: &mut GpuWorkResourceIdAllocator, name: &str) -> Gp
             GpuBufferDescriptor::new(
                 common,
                 64,
-                GpuBufferUsages::new(&resource_label, [GpuBufferUsage::Storage]).unwrap(),
+                GpuBufferUsages::new(
+                    &resource_label,
+                    [GpuBufferUsage::Storage, GpuBufferUsage::CopyDestination],
+                )
+                .unwrap(),
                 GpuBufferInitialization::Uninitialized,
             )
             .unwrap(),
@@ -67,6 +71,60 @@ fn retained_coverage_seeds_canonical_read_validation_and_initial_summary() {
         .unwrap();
     assert_eq!(summary.initial(), Some(&retained));
     assert_eq!(summary.final_coverage(), Some(&retained));
+}
+
+#[test]
+fn exact_clear_expands_retained_initialized_coverage_through_canonical_simulation() {
+    let mut allocator = allocator();
+    let buffer = retained_buffer(&mut allocator, "retained exact expansion");
+    let retained_range = GpuBufferRange::new(&buffer, 0, 16).unwrap();
+    let cleared_range = GpuBufferRange::new(&buffer, 16, 16).unwrap();
+    let combined_read = GpuBufferRange::new(&buffer, 0, 32).unwrap();
+    let retained =
+        GpuInitialCoverage::buffer(&buffer, [GpuBufferCoverage::dense(retained_range)]).unwrap();
+
+    let mut fragment = builder("retained exact expansion");
+    fragment
+        .declare_resource(GpuResourceRef::Buffer(buffer.clone()))
+        .unwrap();
+    fragment
+        .operation(
+            "zero exact retained tail",
+            GpuClearOperation::buffer_zero(GpuBufferRegion::new(&buffer, cleared_range).unwrap())
+                .unwrap(),
+        )
+        .unwrap();
+    add_compute(
+        &mut fragment,
+        "read retained plus exact effect",
+        [buffer_access(
+            &buffer,
+            combined_read,
+            GpuBufferAccessKind::StorageRead,
+        )],
+    );
+
+    let prepared = GpuPreparedWorkGraph::prepare_with_retained_coverage(
+        label("retained exact expansion graph"),
+        [fragment.finish().unwrap()],
+        &[retained],
+    )
+    .unwrap();
+    let final_coverage = prepared
+        .initialization()
+        .iter()
+        .find(|summary| summary.resource().diagnostic_identity() == buffer.diagnostic_identity())
+        .unwrap()
+        .final_coverage()
+        .unwrap()
+        .buffer_values()
+        .unwrap();
+    assert_eq!(
+        final_coverage,
+        [GpuBufferCoverage::dense(
+            GpuBufferRange::new(&buffer, 0, 32).unwrap()
+        )]
+    );
 }
 
 #[test]
