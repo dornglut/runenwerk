@@ -149,7 +149,7 @@ pub enum GpuOpaqueContentContinuity {
     Established {
         last_completed_write: GpuSubmissionId,
     },
-    /// A possibly executed failed/lost write made current content indeterminate.
+    /// A submitted write may have executed without completed success proof, so current content is indeterminate.
     Unknown,
 }
 
