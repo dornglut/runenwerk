@@ -67,6 +67,7 @@ pub struct GpuPreparedWorkGraph {
     diagnostics: Vec<GpuPreparedWorkDiagnostic>,
     initial_content: Vec<GpuPreparedInitialContent>,
     retained_seed: Vec<GpuInitialCoverage>,
+    failure_preserved_coverage: BTreeMap<GpuWorkResourceId, GpuInitialCoverage>,
 }
 
 impl GpuPreparedWorkGraph {
@@ -236,15 +237,16 @@ impl GpuPreparedWorkGraph {
                 })?;
         }
 
-        let (initialization, initialization_diagnostics) = simulate_prepared_initialization(
-            graph_label,
-            &fragments,
-            &storage_resources,
-            &node_locations,
-            &topological_order,
-            &initial_content,
-            &retained_seed,
-        )?;
+        let (initialization, initialization_diagnostics, failure_preserved_coverage) =
+            simulate_prepared_initialization(
+                graph_label,
+                &fragments,
+                &storage_resources,
+                &node_locations,
+                &topological_order,
+                &initial_content,
+                &retained_seed,
+            )?;
         let dependencies = inferred_edges
             .into_iter()
             .map(|((before, after), reasons)| GpuWorkDependency {
@@ -283,6 +285,7 @@ impl GpuPreparedWorkGraph {
             diagnostics,
             initial_content,
             retained_seed,
+            failure_preserved_coverage,
         })
     }
 
@@ -324,6 +327,13 @@ impl GpuPreparedWorkGraph {
 
     pub(crate) fn retained_seed(&self) -> &[GpuInitialCoverage] {
         &self.retained_seed
+    }
+
+    pub(crate) fn failure_preserved_coverage(
+        &self,
+        resource: GpuWorkResourceId,
+    ) -> Option<&GpuInitialCoverage> {
+        self.failure_preserved_coverage.get(&resource)
     }
 }
 
