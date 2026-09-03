@@ -18,7 +18,7 @@ mod state;
 mod surface;
 mod timestamp;
 
-pub(crate) use device_request::{request_headless, request_headless_generation};
+pub(crate) use device_request::{request_generation_with_instance, request_headless};
 pub(crate) use execution::WgpuExecutionState;
 pub(crate) use health::{WgpuDeviceHealth, WgpuErrorAttributionGate};
 pub(crate) use pipeline_realization::{
