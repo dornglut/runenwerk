@@ -35,8 +35,8 @@ fn bundle_extension_boundary_is_unsafe_and_does_not_delegate_world_mutation() {
 }
 
 #[test]
-fn obsolete_component_mutation_reach_through_is_not_public() {
-    assert!(!COMPONENT_ACCESS_RS.contains("pub fn __insert_component"));
-    assert!(!COMPONENT_ACCESS_RS.contains("pub fn __remove_component"));
+fn obsolete_component_mutation_reach_through_is_removed() {
+    assert!(!COMPONENT_ACCESS_RS.contains("fn __insert_component"));
+    assert!(!COMPONENT_ACCESS_RS.contains("fn __remove_component"));
     assert!(!COMPONENT_REGISTRATION_RS.contains("pub fn __register_component"));
 }
