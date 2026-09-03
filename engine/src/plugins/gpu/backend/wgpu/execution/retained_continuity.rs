@@ -241,7 +241,7 @@ impl RetainedContinuityState {
                 continue;
             };
             let previous = records.get(&identity);
-            let preserved = failure_safe_coverage(previous, prepared);
+            let preserved = failure_safe_coverage(prepared);
             let previous_opaque = previous
                 .map_or(GpuOpaqueContentContinuity::Unestablished, |record| {
                     record.opaque_content
@@ -315,7 +315,7 @@ impl RetainedContinuityState {
                 let Some(prepared) = transition.resources.get(&identity) else {
                     continue;
                 };
-                let preserved = failure_safe_coverage(records.get(&identity), prepared);
+                let preserved = failure_safe_coverage(prepared);
                 records.insert(
                     identity,
                     RetainedContinuityRecord {
@@ -341,13 +341,10 @@ impl RetainedContinuityState {
     }
 }
 
-fn failure_safe_coverage(
-    previous: Option<&RetainedContinuityRecord>,
-    prepared: &PreparedRetainedResource,
-) -> Option<GpuInitialCoverage> {
-    let current = previous?.initialized_coverage.as_ref()?;
+fn failure_safe_coverage(prepared: &PreparedRetainedResource) -> Option<GpuInitialCoverage> {
+    let initial = prepared.initial.as_ref()?;
     let failure_preserved = prepared.failure_preserved_coverage.as_ref()?;
-    initial_coverage_intersection(&prepared.resource, current, failure_preserved)
+    initial_coverage_intersection(&prepared.resource, initial, failure_preserved)
 }
 
 fn continuity_changed(
