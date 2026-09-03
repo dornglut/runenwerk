@@ -219,10 +219,10 @@ impl RetainedContinuityState {
             };
             let previous = records.get(&identity);
             let preserved = failure_safe_coverage(previous, prepared);
-            let previous_opaque = previous.map_or(
-                GpuOpaqueContentContinuity::Unestablished,
-                |record| record.opaque_content,
-            );
+            let previous_opaque = previous
+                .map_or(GpuOpaqueContentContinuity::Unestablished, |record| {
+                    record.opaque_content
+                });
             records.insert(
                 identity,
                 RetainedContinuityRecord {
