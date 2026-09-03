@@ -11,8 +11,8 @@ use super::{
     GpuSamplerDescriptor, GpuSamplerHandle, GpuSubmission, GpuSubmissionPreparationError,
     GpuSubmissionRejectionReason, GpuTextureDescriptor, GpuTextureFormat, GpuTextureHandle,
     GpuTextureViewDescriptor, GpuTextureViewHandle, GpuVertexInputStateDescriptor,
-    GpuWorkAuthoringError, GpuWorkFragment, GpuWorkFragmentBuilder, GpuWorkGraphError, GpuWorkNodeId,
-    GpuWorkOperation, GpuWorkResourceIdAllocationError, GpuWorkResourceIdAllocator,
+    GpuWorkAuthoringError, GpuWorkFragment, GpuWorkFragmentBuilder, GpuWorkGraphError,
+    GpuWorkNodeId, GpuWorkOperation, GpuWorkResourceIdAllocationError, GpuWorkResourceIdAllocator,
 };
 use core::fmt;
 
