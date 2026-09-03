@@ -162,3 +162,42 @@ fn first_queue_submitted_write_is_unknown_without_inventing_initialized_coverage
     assert_eq!(failed.opaque_content(), GpuOpaqueContentContinuity::Unknown);
     assert!(failed.initialized_coverage().is_none());
 }
+
+#[test]
+fn ordinary_success_after_revocation_does_not_reestablish_opaque_history() {
+    let buffer = retained_buffer();
+    let initialized = coverage(&buffer, 0, 32);
+    let state = RetainedContinuityState::new(affinity());
+    establish(&state, &buffer, &initialized, submission(3));
+    let writes = BTreeSet::from([buffer.diagnostic_identity()]);
+
+    let failed_write = transition(
+        &buffer,
+        Some(initialized.clone()),
+        Some(initialized.clone()),
+        Some(initialized.clone()),
+        Some(initialized.clone()),
+    );
+    state.validate_and_reserve(&failed_write).unwrap();
+    state.mark_may_execute(&failed_write, &writes);
+    state.fail_after_acceptance(&failed_write, &writes);
+
+    let revoked = state.snapshot(buffer.diagnostic_identity()).unwrap();
+    assert_eq!(revoked.opaque_content(), GpuOpaqueContentContinuity::Unknown);
+    assert_eq!(revoked.initialized_coverage(), Some(&initialized));
+
+    let later_write = transition(
+        &buffer,
+        Some(initialized.clone()),
+        Some(initialized.clone()),
+        Some(initialized.clone()),
+        Some(initialized.clone()),
+    );
+    state.validate_and_reserve(&later_write).unwrap();
+    state.mark_may_execute(&later_write, &writes);
+    state.complete(submission(4), &later_write, &writes);
+
+    let completed = state.snapshot(buffer.diagnostic_identity()).unwrap();
+    assert_eq!(completed.opaque_content(), GpuOpaqueContentContinuity::Unknown);
+    assert_eq!(completed.initialized_coverage(), Some(&initialized));
+}
