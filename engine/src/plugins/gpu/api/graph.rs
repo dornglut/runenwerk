@@ -28,7 +28,34 @@ pub use diagnostics::GpuPreparedWorkDiagnostic;
 pub use identity::{GpuPreparedWorkNodeId, GpuWorkNodeId};
 pub(crate) use initial_content::GpuPreparedInitialContent;
 pub use initialization::GpuPreparedResourceInitialization;
+pub(crate) use initialization::{initial_coverage_contains, initial_coverage_intersection};
 pub use preparation::{GpuPreparedWorkGraph, GpuPreparedWorkNode};
+
+pub(crate) fn same_resource_descriptor(
+    left: &super::GpuResourceRef,
+    right: &super::GpuResourceRef,
+) -> bool {
+    match (left, right) {
+        (super::GpuResourceRef::Buffer(left), super::GpuResourceRef::Buffer(right)) => {
+            left.descriptor() == right.descriptor()
+        }
+        (super::GpuResourceRef::Texture(left), super::GpuResourceRef::Texture(right)) => {
+            left.descriptor() == right.descriptor()
+        }
+        (super::GpuResourceRef::TextureView(left), super::GpuResourceRef::TextureView(right)) => {
+            left.descriptor() == right.descriptor()
+                && left.descriptor().texture().descriptor()
+                    == right.descriptor().texture().descriptor()
+        }
+        (super::GpuResourceRef::Sampler(left), super::GpuResourceRef::Sampler(right)) => {
+            left.descriptor() == right.descriptor()
+        }
+        (super::GpuResourceRef::QuerySet(left), super::GpuResourceRef::QuerySet(right)) => {
+            left.descriptor() == right.descriptor()
+        }
+        _ => false,
+    }
+}
 
 #[cfg(test)]
 mod tests;

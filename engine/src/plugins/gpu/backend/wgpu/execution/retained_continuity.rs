@@ -1,0 +1,372 @@
+use crate::plugins::gpu::api::{
+    initial_coverage_contains, initial_coverage_intersection, same_resource_descriptor,
+};
+use crate::plugins::gpu::{
+    GpuContextAffinity, GpuInitialCoverage, GpuOpaqueContentContinuity, GpuPreparedWorkGraph,
+    GpuResourceRef, GpuRetainedInitializationSeed, GpuRetainedResourceContinuity, GpuSubmissionId,
+    GpuSubmissionRejectionKind, GpuSubmissionRejectionReason, GpuWorkResourceId,
+};
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Mutex;
+
+#[cfg(test)]
+mod participation_tests;
+#[cfg(test)]
+mod storage_scope_tests;
+#[cfg(test)]
+mod terminal_boundary_tests;
+#[cfg(test)]
+mod tests;
+
+#[derive(Debug, Clone)]
+pub(super) struct PreparedRetainedContinuity {
+    resources: BTreeMap<GpuWorkResourceId, PreparedRetainedResource>,
+}
+
+#[derive(Debug, Clone)]
+struct PreparedRetainedResource {
+    resource: GpuResourceRef,
+    consumed_lifecycle: bool,
+    consumed_seed: Option<GpuInitialCoverage>,
+    initial: Option<GpuInitialCoverage>,
+    final_coverage: Option<GpuInitialCoverage>,
+    failure_preserved_coverage: Option<GpuInitialCoverage>,
+}
+
+fn is_retained_storage_resource(resource: &GpuResourceRef) -> bool {
+    resource.common().lifetime().is_retained()
+        && matches!(
+            resource,
+            GpuResourceRef::Buffer(_) | GpuResourceRef::Texture(_) | GpuResourceRef::QuerySet(_)
+        )
+}
+
+impl PreparedRetainedContinuity {
+    pub(super) fn from_graph(graph: &GpuPreparedWorkGraph) -> Self {
+        let participating = graph
+            .nodes()
+            .iter()
+            .flat_map(|prepared| prepared.node().accesses().iter())
+            .map(|access| access.resource_identity())
+            .chain(
+                graph
+                    .initial_content()
+                    .iter()
+                    .map(|candidate| candidate.resource_identity()),
+            )
+            .collect::<BTreeSet<_>>();
+        let resources = graph
+            .initialization()
+            .iter()
+            .filter(|summary| {
+                is_retained_storage_resource(summary.resource())
+                    && participating.contains(&summary.resource().diagnostic_identity())
+            })
+            .map(|summary| {
+                let resource = summary.resource().clone();
+                let identity = resource.diagnostic_identity();
+                let retained_seed = graph
+                    .retained_seed()
+                    .iter()
+                    .find(|seed| seed.resource_identity() == identity);
+                let consumed_lifecycle = retained_seed.is_some();
+                let consumed_seed = retained_seed
+                    .and_then(|seed| seed.initialized_coverage())
+                    .cloned();
+                (
+                    identity,
+                    PreparedRetainedResource {
+                        resource,
+                        consumed_lifecycle,
+                        consumed_seed,
+                        initial: summary.initial().cloned(),
+                        final_coverage: summary.final_coverage().cloned(),
+                        failure_preserved_coverage: graph
+                            .failure_preserved_coverage(identity)
+                            .cloned(),
+                    },
+                )
+            })
+            .collect();
+        Self { resources }
+    }
+
+    pub(super) fn contains(&self, resource: GpuWorkResourceId) -> bool {
+        self.resources.contains_key(&resource)
+    }
+
+    pub(super) fn is_empty(&self) -> bool {
+        self.resources.is_empty()
+    }
+}
+
+#[derive(Debug, Clone)]
+struct RetainedContinuityRecord {
+    resource: GpuResourceRef,
+    initialized_coverage: Option<GpuInitialCoverage>,
+    opaque_content: GpuOpaqueContentContinuity,
+    write_pending: bool,
+}
+
+#[derive(Debug)]
+pub(super) struct RetainedContinuityState {
+    affinity: GpuContextAffinity,
+    records: Mutex<BTreeMap<GpuWorkResourceId, RetainedContinuityRecord>>,
+    reserved: Mutex<BTreeSet<GpuWorkResourceId>>,
+}
+
+impl RetainedContinuityState {
+    pub(super) fn new(affinity: GpuContextAffinity) -> Self {
+        Self {
+            affinity,
+            records: Mutex::new(BTreeMap::new()),
+            reserved: Mutex::new(BTreeSet::new()),
+        }
+    }
+
+    pub(super) fn coverage_seed(&self) -> Vec<GpuRetainedInitializationSeed> {
+        self.records
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .values()
+            .map(|record| {
+                GpuRetainedInitializationSeed::new(
+                    record.resource.clone(),
+                    record.initialized_coverage.clone(),
+                )
+            })
+            .collect()
+    }
+
+    pub(super) fn snapshot(
+        &self,
+        resource: GpuWorkResourceId,
+    ) -> Option<GpuRetainedResourceContinuity> {
+        self.records
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&resource)
+            .map(|record| {
+                GpuRetainedResourceContinuity::new(
+                    self.affinity,
+                    record.resource.clone(),
+                    record.initialized_coverage.clone(),
+                    if record.write_pending {
+                        GpuOpaqueContentContinuity::Unknown
+                    } else {
+                        record.opaque_content
+                    },
+                )
+            })
+    }
+
+    pub(super) fn validate_and_reserve(
+        &self,
+        transition: &PreparedRetainedContinuity,
+    ) -> Result<(), GpuSubmissionRejectionReason> {
+        if transition.is_empty() {
+            return Ok(());
+        }
+
+        let records = self
+            .records
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut reserved = self
+            .reserved
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        for (&identity, prepared) in &transition.resources {
+            if reserved.contains(&identity) {
+                return Err(continuity_changed(
+                    identity,
+                    "another accepted submission still owns retained-state transition authority for this resource",
+                ));
+            }
+            let current = records.get(&identity);
+            if let Some(current) = current
+                && !same_resource_descriptor(&current.resource, &prepared.resource)
+            {
+                return Err(continuity_changed(
+                    identity,
+                    "the retained resource descriptor changed for the same logical identity",
+                ));
+            }
+            if current.is_some() != prepared.consumed_lifecycle {
+                let detail = if current.is_some() {
+                    "prepared work did not consume the current retained lifecycle state"
+                } else {
+                    "retained lifecycle state consumed during graph preparation is no longer current"
+                };
+                return Err(continuity_changed(identity, detail));
+            }
+            if let Some(seed) = &prepared.consumed_seed {
+                let Some(current_coverage) =
+                    current.and_then(|record| record.initialized_coverage.as_ref())
+                else {
+                    return Err(continuity_changed(
+                        identity,
+                        "retained coverage used during graph preparation is no longer established",
+                    ));
+                };
+                if !initial_coverage_contains(current_coverage, seed) {
+                    return Err(continuity_changed(
+                        identity,
+                        "retained coverage used during graph preparation is no longer contained by current continuity",
+                    ));
+                }
+            }
+            if let Some(current_coverage) =
+                current.and_then(|record| record.initialized_coverage.as_ref())
+                && !prepared
+                    .initial
+                    .as_ref()
+                    .is_some_and(|initial| initial_coverage_contains(initial, current_coverage))
+            {
+                return Err(continuity_changed(
+                    identity,
+                    "current retained coverage contains state not represented by the prepared graph entry state",
+                ));
+            }
+        }
+
+        reserved.extend(transition.resources.keys().copied());
+        Ok(())
+    }
+
+    pub(super) fn mark_may_execute(
+        &self,
+        transition: &PreparedRetainedContinuity,
+        submitted_writes: &BTreeSet<GpuWorkResourceId>,
+    ) {
+        if submitted_writes.is_empty() {
+            return;
+        }
+
+        let mut records = self
+            .records
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for &identity in submitted_writes {
+            let Some(prepared) = transition.resources.get(&identity) else {
+                continue;
+            };
+            let previous = records.get(&identity);
+            let preserved = failure_safe_coverage(prepared);
+            let previous_opaque = previous
+                .map_or(GpuOpaqueContentContinuity::Unestablished, |record| {
+                    record.opaque_content
+                });
+            records.insert(
+                identity,
+                RetainedContinuityRecord {
+                    resource: prepared.resource.clone(),
+                    initialized_coverage: preserved,
+                    opaque_content: previous_opaque,
+                    write_pending: true,
+                },
+            );
+        }
+    }
+
+    pub(super) fn complete(
+        &self,
+        submission: GpuSubmissionId,
+        transition: &PreparedRetainedContinuity,
+        submitted_writes: &BTreeSet<GpuWorkResourceId>,
+    ) {
+        let mut records = self
+            .records
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for (&identity, prepared) in &transition.resources {
+            let previous_opaque = records
+                .get(&identity)
+                .map_or(GpuOpaqueContentContinuity::Unestablished, |record| {
+                    record.opaque_content
+                });
+            let opaque_content = if submitted_writes.contains(&identity) {
+                match previous_opaque {
+                    GpuOpaqueContentContinuity::Unknown => GpuOpaqueContentContinuity::Unknown,
+                    GpuOpaqueContentContinuity::Unestablished
+                    | GpuOpaqueContentContinuity::Established { .. } => {
+                        GpuOpaqueContentContinuity::Established {
+                            last_completed_write: submission,
+                        }
+                    }
+                }
+            } else {
+                previous_opaque
+            };
+            records.insert(
+                identity,
+                RetainedContinuityRecord {
+                    resource: prepared.resource.clone(),
+                    initialized_coverage: prepared.final_coverage.clone(),
+                    opaque_content,
+                    write_pending: false,
+                },
+            );
+        }
+        drop(records);
+        self.release(transition);
+    }
+
+    pub(super) fn fail_after_acceptance(
+        &self,
+        transition: &PreparedRetainedContinuity,
+        submitted_writes: &BTreeSet<GpuWorkResourceId>,
+    ) {
+        if !submitted_writes.is_empty() {
+            let mut records = self
+                .records
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for &identity in submitted_writes {
+                let Some(prepared) = transition.resources.get(&identity) else {
+                    continue;
+                };
+                let preserved = failure_safe_coverage(prepared);
+                records.insert(
+                    identity,
+                    RetainedContinuityRecord {
+                        resource: prepared.resource.clone(),
+                        initialized_coverage: preserved,
+                        opaque_content: GpuOpaqueContentContinuity::Unknown,
+                        write_pending: false,
+                    },
+                );
+            }
+        }
+        self.release(transition);
+    }
+
+    fn release(&self, transition: &PreparedRetainedContinuity) {
+        let mut reserved = self
+            .reserved
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for identity in transition.resources.keys() {
+            reserved.remove(identity);
+        }
+    }
+}
+
+fn failure_safe_coverage(prepared: &PreparedRetainedResource) -> Option<GpuInitialCoverage> {
+    let initial = prepared.initial.as_ref()?;
+    let failure_preserved = prepared.failure_preserved_coverage.as_ref()?;
+    initial_coverage_intersection(&prepared.resource, initial, failure_preserved)
+}
+
+fn continuity_changed(
+    resource: GpuWorkResourceId,
+    detail: &'static str,
+) -> GpuSubmissionRejectionReason {
+    GpuSubmissionRejectionReason::new(
+        GpuSubmissionRejectionKind::RetainedContinuityChanged,
+        format!(
+            "retained resource {resource}: {detail}; prepare the work again against current continuity"
+        ),
+    )
+}

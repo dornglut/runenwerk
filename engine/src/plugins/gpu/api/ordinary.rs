@@ -2,18 +2,17 @@ use super::{
     GpuAdmittedProgramSource, GpuBindingLayoutRefinement, GpuBlendMode, GpuBufferDescriptor,
     GpuBufferHandle, GpuColorTargetStateDescriptor, GpuColorWriteMask,
     GpuComputePipelineDescriptor, GpuContext, GpuEntryPointName, GpuFragmentOutputStateDescriptor,
-    GpuMultisampleStateDescriptor, GpuPipelineConfiguration, GpuPreparedWorkGraph,
-    GpuPrimitiveStateDescriptor, GpuProgramContractError, GpuProgramDescriptor,
-    GpuProgramSourceCause, GpuProgramSourceError, GpuProgramSourceIdentity, GpuProgramSourceKey,
-    GpuProgramSourceOwnerId, GpuProgramSourceProvenance, GpuProgramSourceRegistry,
-    GpuProgramSourceRevision, GpuQuerySetDescriptor, GpuQuerySetHandle, GpuRenderEntryPoints,
-    GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor, GpuResourceDescriptorError,
-    GpuResourceLabel, GpuSamplerDescriptor, GpuSamplerHandle, GpuSubmission,
-    GpuSubmissionPreparationError, GpuSubmissionRejectionReason, GpuTextureDescriptor,
-    GpuTextureFormat, GpuTextureHandle, GpuTextureViewDescriptor, GpuTextureViewHandle,
-    GpuVertexInputStateDescriptor, GpuWorkAuthoringError, GpuWorkFragment, GpuWorkFragmentBuilder,
-    GpuWorkGraphError, GpuWorkNodeId, GpuWorkOperation, GpuWorkResourceIdAllocationError,
-    GpuWorkResourceIdAllocator,
+    GpuMultisampleStateDescriptor, GpuPipelineConfiguration, GpuPrimitiveStateDescriptor,
+    GpuProgramContractError, GpuProgramDescriptor, GpuProgramSourceCause, GpuProgramSourceError,
+    GpuProgramSourceIdentity, GpuProgramSourceKey, GpuProgramSourceOwnerId,
+    GpuProgramSourceProvenance, GpuProgramSourceRegistry, GpuProgramSourceRevision,
+    GpuQuerySetDescriptor, GpuQuerySetHandle, GpuRenderEntryPoints, GpuRenderPipelineDescriptor,
+    GpuRenderPipelineStateDescriptor, GpuResourceDescriptorError, GpuResourceLabel,
+    GpuSamplerDescriptor, GpuSamplerHandle, GpuSubmission, GpuSubmissionPreparationError,
+    GpuSubmissionRejectionReason, GpuTextureDescriptor, GpuTextureFormat, GpuTextureHandle,
+    GpuTextureViewDescriptor, GpuTextureViewHandle, GpuVertexInputStateDescriptor,
+    GpuWorkAuthoringError, GpuWorkFragment, GpuWorkFragmentBuilder, GpuWorkGraphError,
+    GpuWorkNodeId, GpuWorkOperation, GpuWorkResourceIdAllocationError, GpuWorkResourceIdAllocator,
 };
 use core::fmt;
 
@@ -196,7 +195,7 @@ impl GpuContext {
         fragments: impl IntoIterator<Item = GpuWorkFragment>,
     ) -> Result<GpuSubmission, GpuWorkSubmissionError> {
         let label = GpuResourceLabel::new(label.as_ref())?;
-        let graph = GpuPreparedWorkGraph::prepare(label, fragments)?;
+        let graph = self.prepare_work_graph(label, fragments)?;
         let prepared = self.prepare_submission(graph).await?;
         self.submit_prepared(prepared).map_err(|rejected| {
             let (_, reason) = rejected.into_parts();
@@ -524,8 +523,8 @@ fn fs_main() -> @location(0) vec4<f32> {
             .find("GpuResourceLabel::new(label.as_ref())?")
             .expect("ordinary submission must validate its text label through the canonical label authority");
         let prepare_graph = method
-            .find("GpuPreparedWorkGraph::prepare(label, fragments)?")
-            .expect("ordinary work must use canonical graph preparation");
+            .find("self.prepare_work_graph(label, fragments)?")
+            .expect("ordinary work must use context-aware canonical graph preparation");
         let prepare_submission = method
             .find("self.prepare_submission(graph).await?")
             .expect("ordinary work must use canonical submission preparation");
@@ -537,6 +536,7 @@ fn fs_main() -> @location(0) vec4<f32> {
         assert!(prepare_graph < prepare_submission);
         assert!(prepare_submission < submit_prepared);
         for forbidden in [
+            "GpuPreparedWorkGraph::prepare(",
             "prepare_execution_plan(",
             "encode_submit_and_register(",
             "create_command_encoder",
