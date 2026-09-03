@@ -26,6 +26,7 @@ pub(super) struct PreparedRetainedContinuity {
 #[derive(Debug, Clone)]
 struct PreparedRetainedResource {
     resource: GpuResourceRef,
+    consumed_lifecycle: bool,
     consumed_seed: Option<GpuInitialCoverage>,
     initial: Option<GpuInitialCoverage>,
     final_coverage: Option<GpuInitialCoverage>,
@@ -64,16 +65,19 @@ impl PreparedRetainedContinuity {
             .map(|summary| {
                 let resource = summary.resource().clone();
                 let identity = resource.diagnostic_identity();
-                let consumed_seed = graph
+                let retained_seed = graph
                     .retained_seed()
                     .iter()
-                    .find(|seed| seed.resource_identity() == identity)
+                    .find(|seed| seed.resource_identity() == identity);
+                let consumed_lifecycle = retained_seed.is_some();
+                let consumed_seed = retained_seed
                     .and_then(|seed| seed.initialized_coverage())
                     .cloned();
                 (
                     identity,
                     PreparedRetainedResource {
                         resource,
+                        consumed_lifecycle,
                         consumed_seed,
                         initial: summary.initial().cloned(),
                         final_coverage: summary.final_coverage().cloned(),
@@ -188,6 +192,14 @@ impl RetainedContinuityState {
                     identity,
                     "the retained resource descriptor changed for the same logical identity",
                 ));
+            }
+            if current.is_some() != prepared.consumed_lifecycle {
+                let detail = if current.is_some() {
+                    "prepared work did not consume the current retained lifecycle state"
+                } else {
+                    "retained lifecycle state consumed during graph preparation is no longer current"
+                };
+                return Err(continuity_changed(identity, detail));
             }
             if let Some(seed) = &prepared.consumed_seed {
                 let Some(current_coverage) =
