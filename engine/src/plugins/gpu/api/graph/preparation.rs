@@ -1,7 +1,7 @@
 use super::super::{
-    GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirements, GpuResourceLabel,
-    GpuResourceRef, GpuWorkGraphCause, GpuWorkGraphError, GpuWorkGraphErrorContext,
-    GpuWorkGraphErrorSource, GpuWorkResourceId,
+    GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirements,
+    GpuResourceLabel, GpuResourceRef, GpuRetainedInitializationSeed, GpuWorkGraphCause,
+    GpuWorkGraphError, GpuWorkGraphErrorContext, GpuWorkGraphErrorSource, GpuWorkResourceId,
 };
 use super::{
     authoring::{GpuWorkFragment, GpuWorkNode, GpuWorkOutput},
@@ -67,7 +67,7 @@ pub struct GpuPreparedWorkGraph {
     outputs: Vec<GpuWorkOutput>,
     diagnostics: Vec<GpuPreparedWorkDiagnostic>,
     initial_content: Vec<GpuPreparedInitialContent>,
-    retained_seed: Vec<GpuInitialCoverage>,
+    retained_seed: Vec<GpuRetainedInitializationSeed>,
     failure_preserved_coverage: BTreeMap<GpuWorkResourceId, GpuInitialCoverage>,
 }
 
@@ -82,7 +82,7 @@ impl GpuPreparedWorkGraph {
     pub(crate) fn prepare_with_retained_coverage(
         label: GpuResourceLabel,
         fragments: impl IntoIterator<Item = GpuWorkFragment>,
-        retained_coverage: &[GpuInitialCoverage],
+        retained_coverage: &[GpuRetainedInitializationSeed],
     ) -> Result<Self, GpuWorkGraphError> {
         let fragments = fragments.into_iter().collect::<Vec<_>>();
         let graph_label = label.as_str();
@@ -157,10 +157,10 @@ impl GpuPreparedWorkGraph {
 
         let retained_seed = retained_coverage
             .iter()
-            .filter(|coverage| {
-                let seed_storage = canonical_storage_resource(coverage.resource());
+            .filter(|seed| {
+                let seed_storage = canonical_storage_resource(seed.resource());
                 storage_resources
-                    .get(&coverage.storage_resource)
+                    .get(&seed.resource_identity())
                     .is_some_and(|current_storage| {
                         current_storage.common().lifetime().is_retained()
                             && seed_storage.common().lifetime().is_retained()
@@ -183,7 +183,14 @@ impl GpuPreparedWorkGraph {
         let topological_order =
             topological_node_order(graph_label, &fragments, &node_locations, &inferred_edges)?;
         let fragment_order = topological_fragment_order(graph_label, &fragments, &import_bindings)?;
-        let initial_content = derive_prepared_initial_content(graph_label, &fragments)?;
+        let initial_content = derive_prepared_initial_content(graph_label, &fragments)?
+            .into_iter()
+            .filter(|candidate| {
+                !retained_seed
+                    .iter()
+                    .any(|seed| seed.resource_identity() == candidate.resource_identity())
+            })
+            .collect::<Vec<_>>();
         validate_fragment_initialization(
             graph_label,
             &fragments,
@@ -327,7 +334,7 @@ impl GpuPreparedWorkGraph {
         &self.initial_content
     }
 
-    pub(crate) fn retained_seed(&self) -> &[GpuInitialCoverage] {
+    pub(crate) fn retained_seed(&self) -> &[GpuRetainedInitializationSeed] {
         &self.retained_seed
     }
 
