@@ -20,15 +20,20 @@ struct NeverInsertedA;
 struct NeverInsertedB;
 
 #[derive(ecs::Bundle)]
+struct EmptyDerivedBundle {}
+
+#[derive(ecs::Bundle)]
 struct DerivedPair {
     a: A,
     b: B,
 }
 
 #[test]
-fn framework_owned_empty_bundle_spawns_and_preserves_empty_archetype() {
+fn empty_derived_bundle_spawns_and_preserves_empty_archetype() {
     let mut world = World::new();
-    let entity = world.spawn(()).expect("empty spawn should succeed");
+    let entity = world
+        .spawn(EmptyDerivedBundle {})
+        .expect("empty spawn should succeed");
 
     assert!(world.contains(entity));
     assert_eq!(world.__entity_archetype_component_count(entity), Some(0));
