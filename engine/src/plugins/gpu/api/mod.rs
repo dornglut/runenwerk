@@ -41,6 +41,7 @@ pub use execution::*;
 pub use graph::*;
 pub(crate) use graph::{
     GpuPreparedInitialContent, initial_coverage_contains, initial_coverage_intersection,
+    same_resource_descriptor,
 };
 pub use handles::*;
 pub use operation::{GpuRenderOperation, GpuWorkNodeKind, GpuWorkOperation};
