@@ -271,11 +271,8 @@ fn retained_seed_cannot_initialize_current_transient_storage_with_equal_identity
 #[test]
 fn retained_seed_with_changed_descriptor_is_ignored_before_canonical_simulation() {
     let mut current_allocator = allocator();
-    let current = retained_buffer_with_size(
-        &mut current_allocator,
-        "current retained descriptor",
-        32,
-    );
+    let current =
+        retained_buffer_with_size(&mut current_allocator, "current retained descriptor", 32);
     let mut stale_allocator = allocator();
     let stale = retained_buffer_with_size(&mut stale_allocator, "stale retained descriptor", 64);
     assert_eq!(current.diagnostic_identity(), stale.diagnostic_identity());
