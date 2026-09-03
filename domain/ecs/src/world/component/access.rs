@@ -89,11 +89,7 @@ impl World {
         Ok(())
     }
 
-    pub(crate) fn __commit_insert_component<T: Component>(
-        &mut self,
-        entity: Entity,
-        component: T,
-    ) {
+    pub(crate) fn __commit_insert_component<T: Component>(&mut self, entity: Entity, component: T) {
         debug_assert!(self.contains(entity));
         let kind = if self.contains_component::<T>(entity) {
             crate::world::change_tracking::ComponentChangeKind::Modified
