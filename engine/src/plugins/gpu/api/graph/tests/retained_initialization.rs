@@ -1,6 +1,14 @@
 use super::support::*;
 
 fn retained_buffer(allocator: &mut GpuWorkResourceIdAllocator, name: &str) -> GpuBufferHandle {
+    retained_buffer_with_size(allocator, name, 64)
+}
+
+fn retained_buffer_with_size(
+    allocator: &mut GpuWorkResourceIdAllocator,
+    name: &str,
+    size_bytes: u64,
+) -> GpuBufferHandle {
     let resource_label = label(name);
     let common = GpuResourceCommon::owned(
         resource_label.clone(),
@@ -14,7 +22,7 @@ fn retained_buffer(allocator: &mut GpuWorkResourceIdAllocator, name: &str) -> Gp
         .allocate_buffer_handle(
             GpuBufferDescriptor::new(
                 common,
-                64,
+                size_bytes,
                 GpuBufferUsages::new(
                     &resource_label,
                     [GpuBufferUsage::Storage, GpuBufferUsage::CopyDestination],
@@ -258,6 +266,48 @@ fn retained_seed_cannot_initialize_current_transient_storage_with_equal_identity
     )
     .unwrap_err();
     assert_eq!(error.cause(), GpuWorkGraphCause::ReadBeforeInitialization);
+}
+
+#[test]
+fn retained_seed_with_changed_descriptor_is_ignored_before_canonical_simulation() {
+    let mut current_allocator = allocator();
+    let current = retained_buffer_with_size(
+        &mut current_allocator,
+        "current retained descriptor",
+        32,
+    );
+    let mut stale_allocator = allocator();
+    let stale = retained_buffer_with_size(&mut stale_allocator, "stale retained descriptor", 64);
+    assert_eq!(current.diagnostic_identity(), stale.diagnostic_identity());
+    assert_ne!(current.descriptor(), stale.descriptor());
+
+    let stale_range = GpuBufferRange::new(&stale, 0, 64).unwrap();
+    let stale_seed =
+        GpuInitialCoverage::buffer(&stale, [GpuBufferCoverage::dense(stale_range)]).unwrap();
+    let current_read = GpuBufferRange::new(&current, 0, 16).unwrap();
+
+    let mut fragment = builder("changed retained descriptor");
+    fragment
+        .declare_resource(GpuResourceRef::Buffer(current.clone()))
+        .unwrap();
+    add_compute(
+        &mut fragment,
+        "read current retained descriptor",
+        [buffer_access(
+            &current,
+            current_read,
+            GpuBufferAccessKind::StorageRead,
+        )],
+    );
+
+    let error = GpuPreparedWorkGraph::prepare_with_retained_coverage(
+        label("changed retained descriptor graph"),
+        [fragment.finish().unwrap()],
+        &[stale_seed],
+    )
+    .unwrap_err();
+    assert_eq!(error.cause(), GpuWorkGraphCause::ReadBeforeInitialization);
+    assert_eq!(error.resource(), Some(current.diagnostic_identity()));
 }
 
 #[test]
