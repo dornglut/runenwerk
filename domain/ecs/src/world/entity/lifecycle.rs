@@ -121,9 +121,9 @@ mod tests {
     }
 
     #[test]
-    fn successful_empty_spawn_publishes_only_after_entity_is_live() {
+    fn successful_spawn_publishes_only_after_entity_is_live() {
         let mut world = World::new();
-        let entity = world.spawn(()).expect("empty spawn should succeed");
+        let entity = world.spawn(Marker).expect("spawn should succeed");
         let events = world.read_broadcast::<EntitySpawnedEvent>();
 
         assert!(world.contains(entity));
