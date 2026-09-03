@@ -46,3 +46,34 @@ impl GpuRetainedReconstructionRequirement {
         self.descriptor_initial_state_matches_required_contents
     }
 }
+
+/// Private cross-generation handoff for one retained reconstruction requirement.
+///
+/// This carries only logical resource identity/descriptor authority plus the narrow lifecycle fact
+/// needed to decide whether descriptor initial-content materialization can still represent the
+/// required state. It never carries old-generation initialized coverage or opaque continuity.
+#[derive(Debug, Clone)]
+pub(crate) struct GpuRetainedReconstructionSeed {
+    resource: GpuResourceRef,
+    descriptor_initial_state_matches_required_contents: bool,
+}
+
+impl GpuRetainedReconstructionSeed {
+    pub(crate) fn new(
+        resource: GpuResourceRef,
+        descriptor_initial_state_matches_required_contents: bool,
+    ) -> Self {
+        Self {
+            resource,
+            descriptor_initial_state_matches_required_contents,
+        }
+    }
+
+    pub(crate) fn resource(&self) -> &GpuResourceRef {
+        &self.resource
+    }
+
+    pub(crate) const fn descriptor_initial_state_matches_required_contents(&self) -> bool {
+        self.descriptor_initial_state_matches_required_contents
+    }
+}
