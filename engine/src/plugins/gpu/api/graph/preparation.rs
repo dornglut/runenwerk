@@ -22,6 +22,7 @@ use super::{
         GpuPreparedResourceInitialization, simulate_prepared_initialization,
         validate_fragment_initialization,
     },
+    same_resource_descriptor,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -163,6 +164,7 @@ impl GpuPreparedWorkGraph {
                     .is_some_and(|current_storage| {
                         current_storage.common().lifetime().is_retained()
                             && seed_storage.common().lifetime().is_retained()
+                            && same_resource_descriptor(current_storage, &seed_storage)
                     })
             })
             .cloned()
