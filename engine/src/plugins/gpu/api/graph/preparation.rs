@@ -518,10 +518,15 @@ fn validate_node_resources(
     node.operation().validate_shape().map_err(|source| {
         GpuWorkGraphError::with_source(
             "validate GPU work operation",
-            graph_label,
-            GraphErrorOrigin::new(Some(fragment), Some(node)),
-            None,
-            source.resource(),
+            GpuWorkGraphErrorContext::new(
+                graph_label,
+                Some(fragment.label().as_str().to_string()),
+                Some(node.label().as_str().to_string()),
+                None,
+                source.resource(),
+                None,
+                Some(node.provenance().clone()),
+            ),
             GpuWorkGraphCause::OperationAccessContradiction,
             "retain the checked operation shape accepted during fragment authoring",
             GpuWorkGraphErrorSource::Operation(source),
