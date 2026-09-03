@@ -373,6 +373,51 @@ pub(super) fn buffer_coverage_contains(
     true
 }
 
+pub(super) fn intersect_buffer_coverage(
+    buffer: &GpuBufferHandle,
+    left: &[GpuBufferCoverage],
+    right: &[GpuBufferCoverage],
+) -> Vec<GpuBufferCoverage> {
+    if buffer_coverage_contains(left, right) {
+        let mut intersection = right.to_vec();
+        normalize_buffer_coverage(buffer, &mut intersection);
+        return intersection;
+    }
+    if buffer_coverage_contains(right, left) {
+        let mut intersection = left.to_vec();
+        normalize_buffer_coverage(buffer, &mut intersection);
+        return intersection;
+    }
+
+    let mut left_intervals = CoverageIntervals::new(left);
+    let mut right_intervals = CoverageIntervals::new(right);
+    let mut left_interval = left_intervals.next();
+    let mut right_interval = right_intervals.next();
+    let mut intersection = Vec::new();
+
+    while let (Some((left_start, left_end)), Some((right_start, right_end))) =
+        (left_interval, right_interval)
+    {
+        let start = left_start.max(right_start);
+        let end = left_end.min(right_end);
+        if start < end {
+            intersection.push(GpuBufferCoverage::Dense(
+                GpuBufferRange::new(buffer, start, end - start)
+                    .expect("intersection of checked buffer coverage remains checked"),
+            ));
+        }
+        if left_end <= right_end {
+            left_interval = left_intervals.next();
+        }
+        if right_end <= left_end {
+            right_interval = right_intervals.next();
+        }
+    }
+
+    normalize_buffer_coverage(buffer, &mut intersection);
+    intersection
+}
+
 struct CoverageIntervals<'a> {
     cursors: Vec<CoverageIntervalCursor<'a>>,
     next: BinaryHeap<Reverse<(u64, u64, usize)>>,
