@@ -1,15 +1,13 @@
-use super::WgpuExecutionState;
 use crate::plugins::gpu::api::{
     initial_coverage_contains, initial_coverage_intersection, same_resource_descriptor,
 };
 use crate::plugins::gpu::{
     GpuContext, GpuContextAffinity, GpuContextDescriptor, GpuDeviceGenerationReplacementError,
-    GpuExecutionPolicy, GpuInitialCoverage, GpuOpaqueContentContinuity, GpuPreparedWorkGraph,
-    GpuRealizationPolicies, GpuReconstruction, GpuResourceLabel, GpuResourceRef,
-    GpuRetainedInitializationSeed, GpuRetainedReconstructionRequirement,
-    GpuRetainedReconstructionSeed, GpuRetainedResourceContinuity, GpuSubmissionId,
-    GpuSubmissionRejectionKind, GpuSubmissionRejectionReason, GpuWorkFragment, GpuWorkGraphError,
-    GpuWorkResourceId,
+    GpuInitialCoverage, GpuOpaqueContentContinuity, GpuPreparedWorkGraph, GpuRealizationPolicies,
+    GpuReconstruction, GpuResourceLabel, GpuResourceRef, GpuRetainedInitializationSeed,
+    GpuRetainedReconstructionRequirement, GpuRetainedReconstructionSeed,
+    GpuRetainedResourceContinuity, GpuSubmissionId, GpuSubmissionRejectionKind,
+    GpuSubmissionRejectionReason, GpuWorkFragment, GpuWorkGraphError, GpuWorkResourceId,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Mutex;
@@ -145,27 +143,10 @@ pub(super) struct RetainedContinuityState {
 
 impl RetainedContinuityState {
     pub(super) fn new(affinity: GpuContextAffinity) -> Self {
-        Self::with_reconstruction_resources(affinity, [])
-    }
-
-    fn with_reconstruction_resources(
-        affinity: GpuContextAffinity,
-        resources: impl IntoIterator<Item = GpuResourceRef>,
-    ) -> Self {
-        let reconstruction_required = resources
-            .into_iter()
-            .filter(is_retained_storage_resource)
-            .map(|resource| {
-                (
-                    resource.diagnostic_identity(),
-                    GpuRetainedReconstructionSeed::new(resource, false),
-                )
-            })
-            .collect();
         Self {
             affinity,
             records: Mutex::new(BTreeMap::new()),
-            reconstruction_required: Mutex::new(reconstruction_required),
+            reconstruction_required: Mutex::new(BTreeMap::new()),
             reserved: Mutex::new(BTreeSet::new()),
         }
     }
@@ -527,9 +508,9 @@ impl RetainedContinuityState {
                     .reconstruction
                     .target
                 {
-                    obligations
-                        .get(&identity)
-                        .is_some_and(GpuRetainedReconstructionSeed::descriptor_initial_state_matches_required_contents)
+                    obligations.get(&identity).is_some_and(|seed| {
+                        seed.descriptor_initial_state_matches_required_contents()
+                    })
                 } else {
                     false
                 };
@@ -566,26 +547,15 @@ impl RetainedContinuityState {
     }
 }
 
-impl WgpuExecutionState {
-    pub(crate) fn new_with_reconstruction_obligations(
-        affinity: GpuContextAffinity,
-        policy: GpuExecutionPolicy,
-        resources: impl IntoIterator<Item = GpuResourceRef>,
-    ) -> Self {
-        let mut state = Self::new(affinity, policy);
-        state.retained = RetainedContinuityState::with_reconstruction_resources(affinity, resources);
-        state
-    }
-}
-
 impl GpuContext {
     /// Requests and atomically installs the next physical device generation for this logical
     /// process-local context identity.
     ///
     /// Submitted GPU work must be quiescent before the retained-state handoff is captured. A failed
     /// or cancelled successor request leaves this generation intact. Realization/execution policies
-    /// are preserved; physical realizations and surfaces are not migrated. Old initialized coverage
-    /// and opaque continuity are never reused as new-generation current state.
+    /// are preserved; physical realizations and surfaces are not migrated. The current private WGPU
+    /// instance is reused so backend-environment admission does not silently change. Old initialized
+    /// coverage and opaque continuity are never reused as new-generation current state.
     pub async fn replace_device_generation(
         &mut self,
         descriptor: GpuContextDescriptor,
@@ -602,19 +572,20 @@ impl GpuContext {
         }
 
         let id = self.id;
+        let instance = self.backend.instance.clone();
         let realization_policies = GpuRealizationPolicies::new(
             self.resource_realization_policy(),
             self.program_binding_realization_policy(),
         );
         let execution_policy = self.execution_policy();
         let reconstruction = self.backend.execution.retained.reconstruction_seed();
-        let replacement = crate::plugins::gpu::backend::request_headless_generation(
+        let replacement = crate::plugins::gpu::backend::request_generation_with_instance(
+            instance,
             descriptor,
             realization_policies,
             execution_policy,
             id,
             generation,
-            Vec::new(),
         )
         .await?;
         replacement
