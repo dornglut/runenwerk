@@ -26,12 +26,20 @@ struct PreparedRetainedResource {
     failure_preserved_coverage: Option<GpuInitialCoverage>,
 }
 
+fn is_retained_storage_resource(resource: &GpuResourceRef) -> bool {
+    resource.common().lifetime().is_retained()
+        && matches!(
+            resource,
+            GpuResourceRef::Buffer(_) | GpuResourceRef::Texture(_) | GpuResourceRef::QuerySet(_)
+        )
+}
+
 impl PreparedRetainedContinuity {
     pub(super) fn from_graph(graph: &GpuPreparedWorkGraph) -> Self {
         let resources = graph
             .initialization()
             .iter()
-            .filter(|summary| summary.resource().common().lifetime().is_retained())
+            .filter(|summary| is_retained_storage_resource(summary.resource()))
             .map(|summary| {
                 let resource = summary.resource().clone();
                 let identity = resource.diagnostic_identity();
