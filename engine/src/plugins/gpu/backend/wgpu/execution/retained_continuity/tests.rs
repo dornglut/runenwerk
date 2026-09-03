@@ -428,3 +428,53 @@ fn prepared_transition_excludes_surface_acquired_storage() {
 
     assert!(PreparedRetainedContinuity::from_graph(&graph).is_empty());
 }
+
+#[test]
+fn acceptance_rejects_changed_descriptor_for_same_logical_identity() {
+    let owner = NonZeroU64::new(91).unwrap();
+    let mut original_allocator = GpuWorkResourceIdAllocator::for_owner_scope(owner);
+    let mut replacement_allocator = GpuWorkResourceIdAllocator::for_owner_scope(owner);
+    let make_buffer = |allocator: &mut GpuWorkResourceIdAllocator, name: &str, size: u64| {
+        let resource_label = label(name);
+        let common = GpuResourceCommon::owned(
+            resource_label.clone(),
+            GpuResourceLifetime::Retained,
+            GpuMemoryIntent::Device,
+            GpuReconstruction::SourceBacked,
+            provenance(name),
+        )
+        .unwrap();
+        allocator
+            .allocate_buffer_handle(
+                GpuBufferDescriptor::new(
+                    common,
+                    size,
+                    GpuBufferUsages::new(&resource_label, [GpuBufferUsage::Storage]).unwrap(),
+                    GpuBufferInitialization::Uninitialized,
+                )
+                .unwrap(),
+            )
+            .unwrap()
+    };
+    let original = make_buffer(&mut original_allocator, "original retained descriptor", 64);
+    let replacement = make_buffer(
+        &mut replacement_allocator,
+        "replacement retained descriptor",
+        32,
+    );
+    assert_eq!(original.diagnostic_identity(), replacement.diagnostic_identity());
+    assert_ne!(original.descriptor(), replacement.descriptor());
+
+    let initialized = coverage(&original, 0, 16);
+    let state = RetainedContinuityState::new(affinity(8, 1));
+    establish(&state, &original, &initialized, submission(11));
+
+    let replacement_transition = transition(&replacement, None, None, None, None);
+    let error = state
+        .validate_and_reserve(&replacement_transition)
+        .unwrap_err();
+    assert_eq!(
+        error.kind(),
+        GpuSubmissionRejectionKind::RetainedContinuityChanged
+    );
+}
