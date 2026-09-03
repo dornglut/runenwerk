@@ -120,6 +120,11 @@ impl EntityAllocator {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn exhaust_index_space_for_test(&mut self) {
+        self.next_index = u64::from(u32::MAX) + 1;
+    }
+
     pub fn allocate(&mut self) -> Result<Entity, EntityAllocationError> {
         if let Some(index) = self.free_list.pop() {
             let slot = self

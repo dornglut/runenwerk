@@ -171,6 +171,11 @@ impl Commands {
         });
     }
 
+    /// Applies queued commands in insertion order and stops on the first error.
+    ///
+    /// Successfully completed commands remain committed. The failing command
+    /// follows its own operation-level atomicity contract, and commands after it
+    /// are not executed. Consuming the queue prevents replay of attempted work.
     pub fn apply(self, world: &mut World) -> Result<(), CommandError> {
         for command in self.into_queue() {
             command.apply_erased(world)?;

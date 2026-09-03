@@ -26,6 +26,11 @@ impl EntityLocationMap {
     pub(crate) fn remove(&mut self, entity: Entity) -> Option<EntityLocation> {
         self.entries.remove(&entity)
     }
+
+    #[cfg(test)]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
 }
 
 #[cfg(test)]

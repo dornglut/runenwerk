@@ -14,6 +14,8 @@ pub mod system;
 pub mod telemetry;
 mod world;
 pub use bundle::Bundle;
+#[doc(hidden)]
+pub use bundle::{BundleComponentDescriptor, BundleComponents};
 pub use commands::{BatchCommands, Commands, DeferredCommand};
 pub use component::{Component, ComponentState, Resource, StatefulComponent};
 pub use ecs_macros::{

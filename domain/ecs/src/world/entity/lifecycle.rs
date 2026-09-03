@@ -1,5 +1,5 @@
 // Owner: ecs World Entity - Lifecycle APIs
-use crate::bundle::Bundle;
+use crate::bundle::{Bundle, prepare_bundle};
 use crate::entity::Entity;
 use crate::errors::{EntityAllocationError, EntityError};
 use crate::world::World;
@@ -12,13 +12,16 @@ impl World {
     }
 
     pub fn spawn<B: Bundle>(&mut self, bundle: B) -> Result<Entity, EntityAllocationError> {
+        let prepared = prepare_bundle(bundle);
         let entity = self.allocator.allocate()?;
-        B::register(self);
+
+        self.register_bundle_descriptors(prepared.descriptors());
         self.alive_entities.insert(entity);
         self.place_entity_in_empty_archetype(entity);
-        bundle
-            .insert(self, entity)
-            .expect("bundle insert should succeed for new entity");
+        for component in prepared.into_components() {
+            component.commit_insert(self, entity);
+        }
+
         self.publish_broadcast(EntitySpawnedEvent { entity });
         Ok(entity)
     }
@@ -84,12 +87,48 @@ impl World {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::any::TypeId;
 
     #[derive(crate::Component)]
     struct Marker;
 
     #[derive(Debug, PartialEq, Eq, crate::Component)]
     struct Value(u32);
+
+    #[derive(crate::Component)]
+    struct NeverRegistered;
+
+    #[test]
+    fn failed_spawn_allocation_has_no_structural_registration_or_spawn_observation_side_effects() {
+        let mut world = World::new();
+        world.allocator.exhaust_index_space_for_test();
+        let alive_before = world.alive_entities.len();
+        let changes_before = world.component_change_log.len();
+        let spawn_events_before = world.read_broadcast::<EntitySpawnedEvent>().len();
+
+        assert_eq!(
+            world.spawn(NeverRegistered),
+            Err(EntityAllocationError::IndexExhausted)
+        );
+        assert_eq!(world.alive_entities.len(), alive_before);
+        assert_eq!(world.component_change_log.len(), changes_before);
+        assert_eq!(
+            world.read_broadcast::<EntitySpawnedEvent>().len(),
+            spawn_events_before
+        );
+        assert!(!world.has_registered_component_type(TypeId::of::<NeverRegistered>()));
+        assert!(world.entity_locations.is_empty());
+    }
+
+    #[test]
+    fn successful_spawn_publishes_only_after_entity_is_live() {
+        let mut world = World::new();
+        let entity = world.spawn(Marker).expect("spawn should succeed");
+        let events = world.read_broadcast::<EntitySpawnedEvent>();
+
+        assert!(world.contains(entity));
+        assert_eq!(events, &[EntitySpawnedEvent { entity }]);
+    }
 
     #[test]
     fn fresh_worlds_never_alias_equal_local_entity_positions() {

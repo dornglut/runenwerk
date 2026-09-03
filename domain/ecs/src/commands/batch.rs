@@ -5,6 +5,11 @@ use crate::entity::Entity;
 use crate::errors::CommandError;
 use crate::world::World;
 
+/// Ordered group of deferred commands.
+///
+/// A batch is not a transaction: commands completed before the first error stay
+/// committed, the failing command is responsible for its own atomicity, and
+/// later commands are not executed.
 pub struct BatchCommands {
     queue: CommandQueue,
 }
@@ -64,6 +69,11 @@ impl BatchCommands {
         });
     }
 
+    /// Applies commands in insertion order and stops on the first error.
+    ///
+    /// Successfully completed commands remain committed. The failing command
+    /// follows its own operation-level atomicity contract, and commands after it
+    /// are not executed. Consuming the batch prevents replay of attempted work.
     pub fn apply(self, world: &mut World) -> Result<(), CommandError> {
         for command in self.queue {
             command.apply_erased(world)?;

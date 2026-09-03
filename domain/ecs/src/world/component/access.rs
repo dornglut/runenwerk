@@ -77,25 +77,16 @@ impl World {
         Ok(Mut { value })
     }
 
-    #[doc(hidden)]
-    pub fn __insert_component<T: Component>(
-        &mut self,
-        entity: Entity,
-        component: T,
-    ) -> Result<(), EntityError> {
-        self.ensure_entity_exists(entity)?;
-        self.__register_component::<T>();
-
+    pub(crate) fn __commit_insert_component<T: Component>(&mut self, entity: Entity, component: T) {
+        debug_assert!(self.contains(entity));
         let kind = if self.contains_component::<T>(entity) {
             crate::world::change_tracking::ComponentChangeKind::Modified
         } else {
             crate::world::change_tracking::ComponentChangeKind::Added
         };
-
         let component_type = TypeId::of::<T>();
-        self.record_component_change(entity, component_type, T::component_name(), kind);
+        let commit_tick = self.change_tick.saturating_add(1);
 
-        let tick = self.change_tick;
         let inserted = if matches!(
             kind,
             crate::world::change_tracking::ComponentChangeKind::Added
@@ -103,45 +94,38 @@ impl World {
             self.archetype_registry.add_component::<T>(
                 entity,
                 component,
-                tick,
+                commit_tick,
                 &mut self.entity_locations,
             )
         } else {
             self.archetype_registry.update_component::<T>(
                 entity,
                 component,
-                tick,
+                commit_tick,
                 &self.entity_locations,
             )
         };
 
         assert!(
             inserted,
-            "archetype component insert/update must succeed for live entity"
+            "preflighted archetype component insert/update must succeed"
         );
-
-        Ok(())
+        self.record_component_change(entity, component_type, T::component_name(), kind);
     }
 
-    #[doc(hidden)]
-    pub fn __remove_component<T: Component>(&mut self, entity: Entity) -> Result<T, EntityError> {
-        self.ensure_entity_exists(entity)?;
+    pub(crate) fn __commit_remove_component<T: Component>(&mut self, entity: Entity) -> T {
+        debug_assert!(self.contains(entity));
         let value = self
             .archetype_registry
             .remove_component::<T>(entity, &mut self.entity_locations)
-            .ok_or(EntityError::MissingComponent {
-                entity,
-                component: type_name::<T>(),
-            })?;
-
+            .expect("preflighted archetype component removal must succeed");
         self.record_component_change(
             entity,
             TypeId::of::<T>(),
             T::component_name(),
             crate::world::change_tracking::ComponentChangeKind::Removed,
         );
-
-        Ok(value)
+        value
     }
 
     pub fn component_changed_since<T: Component>(&self, tick: u64) -> bool {
