@@ -3,12 +3,14 @@ use crate::plugins::gpu::api::{
 };
 use crate::plugins::gpu::{
     GpuContextAffinity, GpuInitialCoverage, GpuOpaqueContentContinuity, GpuPreparedWorkGraph,
-    GpuResourceRef, GpuRetainedResourceContinuity, GpuSubmissionId, GpuSubmissionRejectionKind,
-    GpuSubmissionRejectionReason, GpuWorkResourceId,
+    GpuResourceRef, GpuRetainedInitializationSeed, GpuRetainedResourceContinuity, GpuSubmissionId,
+    GpuSubmissionRejectionKind, GpuSubmissionRejectionReason, GpuWorkResourceId,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Mutex;
 
+#[cfg(test)]
+mod participation_tests;
 #[cfg(test)]
 mod storage_scope_tests;
 #[cfg(test)]
@@ -40,23 +42,39 @@ fn is_retained_storage_resource(resource: &GpuResourceRef) -> bool {
 
 impl PreparedRetainedContinuity {
     pub(super) fn from_graph(graph: &GpuPreparedWorkGraph) -> Self {
+        let participating = graph
+            .nodes()
+            .iter()
+            .flat_map(|prepared| prepared.node().accesses().iter())
+            .map(|access| access.resource_identity())
+            .chain(
+                graph
+                    .initial_content()
+                    .iter()
+                    .map(|candidate| candidate.resource_identity()),
+            )
+            .collect::<BTreeSet<_>>();
         let resources = graph
             .initialization()
             .iter()
-            .filter(|summary| is_retained_storage_resource(summary.resource()))
+            .filter(|summary| {
+                is_retained_storage_resource(summary.resource())
+                    && participating.contains(&summary.resource().diagnostic_identity())
+            })
             .map(|summary| {
                 let resource = summary.resource().clone();
                 let identity = resource.diagnostic_identity();
-                let consumed_seed = graph.retained_seed().iter().find(|seed| {
-                    summary
-                        .initial()
-                        .is_some_and(|initial| initial_coverage_contains(initial, seed))
-                });
+                let consumed_seed = graph
+                    .retained_seed()
+                    .iter()
+                    .find(|seed| seed.resource_identity() == identity)
+                    .and_then(|seed| seed.initialized_coverage())
+                    .cloned();
                 (
                     identity,
                     PreparedRetainedResource {
                         resource,
-                        consumed_seed: consumed_seed.cloned(),
+                        consumed_seed,
                         initial: summary.initial().cloned(),
                         final_coverage: summary.final_coverage().cloned(),
                         failure_preserved_coverage: graph
@@ -102,12 +120,17 @@ impl RetainedContinuityState {
         }
     }
 
-    pub(super) fn coverage_seed(&self) -> Vec<GpuInitialCoverage> {
+    pub(super) fn coverage_seed(&self) -> Vec<GpuRetainedInitializationSeed> {
         self.records
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .values()
-            .filter_map(|record| record.initialized_coverage.clone())
+            .map(|record| {
+                GpuRetainedInitializationSeed::new(
+                    record.resource.clone(),
+                    record.initialized_coverage.clone(),
+                )
+            })
             .collect()
     }
 
