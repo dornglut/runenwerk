@@ -22,6 +22,8 @@ mod storage_scope_tests;
 mod terminal_boundary_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod zeroed_reconstruction_tests;
 
 #[derive(Debug, Clone)]
 pub(super) struct PreparedRetainedContinuity {
@@ -93,6 +95,7 @@ impl PreparedRetainedContinuity {
                 let consumed_seed = retained_seed
                     .and_then(|seed| seed.initialized_coverage())
                     .cloned();
+                let reconstruction_target = graph.reconstruction_targets().contains(&identity);
                 let fresh_descriptor_initial_state = if consumed_lifecycle {
                     false
                 } else {
@@ -102,7 +105,9 @@ impl PreparedRetainedContinuity {
                                 crate::plugins::gpu::GpuBufferInitialization::Uninitialized => {
                                     false
                                 }
-                                crate::plugins::gpu::GpuBufferInitialization::Zeroed => true,
+                                crate::plugins::gpu::GpuBufferInitialization::Zeroed => {
+                                    !reconstruction_target
+                                }
                                 crate::plugins::gpu::GpuBufferInitialization::Prepared(_) => {
                                     descriptor_materializations.contains(&identity)
                                 }
@@ -113,7 +118,9 @@ impl PreparedRetainedContinuity {
                                 crate::plugins::gpu::GpuTextureInitialization::Uninitialized => {
                                     false
                                 }
-                                crate::plugins::gpu::GpuTextureInitialization::Zeroed => true,
+                                crate::plugins::gpu::GpuTextureInitialization::Zeroed => {
+                                    !reconstruction_target
+                                }
                                 crate::plugins::gpu::GpuTextureInitialization::Prepared(_) => {
                                     descriptor_materializations.contains(&identity)
                                 }
@@ -136,7 +143,7 @@ impl PreparedRetainedContinuity {
                             .failure_preserved_coverage(identity)
                             .cloned(),
                         reconstruction: PreparedReconstructionEvidence {
-                            target: graph.reconstruction_targets().contains(&identity),
+                            target: reconstruction_target,
                             explicit_write: explicit_writes.contains(&identity),
                             fresh_descriptor_initial_state,
                         },
