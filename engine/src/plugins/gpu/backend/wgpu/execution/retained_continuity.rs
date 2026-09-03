@@ -42,7 +42,9 @@ impl PreparedRetainedContinuity {
                         consumed_seed: consumed_seed.cloned(),
                         initial: summary.initial().cloned(),
                         final_coverage: summary.final_coverage().cloned(),
-                        failure_preserved_coverage: summary.failure_preserved_coverage().cloned(),
+                        failure_preserved_coverage: graph
+                            .failure_preserved_coverage(identity)
+                            .cloned(),
                     },
                 )
             })
