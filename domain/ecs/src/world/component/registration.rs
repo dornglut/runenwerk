@@ -19,7 +19,7 @@ impl World {
     ) {
         descriptor.register_storage(&mut self.archetype_registry);
         self.component_type_registry
-            .entry(descriptor.type_id())
+            .entry(descriptor.component_type_id())
             .or_insert_with(|| {
                 let id = self.next_component_id;
                 self.next_component_id = self.next_component_id.saturating_add(1);
