@@ -87,12 +87,33 @@ impl World {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::any::TypeId;
 
     #[derive(crate::Component)]
     struct Marker;
 
     #[derive(Debug, PartialEq, Eq, crate::Component)]
     struct Value(u32);
+
+    #[derive(crate::Component)]
+    struct NeverRegistered;
+
+    #[test]
+    fn failed_spawn_allocation_has_no_structural_or_registration_side_effects() {
+        let mut world = World::new();
+        world.allocator.exhaust_index_space_for_test();
+        let alive_before = world.alive_entities.len();
+        let changes_before = world.component_change_log.len();
+
+        assert_eq!(
+            world.spawn(NeverRegistered),
+            Err(EntityAllocationError::IndexExhausted)
+        );
+        assert_eq!(world.alive_entities.len(), alive_before);
+        assert_eq!(world.component_change_log.len(), changes_before);
+        assert!(!world.has_registered_component_type(TypeId::of::<NeverRegistered>()));
+        assert!(world.entity_locations.is_empty());
+    }
 
     #[test]
     fn fresh_worlds_never_alias_equal_local_entity_positions() {
