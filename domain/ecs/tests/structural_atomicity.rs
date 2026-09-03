@@ -78,18 +78,78 @@ fn duplicate_type_removal_keeps_existing_failure_semantics_without_partial_mutat
 }
 
 #[test]
-fn rejected_foreign_insert_does_not_register_bundle_or_publish_changes() {
+fn rejected_foreign_insert_preserves_colliding_local_structure_registration_and_index() {
     let mut first = World::new();
+    let local = first.spawn(A(7)).expect("local spawn should succeed");
+    assert!(first.ensure_component_index::<A, u32>(|value| value.0));
+    assert_eq!(first.find_entity_by_index::<A, u32>(&7), Some(local));
+    let local_location_before = first
+        .__entity_archetype_location(local)
+        .expect("local entity should have a location");
+    let changes_before = first.component_changes_since(0);
+
     let mut second = World::new();
     let foreign = second.spawn(A(1)).expect("foreign spawn should succeed");
-    let changes_before = first.component_changes_since(0);
+    assert_eq!(local.index(), foreign.index());
+    assert_eq!(local.generation(), foreign.generation());
 
     let result = first.insert(foreign, (NeverInsertedA, NeverInsertedB));
 
     assert!(matches!(result, Err(EntityError::ForeignWorld { .. })));
+    assert_eq!(first.require::<A>(local).expect("local A must remain").0, 7);
+    assert_eq!(
+        first.__entity_archetype_location(local),
+        Some(local_location_before)
+    );
+    assert_eq!(first.find_entity_by_index::<A, u32>(&7), Some(local));
+    assert_eq!(first.find_entity_by_index::<A, u32>(&1), None);
     assert!(!first.has_registered_component_type(TypeId::of::<NeverInsertedA>()));
     assert!(!first.has_registered_component_type(TypeId::of::<NeverInsertedB>()));
     assert_eq!(first.component_changes_since(0), changes_before);
+}
+
+#[test]
+fn freed_and_stale_insertions_do_not_register_or_mutate_replacement_state() {
+    let mut world = World::new();
+    let original = world.spawn(A(4)).expect("spawn should succeed");
+    world.despawn(original).expect("despawn should succeed");
+    let changes_after_despawn = world.component_changes_since(0);
+
+    assert!(matches!(
+        world.insert(original, NeverInsertedA),
+        Err(EntityError::AlreadyFreed { .. })
+    ));
+    assert!(!world.has_registered_component_type(TypeId::of::<NeverInsertedA>()));
+    assert_eq!(world.component_changes_since(0), changes_after_despawn);
+
+    let replacement = world.spawn(A(9)).expect("slot reuse should succeed");
+    assert_eq!(original.index(), replacement.index());
+    assert_ne!(original.generation(), replacement.generation());
+    let replacement_location_before = world
+        .__entity_archetype_location(replacement)
+        .expect("replacement should have a location");
+    let changes_before_stale_insert = world.component_changes_since(0);
+
+    assert!(matches!(
+        world.insert(original, NeverInsertedB),
+        Err(EntityError::StaleGeneration { .. })
+    ));
+    assert_eq!(
+        world
+            .require::<A>(replacement)
+            .expect("replacement value must remain")
+            .0,
+        9
+    );
+    assert_eq!(
+        world.__entity_archetype_location(replacement),
+        Some(replacement_location_before)
+    );
+    assert!(!world.has_registered_component_type(TypeId::of::<NeverInsertedB>()));
+    assert_eq!(
+        world.component_changes_since(0),
+        changes_before_stale_insert
+    );
 }
 
 #[test]
