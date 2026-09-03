@@ -102,10 +102,12 @@ fn prepared_resource(
     failure_preserved_coverage: Option<GpuInitialCoverage>,
 ) -> (GpuWorkResourceId, PreparedRetainedResource) {
     let identity = buffer.diagnostic_identity();
+    let consumed_lifecycle = consumed_seed.is_some();
     (
         identity,
         PreparedRetainedResource {
             resource: GpuResourceRef::Buffer(buffer.clone()),
+            consumed_lifecycle,
             consumed_seed,
             initial,
             final_coverage,
