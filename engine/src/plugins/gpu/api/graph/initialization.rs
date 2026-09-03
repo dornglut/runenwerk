@@ -527,6 +527,12 @@ impl GpuPreparedResourceInitialization {
     }
 }
 
+type PreparedInitializationSimulation = (
+    Vec<GpuPreparedResourceInitialization>,
+    Vec<GpuPreparedWorkDiagnostic>,
+    BTreeMap<GpuWorkResourceId, GpuInitialCoverage>,
+);
+
 pub(super) fn validate_fragment_initialization(
     graph_label: &str,
     fragments: &[GpuWorkFragment],
@@ -1238,14 +1244,7 @@ pub(super) fn simulate_prepared_initialization(
     topological_order: &[GpuPreparedWorkNodeId],
     initial_content: &[GpuPreparedInitialContent],
     retained_coverage: &[GpuInitialCoverage],
-) -> Result<
-    (
-        Vec<GpuPreparedResourceInitialization>,
-        Vec<GpuPreparedWorkDiagnostic>,
-        BTreeMap<GpuWorkResourceId, GpuInitialCoverage>,
-    ),
-    GpuWorkGraphError,
-> {
+) -> Result<PreparedInitializationSimulation, GpuWorkGraphError> {
     let mut state = BTreeMap::<GpuWorkResourceId, InitializedCoverage>::new();
     let retained_storage = storage_resources
         .iter()
@@ -1332,12 +1331,11 @@ pub(super) fn simulate_prepared_initialization(
             .get(identity)
             .cloned()
             .unwrap_or_else(|| InitializedCoverage::empty_for(resource));
-        if retained_storage.contains(identity) {
-            if let Some(coverage) =
+        if retained_storage.contains(identity)
+            && let Some(coverage) =
                 coverage_to_public(graph_label, resource, &failure_preserved_value)?
-            {
-                failure_preserved_coverage.insert(*identity, coverage);
-            }
+        {
+            failure_preserved_coverage.insert(*identity, coverage);
         }
         let summary = GpuPreparedResourceInitialization {
             resource: resource.clone(),
