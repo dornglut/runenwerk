@@ -773,6 +773,15 @@ fn apply_node_initialization(
             .get(&resource)
             .is_some_and(|coverage| coverage.contains(&required.coverage))
         {
+            let storage_resource = fragment
+                .resources()
+                .iter()
+                .find(|candidate| storage_identity(candidate) == resource)
+                .map(canonical_storage_resource)
+                .expect("validated fragment retains every initialization requirement resource");
+            let required_initialization =
+                coverage_to_public(graph_label, &storage_resource, &required.coverage)?
+                    .expect("nonempty initialization requirements publish typed coverage");
             return Err(GpuWorkGraphError::invalid(
                 "prepare GPU work initialization",
                 GpuWorkGraphErrorContext::new(
@@ -783,7 +792,8 @@ fn apply_node_initialization(
                     Some(resource),
                     Some(required.description),
                     Some(node.provenance().clone()),
-                ),
+                )
+                .with_required_initialization(required_initialization),
                 GpuWorkGraphCause::ReadBeforeInitialization,
                 "provide descriptor/input/import/retained coverage or preceding work that initializes the exact region",
             ));
