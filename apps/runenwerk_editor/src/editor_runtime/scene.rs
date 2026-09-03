@@ -15,20 +15,6 @@ use crate::editor_runtime::{
     SceneDocumentState,
 };
 
-struct EmptyEntityBundle;
-
-impl ecs::Bundle for EmptyEntityBundle {
-    fn register(_world: &mut ecs::World) {}
-
-    fn insert(self, _world: &mut ecs::World, _entity: ecs::Entity) -> Result<(), ecs::EntityError> {
-        Ok(())
-    }
-
-    fn remove(_world: &mut ecs::World, _entity: ecs::Entity) -> Result<Self, ecs::EntityError> {
-        Ok(Self)
-    }
-}
-
 pub struct RunenwerkEditorSceneRuntime<'a> {
     document: &'a mut SceneDocumentState,
     world: &'a mut ecs::World,
@@ -65,7 +51,7 @@ impl<'a> SceneRuntime for RunenwerkEditorSceneRuntime<'a> {
 
         let ecs_entity = self
             .world
-            .spawn(EmptyEntityBundle)
+            .spawn(())
             .map_err(|_| EditorMutationError::runtime_rejected("failed to allocate ecs entity"))?;
         let editor_id = self.ids.allocate_entity_id();
         self.document
@@ -87,7 +73,7 @@ impl<'a> SceneRuntime for RunenwerkEditorSceneRuntime<'a> {
         self.document.restore_entity(snapshot.clone())?;
 
         if self.ids.resolve_entity(snapshot.id).is_none() {
-            let ecs_entity = self.world.spawn(EmptyEntityBundle).map_err(|_| {
+            let ecs_entity = self.world.spawn(()).map_err(|_| {
                 EditorMutationError::runtime_rejected("failed to allocate ecs entity")
             })?;
             self.ids.register_entity(snapshot.id, ecs_entity);
