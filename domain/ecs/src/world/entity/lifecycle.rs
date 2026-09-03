@@ -99,11 +99,12 @@ mod tests {
     struct NeverRegistered;
 
     #[test]
-    fn failed_spawn_allocation_has_no_structural_or_registration_side_effects() {
+    fn failed_spawn_allocation_has_no_structural_registration_or_spawn_observation_side_effects() {
         let mut world = World::new();
         world.allocator.exhaust_index_space_for_test();
         let alive_before = world.alive_entities.len();
         let changes_before = world.component_change_log.len();
+        let spawn_events_before = world.read_broadcast::<EntitySpawnedEvent>().len();
 
         assert_eq!(
             world.spawn(NeverRegistered),
@@ -111,8 +112,22 @@ mod tests {
         );
         assert_eq!(world.alive_entities.len(), alive_before);
         assert_eq!(world.component_change_log.len(), changes_before);
+        assert_eq!(
+            world.read_broadcast::<EntitySpawnedEvent>().len(),
+            spawn_events_before
+        );
         assert!(!world.has_registered_component_type(TypeId::of::<NeverRegistered>()));
         assert!(world.entity_locations.is_empty());
+    }
+
+    #[test]
+    fn successful_empty_spawn_publishes_only_after_entity_is_live() {
+        let mut world = World::new();
+        let entity = world.spawn(()).expect("empty spawn should succeed");
+        let events = world.read_broadcast::<EntitySpawnedEvent>();
+
+        assert!(world.contains(entity));
+        assert_eq!(events, &[EntitySpawnedEvent { entity }]);
     }
 
     #[test]
