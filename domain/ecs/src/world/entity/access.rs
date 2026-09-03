@@ -26,8 +26,8 @@ impl World {
         let mut removed_types = HashSet::with_capacity(descriptors.len());
 
         for descriptor in &descriptors {
-            if !removed_types.insert(descriptor.type_id())
-                || !self.has_component_by_type_id(entity, descriptor.type_id())
+            if !removed_types.insert(descriptor.component_type_id())
+                || !self.has_component_by_type_id(entity, descriptor.component_type_id())
             {
                 return Err(EntityError::MissingComponent {
                     entity,
