@@ -151,8 +151,20 @@ fn commands_fail_stop_without_rolling_back_prior_success_or_partially_applying_f
         result,
         Err(CommandError::Entity(EntityError::MissingComponent { .. }))
     ));
-    assert_eq!(world.require::<C>(entity).expect("earlier command commits").0, 2);
-    assert_eq!(world.require::<A>(entity).expect("failed removal is atomic").0, 1);
+    assert_eq!(
+        world
+            .require::<C>(entity)
+            .expect("earlier command commits")
+            .0,
+        2
+    );
+    assert_eq!(
+        world
+            .require::<A>(entity)
+            .expect("failed removal is atomic")
+            .0,
+        1
+    );
     assert!(world.get::<D>(entity).is_none());
 }
 
@@ -171,7 +183,19 @@ fn batch_commands_share_non_transactional_fail_stop_semantics() {
         result,
         Err(CommandError::Entity(EntityError::MissingComponent { .. }))
     ));
-    assert_eq!(world.require::<C>(entity).expect("earlier command commits").0, 2);
-    assert_eq!(world.require::<A>(entity).expect("failed removal is atomic").0, 1);
+    assert_eq!(
+        world
+            .require::<C>(entity)
+            .expect("earlier command commits")
+            .0,
+        2
+    );
+    assert_eq!(
+        world
+            .require::<A>(entity)
+            .expect("failed removal is atomic")
+            .0,
+        1
+    );
     assert!(world.get::<D>(entity).is_none());
 }
