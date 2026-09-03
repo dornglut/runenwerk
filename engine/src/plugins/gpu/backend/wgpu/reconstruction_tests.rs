@@ -325,9 +325,9 @@ fn exact_gpu_mutation_makes_original_seed_insufficient_until_replay_completes() 
     let (_, bytes) = submit_and_readback(&context, graph, readback_id);
     assert_u32_bytes(&bytes, &expected_current);
 
-    pollster::block_on(context.replace_device_generation(context_descriptor(
-        "G7B deterministic replay successor",
-    )))
+    pollster::block_on(
+        context.replace_device_generation(context_descriptor("G7B deterministic replay successor")),
+    )
     .unwrap();
     assert!(context.retained_resource_continuity(identity).is_none());
     let requirement = context
