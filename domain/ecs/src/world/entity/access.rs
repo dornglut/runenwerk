@@ -1,5 +1,7 @@
 // Owner: ecs World Entity - Access APIs
-use crate::bundle::{Bundle, BundleComponentValue, BundleComponents, bundle_descriptors, prepare_bundle};
+use crate::bundle::{
+    Bundle, BundleComponentValue, BundleComponents, bundle_descriptors, prepare_bundle,
+};
 use crate::component::Component;
 use crate::entity::Entity;
 use crate::errors::EntityError;
