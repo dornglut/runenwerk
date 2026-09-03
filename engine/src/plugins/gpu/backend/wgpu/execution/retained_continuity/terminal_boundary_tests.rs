@@ -120,7 +120,10 @@ fn queue_submission_makes_current_opaque_content_unknown_until_completion() {
     state.mark_may_execute(&prepared, &writes);
 
     let in_flight = state.snapshot(buffer.diagnostic_identity()).unwrap();
-    assert_eq!(in_flight.opaque_content(), GpuOpaqueContentContinuity::Unknown);
+    assert_eq!(
+        in_flight.opaque_content(),
+        GpuOpaqueContentContinuity::Unknown
+    );
     assert_eq!(in_flight.initialized_coverage(), Some(&failure_safe));
 
     let second_write = submission(2);
@@ -141,20 +144,17 @@ fn first_queue_submitted_write_is_unknown_without_inventing_initialized_coverage
     let buffer = retained_buffer();
     let final_coverage = coverage(&buffer, 0, 16);
     let state = RetainedContinuityState::new(affinity());
-    let prepared = transition(
-        &buffer,
-        None,
-        None,
-        Some(final_coverage),
-        None,
-    );
+    let prepared = transition(&buffer, None, None, Some(final_coverage), None);
     let writes = BTreeSet::from([buffer.diagnostic_identity()]);
     state.validate_and_reserve(&prepared).unwrap();
 
     state.mark_may_execute(&prepared, &writes);
 
     let in_flight = state.snapshot(buffer.diagnostic_identity()).unwrap();
-    assert_eq!(in_flight.opaque_content(), GpuOpaqueContentContinuity::Unknown);
+    assert_eq!(
+        in_flight.opaque_content(),
+        GpuOpaqueContentContinuity::Unknown
+    );
     assert!(in_flight.initialized_coverage().is_none());
 
     state.fail_after_acceptance(&prepared, &writes);
