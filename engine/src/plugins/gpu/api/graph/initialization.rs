@@ -779,12 +779,9 @@ fn apply_node_initialization(
                 .find(|candidate| storage_identity(candidate) == resource)
                 .map(canonical_storage_resource)
                 .expect("validated fragment retains every initialization requirement resource");
-            let required_initialization = coverage_to_public(
-                graph_label,
-                &storage_resource,
-                &required.coverage,
-            )?
-            .expect("nonempty initialization requirements publish typed coverage");
+            let required_initialization =
+                coverage_to_public(graph_label, &storage_resource, &required.coverage)?
+                    .expect("nonempty initialization requirements publish typed coverage");
             return Err(GpuWorkGraphError::invalid(
                 "prepare GPU work initialization",
                 GpuWorkGraphErrorContext::new(
