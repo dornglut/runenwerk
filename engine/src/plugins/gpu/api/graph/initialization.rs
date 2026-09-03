@@ -2,9 +2,10 @@ use super::super::{
     GpuAttachmentStore, GpuBufferCoverage, GpuBufferInitialization, GpuBufferRange,
     GpuBufferStridedCoverage, GpuBufferTextureLayout, GpuClearOperation, GpuColorAttachmentLoad,
     GpuCopyOperation, GpuDepthAttachmentLoad, GpuQueryRange, GpuResourceAccess, GpuResourceRef,
-    GpuTextureAspect, GpuTextureCopyRegion, GpuTextureDimension, GpuTextureHandle,
-    GpuTextureInitialization, GpuTextureSubresourceRange, GpuWorkGraphCause, GpuWorkGraphError,
-    GpuWorkGraphErrorContext, GpuWorkGraphErrorSource, GpuWorkOperation, GpuWorkResourceId,
+    GpuRetainedInitializationSeed, GpuTextureAspect, GpuTextureCopyRegion, GpuTextureDimension,
+    GpuTextureHandle, GpuTextureInitialization, GpuTextureSubresourceRange, GpuWorkGraphCause,
+    GpuWorkGraphError, GpuWorkGraphErrorContext, GpuWorkGraphErrorSource, GpuWorkOperation,
+    GpuWorkResourceId,
 };
 use super::{
     authoring::{GpuWorkFragment, GpuWorkNode},
@@ -12,7 +13,8 @@ use super::{
     coverage::{
         GpuInitialCoverage, GpuInitialCoverageData, buffer_coverage_contains,
         canonical_storage_resource, canonical_texture_aspect, coverage_source_error,
-        normalize_buffer_coverage, normalize_u32_intervals, storage_identity, texture_aspect,
+        intersect_buffer_coverage, normalize_buffer_coverage, normalize_u32_intervals,
+        storage_identity, texture_aspect,
     },
     diagnostics::{
         GpuPreparedWorkDiagnostic, GraphErrorOrigin, graph_error, graph_error_with_region,
@@ -20,7 +22,7 @@ use super::{
     identity::GpuPreparedWorkNodeId,
     initial_content::GpuPreparedInitialContent,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum InitializedCoverage {
@@ -378,7 +380,19 @@ fn texture_range_coverage(
 
 fn intersect_coverage(left: &mut InitializedCoverage, right: &InitializedCoverage) -> bool {
     match (left, right) {
-        (InitializedCoverage::Buffer { .. }, InitializedCoverage::Buffer { .. }) => true,
+        (
+            InitializedCoverage::Buffer {
+                buffer: left_buffer,
+                values: left_values,
+            },
+            InitializedCoverage::Buffer {
+                buffer: right_buffer,
+                values: right_values,
+            },
+        ) if left_buffer == right_buffer => {
+            *left_values = intersect_buffer_coverage(left_buffer, left_values, right_values);
+            true
+        }
         (InitializedCoverage::Texture(left), InitializedCoverage::Texture(right)) => {
             left.retain(|key, left_intervals| {
                 let Some(right_intervals) = right.get(key) else {
@@ -445,6 +459,70 @@ fn initial_coverage_value(coverage: &GpuInitialCoverage) -> InitializedCoverage 
     }
 }
 
+pub(crate) fn initial_coverage_contains(
+    have: &GpuInitialCoverage,
+    required: &GpuInitialCoverage,
+) -> bool {
+    have.storage_resource == required.storage_resource
+        && initial_coverage_value(have).contains(&initial_coverage_value(required))
+}
+
+pub(crate) fn initial_coverage_intersection(
+    resource: &GpuResourceRef,
+    left: &GpuInitialCoverage,
+    right: &GpuInitialCoverage,
+) -> Option<GpuInitialCoverage> {
+    if left.storage_resource != right.storage_resource {
+        return None;
+    }
+    let mut intersection = initial_coverage_value(left);
+    if !intersect_coverage(&mut intersection, &initial_coverage_value(right)) {
+        return None;
+    }
+    coverage_to_public("retained continuity", resource, &intersection)
+        .ok()
+        .flatten()
+}
+
+fn apply_retained_initial_coverage(
+    graph_label: &str,
+    state: &mut BTreeMap<GpuWorkResourceId, InitializedCoverage>,
+    retained_storage: &BTreeSet<GpuWorkResourceId>,
+    retained_state: &[GpuRetainedInitializationSeed],
+) -> Result<(), GpuWorkGraphError> {
+    for seed in retained_state {
+        let seed_storage = canonical_storage_resource(seed.resource());
+        let identity = seed.resource_identity();
+        if !retained_storage.contains(&identity) || !seed_storage.common().lifetime().is_retained()
+        {
+            continue;
+        }
+        let Some(existing) = state.get_mut(&identity) else {
+            continue;
+        };
+        *existing = InitializedCoverage::empty_for(&seed_storage);
+        if let Some(coverage) = seed.initialized_coverage()
+            && !existing.union(&initial_coverage_value(coverage))
+        {
+            return Err(GpuWorkGraphError::invalid(
+                "apply retained GPU initialization state",
+                GpuWorkGraphErrorContext::new(
+                    graph_label,
+                    None,
+                    None,
+                    None,
+                    Some(identity),
+                    None,
+                    Some(seed_storage.common().provenance().clone()),
+                ),
+                GpuWorkGraphCause::ImportExportMismatch,
+                "retain lifecycle state only when current storage and retained coverage describe the same normalized resource",
+            ));
+        }
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuPreparedResourceInitialization {
     resource: GpuResourceRef,
@@ -466,17 +544,24 @@ impl GpuPreparedResourceInitialization {
     }
 }
 
+type PreparedInitializationSimulation = (
+    Vec<GpuPreparedResourceInitialization>,
+    Vec<GpuPreparedWorkDiagnostic>,
+    BTreeMap<GpuWorkResourceId, GpuInitialCoverage>,
+);
+
 pub(super) fn validate_fragment_initialization(
     graph_label: &str,
     fragments: &[GpuWorkFragment],
     fragment_order: &[usize],
     import_bindings: &ImportBindings,
     initial_content: &[GpuPreparedInitialContent],
+    retained_coverage: &[GpuRetainedInitializationSeed],
 ) -> Result<(), GpuWorkGraphError> {
     let mut prepared_outputs = BTreeMap::<(usize, usize), InitializedCoverage>::new();
     for &fragment_index in fragment_order {
         let fragment = &fragments[fragment_index];
-        let mut state = fragment_entry_state(fragment);
+        let mut state = fragment_entry_state(graph_label, fragment, retained_coverage)?;
         apply_fragment_prepared_initial_content(
             graph_label,
             fragment,
@@ -556,12 +641,18 @@ pub(super) fn validate_fragment_initialization(
 }
 
 fn fragment_entry_state(
+    graph_label: &str,
     fragment: &GpuWorkFragment,
-) -> BTreeMap<GpuWorkResourceId, InitializedCoverage> {
+    retained_coverage: &[GpuRetainedInitializationSeed],
+) -> Result<BTreeMap<GpuWorkResourceId, InitializedCoverage>, GpuWorkGraphError> {
     let mut state = BTreeMap::new();
+    let mut retained_storage = BTreeSet::new();
     for resource in fragment.resources() {
         let storage = canonical_storage_resource(resource);
         let identity = storage_identity(&storage);
+        if storage.common().lifetime().is_retained() {
+            retained_storage.insert(identity);
+        }
         let coverage = descriptor_coverage(resource);
         state
             .entry(identity)
@@ -570,6 +661,12 @@ fn fragment_entry_state(
             })
             .or_insert(coverage);
     }
+    apply_retained_initial_coverage(
+        graph_label,
+        &mut state,
+        &retained_storage,
+        retained_coverage,
+    )?;
     for input in fragment.inputs() {
         let resource = input.initialized_coverage().storage_resource;
         let coverage = initial_coverage_value(input.initialized_coverage());
@@ -580,7 +677,7 @@ fn fragment_entry_state(
             })
             .or_insert(coverage);
     }
-    state
+    Ok(state)
 }
 
 fn union_state_coverage(
@@ -688,7 +785,7 @@ fn apply_node_initialization(
                     Some(node.provenance().clone()),
                 ),
                 GpuWorkGraphCause::ReadBeforeInitialization,
-                "provide descriptor/input/import coverage or preceding work that initializes the exact region",
+                "provide descriptor/input/import/retained coverage or preceding work that initializes the exact region",
             ));
         }
     }
@@ -1163,17 +1260,28 @@ pub(super) fn simulate_prepared_initialization(
     node_locations: &BTreeMap<GpuPreparedWorkNodeId, (usize, usize)>,
     topological_order: &[GpuPreparedWorkNodeId],
     initial_content: &[GpuPreparedInitialContent],
-) -> Result<
-    (
-        Vec<GpuPreparedResourceInitialization>,
-        Vec<GpuPreparedWorkDiagnostic>,
-    ),
-    GpuWorkGraphError,
-> {
+    retained_coverage: &[GpuRetainedInitializationSeed],
+) -> Result<PreparedInitializationSimulation, GpuWorkGraphError> {
     let mut state = BTreeMap::<GpuWorkResourceId, InitializedCoverage>::new();
+    let retained_storage = storage_resources
+        .iter()
+        .filter_map(|(identity, resource)| {
+            resource
+                .common()
+                .lifetime()
+                .is_retained()
+                .then_some(*identity)
+        })
+        .collect::<BTreeSet<_>>();
     for (identity, resource) in storage_resources {
         state.insert(*identity, descriptor_coverage(resource));
     }
+    apply_retained_initial_coverage(
+        graph_label,
+        &mut state,
+        &retained_storage,
+        retained_coverage,
+    )?;
     for fragment in fragments {
         for input in fragment.inputs() {
             union_state_coverage(
@@ -1186,6 +1294,7 @@ pub(super) fn simulate_prepared_initialization(
         }
     }
     let initial = state.clone();
+    let mut failure_preserved = initial.clone();
     apply_global_prepared_initial_content(graph_label, &mut state, initial_content)?;
     for &prepared_id in topological_order {
         let Some(&(fragment_index, node_index)) = node_locations.get(&prepared_id) else {
@@ -1207,8 +1316,25 @@ pub(super) fn simulate_prepared_initialization(
         let fragment = &fragments[fragment_index];
         let node = &fragment.nodes()[node_index];
         apply_node_initialization(graph_label, fragment, node, prepared_id, &mut state)?;
+        for discarded in operation_discard_regions(node.operation()) {
+            let Some(coverage) = failure_preserved.get_mut(&discarded.resource) else {
+                continue;
+            };
+            if !coverage.remove(&discarded.coverage) {
+                return Err(graph_error(
+                    "derive GPU failure-preserved initialization coverage",
+                    graph_label,
+                    GraphErrorOrigin::new(Some(fragment), Some(node)),
+                    Some(prepared_id),
+                    Some(discarded.resource),
+                    GpuWorkGraphCause::OperationAccessContradiction,
+                    "apply possible discard invalidation only to matching normalized texture storage",
+                ));
+            }
+        }
     }
     let mut summaries = Vec::new();
+    let mut failure_preserved_coverage = BTreeMap::new();
     for (identity, resource) in storage_resources {
         let initial_value = initial
             .get(identity)
@@ -1218,6 +1344,16 @@ pub(super) fn simulate_prepared_initialization(
             .get(identity)
             .cloned()
             .unwrap_or_else(|| InitializedCoverage::empty_for(resource));
+        let failure_preserved_value = failure_preserved
+            .get(identity)
+            .cloned()
+            .unwrap_or_else(|| InitializedCoverage::empty_for(resource));
+        if retained_storage.contains(identity)
+            && let Some(coverage) =
+                coverage_to_public(graph_label, resource, &failure_preserved_value)?
+        {
+            failure_preserved_coverage.insert(*identity, coverage);
+        }
         let summary = GpuPreparedResourceInitialization {
             resource: resource.clone(),
             initial: coverage_to_public(graph_label, resource, &initial_value)?,
@@ -1230,7 +1366,7 @@ pub(super) fn simulate_prepared_initialization(
         .cloned()
         .map(GpuPreparedWorkDiagnostic::ResourceInitialization)
         .collect();
-    Ok((summaries, diagnostics))
+    Ok((summaries, diagnostics, failure_preserved_coverage))
 }
 
 fn coverage_to_public(

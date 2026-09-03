@@ -1,7 +1,9 @@
 mod render;
+mod retained_continuity;
 mod surface_resources;
 
 use self::render::{PreparedRenderOperation, encode_render_operation, prepare_render_operation};
+use self::retained_continuity::{PreparedRetainedContinuity, RetainedContinuityState};
 use self::surface_resources::{
     PreparedSurfaceUse, PreparedTexture, PreparedTextureView, prepare_present_source,
     prepare_texture,
@@ -19,14 +21,14 @@ use crate::plugins::gpu::{
     GpuPreparedWorkGraph, GpuProgramBindingRealizationError,
     GpuProgramBindingRealizationErrorCategory, GpuReadback, GpuReadbackBytes, GpuReadbackId,
     GpuReadbackStatus, GpuRealizedBindGroup, GpuRealizedBuffer, GpuRealizedComputePipeline,
-    GpuRealizedQuerySet, GpuRealizedTexture, GpuResourceProvenance, GpuRuntimeBindingResource,
-    GpuSubmission, GpuSubmissionFailure, GpuSubmissionFailureKind, GpuSubmissionId,
-    GpuSubmissionPreparationError, GpuSubmissionPreparationErrorKind, GpuSubmissionRejectionKind,
-    GpuSubmissionRejectionReason, GpuSubmissionStatus, GpuSurfaceLeaseError,
-    GpuSurfaceLeaseErrorCategory, GpuSurfaceLeaseId, GpuTextureAspect, GpuTextureCopyRegion,
-    GpuTextureFormat, GpuTextureInitialization, GpuTextureOrigin, GpuTransferRegion,
-    GpuValidatedBindGroupBindings, GpuWorkOperation, GpuWorkResourceId, PreparedGpuData,
-    TransferData,
+    GpuRealizedQuerySet, GpuRealizedTexture, GpuResourceLabel, GpuResourceProvenance,
+    GpuRetainedResourceContinuity, GpuRuntimeBindingResource, GpuSubmission, GpuSubmissionFailure,
+    GpuSubmissionFailureKind, GpuSubmissionId, GpuSubmissionPreparationError,
+    GpuSubmissionPreparationErrorKind, GpuSubmissionRejectionKind, GpuSubmissionRejectionReason,
+    GpuSubmissionStatus, GpuSurfaceLeaseError, GpuSurfaceLeaseErrorCategory, GpuSurfaceLeaseId,
+    GpuTextureAspect, GpuTextureCopyRegion, GpuTextureFormat, GpuTextureInitialization,
+    GpuTextureOrigin, GpuTransferRegion, GpuValidatedBindGroupBindings, GpuWorkFragment,
+    GpuWorkGraphError, GpuWorkOperation, GpuWorkResourceId, PreparedGpuData, TransferData,
 };
 use core::num::NonZeroU64;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -46,6 +48,7 @@ pub(crate) struct WgpuExecutionState {
     next_prepared: AtomicU64,
     next_submission: AtomicU64,
     submission_order: Mutex<()>,
+    retained: RetainedContinuityState,
     inner: Mutex<ExecutionInner>,
     events: Arc<Mutex<VecDeque<ExecutionEvent>>>,
 }
@@ -76,6 +79,8 @@ impl Default for ExecutionInner {
 #[derive(Debug, Clone)]
 struct PreparedExecutionPlan {
     operations: Vec<PreparedExecutionOperation>,
+    retained_writes: Vec<BTreeSet<GpuWorkResourceId>>,
+    retained_continuity: PreparedRetainedContinuity,
     surface_uses: Vec<PreparedSurfaceUse>,
     upload_bytes: u64,
     readback_bytes: u64,
@@ -88,6 +93,7 @@ struct PreparedInitialContentTransfer {
     operation: PreparedExecutionOperation,
     staging_bytes: u64,
     record: PreparedInitialContentRecord,
+    retained_write: Option<GpuWorkResourceId>,
 }
 
 #[derive(Debug, Clone)]
@@ -139,14 +145,18 @@ impl PreparedExecutionPlan {
                 })?;
         }
         let mut operations = Vec::with_capacity(initial_content.len() + self.operations.len());
-        operations.extend(
-            initial_content
-                .iter()
-                .map(|candidate| candidate.operation.clone()),
-        );
+        let mut retained_writes =
+            Vec::with_capacity(initial_content.len() + self.retained_writes.len());
+        for candidate in &initial_content {
+            operations.push(candidate.operation.clone());
+            retained_writes.push(candidate.retained_write.into_iter().collect());
+        }
         operations.extend(self.operations.iter().cloned());
+        retained_writes.extend(self.retained_writes.iter().cloned());
         Ok(Self {
             operations,
+            retained_writes,
+            retained_continuity: self.retained_continuity.clone(),
             surface_uses: self.surface_uses.clone(),
             upload_bytes,
             readback_bytes: self.readback_bytes,
@@ -479,6 +489,7 @@ struct InFlightSubmission {
     status: Arc<Mutex<GpuSubmissionStatus>>,
     readbacks: BTreeMap<GpuReadbackId, InFlightReadback>,
     plan: Option<PreparedExecutionPlan>,
+    submitted_retained_writes: BTreeSet<GpuWorkResourceId>,
     upload_staging: Vec<Arc<Buffer>>,
     upload_bytes: u64,
     submission_terminal: bool,
@@ -549,6 +560,7 @@ struct MaterializedStaging {
 struct EncodedSegment {
     command_buffer: wgpu::CommandBuffer,
     readback_staging: Vec<(GpuReadbackId, Arc<Buffer>)>,
+    retained_writes: BTreeSet<GpuWorkResourceId>,
     present_after: Option<PreparedSurfaceUse>,
 }
 
@@ -560,6 +572,7 @@ impl WgpuExecutionState {
             next_prepared: AtomicU64::new(1),
             next_submission: AtomicU64::new(1),
             submission_order: Mutex::new(()),
+            retained: RetainedContinuityState::new(affinity),
             inner: Mutex::new(ExecutionInner::default()),
             events: Arc::new(Mutex::new(VecDeque::new())),
         }
@@ -832,6 +845,13 @@ impl WgpuExecutionState {
                 "submission identity space is exhausted",
             ));
         };
+        if let Err(reason) = self
+            .retained
+            .validate_and_reserve(&plan.retained_continuity)
+        {
+            inner.prepared.insert(prepared.ticket, Some(stored_plan));
+            return Err(reason);
+        }
         let id = GpuSubmissionId::from_nonzero(raw_id);
         let status = Arc::new(Mutex::new(GpuSubmissionStatus::Accepted));
 
@@ -844,6 +864,7 @@ impl WgpuExecutionState {
                 status: Arc::clone(&status),
                 readbacks,
                 plan: Some(plan.clone()),
+                submitted_retained_writes: BTreeSet::new(),
                 upload_staging: Vec::new(),
                 upload_bytes: plan.upload_bytes,
                 submission_terminal: false,
@@ -884,6 +905,29 @@ impl WgpuExecutionState {
             readback.staging = Some(Arc::clone(staging));
         }
         Ok(())
+    }
+
+    fn mark_segment_may_execute(
+        &self,
+        id: GpuSubmissionId,
+        retained_writes: &BTreeSet<GpuWorkResourceId>,
+    ) {
+        if retained_writes.is_empty() {
+            return;
+        }
+        let mut inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(record) = inner.in_flight.get_mut(&id) {
+            record
+                .submitted_retained_writes
+                .extend(retained_writes.iter().copied());
+            if let Some(plan) = record.plan.as_ref() {
+                self.retained
+                    .mark_may_execute(&plan.retained_continuity, retained_writes);
+            }
+        }
     }
 
     fn drain_events(&self) {
@@ -930,6 +974,11 @@ impl WgpuExecutionState {
             record.submission_terminal = true;
             if let Some(plan) = record.plan.as_ref() {
                 plan.mark_initial_content_completed();
+                self.retained.complete(
+                    id,
+                    &plan.retained_continuity,
+                    &record.submitted_retained_writes,
+                );
             }
             record.plan = None;
             record.upload_staging.clear();
@@ -1048,6 +1097,12 @@ impl WgpuExecutionState {
                 }
                 drop(status);
                 record.submission_terminal = true;
+                if let Some(plan) = record.plan.as_ref() {
+                    self.retained.fail_after_acceptance(
+                        &plan.retained_continuity,
+                        &record.submitted_retained_writes,
+                    );
+                }
                 record.plan = None;
                 record.upload_staging.clear();
                 let release = record.upload_bytes;
@@ -1147,6 +1202,28 @@ impl GpuContext {
 
     pub fn begin_shutdown(&self) -> GpuExecutionLifecycleState {
         self.backend.execution.begin_shutdown()
+    }
+
+    /// Prepares immutable work against this context generation's completed retained coverage.
+    ///
+    /// This is the context-aware entry point for work whose graph-entry read safety depends on
+    /// retained prior submissions. It lowers through the same canonical graph preparation and
+    /// initialization implementation as [`GpuPreparedWorkGraph::prepare`].
+    pub fn prepare_work_graph(
+        &self,
+        label: GpuResourceLabel,
+        fragments: impl IntoIterator<Item = GpuWorkFragment>,
+    ) -> Result<GpuPreparedWorkGraph, GpuWorkGraphError> {
+        let retained = self.backend.execution.retained.coverage_seed();
+        GpuPreparedWorkGraph::prepare_with_retained_coverage(label, fragments, &retained)
+    }
+
+    /// Returns current retained lifecycle facts for one logical storage identity.
+    pub fn retained_resource_continuity(
+        &self,
+        resource: GpuWorkResourceId,
+    ) -> Option<GpuRetainedResourceContinuity> {
+        self.backend.execution.retained.snapshot(resource)
     }
 
     pub async fn prepare_submission(
@@ -1313,15 +1390,22 @@ impl GpuContext {
     }
 
     pub fn progress(&self) -> GpuExecutionStats {
+        let _submission_order = self
+            .backend
+            .execution
+            .submission_order
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        self.backend.execution.drain_events();
         if let Err(error) = self.backend.device.poll(PollType::Poll) {
             self.backend
                 .health
                 .mark_scoped_internal(format!("nonblocking WGPU progress poll failed: {error}"));
         }
+        self.backend.execution.drain_events();
         if let Some(fault) = self.backend.health.terminal_fault() {
             self.backend.execution.fail_active_for_fault(fault);
         }
-        self.backend.execution.drain_events();
         self.backend.execution.stats()
     }
 }
@@ -1334,9 +1418,11 @@ async fn prepare_execution_plan(
     let mut texture_cache = BTreeMap::<GpuWorkResourceId, PreparedTexture>::new();
     let mut texture_view_cache = BTreeMap::<GpuWorkResourceId, PreparedTextureView>::new();
     let mut query_set_cache = BTreeMap::<GpuWorkResourceId, GpuRealizedQuerySet>::new();
+    let retained_continuity = PreparedRetainedContinuity::from_graph(graph);
     let initial_content =
         prepare_initial_content(context, graph, &mut buffer_cache, &mut texture_cache)?;
     let mut operations = Vec::with_capacity(graph.topological_order().len());
+    let mut retained_writes = Vec::with_capacity(graph.topological_order().len());
     let mut surface_uses = Vec::new();
     let mut presented_surface_leases = BTreeSet::<GpuSurfaceLeaseId>::new();
     let mut upload_bytes = 0_u64;
@@ -1355,6 +1441,15 @@ async fn prepare_execution_plan(
                     "prepared topological order references an absent work node",
                 )
             })?;
+        let retained_node_writes = prepared
+            .node()
+            .accesses()
+            .iter()
+            .filter(|access| access.writes())
+            .map(|access| access.resource_identity())
+            .filter(|identity| retained_continuity.contains(*identity))
+            .collect::<BTreeSet<_>>();
+        let operation_count = operations.len();
         match prepared.node().operation() {
             GpuWorkOperation::Upload(upload) => match upload.destination() {
                 GpuTransferRegion::Buffer(destination) => {
@@ -1651,10 +1746,19 @@ async fn prepare_execution_plan(
                 operations.push(PreparedExecutionOperation::Present { source: surface });
             }
         }
+        if operations.len() != operation_count + 1 {
+            return Err(GpuSubmissionPreparationError::new(
+                GpuSubmissionPreparationErrorKind::InternalInvariant,
+                "one prepared work node no longer lowers to exactly one execution operation",
+            ));
+        }
+        retained_writes.push(retained_node_writes);
     }
 
     Ok(PreparedExecutionPlan {
         operations,
+        retained_writes,
+        retained_continuity,
         surface_uses,
         upload_bytes,
         readback_bytes,
@@ -1692,6 +1796,12 @@ fn prepare_initial_content(
                     },
                     staging_bytes: size,
                     record: PreparedInitialContentRecord::Buffer(realized),
+                    retained_write: buffer
+                        .descriptor()
+                        .common()
+                        .lifetime()
+                        .is_retained()
+                        .then_some(buffer.diagnostic_identity()),
                 });
             }
             GpuPreparedInitialContent::Texture(texture) => {
@@ -1747,6 +1857,12 @@ fn prepare_initial_content(
                     },
                     staging_bytes: staging.staging_byte_len,
                     record: PreparedInitialContentRecord::Texture(realized),
+                    retained_write: texture
+                        .descriptor()
+                        .common()
+                        .lifetime()
+                        .is_retained()
+                        .then_some(texture.diagnostic_identity()),
                 });
             }
         }
@@ -2342,6 +2458,7 @@ fn encode_submit_and_register(
 
     let mut encoder = new_submission_encoder(backend);
     let mut segment_readbacks = Vec::new();
+    let mut segment_retained_writes = BTreeSet::new();
     let mut segments = Vec::new();
 
     for (index, operation) in plan.operations.iter().enumerate() {
@@ -2572,15 +2689,24 @@ fn encode_submit_and_register(
                 segments.push(EncodedSegment {
                     command_buffer: current.finish(),
                     readback_staging: std::mem::take(&mut segment_readbacks),
+                    retained_writes: std::mem::take(&mut segment_retained_writes),
                     present_after: Some(source.clone()),
                 });
             }
         }
+        let operation_retained_writes = plan.retained_writes.get(index).ok_or_else(|| {
+            GpuSubmissionFailure::new(
+                GpuSubmissionFailureKind::InternalInvariant,
+                "retained write metadata no longer aligns with prepared execution operations",
+            )
+        })?;
+        segment_retained_writes.extend(operation_retained_writes.iter().copied());
     }
 
     segments.push(EncodedSegment {
         command_buffer: encoder.finish(),
         readback_staging: segment_readbacks,
+        retained_writes: segment_retained_writes,
         present_after: None,
     });
 
@@ -2600,6 +2726,7 @@ fn encode_submit_and_register(
             register_submission_completion(execution, submission, &segment.command_buffer);
         }
         backend.queue.submit([segment.command_buffer]);
+        execution.mark_segment_may_execute(submission, &segment.retained_writes);
         if index == 0 && !plan.mark_initial_content_queued() {
             backend.health.mark_scoped_internal(
                 "prepared initial-content state changed outside serialized submission acceptance",
