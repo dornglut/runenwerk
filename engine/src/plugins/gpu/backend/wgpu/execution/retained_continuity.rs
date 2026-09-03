@@ -97,13 +97,17 @@ impl PreparedRetainedContinuity {
                     false
                 } else {
                     match &resource {
-                        GpuResourceRef::Buffer(buffer) => match buffer.descriptor().initialization() {
-                            crate::plugins::gpu::GpuBufferInitialization::Uninitialized => false,
-                            crate::plugins::gpu::GpuBufferInitialization::Zeroed => true,
-                            crate::plugins::gpu::GpuBufferInitialization::Prepared(_) => {
-                                descriptor_materializations.contains(&identity)
+                        GpuResourceRef::Buffer(buffer) => {
+                            match buffer.descriptor().initialization() {
+                                crate::plugins::gpu::GpuBufferInitialization::Uninitialized => {
+                                    false
+                                }
+                                crate::plugins::gpu::GpuBufferInitialization::Zeroed => true,
+                                crate::plugins::gpu::GpuBufferInitialization::Prepared(_) => {
+                                    descriptor_materializations.contains(&identity)
+                                }
                             }
-                        },
+                        }
                         GpuResourceRef::Texture(texture) => {
                             match texture.descriptor().initialization() {
                                 crate::plugins::gpu::GpuTextureInitialization::Uninitialized => {
