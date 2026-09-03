@@ -147,7 +147,7 @@ impl BundleComponents {
 /// A statically described group of components that can be structurally applied
 /// by [`crate::World`].
 ///
-/// Safe bundle authoring is provided by components, supported tuples, and
+/// Safe bundle authoring is provided by components, `()`, supported tuples, and
 /// `#[derive(Bundle)]`. Manual implementations are a low-level framework
 /// extension boundary and are unsupported.
 ///
@@ -216,6 +216,16 @@ pub(crate) fn prepare_bundle<B: Bundle>(bundle: B) -> PreparedBundle {
 
 pub(crate) fn bundle_descriptors<B: Bundle>() -> Vec<BundleComponentDescriptor> {
     B::__component_descriptors()
+}
+
+unsafe impl Bundle for () {
+    fn __component_descriptors() -> Vec<BundleComponentDescriptor> {
+        Vec::new()
+    }
+
+    fn __into_components(self, _components: &mut BundleComponents) {}
+
+    unsafe fn __from_components(_components: &mut BundleComponents) -> Self {}
 }
 
 unsafe impl<T: Component> Bundle for T {
