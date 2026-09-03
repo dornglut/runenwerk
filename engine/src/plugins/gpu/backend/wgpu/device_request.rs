@@ -10,8 +10,8 @@ use crate::plugins::gpu::{
     GpuContext, GpuContextAdmissionReport, GpuContextAffinity, GpuContextDescriptor, GpuContextId,
     GpuContextRequestError, GpuContextRequestErrorCategory, GpuDeviceGeneration, GpuDeviceLimits,
     GpuDeviceRequestProfile, GpuExecutionPolicy, GpuFallbackStatus, GpuLimits,
-    GpuRealizationPolicies, GpuResourceRef, GpuSoftwareFallbackPolicy, admitted_device_facts,
-    allocate_context_id, canonical_candidate_input_key, select_candidate_inputs,
+    GpuRealizationPolicies, GpuSoftwareFallbackPolicy, admitted_device_facts, allocate_context_id,
+    canonical_candidate_input_key, select_candidate_inputs,
 };
 use std::sync::Arc;
 #[cfg(not(target_arch = "wasm32"))]
@@ -32,7 +32,6 @@ struct NativeAdapterCandidate<T> {
 struct ContextGenerationSeed {
     id: GpuContextId,
     generation: GpuDeviceGeneration,
-    reconstruction: Vec<GpuResourceRef>,
 }
 
 pub(crate) async fn request_headless(
@@ -51,25 +50,27 @@ pub(crate) async fn request_headless(
     .await
 }
 
-pub(crate) async fn request_headless_generation(
+/// Requests one successor device generation through an already-owned private instance.
+///
+/// The caller supplies the existing logical context identity and checked successor generation.
+/// No old physical realization, retained coverage, content continuity, or surface state enters this
+/// admission path; lifecycle owners install any reconstruction requirements only after successful
+/// fresh-generation admission.
+pub(crate) async fn request_generation_with_instance(
+    instance: Instance,
     descriptor: GpuContextDescriptor,
     realization_policies: GpuRealizationPolicies,
     execution_policy: GpuExecutionPolicy,
     id: GpuContextId,
     generation: GpuDeviceGeneration,
-    reconstruction: Vec<GpuResourceRef>,
 ) -> Result<GpuContext, GpuContextRequestError> {
     request_with_instance_generation(
-        Instance::new(runengpu_instance_descriptor()),
+        instance,
         descriptor,
         None,
         realization_policies,
         execution_policy,
-        Some(ContextGenerationSeed {
-            id,
-            generation,
-            reconstruction,
-        }),
+        Some(ContextGenerationSeed { id, generation }),
     )
     .await
 }
@@ -156,16 +157,11 @@ async fn request_with_instance_generation(
         map_device_limits(&actual_native_limits),
         selection.dispositions.clone(),
     )?;
-    let ContextGenerationSeed {
-        id,
-        generation,
-        reconstruction,
-    } = match generation_seed {
+    let ContextGenerationSeed { id, generation } = match generation_seed {
         Some(seed) => seed,
         None => ContextGenerationSeed {
             id: allocate_context_id()?,
             generation: GpuDeviceGeneration::first(),
-            reconstruction: Vec::new(),
         },
     };
     let affinity = GpuContextAffinity::from_context_generation(id, generation);
@@ -189,11 +185,7 @@ async fn request_with_instance_generation(
         Arc::clone(&health),
         Arc::clone(&error_attribution_gate),
     );
-    let execution = Arc::new(WgpuExecutionState::new_with_reconstruction_obligations(
-        affinity,
-        execution_policy,
-        reconstruction,
-    ));
+    let execution = Arc::new(WgpuExecutionState::new(affinity, execution_policy));
     let surfaces = WgpuSurfaceState::new(affinity);
     let adapter_facts = candidate.adapter().clone();
     Ok(GpuContext {
