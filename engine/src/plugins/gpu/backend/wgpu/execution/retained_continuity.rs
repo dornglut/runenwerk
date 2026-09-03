@@ -143,7 +143,9 @@ impl RetainedContinuityState {
                 ));
             }
             if let Some(seed) = &prepared.consumed_seed {
-                let Some(current_coverage) = current.and_then(|record| record.initialized_coverage.as_ref()) else {
+                let Some(current_coverage) =
+                    current.and_then(|record| record.initialized_coverage.as_ref())
+                else {
                     return Err(continuity_changed(
                         identity,
                         "retained coverage used during graph preparation is no longer established",
@@ -156,7 +158,8 @@ impl RetainedContinuityState {
                     ));
                 }
             }
-            if let Some(current_coverage) = current.and_then(|record| record.initialized_coverage.as_ref())
+            if let Some(current_coverage) =
+                current.and_then(|record| record.initialized_coverage.as_ref())
                 && !prepared
                     .initial
                     .as_ref()
@@ -227,9 +230,11 @@ impl RetainedContinuityState {
                     previous.and_then(|record| record.initialized_coverage.as_ref()),
                     prepared.failure_preserved_coverage.as_ref(),
                 ) {
-                    (Some(current), Some(failure_preserved)) => {
-                        initial_coverage_intersection(&prepared.resource, current, failure_preserved)
-                    }
+                    (Some(current), Some(failure_preserved)) => initial_coverage_intersection(
+                        &prepared.resource,
+                        current,
+                        failure_preserved,
+                    ),
                     _ => None,
                 };
                 records.insert(
@@ -262,6 +267,8 @@ fn continuity_changed(
 ) -> GpuSubmissionRejectionReason {
     GpuSubmissionRejectionReason::new(
         GpuSubmissionRejectionKind::RetainedContinuityChanged,
-        format!("retained resource {resource}: {detail}; prepare the work again against current continuity"),
+        format!(
+            "retained resource {resource}: {detail}; prepare the work again against current continuity"
+        ),
     )
 }
