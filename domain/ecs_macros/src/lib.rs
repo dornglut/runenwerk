@@ -201,17 +201,17 @@ pub fn bundle_derive(input: TokenStream) -> TokenStream {
         });
     };
 
-    let registrations = fields.named.iter().map(|field| {
+    let descriptors = fields.named.iter().map(|field| {
         let ty = &field.ty;
         quote! {
-            world.__register_component::<#ty>();
+            #ecs::BundleComponentDescriptor::of::<#ty>()
         }
     });
 
-    let inserts = fields.named.iter().map(|field| {
+    let transfers = fields.named.iter().map(|field| {
         let field_name = field.ident.as_ref().expect("named field");
         quote! {
-            world.__insert_component(entity, self.#field_name)?;
+            components.push(self.#field_name);
         }
     });
 
@@ -219,25 +219,26 @@ pub fn bundle_derive(input: TokenStream) -> TokenStream {
         let field_name = field.ident.as_ref().expect("named field");
         let ty = &field.ty;
         quote! {
-            #field_name: world.__remove_component::<#ty>(entity)?
+            #field_name: components
+                .take::<#ty>()
+                .expect("removed bundle component must match its descriptor")
         }
     });
 
     TokenStream::from(quote! {
-        impl #impl_generics #ecs::Bundle for #name #ty_generics #where_clause {
-            fn register(world: &mut #ecs::World) {
-                #(#registrations)*
+        unsafe impl #impl_generics #ecs::Bundle for #name #ty_generics #where_clause {
+            fn __component_descriptors() -> ::std::vec::Vec<#ecs::BundleComponentDescriptor> {
+                ::std::vec![#(#descriptors),*]
             }
 
-            fn insert(self, world: &mut #ecs::World, entity: #ecs::Entity) -> Result<(), #ecs::EntityError> {
-                #(#inserts)*
-                Ok(())
+            fn __into_components(self, components: &mut #ecs::BundleComponents) {
+                #(#transfers)*
             }
 
-            fn remove(world: &mut #ecs::World, entity: #ecs::Entity) -> Result<Self, #ecs::EntityError> {
-                Ok(Self {
+            unsafe fn __from_components(components: &mut #ecs::BundleComponents) -> Self {
+                Self {
                     #(#removals,)*
-                })
+                }
             }
         }
     })
