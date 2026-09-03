@@ -1,18 +1,7 @@
 use super::device_request::{enforce_runengpu_instance_flags, request_with_instance};
 use crate::plugins::gpu::*;
-use core::num::NonZeroU64;
 use std::time::{Duration, Instant};
 use wgpu::{Backends, Instance, InstanceDescriptor, NoopBackendOptions};
-
-const INCREMENT_WGSL: &str = r#"
-@group(0) @binding(0)
-var<storage, read_write> values: array<u32>;
-
-@compute @workgroup_size(1)
-fn cs_main() {
-    values[0] = values[0] + 1u;
-}
-"#;
 
 fn label(value: &str) -> GpuResourceLabel {
     GpuResourceLabel::new(value).unwrap()
@@ -29,12 +18,8 @@ fn noop_instance() -> Instance {
     Instance::new(enforce_runengpu_instance_flags(descriptor))
 }
 
-fn context_descriptor(name: &str, compute: bool) -> GpuContextDescriptor {
-    let mut requirements = if compute {
-        GpuCapabilityProfile::ComputeBaseline.requirements()
-    } else {
-        GpuCapabilityRequirements::new()
-    };
+fn context_descriptor(name: &str) -> GpuContextDescriptor {
+    let mut requirements = GpuCapabilityRequirements::new();
     requirements
         .insert(GpuCapabilityRequirement::Required(
             GpuCapabilityFeature::Copy,
@@ -57,10 +42,10 @@ fn incompatible_noop_descriptor(name: &str) -> GpuContextDescriptor {
         .with_label(name)
 }
 
-fn noop_context(name: &str, compute: bool) -> GpuContext {
+fn noop_context(name: &str) -> GpuContext {
     let context = pollster::block_on(request_with_instance(
         noop_instance(),
-        context_descriptor(name, compute),
+        context_descriptor(name),
         None,
         GpuRealizationPolicies::default(),
         GpuExecutionPolicy::default(),
@@ -74,7 +59,7 @@ fn noop_context(name: &str, compute: bool) -> GpuContext {
     context
 }
 
-fn retained_prepared_buffer(name: &str, values: &[u32], storage: bool) -> GpuBufferHandle {
+fn retained_prepared_buffer(name: &str, values: &[u32]) -> GpuBufferHandle {
     let resource_label = label(name);
     let common = GpuResourceCommon::owned(
         resource_label.clone(),
@@ -84,10 +69,6 @@ fn retained_prepared_buffer(name: &str, values: &[u32], storage: bool) -> GpuBuf
         provenance(name),
     )
     .unwrap();
-    let mut usages = vec![GpuBufferUsage::CopySource, GpuBufferUsage::CopyDestination];
-    if storage {
-        usages.push(GpuBufferUsage::Storage);
-    }
     let data = PreparedGpuData::<TransferData>::from_pod_transfer(
         format!("{name} prepared source"),
         values,
@@ -98,7 +79,11 @@ fn retained_prepared_buffer(name: &str, values: &[u32], storage: bool) -> GpuBuf
     let descriptor = GpuBufferDescriptor::new(
         common,
         byte_len,
-        GpuBufferUsages::new(&resource_label, usages).unwrap(),
+        GpuBufferUsages::new(
+            &resource_label,
+            [GpuBufferUsage::CopySource, GpuBufferUsage::CopyDestination],
+        )
+        .unwrap(),
         GpuBufferInitialization::Prepared(data),
     )
     .unwrap();
@@ -136,66 +121,22 @@ fn readback_fragment(buffer: &GpuBufferHandle, name: &str) -> (GpuWorkFragment, 
     (builder.finish().unwrap(), readback_id)
 }
 
-fn admitted_increment_source() -> GpuAdmittedProgramSource {
-    let owner = GpuProgramSourceOwnerId::allocate().expect("test source owner should allocate");
-    let identity = GpuProgramSourceIdentity::new(
-        owner,
-        GpuProgramSourceKey::new("g7b.reconstruction.increment").unwrap(),
-        GpuProgramSourceRevision::try_from_raw(1).unwrap(),
-    );
-    let mut sources = GpuProgramSourceRegistry::new(4, 16 * 1024).unwrap();
-    sources
-        .admit_wgsl(
-            identity,
-            INCREMENT_WGSL,
-            GpuProgramSourceProvenance::new("g7b-reconstruction-proof", None).unwrap(),
-        )
-        .unwrap()
-}
-
-fn increment_pipeline() -> GpuComputePipelineDescriptor {
-    let entry = GpuEntryPointName::new("cs_main").unwrap();
-    let refinement = GpuBindingLayoutRefinement::new(GpuBindingKey::try_new(0, 0).unwrap())
-        .with_dynamic_offset(true)
-        .with_host_minimum_size(NonZeroU64::new(4).unwrap());
-    let program =
-        GpuProgramDescriptor::new(admitted_increment_source(), [entry.clone()], [refinement])
-            .unwrap();
-    GpuComputePipelineDescriptor::new(program, entry, GpuPipelineConfiguration::default()).unwrap()
-}
-
-fn increment_operation(buffer: &GpuBufferHandle) -> GpuComputeOperation {
-    let pipeline = increment_pipeline();
-    let binding = GpuRuntimeBindingValue::new(
-        GpuBindingKey::try_new(0, 0).unwrap(),
-        [GpuRuntimeBindingResource::Buffer(
-            GpuRuntimeBufferBinding::new(buffer.clone(), 0, NonZeroU64::new(4).unwrap(), Some(0)),
-        )],
-    )
-    .unwrap();
-    let bindings = GpuRuntimeBindingSet::new(pipeline.layout().clone(), [binding]).unwrap();
-    GpuComputeOperation::new(
-        pipeline,
-        bindings,
-        GpuDispatchIntent::direct(GpuDispatchSize::new(1, 1, 1)),
-    )
-    .unwrap()
-}
-
-fn increment_and_readback_fragment(
+fn zero_and_readback_fragment(
     buffer: &GpuBufferHandle,
     name: &str,
 ) -> (GpuWorkFragment, GpuReadbackId) {
     let region = GpuBufferRegion::new(buffer, GpuBufferRange::whole(buffer).unwrap()).unwrap();
     let readback_id = GpuReadbackId::allocate().unwrap();
-    let readback = GpuReadbackOperation::new(region.into(), readback_id).unwrap();
+    let readback = GpuReadbackOperation::new(region.clone().into(), readback_id).unwrap();
     let mut builder = GpuWorkFragmentBuilder::new(label(name), provenance(name));
     builder
         .declare_resource(GpuResourceRef::Buffer(buffer.clone()))
         .unwrap();
-    builder
-        .compute(&format!("{name} increment"), increment_operation(buffer))
-        .unwrap();
+    add_operation(
+        &mut builder,
+        &format!("{name} zero"),
+        GpuWorkOperation::Clear(GpuClearOperation::BufferZero(region)),
+    );
     add_operation(
         &mut builder,
         &format!("{name} readback"),
@@ -263,8 +204,8 @@ fn assert_u32_bytes(bytes: &GpuReadbackBytes, values: &[u32]) {
 #[test]
 fn descriptor_backed_state_reconstructs_only_through_completed_new_generation_work() {
     let seed = [3_u32, 5, 8, 13];
-    let mut context = noop_context("G7B descriptor reconstruction", false);
-    let buffer = retained_prepared_buffer("descriptor-backed retained state", &seed, false);
+    let mut context = noop_context("G7B descriptor reconstruction");
+    let buffer = retained_prepared_buffer("descriptor-backed retained state", &seed);
     let identity = buffer.diagnostic_identity();
 
     let (fragment, readback_id) = readback_fragment(&buffer, "initial descriptor state");
@@ -303,7 +244,6 @@ fn descriptor_backed_state_reconstructs_only_through_completed_new_generation_wo
 
     pollster::block_on(context.replace_device_generation(context_descriptor(
         "G7B descriptor reconstruction successor",
-        false,
     )))
     .unwrap();
     assert_eq!(context.id(), before_replacement.context());
@@ -371,14 +311,14 @@ fn descriptor_backed_state_reconstructs_only_through_completed_new_generation_wo
 }
 
 #[test]
-fn gpu_mutation_makes_original_seed_insufficient_until_deterministic_replay_completes() {
+fn exact_gpu_mutation_makes_original_seed_insufficient_until_replay_completes() {
     let seed = [10_u32];
-    let expected_current = [11_u32];
-    let mut context = noop_context("G7B deterministic replay", true);
-    let buffer = retained_prepared_buffer("GPU-mutated retained state", &seed, true);
+    let expected_current = [0_u32];
+    let mut context = noop_context("G7B deterministic replay");
+    let buffer = retained_prepared_buffer("GPU-mutated retained state", &seed);
     let identity = buffer.diagnostic_identity();
 
-    let (fragment, readback_id) = increment_and_readback_fragment(&buffer, "initial mutation");
+    let (fragment, readback_id) = zero_and_readback_fragment(&buffer, "initial mutation");
     let graph = context
         .prepare_work_graph(label("initial mutation graph"), [fragment])
         .unwrap();
@@ -387,7 +327,6 @@ fn gpu_mutation_makes_original_seed_insufficient_until_deterministic_replay_comp
 
     pollster::block_on(context.replace_device_generation(context_descriptor(
         "G7B deterministic replay successor",
-        true,
     )))
     .unwrap();
     assert!(context.retained_resource_continuity(identity).is_none());
@@ -422,7 +361,7 @@ fn gpu_mutation_makes_original_seed_insufficient_until_deterministic_replay_comp
     );
 
     let (replay_fragment, replay_readback) =
-        increment_and_readback_fragment(&buffer, "deterministic replay");
+        zero_and_readback_fragment(&buffer, "deterministic replay");
     let replay_graph = context
         .prepare_reconstruction_work_graph(
             label("deterministic replay graph"),
