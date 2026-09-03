@@ -193,6 +193,35 @@ impl RetainedContinuityState {
         Ok(())
     }
 
+    pub(super) fn mark_may_execute(
+        &self,
+        transition: &PreparedRetainedContinuity,
+        submitted_writes: &BTreeSet<GpuWorkResourceId>,
+    ) {
+        if submitted_writes.is_empty() {
+            return;
+        }
+
+        let mut records = self
+            .records
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for &identity in submitted_writes {
+            let Some(prepared) = transition.resources.get(&identity) else {
+                continue;
+            };
+            let preserved = failure_safe_coverage(records.get(&identity), prepared);
+            records.insert(
+                identity,
+                RetainedContinuityRecord {
+                    resource: prepared.resource.clone(),
+                    initialized_coverage: preserved,
+                    opaque_content: GpuOpaqueContentContinuity::Unknown,
+                },
+            );
+        }
+    }
+
     pub(super) fn complete(
         &self,
         submission: GpuSubmissionId,
@@ -242,18 +271,7 @@ impl RetainedContinuityState {
                 let Some(prepared) = transition.resources.get(&identity) else {
                     continue;
                 };
-                let previous = records.get(&identity);
-                let preserved = match (
-                    previous.and_then(|record| record.initialized_coverage.as_ref()),
-                    prepared.failure_preserved_coverage.as_ref(),
-                ) {
-                    (Some(current), Some(failure_preserved)) => initial_coverage_intersection(
-                        &prepared.resource,
-                        current,
-                        failure_preserved,
-                    ),
-                    _ => None,
-                };
+                let preserved = failure_safe_coverage(records.get(&identity), prepared);
                 records.insert(
                     identity,
                     RetainedContinuityRecord {
@@ -276,6 +294,15 @@ impl RetainedContinuityState {
             reserved.remove(identity);
         }
     }
+}
+
+fn failure_safe_coverage(
+    previous: Option<&RetainedContinuityRecord>,
+    prepared: &PreparedRetainedResource,
+) -> Option<GpuInitialCoverage> {
+    let current = previous?.initialized_coverage.as_ref()?;
+    let failure_preserved = prepared.failure_preserved_coverage.as_ref()?;
+    initial_coverage_intersection(&prepared.resource, current, failure_preserved)
 }
 
 fn continuity_changed(
