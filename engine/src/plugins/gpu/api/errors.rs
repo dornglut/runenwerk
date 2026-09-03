@@ -433,6 +433,7 @@ struct GpuWorkGraphErrorDetails {
     node: Option<GpuPreparedWorkNodeId>,
     resource: Option<GpuWorkResourceId>,
     region: Option<String>,
+    required_initialization: Option<super::GpuInitialCoverage>,
     cause: GpuWorkGraphCause,
     correction: &'static str,
     provenance: Option<GpuResourceProvenance>,
@@ -447,6 +448,7 @@ pub(crate) struct GpuWorkGraphErrorContext {
     node: Option<GpuPreparedWorkNodeId>,
     resource: Option<GpuWorkResourceId>,
     region: Option<String>,
+    required_initialization: Option<super::GpuInitialCoverage>,
     provenance: Option<GpuResourceProvenance>,
 }
 
@@ -467,8 +469,17 @@ impl GpuWorkGraphErrorContext {
             node,
             resource,
             region,
+            required_initialization: None,
             provenance,
         }
+    }
+
+    pub(crate) fn with_required_initialization(
+        mut self,
+        required_initialization: super::GpuInitialCoverage,
+    ) -> Self {
+        self.required_initialization = Some(required_initialization);
+        self
     }
 }
 
@@ -488,6 +499,7 @@ impl GpuWorkGraphError {
                 node: context.node,
                 resource: context.resource,
                 region: context.region,
+                required_initialization: context.required_initialization,
                 cause,
                 correction,
                 provenance: context.provenance,
@@ -518,6 +530,14 @@ impl GpuWorkGraphError {
 
     pub const fn resource(&self) -> Option<GpuWorkResourceId> {
         self.details.resource
+    }
+
+    /// Exact normalized storage coverage required by a failed initialization read, when applicable.
+    ///
+    /// This is canonical graph-initialization evidence, not a display string and not a second
+    /// initialization model. Other graph failures return `None`.
+    pub fn required_initialization(&self) -> Option<&super::GpuInitialCoverage> {
+        self.details.required_initialization.as_ref()
     }
 }
 
