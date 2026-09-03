@@ -158,12 +158,9 @@ fn increment_pipeline() -> GpuComputePipelineDescriptor {
     let refinement = GpuBindingLayoutRefinement::new(GpuBindingKey::try_new(0, 0).unwrap())
         .with_dynamic_offset(true)
         .with_host_minimum_size(NonZeroU64::new(4).unwrap());
-    let program = GpuProgramDescriptor::new(
-        admitted_increment_source(),
-        [entry.clone()],
-        [refinement],
-    )
-    .unwrap();
+    let program =
+        GpuProgramDescriptor::new(admitted_increment_source(), [entry.clone()], [refinement])
+            .unwrap();
     GpuComputePipelineDescriptor::new(program, entry, GpuPipelineConfiguration::default()).unwrap()
 }
 
@@ -171,12 +168,9 @@ fn increment_operation(buffer: &GpuBufferHandle) -> GpuComputeOperation {
     let pipeline = increment_pipeline();
     let binding = GpuRuntimeBindingValue::new(
         GpuBindingKey::try_new(0, 0).unwrap(),
-        [GpuRuntimeBindingResource::Buffer(GpuRuntimeBufferBinding::new(
-            buffer.clone(),
-            0,
-            NonZeroU64::new(4).unwrap(),
-            Some(0),
-        ))],
+        [GpuRuntimeBindingResource::Buffer(
+            GpuRuntimeBufferBinding::new(buffer.clone(), 0, NonZeroU64::new(4).unwrap(), Some(0)),
+        )],
     )
     .unwrap();
     let bindings = GpuRuntimeBindingSet::new(pipeline.layout().clone(), [binding]).unwrap();
@@ -290,9 +284,9 @@ fn descriptor_backed_state_reconstructs_only_through_completed_new_generation_wo
     );
 
     let before_replacement = context.affinity();
-    let failed = pollster::block_on(context.replace_device_generation(
-        incompatible_noop_descriptor("G7B rejected successor"),
-    ))
+    let failed = pollster::block_on(
+        context.replace_device_generation(incompatible_noop_descriptor("G7B rejected successor")),
+    )
     .unwrap_err();
     assert!(matches!(
         failed,
@@ -335,8 +329,7 @@ fn descriptor_backed_state_reconstructs_only_through_completed_new_generation_wo
             [ordinary_fragment],
         )
         .unwrap();
-    let ordinary_prepared =
-        pollster::block_on(context.prepare_submission(ordinary_graph)).unwrap();
+    let ordinary_prepared = pollster::block_on(context.prepare_submission(ordinary_graph)).unwrap();
     let ordinary_rejection = context.submit_prepared(ordinary_prepared).unwrap_err();
     assert_eq!(
         ordinary_rejection.reason().kind(),
@@ -453,9 +446,13 @@ fn gpu_mutation_makes_original_seed_insufficient_until_deterministic_replay_comp
         }
     );
 
-    let (ordinary_fragment, ordinary_readback) = readback_fragment(&buffer, "post-replay ordinary read");
+    let (ordinary_fragment, ordinary_readback) =
+        readback_fragment(&buffer, "post-replay ordinary read");
     let ordinary_graph = context
-        .prepare_work_graph(label("post-replay ordinary read graph"), [ordinary_fragment])
+        .prepare_work_graph(
+            label("post-replay ordinary read graph"),
+            [ordinary_fragment],
+        )
         .unwrap();
     let (_, bytes) = submit_and_readback(&context, ordinary_graph, ordinary_readback);
     assert_u32_bytes(&bytes, &expected_current);
