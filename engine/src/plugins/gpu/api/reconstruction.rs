@@ -1,4 +1,5 @@
-use super::{GpuContextAffinity, GpuResourceRef};
+use super::{GpuContextAffinity, GpuContextRequestError, GpuResourceRef};
+use core::fmt;
 
 /// Outstanding current-state reconstruction requirement for one retained logical storage resource.
 ///
@@ -75,5 +76,53 @@ impl GpuRetainedReconstructionSeed {
 
     pub(crate) const fn descriptor_initial_state_matches_required_contents(&self) -> bool {
         self.descriptor_initial_state_matches_required_contents
+    }
+}
+
+/// Failure to replace one physical device generation for an existing logical context.
+///
+/// Replacement is explicit and transactional: a failed request leaves the current context intact.
+#[derive(Debug)]
+pub enum GpuDeviceGenerationReplacementError {
+    /// Submitted GPU work is still nonterminal, so the retained-state handoff is not stable yet.
+    ActiveExecution { in_flight_submissions: usize },
+    /// The process-local generation counter cannot advance without wrapping.
+    GenerationExhausted,
+    /// Fresh adapter/device admission failed; the current generation remains owned by the caller.
+    ContextRequest(GpuContextRequestError),
+}
+
+impl fmt::Display for GpuDeviceGenerationReplacementError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ActiveExecution {
+                in_flight_submissions,
+            } => write!(
+                formatter,
+                "GPU device-generation replacement requires quiescent submitted work; in-flight submissions: {in_flight_submissions}"
+            ),
+            Self::GenerationExhausted => formatter.write_str(
+                "GPU device-generation replacement exhausted the process-local generation identity space",
+            ),
+            Self::ContextRequest(error) => write!(
+                formatter,
+                "GPU device-generation replacement could not admit the successor device: {error}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for GpuDeviceGenerationReplacementError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::ContextRequest(error) => Some(error),
+            Self::ActiveExecution { .. } | Self::GenerationExhausted => None,
+        }
+    }
+}
+
+impl From<GpuContextRequestError> for GpuDeviceGenerationReplacementError {
+    fn from(value: GpuContextRequestError) -> Self {
+        Self::ContextRequest(value)
     }
 }
