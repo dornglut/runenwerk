@@ -87,9 +87,9 @@ fn workload_evidence() -> Vec<Value> {
     assert!(
         reaction_diffusion_evidence["timestamp_evidence"]["envelopes"]
             .as_array()
-            .is_some_and(|envelopes| envelopes.iter().all(|envelope| envelope["runengpu"]
-                ["delta_ns_samples"]
-                .is_array()))
+            .is_some_and(|envelopes| envelopes
+                .iter()
+                .all(|envelope| envelope["runengpu"]["delta_ns_samples"].is_array()))
     );
 
     vec![
