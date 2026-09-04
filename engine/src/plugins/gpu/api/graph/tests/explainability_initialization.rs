@@ -11,10 +11,7 @@ fn summary_for(
         .expect("declared storage resource should have an initialization summary")
 }
 
-fn prepared_buffer(
-    allocator: &mut GpuWorkResourceIdAllocator,
-    name: &str,
-) -> GpuBufferHandle {
+fn prepared_buffer(allocator: &mut GpuWorkResourceIdAllocator, name: &str) -> GpuBufferHandle {
     let data = PreparedGpuData::<TransferData>::from_pod_transfer(
         format!("{name} bytes"),
         &[7_u8; 64],
@@ -124,7 +121,9 @@ fn initialization_explanations_distinguish_descriptor_input_and_generic_shader_w
             .coverage()
             .buffer_values()
             .unwrap(),
-        &[GpuBufferCoverage::dense(GpuBufferRange::whole(&descriptor).unwrap())]
+        &[GpuBufferCoverage::dense(
+            GpuBufferRange::whole(&descriptor).unwrap()
+        )]
     );
 
     let input_summary = summary_for(&prepared, input.diagnostic_identity());
@@ -209,10 +208,9 @@ fn prepared_materialization_and_exact_operation_guarantees_remain_distinct() {
     let mut allocator = allocator();
     let prepared_buffer = prepared_buffer(&mut allocator, "materialized then cleared");
     let whole = GpuBufferRange::whole(&prepared_buffer).unwrap();
-    let clear = GpuClearOperation::buffer_zero(
-        GpuBufferRegion::new(&prepared_buffer, whole).unwrap(),
-    )
-    .unwrap();
+    let clear =
+        GpuClearOperation::buffer_zero(GpuBufferRegion::new(&prepared_buffer, whole).unwrap())
+            .unwrap();
 
     let mut fragment = builder("materialization explanation");
     fragment
@@ -260,18 +258,11 @@ fn attachment_discard_records_exact_loss_after_operation_guarantee() {
         [GpuTextureUsage::ColorAttachment],
     );
     let range = GpuTextureSubresourceRange::whole(&texture).unwrap();
-    let view = texture_view(
-        &mut allocator,
-        &texture,
-        "discard explanation view",
-        range,
-    );
+    let view = texture_view(&mut allocator, &texture, "discard explanation view", range);
     let render = GpuRenderOperation::new(
         [GpuRenderColorAttachment::new(
             view.clone(),
-            GpuColorAttachmentLoad::Clear(
-                GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
-            ),
+            GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap()),
             GpuAttachmentStore::Discard,
             None,
         )
