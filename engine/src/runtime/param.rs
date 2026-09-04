@@ -28,7 +28,10 @@ impl Deref for WorldRef {
     }
 }
 
-impl<'w> SystemParam<'w> for WorldRef {
+// Safety: this legacy read-only whole-World parameter reports no borrow facts and
+// is retained only until the C3 lifetime-bound extraction cut removes its unused
+// surface. It does not manufacture mutable access.
+unsafe impl<'w> SystemParam<'w> for WorldRef {
     type State = ();
 
     fn init_state(_world: &mut World) -> Result<Self::State, SystemParamError> {
@@ -76,7 +79,10 @@ impl DerefMut for WorldMut {
     }
 }
 
-impl<'w> SystemParam<'w> for WorldMut {
+// Safety: WorldMut declares exclusive-world access. C3 registration rejects any
+// sibling immediate World access before extraction, so recovering the invocation's
+// unique World borrow is consistent with the declared access contract.
+unsafe impl<'w> SystemParam<'w> for WorldMut {
     type State = ();
 
     fn init_state(_world: &mut World) -> Result<Self::State, SystemParamError> {
