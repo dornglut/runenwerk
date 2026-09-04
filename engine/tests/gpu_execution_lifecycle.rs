@@ -372,12 +372,8 @@ fn graceful_shutdown_revokes_unaccepted_work_and_drains_accepted_readback_once()
     let deadline = Instant::now() + Duration::from_secs(5);
     let bytes = loop {
         context.progress();
-        let submission_status = submission.status();
-        let readback_status = readback.status();
-        match (&submission_status, &readback_status) {
-            (GpuSubmissionStatus::Completed, GpuReadbackStatus::Ready(bytes)) => {
-                break bytes.clone();
-            }
+        match (submission.status(), readback.status()) {
+            (GpuSubmissionStatus::Completed, GpuReadbackStatus::Ready(bytes)) => break bytes,
             (GpuSubmissionStatus::Failed(failure), _) => {
                 panic!("graceful-shutdown accepted submission failed: {failure:?}")
             }
