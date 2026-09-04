@@ -51,10 +51,44 @@ fn positive_f64(value: &Value) -> bool {
         .is_some_and(|value| value.is_finite() && value > 0.0)
 }
 
+fn measured_sample_array(value: &Value) -> bool {
+    value
+        .as_array()
+        .is_some_and(|samples| samples.len() == common::MEASURED_SAMPLES)
+}
+
+fn measured_samples_by_pass(value: &Value) -> bool {
+    value.as_object().is_some_and(|passes| {
+        !passes.is_empty() && passes.values().all(measured_sample_array)
+    })
+}
+
+fn measured_nested_sample_array(value: &Value) -> bool {
+    value.as_array().is_some_and(|samples| {
+        samples.len() == common::MEASURED_SAMPLES
+            && samples
+                .iter()
+                .all(|sample| sample.as_array().is_some_and(|passes| !passes.is_empty()))
+    })
+}
+
 fn workload_evidence() -> Vec<Value> {
     let mut known_pattern = offscreen_draw::compare();
     retain_measurement_profile(&mut known_pattern);
     assert_workload_evidence(&known_pattern, "G6-C01-known-pattern-offscreen-draw");
+    assert_eq!(
+        known_pattern["timestamp_evidence"]["separate_from_wall_clock_samples"],
+        true
+    );
+    assert!(positive_f64(
+        &known_pattern["timestamp_evidence"]["runengpu"]["timestamp_period_ns"]
+    ));
+    assert!(measured_sample_array(
+        &known_pattern["timestamp_evidence"]["runengpu"]["raw_delta_ticks"]
+    ));
+    assert!(measured_sample_array(
+        &known_pattern["timestamp_evidence"]["runengpu"]["delta_ns"]
+    ));
 
     let mut prefix_scan_evidence = prefix_scan::compare();
     prefix_scan_evidence["timestamp_evidence"] =
@@ -68,6 +102,13 @@ fn workload_evidence() -> Vec<Value> {
     assert!(positive_f64(
         &prefix_scan_evidence["timestamp_evidence"]["runengpu"]["timestamp_period_ns"]
     ));
+    for mode in ["exclusive", "inclusive"] {
+        let evidence = &prefix_scan_evidence["timestamp_evidence"]["runengpu"][mode];
+        assert!(measured_samples_by_pass(
+            &evidence["raw_delta_ticks_by_pass"]
+        ));
+        assert!(measured_samples_by_pass(&evidence["delta_ns_by_pass"]));
+    }
 
     let mut reaction_diffusion_evidence = reaction_diffusion::compare();
     reaction_diffusion_evidence["timestamp_evidence"] =
@@ -87,9 +128,11 @@ fn workload_evidence() -> Vec<Value> {
     assert!(
         reaction_diffusion_evidence["timestamp_evidence"]["envelopes"]
             .as_array()
-            .is_some_and(|envelopes| envelopes
-                .iter()
-                .all(|envelope| envelope["runengpu"]["delta_ns_samples"].is_array()))
+            .is_some_and(|envelopes| envelopes.iter().all(|envelope| {
+                let runengpu = &envelope["runengpu"];
+                measured_nested_sample_array(&runengpu["raw_delta_ticks_samples"])
+                    && measured_nested_sample_array(&runengpu["delta_ns_samples"])
+            }))
     );
 
     vec![
