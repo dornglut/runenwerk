@@ -278,6 +278,8 @@ impl fmt::Debug for GpuRealizedRenderPipeline {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::gpu::{GpuContextId, GpuDeviceGeneration};
+    use core::num::NonZeroU64;
 
     #[test]
     fn every_pipeline_failure_class_has_actionable_correction() {
@@ -317,5 +319,52 @@ mod tests {
         assert_eq!(error.retained_records(), Some(7));
         assert_eq!(error.max_records().map(NonZeroUsize::get), Some(7));
         assert!(error.to_string().contains("records: 7/7"));
+    }
+
+    #[test]
+    fn pipeline_cache_rejection_remains_a_typed_category() {
+        let error = GpuPipelineRealizationError::new(
+            GpuPipelineRealizationErrorCategory::CacheRejected,
+            "representative cached pipeline",
+            "derived cache candidate was rejected",
+        );
+        assert_eq!(
+            error.category(),
+            GpuPipelineRealizationErrorCategory::CacheRejected
+        );
+    }
+
+    #[test]
+    fn stale_pipeline_generation_keeps_expected_and_observed_affinity_typed() {
+        let context = GpuContextId::test_value(NonZeroU64::new(9).unwrap());
+        let stale_generation = GpuDeviceGeneration::first();
+        let current_generation = stale_generation.next().unwrap();
+        let current = GpuContextAffinity::test_value(context, current_generation);
+        let stale = GpuContextAffinity::test_value(context, stale_generation);
+        let error = GpuPipelineRealizationError::affinity(
+            GpuPipelineRealizationErrorCategory::StaleDeviceGeneration,
+            "representative stale pipeline",
+            current,
+            stale,
+        );
+
+        assert_eq!(
+            error.category(),
+            GpuPipelineRealizationErrorCategory::StaleDeviceGeneration
+        );
+        assert_eq!(error.expected_affinity(), Some(current));
+        assert_eq!(error.observed_affinity(), Some(stale));
+        assert_eq!(
+            error
+                .expected_affinity()
+                .map(|affinity| affinity.generation()),
+            Some(current_generation)
+        );
+        assert_eq!(
+            error
+                .observed_affinity()
+                .map(|affinity| affinity.generation()),
+            Some(stale_generation)
+        );
     }
 }
