@@ -73,11 +73,18 @@ crossbeam-deque = "0.8.6"
 thiserror = "2.0.18"
 
 [dev-dependencies]
-criterion = "0.5.1"
 trybuild = "1.0.114"
 ui_app_integration = { workspace = true }
 ui_binding = { workspace = true }
 wgpu = { version = "30.0.0", features = ["noop"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+criterion = "0.5.1"
+
+[[test]]
+name = "gpu_browser_webgpu"
+path = "tests/gpu_browser_webgpu.rs"
+harness = false
 
 [[example]]
 name = "game_of_life_sdf"

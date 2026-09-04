@@ -278,7 +278,7 @@ jobs:
           fi
 
   wasm-compile:
-    name: Wasm WebGPU compilation
+    name: Wasm WebGPU compilation + actual-browser execution
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -336,6 +336,35 @@ jobs:
 
       - name: Check RunenGPU-containing engine library for Wasm WebGPU
         run: cargo +stable check -p engine --lib --target wasm32-unknown-unknown --locked
+
+      - name: Prove actual-browser tooling
+        run: |
+          set -euo pipefail
+          google-chrome --version
+          chromedriver --version
+
+      - name: Install lock-matched wasm-bindgen CLI
+        run: |
+          set -euo pipefail
+          wasm_bindgen_version="$(python3 -c 'import tomllib; data=tomllib.load(open("Cargo.lock", "rb")); versions={package["version"] for package in data["package"] if package["name"] == "wasm-bindgen"}; assert len(versions) == 1, versions; print(versions.pop())')"
+          echo "wasm-bindgen CLI version: ${wasm_bindgen_version}"
+          cargo +stable install wasm-bindgen-cli --version "${wasm_bindgen_version}" --locked
+
+      - name: Run retained G5-C01 and G6-C01 proofs in actual-browser WebGPU
+        env:
+          RUST_BACKTRACE: '1'
+        run: |
+          set -euo pipefail
+          messages="${RUNNER_TEMP}/runengpu-browser-webgpu-cargo.json"
+          cargo +stable test -p engine --test gpu_browser_webgpu \
+            --target wasm32-unknown-unknown --locked --no-run --message-format=json > "${messages}"
+          browser_wasm="$(python3 -c 'import json,sys; artifacts={path for message in map(json.loads, open(sys.argv[1])) if message.get("reason") == "compiler-artifact" and message.get("target", {}).get("name") == "gpu_browser_webgpu" for path in ([message.get("executable")] + message.get("filenames", [])) if isinstance(path, str) and path.endswith(".wasm")}; assert len(artifacts) == 1, artifacts; print(artifacts.pop())' "${messages}")"
+          test -s "${browser_wasm}"
+          out_dir="${RUNNER_TEMP}/runengpu-browser-webgpu"
+          rm -rf "${out_dir}"
+          wasm-bindgen "${browser_wasm}" --target web --no-typescript \
+            --out-dir "${out_dir}" --out-name gpu_browser_webgpu
+          python3 engine/tests/gpu_browser_webgpu/run.py "${out_dir}"
 
       - name: Check diff hygiene
         run: git diff --check
