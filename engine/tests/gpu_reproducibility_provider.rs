@@ -162,9 +162,21 @@ fn reproducibility_provider_collects_public_context_work_and_identity_facts() {
             .enabled_features()
             .any(|feature| feature == GpuCapabilityFeature::Compute)
     );
-    let _adapter_limits = context.adapter_facts().adapter_limits().values();
-    let _device_limits = context.device_facts().device_limits().values();
-    let _workload_budget = context.device_facts().workload_budget().limits();
+    assert_eq!(
+        context.admission_report().candidate().workload_budget(),
+        context.device_facts().workload_budget()
+    );
+    let adapter_limits = context.adapter_facts().adapter_limits().values();
+    let device_limits = context.device_facts().device_limits().values();
+    let workload_budget = context.device_facts().workload_budget().limits();
+    assert!(
+        adapter_limits.max_compute_workgroups_per_dimension()
+            >= device_limits.max_compute_workgroups_per_dimension()
+    );
+    assert!(
+        device_limits.max_compute_workgroups_per_dimension()
+            >= workload_budget.max_compute_workgroups_per_dimension()
+    );
 
     let mut fragment =
         GpuWorkFragmentBuilder::new(label("provider fragment"), provenance("provider"));
