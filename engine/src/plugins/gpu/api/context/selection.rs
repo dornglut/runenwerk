@@ -782,12 +782,8 @@ mod tests {
                 GpuCapabilityFeature::Compute,
             ))
             .unwrap();
-        let error = select_candidate(
-            &GpuContextDescriptor::new(requirements),
-            [adapter()],
-            true,
-        )
-        .unwrap_err();
+        let error = select_candidate(&GpuContextDescriptor::new(requirements), [adapter()], true)
+            .unwrap_err();
         assert_eq!(
             error.category(),
             GpuContextRequestErrorCategory::NoAdmissibleCandidate
