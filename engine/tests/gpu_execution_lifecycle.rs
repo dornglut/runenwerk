@@ -412,7 +412,10 @@ fn graceful_shutdown_revokes_unaccepted_work_and_drains_accepted_readback_once()
 
     for _ in 0..3 {
         context.progress();
-        assert!(matches!(submission.status(), GpuSubmissionStatus::Completed));
+        assert!(matches!(
+            submission.status(),
+            GpuSubmissionStatus::Completed
+        ));
         match readback.status() {
             GpuReadbackStatus::Ready(observed) => {
                 assert_eq!(observed.as_bytes(), expected.as_slice())
