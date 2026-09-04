@@ -321,6 +321,7 @@ impl GpuLimits {
                 operation: "construct normalized GPU limits",
                 label: "GPU limits".to_string(),
                 cause: GpuCapabilityAdmissionCause::InvalidLimit,
+                feature: None,
                 correction: "provide internally consistent normalized limits; dynamic-buffer maxima may be zero when unsupported",
             });
         }
@@ -491,6 +492,7 @@ impl GpuCapabilityAdmission {
                 operation: "admit GPU capability requirements",
                 label: format!("{label}::{feature:?}"),
                 cause: GpuCapabilityAdmissionCause::EnabledUnavailable,
+                feature: Some(*feature),
                 correction: "enable only normalized features reported by the admitted backend",
             });
         }
@@ -506,6 +508,7 @@ impl GpuCapabilityAdmission {
                             operation: "admit GPU capability requirements",
                             label,
                             cause: GpuCapabilityAdmissionCause::RequiredUnavailable,
+                            feature: Some(feature),
                             correction: "select a capable backend or remove the required workload",
                         });
                     }
@@ -514,6 +517,7 @@ impl GpuCapabilityAdmission {
                             operation: "admit GPU capability requirements",
                             label,
                             cause: GpuCapabilityAdmissionCause::RequiredNotEnabled,
+                            feature: Some(feature),
                             correction: "enable the required feature during backend admission",
                         });
                     }
@@ -544,6 +548,7 @@ impl GpuCapabilityAdmission {
                             operation: "admit GPU capability requirements",
                             label,
                             cause: GpuCapabilityAdmissionCause::DisabledEnabled,
+                            feature: Some(feature),
                             correction: "disable the feature path before admission",
                         });
                     }
@@ -743,6 +748,91 @@ mod tests {
             0
         );
         assert!(GpuLimits::new(1, 2, 3, 8, 5, 8192, 4, 4, 8, 4, 65535).is_err());
+    }
+
+    #[test]
+    fn admission_rejections_keep_feature_evidence_typed() {
+        let mut required = GpuCapabilityRequirements::new();
+        required
+            .insert(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::Compute,
+            ))
+            .unwrap();
+
+        let unavailable = GpuCapabilityAdmission::evaluate(
+            "required unavailable",
+            &required,
+            &GpuCapabilities::from_normalized_facts([], test_limits(), []),
+            [],
+        )
+        .unwrap_err();
+        assert_eq!(
+            unavailable.cause(),
+            GpuCapabilityAdmissionCause::RequiredUnavailable
+        );
+        assert_eq!(unavailable.feature(), Some(GpuCapabilityFeature::Compute));
+
+        let not_enabled = GpuCapabilityAdmission::evaluate(
+            "required not enabled",
+            &required,
+            &GpuCapabilities::from_normalized_facts(
+                [GpuCapabilityFeature::Compute],
+                test_limits(),
+                [],
+            ),
+            [],
+        )
+        .unwrap_err();
+        assert_eq!(
+            not_enabled.cause(),
+            GpuCapabilityAdmissionCause::RequiredNotEnabled
+        );
+        assert_eq!(not_enabled.feature(), Some(GpuCapabilityFeature::Compute));
+
+        let disabled = {
+            let mut requirements = GpuCapabilityRequirements::new();
+            requirements
+                .insert(GpuCapabilityRequirement::Disabled(
+                    GpuCapabilityFeature::TimestampQuery,
+                ))
+                .unwrap();
+            GpuCapabilityAdmission::evaluate(
+                "disabled enabled",
+                &requirements,
+                &GpuCapabilities::from_normalized_facts(
+                    [GpuCapabilityFeature::TimestampQuery],
+                    test_limits(),
+                    [],
+                ),
+                [GpuCapabilityFeature::TimestampQuery],
+            )
+            .unwrap_err()
+        };
+        assert_eq!(disabled.cause(), GpuCapabilityAdmissionCause::DisabledEnabled);
+        assert_eq!(
+            disabled.feature(),
+            Some(GpuCapabilityFeature::TimestampQuery)
+        );
+
+        let enabled_unavailable = GpuCapabilityAdmission::evaluate(
+            "enabled unavailable",
+            &GpuCapabilityRequirements::new(),
+            &GpuCapabilities::from_normalized_facts([], test_limits(), []),
+            [GpuCapabilityFeature::TimestampQuery],
+        )
+        .unwrap_err();
+        assert_eq!(
+            enabled_unavailable.cause(),
+            GpuCapabilityAdmissionCause::EnabledUnavailable
+        );
+        assert_eq!(
+            enabled_unavailable.feature(),
+            Some(GpuCapabilityFeature::TimestampQuery)
+        );
+
+        let invalid_limit = GpuLimits::new(0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1).unwrap_err();
+        assert_eq!(invalid_limit.cause(), GpuCapabilityAdmissionCause::InvalidLimit);
+        assert_eq!(invalid_limit.feature(), None);
     }
 
     #[test]
