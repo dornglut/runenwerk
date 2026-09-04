@@ -10,4 +10,6 @@ pub use access_and_filters::{
 };
 pub use orphaned::{Orphaned, QueryOrphaned, QueryOrphanedState};
 pub use snapshot::query_snapshot_source_generation;
-pub use traits_and_state::{Query, QuerySpec, QueryState};
+#[doc(hidden)]
+pub use traits_and_state::QuerySpec;
+pub use traits_and_state::{Query, QueryState};

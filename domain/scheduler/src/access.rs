@@ -11,6 +11,7 @@ pub enum AccessDomain {
     WorkQueue,
     TickBuffer,
     Structural,
+    World,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -101,6 +102,14 @@ impl AccessKey {
         }
     }
 
+    pub fn world(name: &'static str) -> Self {
+        Self {
+            domain: AccessDomain::World,
+            type_id: None,
+            name,
+        }
+    }
+
     pub fn domain(&self) -> AccessDomain {
         self.domain
     }
@@ -122,6 +131,7 @@ impl AccessKey {
             AccessDomain::WorkQueue => "work queue",
             AccessDomain::TickBuffer => "tick buffer",
             AccessDomain::Structural => "structural access",
+            AccessDomain::World => "world access",
         };
         format!("{domain} '{}'", self.name)
     }
@@ -134,7 +144,7 @@ impl PartialEq for AccessKey {
         }
 
         match self.domain {
-            AccessDomain::Structural => self.name == other.name,
+            AccessDomain::Structural | AccessDomain::World => self.name == other.name,
             _ => self.type_id == other.type_id,
         }
     }
@@ -146,7 +156,7 @@ impl Hash for AccessKey {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.domain.hash(state);
         match self.domain {
-            AccessDomain::Structural => self.name.hash(state),
+            AccessDomain::Structural | AccessDomain::World => self.name.hash(state),
             _ => self.type_id.hash(state),
         }
     }
@@ -197,6 +207,8 @@ pub struct SystemAccess {
     read_order: Vec<AccessKey>,
     write_order: Vec<AccessKey>,
     drain_order: Vec<AccessKey>,
+    exclusive_world_accesses: usize,
+    has_immediate_world_access: bool,
 }
 
 impl SystemAccess {
@@ -216,19 +228,36 @@ impl SystemAccess {
         &self.drains
     }
 
+    pub fn exclusive_world_accesses(&self) -> usize {
+        self.exclusive_world_accesses
+    }
+
+    pub fn add_exclusive_world_access(&mut self) {
+        self.exclusive_world_accesses = self.exclusive_world_accesses.saturating_add(1);
+    }
+
     pub fn add_read(&mut self, key: AccessKey) {
+        if key.domain() != AccessDomain::Structural {
+            self.has_immediate_world_access = true;
+        }
         if self.reads.insert(key) {
             self.read_order.push(key);
         }
     }
 
     pub fn add_write(&mut self, key: AccessKey) {
+        if key.domain() != AccessDomain::Structural {
+            self.has_immediate_world_access = true;
+        }
         if self.writes.insert(key) {
             self.write_order.push(key);
         }
     }
 
     pub fn add_drain(&mut self, key: AccessKey) {
+        if key.domain() != AccessDomain::Structural {
+            self.has_immediate_world_access = true;
+        }
         if self.drains.insert(key) {
             self.drain_order.push(key);
         }
@@ -313,11 +342,30 @@ impl SystemAccess {
             });
         }
 
+        if (self.exclusive_world_accesses > 0
+            && (other.exclusive_world_accesses > 0 || other.has_immediate_world_access))
+            || (other.exclusive_world_accesses > 0 && self.has_immediate_world_access)
+        {
+            conflicts.push(AccessConflict {
+                key: AccessKey::world("world"),
+                kind: ConflictKind::WriteWrite,
+            });
+        }
+
         self.sort_conflicts(&mut conflicts);
         conflicts
     }
 
     pub fn validate_internal(&self) -> Result<(), AccessConflict> {
+        if self.exclusive_world_accesses > 1
+            || (self.exclusive_world_accesses == 1 && self.has_immediate_world_access)
+        {
+            return Err(AccessConflict {
+                key: AccessKey::world("world"),
+                kind: ConflictKind::WriteWrite,
+            });
+        }
+
         let mut conflicts = Vec::new();
 
         for key in self.ordered_conflicts(&self.read_order, &self.writes) {

@@ -8,27 +8,73 @@ struct A(i32);
 struct B(i32);
 
 #[test]
-fn same_type_double_mut_query_panics() {
+fn same_type_double_mut_query_is_rejected_before_iteration() {
     let mut world = World::new();
     world.spawn(A(1)).expect("spawn should succeed");
 
-    let query = world.query_state::<(&mut A, &mut A), ()>();
     let panic_result = catch_unwind(AssertUnwindSafe(|| {
-        let _ = query.iter(&mut world).next();
+        let _ = world.query_state::<(&mut A, &mut A), ()>();
     }));
     assert!(panic_result.is_err());
 }
 
 #[test]
-fn same_type_mut_read_query_panics() {
+fn same_type_mut_read_query_is_rejected_before_iteration() {
     let mut world = World::new();
     world.spawn(A(1)).expect("spawn should succeed");
 
-    let query = world.query_state::<(&mut A, &A), ()>();
     let panic_result = catch_unwind(AssertUnwindSafe(|| {
-        let _ = query.iter(&mut world).next();
+        let _ = world.query_state::<(&mut A, &A), ()>();
     }));
     assert!(panic_result.is_err());
+}
+
+#[test]
+fn same_type_optional_mut_query_is_rejected_before_iteration() {
+    let mut world = World::new();
+    world.spawn(A(1)).expect("spawn should succeed");
+
+    let panic_result = catch_unwind(AssertUnwindSafe(|| {
+        let _ = world.query_state::<(&mut A, Option<&mut A>), ()>();
+    }));
+    assert!(panic_result.is_err());
+}
+
+#[test]
+fn query_state_rebinds_world_scope_and_resets_change_cursor() {
+    let mut first = World::new();
+    let first_entity = first.spawn(A(1)).expect("spawn should succeed");
+    let changed = first.query_state::<(Entity, &A), Changed<A>>();
+
+    assert_eq!(
+        changed
+            .iter(&first)
+            .map(|(entity, _)| entity)
+            .collect::<Vec<_>>(),
+        vec![first_entity]
+    );
+    assert!(changed.iter(&first).next().is_none());
+
+    let mut second = World::new();
+    let second_entity = second.spawn(A(10)).expect("spawn should succeed");
+    assert_eq!(
+        changed
+            .iter(&second)
+            .map(|(entity, _)| entity)
+            .collect::<Vec<_>>(),
+        vec![second_entity],
+        "rebinding must reset the change cursor instead of carrying another World's tick"
+    );
+    assert!(changed.iter(&second).next().is_none());
+
+    assert_eq!(
+        changed
+            .iter(&first)
+            .map(|(entity, _)| entity)
+            .collect::<Vec<_>>(),
+        vec![first_entity],
+        "rebinding back must reset world-local query cursor state again"
+    );
 }
 
 #[test]

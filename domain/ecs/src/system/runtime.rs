@@ -444,6 +444,22 @@ where
     }
 }
 
+fn validate_borrow_access(system_name: &str, access_parts: &[QueryAccess]) -> Result<()> {
+    let mut merged = QueryAccess::default();
+    for access in access_parts {
+        merged.extend(access.clone());
+    }
+    if let Some(conflict) = merged.borrow_conflict() {
+        return Err(anyhow!(
+            "system '{}' has conflicting param borrows: {} {}",
+            system_name,
+            conflict.domain(),
+            conflict.name()
+        ));
+    }
+    Ok(())
+}
+
 fn merge_access(system_name: &str, access_parts: &[SystemAccess]) -> Result<SystemAccess> {
     let mut merged = SystemAccess::new();
     for access in access_parts {
@@ -455,6 +471,9 @@ fn merge_access(system_name: &str, access_parts: &[SystemAccess]) -> Result<Syst
         }
         for drain in access.drains() {
             merged.add_drain(*drain);
+        }
+        for _ in 0..access.exclusive_world_accesses() {
+            merged.add_exclusive_world_access();
         }
     }
     if let Err(conflict) = merged.validate_internal() {
@@ -487,11 +506,16 @@ macro_rules! impl_into_system {
                         <$param as SystemParamState>::init_state(world)?,
                     )*
                 );
-                let access_parts = vec![
+                let query_access_parts = vec![
                     $(
-                        query_access_to_system_access(<$param as SystemParamState>::access(&states.$index)),
+                        <$param as SystemParamState>::access(&states.$index),
                     )*
                 ];
+                validate_borrow_access(&system_name, &query_access_parts)?;
+                let access_parts = query_access_parts
+                    .into_iter()
+                    .map(query_access_to_system_access)
+                    .collect::<Vec<_>>();
                 let access = merge_access(&system_name, &access_parts)?;
                 let param_slots = vec![
                     $(
@@ -865,6 +889,9 @@ fn query_access_to_system_access(access: QueryAccess) -> SystemAccess {
     }
     if access.deferred_structural_mutation() {
         system_access.add_write(AccessKey::structural("world_structure"));
+    }
+    for _ in 0..access.exclusive_world_accesses() {
+        system_access.add_exclusive_world_access();
     }
     system_access
 }

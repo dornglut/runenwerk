@@ -6,16 +6,15 @@ use super::super::runtime::{
 use crate::plugins::{InputState, SceneResource};
 use crate::prelude::Time;
 use crate::prelude::domain::{SceneCommand, SceneId};
-use crate::runtime::{FixedTimeConfig, Res, WindowState, WorldMut};
+use crate::runtime::{FixedTimeConfig, WindowState, WorldMut};
 use crate::{GameplayRuntimeConfig, SceneRuntimeState, UiOverlayState};
 use anyhow::Result;
 
-pub(crate) fn scene_transition_system(
-    mut world: WorldMut,
-    window: Res<WindowState>,
-    time: Res<Time>,
-    fixed_time: Res<FixedTimeConfig>,
-) -> Result<()> {
+pub(crate) fn scene_transition_system(mut world: WorldMut) -> Result<()> {
+    let window = world.resource::<WindowState>()?.clone();
+    let delta_seconds = world.resource::<Time>()?.delta_seconds;
+    let fixed_step_seconds = world.resource::<FixedTimeConfig>()?.step_seconds;
+
     let mut input = world.remove_resource::<InputState>().unwrap_or_default();
     let mut scene_templates = world
         .remove_resource::<SceneTemplateFlowResource>()
@@ -37,15 +36,15 @@ pub(crate) fn scene_transition_system(
         };
 
         sync_overlay_viewport(manager, &window);
-        sync_world_scene_context_from_input(
-            manager,
-            &input,
-            time.delta_seconds,
-            fixed_time.step_seconds,
-        );
+        sync_world_scene_context_from_input(manager, &input, delta_seconds, fixed_step_seconds);
 
         if scene_templates.has_scenes() {
-            process_overlay_pointer_input(manager, &mut input, &mut scene_templates, &time)?;
+            process_overlay_pointer_input(
+                manager,
+                &mut input,
+                &mut scene_templates,
+                delta_seconds,
+            )?;
             if input.toggle_pause_menu {
                 match scene_templates.active_scene_id() {
                     Some("game_scene") => {

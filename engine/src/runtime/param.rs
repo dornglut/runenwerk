@@ -84,7 +84,7 @@ impl<'w> SystemParam<'w> for WorldMut {
     }
 
     fn access(_state: &Self::State) -> QueryAccess {
-        QueryAccess::structural_mutation()
+        QueryAccess::exclusive_world()
     }
 
     unsafe fn extract(

@@ -1,7 +1,7 @@
 // Owner: Grotto Quest ecs - Query Runtime
 use super::access_and_filters::{QueryAccess, QueryFilter, push_unique_type};
 use crate::component::Component;
-use crate::entity::Entity;
+use crate::entity::{Entity, WorldScopeId};
 use crate::errors::QueryError;
 use crate::storage::ArchetypeExecutionBinding;
 use crate::telemetry;
@@ -66,8 +66,19 @@ pub trait QueryData {
     unsafe fn world_ref<'w>(world: *mut World) -> Self::WorldRef<'w>;
 }
 
+mod sealed {
+    pub trait QuerySpecSealed {}
+}
+
+impl<T> sealed::QuerySpecSealed for T where T: QueryData {}
+
+/// Framework-owned low-level query implementation contract.
+///
+/// This trait is public only because it appears in public generic bounds. It is
+/// sealed: downstream code cannot implement it. Safe query authoring uses the
+/// framework-provided component/reference/tuple/optional/entity forms.
 #[doc(hidden)]
-pub trait QuerySpec {
+pub trait QuerySpec: sealed::QuerySpecSealed {
     type Item<'w>;
     type WorldRef<'w>: QueryWorldRef<'w>;
 
@@ -209,13 +220,15 @@ pub struct QueryArchetypeRow {
 
 #[derive(Debug, Clone, Default)]
 pub struct QueryFastCache {
-    // Tracks cache ownership across reused `QueryState` runs and cross-world rebinding.
+    // Raw address is cache invalidation state only. QueryState semantic ownership
+    // is bound separately to C1's opaque world identity.
     pub(crate) world_ptr: *const World,
     // Reused archetype bindings for archetype-row execution forms.
     pub(crate) archetype_bindings: Vec<ArchetypeExecutionBinding>,
 }
 
 pub struct QueryState<Q, F = ()> {
+    world_scope: Cell<WorldScopeId>,
     required_present: Vec<TypeId>,
     excluded: Vec<TypeId>,
     access: QueryAccess,
@@ -229,8 +242,19 @@ pub struct QueryState<Q, F = ()> {
 }
 
 impl<Q: QuerySpec, F: QueryFilter> QueryState<Q, F> {
-    pub fn new(_world: &World) -> Self {
-        Self::detached()
+    pub fn new(world: &World) -> Self {
+        Self::try_new(world).unwrap_or_else(|error| panic!("invalid query state: {error}"))
+    }
+
+    pub(crate) fn try_new(world: &World) -> Result<Self, QueryError> {
+        let state = Self::detached(world.scope_id());
+        if let Some(conflict) = state.access.borrow_conflict() {
+            return Err(QueryError::ConflictingBorrow {
+                domain: conflict.domain(),
+                target: conflict.name(),
+            });
+        }
+        Ok(state)
     }
 
     pub fn access(&self) -> &QueryAccess {
@@ -253,7 +277,10 @@ impl<Q: QuerySpec, F: QueryFilter> QueryState<Q, F> {
     {
         let start = Instant::now();
         let world_ptr = world.into_world_ptr();
+        // Safety: framework-owned QueryWorldRef implementations only produce a
+        // pointer from the live World reference supplied by the caller.
         let world_ref = unsafe { &*world_ptr };
+        self.rebind_world_scope(world_ref.scope_id());
         let since_tick = self.last_run_tick.get();
         let (use_fast_fetch, mut fast_cache) = self.prepare_fast_fetch(world_ptr);
 
@@ -307,7 +334,10 @@ impl<Q: QuerySpec, F: QueryFilter> QueryState<Q, F> {
     pub fn get<'w>(&self, world: Q::WorldRef<'w>, entity: Entity) -> Option<Q::Item<'w>> {
         let start = Instant::now();
         let world_ptr = world.into_world_ptr();
+        // Safety: framework-owned QueryWorldRef implementations only produce a
+        // pointer from the live World reference supplied by the caller.
         let world_ref = unsafe { &*world_ptr };
+        self.rebind_world_scope(world_ref.scope_id());
         let matches = self.matches_entity(world_ref, entity);
         self.last_run_tick.set(world_ref.current_change_tick());
         if !matches {
@@ -315,7 +345,7 @@ impl<Q: QuerySpec, F: QueryFilter> QueryState<Q, F> {
             return None;
         }
         Q::mark_changed(world_ptr, entity);
-        // Safety: access conflicts are guarded by the query type and runtime.
+        // Safety: query borrow conflicts were rejected when this QueryState was created.
         let item = unsafe { Q::fetch(world_ptr, entity) };
         telemetry::record_query_get(start.elapsed().as_nanos() as u64);
         item
@@ -324,7 +354,10 @@ impl<Q: QuerySpec, F: QueryFilter> QueryState<Q, F> {
     pub fn single<'w>(&self, world: Q::WorldRef<'w>) -> Result<Q::Item<'w>, QueryError> {
         let start = Instant::now();
         let world_ptr = world.into_world_ptr();
+        // Safety: framework-owned QueryWorldRef implementations only produce a
+        // pointer from the live World reference supplied by the caller.
         let world_ref = unsafe { &*world_ptr };
+        self.rebind_world_scope(world_ref.scope_id());
         let mut entities = self.acquire_scratch_vec();
         self.matching_entities_into(world_ref, &mut entities);
         self.last_run_tick.set(world_ref.current_change_tick());
@@ -340,14 +373,15 @@ impl<Q: QuerySpec, F: QueryFilter> QueryState<Q, F> {
             return Err(QueryError::MultipleResults { count });
         }
         Q::mark_changed(world_ptr, entities[0]);
-        // Safety: exactly one matching entity exists and query access rules are upheld.
+        // Safety: exactly one matching entity exists and query borrow conflicts
+        // were rejected when this QueryState was created.
         let result = unsafe { Q::fetch(world_ptr, entities[0]) }.ok_or(QueryError::NoResults);
         self.release_scratch_vec(entities);
         telemetry::record_query_single(start.elapsed().as_nanos() as u64);
         result
     }
 
-    pub(crate) fn detached() -> Self {
+    pub(crate) fn detached(world_scope: WorldScopeId) -> Self {
         let query_types = Q::query_types();
         let mut required = Vec::new();
         let mut excluded = Vec::new();
@@ -359,9 +393,15 @@ impl<Q: QuerySpec, F: QueryFilter> QueryState<Q, F> {
 
         let mut access = QueryAccess::default();
         Q::append_access(&mut access);
+        let query_borrow_checkpoint = access.borrow_checkpoint();
         F::append_access(&mut access);
+        // Filter callbacks only inspect a shared World and do not manufacture
+        // query-item references. Keep their scheduler metadata but exclude it
+        // from the alias proof captured from Q itself.
+        access.restore_borrow_checkpoint(query_borrow_checkpoint);
 
         Self {
+            world_scope: Cell::new(world_scope),
             required_present,
             excluded,
             access,
@@ -373,6 +413,16 @@ impl<Q: QuerySpec, F: QueryFilter> QueryState<Q, F> {
             fast_cache: RefCell::new(QueryFastCache::default()),
             _marker: PhantomData,
         }
+    }
+
+    fn rebind_world_scope(&self, actual: WorldScopeId) {
+        if self.world_scope.get() == actual {
+            return;
+        }
+
+        self.world_scope.set(actual);
+        self.last_run_tick.set(0);
+        *self.fast_cache.borrow_mut() = QueryFastCache::default();
     }
 
     fn prepare_fast_fetch(&self, world_ptr: *mut World) -> (bool, QueryFastCache) {
@@ -488,12 +538,14 @@ impl<'w, Q: QuerySpec> QueryIter<'w, Q> {
     fn mark_and_fetch(&mut self, entity: Entity) -> Option<Q::Item<'w>> {
         if self.use_fast_fetch {
             Q::mark_changed_fast(self.world, entity, &mut self.fast_cache);
-            // Safety: `QueryIter` holds the world borrow contract through `Q::WorldRef<'w>`.
+            // Safety: QueryState validated aliasing before constructing this iterator,
+            // which holds the world borrow contract through Q::WorldRef<'w>.
             return unsafe { Q::fetch_fast(self.world, entity, &mut self.fast_cache) };
         }
 
         Q::mark_changed(self.world, entity);
-        // Safety: `QueryIter` holds the world borrow contract through `Q::WorldRef<'w>`.
+        // Safety: QueryState validated aliasing before constructing this iterator,
+        // which holds the world borrow contract through Q::WorldRef<'w>.
         unsafe { Q::fetch(self.world, entity) }
     }
 }

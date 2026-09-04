@@ -28,6 +28,59 @@ impl QueryTypeAccess {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum QueryBorrowMode {
+    Shared,
+    Exclusive,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+struct QueryBorrowAccess {
+    type_id: TypeId,
+    name: &'static str,
+    mode: QueryBorrowMode,
+}
+
+impl QueryBorrowAccess {
+    fn shared<T: 'static>(name: &'static str) -> Self {
+        Self {
+            type_id: TypeId::of::<T>(),
+            name,
+            mode: QueryBorrowMode::Shared,
+        }
+    }
+
+    fn exclusive<T: 'static>(name: &'static str) -> Self {
+        Self {
+            type_id: TypeId::of::<T>(),
+            name,
+            mode: QueryBorrowMode::Exclusive,
+        }
+    }
+
+    fn conflicts_with(self, other: Self) -> bool {
+        self.type_id == other.type_id
+            && (matches!(self.mode, QueryBorrowMode::Exclusive)
+                || matches!(other.mode, QueryBorrowMode::Exclusive))
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub(crate) struct QueryBorrowConflict {
+    domain: &'static str,
+    name: &'static str,
+}
+
+impl QueryBorrowConflict {
+    pub(crate) const fn domain(self) -> &'static str {
+        self.domain
+    }
+
+    pub(crate) const fn name(self) -> &'static str {
+        self.name
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct QueryAccess {
     component_reads: Vec<QueryTypeAccess>,
@@ -44,12 +97,22 @@ pub struct QueryAccess {
     tick_buffer_writes: Vec<QueryTypeAccess>,
     tick_buffer_drains: Vec<QueryTypeAccess>,
     deferred_structural_mutation: bool,
+    exclusive_world_accesses: usize,
+    component_borrows: Vec<QueryBorrowAccess>,
+    resource_borrows: Vec<QueryBorrowAccess>,
 }
 
 impl QueryAccess {
     pub fn structural_mutation() -> Self {
         Self {
             deferred_structural_mutation: true,
+            ..Self::default()
+        }
+    }
+
+    pub fn exclusive_world() -> Self {
+        Self {
+            exclusive_world_accesses: 1,
             ..Self::default()
         }
     }
@@ -103,6 +166,10 @@ impl QueryAccess {
         self.deferred_structural_mutation
     }
 
+    pub fn exclusive_world_accesses(&self) -> usize {
+        self.exclusive_world_accesses
+    }
+
     pub fn broadcast_reads(&self) -> &[QueryTypeAccess] {
         &self.broadcast_reads
     }
@@ -136,6 +203,8 @@ impl QueryAccess {
     }
 
     pub(crate) fn add_component_read<T: Component>(&mut self) {
+        self.component_borrows
+            .push(QueryBorrowAccess::shared::<T>(T::component_name()));
         push_unique_access(
             &mut self.component_reads,
             QueryTypeAccess::of::<T>(T::component_name()),
@@ -143,6 +212,8 @@ impl QueryAccess {
     }
 
     pub(crate) fn add_component_write<T: Component>(&mut self) {
+        self.component_borrows
+            .push(QueryBorrowAccess::exclusive::<T>(T::component_name()));
         push_unique_access(
             &mut self.component_writes,
             QueryTypeAccess::of::<T>(T::component_name()),
@@ -157,6 +228,8 @@ impl QueryAccess {
     }
 
     pub(crate) fn add_resource_read<T: Resource>(&mut self) {
+        self.resource_borrows
+            .push(QueryBorrowAccess::shared::<T>(T::resource_name()));
         push_unique_access(
             &mut self.resource_reads,
             QueryTypeAccess::of::<T>(T::resource_name()),
@@ -164,6 +237,8 @@ impl QueryAccess {
     }
 
     pub(crate) fn add_resource_write<T: Resource>(&mut self) {
+        self.resource_borrows
+            .push(QueryBorrowAccess::exclusive::<T>(T::resource_name()));
         push_unique_access(
             &mut self.resource_writes,
             QueryTypeAccess::of::<T>(T::resource_name()),
@@ -206,11 +281,52 @@ impl QueryAccess {
         self.deferred_structural_mutation = true;
     }
 
+    pub(crate) fn borrow_checkpoint(&self) -> (usize, usize) {
+        (self.component_borrows.len(), self.resource_borrows.len())
+    }
+
+    pub(crate) fn restore_borrow_checkpoint(&mut self, checkpoint: (usize, usize)) {
+        self.component_borrows.truncate(checkpoint.0);
+        self.resource_borrows.truncate(checkpoint.1);
+    }
+
+    pub(crate) fn borrow_conflict(&self) -> Option<QueryBorrowConflict> {
+        if self.exclusive_world_accesses > 1
+            || (self.exclusive_world_accesses == 1 && self.has_immediate_world_access())
+        {
+            return Some(QueryBorrowConflict {
+                domain: "world",
+                name: "exclusive world",
+            });
+        }
+
+        find_borrow_conflict("component", &self.component_borrows)
+            .or_else(|| find_borrow_conflict("resource", &self.resource_borrows))
+    }
+
+    fn has_immediate_world_access(&self) -> bool {
+        !self.component_reads.is_empty()
+            || !self.orphaned_component_reads.is_empty()
+            || !self.component_writes.is_empty()
+            || !self.resource_reads.is_empty()
+            || !self.resource_writes.is_empty()
+            || !self.broadcast_reads.is_empty()
+            || !self.broadcast_writes.is_empty()
+            || !self.work_queue_reads.is_empty()
+            || !self.work_queue_writes.is_empty()
+            || !self.work_queue_drains.is_empty()
+            || !self.tick_buffer_reads.is_empty()
+            || !self.tick_buffer_writes.is_empty()
+            || !self.tick_buffer_drains.is_empty()
+    }
+
     /// Extends this access set with another access set.
     ///
     /// Composite `SystemParam` implementations use this as the canonical way to
     /// preserve child access semantics while reporting one grouped parameter.
     pub fn extend(&mut self, other: Self) {
+        self.component_borrows.extend(other.component_borrows);
+        self.resource_borrows.extend(other.resource_borrows);
         for access in other.component_reads {
             push_unique_access(&mut self.component_reads, access);
         }
@@ -251,6 +367,9 @@ impl QueryAccess {
             push_unique_access(&mut self.tick_buffer_drains, access);
         }
         self.deferred_structural_mutation |= other.deferred_structural_mutation;
+        self.exclusive_world_accesses = self
+            .exclusive_world_accesses
+            .saturating_add(other.exclusive_world_accesses);
     }
 }
 
@@ -435,5 +554,59 @@ pub(super) fn push_unique_type(target: &mut Vec<TypeId>, type_id: TypeId) {
 fn push_unique_access(target: &mut Vec<QueryTypeAccess>, access: QueryTypeAccess) {
     if !target.iter().any(|entry| entry.type_id == access.type_id) {
         target.push(access);
+    }
+}
+
+fn find_borrow_conflict(
+    domain: &'static str,
+    borrows: &[QueryBorrowAccess],
+) -> Option<QueryBorrowConflict> {
+    for (index, left) in borrows.iter().copied().enumerate() {
+        for right in borrows.iter().copied().skip(index + 1) {
+            if left.conflicts_with(right) {
+                return Some(QueryBorrowConflict {
+                    domain,
+                    name: left.name,
+                });
+            }
+        }
+    }
+    None
+}
+
+#[cfg(test)]
+mod exclusive_world_tests {
+    use super::QueryAccess;
+    use crate::Resource;
+
+    struct ResourceA;
+    impl Resource for ResourceA {}
+
+    #[test]
+    fn exclusive_world_conflicts_with_immediate_resource_borrow() {
+        let mut access = QueryAccess::exclusive_world();
+        access.add_resource_read::<ResourceA>();
+
+        let conflict = access
+            .borrow_conflict()
+            .expect("exclusive world plus resource access must conflict");
+        assert_eq!(conflict.domain(), "world");
+        assert_eq!(conflict.name(), "exclusive world");
+    }
+
+    #[test]
+    fn duplicate_exclusive_world_accesses_conflict() {
+        let mut access = QueryAccess::exclusive_world();
+        access.extend(QueryAccess::exclusive_world());
+
+        assert!(access.borrow_conflict().is_some());
+    }
+
+    #[test]
+    fn exclusive_world_can_coexist_with_deferred_structural_mutation() {
+        let mut access = QueryAccess::exclusive_world();
+        access.extend(QueryAccess::structural_mutation());
+
+        assert!(access.borrow_conflict().is_none());
     }
 }
