@@ -538,20 +538,8 @@ pub enum GpuInitializationExplanationKind {
     DeclaredInput,
     RetainedCoverage,
     PreparedInitialContent,
-    OperationGuaranteed { node: GpuPreparedWorkNodeId },
-    AttachmentDiscard { node: GpuPreparedWorkNodeId },
-}
-
-impl GpuInitializationExplanationKind {
-    pub const fn node(self) -> Option<GpuPreparedWorkNodeId> {
-        match self {
-            Self::OperationGuaranteed { node } | Self::AttachmentDiscard { node } => Some(node),
-            Self::DescriptorGuaranteed
-            | Self::DeclaredInput
-            | Self::RetainedCoverage
-            | Self::PreparedInitialContent => None,
-        }
-    }
+    OperationGuaranteed,
+    AttachmentDiscard,
 }
 
 /// One ordered typed explanation fact emitted by the canonical initialization simulator.
@@ -920,7 +908,7 @@ fn apply_node_initialization(
             record_pending_initialization_explanation(
                 explanations,
                 effect.resource,
-                GpuInitializationExplanationKind::OperationGuaranteed { node: prepared_id },
+                GpuInitializationExplanationKind::OperationGuaranteed,
                 effect.coverage,
             );
         }
@@ -966,7 +954,7 @@ fn apply_node_initialization(
             record_pending_initialization_explanation(
                 explanations,
                 resource,
-                GpuInitializationExplanationKind::AttachmentDiscard { node: prepared_id },
+                GpuInitializationExplanationKind::AttachmentDiscard,
                 removed,
             );
         }
