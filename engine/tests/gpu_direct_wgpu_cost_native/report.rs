@@ -45,16 +45,70 @@ fn assert_workload_evidence(evidence: &Value, expected_workload: &str) {
     assert!(evidence["runengpu_over_direct_ratio"].is_object());
 }
 
+fn positive_f64(value: &Value) -> bool {
+    value
+        .as_f64()
+        .is_some_and(|value| value.is_finite() && value > 0.0)
+}
+
+fn measured_sample_array(value: &Value) -> bool {
+    value
+        .as_array()
+        .is_some_and(|samples| samples.len() == common::MEASURED_SAMPLES)
+}
+
+fn measured_samples_by_pass(value: &Value) -> bool {
+    value
+        .as_object()
+        .is_some_and(|passes| !passes.is_empty() && passes.values().all(measured_sample_array))
+}
+
+fn measured_nested_sample_array(value: &Value) -> bool {
+    value.as_array().is_some_and(|samples| {
+        samples.len() == common::MEASURED_SAMPLES
+            && samples
+                .iter()
+                .all(|sample| sample.as_array().is_some_and(|passes| !passes.is_empty()))
+    })
+}
+
 fn workload_evidence() -> Vec<Value> {
     let mut known_pattern = offscreen_draw::compare();
     retain_measurement_profile(&mut known_pattern);
     assert_workload_evidence(&known_pattern, "G6-C01-known-pattern-offscreen-draw");
+    assert_eq!(
+        known_pattern["timestamp_evidence"]["separate_from_wall_clock_samples"],
+        true
+    );
+    assert!(positive_f64(
+        &known_pattern["timestamp_evidence"]["runengpu"]["timestamp_period_ns"]
+    ));
+    assert!(measured_sample_array(
+        &known_pattern["timestamp_evidence"]["runengpu"]["raw_delta_ticks"]
+    ));
+    assert!(measured_sample_array(
+        &known_pattern["timestamp_evidence"]["runengpu"]["delta_ns"]
+    ));
 
     let mut prefix_scan_evidence = prefix_scan::compare();
     prefix_scan_evidence["timestamp_evidence"] =
         prefix_scan::timestamp::evidence(&prefix_scan_evidence);
     retain_measurement_profile(&mut prefix_scan_evidence);
     assert_workload_evidence(&prefix_scan_evidence, "G5-C01-4097-u32-prefix-scan");
+    assert_eq!(
+        prefix_scan_evidence["timestamp_evidence"]["separate_from_wall_clock_samples"],
+        true
+    );
+    assert!(positive_f64(
+        &prefix_scan_evidence["timestamp_evidence"]["runengpu"]["timestamp_period_ns"]
+    ));
+    for mode in ["exclusive", "inclusive"] {
+        let evidence = &prefix_scan_evidence["timestamp_evidence"]["runengpu"][mode];
+        assert!(measured_samples_by_pass(
+            &evidence["raw_delta_ticks_by_pass"]
+        ));
+        assert!(measured_samples_by_pass(&evidence["delta_ns_by_pass"]));
+    }
 
     let mut reaction_diffusion_evidence = reaction_diffusion::compare();
     reaction_diffusion_evidence["timestamp_evidence"] =
@@ -64,6 +118,22 @@ fn workload_evidence() -> Vec<Value> {
     retain_measurement_profile(&mut reaction_diffusion_evidence);
     assert_workload_evidence(&reaction_diffusion_evidence, "G6-I01-reaction-diffusion");
     assert!(reaction_diffusion_evidence["host_characterization"].is_object());
+    assert_eq!(
+        reaction_diffusion_evidence["timestamp_evidence"]["separate_from_wall_clock_samples"],
+        true
+    );
+    assert!(positive_f64(
+        &reaction_diffusion_evidence["timestamp_evidence"]["runengpu_timestamp_period_ns"]
+    ));
+    assert!(
+        reaction_diffusion_evidence["timestamp_evidence"]["envelopes"]
+            .as_array()
+            .is_some_and(|envelopes| envelopes.iter().all(|envelope| {
+                let runengpu = &envelope["runengpu"];
+                measured_nested_sample_array(&runengpu["raw_delta_ticks_samples"])
+                    && measured_nested_sample_array(&runengpu["delta_ns_samples"])
+            }))
+    );
 
     vec![
         known_pattern,
@@ -121,11 +191,6 @@ fn direct_wgpu_cost_portfolio_retains_report() {
                 "metric": "backend allocation/high-water bytes",
                 "status": "unavailable",
                 "reason": "the accepted public/test-visible boundaries expose no allocator high-water metric and G6-P01 does not add production allocator instrumentation",
-            },
-            {
-                "metric": "RunenGPU timestamp period in nanoseconds",
-                "status": "unavailable",
-                "reason": "public RunenGPU device facts do not expose the timestamp period; symmetric raw timestamp ticks are retained without fabricating a conversion",
             },
         ],
         "workloads": workloads,

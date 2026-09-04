@@ -551,6 +551,7 @@ fn measure_envelope(
     sources: &retained::ProgramSources,
     direct_pipelines: &DirectPipelines,
     envelope: retained::Envelope,
+    runengpu_period_ns: f64,
     direct_period_ns: f64,
 ) -> Value {
     let passes = timed_passes(envelope);
@@ -585,7 +586,7 @@ fn measure_envelope(
         "timed_passes": passes.len(),
         "query_count": query_count(&passes),
         "pass_sequence": passes.iter().map(TimedPass::json).collect::<Vec<_>>(),
-        "runengpu": aggregate_ticks(&runengpu, &passes, None),
+        "runengpu": aggregate_ticks(&runengpu, &passes, Some(runengpu_period_ns)),
         "direct_wgpu": aggregate_ticks(&direct, &passes, Some(direct_period_ns)),
     })
 }
@@ -629,13 +630,21 @@ pub(crate) fn evidence(wall_evidence: &Value) -> Value {
 
     let sources = retained::admitted_sources();
     let direct_pipelines = direct_pipelines(&direct_context);
+    let runengpu_period_ns = f64::from(
+        runengpu_context
+            .timestamp_period_ns()
+            .expect("timestamp-query-admitted RunenGPU context must expose timestamp period"),
+    );
     let direct_period_ns = f64::from(direct_context.queue.get_timestamp_period());
+    assert!(runengpu_period_ns.is_finite() && runengpu_period_ns > 0.0);
+    assert!(direct_period_ns.is_finite() && direct_period_ns > 0.0);
     let first = measure_envelope(
         &runengpu_context,
         &direct_context,
         &sources,
         &direct_pipelines,
         retained::ENVELOPES[0],
+        runengpu_period_ns,
         direct_period_ns,
     );
     let second = measure_envelope(
@@ -644,6 +653,7 @@ pub(crate) fn evidence(wall_evidence: &Value) -> Value {
         &sources,
         &direct_pipelines,
         retained::ENVELOPES[1],
+        runengpu_period_ns,
         direct_period_ns,
     );
     let total_timed_passes = retained::ENVELOPES
@@ -668,14 +678,14 @@ pub(crate) fn evidence(wall_evidence: &Value) -> Value {
                 "device": direct_context.adapter_info.device,
             },
         },
-        "runengpu_timestamp_period_ns": null,
-        "runengpu_timestamp_period_status": "not exposed by public RunenGPU device facts",
+        "runengpu_timestamp_period_ns": runengpu_period_ns,
+        "runengpu_timestamp_period_status": "reported by GpuContext::timestamp_period_ns()",
         "direct_wgpu_timestamp_period_ns": direct_period_ns,
         "envelopes": [first, second],
         "correctness": {
             "runengpu": "retained per-frame format/size/alpha/spatial-variation and sequence-evolution oracle passed on every timestamp sample",
             "direct_wgpu": "equivalent per-frame size/alpha/spatial-variation and sequence-evolution oracle passed on every timestamp sample",
         },
-        "interpretation": "Both paths timestamp the exact ordered retained compute/render pass sequence on the same Vulkan fallback adapter. Raw RunenGPU ticks are retained without fabricating a timestamp period that its public device facts do not expose; direct WGPU retains the queue period and derived nanosecond samples.",
+        "interpretation": "Both paths timestamp the exact ordered retained compute/render pass sequence on the same Vulkan fallback adapter. Raw ticks remain retained for both paths; each path converts its own ticks with its own reported timestamp period, while GPU pass timestamps remain separate from host wall-clock characterization.",
     })
 }
