@@ -355,11 +355,15 @@ mod tests {
         assert_eq!(error.expected_affinity(), Some(current));
         assert_eq!(error.observed_affinity(), Some(stale));
         assert_eq!(
-            error.expected_affinity().map(|affinity| affinity.generation()),
+            error
+                .expected_affinity()
+                .map(|affinity| affinity.generation()),
             Some(current_generation)
         );
         assert_eq!(
-            error.observed_affinity().map(|affinity| affinity.generation()),
+            error
+                .observed_affinity()
+                .map(|affinity| affinity.generation()),
             Some(stale_generation)
         );
     }
