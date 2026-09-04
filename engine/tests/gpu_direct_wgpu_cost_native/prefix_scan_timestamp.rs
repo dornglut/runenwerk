@@ -529,7 +529,14 @@ pub(crate) fn evidence(wall_evidence: &Value) -> Value {
         ));
     }
 
+    let runengpu_period_ns = f64::from(
+        runengpu_context
+            .timestamp_period_ns()
+            .expect("timestamp-query-admitted RunenGPU context must expose timestamp period"),
+    );
     let direct_period_ns = f64::from(direct_context.queue.get_timestamp_period());
+    assert!(runengpu_period_ns.is_finite() && runengpu_period_ns > 0.0);
+    assert!(direct_period_ns.is_finite() && direct_period_ns > 0.0);
     json!({
         "status": "measured",
         "separate_from_wall_clock_samples": true,
@@ -538,10 +545,10 @@ pub(crate) fn evidence(wall_evidence: &Value) -> Value {
         "warmup_samples": WARMUP_SAMPLES,
         "measured_samples": MEASURED_SAMPLES,
         "runengpu": {
-            "timestamp_period_ns": null,
-            "timestamp_period_status": "not exposed by public RunenGPU device facts",
-            "exclusive": pass_evidence(&runengpu_exclusive, None),
-            "inclusive": pass_evidence(&runengpu_inclusive, None),
+            "timestamp_period_ns": runengpu_period_ns,
+            "timestamp_period_status": "reported by GpuContext::timestamp_period_ns()",
+            "exclusive": pass_evidence(&runengpu_exclusive, Some(runengpu_period_ns)),
+            "inclusive": pass_evidence(&runengpu_inclusive, Some(runengpu_period_ns)),
         },
         "direct_wgpu": {
             "timestamp_period_ns": direct_period_ns,
@@ -549,6 +556,6 @@ pub(crate) fn evidence(wall_evidence: &Value) -> Value {
             "inclusive": pass_evidence(&direct_inclusive, Some(direct_period_ns)),
         },
         "correctness": "full exclusive+inclusive outputs and exact total passed on every timestamp sample for both paths",
-        "interpretation": "Both paths write timestamps at the beginning/end of each of the five retained prefix-scan compute passes on the same Vulkan fallback adapter. RunenGPU raw ticks are retained without fabricating a period that its public device facts do not expose.",
+        "interpretation": "Both paths write timestamps at the beginning/end of each of the five retained prefix-scan compute passes on the same Vulkan fallback adapter. Raw ticks remain retained for both paths; each path converts its own ticks with its own reported timestamp period, keeping GPU timestamp evidence separate from wall-clock samples.",
     })
 }
