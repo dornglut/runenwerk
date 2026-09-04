@@ -135,7 +135,7 @@ fn in_flight_capacity_rejection_exposes_typed_current_policy_snapshot() {
     let evidence = reason
         .in_flight_capacity_evidence()
         .expect("in-flight rejection must preserve typed execution pressure evidence");
-    assert_eq!(evidence.stats().in_flight_submissions(), 1);
+    assert_eq!(evidence.current_in_flight_submissions(), 1);
     assert_eq!(evidence.policy(), policy);
     assert_eq!(evidence.policy().max_in_flight_submissions().get(), 1);
 

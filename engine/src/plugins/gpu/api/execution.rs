@@ -478,20 +478,23 @@ pub enum GpuSubmissionRejectionKind {
     IdentityExhausted,
 }
 
-/// Canonical execution-pressure snapshot retained for one rejected additional in-flight submission.
+/// Typed current pressure and policy for one rejected additional in-flight submission.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GpuInFlightCapacityEvidence {
-    stats: GpuExecutionStats,
+    current_in_flight_submissions: usize,
     policy: GpuExecutionPolicy,
 }
 
 impl GpuInFlightCapacityEvidence {
-    const fn new(stats: GpuExecutionStats, policy: GpuExecutionPolicy) -> Self {
-        Self { stats, policy }
+    const fn new(current_in_flight_submissions: usize, policy: GpuExecutionPolicy) -> Self {
+        Self {
+            current_in_flight_submissions,
+            policy,
+        }
     }
 
-    pub const fn stats(self) -> GpuExecutionStats {
-        self.stats
+    pub const fn current_in_flight_submissions(self) -> usize {
+        self.current_in_flight_submissions
     }
 
     pub const fn policy(self) -> GpuExecutionPolicy {
@@ -528,15 +531,17 @@ impl GpuSubmissionRejectionReason {
 
     fn attach_in_flight_capacity_evidence(
         &mut self,
-        stats: GpuExecutionStats,
+        current_in_flight_submissions: usize,
         policy: GpuExecutionPolicy,
     ) {
         debug_assert_eq!(
             self.kind,
             GpuSubmissionRejectionKind::InFlightCapacityExceeded
         );
-        self.in_flight_capacity_evidence =
-            Some(Box::new(GpuInFlightCapacityEvidence::new(stats, policy)));
+        self.in_flight_capacity_evidence = Some(Box::new(GpuInFlightCapacityEvidence::new(
+            current_in_flight_submissions,
+            policy,
+        )));
     }
 
     pub const fn kind(&self) -> GpuSubmissionRejectionKind {
@@ -635,7 +640,11 @@ impl GpuPreparedSubmissionRejected {
         if reason.kind() == GpuSubmissionRejectionKind::InFlightCapacityExceeded
             && let Some(execution) = prepared.execution.upgrade()
         {
-            reason.attach_in_flight_capacity_evidence(execution.stats(), execution.policy());
+            let stats = execution.stats();
+            reason.attach_in_flight_capacity_evidence(
+                stats.in_flight_submissions(),
+                execution.policy(),
+            );
         }
         Self { prepared, reason }
     }
