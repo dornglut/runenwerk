@@ -76,7 +76,7 @@ struct GenericParamGroup<T: Resource> {
 
 struct LifetimeMarkerParam<'a>(PhantomData<&'a ()>);
 
-impl<'world, 'a> SystemParam<'world> for LifetimeMarkerParam<'a> {
+unsafe impl<'world, 'a> SystemParam<'world> for LifetimeMarkerParam<'a> {
     type State = ();
 
     fn init_state(_world: &mut World) -> Result<Self::State, SystemParamError> {
@@ -1118,7 +1118,7 @@ static PARAM_EXTRACT_CALLS: AtomicUsize = AtomicUsize::new(0);
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 struct StatefulParam(u32);
 
-impl<'w> SystemParam<'w> for StatefulParam {
+unsafe impl<'w> SystemParam<'w> for StatefulParam {
     type State = u32;
 
     fn init_state(_world: &mut World) -> Result<Self::State, SystemParamError> {
