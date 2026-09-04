@@ -58,9 +58,9 @@ fn measured_sample_array(value: &Value) -> bool {
 }
 
 fn measured_samples_by_pass(value: &Value) -> bool {
-    value.as_object().is_some_and(|passes| {
-        !passes.is_empty() && passes.values().all(measured_sample_array)
-    })
+    value
+        .as_object()
+        .is_some_and(|passes| !passes.is_empty() && passes.values().all(measured_sample_array))
 }
 
 fn measured_nested_sample_array(value: &Value) -> bool {
