@@ -1,5 +1,6 @@
 use super::super::WgpuContextState;
 use super::super::surface::execution::WgpuSurfaceLeaseGuard;
+use super::observability::PreparedExecutionObservability;
 use super::surface_resources::{
     PreparedSurfaceUse, PreparedTexture, PreparedTextureView, prepare_texture_view,
 };
@@ -296,6 +297,7 @@ async fn prepare_render_draw(
 pub(super) fn encode_render_operation<'a>(
     backend: &WgpuContextState,
     encoder: &mut CommandEncoder,
+    observability: &PreparedExecutionObservability,
     render: &'a PreparedRenderOperation,
     surface_guard: Option<&'a WgpuSurfaceLeaseGuard<'_>>,
 ) -> Result<(), GpuSubmissionFailure> {
@@ -360,6 +362,7 @@ pub(super) fn encode_render_operation<'a>(
         .iter()
         .map(|draw| &draw.pipeline)
         .collect::<Vec<_>>();
+    let debug_label = observability.debug_label();
 
     backend
         .pipeline_realization
@@ -368,7 +371,7 @@ pub(super) fn encode_render_operation<'a>(
             &backend.program_binding_realization,
             |pipeline_objects| {
                 let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
-                    label: Some("RunenGPU G5B render"),
+                    label: Some(debug_label.as_str()),
                     color_attachments: &color_attachments,
                     depth_stencil_attachment,
                     timestamp_writes,

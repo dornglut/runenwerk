@@ -1,7 +1,9 @@
+mod observability;
 mod render;
 mod retained_continuity;
 mod surface_resources;
 
+use self::observability::PreparedExecutionObservability;
 use self::render::{PreparedRenderOperation, encode_render_operation, prepare_render_operation};
 use self::retained_continuity::{PreparedRetainedContinuity, RetainedContinuityState};
 use self::surface_resources::{
@@ -78,6 +80,7 @@ impl Default for ExecutionInner {
 
 #[derive(Debug, Clone)]
 struct PreparedExecutionPlan {
+    graph_label: GpuResourceLabel,
     operations: Vec<PreparedExecutionOperation>,
     retained_writes: Vec<BTreeSet<GpuWorkResourceId>>,
     retained_continuity: PreparedRetainedContinuity,
@@ -154,6 +157,7 @@ impl PreparedExecutionPlan {
         operations.extend(self.operations.iter().cloned());
         retained_writes.extend(self.retained_writes.iter().cloned());
         Ok(Self {
+            graph_label: self.graph_label.clone(),
             operations,
             retained_writes,
             retained_continuity: self.retained_continuity.clone(),
@@ -423,12 +427,16 @@ enum PreparedExecutionOperation {
         payload: PreparedGpuData<TransferData>,
     },
     Compute {
+        observability: PreparedExecutionObservability,
         pipeline: GpuRealizedComputePipeline,
         bind_groups: Vec<PreparedBindGroup>,
         dispatch: PreparedComputeDispatch,
         timestamp_writes: Option<PreparedTimestampWrites>,
     },
-    Render(PreparedRenderOperation),
+    Render {
+        observability: PreparedExecutionObservability,
+        operation: PreparedRenderOperation,
+    },
     Copy {
         source: GpuRealizedBuffer,
         source_offset: u64,
@@ -1503,17 +1511,28 @@ async fn prepare_execution_plan(
                 }
             },
             GpuWorkOperation::Compute(compute) => {
+                let observability = PreparedExecutionObservability::new(
+                    prepared.fragment_label().clone(),
+                    prepared.node().label().clone(),
+                    prepared.node().provenance().clone(),
+                );
                 operations.push(
                     prepare_compute_operation(
                         context,
                         &mut buffer_cache,
                         &mut query_set_cache,
+                        observability,
                         compute,
                     )
                     .await?,
                 );
             }
             GpuWorkOperation::Render(render) => {
+                let observability = PreparedExecutionObservability::new(
+                    prepared.fragment_label().clone(),
+                    prepared.node().label().clone(),
+                    prepared.node().provenance().clone(),
+                );
                 let render = prepare_render_operation(
                     context,
                     &mut texture_cache,
@@ -1526,7 +1545,10 @@ async fn prepare_execution_plan(
                 for surface in render_surface_uses {
                     append_surface_use(&mut surface_uses, &presented_surface_leases, &surface)?;
                 }
-                operations.push(PreparedExecutionOperation::Render(render));
+                operations.push(PreparedExecutionOperation::Render {
+                    observability,
+                    operation: render,
+                });
             }
             GpuWorkOperation::Copy(copy) => match copy {
                 GpuCopyOperation::BufferToBuffer {
@@ -1756,6 +1778,7 @@ async fn prepare_execution_plan(
     }
 
     Ok(PreparedExecutionPlan {
+        graph_label: graph.label().clone(),
         operations,
         retained_writes,
         retained_continuity,
@@ -2031,6 +2054,7 @@ async fn prepare_compute_operation(
     context: &GpuContext,
     buffer_cache: &mut BTreeMap<GpuWorkResourceId, GpuRealizedBuffer>,
     query_set_cache: &mut BTreeMap<GpuWorkResourceId, GpuRealizedQuerySet>,
+    observability: PreparedExecutionObservability,
     compute: &crate::plugins::gpu::GpuComputeOperation,
 ) -> Result<PreparedExecutionOperation, GpuSubmissionPreparationError> {
     let dispatch = if let Some(dispatch) = compute.dispatch().direct_size() {
@@ -2089,6 +2113,7 @@ async fn prepare_compute_operation(
     }
 
     Ok(PreparedExecutionOperation::Compute {
+        observability,
         pipeline,
         bind_groups,
         dispatch,
@@ -2434,11 +2459,14 @@ fn materialize_staging(
     })
 }
 
-fn new_submission_encoder(backend: &WgpuContextState) -> CommandEncoder {
+fn new_submission_encoder(
+    backend: &WgpuContextState,
+    graph_label: &GpuResourceLabel,
+) -> CommandEncoder {
     backend
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
-            label: Some("RunenGPU G5B submission"),
+            label: Some(graph_label.as_str()),
         })
 }
 
@@ -2456,7 +2484,7 @@ fn encode_submit_and_register(
     let staging = materialize_staging(backend, plan)?;
     execution.attach_staging(submission, &staging.encoded)?;
 
-    let mut encoder = new_submission_encoder(backend);
+    let mut encoder = new_submission_encoder(backend, &plan.graph_label);
     let mut segment_readbacks = Vec::new();
     let mut segment_retained_writes = BTreeSet::new();
     let mut segments = Vec::new();
@@ -2504,6 +2532,7 @@ fn encode_submit_and_register(
                 );
             }
             PreparedExecutionOperation::Compute {
+                observability,
                 pipeline,
                 bind_groups,
                 dispatch,
@@ -2517,6 +2546,7 @@ fn encode_submit_and_register(
                     .iter()
                     .map(|group| &group.realization)
                     .collect::<Vec<_>>();
+                let debug_label = observability.debug_label();
                 backend
                     .pipeline_realization
                     .with_execution_compute_pipeline(
@@ -2537,7 +2567,7 @@ fn encode_submit_and_register(
                                         });
                                     let mut pass =
                                         encoder.begin_compute_pass(&ComputePassDescriptor {
-                                            label: Some("RunenGPU G5B compute"),
+                                            label: Some(debug_label.as_str()),
                                             timestamp_writes,
                                         });
                                     pass.set_pipeline(pipeline_object);
@@ -2570,8 +2600,17 @@ fn encode_submit_and_register(
                     .map_err(submission_pipeline_failure)?
                     .map_err(submission_program_binding_failure)?;
             }
-            PreparedExecutionOperation::Render(render) => {
-                encode_render_operation(backend, &mut encoder, render, surface_guard.as_deref())?;
+            PreparedExecutionOperation::Render {
+                observability,
+                operation,
+            } => {
+                encode_render_operation(
+                    backend,
+                    &mut encoder,
+                    observability,
+                    operation,
+                    surface_guard.as_deref(),
+                )?;
             }
             PreparedExecutionOperation::Copy {
                 source,
@@ -2684,7 +2723,7 @@ fn encode_submit_and_register(
                 segment_readbacks.push((*readback_id, Arc::clone(staging_buffer)));
             }
             PreparedExecutionOperation::Present { source } => {
-                let next = new_submission_encoder(backend);
+                let next = new_submission_encoder(backend, &plan.graph_label);
                 let current = std::mem::replace(&mut encoder, next);
                 segments.push(EncodedSegment {
                     command_buffer: current.finish(),
