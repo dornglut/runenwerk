@@ -12,16 +12,20 @@ impl GpuContextDescriptor {
         self.allowed_backends().iter().copied()
     }
 
-    /// Iterates normalized backend-preference priorities in canonical backend-family order.
+    /// Iterates explicitly preferred backend families from most to least preferred.
     ///
-    /// Lower priority values are preferred. Backends omitted from this iterator have no explicit
-    /// preference and therefore retain the existing lowest-priority fallback semantics.
-    pub fn backend_preference_priorities(
+    /// An empty iterator means the request has no explicit backend preference. The internal
+    /// ranking representation remains private and is not part of the public RunenGPU contract.
+    pub fn backend_preference_order(
         &self,
-    ) -> impl ExactSizeIterator<Item = (GpuBackendFamily, u8)> + '_ {
-        self.backend_preference()
+    ) -> impl ExactSizeIterator<Item = GpuBackendFamily> + '_ {
+        let mut ordered = self
+            .backend_preference()
             .iter()
-            .map(|(&backend, &priority)| (backend, priority))
+            .map(|(&backend, &priority)| (priority, backend))
+            .collect::<Vec<_>>();
+        ordered.sort_unstable();
+        ordered.into_iter().map(|(_, backend)| backend)
     }
 
     /// Iterates the normalized adapter-class allowlist in canonical adapter-class order.
