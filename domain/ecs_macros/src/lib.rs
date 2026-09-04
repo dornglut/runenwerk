@@ -106,7 +106,7 @@ pub fn system_param_derive(input: TokenStream) -> TokenStream {
     let group_label = name.to_string();
 
     TokenStream::from(quote! {
-        impl #impl_generics #ecs::SystemParam<#system_param_lifetime> for #name #ty_generics #where_clause {
+        unsafe impl #impl_generics #ecs::SystemParam<#system_param_lifetime> for #name #ty_generics #where_clause {
             type State = (
                 #(<#field_types as #ecs::SystemParam<#system_param_lifetime>>::State,)*
             );
@@ -247,12 +247,14 @@ pub fn bundle_derive(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(Reflect)]
 pub fn reflect_derive(input: TokenStream) -> TokenStream {
     let ecs = ecs_crate_path();
+    let input = parse_macro_input!(input as DeriveInput);
     expand_reflect(input, quote!(#ecs::reflect::ReflectClassification::Plain))
 }
 
 #[proc_macro_derive(ReflectComponent)]
 pub fn reflect_component_derive(input: TokenStream) -> TokenStream {
     let ecs = ecs_crate_path();
+    let input = parse_macro_input!(input as DeriveInput);
     expand_reflect(
         input,
         quote!(#ecs::reflect::ReflectClassification::Component),
@@ -262,13 +264,17 @@ pub fn reflect_component_derive(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(ReflectResource)]
 pub fn reflect_resource_derive(input: TokenStream) -> TokenStream {
     let ecs = ecs_crate_path();
+    let input = parse_macro_input!(input as DeriveInput);
     expand_reflect(
         input,
         quote!(#ecs::reflect::ReflectClassification::Resource),
     )
 }
 
-fn expand_reflect(input: TokenStream, classification: proc_macro2::TokenStream) -> TokenStream {
+fn expand_reflect(
+    input: TokenStream,
+    classification: proc_macro2::TokenStream,
+) -> TokenStream {
     let ecs = ecs_crate_path();
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
@@ -314,7 +320,6 @@ fn expand_reflect_struct(
         let field_ident = field.ident.as_ref().expect("named field");
         let get_ref_fn = format_ident!("__ecs_reflect_get_ref_{}", field_ident);
         let get_mut_fn = format_ident!("__ecs_reflect_get_mut_{}", field_ident);
-
         quote! {
             fn #get_ref_fn<'a>(
                 owner: &'a dyn ::std::any::Any
@@ -324,7 +329,7 @@ fn expand_reflect_struct(
             }
 
             fn #get_mut_fn<'a>(
-                owner: &'a mut dyn ::std::any::Any
+                owner: &'a mut dyn ::std::any::Any,
             ) -> Option<#ecs::reflect::ReflectValueMut<'a>> {
                 let typed = owner.downcast_mut::<#name>()?;
                 Some(#ecs::reflect::ReflectValueMut::new(&mut typed.#field_ident))
@@ -338,7 +343,6 @@ fn expand_reflect_struct(
         let field_ty = &field.ty;
         let get_ref_fn = format_ident!("__ecs_reflect_get_ref_{}", field_ident);
         let get_mut_fn = format_ident!("__ecs_reflect_get_mut_{}", field_ident);
-
         quote! {
             #ecs::reflect::FieldInfo::new(
                 #field_name_string,
