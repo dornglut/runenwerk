@@ -478,10 +478,35 @@ pub enum GpuSubmissionRejectionKind {
     IdentityExhausted,
 }
 
+/// Typed current pressure and policy for one rejected additional in-flight submission.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GpuInFlightCapacityEvidence {
+    current_in_flight_submissions: usize,
+    policy: GpuExecutionPolicy,
+}
+
+impl GpuInFlightCapacityEvidence {
+    const fn new(current_in_flight_submissions: usize, policy: GpuExecutionPolicy) -> Self {
+        Self {
+            current_in_flight_submissions,
+            policy,
+        }
+    }
+
+    pub const fn current_in_flight_submissions(self) -> usize {
+        self.current_in_flight_submissions
+    }
+
+    pub const fn policy(self) -> GpuExecutionPolicy {
+        self.policy
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct GpuSubmissionRejectionReason {
     kind: GpuSubmissionRejectionKind,
     detail: String,
+    in_flight_capacity_evidence: Option<Box<GpuInFlightCapacityEvidence>>,
     surface_error: Option<Box<GpuSurfaceLeaseError>>,
 }
 
@@ -490,6 +515,7 @@ impl GpuSubmissionRejectionReason {
         Self {
             kind,
             detail: detail.into(),
+            in_flight_capacity_evidence: None,
             surface_error: None,
         }
     }
@@ -498,8 +524,24 @@ impl GpuSubmissionRejectionReason {
         Self {
             kind: GpuSubmissionRejectionKind::SurfaceLease,
             detail: error.to_string(),
+            in_flight_capacity_evidence: None,
             surface_error: Some(Box::new(error)),
         }
+    }
+
+    fn attach_in_flight_capacity_evidence(
+        &mut self,
+        current_in_flight_submissions: usize,
+        policy: GpuExecutionPolicy,
+    ) {
+        debug_assert_eq!(
+            self.kind,
+            GpuSubmissionRejectionKind::InFlightCapacityExceeded
+        );
+        self.in_flight_capacity_evidence = Some(Box::new(GpuInFlightCapacityEvidence::new(
+            current_in_flight_submissions,
+            policy,
+        )));
     }
 
     pub const fn kind(&self) -> GpuSubmissionRejectionKind {
@@ -508,6 +550,10 @@ impl GpuSubmissionRejectionReason {
 
     pub fn detail(&self) -> &str {
         &self.detail
+    }
+
+    pub fn in_flight_capacity_evidence(&self) -> Option<&GpuInFlightCapacityEvidence> {
+        self.in_flight_capacity_evidence.as_deref()
     }
 
     pub fn surface_error(&self) -> Option<&GpuSurfaceLeaseError> {
@@ -590,6 +636,16 @@ impl GpuPreparedSubmissionRejected {
         prepared: GpuPreparedSubmission,
         reason: GpuSubmissionRejectionReason,
     ) -> Self {
+        let mut reason = reason;
+        if reason.kind() == GpuSubmissionRejectionKind::InFlightCapacityExceeded
+            && let Some(execution) = prepared.execution.upgrade()
+        {
+            let stats = execution.stats();
+            reason.attach_in_flight_capacity_evidence(
+                stats.in_flight_submissions(),
+                execution.policy(),
+            );
+        }
         Self { prepared, reason }
     }
 

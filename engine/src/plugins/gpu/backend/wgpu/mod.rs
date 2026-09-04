@@ -12,6 +12,8 @@ mod health;
 #[cfg(test)]
 mod initial_content_tests;
 mod pipeline_realization;
+#[cfg(test)]
+mod pressure_diagnostics_tests;
 mod program_binding_realization;
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod reconstruction_tests;
