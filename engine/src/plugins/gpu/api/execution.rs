@@ -1,6 +1,6 @@
 use super::{
-    GpuContextAffinity, GpuInitialCoverage, GpuProgramContractError, GpuReadbackBytes, GpuReadbackId,
-    GpuResourceRef, GpuSurfaceLeaseError, GpuWorkOperationError,
+    GpuContextAffinity, GpuInitialCoverage, GpuProgramContractError, GpuReadbackBytes,
+    GpuReadbackId, GpuResourceRef, GpuSurfaceLeaseError, GpuWorkOperationError,
 };
 use core::fmt;
 use core::num::{NonZeroU64, NonZeroUsize};
