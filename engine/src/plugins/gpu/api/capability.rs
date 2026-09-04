@@ -808,7 +808,10 @@ mod tests {
             )
             .unwrap_err()
         };
-        assert_eq!(disabled.cause(), GpuCapabilityAdmissionCause::DisabledEnabled);
+        assert_eq!(
+            disabled.cause(),
+            GpuCapabilityAdmissionCause::DisabledEnabled
+        );
         assert_eq!(
             disabled.feature(),
             Some(GpuCapabilityFeature::TimestampQuery)
@@ -831,7 +834,10 @@ mod tests {
         );
 
         let invalid_limit = GpuLimits::new(0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1).unwrap_err();
-        assert_eq!(invalid_limit.cause(), GpuCapabilityAdmissionCause::InvalidLimit);
+        assert_eq!(
+            invalid_limit.cause(),
+            GpuCapabilityAdmissionCause::InvalidLimit
+        );
         assert_eq!(invalid_limit.feature(), None);
     }
 
