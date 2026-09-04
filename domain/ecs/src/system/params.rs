@@ -321,7 +321,7 @@ impl<T: 'static> TickBufferDrainer<T> {
     }
 }
 
-impl<'w, Q, F> SystemParam<'w> for Query<Q, F>
+unsafe impl<'w, Q, F> SystemParam<'w> for Query<Q, F>
 where
     Q: QuerySpec + 'static,
     F: QueryFilter + 'static,
@@ -349,7 +349,7 @@ where
     }
 }
 
-impl<'w, T> SystemParam<'w> for QueryOrphaned<T>
+unsafe impl<'w, T> SystemParam<'w> for QueryOrphaned<T>
 where
     T: Component + 'static,
 {
@@ -380,7 +380,7 @@ where
     }
 }
 
-impl<'w, T: Resource> SystemParam<'w> for Res<T> {
+unsafe impl<'w, T: Resource> SystemParam<'w> for Res<T> {
     type State = ();
 
     fn init_state(world: &mut World) -> Result<Self::State, SystemParamError> {
@@ -407,7 +407,7 @@ impl<'w, T: Resource> SystemParam<'w> for Res<T> {
     }
 }
 
-impl<'w, T: Resource> SystemParam<'w> for ResMut<T> {
+unsafe impl<'w, T: Resource> SystemParam<'w> for ResMut<T> {
     type State = ();
 
     fn init_state(world: &mut World) -> Result<Self::State, SystemParamError> {
@@ -434,7 +434,7 @@ impl<'w, T: Resource> SystemParam<'w> for ResMut<T> {
     }
 }
 
-impl<'w> SystemParam<'w> for Commands {
+unsafe impl<'w> SystemParam<'w> for Commands {
     type State = ();
 
     fn init_state(_world: &mut World) -> Result<Self::State, SystemParamError> {
@@ -462,7 +462,7 @@ impl<'w> SystemParam<'w> for Commands {
 
 macro_rules! impl_tuple_system_param {
     ($(($index:tt, $param:ident)),+ $(,)?) => {
-        impl<'w, $($param),+> SystemParam<'w> for ($($param,)+)
+        unsafe impl<'w, $($param),+> SystemParam<'w> for ($($param,)+)
         where
             $($param: SystemParam<'w>,)+
         {
@@ -532,7 +532,7 @@ impl_tuple_system_param!(
     (7, H),
 );
 
-impl<'w, T: 'static> SystemParam<'w> for BroadcastReader<T> {
+unsafe impl<'w, T: 'static> SystemParam<'w> for BroadcastReader<T> {
     type State = BroadcastReaderState;
 
     fn init_state(_world: &mut World) -> Result<Self::State, SystemParamError> {
@@ -565,7 +565,7 @@ impl<'w, T: 'static> SystemParam<'w> for BroadcastReader<T> {
     }
 }
 
-impl<'w, T: 'static> SystemParam<'w> for BroadcastWriter<T> {
+unsafe impl<'w, T: 'static> SystemParam<'w> for BroadcastWriter<T> {
     type State = ();
 
     fn init_state(_world: &mut World) -> Result<Self::State, SystemParamError> {
@@ -595,7 +595,7 @@ impl<'w, T: 'static> SystemParam<'w> for BroadcastWriter<T> {
     }
 }
 
-impl<'w, T: 'static> SystemParam<'w> for WorkQueueReader<T> {
+unsafe impl<'w, T: 'static> SystemParam<'w> for WorkQueueReader<T> {
     type State = ();
 
     fn init_state(_world: &mut World) -> Result<Self::State, SystemParamError> {
@@ -625,7 +625,7 @@ impl<'w, T: 'static> SystemParam<'w> for WorkQueueReader<T> {
     }
 }
 
-impl<'w, T: 'static> SystemParam<'w> for WorkQueueWriter<T> {
+unsafe impl<'w, T: 'static> SystemParam<'w> for WorkQueueWriter<T> {
     type State = ();
 
     fn init_state(_world: &mut World) -> Result<Self::State, SystemParamError> {
@@ -655,7 +655,7 @@ impl<'w, T: 'static> SystemParam<'w> for WorkQueueWriter<T> {
     }
 }
 
-impl<'w, T: 'static> SystemParam<'w> for WorkQueueDrainer<T> {
+unsafe impl<'w, T: 'static> SystemParam<'w> for WorkQueueDrainer<T> {
     type State = ();
 
     fn init_state(_world: &mut World) -> Result<Self::State, SystemParamError> {
@@ -685,7 +685,7 @@ impl<'w, T: 'static> SystemParam<'w> for WorkQueueDrainer<T> {
     }
 }
 
-impl<'w, T: 'static> SystemParam<'w> for TickBufferReader<T> {
+unsafe impl<'w, T: 'static> SystemParam<'w> for TickBufferReader<T> {
     type State = ();
 
     fn init_state(_world: &mut World) -> Result<Self::State, SystemParamError> {
@@ -715,7 +715,7 @@ impl<'w, T: 'static> SystemParam<'w> for TickBufferReader<T> {
     }
 }
 
-impl<'w, T: 'static> SystemParam<'w> for TickBufferWriter<T> {
+unsafe impl<'w, T: 'static> SystemParam<'w> for TickBufferWriter<T> {
     type State = ();
 
     fn init_state(_world: &mut World) -> Result<Self::State, SystemParamError> {
@@ -745,7 +745,7 @@ impl<'w, T: 'static> SystemParam<'w> for TickBufferWriter<T> {
     }
 }
 
-impl<'w, T: 'static> SystemParam<'w> for TickBufferDrainer<T> {
+unsafe impl<'w, T: 'static> SystemParam<'w> for TickBufferDrainer<T> {
     type State = ();
 
     fn init_state(_world: &mut World) -> Result<Self::State, SystemParamError> {
