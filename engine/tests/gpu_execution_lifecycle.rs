@@ -310,6 +310,126 @@ fn pre_acceptance_pressure_rejection_preserves_prepared_ownership_for_retry() {
 }
 
 #[test]
+fn graceful_shutdown_revokes_unaccepted_work_and_drains_accepted_readback_once() {
+    let Some(context) = request_context(
+        policy(4, 2, 4096, 4096, 4),
+        "graceful shutdown with pending readback",
+    ) else {
+        return;
+    };
+    let values = [11_u32, 23, 47, 89];
+    let (accepted_graph, readback_id) = round_trip_graph("shutdown accepted", &values);
+    let accepted = pollster::block_on(context.prepare_submission(accepted_graph)).unwrap();
+    let unaccepted = pollster::block_on(
+        context.prepare_submission(upload_graph("shutdown unaccepted", &[5_u32, 7, 13, 17])),
+    )
+    .unwrap();
+    assert_eq!(context.execution_stats().prepared_submissions(), 2);
+
+    let submission = context.submit_prepared(accepted).unwrap();
+    let readback = submission
+        .readback(readback_id)
+        .expect("accepted shutdown proof must retain its planned readback")
+        .clone();
+    assert!(matches!(submission.status(), GpuSubmissionStatus::Accepted));
+    assert!(matches!(readback.status(), GpuReadbackStatus::Pending));
+    let before_shutdown = context.execution_stats();
+    assert_eq!(before_shutdown.prepared_submissions(), 1);
+    assert_eq!(before_shutdown.in_flight_submissions(), 1);
+    assert_eq!(before_shutdown.pending_readbacks(), 1);
+
+    assert_eq!(
+        context.begin_shutdown(),
+        GpuExecutionLifecycleState::ShuttingDown
+    );
+    assert_eq!(
+        context.begin_shutdown(),
+        GpuExecutionLifecycleState::ShuttingDown,
+        "graceful shutdown must be idempotent while accepted work remains"
+    );
+    assert_eq!(
+        context.execution_lifecycle_state(),
+        GpuExecutionLifecycleState::ShuttingDown
+    );
+    assert_eq!(context.execution_stats().prepared_submissions(), 0);
+
+    let rejected = context
+        .submit_prepared(unaccepted)
+        .expect_err("shutdown must revoke unaccepted prepared authority");
+    assert_eq!(
+        rejected.reason().kind(),
+        GpuSubmissionRejectionKind::ExecutionNotRunning
+    );
+    let preparation_error = pollster::block_on(
+        context.prepare_submission(upload_graph("shutdown rejected", &[19_u32])),
+    )
+    .expect_err("shutdown must reject new preparation");
+    assert_eq!(
+        preparation_error.kind(),
+        GpuSubmissionPreparationErrorKind::ExecutionNotRunning
+    );
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let bytes = loop {
+        context.progress();
+        match (submission.status(), readback.status()) {
+            (GpuSubmissionStatus::Completed, GpuReadbackStatus::Ready(bytes)) => break bytes,
+            (GpuSubmissionStatus::Failed(failure), _) => {
+                panic!("graceful-shutdown accepted submission failed: {failure:?}")
+            }
+            (_, GpuReadbackStatus::Failed(failure)) => {
+                panic!("graceful-shutdown accepted readback failed: {failure:?}")
+            }
+            _ => {}
+        }
+        assert_eq!(
+            context.execution_lifecycle_state(),
+            GpuExecutionLifecycleState::ShuttingDown,
+            "shutdown must remain in progress until accepted submission and readback terminalize"
+        );
+        assert!(
+            Instant::now() < deadline,
+            "graceful shutdown did not drain accepted work"
+        );
+        std::thread::yield_now();
+    };
+
+    let expected = values
+        .iter()
+        .flat_map(|value| value.to_ne_bytes())
+        .collect::<Vec<_>>();
+    assert_eq!(bytes.as_bytes(), expected.as_slice());
+    assert_eq!(
+        context.execution_lifecycle_state(),
+        GpuExecutionLifecycleState::Closed
+    );
+    let drained = context.execution_stats();
+    assert_eq!(drained.prepared_submissions(), 0);
+    assert_eq!(drained.in_flight_submissions(), 0);
+    assert_eq!(drained.upload_bytes_in_flight(), 0);
+    assert_eq!(drained.readback_bytes_in_flight(), 0);
+    assert_eq!(drained.pending_readbacks(), 0);
+
+    for _ in 0..3 {
+        context.progress();
+        assert!(matches!(
+            submission.status(),
+            GpuSubmissionStatus::Completed
+        ));
+        match readback.status() {
+            GpuReadbackStatus::Ready(observed) => {
+                assert_eq!(observed.as_bytes(), expected.as_slice())
+            }
+            other => panic!("terminal readback observation changed after completion: {other:?}"),
+        }
+        assert_eq!(
+            context.execution_lifecycle_state(),
+            GpuExecutionLifecycleState::Closed
+        );
+    }
+}
+
+#[test]
 fn last_context_drop_terminalizes_detached_accepted_observation_without_waiting() {
     let Some(context) = request_context(
         policy(1, 1, 1024, 0, 0),

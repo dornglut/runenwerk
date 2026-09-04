@@ -164,6 +164,15 @@ jobs:
           cargo +stable test -p engine --test gpu_g5b_native_render --locked -- --ignored --nocapture
           cargo +stable test -p engine --test gpu_initial_content_native --locked -- --ignored --nocapture
 
+      - name: Run graceful execution shutdown proof
+        env:
+          RUST_BACKTRACE: '1'
+        run: |
+          set -euo pipefail
+          cargo +stable test -p engine --test gpu_execution_lifecycle \
+            graceful_shutdown_revokes_unaccepted_work_and_drains_accepted_readback_once \
+            --locked -- --nocapture
+
       - name: Run indexed offscreen known-pattern proof
         env:
           RUST_BACKTRACE: '1'
