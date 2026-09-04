@@ -110,7 +110,10 @@ static EXTRACT_CALLS: AtomicUsize = AtomicUsize::new(0);
 
 struct CachedCounter(usize);
 
-impl<'w> SystemParam<'w> for CachedCounter {
+// Safety: this test-only parameter has no World access and only mutates its own
+// per-system cached state. The empty QueryAccess therefore describes extraction
+// completely.
+unsafe impl<'w> SystemParam<'w> for CachedCounter {
     type State = usize;
 
     fn init_state(_world: &mut World) -> Result<Self::State, SystemParamError> {
