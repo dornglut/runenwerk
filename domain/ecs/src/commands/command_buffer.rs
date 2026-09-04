@@ -6,11 +6,12 @@ use crate::entity::Entity;
 use crate::errors::CommandError;
 use crate::world::World;
 use std::cell::{Cell, RefCell};
-use std::ptr::NonNull;
+use std::marker::PhantomData;
 use std::rc::Rc;
 
-pub struct Commands {
+pub struct Commands<'world> {
     queue: CommandQueueStorage,
+    _marker: PhantomData<&'world mut World>,
 }
 
 enum CommandQueueStorage {
@@ -45,30 +46,29 @@ impl ExternalCommandQueue {
     }
 }
 
-impl Commands {
+impl Commands<'static> {
     pub fn new() -> Self {
         Self {
             queue: CommandQueueStorage::Owned(Vec::new()),
+            _marker: PhantomData,
         }
     }
 
     pub(crate) fn new_external_owner() -> Self {
         Self {
             queue: CommandQueueStorage::ExternalOwner(ExternalCommandQueue::new()),
+            _marker: PhantomData,
         }
     }
 
-    pub(crate) fn from_external(owner: *mut Commands) -> Self {
-        let owner = NonNull::new(owner).expect("command owner pointer must not be null");
+    pub(crate) fn from_external<'world>(owner: &'world mut Commands<'static>) -> Commands<'world> {
         // Safety: owner pointers are only provided by runtime command owner construction.
-        let queue = unsafe {
-            owner
-                .as_ref()
-                .external_queue()
-                .expect("command owner must provide an external queue")
-        };
-        Self {
+        let queue = owner
+            .external_queue()
+            .expect("command owner must provide an external queue");
+        Commands {
             queue: CommandQueueStorage::ExternalBorrowed(queue),
+            _marker: PhantomData,
         }
     }
 
@@ -80,6 +80,20 @@ impl Commands {
         }
     }
 
+    pub(crate) fn finalize_external_owner(&mut self) -> Commands<'static> {
+        let CommandQueueStorage::ExternalOwner(queue) = &self.queue else {
+            panic!("external command owner finalization requires runtime command owner");
+        };
+        queue.active.set(false);
+        let staged_queue = queue.drain();
+        Commands {
+            queue: CommandQueueStorage::Owned(staged_queue),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<'world> Commands<'world> {
     fn push_erased(&mut self, command: Box<dyn super::deferred::ErasedDeferredCommand>) {
         match &mut self.queue {
             CommandQueueStorage::Owned(queue) => queue.push(command),
@@ -99,17 +113,6 @@ impl Commands {
                 queue.assert_active();
                 queue.drain()
             }
-        }
-    }
-
-    pub(crate) fn finalize_external_owner(&mut self) -> Commands {
-        let CommandQueueStorage::ExternalOwner(queue) = &self.queue else {
-            panic!("external command owner finalization requires runtime command owner");
-        };
-        queue.active.set(false);
-        let staged_queue = queue.drain();
-        Commands {
-            queue: CommandQueueStorage::Owned(staged_queue),
         }
     }
 
@@ -171,11 +174,6 @@ impl Commands {
         });
     }
 
-    /// Applies queued commands in insertion order and stops on the first error.
-    ///
-    /// Successfully completed commands remain committed. The failing command
-    /// follows its own operation-level atomicity contract, and commands after it
-    /// are not executed. Consuming the queue prevents replay of attempted work.
     pub fn apply(self, world: &mut World) -> Result<(), CommandError> {
         for command in self.into_queue() {
             command.apply_erased(world)?;
@@ -184,7 +182,7 @@ impl Commands {
     }
 }
 
-impl Default for Commands {
+impl Default for Commands<'static> {
     fn default() -> Self {
         Self::new()
     }

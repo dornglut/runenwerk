@@ -12,4 +12,6 @@ pub use orphaned::{Orphaned, QueryOrphaned, QueryOrphanedState};
 pub use snapshot::query_snapshot_source_generation;
 #[doc(hidden)]
 pub use traits_and_state::QuerySpec;
+#[doc(hidden)]
+pub use traits_and_state::QueryWorldSource;
 pub use traits_and_state::{Query, QueryState};

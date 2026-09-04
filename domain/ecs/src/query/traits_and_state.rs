@@ -5,7 +5,7 @@ use crate::entity::{Entity, WorldScopeId};
 use crate::errors::QueryError;
 use crate::storage::ArchetypeExecutionBinding;
 use crate::telemetry;
-use crate::world::World;
+use crate::world::{QueryCapability, World};
 use std::any::TypeId;
 use std::cell::{Cell, RefCell};
 use std::marker::PhantomData;
@@ -15,23 +15,22 @@ use std::time::Instant;
 
 pub trait QueryData {
     type Item<'w>;
-    type WorldRef<'w>: QueryWorldRef<'w>;
 
     fn query_types() -> Vec<TypeId>;
     fn append_access(access: &mut QueryAccess);
 
-    fn mark_changed(_world: *mut World, _entity: Entity) {}
+    fn mark_changed(_world: QueryCapability<'_>, _entity: Entity) {}
 
     /// Enables cached mark/fetch hooks that avoid per-entity setup work inside the iterator loop.
     fn supports_fast_path() -> bool {
         false
     }
 
-    fn prepare_fast_cache(_world: *mut World, _cache: &mut QueryFastCache) -> bool {
+    fn prepare_fast_cache(_world: QueryCapability<'_>, _cache: &mut QueryFastCache) -> bool {
         false
     }
 
-    fn mark_changed_fast(world: *mut World, entity: Entity, _cache: &mut QueryFastCache) {
+    fn mark_changed_fast(world: QueryCapability<'_>, entity: Entity, _cache: &mut QueryFastCache) {
         Self::mark_changed(world, entity);
     }
 
@@ -41,7 +40,7 @@ pub trait QueryData {
     }
 
     fn collect_archetype_rows(
-        _world: *mut World,
+        _world: QueryCapability<'_>,
         _required_present: &[TypeId],
         _excluded: &[TypeId],
         _rows: &mut Vec<QueryArchetypeRow>,
@@ -51,19 +50,16 @@ pub trait QueryData {
     }
 
     /// Safety: the caller must uphold the access guarantees described by `Self::append_access`.
-    unsafe fn fetch<'w>(world: *mut World, entity: Entity) -> Option<Self::Item<'w>>;
+    unsafe fn fetch<'w>(world: QueryCapability<'w>, entity: Entity) -> Option<Self::Item<'w>>;
 
     /// Safety: the caller must uphold the access guarantees described by `Self::append_access`.
     unsafe fn fetch_fast<'w>(
-        world: *mut World,
+        world: QueryCapability<'w>,
         entity: Entity,
         _cache: &mut QueryFastCache,
     ) -> Option<Self::Item<'w>> {
         unsafe { Self::fetch(world, entity) }
     }
-
-    /// Safety: `world` must point to a valid world for the returned borrow lifetime.
-    unsafe fn world_ref<'w>(world: *mut World) -> Self::WorldRef<'w>;
 }
 
 mod sealed {
@@ -80,7 +76,6 @@ impl<T> sealed::QuerySpecSealed for T where T: QueryData {}
 #[doc(hidden)]
 pub trait QuerySpec: sealed::QuerySpecSealed {
     type Item<'w>;
-    type WorldRef<'w>: QueryWorldRef<'w>;
 
     #[doc(hidden)]
     fn query_types() -> Vec<TypeId>;
@@ -89,23 +84,23 @@ pub trait QuerySpec: sealed::QuerySpecSealed {
     fn append_access(access: &mut QueryAccess);
 
     #[doc(hidden)]
-    fn mark_changed(world: *mut World, entity: Entity);
+    fn mark_changed(world: QueryCapability<'_>, entity: Entity);
 
     #[doc(hidden)]
     fn supports_fast_path() -> bool;
 
     #[doc(hidden)]
-    fn prepare_fast_cache(world: *mut World, cache: &mut QueryFastCache) -> bool;
+    fn prepare_fast_cache(world: QueryCapability<'_>, cache: &mut QueryFastCache) -> bool;
 
     #[doc(hidden)]
-    fn mark_changed_fast(world: *mut World, entity: Entity, cache: &mut QueryFastCache);
+    fn mark_changed_fast(world: QueryCapability<'_>, entity: Entity, cache: &mut QueryFastCache);
 
     #[doc(hidden)]
     fn supports_archetype_execution() -> bool;
 
     #[doc(hidden)]
     fn collect_archetype_rows(
-        world: *mut World,
+        world: QueryCapability<'_>,
         required_present: &[TypeId],
         excluded: &[TypeId],
         rows: &mut Vec<QueryArchetypeRow>,
@@ -115,21 +110,36 @@ pub trait QuerySpec: sealed::QuerySpecSealed {
     /// # Safety
     /// The caller must uphold the access guarantees described by `Self::append_access`.
     #[doc(hidden)]
-    unsafe fn fetch<'w>(world: *mut World, entity: Entity) -> Option<Self::Item<'w>>;
+    unsafe fn fetch<'w>(world: QueryCapability<'w>, entity: Entity) -> Option<Self::Item<'w>>;
 
     /// # Safety
     /// The caller must uphold the access guarantees described by `Self::append_access`.
     #[doc(hidden)]
     unsafe fn fetch_fast<'w>(
-        world: *mut World,
+        world: QueryCapability<'w>,
         entity: Entity,
         cache: &mut QueryFastCache,
     ) -> Option<Self::Item<'w>>;
+}
 
-    /// # Safety
-    /// `world` must point to a valid world for the returned borrow lifetime.
-    #[doc(hidden)]
-    unsafe fn world_ref<'w>(world: *mut World) -> Self::WorldRef<'w>;
+/// Direct query callers are converted at the public boundary into the same
+/// narrow query capability used by system extraction.  Query execution itself
+/// never reconstructs a whole `World` reference from this value.
+#[doc(hidden)]
+pub trait QueryWorldSource<'world> {
+    fn into_query_capability(self) -> QueryCapability<'world>;
+}
+
+impl<'world> QueryWorldSource<'world> for &'world World {
+    fn into_query_capability(self) -> QueryCapability<'world> {
+        self.query_capability()
+    }
+}
+
+impl<'world> QueryWorldSource<'world> for &'world mut World {
+    fn into_query_capability(self) -> QueryCapability<'world> {
+        self.query_capability()
+    }
 }
 
 impl<T> QuerySpec for T
@@ -137,7 +147,6 @@ where
     T: QueryData,
 {
     type Item<'w> = T::Item<'w>;
-    type WorldRef<'w> = T::WorldRef<'w>;
 
     fn query_types() -> Vec<TypeId> {
         T::query_types()
@@ -147,7 +156,7 @@ where
         T::append_access(access);
     }
 
-    fn mark_changed(world: *mut World, entity: Entity) {
+    fn mark_changed(world: QueryCapability<'_>, entity: Entity) {
         T::mark_changed(world, entity);
     }
 
@@ -155,11 +164,11 @@ where
         T::supports_fast_path()
     }
 
-    fn prepare_fast_cache(world: *mut World, cache: &mut QueryFastCache) -> bool {
+    fn prepare_fast_cache(world: QueryCapability<'_>, cache: &mut QueryFastCache) -> bool {
         T::prepare_fast_cache(world, cache)
     }
 
-    fn mark_changed_fast(world: *mut World, entity: Entity, cache: &mut QueryFastCache) {
+    fn mark_changed_fast(world: QueryCapability<'_>, entity: Entity, cache: &mut QueryFastCache) {
         T::mark_changed_fast(world, entity, cache);
     }
 
@@ -168,7 +177,7 @@ where
     }
 
     fn collect_archetype_rows(
-        world: *mut World,
+        world: QueryCapability<'_>,
         required_present: &[TypeId],
         excluded: &[TypeId],
         rows: &mut Vec<QueryArchetypeRow>,
@@ -177,37 +186,16 @@ where
         T::collect_archetype_rows(world, required_present, excluded, rows, cache)
     }
 
-    unsafe fn fetch<'w>(world: *mut World, entity: Entity) -> Option<Self::Item<'w>> {
+    unsafe fn fetch<'w>(world: QueryCapability<'w>, entity: Entity) -> Option<Self::Item<'w>> {
         unsafe { T::fetch(world, entity) }
     }
 
     unsafe fn fetch_fast<'w>(
-        world: *mut World,
+        world: QueryCapability<'w>,
         entity: Entity,
         cache: &mut QueryFastCache,
     ) -> Option<Self::Item<'w>> {
         unsafe { T::fetch_fast(world, entity, cache) }
-    }
-
-    unsafe fn world_ref<'w>(world: *mut World) -> Self::WorldRef<'w> {
-        unsafe { T::world_ref(world) }
-    }
-}
-
-#[doc(hidden)]
-pub trait QueryWorldRef<'w> {
-    fn into_world_ptr(self) -> *mut World;
-}
-
-impl<'w> QueryWorldRef<'w> for &'w World {
-    fn into_world_ptr(self) -> *mut World {
-        self as *const World as *mut World
-    }
-}
-
-impl<'w> QueryWorldRef<'w> for &'w mut World {
-    fn into_world_ptr(self) -> *mut World {
-        self as *mut World
     }
 }
 
@@ -220,9 +208,9 @@ pub struct QueryArchetypeRow {
 
 #[derive(Debug, Clone, Default)]
 pub struct QueryFastCache {
-    // Raw address is cache invalidation state only. QueryState semantic ownership
-    // is bound separately to C1's opaque world identity.
-    pub(crate) world_ptr: *const World,
+    // QueryState semantic ownership is bound separately to C1's opaque world
+    // identity. This field is only a cache invalidation marker.
+    pub(crate) world_scope: Option<WorldScopeId>,
     // Reused archetype bindings for archetype-row execution forms.
     pub(crate) archetype_bindings: Vec<ArchetypeExecutionBinding>,
 }
@@ -271,35 +259,58 @@ impl<Q: QuerySpec, F: QueryFilter> QueryState<Q, F> {
         self
     }
 
-    pub fn iter<'w>(&self, world: Q::WorldRef<'w>) -> impl Iterator<Item = Q::Item<'w>> + 'w
+    pub fn iter<'w, W>(&self, world: W) -> impl Iterator<Item = Q::Item<'w>> + 'w
+    where
+        Q: 'w,
+        W: QueryWorldSource<'w>,
+    {
+        self.iter_capability(world.into_query_capability())
+    }
+
+    pub fn get<'w, W>(&self, world: W, entity: Entity) -> Option<Q::Item<'w>>
+    where
+        Q: 'w,
+        W: QueryWorldSource<'w>,
+    {
+        self.get_capability(world.into_query_capability(), entity)
+    }
+
+    pub fn single<'w, W>(&self, world: W) -> Result<Q::Item<'w>, QueryError>
+    where
+        Q: 'w,
+        W: QueryWorldSource<'w>,
+    {
+        self.single_capability(world.into_query_capability())
+    }
+
+    fn iter_capability<'w>(
+        &self,
+        world: QueryCapability<'w>,
+    ) -> impl Iterator<Item = Q::Item<'w>> + 'w
     where
         Q: 'w,
     {
         let start = Instant::now();
-        let world_ptr = world.into_world_ptr();
-        // Safety: framework-owned QueryWorldRef implementations only produce a
-        // pointer from the live World reference supplied by the caller.
-        let world_ref = unsafe { &*world_ptr };
-        self.rebind_world_scope(world_ref.scope_id());
+        self.rebind_world_scope(world.world_scope());
         let since_tick = self.last_run_tick.get();
-        let (use_fast_fetch, mut fast_cache) = self.prepare_fast_fetch(world_ptr);
+        let (use_fast_fetch, mut fast_cache) = self.prepare_fast_fetch(world);
 
         if self.archetype_execution_enabled {
             let mut rows = self.acquire_archetype_row_vec();
             if Q::collect_archetype_rows(
-                world_ptr,
+                world,
                 &self.required_present,
                 &self.excluded,
                 &mut rows,
                 &mut fast_cache,
             ) {
                 if F::needs_tick_filter() {
-                    rows.retain(|row| F::matches_entity(world_ref, row.entity, since_tick));
+                    rows.retain(|row| F::matches_entity(world, row.entity, since_tick));
                 }
-                self.last_run_tick.set(world_ref.current_change_tick());
+                self.last_run_tick.set(world.current_change_tick());
                 telemetry::record_query_iter(start.elapsed().as_nanos() as u64);
                 return QueryIter::<Q> {
-                    world: world_ptr,
+                    world,
                     entities: None,
                     archetype_rows: Some(rows),
                     scratch_pool: Rc::clone(&self.scratch_pool),
@@ -315,11 +326,11 @@ impl<Q: QuerySpec, F: QueryFilter> QueryState<Q, F> {
 
         let mut entities = self.acquire_scratch_vec();
         // Fallback path for query forms that do not support archetype-row execution.
-        self.matching_entities_into(world_ref, &mut entities);
-        self.last_run_tick.set(world_ref.current_change_tick());
+        self.matching_entities_into(world, &mut entities);
+        self.last_run_tick.set(world.current_change_tick());
         telemetry::record_query_iter(start.elapsed().as_nanos() as u64);
         QueryIter::<Q> {
-            world: world_ptr,
+            world,
             entities: Some(entities),
             archetype_rows: None,
             scratch_pool: Rc::clone(&self.scratch_pool),
@@ -331,36 +342,34 @@ impl<Q: QuerySpec, F: QueryFilter> QueryState<Q, F> {
         }
     }
 
-    pub fn get<'w>(&self, world: Q::WorldRef<'w>, entity: Entity) -> Option<Q::Item<'w>> {
+    fn get_capability<'w>(&self, world: QueryCapability<'w>, entity: Entity) -> Option<Q::Item<'w>>
+    where
+        Q: 'w,
+    {
         let start = Instant::now();
-        let world_ptr = world.into_world_ptr();
-        // Safety: framework-owned QueryWorldRef implementations only produce a
-        // pointer from the live World reference supplied by the caller.
-        let world_ref = unsafe { &*world_ptr };
-        self.rebind_world_scope(world_ref.scope_id());
-        let matches = self.matches_entity(world_ref, entity);
-        self.last_run_tick.set(world_ref.current_change_tick());
+        self.rebind_world_scope(world.world_scope());
+        let matches = self.matches_entity(world, entity);
+        self.last_run_tick.set(world.current_change_tick());
         if !matches {
             telemetry::record_query_get(start.elapsed().as_nanos() as u64);
             return None;
         }
-        Q::mark_changed(world_ptr, entity);
+        Q::mark_changed(world, entity);
         // Safety: query borrow conflicts were rejected when this QueryState was created.
-        let item = unsafe { Q::fetch(world_ptr, entity) };
+        let item = unsafe { Q::fetch(world, entity) };
         telemetry::record_query_get(start.elapsed().as_nanos() as u64);
         item
     }
 
-    pub fn single<'w>(&self, world: Q::WorldRef<'w>) -> Result<Q::Item<'w>, QueryError> {
+    fn single_capability<'w>(&self, world: QueryCapability<'w>) -> Result<Q::Item<'w>, QueryError>
+    where
+        Q: 'w,
+    {
         let start = Instant::now();
-        let world_ptr = world.into_world_ptr();
-        // Safety: framework-owned QueryWorldRef implementations only produce a
-        // pointer from the live World reference supplied by the caller.
-        let world_ref = unsafe { &*world_ptr };
-        self.rebind_world_scope(world_ref.scope_id());
+        self.rebind_world_scope(world.world_scope());
         let mut entities = self.acquire_scratch_vec();
-        self.matching_entities_into(world_ref, &mut entities);
-        self.last_run_tick.set(world_ref.current_change_tick());
+        self.matching_entities_into(world, &mut entities);
+        self.last_run_tick.set(world.current_change_tick());
         if entities.is_empty() {
             self.release_scratch_vec(entities);
             telemetry::record_query_single(start.elapsed().as_nanos() as u64);
@@ -372,10 +381,10 @@ impl<Q: QuerySpec, F: QueryFilter> QueryState<Q, F> {
             telemetry::record_query_single(start.elapsed().as_nanos() as u64);
             return Err(QueryError::MultipleResults { count });
         }
-        Q::mark_changed(world_ptr, entities[0]);
+        Q::mark_changed(world, entities[0]);
         // Safety: exactly one matching entity exists and query borrow conflicts
         // were rejected when this QueryState was created.
-        let result = unsafe { Q::fetch(world_ptr, entities[0]) }.ok_or(QueryError::NoResults);
+        let result = unsafe { Q::fetch(world, entities[0]) }.ok_or(QueryError::NoResults);
         self.release_scratch_vec(entities);
         telemetry::record_query_single(start.elapsed().as_nanos() as u64);
         result
@@ -425,17 +434,17 @@ impl<Q: QuerySpec, F: QueryFilter> QueryState<Q, F> {
         *self.fast_cache.borrow_mut() = QueryFastCache::default();
     }
 
-    fn prepare_fast_fetch(&self, world_ptr: *mut World) -> (bool, QueryFastCache) {
+    fn prepare_fast_fetch(&self, world: QueryCapability<'_>) -> (bool, QueryFastCache) {
         if !self.fast_fetch_enabled {
             return (false, QueryFastCache::default());
         }
 
         let mut cache = self.fast_cache.borrow_mut();
-        let prepared = Q::prepare_fast_cache(world_ptr, &mut cache);
+        let prepared = Q::prepare_fast_cache(world, &mut cache);
         (prepared, cache.clone())
     }
 
-    fn matching_entities_into(&self, world: &World, out: &mut Vec<Entity>) {
+    fn matching_entities_into(&self, world: QueryCapability<'_>, out: &mut Vec<Entity>) {
         let since_tick = self.last_run_tick.get();
         world.matching_entities_into(&self.required_present, &self.excluded, out);
         if F::needs_tick_filter() {
@@ -443,7 +452,7 @@ impl<Q: QuerySpec, F: QueryFilter> QueryState<Q, F> {
         }
     }
 
-    fn matches_entity(&self, world: &World, entity: Entity) -> bool {
+    fn matches_entity(&self, world: QueryCapability<'_>, entity: Entity) -> bool {
         let since_tick = self.last_run_tick.get();
         world.entity_matches_component_constraints(entity, &self.required_present, &self.excluded)
             && (!F::needs_tick_filter() || F::matches_entity(world, entity, since_tick))
@@ -477,53 +486,45 @@ impl<Q: QuerySpec, F: QueryFilter> QueryState<Q, F> {
     }
 }
 
-pub struct Query<Q, F = ()> {
-    world: NonNull<World>,
+pub struct Query<'world, Q, F = ()> {
+    world: QueryCapability<'world>,
     state: NonNull<QueryState<Q, F>>,
     _marker: PhantomData<(Q, F)>,
 }
 
-impl<Q, F> Query<Q, F> {
-    pub(crate) fn new(world: *mut World, state: &mut QueryState<Q, F>) -> Self {
+impl<'world, Q, F> Query<'world, Q, F> {
+    pub(crate) fn new(world: QueryCapability<'world>, state: &mut QueryState<Q, F>) -> Self {
         Self {
-            world: NonNull::new(world).expect("world pointer must not be null"),
+            world,
             state: NonNull::from(state),
             _marker: PhantomData,
         }
     }
 }
 
-impl<Q: QuerySpec, F: QueryFilter> Query<Q, F> {
+impl<'world, Q: QuerySpec, F: QueryFilter> Query<'world, Q, F> {
     pub fn access(&self) -> &QueryAccess {
         unsafe { self.state.as_ref().access() }
     }
 
     pub fn iter(&mut self) -> impl Iterator<Item = Q::Item<'_>> + '_ {
         // Safety: system execution guarantees the world pointer remains valid for this call.
-        unsafe { self.state.as_ref().iter(Q::world_ref(self.world.as_ptr())) }
+        unsafe { self.state.as_ref().iter_capability(self.world) }
     }
 
     pub fn get(&mut self, entity: Entity) -> Option<Q::Item<'_>> {
         // Safety: system execution guarantees the world pointer remains valid for this call.
-        unsafe {
-            self.state
-                .as_ref()
-                .get(Q::world_ref(self.world.as_ptr()), entity)
-        }
+        unsafe { self.state.as_ref().get_capability(self.world, entity) }
     }
 
     pub fn single(&mut self) -> Result<Q::Item<'_>, QueryError> {
         // Safety: system execution guarantees the world pointer remains valid for this call.
-        unsafe {
-            self.state
-                .as_ref()
-                .single(Q::world_ref(self.world.as_ptr()))
-        }
+        unsafe { self.state.as_ref().single_capability(self.world) }
     }
 }
 
 struct QueryIter<'w, Q: QuerySpec> {
-    world: *mut World,
+    world: QueryCapability<'w>,
     entities: Option<Vec<Entity>>,
     archetype_rows: Option<Vec<QueryArchetypeRow>>,
     scratch_pool: Rc<RefCell<Vec<Vec<Entity>>>>,
@@ -531,7 +532,7 @@ struct QueryIter<'w, Q: QuerySpec> {
     use_fast_fetch: bool,
     fast_cache: QueryFastCache,
     index: usize,
-    _marker: PhantomData<Q::WorldRef<'w>>,
+    _marker: PhantomData<Q::Item<'w>>,
 }
 
 impl<'w, Q: QuerySpec> QueryIter<'w, Q> {
@@ -539,13 +540,13 @@ impl<'w, Q: QuerySpec> QueryIter<'w, Q> {
         if self.use_fast_fetch {
             Q::mark_changed_fast(self.world, entity, &mut self.fast_cache);
             // Safety: QueryState validated aliasing before constructing this iterator,
-            // which holds the world borrow contract through Q::WorldRef<'w>.
+            // which holds the invocation-scoped query capability contract.
             return unsafe { Q::fetch_fast(self.world, entity, &mut self.fast_cache) };
         }
 
         Q::mark_changed(self.world, entity);
         // Safety: QueryState validated aliasing before constructing this iterator,
-        // which holds the world borrow contract through Q::WorldRef<'w>.
+        // which holds the invocation-scoped query capability contract.
         unsafe { Q::fetch(self.world, entity) }
     }
 }

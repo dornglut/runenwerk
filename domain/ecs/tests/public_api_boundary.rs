@@ -34,7 +34,7 @@ fn low_level_query_extension_is_sealed() {
 
 #[test]
 fn low_level_system_param_extension_requires_explicit_unsafe_implementation() {
-    assert!(SYSTEM_EXTRACT_RS.contains("pub unsafe trait SystemParam<'w>"));
+    assert!(SYSTEM_EXTRACT_RS.contains("pub unsafe trait SystemParam"));
 }
 
 #[test]

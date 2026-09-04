@@ -26,19 +26,19 @@ pub enum WorkQueueEnqueueError {
 }
 
 pub(crate) struct WorkQueueStorage {
-    pub(super) work_queue_key: WorkQueueKey,
-    pub(super) work_queue_type_name: &'static str,
+    pub(crate) work_queue_key: WorkQueueKey,
+    pub(crate) work_queue_type_name: &'static str,
     messages: Box<dyn Any>,
     len_fn: fn(&Box<dyn Any>) -> usize,
     clear_fn: fn(&mut Box<dyn Any>) -> usize,
-    pub(super) config: WorkQueueConfig,
-    pub(super) enqueued: u64,
-    pub(super) drained: u64,
-    pub(super) rejected: u64,
+    pub(crate) config: WorkQueueConfig,
+    pub(crate) enqueued: u64,
+    pub(crate) drained: u64,
+    pub(crate) rejected: u64,
 }
 
 impl WorkQueueStorage {
-    pub(super) fn new<T: 'static>(work_queue_key: WorkQueueKey) -> Self {
+    pub(crate) fn new<T: 'static>(work_queue_key: WorkQueueKey) -> Self {
         fn len_for<T: 'static>(messages: &Box<dyn Any>) -> usize {
             messages
                 .downcast_ref::<VecDeque<T>>()
@@ -68,7 +68,7 @@ impl WorkQueueStorage {
         }
     }
 
-    pub(super) fn messages_ref<T: 'static>(&self) -> &VecDeque<T> {
+    pub(crate) fn messages_ref<T: 'static>(&self) -> &VecDeque<T> {
         self.messages
             .downcast_ref::<VecDeque<T>>()
             .unwrap_or_else(|| {
@@ -80,7 +80,7 @@ impl WorkQueueStorage {
             })
     }
 
-    pub(super) fn messages_mut<T: 'static>(&mut self) -> &mut VecDeque<T> {
+    pub(crate) fn messages_mut<T: 'static>(&mut self) -> &mut VecDeque<T> {
         self.messages
             .downcast_mut::<VecDeque<T>>()
             .unwrap_or_else(|| {
@@ -92,11 +92,11 @@ impl WorkQueueStorage {
             })
     }
 
-    pub(super) fn messages_len_any(&self) -> usize {
+    pub(crate) fn messages_len_any(&self) -> usize {
         (self.len_fn)(&self.messages)
     }
 
-    pub(super) fn clear_any(&mut self) -> usize {
+    pub(crate) fn clear_any(&mut self) -> usize {
         (self.clear_fn)(&mut self.messages)
     }
 }

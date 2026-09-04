@@ -1,3 +1,4 @@
+mod capability;
 pub mod change_extraction;
 mod change_tracking;
 mod component_indexes;
@@ -35,3 +36,8 @@ pub use ownership::{
     ResourceOwnershipDescriptor,
 };
 pub use state::World;
+
+pub(crate) use capability::{
+    MessagingCapability, QueryCapability, ResourceCapability, ResourceMutationCapability,
+    WorldAuthority,
+};

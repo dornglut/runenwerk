@@ -38,8 +38,8 @@ pub use system::{
     ResMut, ResView, Runtime, RuntimePlanBarrierReport, RuntimePlanConflictReport,
     RuntimePlanDiagnosticReport, RuntimePlanPhaseReport, RuntimePlanReport, RuntimePlanStageReport,
     RuntimePlanSystemReport, RuntimePlanWaveReport, SystemConfigExt, SystemId, SystemParam,
-    SystemParamError, TickBufferDrainer, TickBufferReader, TickBufferWriter, WorkQueueDrainer,
-    WorkQueueReader, WorkQueueWriter,
+    SystemParamContext, SystemParamError, TickBufferDrainer, TickBufferReader, TickBufferWriter,
+    WorkQueueDrainer, WorkQueueReader, WorkQueueWriter,
 };
 pub use world::{
     BroadcastDiagnosticsSnapshot, BroadcastKey, BroadcastLifetime, BroadcastObserverNotification,

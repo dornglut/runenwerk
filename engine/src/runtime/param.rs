@@ -1,4 +1,5 @@
-use ecs::{QueryAccess, SystemParam, SystemParamError, World};
+use ecs::{QueryAccess, SystemParam, SystemParamContext, SystemParamError, World};
+use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::ptr::NonNull;
 
@@ -7,97 +8,50 @@ pub use ecs::{
     TickBufferReader, TickBufferWriter, WorkQueueDrainer, WorkQueueReader, WorkQueueWriter,
 };
 
-pub struct WorldRef {
+/// The sole whole-world system parameter. Registration rejects every sibling
+/// immediate borrow before this capability is extracted.
+pub struct WorldMut<'world> {
     world: NonNull<World>,
+    _marker: PhantomData<&'world mut World>,
 }
 
-impl WorldRef {
-    fn new(world: *mut World) -> Self {
-        Self {
-            world: NonNull::new(world).expect("world pointer must not be null"),
-        }
-    }
-}
-
-impl Deref for WorldRef {
+impl<'world> Deref for WorldMut<'world> {
     type Target = World;
-
-    fn deref(&self) -> &Self::Target {
-        // Safety: extraction guarantees a live world pointer during system execution.
+    fn deref(&self) -> &World {
         unsafe { self.world.as_ref() }
     }
 }
 
-// Safety: this legacy read-only whole-World parameter reports no borrow facts and
-// is retained only until the C3 lifetime-bound extraction cut removes its unused
-// surface. It does not manufacture mutable access.
-unsafe impl<'w> SystemParam<'w> for WorldRef {
-    type State = ();
-
-    fn init_state(_world: &mut World) -> Result<Self::State, SystemParamError> {
-        Ok(())
-    }
-
-    fn access(_state: &Self::State) -> QueryAccess {
-        QueryAccess::default()
-    }
-
-    unsafe fn extract(
-        _state: &'w mut Self::State,
-        world: *mut World,
-        _commands: *mut Commands,
-    ) -> Result<Self, SystemParamError> {
-        Ok(Self::new(world))
-    }
-}
-
-pub struct WorldMut {
-    world: NonNull<World>,
-}
-
-impl WorldMut {
-    fn new(world: *mut World) -> Self {
-        Self {
-            world: NonNull::new(world).expect("world pointer must not be null"),
-        }
-    }
-}
-
-impl Deref for WorldMut {
-    type Target = World;
-
-    fn deref(&self) -> &Self::Target {
-        // Safety: extraction guarantees a live world pointer during system execution.
-        unsafe { self.world.as_ref() }
-    }
-}
-
-impl DerefMut for WorldMut {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        // Safety: extraction guarantees a live world pointer during system execution.
+impl<'world> DerefMut for WorldMut<'world> {
+    fn deref_mut(&mut self) -> &mut World {
         unsafe { self.world.as_mut() }
     }
 }
 
-// Safety: WorldMut declares exclusive-world access. C3 registration rejects any
-// sibling immediate World access before extraction, so recovering the invocation's
-// unique World borrow is consistent with the declared access contract.
-unsafe impl<'w> SystemParam<'w> for WorldMut {
+unsafe impl<'param> SystemParam for WorldMut<'param> {
     type State = ();
-
-    fn init_state(_world: &mut World) -> Result<Self::State, SystemParamError> {
+    type Item<'world, 'state> = WorldMut<'world>;
+    fn init_state(_: &mut World) -> Result<Self::State, SystemParamError> {
         Ok(())
     }
-
-    fn access(_state: &Self::State) -> QueryAccess {
+    fn access(_: &Self::State) -> QueryAccess {
         QueryAccess::exclusive_world()
     }
-
-    unsafe fn extract(
-        _state: &'w mut Self::State,
-        world: *mut World,
-        _commands: *mut Commands,
-    ) -> Result<Self, SystemParamError> {
-        Ok(Self::new(world))
+    fn slot_descriptor() -> scheduler::system::ParamSlotDescriptor {
+        scheduler::system::ParamSlotDescriptor::leaf(
+            "world_mut",
+            "WorldMut",
+            std::any::type_name::<Self>(),
+        )
+    }
+    unsafe fn extract<'world, 'state>(
+        _: &'state mut Self::State,
+        context: SystemParamContext<'world>,
+    ) -> Result<Self::Item<'world, 'state>, SystemParamError> {
+        let world = unsafe { context.world_mut() };
+        Ok(WorldMut {
+            world: NonNull::from(world),
+            _marker: PhantomData,
+        })
     }
 }

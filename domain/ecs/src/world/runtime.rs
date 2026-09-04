@@ -4,7 +4,7 @@ use crate::commands::Commands;
 use crate::query::{QueryFilter, QueryOrphanedState, QuerySpec, QueryState};
 
 impl World {
-    pub fn commands(&self) -> Commands {
+    pub fn commands(&self) -> Commands<'static> {
         Commands::new()
     }
 

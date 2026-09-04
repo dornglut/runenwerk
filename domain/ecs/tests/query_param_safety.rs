@@ -79,19 +79,19 @@ fn conflicting_query_params_are_rejected_before_system_execution() {
 }
 
 #[derive(ecs::SystemParam)]
-struct InnerBorrowGroup {
-    _counter: ResMut<Counter>,
+struct InnerBorrowGroup<'w> {
+    _counter: ResMut<'w, Counter>,
 }
 
 #[derive(ecs::SystemParam)]
-struct NestedBorrowGroup {
-    _inner: InnerBorrowGroup,
-    _counter: Res<Counter>,
+struct NestedBorrowGroup<'w> {
+    _inner: InnerBorrowGroup<'w>,
+    _counter: Res<'w, Counter>,
 }
 
 #[test]
 fn nested_derived_param_borrow_conflicts_are_rejected() {
-    fn invalid(_group: NestedBorrowGroup) {
+    fn invalid(_group: NestedBorrowGroup<'_>) {
         panic!("conflicting system must never execute");
     }
 

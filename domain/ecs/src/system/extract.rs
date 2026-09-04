@@ -1,6 +1,9 @@
 use crate::query::QueryAccess;
+use crate::world::{MessagingCapability, WorldAuthority};
 use crate::{Commands, ResourceError, World};
 use scheduler::system::ParamSlotDescriptor;
+use std::marker::PhantomData;
+use std::ptr::NonNull;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -16,6 +19,62 @@ pub enum SystemParamError {
     RuntimeContext(&'static str),
 }
 
+/// Invocation-scoped extraction context owned by the RunenECS runtime.
+///
+/// Safe system code never constructs this value. It is public only because the
+/// low-level [`SystemParam`] contract must remain reachable by downstream derive
+/// expansion and the maintained engine-owned exclusive-world parameter.
+#[doc(hidden)]
+#[derive(Copy, Clone)]
+pub struct SystemParamContext<'world> {
+    authority: WorldAuthority<'world>,
+    commands: NonNull<Commands<'static>>,
+    _marker: PhantomData<&'world mut World>,
+}
+
+impl<'world> SystemParamContext<'world> {
+    pub(crate) fn new(world: &'world mut World, commands: &'world mut Commands<'static>) -> Self {
+        Self {
+            authority: WorldAuthority::new(world),
+            commands: NonNull::from(commands),
+            _marker: PhantomData,
+        }
+    }
+
+    pub(crate) fn query(self) -> crate::world::QueryCapability<'world> {
+        self.authority.query()
+    }
+
+    pub(crate) fn resource<T: crate::Resource>(
+        self,
+    ) -> Result<crate::world::ResourceCapability<'world, T>, SystemParamError> {
+        Ok(self.authority.resource::<T>()?)
+    }
+
+    pub(crate) fn resource_mut<T: crate::Resource>(
+        self,
+    ) -> Result<crate::world::ResourceCapability<'world, T>, SystemParamError> {
+        Ok(self.authority.resource_mut::<T>()?)
+    }
+
+    pub(crate) fn messaging(self) -> MessagingCapability<'world> {
+        self.authority.messaging()
+    }
+
+    /// # Safety
+    /// The caller must have declared exclusive-world access and must not retain
+    /// any sibling world capability.
+    pub unsafe fn world_mut(self) -> &'world mut World {
+        unsafe { self.authority.world_mut() }
+    }
+
+    pub(crate) fn commands(self) -> &'world mut Commands<'static> {
+        // Safety: the runtime constructs this pointer from the live command
+        // owner and keeps it valid until extraction finishes.
+        unsafe { self.commands.as_ptr().as_mut().unwrap_unchecked() }
+    }
+}
+
 /// Framework-owned low-level system-parameter implementation contract.
 ///
 /// Safe user composition uses the built-in parameters and
@@ -25,12 +84,13 @@ pub enum SystemParamError {
 ///
 /// # Safety
 ///
-/// Implementors must keep `State` lifetime-independent for every `'w`
-/// implementation of the same parameter type, report every immediate borrow in
-/// `access`, and only dereference `world` / `commands` according to those access
-/// facts for the extraction lifetime.
-pub unsafe trait SystemParam<'w>: Sized {
+/// Implementors must keep `State` lifetime-independent, report every immediate
+/// borrow in `access`, and ensure each returned item is valid only for the
+/// invocation/state lifetimes supplied to `extract`.
+#[doc(hidden)]
+pub unsafe trait SystemParam: Sized {
     type State: 'static;
+    type Item<'world, 'state>;
 
     fn init_state(world: &mut World) -> Result<Self::State, SystemParamError>;
     fn access(state: &Self::State) -> QueryAccess;
@@ -41,12 +101,12 @@ pub unsafe trait SystemParam<'w>: Sized {
 
     /// # Safety
     ///
-    /// `world` and `commands` must point to live values for `'w`. Implementors
-    /// may only access World domains described by `Self::access(state)` and must
+    /// `context` belongs to the current system invocation. Implementors may
+    /// only access World domains described by `Self::access(state)`, may not
+    /// extend references beyond the corresponding GAT lifetimes, and must
     /// preserve the scheduler-validated aliasing contract.
-    unsafe fn extract(
-        state: &'w mut Self::State,
-        world: *mut World,
-        commands: *mut Commands,
-    ) -> Result<Self, SystemParamError>;
+    unsafe fn extract<'world, 'state>(
+        state: &'state mut Self::State,
+        context: SystemParamContext<'world>,
+    ) -> Result<Self::Item<'world, 'state>, SystemParamError>;
 }

@@ -1182,10 +1182,10 @@ fn world_for_param_access_checks() {
     world.insert_resource(Frame(0));
 
     let query_state =
-        <Query<(&mut Position, &Velocity)> as SystemParam<'static>>::init_state(&mut world)
+        <Query<'static, (&mut Position, &Velocity)> as SystemParam>::init_state(&mut world)
             .unwrap();
     let query_access =
-        <Query<(&mut Position, &Velocity)> as SystemParam<'static>>::access(&query_state);
+        <Query<'static, (&mut Position, &Velocity)> as SystemParam>::access(&query_state);
     assert!(contains_type(
         query_access.component_writes(),
         TypeId::of::<Position>()
@@ -1195,36 +1195,36 @@ fn world_for_param_access_checks() {
         TypeId::of::<Velocity>()
     ));
 
-    let res_access = <Res<Frame> as SystemParam<'static>>::access(&());
+    let res_access = <Res<'static, Frame> as SystemParam>::access(&());
     assert!(contains_type(
         res_access.resource_reads(),
         TypeId::of::<Frame>()
     ));
 
-    let res_view_access = <ResView<Frame> as SystemParam<'static>>::access(&());
+    let res_view_access = <ResView<'static, Frame> as SystemParam>::access(&());
     assert!(contains_type(
         res_view_access.resource_reads(),
         TypeId::of::<Frame>()
     ));
 
-    let res_mut_access = <ResMut<Frame> as SystemParam<'static>>::access(&());
+    let res_mut_access = <ResMut<'static, Frame> as SystemParam>::access(&());
     assert!(contains_type(
         res_mut_access.resource_writes(),
         TypeId::of::<Frame>()
     ));
 
-    let commands_access = <Commands as SystemParam<'static>>::access(&());
+    let commands_access = <Commands<'static> as SystemParam>::access(&());
     assert!(commands_access.deferred_structural_mutation());
 
     let reader_state =
-        <BroadcastReader<TickEvent> as SystemParam<'static>>::init_state(&mut world).unwrap();
-    let reader_access = <BroadcastReader<TickEvent> as SystemParam<'static>>::access(&reader_state);
+        <BroadcastReader<'static, TickEvent> as SystemParam>::init_state(&mut world).unwrap();
+    let reader_access = <BroadcastReader<'static, TickEvent> as SystemParam>::access(&reader_state);
     assert!(contains_type(
         reader_access.broadcast_reads(),
         TypeId::of::<TickEvent>()
     ));
 
-    let writer_access = <BroadcastWriter<TickEvent> as SystemParam<'static>>::access(&());
+    let writer_access = <BroadcastWriter<'static, TickEvent> as SystemParam>::access(&());
     assert!(contains_type(
         writer_access.broadcast_writes(),
         TypeId::of::<TickEvent>()

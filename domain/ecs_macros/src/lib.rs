@@ -1,10 +1,7 @@
 use proc_macro::TokenStream;
 use proc_macro_crate::{FoundCrate, crate_name};
 use quote::{format_ident, quote};
-use syn::{
-    Data, DataEnum, DataStruct, DeriveInput, Fields, Ident, Lifetime, parse_macro_input,
-    parse_quote,
-};
+use syn::{Data, DataEnum, DataStruct, DeriveInput, Fields, Ident, parse_macro_input};
 
 fn ecs_crate_path() -> proc_macro2::TokenStream {
     match crate_name("ecs") {
@@ -90,37 +87,45 @@ pub fn system_param_derive(input: TokenStream) -> TokenStream {
     let field_types = fields.iter().map(|field| &field.ty).collect::<Vec<_>>();
     let state_indices = (0..fields.len()).map(syn::Index::from).collect::<Vec<_>>();
 
-    let system_param_lifetime = fresh_system_param_lifetime(&generics);
-    let mut impl_generics = generics.clone();
-    impl_generics
-        .params
-        .insert(0, parse_quote!(#system_param_lifetime));
-    let where_clause = impl_generics.make_where_clause();
-    for field_ty in &field_types {
-        where_clause
-            .predicates
-            .push(parse_quote!(#field_ty: #ecs::SystemParam<#system_param_lifetime>));
-    }
+    let impl_generics = generics.clone();
     let (impl_generics, _, where_clause) = impl_generics.split_for_impl();
+    let item_args = generics
+        .params
+        .iter()
+        .map(|param| match param {
+            syn::GenericParam::Lifetime(_) => quote!('world),
+            syn::GenericParam::Type(param) => {
+                let ident = &param.ident;
+                quote!(#ident)
+            }
+            syn::GenericParam::Const(param) => {
+                let ident = &param.ident;
+                quote!(#ident)
+            }
+        })
+        .collect::<Vec<_>>();
     let (_, ty_generics, _) = generics.split_for_impl();
+    let item_type = quote!(#name <#(#item_args),*>);
+    let item_ctor = quote!(#name :: <#(#item_args),*>);
     let group_label = name.to_string();
 
     TokenStream::from(quote! {
-        unsafe impl #impl_generics #ecs::SystemParam<#system_param_lifetime> for #name #ty_generics #where_clause {
+        unsafe impl #impl_generics #ecs::SystemParam for #name #ty_generics #where_clause {
             type State = (
-                #(<#field_types as #ecs::SystemParam<#system_param_lifetime>>::State,)*
+                #(<#field_types as #ecs::SystemParam>::State,)*
             );
+            type Item<'world, 'state> = #item_type;
 
             fn init_state(world: &mut #ecs::World) -> Result<Self::State, #ecs::SystemParamError> {
                 Ok((
-                    #(<#field_types as #ecs::SystemParam<#system_param_lifetime>>::init_state(world)?,)*
+                    #(<#field_types as #ecs::SystemParam>::init_state(world)?,)*
                 ))
             }
 
             fn access(state: &Self::State) -> #ecs::QueryAccess {
                 let mut access = #ecs::QueryAccess::default();
                 #(
-                    access.extend(<#field_types as #ecs::SystemParam<#system_param_lifetime>>::access(&state.#state_indices));
+                    access.extend(<#field_types as #ecs::SystemParam>::access(&state.#state_indices));
                 )*
                 access
             }
@@ -134,25 +139,23 @@ pub fn system_param_derive(input: TokenStream) -> TokenStream {
                         #(
                             #ecs::ParamSlotDescriptor::named_child(
                                 #field_names,
-                                <#field_types as #ecs::SystemParam<#system_param_lifetime>>::slot_descriptor(),
+                                <#field_types as #ecs::SystemParam>::slot_descriptor(),
                             ),
                         )*
                     ],
                 )
             }
 
-            unsafe fn extract(
-                state: &#system_param_lifetime mut Self::State,
-                world: *mut #ecs::World,
-                commands: *mut #ecs::Commands,
-            ) -> Result<Self, #ecs::SystemParamError> {
-                Ok(Self {
+            unsafe fn extract<'world, 'state>(
+                state: &'state mut Self::State,
+                context: #ecs::SystemParamContext<'world>,
+            ) -> Result<Self::Item<'world, 'state>, #ecs::SystemParamError> {
+                Ok(#item_ctor {
                     #(
                         #field_idents: unsafe {
-                            <#field_types as #ecs::SystemParam<#system_param_lifetime>>::extract(
+                            <#field_types as #ecs::SystemParam>::extract(
                                 &mut state.#state_indices,
-                                world,
-                                commands,
+                                context,
                             )?
                         },
                     )*
@@ -160,25 +163,6 @@ pub fn system_param_derive(input: TokenStream) -> TokenStream {
             }
         }
     })
-}
-
-fn fresh_system_param_lifetime(generics: &syn::Generics) -> Lifetime {
-    let base = "__ecs_system_param_w";
-    let mut candidate = base.to_string();
-    let mut suffix = 0;
-
-    while generics.params.iter().any(|param| {
-        matches!(
-            param,
-            syn::GenericParam::Lifetime(lifetime)
-                if lifetime.lifetime.ident == candidate.as_str()
-        )
-    }) {
-        suffix += 1;
-        candidate = format!("{base}_{suffix}");
-    }
-
-    Lifetime::new(&format!("'{candidate}"), proc_macro2::Span::call_site())
 }
 
 #[proc_macro_derive(Bundle)]

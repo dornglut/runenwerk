@@ -4,7 +4,7 @@ use super::traits_and_state::{QueryArchetypeRow, QueryData, QueryFastCache};
 use crate::component::Component;
 use crate::entity::Entity;
 use crate::storage::ArchetypeExecutionBinding;
-use crate::world::World;
+use crate::world::QueryCapability;
 use std::any::TypeId;
 
 fn required_types_match(required_present: &[TypeId], expected: &[TypeId]) -> bool {
@@ -15,7 +15,7 @@ fn required_types_match(required_present: &[TypeId], expected: &[TypeId]) -> boo
 }
 
 fn collect_rows_from_bindings(
-    world: &World,
+    world: QueryCapability<'_>,
     bindings: &[ArchetypeExecutionBinding],
     rows: &mut Vec<QueryArchetypeRow>,
 ) {
@@ -32,11 +32,11 @@ fn collect_rows_from_bindings(
         }
     }
     rows.sort_unstable();
+    rows.dedup_by_key(|row| row.entity);
 }
 
 impl<T: Component> QueryData for &T {
     type Item<'w> = &'w T;
-    type WorldRef<'w> = &'w World;
 
     fn query_types() -> Vec<TypeId> {
         vec![TypeId::of::<T>()]
@@ -50,36 +50,31 @@ impl<T: Component> QueryData for &T {
         true
     }
 
-    fn prepare_fast_cache(world: *mut World, cache: &mut QueryFastCache) -> bool {
-        let world_ptr = world as *const World;
-        if cache.world_ptr != world_ptr {
-            cache.world_ptr = world_ptr;
+    fn prepare_fast_cache(world: QueryCapability<'_>, cache: &mut QueryFastCache) -> bool {
+        let world_scope = world.world_scope();
+        if cache.world_scope != Some(world_scope) {
+            cache.world_scope = Some(world_scope);
             cache.archetype_bindings.clear();
         }
         true
     }
 
-    unsafe fn fetch<'w>(world: *mut World, entity: Entity) -> Option<Self::Item<'w>> {
-        unsafe { (&*world).archetype_component::<T>(entity) }
+    unsafe fn fetch<'w>(world: QueryCapability<'w>, entity: Entity) -> Option<Self::Item<'w>> {
+        world.component::<T>(entity)
     }
 
     unsafe fn fetch_fast<'w>(
-        world: *mut World,
+        world: QueryCapability<'w>,
         entity: Entity,
         cache: &mut QueryFastCache,
     ) -> Option<Self::Item<'w>> {
         let _ = cache;
         unsafe { Self::fetch(world, entity) }
     }
-
-    unsafe fn world_ref<'w>(world: *mut World) -> Self::WorldRef<'w> {
-        unsafe { &*world }
-    }
 }
 
 impl<T: Component> QueryData for &mut T {
     type Item<'w> = &'w mut T;
-    type WorldRef<'w> = &'w mut World;
 
     fn query_types() -> Vec<TypeId> {
         vec![TypeId::of::<T>()]
@@ -93,10 +88,10 @@ impl<T: Component> QueryData for &mut T {
         true
     }
 
-    fn prepare_fast_cache(world: *mut World, cache: &mut QueryFastCache) -> bool {
-        let world_ptr = world as *const World;
-        if cache.world_ptr != world_ptr {
-            cache.world_ptr = world_ptr;
+    fn prepare_fast_cache(world: QueryCapability<'_>, cache: &mut QueryFastCache) -> bool {
+        let world_scope = world.world_scope();
+        if cache.world_scope != Some(world_scope) {
+            cache.world_scope = Some(world_scope);
             cache.archetype_bindings.clear();
         }
         true
@@ -107,7 +102,7 @@ impl<T: Component> QueryData for &mut T {
     }
 
     fn collect_archetype_rows(
-        world: *mut World,
+        world: QueryCapability<'_>,
         required_present: &[TypeId],
         excluded: &[TypeId],
         rows: &mut Vec<QueryArchetypeRow>,
@@ -117,7 +112,7 @@ impl<T: Component> QueryData for &mut T {
             return false;
         }
 
-        let world_ref = unsafe { &*world };
+        let world_ref = world;
         if !world_ref.matching_archetype_bindings_into(
             required_present,
             excluded,
@@ -130,37 +125,32 @@ impl<T: Component> QueryData for &mut T {
         true
     }
 
-    fn mark_changed(world: *mut World, entity: Entity) {
+    fn mark_changed(world: QueryCapability<'_>, entity: Entity) {
         // Safety: query execution ensures exclusive mutable world access for this query form.
-        let _ = unsafe { (&mut *world).get_mut::<T>(entity) };
+        world.mark_component_modified_by_id(entity, TypeId::of::<T>(), T::component_name());
     }
 
-    fn mark_changed_fast(world: *mut World, entity: Entity, _cache: &mut QueryFastCache) {
-        let world_mut = unsafe { &mut *world };
+    fn mark_changed_fast(world: QueryCapability<'_>, entity: Entity, _cache: &mut QueryFastCache) {
+        let world_mut = world;
         world_mut.mark_component_modified_by_id(entity, TypeId::of::<T>(), T::component_name());
     }
 
-    unsafe fn fetch<'w>(world: *mut World, entity: Entity) -> Option<Self::Item<'w>> {
-        unsafe { (&mut *world).archetype_component_mut_untracked::<T>(entity) }
+    unsafe fn fetch<'w>(world: QueryCapability<'w>, entity: Entity) -> Option<Self::Item<'w>> {
+        unsafe { world.component_mut::<T>(entity) }
     }
 
     unsafe fn fetch_fast<'w>(
-        world: *mut World,
+        world: QueryCapability<'w>,
         entity: Entity,
         cache: &mut QueryFastCache,
     ) -> Option<Self::Item<'w>> {
         let _ = cache;
         unsafe { Self::fetch(world, entity) }
     }
-
-    unsafe fn world_ref<'w>(world: *mut World) -> Self::WorldRef<'w> {
-        unsafe { &mut *world }
-    }
 }
 
 impl<T: Component> QueryData for (Entity, &T) {
     type Item<'w> = (Entity, &'w T);
-    type WorldRef<'w> = &'w World;
 
     fn query_types() -> Vec<TypeId> {
         vec![TypeId::of::<T>()]
@@ -170,18 +160,13 @@ impl<T: Component> QueryData for (Entity, &T) {
         access.add_component_read::<T>();
     }
 
-    unsafe fn fetch<'w>(world: *mut World, entity: Entity) -> Option<Self::Item<'w>> {
-        unsafe { (&*world).archetype_component::<T>(entity) }.map(|value| (entity, value))
-    }
-
-    unsafe fn world_ref<'w>(world: *mut World) -> Self::WorldRef<'w> {
-        unsafe { &*world }
+    unsafe fn fetch<'w>(world: QueryCapability<'w>, entity: Entity) -> Option<Self::Item<'w>> {
+        world.component::<T>(entity).map(|value| (entity, value))
     }
 }
 
 impl<T: Component> QueryData for (Entity, &mut T) {
     type Item<'w> = (Entity, &'w mut T);
-    type WorldRef<'w> = &'w mut World;
 
     fn query_types() -> Vec<TypeId> {
         vec![TypeId::of::<T>()]
@@ -191,24 +176,18 @@ impl<T: Component> QueryData for (Entity, &mut T) {
         access.add_component_write::<T>();
     }
 
-    fn mark_changed(world: *mut World, entity: Entity) {
+    fn mark_changed(world: QueryCapability<'_>, entity: Entity) {
         // Safety: query execution ensures exclusive mutable world access for this query form.
-        let _ = unsafe { (&mut *world).get_mut::<T>(entity) };
+        world.mark_component_modified_by_id(entity, TypeId::of::<T>(), T::component_name());
     }
 
-    unsafe fn fetch<'w>(world: *mut World, entity: Entity) -> Option<Self::Item<'w>> {
-        unsafe { (&mut *world).archetype_component_mut_untracked::<T>(entity) }
-            .map(|value| (entity, value))
-    }
-
-    unsafe fn world_ref<'w>(world: *mut World) -> Self::WorldRef<'w> {
-        unsafe { &mut *world }
+    unsafe fn fetch<'w>(world: QueryCapability<'w>, entity: Entity) -> Option<Self::Item<'w>> {
+        unsafe { world.component_mut::<T>(entity) }.map(|value| (entity, value))
     }
 }
 
 impl<A: Component, B: Component> QueryData for (&A, &B) {
     type Item<'w> = (&'w A, &'w B);
-    type WorldRef<'w> = &'w World;
 
     fn query_types() -> Vec<TypeId> {
         vec![TypeId::of::<A>(), TypeId::of::<B>()]
@@ -219,20 +198,15 @@ impl<A: Component, B: Component> QueryData for (&A, &B) {
         access.add_component_read::<B>();
     }
 
-    unsafe fn fetch<'w>(world: *mut World, entity: Entity) -> Option<Self::Item<'w>> {
-        let a = unsafe { (&*world).archetype_component::<A>(entity) }?;
-        let b = unsafe { (&*world).archetype_component::<B>(entity) }?;
+    unsafe fn fetch<'w>(world: QueryCapability<'w>, entity: Entity) -> Option<Self::Item<'w>> {
+        let a = world.component::<A>(entity)?;
+        let b = world.component::<B>(entity)?;
         Some((a, b))
-    }
-
-    unsafe fn world_ref<'w>(world: *mut World) -> Self::WorldRef<'w> {
-        unsafe { &*world }
     }
 }
 
 impl<A: Component, B: Component> QueryData for (&mut A, &B) {
     type Item<'w> = (&'w mut A, &'w B);
-    type WorldRef<'w> = &'w mut World;
 
     fn query_types() -> Vec<TypeId> {
         vec![TypeId::of::<A>(), TypeId::of::<B>()]
@@ -247,15 +221,15 @@ impl<A: Component, B: Component> QueryData for (&mut A, &B) {
         true
     }
 
-    fn prepare_fast_cache(world: *mut World, cache: &mut QueryFastCache) -> bool {
+    fn prepare_fast_cache(world: QueryCapability<'_>, cache: &mut QueryFastCache) -> bool {
         if TypeId::of::<A>() == TypeId::of::<B>() {
             cache.archetype_bindings.clear();
             return false;
         }
 
-        let world_ptr = world as *const World;
-        if cache.world_ptr != world_ptr {
-            cache.world_ptr = world_ptr;
+        let world_scope = world.world_scope();
+        if cache.world_scope != Some(world_scope) {
+            cache.world_scope = Some(world_scope);
             cache.archetype_bindings.clear();
         }
 
@@ -267,7 +241,7 @@ impl<A: Component, B: Component> QueryData for (&mut A, &B) {
     }
 
     fn collect_archetype_rows(
-        world: *mut World,
+        world: QueryCapability<'_>,
         required_present: &[TypeId],
         excluded: &[TypeId],
         rows: &mut Vec<QueryArchetypeRow>,
@@ -280,7 +254,7 @@ impl<A: Component, B: Component> QueryData for (&mut A, &B) {
             return false;
         }
 
-        let world_ref = unsafe { &*world };
+        let world_ref = world;
         if !world_ref.matching_archetype_bindings_into(
             required_present,
             excluded,
@@ -293,48 +267,43 @@ impl<A: Component, B: Component> QueryData for (&mut A, &B) {
         true
     }
 
-    fn mark_changed(world: *mut World, entity: Entity) {
+    fn mark_changed(world: QueryCapability<'_>, entity: Entity) {
         // Safety: query execution ensures exclusive mutable world access for this query form.
-        let _ = unsafe { (&mut *world).get_mut::<A>(entity) };
+        world.mark_component_modified_by_id(entity, TypeId::of::<A>(), A::component_name());
     }
 
-    fn mark_changed_fast(world: *mut World, entity: Entity, _cache: &mut QueryFastCache) {
-        let world_mut = unsafe { &mut *world };
+    fn mark_changed_fast(world: QueryCapability<'_>, entity: Entity, _cache: &mut QueryFastCache) {
+        let world_mut = world;
         world_mut.mark_component_modified_by_id(entity, TypeId::of::<A>(), A::component_name());
     }
 
-    unsafe fn fetch<'w>(world: *mut World, entity: Entity) -> Option<Self::Item<'w>> {
+    unsafe fn fetch<'w>(world: QueryCapability<'w>, entity: Entity) -> Option<Self::Item<'w>> {
         assert_ne!(
             TypeId::of::<A>(),
             TypeId::of::<B>(),
             "mutable/read query requires distinct component types",
         );
 
-        let world_mut = unsafe { &mut *world };
-        let b = world_mut.archetype_component::<B>(entity)? as *const B;
-        let a = world_mut.archetype_component_mut_untracked::<A>(entity)? as *mut A;
+        let world_mut = world;
+        let b = world_mut.component::<B>(entity)? as *const B;
+        let a = unsafe { world_mut.component_mut::<A>(entity) }? as *mut A;
 
         // Safety: mutable/read query access requires distinct component types.
         Some(unsafe { (&mut *a, &*b) })
     }
 
     unsafe fn fetch_fast<'w>(
-        world: *mut World,
+        world: QueryCapability<'w>,
         entity: Entity,
         cache: &mut QueryFastCache,
     ) -> Option<Self::Item<'w>> {
         let _ = cache;
         unsafe { Self::fetch(world, entity) }
     }
-
-    unsafe fn world_ref<'w>(world: *mut World) -> Self::WorldRef<'w> {
-        unsafe { &mut *world }
-    }
 }
 
 impl<A: Component, B: Component> QueryData for (&A, &mut B) {
     type Item<'w> = (&'w A, &'w mut B);
-    type WorldRef<'w> = &'w mut World;
 
     fn query_types() -> Vec<TypeId> {
         vec![TypeId::of::<A>(), TypeId::of::<B>()]
@@ -345,34 +314,29 @@ impl<A: Component, B: Component> QueryData for (&A, &mut B) {
         access.add_component_write::<B>();
     }
 
-    fn mark_changed(world: *mut World, entity: Entity) {
+    fn mark_changed(world: QueryCapability<'_>, entity: Entity) {
         // Safety: query execution ensures exclusive mutable world access for this query form.
-        let _ = unsafe { (&mut *world).get_mut::<B>(entity) };
+        world.mark_component_modified_by_id(entity, TypeId::of::<B>(), B::component_name());
     }
 
-    unsafe fn fetch<'w>(world: *mut World, entity: Entity) -> Option<Self::Item<'w>> {
+    unsafe fn fetch<'w>(world: QueryCapability<'w>, entity: Entity) -> Option<Self::Item<'w>> {
         assert_ne!(
             TypeId::of::<A>(),
             TypeId::of::<B>(),
             "read/mutable query requires distinct component types",
         );
 
-        let world_mut = unsafe { &mut *world };
-        let a = world_mut.archetype_component::<A>(entity)? as *const A;
-        let b = world_mut.archetype_component_mut_untracked::<B>(entity)? as *mut B;
+        let world_mut = world;
+        let a = world_mut.component::<A>(entity)? as *const A;
+        let b = unsafe { world_mut.component_mut::<B>(entity) }? as *mut B;
 
         // Safety: read/mutable query access requires distinct component types.
         Some(unsafe { (&*a, &mut *b) })
-    }
-
-    unsafe fn world_ref<'w>(world: *mut World) -> Self::WorldRef<'w> {
-        unsafe { &mut *world }
     }
 }
 
 impl<A: Component, B: Component> QueryData for (&mut A, &mut B) {
     type Item<'w> = (&'w mut A, &'w mut B);
-    type WorldRef<'w> = &'w mut World;
 
     fn query_types() -> Vec<TypeId> {
         vec![TypeId::of::<A>(), TypeId::of::<B>()]
@@ -387,15 +351,15 @@ impl<A: Component, B: Component> QueryData for (&mut A, &mut B) {
         true
     }
 
-    fn prepare_fast_cache(world: *mut World, cache: &mut QueryFastCache) -> bool {
+    fn prepare_fast_cache(world: QueryCapability<'_>, cache: &mut QueryFastCache) -> bool {
         if TypeId::of::<A>() == TypeId::of::<B>() {
             cache.archetype_bindings.clear();
             return false;
         }
 
-        let world_ptr = world as *const World;
-        if cache.world_ptr != world_ptr {
-            cache.world_ptr = world_ptr;
+        let world_scope = world.world_scope();
+        if cache.world_scope != Some(world_scope) {
+            cache.world_scope = Some(world_scope);
             cache.archetype_bindings.clear();
         }
 
@@ -407,7 +371,7 @@ impl<A: Component, B: Component> QueryData for (&mut A, &mut B) {
     }
 
     fn collect_archetype_rows(
-        world: *mut World,
+        world: QueryCapability<'_>,
         required_present: &[TypeId],
         excluded: &[TypeId],
         rows: &mut Vec<QueryArchetypeRow>,
@@ -420,7 +384,7 @@ impl<A: Component, B: Component> QueryData for (&mut A, &mut B) {
             return false;
         }
 
-        let world_ref = unsafe { &*world };
+        let world_ref = world;
         if !world_ref.matching_archetype_bindings_into(
             required_present,
             excluded,
@@ -433,51 +397,46 @@ impl<A: Component, B: Component> QueryData for (&mut A, &mut B) {
         true
     }
 
-    fn mark_changed(world: *mut World, entity: Entity) {
+    fn mark_changed(world: QueryCapability<'_>, entity: Entity) {
         // Safety: query execution ensures exclusive mutable world access for this query form.
-        let world_mut = unsafe { &mut *world };
-        let _ = world_mut.get_mut::<A>(entity);
-        let _ = world_mut.get_mut::<B>(entity);
+        let world_mut = world;
+        world_mut.mark_component_modified::<A>(entity);
+        world_mut.mark_component_modified::<B>(entity);
     }
 
-    fn mark_changed_fast(world: *mut World, entity: Entity, _cache: &mut QueryFastCache) {
-        let world_mut = unsafe { &mut *world };
+    fn mark_changed_fast(world: QueryCapability<'_>, entity: Entity, _cache: &mut QueryFastCache) {
+        let world_mut = world;
         world_mut.mark_component_modified_by_id(entity, TypeId::of::<A>(), A::component_name());
         world_mut.mark_component_modified_by_id(entity, TypeId::of::<B>(), B::component_name());
     }
 
-    unsafe fn fetch<'w>(world: *mut World, entity: Entity) -> Option<Self::Item<'w>> {
+    unsafe fn fetch<'w>(world: QueryCapability<'w>, entity: Entity) -> Option<Self::Item<'w>> {
         assert_ne!(
             TypeId::of::<A>(),
             TypeId::of::<B>(),
             "double mutable query requires distinct component types",
         );
 
-        let world_mut = unsafe { &mut *world };
-        let a = world_mut.archetype_component_mut_untracked::<A>(entity)? as *mut A;
-        let b = world_mut.archetype_component_mut_untracked::<B>(entity)? as *mut B;
+        let world_mut = world;
+        let a = unsafe { world_mut.component_mut::<A>(entity) }? as *mut A;
+        let b = unsafe { world_mut.component_mut::<B>(entity) }? as *mut B;
 
         // Safety: double mutable query access requires distinct component types.
         Some(unsafe { (&mut *a, &mut *b) })
     }
 
     unsafe fn fetch_fast<'w>(
-        world: *mut World,
+        world: QueryCapability<'w>,
         entity: Entity,
         cache: &mut QueryFastCache,
     ) -> Option<Self::Item<'w>> {
         let _ = cache;
         unsafe { Self::fetch(world, entity) }
     }
-
-    unsafe fn world_ref<'w>(world: *mut World) -> Self::WorldRef<'w> {
-        unsafe { &mut *world }
-    }
 }
 
 impl<T: Component> QueryData for Option<&T> {
     type Item<'w> = Option<&'w T>;
-    type WorldRef<'w> = &'w World;
 
     fn query_types() -> Vec<TypeId> {
         Vec::new()
@@ -487,18 +446,13 @@ impl<T: Component> QueryData for Option<&T> {
         access.add_component_read::<T>();
     }
 
-    unsafe fn fetch<'w>(world: *mut World, entity: Entity) -> Option<Self::Item<'w>> {
-        Some(unsafe { (&*world).archetype_component::<T>(entity) })
-    }
-
-    unsafe fn world_ref<'w>(world: *mut World) -> Self::WorldRef<'w> {
-        unsafe { &*world }
+    unsafe fn fetch<'w>(world: QueryCapability<'w>, entity: Entity) -> Option<Self::Item<'w>> {
+        Some(world.component::<T>(entity))
     }
 }
 
 impl<T: Component> QueryData for Option<&mut T> {
     type Item<'w> = Option<&'w mut T>;
-    type WorldRef<'w> = &'w mut World;
 
     fn query_types() -> Vec<TypeId> {
         Vec::new()
@@ -508,27 +462,22 @@ impl<T: Component> QueryData for Option<&mut T> {
         access.add_component_write::<T>();
     }
 
-    fn mark_changed(world: *mut World, entity: Entity) {
-        let should_mark = unsafe { (&*world).archetype_component::<T>(entity) };
+    fn mark_changed(world: QueryCapability<'_>, entity: Entity) {
+        let should_mark = world.component::<T>(entity);
         if should_mark.is_some() {
             // Safety: query execution ensures exclusive mutable world access for this query form.
-            let _ = unsafe { (&mut *world).get_mut::<T>(entity) };
+            world.mark_component_modified_by_id(entity, TypeId::of::<T>(), T::component_name());
         }
     }
 
-    unsafe fn fetch<'w>(world: *mut World, entity: Entity) -> Option<Self::Item<'w>> {
-        let value = unsafe { (&mut *world).archetype_component_mut_untracked::<T>(entity) };
+    unsafe fn fetch<'w>(world: QueryCapability<'w>, entity: Entity) -> Option<Self::Item<'w>> {
+        let value = unsafe { world.component_mut::<T>(entity) };
         Some(value)
-    }
-
-    unsafe fn world_ref<'w>(world: *mut World) -> Self::WorldRef<'w> {
-        unsafe { &mut *world }
     }
 }
 
 impl<A: Component, B: Component> QueryData for (&mut A, Option<&B>) {
     type Item<'w> = (&'w mut A, Option<&'w B>);
-    type WorldRef<'w> = &'w mut World;
 
     fn query_types() -> Vec<TypeId> {
         vec![TypeId::of::<A>()]
@@ -539,36 +488,31 @@ impl<A: Component, B: Component> QueryData for (&mut A, Option<&B>) {
         access.add_component_read::<B>();
     }
 
-    fn mark_changed(world: *mut World, entity: Entity) {
+    fn mark_changed(world: QueryCapability<'_>, entity: Entity) {
         // Safety: query execution ensures exclusive mutable world access for this query form.
-        let _ = unsafe { (&mut *world).get_mut::<A>(entity) };
+        world.mark_component_modified_by_id(entity, TypeId::of::<A>(), A::component_name());
     }
 
-    unsafe fn fetch<'w>(world: *mut World, entity: Entity) -> Option<Self::Item<'w>> {
+    unsafe fn fetch<'w>(world: QueryCapability<'w>, entity: Entity) -> Option<Self::Item<'w>> {
         assert_ne!(
             TypeId::of::<A>(),
             TypeId::of::<B>(),
             "mutable/optional query requires distinct component types",
         );
 
-        let world_mut = unsafe { &mut *world };
+        let world_mut = world;
         let b = world_mut
-            .archetype_component::<B>(entity)
+            .component::<B>(entity)
             .map(|value| value as *const B);
-        let a = world_mut.archetype_component_mut_untracked::<A>(entity)? as *mut A;
+        let a = unsafe { world_mut.component_mut::<A>(entity) }? as *mut A;
 
         // Safety: mutable/optional query access requires distinct component types.
         Some(unsafe { (&mut *a, b.map(|ptr| &*ptr)) })
-    }
-
-    unsafe fn world_ref<'w>(world: *mut World) -> Self::WorldRef<'w> {
-        unsafe { &mut *world }
     }
 }
 
 impl<A: Component, B: Component> QueryData for (&A, Option<&B>) {
     type Item<'w> = (&'w A, Option<&'w B>);
-    type WorldRef<'w> = &'w World;
 
     fn query_types() -> Vec<TypeId> {
         vec![TypeId::of::<A>()]
@@ -579,21 +523,16 @@ impl<A: Component, B: Component> QueryData for (&A, Option<&B>) {
         access.add_component_read::<B>();
     }
 
-    unsafe fn fetch<'w>(world: *mut World, entity: Entity) -> Option<Self::Item<'w>> {
-        let world_ref = unsafe { &*world };
-        let a = world_ref.archetype_component::<A>(entity)?;
-        let b = world_ref.archetype_component::<B>(entity);
+    unsafe fn fetch<'w>(world: QueryCapability<'w>, entity: Entity) -> Option<Self::Item<'w>> {
+        let world_ref = world;
+        let a = world_ref.component::<A>(entity)?;
+        let b = world_ref.component::<B>(entity);
         Some((a, b))
-    }
-
-    unsafe fn world_ref<'w>(world: *mut World) -> Self::WorldRef<'w> {
-        unsafe { &*world }
     }
 }
 
 impl<A: Component, B: Component> QueryData for (&A, Option<&mut B>) {
     type Item<'w> = (&'w A, Option<&'w mut B>);
-    type WorldRef<'w> = &'w mut World;
 
     fn query_types() -> Vec<TypeId> {
         vec![TypeId::of::<A>()]
@@ -604,39 +543,32 @@ impl<A: Component, B: Component> QueryData for (&A, Option<&mut B>) {
         access.add_component_write::<B>();
     }
 
-    fn mark_changed(world: *mut World, entity: Entity) {
-        let should_mark = unsafe { (&*world).archetype_component::<B>(entity) };
+    fn mark_changed(world: QueryCapability<'_>, entity: Entity) {
+        let should_mark = world.component::<B>(entity);
         if should_mark.is_some() {
             // Safety: query execution ensures exclusive mutable world access for this query form.
-            let _ = unsafe { (&mut *world).get_mut::<B>(entity) };
+            world.mark_component_modified_by_id(entity, TypeId::of::<B>(), B::component_name());
         }
     }
 
-    unsafe fn fetch<'w>(world: *mut World, entity: Entity) -> Option<Self::Item<'w>> {
+    unsafe fn fetch<'w>(world: QueryCapability<'w>, entity: Entity) -> Option<Self::Item<'w>> {
         assert_ne!(
             TypeId::of::<A>(),
             TypeId::of::<B>(),
             "read/optional mutable query requires distinct component types",
         );
 
-        let world_mut = unsafe { &mut *world };
-        let a = world_mut.archetype_component::<A>(entity)? as *const A;
-        let b = world_mut
-            .archetype_component_mut_untracked::<B>(entity)
-            .map(|value| value as *mut B);
+        let world_mut = world;
+        let a = world_mut.component::<A>(entity)? as *const A;
+        let b = unsafe { world_mut.component_mut::<B>(entity) }.map(|value| value as *mut B);
 
         // Safety: read/optional mutable query access requires distinct component types.
         Some(unsafe { (&*a, b.map(|ptr| &mut *ptr)) })
-    }
-
-    unsafe fn world_ref<'w>(world: *mut World) -> Self::WorldRef<'w> {
-        unsafe { &mut *world }
     }
 }
 
 impl<A: Component, B: Component> QueryData for (&mut A, Option<&mut B>) {
     type Item<'w> = (&'w mut A, Option<&'w mut B>);
-    type WorldRef<'w> = &'w mut World;
 
     fn query_types() -> Vec<TypeId> {
         vec![TypeId::of::<A>()]
@@ -647,40 +579,31 @@ impl<A: Component, B: Component> QueryData for (&mut A, Option<&mut B>) {
         access.add_component_write::<B>();
     }
 
-    fn mark_changed(world: *mut World, entity: Entity) {
+    fn mark_changed(world: QueryCapability<'_>, entity: Entity) {
         // Safety: query execution ensures exclusive mutable world access for this query form.
-        let world_mut = unsafe { &mut *world };
-        let _ = world_mut.get_mut::<A>(entity);
-        if world_mut.get::<B>(entity).is_some() {
-            let _ = world_mut.get_mut::<B>(entity);
-        }
+        let world_mut = world;
+        world_mut.mark_component_modified::<A>(entity);
+        world_mut.mark_component_modified::<B>(entity);
     }
 
-    unsafe fn fetch<'w>(world: *mut World, entity: Entity) -> Option<Self::Item<'w>> {
+    unsafe fn fetch<'w>(world: QueryCapability<'w>, entity: Entity) -> Option<Self::Item<'w>> {
         assert_ne!(
             TypeId::of::<A>(),
             TypeId::of::<B>(),
             "mutable/optional mutable query requires distinct component types",
         );
 
-        let world_mut = unsafe { &mut *world };
-        let b = world_mut
-            .archetype_component_mut_untracked::<B>(entity)
-            .map(|value| value as *mut B);
-        let a = world_mut.archetype_component_mut_untracked::<A>(entity)? as *mut A;
+        let world_mut = world;
+        let b = unsafe { world_mut.component_mut::<B>(entity) }.map(|value| value as *mut B);
+        let a = unsafe { world_mut.component_mut::<A>(entity) }? as *mut A;
 
         // Safety: mutable/optional mutable query access requires distinct component types.
         Some(unsafe { (&mut *a, b.map(|ptr| &mut *ptr)) })
-    }
-
-    unsafe fn world_ref<'w>(world: *mut World) -> Self::WorldRef<'w> {
-        unsafe { &mut *world }
     }
 }
 
 impl<T: Component> QueryData for (Entity, Option<&T>) {
     type Item<'w> = (Entity, Option<&'w T>);
-    type WorldRef<'w> = &'w World;
 
     fn query_types() -> Vec<TypeId> {
         Vec::new()
@@ -690,19 +613,14 @@ impl<T: Component> QueryData for (Entity, Option<&T>) {
         access.add_component_read::<T>();
     }
 
-    unsafe fn fetch<'w>(world: *mut World, entity: Entity) -> Option<Self::Item<'w>> {
-        let value = unsafe { (&*world).archetype_component::<T>(entity) };
+    unsafe fn fetch<'w>(world: QueryCapability<'w>, entity: Entity) -> Option<Self::Item<'w>> {
+        let value = world.component::<T>(entity);
         Some((entity, value))
-    }
-
-    unsafe fn world_ref<'w>(world: *mut World) -> Self::WorldRef<'w> {
-        unsafe { &*world }
     }
 }
 
 impl<A: Component, B: Component, C: Component> QueryData for (&A, &B, &C) {
     type Item<'w> = (&'w A, &'w B, &'w C);
-    type WorldRef<'w> = &'w World;
 
     fn query_types() -> Vec<TypeId> {
         vec![TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()]
@@ -714,21 +632,16 @@ impl<A: Component, B: Component, C: Component> QueryData for (&A, &B, &C) {
         access.add_component_read::<C>();
     }
 
-    unsafe fn fetch<'w>(world: *mut World, entity: Entity) -> Option<Self::Item<'w>> {
-        let a = unsafe { (&*world).archetype_component::<A>(entity) }?;
-        let b = unsafe { (&*world).archetype_component::<B>(entity) }?;
-        let c = unsafe { (&*world).archetype_component::<C>(entity) }?;
+    unsafe fn fetch<'w>(world: QueryCapability<'w>, entity: Entity) -> Option<Self::Item<'w>> {
+        let a = world.component::<A>(entity)?;
+        let b = world.component::<B>(entity)?;
+        let c = world.component::<C>(entity)?;
         Some((a, b, c))
-    }
-
-    unsafe fn world_ref<'w>(world: *mut World) -> Self::WorldRef<'w> {
-        unsafe { &*world }
     }
 }
 
 impl<A: Component, B: Component, C: Component> QueryData for (&mut A, &B, &C) {
     type Item<'w> = (&'w mut A, &'w B, &'w C);
-    type WorldRef<'w> = &'w mut World;
 
     fn query_types() -> Vec<TypeId> {
         vec![TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()]
@@ -740,12 +653,12 @@ impl<A: Component, B: Component, C: Component> QueryData for (&mut A, &B, &C) {
         access.add_component_read::<C>();
     }
 
-    fn mark_changed(world: *mut World, entity: Entity) {
+    fn mark_changed(world: QueryCapability<'_>, entity: Entity) {
         // Safety: query execution ensures exclusive mutable world access for this query form.
-        let _ = unsafe { (&mut *world).get_mut::<A>(entity) };
+        world.mark_component_modified_by_id(entity, TypeId::of::<A>(), A::component_name());
     }
 
-    unsafe fn fetch<'w>(world: *mut World, entity: Entity) -> Option<Self::Item<'w>> {
+    unsafe fn fetch<'w>(world: QueryCapability<'w>, entity: Entity) -> Option<Self::Item<'w>> {
         assert_ne!(
             TypeId::of::<A>(),
             TypeId::of::<B>(),
@@ -757,23 +670,18 @@ impl<A: Component, B: Component, C: Component> QueryData for (&mut A, &B, &C) {
             "mutable/read tuple query requires distinct component types",
         );
 
-        let world_mut = unsafe { &mut *world };
-        let b = world_mut.archetype_component::<B>(entity)? as *const B;
-        let c = world_mut.archetype_component::<C>(entity)? as *const C;
-        let a = world_mut.archetype_component_mut_untracked::<A>(entity)? as *mut A;
+        let world_mut = world;
+        let b = world_mut.component::<B>(entity)? as *const B;
+        let c = world_mut.component::<C>(entity)? as *const C;
+        let a = unsafe { world_mut.component_mut::<A>(entity) }? as *mut A;
 
         // Safety: mutable/read tuple query access requires distinct component types.
         Some(unsafe { (&mut *a, &*b, &*c) })
-    }
-
-    unsafe fn world_ref<'w>(world: *mut World) -> Self::WorldRef<'w> {
-        unsafe { &mut *world }
     }
 }
 
 impl<A: Component, B: Component, C: Component> QueryData for (&mut A, &mut B, &C) {
     type Item<'w> = (&'w mut A, &'w mut B, &'w C);
-    type WorldRef<'w> = &'w mut World;
 
     fn query_types() -> Vec<TypeId> {
         vec![TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()]
@@ -785,14 +693,14 @@ impl<A: Component, B: Component, C: Component> QueryData for (&mut A, &mut B, &C
         access.add_component_read::<C>();
     }
 
-    fn mark_changed(world: *mut World, entity: Entity) {
+    fn mark_changed(world: QueryCapability<'_>, entity: Entity) {
         // Safety: query execution ensures exclusive mutable world access for this query form.
-        let world_mut = unsafe { &mut *world };
-        let _ = world_mut.get_mut::<A>(entity);
-        let _ = world_mut.get_mut::<B>(entity);
+        let world_mut = world;
+        world_mut.mark_component_modified::<A>(entity);
+        world_mut.mark_component_modified::<B>(entity);
     }
 
-    unsafe fn fetch<'w>(world: *mut World, entity: Entity) -> Option<Self::Item<'w>> {
+    unsafe fn fetch<'w>(world: QueryCapability<'w>, entity: Entity) -> Option<Self::Item<'w>> {
         assert_ne!(
             TypeId::of::<A>(),
             TypeId::of::<B>(),
@@ -809,16 +717,12 @@ impl<A: Component, B: Component, C: Component> QueryData for (&mut A, &mut B, &C
             "mutable/read tuple query requires distinct component types",
         );
 
-        let world_mut = unsafe { &mut *world };
-        let c = world_mut.archetype_component::<C>(entity)? as *const C;
-        let a = world_mut.archetype_component_mut_untracked::<A>(entity)? as *mut A;
-        let b = world_mut.archetype_component_mut_untracked::<B>(entity)? as *mut B;
+        let world_mut = world;
+        let c = world_mut.component::<C>(entity)? as *const C;
+        let a = unsafe { world_mut.component_mut::<A>(entity) }? as *mut A;
+        let b = unsafe { world_mut.component_mut::<B>(entity) }? as *mut B;
 
         // Safety: mutable/read tuple query access requires distinct component types.
         Some(unsafe { (&mut *a, &mut *b, &*c) })
-    }
-
-    unsafe fn world_ref<'w>(world: *mut World) -> Self::WorldRef<'w> {
-        unsafe { &mut *world }
     }
 }

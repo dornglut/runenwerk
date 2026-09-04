@@ -1,7 +1,7 @@
 // Owner: Grotto Quest ecs - Query Runtime
 use crate::component::{Component, Resource};
 use crate::entity::Entity;
-use crate::world::World;
+use crate::world::QueryCapability;
 use std::any::TypeId;
 use std::marker::PhantomData;
 
@@ -277,10 +277,6 @@ impl QueryAccess {
         push_unique_access(&mut self.tick_buffer_drains, QueryTypeAccess::of::<T>(name));
     }
 
-    pub(crate) fn set_deferred_structural_mutation(&mut self) {
-        self.deferred_structural_mutation = true;
-    }
-
     pub(crate) fn borrow_checkpoint(&self) -> (usize, usize) {
         (self.component_borrows.len(), self.resource_borrows.len())
     }
@@ -373,7 +369,11 @@ impl QueryAccess {
     }
 }
 
-pub trait QueryFilter {
+mod sealed {
+    pub trait QueryFilterSealed {}
+}
+
+pub trait QueryFilter: sealed::QueryFilterSealed {
     fn configure(required: &mut Vec<TypeId>, excluded: &mut Vec<TypeId>);
 
     fn append_access(_access: &mut QueryAccess) {}
@@ -382,7 +382,7 @@ pub trait QueryFilter {
         false
     }
 
-    fn matches_entity(_world: &World, _entity: Entity, _since_tick: u64) -> bool {
+    fn matches_entity(_world: QueryCapability<'_>, _entity: Entity, _since_tick: u64) -> bool {
         true
     }
 }
@@ -409,6 +409,18 @@ impl<T: Component> QueryFilter for Without<T> {
 pub struct Changed<T: Component>(PhantomData<T>);
 pub struct Added<T: Component>(PhantomData<T>);
 
+impl sealed::QueryFilterSealed for () {}
+impl<T: Component> sealed::QueryFilterSealed for With<T> {}
+impl<T: Component> sealed::QueryFilterSealed for Without<T> {}
+impl<T: Component> sealed::QueryFilterSealed for Changed<T> {}
+impl<T: Component> sealed::QueryFilterSealed for Added<T> {}
+impl<A: QueryFilter, B: QueryFilter> sealed::QueryFilterSealed for (A, B) {}
+
+macro_rules! impl_query_filter_sealed_tuple {
+    ($(($($name:ident),+)),+ $(,)?) => {$(impl<$($name: QueryFilter),+> sealed::QueryFilterSealed for ($($name,)+) {})+};
+}
+impl_query_filter_sealed_tuple!((A, B, C), (A, B, C, D), (A, B, C, D, E), (A, B, C, D, E, F));
+
 impl<T: Component> QueryFilter for Changed<T> {
     fn configure(required: &mut Vec<TypeId>, _excluded: &mut Vec<TypeId>) {
         push_unique_type(required, TypeId::of::<T>());
@@ -422,7 +434,7 @@ impl<T: Component> QueryFilter for Changed<T> {
         true
     }
 
-    fn matches_entity(world: &World, entity: Entity, since_tick: u64) -> bool {
+    fn matches_entity(world: QueryCapability<'_>, entity: Entity, since_tick: u64) -> bool {
         world.component_changed_for_entity_since::<T>(entity, since_tick)
     }
 }
@@ -440,7 +452,7 @@ impl<T: Component> QueryFilter for Added<T> {
         true
     }
 
-    fn matches_entity(world: &World, entity: Entity, since_tick: u64) -> bool {
+    fn matches_entity(world: QueryCapability<'_>, entity: Entity, since_tick: u64) -> bool {
         world.component_added_for_entity_since::<T>(entity, since_tick)
     }
 }
@@ -460,7 +472,7 @@ impl<A: QueryFilter, B: QueryFilter> QueryFilter for (A, B) {
         A::needs_tick_filter() || B::needs_tick_filter()
     }
 
-    fn matches_entity(world: &World, entity: Entity, since_tick: u64) -> bool {
+    fn matches_entity(world: QueryCapability<'_>, entity: Entity, since_tick: u64) -> bool {
         A::matches_entity(world, entity, since_tick) && B::matches_entity(world, entity, since_tick)
     }
 }
@@ -485,7 +497,7 @@ macro_rules! impl_query_filter_tuple {
                     false $(|| $name::needs_tick_filter())+
                 }
 
-                fn matches_entity(world: &World, entity: Entity, since_tick: u64) -> bool {
+                fn matches_entity(world: QueryCapability<'_>, entity: Entity, since_tick: u64) -> bool {
                     true $(
                         && $name::matches_entity(world, entity, since_tick)
                     )+

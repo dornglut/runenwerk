@@ -63,21 +63,22 @@ struct TargetEntity(Entity);
 struct Step(u32);
 
 #[derive(ecs::SystemParam)]
-struct CounterParamGroup {
-    step: Res<Step>,
-    seen: ResMut<SeenCount>,
+struct CounterParamGroup<'w> {
+    step: Res<'w, Step>,
+    seen: ResMut<'w, SeenCount>,
 }
 
 #[derive(ecs::SystemParam)]
-struct GenericParamGroup<T: Resource> {
-    value: Res<T>,
-    seen: ResMut<SeenCount>,
+struct GenericParamGroup<'w, T: Resource> {
+    value: Res<'w, T>,
+    seen: ResMut<'w, SeenCount>,
 }
 
 struct LifetimeMarkerParam<'a>(PhantomData<&'a ()>);
 
-unsafe impl<'world, 'a> SystemParam<'world> for LifetimeMarkerParam<'a> {
+unsafe impl<'a> SystemParam for LifetimeMarkerParam<'a> {
     type State = ();
+    type Item<'world, 'state> = LifetimeMarkerParam<'world>;
 
     fn init_state(_world: &mut World) -> Result<Self::State, SystemParamError> {
         Ok(())
@@ -87,43 +88,42 @@ unsafe impl<'world, 'a> SystemParam<'world> for LifetimeMarkerParam<'a> {
         QueryAccess::default()
     }
 
-    unsafe fn extract(
-        _state: &'world mut Self::State,
-        _world: *mut World,
-        _commands: *mut Commands,
-    ) -> Result<Self, SystemParamError> {
-        Ok(Self(PhantomData))
+    unsafe fn extract<'world, 'state>(
+        _state: &'state mut Self::State,
+        _context: ecs::SystemParamContext<'world>,
+    ) -> Result<Self::Item<'world, 'state>, SystemParamError> {
+        Ok(LifetimeMarkerParam(PhantomData))
     }
 }
 
 #[derive(ecs::SystemParam)]
 struct LifetimeCollisionParamGroup<'w> {
     marker: LifetimeMarkerParam<'w>,
-    step: Res<Step>,
-    seen: ResMut<SeenCount>,
+    step: Res<'w, Step>,
+    seen: ResMut<'w, SeenCount>,
 }
 
 #[derive(ecs::SystemParam)]
-struct InnerParamGroup {
-    step: Res<Step>,
+struct InnerParamGroup<'w> {
+    step: Res<'w, Step>,
 }
 
 #[derive(ecs::SystemParam)]
-struct OuterParamGroup {
-    inner: InnerParamGroup,
-    seen: ResMut<SeenCount>,
+struct OuterParamGroup<'w> {
+    inner: InnerParamGroup<'w>,
+    seen: ResMut<'w, SeenCount>,
 }
 
 #[derive(ecs::SystemParam)]
-struct InvalidQueueParamGroup {
-    reader: WorkQueueReader<DamageEvent>,
-    drainer: WorkQueueDrainer<DamageEvent>,
+struct InvalidQueueParamGroup<'w> {
+    reader: WorkQueueReader<'w, DamageEvent>,
+    drainer: WorkQueueDrainer<'w, DamageEvent>,
 }
 
 #[derive(ecs::SystemParam)]
-struct DuplicateWriterParamGroup {
-    first: WorkQueueWriter<DamageEvent>,
-    second: WorkQueueWriter<DamageEvent>,
+struct DuplicateWriterParamGroup<'w> {
+    first: WorkQueueWriter<'w, DamageEvent>,
+    second: WorkQueueWriter<'w, DamageEvent>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
@@ -143,9 +143,6 @@ struct PresenceHistory(Vec<usize>);
 
 #[derive(Debug, PartialEq, Eq, ecs::Resource)]
 struct BarrierLog(Vec<(usize, BarrierKind)>);
-
-#[derive(ecs::Resource)]
-struct EscapedCommands(Option<Commands>);
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 struct SpawnMarkerDeferred(u32);
@@ -351,7 +348,7 @@ fn duplicate_write_intents_in_single_system_are_allowed() {
 
 #[test]
 fn derived_named_param_group_executes_and_reports_named_children() {
-    fn use_group(mut group: CounterParamGroup) {
+    fn use_group(mut group: CounterParamGroup<'_>) {
         group.seen.0 = group.step.0.saturating_add(1);
     }
 
@@ -369,7 +366,7 @@ fn derived_named_param_group_executes_and_reports_named_children() {
     let slots = runtime.param_slots_for_system(system_id).unwrap();
     assert_eq!(slots.len(), 1);
     assert_eq!(slots[0].kind, "param_group");
-    assert!(slots[0].type_name.contains("CounterParamGroup"));
+    assert!(slots[0].type_name.contains("CounterParamGroup<'_>"));
     assert_eq!(slots[0].id.path.as_slice(), [0]);
     assert_eq!(slots[0].children.len(), 2);
     assert_eq!(slots[0].children[0].name, Some("step"));
@@ -382,7 +379,7 @@ fn derived_named_param_group_executes_and_reports_named_children() {
 
 #[test]
 fn generic_named_param_group_executes_and_reports_named_children() {
-    fn use_generic_group(mut group: GenericParamGroup<Step>) {
+    fn use_generic_group(mut group: GenericParamGroup<'_, Step>) {
         group.seen.0 = group.value.0.saturating_add(1);
     }
 
@@ -409,7 +406,7 @@ fn generic_named_param_group_executes_and_reports_named_children() {
 
 #[test]
 fn derive_handles_user_lifetime_named_w() {
-    fn use_lifetime_group(mut group: LifetimeCollisionParamGroup<'static>) {
+    fn use_lifetime_group(mut group: LifetimeCollisionParamGroup<'_>) {
         let _ = &group.marker;
         group.seen.0 = group.step.0.saturating_add(1);
     }
@@ -427,7 +424,7 @@ fn derive_handles_user_lifetime_named_w() {
 
 #[test]
 fn nested_param_group_reports_recursive_child_paths() {
-    fn use_nested_group(mut group: OuterParamGroup) {
+    fn use_nested_group(mut group: OuterParamGroup<'_>) {
         group.seen.0 = group.inner.step.0.saturating_add(2);
     }
 
@@ -486,7 +483,7 @@ fn tuple_param_group_reports_indexed_children_and_executes() {
 
 #[test]
 fn grouped_mixed_intent_params_in_single_system_are_rejected() {
-    fn invalid_group(group: InvalidQueueParamGroup) {
+    fn invalid_group(group: InvalidQueueParamGroup<'_>) {
         let _ = (&group.reader, &group.drainer);
     }
 
@@ -503,7 +500,7 @@ fn grouped_mixed_intent_params_in_single_system_are_rejected() {
 
 #[test]
 fn grouped_duplicate_write_intents_in_single_system_are_allowed() {
-    fn duplicate_group(group: DuplicateWriterParamGroup) {
+    fn duplicate_group(group: DuplicateWriterParamGroup<'_>) {
         let _ = (&group.first, &group.second);
     }
 
@@ -1091,35 +1088,15 @@ fn failed_schedule_drops_stage_deferred_commands_instead_of_replaying_next_run()
     assert_eq!(world.query_state::<&Marker, ()>().iter(&world).count(), 0);
 }
 
-#[test]
-#[should_panic(expected = "commands param escaped its system execution scope")]
-fn escaped_commands_panics_after_system_scope() {
-    fn stash_commands_once(mut escaped: ResMut<EscapedCommands>, commands: Commands) {
-        if escaped.0.is_none() {
-            escaped.0 = Some(commands);
-        }
-    }
-
-    let mut world = World::new();
-    world.insert_resource(EscapedCommands(None));
-
-    let mut runtime = Runtime::new();
-    runtime.add_systems::<Update, _, _>(&mut world, stash_commands_once);
-    runtime.run_schedule::<Update>(&mut world).unwrap();
-
-    let mut escaped = world.remove_resource::<EscapedCommands>().unwrap();
-    let mut commands = escaped.0.take().expect("commands should have been stashed");
-    commands.spawn(Marker(1));
-}
-
 static PARAM_INIT_CALLS: AtomicUsize = AtomicUsize::new(0);
 static PARAM_EXTRACT_CALLS: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 struct StatefulParam(u32);
 
-unsafe impl<'w> SystemParam<'w> for StatefulParam {
+unsafe impl SystemParam for StatefulParam {
     type State = u32;
+    type Item<'world, 'state> = StatefulParam;
 
     fn init_state(_world: &mut World) -> Result<Self::State, SystemParamError> {
         PARAM_INIT_CALLS.fetch_add(1, Ordering::SeqCst);
@@ -1130,11 +1107,10 @@ unsafe impl<'w> SystemParam<'w> for StatefulParam {
         QueryAccess::default()
     }
 
-    unsafe fn extract(
-        state: &'w mut Self::State,
-        _world: *mut World,
-        _commands: *mut Commands,
-    ) -> Result<Self, SystemParamError> {
+    unsafe fn extract<'world, 'state>(
+        state: &'state mut Self::State,
+        _context: ecs::SystemParamContext<'world>,
+    ) -> Result<Self::Item<'world, 'state>, SystemParamError> {
         *state = state.saturating_add(1);
         PARAM_EXTRACT_CALLS.fetch_add(1, Ordering::SeqCst);
         Ok(StatefulParam(*state))

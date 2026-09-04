@@ -45,13 +45,13 @@ pub const DRAWING_RENDER_FRAME_PRODUCER_ID: RenderFrameProducerId = render_frame
 pub const NATIVE_CONTACT_FALLBACK_SUPPRESSION_IDLE_FRAME_LIMIT: u32 = 12;
 
 #[derive(ecs::SystemParam)]
-pub struct DrawingFrameSubmissionResources {
-    submissions: ResMut<SurfaceFrameSubmissionRegistryResource>,
-    dynamic_targets: ResMut<RenderDynamicTextureTargetRequestRegistryResource>,
-    texture_uploads: ResMut<RenderDynamicTextureUploadRegistryResource>,
-    product_selections: ResMut<PreparedRenderProductSelectionResource>,
-    frame_requests: ResMut<PreparedRenderFrameRequestResource>,
-    debug_config: ResMut<RenderDebugConfigResource>,
+pub struct DrawingFrameSubmissionResources<'w> {
+    submissions: ResMut<'w, SurfaceFrameSubmissionRegistryResource>,
+    dynamic_targets: ResMut<'w, RenderDynamicTextureTargetRequestRegistryResource>,
+    texture_uploads: ResMut<'w, RenderDynamicTextureUploadRegistryResource>,
+    product_selections: ResMut<'w, PreparedRenderProductSelectionResource>,
+    frame_requests: ResMut<'w, PreparedRenderFrameRequestResource>,
+    debug_config: ResMut<'w, RenderDebugConfigResource>,
 }
 
 const fn ui_frame_producer_id(raw: u64) -> RenderFrameProducerId {
@@ -380,7 +380,7 @@ pub fn submit_draw_frame_system(
     mut host: ResMut<DrawingHostResource>,
     mut upload_tracker: ResMut<DrawingInkUploadTrackerResource>,
     gpu_flow: Res<DrawingInkGpuFlowResource>,
-    render_submission: DrawingFrameSubmissionResources,
+    render_submission: DrawingFrameSubmissionResources<'_>,
 ) {
     let DrawingFrameSubmissionResources {
         mut submissions,
