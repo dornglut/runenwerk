@@ -5,8 +5,6 @@ mod plan_report;
 mod runtime;
 
 pub use extract::{SystemParam, SystemParamError};
-#[doc(hidden)]
-pub use extract::SystemParamContext;
 pub use param_metadata::{ParamSlotId, ParamSlotMetadata};
 pub use params::{
     BroadcastReader, BroadcastReaderState, BroadcastWriter, Res, ResMut, ResView,
