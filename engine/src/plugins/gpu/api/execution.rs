@@ -1,6 +1,6 @@
 use super::{
-    GpuContextAffinity, GpuInitialCoverage, GpuReadbackBytes, GpuReadbackId, GpuResourceRef,
-    GpuSurfaceLeaseError,
+    GpuContextAffinity, GpuInitialCoverage, GpuProgramContractError, GpuReadbackBytes,
+    GpuReadbackId, GpuResourceRef, GpuSurfaceLeaseError, GpuWorkOperationError,
 };
 use core::fmt;
 use core::num::{NonZeroU64, NonZeroUsize};
@@ -356,6 +356,15 @@ impl fmt::Debug for GpuSubmission {
     }
 }
 
+/// Original typed authority for one contextual `WorkNotAdmitted` rejection.
+///
+/// This enum transports existing owner-specific errors and does not define new rejection causes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GpuWorkNotAdmittedSource {
+    ProgramContract(GpuProgramContractError),
+    Operation(GpuWorkOperationError),
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GpuSubmissionPreparationErrorKind {
     CapabilityNotAdmitted,
@@ -381,6 +390,7 @@ pub enum GpuSubmissionPreparationErrorKind {
 pub struct GpuSubmissionPreparationError {
     kind: GpuSubmissionPreparationErrorKind,
     detail: String,
+    work_not_admitted_source: Option<Box<GpuWorkNotAdmittedSource>>,
     surface_error: Option<Box<GpuSurfaceLeaseError>>,
 }
 
@@ -389,6 +399,19 @@ impl GpuSubmissionPreparationError {
         Self {
             kind,
             detail: detail.into(),
+            work_not_admitted_source: None,
+            surface_error: None,
+        }
+    }
+
+    pub(crate) fn work_not_admitted(
+        detail: impl Into<String>,
+        source: GpuWorkNotAdmittedSource,
+    ) -> Self {
+        Self {
+            kind: GpuSubmissionPreparationErrorKind::WorkNotAdmitted,
+            detail: detail.into(),
+            work_not_admitted_source: Some(Box::new(source)),
             surface_error: None,
         }
     }
@@ -397,6 +420,7 @@ impl GpuSubmissionPreparationError {
         Self {
             kind: GpuSubmissionPreparationErrorKind::SurfaceLease,
             detail: error.to_string(),
+            work_not_admitted_source: None,
             surface_error: Some(Box::new(error)),
         }
     }
@@ -407,6 +431,10 @@ impl GpuSubmissionPreparationError {
 
     pub fn detail(&self) -> &str {
         &self.detail
+    }
+
+    pub fn work_not_admitted_source(&self) -> Option<&GpuWorkNotAdmittedSource> {
+        self.work_not_admitted_source.as_deref()
     }
 
     pub fn surface_error(&self) -> Option<&GpuSurfaceLeaseError> {
