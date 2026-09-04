@@ -120,7 +120,10 @@ fn retained_indeterminate_reason_and_reconstruction_outcome_stay_typed_and_disti
 
     let pending = state.snapshot(identity).unwrap();
     assert_eq!(pending.initialized_coverage(), Some(&initialized));
-    assert_eq!(pending.opaque_content(), GpuOpaqueContentContinuity::Unknown);
+    assert_eq!(
+        pending.opaque_content(),
+        GpuOpaqueContentContinuity::Unknown
+    );
     assert_eq!(
         pending.opaque_content_indeterminate_reason(),
         Some(GpuOpaqueContentIndeterminateReason::AcceptedWritePending)
