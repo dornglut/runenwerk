@@ -1,4 +1,6 @@
+use super::descriptor::GpuLimitKind;
 use super::selection::GpuCandidateDisposition;
+use crate::plugins::gpu::GpuCapabilityAdmissionError;
 use std::collections::BTreeMap;
 use std::fmt;
 
@@ -116,10 +118,33 @@ impl GpuContextRequestErrorCategory {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct GpuContextLimitRejection {
+    kind: GpuLimitKind,
+    required_minimum: u64,
+    observed: u64,
+}
+
+impl GpuContextLimitRejection {
+    pub(crate) const fn new(kind: GpuLimitKind, required_minimum: u64, observed: u64) -> Self {
+        Self {
+            kind,
+            required_minimum,
+            observed,
+        }
+    }
+
+    pub(crate) const fn as_tuple(self) -> (GpuLimitKind, u64, u64) {
+        (self.kind, self.required_minimum, self.observed)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuContextRequestError {
     category: GpuContextRequestErrorCategory,
     detail: Option<String>,
+    capability_admission_error: Option<Box<GpuCapabilityAdmissionError>>,
+    limit_rejection: Option<GpuContextLimitRejection>,
     candidate_dispositions: Vec<GpuCandidateDisposition>,
 }
 
@@ -128,6 +153,39 @@ impl GpuContextRequestError {
         Self {
             category,
             detail: sanitized_diagnostic(detail.into()),
+            capability_admission_error: None,
+            limit_rejection: None,
+            candidate_dispositions: Vec::new(),
+        }
+    }
+
+    pub(crate) fn from_capability_admission(error: GpuCapabilityAdmissionError) -> Self {
+        let detail = sanitized_diagnostic(error.to_string());
+        Self {
+            category: GpuContextRequestErrorCategory::MandatoryFeatureMissing,
+            detail,
+            capability_admission_error: Some(Box::new(error)),
+            limit_rejection: None,
+            candidate_dispositions: Vec::new(),
+        }
+    }
+
+    pub(crate) fn limit_below_required_minimum(
+        kind: GpuLimitKind,
+        required_minimum: u64,
+        observed: u64,
+        detail: impl Into<String>,
+    ) -> Self {
+        debug_assert!(observed < required_minimum);
+        Self {
+            category: GpuContextRequestErrorCategory::LimitBelowRequiredMinimum,
+            detail: sanitized_diagnostic(detail.into()),
+            capability_admission_error: None,
+            limit_rejection: Some(GpuContextLimitRejection::new(
+                kind,
+                required_minimum,
+                observed,
+            )),
             candidate_dispositions: Vec::new(),
         }
     }
@@ -138,6 +196,23 @@ impl GpuContextRequestError {
 
     pub fn detail(&self) -> Option<&str> {
         self.detail.as_deref()
+    }
+
+    pub fn capability_admission_error(&self) -> Option<&GpuCapabilityAdmissionError> {
+        self.capability_admission_error.as_deref()
+    }
+
+    /// Returns `(normalized limit kind, required minimum, observed value)` for a below-minimum
+    /// context-admission rejection. Other rejection classes return `None`.
+    pub const fn limit_rejection(&self) -> Option<(GpuLimitKind, u64, u64)> {
+        match self.limit_rejection {
+            Some(rejection) => Some(rejection.as_tuple()),
+            None => None,
+        }
+    }
+
+    pub(crate) const fn limit_rejection_evidence(&self) -> Option<GpuContextLimitRejection> {
+        self.limit_rejection
     }
 
     pub fn candidate_dispositions(&self) -> &[GpuCandidateDisposition] {
@@ -311,6 +386,8 @@ mod tests {
                 adapter: adapter(),
                 category,
                 detail: sanitized_diagnostic(detail.to_owned()),
+                capability_admission_error: None,
+                limit_rejection: None,
             }))
         };
         let rendered = GpuContextRequestError::new(

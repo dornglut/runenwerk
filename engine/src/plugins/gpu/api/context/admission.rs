@@ -2,7 +2,9 @@ use super::descriptor::{
     GpuAlignmentKind, GpuContextDescriptor, GpuFormatRole, GpuLimitKind, GpuPortabilityPolicy,
     GpuSoftwareFallbackPolicy, alignment_value, validate_descriptor_semantics,
 };
-use super::diagnostics::{GpuContextRequestError, GpuContextRequestErrorCategory};
+use super::diagnostics::{
+    GpuContextLimitRejection, GpuContextRequestError, GpuContextRequestErrorCategory,
+};
 use super::facts::{
     GpuAdapterFacts, GpuAdmittedDeviceFacts, GpuAlignmentFacts, GpuDeviceLimits,
     GpuDeviceRequestProfile, GpuPortabilityClass, GpuPortabilityEvidence, GpuPortabilityReason,
@@ -10,8 +12,8 @@ use super::facts::{
 };
 use super::selection::GpuCandidateId;
 use crate::plugins::gpu::{
-    GpuCapabilityAdmission, GpuCapabilityFeature, GpuCapabilityRequirement, GpuLimits,
-    GpuPreferredFallback, GpuTextureFormat,
+    GpuCapabilityAdmission, GpuCapabilityAdmissionError, GpuCapabilityFeature,
+    GpuCapabilityRequirement, GpuLimits, GpuPreferredFallback, GpuTextureFormat,
 };
 use std::collections::BTreeSet;
 
@@ -143,6 +145,8 @@ pub struct GpuRejectedCandidateReport {
     pub(crate) adapter: GpuAdapterFacts,
     pub(crate) category: GpuContextRequestErrorCategory,
     pub(crate) detail: Option<String>,
+    pub(crate) capability_admission_error: Option<GpuCapabilityAdmissionError>,
+    pub(crate) limit_rejection: Option<GpuContextLimitRejection>,
 }
 
 impl GpuRejectedCandidateReport {
@@ -160,6 +164,34 @@ impl GpuRejectedCandidateReport {
 
     pub fn detail(&self) -> Option<&str> {
         self.detail.as_deref()
+    }
+
+    pub fn capability_admission_error(&self) -> Option<&GpuCapabilityAdmissionError> {
+        self.capability_admission_error.as_ref()
+    }
+
+    /// Returns `(normalized limit kind, required minimum, observed value)` for a below-minimum
+    /// candidate-admission rejection. Other rejection classes return `None`.
+    pub const fn limit_rejection(&self) -> Option<(GpuLimitKind, u64, u64)> {
+        match self.limit_rejection {
+            Some(rejection) => Some(rejection.as_tuple()),
+            None => None,
+        }
+    }
+
+    pub(crate) fn from_context_error(
+        id: GpuCandidateId,
+        adapter: GpuAdapterFacts,
+        error: GpuContextRequestError,
+    ) -> Self {
+        Self {
+            id,
+            adapter,
+            category: error.category(),
+            detail: error.detail().map(str::to_owned),
+            capability_admission_error: error.capability_admission_error().cloned(),
+            limit_rejection: error.limit_rejection_evidence(),
+        }
     }
 }
 
@@ -236,12 +268,7 @@ pub(crate) fn evaluate_validated_candidate(
         adapter.supported(),
         enabled_features.iter().copied(),
     )
-    .map_err(|error| {
-        GpuContextRequestError::new(
-            GpuContextRequestErrorCategory::MandatoryFeatureMissing,
-            error.to_string(),
-        )
-    })?;
+    .map_err(GpuContextRequestError::from_capability_admission)?;
     let degradations = capability_admission
         .preferred()
         .iter()
@@ -285,11 +312,13 @@ pub(crate) fn evaluate_validated_candidate(
 
     let workload_budget = effective_workload_budget(descriptor)?;
     for kind in ALL_LIMIT_KINDS {
-        if limit_value(adapter.adapter_limits().values(), kind)
-            < limit_value(workload_budget.limits(), kind)
-        {
-            return Err(GpuContextRequestError::new(
-                GpuContextRequestErrorCategory::LimitBelowRequiredMinimum,
+        let observed = limit_value(adapter.adapter_limits().values(), kind);
+        let required_minimum = limit_value(workload_budget.limits(), kind);
+        if observed < required_minimum {
+            return Err(GpuContextRequestError::limit_below_required_minimum(
+                kind,
+                required_minimum,
+                observed,
                 format!("{kind:?} is below the effective workload budget"),
             ));
         }
@@ -362,11 +391,13 @@ pub(crate) fn admitted_device_facts(
     candidate_dispositions: Vec<super::selection::GpuCandidateDisposition>,
 ) -> Result<GpuAdmittedDeviceFacts, GpuContextRequestError> {
     for kind in ALL_LIMIT_KINDS {
-        if limit_value(device_limits.values(), kind)
-            < limit_value(candidate.contract.workload_budget.limits(), kind)
-        {
-            return Err(GpuContextRequestError::new(
-                GpuContextRequestErrorCategory::LimitBelowRequiredMinimum,
+        let observed = limit_value(device_limits.values(), kind);
+        let required_minimum = limit_value(candidate.contract.workload_budget.limits(), kind);
+        if observed < required_minimum {
+            return Err(GpuContextRequestError::limit_below_required_minimum(
+                kind,
+                required_minimum,
+                observed,
                 format!("created device {kind:?} is below the admitted workload budget"),
             ));
         }
@@ -754,6 +785,40 @@ mod tests {
         assert_eq!(facts.device_limits(), actual);
         assert_eq!(facts.workload_budget().limits().max_vertex_buffers(), 4);
         assert_eq!(facts.admission_contract(), candidate.contract());
+    }
+
+    #[test]
+    fn device_limit_rejection_preserves_typed_requirement_evidence() {
+        let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+            .require_limit(GpuLimitKind::MaxVertexBuffers, 8);
+        let candidate = evaluate_candidate(&descriptor, adapter([]), true).unwrap();
+        let device_limits = GpuDeviceLimits::new(
+            GpuLimits::new(
+                64 * 1024,
+                128 * 1024 * 1024,
+                4,
+                7,
+                64,
+                8192,
+                4,
+                24,
+                8,
+                4,
+                65_535,
+            )
+            .unwrap(),
+            alignments(),
+        );
+
+        let error = admitted_device_facts(&candidate, device_limits, Vec::new()).unwrap_err();
+        assert_eq!(
+            error.category(),
+            GpuContextRequestErrorCategory::LimitBelowRequiredMinimum
+        );
+        assert_eq!(
+            error.limit_rejection(),
+            Some((GpuLimitKind::MaxVertexBuffers, 8, 7))
+        );
     }
 
     #[test]
