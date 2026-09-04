@@ -466,8 +466,8 @@ fn dynamic_compute_graph_with_first_work(
 fn bind_group_limit_violation_graph(context: &GpuContext) -> GpuPreparedWorkGraph {
     let group = context
         .device_facts()
-        .workload_budget()
-        .limits()
+        .device_limits()
+        .values()
         .max_bind_groups();
     let source_text = format!(
         r#"
