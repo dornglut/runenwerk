@@ -141,7 +141,7 @@ fn initialization_explanations_distinguish_descriptor_input_and_generic_shader_w
             .iter()
             .all(|explanation| !matches!(
                 explanation.kind(),
-                GpuInitializationExplanationKind::OperationGuaranteed { .. }
+                GpuInitializationExplanationKind::OperationGuaranteed
             )),
         "generic shader writes must not manufacture initialization guarantees"
     );
@@ -226,7 +226,6 @@ fn prepared_materialization_and_exact_operation_guarantees_remain_distinct() {
     )
     .unwrap();
     assert_eq!(prepared.initial_content().len(), 1);
-    let node = prepared.nodes()[0].id();
     let summary = summary_for(&prepared, prepared_buffer.diagnostic_identity());
     assert!(summary.initial().is_none());
     assert_eq!(summary.explanations().len(), 2);
@@ -236,7 +235,7 @@ fn prepared_materialization_and_exact_operation_guarantees_remain_distinct() {
     );
     assert_eq!(
         summary.explanations()[1].kind(),
-        GpuInitializationExplanationKind::OperationGuaranteed { node }
+        GpuInitializationExplanationKind::OperationGuaranteed
     );
     for explanation in summary.explanations() {
         assert_eq!(
@@ -289,18 +288,17 @@ fn attachment_discard_records_exact_loss_after_operation_guarantee() {
         [fragment.finish().unwrap()],
     )
     .unwrap();
-    let node = prepared.nodes()[0].id();
     let summary = summary_for(&prepared, texture.diagnostic_identity());
     assert!(summary.initial().is_none());
     assert!(summary.final_coverage().is_none());
     assert_eq!(summary.explanations().len(), 2);
     assert_eq!(
         summary.explanations()[0].kind(),
-        GpuInitializationExplanationKind::OperationGuaranteed { node }
+        GpuInitializationExplanationKind::OperationGuaranteed
     );
     assert_eq!(
         summary.explanations()[1].kind(),
-        GpuInitializationExplanationKind::AttachmentDiscard { node }
+        GpuInitializationExplanationKind::AttachmentDiscard
     );
     for explanation in summary.explanations() {
         assert_eq!(
