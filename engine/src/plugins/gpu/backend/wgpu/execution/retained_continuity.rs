@@ -3,15 +3,18 @@ use crate::plugins::gpu::api::{
 };
 use crate::plugins::gpu::{
     GpuContext, GpuContextAffinity, GpuContextDescriptor, GpuDeviceGenerationReplacementError,
-    GpuInitialCoverage, GpuOpaqueContentContinuity, GpuPreparedWorkGraph, GpuRealizationPolicies,
-    GpuReconstruction, GpuResourceLabel, GpuResourceRef, GpuRetainedInitializationSeed,
-    GpuRetainedReconstructionRequirement, GpuRetainedReconstructionSeed,
-    GpuRetainedResourceContinuity, GpuSubmissionId, GpuSubmissionRejectionKind,
-    GpuSubmissionRejectionReason, GpuWorkFragment, GpuWorkGraphError, GpuWorkResourceId,
+    GpuInitialCoverage, GpuOpaqueContentContinuity, GpuOpaqueContentIndeterminateReason,
+    GpuPreparedWorkGraph, GpuRealizationPolicies, GpuReconstruction, GpuResourceLabel,
+    GpuResourceRef, GpuRetainedInitializationSeed, GpuRetainedReconstructionRequirement,
+    GpuRetainedReconstructionSeed, GpuRetainedResourceContinuity, GpuSubmissionId,
+    GpuSubmissionRejectionKind, GpuSubmissionRejectionReason, GpuWorkFragment, GpuWorkGraphError,
+    GpuWorkResourceId,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Mutex;
 
+#[cfg(test)]
+mod explainability_tests;
 #[cfg(test)]
 mod participation_tests;
 #[cfg(test)]
@@ -249,15 +252,25 @@ impl RetainedContinuityState {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .get(&resource)
             .map(|record| {
+                let (opaque_content, indeterminate_reason) = if record.write_pending {
+                    (
+                        GpuOpaqueContentContinuity::Unknown,
+                        Some(GpuOpaqueContentIndeterminateReason::AcceptedWritePending),
+                    )
+                } else if record.opaque_content == GpuOpaqueContentContinuity::Unknown {
+                    (
+                        GpuOpaqueContentContinuity::Unknown,
+                        Some(GpuOpaqueContentIndeterminateReason::PossibleWriteFailure),
+                    )
+                } else {
+                    (record.opaque_content, None)
+                };
                 GpuRetainedResourceContinuity::new(
                     self.affinity,
                     record.resource.clone(),
                     record.initialized_coverage.clone(),
-                    if record.write_pending {
-                        GpuOpaqueContentContinuity::Unknown
-                    } else {
-                        record.opaque_content
-                    },
+                    opaque_content,
+                    indeterminate_reason,
                 )
             })
     }
