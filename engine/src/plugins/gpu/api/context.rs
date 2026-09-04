@@ -5,7 +5,7 @@
 
 use super::{
     GpuExecutionPolicy, GpuPreparedWorkGraph, GpuPreparedWorkNode, GpuRealizationPolicies,
-    GpuRuntimeBindingDeviceFacts, GpuSubmissionPreparationError, GpuSubmissionPreparationErrorKind,
+    GpuRuntimeBindingDeviceFacts, GpuSubmissionPreparationError, GpuWorkNotAdmittedSource,
     GpuWorkOperation,
 };
 use core::num::NonZeroU64;
@@ -155,19 +155,32 @@ impl GpuContext {
                     operation
                         .bindings()
                         .validate_device_facts(&binding_facts)
-                        .map_err(|error| work_not_admitted(prepared, error.to_string()))?;
+                        .map_err(|error| {
+                            work_not_admitted(
+                                prepared,
+                                GpuWorkNotAdmittedSource::ProgramContract(error),
+                            )
+                        })?;
                     operation
                         .dispatch()
                         .validate_limits(limits)
-                        .map_err(|error| work_not_admitted(prepared, error.to_string()))?;
+                        .map_err(|error| {
+                            work_not_admitted(prepared, GpuWorkNotAdmittedSource::Operation(error))
+                        })?;
                 }
                 GpuWorkOperation::Render(operation) => {
                     for draw in operation.draws() {
                         draw.bindings()
                             .validate_device_facts(&binding_facts)
-                            .map_err(|error| work_not_admitted(prepared, error.to_string()))?;
-                        draw.validate_limits(limits)
-                            .map_err(|error| work_not_admitted(prepared, error.to_string()))?;
+                            .map_err(|error| {
+                                work_not_admitted(
+                                    prepared,
+                                    GpuWorkNotAdmittedSource::ProgramContract(error),
+                                )
+                            })?;
+                        draw.validate_limits(limits).map_err(|error| {
+                            work_not_admitted(prepared, GpuWorkNotAdmittedSource::Operation(error))
+                        })?;
                     }
                 }
                 GpuWorkOperation::Copy(_)
@@ -195,15 +208,19 @@ impl GpuContext {
 
 fn work_not_admitted(
     prepared: &GpuPreparedWorkNode,
-    detail: String,
+    source: GpuWorkNotAdmittedSource,
 ) -> GpuSubmissionPreparationError {
-    GpuSubmissionPreparationError::new(
-        GpuSubmissionPreparationErrorKind::WorkNotAdmitted,
+    let source_detail = match &source {
+        GpuWorkNotAdmittedSource::ProgramContract(error) => error.to_string(),
+        GpuWorkNotAdmittedSource::Operation(error) => error.to_string(),
+    };
+    GpuSubmissionPreparationError::work_not_admitted(
         format!(
-            "fragment={:?} node={:?} prepared_node={:?}: {detail}",
+            "fragment={:?} node={:?} prepared_node={:?}: {source_detail}",
             prepared.fragment_label().as_str(),
             prepared.node().label().as_str(),
             prepared.id(),
         ),
+        source,
     )
 }

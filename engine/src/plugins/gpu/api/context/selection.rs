@@ -310,14 +310,13 @@ pub(crate) fn select_candidate_inputs(
                 candidate.environment,
             ) {
                 Ok(report) => GpuCandidateDisposition::Accepted(Box::new(report)),
-                Err(error) => {
-                    GpuCandidateDisposition::Rejected(Box::new(GpuRejectedCandidateReport {
-                        id: candidate.id,
-                        adapter: candidate.adapter,
-                        category: error.category(),
-                        detail: error.detail().map(str::to_owned),
-                    }))
-                }
+                Err(error) => GpuCandidateDisposition::Rejected(Box::new(
+                    GpuRejectedCandidateReport::from_context_error(
+                        candidate.id,
+                        candidate.adapter,
+                        error,
+                    ),
+                )),
             }
         })
         .collect::<Vec<_>>();
@@ -664,8 +663,9 @@ mod tests {
     use super::*;
     use crate::plugins::gpu::{
         GpuAdapterClass, GpuAdapterFacts, GpuAdapterLimits, GpuAlignmentFacts, GpuBackendFamily,
-        GpuCapabilities, GpuCapabilityFeature, GpuCapabilityRequirements, GpuContextDescriptor,
-        GpuFallbackStatus, GpuLimits, GpuSoftwareStatus,
+        GpuCapabilities, GpuCapabilityAdmissionCause, GpuCapabilityFeature,
+        GpuCapabilityRequirement, GpuCapabilityRequirements, GpuContextDescriptor,
+        GpuFallbackStatus, GpuLimitKind, GpuLimits, GpuSoftwareStatus,
     };
 
     static RETRY_REGISTRY_TEST_SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
@@ -772,6 +772,57 @@ mod tests {
             [GpuCandidateDisposition::Rejected(report)]
                 if report.category() == GpuContextRequestErrorCategory::BackendFamilyForbidden
         ));
+    }
+
+    #[test]
+    fn rejected_candidate_preserves_typed_capability_admission_evidence() {
+        let mut requirements = GpuCapabilityRequirements::new();
+        requirements
+            .insert(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::Compute,
+            ))
+            .unwrap();
+        let error = select_candidate(&GpuContextDescriptor::new(requirements), [adapter()], true)
+            .unwrap_err();
+        assert_eq!(
+            error.category(),
+            GpuContextRequestErrorCategory::NoAdmissibleCandidate
+        );
+        let [GpuCandidateDisposition::Rejected(report)] = error.candidate_dispositions() else {
+            panic!("one rejected candidate should be retained");
+        };
+        let capability = report
+            .capability_admission_error()
+            .expect("capability rejection should remain typed");
+        assert_eq!(
+            capability.cause(),
+            GpuCapabilityAdmissionCause::RequiredUnavailable
+        );
+        assert_eq!(capability.feature(), Some(GpuCapabilityFeature::Compute));
+        assert_eq!(report.limit_rejection(), None);
+    }
+
+    #[test]
+    fn rejected_candidate_preserves_typed_limit_requirement_evidence() {
+        let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+            .require_limit(GpuLimitKind::MaxVertexBuffers, 9);
+        let error = select_candidate(&descriptor, [adapter()], true).unwrap_err();
+        assert_eq!(
+            error.category(),
+            GpuContextRequestErrorCategory::NoAdmissibleCandidate
+        );
+        let [GpuCandidateDisposition::Rejected(report)] = error.candidate_dispositions() else {
+            panic!("one rejected candidate should be retained");
+        };
+        assert_eq!(
+            report.category(),
+            GpuContextRequestErrorCategory::LimitBelowRequiredMinimum
+        );
+        assert_eq!(
+            report.limit_rejection(),
+            Some((GpuLimitKind::MaxVertexBuffers, 9, 8))
+        );
+        assert!(report.capability_admission_error().is_none());
     }
 
     #[test]

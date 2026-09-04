@@ -1,6 +1,9 @@
 use core::fmt;
 
-use super::{GpuPreparedWorkNodeId, GpuResourceProvenance, GpuWorkNodeId, GpuWorkResourceId};
+use super::{
+    GpuCapabilityFeature, GpuPreparedWorkNodeId, GpuResourceProvenance, GpuWorkNodeId,
+    GpuWorkResourceId,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GpuAccessCause {
@@ -632,8 +635,25 @@ pub enum GpuCapabilityAdmissionError {
         operation: &'static str,
         label: String,
         cause: GpuCapabilityAdmissionCause,
+        feature: Option<GpuCapabilityFeature>,
         correction: &'static str,
     },
+}
+
+impl GpuCapabilityAdmissionError {
+    pub const fn cause(&self) -> GpuCapabilityAdmissionCause {
+        match self {
+            Self::Rejected { cause, .. } => *cause,
+        }
+    }
+
+    /// Exact normalized capability feature implicated by this admission rejection, when the
+    /// rejection is feature-specific. Limit-domain rejections return `None`.
+    pub const fn feature(&self) -> Option<GpuCapabilityFeature> {
+        match self {
+            Self::Rejected { feature, .. } => *feature,
+        }
+    }
 }
 
 impl fmt::Display for GpuCapabilityAdmissionError {
@@ -643,6 +663,7 @@ impl fmt::Display for GpuCapabilityAdmissionError {
             label,
             cause,
             correction,
+            ..
         } = self;
         write!(
             f,

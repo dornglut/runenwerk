@@ -3,6 +3,7 @@ mod authoring_transaction;
 mod buffer_coverage_intersection;
 mod composition;
 mod explainability;
+mod explainability_initialization;
 mod hazards;
 mod initial_content;
 mod initialization;

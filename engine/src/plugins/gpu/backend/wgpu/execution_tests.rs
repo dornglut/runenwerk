@@ -463,6 +463,98 @@ fn dynamic_compute_graph_with_first_work(
     )
 }
 
+fn bind_group_limit_violation_graph(context: &GpuContext) -> GpuPreparedWorkGraph {
+    let group = context
+        .device_facts()
+        .device_limits()
+        .values()
+        .max_bind_groups();
+    let source_text = format!(
+        r#"
+@group({group}) @binding(0)
+var<storage, read_write> values: array<u32>;
+
+@compute @workgroup_size(1)
+fn cs_main() {{
+    values[0] = values[0] + 1u;
+}}
+"#
+    );
+    let owner = GpuProgramSourceOwnerId::allocate().expect("test source owner should allocate");
+    let identity = GpuProgramSourceIdentity::new(
+        owner,
+        GpuProgramSourceKey::new("g5b.noop.bind-group-limit-violation").unwrap(),
+        GpuProgramSourceRevision::try_from_raw(1).unwrap(),
+    );
+    let mut sources = GpuProgramSourceRegistry::new(4, 16 * 1024).unwrap();
+    let source = sources
+        .admit_wgsl(
+            identity,
+            &source_text,
+            GpuProgramSourceProvenance::new("g5b-noop-bind-group-limit", None).unwrap(),
+        )
+        .unwrap();
+    let entry = GpuEntryPointName::new("cs_main").unwrap();
+    let key = GpuBindingKey::try_new(u64::from(group), 0).unwrap();
+    let refinement =
+        GpuBindingLayoutRefinement::new(key).with_host_minimum_size(NonZeroU64::new(4).unwrap());
+    let program = GpuProgramDescriptor::new(source, [entry.clone()], [refinement]).unwrap();
+    let pipeline =
+        GpuComputePipelineDescriptor::new(program, entry, GpuPipelineConfiguration::default())
+            .unwrap();
+
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let values_buffer = compute_buffer(&mut allocator, "bind-group-limit values", 4);
+    let whole = GpuBufferRegion::new(
+        &values_buffer,
+        GpuBufferRange::whole(&values_buffer).unwrap(),
+    )
+    .unwrap();
+    let payload = PreparedGpuData::<TransferData>::from_pod_transfer(
+        "bind-group-limit payload",
+        &[41_u32],
+        provenance("bind-group-limit payload"),
+    )
+    .unwrap();
+    let upload = GpuUploadOperation::new(whole.into(), payload).unwrap();
+    let binding = GpuRuntimeBindingValue::new(
+        key,
+        [GpuRuntimeBindingResource::Buffer(
+            GpuRuntimeBufferBinding::new(
+                values_buffer.clone(),
+                0,
+                NonZeroU64::new(4).unwrap(),
+                None,
+            ),
+        )],
+    )
+    .unwrap();
+    let bindings = GpuRuntimeBindingSet::new(pipeline.layout().clone(), [binding]).unwrap();
+    let compute = GpuComputeOperation::new(
+        pipeline,
+        bindings,
+        GpuDispatchIntent::direct(GpuDispatchSize::new(1, 1, 1)),
+    )
+    .unwrap();
+
+    let name = "noop bind-group-limit violation";
+    let mut builder = GpuWorkFragmentBuilder::new(label(name), provenance(name));
+    builder.declare_resource(values_buffer.into()).unwrap();
+    add_operation(
+        &mut builder,
+        "bind-group-limit upload",
+        GpuWorkOperation::Upload(upload),
+    );
+    builder
+        .compute("bind-group-limit compute", compute)
+        .unwrap();
+    GpuPreparedWorkGraph::prepare(
+        label("noop bind-group-limit violation graph"),
+        [builder.finish().unwrap()],
+    )
+    .unwrap()
+}
+
 fn indirect_compute_graph() -> (GpuPreparedWorkGraph, GpuReadbackId, [u32; 1]) {
     let values = [41_u32];
     let arguments = [1_u32, 1, 1];
@@ -640,6 +732,13 @@ fn contextual_work_validation_precedes_prepared_capacity_reservation() {
         GpuSubmissionPreparationErrorKind::WorkNotAdmitted,
         "contextual work validation must outrank prepared-capacity exhaustion"
     );
+    let Some(GpuWorkNotAdmittedSource::Operation(source)) = error.work_not_admitted_source() else {
+        panic!("direct-dispatch admission rejection must preserve its typed operation source");
+    };
+    assert_eq!(
+        source.cause(),
+        GpuWorkOperationCause::MechanicalCapabilityContradiction
+    );
     assert_eq!(
         context.execution_stats().prepared_submissions(),
         1,
@@ -647,6 +746,27 @@ fn contextual_work_validation_precedes_prepared_capacity_reservation() {
     );
 
     drop(held);
+    assert_eq!(context.execution_stats().prepared_submissions(), 0);
+}
+
+#[test]
+fn contextual_binding_validation_preserves_typed_program_contract_source() {
+    let context = noop_compute_context();
+    let invalid_graph = bind_group_limit_violation_graph(&context);
+    let error = pollster::block_on(context.prepare_submission(invalid_graph))
+        .expect_err("device-invalid runtime binding must reject during contextual validation");
+    assert_eq!(
+        error.kind(),
+        GpuSubmissionPreparationErrorKind::WorkNotAdmitted
+    );
+    let Some(GpuWorkNotAdmittedSource::ProgramContract(source)) = error.work_not_admitted_source()
+    else {
+        panic!("runtime-binding admission rejection must preserve its typed program source");
+    };
+    assert_eq!(
+        source.cause(),
+        GpuProgramContractCause::RuntimeBindingIncompatible
+    );
     assert_eq!(context.execution_stats().prepared_submissions(), 0);
 }
 
