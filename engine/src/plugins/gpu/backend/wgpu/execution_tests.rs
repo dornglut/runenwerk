@@ -640,6 +640,13 @@ fn contextual_work_validation_precedes_prepared_capacity_reservation() {
         GpuSubmissionPreparationErrorKind::WorkNotAdmitted,
         "contextual work validation must outrank prepared-capacity exhaustion"
     );
+    let Some(GpuWorkNotAdmittedSource::Operation(source)) = error.work_not_admitted_source() else {
+        panic!("direct-dispatch admission rejection must preserve its typed operation source");
+    };
+    assert_eq!(
+        source.cause(),
+        GpuWorkOperationCause::MechanicalCapabilityContradiction
+    );
     assert_eq!(
         context.execution_stats().prepared_submissions(),
         1,
@@ -647,6 +654,37 @@ fn contextual_work_validation_precedes_prepared_capacity_reservation() {
     );
 
     drop(held);
+    assert_eq!(context.execution_stats().prepared_submissions(), 0);
+}
+
+#[test]
+fn contextual_binding_validation_preserves_typed_program_contract_source() {
+    let context = noop_compute_context();
+    let storage_alignment = context
+        .device_facts()
+        .device_limits()
+        .alignments()
+        .storage_dynamic_offset
+        .expect("compute context must publish storage dynamic-offset alignment");
+    assert!(
+        storage_alignment > 1,
+        "the deterministic Noop proof requires a nontrivial storage dynamic-offset alignment"
+    );
+    let (invalid_graph, _, _) = dynamic_compute_graph_with_first_work(&context, 1, 1);
+    let error = pollster::block_on(context.prepare_submission(invalid_graph))
+        .expect_err("device-invalid runtime binding must reject during contextual validation");
+    assert_eq!(
+        error.kind(),
+        GpuSubmissionPreparationErrorKind::WorkNotAdmitted
+    );
+    let Some(GpuWorkNotAdmittedSource::ProgramContract(source)) = error.work_not_admitted_source()
+    else {
+        panic!("runtime-binding admission rejection must preserve its typed program source");
+    };
+    assert_eq!(
+        source.cause(),
+        GpuProgramContractCause::RuntimeBindingIncompatible
+    );
     assert_eq!(context.execution_stats().prepared_submissions(), 0);
 }
 
