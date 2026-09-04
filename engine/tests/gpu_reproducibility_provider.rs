@@ -1,11 +1,11 @@
 use engine::plugins::gpu::{
     GpuAdapterClass, GpuAlignmentKind, GpuBackendFamily, GpuBufferDescriptor,
     GpuBufferInitialization, GpuBufferUsage, GpuBufferUsages, GpuCapabilityFeature,
-    GpuCapabilityProfile, GpuCapabilityRequirement, GpuComputeOperation, GpuComputePipelineDescriptor,
-    GpuContext, GpuContextDescriptor, GpuDispatchIntent, GpuDispatchSize, GpuFormatRole,
-    GpuLimitConstraint, GpuLimitKind, GpuMemoryIntent, GpuPipelineConfiguration,
-    GpuPortabilityPolicy, GpuPowerPreference, GpuPreparedWorkGraph, GpuProgramDescriptor,
-    GpuProgramSourceIdentity, GpuProgramSourceKey, GpuProgramSourceOwnerId,
+    GpuCapabilityProfile, GpuCapabilityRequirement, GpuComputeOperation,
+    GpuComputePipelineDescriptor, GpuContext, GpuContextDescriptor, GpuDispatchIntent,
+    GpuDispatchSize, GpuFormatRole, GpuLimitConstraint, GpuLimitKind, GpuMemoryIntent,
+    GpuPipelineConfiguration, GpuPortabilityPolicy, GpuPowerPreference, GpuPreparedWorkGraph,
+    GpuProgramDescriptor, GpuProgramSourceIdentity, GpuProgramSourceKey, GpuProgramSourceOwnerId,
     GpuProgramSourceProvenance, GpuProgramSourceRegistry, GpuProgramSourceRevision,
     GpuReconstruction, GpuResourceCommon, GpuResourceLabel, GpuResourceLifetime,
     GpuResourceProvenance, GpuRuntimeBindingSet, GpuSoftwareFallbackPolicy, GpuTextureFormat,
@@ -54,19 +54,20 @@ fn compute_operation() -> GpuWorkOperation {
 
 #[test]
 fn descriptor_exposes_normalized_reproducibility_request_facts() {
-    let descriptor = GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements())
-        .with_label("provider request")
-        .with_provenance("provider-proof")
-        .with_power_preference(GpuPowerPreference::HighPerformance)
-        .with_fallback_policy(GpuSoftwareFallbackPolicy::Forbid)
-        .with_allowed_backends([GpuBackendFamily::Vulkan, GpuBackendFamily::Metal])
-        .with_backend_preference([GpuBackendFamily::Metal, GpuBackendFamily::Vulkan])
-        .with_allowed_adapter_classes([GpuAdapterClass::Discrete, GpuAdapterClass::Integrated])
-        .with_portability_policy(GpuPortabilityPolicy::RequirePortableBaseline)
-        .require_limit(GpuLimitKind::MaxVertexBuffers, 4)
-        .permit_limit(GpuLimitKind::MaxVertexBuffers, 8)
-        .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::ColorAttachment)
-        .require_alignment(GpuAlignmentKind::BytesPerRow, 256);
+    let descriptor =
+        GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements())
+            .with_label("provider request")
+            .with_provenance("provider-proof")
+            .with_power_preference(GpuPowerPreference::HighPerformance)
+            .with_fallback_policy(GpuSoftwareFallbackPolicy::Forbid)
+            .with_allowed_backends([GpuBackendFamily::Vulkan, GpuBackendFamily::Metal])
+            .with_backend_preference([GpuBackendFamily::Metal, GpuBackendFamily::Vulkan])
+            .with_allowed_adapter_classes([GpuAdapterClass::Discrete, GpuAdapterClass::Integrated])
+            .with_portability_policy(GpuPortabilityPolicy::RequirePortableBaseline)
+            .require_limit(GpuLimitKind::MaxVertexBuffers, 4)
+            .permit_limit(GpuLimitKind::MaxVertexBuffers, 8)
+            .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::ColorAttachment)
+            .require_alignment(GpuAlignmentKind::BytesPerRow, 256);
 
     assert_eq!(descriptor.label(), Some("provider request"));
     assert_eq!(descriptor.provenance(), Some("provider-proof"));
@@ -86,10 +87,7 @@ fn descriptor_exposes_normalized_reproducibility_request_facts() {
         descriptor
             .backend_preference_priorities()
             .collect::<Vec<_>>(),
-        [
-            (GpuBackendFamily::Vulkan, 1),
-            (GpuBackendFamily::Metal, 0),
-        ]
+        [(GpuBackendFamily::Vulkan, 1), (GpuBackendFamily::Metal, 0),]
     );
     assert_eq!(
         descriptor.adapter_class_allowlist().collect::<Vec<_>>(),
@@ -129,11 +127,12 @@ fn descriptor_exposes_normalized_reproducibility_request_facts() {
 #[test]
 #[ignore = "requires the controlled RunenGPU native conformance GPU environment"]
 fn reproducibility_provider_collects_public_context_work_and_identity_facts() {
-    let descriptor = GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements())
-        .with_label("provider admitted context")
-        .with_provenance("provider-proof")
-        .with_allowed_backends([GpuBackendFamily::Vulkan])
-        .with_backend_preference([GpuBackendFamily::Vulkan]);
+    let descriptor =
+        GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements())
+            .with_label("provider admitted context")
+            .with_provenance("provider-proof")
+            .with_allowed_backends([GpuBackendFamily::Vulkan])
+            .with_backend_preference([GpuBackendFamily::Vulkan]);
 
     let context = pollster::block_on(GpuContext::request(descriptor.clone()))
         .expect("controlled native conformance must admit the Vulkan fallback context");
@@ -169,7 +168,8 @@ fn reproducibility_provider_collects_public_context_work_and_identity_facts() {
     let _device_limits = context.device_facts().device_limits().values();
     let _workload_budget = context.device_facts().workload_budget().limits();
 
-    let mut fragment = GpuWorkFragmentBuilder::new(label("provider fragment"), provenance("provider"));
+    let mut fragment =
+        GpuWorkFragmentBuilder::new(label("provider fragment"), provenance("provider"));
     fragment
         .operation(label("provider compute"), compute_operation())
         .unwrap();
@@ -231,7 +231,11 @@ fn reproducibility_provider_collects_public_context_work_and_identity_facts() {
     let correlation = resource.diagnostic_identity();
     assert_eq!(resource.clone().diagnostic_identity(), correlation);
     assert_eq!(
-        resource.descriptor().common().provenance().source_generation(),
+        resource
+            .descriptor()
+            .common()
+            .provenance()
+            .source_generation(),
         Some(7)
     );
     assert_eq!(
