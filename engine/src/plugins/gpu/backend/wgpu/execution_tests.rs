@@ -496,8 +496,8 @@ fn cs_main() {{
         .unwrap();
     let entry = GpuEntryPointName::new("cs_main").unwrap();
     let key = GpuBindingKey::try_new(u64::from(group), 0).unwrap();
-    let refinement = GpuBindingLayoutRefinement::new(key)
-        .with_host_minimum_size(NonZeroU64::new(4).unwrap());
+    let refinement =
+        GpuBindingLayoutRefinement::new(key).with_host_minimum_size(NonZeroU64::new(4).unwrap());
     let program = GpuProgramDescriptor::new(source, [entry.clone()], [refinement]).unwrap();
     let pipeline =
         GpuComputePipelineDescriptor::new(program, entry, GpuPipelineConfiguration::default())
