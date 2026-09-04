@@ -15,7 +15,7 @@ const SCAN_WGSL: &str = include_str!("gpu_prefix_scan_native/scan.wgsl");
 const APPLY_OFFSETS_WGSL: &str = include_str!("gpu_prefix_scan_native/apply_offsets.wgsl");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ScanMode {
+pub(crate) enum ScanMode {
     Exclusive,
     Inclusive,
 }
@@ -37,7 +37,7 @@ impl ScanMode {
 }
 
 #[derive(Clone)]
-struct ProgramSources {
+pub(crate) struct ProgramSources {
     scan: GpuAdmittedProgramSource,
     apply_offsets: GpuAdmittedProgramSource,
 }
@@ -57,7 +57,7 @@ fn hierarchy_counts() -> [u32; 3] {
     [level_0, level_1, level_2]
 }
 
-fn admitted_sources() -> ProgramSources {
+pub(crate) fn admitted_sources() -> ProgramSources {
     let [scan, apply_offsets] = admit_static_wgsl_sources([
         ("proof.prefix-scan.scan", SOURCE_REVISION, SCAN_WGSL),
         (
@@ -233,7 +233,7 @@ fn readback_operation(buffer: &GpuBufferHandle) -> GpuReadbackOperation {
     GpuReadbackOperation::ordinary(GpuBufferRegion::whole(buffer).unwrap().into()).unwrap()
 }
 
-fn author_scan(
+pub(crate) fn author_scan(
     sources: &ProgramSources,
     mode: ScanMode,
 ) -> (GpuWorkFragment, GpuReadbackId, GpuReadbackId) {
@@ -424,13 +424,13 @@ fn progress_to_readbacks(
         .collect()
 }
 
-fn decode_u32(bytes: &GpuReadbackBytes) -> Vec<u32> {
+pub(crate) fn decode_u32(bytes: &GpuReadbackBytes) -> Vec<u32> {
     let (words, remainder) = bytes.as_bytes().as_chunks::<4>();
     assert!(remainder.is_empty());
     words.iter().copied().map(u32::from_le_bytes).collect()
 }
 
-fn assert_exact_output(mode: ScanMode, output: &[u32], total: &[u32]) {
+pub(crate) fn assert_exact_output(mode: ScanMode, output: &[u32], total: &[u32]) {
     assert_eq!(output.len(), usize::try_from(ELEMENT_COUNT).unwrap());
     for (index, value) in output.iter().copied().enumerate() {
         let index = u32::try_from(index).unwrap();

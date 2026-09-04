@@ -172,7 +172,7 @@ fn prepared_index_buffer(allocator: &mut GpuWorkResourceIdAllocator) -> GpuBuffe
         .unwrap()
 }
 
-fn render_graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
+pub(crate) fn render_graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
     let mut allocator = GpuWorkResourceIdAllocator::new();
     let (texture, view) = render_target(&mut allocator);
     let index_buffer = prepared_index_buffer(&mut allocator);
@@ -315,7 +315,7 @@ fn pixel_at(bytes: &GpuReadbackBytes, x: u32, y: u32) -> [u8; 4] {
     bytes.as_bytes()[offset..offset + 4].try_into().unwrap()
 }
 
-fn assert_known_pattern(bytes: &GpuReadbackBytes) {
+pub(crate) fn assert_known_pattern(bytes: &GpuReadbackBytes) {
     assert_eq!(bytes.texture_format(), Some(GpuTextureFormat::Rgba8Unorm));
     assert_eq!(
         bytes.as_bytes().len(),
