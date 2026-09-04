@@ -313,7 +313,7 @@ fn pre_acceptance_pressure_rejection_preserves_prepared_ownership_for_retry() {
 fn graceful_shutdown_revokes_unaccepted_work_and_drains_accepted_readback_once() {
     let Some(context) = request_context(
         policy(4, 2, 4096, 4096, 4),
-        "G8 O02 graceful shutdown with pending readback",
+        "graceful shutdown with pending readback",
     ) else {
         return;
     };
