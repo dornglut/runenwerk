@@ -153,6 +153,15 @@ pub enum GpuOpaqueContentContinuity {
     Unknown,
 }
 
+/// Typed lifecycle reason why retained opaque content is currently indeterminate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GpuOpaqueContentIndeterminateReason {
+    /// An accepted retained-state write may execute and has not terminalized yet.
+    AcceptedWritePending,
+    /// A retained-state write may have executed before the submission failed, so prior coherent content was revoked.
+    PossibleWriteFailure,
+}
+
 /// Point-in-time retained-state continuity owned by one context/device generation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuRetainedResourceContinuity {
@@ -160,6 +169,7 @@ pub struct GpuRetainedResourceContinuity {
     resource: GpuResourceRef,
     initialized_coverage: Option<GpuInitialCoverage>,
     opaque_content: GpuOpaqueContentContinuity,
+    opaque_content_indeterminate_reason: Option<GpuOpaqueContentIndeterminateReason>,
 }
 
 impl GpuRetainedResourceContinuity {
@@ -168,12 +178,18 @@ impl GpuRetainedResourceContinuity {
         resource: GpuResourceRef,
         initialized_coverage: Option<GpuInitialCoverage>,
         opaque_content: GpuOpaqueContentContinuity,
+        opaque_content_indeterminate_reason: Option<GpuOpaqueContentIndeterminateReason>,
     ) -> Self {
+        debug_assert_eq!(
+            matches!(opaque_content, GpuOpaqueContentContinuity::Unknown),
+            opaque_content_indeterminate_reason.is_some()
+        );
         Self {
             affinity,
             resource,
             initialized_coverage,
             opaque_content,
+            opaque_content_indeterminate_reason,
         }
     }
 
@@ -191,6 +207,12 @@ impl GpuRetainedResourceContinuity {
 
     pub const fn opaque_content(&self) -> GpuOpaqueContentContinuity {
         self.opaque_content
+    }
+
+    pub const fn opaque_content_indeterminate_reason(
+        &self,
+    ) -> Option<GpuOpaqueContentIndeterminateReason> {
+        self.opaque_content_indeterminate_reason
     }
 }
 
