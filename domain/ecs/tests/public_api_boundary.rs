@@ -1,6 +1,7 @@
 const PRELUDE_RS: &str = include_str!("../src/prelude.rs");
 const QUERY_MOD_RS: &str = include_str!("../src/query/mod.rs");
 const QUERY_TRAITS_RS: &str = include_str!("../src/query/traits_and_state.rs");
+const SYSTEM_EXTRACT_RS: &str = include_str!("../src/system/extract.rs");
 const BUNDLE_RS: &str = include_str!("../src/bundle.rs");
 const COMPONENT_ACCESS_RS: &str = include_str!("../src/world/component/access.rs");
 const COMPONENT_REGISTRATION_RS: &str = include_str!("../src/world/component/registration.rs");
@@ -29,6 +30,11 @@ fn low_level_query_extension_is_sealed() {
     assert!(QUERY_MOD_RS.contains("pub use traits_and_state::QuerySpec"));
     assert!(QUERY_TRAITS_RS.contains("pub trait QuerySpec: sealed::QuerySpecSealed"));
     assert!(QUERY_TRAITS_RS.contains("mod sealed"));
+}
+
+#[test]
+fn low_level_system_param_extension_requires_explicit_unsafe_implementation() {
+    assert!(SYSTEM_EXTRACT_RS.contains("pub unsafe trait SystemParam<'w>"));
 }
 
 #[test]
