@@ -143,7 +143,7 @@ impl GpuContextLimitRejection {
 pub struct GpuContextRequestError {
     category: GpuContextRequestErrorCategory,
     detail: Option<String>,
-    capability_admission_error: Option<GpuCapabilityAdmissionError>,
+    capability_admission_error: Option<Box<GpuCapabilityAdmissionError>>,
     limit_rejection: Option<GpuContextLimitRejection>,
     candidate_dispositions: Vec<GpuCandidateDisposition>,
 }
@@ -164,7 +164,7 @@ impl GpuContextRequestError {
         Self {
             category: GpuContextRequestErrorCategory::MandatoryFeatureMissing,
             detail,
-            capability_admission_error: Some(error),
+            capability_admission_error: Some(Box::new(error)),
             limit_rejection: None,
             candidate_dispositions: Vec::new(),
         }
@@ -199,7 +199,7 @@ impl GpuContextRequestError {
     }
 
     pub fn capability_admission_error(&self) -> Option<&GpuCapabilityAdmissionError> {
-        self.capability_admission_error.as_ref()
+        self.capability_admission_error.as_deref()
     }
 
     /// Returns `(normalized limit kind, required minimum, observed value)` for a below-minimum
