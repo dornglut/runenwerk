@@ -126,6 +126,15 @@ jobs:
           set -euo pipefail
           vulkaninfo --summary
 
+      - name: Run public reproducibility provider proof
+        env:
+          RUST_BACKTRACE: '1'
+        run: |
+          set -euo pipefail
+          cargo +stable test -p engine --test gpu_reproducibility_provider \
+            reproducibility_provider_collects_public_context_work_and_identity_facts \
+            --locked -- --ignored --nocapture
+
       - name: Run optimized G6-P01 direct-WGPU portfolio proof
         env:
           RUST_BACKTRACE: '1'
