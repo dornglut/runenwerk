@@ -16,9 +16,7 @@ impl GpuContextDescriptor {
     ///
     /// An empty iterator means the request has no explicit backend preference. The internal
     /// ranking representation remains private and is not part of the public RunenGPU contract.
-    pub fn backend_preference_order(
-        &self,
-    ) -> impl ExactSizeIterator<Item = GpuBackendFamily> + '_ {
+    pub fn backend_preference_order(&self) -> impl ExactSizeIterator<Item = GpuBackendFamily> + '_ {
         let mut ordered = self
             .backend_preference()
             .iter()
