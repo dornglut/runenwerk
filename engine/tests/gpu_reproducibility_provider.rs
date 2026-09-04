@@ -8,8 +8,8 @@ use engine::plugins::gpu::{
     GpuProgramDescriptor, GpuProgramSourceIdentity, GpuProgramSourceKey, GpuProgramSourceOwnerId,
     GpuProgramSourceProvenance, GpuProgramSourceRegistry, GpuProgramSourceRevision,
     GpuReconstruction, GpuResourceCommon, GpuResourceLabel, GpuResourceLifetime,
-    GpuResourceProvenance, GpuRuntimeBindingSet, GpuSoftwareFallbackPolicy, GpuTextureFormat,
-    GpuWorkFragmentBuilder, GpuWorkOperation, GpuWorkResourceIdAllocator,
+    GpuResourceProvenance, GpuRuntimeBindingSet, GpuShaderStage, GpuSoftwareFallbackPolicy,
+    GpuTextureFormat, GpuWorkFragmentBuilder, GpuWorkOperation, GpuWorkResourceIdAllocator,
 };
 
 fn label(value: &str) -> GpuResourceLabel {
@@ -84,10 +84,8 @@ fn descriptor_exposes_normalized_reproducibility_request_facts() {
         [GpuBackendFamily::Vulkan, GpuBackendFamily::Metal]
     );
     assert_eq!(
-        descriptor
-            .backend_preference_priorities()
-            .collect::<Vec<_>>(),
-        [(GpuBackendFamily::Vulkan, 1), (GpuBackendFamily::Metal, 0),]
+        descriptor.backend_preference_order().collect::<Vec<_>>(),
+        [GpuBackendFamily::Metal, GpuBackendFamily::Vulkan]
     );
     assert_eq!(
         descriptor.adapter_class_allowlist().collect::<Vec<_>>(),
@@ -181,7 +179,6 @@ fn reproducibility_provider_collects_public_context_work_and_identity_facts() {
 
     assert_eq!(graph.label().as_str(), "provider prepared graph");
     assert_eq!(graph.nodes().len(), 1);
-    assert_eq!(graph.topological_order().len(), 1);
     assert!(graph.dependencies().is_empty());
     assert!(graph.initialization().is_empty());
     assert!(graph.outputs().is_empty());
@@ -192,10 +189,28 @@ fn reproducibility_provider_collects_public_context_work_and_identity_facts() {
         )
     }));
 
-    let GpuWorkOperation::Compute(operation) = graph.nodes()[0].node().operation() else {
+    let prepared = &graph.nodes()[0];
+    let workload_identity = prepared.id();
+    assert_eq!(workload_identity.fragment_ordinal(), 0);
+    assert_eq!(workload_identity.local_node(), 1);
+    assert_eq!(graph.topological_order(), &[workload_identity]);
+    assert_eq!(prepared.fragment_label().as_str(), "provider fragment");
+
+    let GpuWorkOperation::Compute(operation) = prepared.node().operation() else {
         panic!("provider proof should retain the authored compute operation");
     };
-    let source = operation.pipeline().program().source();
+    let program = operation.pipeline().program();
+    assert!(program.is_same_record(&program.clone()));
+    assert_eq!(program.entry_points().len(), 1);
+    let entry_point = program
+        .entry_points()
+        .next()
+        .expect("provider proof program should retain one compute entry point");
+    assert_eq!(entry_point.name().as_str(), "main");
+    assert_eq!(entry_point.stage(), GpuShaderStage::Compute);
+    assert_eq!(operation.pipeline().entry_point().as_str(), "main");
+
+    let source = program.source();
     assert_eq!(
         source.identity().key().as_str(),
         "reproducibility.provider.compute"
