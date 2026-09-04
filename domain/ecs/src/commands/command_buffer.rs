@@ -21,7 +21,7 @@ enum CommandQueueStorage {
 }
 
 #[derive(Clone)]
-struct ExternalCommandQueue {
+pub(crate) struct ExternalCommandQueue {
     queue: Rc<RefCell<CommandQueue>>,
     active: Rc<Cell<bool>>,
 }
@@ -61,18 +61,14 @@ impl Commands<'static> {
         }
     }
 
-    pub(crate) fn from_external<'world>(owner: &'world mut Commands<'static>) -> Commands<'world> {
-        // Safety: owner pointers are only provided by runtime command owner construction.
-        let queue = owner
-            .external_queue()
-            .expect("command owner must provide an external queue");
+    pub(crate) fn from_external<'world>(queue: ExternalCommandQueue) -> Commands<'world> {
         Commands {
             queue: CommandQueueStorage::ExternalBorrowed(queue),
             _marker: PhantomData,
         }
     }
 
-    fn external_queue(&self) -> Option<ExternalCommandQueue> {
+    pub(crate) fn external_queue(&self) -> Option<ExternalCommandQueue> {
         match &self.queue {
             CommandQueueStorage::ExternalOwner(queue)
             | CommandQueueStorage::ExternalBorrowed(queue) => Some(queue.clone()),

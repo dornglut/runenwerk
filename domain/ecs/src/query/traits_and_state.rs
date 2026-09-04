@@ -64,6 +64,8 @@ pub trait QueryData {
 
 mod sealed {
     pub trait QuerySpecSealed {}
+    pub trait QueryReadOnlySealed {}
+    pub trait QueryWorldSourceSealed {}
 }
 
 impl<T> sealed::QuerySpecSealed for T where T: QueryData {}
@@ -122,23 +124,49 @@ pub trait QuerySpec: sealed::QuerySpecSealed {
     ) -> Option<Self::Item<'w>>;
 }
 
+/// Framework-owned classification for query shapes that only yield shared
+/// component references (or entity identity). This is intentionally sealed;
+/// the `&World` direct-query source must not be widened by downstream code.
+#[doc(hidden)]
+pub trait QueryReadOnly: sealed::QueryReadOnlySealed {}
+
+impl sealed::QueryReadOnlySealed for Entity {}
+impl QueryReadOnly for Entity {}
+impl<T: Component> sealed::QueryReadOnlySealed for &T {}
+impl<T: Component> QueryReadOnly for &T {}
+impl<T: Component> sealed::QueryReadOnlySealed for (Entity, &T) {}
+impl<T: Component> QueryReadOnly for (Entity, &T) {}
+impl<A: Component, B: Component> sealed::QueryReadOnlySealed for (&A, &B) {}
+impl<A: Component, B: Component> QueryReadOnly for (&A, &B) {}
+impl<T: Component> sealed::QueryReadOnlySealed for Option<&T> {}
+impl<T: Component> QueryReadOnly for Option<&T> {}
+impl<A: Component, B: Component> sealed::QueryReadOnlySealed for (&A, Option<&B>) {}
+impl<A: Component, B: Component> QueryReadOnly for (&A, Option<&B>) {}
+impl<T: Component> sealed::QueryReadOnlySealed for (Entity, Option<&T>) {}
+impl<T: Component> QueryReadOnly for (Entity, Option<&T>) {}
+impl<A: Component, B: Component, C: Component> sealed::QueryReadOnlySealed for (&A, &B, &C) {}
+impl<A: Component, B: Component, C: Component> QueryReadOnly for (&A, &B, &C) {}
+
 /// Direct query callers are converted at the public boundary into the same
 /// narrow query capability used by system extraction.  Query execution itself
 /// never reconstructs a whole `World` reference from this value.
 #[doc(hidden)]
-pub trait QueryWorldSource<'world> {
+pub trait QueryWorldSource<'world, Q: ?Sized = Entity>: sealed::QueryWorldSourceSealed {
     fn into_query_capability(self) -> QueryCapability<'world>;
 }
 
-impl<'world> QueryWorldSource<'world> for &'world World {
+impl sealed::QueryWorldSourceSealed for &World {}
+impl sealed::QueryWorldSourceSealed for &mut World {}
+
+impl<'world, Q: QueryReadOnly> QueryWorldSource<'world, Q> for &'world World {
     fn into_query_capability(self) -> QueryCapability<'world> {
         self.query_capability()
     }
 }
 
-impl<'world> QueryWorldSource<'world> for &'world mut World {
+impl<'world, Q: ?Sized> QueryWorldSource<'world, Q> for &'world mut World {
     fn into_query_capability(self) -> QueryCapability<'world> {
-        self.query_capability()
+        self.query_capability_mut()
     }
 }
 
@@ -262,15 +290,17 @@ impl<Q: QuerySpec, F: QueryFilter> QueryState<Q, F> {
     pub fn iter<'w, W>(&self, world: W) -> impl Iterator<Item = Q::Item<'w>> + 'w
     where
         Q: 'w,
-        W: QueryWorldSource<'w>,
+        F: 'w,
+        W: QueryWorldSource<'w, Q>,
     {
-        self.iter_capability(world.into_query_capability())
+        let iter: QueryIter<'w, 'w, Q, F> = self.iter_capability(world.into_query_capability());
+        iter
     }
 
     pub fn get<'w, W>(&self, world: W, entity: Entity) -> Option<Q::Item<'w>>
     where
         Q: 'w,
-        W: QueryWorldSource<'w>,
+        W: QueryWorldSource<'w, Q>,
     {
         self.get_capability(world.into_query_capability(), entity)
     }
@@ -278,15 +308,12 @@ impl<Q: QuerySpec, F: QueryFilter> QueryState<Q, F> {
     pub fn single<'w, W>(&self, world: W) -> Result<Q::Item<'w>, QueryError>
     where
         Q: 'w,
-        W: QueryWorldSource<'w>,
+        W: QueryWorldSource<'w, Q>,
     {
         self.single_capability(world.into_query_capability())
     }
 
-    fn iter_capability<'w>(
-        &self,
-        world: QueryCapability<'w>,
-    ) -> impl Iterator<Item = Q::Item<'w>> + 'w
+    fn iter_capability<'w, 'state>(&self, world: QueryCapability<'w>) -> QueryIter<'w, 'state, Q, F>
     where
         Q: 'w,
     {
@@ -309,7 +336,7 @@ impl<Q: QuerySpec, F: QueryFilter> QueryState<Q, F> {
                 }
                 self.last_run_tick.set(world.current_change_tick());
                 telemetry::record_query_iter(start.elapsed().as_nanos() as u64);
-                return QueryIter::<Q> {
+                return QueryIter {
                     world,
                     entities: None,
                     archetype_rows: Some(rows),
@@ -329,7 +356,7 @@ impl<Q: QuerySpec, F: QueryFilter> QueryState<Q, F> {
         self.matching_entities_into(world, &mut entities);
         self.last_run_tick.set(world.current_change_tick());
         telemetry::record_query_iter(start.elapsed().as_nanos() as u64);
-        QueryIter::<Q> {
+        QueryIter {
             world,
             entities: Some(entities),
             archetype_rows: None,
@@ -486,44 +513,54 @@ impl<Q: QuerySpec, F: QueryFilter> QueryState<Q, F> {
     }
 }
 
-pub struct Query<'world, Q, F = ()> {
+pub struct Query<'world, 'state, Q, F = ()> {
     world: QueryCapability<'world>,
     state: NonNull<QueryState<Q, F>>,
-    _marker: PhantomData<(Q, F)>,
+    _marker: PhantomData<&'state mut QueryState<Q, F>>,
 }
 
-impl<'world, Q, F> Query<'world, Q, F> {
-    pub(crate) fn new(world: QueryCapability<'world>, state: &mut QueryState<Q, F>) -> Self {
+impl<'world, 'state, Q, F> Query<'world, 'state, Q, F> {
+    pub(crate) fn new(world: QueryCapability<'world>, state: &'state mut QueryState<Q, F>) -> Self {
         Self {
             world,
             state: NonNull::from(state),
             _marker: PhantomData,
         }
     }
+
+    fn capability<'query>(&'query self) -> QueryCapability<'query> {
+        self.world
+    }
 }
 
-impl<'world, Q: QuerySpec, F: QueryFilter> Query<'world, Q, F> {
+impl<'world, 'state, Q: QuerySpec, F: QueryFilter> Query<'world, 'state, Q, F> {
     pub fn access(&self) -> &QueryAccess {
         unsafe { self.state.as_ref().access() }
     }
 
     pub fn iter(&mut self) -> impl Iterator<Item = Q::Item<'_>> + '_ {
         // Safety: system execution guarantees the world pointer remains valid for this call.
-        unsafe { self.state.as_ref().iter_capability(self.world) }
+        let iter: QueryIter<'_, 'state, Q, F> =
+            unsafe { self.state.as_ref().iter_capability(self.capability()) };
+        iter
     }
 
     pub fn get(&mut self, entity: Entity) -> Option<Q::Item<'_>> {
         // Safety: system execution guarantees the world pointer remains valid for this call.
-        unsafe { self.state.as_ref().get_capability(self.world, entity) }
+        unsafe {
+            self.state
+                .as_ref()
+                .get_capability(self.capability(), entity)
+        }
     }
 
     pub fn single(&mut self) -> Result<Q::Item<'_>, QueryError> {
         // Safety: system execution guarantees the world pointer remains valid for this call.
-        unsafe { self.state.as_ref().single_capability(self.world) }
+        unsafe { self.state.as_ref().single_capability(self.capability()) }
     }
 }
 
-struct QueryIter<'w, Q: QuerySpec> {
+struct QueryIter<'w, 'state, Q: QuerySpec, F> {
     world: QueryCapability<'w>,
     entities: Option<Vec<Entity>>,
     archetype_rows: Option<Vec<QueryArchetypeRow>>,
@@ -532,10 +569,10 @@ struct QueryIter<'w, Q: QuerySpec> {
     use_fast_fetch: bool,
     fast_cache: QueryFastCache,
     index: usize,
-    _marker: PhantomData<Q::Item<'w>>,
+    _marker: PhantomData<(&'state mut QueryState<Q, F>, Q::Item<'w>)>,
 }
 
-impl<'w, Q: QuerySpec> QueryIter<'w, Q> {
+impl<'w, 'state, Q: QuerySpec, F> QueryIter<'w, 'state, Q, F> {
     fn mark_and_fetch(&mut self, entity: Entity) -> Option<Q::Item<'w>> {
         if self.use_fast_fetch {
             Q::mark_changed_fast(self.world, entity, &mut self.fast_cache);
@@ -551,7 +588,7 @@ impl<'w, Q: QuerySpec> QueryIter<'w, Q> {
     }
 }
 
-impl<'w, Q: QuerySpec> Iterator for QueryIter<'w, Q> {
+impl<'w, 'state, Q: QuerySpec, F> Iterator for QueryIter<'w, 'state, Q, F> {
     type Item = Q::Item<'w>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -586,7 +623,7 @@ impl<'w, Q: QuerySpec> Iterator for QueryIter<'w, Q> {
     }
 }
 
-impl<'w, Q: QuerySpec> Drop for QueryIter<'w, Q> {
+impl<'w, 'state, Q: QuerySpec, F> Drop for QueryIter<'w, 'state, Q, F> {
     fn drop(&mut self) {
         if let Some(mut entities) = self.entities.take() {
             entities.clear();

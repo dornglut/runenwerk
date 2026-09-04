@@ -68,10 +68,18 @@ impl<'world> SystemParamContext<'world> {
         unsafe { self.authority.world_mut() }
     }
 
-    pub(crate) fn commands(self) -> &'world mut Commands<'static> {
+    pub(crate) fn commands(self) -> Commands<'world> {
         // Safety: the runtime constructs this pointer from the live command
-        // owner and keeps it valid until extraction finishes.
-        unsafe { self.commands.as_ptr().as_mut().unwrap_unchecked() }
+        // owner and keeps it valid until extraction finishes. Only a shared
+        // owner read is needed to clone its external queue; no mutable owner
+        // reference is manufactured from the copied context.
+        let queue = unsafe {
+            self.commands
+                .as_ref()
+                .external_queue()
+                .expect("command owner must provide an external queue")
+        };
+        Commands::from_external(queue)
     }
 }
 

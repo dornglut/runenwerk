@@ -49,7 +49,7 @@ impl<T: Component> QueryOrphanedState<T> {
 
     pub fn iter<'w, W>(&self, world: W) -> impl Iterator<Item = Orphaned<T>> + 'w
     where
-        W: QueryWorldSource<'w>,
+        W: QueryWorldSource<'w, Entity>,
     {
         self.iter_capability(world.into_query_capability())
     }
@@ -72,14 +72,17 @@ impl<T: Component> QueryOrphanedState<T> {
     }
 }
 
-pub struct QueryOrphaned<'world, T: Component> {
+pub struct QueryOrphaned<'world, 'state, T: Component> {
     world: QueryCapability<'world>,
     state: NonNull<QueryOrphanedState<T>>,
-    _marker: PhantomData<T>,
+    _marker: PhantomData<(&'state mut QueryOrphanedState<T>, T)>,
 }
 
-impl<'world, T: Component> QueryOrphaned<'world, T> {
-    pub(crate) fn new(world: QueryCapability<'world>, state: &mut QueryOrphanedState<T>) -> Self {
+impl<'world, 'state, T: Component> QueryOrphaned<'world, 'state, T> {
+    pub(crate) fn new(
+        world: QueryCapability<'world>,
+        state: &'state mut QueryOrphanedState<T>,
+    ) -> Self {
         Self {
             world,
             state: NonNull::from(state),

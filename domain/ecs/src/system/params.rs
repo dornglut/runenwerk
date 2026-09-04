@@ -67,12 +67,12 @@ impl<'world, T: Resource> DerefMut for ResMut<'world, T> {
 pub struct BroadcastReaderState {
     next_sequence: u64,
 }
-pub struct BroadcastReader<'world, T: 'static> {
+pub struct BroadcastReader<'world, 'state, T: 'static> {
     messaging: MessagingCapability<'world>,
     state: NonNull<BroadcastReaderState>,
-    _marker: PhantomData<T>,
+    _marker: PhantomData<(&'state mut BroadcastReaderState, T)>,
 }
-impl<'world, T: 'static> BroadcastReader<'world, T> {
+impl<'world, 'state, T: 'static> BroadcastReader<'world, 'state, T> {
     pub(crate) fn new(
         messaging: MessagingCapability<'world>,
         state: &mut BroadcastReaderState,
@@ -242,13 +242,13 @@ impl<'world, T: 'static> TickBufferDrainer<'world, T> {
     }
 }
 
-unsafe impl<'param, Q, F> SystemParam for Query<'param, Q, F>
+unsafe impl<'param, 'cached, Q, F> SystemParam for Query<'param, 'cached, Q, F>
 where
     Q: QuerySpec + 'static,
     F: QueryFilter + 'static,
 {
     type State = QueryState<Q, F>;
-    type Item<'world, 'state> = Query<'world, Q, F>;
+    type Item<'world, 'state> = Query<'world, 'state, Q, F>;
     fn init_state(world: &mut World) -> Result<Self::State, SystemParamError> {
         Ok(QueryState::new(world))
     }
@@ -265,9 +265,11 @@ where
         Ok(Query::new(context.query(), state))
     }
 }
-unsafe impl<'param, T: Component + 'static> SystemParam for QueryOrphaned<'param, T> {
+unsafe impl<'param, 'cached, T: Component + 'static> SystemParam
+    for QueryOrphaned<'param, 'cached, T>
+{
     type State = QueryOrphanedState<T>;
-    type Item<'world, 'state> = QueryOrphaned<'world, T>;
+    type Item<'world, 'state> = QueryOrphaned<'world, 'state, T>;
     fn init_state(world: &mut World) -> Result<Self::State, SystemParamError> {
         Ok(QueryOrphanedState::new(world))
     }
@@ -344,7 +346,7 @@ unsafe impl<'param> SystemParam for Commands<'param> {
         _: &'state mut Self::State,
         context: SystemParamContext<'world>,
     ) -> Result<Self::Item<'world, 'state>, SystemParamError> {
-        Ok(Commands::from_external(context.commands()))
+        Ok(context.commands())
     }
 }
 
@@ -437,9 +439,9 @@ impl_message_simple!(
     "tick_buffer_drainer"
 );
 
-unsafe impl<'param, T: 'static> SystemParam for BroadcastReader<'param, T> {
+unsafe impl<'param, 'cached, T: 'static> SystemParam for BroadcastReader<'param, 'cached, T> {
     type State = BroadcastReaderState;
-    type Item<'world, 'state> = BroadcastReader<'world, T>;
+    type Item<'world, 'state> = BroadcastReader<'world, 'state, T>;
     fn init_state(_: &mut World) -> Result<Self::State, SystemParamError> {
         Ok(Default::default())
     }

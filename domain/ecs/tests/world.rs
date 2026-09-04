@@ -1182,10 +1182,12 @@ fn world_for_param_access_checks() {
     world.insert_resource(Frame(0));
 
     let query_state =
-        <Query<'static, (&mut Position, &Velocity)> as SystemParam>::init_state(&mut world)
-            .unwrap();
+        <Query<'static, 'static, (&mut Position, &Velocity)> as SystemParam>::init_state(
+            &mut world,
+        )
+        .unwrap();
     let query_access =
-        <Query<'static, (&mut Position, &Velocity)> as SystemParam>::access(&query_state);
+        <Query<'static, 'static, (&mut Position, &Velocity)> as SystemParam>::access(&query_state);
     assert!(contains_type(
         query_access.component_writes(),
         TypeId::of::<Position>()
@@ -1217,8 +1219,10 @@ fn world_for_param_access_checks() {
     assert!(commands_access.deferred_structural_mutation());
 
     let reader_state =
-        <BroadcastReader<'static, TickEvent> as SystemParam>::init_state(&mut world).unwrap();
-    let reader_access = <BroadcastReader<'static, TickEvent> as SystemParam>::access(&reader_state);
+        <BroadcastReader<'static, 'static, TickEvent> as SystemParam>::init_state(&mut world)
+            .unwrap();
+    let reader_access =
+        <BroadcastReader<'static, 'static, TickEvent> as SystemParam>::access(&reader_state);
     assert!(contains_type(
         reader_access.broadcast_reads(),
         TypeId::of::<TickEvent>()

@@ -50,11 +50,11 @@ impl<'world> WorldAuthority<'world> {
     pub(crate) fn query(self) -> QueryCapability<'world> {
         // Safety: the authority was constructed from the live invocation World;
         // the bridge immediately projects only owned query fields.
-        unsafe { self.world.as_ref().query_capability() }
+        unsafe { QueryCapability::from_world_ptr(self.world) }
     }
 
     pub(crate) fn messaging(self) -> MessagingCapability<'world> {
-        unsafe { self.world.as_ref().messaging_capability() }
+        unsafe { MessagingCapability::from_world_ptr(self.world) }
     }
 
     pub(crate) unsafe fn world_mut(mut self) -> &'world mut World {
@@ -66,7 +66,7 @@ impl<'world> WorldAuthority<'world> {
     ) -> Result<ResourceCapability<'world, T>, ResourceError> {
         // Safety: the authority lifetime is the invocation lifetime and the
         // resource bridge retains only the stable boxed payload address.
-        unsafe { self.world.as_ref().resource_capability::<T>(false) }
+        unsafe { World::resource_capability_from_ptr(self.world, false) }
     }
 
     pub(crate) fn resource_mut<T: crate::component::Resource>(
@@ -74,7 +74,7 @@ impl<'world> WorldAuthority<'world> {
     ) -> Result<ResourceCapability<'world, T>, ResourceError> {
         // Safety: access validation rejects overlapping resource borrows before
         // this projection is manufactured.
-        unsafe { self.world.as_ref().resource_capability::<T>(true) }
+        unsafe { World::resource_capability_from_ptr(self.world, true) }
     }
 }
 
@@ -121,6 +121,63 @@ impl<'world> QueryCapability<'world> {
             component_change_ticks: NonNull::from(&world.component_change_ticks),
             component_change_log: NonNull::from(&world.component_change_log),
             removed_component_records: NonNull::from(&world.removed_component_records),
+            _marker: PhantomData,
+        }
+    }
+
+    pub(super) fn from_world_mut(world: &'world mut World) -> Self {
+        Self {
+            world_scope: world.scope_id(),
+            alive_entities: NonNull::from(&mut world.alive_entities),
+            archetype_registry: NonNull::from(&mut world.archetype_registry),
+            entity_locations: NonNull::from(&mut world.entity_locations),
+            component_type_registry: NonNull::from(&mut world.component_type_registry),
+            component_indexes: NonNull::from(&mut world.component_indexes),
+            change_tick: NonNull::from(&mut world.change_tick),
+            current_frame_index: NonNull::from(&mut world.current_frame_index),
+            component_change_ticks: NonNull::from(&mut world.component_change_ticks),
+            component_change_log: NonNull::from(&mut world.component_change_log),
+            removed_component_records: NonNull::from(&mut world.removed_component_records),
+            _marker: PhantomData,
+        }
+    }
+
+    pub(super) unsafe fn from_world_ptr(world: NonNull<World>) -> Self {
+        let world_ptr = world.as_ptr();
+        Self {
+            world_scope: unsafe { (*world_ptr).scope_id() },
+            alive_entities: unsafe {
+                NonNull::new_unchecked(std::ptr::addr_of_mut!((*world_ptr).alive_entities))
+            },
+            archetype_registry: unsafe {
+                NonNull::new_unchecked(std::ptr::addr_of_mut!((*world_ptr).archetype_registry))
+            },
+            entity_locations: unsafe {
+                NonNull::new_unchecked(std::ptr::addr_of_mut!((*world_ptr).entity_locations))
+            },
+            component_type_registry: unsafe {
+                NonNull::new_unchecked(std::ptr::addr_of_mut!((*world_ptr).component_type_registry))
+            },
+            component_indexes: unsafe {
+                NonNull::new_unchecked(std::ptr::addr_of_mut!((*world_ptr).component_indexes))
+            },
+            change_tick: unsafe {
+                NonNull::new_unchecked(std::ptr::addr_of_mut!((*world_ptr).change_tick))
+            },
+            current_frame_index: unsafe {
+                NonNull::new_unchecked(std::ptr::addr_of_mut!((*world_ptr).current_frame_index))
+            },
+            component_change_ticks: unsafe {
+                NonNull::new_unchecked(std::ptr::addr_of_mut!((*world_ptr).component_change_ticks))
+            },
+            component_change_log: unsafe {
+                NonNull::new_unchecked(std::ptr::addr_of_mut!((*world_ptr).component_change_log))
+            },
+            removed_component_records: unsafe {
+                NonNull::new_unchecked(std::ptr::addr_of_mut!(
+                    (*world_ptr).removed_component_records
+                ))
+            },
             _marker: PhantomData,
         }
     }
@@ -395,20 +452,41 @@ impl<'world> Clone for MessagingCapability<'world> {
 }
 
 impl<'world> MessagingCapability<'world> {
-    pub(super) fn from_world(world: &'world World) -> Self {
+    pub(super) unsafe fn from_world_ptr(world: NonNull<World>) -> Self {
+        let world_ptr = world.as_ptr();
         Self {
-            broadcast_streams: NonNull::from(&world.broadcast_streams),
-            work_queues: NonNull::from(&world.work_queues),
-            tick_buffers: NonNull::from(&world.tick_buffers),
-            broadcast_observers: NonNull::from(&world.broadcast_observers),
-            broadcast_observer_notifications: NonNull::from(
-                &world.broadcast_observer_notifications,
-            ),
-            next_broadcast_key: NonNull::from(&world.next_broadcast_key),
-            next_work_queue_key: NonNull::from(&world.next_work_queue_key),
-            next_tick_buffer_key: NonNull::from(&world.next_tick_buffer_key),
-            current_buffer_tick: NonNull::from(&world.current_buffer_tick),
-            finalized_buffer_tick: NonNull::from(&world.finalized_buffer_tick),
+            broadcast_streams: unsafe {
+                NonNull::new_unchecked(std::ptr::addr_of_mut!((*world_ptr).broadcast_streams))
+            },
+            work_queues: unsafe {
+                NonNull::new_unchecked(std::ptr::addr_of_mut!((*world_ptr).work_queues))
+            },
+            tick_buffers: unsafe {
+                NonNull::new_unchecked(std::ptr::addr_of_mut!((*world_ptr).tick_buffers))
+            },
+            broadcast_observers: unsafe {
+                NonNull::new_unchecked(std::ptr::addr_of_mut!((*world_ptr).broadcast_observers))
+            },
+            broadcast_observer_notifications: unsafe {
+                NonNull::new_unchecked(std::ptr::addr_of_mut!(
+                    (*world_ptr).broadcast_observer_notifications
+                ))
+            },
+            next_broadcast_key: unsafe {
+                NonNull::new_unchecked(std::ptr::addr_of_mut!((*world_ptr).next_broadcast_key))
+            },
+            next_work_queue_key: unsafe {
+                NonNull::new_unchecked(std::ptr::addr_of_mut!((*world_ptr).next_work_queue_key))
+            },
+            next_tick_buffer_key: unsafe {
+                NonNull::new_unchecked(std::ptr::addr_of_mut!((*world_ptr).next_tick_buffer_key))
+            },
+            current_buffer_tick: unsafe {
+                NonNull::new_unchecked(std::ptr::addr_of_mut!((*world_ptr).current_buffer_tick))
+            },
+            finalized_buffer_tick: unsafe {
+                NonNull::new_unchecked(std::ptr::addr_of_mut!((*world_ptr).finalized_buffer_tick))
+            },
             _marker: PhantomData,
         }
     }
@@ -760,36 +838,72 @@ impl World {
         QueryCapability::from_world(self)
     }
 
-    pub(crate) fn messaging_capability(&self) -> MessagingCapability<'_> {
-        MessagingCapability::from_world(self)
+    pub(crate) fn query_capability_mut(&mut self) -> QueryCapability<'_> {
+        QueryCapability::from_world_mut(self)
     }
 
-    pub(crate) fn resource_capability<T: crate::component::Resource>(
-        &self,
+    pub(crate) unsafe fn resource_capability_from_ptr<'world, T: crate::component::Resource>(
+        world: NonNull<World>,
         mutable: bool,
-    ) -> Result<ResourceCapability<'_, T>, ResourceError> {
+    ) -> Result<ResourceCapability<'world, T>, ResourceError> {
+        let world_ptr = world.as_ptr();
         let type_id = TypeId::of::<T>();
-        let value = self
-            .resources
-            .get(&type_id)
-            .and_then(|resource| resource.downcast_ref::<T>())
+        if mutable {
+            let value = unsafe {
+                (*world_ptr)
+                    .resources
+                    .get_mut(&type_id)
+                    .and_then(|resource| resource.downcast_mut::<T>())
+            }
             .ok_or(ResourceError::Missing {
                 resource: type_name::<T>(),
             })?;
-        let mutation = mutable.then(|| ResourceMutationCapability {
-            next_resource_id: NonNull::from(&self.next_resource_id),
-            resource_type_registry: NonNull::from(&self.resource_type_registry),
-            change_tick: NonNull::from(&self.change_tick),
-            current_frame_index: NonNull::from(&self.current_frame_index),
-            resource_change_ticks: NonNull::from(&self.resource_change_ticks),
-            resource_change_log: NonNull::from(&self.resource_change_log),
-            _marker: PhantomData,
-        });
-        Ok(ResourceCapability {
-            value: NonNull::from(value),
-            mutation,
-            _marker: PhantomData,
-        })
+            let mutation = ResourceMutationCapability {
+                next_resource_id: unsafe {
+                    NonNull::new_unchecked(std::ptr::addr_of_mut!((*world_ptr).next_resource_id))
+                },
+                resource_type_registry: unsafe {
+                    NonNull::new_unchecked(std::ptr::addr_of_mut!(
+                        (*world_ptr).resource_type_registry
+                    ))
+                },
+                change_tick: unsafe {
+                    NonNull::new_unchecked(std::ptr::addr_of_mut!((*world_ptr).change_tick))
+                },
+                current_frame_index: unsafe {
+                    NonNull::new_unchecked(std::ptr::addr_of_mut!((*world_ptr).current_frame_index))
+                },
+                resource_change_ticks: unsafe {
+                    NonNull::new_unchecked(std::ptr::addr_of_mut!(
+                        (*world_ptr).resource_change_ticks
+                    ))
+                },
+                resource_change_log: unsafe {
+                    NonNull::new_unchecked(std::ptr::addr_of_mut!((*world_ptr).resource_change_log))
+                },
+                _marker: PhantomData,
+            };
+            Ok(ResourceCapability {
+                value: NonNull::from(&mut *value),
+                mutation: Some(mutation),
+                _marker: PhantomData,
+            })
+        } else {
+            let value = unsafe {
+                (*world_ptr)
+                    .resources
+                    .get(&type_id)
+                    .and_then(|resource| resource.downcast_ref::<T>())
+            }
+            .ok_or(ResourceError::Missing {
+                resource: type_name::<T>(),
+            })?;
+            Ok(ResourceCapability {
+                value: NonNull::from(value),
+                mutation: None,
+                _marker: PhantomData,
+            })
+        }
     }
 }
 

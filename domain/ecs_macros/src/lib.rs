@@ -75,6 +75,21 @@ pub fn system_param_derive(input: TokenStream) -> TokenStream {
         });
     }
 
+    for param in &generics.params {
+        if let syn::GenericParam::Lifetime(param) = param {
+            let lifetime = &param.lifetime;
+            let supported = lifetime.ident == "w" || lifetime.ident == "s";
+            if !supported {
+                return syn::Error::new_spanned(
+                    lifetime,
+                    "SystemParam derive only supports the lifetime roles 'w (world) and 's (cached state)",
+                )
+                .to_compile_error()
+                .into();
+            }
+        }
+    }
+
     let fields = fields.named.into_iter().collect::<Vec<_>>();
     let field_idents = fields
         .iter()
@@ -93,7 +108,8 @@ pub fn system_param_derive(input: TokenStream) -> TokenStream {
         .params
         .iter()
         .map(|param| match param {
-            syn::GenericParam::Lifetime(_) => quote!('world),
+            syn::GenericParam::Lifetime(param) if param.lifetime.ident == "w" => quote!('world),
+            syn::GenericParam::Lifetime(_) => quote!('state),
             syn::GenericParam::Type(param) => {
                 let ident = &param.ident;
                 quote!(#ident)
@@ -105,8 +121,16 @@ pub fn system_param_derive(input: TokenStream) -> TokenStream {
         })
         .collect::<Vec<_>>();
     let (_, ty_generics, _) = generics.split_for_impl();
-    let item_type = quote!(#name <#(#item_args),*>);
-    let item_ctor = quote!(#name :: <#(#item_args),*>);
+    let item_type = if item_args.is_empty() {
+        quote!(#name)
+    } else {
+        quote!(#name <#(#item_args),*>)
+    };
+    let item_ctor = if item_args.is_empty() {
+        quote!(#name)
+    } else {
+        quote!(#name :: <#(#item_args),*>)
+    };
     let group_label = name.to_string();
 
     TokenStream::from(quote! {
