@@ -316,6 +316,7 @@ fn apply_global_prepared_initial_content(
     graph_label: &str,
     state: &mut BTreeMap<GpuWorkResourceId, InitializedCoverage>,
     initial_content: &[GpuPreparedInitialContent],
+    explanations: &mut PendingInitializationExplanations,
 ) -> Result<(), GpuWorkGraphError> {
     for candidate in initial_content {
         let identity = candidate.resource_identity();
@@ -343,7 +344,8 @@ fn apply_global_prepared_initial_content(
                 "retain each operation-used prepared resource in the normalized storage registry",
             ));
         };
-        if !existing.union(&prepared_initial_content_coverage(candidate)) {
+        let materialized = prepared_initial_content_coverage(candidate);
+        if !existing.union(&materialized) {
             return Err(GpuWorkGraphError::invalid(
                 "apply prepared initial-content simulation effect",
                 GpuWorkGraphErrorContext::new(
@@ -359,6 +361,12 @@ fn apply_global_prepared_initial_content(
                 "apply prepared initial content only to its matching normalized storage kind",
             ));
         }
+        record_pending_initialization_explanation(
+            explanations,
+            identity,
+            GpuInitializationExplanationKind::PreparedInitialContent,
+            materialized,
+        );
     }
     Ok(())
 }
@@ -523,11 +531,76 @@ fn apply_retained_initial_coverage(
     Ok(())
 }
 
+/// Typed reason why canonical initialized coverage was established or removed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GpuInitializationExplanationKind {
+    DescriptorGuaranteed,
+    DeclaredInput,
+    RetainedCoverage,
+    PreparedInitialContent,
+    OperationGuaranteed { node: GpuPreparedWorkNodeId },
+    AttachmentDiscard { node: GpuPreparedWorkNodeId },
+}
+
+impl GpuInitializationExplanationKind {
+    pub const fn node(self) -> Option<GpuPreparedWorkNodeId> {
+        match self {
+            Self::OperationGuaranteed { node } | Self::AttachmentDiscard { node } => Some(node),
+            Self::DescriptorGuaranteed
+            | Self::DeclaredInput
+            | Self::RetainedCoverage
+            | Self::PreparedInitialContent => None,
+        }
+    }
+}
+
+/// One ordered typed explanation fact emitted by the canonical initialization simulator.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GpuInitializationExplanation {
+    kind: GpuInitializationExplanationKind,
+    coverage: GpuInitialCoverage,
+}
+
+impl GpuInitializationExplanation {
+    pub const fn kind(&self) -> GpuInitializationExplanationKind {
+        self.kind
+    }
+
+    pub fn coverage(&self) -> &GpuInitialCoverage {
+        &self.coverage
+    }
+}
+
+#[derive(Debug, Clone)]
+struct PendingInitializationExplanation {
+    kind: GpuInitializationExplanationKind,
+    coverage: InitializedCoverage,
+}
+
+type PendingInitializationExplanations =
+    BTreeMap<GpuWorkResourceId, Vec<PendingInitializationExplanation>>;
+
+fn record_pending_initialization_explanation(
+    explanations: &mut PendingInitializationExplanations,
+    resource: GpuWorkResourceId,
+    kind: GpuInitializationExplanationKind,
+    coverage: InitializedCoverage,
+) {
+    if coverage.is_empty() {
+        return;
+    }
+    explanations
+        .entry(resource)
+        .or_default()
+        .push(PendingInitializationExplanation { kind, coverage });
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuPreparedResourceInitialization {
     resource: GpuResourceRef,
     initial: Option<GpuInitialCoverage>,
     final_coverage: Option<GpuInitialCoverage>,
+    explanations: Vec<GpuInitializationExplanation>,
 }
 
 impl GpuPreparedResourceInitialization {
@@ -541,6 +614,10 @@ impl GpuPreparedResourceInitialization {
 
     pub fn final_coverage(&self) -> Option<&GpuInitialCoverage> {
         self.final_coverage.as_ref()
+    }
+
+    pub fn explanations(&self) -> &[GpuInitializationExplanation] {
+        &self.explanations
     }
 }
 
@@ -614,7 +691,7 @@ pub(super) fn validate_fragment_initialization(
                 })?,
                 node.id().local,
             );
-            apply_node_initialization(graph_label, fragment, node, id, &mut state)?;
+            apply_node_initialization(graph_label, fragment, node, id, &mut state, None)?;
         }
         for (output_index, output) in fragment.outputs().iter().enumerate() {
             let resource = storage_identity(output.relationship().resource());
@@ -758,6 +835,7 @@ fn apply_node_initialization(
     node: &GpuWorkNode,
     prepared_id: GpuPreparedWorkNodeId,
     state: &mut BTreeMap<GpuWorkResourceId, InitializedCoverage>,
+    mut explanations: Option<&mut PendingInitializationExplanations>,
 ) -> Result<(), GpuWorkGraphError> {
     let mut requirements = node
         .caller_readable_accesses()
@@ -838,6 +916,14 @@ fn apply_node_initialization(
                 "apply initialization effects only to matching normalized storage kinds",
             ));
         }
+        if let Some(explanations) = explanations.as_deref_mut() {
+            record_pending_initialization_explanation(
+                explanations,
+                effect.resource,
+                GpuInitializationExplanationKind::OperationGuaranteed { node: prepared_id },
+                effect.coverage,
+            );
+        }
     }
     for discarded in operation_discard_regions(node.operation()) {
         let resource = discarded.resource;
@@ -853,6 +939,18 @@ fn apply_node_initialization(
                 "declare each normalized storage resource before use",
             ));
         };
+        let mut removed = coverage.clone();
+        if !intersect_coverage(&mut removed, &affected) {
+            return Err(graph_error(
+                "derive GPU attachment discard explanation",
+                graph_label,
+                GraphErrorOrigin::new(Some(fragment), Some(node)),
+                Some(prepared_id),
+                Some(resource),
+                GpuWorkGraphCause::OperationAccessContradiction,
+                "derive discard evidence only from matching normalized texture storage",
+            ));
+        }
         if !coverage.remove(&affected) {
             return Err(graph_error(
                 "apply GPU attachment discard",
@@ -863,6 +961,14 @@ fn apply_node_initialization(
                 GpuWorkGraphCause::OperationAccessContradiction,
                 "discard coverage only from the matching texture storage",
             ));
+        }
+        if let Some(explanations) = explanations.as_deref_mut() {
+            record_pending_initialization_explanation(
+                explanations,
+                resource,
+                GpuInitializationExplanationKind::AttachmentDiscard { node: prepared_id },
+                removed,
+            );
         }
     }
     Ok(())
@@ -1273,6 +1379,7 @@ pub(super) fn simulate_prepared_initialization(
     retained_coverage: &[GpuRetainedInitializationSeed],
 ) -> Result<PreparedInitializationSimulation, GpuWorkGraphError> {
     let mut state = BTreeMap::<GpuWorkResourceId, InitializedCoverage>::new();
+    let mut explanation_state = PendingInitializationExplanations::new();
     let retained_storage = storage_resources
         .iter()
         .filter_map(|(identity, resource)| {
@@ -1283,8 +1390,21 @@ pub(super) fn simulate_prepared_initialization(
                 .then_some(*identity)
         })
         .collect::<BTreeSet<_>>();
+    let retained_seeded = retained_coverage
+        .iter()
+        .map(GpuRetainedInitializationSeed::resource_identity)
+        .collect::<BTreeSet<_>>();
     for (identity, resource) in storage_resources {
-        state.insert(*identity, descriptor_coverage(resource));
+        let descriptor = descriptor_coverage(resource);
+        if !retained_seeded.contains(identity) {
+            record_pending_initialization_explanation(
+                &mut explanation_state,
+                *identity,
+                GpuInitializationExplanationKind::DescriptorGuaranteed,
+                descriptor.clone(),
+            );
+        }
+        state.insert(*identity, descriptor);
     }
     apply_retained_initial_coverage(
         graph_label,
@@ -1292,20 +1412,37 @@ pub(super) fn simulate_prepared_initialization(
         &retained_storage,
         retained_coverage,
     )?;
+    for seed in retained_coverage {
+        if let Some(coverage) = seed.initialized_coverage() {
+            record_pending_initialization_explanation(
+                &mut explanation_state,
+                seed.resource_identity(),
+                GpuInitializationExplanationKind::RetainedCoverage,
+                initial_coverage_value(coverage),
+            );
+        }
+    }
     for fragment in fragments {
         for input in fragment.inputs() {
-            union_state_coverage(
-                graph_label,
-                fragment,
-                &mut state,
-                input.initialized_coverage().storage_resource,
-                &initial_coverage_value(input.initialized_coverage()),
-            )?;
+            let resource = input.initialized_coverage().storage_resource;
+            let coverage = initial_coverage_value(input.initialized_coverage());
+            union_state_coverage(graph_label, fragment, &mut state, resource, &coverage)?;
+            record_pending_initialization_explanation(
+                &mut explanation_state,
+                resource,
+                GpuInitializationExplanationKind::DeclaredInput,
+                coverage,
+            );
         }
     }
     let initial = state.clone();
     let mut failure_preserved = initial.clone();
-    apply_global_prepared_initial_content(graph_label, &mut state, initial_content)?;
+    apply_global_prepared_initial_content(
+        graph_label,
+        &mut state,
+        initial_content,
+        &mut explanation_state,
+    )?;
     for &prepared_id in topological_order {
         let Some(&(fragment_index, node_index)) = node_locations.get(&prepared_id) else {
             return Err(GpuWorkGraphError::invalid(
@@ -1325,7 +1462,14 @@ pub(super) fn simulate_prepared_initialization(
         };
         let fragment = &fragments[fragment_index];
         let node = &fragment.nodes()[node_index];
-        apply_node_initialization(graph_label, fragment, node, prepared_id, &mut state)?;
+        apply_node_initialization(
+            graph_label,
+            fragment,
+            node,
+            prepared_id,
+            &mut state,
+            Some(&mut explanation_state),
+        )?;
         for discarded in operation_discard_regions(node.operation()) {
             let Some(coverage) = failure_preserved.get_mut(&discarded.resource) else {
                 continue;
@@ -1364,10 +1508,20 @@ pub(super) fn simulate_prepared_initialization(
         {
             failure_preserved_coverage.insert(*identity, coverage);
         }
+        let mut explanations = Vec::new();
+        for pending in explanation_state.remove(identity).unwrap_or_default() {
+            if let Some(coverage) = coverage_to_public(graph_label, resource, &pending.coverage)? {
+                explanations.push(GpuInitializationExplanation {
+                    kind: pending.kind,
+                    coverage,
+                });
+            }
+        }
         let summary = GpuPreparedResourceInitialization {
             resource: resource.clone(),
             initial: coverage_to_public(graph_label, resource, &initial_value)?,
             final_coverage: coverage_to_public(graph_label, resource, &final_value)?,
+            explanations,
         };
         summaries.push(summary);
     }
