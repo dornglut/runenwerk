@@ -846,7 +846,18 @@ fn timestamp_evidence(wall_runengpu: &GpuContext, wall_direct: &DirectWgpuContex
             &direct_pipeline.pipeline,
         ));
     }
+    let runengpu_period_ns = f64::from(
+        runengpu_context
+            .timestamp_period_ns()
+            .expect("timestamp-query-admitted RunenGPU context must expose timestamp period"),
+    );
     let direct_period_ns = f64::from(direct_context.queue.get_timestamp_period());
+    assert!(runengpu_period_ns.is_finite() && runengpu_period_ns > 0.0);
+    assert!(direct_period_ns.is_finite() && direct_period_ns > 0.0);
+    let runengpu_ns = runengpu_ticks
+        .iter()
+        .map(|ticks| *ticks as f64 * runengpu_period_ns)
+        .collect::<Vec<_>>();
     let direct_ns = direct_ticks
         .iter()
         .map(|ticks| *ticks as f64 * direct_period_ns)
@@ -861,8 +872,9 @@ fn timestamp_evidence(wall_runengpu: &GpuContext, wall_direct: &DirectWgpuContex
         "runengpu": {
             "raw_delta_ticks": runengpu_ticks,
             "summary_ticks": summarize_u64(&runengpu_ticks),
-            "timestamp_period_ns": null,
-            "timestamp_period_status": "not exposed by public RunenGPU device facts",
+            "timestamp_period_ns": runengpu_period_ns,
+            "timestamp_period_status": "reported by GpuContext::timestamp_period_ns()",
+            "delta_ns": runengpu_ns,
         },
         "direct_wgpu": {
             "raw_delta_ticks": direct_ticks,
@@ -870,7 +882,7 @@ fn timestamp_evidence(wall_runengpu: &GpuContext, wall_direct: &DirectWgpuContex
             "timestamp_period_ns": direct_period_ns,
             "delta_ns": direct_ns,
         },
-        "interpretation": "Both paths write timestamps at equivalent retained render-pass boundaries on the same Vulkan fallback adapter. RunenGPU raw ticks are retained without fabricating a period that its public device facts do not expose.",
+        "interpretation": "Both paths write timestamps at equivalent retained render-pass boundaries on the same Vulkan fallback adapter. Raw ticks remain retained for both paths; each path converts its own ticks with its own reported timestamp period, keeping GPU timestamp evidence separate from wall-clock samples.",
     })
 }
 
