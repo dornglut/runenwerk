@@ -176,6 +176,7 @@ def main() -> int:
                     }
                 }
             },
+            timeout=30,
         )
         if not isinstance(response, dict) or not isinstance(response.get("value"), dict):
             raise RuntimeError(f"unexpected ChromeDriver session response: {response!r}")
