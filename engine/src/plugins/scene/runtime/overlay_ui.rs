@@ -9,7 +9,6 @@ use crate::plugins::scene::ui::{
     ConsoleUiRuntimeState, UiNode as SceneUiNode, UiPresentationMode, UiStyle, UiText, UiTransform,
     reload_console_template_if_changed,
 };
-use crate::plugins::time::domain::Time;
 use crate::plugins::{InputState, SceneManager};
 use ui_math::{UiInsets, UiRect, UiSize};
 use ui_runtime::{
@@ -65,7 +64,7 @@ pub(crate) fn process_overlay_pointer_input(
     manager: &mut SceneManager,
     input: &mut InputState,
     scene_templates: &mut SceneTemplateFlowResource,
-    time: &Time,
+    delta_seconds: f32,
 ) -> anyhow::Result<()> {
     if !manager.overlay_visible() || !scene_templates.has_scenes() {
         return Ok(());
@@ -87,7 +86,7 @@ pub(crate) fn process_overlay_pointer_input(
     if let Some(slot) = scene_templates.update_hold(
         hovered_slot,
         input.left_mouse_down(),
-        time.delta_seconds.max(0.0) * 1000.0,
+        delta_seconds.max(0.0) * 1000.0,
     ) && let Some(action) = scene_templates.hold_action_for(slot).cloned()
     {
         scene_templates.apply_action(

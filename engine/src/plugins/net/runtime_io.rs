@@ -1,6 +1,5 @@
 use super::*;
 use crate::WorldMut;
-use crate::runtime::{WorkQueueDrainer, WorkQueueWriter};
 use anyhow::Context;
 use ecs::{OwnerRole, WorkQueueEnqueueError, World};
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
@@ -18,12 +17,12 @@ where
     anyhow::Error::new(error).context(context)
 }
 
-fn enqueue_work_queue_writer_with_backpressure<T: 'static>(
-    writer: &mut WorkQueueWriter<T>,
+fn enqueue_work_queue_with_backpressure<T: 'static>(
+    world: &mut World,
     work_queue_name: &'static str,
     message: T,
 ) -> Result<(), WorkQueueEnqueueError> {
-    let result = writer.enqueue(message);
+    let result = world.work_queue_enqueue(message);
     if let Err(WorkQueueEnqueueError::Backpressure { capacity, .. }) = &result {
         tracing::warn!(
             work_queue = work_queue_name,
@@ -34,17 +33,13 @@ fn enqueue_work_queue_writer_with_backpressure<T: 'static>(
     result
 }
 
-pub fn client_receive_system<TDriver>(
-    mut world: WorldMut,
-    mut client_inbox: WorkQueueDrainer<ServerMessage>,
-    mut client_outbox: WorkQueueWriter<ClientMessage>,
-) -> anyhow::Result<()>
+pub fn client_receive_system<TDriver>(mut world: WorldMut) -> anyhow::Result<()>
 where
     TDriver: ReplicationDriver + SnapshotApplyDriver + InputDriver + Send + Sync + 'static,
     TDriver::Snapshot: Clone + PartialEq,
     TDriver::Input: Clone + PartialEq,
 {
-    let messages = client_inbox.drain();
+    let messages = world.work_queue_drain::<ServerMessage>();
     if messages.is_empty() {
         return Ok(());
     }
@@ -81,8 +76,8 @@ where
 
                 match result {
                     Ok(corrected) => {
-                        if let Err(error) = enqueue_work_queue_writer_with_backpressure(
-                            &mut client_outbox,
+                        if let Err(error) = enqueue_work_queue_with_backpressure(
+                            &mut world,
                             "NetworkClientOutbox",
                             ClientMessage::Ack(Ack {
                                 cursor: snapshot.cursor,
@@ -124,8 +119,8 @@ where
 
                 match result {
                     Ok(corrected) => {
-                        if let Err(error) = enqueue_work_queue_writer_with_backpressure(
-                            &mut client_outbox,
+                        if let Err(error) = enqueue_work_queue_with_backpressure(
+                            &mut world,
                             "NetworkClientOutbox",
                             ClientMessage::Ack(Ack {
                                 cursor: snapshot.cursor,
@@ -169,15 +164,12 @@ fn connection_is_admitted(world: &World, connection: ConnectionHandle) -> bool {
         .is_some()
 }
 
-pub fn server_receive_system<TDriver>(
-    mut world: WorldMut,
-    mut server_inbox: WorkQueueDrainer<InboundClientMessage>,
-) -> anyhow::Result<()>
+pub fn server_receive_system<TDriver>(mut world: WorldMut) -> anyhow::Result<()>
 where
     TDriver: ReplicationDriver + InputDriver + Send + Sync + 'static,
     TDriver::Snapshot: Clone + PartialEq,
 {
-    let messages = server_inbox.drain();
+    let messages = world.work_queue_drain::<InboundClientMessage>();
     if messages.is_empty() {
         return Ok(());
     }
@@ -414,11 +406,8 @@ pub fn sync_net_diagnostics_view_system(mut world: WorldMut) {
     sync_net_diagnostics_view(&mut world);
 }
 
-pub fn client_flush_system(
-    mut world: WorldMut,
-    mut client_outbox: WorkQueueDrainer<ClientMessage>,
-) -> anyhow::Result<()> {
-    let messages = client_outbox.drain();
+pub fn client_flush_system(mut world: WorldMut) -> anyhow::Result<()> {
+    let messages = world.work_queue_drain::<ClientMessage>();
     if messages.is_empty() {
         return Ok(());
     }
@@ -438,11 +427,8 @@ pub fn client_flush_system(
     Ok(())
 }
 
-pub fn server_flush_system(
-    mut world: WorldMut,
-    mut server_outbox: WorkQueueDrainer<OutboundServerMessage>,
-) -> anyhow::Result<()> {
-    let messages = server_outbox.drain();
+pub fn server_flush_system(mut world: WorldMut) -> anyhow::Result<()> {
+    let messages = world.work_queue_drain::<OutboundServerMessage>();
     if messages.is_empty() {
         return Ok(());
     }

@@ -718,6 +718,7 @@ dependencies = [
  "glam 0.31.1",
  "scheduler",
  "thiserror 2.0.18",
+ "trybuild",
 ]
 
 [[package]]

@@ -2,7 +2,8 @@
 use super::access_and_filters::QueryAccess;
 use crate::component::Component;
 use crate::entity::Entity;
-use crate::world::World;
+use crate::query::QueryWorldSource;
+use crate::world::{QueryCapability, World};
 use std::any::TypeId;
 use std::cell::RefCell;
 use std::marker::PhantomData;
@@ -46,7 +47,17 @@ impl<T: Component> QueryOrphanedState<T> {
         &self.access
     }
 
-    pub fn iter<'w>(&self, world: &'w World) -> impl Iterator<Item = Orphaned<T>> + 'w {
+    pub fn iter<'w, W>(&self, world: W) -> impl Iterator<Item = Orphaned<T>> + 'w
+    where
+        W: QueryWorldSource<'w, Entity>,
+    {
+        self.iter_capability(world.into_query_capability())
+    }
+
+    pub(crate) fn iter_capability<'w>(
+        &self,
+        world: QueryCapability<'w>,
+    ) -> impl Iterator<Item = Orphaned<T>> + 'w {
         let mut scratch = self.scratch.borrow_mut();
         world.removed_component_records_current_window(TypeId::of::<T>(), &mut scratch);
         let records = scratch
@@ -61,16 +72,19 @@ impl<T: Component> QueryOrphanedState<T> {
     }
 }
 
-pub struct QueryOrphaned<T: Component> {
-    world: NonNull<World>,
+pub struct QueryOrphaned<'world, 'state, T: Component> {
+    world: QueryCapability<'world>,
     state: NonNull<QueryOrphanedState<T>>,
-    _marker: PhantomData<T>,
+    _marker: PhantomData<(&'state mut QueryOrphanedState<T>, T)>,
 }
 
-impl<T: Component> QueryOrphaned<T> {
-    pub(crate) fn new(world: *mut World, state: &mut QueryOrphanedState<T>) -> Self {
+impl<'world, 'state, T: Component> QueryOrphaned<'world, 'state, T> {
+    pub(crate) fn new(
+        world: QueryCapability<'world>,
+        state: &'state mut QueryOrphanedState<T>,
+    ) -> Self {
         Self {
-            world: NonNull::new(world).expect("world pointer must not be null"),
+            world,
             state: NonNull::from(state),
             _marker: PhantomData,
         }
@@ -81,7 +95,6 @@ impl<T: Component> QueryOrphaned<T> {
     }
 
     pub fn iter(&mut self) -> impl Iterator<Item = Orphaned<T>> + '_ {
-        let world = unsafe { self.world.as_ref() };
-        unsafe { self.state.as_ref().iter(world) }
+        unsafe { self.state.as_ref().iter_capability(self.world) }
     }
 }

@@ -4,7 +4,7 @@ mod params;
 mod plan_report;
 mod runtime;
 
-pub use extract::{SystemParam, SystemParamError};
+pub use extract::{SystemParam, SystemParamContext, SystemParamError};
 pub use param_metadata::{ParamSlotId, ParamSlotMetadata};
 pub use params::{
     BroadcastReader, BroadcastReaderState, BroadcastWriter, Res, ResMut, ResView,

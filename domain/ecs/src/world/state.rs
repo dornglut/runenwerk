@@ -11,7 +11,7 @@ use super::messaging::finalization::MessagingFinalizationCounters;
 use super::messaging::tick_buffer::TickBufferStorage;
 use super::messaging::work_queue::WorkQueueStorage;
 use super::ownership::OwnershipRegistry;
-use crate::entity::{Entity, EntityAllocator};
+use crate::entity::{Entity, EntityAllocator, WorldScopeId};
 use crate::indexing::SpatialIndexStorage;
 use crate::storage::{ArchetypeRegistry, EntityLocationMap};
 use std::any::{Any, TypeId};
@@ -104,6 +104,10 @@ impl World {
             removed_component_records: HashMap::new(),
             resource_change_log: Vec::new(),
         }
+    }
+
+    pub(crate) const fn scope_id(&self) -> WorldScopeId {
+        self.allocator.scope_id()
     }
 }
 

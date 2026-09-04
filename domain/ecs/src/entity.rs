@@ -6,7 +6,7 @@ const WORLD_SCOPE_EXHAUSTED_MESSAGE: &str = "RunenECS world scope identity space
 static NEXT_WORLD_SCOPE: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
-struct WorldScopeId(u64);
+pub(crate) struct WorldScopeId(u64);
 
 impl WorldScopeId {
     fn allocate_process_local() -> Self {
@@ -118,6 +118,10 @@ impl EntityAllocator {
             free_list: Vec::new(),
             slots: Vec::new(),
         }
+    }
+
+    pub(crate) const fn scope_id(&self) -> WorldScopeId {
+        self.scope
     }
 
     #[cfg(test)]

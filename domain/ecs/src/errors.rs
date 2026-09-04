@@ -47,6 +47,11 @@ pub enum QueryError {
     NoResults,
     #[error("query expected exactly one result but found {count}")]
     MultipleResults { count: usize },
+    #[error("query has conflicting {domain} borrows for {target}")]
+    ConflictingBorrow {
+        domain: &'static str,
+        target: &'static str,
+    },
 }
 
 #[derive(Debug, Error, Clone, PartialEq)]

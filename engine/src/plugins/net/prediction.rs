@@ -1,6 +1,5 @@
 use super::*;
 use crate::WorldMut;
-use crate::runtime::WorkQueueWriter;
 use ecs::{OwnerRole, TickBufferProvenance, WorkQueueEnqueueError, World};
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 use engine_net::*;
@@ -14,12 +13,12 @@ const FULL_SNAPSHOT_INTERVAL_TICKS: u64 = 30;
 const MAX_SERVER_SNAPSHOT_HISTORY: usize = 256;
 const MAX_CLIENT_SNAPSHOT_HISTORY: usize = 256;
 
-fn enqueue_work_queue_writer_with_backpressure<T: 'static>(
-    writer: &mut WorkQueueWriter<T>,
+fn enqueue_work_queue_with_backpressure<T: 'static>(
+    world: &mut World,
     work_queue_name: &'static str,
     message: T,
 ) -> Result<(), WorkQueueEnqueueError> {
-    let result = writer.enqueue(message);
+    let result = world.work_queue_enqueue(message);
     if let Err(WorkQueueEnqueueError::Backpressure { capacity, .. }) = &result {
         tracing::warn!(
             work_queue = work_queue_name,
@@ -46,10 +45,7 @@ fn sole_active_connection(world: &World) -> Option<ConnectionHandle> {
     connections.next().is_none().then_some(first)
 }
 
-pub fn replication_step_system<TDriver>(
-    mut world: WorldMut,
-    mut server_outbox: WorkQueueWriter<OutboundServerMessage>,
-) -> anyhow::Result<()>
+pub fn replication_step_system<TDriver>(mut world: WorldMut) -> anyhow::Result<()>
 where
     TDriver: ReplicationDriver + Send + Sync + 'static,
     TDriver::Snapshot: Clone + PartialEq,
@@ -206,11 +202,9 @@ where
     }
 
     for message in &outbound {
-        if let Err(error) = enqueue_work_queue_writer_with_backpressure(
-            &mut server_outbox,
-            "NetworkServerOutbox",
-            message.clone(),
-        ) {
+        if let Err(error) =
+            enqueue_work_queue_with_backpressure(&mut world, "NetworkServerOutbox", message.clone())
+        {
             tracing::warn!(error = ?error, "failed to enqueue replication server outbox message");
         }
     }
@@ -225,10 +219,7 @@ where
     Ok(())
 }
 
-pub fn prediction_step_system<TDriver>(
-    mut world: WorldMut,
-    mut client_outbox: WorkQueueWriter<ClientMessage>,
-) -> anyhow::Result<()>
+pub fn prediction_step_system<TDriver>(mut world: WorldMut) -> anyhow::Result<()>
 where
     TDriver: ReplicationDriver + InputDriver + Send + Sync + 'static,
     TDriver::Input: Clone + PartialEq,
@@ -277,8 +268,8 @@ where
         let payload = TDriver::encode_input(&commands)
             .map_err(|error| map_driver_error::<TDriver>(error, "encode input"))?;
 
-        if let Err(error) = enqueue_work_queue_writer_with_backpressure(
-            &mut client_outbox,
+        if let Err(error) = enqueue_work_queue_with_backpressure(
+            &mut world,
             "NetworkClientOutbox",
             ClientMessage::InputFrame(InputFrame { tick, payload }),
         ) {

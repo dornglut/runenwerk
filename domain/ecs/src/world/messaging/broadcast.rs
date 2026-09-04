@@ -82,33 +82,33 @@ pub struct BroadcastObserverNotification {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct BroadcastObserver {
-    pub(super) observer_id: String,
-    pub(super) stream_type: TypeId,
-    pub(super) trigger: BroadcastObserverTrigger,
-    pub(super) invocations: u64,
+    pub(crate) observer_id: String,
+    pub(crate) stream_type: TypeId,
+    pub(crate) trigger: BroadcastObserverTrigger,
+    pub(crate) invocations: u64,
 }
 
 pub(crate) struct BroadcastStreamStorage {
-    pub(super) stream_key: BroadcastKey,
-    pub(super) stream_type_name: &'static str,
+    pub(crate) stream_key: BroadcastKey,
+    pub(crate) stream_type_name: &'static str,
     messages: Box<dyn Any>,
     len_fn: fn(&Box<dyn Any>) -> usize,
     clear_fn: fn(&mut Box<dyn Any>) -> usize,
-    pub(super) start_sequence: u64,
-    pub(super) next_sequence: u64,
-    pub(super) config: BroadcastStreamConfig,
-    pub(super) emitted: u64,
-    pub(super) drained: u64,
-    pub(super) dropped: u64,
-    pub(super) consumer_reads: u64,
-    pub(super) consumer_lagged_reads: u64,
-    pub(super) consumer_missed_messages: u64,
-    pub(super) consumer_lag_latest: u64,
-    pub(super) consumer_lag_max: u64,
+    pub(crate) start_sequence: u64,
+    pub(crate) next_sequence: u64,
+    pub(crate) config: BroadcastStreamConfig,
+    pub(crate) emitted: u64,
+    pub(crate) drained: u64,
+    pub(crate) dropped: u64,
+    pub(crate) consumer_reads: u64,
+    pub(crate) consumer_lagged_reads: u64,
+    pub(crate) consumer_missed_messages: u64,
+    pub(crate) consumer_lag_latest: u64,
+    pub(crate) consumer_lag_max: u64,
 }
 
 impl BroadcastStreamStorage {
-    pub(super) fn new<T: 'static>(stream_key: BroadcastKey) -> Self {
+    pub(crate) fn new<T: 'static>(stream_key: BroadcastKey) -> Self {
         fn len_for<T: 'static>(messages: &Box<dyn Any>) -> usize {
             messages
                 .downcast_ref::<Vec<T>>()
@@ -147,7 +147,7 @@ impl BroadcastStreamStorage {
         }
     }
 
-    pub(super) fn messages_ref<T: 'static>(&self) -> &[T] {
+    pub(crate) fn messages_ref<T: 'static>(&self) -> &[T] {
         self.messages
             .downcast_ref::<Vec<T>>()
             .map(Vec::as_slice)
@@ -160,7 +160,7 @@ impl BroadcastStreamStorage {
             })
     }
 
-    pub(super) fn messages_mut<T: 'static>(&mut self) -> &mut Vec<T> {
+    pub(crate) fn messages_mut<T: 'static>(&mut self) -> &mut Vec<T> {
         self.messages.downcast_mut::<Vec<T>>().unwrap_or_else(|| {
             panic!(
                 "broadcast stream type mismatch: stored={} requested={}",
@@ -170,24 +170,24 @@ impl BroadcastStreamStorage {
         })
     }
 
-    pub(super) fn messages_len_any(&self) -> usize {
+    pub(crate) fn messages_len_any(&self) -> usize {
         (self.len_fn)(&self.messages)
     }
 
-    pub(super) fn clear_any(&mut self) -> usize {
+    pub(crate) fn clear_any(&mut self) -> usize {
         let removed = (self.clear_fn)(&mut self.messages);
         self.advance_sequence_for_removed(removed);
         removed
     }
 
-    pub(super) fn messages_ref_since<T: 'static>(&self, sequence: u64) -> &[T] {
+    pub(crate) fn messages_ref_since<T: 'static>(&self, sequence: u64) -> &[T] {
         let messages = self.messages_ref::<T>();
         let clamped_sequence = sequence.max(self.start_sequence).min(self.next_sequence);
         let offset = (clamped_sequence.saturating_sub(self.start_sequence)) as usize;
         &messages[offset..]
     }
 
-    pub(super) fn advance_sequence_for_removed(&mut self, removed: usize) {
+    pub(crate) fn advance_sequence_for_removed(&mut self, removed: usize) {
         let removed = removed as u64;
         self.start_sequence = self
             .start_sequence
@@ -195,7 +195,7 @@ impl BroadcastStreamStorage {
             .min(self.next_sequence);
     }
 
-    pub(super) fn record_consumer_read_from(&mut self, sequence: u64) {
+    pub(crate) fn record_consumer_read_from(&mut self, sequence: u64) {
         let clamped_sequence = sequence.min(self.next_sequence);
         let lag = self.next_sequence.saturating_sub(clamped_sequence);
         let missed = self.start_sequence.saturating_sub(sequence);
@@ -331,18 +331,6 @@ impl World {
             .get(&TypeId::of::<T>())
             .map(|stream| stream.messages_ref::<T>())
             .unwrap_or(&[])
-    }
-
-    pub(crate) fn read_broadcast_since_for_consumer<T: 'static>(
-        &mut self,
-        sequence: u64,
-    ) -> (&[T], u64) {
-        let Some(stream) = self.broadcast_streams.get_mut(&TypeId::of::<T>()) else {
-            return (&[], 0);
-        };
-        let next_sequence = stream.next_sequence;
-        stream.record_consumer_read_from(sequence);
-        (stream.messages_ref_since::<T>(sequence), next_sequence)
     }
 
     pub fn drain_broadcast_admin<T: 'static>(&mut self) -> Vec<T> {

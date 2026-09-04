@@ -4,7 +4,7 @@ use crate::plugins::render::inspect::RenderDebugTimingsState;
 use crate::plugins::render::*;
 use crate::plugins::scene::SceneResource;
 use crate::runtime::{
-    CatchupBudget, FixedTimeConfig, FixedTimeState, NativeWindowLifecycleState, ResMut, WorldMut,
+    CatchupBudget, FixedTimeConfig, FixedTimeState, NativeWindowLifecycleState, WorldMut,
 };
 use std::any::{Any, TypeId};
 use std::collections::{BTreeMap, BTreeSet};
@@ -12,13 +12,22 @@ use std::time::Instant;
 
 type ExtractedRenderStateMap<'a> = BTreeMap<TypeId, &'a dyn Any>;
 
-pub(crate) fn frame_render_prepare_system(
-    mut world: WorldMut,
-    mut scene_resource: ResMut<SceneResource>,
-) -> anyhow::Result<()> {
-    let Some(manager) = scene_resource.manager.as_mut() else {
-        clear_prepared_frame(&mut world);
-        return Ok(());
+pub(crate) fn frame_render_prepare_system(mut world: WorldMut) -> anyhow::Result<()> {
+    let (target_size, active_world_label, active_overlay_label) = {
+        let scene_resource = world.resource::<SceneResource>()?;
+        let Some(manager) = scene_resource.manager.as_ref() else {
+            clear_prepared_frame(&mut world);
+            return Ok(());
+        };
+        let (window_w, window_h) = manager.overlay_runtime.ui.screen_size;
+        (
+            (
+                window_w.max(1.0).round() as u32,
+                window_h.max(1.0).round() as u32,
+            ),
+            manager.world.active.label().to_string(),
+            manager.active_overlay().label().to_string(),
+        )
     };
 
     let Some(mut shader_registry) = world.remove_resource::<ShaderRegistryResource>() else {
@@ -35,27 +44,23 @@ pub(crate) fn frame_render_prepare_system(
     }
     let shader_reload_messages = shader_registry.drain_message_lines();
     if !shader_reload_messages.is_empty() {
-        for msg in shader_reload_messages {
-            manager
-                .overlay_runtime
-                .ui
-                .log_lines
-                .push(format!("[world] {msg}"));
+        let scene_resource = world.resource_mut::<SceneResource>()?;
+        if let Some(manager) = scene_resource.manager.as_mut() {
+            for msg in shader_reload_messages {
+                manager
+                    .overlay_runtime
+                    .ui
+                    .log_lines
+                    .push(format!("[world] {msg}"));
+            }
+            crate::plugins::render::runtime::debug_eval::clamp_lines(
+                &mut manager.overlay_runtime.ui.log_lines,
+                manager.overlay_runtime.ui.max_lines,
+            );
+            manager.overlay_runtime.ui.log_scroll_lines_from_bottom = 0;
         }
-        crate::plugins::render::runtime::debug_eval::clamp_lines(
-            &mut manager.overlay_runtime.ui.log_lines,
-            manager.overlay_runtime.ui.max_lines,
-        );
-        manager.overlay_runtime.ui.log_scroll_lines_from_bottom = 0;
     }
 
-    let target_size = {
-        let (window_w, window_h) = manager.overlay_runtime.ui.screen_size;
-        (
-            window_w.max(1.0).round() as u32,
-            window_h.max(1.0).round() as u32,
-        )
-    };
     let surface_infos = prepared_surface_infos(&mut world, target_size);
 
     let (flow_registry_revision, compiled_flows, execution_feature_ids, surface_packets) = {
@@ -110,8 +115,8 @@ pub(crate) fn frame_render_prepare_system(
 
     let contributions = build_frame_feature_contributions(
         &world,
-        manager.world.active.label().to_string(),
-        manager.active_overlay().label().to_string(),
+        active_world_label,
+        active_overlay_label,
         &execution_feature_ids,
     );
     let dynamic_texture_targets = world

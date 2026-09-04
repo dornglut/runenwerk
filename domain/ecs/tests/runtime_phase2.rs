@@ -110,8 +110,12 @@ static EXTRACT_CALLS: AtomicUsize = AtomicUsize::new(0);
 
 struct CachedCounter(usize);
 
-impl<'w> SystemParam<'w> for CachedCounter {
+// Safety: this test-only parameter has no World access and only mutates its own
+// per-system cached state. The empty QueryAccess therefore describes extraction
+// completely.
+unsafe impl SystemParam for CachedCounter {
     type State = usize;
+    type Item<'world, 'state> = CachedCounter;
 
     fn init_state(_world: &mut World) -> Result<Self::State, SystemParamError> {
         INIT_STATE_CALLS.fetch_add(1, Ordering::SeqCst);
@@ -122,11 +126,10 @@ impl<'w> SystemParam<'w> for CachedCounter {
         QueryAccess::default()
     }
 
-    unsafe fn extract(
-        state: &'w mut Self::State,
-        _world: *mut World,
-        _commands: *mut Commands,
-    ) -> Result<Self, SystemParamError> {
+    unsafe fn extract<'world, 'state>(
+        state: &'state mut Self::State,
+        _context: ecs::SystemParamContext<'world>,
+    ) -> Result<Self::Item<'world, 'state>, SystemParamError> {
         *state += 1;
         EXTRACT_CALLS.fetch_add(1, Ordering::SeqCst);
         Ok(CachedCounter(*state))

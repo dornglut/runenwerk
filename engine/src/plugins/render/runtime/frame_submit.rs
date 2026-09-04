@@ -16,7 +16,7 @@ use crate::plugins::render::runtime::{
 use crate::plugins::render::*;
 use crate::plugins::time::domain::Time;
 use crate::runtime::FramePacingRuntimeStateResource;
-use crate::runtime::{Res, ResMut, SimulationTick, WorldMut};
+use crate::runtime::{SimulationTick, WorldMut};
 use crate::state::{DebugMetricsState, StartupState};
 use anyhow::anyhow;
 use scheduler::set_slow_node_logging_enabled;
@@ -35,19 +35,14 @@ fn render_timing_logging_enabled() -> bool {
         .unwrap_or(false)
 }
 
-pub(crate) fn frame_render_submit_system(
-    mut world: WorldMut,
-    time: Res<Time>,
-    scene_resource: ResMut<SceneResource>,
-    mut startup: ResMut<StartupState>,
-    mut debug_metrics: ResMut<DebugMetricsState>,
-) -> anyhow::Result<()> {
-    if scene_resource.manager.is_none() {
+pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<()> {
+    if world.resource::<SceneResource>()?.manager.is_none() {
         return Ok(());
     }
 
     let _submit_span = tracing::info_span!("systems.frame_render_submit").entered();
-    let startup_ready_before = startup.is_ready();
+    let startup_ready_before = world.resource::<StartupState>()?.is_ready();
+    let delta_seconds = world.resource::<Time>()?.delta_seconds;
     let timing_log_enabled = render_timing_logging_enabled();
     set_slow_node_logging_enabled(startup_ready_before);
 
@@ -156,7 +151,7 @@ pub(crate) fn frame_render_submit_system(
 
     let result = match render_result {
         Ok(timings) => {
-            debug_metrics.last_timings = Some(timings);
+            world.resource_mut::<DebugMetricsState>()?.last_timings = Some(timings);
 
             if let Ok(render_debug_timings) = world.resource_mut::<RenderDebugTimingsState>() {
                 render_debug_timings.observe_frame_timings(timings);
@@ -312,14 +307,23 @@ pub(crate) fn frame_render_submit_system(
 
             let mesh_hot = timings.renderer.mesh_hot_path;
             let warm_frame = mesh_hot.is_warm_frame();
-            let warmup_completed =
-                startup.observe_render_warm_frame(warm_frame, time.delta_seconds.max(0.0));
+            let (warmup_completed, elapsed_loading_seconds, stable_frames, required_stable_frames) = {
+                let startup = world.resource_mut::<StartupState>()?;
+                let warmup_completed =
+                    startup.observe_render_warm_frame(warm_frame, delta_seconds.max(0.0));
+                (
+                    warmup_completed,
+                    startup.elapsed_loading_seconds,
+                    startup.stable_frames,
+                    startup.required_stable_frames,
+                )
+            };
 
             if warmup_completed {
                 tracing::info!(
-                    elapsed_loading_seconds = startup.elapsed_loading_seconds,
-                    stable_frames = startup.stable_frames,
-                    required_stable_frames = startup.required_stable_frames,
+                    elapsed_loading_seconds,
+                    stable_frames,
+                    required_stable_frames,
                     warm_frame,
                     "startup warmup complete; scene flow can transition out of loading screen"
                 );

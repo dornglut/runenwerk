@@ -487,3 +487,61 @@ fn scheduler_assigns_monotonic_ids_and_surfaces_them_in_plans() {
         .collect();
     assert_eq!(stage_ids, vec![0, 1]);
 }
+
+#[test]
+fn exclusive_world_conflicts_with_every_immediate_access_domain() {
+    let mut exclusive = SystemAccess::new();
+    exclusive.add_exclusive_world_access();
+
+    let immediate = [
+        SystemAccess::new().with_read(AccessKey::component::<A>("component")),
+        SystemAccess::new().with_read(AccessKey::resource::<A>("resource")),
+        SystemAccess::new().with_write(AccessKey::broadcast_stream::<A>("broadcast")),
+        SystemAccess::new().with_drain(AccessKey::work_queue::<A>("queue")),
+        SystemAccess::new().with_write(AccessKey::tick_buffer::<A>("tick")),
+    ];
+
+    for access in immediate {
+        let conflicts = exclusive.conflicts_with(&access);
+        assert_eq!(conflicts.len(), 1);
+        assert_eq!(conflicts[0].kind, ConflictKind::WriteWrite);
+        assert_eq!(conflicts[0].key, AccessKey::world("world"));
+    }
+}
+
+#[test]
+fn exclusive_world_conflicts_with_another_exclusive_world_access() {
+    let mut left = SystemAccess::new();
+    left.add_exclusive_world_access();
+    let mut right = SystemAccess::new();
+    right.add_exclusive_world_access();
+
+    let conflicts = left.conflicts_with(&right);
+    assert_eq!(conflicts.len(), 1);
+    assert_eq!(conflicts[0].key, AccessKey::world("world"));
+    assert_eq!(conflicts[0].kind, ConflictKind::WriteWrite);
+}
+
+#[test]
+fn exclusive_world_can_coexist_with_deferred_structural_access() {
+    let mut exclusive = SystemAccess::new();
+    exclusive.add_exclusive_world_access();
+    let structural = SystemAccess::new().with_write(AccessKey::structural("world_structure"));
+
+    assert!(exclusive.conflicts_with(&structural).is_empty());
+
+    exclusive.add_write(AccessKey::structural("world_structure"));
+    assert!(exclusive.validate_internal().is_ok());
+}
+
+#[test]
+fn exclusive_world_rejects_immediate_access_inside_one_system() {
+    let mut access = SystemAccess::new().with_read(AccessKey::resource::<A>("resource"));
+    access.add_exclusive_world_access();
+
+    let conflict = access
+        .validate_internal()
+        .expect_err("exclusive world plus immediate resource access must be rejected");
+    assert_eq!(conflict.key, AccessKey::world("world"));
+    assert_eq!(conflict.kind, ConflictKind::WriteWrite);
+}

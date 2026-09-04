@@ -1,4 +1,4 @@
-use super::extract::{SystemParam, SystemParamError};
+use super::extract::{SystemParam, SystemParamContext, SystemParamError};
 use super::param_metadata::{ParamSlotMetadata, param_slot_metadata_for_descriptors};
 use super::plan_report::RuntimePlanReport;
 use anyhow::{Result, anyhow};
@@ -15,7 +15,7 @@ use crate::query::QueryAccess;
 use crate::telemetry;
 use crate::{Commands, World};
 
-type DeferredCommands = Rc<RefCell<Vec<Commands>>>;
+type DeferredCommands = Rc<RefCell<Vec<Commands<'static>>>>;
 pub type BarrierHandler = Box<dyn Fn(&ExecutionBarrier, &mut World) -> Result<()>>;
 
 struct RegisteredBarrierHandler {
@@ -402,46 +402,59 @@ impl_into_system_configs_tuple!(
 
 trait SystemParamState: Sized {
     type State: 'static;
+    type Item<'world, 'state>;
 
     fn init_state(world: &mut World) -> std::result::Result<Self::State, SystemParamError>;
     fn access(state: &Self::State) -> QueryAccess;
     fn slot_descriptor() -> ParamSlotDescriptor;
 
-    unsafe fn extract(
-        state: &mut Self::State,
-        world: *mut World,
-        commands: *mut Commands,
-    ) -> std::result::Result<Self, SystemParamError>;
+    unsafe fn extract<'world, 'state>(
+        state: &'state mut Self::State,
+        context: SystemParamContext<'world>,
+    ) -> std::result::Result<Self::Item<'world, 'state>, SystemParamError>;
 }
 
 impl<T> SystemParamState for T
 where
-    T: for<'w> SystemParam<'w>,
+    T: SystemParam,
 {
-    type State = <T as SystemParam<'static>>::State;
+    type State = T::State;
+    type Item<'world, 'state> = T::Item<'world, 'state>;
 
     fn init_state(world: &mut World) -> std::result::Result<Self::State, SystemParamError> {
-        <T as SystemParam<'static>>::init_state(world)
+        T::init_state(world)
     }
 
     fn access(state: &Self::State) -> QueryAccess {
-        <T as SystemParam<'static>>::access(state)
+        T::access(state)
     }
 
     fn slot_descriptor() -> ParamSlotDescriptor {
-        <T as SystemParam<'static>>::slot_descriptor()
+        T::slot_descriptor()
     }
 
-    unsafe fn extract(
-        state: &mut Self::State,
-        world: *mut World,
-        commands: *mut Commands,
-    ) -> std::result::Result<Self, SystemParamError> {
-        // Safety: `SystemParam` implementors are required to keep `State` lifetime-independent.
-        // This cast converts the cached `'static` state type view into the extraction lifetime view.
-        let state_ptr = state as *mut Self::State as *mut <T as SystemParam<'_>>::State;
-        unsafe { <T as SystemParam<'_>>::extract(&mut *state_ptr, world, commands) }
+    unsafe fn extract<'world, 'state>(
+        state: &'state mut Self::State,
+        context: SystemParamContext<'world>,
+    ) -> std::result::Result<Self::Item<'world, 'state>, SystemParamError> {
+        unsafe { T::extract(state, context) }
     }
+}
+
+fn validate_borrow_access(system_name: &str, access_parts: &[QueryAccess]) -> Result<()> {
+    let mut merged = QueryAccess::default();
+    for access in access_parts {
+        merged.extend(access.clone());
+    }
+    if let Some(conflict) = merged.borrow_conflict() {
+        return Err(anyhow!(
+            "system '{}' has conflicting param borrows: {} {}",
+            system_name,
+            conflict.domain(),
+            conflict.name()
+        ));
+    }
+    Ok(())
 }
 
 fn merge_access(system_name: &str, access_parts: &[SystemAccess]) -> Result<SystemAccess> {
@@ -455,6 +468,9 @@ fn merge_access(system_name: &str, access_parts: &[SystemAccess]) -> Result<Syst
         }
         for drain in access.drains() {
             merged.add_drain(*drain);
+        }
+        for _ in 0..access.exclusive_world_accesses() {
+            merged.add_exclusive_world_access();
         }
     }
     if let Err(conflict) = merged.validate_internal() {
@@ -472,9 +488,9 @@ macro_rules! impl_into_system {
         #[allow(unused_mut, unused_variables, non_snake_case)]
         impl<Func, R, $($param),*> IntoSystem<fn($($param),*) -> R> for Func
         where
-            Func: FnMut($($param),*) -> R + 'static,
+            Func: FnMut($($param),*) -> R + for<'world, 'state> FnMut($(<$param as SystemParamState>::Item<'world, 'state>),*) -> R + 'static,
+            $($param: SystemParam,)*
             R: SystemOutput,
-            $($param: SystemParamState,)*
         {
             fn into_registered_system<Sched: ScheduleLabel>(
                 self,
@@ -487,11 +503,16 @@ macro_rules! impl_into_system {
                         <$param as SystemParamState>::init_state(world)?,
                     )*
                 );
-                let access_parts = vec![
+                let query_access_parts = vec![
                     $(
-                        query_access_to_system_access(<$param as SystemParamState>::access(&states.$index)),
+                        <$param as SystemParamState>::access(&states.$index),
                     )*
                 ];
+                validate_borrow_access(&system_name, &query_access_parts)?;
+                let access_parts = query_access_parts
+                    .into_iter()
+                    .map(query_access_to_system_access)
+                    .collect::<Vec<_>>();
                 let access = merge_access(&system_name, &access_parts)?;
                 let param_slots = vec![
                     $(
@@ -503,14 +524,9 @@ macro_rules! impl_into_system {
 
                 let mut registered = RegisteredSystem::new::<Sched>(system_name, access, move |world| {
                     let mut commands = Commands::new_external_owner();
+                    let context = SystemParamContext::new(world, &mut commands);
                     $(
-                        let $param = unsafe {
-                            <$param as SystemParamState>::extract(
-                                &mut states.$index,
-                                world as *mut World,
-                                &mut commands as *mut Commands,
-                            )?
-                        };
+                        let $param = unsafe { <$param as SystemParamState>::extract(&mut states.$index, context)? };
                     )*
                     let result = func($($param),*).into_result();
                     let staged_commands = commands.finalize_external_owner();
@@ -865,6 +881,9 @@ fn query_access_to_system_access(access: QueryAccess) -> SystemAccess {
     }
     if access.deferred_structural_mutation() {
         system_access.add_write(AccessKey::structural("world_structure"));
+    }
+    for _ in 0..access.exclusive_world_accesses() {
+        system_access.add_exclusive_world_access();
     }
     system_access
 }

@@ -2,7 +2,6 @@
 use crate::component::{Component, ComponentState, StatefulComponent};
 use crate::entity::Entity;
 use crate::errors::EntityError;
-use crate::storage::ArchetypeExecutionBinding;
 use crate::telemetry;
 use crate::world::World;
 use crate::world::change_tracking::ComponentTypeKey;
@@ -178,32 +177,6 @@ impl World {
         self.has_component_by_type_id(entity, TypeId::of::<T>())
     }
 
-    pub(crate) fn component_changed_for_entity_since<T: Component>(
-        &self,
-        entity: Entity,
-        tick: u64,
-    ) -> bool {
-        let start = Instant::now();
-        let changed = self
-            .archetype_component_metadata::<T>(entity)
-            .is_some_and(|(_added_tick, changed_tick)| changed_tick > tick);
-        telemetry::record_changed_check(start.elapsed().as_nanos() as u64);
-        changed
-    }
-
-    pub(crate) fn component_added_for_entity_since<T: Component>(
-        &self,
-        entity: Entity,
-        tick: u64,
-    ) -> bool {
-        let start = Instant::now();
-        let added = self
-            .archetype_component_metadata::<T>(entity)
-            .is_some_and(|(added_tick, _changed_tick)| added_tick > tick);
-        telemetry::record_added_check(start.elapsed().as_nanos() as u64);
-        added
-    }
-
     pub(crate) fn mark_component_modified_by_id(
         &mut self,
         entity: Entity,
@@ -275,20 +248,6 @@ impl World {
         self.removed_component_records.clear();
     }
 
-    pub(crate) fn removed_component_records_current_window(
-        &self,
-        component_type: TypeId,
-        out: &mut Vec<(Entity, u64)>,
-    ) {
-        out.clear();
-
-        let Some(records) = self.removed_component_records.get(&component_type) else {
-            return;
-        };
-
-        out.extend(records.iter().map(|record| (record.entity, record.tick)));
-    }
-
     pub(crate) fn archetype_component<T: Component>(&self, entity: Entity) -> Option<&T> {
         let ptr = self
             .archetype_registry
@@ -337,34 +296,5 @@ impl World {
             .collect_matching_entities(required_present, excluded, out);
         let count = out.len() as u64;
         telemetry::record_query_matching(start.elapsed().as_nanos() as u64, count, count);
-    }
-
-    pub(crate) fn matching_archetype_bindings_into(
-        &self,
-        required_present: &[TypeId],
-        excluded: &[TypeId],
-        out: &mut Vec<ArchetypeExecutionBinding>,
-    ) -> bool {
-        self.archetype_registry
-            .collect_matching_bindings(required_present, excluded, out)
-    }
-
-    pub(crate) fn archetype_entity_at(&self, archetype_index: usize, row: usize) -> Option<Entity> {
-        self.archetype_registry.entity_at(archetype_index, row)
-    }
-
-    pub(crate) fn entity_matches_component_constraints(
-        &self,
-        entity: Entity,
-        required_present: &[TypeId],
-        excluded: &[TypeId],
-    ) -> bool {
-        self.contains(entity)
-            && required_present
-                .iter()
-                .all(|type_id| self.has_component_by_type_id(entity, *type_id))
-            && excluded
-                .iter()
-                .all(|type_id| !self.has_component_by_type_id(entity, *type_id))
     }
 }

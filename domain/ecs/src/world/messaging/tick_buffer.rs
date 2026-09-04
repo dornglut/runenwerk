@@ -85,24 +85,24 @@ type TickBufferDedupHook = Box<dyn Fn(&dyn Any, &dyn Any) -> bool + Send + Sync 
 type FinalizeTickFn = fn(&mut Box<dyn Any>, &mut BTreeMap<u64, Vec<TickBufferMeta>>, u64) -> usize;
 
 pub(crate) struct TickBufferStorage {
-    pub(super) buffer_key: TickBufferKey,
-    pub(super) buffer_type_name: &'static str,
+    pub(crate) buffer_key: TickBufferKey,
+    pub(crate) buffer_type_name: &'static str,
     buckets: Box<dyn Any>,
     bucket_count_fn: fn(&Box<dyn Any>) -> usize,
     finalize_tick_fn: FinalizeTickFn,
-    metadata: BTreeMap<u64, Vec<TickBufferMeta>>,
+    pub(crate) metadata: BTreeMap<u64, Vec<TickBufferMeta>>,
     dedup_hook: Option<TickBufferDedupHook>,
-    pub(super) config: TickBufferConfig,
-    pub(super) next_sequence: u64,
-    pub(super) pushed: u64,
-    pub(super) drained: u64,
-    pub(super) dropped: u64,
-    pub(super) rejected: u64,
-    pub(super) pending_messages: usize,
+    pub(crate) config: TickBufferConfig,
+    pub(crate) next_sequence: u64,
+    pub(crate) pushed: u64,
+    pub(crate) drained: u64,
+    pub(crate) dropped: u64,
+    pub(crate) rejected: u64,
+    pub(crate) pending_messages: usize,
 }
 
 impl TickBufferStorage {
-    pub(super) fn new<T: 'static>(buffer_key: TickBufferKey) -> Self {
+    pub(crate) fn new<T: 'static>(buffer_key: TickBufferKey) -> Self {
         fn bucket_count_for<T: 'static>(buckets: &Box<dyn Any>) -> usize {
             buckets
                 .downcast_ref::<BTreeMap<u64, Vec<T>>>()
@@ -158,7 +158,7 @@ impl TickBufferStorage {
         }
     }
 
-    pub(super) fn buckets_ref<T: 'static>(&self) -> &BTreeMap<u64, Vec<T>> {
+    pub(crate) fn buckets_ref<T: 'static>(&self) -> &BTreeMap<u64, Vec<T>> {
         self.buckets
             .downcast_ref::<BTreeMap<u64, Vec<T>>>()
             .unwrap_or_else(|| {
@@ -170,7 +170,7 @@ impl TickBufferStorage {
             })
     }
 
-    pub(super) fn buckets_mut<T: 'static>(&mut self) -> &mut BTreeMap<u64, Vec<T>> {
+    pub(crate) fn buckets_mut<T: 'static>(&mut self) -> &mut BTreeMap<u64, Vec<T>> {
         self.buckets
             .downcast_mut::<BTreeMap<u64, Vec<T>>>()
             .unwrap_or_else(|| {
@@ -182,24 +182,36 @@ impl TickBufferStorage {
             })
     }
 
-    pub(super) fn metadata_ref(&self, tick: u64) -> &[TickBufferMeta] {
+    pub(crate) fn metadata_ref(&self, tick: u64) -> &[TickBufferMeta] {
         self.metadata.get(&tick).map(Vec::as_slice).unwrap_or(&[])
     }
 
-    pub(super) fn metadata_remove(&mut self, tick: u64) -> Vec<TickBufferMeta> {
+    pub(crate) fn metadata_remove(&mut self, tick: u64) -> Vec<TickBufferMeta> {
         self.metadata.remove(&tick).unwrap_or_default()
     }
 
-    pub(super) fn metadata_clear(&mut self) {
+    pub(crate) fn metadata_clear(&mut self) {
         self.metadata.clear();
     }
 
-    pub(super) fn bucket_count_any(&self) -> usize {
+    pub(crate) fn bucket_count_any(&self) -> usize {
         (self.bucket_count_fn)(&self.buckets)
     }
 
-    pub(super) fn finalize_up_to_any(&mut self, finalized_tick: u64) -> usize {
+    pub(crate) fn finalize_up_to_any(&mut self, finalized_tick: u64) -> usize {
         (self.finalize_tick_fn)(&mut self.buckets, &mut self.metadata, finalized_tick)
+    }
+
+    pub(crate) fn is_duplicate<T: 'static>(&self, tick: u64, message: &T) -> bool {
+        self.dedup_hook
+            .as_ref()
+            .and_then(|hook| {
+                self.buckets_ref::<T>()
+                    .get(&tick)
+                    .and_then(|values| values.last())
+                    .map(|last| hook(last as &dyn Any, message as &dyn Any))
+            })
+            .unwrap_or(false)
     }
 }
 
