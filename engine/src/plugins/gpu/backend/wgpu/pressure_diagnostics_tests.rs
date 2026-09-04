@@ -37,8 +37,7 @@ fn upload_graph(name: &str, value: u32) -> GpuPreparedWorkGraph {
             .unwrap(),
         )
         .unwrap();
-    let region =
-        GpuBufferRegion::new(&buffer, GpuBufferRange::whole(&buffer).unwrap()).unwrap();
+    let region = GpuBufferRegion::new(&buffer, GpuBufferRange::whole(&buffer).unwrap()).unwrap();
     let payload = PreparedGpuData::<TransferData>::from_pod_transfer(
         format!("{name} payload"),
         &[value],
@@ -60,11 +59,8 @@ fn upload_graph(name: &str, value: u32) -> GpuPreparedWorkGraph {
         )
         .unwrap();
 
-    GpuPreparedWorkGraph::prepare(
-        label(&format!("{name} graph")),
-        [builder.finish().unwrap()],
-    )
-    .unwrap()
+    GpuPreparedWorkGraph::prepare(label(&format!("{name} graph")), [builder.finish().unwrap()])
+        .unwrap()
 }
 
 fn noop_instance() -> Instance {
@@ -93,7 +89,10 @@ fn noop_context_with_policy(policy: GpuExecutionPolicy) -> GpuContext {
         policy,
     ))
     .expect("explicitly enabled WGPU noop backend must admit the pressure-proof context");
-    assert_eq!(context.adapter_facts().backend(), GpuBackendFamily::UnknownBackend);
+    assert_eq!(
+        context.adapter_facts().backend(),
+        GpuBackendFamily::UnknownBackend
+    );
     assert_eq!(
         context.admission_report().candidate().portability(),
         GpuPortabilityClass::Unsupported,
@@ -116,8 +115,9 @@ fn in_flight_capacity_rejection_exposes_typed_current_policy_snapshot() {
 
     let first = pollster::block_on(context.prepare_submission(upload_graph("pressure first", 41)))
         .expect("first upload must prepare");
-    let second = pollster::block_on(context.prepare_submission(upload_graph("pressure second", 42)))
-        .expect("second upload must prepare before live acceptance pressure is evaluated");
+    let second =
+        pollster::block_on(context.prepare_submission(upload_graph("pressure second", 42)))
+            .expect("second upload must prepare before live acceptance pressure is evaluated");
 
     let first_submission = context
         .submit_prepared(first)

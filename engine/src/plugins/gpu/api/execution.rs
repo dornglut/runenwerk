@@ -531,7 +531,10 @@ impl GpuSubmissionRejectionReason {
         stats: GpuExecutionStats,
         policy: GpuExecutionPolicy,
     ) {
-        debug_assert_eq!(self.kind, GpuSubmissionRejectionKind::InFlightCapacityExceeded);
+        debug_assert_eq!(
+            self.kind,
+            GpuSubmissionRejectionKind::InFlightCapacityExceeded
+        );
         self.in_flight_capacity_evidence =
             Some(Box::new(GpuInFlightCapacityEvidence::new(stats, policy)));
     }
