@@ -114,7 +114,10 @@ fn author_work(sources: &ProgramSources) -> (GpuWorkFragment, GpuReadbackId) {
 
     let mut readback_id = None;
     let fragment = GpuWorkFragment::build("G5-C02 Game of Life exact conformance", |work| {
-        work.operation("game of life deterministic seed", seed_operation(&seed, &state_a, &state_b))?;
+        work.operation(
+            "game of life deterministic seed",
+            seed_operation(&seed, &state_a, &state_b),
+        )?;
 
         for step_index in 0..STEP_COUNT {
             let (input, output) = if step_index % 2 == 0 {
@@ -133,10 +136,9 @@ fn author_work(sources: &ProgramSources) -> (GpuWorkFragment, GpuReadbackId) {
         } else {
             &state_b
         };
-        let readback = GpuReadbackOperation::ordinary(
-            GpuBufferRegion::whole(final_state).unwrap().into(),
-        )
-        .unwrap();
+        let readback =
+            GpuReadbackOperation::ordinary(GpuBufferRegion::whole(final_state).unwrap().into())
+                .unwrap();
         readback_id = Some(readback.id());
         work.operation("game of life final full-grid readback", readback)?;
         Ok(())
@@ -144,7 +146,10 @@ fn author_work(sources: &ProgramSources) -> (GpuWorkFragment, GpuReadbackId) {
     .unwrap();
 
     assert_eq!(fragment.resources().len(), 2);
-    assert_eq!(fragment.nodes().len(), usize::try_from(STEP_COUNT).unwrap() + 2);
+    assert_eq!(
+        fragment.nodes().len(),
+        usize::try_from(STEP_COUNT).unwrap() + 2
+    );
     (fragment, readback_id.unwrap())
 }
 
@@ -311,10 +316,14 @@ fn native_game_of_life_proves_exact_160x90_seed_16_step_oracle() {
     let context = native_compute_context();
     let sources = admitted_sources();
     let (fragment, readback_id) = author_work(&sources);
-    let graph = GpuPreparedWorkGraph::prepare(label("G5-C02 Game of Life prepared graph"), [fragment])
-        .unwrap();
+    let graph =
+        GpuPreparedWorkGraph::prepare(label("G5-C02 Game of Life prepared graph"), [fragment])
+            .unwrap();
 
-    assert_eq!(graph.nodes().len(), usize::try_from(STEP_COUNT).unwrap() + 2);
+    assert_eq!(
+        graph.nodes().len(),
+        usize::try_from(STEP_COUNT).unwrap() + 2
+    );
     assert_eq!(graph.topological_order().len(), graph.nodes().len());
     assert!(
         graph
@@ -333,7 +342,10 @@ fn native_game_of_life_proves_exact_160x90_seed_16_step_oracle() {
     let bytes = progress_to_readback(&context, &submission, readback_id);
     let actual = decode_u32(&bytes);
 
-    assert_eq!(actual, expected, "Game-of-Life GPU grid must equal the CPU oracle");
+    assert_eq!(
+        actual, expected,
+        "Game-of-Life GPU grid must equal the CPU oracle"
+    );
     assert_canonical_oracle(&actual);
 
     let stats = context.execution_stats();
