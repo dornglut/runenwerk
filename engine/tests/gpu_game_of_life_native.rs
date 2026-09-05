@@ -121,7 +121,7 @@ fn author_work(
             )?;
         }
 
-        let final_state = if STEP_COUNT % 2 == 0 {
+        let final_state = if STEP_COUNT.is_multiple_of(2) {
             &state_a
         } else {
             &state_b
