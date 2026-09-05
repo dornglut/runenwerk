@@ -138,7 +138,15 @@ Every completed extraction must:
 - leave no compatibility package, forwarding namespace, source mirror, submodule,
   branch dependency, or writable parallel authority.
 
-Temporary duplication may exist only on an unmerged extraction branch.
+Cross-repository handoff follows Dornglut Engineering ADR 0008. Before successor
+acceptance, a copied candidate may exist only on an unmerged successor branch while
+Runenwerk remains the semantic source authority. After successor acceptance, the
+accepted successor revision becomes the sole semantic source authority and any
+still-present Runenwerk implementation is a frozen predecessor copy: it may exist only
+for the serialized downstream cutover, may not receive independent semantic or
+implementation changes, and must be deleted when consumers migrate or retired through
+an explicit accepted reversal. The completed cutover still contains one implementation
+copy and no compatibility or forwarding path.
 
 If current Runenwerk has no real consumer for an extracted framework, removal of
 the internal package does not require adding an unused external dependency.
