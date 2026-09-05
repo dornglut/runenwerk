@@ -25,12 +25,9 @@ fn label(value: impl AsRef<str>) -> GpuResourceLabel {
 }
 
 fn admitted_step_source() -> GpuAdmittedProgramSource {
-    let [step] = admit_static_wgsl_sources([(
-        "proof.game-of-life.step",
-        SOURCE_REVISION,
-        STEP_WGSL,
-    )])
-    .unwrap();
+    let [step] =
+        admit_static_wgsl_sources([("proof.game-of-life.step", SOURCE_REVISION, STEP_WGSL)])
+            .unwrap();
     step
 }
 
