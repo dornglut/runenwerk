@@ -93,7 +93,16 @@ A completed extraction leaves:
 - no submodule, source include, moving branch dependency, or long-lived migration facade;
 - no duplicate runtime path.
 
-Temporary duplication is allowed only on an unmerged extraction branch. If Runenwerk has no real consumer, internal source may be removed without adding an unused external dependency.
+Cross-repository transfers follow Dornglut Engineering ADR 0008. Before successor
+acceptance, copied source may exist only on an unmerged successor branch while the
+predecessor remains semantic source authority. Once the successor is accepted, its
+accepted revision is the sole semantic source authority; any still-present Runenwerk
+implementation is a frozen predecessor copy allowed only for the serialized consumer
+cutover. It may not receive independent semantic or implementation changes and must be
+deleted when consumers migrate or retired through an explicit accepted reversal.
+The final accepted state still has one implementation copy and no compatibility path.
+
+If Runenwerk has no real consumer, internal source may be removed without adding an unused external dependency.
 
 ## Boundary escalation
 

@@ -433,16 +433,23 @@ Each extraction proceeds:
 2. accept a decision-complete boundary;
 3. correct and prove the future public boundary inside Runenwerk;
 4. establish independent conformance;
-5. create or populate the external repository;
-6. pin Runenwerk to an exact revision;
-7. migrate active consumers;
-8. delete the original implementation;
-9. remove temporary migration seams;
+5. create or populate the successor repository on an unmerged branch while Runenwerk remains semantic source authority;
+6. validate and accept the successor through its repository-owned workflow;
+7. switch semantic source authority to the accepted successor revision and freeze any still-present Runenwerk predecessor copy;
+8. pin Runenwerk to the exact accepted successor revision and migrate active consumers;
+9. delete the frozen predecessor implementation in the same downstream cutover and remove temporary migration seams;
 10. update authority and record closeout.
 
-Temporary duplication may exist only on an unmerged branch. Compatibility packages,
-forwarding namespaces, mirrors, submodules, source includes, and branch dependencies do
-not survive a completed cutover.
+This handoff follows Dornglut Engineering ADR 0008. Before successor acceptance,
+duplicate candidate source exists only on an unmerged successor branch. After successor
+acceptance, physical overlap is permitted only as one serialized publication interval:
+the accepted successor is the sole semantic source authority and the Runenwerk copy is
+frozen, deletion-bound, and not independently writable. Ordinary successor feature or
+capability evolution waits until predecessor deletion. A cancelled transfer after
+successor acceptance requires an explicit accepted reversal before predecessor semantic
+authority can resume. Compatibility packages, forwarding namespaces, mirrors,
+submodules, source includes, and moving branch dependencies do not survive a completed
+cutover.
 
 If Runenwerk has no active consumer, removing the internal implementation does not
 require adding an unused external dependency.
