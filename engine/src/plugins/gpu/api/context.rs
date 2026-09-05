@@ -15,6 +15,7 @@ mod descriptor;
 mod diagnostics;
 mod facts;
 mod identity;
+mod observation;
 mod selection;
 
 pub use admission::{
