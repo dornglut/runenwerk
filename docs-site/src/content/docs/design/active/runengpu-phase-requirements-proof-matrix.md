@@ -5,7 +5,7 @@ status: active
 owner: gpu
 layer: framework/gpu
 canonical: true
-last_reviewed: 2026-08-24
+last_reviewed: 2026-09-05
 related_docs:
   - ./runengpu-architecture-design.md
   - ./runengpu-g3-access-work-graph-design.md
@@ -127,13 +127,13 @@ No image artifact is required.
 **Evidence:** retain the accepted fixed job:
 
 - 160 x 90 cells;
-- fixed seed;
+- fixed seed, with source state prepared outside RunenGPU and canonically uploaded;
 - 16 steps;
 - ping-pong storage;
-- full-grid CPU oracle;
+- exact full-grid GPU equality with the CPU oracle;
 - final live-cell count `2,063`;
 - final FNV-1a-64 `0xBD710B88594CD584`;
-- accepted selected-cell assertions;
+- optional selected-cell diagnostics, if retained, derive expected values from the CPU oracle and are not an independent truth source;
 - asynchronous completion/readback.
 
 The phrase **offline sequence** means deterministic state progression, not graphics support.
