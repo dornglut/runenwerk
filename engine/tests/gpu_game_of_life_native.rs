@@ -2,8 +2,9 @@
 //!
 //! The fixed fixture is the recovered historical `game_of_life_sdf` workload:
 //! 160x90 cells, seed 0xC0FF_EE11, toroidal Conway B3/S23 evolution, and exactly
-//! 16 steps. The proof uses only public RunenGPU resource, program, work,
-//! prepare/submit, completion, and readback semantics.
+//! 16 steps. Source state is prepared on the CPU, then the proof uses only public
+//! RunenGPU resource, upload, program, work, prepare/submit, completion, and
+//! readback semantics for GPU execution.
 
 use engine::plugins::gpu::*;
 use std::time::{Duration, Instant};
@@ -17,26 +18,20 @@ const EXPECTED_LIVE_CELLS: u32 = 2_063;
 const EXPECTED_FNV1A64: u64 = 0xBD71_0B88_594C_D584;
 const WORKGROUP_SIZE: u32 = 8;
 const SOURCE_REVISION: u64 = 1;
-const SEED_WGSL: &str = include_str!("gpu_game_of_life_native/seed.wgsl");
 const STEP_WGSL: &str = include_str!("gpu_game_of_life_native/step.wgsl");
-
-#[derive(Clone)]
-struct ProgramSources {
-    seed: GpuAdmittedProgramSource,
-    step: GpuAdmittedProgramSource,
-}
 
 fn label(value: impl AsRef<str>) -> GpuResourceLabel {
     GpuResourceLabel::new(value.as_ref()).unwrap()
 }
 
-fn admitted_sources() -> ProgramSources {
-    let [seed, step] = admit_static_wgsl_sources([
-        ("proof.game-of-life.seed", SOURCE_REVISION, SEED_WGSL),
-        ("proof.game-of-life.step", SOURCE_REVISION, STEP_WGSL),
-    ])
+fn admitted_step_source() -> GpuAdmittedProgramSource {
+    let [step] = admit_static_wgsl_sources([(
+        "proof.game-of-life.step",
+        SOURCE_REVISION,
+        STEP_WGSL,
+    )])
     .unwrap();
-    ProgramSources { seed, step }
+    step
 }
 
 fn compute_pipeline(source: &GpuAdmittedProgramSource) -> GpuComputePipelineDescriptor {
@@ -51,8 +46,12 @@ fn state_buffer(resources: &mut GpuResourceScope, name: &str) -> GpuBufferHandle
                 GpuResourceLifetime::Transient,
                 GpuReconstruction::SourceBacked,
                 u64::try_from(CELL_COUNT * std::mem::size_of::<u32>()).unwrap(),
-                [GpuBufferUsage::Storage, GpuBufferUsage::CopySource],
-                GpuBufferInitialization::Zeroed,
+                [
+                    GpuBufferUsage::Storage,
+                    GpuBufferUsage::CopyDestination,
+                    GpuBufferUsage::CopySource,
+                ],
+                GpuBufferInitialization::Uninitialized,
             )
             .unwrap(),
         )
@@ -65,25 +64,6 @@ fn dispatch_size() -> GpuDispatchSize {
         HEIGHT.div_ceil(WORKGROUP_SIZE),
         1,
     )
-}
-
-fn seed_operation(
-    pipeline: &GpuComputePipelineDescriptor,
-    state_a: &GpuBufferHandle,
-    state_b: &GpuBufferHandle,
-) -> GpuComputeOperation {
-    let bindings = pipeline
-        .runtime_bindings([
-            GpuRuntimeBindingValue::whole_buffer(0, 0, state_a),
-            GpuRuntimeBindingValue::whole_buffer(0, 1, state_b),
-        ])
-        .unwrap();
-    GpuComputeOperation::new(
-        pipeline.clone(),
-        bindings,
-        GpuDispatchIntent::direct(dispatch_size()),
-    )
-    .unwrap()
 }
 
 fn step_operation(
@@ -105,18 +85,31 @@ fn step_operation(
     .unwrap()
 }
 
-fn author_work(sources: &ProgramSources) -> (GpuWorkFragment, GpuReadbackId) {
+fn author_work(
+    source: &GpuAdmittedProgramSource,
+    source_state: &[u32],
+) -> (GpuWorkFragment, GpuReadbackId) {
+    assert_eq!(source_state.len(), CELL_COUNT);
+    let prepared_source = PreparedGpuData::<TransferData>::ordinary_pod_transfer(
+        "G5-C02 Game of Life source state",
+        source_state,
+    )
+    .unwrap();
+
     let mut resources = GpuResourceScope::new();
     let state_a = state_buffer(&mut resources, "game of life state a");
     let state_b = state_buffer(&mut resources, "game of life state b");
-    let seed = compute_pipeline(&sources.seed);
-    let step = compute_pipeline(&sources.step);
+    let step = compute_pipeline(source);
 
     let mut readback_id = None;
     let fragment = GpuWorkFragment::build("G5-C02 Game of Life exact conformance", |work| {
         work.operation(
-            "game of life deterministic seed",
-            seed_operation(&seed, &state_a, &state_b),
+            "game of life upload source state a",
+            GpuUploadOperation::whole_buffer(&state_a, prepared_source.clone()).unwrap(),
+        )?;
+        work.operation(
+            "game of life upload source state b",
+            GpuUploadOperation::whole_buffer(&state_b, prepared_source).unwrap(),
         )?;
 
         for step_index in 0..STEP_COUNT {
@@ -148,7 +141,7 @@ fn author_work(sources: &ProgramSources) -> (GpuWorkFragment, GpuReadbackId) {
     assert_eq!(fragment.resources().len(), 2);
     assert_eq!(
         fragment.nodes().len(),
-        usize::try_from(STEP_COUNT).unwrap() + 2
+        usize::try_from(STEP_COUNT).unwrap() + 3
     );
     (fragment, readback_id.unwrap())
 }
@@ -277,8 +270,9 @@ fn cpu_step(input: &[u32]) -> Vec<u32> {
     output
 }
 
-fn cpu_final_grid() -> Vec<u32> {
-    let mut cells = cpu_seed();
+fn cpu_final_grid(source_state: &[u32]) -> Vec<u32> {
+    assert_eq!(source_state.len(), CELL_COUNT);
+    let mut cells = source_state.to_vec();
     for _ in 0..STEP_COUNT {
         cells = cpu_step(&cells);
     }
@@ -310,19 +304,20 @@ fn assert_canonical_oracle(cells: &[u32]) {
 #[test]
 #[ignore = "requires a real Vulkan fallback adapter; executed by RunenGPU Conformance CI"]
 fn native_game_of_life_proves_exact_160x90_seed_16_step_oracle() {
-    let expected = cpu_final_grid();
+    let source_state = cpu_seed();
+    let expected = cpu_final_grid(&source_state);
     assert_canonical_oracle(&expected);
 
     let context = native_compute_context();
-    let sources = admitted_sources();
-    let (fragment, readback_id) = author_work(&sources);
+    let step_source = admitted_step_source();
+    let (fragment, readback_id) = author_work(&step_source, &source_state);
     let graph =
         GpuPreparedWorkGraph::prepare(label("G5-C02 Game of Life prepared graph"), [fragment])
             .unwrap();
 
     assert_eq!(
         graph.nodes().len(),
-        usize::try_from(STEP_COUNT).unwrap() + 2
+        usize::try_from(STEP_COUNT).unwrap() + 3
     );
     assert_eq!(graph.topological_order().len(), graph.nodes().len());
     assert!(
