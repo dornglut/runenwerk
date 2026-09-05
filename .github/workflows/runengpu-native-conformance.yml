@@ -164,6 +164,15 @@ jobs:
             native_prefix_scan_proves_exact_4097_element_inclusive_and_exclusive_results \
             --locked -- --ignored --nocapture
 
+      - name: Run retained G5-C02 Game of Life proof
+        env:
+          RUST_BACKTRACE: '1'
+        run: |
+          set -euo pipefail
+          cargo +stable test -p engine --test gpu_game_of_life_native \
+            native_game_of_life_proves_exact_160x90_seed_16_step_oracle \
+            --locked -- --ignored --nocapture
+
       - name: Run native G5 transfer and G5R initial-content proofs
         env:
           RUST_BACKTRACE: '1'
