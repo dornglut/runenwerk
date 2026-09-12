@@ -5,12 +5,12 @@ status: deferred
 owner: workspace
 layer: domain / engine-runtime
 canonical: false
-last_reviewed: 2026-05-16
+last_reviewed: 2026-09-13
 related_designs:
   - ../accepted/sdf-first-production-capability-map.md
   - ../accepted/field-product-contracts-diagnostics-and-residency-design.md
-  - ../active/sdf-procedural-animation-and-animated-models-design.md
-  - ../active/sdf-prefab-composition-system-design.md
+  - ./sdf-procedural-animation-and-animated-models-design.md
+  - ./sdf-prefab-composition-system-design.md
   - ./water-wetness-field-system-design.md
 ---
 
@@ -27,7 +27,7 @@ active-body residency policy are accepted.
 
 Animated SDF character ownership, semantic regions, deformation, and lowering
 policy are now specified by
-[`../active/sdf-procedural-animation-and-animated-models-design.md`](../active/sdf-procedural-animation-and-animated-models-design.md).
+[`./sdf-procedural-animation-and-animated-models-design.md`](./sdf-procedural-animation-and-animated-models-design.md).
 
 This document defines physics and collision for an SDF-first engine.
 

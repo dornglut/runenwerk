@@ -5,9 +5,9 @@ status: accepted
 owner: workspace
 layer: cross-domain
 canonical: true
-last_reviewed: 2026-05-16
+last_reviewed: 2026-09-13
 related_designs:
-  - ../../design/active/sdf-procedural-animation-and-animated-models-design.md
+  - ../../design/deferred/sdf-procedural-animation-and-animated-models-design.md
   - ../../design/accepted/sdf-first-field-world-platform-design.md
   - ../../design/accepted/field-product-contracts-diagnostics-and-residency-design.md
   - ../../design/accepted/execution-fabric-and-product-jobs-design.md
@@ -27,7 +27,7 @@ Accepted.
 
 This ADR accepts only the durable execution-boundary invariant from the broader
 Animated SDF proposal. The broader product-family context remains preserved in
-the proposed ADR and active design.
+the proposed ADR and deferred design.
 
 ## Context
 
@@ -76,7 +76,7 @@ This ADR does not decide:
 - scheduler sync point details;
 - the first concrete validation scenario.
 
-Those topics remain in the active design and proposed ADR until each is promoted
+Those topics remain in the deferred design and proposed ADR until each is promoted
 through its own accepted decision or owning design.
 
 ## Rejected Alternatives

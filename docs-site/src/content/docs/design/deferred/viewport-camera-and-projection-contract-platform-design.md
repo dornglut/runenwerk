@@ -1,11 +1,11 @@
 ---
 title: Viewport Camera And Projection Contract Platform
-description: Long-term platform design for renderer procedural projection, editor viewport camera semantics, viewport surface presentation, and example evidence.
-status: active
+description: Deferred platform target for renderer procedural projection, editor viewport camera semantics, viewport surface presentation, and example evidence.
+status: deferred
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-09-12
+last_reviewed: 2026-09-13
 related_designs:
   - ../implemented/workspace-viewport-expression-upgrade-design.md
   - ../implemented/renderer-procedural-population-hardening-platform-design.md
@@ -16,6 +16,8 @@ related_designs:
 # Viewport Camera And Projection Contract Platform
 
 ## Decision
+
+This is a deferred long-term platform target. Reactivation requires a current owning issue that re-censuses the concrete renderer, editor viewport, app-adapter, and UI boundaries and binds the exact remaining gaps.
 
 This design owns the long-term camera, projection, viewport presentation, and
 surface-fit contract boundary historically decomposed as

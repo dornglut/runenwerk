@@ -5,11 +5,11 @@ status: deferred
 owner: workspace
 layer: cross-domain
 canonical: false
-last_reviewed: 2026-05-16
+last_reviewed: 2026-09-13
 related_designs:
   - ../accepted/sdf-first-production-capability-map.md
   - ../accepted/sdf-first-field-world-platform-design.md
-  - ../active/sdf-procedural-animation-and-animated-models-design.md
+  - ./sdf-procedural-animation-and-animated-models-design.md
 ---
 
 # SDF World Production Slice Design
@@ -23,8 +23,8 @@ The accepted long-term capability map is
 only after the relevant owning product contracts and domain boundaries are
 accepted.
 
-Animated SDF player and enemy character architecture is now specified by
-[`../active/sdf-procedural-animation-and-animated-models-design.md`](../active/sdf-procedural-animation-and-animated-models-design.md).
+Animated SDF player and enemy character architecture is specified by
+[`./sdf-procedural-animation-and-animated-models-design.md`](./sdf-procedural-animation-and-animated-models-design.md).
 
 This document defines the first production integration scenario for Runenwerk.
 
