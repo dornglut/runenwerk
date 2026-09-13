@@ -21,6 +21,20 @@ jobs:
         run: rustup toolchain install stable --profile minimal
       - name: Apply correction
         run: python .github/agent-627-build.py
+      - name: Match accepted RunenGPU whole-base-mip API
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("engine/src/plugins/render/deterministic_execution/capture.rs")
+          text = path.read_text()
+          old_import = "    GpuRetainedResourceContinuity, GpuSubmissionFailureKind, GpuTextureAspect,\n    GpuTextureCopyRegion, GpuTextureFormat, GpuTransferRegion,\n"
+          new_import = "    GpuRetainedResourceContinuity, GpuSubmissionFailureKind, GpuTextureCopyRegion,\n    GpuTextureFormat, GpuTransferRegion,\n"
+          old_call = "GpuTextureCopyRegion::whole_base_mip(texture, GpuTextureAspect::Color)"
+          new_call = "GpuTextureCopyRegion::whole_base_mip(texture)"
+          if text.count(old_import) != 1 or text.count(old_call) != 1:
+              raise SystemExit("accepted RunenGPU constructor correction did not match exact generated source")
+          path.write_text(text.replace(old_import, new_import, 1).replace(old_call, new_call, 1))
+          PY
       - name: Update dependency lock
         run: cargo +stable update -p runen-gpu
       - name: Format
