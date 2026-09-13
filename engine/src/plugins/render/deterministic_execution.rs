@@ -203,12 +203,13 @@ impl SubmittedDeterministicRender {
                 verification: DeterministicVerificationState::Requested(verification_readbacks),
             },
         };
-        let verified = super::deterministic_verification::verify_completed_deterministic_render(
-            verification,
-        )
-        .map_err(|error| RenderDeterministicResultFormationError::VerificationRejected {
-            detail: error.to_string(),
-        })?;
+        let verified =
+            super::deterministic_verification::verify_completed_deterministic_render(verification)
+                .map_err(
+                    |error| RenderDeterministicResultFormationError::VerificationRejected {
+                        detail: error.to_string(),
+                    },
+                )?;
         let result = RenderResult::from_verified_deterministic(verified).map_err(|error| {
             RenderDeterministicResultFormationError::ResultFormation {
                 detail: error.to_string(),
@@ -237,9 +238,8 @@ impl DeterministicVerificationSubmission {
     pub(super) fn readbacks(&self) -> &[DeterministicVerificationReadbacks] {
         match &self.submitted.verification {
             DeterministicVerificationState::Requested(readbacks) => readbacks,
-            DeterministicVerificationState::NotRequested | DeterministicVerificationState::Formed => {
-                &[]
-            }
+            DeterministicVerificationState::NotRequested
+            | DeterministicVerificationState::Formed => &[],
         }
     }
 
@@ -504,9 +504,11 @@ fn map_verified_submission_error(
     use super::deterministic_verification::RenderDeterministicVerifiedSubmissionError as PrivateError;
 
     match error {
-        PrivateError::Eligibility(error) => RenderDeterministicVerifiedSubmissionError::Eligibility {
-            detail: error.to_string(),
-        },
+        PrivateError::Eligibility(error) => {
+            RenderDeterministicVerifiedSubmissionError::Eligibility {
+                detail: error.to_string(),
+            }
+        }
         PrivateError::Execution(error) => {
             RenderDeterministicVerifiedSubmissionError::Execution(error)
         }
