@@ -1,5 +1,5 @@
 use asset::{AssetArtifactDescriptor, AssetArtifactId, AssetDiagnosticCode, AssetDiagnosticRecord};
-use engine::runtime::{ProductPublicationRuntimeResource, PublicationBoundary};
+use engine::runtime::{ProductPublicationOccurrence, ProductPublicationRuntimeResource};
 use product::{
     FieldProductDiagnostic, FieldProductDiagnosticCode, ProductIdentity, ProductPublicationOutcome,
     ProductPublicationReport, ProductPublicationStatus, ratify_product_publication,
@@ -41,7 +41,7 @@ pub struct EditorFieldProductPublicationJournalEntry {
 pub fn publish_pending_field_product_publications(
     app: &mut RunenwerkEditorApp,
     publications: &mut ProductPublicationRuntimeResource,
-    boundary: &PublicationBoundary,
+    occurrence: &ProductPublicationOccurrence,
 ) -> ProductPublicationReport {
     let pending = app.take_pending_field_product_publications();
     if pending.is_empty() {
@@ -53,7 +53,7 @@ pub fn publish_pending_field_product_publications(
     }
 
     let journal_start = publications.journal().len();
-    let report = publications.publish_staged(boundary);
+    let report = publications.publish_staged(occurrence);
     let published_entries = &publications.journal()[journal_start..];
 
     for diagnostic in &report.diagnostics {
@@ -94,8 +94,9 @@ pub fn publish_pending_field_product_publications(
             status: pending_publication.publication.status,
         });
         app.append_console_line(format!(
-            "[product] published field product {} via publication boundary {}",
-            pending_publication.candidate.descriptor.product_id.0, boundary.index
+            "[product] published field product {} via product publication sequence {}",
+            pending_publication.candidate.descriptor.product_id.0,
+            occurrence.sequence()
         ));
     }
 
@@ -125,12 +126,12 @@ mod tests {
 
     use crate::asset_pipeline::run_field_product_job;
 
-    fn boundary() -> PublicationBoundary {
-        PublicationBoundary::new(7, "Update", 0)
+    fn occurrence() -> ProductPublicationOccurrence {
+        ProductPublicationOccurrence::new(7, "Update")
     }
 
     #[test]
-    fn field_product_publication_updates_catalog_only_at_boundary() {
+    fn field_product_publication_updates_catalog_at_product_publication() {
         let root = unique_temp_dir("runenwerk_editor_field_publication");
         let source = asset::AssetSourceDescriptor::new(
             asset_source_id(2),
@@ -174,7 +175,7 @@ mod tests {
         assert_eq!(app.pending_field_product_publication_count(), 1);
 
         let report =
-            publish_pending_field_product_publications(&mut app, &mut publications, &boundary());
+            publish_pending_field_product_publications(&mut app, &mut publications, &occurrence());
 
         assert_eq!(report.published_count, 1);
         assert_eq!(app.pending_field_product_publication_count(), 0);
@@ -235,7 +236,7 @@ mod tests {
         let mut publications = ProductPublicationRuntimeResource::default();
 
         let report =
-            publish_pending_field_product_publications(&mut app, &mut publications, &boundary());
+            publish_pending_field_product_publications(&mut app, &mut publications, &occurrence());
 
         assert_eq!(report.rejected_count, 1);
         assert_eq!(app.field_product_publication_journal().len(), 0);
@@ -305,7 +306,7 @@ mod tests {
         let mut publications = ProductPublicationRuntimeResource::default();
 
         let report =
-            publish_pending_field_product_publications(&mut app, &mut publications, &boundary());
+            publish_pending_field_product_publications(&mut app, &mut publications, &occurrence());
 
         assert_eq!(report.published_count, 1);
         assert_eq!(report.rejected_count, 1);

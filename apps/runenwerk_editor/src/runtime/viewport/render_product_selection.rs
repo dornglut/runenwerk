@@ -326,7 +326,7 @@ mod tests {
     use engine::plugins::render::{
         PreparedFlowInvocationRequest, PreparedViewFrame, RenderFlowId, RenderProductSurfaceRequest,
     };
-    use engine::runtime::PublicationBoundary;
+    use engine::runtime::QuerySnapshotPublicationOccurrence;
     use product::{
         ProductAuthorityClass, ProductDescriptorCore, ProductFamily, ProductKind, ProductLineage,
         ProductScaleBand, ProductScope, QuerySnapshotProductDescriptor,
@@ -338,8 +338,8 @@ mod tests {
         material_preview_descriptor,
     };
 
-    fn publication_boundary() -> PublicationBoundary {
-        PublicationBoundary::new(1, "RenderPrepare", 0)
+    fn query_publication_occurrence() -> QuerySnapshotPublicationOccurrence {
+        QuerySnapshotPublicationOccurrence::new(1, "RenderPrepare")
     }
 
     fn snapshot(product_id: ExpressionProductId) -> QuerySnapshotProductDescriptor {
@@ -449,7 +449,7 @@ mod tests {
         let mut snapshots = QuerySnapshotRuntimeResource::default();
         snapshots.stage(snapshot(SCENE_COLOR_PRODUCT_ID));
         snapshots.stage(snapshot(OVERLAY_PRODUCT_ID));
-        snapshots.publish_staged(&publication_boundary());
+        snapshots.publish_staged(&query_publication_occurrence());
 
         let mut app = RunenwerkEditorApp::new();
         let mut prepared = PreparedRenderProductSelectionResource::default();
@@ -528,7 +528,7 @@ mod tests {
 
         let mut snapshots = QuerySnapshotRuntimeResource::default();
         snapshots.stage(snapshot(material_product_id));
-        snapshots.publish_staged(&publication_boundary());
+        snapshots.publish_staged(&query_publication_occurrence());
 
         let mut app = RunenwerkEditorApp::new();
         let mut prepared = PreparedRenderProductSelectionResource::default();

@@ -4,6 +4,7 @@ use engine::plugins::render::SurfaceFrameSubmissionRegistryResource;
 use engine::prelude::*;
 use engine::runtime::{
     IntoSystemSetKey, RuntimeJobExecutorConfig, RuntimeJobExecutorResource, SystemConfigExt,
+    dispatch_product_publication_system, dispatch_query_snapshot_publication_system,
 };
 use runen_ecs::SystemSetKey;
 
@@ -11,7 +12,7 @@ use crate::runtime::gpu_ink::{
     DrawingInkGpuValidationReportCursorResource, process_drawing_ink_gpu_validation_report_system,
 };
 use crate::runtime::ink::{
-    publish_drawing_ink_products_at_boundary, publish_drawing_ink_query_snapshots_at_boundary,
+    dispatch_drawing_ink_product_publication, dispatch_drawing_ink_query_publication,
 };
 use crate::runtime::resources::{DrawingHostResource, DrawingInkUploadTrackerResource};
 use crate::runtime::systems::{
@@ -24,6 +25,8 @@ pub struct DrawingAppPlugin;
 pub enum DrawingRuntimeSet {
     InputRoute,
     PreviewJobs,
+    ProductPublication,
+    QuerySnapshotPublication,
     GpuValidation,
     FrameSubmit,
 }
@@ -36,6 +39,12 @@ impl IntoSystemSetKey for DrawingRuntimeSet {
             }
             Self::PreviewJobs => {
                 SystemSetKey::of::<DrawingRuntimeSet>("DrawingRuntimeSet::PreviewJobs")
+            }
+            Self::ProductPublication => {
+                SystemSetKey::of::<DrawingRuntimeSet>("DrawingRuntimeSet::ProductPublication")
+            }
+            Self::QuerySnapshotPublication => {
+                SystemSetKey::of::<DrawingRuntimeSet>("DrawingRuntimeSet::QuerySnapshotPublication")
             }
             Self::GpuValidation => {
                 SystemSetKey::of::<DrawingRuntimeSet>("DrawingRuntimeSet::GpuValidation")
@@ -54,8 +63,8 @@ impl Plugin for DrawingAppPlugin {
         app.init_resource::<DrawingInkUploadTrackerResource>();
         app.init_resource::<DrawingInkGpuValidationReportCursorResource>();
         app.init_resource::<SurfaceFrameSubmissionRegistryResource>();
-        app.add_product_publication_handler(publish_drawing_ink_products_at_boundary);
-        app.add_query_snapshot_publication_handler(publish_drawing_ink_query_snapshots_at_boundary);
+        app.add_product_publication_handler(dispatch_drawing_ink_product_publication);
+        app.add_query_snapshot_publication_handler(dispatch_drawing_ink_query_publication);
 
         app.add_systems(
             Update,
@@ -69,18 +78,28 @@ impl Plugin for DrawingAppPlugin {
         );
         app.add_systems(
             Update,
+            dispatch_product_publication_system
+                .in_set(DrawingRuntimeSet::ProductPublication)
+                .after(DrawingRuntimeSet::PreviewJobs),
+        );
+        app.add_systems(
+            Update,
+            dispatch_query_snapshot_publication_system
+                .in_set(DrawingRuntimeSet::QuerySnapshotPublication)
+                .after(DrawingRuntimeSet::ProductPublication),
+        );
+        app.add_systems(
+            Update,
             process_drawing_ink_gpu_validation_report_system
                 .in_set(DrawingRuntimeSet::GpuValidation)
-                .after(DrawingRuntimeSet::PreviewJobs)
-                .after(DrawingRuntimeSet::InputRoute),
+                .after(DrawingRuntimeSet::PreviewJobs),
         );
         app.add_systems(
             Update,
             submit_draw_frame_system
                 .in_set(DrawingRuntimeSet::FrameSubmit)
                 .after(DrawingRuntimeSet::GpuValidation)
-                .after(DrawingRuntimeSet::PreviewJobs)
-                .after(DrawingRuntimeSet::InputRoute),
+                .after(DrawingRuntimeSet::QuerySnapshotPublication),
         );
     }
 }

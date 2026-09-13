@@ -315,7 +315,7 @@ runtime.run_schedule::<Update>(&mut world).unwrap();
 
 The explicit set edge is a required same-schedule relation and establishes
 semantic precedence. Deferred commands from the earlier ordered work are
-applied at an ECS deferred-apply boundary before dependent later work runs.
+applied at an ECS deferred-publication frontier before dependent later work runs.
 Use `before_if_present` or `after_if_present` only for a meaningful relation
 whose target may be absent. A missing required target fails schedule validation;
 an absent optional target creates no edge. Read/write access conflicts are

@@ -3,7 +3,7 @@ use editor_viewport::{
     ArtifactObservationFrame, ExpressionFreshness, ExpressionProductDescriptor,
     ExpressionProductId, ExpressionSourceRealityClass, ProductAvailabilityState,
 };
-use engine::runtime::{PublicationBoundary, QuerySnapshotRuntimeResource};
+use engine::runtime::{QuerySnapshotPublicationOccurrence, QuerySnapshotRuntimeResource};
 use product::{
     FieldProductDiagnostic, FieldProductDiagnosticCode, ProductAuthorityClass,
     ProductConsumerClass, ProductDescriptorCore, ProductFamily, ProductFreshness, ProductIdentity,
@@ -21,7 +21,8 @@ use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EditorViewportQuerySnapshotJournalEntry {
-    pub publication_boundary_index: usize,
+    pub query_publication_sequence: u64,
+    pub schedule_label: &'static str,
     pub product_id: ProductIdentity,
     pub status: QuerySnapshotPublicationStatus,
     pub source_generation: u64,
@@ -64,8 +65,8 @@ impl EditorViewportQuerySnapshotSummary {
     }
 }
 
-pub fn publish_viewport_query_snapshots_at_boundary(
-    boundary: &PublicationBoundary,
+pub fn dispatch_viewport_query_publication(
+    occurrence: &QuerySnapshotPublicationOccurrence,
     world: &mut World,
 ) -> Result<()> {
     let Some(observations) = world
@@ -83,7 +84,7 @@ pub fn publish_viewport_query_snapshots_at_boundary(
         return Ok(());
     };
 
-    publish_viewport_query_snapshots(&mut host.app, &observations, &mut snapshots, boundary);
+    publish_viewport_query_snapshots(&mut host.app, &observations, &mut snapshots, occurrence);
 
     world.insert_resource(snapshots);
     world.insert_resource(host);
@@ -94,7 +95,7 @@ pub fn publish_viewport_query_snapshots(
     app: &mut RunenwerkEditorApp,
     observations: &ViewportArtifactObservationResource,
     snapshots: &mut QuerySnapshotRuntimeResource,
-    boundary: &PublicationBoundary,
+    occurrence: &QuerySnapshotPublicationOccurrence,
 ) -> QuerySnapshotPublicationReport {
     let staged = build_viewport_query_snapshot_descriptors(observations);
     if staged.is_empty() {
@@ -102,12 +103,13 @@ pub fn publish_viewport_query_snapshots(
     }
 
     snapshots.stage_all(staged);
-    let report = snapshots.publish_staged(boundary);
+    let report = snapshots.publish_staged(occurrence);
     let published_entries = snapshots.last_published_entries().to_vec();
 
     for entry in &published_entries {
         app.record_viewport_query_snapshot(EditorViewportQuerySnapshotJournalEntry {
-            publication_boundary_index: entry.publication_boundary_index,
+            query_publication_sequence: entry.publication_sequence,
+            schedule_label: entry.schedule_label,
             product_id: entry.product_id,
             status: entry.status,
             source_generation: entry.source_generation,
@@ -119,8 +121,8 @@ pub fn publish_viewport_query_snapshots(
     let summary = EditorViewportQuerySnapshotSummary::from_report(&report);
     if app.update_viewport_query_snapshot_summary(summary) {
         app.append_console_line(format!(
-            "[query_snapshot] publication boundary {}: published={} rejected={} preserved={} invalidated={}",
-            boundary.index,
+            "[query_snapshot] publication sequence {}: published={} rejected={} preserved={} invalidated={}",
+            occurrence.sequence(),
             report.published_count,
             report.rejected_count,
             report.preserved_count,
@@ -280,8 +282,8 @@ mod tests {
     };
     use engine::runtime::QuerySnapshotRuntimeResource;
 
-    fn boundary() -> PublicationBoundary {
-        PublicationBoundary::new(9, "Update", 0)
+    fn occurrence() -> QuerySnapshotPublicationOccurrence {
+        QuerySnapshotPublicationOccurrence::new(9, "Update")
     }
 
     fn descriptor(id: u64, freshness: ExpressionFreshness) -> ExpressionProductDescriptor {
@@ -316,7 +318,7 @@ mod tests {
     }
 
     #[test]
-    fn viewport_query_snapshots_stage_and_publish_at_boundary() {
+    fn viewport_query_snapshots_stage_and_publish_at_query_publication() {
         let observations = observations(
             descriptor(1, ExpressionFreshness::Current),
             ProductAvailabilityState::Available,
@@ -324,8 +326,12 @@ mod tests {
         let mut app = RunenwerkEditorApp::new();
         let mut snapshots = QuerySnapshotRuntimeResource::default();
 
-        let report =
-            publish_viewport_query_snapshots(&mut app, &observations, &mut snapshots, &boundary());
+        let report = publish_viewport_query_snapshots(
+            &mut app,
+            &observations,
+            &mut snapshots,
+            &occurrence(),
+        );
 
         assert_eq!(report.published_count, 1);
         assert!(
@@ -335,7 +341,7 @@ mod tests {
         );
         assert_eq!(app.viewport_query_snapshot_journal().len(), 1);
         assert_eq!(
-            app.viewport_query_snapshot_journal()[0].publication_boundary_index,
+            app.viewport_query_snapshot_journal()[0].query_publication_sequence,
             9
         );
     }
@@ -349,8 +355,12 @@ mod tests {
         let mut app = RunenwerkEditorApp::new();
         let mut snapshots = QuerySnapshotRuntimeResource::default();
 
-        let report =
-            publish_viewport_query_snapshots(&mut app, &observations, &mut snapshots, &boundary());
+        let report = publish_viewport_query_snapshots(
+            &mut app,
+            &observations,
+            &mut snapshots,
+            &occurrence(),
+        );
 
         assert_eq!(report.rejected_count, 1);
         assert!(
@@ -384,9 +394,9 @@ mod tests {
         let mut app = RunenwerkEditorApp::new();
         let mut snapshots = QuerySnapshotRuntimeResource::default();
 
-        publish_viewport_query_snapshots(&mut app, &first, &mut snapshots, &boundary());
+        publish_viewport_query_snapshots(&mut app, &first, &mut snapshots, &occurrence());
         let report =
-            publish_viewport_query_snapshots(&mut app, &second, &mut snapshots, &boundary());
+            publish_viewport_query_snapshots(&mut app, &second, &mut snapshots, &occurrence());
 
         assert_eq!(report.preserved_count, 1);
         assert_eq!(
@@ -430,8 +440,12 @@ mod tests {
 
         let mut app = RunenwerkEditorApp::new();
         let mut snapshots = QuerySnapshotRuntimeResource::default();
-        let report =
-            publish_viewport_query_snapshots(&mut app, &observations, &mut snapshots, &boundary());
+        let report = publish_viewport_query_snapshots(
+            &mut app,
+            &observations,
+            &mut snapshots,
+            &occurrence(),
+        );
 
         assert_eq!(report.published_count, 2);
         assert_eq!(report.rejected_count, 0);
@@ -460,13 +474,13 @@ mod tests {
         );
         let mut app = RunenwerkEditorApp::new();
         let mut snapshots = QuerySnapshotRuntimeResource::default();
-        let boundary = boundary();
+        let occurrence = occurrence();
 
         let first =
-            publish_viewport_query_snapshots(&mut app, &observations, &mut snapshots, &boundary);
+            publish_viewport_query_snapshots(&mut app, &observations, &mut snapshots, &occurrence);
         let console_count = app.console_lines().len();
         let second =
-            publish_viewport_query_snapshots(&mut app, &observations, &mut snapshots, &boundary);
+            publish_viewport_query_snapshots(&mut app, &observations, &mut snapshots, &occurrence);
 
         assert_eq!(first.invalidated_count, 0);
         assert_eq!(second.invalidated_count, 0);

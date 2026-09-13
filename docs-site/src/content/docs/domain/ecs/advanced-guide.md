@@ -15,11 +15,11 @@ invariants are documented in [architecture.md](architecture.md).
 
 ## Deferred commands and visibility
 
-`Commands` queues structural mutations for the next ECS deferred-apply
-boundary. Queues are collected in deterministic serial execution order and
-are discarded if the system or command application fails. A system that must
-observe a queued mutation in the same schedule run should be placed after the
-producer with an explicit system-set ordering relation.
+`Commands` queues structural mutations for the next RunenECS deferred-
+publication frontier. Queues are collected in deterministic serial execution
+order and are discarded if the system or command application fails. A system
+that must observe a queued mutation in the same schedule run should be placed
+after the producer with an explicit system-set ordering relation.
 
 Access incompatibility is separate from semantic ordering and does not create
 an extra visibility boundary.
@@ -36,9 +36,13 @@ otherwise unordered systems use deterministic registration order in the serial
 reference executor. Engine lifecycle order between schedules is not represented
 by ECS set references.
 
-The runtime exposes `DeferredApplyBoundary` for a host callback that needs to
-run after a successful flush. Its index is only ECS deferred-apply progress,
-not an application frame, render phase, network tick, or publication identity.
+RunenECS exposes `DeferredPublicationFrontier` through its explicit frontier
+callback API when an integration needs to observe a successful deferred flush.
+Its index is only ECS deferred-publication progress within that schedule run;
+it is not an application frame, render phase, network tick, product-publication
+sequence, query-snapshot sequence, or other publication identity. Runenwerk's
+product and query publication phases are explicit application systems and are
+not synthesized from these frontiers.
 
 ## Secondary indexes
 

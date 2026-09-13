@@ -52,7 +52,7 @@ fn process_removed(mut removed: RemovedQuery<Velocity>) {
 
 ## Invariants
 
-- Queries do not observe runtime-deferred structural changes until the applicable ECS deferred-apply boundary has completed.
+- Queries do not observe runtime-deferred structural changes until the applicable ECS deferred-publication frontier has completed.
 - `Added<T>` / `Changed<T>` use ECS-local change state and are not application frame/tick semantics.
 - `RemovedQuery<T>` reports removals in the current ECS removal-observation window; that window is not an Engine lifecycle or product-publication identity.
 - Mutable query shapes must not alias the same component mutably.

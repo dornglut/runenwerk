@@ -8,7 +8,9 @@ use crate::plugins::{
     SceneReplayArchive, load_replay, seek_loaded_replay, start_recording, stop_recording,
 };
 use crate::prelude::IntoPlugins;
-use crate::runtime::publication::{PublicationBoundary, PublicationHandlers};
+use crate::runtime::publication::{
+    ProductPublicationOccurrence, PublicationHandlers, QuerySnapshotPublicationOccurrence,
+};
 use crate::runtime::system::IntoSystemConfigs;
 use crate::*;
 use anyhow::Result;
@@ -92,7 +94,7 @@ impl App {
 
     pub fn add_product_publication_handler<F>(&mut self, handler: F) -> &mut Self
     where
-        F: Fn(&PublicationBoundary, &mut World) -> Result<()> + 'static,
+        F: Fn(&ProductPublicationOccurrence, &mut World) -> Result<()> + 'static,
     {
         if !self.world.has_resource::<PublicationHandlers>() {
             self.world.insert_resource(PublicationHandlers::default());
@@ -106,7 +108,7 @@ impl App {
 
     pub fn add_query_snapshot_publication_handler<F>(&mut self, handler: F) -> &mut Self
     where
-        F: Fn(&PublicationBoundary, &mut World) -> Result<()> + 'static,
+        F: Fn(&QuerySnapshotPublicationOccurrence, &mut World) -> Result<()> + 'static,
     {
         if !self.world.has_resource::<PublicationHandlers>() {
             self.world.insert_resource(PublicationHandlers::default());

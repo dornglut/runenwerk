@@ -41,15 +41,15 @@ pub fn inspect_query_snapshots(resource: &QuerySnapshotRuntimeResource) -> Query
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runtime::PublicationBoundary;
+    use crate::runtime::QuerySnapshotPublicationOccurrence;
     use product::{
         ProductAuthorityClass, ProductConsumerClass, ProductDescriptorCore, ProductFamily,
         ProductIdentity, ProductKind, ProductLineage, ProductQueryPolicy, ProductResidency,
         ProductScaleBand, ProductScope, QuerySnapshotProductDescriptor,
     };
 
-    fn boundary() -> PublicationBoundary {
-        PublicationBoundary::new(1, "RenderPrepare", 0)
+    fn occurrence() -> QuerySnapshotPublicationOccurrence {
+        QuerySnapshotPublicationOccurrence::new(1, "RenderPrepare")
     }
 
     fn snapshot() -> QuerySnapshotProductDescriptor {
@@ -73,7 +73,7 @@ mod tests {
     fn render_query_snapshot_inspection_exposes_decisions_without_backend_handles() {
         let mut resource = QuerySnapshotRuntimeResource::default();
         resource.stage(snapshot());
-        resource.publish_staged(&boundary());
+        resource.publish_staged(&occurrence());
 
         let inspection = inspect_query_snapshots(&resource);
 

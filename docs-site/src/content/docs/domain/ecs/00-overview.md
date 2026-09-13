@@ -24,7 +24,7 @@ The ECS foundation currently includes:
 - archetype + dense storage implementation
 - typed queries with `Added<T>` / `Changed<T>`
 - ECS-native system registration, schedule labels, system sets, explicit ordering, access validation, and deterministic serial reference execution
-- deferred structural commands and ECS-owned deferred-apply boundaries
+- deferred structural commands and ECS-owned deferred-publication frontiers
 - current removed-component observation through `RemovedQuery<T>`
 - resource parameters through `Res<T>` / `ResMut<T>` and built-in exclusive `WorldMut`
 - explicit reflection and lightweight ECS-local change observation
@@ -39,7 +39,7 @@ RunenECS currently exposes no generic event/channel transport API. Application, 
 - **Resource**: world-level singleton state.
 - **System**: typed function operating on queries/resources/commands through declared system parameters.
 - **Query**: typed access to matching component sets, with filters.
-- **Command**: deferred structural mutation made visible at an ECS deferred-apply boundary.
+- **Command**: deferred structural mutation made visible at an ECS deferred-publication frontier.
 - **Schedule / System Set**: generic ECS identity and explicit semantic-ordering structure.
 - **Secondary Index**: optional typed ECS lookup acceleration.
 
@@ -53,7 +53,7 @@ RunenECS currently exposes no generic event/channel transport API. Application, 
 
 ## Invariants
 
-- Structural mutations are deferred during runtime-managed system execution and become visible only after an ECS deferred-apply boundary.
+- Structural mutations are deferred during runtime-managed system execution and become visible only after an ECS deferred-publication frontier.
 - Explicit `before` / `after` relations define semantic precedence; access incompatibility does not invent semantic order.
 - Failed schedule runs do not replay discarded deferred command queues in later runs.
 - Query filter semantics (`Added` / `Changed`) use ECS-local ticks and query-local observation state.

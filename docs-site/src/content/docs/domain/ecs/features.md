@@ -20,7 +20,7 @@ last_reviewed: 2026-09-10
 | System params | `Res`, `ResMut`, `WorldMut`, `Commands` | ✅ | `WorldMut` is the built-in exclusive whole-world parameter. |
 | Commands | `queue`, `spawn`, `despawn`, `insert`, `remove`, `batch`, `apply` | ✅ | Deferred structural mutations with deterministic serial application. |
 | Runtime | Schedule labels and system sets | ✅ | Explicit `before` / `after` ordering with cycle validation. |
-| Runtime | Deferred-apply boundaries | ✅ | ECS-neutral visibility points reported after successful flushes. |
+| Runtime | `DeferredPublicationFrontier` | ✅ | ECS-owned visibility points reported after successful flushes; not Runenwerk lifecycle publication. |
 | Runtime | Structured errors | ✅ | ECS-owned setup, schedule, parameter, command, system, boundary, and invariant categories. |
 | Runtime | Deterministic serial execution | ✅ | Registration order is the tie-break for otherwise unordered systems. |
 | Extension boundary | Manual `SystemParam` implementation | ⚠ | Low-level unsafe contract is doc-hidden and unsupported for downstream code; use derives or built-ins. |

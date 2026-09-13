@@ -26,7 +26,7 @@ For advanced integration patterns, see [advanced-guide.md](advanced-guide.md).
 - extraction happens each run through `SystemParamContext`
 - each system run owns an ephemeral deferred command owner
 - systems within a current execution-plan stage execute serially in deterministic registration order
-- queued commands flush before the corresponding ECS deferred-apply boundary is reported
+- queued commands flush before the corresponding ECS deferred-publication frontier is reported
 - integration callbacks run only after the deferred flush succeeds
 
 Supported function-system and tuple-registration arity is implemented and regression-tested through 16 entries.
@@ -87,21 +87,26 @@ Deterministic ordering contract:
 1. systems execute according to validated semantic precedence
 2. otherwise unordered systems use deterministic registration order in the serial reference executor
 3. command queues are collected in system execution order
-4. queued commands are applied in deterministic order at ECS deferred-apply boundaries
-5. `DeferredApplyBoundary` is reported only after the corresponding flush succeeds
+4. queued commands are applied in deterministic order at ECS deferred-publication frontiers
+5. `DeferredPublicationFrontier` is reported only after the corresponding flush succeeds
 
 Visibility contract:
 
-- systems that execute before the same deferred-apply boundary do not observe one another's deferred structural mutations
-- explicitly ordered dependent work after the boundary observes mutations applied before that boundary
+- systems that execute before the same deferred-publication frontier do not observe one another's deferred structural mutations
+- explicitly ordered dependent work after the frontier observes mutations applied before that frontier
 - access conflicts alone never introduce an extra visibility boundary
-- `DeferredApplyBoundary::index()` identifies deferred-apply progress within the schedule run.
+- `DeferredPublicationFrontier::index()` identifies deferred-publication progress within the schedule run.
+
+The frontier is an ECS visibility/provenance fact only. It does not define an
+application frame, product publication, query-snapshot publication, cache
+identity, or render phase. Runenwerk installs explicit product and query
+publication systems at the lifecycle boundaries that own those effects.
 
 Failure atomicity contract:
 
 - commands are staged only for successful system runs
 - failed schedule runs discard deferred queues instead of replaying them later
-- a failed command flush or deferred-boundary callback stops the schedule and clears pending deferred state
+- a failed command flush or deferred-frontier callback stops the schedule and clears pending deferred state
 
 ## 5. Query Engine Internals
 

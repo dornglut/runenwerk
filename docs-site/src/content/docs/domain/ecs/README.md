@@ -26,7 +26,7 @@ implementation and downstream conformance fixture live in
 - `Query`, `QueryState`, and ECS-native `Added`, `Changed`, and `RemovedQuery`
 - `Runtime`, schedule labels, system sets, explicit semantic ordering, and validation
 - `Res`, `ResMut`, built-in exclusive `WorldMut`, and derived `SystemParam`
-- deferred `Commands` and `BatchCommands` with ECS-owned visibility boundaries
+- deferred `Commands` and `BatchCommands` with ECS-owned visibility frontiers
 - optional standalone reflection APIs
 
 ```rust
