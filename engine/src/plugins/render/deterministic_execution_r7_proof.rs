@@ -11,17 +11,20 @@ use super::admission::{
     RenderOutputBinding, RenderOutputDestination, RenderRepresentationAvailabilityFact,
     RenderRepresentationAvailabilityState,
 };
+use super::appearance::RenderDiffuseMaterial;
 use super::deterministic_admission::{AdmittedDeterministicRender, admit_deterministic_render};
 use super::deterministic_execution::{
-    RenderDeterministicResultFormationError, submit_deterministic_render,
-    submit_deterministic_render_for_verified_result,
+    RenderDeterministicRadianceCaptureRequestError, RenderDeterministicResultFormationError,
+    submit_deterministic_render, submit_deterministic_render_for_verified_result,
 };
 use super::deterministic_verification::{
     submit_deterministic_render_for_verified_formation, verify_completed_deterministic_render,
 };
+use super::participation::RenderMaterialAssignment;
 use super::participation::RenderObjectParticipation;
 use super::representation::{
-    RENDER_SURFACE_QUERY_PROTOCOL_REVISION, RenderRefinementEvidence, RenderRepresentationRecord,
+    RENDER_ORIENTED_SURFACE_QUERY_PROTOCOL_REVISION, RENDER_SURFACE_QUERY_PROTOCOL_REVISION,
+    RenderOrientedSurfaceProtocolEvidence, RenderRefinementEvidence, RenderRepresentationRecord,
     RenderSurfaceProtocolEvidence,
 };
 use super::request::{
@@ -41,9 +44,10 @@ use super::surface_input::{
 };
 use runen_gpu::{
     GpuCapabilityProfile, GpuContext, GpuContextDescriptor, GpuContextRequestErrorCategory,
-    GpuFormatRole, GpuReadbackId, GpuReadbackStatus, GpuReconstruction, GpuResourceLifetime,
-    GpuSubmission, GpuSubmissionStatus, GpuTextureDescriptor, GpuTextureFormat,
-    GpuTextureInitialization, GpuTextureUsage, GpuWorkResourceIdAllocator,
+    GpuFormatRole, GpuReadbackId, GpuReadbackOperation, GpuReadbackStatus, GpuReconstruction,
+    GpuResourceLifetime, GpuSubmission, GpuSubmissionStatus, GpuTextureDescriptor,
+    GpuTextureFormat, GpuTextureInitialization, GpuTextureUsage, GpuWorkFragment,
+    GpuWorkResourceIdAllocator,
 };
 use std::time::{Duration, Instant};
 
@@ -78,6 +82,12 @@ fn translated_identity_state() -> RenderObjectState {
 fn maintained_surface_evidence() -> RenderSurfaceProtocolEvidence {
     RenderSurfaceProtocolEvidence::exact(RENDER_SURFACE_QUERY_PROTOCOL_REVISION)
         .expect("R7 maintained surface protocol")
+        .with_oriented_surface(
+            RenderOrientedSurfaceProtocolEvidence::exact(
+                RENDER_ORIENTED_SURFACE_QUERY_PROTOCOL_REVISION,
+            )
+            .expect("R7 maintained oriented-surface protocol"),
+        )
         .with_semantic_input_requirement(RenderSurfaceSemanticInputRequirement::current())
 }
 
@@ -104,7 +114,10 @@ fn maintained_fixture() -> MaintainedExecutionFixture {
         None,
     )
     .expect("R7 maintained proof representation");
-    let participation = RenderObjectParticipation::new(vec![representation], None, None)
+    let material = RenderMaterialAssignment::new(
+        RenderDiffuseMaterial::new(0.5).expect("R7 maintained proof diffuse material"),
+    );
+    let participation = RenderObjectParticipation::new(vec![representation], Some(material), None)
         .expect("R7 maintained proof participation");
     let mut attach = RenderSceneUpdate::new();
     attach.replace_participation(object_id, participation);
@@ -203,10 +216,45 @@ fn reordered_8x6_request() -> RenderRequest {
     .expect("R7 reordered 8x6 request")
 }
 
+fn radiance_lattice_request() -> RenderRequest {
+    let shutter = instant();
+    let observation = RenderObservationSpec::Perspective(
+        RenderPerspectiveObservation::new(
+            RenderAffineTransform3::identity(),
+            std::f64::consts::FRAC_PI_3,
+            1.0,
+            shutter,
+            RenderSamplingSupport::ideal_ray(),
+        )
+        .expect("R7 maintained radiance perspective observation"),
+    );
+    RenderRequest::new(
+        shutter,
+        vec![observation],
+        vec![RenderRequestedOutput::new(
+            0,
+            RenderOutputSpec::new(
+                RenderOutputValue::Radiance {
+                    representation: super::request::RenderRadiometricRepresentation::spectral_at_wavelength_meters(
+                        550.0e-9,
+                    )
+                    .expect("R7 maintained radiance representation"),
+                },
+                RenderResultTopology::sample_lattice_2d(2, 2)
+                    .expect("R7 maintained radiance lattice topology"),
+                RenderSemanticTolerance::exact(),
+            )
+            .expect("R7 maintained radiance output"),
+        )],
+    )
+    .expect("R7 maintained radiance lattice request")
+}
+
 fn request_execution_context() -> Option<GpuContext> {
     let descriptor =
         GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements())
             .require_format_role(GpuTextureFormat::R32Uint, GpuFormatRole::CopyDestination)
+            .require_format_role(GpuTextureFormat::R32Uint, GpuFormatRole::CopySource)
             .with_label("RunenRender R7 maintained execution proof");
     match pollster::block_on(GpuContext::request(descriptor)) {
         Ok(context) => Some(context),
@@ -256,6 +304,50 @@ fn admit_with_writable_only_destination(
         context,
     )
     .expect("R7 maintained fixture must reach maintained deterministic admission")
+}
+
+fn admit_with_retained_radiance_destination(
+    fixture: &MaintainedExecutionFixture,
+    context: &GpuContext,
+) -> AdmittedDeterministicRender {
+    let fixture = MaintainedExecutionFixture {
+        scene: fixture.scene.clone(),
+        request: radiance_lattice_request(),
+        semantic_inputs: fixture.semantic_inputs.clone(),
+        availability: fixture.availability.clone(),
+    };
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let destination = allocator
+        .allocate_texture_handle(
+            GpuTextureDescriptor::ordinary_owned_2d(
+                "R7 maintained retained radiance destination",
+                GpuResourceLifetime::Retained,
+                GpuReconstruction::SourceBacked,
+                2,
+                2,
+                GpuTextureFormat::R32Uint,
+                [
+                    GpuTextureUsage::CopyDestination,
+                    GpuTextureUsage::CopySource,
+                ],
+                GpuTextureInitialization::Uninitialized,
+            )
+            .expect("R7 maintained retained radiance descriptor"),
+        )
+        .expect("R7 maintained retained radiance handle");
+    let output_bindings = [RenderOutputBinding::new(
+        0,
+        RenderOutputDestination::SampleLatticeTexture(destination),
+    )];
+    admit_deterministic_render(
+        &fixture.scene,
+        &fixture.request,
+        &fixture.semantic_inputs,
+        &fixture.availability,
+        &output_bindings,
+        context,
+    )
+    .expect("R7 maintained retained radiance fixture must admit")
 }
 
 fn lattice_bindings(width: u32, height: u32, output_count: usize) -> Vec<RenderOutputBinding> {
@@ -462,6 +554,70 @@ fn public_verified_result_path_forms_once_from_exact_submission() {
         Err(RenderDeterministicResultFormationError::ResultAlreadyFormed),
         "one exact verified submission must not mint semantic result evidence twice"
     );
+}
+
+#[test]
+fn public_radiance_capture_uses_a_separate_product_readback_submission() {
+    let Some(context) = request_execution_context() else {
+        return;
+    };
+    let fixture = maintained_fixture();
+    let admitted = admit_with_retained_radiance_destination(&fixture, &context);
+    let mut submitted = pollster::block_on(submit_deterministic_render_for_verified_result(
+        admitted, &context,
+    ))
+    .expect("public maintained radiance execution must submit");
+    assert!(matches!(
+        submitted.request_deterministic_radiance_capture(0),
+        Err(RenderDeterministicRadianceCaptureRequestError::VerificationNotFormed)
+    ));
+
+    let deadline = Instant::now() + Duration::from_secs(15);
+    let result = loop {
+        context.progress();
+        match submitted.try_form_verified_result() {
+            Ok(Some(result)) => break result,
+            Ok(None) => {}
+            Err(error) => panic!("public maintained radiance result formation failed: {error}"),
+        }
+        assert!(
+            Instant::now() < deadline,
+            "public maintained radiance result formation did not complete before timeout"
+        );
+        std::thread::yield_now();
+    };
+
+    let request = submitted
+        .request_deterministic_radiance_capture(0)
+        .expect("formed radiance result must mint a capture request");
+    assert!(matches!(
+        submitted.request_deterministic_radiance_capture(usize::MAX),
+        Err(RenderDeterministicRadianceCaptureRequestError::OutputIndexOutOfRange)
+    ));
+    let readback = GpuReadbackOperation::new(request.source().clone(), request.readback_id())
+        .expect("product must construct the ordinary public readback from request evidence");
+    let fragment = GpuWorkFragment::build("R7 product radiance readback", |work| {
+        work.operation("read back retained radiance lattice", readback)?;
+        Ok(())
+    })
+    .expect("product readback fragment must be authorable through public RunenGPU");
+    let product_submission =
+        pollster::block_on(context.submit_work("R7 product radiance readback", [fragment]))
+            .expect("product radiance readback must submit separately");
+    wait_for_readbacks(&context, &product_submission, &[request.readback_id()]);
+
+    let captured = submitted
+        .capture_deterministic_radiance(request, &context, &product_submission)
+        .expect("RunenRender must interpret the exact product-owned readback");
+    assert_eq!(captured.output_index(), 0);
+    assert_eq!(
+        captured.topology().sample_lattice_dimensions(),
+        Some((2, 2))
+    );
+    assert_eq!(captured.samples().len(), 4);
+    assert!(captured.samples().iter().all(|sample| sample.is_finite()));
+    assert!(captured.samples().iter().all(|sample| *sample == 0.0));
+    assert_eq!(result.outputs().len(), 1);
 }
 
 #[test]

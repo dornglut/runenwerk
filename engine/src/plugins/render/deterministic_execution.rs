@@ -14,6 +14,11 @@
 use super::admission::{AdmittedRenderPlan, RenderOutputDestination};
 use super::derived_transform::{RenderCompiledObjectTransform, RenderCompiledObjectTransformError};
 use super::deterministic_admission::AdmittedDeterministicRender;
+pub use super::deterministic_capture::{
+    RenderCapturedDeterministicRadiance, RenderDeterministicRadianceCaptureError,
+    RenderDeterministicRadianceCaptureRequest, RenderDeterministicRadianceCaptureRequestError,
+};
+use super::deterministic_carrier;
 use super::lowering::RenderWorkSet;
 use super::render_result::RenderResult;
 use super::representation::RenderRepresentationId;
@@ -33,7 +38,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt;
 
-const WORD_BYTES: u64 = 4;
+const WORD_BYTES: u64 = deterministic_carrier::WORD_BYTES as u64;
 const HEADER_WORDS: usize = 24;
 const GEOMETRY_WORDS: usize = 32;
 const EMITTER_WORDS: usize = 4;
@@ -141,6 +146,31 @@ impl SubmittedDeterministicRender {
 
     pub(super) const fn submission(&self) -> &GpuSubmission {
         &self.submission
+    }
+
+    pub(super) const fn result_is_formed(&self) -> bool {
+        matches!(self.verification, DeterministicVerificationState::Formed)
+    }
+
+    /// Mint one exact public readback correlation for a formed maintained radiance lattice.
+    pub fn request_deterministic_radiance_capture(
+        &self,
+        output_index: usize,
+    ) -> Result<
+        RenderDeterministicRadianceCaptureRequest,
+        RenderDeterministicRadianceCaptureRequestError,
+    > {
+        super::deterministic_capture::mint_request(self, output_index)
+    }
+
+    /// Consume one capture request and interpret its completed product-owned public readback.
+    pub fn capture_deterministic_radiance(
+        &self,
+        request: RenderDeterministicRadianceCaptureRequest,
+        context: &GpuContext,
+        product_submission: &GpuSubmission,
+    ) -> Result<RenderCapturedDeterministicRadiance, RenderDeterministicRadianceCaptureError> {
+        super::deterministic_capture::capture(self, request, context, product_submission)
     }
 
     pub const fn object_identity_decoder(&self) -> &RenderObjectIdentityDecoder {

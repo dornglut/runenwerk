@@ -9,6 +9,7 @@
 
 use super::super::admission::{AdmittedRenderPlan, RenderAdmittedOutput};
 use super::super::appearance::RenderDirectionalEmitter;
+use super::super::deterministic_carrier::maintained_evaluation_value;
 use super::super::deterministic_execution::{
     DeterministicVerificationSubmission, RenderObjectIdentityDecoder,
 };
@@ -301,7 +302,13 @@ fn verify_numeric_value(
     reference: VerificationInterval,
     tolerance: super::super::request::RenderSemanticTolerance,
 ) -> Result<(), RenderDeterministicVerificationError> {
-    let observed = f64::from(f32::from_bits(canonical_word));
+    let Some(observed) = maintained_evaluation_value(canonical_word).map(f64::from) else {
+        return Err(physical_mismatch_error(
+            output_index,
+            Some(sample_index),
+            "maintained numeric carrier is not finite",
+        ));
+    };
     if !numeric_value_satisfies_tolerance(observed, reference, tolerance) {
         return Err(RenderDeterministicVerificationError::ToleranceMismatch {
             output_index,
