@@ -54,9 +54,6 @@ impl App {
             self.world
                 .insert_resource(NativeWindowHookRegistryResource::default());
         }
-        if !self.world.has_resource::<SceneCatalog>() {
-            self.world.insert_resource(SceneCatalog::default());
-        }
         if !self.world.has_resource::<StartupState>() {
             self.world.insert_resource(StartupState::default());
         }

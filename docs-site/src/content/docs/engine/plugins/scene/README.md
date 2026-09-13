@@ -12,12 +12,13 @@ last_reviewed: 2026-09-13
 
 ## Purpose
 
-Coordinates world/overlay scene lifecycle, authoritative scene simulation, and scene replay/snapshot boundaries.
+Coordinates scene registration, world/overlay scene lifecycle, authoritative scene simulation, and scene replay/snapshot boundaries.
 
 ## Usage
 
 - Plugin: `ScenePlugin`
 - Timing provider: `TimePlugin` directly or through `default_plugins()`
+- Scene catalog provider: `ScenePlugin`, or explicit `App::add_scene*` composition before plugin installation
 - Schedules:
   - `Startup`: initialize the scene manager
   - `PreUpdate`: process transition commands and input-driven scene state
@@ -26,6 +27,11 @@ Coordinates world/overlay scene lifecycle, authoritative scene simulation, and s
 
 The plugin consumes `Time` during scene transition/runtime processing but does not install or
 advance frame timing state.
+
+`SceneCatalog` is Scene-owned composition/runtime input. A bare `App` does not contain a scene
+catalog. `ScenePlugin` installs an empty catalog when none exists, while `App::add_scene` and
+`App::add_scene_template` are explicit composition conveniences that may create and populate the
+same catalog before the plugin is selected. Plugin installation preserves those registrations.
 
 The plugin owns the runtime scene manager and republishes transport-neutral scene state through:
 
@@ -42,7 +48,7 @@ It also defines the current authoritative scene replay/snapshot DTOs:
 
 ## Ownership Boundaries
 
-- Owns scene transition orchestration and scene lifecycle event flow.
+- Owns scene registration/catalog state, transition orchestration, and scene lifecycle event flow.
 - Owns world scene runtime updates and overlay/world interaction state.
 - Owns the authoritative scene snapshot/restore boundary used by replay and replication.
 - Owns applying compiled scene/template authoring outputs to runtime state.
