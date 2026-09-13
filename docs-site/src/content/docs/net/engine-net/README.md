@@ -5,7 +5,7 @@ status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-09-01
+last_reviewed: 2026-09-13
 ---
 
 # engine_net
@@ -62,8 +62,12 @@ Standalone RunenNet is the reusable realtime networking semantic authority. `run
 
 `engine_net` remains only until later RN8 cuts migrate its evidence-backed live replication/input/authoring consumers. New reusable networking semantics must not be added here.
 
-Design details:
+Current migration authority:
 
-- [../../design/active/net-authoritative-replication-protocol.md](../../design/active/net-authoritative-replication-protocol.md)
-- [../../design/active/ecs-net-replication-boundary.md](../../design/active/ecs-net-replication-boundary.md)
-- [../../design/active/net-declarative-replication-authoring.md](../../design/active/net-declarative-replication-authoring.md)
+- [Runenwerk networking architecture](../net-architecture.md)
+- [Multiplayer replication implementation roadmap](../multiplayer-replication-implementation-roadmap.md)
+- [Authoritative replication protocol](../../design/active/net-authoritative-replication-protocol.md)
+- [ECS/net replication boundary](../../design/active/ecs-net-replication-boundary.md)
+
+The former component-registration authoring target is archived history, not current
+`engine_net` authority.

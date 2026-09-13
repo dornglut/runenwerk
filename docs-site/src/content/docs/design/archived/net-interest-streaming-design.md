@@ -1,16 +1,33 @@
 ---
 title: "Net Interest and Streaming Design"
-description: "Design for interest filtering, per-connection relevancy, and world streaming boundaries."
-status: active
+description: "Historical pre-RN8 engine_net interest-policy target retained as migration and implementation evidence."
+status: archived
 owner: net
 layer: net
-canonical: true
-last_reviewed: 2026-05-05
-related_roadmaps:
+canonical: false
+last_reviewed: 2026-09-13
+related:
+  - ../../net/net-architecture.md
   - ../../net/multiplayer-replication-implementation-roadmap.md
 ---
 
 # Net Interest and Streaming Design
+
+## Archive disposition
+
+This document records the former hard-coded `engine_net` interest-policy target. It is
+not current reusable networking architecture. The `InterestPolicy` vocabulary described
+below still exists in current source as RN8 migration residue; that implementation fact
+does not make it the future semantic owner.
+
+Current Runenwerk networking authority keeps concrete world, spatial, team, audience,
+and gameplay relevancy policy outside reusable networking semantics. Current integration
+ownership is recorded by the [Runenwerk networking architecture](../../net/net-architecture.md)
+and the [multiplayer replication roadmap](../../net/multiplayer-replication-implementation-roadmap.md).
+Future audience/relevancy authoring remains dependent on accepted ECS↔Net integration
+evidence; this archive does not define a replacement enum, policy vocabulary, or API.
+
+The historical body below is retained for provenance.
 
 ## Purpose
 
