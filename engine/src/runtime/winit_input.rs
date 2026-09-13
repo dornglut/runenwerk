@@ -51,13 +51,7 @@ impl WinitInputAdapter {
 
     pub(crate) fn raw_device_context(&mut self, backend_device_id: DeviceId) -> InputContext {
         let device = self.intern_raw_device(backend_device_id);
-        let source = if let Some(source) = self.raw_sources.get(&device).copied() {
-            source
-        } else {
-            let source = self.allocate_source();
-            self.raw_sources.insert(device, source);
-            source
-        };
+        let source = self.source_for_raw_device(device);
         InputContext::new(source, Some(device))
     }
 
@@ -93,6 +87,15 @@ impl WinitInputAdapter {
         }
         let source = self.allocate_source();
         self.window_sources.insert(native_window_id, source);
+        source
+    }
+
+    fn source_for_raw_device(&mut self, device: InputDeviceId) -> InputSourceId {
+        if let Some(source) = self.raw_sources.get(&device).copied() {
+            return source;
+        }
+        let source = self.allocate_source();
+        self.raw_sources.insert(device, source);
         source
     }
 
@@ -304,12 +307,27 @@ mod tests {
         let mut adapter = WinitInputAdapter::default();
         let primary = NativeWindowId::primary();
         let secondary = NativeWindowId::try_from_raw(2).expect("secondary window id");
+        let backend_device = DeviceId::dummy();
 
-        let primary_source = adapter.source_for_window(primary);
-        let secondary_source = adapter.source_for_window(secondary);
+        let primary_context = adapter.window_context(primary, backend_device);
+        let secondary_context = adapter.window_context(secondary, backend_device);
 
-        assert_ne!(primary_source, secondary_source);
-        assert_eq!(primary_source, adapter.source_for_window(primary));
+        assert_ne!(primary_context.source, secondary_context.source);
+        assert_eq!(primary_context.device, secondary_context.device);
+        assert_eq!(primary_context, adapter.window_context(primary, backend_device));
+    }
+
+    #[test]
+    fn distinct_raw_devices_receive_distinct_stable_sources() {
+        let mut adapter = WinitInputAdapter::default();
+        let device_a = InputDeviceId::new(1);
+        let device_b = InputDeviceId::new(2);
+
+        let source_a = adapter.source_for_raw_device(device_a);
+        let source_b = adapter.source_for_raw_device(device_b);
+
+        assert_ne!(source_a, source_b);
+        assert_eq!(source_a, adapter.source_for_raw_device(device_a));
     }
 
     #[test]
@@ -340,7 +358,19 @@ mod tests {
     }
 
     #[test]
-    fn line_and_pixel_scroll_preserve_both_axes_and_domain() {
+    fn logical_key_and_location_preserve_backend_interpretation() {
+        assert_eq!(
+            logical_key(&Key::Character("z".into())),
+            LogicalKey::Character("z".to_owned())
+        );
+        assert_eq!(
+            key_location(winit::keyboard::KeyLocation::Numpad),
+            KeyLocation::Numpad
+        );
+    }
+
+    #[test]
+    fn line_and_pixel_scroll_preserve_both_axes_domain_and_phase() {
         let line = scroll_input(MouseScrollDelta::LineDelta(2.0, -3.0), TouchPhase::Moved);
         let pixel = scroll_input(
             MouseScrollDelta::PixelDelta(PhysicalPosition::new(12.0, -18.0)),
@@ -349,8 +379,10 @@ mod tests {
 
         assert_eq!(line.delta, ScrollDelta::two_dimensional(2.0, -3.0));
         assert_eq!(line.domain, ScrollDomain::Lines);
+        assert_eq!(line.phase, Some(ScrollPhase::Update));
         assert_eq!(pixel.delta, ScrollDelta::two_dimensional(12.0, -18.0));
         assert_eq!(pixel.domain, ScrollDomain::WindowPhysicalPixels);
+        assert_eq!(pixel.phase, Some(ScrollPhase::Update));
         assert_ne!(line.domain, pixel.domain);
     }
 
@@ -361,6 +393,16 @@ mod tests {
             ObservationOrigin::BackendSyntheticReconciliation
         );
         assert_eq!(observation_origin(false), ObservationOrigin::SourceReport);
+    }
+
+    #[test]
+    fn contact_cancel_remains_distinct_from_ordinary_end() {
+        assert_eq!(contact_phase(TouchPhase::Cancelled), ContactPhase::Cancel);
+        assert_eq!(contact_phase(TouchPhase::Ended), ContactPhase::End);
+        assert_ne!(
+            contact_phase(TouchPhase::Cancelled),
+            contact_phase(TouchPhase::Ended)
+        );
     }
 
     #[test]
