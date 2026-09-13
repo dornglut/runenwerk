@@ -11,6 +11,10 @@
 //! remain distinct from payload bits. For this maintained direct/no-environment method only, a
 //! primary radiance miss is the defined value zero; generic R2 radiance-miss semantics remain wider.
 
+mod capture;
+
+pub use capture::{RenderCapturedDeterministicRadiance, RenderDeterministicRadianceCaptureError};
+
 use super::admission::{AdmittedRenderPlan, RenderOutputDestination};
 use super::derived_transform::{RenderCompiledObjectTransform, RenderCompiledObjectTransformError};
 use super::deterministic_admission::AdmittedDeterministicRender;

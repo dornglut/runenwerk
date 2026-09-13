@@ -5,14 +5,13 @@
 //! using the retained semantic topology plus the exact returned canonical-buffer byte length. It
 //! never re-derives physical packing from device facts and it does not perform semantic verification.
 
+use super::super::deterministic_carrier::{WORD_BYTES, decode_word};
 use super::super::deterministic_execution::DeterministicVerificationSubmission;
 use super::super::request::RenderResultTopology;
 use runen_gpu::{
     GpuReadbackBytes, GpuReadbackId, GpuReadbackStatus, GpuSubmission, GpuSubmissionFailureKind,
     GpuSubmissionStatus,
 };
-
-const WORD_BYTES: usize = 4;
 
 /// Renderer-private normalized physical observations for one exact admitted output.
 ///
@@ -398,11 +397,6 @@ fn invalid_layout<T>(
             byte_len,
         },
     )
-}
-
-fn decode_word(bytes: &[u8]) -> u32 {
-    debug_assert_eq!(bytes.len(), WORD_BYTES);
-    u32::from_ne_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])
 }
 
 #[cfg(test)]
