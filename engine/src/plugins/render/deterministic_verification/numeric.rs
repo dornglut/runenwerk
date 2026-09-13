@@ -4,6 +4,8 @@
 //! bounded conservative arithmetic needed by the maintained deterministic verifier. Every helper
 //! fails closed on non-finite/unsupported arithmetic instead of manufacturing fidelity evidence.
 
+use super::super::request::RenderSemanticTolerance;
+
 const CERTIFIED_TAYLOR_X_LIMIT: f64 = 0.786;
 const PI_LOWER_BITS: u64 = 0x4009_21fb_5444_2d18;
 const PI_UPPER_BITS: u64 = 0x4009_21fb_5444_2d19;
@@ -36,6 +38,23 @@ impl VerificationInterval {
 
     pub(super) fn contains(self, value: f64) -> bool {
         value.is_finite() && self.lower <= value && value <= self.upper
+    }
+
+    fn is_singleton(self) -> bool {
+        self.lower == self.upper
+    }
+
+    fn abs(self) -> Self {
+        if self.lower >= 0.0 {
+            self
+        } else if self.upper <= 0.0 {
+            self.neg()
+        } else {
+            Self {
+                lower: 0.0,
+                upper: (-self.lower).max(self.upper),
+            }
+        }
     }
 
     pub(super) fn add(self, other: Self) -> Option<Self> {
@@ -116,6 +135,51 @@ impl VerificationInterval {
             ieee_next_up(upper),
         )
     }
+}
+
+/// Prove one observed finite numeric value satisfies the exact request tolerance for every semantic
+/// value enclosed by `reference`.
+///
+/// The proof is intentionally one-sided: returning `false` means mismatch or inconclusive evidence,
+/// never permission to widen the request. Relative tolerance uses the smallest allowed error across
+/// the entire reference interval, preserving the request law that an exact zero permits zero error.
+pub(super) fn numeric_value_satisfies_tolerance(
+    observed: f64,
+    reference: VerificationInterval,
+    tolerance: RenderSemanticTolerance,
+) -> bool {
+    if !observed.is_finite() {
+        return false;
+    }
+    if reference.is_singleton() && observed == reference.lower {
+        return true;
+    }
+    if tolerance.is_exact() {
+        return false;
+    }
+
+    let Some(observed_interval) = VerificationInterval::singleton(observed) else {
+        return false;
+    };
+    let Some(error_interval) = observed_interval.sub(reference).map(VerificationInterval::abs)
+    else {
+        return false;
+    };
+
+    if let Some(max_error) = tolerance.absolute_max_error() {
+        return error_interval.upper <= max_error;
+    }
+
+    let Some(max_fraction) = tolerance.relative_max_fraction() else {
+        return false;
+    };
+    let Some(fraction) = VerificationInterval::singleton(max_fraction) else {
+        return false;
+    };
+    let Some(allowed_error) = reference.abs().mul(fraction) else {
+        return false;
+    };
+    error_interval.upper <= allowed_error.lower
 }
 
 /// Fixed binary64 enclosure of mathematical pi.
@@ -282,6 +346,52 @@ mod tests {
             .expect("positive square root");
         assert!(root.contains(2.0_f64.sqrt()));
         assert!(root.lower() >= 0.0);
+    }
+
+    #[test]
+    fn exact_tolerance_requires_a_uniquely_certified_value() {
+        let exact = RenderSemanticTolerance::exact();
+        let singleton = VerificationInterval::singleton(2.0).expect("singleton");
+        assert!(numeric_value_satisfies_tolerance(2.0, singleton, exact));
+        assert!(!numeric_value_satisfies_tolerance(2.0 + f64::EPSILON, singleton, exact));
+
+        let uncertain = VerificationInterval::bounds(1.999, 2.001).expect("uncertain interval");
+        assert!(!numeric_value_satisfies_tolerance(2.0, uncertain, exact));
+    }
+
+    #[test]
+    fn absolute_tolerance_covers_every_reference_value() {
+        let reference = VerificationInterval::bounds(9.999, 10.001).expect("reference");
+        let accepted = RenderSemanticTolerance::absolute(0.002).expect("absolute tolerance");
+        let rejected = RenderSemanticTolerance::absolute(0.0005).expect("absolute tolerance");
+        assert!(numeric_value_satisfies_tolerance(10.0, reference, accepted));
+        assert!(!numeric_value_satisfies_tolerance(10.0, reference, rejected));
+    }
+
+    #[test]
+    fn relative_tolerance_preserves_strict_zero_semantics() {
+        let relative = RenderSemanticTolerance::relative(1.0).expect("relative tolerance");
+        let zero = VerificationInterval::singleton(0.0).expect("zero");
+        assert!(numeric_value_satisfies_tolerance(0.0, zero, relative));
+        assert!(!numeric_value_satisfies_tolerance(
+            f64::from_bits(1),
+            zero,
+            relative
+        ));
+    }
+
+    #[test]
+    fn relative_tolerance_uses_the_smallest_allowance_across_uncertainty() {
+        let reference = VerificationInterval::bounds(99.999, 100.001).expect("reference");
+        let accepted = RenderSemanticTolerance::relative(0.0001).expect("relative tolerance");
+        let rejected = RenderSemanticTolerance::relative(0.000001).expect("relative tolerance");
+        assert!(numeric_value_satisfies_tolerance(100.0, reference, accepted));
+        assert!(!numeric_value_satisfies_tolerance(100.0, reference, rejected));
+        assert!(!numeric_value_satisfies_tolerance(
+            f64::NAN,
+            reference,
+            accepted
+        ));
     }
 
     #[test]
