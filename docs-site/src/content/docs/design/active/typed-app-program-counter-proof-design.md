@@ -7,11 +7,11 @@ layer: design
 canonical: false
 last_reviewed: 2026-07-08
 related:
-  - ./typed-app-program-and-ui-proof-design.md
+  - ../deferred/typed-app-program-and-ui-proof-design.md
   - ../superseded/domain-authoring-source-and-program-pattern.md
   - ../implemented/ui-program-architecture.md
   - ../../architecture/ui-framework-architecture.md
-  - ./runenwerk-typed-app-composition-plugin-framework-design.md
+  - ../superseded/runenwerk-typed-app-composition-plugin-framework-design.md
 ---
 
 # Typed App Program Counter Proof Design

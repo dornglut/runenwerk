@@ -9,7 +9,7 @@ last_reviewed: 2026-09-13
 related_designs:
   - ../active/runenwerk-ui-story-driven-golden-workflow-design.md
   - ./editor-ui-runtime-v2-and-interaction-formation-design.md
-  - ../active/runenwerk-typed-app-composition-plugin-framework-design.md
+  - ../superseded/runenwerk-typed-app-composition-plugin-framework-design.md
 related_docs:
   - ../../domain/ui/architecture.md
   - ../../domain/ui/roadmap.md
@@ -71,7 +71,7 @@ Current source includes `domain/ui/ui_controls/src/surface2d/` and `domain/ui/ui
 
 Specialized future surfaces such as SpatialCanvas, NodeCanvas, PortGraphCanvas, progression trees, and track/timeline surfaces are not part of this implemented classification. They remain separately lifecycle-owned and must consume the generic substrate without pushing their domain semantics into Surface2D.
 
-Typed App Composition remains proposed Runenwerk architecture direction only and does not become implemented by relation to Surface2D.
+The former Typed App Composition proposal is superseded by ADR 0019 and the canonical Runenwerk platform architecture. Its historical relation to Surface2D does not make that proposal implemented or current authority.
 
 ## Boundary rules
 
