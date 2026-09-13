@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-16
+last_reviewed: 2026-09-13
 ---
 
 # Render Plugin
@@ -30,6 +30,8 @@ Render runtime orchestration for the engine runtime path.
   - Render feature registry, dependency ordering, and contribution fallback policies.
 - `renderer/`
   - Per-frame orchestration and execution (`extract`, `frame_bindings`, `prepare`, `submit`).
+- `readiness/`
+  - Render-owned readiness state derived from successful render warm-frame evidence and timeout policy.
 - `shader/`
   - Shader registry/types/helpers/hot-reload entry.
 - `pipelines/`
@@ -44,6 +46,13 @@ Render runtime orchestration for the engine runtime path.
   - Public authoring surface for `RenderFlow`, pass builders, typed handles, and param projection bindings.
 - `params/`
   - GPU parameter conversion traits and types (`GpuParams`, `GpuUniform`, `GpuStorage`, `ToGpuValue`).
+
+## Runtime Ownership
+
+`RenderPlugin` provides `RenderReadinessState` through non-overwriting typed resource initialization.
+A bare `App` does not imply render-readiness state. Successful render submission advances readiness
+from render warm-frame evidence using the maintained stability/timeout policy. This state describes
+Render readiness only; it is not the Runenwerk App `Startup` lifecycle.
 
 ## Guides
 
