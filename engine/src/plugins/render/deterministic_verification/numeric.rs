@@ -161,7 +161,9 @@ pub(super) fn numeric_value_satisfies_tolerance(
     let Some(observed_interval) = VerificationInterval::singleton(observed) else {
         return false;
     };
-    let Some(error_interval) = observed_interval.sub(reference).map(VerificationInterval::abs)
+    let Some(error_interval) = observed_interval
+        .sub(reference)
+        .map(VerificationInterval::abs)
     else {
         return false;
     };
@@ -369,7 +371,9 @@ mod tests {
         let accepted = RenderSemanticTolerance::absolute(0.002).expect("absolute tolerance");
         let rejected = RenderSemanticTolerance::absolute(0.0005).expect("absolute tolerance");
         assert!(numeric_value_satisfies_tolerance(10.0, reference, accepted));
-        assert!(!numeric_value_satisfies_tolerance(10.0, reference, rejected));
+        assert!(!numeric_value_satisfies_tolerance(
+            10.0, reference, rejected
+        ));
     }
 
     #[test]
@@ -389,8 +393,12 @@ mod tests {
         let reference = VerificationInterval::bounds(99.999, 100.001).expect("reference");
         let accepted = RenderSemanticTolerance::relative(0.0001).expect("relative tolerance");
         let rejected = RenderSemanticTolerance::relative(0.000001).expect("relative tolerance");
-        assert!(numeric_value_satisfies_tolerance(100.0, reference, accepted));
-        assert!(!numeric_value_satisfies_tolerance(100.0, reference, rejected));
+        assert!(numeric_value_satisfies_tolerance(
+            100.0, reference, accepted
+        ));
+        assert!(!numeric_value_satisfies_tolerance(
+            100.0, reference, rejected
+        ));
         assert!(!numeric_value_satisfies_tolerance(
             f64::NAN,
             reference,
