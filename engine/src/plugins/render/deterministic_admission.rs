@@ -9,11 +9,13 @@ use super::admission::{
     RenderOutputDestination, RenderRepresentationAvailabilityFact,
     admit_render_plan_with_surface_inputs,
 };
+use super::derived_transform::{RenderCompiledObjectTransform, RenderCompiledObjectTransformError};
 use super::maintained_method::maintained_deterministic_method;
+use super::representation::RenderRepresentationId;
 use super::request::{RenderObservationSpec, RenderRequest};
-use super::scene::RenderSceneSnapshot;
+use super::scene::{RenderObjectId, RenderObjectState, RenderSceneSnapshot};
 use super::semantic_plan::{RenderPlanningFailure, plan_render};
-use super::surface_input::RenderSurfaceSemanticInputBinding;
+use super::surface_input::{RenderSurfaceSemanticInput, RenderSurfaceSemanticInputBinding};
 use runen_gpu::{
     GpuBufferUsage, GpuCapabilityFeature, GpuContext, GpuTextureFormat, GpuTextureUsage,
 };
@@ -30,6 +32,19 @@ pub enum RenderDeterministicCompatibilityError {
     },
     ObservationSamplingSupportUnsupported {
         observation_index: usize,
+    },
+    SelectedRepresentationSurfaceInputUnsupported {
+        output_index: usize,
+        object_id: RenderObjectId,
+        representation_id: RenderRepresentationId,
+    },
+    SelectedObjectStateMissing {
+        output_index: usize,
+        object_id: RenderObjectId,
+    },
+    SelectedObjectTransformNonInvertible {
+        output_index: usize,
+        object_id: RenderObjectId,
     },
     CopyCapabilityUnsupported,
     CopyCapabilityNotEnabled,
@@ -63,6 +78,28 @@ impl fmt::Display for RenderDeterministicCompatibilityError {
             Self::ObservationSamplingSupportUnsupported { observation_index } => write!(
                 formatter,
                 "observation {observation_index} requires ideal-ray sampling support"
+            ),
+            Self::SelectedRepresentationSurfaceInputUnsupported {
+                output_index,
+                object_id,
+                representation_id,
+            } => write!(
+                formatter,
+                "output {output_index} object {object_id:?} representation {representation_id:?} has no surface semantic input supported by the maintained evaluator"
+            ),
+            Self::SelectedObjectStateMissing {
+                output_index,
+                object_id,
+            } => write!(
+                formatter,
+                "output {output_index} object {object_id:?} has no retained object state"
+            ),
+            Self::SelectedObjectTransformNonInvertible {
+                output_index,
+                object_id,
+            } => write!(
+                formatter,
+                "output {output_index} object {object_id:?} has a non-invertible semantic transform unsupported by the maintained evaluator"
             ),
             Self::CopyCapabilityUnsupported => {
                 formatter.write_str("RunenGPU copy capability is unsupported")
@@ -139,8 +176,9 @@ impl Error for RenderDeterministicAdmissionFailure {}
 /// R5-admitted work for the exact RunenRender-owned maintained deterministic method.
 ///
 /// The wrapper carries no submission/session identity. Construction additionally proves that the
-/// admitted request and physical destinations fit the currently maintained evaluator/carrier
-/// contract; RunenGPU still owns graph preparation, realization, submission, and execution failure.
+/// selected representation inputs, semantic object transforms, request, and physical destinations
+/// fit the currently maintained evaluator/carrier contract; RunenGPU still owns graph preparation,
+/// realization, submission, and execution failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AdmittedDeterministicRender {
     admitted: AdmittedRenderPlan,
@@ -186,6 +224,8 @@ fn validate_maintained_compatibility(
         validate_observation(observation_index, *observation)?;
     }
 
+    validate_selected_evaluator_inputs(admitted)?;
+
     let capabilities = context.adapter_facts().supported();
     if !capabilities.supports(GpuCapabilityFeature::Copy) {
         return Err(RenderDeterministicCompatibilityError::CopyCapabilityUnsupported);
@@ -216,6 +256,58 @@ fn validate_maintained_compatibility(
     for output in admitted.outputs() {
         validate_destination(output.output_index(), output.binding().destination())?;
     }
+    Ok(())
+}
+
+fn validate_selected_evaluator_inputs(
+    admitted: &AdmittedRenderPlan,
+) -> Result<(), RenderDeterministicCompatibilityError> {
+    for output in admitted.outputs() {
+        for object in output.object_representations() {
+            let object_id = object.object_id();
+            let representation_id = object.representation().representation_id();
+            validate_selected_evaluator_object(
+                output.output_index(),
+                object_id,
+                representation_id,
+                admitted.surface_semantic_input(representation_id),
+                admitted.plan().scene().object_state(object_id),
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_selected_evaluator_object(
+    output_index: usize,
+    object_id: RenderObjectId,
+    representation_id: RenderRepresentationId,
+    surface_input: Option<&RenderSurfaceSemanticInput>,
+    state: Option<&RenderObjectState>,
+) -> Result<(), RenderDeterministicCompatibilityError> {
+    if surface_input.is_none() {
+        return Err(
+            RenderDeterministicCompatibilityError::SelectedRepresentationSurfaceInputUnsupported {
+                output_index,
+                object_id,
+                representation_id,
+            },
+        );
+    }
+    let state = state.ok_or(
+        RenderDeterministicCompatibilityError::SelectedObjectStateMissing {
+            output_index,
+            object_id,
+        },
+    )?;
+    RenderCompiledObjectTransform::compile(state.spatial()).map_err(
+        |RenderCompiledObjectTransformError::NonInvertibleObjectTransform| {
+            RenderDeterministicCompatibilityError::SelectedObjectTransformNonInvertible {
+                output_index,
+                object_id,
+            }
+        },
+    )?;
     Ok(())
 }
 
@@ -312,7 +404,9 @@ mod tests {
         RenderSamplingSupport,
     };
     use crate::plugins::render::space_time::{
-        RenderAffineTransform3, RenderTimeInterval, RenderTimePoint,
+        RenderAffineTransform3, RenderHandedness, RenderObjectSpatialState,
+        RenderObjectTemporalState, RenderSpaceSpec, RenderSpatialCoverage, RenderTemporalSupport,
+        RenderTimeInterval, RenderTimePoint,
     };
     use runen_gpu::{
         GpuBufferDescriptor, GpuBufferInitialization, GpuBufferUsage, GpuReconstruction,
@@ -326,6 +420,17 @@ mod tests {
 
     fn instant() -> RenderTimeInterval {
         RenderTimeInterval::instant(time(0.0))
+    }
+
+    fn object_state(local_to_scene: RenderAffineTransform3) -> RenderObjectState {
+        RenderObjectState::new(
+            RenderObjectSpatialState::new(
+                RenderSpaceSpec::new(1.0, RenderHandedness::Right).expect("test space"),
+                local_to_scene,
+                RenderSpatialCoverage::unbounded(),
+            ),
+            RenderObjectTemporalState::new(RenderTemporalSupport::unbounded()),
+        )
     }
 
     #[test]
@@ -400,6 +505,67 @@ mod tests {
                     observation_index: 4
                 }
             )
+        );
+    }
+
+    #[test]
+    fn maintained_evaluator_requires_supported_surface_input_and_invertible_transform() {
+        let object_id = RenderObjectId::from_raw(1).expect("object id");
+        let representation_id = RenderRepresentationId::from_raw(2).expect("representation id");
+        let valid_state = object_state(RenderAffineTransform3::identity());
+        assert_eq!(
+            validate_selected_evaluator_object(
+                5,
+                object_id,
+                representation_id,
+                None,
+                Some(&valid_state),
+            ),
+            Err(
+                RenderDeterministicCompatibilityError::SelectedRepresentationSurfaceInputUnsupported {
+                    output_index: 5,
+                    object_id,
+                    representation_id,
+                }
+            )
+        );
+
+        let input = RenderSurfaceSemanticInput::sphere(
+            [0.0, 0.0, 0.0],
+            1.0,
+            RenderTemporalSupport::unbounded(),
+        )
+        .expect("surface input");
+        let singular_state = object_state(
+            RenderAffineTransform3::from_row_major_3x4([
+                1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+            ])
+            .expect("finite singular transform"),
+        );
+        assert_eq!(
+            validate_selected_evaluator_object(
+                6,
+                object_id,
+                representation_id,
+                Some(&input),
+                Some(&singular_state),
+            ),
+            Err(
+                RenderDeterministicCompatibilityError::SelectedObjectTransformNonInvertible {
+                    output_index: 6,
+                    object_id,
+                }
+            )
+        );
+        assert_eq!(
+            validate_selected_evaluator_object(
+                7,
+                object_id,
+                representation_id,
+                Some(&input),
+                Some(&valid_state),
+            ),
+            Ok(())
         );
     }
 
