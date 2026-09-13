@@ -22,14 +22,14 @@ For Runenwerk-wide architecture, start with:
 
 - [Runenwerk Platform Architecture](../../architecture/runenwerk-platform-architecture.md)
 
-For the whole UI framework architecture, start with:
+For Runenwerk-local UI architecture and the standalone ownership boundary, start with:
 
-- [Runenwerk UI Framework Architecture](../../architecture/ui-framework-architecture.md)
+- [Runenwerk UI Local Runtime and Integration Architecture](../../architecture/ui-framework-architecture.md)
 
 Active design docs below are slice-level authorities, proposals, implementation
-designs, or product references. They should not each restate the entire framework or
-platform architecture. Accepted ADRs and canonical architecture spines win when an
-active design contains older conflicting target language.
+designs, or product references. They should not restate standalone reusable
+framework authority inside Runenwerk. Accepted ADRs and canonical architecture
+spines win when an active design contains older conflicting target language.
 
 ## Current Designs
 
@@ -63,17 +63,6 @@ active design contains older conflicting target language.
 
 - [Runenwerk Draw Pen-First Radial Tablet UX Design](runenwerk-draw-pen-first-radial-tablet-ux-design.md)
 
-### UI Component Platform
-
-- [UI Component Platform Budget Evidence Design](ui-component-platform-budget-evidence-design.md)
-- [UI Component Platform Node Canvas Design](ui-component-platform-node-canvas-design.md)
-- [UI Component Platform Ownership Realignment Design](ui-component-platform-ownership-realignment-design.md)
-- [UI Component Platform Port Graph Canvas Design](ui-component-platform-port-graph-canvas-design.md)
-- [UI Component Platform Progression Tree View Design](ui-component-platform-progression-tree-view-design.md)
-- [UI Component Platform Spatial Canvas Design](ui-component-platform-spatial-canvas-design.md)
-- [UI Component Platform Track Surface Design](ui-component-platform-track-surface-design.md)
-- [UI Component Platform Transitions / Effects Design](ui-component-platform-transitions-effects-design.md)
-
 ### Repository Family Extraction
 
 - [RunenSDF Extraction Design](runensdf-extraction-design.md)
@@ -90,24 +79,9 @@ active design contains older conflicting target language.
 - [RunenGPU Phase Requirements and Proof Matrix](runengpu-phase-requirements-proof-matrix.md)
 - [RunenGPU and RunenRender Decomposition Execution Plan](runenrender-internal-decomposition-execution-plan.md)
 
-### Domain Authoring And Standalone UI Framework
+### Domain Authoring / App Proof
 
 - [Typed App Program Counter Proof Design](typed-app-program-counter-proof-design.md)
-- [UI Framework Runtime Requirements](ui-framework-runtime-requirements-design.md)
-- [UI Source Projection And Program Lowering](ui-source-projection-and-program-lowering-design.md)
-- [UI Component Composition, Slots, And Authoring](ui-component-composition-slots-and-authoring-design.md)
-- [UI Data Binding, Forms, And Effects](ui-data-binding-forms-and-effects-design.md)
-- [UI Reactive Runtime And Invalidation](ui-reactive-runtime-and-invalidation-design.md)
-- [UI Live Editing And Preview](ui-live-editing-and-preview-design.md)
-- [UI Game And World-Space Host Requirements](ui-game-and-worldspace-host-requirements-design.md)
-- [UI Accessibility, Internationalization, And Text Conformance](ui-accessibility-internationalization-and-text-conformance-design.md)
-- [UI Layout, Style, Theme, And Motion](ui-layout-style-theme-and-motion-design.md)
-- [UI Performance, Virtualization, Assets, And Profiling](ui-performance-virtualization-assets-and-profiling-design.md)
-- [UI Render Output And Host Renderer Boundary](ui-render-output-and-host-renderer-boundary-design.md)
-- [UI Platform Input, Windowing, And OS Integration](ui-platform-input-windowing-and-os-integration-design.md)
-- [UI Devtools, Inspection, And Workbench](ui-devtools-inspection-and-workbench-design.md)
-- [UI Testing, Conformance, And Proof Matrix](ui-testing-conformance-and-proof-matrix-design.md)
-- [UI Package Security, Versioning, And Migration](ui-package-security-versioning-and-migration-design.md)
 
 ### Workspace / Cross-Domain
 
@@ -118,5 +92,5 @@ active design contains older conflicting target language.
 - [Typed App Program And UI Proof Design](typed-app-program-and-ui-proof-design.md)
 - [Runenwerk Typed App Composition Plugin Framework Design](runenwerk-typed-app-composition-plugin-framework-design.md)
 - [Runenwerk Typed App Composition Plugin Framework Roadmap](runenwerk-typed-app-composition-plugin-framework-implementation-roadmap.md)
-- [Runenwerk UI Story Driven Golden Workflow Design](runenwerk-ui-story-driven-golden-workflow-design.md)
+- [Runenwerk UI Story V2 Consumer and Proof Boundary](runenwerk-ui-story-driven-golden-workflow-design.md)
 - [Semantic Graph IR and Compilation Design](semantic-graph-ir-and-compilation-design.md)

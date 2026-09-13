@@ -10,7 +10,7 @@ related_docs:
   - ../../domain/ui/roadmap.md
   - ../../reports/closeouts/pt-ui-component-platform-011-base-control-packages-closeout.md
   - ./ui-component-platform-generic-interaction-design.md
-  - ../active/ui-component-platform-ownership-realignment-design.md
+  - ../superseded/ui-component-platform-ownership-realignment-design.md
   - ./ui-component-platform-render-surface-output-design.md
 ---
 

@@ -1,30 +1,33 @@
 ---
-title: UI Component Platform Ownership Realignment Design
-description: Corrects the UI Component Platform rule so owning crates define reusable vocabulary and ui_controls exposes control-facing requirements.
-status: active
+title: Superseded UI Component Platform Ownership Realignment Design
+description: Historical owner-first correction plan for Component Platform vocabulary; current landed owner splits live in implemented Runenwerk-local contracts.
+status: superseded
 owner: ui
-layer: domain
-canonical: true
-last_reviewed: 2026-06-26
-related_designs:
+layer: history
+canonical: false
+last_reviewed: 2026-09-13
+replacement_docs:
   - ../implemented/ui-component-platform-layout-container-virtualization-design.md
   - ../implemented/ui-component-platform-accessibility-focus-inspection-design.md
   - ../implemented/ui-component-platform-theme-state-style-design.md
-related_docs:
+  - ../implemented/ui-component-platform-render-surface-output-design.md
   - ../../domain/ui/architecture.md
-  - ../../domain/ui/roadmap.md
-  - ../../workspace/planning/roadmap.md
 ---
 
-# UI Component Platform Ownership Realignment Design
+# Superseded UI Component Platform Ownership Realignment Design
 
 ## Status
 
-This is the planning and acceptance design for `PT-UI-COMPONENT-PLATFORM-009A`.
+Superseded historical correction record for `PT-UI-COMPONENT-PLATFORM-009A`.
 
-It is a correction pass before Phase 9 implementation. It stops the pattern where generic UI vocabulary is added directly to `ui_controls` just because `ui_controls` may legally depend on the owning crate.
+The durable rule from this plan remains valid in the current Runenwerk-local
+implementation: owning crates define reusable local vocabulary and `ui_controls`
+defines per-control requirements and summaries that reference those owners.
+Current implemented contracts and code/tests now own the landed split; this file
+no longer authorizes future Component Platform phases or reusable-framework work.
+Future reusable UI-framework semantics belong to standalone `dornglut/runen-ui`.
 
-## Decision
+## Historical decision
 
 Owning crates define reusable UI vocabulary and contracts. `ui_controls` defines per-control requirements and summaries that reference those contracts.
 
@@ -40,7 +43,7 @@ catalog/inspection exposes read-only summaries.
 runtime, renderer, apps, editor, and game execute behavior later.
 ```
 
-## Rule
+## Historical rule
 
 `ui_controls` must not become the source of truth for generic UI concepts when an owning crate exists.
 
@@ -73,9 +76,9 @@ generic renderer facts
 generic runtime behavior
 ```
 
-## Phase 5-8 classification
+## Historical Phase 5-8 classification
 
-The completed Phase 5-8 code is useful because it is declarative and read-only, but some vocabulary is in the wrong owner.
+The completed Phase 5-8 code was useful because it was declarative and read-only, but some vocabulary was in the wrong owner.
 
 ```text
 Phase 5 Input / Gesture / Device:
@@ -96,11 +99,11 @@ Phase 8 Accessibility / Focus / Inspection:
   keep ControlAccessibilityDescriptor as per-control requirements.
 ```
 
-## Phase 9 correction
+## Historical Phase 9 correction
 
-Do not implement Phase 9 as a broad `ui_controls/src/layout.rs` vocabulary owner.
+The plan rejected implementing Phase 9 as a broad `ui_controls/src/layout.rs` vocabulary owner.
 
-Correct implementation order:
+Its intended order was:
 
 ```text
 009B Layout Foundation:
@@ -112,11 +115,12 @@ Correct implementation order:
   add focused control-level tests.
 ```
 
-## Migration strategy
+That owner-first outcome is now represented by current implemented contracts and
+source rather than this planning record.
 
-Do not break the existing green phases in one large rewrite.
+## Historical migration strategy
 
-Use controlled migrations:
+The plan required controlled owner-first migration rather than a large rewrite:
 
 ```text
 1. Add owner-crate vocabulary first.
@@ -126,12 +130,9 @@ Use controlled migrations:
 5. Remove duplicated vocabulary only after tests prove compatibility.
 ```
 
-## Acceptance criteria
+## Supersession boundary
 
-This correction pass is complete when:
-
-- the ownership rule is recorded in a canonical active design;
-- the active roadmap no longer asks Phase 9 to implement layout vocabulary directly in `ui_controls`;
-- Phase 9 is split into owner-first layout foundation and control bridge follow-up;
-- completed Phase 5-8 work is classified as useful but needing later owner-crate vocabulary migration;
-- no Rust migration is attempted in this planning pass.
+Use current implemented Component Platform documents and code/tests for Runenwerk
+local truth. Do not reactivate the old numbered phase program from this file.
+This record does not establish standalone RunenUI adoption and does not authorize
+future reusable-framework targets inside Runenwerk.

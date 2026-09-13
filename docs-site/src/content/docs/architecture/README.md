@@ -13,7 +13,8 @@ last_reviewed: 2026-09-11
 This folder contains canonical top-down architecture spines.
 
 Start with the Runenwerk-wide platform spine, then follow the owning subsystem or
-framework architecture for the work at hand.
+integration architecture for the work at hand. Reusable framework semantics live
+with their owning framework repositories rather than being redefined here.
 
 ## Runenwerk-wide spine
 
@@ -31,7 +32,7 @@ Its durable decision basis is:
 ## Subsystem spines
 
 - [Framework Integration Architecture](./repository-family-architecture.md)
-- [Runenwerk UI Framework Architecture](./ui-framework-architecture.md)
+- [Runenwerk UI Local Runtime and Integration Architecture](./ui-framework-architecture.md)
 - [Live UiPlugin Runtime Platform Architecture](./live-uiplugin-runtime-platform-architecture.md)
 
 Active design documents may refine an owning subsystem or delivery slice, but they do

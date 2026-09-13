@@ -12,7 +12,7 @@ related_docs:
   - ../implemented/ui-program-architecture.md
   - ../implemented/ui-program-architecture-owner-map.md
   - ../implemented/ui-component-platform-base-control-packages-design.md
-  - ./ui-component-platform-ownership-realignment-design.md
+  - ../superseded/ui-component-platform-ownership-realignment-design.md
   - ../../workspace/engineering-workflow.md
   - ../../workspace/authority-model.md
   - ../../guidelines/domain-program-architecture-pattern.md

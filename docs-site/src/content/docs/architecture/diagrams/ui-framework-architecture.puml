@@ -1,18 +1,9 @@
 @startuml
-title Runenwerk UI Framework Architecture
+title Runenwerk UI Local Runtime and Integration Architecture
 
 skinparam packageStyle rectangle
 
-package "Authoring Frontends" {
-  [Rust UiBuilder]
-  [RON Templates]
-  [Visual Designer]
-  [Compiler DSL]
-  [Immediate Adapter]
-  [Reactive Adapter]
-}
-
-package "UI Source IR" {
+package "Runenwerk Authored UI" {
   [AuthoredUiTemplate]
   [UiNodeDefinition]
   [Source Maps]
@@ -23,82 +14,80 @@ package "Interaction Formation" {
   [FormedInteractionModel]
 }
 
-package "Semantic Program" {
+package "Current Local Execution" {
+  [Retained UI]
   [UiProgram]
-  [RouteId]
-  [UiEventPacket]
-}
-
-package "Runtime / Evaluation / Proof" {
   [UiCompiler]
   [UiRuntimeArtifact]
-  [UiEvaluator]
-  [UiStoryRunReport]
-  [Mount Eligibility]
+  [UiEvaluator / UiRuntimeView]
 }
 
-package "Host Adapters" {
-  [ECS App Host]
-  [Editor Host]
-  [Game HUD Host]
-  [Headless Host]
-  [World Space Host]
+package "Local Proof" {
+  [UiStoryManifestV2]
+  [Workflow Profile]
+  [UiStoryWorkflowReportV2]
+  [UiStoryMountDecisionV2]
 }
 
-package "Render / Projection Targets" {
-  [Backend-neutral UiFrame]
-  [Raster Renderer]
-  [SDF UI Target]
-  [Static Mount]
-  [SpatialCanvas]
-  [World-space Projection]
+package "Runenwerk Hosts" {
+  [engine::plugins::ui]
+  [Editor / App Host]
+  [Headless Proof]
 }
 
-[Rust UiBuilder] --> [AuthoredUiTemplate]
-[RON Templates] --> [AuthoredUiTemplate]
-[Visual Designer] --> [AuthoredUiTemplate]
-[Compiler DSL] --> [AuthoredUiTemplate]
-[Immediate Adapter] --> [AuthoredUiTemplate]
-[Reactive Adapter] --> [AuthoredUiTemplate]
+package "Derived Output" {
+  [UiFrame / Render Data]
+  [Engine Renderer]
+}
+
+cloud "Standalone RunenUI\nfuture reusable-framework authority" as RunenUI
 
 [AuthoredUiTemplate] --> [UiNodeDefinition]
 [AuthoredUiTemplate] --> [Source Maps]
 [AuthoredUiTemplate] --> [NormalizedUiTemplate]
 [UiNodeDefinition] --> [NormalizedUiTemplate]
-
 [NormalizedUiTemplate] --> [FormedInteractionModel]
-[FormedInteractionModel] --> [UiProgram]
-[UiProgram] --> [RouteId]
-[UiProgram] --> [UiEventPacket]
 
+[FormedInteractionModel] --> [Retained UI]
+[FormedInteractionModel] --> [UiProgram]
 [UiProgram] --> [UiCompiler]
 [UiCompiler] --> [UiRuntimeArtifact]
-[UiRuntimeArtifact] --> [UiEvaluator]
-[UiEvaluator] --> [UiStoryRunReport]
-[UiStoryRunReport] --> [Mount Eligibility]
+[UiRuntimeArtifact] --> [UiEvaluator / UiRuntimeView]
 
-[UiEventPacket] --> [ECS App Host]
-[UiEventPacket] --> [Editor Host]
-[UiEventPacket] --> [Game HUD Host]
-[UiEventPacket] --> [Headless Host]
-[UiEventPacket] --> [World Space Host]
+[UiStoryManifestV2] --> [Workflow Profile]
+[Workflow Profile] --> [UiStoryWorkflowReportV2]
+[UiStoryWorkflowReportV2] --> [UiStoryMountDecisionV2]
+[UiProgram] ..> [UiStoryWorkflowReportV2]
+[UiRuntimeArtifact] ..> [UiStoryWorkflowReportV2]
+[UiEvaluator / UiRuntimeView] ..> [UiStoryWorkflowReportV2]
 
-[UiEvaluator] --> [Backend-neutral UiFrame]
-[Backend-neutral UiFrame] --> [Raster Renderer]
-[Backend-neutral UiFrame] --> [SDF UI Target]
-[Backend-neutral UiFrame] --> [Static Mount]
-[Backend-neutral UiFrame] --> [SpatialCanvas]
-[Backend-neutral UiFrame] --> [World-space Projection]
+[Retained UI] --> [engine::plugins::ui]
+[UiEvaluator / UiRuntimeView] --> [engine::plugins::ui]
+[UiStoryMountDecisionV2] ..> [Editor / App Host]
+[UiStoryWorkflowReportV2] --> [Headless Proof]
+[engine::plugins::ui] --> [Editor / App Host]
 
-note right of [SDF UI Target]
-SDF is a target/backend.
-It does not own UI semantics,
-routes, source identity, or mutation.
+[Retained UI] --> [UiFrame / Render Data]
+[UiEvaluator / UiRuntimeView] --> [UiFrame / Render Data]
+[UiFrame / Render Data] --> [Engine Renderer]
+
+RunenUI ..> [engine::plugins::ui] : future explicit\nconsumer cutover only
+
+note right of RunenUI
+RunenUI owns future reusable
+framework semantics.
+Runenwerk does not mirror
+that roadmap locally.
 end note
 
-note bottom of [ECS App Host]
-Current ui_app_integration proof is ECS-hosted.
-It is not the final host-neutral app framework.
+note bottom of [Current Local Execution]
+Retained UI and UiProgram-era owners coexist.
+No total replacement is implied.
+end note
+
+note bottom of [Editor / App Host]
+Hosts own product mutation and effects.
+UI facts do not directly mutate app truth.
 end note
 
 @enduml

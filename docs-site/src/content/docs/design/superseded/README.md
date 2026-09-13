@@ -27,6 +27,7 @@ No superseded foundation design documents are currently tracked in this folder.
 - [Runenwerk UI Platform Capability Roadmap](runenwerk-ui-platform-capability-roadmap.md)
 - [UI Program Contract Design](ui-program-contract-design.md)
 - [UI Runtime Rendering Pipeline Roadmap](ui-runtime-rendering-pipeline-roadmap.md)
+- [UI Component Platform Ownership Realignment Design](ui-component-platform-ownership-realignment-design.md)
 
 ### Engine Runtime
 
