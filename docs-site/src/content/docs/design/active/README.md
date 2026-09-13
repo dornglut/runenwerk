@@ -65,8 +65,6 @@ spines win when an active design contains older conflicting target language.
 
 ### Repository Family Extraction
 
-- [RunenSDF Extraction Design](runensdf-extraction-design.md)
-- [RunenSDF Repository Identity Decision](runensdf-repository-identity-decision.md)
 - [RunenGPU Architecture Design](runengpu-architecture-design.md)
 - [RunenGPU G3 Access and Work Graph Design](runengpu-g3-access-work-graph-design.md)
 - [RunenGPU G3R Definite Initialization Semantics Correction](runengpu-g3r-definite-initialization-correction.md)
