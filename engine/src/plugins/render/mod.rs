@@ -66,6 +66,9 @@ pub use material_compiler::*;
 pub use params::*;
 pub use plugin::RenderPlugin;
 pub use procedural::*;
+pub use render_result::{
+    RenderResult, RenderResultObjectRepresentation, RenderResultOutputEvidence,
+};
 pub use renderer::{Gfx, GfxFrameTimings, RenderFrameDataRegistry, Renderer, RendererFrameTimings};
 pub use residency::*;
 pub use resource::*;

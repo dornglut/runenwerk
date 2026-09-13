@@ -34,17 +34,17 @@ impl RenderDeterministicOutputFormationEvidence {
 /// Physical bindings, GPU execution evidence, readback identities, and output bytes deliberately do
 /// not participate in this semantic result evidence.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct RenderResultObjectRepresentation {
+pub struct RenderResultObjectRepresentation {
     object_id: RenderObjectId,
     representation: RenderApplicableRepresentationUse,
 }
 
 impl RenderResultObjectRepresentation {
-    pub(crate) const fn object_id(&self) -> RenderObjectId {
+    pub const fn object_id(&self) -> RenderObjectId {
         self.object_id
     }
 
-    pub(crate) const fn representation(&self) -> RenderApplicableRepresentationUse {
+    pub const fn representation(&self) -> RenderApplicableRepresentationUse {
         self.representation
     }
 }
@@ -55,22 +55,22 @@ impl RenderResultObjectRepresentation {
 /// the exact immutable `RenderRequest`, so callers derive that relation through the requested output
 /// at `output_index`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct RenderResultOutputEvidence {
+pub struct RenderResultOutputEvidence {
     output_index: usize,
     approximation: RenderOutputApproximation,
     object_representations: Vec<RenderResultObjectRepresentation>,
 }
 
 impl RenderResultOutputEvidence {
-    pub(crate) const fn output_index(&self) -> usize {
+    pub const fn output_index(&self) -> usize {
         self.output_index
     }
 
-    pub(crate) const fn approximation(&self) -> RenderOutputApproximation {
+    pub const fn approximation(&self) -> RenderOutputApproximation {
         self.approximation
     }
 
-    pub(crate) fn object_representations(&self) -> &[RenderResultObjectRepresentation] {
+    pub fn object_representations(&self) -> &[RenderResultObjectRepresentation] {
         &self.object_representations
     }
 }
@@ -82,7 +82,7 @@ impl RenderResultOutputEvidence {
 /// only immutable semantic provenance projected from the exact admitted plan that produced the work,
 /// including the exact selected request-scoped semantic surface inputs once at result level.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct RenderResult {
+pub struct RenderResult {
     scene: RenderSceneSnapshot,
     request: RenderRequest,
     method_id: RenderMethodId,
@@ -188,27 +188,27 @@ impl RenderResult {
         })
     }
 
-    pub(crate) const fn scene_revision(&self) -> RenderSceneRevision {
+    pub const fn scene_revision(&self) -> RenderSceneRevision {
         self.scene.revision()
     }
 
-    pub(crate) const fn scene(&self) -> &RenderSceneSnapshot {
+    pub const fn scene(&self) -> &RenderSceneSnapshot {
         &self.scene
     }
 
-    pub(crate) const fn request(&self) -> &RenderRequest {
+    pub const fn request(&self) -> &RenderRequest {
         &self.request
     }
 
-    pub(crate) const fn method_id(&self) -> RenderMethodId {
+    pub const fn method_id(&self) -> RenderMethodId {
         self.method_id
     }
 
-    pub(crate) fn surface_semantic_inputs(&self) -> &[RenderSurfaceSemanticInputBinding] {
+    pub fn surface_semantic_inputs(&self) -> &[RenderSurfaceSemanticInputBinding] {
         &self.surface_semantic_inputs
     }
 
-    pub(crate) fn outputs(&self) -> &[RenderResultOutputEvidence] {
+    pub fn outputs(&self) -> &[RenderResultOutputEvidence] {
         &self.outputs
     }
 }
