@@ -5,15 +5,12 @@ status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-09-01
+last_reviewed: 2026-09-13
 related_designs:
   - ../design/active/net-authoritative-replication-protocol.md
-  - ../design/active/net-prediction-reconciliation-boundary.md
   - ../design/active/net-plugin-runtime-bridge.md
   - ../design/active/ecs-net-replication-boundary.md
-  - ../design/active/net-interest-streaming-design.md
   - ../design/active/net-reconnect-history-recovery.md
-  - ../design/active/net-declarative-replication-authoring.md
   - ../design/active/net-transport-lanes-delivery.md
   - ../design/active/net-diagnostics-inspection.md
 related_reports:

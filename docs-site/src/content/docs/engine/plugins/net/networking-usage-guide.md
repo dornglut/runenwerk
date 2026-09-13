@@ -1,30 +1,33 @@
 ---
 title: "Networking Usage Guide"
-description: "Documentation for Networking Usage Guide."
+description: "Current guide for the retained low-level Runenwerk networking migration surface."
 status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-05
+last_reviewed: 2026-09-13
 ---
 
 # Networking Usage Guide
 
-## 1) Import the Canonical API
+This guide documents the **retained low-level RN8 migration surface** that still has maintained Runenwerk consumers. It is not authority for the future ordinary multiplayer authoring syntax. Current ownership and migration constraints are defined by the Runenwerk networking architecture and multiplayer replication roadmap.
+
+## 1) Import the Current Engine Surface
 
 ```rust
 use engine::net::prelude::*;
 ```
 
-This provides:
+This provides the current engine-facing integration surface, including:
 
-- `#[net_component]`
-- `#[net_entity]`
-- protocol/session/runtime contracts
-- `NetPlugin`
-- `NetRole`
+- retained `#[net_component]` and `#[net_entity]` metadata macros;
+- retained replication/input/protocol-payload contracts from `engine_net`;
+- `NetPlugin`;
+- `NetRole`.
 
-## 2) Declare Replicated Types
+Connection/session lifecycle authority is not provided by `engine_net`; standalone RunenNet owns that boundary.
+
+## 2) Retained Replication Metadata
 
 ```rust
 use engine::net::prelude::*;
@@ -45,26 +48,23 @@ pub struct PlayerState {
 }
 ```
 
-Current status: declarations generate replication metadata. They do not
-yet generate the complete snapshot extraction, delta generation, or ECS
-apply path.
+These declarations currently generate replication metadata. They do not generate the complete snapshot extraction, delta generation, ECS apply path, or a future Replicated View authoring API.
 
-## 3) Implement a Driver
+The macros are migration-surface implementation, not a promise that per-component registration remains the final ordinary authoring model.
 
-Implement:
+## 3) Implement the Retained Driver Boundary
 
-- `ReplicationDriver`
-- `SnapshotApplyDriver`
-- `InputDriver`
+Current maintained consumers use:
 
-`InputDriver::receive_remote_input` receives `ConnectionId`, so
-authoritative gameplay can map input to sender identity.
+- `ReplicationDriver`;
+- `SnapshotApplyDriver`;
+- `InputDriver`.
 
-This is currently required for real gameplay integration. The long-term
-design keeps driver traits as an escape hatch while adding a lower
-boilerplate declarative path later.
+`InputDriver::receive_remote_input` receives RunenNet `ConnectionHandle`, so authoritative gameplay/integration code can preserve the already-authorized connection lineage.
 
-## 4) Install a Single Net Plugin
+These driver traits are the retained low-level path and remain useful for specialized representations. The future common-path authoring API is intentionally not defined by this guide.
+
+## 4) Install the Net Plugin
 
 ```rust
 app.add_plugins(NetPlugin::<MyDriver>::new(NetRole::Client));
@@ -72,26 +72,29 @@ app.add_plugins(NetPlugin::<MyDriver>::new(NetRole::Client));
 
 or `NetRole::Server` / `NetRole::Host`.
 
-## 5) Runtime Handle Wiring
+`NetPlugin` owns engine schedule placement and retained replication/prediction integration. It does not become the owner of reusable RunenNet session, delivery, recovery, or prediction semantics.
 
-Insert `NetworkRuntimeHandle` once startup networking runtime is
-available. The plugin handles:
+## 5) Session and Runtime Boundary
 
-- runtime event intake
-- inbox/outbox processing
-- targeted server dispatch
-- per-connection baseline replication
-- client ack + prediction replay
+There is no `NetworkRuntimeHandle` session bridge in the current architecture.
 
-## 6) Multi-Client Semantics
+Standalone RunenNet Core owns compatibility negotiation, session membership, connection binding/loss/retention/replacement/expiry, and closure. Runenwerk projects already-authorized bindings into engine integration and uses engine inbox/outbox work queues for retained replication/application payloads.
 
-Server replication is computed per connection, not globally:
+Those engine work queues are staging, not a replacement transport or delivery-acceptance runtime. Concrete transport realization is added only where a maintained product consumer requires it.
 
-- independent ack/baseline cursors per `ConnectionId`
-- targeted snapshot/delta delivery
-- delta fallback to full resync only for the affected connection
+## 6) Multi-Connection Semantics
 
-Related designs:
+Retained server replication is computed per RunenNet `ConnectionHandle`, not globally:
 
-- [../../../design/active/net-plugin-runtime-bridge.md](../../../design/active/net-plugin-runtime-bridge.md)
-- [../../../design/active/net-declarative-replication-authoring.md](../../../design/active/net-declarative-replication-authoring.md)
+- independent ACK/baseline cursors per authorized connection;
+- targeted snapshot/delta staging;
+- delta fallback to full resync only for the affected connection.
+
+## Current Authority
+
+- [Runenwerk networking architecture](../../../net/net-architecture.md)
+- [Engine net integration design](../../../design/active/net-plugin-runtime-bridge.md)
+- [ECS/net replication boundary](../../../design/active/ecs-net-replication-boundary.md)
+- [Multiplayer replication implementation roadmap](../../../net/multiplayer-replication-implementation-roadmap.md)
+
+The former component-registration authoring target and pre-RunenNet prediction/interest target designs are archived historical evidence and must not be used as current implementation or future-authoring authority.

@@ -51,11 +51,8 @@ spines win when an active design contains older conflicting target language.
 
 - [ECS Net Replication Boundary](ecs-net-replication-boundary.md)
 - [Net Authoritative Replication Protocol](net-authoritative-replication-protocol.md)
-- [Net Declarative Replication Authoring](net-declarative-replication-authoring.md)
 - [Net Diagnostics Inspection](net-diagnostics-inspection.md)
-- [Net Interest Streaming Design](net-interest-streaming-design.md)
 - [Net Plugin Runtime Bridge](net-plugin-runtime-bridge.md)
-- [Net Prediction Reconciliation Boundary](net-prediction-reconciliation-boundary.md)
 - [Net Reconnect History Recovery](net-reconnect-history-recovery.md)
 - [Net Transport Lanes Delivery](net-transport-lanes-delivery.md)
 

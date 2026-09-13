@@ -1,16 +1,34 @@
 ---
 title: "Net Declarative Replication Authoring Design"
-description: "Design for macro-based replication metadata and future low-boilerplate gameplay authoring."
-status: active
+description: "Historical pre-RN8 component-registration authoring target retained as migration and implementation evidence."
+status: archived
 owner: net
 layer: net
-canonical: true
-last_reviewed: 2026-05-05
-related_roadmaps:
+canonical: false
+last_reviewed: 2026-09-13
+related:
+  - ../../net/net-architecture.md
   - ../../net/multiplayer-replication-implementation-roadmap.md
 ---
 
 # Net Declarative Replication Authoring Design
+
+## Archive disposition
+
+This document records the former component-registration authoring target around
+`#[net_entity]`, `#[net_component(...)]`, and retained `engine_net` metadata.
+It is not current networking architecture and must not be used to infer the future
+ordinary multiplayer authoring syntax.
+
+The macros described below still exist as migration-surface implementation evidence,
+but current Runenwerk networking authority treats retained `engine_net` and
+`engine_net_macros` as deletion-bound RN8 residue. Current integration ownership is
+recorded by the [Runenwerk networking architecture](../../net/net-architecture.md) and
+the [multiplayer replication roadmap](../../net/multiplayer-replication-implementation-roadmap.md).
+The future common authoring path remains gated by accepted RunenECS/RunenNet integration
+evidence; this archive does not reactivate or freeze per-component registration syntax.
+
+The historical body below is retained for provenance.
 
 ## Purpose
 

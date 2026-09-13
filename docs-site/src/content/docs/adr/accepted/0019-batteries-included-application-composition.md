@@ -5,7 +5,7 @@ status: accepted
 owner: workspace
 layer: architecture
 canonical: true
-last_reviewed: 2026-08-12
+last_reviewed: 2026-09-13
 related_adrs:
   - ./0014-repository-family-extraction-boundaries.md
   - ./0017-cross-authority-consistency-and-graph-semantics.md
@@ -13,7 +13,7 @@ related_adrs:
 related_docs:
   - ../../architecture/repository-family-architecture.md
   - ../../design/active/runenwerk-domain-workbench-north-star.md
-  - ../../design/active/net-declarative-replication-authoring.md
+  - ../../net/net-architecture.md
   - ../../design/active/net-plugin-runtime-bridge.md
   - ../../net/multiplayer-replication-implementation-roadmap.md
   - ../../reports/investigations/2026-08-12-application-composition-and-networking-ergonomics.md
@@ -238,7 +238,7 @@ product would otherwise reproduce, such as:
 standard owner-plugin combination/order
 routine cross-framework adapters
 network role -> simulation/world authority integration
-standard registered ECS replication extraction/application once implemented
+standard ECS-to-network projection/extraction/application once accepted and implemented
 common product lifecycle wiring
 ```
 
@@ -356,25 +356,33 @@ real pressure, those concerns require a separate dependency/feature-topology des
 
 ## Built-in Runen networking
 
-Runenwerk preserves its existing custom networking architecture.
+Runenwerk preserves Runen-owned game-network product and integration semantics while
+consuming standalone RunenNet as the reusable realtime networking authority.
 
 The product-level law is:
 
-> **Built-in Runen networking means Runen owns the game-network semantic contracts and
-> supplies a low-boilerplate ordinary path for supported gameplay cases. It does not
-> mean Runen must reimplement transport, TLS/crypto, or OS networking primitives.**
+> **Built-in Runen networking means Runen supplies owned game-network semantics and a
+> low-boilerplate ordinary path for supported gameplay cases. It does not mean Runenwerk
+> duplicates standalone RunenNet authority or reimplements transport, TLS/crypto, or OS
+> networking primitives.**
 
-Runen-owned networking semantics include, according to their current owners:
+Current ownership is split deliberately:
 
 ```text
-authoritative session and replication contracts
-snapshots / deltas / ACK / baseline / resynchronization
-prediction / correction / reconciliation
-interest and streaming integration
-simulation / history / replay integration
-diagnostics and inspection
-typed/declarative component/entity/input/protocol authoring
-product-level client/server/host role composition
+RunenNet
+  connection/session identity and authority lifecycle
+  delivery/resource-pressure/recovery semantics
+  protocol/schema identity and negotiation
+  authoritative replication consistency
+  participant-input prediction and authoritative reconciliation
+
+Runenwerk/application integration
+  ECS/game/world mapping and policy
+  product/client/server/host composition
+  scheduling and engine integration
+  presentation/interpolation policy
+  diagnostics presentation
+  ordinary developer authoring integration
 ```
 
 Contained realizations may own lower-level mechanics such as:
@@ -386,27 +394,33 @@ OS networking backend behavior
 future transport adapters
 ```
 
-The current Quinn-based `engine_net_quic` realization does not make Quinn the owner of
-Runen replication semantics.
+Use of a concrete adapter such as `runen-net-quic` does not transfer RunenNet semantic
+ownership to that adapter or back into Runenwerk.
 
 ## Ordinary networking path
 
-The accepted declarative networking direction remains the normal target:
+The durable product requirement is a low-boilerplate ordinary multiplayer path. This
+ADR deliberately does **not** fix its concrete Rust authoring syntax.
+
+The ordinary path must preserve these ownership laws:
 
 ```text
-mark/register replicated entities and components
-register input streams and ownership routing
-write ordinary authoritative ECS/game systems
-Runen integration handles standard extraction/snapshots/deltas/apply/ACK/replay plumbing
+ECS storage/layout != network-visible contract
+application gameplay semantics remain explicit
+network-visible state/schema is explicit and versioned
+mechanical projection/adaptation may be generated where proven safe
+RunenNet owns reusable replication/delivery/recovery/prediction semantics
+Runenwerk owns concrete ECS/game/product integration
 ```
 
-At the evidence baseline this path is incomplete: declarative macros primarily provide
-metadata, and ordinary gameplay still often requires a custom `ReplicationDriver`.
+Current retained `engine_net` metadata macros and driver traits are migration-surface
+implementation facts, not a promise that per-component registration is the final normal
+path. The exact common-path authoring shape remains gated by current RunenECS public
+contracts, RunenNet authority, and concrete Runenwerk integration evidence.
 
-That gap is already owned by the networking design and implementation roadmap. In
-particular, standard ECS component extraction/application and the later public usage
-path must complete before documentation can claim custom-driver-free ordinary
-multiplayer authoring.
+That gap is owned by the current networking architecture and implementation roadmap.
+Documentation must not claim custom-driver-free ordinary multiplayer authoring until it
+is actually accepted and implemented.
 
 This ADR does not implement or duplicate that roadmap.
 
@@ -500,8 +514,8 @@ product paths.
 
 ### Multiplayer client/server
 
-- a normal registered ECS component/input path should eventually require no custom
-  replication driver or transport glue;
+- a normal ECS/network authoring path should eventually require no custom replication
+  driver or transport glue for supported common cases;
 - application protocol and game semantics remain explicit;
 - custom drivers remain available for specialized representations.
 
@@ -617,8 +631,9 @@ and already owns substantial behavior.
 - Product-specific behavior remains visible instead of disappearing into one giant
   default stack.
 - Dedicated servers and tools can have intentionally different product compositions.
-- Existing networking architecture remains custom Runen technology while the ordinary
-  ECS authoring path is expected to become substantially less boilerplate.
+- Standalone RunenNet remains the reusable realtime networking authority while Runenwerk
+  owns product/ECS/game integration and keeps the ordinary authoring path deliberately
+  low-boilerplate without freezing its syntax prematurely.
 - Managed backend integrations remain available as future product work without being
   conflated with game replication.
 - App builtin-resource cleanup and compile-time modularity remain separate future work.
@@ -660,7 +675,7 @@ Implementation remains separately gated. In particular:
 
 - exact product-group API design requires current-source implementation proof;
 - moving `App` builtin resources requires a separate ownership/cutover review;
-- declarative networking implementation remains governed by the existing networking
-  design and roadmap;
+- ordinary networking authoring/integration remains governed by the current networking
+  architecture and roadmap; this ADR does not freeze its concrete syntax;
 - compile-time feature/dependency topology requires separate evidence;
 - managed backend integrations require separate product/provider designs.
