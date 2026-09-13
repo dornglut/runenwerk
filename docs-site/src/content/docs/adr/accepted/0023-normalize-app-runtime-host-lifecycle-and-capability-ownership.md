@@ -1,6 +1,6 @@
 ---
 title: Normalize App Runtime, Host, Lifecycle, and Capability Ownership
-description: Durable application-runtime ownership laws separating Runenwerk App composition, runtime container state, host realization, advancement policy, lifecycle occurrences, and owner capability state.
+description: Durable application-runtime ownership laws separating Runenwerk App composition, contained owner runtimes, host realization, advancement policy, lifecycle occurrences, and owner capability state.
 status: accepted
 owner: engine
 layer: architecture
@@ -27,14 +27,14 @@ accepted a target discipline: bare App construction should own only genuine
 application-runtime invariants and cheap state required across supported App modes.
 Capability/domain/product state should normally be installed by its owner.
 
-That target was intentionally not implemented or fully classified by ADR 0019.
+That target was intentionally not fully classified or implemented by ADR 0019.
 Current source still mixes several independent concerns in App construction and
 execution:
 
-- runtime container state (`World`, RunenECS `Runtime`);
-- application lifecycle state;
+- the current RunenECS `World` and `Runtime` integration;
+- Runenwerk App lifecycle state;
 - native-window/Winit host policy;
-- bounded headless runner policy;
+- bounded runner policy;
 - fixed-step cadence and simulation identity;
 - timing/input/scene/UI/gameplay state;
 - product/query publication state;
@@ -43,20 +43,20 @@ execution:
 
 Current `AppMode` and `AppRunner` also do not form one coherent semantic axis:
 windowed execution is owned by the Winit path, while `run_for_frames` and
-`run_for_ticks` use the headless runner path independently of the stored mode.
+`run_for_ticks` use the bounded/headless runner path independently of the stored mode.
 
-The defect is not merely that too many resources are installed in one function. The
-current shape conflates **application composition, runtime containment, host
-realization, advancement policy, lifecycle occurrences, and owner capability state**.
-Moving resources mechanically would preserve the ambiguity.
+The defect is therefore not merely that too many resources are initialized by one
+function. The current shape conflates **application composition, integration/runtime
+containment, host realization, advancement policy, lifecycle occurrences, and owner
+capability state**. Moving resources mechanically would preserve that ambiguity.
 
-ADR 0022 independently proves the same ownership principle for product/query
+ADR 0022 independently demonstrates the same ownership principle for product/query
 publication: Runenwerk may own an application lifecycle occurrence without thereby
 owning the semantic state that participating domains publish at that occurrence.
 
 This ADR establishes the missing durable model beneath ADR 0019. The detailed
-current-source classification and implementation pressure are recorded in the
-companion accepted semantic-model design.
+current-source census, disposition matrix, and future implementation fitness tests live
+in the companion accepted semantic-model design.
 
 ## Decision
 
@@ -68,9 +68,9 @@ Runenwerk uses exactly one live application/runtime composition root:
 App
 ```
 
-`App` owns the assembly and execution of one Runenwerk runtime instance. It does not
-become a semantic super-domain merely because owner plugins/resources/systems are
-installed through it.
+`App` owns the assembly and Runenwerk integration of one application runtime instance.
+It does not become a semantic super-domain merely because owner runtimes,
+plugins/resources/systems, or adapters are reached through it.
 
 Rejected as parallel live authority:
 
@@ -95,15 +95,15 @@ Runenwerk normalizes application runtime around five distinct dimensions:
 Application Composition
     selected owners/capabilities/product behavior and configuration
 
-Runtime Container
-    live World + RunenECS Runtime + genuine App lifecycle state
+Integration / Runtime Container
+    Runenwerk lifecycle/integration state plus contained owner runtimes/adapters
 
 Host
     environment realization: native-window/event-loop, headless process,
     or another separately proven host
 
 Advancement Policy
-    how the runtime is driven: host/event-driven, bounded frames,
+    how execution opportunities are supplied: host/event-driven, bounded frames,
     bounded fixed-step proof, or another separately accepted driver
 
 Owner Capability State
@@ -118,20 +118,39 @@ In particular:
 host != advancement policy
 lifecycle occurrence != domain state
 composition root != semantic ownership
+containment != semantic ownership
 resource presence != capability authority
 schedule position != domain ownership
 ```
 
-### 3. Bare App state requires universal-invariant proof
+### 3. Contained owner runtimes do not become App semantics
 
-A state item may be installed by bare App construction only when **all** of these are
-true:
+The current `App` mechanically contains a RunenECS `World` and `Runtime`. Their ECS
+semantics remain owned by RunenECS.
+
+Runenwerk owns the application integration that stores/invokes them at Runenwerk-owned
+lifecycle points. This ADR does **not** promote ECS into a universal Runen semantic
+ontology, and it does not decide that every conceivable future Runenwerk host/product
+must forever require RunenECS.
+
+Equally, this ADR does not authorize removing the current RunenECS integration. A change
+to that structural dependency would require independent consumer and architecture proof.
+
+The general law is:
+
+> **`App` may contain or invoke an owner runtime without acquiring the owner's semantic
+> invariants.**
+
+### 4. Bare App-owned runtime state requires universal-invariant proof
+
+A state item may be owned and installed as **bare App-owned runtime state** only when all
+of these are true:
 
 1. Runenwerk application/runtime semantics own the invariant.
-2. Every valid supported App host/runtime requires it.
+2. Every currently supported App host/runtime path that claims the state requires it.
 3. It remains meaningful when every optional domain/product capability is absent.
-4. Its absence would make the App runtime itself invalid rather than merely disable a
-   capability.
+4. Its absence would make the relevant App runtime itself invalid rather than merely
+   disable one capability.
 5. Installing it does not manufacture foreign semantic authority or a fake host or
    capability.
 6. Universal installation has independently acceptable cost.
@@ -139,10 +158,14 @@ true:
 Convenience, historical placement, a broad prelude, or a current consumer that assumes
 the resource exists are not evidence for bare-App ownership.
 
-When this test fails, the state belongs to its owner plugin, host integration, product,
-or another explicit integration capability.
+This qualification rule applies to App-owned **runtime state**, not to host-neutral
+pre-run application configuration/metadata and not to explicitly contained
+foreign-owner runtimes whose semantics remain with their owner.
 
-### 4. Composition is explicit pre-run assembly
+When App-owned runtime state fails the test, it belongs to an owner capability/plugin,
+host integration, product, or another explicit integration capability.
+
+### 5. Composition is explicit pre-run assembly
 
 The ordinary application model is:
 
@@ -150,7 +173,7 @@ The ordinary application model is:
 construct App
 -> install/configure owner capabilities and product behavior
 -> admit/finalize composition
--> prepare host/runtime
+-> prepare selected host/runtime integration
 -> start
 -> run
 ```
@@ -166,26 +189,26 @@ Illegal duplicate/incompatible capability selection must reject explicitly. Mult
 instances are allowed only where the owner contract actually defines multiple-instance
 semantics.
 
-### 5. A plugin installs capability integration; it is not semantic authority
+### 6. A plugin installs capability integration; it is not semantic authority
 
 A Runenwerk `Plugin` is a composition/install mechanism over `App`.
 
 The semantic owner of a capability remains the domain/framework/product that defines its
 invariants. A plugin representing that capability must install/configure the state,
 systems, and adapters the capability requires unless a dependency is independently
-proven to be App-core.
+proven to be App-owned core integration state or another explicit owner supplies it.
 
 A nominal plugin must not coexist indefinitely with globally pre-activated state that
 already makes the plugin's capability present. Such cases require a clean disposition:
-make the plugin the real activator/owner, or remove the meaningless plugin boundary when
-the capability is genuinely universal App lifecycle.
+make the plugin the real activator/installer, or remove the meaningless plugin boundary
+when the capability is genuinely universal Runenwerk application lifecycle.
 
-### 6. Host realization is not App-domain state
+### 7. Host realization is not universal App state
 
 A Host adapts the runtime to an execution environment.
 
-The native-window host owns Runenwerk's Winit/event-loop integration, including as
-applicable:
+The current native-window host owns Runenwerk's Winit/event-loop integration, including
+as applicable:
 
 ```text
 native window lifecycle
@@ -193,27 +216,32 @@ window creation/destruction
 platform/window event delivery
 Winit ControlFlow
 redraw policy
-frame pacing
+current event-loop frame-pacing realization
 native-window hooks
 surface-host integration
 ```
 
-These are Runenwerk-owned integration semantics, but they are **not universal App
-state**.
+These are Runenwerk-owned integration semantics, but they are **not universal App-owned
+runtime state**.
 
 A headless host must not require synthetic native-window state, a native-window registry,
-Winit `ControlFlow`, native-window hooks, or redraw/frame-pacing state merely to satisfy a
-window-shaped API.
+Winit `ControlFlow`, native-window hooks, or redraw/event-loop-pacing state merely to
+satisfy a window-shaped API.
 
-Application metadata such as a product title may remain application configuration; a
+Application metadata such as a title may remain host-neutral pre-run configuration; a
 window host may project it into native-window state.
 
 Winit is a contained host realization, not the normalized App semantic model.
 
-### 7. Advancement policy is orthogonal to host
+This decision classifies the **current** frame-pacing resources according to their
+actual Winit/event-loop use. If a future headless or cross-host throttling policy is
+proven, that generic pacing concern belongs with Advancement Policy rather than being
+silently generalized from the native host implementation.
 
-Host answers **where/how the runtime is hosted**. Advancement policy answers **how the
-runtime is advanced**.
+### 8. Advancement policy is orthogonal to host
+
+Host answers **where/how the runtime is hosted**. Advancement Policy answers **how
+execution opportunities are supplied or bounded**.
 
 These must not be encoded as one mode axis.
 
@@ -228,7 +256,7 @@ must preserve the semantic split.
 A proof/test driver must not implement bounded execution by pretending a windowed host
 became a headless window state.
 
-### 8. App lifecycle and owner lifecycle are distinct
+### 9. App lifecycle and owner lifecycle are distinct
 
 The normalized conceptual App lifecycle is:
 
@@ -250,7 +278,8 @@ Required laws:
 - the App Startup schedule executes at most once for one runtime instance;
 - runtime lifecycle occurrences happen only while the runtime is in an appropriate
   running transition;
-- termination is explicit even when a concrete host does not return normally;
+- terminal state is explicit conceptually even when a concrete event loop does not
+  return normally;
 - this ADR does not create a universal lifecycle event bus or require a new `Shutdown`
   ECS schedule.
 
@@ -258,12 +287,12 @@ Owner-specific readiness/state machines remain separate. A renderer warm-up/read
 state named `StartupState`, for example, is not App Startup lifecycle merely because of
 its name.
 
-### 9. Lifecycle occurrence does not acquire foreign semantic authority
+### 10. Lifecycle occurrence does not acquire foreign semantic authority
 
-Runenwerk owns application integration/lifecycle points where already accepted, including
-frame/fixed/render integration and ADR 0022 publication occurrences.
+Runenwerk owns application integration/lifecycle points where already accepted,
+including frame/fixed/render integration and ADR 0022 publication occurrences.
 
-That ownership does not make state observed or advanced there Runenwerk App-core state.
+That ownership does not make state observed or advanced there Runenwerk App-owned state.
 
 Normative examples:
 
@@ -284,7 +313,7 @@ Runenwerk ProductPublication occurrence
 Owner adapters/plugins translate an application lifecycle occurrence into owner-specific
 state transitions where required.
 
-### 10. Fixed cadence and simulation identity are separate
+### 11. Fixed cadence and simulation identity are separate
 
 Runenwerk owns application fixed-step lifecycle/cadence and invocation of the accepted
 `FixedUpdate` application lifecycle position.
@@ -304,22 +333,22 @@ Runenwerk fixed-step cadence / occurrence
 
 This ADR deliberately does not choose the final Rust representation of fixed cadence.
 A later implementation must decide whether the current `FixedStepPlugin` becomes the
-real activator of optional fixed-step machinery or disappears because the fixed cadence
-is proven universal App lifecycle. It may not remain a nominal plugin duplicating
+real activator of optional fixed-step machinery or disappears because fixed cadence is
+proven universal Runenwerk App lifecycle. It may not remain a nominal plugin duplicating
 already-active global state.
 
-### 11. Host progression and `Time` resource authority are separate
+### 12. Host progression and `Time` resource authority are separate
 
-The Host/Advancement Policy determines when runtime occurrences happen.
+Host/Advancement Policy determines when runtime occurrences happen.
 
 A `Time` resource exposed to systems is a runtime timing projection/service. It does not
 become the authority over host progression merely because systems read it.
 
 If `TimePlugin` remains, it must truthfully own the resource/system behavior it exposes,
-unless a later classification independently proves the `Time` state satisfies the
-universal App-core test.
+unless a later classification independently proves a minimal timing state satisfies the
+App-owned runtime-state qualification rule.
 
-### 12. Input remains separately owned and separately repaired
+### 13. Input remains separately owned and separately repaired
 
 The completed RunenInput I0 investigation concluded `INTERNAL_BOUNDARY_REPAIR_FIRST`.
 This ADR preserves that result.
@@ -329,9 +358,9 @@ device facts, application action mapping, and RunenUI interaction semantics rema
 separate ownership questions.
 
 This ADR does not authorize a `RunenInput` repository/API or declare today's mixed
-`InputState` to be App-core.
+`InputState` to be App-owned core state.
 
-### 13. Publication and product-job semantics keep their accepted owners
+### 14. Publication and product-job semantics keep their accepted owners
 
 ADR 0022 remains authoritative for `ProductPublication` and
 `QuerySnapshotPublication` lifecycle semantics. The Execution Fabric and Product Jobs
@@ -344,7 +373,7 @@ them.
 
 This ADR must not interfere with the active ADR-0022 implementation cutover.
 
-### 14. One App root does not require one giant inherent API
+### 15. One App root does not require one giant inherent API
 
 Capability-specific authoring may use owner-specific extension APIs over the same App
 root.
@@ -353,7 +382,7 @@ Directionally:
 
 ```text
 App core API
-    composition/runtime-container/lifecycle primitives
+    composition / application-integration / lifecycle primitives
 
 owner App extensions
     scene authoring/configuration
@@ -370,11 +399,12 @@ Moving capability-specific operations out of inherent `App` methods does not cre
 second runtime. It narrows the semantic surface while preserving ergonomic progressive
 disclosure.
 
-### 15. Effective composition may be inspected, but inspection is derived state
+### 16. Effective composition may be inspected, but inspection is derived state
 
 Runenwerk may expose a read-oriented effective-composition projection containing facts
 such as selected plugins/groups, deterministic installation order, owner configuration
-identity where meaningful, and rejected/incompatible selections.
+identity where meaningful, host/advancement selection, and rejected/incompatible
+selections.
 
 That projection is diagnostics/tooling evidence, not a mutable semantic registry. It
 must derive from the actual composition path and must not become a second source of
@@ -382,9 +412,13 @@ runtime truth.
 
 ## Consequences
 
-Bare App construction becomes intentionally smaller and more stable. Optional domains
-and product capabilities become absent by default unless selected through their owner or
-a transparent product composition recipe.
+Bare App-owned runtime state becomes intentionally smaller and more stable. Optional
+domains and product capabilities become absent by default unless selected through their
+owner or a transparent product composition recipe.
+
+Containment becomes explicit: `App` can host/invoke an owner runtime without claiming
+its semantics. In particular, this decision does not turn RunenECS into a universal
+Runen ontology merely because current App contains `World` and `Runtime`.
 
 Headless applications stop carrying native-window-shaped sentinel state merely because
 windowed execution exists elsewhere.
@@ -410,7 +444,7 @@ Issue #281 owns the unresolved Runen semantic Plan/programming architecture.
 This ADR neither accepts nor rejects that Plan direction. If Plan is accepted later, an
 application Plan may lower into the ordinary `App` composition/runtime root as already
 allowed by ADR 0019. It must not become a second live App runtime or override these host,
-lifecycle, and owner-state boundaries.
+lifecycle, containment, and owner-state boundaries.
 
 ## External pressure
 
@@ -431,16 +465,21 @@ Rejected. Current placement includes scene, UI/gameplay, simulation, publication
 product-job, input, and native-window state whose owners are not universal App semantics.
 Documentation cannot turn incidental bootstrap placement into authority.
 
+### Treat contained owner runtimes as App semantic authority
+
+Rejected. App integration may host or invoke an owner runtime, but ownership stays with
+the owner. Containment is not a semantic transfer mechanism.
+
 ### Move each resource to a nearby plugin without a semantic model
 
 Rejected. This would preserve deeper conflations such as fixed cadence versus simulation
-tick, host versus runner, and product readiness versus App Startup lifecycle.
+tick, host versus advancement, and product readiness versus App Startup lifecycle.
 
 ### Make all engine features plugins mechanically
 
-Rejected as a universal rule. Some lifecycle/container invariants may genuinely belong
-to App core. The qualification rule is semantic ownership and universality, not a desire
-for symmetrical APIs.
+Rejected as a universal rule. Some lifecycle/integration invariants may genuinely belong
+to App-owned core state. The qualification rule is semantic ownership and universality,
+not a desire for symmetrical APIs.
 
 ### Persistent capability registry / DI container
 
