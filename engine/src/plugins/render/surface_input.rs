@@ -51,6 +51,23 @@ enum RenderSurfaceSemanticInputKind {
     },
 }
 
+/// Crate-private value view used only by the maintained evaluator's physical realization.
+///
+/// Keeping this view non-public prevents the current sphere/plane pressure from becoming a closed
+/// representation-family ontology. The public semantic input remains the sole source of truth; this
+/// is a lossless projection for renderer-owned execution code, not independent semantic state.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) enum RenderSurfaceSemanticInputView {
+    Sphere {
+        center_local_units: [f64; 3],
+        radius_local_units: f64,
+    },
+    Plane {
+        point_local_units: [f64; 3],
+        normal_local: [f64; 3],
+    },
+}
+
 impl RenderSurfaceSemanticInput {
     pub fn sphere(
         center_local_units: [f64; 3],
@@ -88,6 +105,25 @@ impl RenderSurfaceSemanticInput {
 
     pub const fn validity(&self) -> RenderTemporalSupport {
         self.validity
+    }
+
+    pub(super) fn execution_view(&self) -> RenderSurfaceSemanticInputView {
+        match &self.kind {
+            RenderSurfaceSemanticInputKind::Sphere {
+                center_local_units,
+                radius_local_units,
+            } => RenderSurfaceSemanticInputView::Sphere {
+                center_local_units: center_local_units.map(CanonicalF64::get),
+                radius_local_units: radius_local_units.get(),
+            },
+            RenderSurfaceSemanticInputKind::Plane {
+                point_local_units,
+                normal_local,
+            } => RenderSurfaceSemanticInputView::Plane {
+                point_local_units: point_local_units.map(CanonicalF64::get),
+                normal_local: normal_local.map(CanonicalF64::get),
+            },
+        }
     }
 }
 
