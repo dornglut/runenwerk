@@ -7,9 +7,9 @@ layer: domain
 canonical: true
 last_reviewed: 2026-06-26
 related_designs:
-  - ./ui-component-platform-layout-container-virtualization-design.md
-  - ./ui-component-platform-accessibility-focus-inspection-design.md
-  - ./ui-component-platform-theme-state-style-design.md
+  - ../implemented/ui-component-platform-layout-container-virtualization-design.md
+  - ../implemented/ui-component-platform-accessibility-focus-inspection-design.md
+  - ../implemented/ui-component-platform-theme-state-style-design.md
 related_docs:
   - ../../domain/ui/architecture.md
   - ../../domain/ui/roadmap.md
