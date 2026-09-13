@@ -645,32 +645,52 @@ lifecycle authority.
 
 ## 12. Publication and execution-fabric normalization
 
-ADR 0022 and the Execution Fabric design already provide the owners.
+ADR 0022, issue #591, and the Execution Fabric design already own this area. This App
+model therefore classifies ownership without freezing predecessor types or competing
+with the active cutover.
 
-### 12.1 Product/query publication resources
+### 12.1 Publication lifecycle and occurrence state
 
-`ProductPublicationRuntimeResource` and `QuerySnapshotRuntimeResource` are Runenwerk
-integration state for those publication/product workflows. Their presence is not a
-universal App invariant.
+`ProductPublication` and `QuerySnapshotPublication` are Runenwerk-owned lifecycle
+classes under ADR 0022. Product/query payload semantics remain with their actual owners.
 
-### 12.2 Publication handlers
+Current `ProductPublicationRuntimeResource`, `QuerySnapshotRuntimeResource`,
+`PublicationBoundary`, and related predecessor state are implementation evidence under
+the active #591 cutover, not stable App semantic types selected by this design.
 
-The narrow product/query handler registries are accepted Runenwerk integration
-mechanisms. They should exist when corresponding publication integration is installed
-and required.
+Their exact replacement/removal/placement belongs to #591.
 
-They must not be used to justify global bare-App product/query capability activation.
+### 12.2 Publication handler registries
+
+Issue #591 explicitly retains/refines the narrow product and query handler-registration
+mechanism and keeps built-in engine handlers installed during `App` construction as part
+of deterministic registration order.
+
+That accepted App-construction placement is valid Runenwerk integration ownership. It
+does **not** make product/query payload semantics App-owned and does not authorize a
+generic lifecycle bus.
+
+This semantic model must therefore not reclassify the handler registry as optional or
+move it independently of #591.
 
 ### 12.3 RuntimeJobExecutorResource
 
-The runtime job executor is execution-fabric capability state. It does not become
-App-owned core state because Draw/Editor currently consume it or because bootstrap
-currently installs it.
+The runtime job executor is owned by the accepted Execution Fabric subsystem. Current
+bare-App bootstrap placement does not by itself answer whether the final executor
+installation is universal App integration or selected capability state.
+
+That classification requires the then-current Execution Fabric consumer census. This
+App design fixes the semantic owner, not an installation answer that existing authority
+has not separately proven.
 
 ### 12.4 RuntimeProductCacheResource
 
-The runtime product cache is product execution/cache state. It is reconstructable
-integration state, not App semantic authority.
+The runtime product cache is product execution/cache state owned under the Execution
+Fabric/product boundary. Current bootstrap placement does not transfer source/product
+semantic authority to App.
+
+Its final installation placement must follow then-current Execution Fabric consumers and
+must not be guessed merely from current bootstrap.
 
 ### 12.5 Concurrency boundary
 
@@ -801,11 +821,10 @@ one implementation PR.
 | `GameplayRuntimeConfig` | bootstrap + ScenePlugin | Product/game policy | Actual product/world/scene owner; not App-owned core state |
 | `UiOverlayState` | bootstrap + ScenePlugin | UI/render/product integration | Actual UI/render integration owner; not App-owned core state |
 | current `StartupState` | bootstrap | Product/render readiness | Rename/rehome under readiness owner; not App lifecycle |
-| `ProductPublicationRuntimeResource` | bootstrap | Publication/product integration | ADR 0022 / execution-fabric owner; install where required |
-| `QuerySnapshotRuntimeResource` | bootstrap | Publication/query integration | ADR 0022 / execution-fabric owner; install where required |
-| publication handler registry | implicit via handlers | Runenwerk publication integration | Narrow owner mechanism; no universal capability implication |
-| `RuntimeJobExecutorResource` | bootstrap | Execution Fabric capability | Execution-fabric owner |
-| `RuntimeProductCacheResource` | bootstrap | Product execution/cache | Execution-fabric/product owner |
+| current product/query publication runtime resources | bootstrap | ADR 0022 publication integration predecessor state | Exact replacement/removal/placement owned by #591; do not freeze current types here |
+| publication handler registries | App construction / runtime integration | Runenwerk publication integration | Preserve/refine according to #591; built-in App-construction registration does not transfer payload authority |
+| `RuntimeJobExecutorResource` | bootstrap | Execution Fabric subsystem | Execution Fabric owns semantics; final installation universality requires separate consumer proof |
+| `RuntimeProductCacheResource` | bootstrap | Product execution/cache | Execution Fabric/product owner; final installation follows then-current consumers |
 
 An implementation census may refine a target owner where this table intentionally names
 an owner family rather than a final Rust module. It may not collapse the categories back
@@ -873,8 +892,9 @@ A future clean cut must eventually prove all of the following.
 ### 20.1 Minimal App / headless
 
 - bare headless construction has no native-window state;
-- no scene/UI/render/network/replay/product-job/simulation state appears merely because
-  App exists;
+- no scene/UI/render/network/replay/simulation state appears merely because App exists;
+- execution-fabric/publication integration state follows its accepted owner decisions
+  rather than being moved mechanically;
 - no synthetic `WindowState` is required as a headless marker;
 - no Winit `ControlFlow` is App-owned core state;
 - current contained RunenECS runtime remains semantically RunenECS-owned even where
@@ -912,10 +932,10 @@ A future clean cut must eventually prove all of the following.
 
 ### 20.7 Publication/execution fabric
 
-- ADR 0022 publication behavior remains explicit and independent of generic schedule
-  wrapping;
-- product/query/job/cache state exists only where selected/required;
-- #591 behavior is not regressed or duplicated.
+- ADR 0022 publication behavior and #591 handler-registration requirements remain intact;
+- App cleanup does not resurrect predecessor `PublicationBoundary` semantics;
+- product/query payload authority is not transferred to App by handler placement;
+- execution-fabric executor/cache placement is changed only after its own consumer proof.
 
 ### 20.8 Composition
 
