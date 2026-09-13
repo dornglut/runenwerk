@@ -61,7 +61,6 @@ This page remains the UI-domain landing page and current docs router.
 ## Story Workflow
 
 - [Runenwerk UI Story Driven Golden Workflow Design](../../design/active/runenwerk-ui-story-driven-golden-workflow-design.md)
-- [Runenwerk UI Platform Capability Roadmap](../../design/active/runenwerk-ui-platform-capability-roadmap.md)
 - [Story Acceptance and Review Checklist](./story-acceptance-and-review-checklist.md)
 
 ## Formation / Source Model

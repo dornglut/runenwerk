@@ -1,21 +1,27 @@
 ---
 title: UI Runtime Rendering Pipeline Roadmap
-description: Perfectionist roadmap for moving UiProgram artifacts from authored controls to evaluated runtime views, render primitives, visible gallery output, and production readiness without renderer-owned UI truth.
-status: active
+description: Superseded artifact-backed UI runtime/rendering roadmap retained as historical decomposition after canonical sequence authority consolidated in domain/ui/roadmap.md.
+status: superseded
 owner: ui
 layer: domain
-canonical: true
-last_reviewed: 2026-09-10
+canonical: false
+last_reviewed: 2026-09-13
 related:
   - ../implemented/ui-program-architecture.md
+  - ../implemented/ui-component-platform-render-surface-output-design.md
+  - ../active/runenwerk-ui-story-driven-golden-workflow-design.md
   - ../deferred/game-runtime-ui-projection-and-hud-platform-design.md
   - ../../domain/ui/architecture.md
   - ../../domain/ui/roadmap.md
-  - ../../workspace/production-track-planning-model.md
-  - ../../workspace/planning-and-implementation-workflow.md
 ---
 
 # UI Runtime Rendering Pipeline Roadmap
+
+## Supersession disposition
+
+This roadmap is retained as historical decomposition and evidence. Canonical `domain/ui/roadmap.md` now owns the durable Runenwerk-local sequence and decisions; implemented code/tests plus lifecycle-owned implementation documents own landed behavior.
+
+The M0–M22 states and future-language below describe the delivery-era roadmap and must not be used as independent activation authority. Current work requires current GitHub ownership and the canonical roadmap.
 
 ## Decision
 
@@ -51,7 +57,7 @@ This roadmap follows the production planning rules:
 - implementation must remain blocked behind accepted design gates, WR ownership, validation commands, evidence gates, and closeout evidence;
 - design and roadmap documents may define the target and milestones, but they do not authorize code changes or crate creation by themselves.
 
-This document is therefore an active design/roadmap source. It does not claim production-track completion, does not edit generated production indexes, and does not authorize renderer or app changes by itself.
+This document was an active design/roadmap source. It did not claim production-track completion, did not edit generated production indexes, and did not authorize renderer or app changes by itself.
 
 ## Story-First Supersession
 

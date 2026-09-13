@@ -7,7 +7,6 @@ layer: domain
 canonical: true
 last_reviewed: 2026-06-24
 related_designs:
-  - ./runenwerk-ui-platform-capability-roadmap.md
   - ./runenwerk-ui-story-driven-golden-workflow-design.md
   - ../implemented/editor-ui-runtime-v2-and-interaction-formation-design.md
 related_docs:

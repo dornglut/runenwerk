@@ -1,32 +1,26 @@
 ---
 title: UI Framework App Integration Direction Review
-description: Direction correction for making Runenwerk UI a real app-facing framework through App/ECS-hosted authoring, UI-definition-backed source, UiProgram contracts, UiStory proof, and host-owned mutation.
-status: active
+description: Historical app-facing UI integration direction review retained as non-authoritative evidence after the Runenwerk-local UiPlugin delivery and standalone RunenUI ownership split.
+status: archived
 owner: ui
 layer: design
-canonical: true
-last_reviewed: 2026-07-05
+canonical: false
+last_reviewed: 2026-09-13
 related_docs:
   - ../../architecture/ui-framework-architecture.md
-  - ../../domain/ui/architecture.md
-  - ../../domain/ui/roadmap.md
-  - ./runenwerk-ui-platform-capability-roadmap.md
-  - ./runenwerk-ui-story-driven-golden-workflow-design.md
-  - ./ui-runtime-rendering-pipeline-roadmap.md
-  - ../implemented/ui-program-architecture.md
-  - ../implemented/ui-program-architecture-owner-map.md
-  - ./editor-ui-runtime-v2-and-interaction-formation-design.md
-  - ../../adr/accepted/0009-ui-interaction-formation-v2.md
-  - ./runenwerk-typed-app-composition-plugin-framework-design.md
-  - ./typed-app-program-and-ui-proof-design.md
-  - ../../workspace/planning/typed-app-program-ui-proof-001-planning.md
-  - ../../workspace/planning/roadmap.md
-  - ../../workspace/planning/decision-register.md
-  - ./live-uiplugin-runtime-and-surface-frame-rendering-design.md
+  - ../../architecture/live-uiplugin-runtime-platform-architecture.md
+  - ../deferred/live-uiplugin-runtime-and-surface-frame-rendering-design.md
   - ../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md
+  - ../../workspace/planning/decision-register.md
 ---
 
 # UI Framework App Integration Direction Review
+
+## Archive disposition
+
+This document preserves the original accepted-direction review and delivery-era rationale. It is historical evidence, not current implementation or activation authority. Statements below that describe a target as "current", name a "next" PR/phase, or say an API does not yet exist must be read in their historical context.
+
+Current Runenwerk-local implementation truth is owned by current code/tests and the canonical UI/runtime architecture. Future Runenwerk consumer integration with standalone RunenUI is deferred and must be re-derived from an exact accepted RunenUI revision under a new owning issue. Do not resume work from this archived review.
 
 ## Status
 
@@ -176,10 +170,10 @@ App / Plugin / ECS-hosted app authoring
   -> host/app-owned mutation
 ```
 
-The current target public API spelling is owned by
-[Live UiPlugin Runtime And Surface Frame Rendering](./live-uiplugin-runtime-and-surface-frame-rendering-design.md).
+The historical target public API spelling is retained in
+[Live UiPlugin Runtime And Surface Frame Rendering](../deferred/live-uiplugin-runtime-and-surface-frame-rendering-design.md).
 
-Current target shape:
+Historical target shape:
 
 ```rust
 struct CounterPlugin;
@@ -198,7 +192,7 @@ manual `add_ui_action`, `add_ui_screen`, `add_ui_screen_router`, manual route
 maps, host adapters, event packets, render submission registries, or
 prepared-frame resources for the common path.
 
-This target shape is not current API and is not implementation authorization.
+This target shape was not current API when this review was written and this archived review is not implementation authorization.
 
 The important lowering rule is:
 

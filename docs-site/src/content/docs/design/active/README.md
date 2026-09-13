@@ -31,10 +31,6 @@ designs, or product references. They should not each restate the entire framewor
 platform architecture. Accepted ADRs and canonical architecture spines win when an
 active design contains older conflicting target language.
 
-### Temporary compatibility pointer
-
-- [Runenwerk Domain Workbench North Star Compatibility Pointer](runenwerk-domain-workbench-north-star.md) — noncanonical path-stable pointer used only by two legacy UI design consumers pending the separate RunenUI legacy/adoption cleanup under #205. Do not add new references.
-
 ## Current Designs
 
 ### Editor Domain
@@ -122,12 +118,5 @@ active design contains older conflicting target language.
 - [Typed App Program And UI Proof Design](typed-app-program-and-ui-proof-design.md)
 - [Runenwerk Typed App Composition Plugin Framework Design](runenwerk-typed-app-composition-plugin-framework-design.md)
 - [Runenwerk Typed App Composition Plugin Framework Roadmap](runenwerk-typed-app-composition-plugin-framework-implementation-roadmap.md)
-- [UI Framework App Integration Direction Review](ui-framework-app-integration-direction-review.md)
-- [Live UiPlugin Runtime And Surface Frame Rendering](live-uiplugin-runtime-and-surface-frame-rendering-design.md)
-- [Live UiPlugin Runtime Full Cutover Plan](live-uiplugin-runtime-full-cutover-plan.md)
-- [Runenwerk UI Platform Capability Roadmap](runenwerk-ui-platform-capability-roadmap.md)
 - [Runenwerk UI Story Driven Golden Workflow Design](runenwerk-ui-story-driven-golden-workflow-design.md)
-- [UI Program Contract Design](ui-program-contract-design.md)
-- [UI Program Proof Slice Plan](ui-program-proof-slice-plan.md)
-- [UI Runtime Rendering Pipeline Roadmap](ui-runtime-rendering-pipeline-roadmap.md)
 - [Semantic Graph IR and Compilation Design](semantic-graph-ir-and-compilation-design.md)

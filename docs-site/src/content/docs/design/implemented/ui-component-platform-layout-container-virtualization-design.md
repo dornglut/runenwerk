@@ -10,7 +10,6 @@ related_designs:
   - ../active/ui-component-platform-ownership-realignment-design.md
   - ./ui-component-platform-accessibility-focus-inspection-design.md
   - ./ui-component-platform-theme-state-style-design.md
-  - ../active/runenwerk-ui-platform-capability-roadmap.md
 related_docs:
   - ../../domain/ui/architecture.md
   - ../../domain/ui/roadmap.md

@@ -1,25 +1,31 @@
 ---
 title: UI Program Proof Slice Plan
-description: Bounded Stage 6 proof-slice planning contract for validating UI Program Architecture without authorizing broad implementation.
-status: active
+description: Historical Stage 6 UiProgram proof-slice planning contract retained after the proof program completed and implementation authority moved to implemented UiProgram documentation and current code/tests.
+status: archived
 owner: ui
 layer: domain
-canonical: true
-last_reviewed: 2026-05-31
+canonical: false
+last_reviewed: 2026-09-13
 related:
   - ../implemented/ui-program-architecture.md
-  - ./runenwerk-domain-workbench-north-star.md
+  - ../implemented/ui-program-architecture-owner-map.md
   - ../../domain/ui/architecture.md
   - ../../domain/ui/roadmap.md
 ---
 
 # UI Program Proof Slice Plan
 
+## Archive disposition
+
+The complete 6A–6F planning contract below is retained as delivery/proof provenance. It is not active sequencing or implementation authority. Current UiProgram implementation truth is owned by current code/tests and the implemented UiProgram architecture/owner map; current sequencing is owned by the canonical UI roadmap and active GitHub work.
+
+Do not reopen a 6A–6F slice from this archive. Any new work requires current owner inspection and a new owning issue.
+
 ## 1. Status And Authority
 
 This document is the bounded proof-slice planning contract for Stage 6 of
 [UI Program Architecture](../implemented/ui-program-architecture.md), under the accepted
-[Runenwerk Domain Workbench North Star](./runenwerk-domain-workbench-north-star.md).
+Runenwerk Domain Workbench direction that existed when this plan was written.
 
 It treats UI Program Architecture as accepted design direction. It does not
 authorize broad implementation, new crates, crate renames, placeholder future

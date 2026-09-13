@@ -7,7 +7,7 @@ layer: architecture
 canonical: false
 last_reviewed: 2026-08-04
 related_docs:
-  - ./runenwerk-domain-workbench-north-star.md
+  - ../superseded/runenwerk-domain-workbench-north-star.md
   - ../implemented/ui-program-architecture.md
   - ../implemented/ui-program-architecture-owner-map.md
   - ../implemented/ui-component-platform-base-control-packages-design.md

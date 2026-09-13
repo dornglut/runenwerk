@@ -8,11 +8,11 @@ canonical: false
 last_reviewed: 2026-08-13
 related_designs:
   - ../active/runenwerk-ui-story-driven-golden-workflow-design.md
-  - ../active/ui-runtime-rendering-pipeline-roadmap.md
+  - ./ui-runtime-rendering-pipeline-roadmap.md
   - ../active/game-runtime-ui-projection-and-hud-platform-design.md
   - ../active/viewport-camera-and-projection-contract-platform-design.md
   - ../accepted/ui-designer-workbench-product-design.md
-  - ../active/ui-program-architecture.md
+  - ../implemented/ui-program-architecture.md
 related_docs:
   - ../../domain/ui/architecture.md
   - ../../domain/ui/story-acceptance-and-review-checklist.md

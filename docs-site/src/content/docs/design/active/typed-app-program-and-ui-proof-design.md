@@ -9,7 +9,7 @@ last_reviewed: 2026-08-04
 related_docs:
   - ../../reports/investigations/typed-app-program-current-state-investigation.md
   - ../../guidelines/domain-program-architecture-pattern.md
-  - ./runenwerk-domain-workbench-north-star.md
+  - ../superseded/runenwerk-domain-workbench-north-star.md
   - ../implemented/ui-program-architecture.md
   - ../implemented/ui-program-architecture-owner-map.md
   - ./runenwerk-typed-app-composition-plugin-framework-design.md
