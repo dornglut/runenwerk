@@ -1,4 +1,4 @@
-use crate::plugins::InputState;
+use crate::plugins::{InputState, TimePlugin};
 // Owner: Engine Scene Plugin - Tests
 use super::super::domain::{QuestState, WorldToOverlayMessage};
 use super::super::{
@@ -45,6 +45,7 @@ fn format_world_message_renders_all_variants() {
 #[test]
 fn scene_plugin_toggles_pause_overlay_and_updates_public_state() {
     let mut app = App::headless();
+    app.add_plugin(TimePlugin);
     app.add_plugin(ScenePlugin);
     app.world_mut()
         .resource_mut::<InputState>()
@@ -64,6 +65,7 @@ fn scene_plugin_toggles_pause_overlay_and_updates_public_state() {
 #[test]
 fn scene_helper_switches_world_scene_by_label() {
     let mut app = App::headless();
+    app.add_plugin(TimePlugin);
     app.add_plugin(ScenePlugin);
     switch_scene_by_id(app.world_mut(), "hub").expect("scene switch should queue");
 
@@ -79,6 +81,7 @@ fn scene_helper_switches_world_scene_by_label() {
 #[test]
 fn scene_plugin_routes_world_tick_messages_into_overlay_log() {
     let mut app = App::headless();
+    app.add_plugin(TimePlugin);
     app.add_plugin(ScenePlugin);
 
     let app = app.run_for_ticks(60).expect("scene plugin should run");
@@ -103,6 +106,7 @@ fn scene_plugin_routes_world_tick_messages_into_overlay_log() {
 #[test]
 fn scene_simulation_delta_round_trips_back_to_the_current_snapshot() {
     let mut app = App::headless();
+    app.add_plugin(TimePlugin);
     app.add_plugin(ScenePlugin);
     let mut app = app
         .run_for_frames(1)
@@ -174,6 +178,7 @@ fn scene_simulation_delta_round_trips_back_to_the_current_snapshot() {
 fn scene_registered_apps_publish_overlay_frame_with_buttons() {
     let mut app = App::headless();
     app.add_scene("engine/tests/fixtures/scene_templates/main_menu.ron");
+    app.add_plugin(TimePlugin);
     app.add_plugin(ScenePlugin);
 
     let app = app.run_for_frames(1).expect("scene plugin should run");
@@ -237,6 +242,7 @@ fn scene_template_buttons_switch_scene_on_click() {
     app.add_scene("engine/tests/fixtures/scene_templates/main_menu.ron");
     app.add_scene("engine/tests/fixtures/scene_templates/settings_menu.ron");
     app.add_scene("engine/tests/fixtures/scene_templates/game_scene.ron");
+    app.add_plugin(TimePlugin);
     app.add_plugin(ScenePlugin);
 
     let mut app = app.run_for_frames(1).expect("scene plugin should run");

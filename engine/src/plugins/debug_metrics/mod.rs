@@ -307,7 +307,7 @@ fn debug_overlay_font_atlas() -> &'static UiFontAtlasResource {
 #[cfg(test)]
 mod tests {
     use super::DebugMetricsPlugin;
-    use crate::plugins::InputState;
+    use crate::plugins::{InputState, TimePlugin};
     use crate::prelude::*;
     use winit::event::ElementState;
     use winit::keyboard::KeyCode;
@@ -319,6 +319,7 @@ mod tests {
     #[test]
     fn debug_metrics_plugin_populates_overlay_draw_state() {
         let mut app = App::headless();
+        app.add_plugin(TimePlugin);
         app.add_plugin(DebugMetricsPlugin);
         app.add_systems(Update, inject_f10);
         let app = app.run_for_frames(1).expect("debug metrics should run");

@@ -1,4 +1,4 @@
-use engine::plugins::default_plugins;
+use engine::plugins::{TimePlugin, default_plugins};
 use engine::prelude::*;
 use winit::event::ElementState;
 use winit::keyboard::KeyCode;
@@ -71,7 +71,6 @@ impl Plugin for ResourceVisibilityPlugin {
 
 fn capture_startup_resources(
     window: Res<WindowState>,
-    _time: Res<Time>,
     _input: Res<InputState>,
     mut snapshot: ResMut<StartupSnapshot>,
 ) {
@@ -298,7 +297,7 @@ impl Plugin for ScriptedDeltaPlugin {
         app.insert_resource(CatchupBudget {
             max_steps_per_frame: 4,
         });
-        app.add_systems(PreUpdate, scripted_delta);
+        app.add_systems(PreUpdate, scripted_delta.after(CoreSet::Time));
         app.add_systems(FixedUpdate, count_fixed_update);
     }
 }
@@ -315,6 +314,7 @@ fn count_fixed_update(mut state: ResMut<ScriptedDeltaState>) {
 #[test]
 fn fixed_step_schedule_supports_zero_and_batched_ticks_per_frame() {
     let mut app = App::headless();
+    app.add_plugin(TimePlugin);
     app.add_plugin(ScriptedDeltaPlugin);
     let app = app
         .run_for_frames(2)
@@ -343,7 +343,7 @@ impl Plugin for TickVisibilityPlugin {
         app.insert_resource(CatchupBudget {
             max_steps_per_frame: 4,
         });
-        app.add_systems(PreUpdate, force_large_delta);
+        app.add_systems(PreUpdate, force_large_delta.after(CoreSet::Time));
         app.add_systems(FixedUpdate, observe_tick_during_fixed_update);
     }
 }
@@ -359,6 +359,7 @@ fn observe_tick_during_fixed_update(tick: Res<SimulationTick>, mut log: ResMut<T
 #[test]
 fn fixed_step_advances_tick_before_each_fixed_update_step() {
     let mut app = App::headless();
+    app.add_plugin(TimePlugin);
     app.add_plugin(TickVisibilityPlugin);
     let app = app.run_for_frames(1).expect("fixed-step frame should run");
 
@@ -390,7 +391,7 @@ impl Plugin for SaturationPlugin {
         app.insert_resource(CatchupBudget {
             max_steps_per_frame: 1,
         });
-        app.add_systems(PreUpdate, force_saturating_delta);
+        app.add_systems(PreUpdate, force_saturating_delta.after(CoreSet::Time));
         app.add_systems(FixedUpdate, count_saturation_fixed_step);
     }
 }
@@ -406,6 +407,7 @@ fn count_saturation_fixed_step(mut count: ResMut<SaturationFixedStepCounter>) {
 #[test]
 fn fixed_step_saturation_tracks_dropped_backlog_when_budget_is_exhausted() {
     let mut app = App::headless();
+    app.add_plugin(TimePlugin);
     app.add_plugin(SaturationPlugin);
     let app = app.run_for_frames(1).expect("saturation frame should run");
 
@@ -522,7 +524,7 @@ impl Plugin for ZeroDeltaPlugin {
         app.insert_resource(CatchupBudget {
             max_steps_per_frame: 4,
         });
-        app.add_systems(PreUpdate, force_zero_delta);
+        app.add_systems(PreUpdate, force_zero_delta.after(CoreSet::Time));
     }
 }
 
@@ -533,6 +535,7 @@ fn force_zero_delta(mut time: ResMut<Time>) {
 #[test]
 fn zero_fixed_step_frames_do_not_advance_simulation_tick() {
     let mut app = App::headless();
+    app.add_plugin(TimePlugin);
     app.add_plugin(ZeroDeltaPlugin);
     let app = app
         .run_for_frames(2)

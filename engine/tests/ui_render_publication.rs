@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use engine::plugins::TimePlugin;
 use engine::plugins::render::backend::RenderSurfaceId;
 use engine::plugins::render::{
     FeatureContributionStatus, PreparedUiFrameResource, RenderPlugin,
@@ -158,6 +159,7 @@ fn ui_render_publication_missing_evaluation_records_report_and_diagnostic() {
 #[test]
 fn ui_render_publication_prepares_payload_when_plugins_run_render_prepare() {
     let mut app = App::headless();
+    app.add_plugin(TimePlugin);
     app.add_plugin(RenderPlugin);
     app.add_plugin(UiPlugin);
     app.insert_resource(evaluated_counter_runtime("Clicked 3 / 5", 3));
@@ -219,6 +221,7 @@ fn ui_render_publication_can_feed_prepare_resource_directly() {
     assert!(report.is_published());
 
     let mut app = App::headless();
+    app.add_plugin(TimePlugin);
     app.add_plugin(RenderPlugin);
     app.insert_resource(submissions);
     let app = app
