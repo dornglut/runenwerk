@@ -12,10 +12,8 @@
 mod numeric;
 mod observation;
 
-pub(super) use observation::{
-    DeterministicVerificationObservation, RenderDeterministicVerificationObservationError,
-    observe_completed_deterministic_verification,
-};
+#[cfg(test)]
+pub(super) use observation::observe_completed_deterministic_verification;
 
 use super::deterministic_admission::AdmittedDeterministicRender;
 use super::deterministic_execution::{

@@ -330,7 +330,7 @@ fn normalize_canonical_words(
                 byte_len: actual_byte_len,
             },
         )?;
-        for chunk in row_bytes.chunks_exact(WORD_BYTES) {
+        for chunk in row_bytes.as_chunks::<WORD_BYTES>().0 {
             words.push(decode_word(chunk));
         }
     }
@@ -367,7 +367,7 @@ fn decode_tightly_packed_words(
             channel,
         }
     })?;
-    for chunk in bytes.chunks_exact(WORD_BYTES) {
+    for chunk in bytes.as_chunks::<WORD_BYTES>().0 {
         words.push(decode_word(chunk));
     }
     Ok(words)
