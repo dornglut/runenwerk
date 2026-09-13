@@ -5,7 +5,7 @@ status: active
 owner: domain
 layer: domain
 canonical: true
-last_reviewed: 2026-09-11
+last_reviewed: 2026-09-13
 ---
 
 # Domain Layer Overview
@@ -56,7 +56,7 @@ Do not add crate metadata for them until their implementation milestone lands.
 
 - particles and VFX;
 - physics and collision authoring;
-- animation and procedural motion, with active architecture tracked in [`../design/active/sdf-procedural-animation-and-animated-models-design.md`](../design/active/sdf-procedural-animation-and-animated-models-design.md);
+- animation and procedural motion, with a deferred architecture target tracked in [`../design/deferred/sdf-procedural-animation-and-animated-models-design.md`](../design/deferred/sdf-procedural-animation-and-animated-models-design.md);
 - simulation/world processes;
 - gameplay graph orchestration after narrower gameplay event/action/state/quest contracts exist.
 

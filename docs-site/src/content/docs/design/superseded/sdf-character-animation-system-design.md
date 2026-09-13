@@ -5,8 +5,8 @@ status: superseded
 owner: workspace
 layer: cross-domain
 canonical: false
-last_reviewed: 2026-05-16
-replaced_by: ../active/sdf-procedural-animation-and-animated-models-design.md
+last_reviewed: 2026-09-13
+replaced_by: ../deferred/sdf-procedural-animation-and-animated-models-design.md
 related_designs:
   - ../active/sdf-procedural-animation-and-animated-models-design.md
   - ../accepted/sdf-first-production-capability-map.md
@@ -20,9 +20,9 @@ related_designs:
 Superseded draft.
 
 Replaced by
-[`../active/sdf-procedural-animation-and-animated-models-design.md`](../active/sdf-procedural-animation-and-animated-models-design.md).
-That active design broadens this draft into the current procedural-animation,
-semantic-SDF, purpose-specific product, and scheduler-aware lowering authority.
+[`../deferred/sdf-procedural-animation-and-animated-models-design.md`](../deferred/sdf-procedural-animation-and-animated-models-design.md).
+That deferred design broadens this draft into the preserved procedural-animation,
+semantic-SDF, purpose-specific product, and scheduler-aware lowering target.
 
 This document defines character modelling and animation for an SDF-first engine.
 

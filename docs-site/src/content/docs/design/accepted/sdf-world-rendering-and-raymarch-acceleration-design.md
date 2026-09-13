@@ -5,13 +5,13 @@ status: accepted
 owner: engine
 layer: engine-runtime / renderer / sdf-products
 canonical: true
-last_reviewed: 2026-05-22
+last_reviewed: 2026-09-13
 related_designs:
   - ./sdf-first-field-world-platform-design.md
   - ./sdf-product-renderer-and-gpu-residency-design.md
   - ./field-product-contracts-diagnostics-and-residency-design.md
   - ./renderer-scale-residency-and-gpu-driven-visibility-design.md
-  - ../active/sdf-procedural-animation-and-animated-models-design.md
+  - ../deferred/sdf-procedural-animation-and-animated-models-design.md
 ---
 
 # SDF World Rendering And Raymarch Acceleration Platform

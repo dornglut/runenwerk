@@ -1,11 +1,11 @@
 ---
 title: SDF Procedural Animation and Animated Models Design
-description: Active cross-domain design for procedural animation, animated SDF models, semantic regions, purpose-specific field products, and scheduler-aware runtime lowering.
-status: active
+description: Deferred cross-domain design for procedural animation, animated SDF models, semantic regions, purpose-specific field products, and scheduler-aware runtime lowering.
+status: deferred
 owner: workspace
 layer: cross-domain
 canonical: true
-last_reviewed: 2026-09-11
+last_reviewed: 2026-09-13
 related_adrs:
   - ../../adr/accepted/0004-separate-description-from-execution.md
   - ../../adr/accepted/0005-projections-are-derived-state.md
@@ -29,11 +29,11 @@ supersedes:
 
 ## Status
 
-Active cross-domain architecture design.
+Deferred cross-domain architecture target. It remains useful long-term architecture, but no current implementation issue activates it.
 
 This document supersedes the older deferred SDF character animation draft and refines it into a broader procedural-animation, semantic-SDF, product-lowering, and scheduler-aware runtime design. It does not create a new crate or declare animation/physics/rendering domains implemented.
 
-Implementation remains gated behind accepted ownership, product, scheduler, and validation decisions. ADR 0011 accepts the narrow rule that animated SDF authoring graphs lower before runtime hot paths consume them; the umbrella proposed ADR remains preserved context for broader product-family decisions.
+Reactivation requires accepted animation, physics, product, and scheduler ownership plus a bounded implementation issue that re-censuses current source and consumers. ADR 0011 independently retains the accepted narrow rule that animated SDF authoring graphs lower before runtime hot paths consume them; the umbrella proposed ADR remains preserved context for broader product-family decisions.
 
 ## 0. Five-Pass Revision Summary
 
@@ -1390,7 +1390,7 @@ ADR: First validation creature
 Create/update:
 
 ```text
-docs-site/src/content/docs/design/active/sdf-procedural-animation-and-animated-models-design.md
+docs-site/src/content/docs/design/deferred/sdf-procedural-animation-and-animated-models-design.md
 standalone dornglut/runen-sdf docs for sdf-deformation
 standalone dornglut/runen-sdf docs for semantic-sdf-regions
 domain/editor/procedural-animation-editor.md

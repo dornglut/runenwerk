@@ -5,9 +5,9 @@ status: draft
 owner: workspace
 layer: cross-domain
 canonical: true
-last_reviewed: 2026-05-16
+last_reviewed: 2026-09-13
 related_designs:
-  - ../../design/active/sdf-procedural-animation-and-animated-models-design.md
+  - ../../design/deferred/sdf-procedural-animation-and-animated-models-design.md
   - ../../design/accepted/sdf-first-field-world-platform-design.md
   - ../../design/accepted/field-product-contracts-diagnostics-and-residency-design.md
   - ../../design/accepted/execution-fabric-and-product-jobs-design.md
