@@ -26,6 +26,10 @@ Use this folder for designs that remain valid but are intentionally postponed.
 
 - [UI Model Multiple Execution Strategies Design](ui-model-multiple-execution-strategies-design.md)
 
+### Application Composition / App Proof
+
+- [Typed App Program And UI Proof Design](typed-app-program-and-ui-proof-design.md)
+
 ### Gameplay Domain
 
 - [Architecture Review Summary](domain-gameplay-architecture-review-evaluation.md)

@@ -37,7 +37,8 @@ No superseded foundation design documents are currently tracked in this folder.
 
 ### App / Tooling
 
-No superseded app/tooling design documents are currently tracked in this folder.
+- [Runenwerk Typed App Composition Plugin Framework Design](runenwerk-typed-app-composition-plugin-framework-design.md)
+- [Runenwerk Typed App Composition Plugin Framework Roadmap](runenwerk-typed-app-composition-plugin-framework-implementation-roadmap.md)
 
 ### Workspace / Cross-Domain
 
