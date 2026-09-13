@@ -87,10 +87,20 @@ runtime.add_systems::<Update, _, _>(
 
 The explicit `after(Gameplay)` edge establishes semantic precedence. Deferred commands produced by earlier ordered work are applied at an ECS deferred-apply boundary before dependent later work executes. Without such an ordering edge, systems remain semantically unordered even when their access facts conflict.
 
+`before` and `after` name a required target set in the same schedule. If no
+other system in that schedule belongs to a required target set, schedule
+validation fails. For a meaningful relation to a target that may be absent,
+use the explicit `before_if_present` or `after_if_present` form instead; when
+the target exists, it has the same precedence semantics. Engine lifecycle order
+between schedules is not ECS set ordering.
+
 ## Invariants & Rules
 
 - System parameters declare ECS **access facts**. Conflicting access may constrain future parallel admission, but it does not invent an A-before-B semantic order.
-- Explicit `before` / `after` set relations define semantic ordering and are cycle-validated.
+- Explicit `before` / `after` set relations define required same-schedule semantic ordering and are cycle-validated.
+- Explicit `before_if_present` / `after_if_present` relations define meaningful conditional same-schedule ordering.
+- Missing required ordering targets fail schedule validation; optional missing targets do not create an edge.
+- Engine lifecycle schedule order is distinct from ECS set ordering.
 - The serial reference executor uses deterministic registration order for otherwise unordered systems.
 - Structural changes are **deferred** and become visible only after an ECS deferred-apply boundary.
 - Systems that execute before the same deferred-apply boundary do not observe one another's deferred structural mutations.

@@ -5,7 +5,7 @@ use engine::plugins::render::{
     RenderGpuResidencyResource, RenderRuntimeSet, SurfaceFrameSubmissionRegistryResource,
 };
 use engine::prelude::*;
-use engine::runtime::{CoreSet, IntoSystemSetKey, SystemConfigExt, WindowStateRegistryResource};
+use engine::runtime::{IntoSystemSetKey, SystemConfigExt, WindowStateRegistryResource};
 use engine::runtime::{ProductPublicationRuntimeResource, PublicationBoundary};
 use runen_ecs::{SystemSetKey, World};
 
@@ -163,99 +163,74 @@ impl Plugin for EditorAppPlugin {
         app.add_systems(Startup, seed_viewport_runtime_contracts_system);
         app.add_systems(
             Update,
-            produce_editor_picking_system
-                .in_set(EditorRuntimeSet::Picking)
-                .after(CoreSet::Input)
-                .after(CoreSet::Time),
+            produce_editor_picking_system.in_set(EditorRuntimeSet::Picking),
         );
         app.add_systems(
             Update,
             dispatch_editor_input_system
                 .in_set(EditorRuntimeSet::InputBridge)
-                .after(EditorRuntimeSet::Picking)
-                .after(CoreSet::Input)
-                .after(CoreSet::Time),
+                .after(EditorRuntimeSet::Picking),
         );
         app.add_systems(
             Update,
             apply_viewport_render_state_commands_system
                 .in_set(EditorRuntimeSet::ViewportRenderStateCommands)
-                .after(EditorRuntimeSet::InputBridge)
-                .after(CoreSet::Input)
-                .after(CoreSet::Time),
+                .after(EditorRuntimeSet::InputBridge),
         );
         app.add_systems(
             Update,
             sync_editor_composition_transitions_system
                 .in_set(EditorRuntimeSet::CompositionTransitions)
-                .after(EditorRuntimeSet::InputBridge)
-                .after(CoreSet::Input)
-                .after(CoreSet::Time),
+                .after(EditorRuntimeSet::InputBridge),
         );
         app.add_systems(
             Update,
             dispatch_editor_target_input_system
                 .in_set(EditorRuntimeSet::TargetInput)
-                .after(EditorRuntimeSet::CompositionTransitions)
-                .after(CoreSet::Input)
-                .after(CoreSet::Time),
+                .after(EditorRuntimeSet::CompositionTransitions),
         );
         app.add_systems(
             Update,
             sync_editor_window_presentation_requests_system
                 .in_set(EditorRuntimeSet::WindowPresentationRequests)
-                .after(EditorRuntimeSet::TargetInput)
-                .after(CoreSet::Input)
-                .after(CoreSet::Time),
+                .after(EditorRuntimeSet::TargetInput),
         );
         app.add_systems(
             Update,
             sync_viewport_instances_system
                 .in_set(EditorRuntimeSet::ViewportLifecycle)
                 .after(EditorRuntimeSet::ViewportRenderStateCommands)
-                .after(EditorRuntimeSet::WindowPresentationRequests)
-                .after(CoreSet::Input)
-                .after(CoreSet::Time),
+                .after(EditorRuntimeSet::WindowPresentationRequests),
         );
         app.add_systems(
             Update,
             submit_editor_frame_system
                 .in_set(EditorRuntimeSet::FrameSubmit)
-                .after(EditorRuntimeSet::ViewportLifecycle)
-                .after(CoreSet::Input)
-                .after(CoreSet::Time),
+                .after(EditorRuntimeSet::ViewportLifecycle),
         );
         app.add_systems(
             Update,
             sync_viewport_presentation_products_system
                 .in_set(EditorRuntimeSet::ViewportPresentationSync)
-                .after(EditorRuntimeSet::FrameSubmit)
-                .after(CoreSet::Input)
-                .after(CoreSet::Time),
+                .after(EditorRuntimeSet::FrameSubmit),
         );
         app.add_systems(
             Update,
             sync_procgen_viewport_overlay_system
                 .in_set(EditorRuntimeSet::ProcgenViewportOverlay)
-                .after(EditorRuntimeSet::ViewportPresentationSync)
-                .after(CoreSet::Input)
-                .after(CoreSet::Time),
+                .after(EditorRuntimeSet::ViewportPresentationSync),
         );
         app.add_systems(
             Update,
             sync_viewport_product_targets_system
                 .in_set(EditorRuntimeSet::ViewportProductTargets)
-                .after(EditorRuntimeSet::ProcgenViewportOverlay)
-                .after(CoreSet::Input)
-                .after(CoreSet::Time),
+                .after(EditorRuntimeSet::ProcgenViewportOverlay),
         );
         app.add_systems(
             Update,
             sync_viewport_render_jobs_system
                 .in_set(EditorRuntimeSet::ViewportRenderJobs)
-                .after(EditorRuntimeSet::ViewportProductTargets)
-                .after(CoreSet::Input)
-                .after(CoreSet::Time),
+                .after(EditorRuntimeSet::ViewportProductTargets),
         );
         app.add_systems(
             RenderPrepare,

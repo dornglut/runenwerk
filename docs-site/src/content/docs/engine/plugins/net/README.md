@@ -56,12 +56,18 @@ Server outbox delivery is explicit:
   - `client_receive_system`
   - `server_receive_system`
 - `FixedUpdate`
-  - `prediction_step_system` in `NetFixedSet::Prediction` (after `CoreSet::Simulation`)
-  - `replication_step_system` in `NetFixedSet::Replication` (after `CoreSet::Simulation` and prediction)
-  - explicit ordering: `Simulation -> Prediction -> Replication`
+  - `prediction_step_system` in `NetFixedSet::Prediction`
+  - `replication_step_system` in `NetFixedSet::Replication`
+  - required intrinsic ordering: `Prediction -> Replication`
+  - when a same-`FixedUpdate` `CoreSet::Simulation` owner is installed, explicit
+    optional-presence references place it before relevant Net work
 - `FrameEnd` / `CoreSet::FrameEnd`
   - `client_flush_system`
   - `server_flush_system`
+
+The Net plugin is also valid in assemblies without a `CoreSet::Simulation`
+owner. Simulation-to-Net ordering is conditional composition; it is not an
+unconditional intrinsic Net chain.
 
 ## Related Docs
 
@@ -75,4 +81,3 @@ Server outbox delivery is explicit:
 - Usage: [../../../docs/reference/plugins/net/usage-guide.md](../../reference/plugins/net/usage-guide.md)
 - Advanced: [../../../docs/reference/plugins/net/advanced-guide.md](../../reference/plugins/net/advanced-guide.md)
 - Architecture: [../../../docs/reference/plugins/net/architecture.md](../../reference/plugins/net/architecture.md)
-
