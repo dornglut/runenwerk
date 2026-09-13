@@ -9,6 +9,8 @@ pub mod derived_state;
 mod derived_transform;
 pub mod deterministic_admission;
 pub mod deterministic_execution;
+#[allow(dead_code)]
+mod deterministic_verification;
 pub mod features;
 pub mod frame;
 pub mod gpu_primitives;
