@@ -106,29 +106,36 @@ run_for_ticks(...)
 ```
 
 always route through `run_headless()` regardless of stored mode, then return the same
-`App` value to the caller.
+`App` value to the caller on success.
 
 Therefore current mode, host preparation, and bounded advancement are not one coherent
 semantic axis.
 
-### 1.4 Bounded advancement is demonstrably repeatable
+### 1.4 Bounded advancement is demonstrably repeatable on success
 
-`run_for_frames` and `run_for_ticks` consume and return `Self`. A caller can receive the
-same runtime back and advance it again. `startup_ran` prevents successful Startup from
-running again.
+`run_for_frames` and `run_for_ticks` consume and return `Self` on success. A caller can
+receive the same runtime back and advance it again. `startup_ran` prevents successful
+Startup from running again.
 
 Therefore **normal bounded completion cannot semantically mean App termination**.
 
-### 1.5 Current Startup has an unsafe implicit retry shape
+### 1.5 Current Startup state records success, not failed-attempt identity
 
 `run_startup_if_needed` sets `startup_ran = true` only after the Startup schedule
-returns success.
+returns success. A returned error leaves the boolean indistinguishable from
+"Startup was never attempted."
 
-If Startup mutates state and then returns an error, the same App can be advanced again
-and Startup will be attempted again over partially committed state. There is no generic
-rollback contract.
+Current public bounded-run helpers consume `App` and do not return it on failure, while
+the current windowed runner records a fatal error and exits the event loop on Startup
+failure. Therefore current source does **not** establish a maintained public same-instance
+Startup retry path.
 
-That current behavior is not accepted as the normalized lifecycle contract.
+The architectural gap is narrower but real: lifecycle state itself cannot represent a
+failed Startup attempt and therefore relies on surrounding runner destruction/exit to
+prevent reuse. A future/specialized caller that retained the runtime after a returned
+error, or a caller that caught an unwind around Startup execution, would need an explicit
+failed/non-runnable state rather than interpreting `startup_ran == false` as retry
+eligibility.
 
 ### 1.6 Current bounded tick advancement leaks simulation/timing ownership
 
@@ -501,9 +508,10 @@ context and diagnostics.
 
 Startup is a one-shot lifecycle attempt for one runtime instance.
 
-The runtime must record the Startup attempt before the first Startup system executes.
-This ensures that a returned error or a panic whose unwind is caught cannot leave the
-same partially mutated runtime eligible for an implicit retry.
+Current public runners do not return the same App after Startup failure, so this design
+does not claim a maintained public retry bug. The target nevertheless records the Startup
+attempt before the first Startup system executes. If a runtime survives a returned error
+or caught unwind, it cannot remain semantically indistinguishable from "not attempted."
 
 On success:
 
@@ -511,7 +519,8 @@ On success:
 Starting -> Running
 ```
 
-On error or panic after Startup execution begins:
+On error or panic after Startup execution begins, for any runtime instance that survives
+the failure:
 
 ```text
 Starting -> invalid/non-runnable runtime instance
@@ -521,12 +530,9 @@ Required failure law:
 
 - no generic rollback is implied;
 - already committed effects remain committed;
-- Runenwerk does not implicitly retry Startup on the same runtime;
-- ordinary advancement of that runtime must reject;
+- Runenwerk does not implicitly retry Startup on the same surviving runtime;
+- ordinary advancement of that surviving runtime must reject;
 - recovery requires an explicit owner/host recovery contract or reconstruction.
-
-Current `startup_ran` behavior, which retries after failure because only success marks the
-flag, is predecessor implementation behavior and is not the target contract.
 
 ### 6.4 Running
 
@@ -871,16 +877,18 @@ generic transaction or rollback.
 
 ### 15.3 Startup failure
 
-Startup execution is fail-stop for that runtime instance:
+Current consuming runners discard/exit on Startup failure; this model does not claim a
+maintained public same-instance retry path. The normalized contract is nevertheless
+explicit for any runtime instance that survives the failure:
 
 ```text
 record attempt before executing Startup systems
 -> success: Running
--> error/panic: non-runnable instance
+-> returned error / caught unwind: non-runnable surviving instance
 ```
 
-No automatic retry and no generic rollback. A caught unwind cannot make the same runtime
-retry-eligible.
+No automatic retry and no generic rollback. Failure semantics must not depend on runner
+destruction or event-loop exit for correctness.
 
 ### 15.4 Runtime owner/system failure
 
@@ -903,7 +911,7 @@ This matrix is normative ownership pressure, not permission to move every row in
 |---|---|---|
 | `World` | contained RunenECS runtime | retain current containment until separately redesigned; ECS semantics remain RunenECS-owned |
 | RunenECS `Runtime` | contained RunenECS runtime | retain current containment until separately redesigned; schedule semantics remain RunenECS-owned |
-| `startup_ran` | predecessor App lifecycle marker | replace/refine with lifecycle state that records one-shot Startup attempt, including failure |
+| `startup_ran` | predecessor App lifecycle marker | replace/refine only when implementing explicit failed-attempt/non-runnable lifecycle semantics; current consuming runners already discard/exit on Startup failure |
 | `title` | host-neutral application metadata | composition/configuration; Host projects it as needed |
 | `AppMode` | Host selection mixed with run mode | replace/refine around explicit Host selection |
 | `AppRunner` | Advancement Policy realization | normalize independently from Host and foreign owner state |
@@ -969,10 +977,11 @@ A future clean cut must eventually prove the applicable subset below.
 ### Lifecycle
 
 - composition topology is sealed before preparation/Startup;
-- Startup-attempt state is recorded before Startup systems execute;
+- if a runtime can survive Startup failure, failed-attempt state is recorded before
+  Startup systems execute;
 - successful Startup executes once;
-- failed/panicking Startup cannot be implicitly retried on the same runtime, including
-  after a caught unwind;
+- a surviving runtime cannot implicitly retry failed/panicking Startup, including after
+  a caught unwind;
 - partial Startup effects are not claimed to be generically rolled back;
 - terminal shutdown is distinct from bounded completion.
 
