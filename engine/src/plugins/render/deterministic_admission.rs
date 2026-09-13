@@ -117,7 +117,10 @@ impl fmt::Display for RenderDeterministicAdmissionFailure {
                 write!(formatter, "deterministic render admission failed: {error}")
             }
             Self::Compatibility(error) => {
-                write!(formatter, "deterministic renderer compatibility failed: {error}")
+                write!(
+                    formatter,
+                    "deterministic renderer compatibility failed: {error}"
+                )
             }
         }
     }
@@ -169,12 +172,8 @@ fn validate_maintained_compatibility(
     admitted: &AdmittedRenderPlan,
     context: &GpuContext,
 ) -> Result<(), RenderDeterministicCompatibilityError> {
-    for (observation_index, observation) in admitted
-        .plan()
-        .request()
-        .observations()
-        .iter()
-        .enumerate()
+    for (observation_index, observation) in
+        admitted.plan().request().observations().iter().enumerate()
     {
         validate_observation(observation_index, *observation)?;
     }
@@ -183,7 +182,10 @@ fn validate_maintained_compatibility(
     if !capabilities.supports(GpuCapabilityFeature::Copy) {
         return Err(RenderDeterministicCompatibilityError::CopyCapabilityUnsupported);
     }
-    if !context.device_facts().is_enabled(GpuCapabilityFeature::Copy) {
+    if !context
+        .device_facts()
+        .is_enabled(GpuCapabilityFeature::Copy)
+    {
         return Err(RenderDeterministicCompatibilityError::CopyCapabilityNotEnabled);
     }
 
@@ -215,9 +217,11 @@ fn validate_observation(
 ) -> Result<(), RenderDeterministicCompatibilityError> {
     let shutter = observation.shutter();
     if shutter.start() != shutter.end() {
-        return Err(RenderDeterministicCompatibilityError::ObservationShutterNotInstant {
-            observation_index,
-        });
+        return Err(
+            RenderDeterministicCompatibilityError::ObservationShutterNotInstant {
+                observation_index,
+            },
+        );
     }
 
     let sampling_support = match observation {
@@ -242,13 +246,18 @@ fn validate_destination(
         RenderOutputDestination::ScalarBuffer(buffer) => {
             let descriptor = buffer.descriptor();
             if descriptor.size_bytes() != SCALAR_CARRIER_BYTES {
-                return Err(RenderDeterministicCompatibilityError::ScalarDestinationSize {
-                    output_index,
-                    expected_size_bytes: SCALAR_CARRIER_BYTES,
-                    actual_size_bytes: descriptor.size_bytes(),
-                });
+                return Err(
+                    RenderDeterministicCompatibilityError::ScalarDestinationSize {
+                        output_index,
+                        expected_size_bytes: SCALAR_CARRIER_BYTES,
+                        actual_size_bytes: descriptor.size_bytes(),
+                    },
+                );
             }
-            if !descriptor.usages().contains(GpuBufferUsage::CopyDestination) {
+            if !descriptor
+                .usages()
+                .contains(GpuBufferUsage::CopyDestination)
+            {
                 return Err(
                     RenderDeterministicCompatibilityError::ScalarDestinationNotCopyDestination {
                         output_index,
@@ -259,13 +268,18 @@ fn validate_destination(
         RenderOutputDestination::SampleLatticeTexture(texture) => {
             let descriptor = texture.descriptor();
             if descriptor.format() != LATTICE_CARRIER_FORMAT {
-                return Err(RenderDeterministicCompatibilityError::LatticeDestinationFormat {
-                    output_index,
-                    expected: LATTICE_CARRIER_FORMAT,
-                    actual: descriptor.format(),
-                });
+                return Err(
+                    RenderDeterministicCompatibilityError::LatticeDestinationFormat {
+                        output_index,
+                        expected: LATTICE_CARRIER_FORMAT,
+                        actual: descriptor.format(),
+                    },
+                );
             }
-            if !descriptor.usages().contains(GpuTextureUsage::CopyDestination) {
+            if !descriptor
+                .usages()
+                .contains(GpuTextureUsage::CopyDestination)
+            {
                 return Err(
                     RenderDeterministicCompatibilityError::LatticeDestinationNotCopyDestination {
                         output_index,
@@ -354,9 +368,11 @@ mod tests {
         );
         assert_eq!(
             validate_observation(3, noninstant),
-            Err(RenderDeterministicCompatibilityError::ObservationShutterNotInstant {
-                observation_index: 3
-            })
+            Err(
+                RenderDeterministicCompatibilityError::ObservationShutterNotInstant {
+                    observation_index: 3
+                }
+            )
         );
 
         let cone = RenderObservationSpec::Perspective(
@@ -415,15 +431,14 @@ mod tests {
             )
             .expect("oversized scalar handle");
         assert_eq!(
-            validate_destination(
-                1,
-                &RenderOutputDestination::ScalarBuffer(oversized_scalar)
-            ),
-            Err(RenderDeterministicCompatibilityError::ScalarDestinationSize {
-                output_index: 1,
-                expected_size_bytes: 4,
-                actual_size_bytes: 8,
-            })
+            validate_destination(1, &RenderOutputDestination::ScalarBuffer(oversized_scalar)),
+            Err(
+                RenderDeterministicCompatibilityError::ScalarDestinationSize {
+                    output_index: 1,
+                    expected_size_bytes: 4,
+                    actual_size_bytes: 8,
+                }
+            )
         );
 
         let storage_only_scalar = allocator
@@ -471,11 +486,13 @@ mod tests {
                 3,
                 &RenderOutputDestination::SampleLatticeTexture(wrong_format)
             ),
-            Err(RenderDeterministicCompatibilityError::LatticeDestinationFormat {
-                output_index: 3,
-                expected: GpuTextureFormat::R32Uint,
-                actual: GpuTextureFormat::Rgba8Unorm,
-            })
+            Err(
+                RenderDeterministicCompatibilityError::LatticeDestinationFormat {
+                    output_index: 3,
+                    expected: GpuTextureFormat::R32Uint,
+                    actual: GpuTextureFormat::Rgba8Unorm,
+                }
+            )
         );
 
         let storage_only_lattice = allocator
