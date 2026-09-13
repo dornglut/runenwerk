@@ -33,7 +33,12 @@ The former declarative component-registration and hard-coded interest-policy tar
 designs are retained only in the archived design area as historical evidence. They are
 not current successor authority.
 
-## Current Truth Summary
+The implementation inventory below is retained as a point-in-time snapshot from this
+document's original 2026-05-05 review. The September 2026 `last_reviewed` date records
+successor-link and lifecycle reconciliation; it does not revalidate that historical
+inventory as current implementation truth.
+
+## Historical Implementation Snapshot
 
 Implemented now:
 
