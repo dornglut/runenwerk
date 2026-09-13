@@ -7,11 +7,6 @@
 //! branch fails closed; no physical packing, WGSL behavior, or test-only CPU oracle becomes semantic
 //! authority.
 
-use super::numeric::{
-    VerificationInterval, certified_tan_half_fov, mathematical_pi_interval,
-    numeric_value_satisfies_tolerance,
-};
-use super::observation::DeterministicVerificationObservation;
 use super::super::admission::{AdmittedRenderPlan, RenderAdmittedOutput};
 use super::super::appearance::RenderDirectionalEmitter;
 use super::super::deterministic_execution::{
@@ -24,6 +19,11 @@ use super::super::request::{
 use super::super::scene::RenderObjectId;
 use super::super::surface_input::RenderSurfaceSemanticInputView;
 use super::RenderDeterministicVerificationError;
+use super::numeric::{
+    VerificationInterval, certified_tan_half_fov, mathematical_pi_interval,
+    numeric_value_satisfies_tolerance,
+};
+use super::observation::DeterministicVerificationObservation;
 
 #[derive(Debug, Clone, Copy)]
 struct CertifiedRay {
@@ -77,11 +77,7 @@ pub(super) fn verify_completed_semantics(
     }
 
     for observed in observations {
-        verify_output(
-            admitted,
-            submitted.object_identity_decoder(),
-            observed,
-        )?;
+        verify_output(admitted, submitted.object_identity_decoder(), observed)?;
     }
     Ok(())
 }
@@ -150,20 +146,18 @@ fn verify_output(
                 "maintained evaluator reported an internal-invalid sample",
             ));
         }
-        let ray = certified_sample_ray(observation, requested.spec().topology(), sample_index).ok_or(
-            inconclusive_error(
+        let ray = certified_sample_ray(observation, requested.spec().topology(), sample_index)
+            .ok_or(inconclusive_error(
                 output_index,
                 Some(sample_index),
                 "sample ray could not be conservatively certified",
-            ),
-        )?;
-        let intersection = nearest_primary_intersection(ray, &geometry).ok_or(
-            inconclusive_error(
+            ))?;
+        let intersection =
+            nearest_primary_intersection(ray, &geometry).ok_or(inconclusive_error(
                 output_index,
                 Some(sample_index),
                 "primary surface branch or nearest-hit choice is ambiguous",
-            ),
-        )?;
+            ))?;
         verify_sample(
             admitted,
             identity_decoder,
@@ -206,17 +200,14 @@ fn verify_sample(
                     Some(sample_index),
                     "zero radiance reference could not be represented",
                 ))?,
-                CertifiedIntersection::Hit(hit) => direct_radiance(
-                    admitted,
-                    geometry,
-                    hit,
-                    representation.wavelength_meters(),
-                )
-                .ok_or(inconclusive_error(
-                    output_index,
-                    Some(sample_index),
-                    "radiance orientation, visibility, or arithmetic branch is ambiguous",
-                ))?,
+                CertifiedIntersection::Hit(hit) => {
+                    direct_radiance(admitted, geometry, hit, representation.wavelength_meters())
+                        .ok_or(inconclusive_error(
+                            output_index,
+                            Some(sample_index),
+                            "radiance orientation, visibility, or arithmetic branch is ambiguous",
+                        ))?
+                }
             };
             verify_numeric_value(
                 output_index,
@@ -238,13 +229,12 @@ fn verify_sample(
             ),
             CertifiedIntersection::Hit(hit) => {
                 require_definedness(output_index, sample_index, definedness_word, 1)?;
-                let displacement = vec_sub(hit.position_scene, ray.origin_scene).ok_or(
-                    inconclusive_error(
+                let displacement =
+                    vec_sub(hit.position_scene, ray.origin_scene).ok_or(inconclusive_error(
                         output_index,
                         Some(sample_index),
                         "forward-depth displacement arithmetic is unsupported",
-                    ),
-                )?;
+                    ))?;
                 let forward = interval_vec3([0.0, 0.0, -1.0]).ok_or(inconclusive_error(
                     output_index,
                     Some(sample_index),
@@ -284,7 +274,8 @@ fn verify_sample(
             }
             CertifiedIntersection::Hit(hit) => {
                 require_definedness(output_index, sample_index, definedness_word, 1)?;
-                if canonical_word == 0 || identity_decoder.decode(canonical_word) != Some(hit.object_id)
+                if canonical_word == 0
+                    || identity_decoder.decode(canonical_word) != Some(hit.object_id)
                 {
                     return Err(physical_mismatch_error(
                         output_index,
@@ -373,11 +364,15 @@ fn collect_geometry(
     for object in output.object_representations() {
         let object_id = object.object_id();
         let representation_id = object.representation().representation_id();
-        let state = admitted.plan().scene().object_state(object_id).ok_or(correlation_error(
-            output_index,
-            None,
-            "selected verification object no longer has retained spatial state",
-        ))?;
+        let state = admitted
+            .plan()
+            .scene()
+            .object_state(object_id)
+            .ok_or(correlation_error(
+                output_index,
+                None,
+                "selected verification object no longer has retained spatial state",
+            ))?;
         let matrix = state.spatial().local_to_scene().row_major_3x4();
         let input = admitted
             .surface_semantic_input(representation_id)
@@ -520,10 +515,7 @@ fn nearest_primary_intersection(
     winner.map(CertifiedIntersection::Hit)
 }
 
-fn intersect(
-    ray: CertifiedRay,
-    geometry: VerificationGeometry,
-) -> Option<CertifiedIntersection> {
+fn intersect(ray: CertifiedRay, geometry: VerificationGeometry) -> Option<CertifiedIntersection> {
     match geometry.surface {
         RenderSurfaceSemanticInputView::Sphere {
             center_local_units,
@@ -604,10 +596,7 @@ fn intersect_plane(
     if distance.lower() < 0.0 {
         return None;
     }
-    let position_scene = vec_add(
-        ray.origin_scene,
-        vec_scale(ray.direction_scene, distance)?,
-    )?;
+    let position_scene = vec_add(ray.origin_scene, vec_scale(ray.direction_scene, distance)?)?;
     Some(CertifiedIntersection::Hit(CertifiedHit {
         object_id: geometry.object_id,
         distance,
@@ -623,10 +612,7 @@ fn certified_hit(
     distance: VerificationInterval,
     center_scene: [VerificationInterval; 3],
 ) -> Option<CertifiedIntersection> {
-    let position_scene = vec_add(
-        ray.origin_scene,
-        vec_scale(ray.direction_scene, distance)?,
-    )?;
+    let position_scene = vec_add(ray.origin_scene, vec_scale(ray.direction_scene, distance)?)?;
     let normal_scene = normalize(vec_sub(position_scene, center_scene)?)?;
     Some(CertifiedIntersection::Hit(CertifiedHit {
         object_id: geometry.object_id,
@@ -726,10 +712,7 @@ fn sample_count(topology: RenderResultTopology) -> Option<usize> {
     }
 }
 
-fn translated_point(
-    point: [f64; 3],
-    translation: [f64; 3],
-) -> Option<[VerificationInterval; 3]> {
+fn translated_point(point: [f64; 3], translation: [f64; 3]) -> Option<[VerificationInterval; 3]> {
     vec_add(interval_vec3(point)?, interval_vec3(translation)?)
 }
 
@@ -902,11 +885,8 @@ mod tests {
         let first = sphere(object_id(), -3.0, 1.0);
         let second = sphere(object_id(), -3.0, 1.0);
         assert!(
-            nearest_primary_intersection(
-                ray([0.0, 0.0, 0.0], [0.0, 0.0, -1.0]),
-                &[first, second],
-            )
-            .is_none(),
+            nearest_primary_intersection(ray([0.0, 0.0, 0.0], [0.0, 0.0, -1.0]), &[first, second],)
+                .is_none(),
             "overlapping nearest surfaces must fail closed"
         );
     }

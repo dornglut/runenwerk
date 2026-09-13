@@ -202,7 +202,9 @@ pub(super) enum RenderDeterministicVerificationError {
 impl fmt::Display for RenderDeterministicVerificationError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Eligibility(error) => write!(formatter, "verification eligibility failed: {error}"),
+            Self::Eligibility(error) => {
+                write!(formatter, "verification eligibility failed: {error}")
+            }
             Self::ObservationNormalization { detail } => write!(
                 formatter,
                 "same-submission observation normalization failed: {detail}"
@@ -412,11 +414,12 @@ pub(super) fn verify_completed_deterministic_render(
 ) -> Result<VerifiedDeterministicRender, RenderDeterministicVerificationError> {
     ensure_deterministic_verification_eligible(verification.submitted().admitted())
         .map_err(RenderDeterministicVerificationError::Eligibility)?;
-    let observations = observe_completed_deterministic_verification(&verification).map_err(|error| {
-        RenderDeterministicVerificationError::ObservationNormalization {
-            detail: format!("{error:?}"),
-        }
-    })?;
+    let observations =
+        observe_completed_deterministic_verification(&verification).map_err(|error| {
+            RenderDeterministicVerificationError::ObservationNormalization {
+                detail: format!("{error:?}"),
+            }
+        })?;
     semantic::verify_completed_semantics(&verification, &observations)?;
     Ok(VerifiedDeterministicRender { verification })
 }
