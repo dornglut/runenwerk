@@ -160,9 +160,7 @@ fn request_execution_context() -> Option<GpuContext> {
         Ok(context) => Some(context),
         Err(error) if error.category() == GpuContextRequestErrorCategory::NoAdapterAvailable => {
             assert_ne!(
-                std::env::var("RUNENRENDER_R7_REQUIRE_GPU")
-                    .ok()
-                    .as_deref(),
+                std::env::var("RUNENRENDER_R7_REQUIRE_GPU").ok().as_deref(),
                 Some("1"),
                 "permanent R7 maintained execution CI requires a public RunenGPU adapter"
             );
