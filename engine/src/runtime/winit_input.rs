@@ -8,7 +8,9 @@ use crate::plugins::{
 };
 use crate::runtime::window::NativeWindowId;
 use winit::dpi::PhysicalPosition;
-use winit::event::{DeviceId, ElementState, Force, MouseButton, MouseScrollDelta, Touch, TouchPhase};
+use winit::event::{
+    DeviceId, ElementState, Force, MouseButton, MouseScrollDelta, Touch, TouchPhase,
+};
 use winit::keyboard::{Key, NativeKey, NativeKeyCode, PhysicalKey};
 
 const FIRST_WINIT_SOURCE_ID: u64 = 1024;
@@ -148,10 +150,7 @@ pub(crate) fn cursor_position(position: PhysicalPosition<f64>) -> Point2 {
     )
 }
 
-pub(crate) fn pointer_button_input(
-    state: ElementState,
-    button: MouseButton,
-) -> PointerButtonInput {
+pub(crate) fn pointer_button_input(state: ElementState, button: MouseButton) -> PointerButtonInput {
     PointerButtonInput {
         button: pointer_button(button),
         state: digital_state(state),
