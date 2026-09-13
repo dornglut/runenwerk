@@ -29,6 +29,16 @@ var<storage, read_write> defined_words: array<u32>;
 @group(0) @binding(3)
 var<storage, read_write> status_words: array<u32>;
 
+const F32_EXPONENT_MASK: u32 = 2139095040u;
+
+fn finite_f32(value: f32) -> bool {
+    return (bitcast<u32>(value) & F32_EXPONENT_MASK) != F32_EXPONENT_MASK;
+}
+
+fn finite_vec3(value: vec3<f32>) -> bool {
+    return finite_f32(value.x) && finite_f32(value.y) && finite_f32(value.z);
+}
+
 fn load_f32(index: u32) -> f32 {
     return bitcast<f32>(input_words[index]);
 }
@@ -43,11 +53,11 @@ fn invalid_hit() -> Hit {
 
 fn normalize_checked(value: vec3<f32>) -> NormalizedDirection {
     let magnitude_squared = dot(value, value);
-    if !isFinite(magnitude_squared) || magnitude_squared <= 0.0 {
+    if !finite_f32(magnitude_squared) || magnitude_squared <= 0.0 {
         return NormalizedDirection(false, vec3<f32>(0.0));
     }
     let normalized = value / sqrt(magnitude_squared);
-    return NormalizedDirection(all(isFinite(normalized)), normalized);
+    return NormalizedDirection(finite_vec3(normalized), normalized);
 }
 
 fn mul3(base: u32, value: vec3<f32>) -> vec3<f32> {
@@ -86,7 +96,7 @@ fn normal_to_scene(base: u32, normal_local: vec3<f32>) -> NormalizedDirection {
 fn intersect_sphere(base: u32, origin_scene: vec3<f32>, direction_scene: vec3<f32>) -> Hit {
     let origin = to_local_point(base, origin_scene);
     let direction = to_local_direction(base, direction_scene);
-    if !all(isFinite(origin)) || !all(isFinite(direction)) {
+    if !finite_vec3(origin) || !finite_vec3(direction) {
         return invalid_hit();
     }
 
@@ -101,7 +111,7 @@ fn intersect_sphere(base: u32, origin_scene: vec3<f32>, direction_scene: vec3<f3
     let b = 2.0 * dot(relative, direction);
     let c = dot(relative, relative) - radius * radius;
     let discriminant = b * b - 4.0 * a * c;
-    if !isFinite(a) || a <= 0.0 || !isFinite(discriminant) {
+    if !finite_f32(a) || a <= 0.0 || !finite_f32(discriminant) {
         return invalid_hit();
     }
     if discriminant < 0.0 {
@@ -112,7 +122,7 @@ fn intersect_sphere(base: u32, origin_scene: vec3<f32>, direction_scene: vec3<f3
     let denominator = 2.0 * a;
     let first = (-b - root) / denominator;
     let second = (-b + root) / denominator;
-    if !isFinite(first) || !isFinite(second) {
+    if !finite_f32(first) || !finite_f32(second) {
         return invalid_hit();
     }
 
@@ -131,7 +141,7 @@ fn intersect_sphere(base: u32, origin_scene: vec3<f32>, direction_scene: vec3<f3
     }
 
     let hit_local = origin + direction * t;
-    if !all(isFinite(hit_local)) {
+    if !finite_vec3(hit_local) {
         return invalid_hit();
     }
     let normal = normalize_checked(hit_local - center);
@@ -155,7 +165,7 @@ fn intersect_sphere(base: u32, origin_scene: vec3<f32>, direction_scene: vec3<f3
 fn intersect_plane(base: u32, origin_scene: vec3<f32>, direction_scene: vec3<f32>) -> Hit {
     let origin = to_local_point(base, origin_scene);
     let direction = to_local_direction(base, direction_scene);
-    if !all(isFinite(origin)) || !all(isFinite(direction)) {
+    if !finite_vec3(origin) || !finite_vec3(direction) {
         return invalid_hit();
     }
 
@@ -174,14 +184,14 @@ fn intersect_plane(base: u32, origin_scene: vec3<f32>, direction_scene: vec3<f32
     }
 
     let denominator = dot(normal.value, direction);
-    if !isFinite(denominator) {
+    if !finite_f32(denominator) {
         return invalid_hit();
     }
     if denominator == 0.0 {
         return miss();
     }
     let t = dot(point - origin, normal.value) / denominator;
-    if !isFinite(t) {
+    if !finite_f32(t) {
         return invalid_hit();
     }
     if t < 0.0 {
@@ -252,7 +262,7 @@ fn direct_radiance(hit_position: vec3<f32>, hit: Hit) -> ScalarEvaluation {
         }
 
         let cosine = max(dot(hit.normal_scene, direction.value), 0.0);
-        if !isFinite(cosine) {
+        if !finite_f32(cosine) {
             return ScalarEvaluation(false, 0.0);
         }
         if cosine > 0.0 {
@@ -264,7 +274,7 @@ fn direct_radiance(hit_position: vec3<f32>, hit: Hit) -> ScalarEvaluation {
                 let contribution =
                     hit.reflectance * load_f32(base + 3u) * cosine / 3.14159265358979323846;
                 total = total + contribution;
-                if !isFinite(total) {
+                if !finite_f32(total) {
                     return ScalarEvaluation(false, 0.0);
                 }
             }
@@ -327,7 +337,7 @@ fn main(@builtin(global_invocation_id) invocation: vec3<u32>) {
     let output_index = physical_output_index(sample_index);
     let origin = observation_origin();
     let direction = sample_direction(sample_index);
-    if !all(isFinite(origin)) || !direction.valid {
+    if !finite_vec3(origin) || !direction.valid {
         invalidate(output_index, sample_index);
         return;
     }
@@ -345,7 +355,7 @@ fn main(@builtin(global_invocation_id) invocation: vec3<u32>) {
             return;
         }
         let position = origin + direction.value * hit.t;
-        if !all(isFinite(position)) {
+        if !finite_vec3(position) {
             invalidate(output_index, sample_index);
             return;
         }
@@ -370,7 +380,7 @@ fn main(@builtin(global_invocation_id) invocation: vec3<u32>) {
         }
         let position = origin + direction.value * hit.t;
         let depth = dot(position - origin, forward.value);
-        if !all(isFinite(position)) || !isFinite(depth) {
+        if !finite_vec3(position) || !finite_f32(depth) {
             invalidate(output_index, sample_index);
             return;
         }
