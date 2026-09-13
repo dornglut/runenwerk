@@ -19,8 +19,10 @@ fn scene_plugin_installs_scene_runtime_state() {
 #[test]
 fn scene_plugin_preserves_preinserted_scene_runtime_state() {
     let mut app = App::headless();
-    let mut scene = SceneRuntimeState::default();
-    scene.world_scene_label = "configured-scene".to_string();
+    let scene = SceneRuntimeState {
+        world_scene_label: "configured-scene".to_string(),
+        ..Default::default()
+    };
     app.insert_resource(scene);
 
     app.add_plugin(ScenePlugin);
