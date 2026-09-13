@@ -12,12 +12,13 @@ last_reviewed: 2026-09-13
 
 ## Purpose
 
-Owns scene lifecycle orchestration and runtime scene state publication.
+Owns scene registration/catalog state, scene lifecycle orchestration, and runtime scene state publication.
 
 ## Entry Points
 
 - Module: engine/src/plugins/scene/plugin.rs
 - Entry: ScenePlugin
+- Scene composition helpers: `App::add_scene`, `App::add_scene_template`
 - Local README: engine/src/plugins/scene/README.md
 
 ## Minimal Setup
@@ -32,11 +33,17 @@ app.add_plugin(ScenePlugin);
 The current Scene runtime consumes frame timing but does not own it. Applications that already
 use `default_plugins()` get `TimePlugin` from that stack and only need to add `ScenePlugin`.
 
+`ScenePlugin` installs an empty `SceneCatalog` when no scenes were registered explicitly. A bare
+`App` does not imply Scene catalog state. Applications may register scenes before installing the
+plugin; `App::add_scene` and `App::add_scene_template` create/populate the same Scene-owned catalog,
+and later `ScenePlugin` installation preserves those registrations.
+
 ## Runtime Contract
 
 - Schedule placement: Startup, PreUpdate, FixedUpdate, Update
 - Timing prerequisite: `Time` supplied by `TimePlugin` (directly or through a plugin stack).
-- Ownership: Scene manager lifecycle and runtime publication boundaries.
+- Scene catalog: supplied by `ScenePlugin` when absent or populated explicitly through `App::add_scene*` composition.
+- Ownership: Scene registration/catalog state, scene manager lifecycle, and runtime publication boundaries.
 - Non-ownership: Frame-time progression and render graph submission.
 
 ## Related
