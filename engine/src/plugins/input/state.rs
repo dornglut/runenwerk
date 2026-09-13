@@ -18,12 +18,12 @@ const LEGACY_DEVICE_SOURCE: InputSourceId = InputSourceId::new(2);
 #[derive(Debug, Default)]
 struct LegacyControlInterner {
     next_control: u64,
-    keys: HashMap<KeyCode, ControlId>,
+    keys: HashMap<PhysicalKey, ControlId>,
     buttons: HashMap<MouseButton, ControlId>,
 }
 
 impl LegacyControlInterner {
-    fn intern_key(&mut self, key: KeyCode) -> ControlId {
+    fn intern_key(&mut self, key: PhysicalKey) -> ControlId {
         if let Some(control) = self.keys.get(&key).copied() {
             return control;
         }
@@ -32,8 +32,12 @@ impl LegacyControlInterner {
         control
     }
 
-    fn key(&self, key: KeyCode) -> Option<ControlId> {
+    fn key(&self, key: PhysicalKey) -> Option<ControlId> {
         self.keys.get(&key).copied()
+    }
+
+    fn key_code(&self, key: KeyCode) -> Option<ControlId> {
+        self.key(PhysicalKey::Code(key))
     }
 
     fn intern_button(&mut self, button: MouseButton) -> ControlId {
@@ -309,13 +313,12 @@ impl InputState {
                 is_synthetic,
                 ..
             } => {
-                if let PhysicalKey::Code(code) = event.physical_key {
-                    if *is_synthetic {
-                        self.handle_keyboard_reconciliation(code, event.state);
-                    } else {
-                        self.handle_keyboard_input(code, event.state, event.text.as_deref());
-                    }
-                }
+                self.handle_keyboard_physical(
+                    event.physical_key,
+                    event.state,
+                    event.text.as_deref(),
+                    *is_synthetic,
+                );
             }
             WindowEvent::MouseWheel { delta, .. } => self.handle_mouse_wheel_delta(match delta {
                 MouseScrollDelta::LineDelta(_, y) => *y,
@@ -352,21 +355,22 @@ impl InputState {
         state: ElementState,
         text: Option<&str>,
     ) {
-        self.handle_keyboard_semantic(code, state, text, false);
+        self.handle_keyboard_physical(PhysicalKey::Code(code), state, text, false);
     }
 
+    #[cfg(test)]
     pub(crate) fn handle_keyboard_reconciliation(&mut self, code: KeyCode, state: ElementState) {
-        self.handle_keyboard_semantic(code, state, None, true);
+        self.handle_keyboard_physical(PhysicalKey::Code(code), state, None, true);
     }
 
-    fn handle_keyboard_semantic(
+    fn handle_keyboard_physical(
         &mut self,
-        code: KeyCode,
+        physical_key: PhysicalKey,
         state: ElementState,
         text: Option<&str>,
         reconciliation: bool,
     ) {
-        let control = self.controls.intern_key(code);
+        let control = self.controls.intern_key(physical_key);
         let was_down = self.neutral.control_down(LEGACY_WINDOW_SOURCE, control);
         let transition = match (reconciliation, state) {
             (false, ElementState::Pressed) => DigitalTransition::Down,
@@ -377,14 +381,23 @@ impl InputState {
         self.neutral
             .admit(ObservationGroup::single(
                 LEGACY_WINDOW_SOURCE,
-                InputObservation::DigitalControl { control, transition },
+                InputObservation::DigitalControl {
+                    control,
+                    transition,
+                },
             ))
             .expect("digital keyboard observation should always be valid");
 
         self.recompute_action_down_states();
-        match (reconciliation, state) {
-            (false, ElementState::Pressed) if !was_down => self.apply_action_press_for_key(code),
-            _ => self.sync_legacy_flags(),
+        if let PhysicalKey::Code(code) = physical_key {
+            match (reconciliation, state) {
+                (false, ElementState::Pressed) if !was_down => {
+                    self.apply_action_press_for_key(code);
+                }
+                _ => self.sync_legacy_flags(),
+            }
+        } else {
+            self.sync_legacy_flags();
         }
 
         if !reconciliation {
@@ -450,7 +463,10 @@ impl InputState {
         self.neutral
             .admit(ObservationGroup::single(
                 LEGACY_WINDOW_SOURCE,
-                InputObservation::DigitalControl { control, transition },
+                InputObservation::DigitalControl {
+                    control,
+                    transition,
+                },
             ))
             .expect("digital mouse-button observation should always be valid");
 
@@ -467,12 +483,13 @@ impl InputState {
             .absolute_pointer_position(LEGACY_WINDOW_SOURCE)
             .map(|point| (point.x, point.y))
             .unwrap_or((0.0, 0.0));
-        self.mouse_button_transitions.push(MouseButtonTransitionSample {
-            button,
-            state,
-            position,
-            motion_sample_index: self.mouse_motion_samples.len(),
-        });
+        self.mouse_button_transitions
+            .push(MouseButtonTransitionSample {
+                button,
+                state,
+                position,
+                motion_sample_index: self.mouse_motion_samples.len(),
+            });
 
         match state {
             ElementState::Pressed => {
@@ -533,7 +550,8 @@ impl InputState {
             TouchInputPhase::Ended => NeutralContactPhase::End,
             TouchInputPhase::Cancelled => NeutralContactPhase::Cancel,
         };
-        let pressure = pressure.map(|value| AnalogMeasurement::new(value, MeasurementDomain::LegacyPressureScalar));
+        let pressure = pressure
+            .map(|value| AnalogMeasurement::new(value, MeasurementDomain::LegacyPressureScalar));
         if self
             .neutral
             .admit(ObservationGroup::single(
@@ -603,11 +621,18 @@ impl InputState {
     }
 
     pub fn left_mouse_pressed_transition(&self) -> Option<MouseButtonTransitionSample> {
-        self.mouse_button_transitions.iter().find(|transition| transition.is_left_pressed()).copied()
+        self.mouse_button_transitions
+            .iter()
+            .find(|transition| transition.is_left_pressed())
+            .copied()
     }
 
     pub fn left_mouse_released_transition(&self) -> Option<MouseButtonTransitionSample> {
-        self.mouse_button_transitions.iter().rev().find(|transition| transition.is_left_released()).copied()
+        self.mouse_button_transitions
+            .iter()
+            .rev()
+            .find(|transition| transition.is_left_released())
+            .copied()
     }
 
     pub fn touch_samples(&self) -> &[TouchInputSample] {
@@ -672,17 +697,25 @@ impl InputState {
     }
 
     fn key_down(&self, key: KeyCode) -> bool {
-        self.controls.key(key).is_some_and(|control| self.neutral.control_down(LEGACY_WINDOW_SOURCE, control))
+        self.controls
+            .key_code(key)
+            .is_some_and(|control| self.neutral.control_down(LEGACY_WINDOW_SOURCE, control))
     }
 
     fn button_down(&self, button: MouseButton) -> bool {
-        self.controls.button(button).is_some_and(|control| self.neutral.control_down(LEGACY_WINDOW_SOURCE, control))
+        self.controls
+            .button(button)
+            .is_some_and(|control| self.neutral.control_down(LEGACY_WINDOW_SOURCE, control))
     }
 
+    #[cfg(test)]
     pub(crate) fn neutral_touch_active(&self, id: u64) -> bool {
-        self.neutral.contact_state(LEGACY_WINDOW_SOURCE, ContactId::new(id)).is_some()
+        self.neutral
+            .contact_state(LEGACY_WINDOW_SOURCE, ContactId::new(id))
+            .is_some()
     }
 
+    #[cfg(test)]
     pub(crate) fn neutral_active_touch_count(&self) -> usize {
         self.neutral.active_contact_count(LEGACY_WINDOW_SOURCE)
     }
@@ -700,9 +733,15 @@ impl InputState {
     fn apply_binding_change_inner(&mut self, change: InputBindingChange) -> bool {
         match change {
             InputBindingChange::MapKey { action, key } => self.bindings.map_key(action, key),
-            InputBindingChange::MapChord { action, chord } => self.bindings.map_chord(action, chord),
-            InputBindingChange::UnmapKey { action, key } => self.bindings.unmap_key(&action, key) > 0,
-            InputBindingChange::UnmapChord { action, chord } => self.bindings.unmap_chord(&action, chord),
+            InputBindingChange::MapChord { action, chord } => {
+                self.bindings.map_chord(action, chord)
+            }
+            InputBindingChange::UnmapKey { action, key } => {
+                self.bindings.unmap_key(&action, key) > 0
+            }
+            InputBindingChange::UnmapChord { action, chord } => {
+                self.bindings.unmap_chord(&action, chord)
+            }
             InputBindingChange::ClearAction { action } => self.bindings.clear_action(&action),
             InputBindingChange::ResetDefaults => {
                 self.bindings = InputBindings::with_default_bindings();
@@ -724,7 +763,11 @@ impl InputState {
         for action in self.bindings.action_ids() {
             if self.bindings.action_down(
                 action,
-                |key| controls.key(key).is_some_and(|control| neutral.control_down(LEGACY_WINDOW_SOURCE, control)),
+                |key| {
+                    controls
+                        .key_code(key)
+                        .is_some_and(|control| neutral.control_down(LEGACY_WINDOW_SOURCE, control))
+                },
                 modifiers,
             ) {
                 actions_down.insert(action.clone());
@@ -770,4 +813,25 @@ pub struct ModifiersSnapshot {
     pub(crate) ctrl: bool,
     pub(crate) alt: bool,
     pub(crate) super_key: bool,
+}
+
+#[cfg(test)]
+mod interner_tests {
+    use super::LegacyControlInterner;
+    use winit::event::MouseButton;
+    use winit::keyboard::{KeyCode, NativeKeyCode, PhysicalKey};
+
+    #[test]
+    fn distinct_physical_controls_do_not_alias() {
+        let mut interner = LegacyControlInterner::default();
+        let native_a = interner.intern_key(PhysicalKey::Unidentified(NativeKeyCode::Xkb(41)));
+        let native_b = interner.intern_key(PhysicalKey::Unidentified(NativeKeyCode::Xkb(42)));
+        let known = interner.intern_key(PhysicalKey::Code(KeyCode::F13));
+        let button = interner.intern_button(MouseButton::Left);
+
+        assert_ne!(native_a, native_b);
+        assert_ne!(native_a, known);
+        assert_ne!(native_a, button);
+        assert_ne!(known, button);
+    }
 }

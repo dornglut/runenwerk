@@ -27,19 +27,37 @@ impl ContactId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct SourceSequence(u64);
 
 impl SourceSequence {
+    fn next(self) -> Self {
+        Self(
+            self.0
+                .checked_add(1)
+                .expect("input source sequence exhausted"),
+        )
+    }
+
+    #[cfg(test)]
     pub(crate) const fn get(self) -> u64 {
         self.0
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct AdmissionSequence(u64);
 
 impl AdmissionSequence {
+    fn next(self) -> Self {
+        Self(
+            self.0
+                .checked_add(1)
+                .expect("input admission sequence exhausted"),
+        )
+    }
+
+    #[cfg(test)]
     pub(crate) const fn get(self) -> u64 {
         self.0
     }
@@ -141,7 +159,6 @@ pub(crate) enum InputObservation {
         position: Point2,
         pressure: Option<AnalogMeasurement>,
     },
-    SourceDiscontinuity,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -152,7 +169,10 @@ pub(crate) struct ObservationGroup {
 
 impl ObservationGroup {
     pub(crate) fn new(source: InputSourceId, observations: Vec<InputObservation>) -> Self {
-        Self { source, observations }
+        Self {
+            source,
+            observations,
+        }
     }
 
     pub(crate) fn single(source: InputSourceId, observation: InputObservation) -> Self {
@@ -160,17 +180,9 @@ impl ObservationGroup {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct AdmissionReceipt {
-    pub(crate) source: InputSourceId,
-    pub(crate) source_sequence: SourceSequence,
-    pub(crate) admission_sequence: AdmissionSequence,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct ContactState {
     pub(crate) position: Point2,
-    pub(crate) pressure: Option<AnalogMeasurement>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -188,29 +200,32 @@ struct NeutralInputState {
 #[derive(Debug, Default)]
 pub(crate) struct NeutralInputAuthority {
     state: NeutralInputState,
-    source_sequences: HashMap<InputSourceId, u64>,
-    next_admission_sequence: u64,
+    source_sequences: HashMap<InputSourceId, SourceSequence>,
+    admission_sequence: AdmissionSequence,
 }
 
 impl NeutralInputAuthority {
-    pub(crate) fn admit(&mut self, group: ObservationGroup) -> Result<AdmissionReceipt, NeutralInputError> {
-        if group.observations.iter().any(|observation| !is_finite(observation)) {
+    pub(crate) fn admit(
+        &mut self,
+        group: ObservationGroup,
+    ) -> Result<(), NeutralInputError> {
+        if group
+            .observations
+            .iter()
+            .any(|observation| !is_finite(observation))
+        {
             return Err(NeutralInputError::NonFiniteObservation);
         }
 
-        let source_sequence = {
-            let next = self.source_sequences.entry(group.source).or_insert(0);
-            *next = next.checked_add(1).expect("input source sequence exhausted");
-            SourceSequence(*next)
-        };
-        self.next_admission_sequence = self.next_admission_sequence.checked_add(1).expect("input admission sequence exhausted");
-        let admission_sequence = AdmissionSequence(self.next_admission_sequence);
+        let source_sequence = self.source_sequences.entry(group.source).or_default();
+        *source_sequence = source_sequence.next();
+        self.admission_sequence = self.admission_sequence.next();
 
         for observation in group.observations {
             self.apply(group.source, observation);
         }
 
-        Ok(AdmissionReceipt { source: group.source, source_sequence, admission_sequence })
+        Ok(())
     }
 
     pub(crate) fn control_down(&self, source: InputSourceId, control: ControlId) -> bool {
@@ -221,17 +236,39 @@ impl NeutralInputAuthority {
         self.state.absolute_pointer_positions.get(&source).copied()
     }
 
-    pub(crate) fn contact_state(&self, source: InputSourceId, contact: ContactId) -> Option<ContactState> {
+    pub(crate) fn contact_state(
+        &self,
+        source: InputSourceId,
+        contact: ContactId,
+    ) -> Option<ContactState> {
         self.state.contacts.get(&(source, contact)).copied()
     }
 
+    #[cfg(test)]
     pub(crate) fn active_contact_count(&self, source: InputSourceId) -> usize {
-        self.state.contacts.keys().filter(|(candidate, _)| *candidate == source).count()
+        self.state
+            .contacts
+            .keys()
+            .filter(|(candidate, _)| *candidate == source)
+            .count()
+    }
+
+    #[cfg(test)]
+    fn source_sequence(&self, source: InputSourceId) -> Option<SourceSequence> {
+        self.source_sequences.get(&source).copied()
+    }
+
+    #[cfg(test)]
+    fn admission_sequence(&self) -> AdmissionSequence {
+        self.admission_sequence
     }
 
     fn apply(&mut self, source: InputSourceId, observation: InputObservation) {
         match observation {
-            InputObservation::DigitalControl { control, transition } => match transition {
+            InputObservation::DigitalControl {
+                control,
+                transition,
+            } => match transition {
                 DigitalTransition::Down | DigitalTransition::ReconcileDown => {
                     self.state.held_controls.insert((source, control));
                 }
@@ -242,32 +279,29 @@ impl NeutralInputAuthority {
             InputObservation::AbsolutePointerPosition { position } => {
                 self.state.absolute_pointer_positions.insert(source, position);
             }
-            InputObservation::RelativeMotion { delta, unit } => {
-                let _ = (delta, unit);
-            }
-            InputObservation::Scroll { delta, domain } => {
-                let _ = (delta, domain);
-            }
-            InputObservation::Contact { contact, phase, position, pressure } => match phase {
+            InputObservation::RelativeMotion { .. } | InputObservation::Scroll { .. } => {}
+            InputObservation::Contact {
+                contact,
+                phase,
+                position,
+                ..
+            } => match phase {
                 ContactPhase::Begin | ContactPhase::Update => {
-                    self.state.contacts.insert((source, contact), ContactState { position, pressure });
+                    self.state
+                        .contacts
+                        .insert((source, contact), ContactState { position });
                 }
                 ContactPhase::End | ContactPhase::Cancel => {
                     self.state.contacts.remove(&(source, contact));
                 }
             },
-            InputObservation::SourceDiscontinuity => {
-                self.state.held_controls.retain(|(candidate, _)| *candidate != source);
-                self.state.contacts.retain(|(candidate, _), _| *candidate != source);
-                self.state.absolute_pointer_positions.remove(&source);
-            }
         }
     }
 }
 
 fn is_finite(observation: &InputObservation) -> bool {
     match observation {
-        InputObservation::DigitalControl { .. } | InputObservation::SourceDiscontinuity => true,
+        InputObservation::DigitalControl { .. } => true,
         InputObservation::AbsolutePointerPosition { position } => {
             let _ = position.space;
             point_is_finite(*position)
@@ -280,10 +314,12 @@ fn is_finite(observation: &InputObservation) -> bool {
             let _ = domain;
             delta.x.is_finite() && delta.y.is_finite()
         }
-        InputObservation::Contact { position, pressure, .. } => {
+        InputObservation::Contact {
+            position, pressure, ..
+        } => {
             let _ = position.space;
             point_is_finite(*position)
-                && pressure.as_ref().map_or(true, |measurement| {
+                && pressure.as_ref().is_none_or(|measurement| {
                     let _ = measurement.domain;
                     measurement.value.is_finite()
                 })
@@ -306,66 +342,146 @@ mod tests {
     #[test]
     fn source_and_admission_sequences_are_distinct_and_deterministic() {
         let mut authority = NeutralInputAuthority::default();
-        let a1 = authority.admit(ObservationGroup::single(SOURCE_A, InputObservation::DigitalControl { control: CONTROL, transition: DigitalTransition::Down })).expect("first source-A observation should admit");
-        let b1 = authority.admit(ObservationGroup::single(SOURCE_B, InputObservation::RelativeMotion { delta: Vector2::new(1.0, -1.0), unit: RelativeMotionUnit::BackendDeviceUnits })).expect("source-B observation should admit");
-        let a2 = authority.admit(ObservationGroup::single(SOURCE_A, InputObservation::DigitalControl { control: CONTROL, transition: DigitalTransition::Up })).expect("second source-A observation should admit");
 
-        assert_eq!(a1.source, SOURCE_A);
-        assert_eq!(a1.source_sequence.get(), 1);
-        assert_eq!(b1.source_sequence.get(), 1);
-        assert_eq!(a2.source_sequence.get(), 2);
-        assert_eq!(a1.admission_sequence.get(), 1);
-        assert_eq!(b1.admission_sequence.get(), 2);
-        assert_eq!(a2.admission_sequence.get(), 3);
+        authority
+            .admit(ObservationGroup::single(
+                SOURCE_A,
+                InputObservation::DigitalControl {
+                    control: CONTROL,
+                    transition: DigitalTransition::Down,
+                },
+            ))
+            .expect("first source-A observation should admit");
+        assert_eq!(authority.source_sequence(SOURCE_A).unwrap().get(), 1);
+        assert_eq!(authority.admission_sequence().get(), 1);
+
+        authority
+            .admit(ObservationGroup::single(
+                SOURCE_B,
+                InputObservation::RelativeMotion {
+                    delta: Vector2::new(1.0, -1.0),
+                    unit: RelativeMotionUnit::BackendDeviceUnits,
+                },
+            ))
+            .expect("source-B observation should admit");
+        assert_eq!(authority.source_sequence(SOURCE_B).unwrap().get(), 1);
+        assert_eq!(authority.admission_sequence().get(), 2);
+
+        authority
+            .admit(ObservationGroup::single(
+                SOURCE_A,
+                InputObservation::DigitalControl {
+                    control: CONTROL,
+                    transition: DigitalTransition::Up,
+                },
+            ))
+            .expect("second source-A observation should admit");
+        assert_eq!(authority.source_sequence(SOURCE_A).unwrap().get(), 2);
+        assert_eq!(authority.admission_sequence().get(), 3);
     }
 
     #[test]
     fn down_then_up_remain_two_admissions_even_when_final_state_matches_initial() {
         let mut authority = NeutralInputAuthority::default();
-        let down = authority.admit(ObservationGroup::single(SOURCE_A, InputObservation::DigitalControl { control: CONTROL, transition: DigitalTransition::Down })).expect("down should admit");
+
+        authority
+            .admit(ObservationGroup::single(
+                SOURCE_A,
+                InputObservation::DigitalControl {
+                    control: CONTROL,
+                    transition: DigitalTransition::Down,
+                },
+            ))
+            .expect("down should admit");
         assert!(authority.control_down(SOURCE_A, CONTROL));
-        let up = authority.admit(ObservationGroup::single(SOURCE_A, InputObservation::DigitalControl { control: CONTROL, transition: DigitalTransition::Up })).expect("up should admit");
+        assert_eq!(authority.admission_sequence().get(), 1);
+
+        authority
+            .admit(ObservationGroup::single(
+                SOURCE_A,
+                InputObservation::DigitalControl {
+                    control: CONTROL,
+                    transition: DigitalTransition::Up,
+                },
+            ))
+            .expect("up should admit");
         assert!(!authority.control_down(SOURCE_A, CONTROL));
-        assert_eq!(down.admission_sequence.get(), 1);
-        assert_eq!(up.admission_sequence.get(), 2);
+        assert_eq!(authority.admission_sequence().get(), 2);
     }
 
     #[test]
-    fn reconciliation_and_discontinuity_change_state_without_ordinary_edges() {
+    fn reconciliation_changes_confirmed_state_without_an_ordinary_edge() {
         let mut authority = NeutralInputAuthority::default();
-        authority.admit(ObservationGroup::single(SOURCE_A, InputObservation::DigitalControl { control: CONTROL, transition: DigitalTransition::ReconcileDown })).expect("reconciliation down should admit");
-        assert!(authority.control_down(SOURCE_A, CONTROL));
-        authority.admit(ObservationGroup::single(SOURCE_A, InputObservation::DigitalControl { control: CONTROL, transition: DigitalTransition::Cancel })).expect("cancel should admit");
-        assert!(!authority.control_down(SOURCE_A, CONTROL));
 
-        authority.admit(ObservationGroup::new(SOURCE_A, vec![
-            InputObservation::DigitalControl { control: CONTROL, transition: DigitalTransition::Down },
-            InputObservation::Contact { contact: ContactId::new(3), phase: ContactPhase::Begin, position: Point2::new(4.0, 5.0, CoordinateSpace::LegacyWindowPhysicalPixels), pressure: None },
-        ])).expect("confirmed state should admit");
-        authority.admit(ObservationGroup::single(SOURCE_A, InputObservation::SourceDiscontinuity)).expect("discontinuity should admit");
+        authority
+            .admit(ObservationGroup::single(
+                SOURCE_A,
+                InputObservation::DigitalControl {
+                    control: CONTROL,
+                    transition: DigitalTransition::ReconcileDown,
+                },
+            ))
+            .expect("reconciliation down should admit");
+        assert!(authority.control_down(SOURCE_A, CONTROL));
+
+        authority
+            .admit(ObservationGroup::single(
+                SOURCE_A,
+                InputObservation::DigitalControl {
+                    control: CONTROL,
+                    transition: DigitalTransition::Cancel,
+                },
+            ))
+            .expect("cancel should admit");
         assert!(!authority.control_down(SOURCE_A, CONTROL));
-        assert_eq!(authority.active_contact_count(SOURCE_A), 0);
     }
 
     #[test]
     fn omitted_pressure_remains_distinct_from_measured_zero() {
-        let mut authority = NeutralInputAuthority::default();
-        let contact = ContactId::new(9);
-        let position = Point2::new(10.0, 12.0, CoordinateSpace::LegacyWindowPhysicalPixels);
-        authority.admit(ObservationGroup::single(SOURCE_A, InputObservation::Contact { contact, phase: ContactPhase::Begin, position, pressure: None })).expect("contact without pressure should admit");
-        assert_eq!(authority.contact_state(SOURCE_A, contact).unwrap().pressure, None);
-        authority.admit(ObservationGroup::single(SOURCE_A, InputObservation::Contact { contact, phase: ContactPhase::Update, position, pressure: Some(AnalogMeasurement::new(0.0, MeasurementDomain::LegacyPressureScalar)) })).expect("measured zero should admit");
-        assert_eq!(authority.contact_state(SOURCE_A, contact).unwrap().pressure.unwrap().value, 0.0);
+        let position = Point2::new(
+            10.0,
+            12.0,
+            CoordinateSpace::LegacyWindowPhysicalPixels,
+        );
+        let omitted = InputObservation::Contact {
+            contact: ContactId::new(9),
+            phase: ContactPhase::Update,
+            position,
+            pressure: None,
+        };
+        let measured_zero = InputObservation::Contact {
+            contact: ContactId::new(9),
+            phase: ContactPhase::Update,
+            position,
+            pressure: Some(AnalogMeasurement::new(
+                0.0,
+                MeasurementDomain::LegacyPressureScalar,
+            )),
+        };
+
+        assert_ne!(omitted, measured_zero);
     }
 
     #[test]
     fn invalid_numeric_group_is_rejected_atomically() {
         let mut authority = NeutralInputAuthority::default();
-        let result = authority.admit(ObservationGroup::new(SOURCE_A, vec![
-            InputObservation::DigitalControl { control: CONTROL, transition: DigitalTransition::Down },
-            InputObservation::RelativeMotion { delta: Vector2::new(f32::NAN, 0.0), unit: RelativeMotionUnit::BackendDeviceUnits },
-        ]));
+
+        let result = authority.admit(ObservationGroup::new(
+            SOURCE_A,
+            vec![
+                InputObservation::DigitalControl {
+                    control: CONTROL,
+                    transition: DigitalTransition::Down,
+                },
+                InputObservation::RelativeMotion {
+                    delta: Vector2::new(f32::NAN, 0.0),
+                    unit: RelativeMotionUnit::BackendDeviceUnits,
+                },
+            ],
+        ));
+
         assert_eq!(result, Err(NeutralInputError::NonFiniteObservation));
         assert!(!authority.control_down(SOURCE_A, CONTROL));
+        assert_eq!(authority.admission_sequence().get(), 0);
     }
 }
