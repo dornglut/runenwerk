@@ -4,7 +4,7 @@
 //! through `admit_deterministic_render`, then proves the maintained ordinary and verified paths use
 //! their intended observation policy: ordinary execution authors no readback at all, while verified
 //! execution retains exactly the renderer-private canonical-output, definedness, and evaluator-status
-//! readbacks from the same exact `GpuSubmission`.
+//! readbacks from the same exact `GpuSubmission` and can establish the private RR566-EVAL-001 witness.
 
 use super::admission::{
     RenderOutputBinding, RenderOutputDestination, RenderRepresentationAvailabilityFact,
@@ -13,8 +13,7 @@ use super::admission::{
 use super::deterministic_admission::{AdmittedDeterministicRender, admit_deterministic_render};
 use super::deterministic_execution::submit_deterministic_render;
 use super::deterministic_verification::{
-    observe_completed_deterministic_verification,
-    submit_deterministic_render_for_verified_formation,
+    submit_deterministic_render_for_verified_formation, verify_completed_deterministic_render,
 };
 use super::participation::RenderObjectParticipation;
 use super::representation::{
@@ -137,7 +136,7 @@ fn maintained_fixture() -> MaintainedExecutionFixture {
     .expect("R7 maintained proof request");
     let semantic_input = RenderSurfaceSemanticInput::sphere(
         [0.0, 0.0, 0.0],
-        1.0,
+        2.0,
         RenderTemporalSupport::unbounded(),
     )
     .expect("R7 maintained sphere semantic input");
@@ -334,12 +333,10 @@ fn maintained_execution_keeps_ordinary_unobserved_and_verified_same_submission_o
         "2x2 canonical observation must contain at least four one-word logical samples"
     );
 
-    let observations = observe_completed_deterministic_verification(&verified)
-        .expect("completed same-submission observations must normalize");
-    assert_eq!(observations.len(), 1);
-    let observation = &observations[0];
-    assert_eq!(observation.output_index(), 0);
-    assert_eq!(observation.canonical_words().len(), 4);
-    assert_eq!(observation.definedness_words().len(), 4);
-    assert_eq!(observation.status_words().len(), 4);
+    let verified = verify_completed_deterministic_render(verified)
+        .expect("same-submission object-identity samples must satisfy RR566-EVAL-001");
+    assert!(matches!(
+        verified.submitted().submission().status(),
+        GpuSubmissionStatus::Completed
+    ));
 }

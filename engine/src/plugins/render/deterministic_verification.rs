@@ -1,23 +1,25 @@
-//! Private static eligibility, same-submission correlation, and physical observation normalization
-//! for RR566-EVAL-001 verified-result formation.
+//! Private static eligibility, same-submission correlation, physical observation normalization, and
+//! conservative semantic verification for RR566-EVAL-001 verified-result formation.
 //!
 //! This module deliberately does not narrow maintained deterministic execution. The ordinary
 //! evaluator accepts every request already proven by `AdmittedDeterministicRender`; this gate asks a
 //! separate question: whether the exact admitted semantics lie inside the first bounded domain for
-//! which RunenRender is allowed to attempt conservative finite-evaluation verification. Verified
-//! submission proves renderer-private observation readbacks are correlated to the exact accepted
-//! RunenGPU submission; `observation` then normalizes only completed physical observations. Semantic
-//! comparison and FORM-001 result formation remain later steps.
+//! which RunenRender is allowed to establish requested finite-evaluation fidelity. Verified
+//! submission proves renderer-private readbacks are correlated to one exact accepted RunenGPU
+//! submission; observation normalization then removes physical padding; the private semantic
+//! verifier finally consumes that exact submission and fails closed on unsupported/ambiguous
+//! arithmetic or branch evidence. FORM-001 result formation remains a later owner-controlled step.
 
 mod numeric;
 mod observation;
+mod semantic;
 
-#[cfg(test)]
-pub(super) use observation::observe_completed_deterministic_verification;
+use observation::observe_completed_deterministic_verification;
 
 use super::deterministic_admission::AdmittedDeterministicRender;
 use super::deterministic_execution::{
     self, DeterministicVerificationSubmission, RenderDeterministicExecutionError,
+    SubmittedDeterministicRender,
 };
 use super::request::RenderObservationSpec;
 use super::scene::RenderObjectId;
@@ -165,6 +167,137 @@ impl From<RenderDeterministicExecutionError> for RenderDeterministicVerifiedSubm
     }
 }
 
+/// Dynamic RR566-EVAL-001 failure after one exact verified submission has been authored.
+///
+/// Static-domain rejection remains the eligibility error above. `Inconclusive` is reserved for a
+/// semantic branch the conservative interval proof cannot uniquely establish. Physical mismatch and
+/// tolerance mismatch mean the completed observation contradicts the certified semantic result.
+#[derive(Debug)]
+pub(super) enum RenderDeterministicVerificationError {
+    Eligibility(RenderDeterministicVerificationEligibilityError),
+    ObservationNormalization {
+        detail: String,
+    },
+    Correlation {
+        output_index: usize,
+        sample_index: Option<usize>,
+        detail: &'static str,
+    },
+    Inconclusive {
+        output_index: usize,
+        sample_index: Option<usize>,
+        detail: &'static str,
+    },
+    PhysicalMismatch {
+        output_index: usize,
+        sample_index: Option<usize>,
+        detail: &'static str,
+    },
+    ToleranceMismatch {
+        output_index: usize,
+        sample_index: usize,
+    },
+}
+
+impl fmt::Display for RenderDeterministicVerificationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Eligibility(error) => write!(formatter, "verification eligibility failed: {error}"),
+            Self::ObservationNormalization { detail } => write!(
+                formatter,
+                "same-submission observation normalization failed: {detail}"
+            ),
+            Self::Correlation {
+                output_index,
+                sample_index,
+                detail,
+            } => format_verification_location(
+                formatter,
+                "correlation failed",
+                *output_index,
+                *sample_index,
+                detail,
+            ),
+            Self::Inconclusive {
+                output_index,
+                sample_index,
+                detail,
+            } => format_verification_location(
+                formatter,
+                "verification is inconclusive",
+                *output_index,
+                *sample_index,
+                detail,
+            ),
+            Self::PhysicalMismatch {
+                output_index,
+                sample_index,
+                detail,
+            } => format_verification_location(
+                formatter,
+                "physical observation mismatch",
+                *output_index,
+                *sample_index,
+                detail,
+            ),
+            Self::ToleranceMismatch {
+                output_index,
+                sample_index,
+            } => write!(
+                formatter,
+                "output {output_index} sample {sample_index} does not satisfy the requested semantic tolerance"
+            ),
+        }
+    }
+}
+
+impl Error for RenderDeterministicVerificationError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Eligibility(error) => Some(error),
+            Self::ObservationNormalization { .. }
+            | Self::Correlation { .. }
+            | Self::Inconclusive { .. }
+            | Self::PhysicalMismatch { .. }
+            | Self::ToleranceMismatch { .. } => None,
+        }
+    }
+}
+
+fn format_verification_location(
+    formatter: &mut fmt::Formatter<'_>,
+    category: &'static str,
+    output_index: usize,
+    sample_index: Option<usize>,
+    detail: &'static str,
+) -> fmt::Result {
+    if let Some(sample_index) = sample_index {
+        write!(
+            formatter,
+            "output {output_index} sample {sample_index} {category}: {detail}"
+        )
+    } else {
+        write!(formatter, "output {output_index} {category}: {detail}")
+    }
+}
+
+/// Execution-scoped proof that one exact verified submission satisfied RR566-EVAL-001.
+///
+/// The private verification submission is owned, not projected into detached output-index tokens.
+/// This keeps later FORM-001 evidence bound to the exact admitted semantics, physical decoder, and
+/// RunenGPU submission that were actually observed. GPU/readback identity still does not become
+/// public `RenderResult` identity.
+#[derive(Debug)]
+pub(super) struct VerifiedDeterministicRender {
+    verification: DeterministicVerificationSubmission,
+}
+
+impl VerifiedDeterministicRender {
+    pub(super) const fn submitted(&self) -> &SubmittedDeterministicRender {
+        self.verification.submitted()
+    }
+}
+
 /// Prove only the static RR566-EVAL-001 subset that is knowable before one verified submission.
 ///
 /// Instant shutters and ideal-ray sampling are already invariants of `AdmittedDeterministicRender`.
@@ -267,6 +400,25 @@ pub(super) async fn submit_deterministic_render_for_verified_formation(
     }
 
     Ok(verification)
+}
+
+/// Consume one completed same-submission observation set and establish the first conservative
+/// deterministic finite-evaluation witness.
+///
+/// Success does not yet form `RenderResult`; it returns an execution-scoped owner-controlled witness
+/// that later FORM-001 wiring can consume without accepting detached output-index assertions.
+pub(super) fn verify_completed_deterministic_render(
+    verification: DeterministicVerificationSubmission,
+) -> Result<VerifiedDeterministicRender, RenderDeterministicVerificationError> {
+    ensure_deterministic_verification_eligible(verification.submitted().admitted())
+        .map_err(RenderDeterministicVerificationError::Eligibility)?;
+    let observations = observe_completed_deterministic_verification(&verification).map_err(|error| {
+        RenderDeterministicVerificationError::ObservationNormalization {
+            detail: format!("{error:?}"),
+        }
+    })?;
+    semantic::verify_completed_semantics(&verification, &observations)?;
+    Ok(VerifiedDeterministicRender { verification })
 }
 
 fn validate_observation(
