@@ -403,6 +403,7 @@ mod tests {
         RenderDistanceConvention, RenderPerspectiveObservation, RenderProbeObservation,
         RenderSamplingSupport,
     };
+    use crate::plugins::render::scene::{RenderSceneStore, RenderSceneUpdate};
     use crate::plugins::render::space_time::{
         RenderAffineTransform3, RenderHandedness, RenderObjectSpatialState,
         RenderObjectTemporalState, RenderSpaceSpec, RenderSpatialCoverage, RenderTemporalSupport,
@@ -510,9 +511,16 @@ mod tests {
 
     #[test]
     fn maintained_evaluator_requires_supported_surface_input_and_invertible_transform() {
-        let object_id = RenderObjectId::from_raw(1).expect("object id");
-        let representation_id = RenderRepresentationId::from_raw(2).expect("representation id");
         let valid_state = object_state(RenderAffineTransform3::identity());
+        let mut store = RenderSceneStore::new();
+        let object_id = store.allocate_object_id().expect("object id");
+        let mut insert = RenderSceneUpdate::new();
+        insert.insert_with_state(object_id, valid_state.clone());
+        store.commit(insert).expect("insert object");
+        let representation_id = store
+            .allocate_representation_id(object_id)
+            .expect("representation id");
+
         assert_eq!(
             validate_selected_evaluator_object(
                 5,
