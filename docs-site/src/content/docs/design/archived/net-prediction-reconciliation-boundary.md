@@ -1,16 +1,35 @@
 ---
 title: "Net Prediction Reconciliation Boundary Design"
-description: "Boundary design for prediction, authoritative correction, input replay, and gameplay-owned smoothing."
-status: active
+description: "Historical pre-RunenNet prediction/reconciliation ownership design retained after reusable semantics transferred to standalone RunenNet."
+status: archived
 owner: net
 layer: net
-canonical: true
-last_reviewed: 2026-05-05
-related_roadmaps:
+canonical: false
+last_reviewed: 2026-09-13
+related:
+  - ../../net/net-architecture.md
   - ../../net/multiplayer-replication-implementation-roadmap.md
 ---
 
 # Net Prediction Reconciliation Boundary Design
+
+## Archive disposition
+
+This document records the former split in which `engine_net` owned reusable prediction
+vocabulary and reconciliation contracts. That ownership is no longer current.
+Standalone RunenNet now owns reusable participant-input prediction and authoritative
+reconciliation semantics in its normative
+[`spec/prediction/reconciliation.md`](https://github.com/dornglut/runen-net/blob/main/spec/prediction/reconciliation.md).
+
+Runenwerk still contains retained pending-input replay and schedule integration while RN8
+migration prerequisites remain unresolved. That local residue is governed by the current
+[Runenwerk networking architecture](../../net/net-architecture.md), the active engine
+integration design, and the
+[multiplayer replication roadmap](../../net/multiplayer-replication-implementation-roadmap.md).
+Do not use this archive to recreate `engine_net` prediction authority or to infer a new
+prediction API.
+
+The historical body below is retained for provenance.
 
 ## Purpose
 

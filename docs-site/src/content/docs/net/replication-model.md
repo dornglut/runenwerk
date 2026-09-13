@@ -1,16 +1,17 @@
 ---
 title: "Multiplayer Replication Model"
-description: "Historical replication model overview retained for context; superseded by active networking design documents."
+description: "Historical replication model overview retained for context; superseded by current networking architecture and migration designs."
 status: superseded
 owner: net
 layer: net
 canonical: false
-last_reviewed: 2026-05-05
+last_reviewed: 2026-09-13
 replaced_by:
+  - net-architecture.md
   - ../design/active/net-authoritative-replication-protocol.md
-  - ../design/active/net-declarative-replication-authoring.md
-  - ../design/active/net-interest-streaming-design.md
   - ../design/active/net-transport-lanes-delivery.md
+  - ../design/active/ecs-net-replication-boundary.md
+  - multiplayer-replication-implementation-roadmap.md
 ---
 
 # Multiplayer Replication Model
@@ -22,14 +23,22 @@ Do not use this page as current implementation guidance.
 
 Current guidance lives in:
 
+- [Networking architecture](net-architecture.md)
 - [Authoritative replication protocol](../design/active/net-authoritative-replication-protocol.md)
-- [Declarative replication authoring](../design/active/net-declarative-replication-authoring.md)
-- [Interest and streaming](../design/active/net-interest-streaming-design.md)
 - [Transport lanes and delivery](../design/active/net-transport-lanes-delivery.md)
 - [ECS/net replication boundary](../design/active/ecs-net-replication-boundary.md)
 - [Implementation roadmap](multiplayer-replication-implementation-roadmap.md)
 
-## Current Truth Summary
+The former declarative component-registration and hard-coded interest-policy target
+designs are retained only in the archived design area as historical evidence. They are
+not current successor authority.
+
+The implementation inventory below is retained as a point-in-time snapshot from this
+document's original 2026-05-05 review. The September 2026 `last_reviewed` date records
+successor-link and lifecycle reconciliation; it does not revalidate that historical
+inventory as current implementation truth.
+
+## Historical Implementation Snapshot
 
 Implemented now:
 

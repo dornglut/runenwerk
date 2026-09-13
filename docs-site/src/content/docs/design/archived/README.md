@@ -30,6 +30,12 @@ No archived editor-domain design documents are currently tracked in this folder.
 
 - [Live UiPlugin Runtime Full Cutover Plan](live-uiplugin-runtime-full-cutover-plan.md)
 
+### Net
+
+- [Net Declarative Replication Authoring Design](net-declarative-replication-authoring.md)
+- [Net Interest and Streaming Design](net-interest-streaming-design.md)
+- [Net Prediction Reconciliation Boundary Design](net-prediction-reconciliation-boundary.md)
+
 ### App / Tooling
 
 No archived app/tooling design documents are currently tracked in this folder.
