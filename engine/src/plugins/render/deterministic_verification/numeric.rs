@@ -353,7 +353,11 @@ mod tests {
         let exact = RenderSemanticTolerance::exact();
         let singleton = VerificationInterval::singleton(2.0).expect("singleton");
         assert!(numeric_value_satisfies_tolerance(2.0, singleton, exact));
-        assert!(!numeric_value_satisfies_tolerance(2.0 + f64::EPSILON, singleton, exact));
+        assert!(!numeric_value_satisfies_tolerance(
+            ieee_next_up(2.0),
+            singleton,
+            exact
+        ));
 
         let uncertain = VerificationInterval::bounds(1.999, 2.001).expect("uncertain interval");
         assert!(!numeric_value_satisfies_tolerance(2.0, uncertain, exact));
