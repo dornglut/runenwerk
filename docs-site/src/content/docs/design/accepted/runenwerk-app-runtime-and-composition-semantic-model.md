@@ -377,7 +377,7 @@ gates:
 | Gate | Question |
 |---|---|
 | Ownership | Is the invariant genuinely Runenwerk App/runtime-integration semantics? |
-| Universality | Does every current runtime path requiring this invariant need it independent of optional capabilities? |
+| Universality | Does every currently supported App runtime path require it independent of optional capabilities and Host realization? |
 | Independence | Is it meaningful with every optional domain/product capability absent? |
 | Necessity | Would its absence invalidate App/runtime integration itself rather than one optional capability? |
 | Authority safety | Does installation avoid manufacturing foreign/fake semantic authority? |
@@ -500,6 +500,10 @@ context and diagnostics.
 ### 6.3 Starting
 
 Startup is a one-shot lifecycle attempt for one runtime instance.
+
+The runtime must record the Startup attempt before the first Startup system executes.
+This ensures that a returned error or a panic whose unwind is caught cannot leave the
+same partially mutated runtime eligible for an implicit retry.
 
 On success:
 
@@ -870,12 +874,13 @@ generic transaction or rollback.
 Startup execution is fail-stop for that runtime instance:
 
 ```text
-attempt once
+record attempt before executing Startup systems
 -> success: Running
 -> error/panic: non-runnable instance
 ```
 
-No automatic retry and no generic rollback.
+No automatic retry and no generic rollback. A caught unwind cannot make the same runtime
+retry-eligible.
 
 ### 15.4 Runtime owner/system failure
 
@@ -964,8 +969,10 @@ A future clean cut must eventually prove the applicable subset below.
 ### Lifecycle
 
 - composition topology is sealed before preparation/Startup;
+- Startup-attempt state is recorded before Startup systems execute;
 - successful Startup executes once;
-- failed/panicking Startup cannot be implicitly retried on the same runtime;
+- failed/panicking Startup cannot be implicitly retried on the same runtime, including
+  after a caught unwind;
 - partial Startup effects are not claimed to be generically rolled back;
 - terminal shutdown is distinct from bounded completion.
 
