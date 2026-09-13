@@ -5,7 +5,7 @@ status: accepted
 owner: workspace
 layer: architecture
 canonical: true
-last_reviewed: 2026-09-11
+last_reviewed: 2026-09-14
 related_adrs:
   - ../adr/accepted/0014-repository-family-extraction-boundaries.md
   - ../adr/accepted/0015-separate-gpu-execution-from-rendering.md
@@ -479,47 +479,52 @@ separate implementation/design proof.
 
 # 10. Networking
 
-Runen networking is custom engine technology, not merely transport glue.
+Runenwerk consumes standalone RunenNet for reusable realtime networking semantics while
+retaining Runenwerk-owned engine, world/gameplay, product, and presentation integration.
 
-Directionally:
-
-```text
-engine_net
-  protocol / session / replication semantics
-
-engine_net_quic
-  Quinn-based QUIC realization
-
-engine integration
-  scheduling / simulation authority / history / diagnostics
-
-application/gameplay
-  protocol declarations and game-specific policy
-```
-
-Runen owns authoritative replication, snapshots/deltas, ACK/baseline/resync,
-prediction/correction, interest/streaming, simulation/history/replay integration,
-diagnostics, and typed/declarative game-network authoring.
-
-Lower-level libraries may own QUIC, TLS/crypto, sockets, or OS networking mechanics
-without owning Runen replication semantics.
-
-The target ordinary gameplay path is registration-driven:
+The current ownership direction is:
 
 ```text
-register replicated entities/components
-register inputs and ownership routing
-write ordinary authoritative ECS/game systems
-Runen handles standard extract/snapshot/delta/apply/ACK/replay plumbing
+standalone RunenNet
+  connection/session identity and lifecycle
+  compatibility negotiation
+  delivery / resource-pressure / recovery semantics
+  replication consistency and full-snapshot recovery
+  participant-input prediction and authoritative reconciliation
+
+Runenwerk engine / product integration
+  lifecycle placement and scheduling
+  ECS / game / world mapping and policy
+  RunenNet session projection into engine-visible state
+  retained replication/input staging and migration integration
+  product / host / reconnect deployment policy
+  diagnostics and presentation
+
+retained engine_net
+  bounded migration residue for maintained envelopes,
+  replication drivers/models/profiles/macros, and authoring consumers
+
+runen-net-quic or another concrete transport realization
+  contained realization consumed where a maintained product requires it
 ```
 
-That target is not fully implemented yet; existing networking designs/roadmap own the
-remaining standard-ECS bridge work. Custom replication drivers remain an expert path for
-genuinely specialized representations.
+Runenwerk must not recreate standalone RunenNet connection/session, reusable delivery,
+replication-consistency/recovery, or prediction/reconciliation authority inside
+`engine_net`, engine plugin resources, compatibility aliases, or forwarding runtimes.
 
-Authentication, cloud persistence, object storage, lobbies/presence, hosted functions,
-payments, and similar managed services are a separate product concern and do not replace
-authoritative game-state networking.
+Engine inbox/outbox and retained replication work queues are bounded staging/integration
+surfaces. They are not transport realization, RunenNet delivery acceptance, or a second
+network runtime.
+
+Concrete world, spatial, team, gameplay, presentation, scheduling, and deployment policy
+remain Runenwerk/application concerns. Lower transport/TLS/socket libraries do not gain
+those semantics merely because they realize network I/O.
+
+RN8 is currently parked after N4. Current architecture does not authorize N5 and does
+not select a replacement ordinary replicated-view or gameplay authoring syntax.
+
+See the canonical [Runenwerk Networking Architecture](../net/net-architecture.md) for
+the current migration boundary and retained integration details.
 
 # 11. Domain Program and other specialized patterns
 
