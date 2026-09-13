@@ -12,7 +12,10 @@ use super::admission::{
 };
 use super::deterministic_admission::{AdmittedDeterministicRender, admit_deterministic_render};
 use super::deterministic_execution::submit_deterministic_render;
-use super::deterministic_verification::submit_deterministic_render_for_verified_formation;
+use super::deterministic_verification::{
+    observe_completed_deterministic_verification,
+    submit_deterministic_render_for_verified_formation,
+};
 use super::participation::RenderObjectParticipation;
 use super::representation::{
     RENDER_SURFACE_QUERY_PROTOCOL_REVISION, RenderRefinementEvidence, RenderRepresentationRecord,
@@ -124,8 +127,8 @@ fn maintained_fixture() -> MaintainedExecutionFixture {
             0,
             RenderOutputSpec::new(
                 RenderOutputValue::ObjectIdentity,
-                RenderResultTopology::sample_lattice_2d(1, 1)
-                    .expect("R7 maintained 1x1 lattice topology"),
+                RenderResultTopology::sample_lattice_2d(2, 2)
+                    .expect("R7 maintained 2x2 lattice topology"),
                 RenderSemanticTolerance::exact(),
             )
             .expect("R7 maintained object-identity output"),
@@ -184,8 +187,8 @@ fn admit_with_writable_only_destination(
                 label,
                 GpuResourceLifetime::Transient,
                 GpuReconstruction::SourceBacked,
-                1,
-                1,
+                2,
+                2,
                 GpuTextureFormat::R32Uint,
                 [GpuTextureUsage::CopyDestination],
                 GpuTextureInitialization::Uninitialized,
@@ -313,4 +316,30 @@ fn maintained_execution_keeps_ordinary_unobserved_and_verified_same_submission_o
         );
     }
     wait_for_readbacks(&context, submission, &readback_ids);
+
+    let raw_canonical = match submission
+        .readback(correlation.canonical_output())
+        .expect("canonical correlation")
+        .status()
+    {
+        GpuReadbackStatus::Ready(bytes) => bytes,
+        status => panic!("canonical observation must be ready after wait: {status:?}"),
+    };
+    assert_eq!(
+        raw_canonical.layout().byte_len(),
+        u64::try_from(raw_canonical.as_bytes().len()).expect("readback byte length must fit u64")
+    );
+    assert!(
+        raw_canonical.layout().byte_len() >= 4 * 4,
+        "2x2 canonical observation must contain at least four one-word logical samples"
+    );
+
+    let observations = observe_completed_deterministic_verification(&verified)
+        .expect("completed same-submission observations must normalize");
+    assert_eq!(observations.len(), 1);
+    let observation = &observations[0];
+    assert_eq!(observation.output_index(), 0);
+    assert_eq!(observation.canonical_words().len(), 4);
+    assert_eq!(observation.definedness_words().len(), 4);
+    assert_eq!(observation.status_words().len(), 4);
 }

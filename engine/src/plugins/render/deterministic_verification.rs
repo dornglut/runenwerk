@@ -1,14 +1,21 @@
-//! Private static eligibility gate and same-submission correlation for RR566-EVAL-001 verified-result formation.
+//! Private static eligibility, same-submission correlation, and physical observation normalization
+//! for RR566-EVAL-001 verified-result formation.
 //!
 //! This module deliberately does not narrow maintained deterministic execution. The ordinary
 //! evaluator accepts every request already proven by `AdmittedDeterministicRender`; this gate asks a
 //! separate question: whether the exact admitted semantics lie inside the first bounded domain for
 //! which RunenRender is allowed to attempt conservative finite-evaluation verification. Verified
-//! submission additionally proves only that renderer-private observation readbacks are correlated to
-//! the exact accepted RunenGPU submission. Byte readiness, semantic verification, and FORM-001 result
-//! formation remain later steps.
+//! submission proves renderer-private observation readbacks are correlated to the exact accepted
+//! RunenGPU submission; `observation` then normalizes only completed physical observations. Semantic
+//! comparison and FORM-001 result formation remain later steps.
 
 mod numeric;
+mod observation;
+
+pub(super) use observation::{
+    DeterministicVerificationObservation, RenderDeterministicVerificationObservationError,
+    observe_completed_deterministic_verification,
+};
 
 use super::deterministic_admission::AdmittedDeterministicRender;
 use super::deterministic_execution::{
