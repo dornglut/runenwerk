@@ -137,14 +137,11 @@ pub(super) fn mathematical_pi_interval() -> VerificationInterval {
 /// alternating Taylor sums plus the next-term remainder bound on the bounded non-negative domain,
 /// then divided only after cosine is proven strictly positive.
 pub(super) fn certified_tan_half_fov(full_fov: f64) -> Option<VerificationInterval> {
-    if !full_fov.is_finite()
-        || full_fov <= 0.0
-        || full_fov > std::f64::consts::FRAC_PI_2
-    {
+    if !full_fov.is_finite() || full_fov <= 0.0 || full_fov > std::f64::consts::FRAC_PI_2 {
         return None;
     }
-    let x = VerificationInterval::singleton(full_fov)?
-        .mul(VerificationInterval::singleton(0.5)?)?;
+    let x =
+        VerificationInterval::singleton(full_fov)?.mul(VerificationInterval::singleton(0.5)?)?;
     let sine = sin_small_nonnegative(x)?;
     let cosine = cos_small_nonnegative(x)?;
     if cosine.lower <= 0.0 {
@@ -202,11 +199,10 @@ fn cos_small_nonnegative(x: VerificationInterval) -> Option<VerificationInterval
 }
 
 fn symmetric_radius(radius: f64) -> Option<VerificationInterval> {
-    (radius.is_finite() && radius >= 0.0)
-        .then_some(VerificationInterval {
-            lower: -radius,
-            upper: radius,
-        })
+    (radius.is_finite() && radius >= 0.0).then_some(VerificationInterval {
+        lower: -radius,
+        upper: radius,
+    })
 }
 
 fn outward_scalar(value: f64) -> Option<VerificationInterval> {
