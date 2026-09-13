@@ -135,6 +135,19 @@ fn repeated_key_down_does_not_create_a_second_pressed_edge() {
 }
 
 #[test]
+fn keyboard_reconciliation_changes_held_state_without_pressed_edges() {
+    let mut state = InputState::new();
+
+    state.handle_keyboard_reconciliation(KeyCode::KeyW, ElementState::Pressed);
+    assert!(state.action_down(action::WORLD_MOVE_UP));
+    assert!(!state.action_pressed(action::WORLD_MOVE_UP));
+
+    state.handle_keyboard_reconciliation(KeyCode::KeyW, ElementState::Released);
+    assert!(!state.action_down(action::WORLD_MOVE_UP));
+    assert!(!state.action_pressed(action::WORLD_MOVE_UP));
+}
+
+#[test]
 fn cursor_motion_samples_preserve_all_positions_until_frame_end() {
     let mut state = InputState::new();
 

@@ -304,9 +304,17 @@ impl InputState {
 
     pub fn handle_window_event(&mut self, event: &WindowEvent) {
         match event {
-            WindowEvent::KeyboardInput { event, .. } => {
+            WindowEvent::KeyboardInput {
+                event,
+                is_synthetic,
+                ..
+            } => {
                 if let PhysicalKey::Code(code) = event.physical_key {
-                    self.handle_keyboard_input(code, event.state, event.text.as_deref());
+                    if *is_synthetic {
+                        self.handle_keyboard_reconciliation(code, event.state);
+                    } else {
+                        self.handle_keyboard_input(code, event.state, event.text.as_deref());
+                    }
                 }
             }
             WindowEvent::MouseWheel { delta, .. } => self.handle_mouse_wheel_delta(match delta {
@@ -344,32 +352,47 @@ impl InputState {
         state: ElementState,
         text: Option<&str>,
     ) {
+        self.handle_keyboard_semantic(code, state, text, false);
+    }
+
+    pub(crate) fn handle_keyboard_reconciliation(&mut self, code: KeyCode, state: ElementState) {
+        self.handle_keyboard_semantic(code, state, None, true);
+    }
+
+    fn handle_keyboard_semantic(
+        &mut self,
+        code: KeyCode,
+        state: ElementState,
+        text: Option<&str>,
+        reconciliation: bool,
+    ) {
         let control = self.controls.intern_key(code);
         let was_down = self.neutral.control_down(LEGACY_WINDOW_SOURCE, control);
-        let transition = match state {
-            ElementState::Pressed => DigitalTransition::Down,
-            ElementState::Released => DigitalTransition::Up,
+        let transition = match (reconciliation, state) {
+            (false, ElementState::Pressed) => DigitalTransition::Down,
+            (false, ElementState::Released) => DigitalTransition::Up,
+            (true, ElementState::Pressed) => DigitalTransition::ReconcileDown,
+            (true, ElementState::Released) => DigitalTransition::Cancel,
         };
         self.neutral
             .admit(ObservationGroup::single(
                 LEGACY_WINDOW_SOURCE,
-                InputObservation::DigitalControl {
-                    control,
-                    transition,
-                },
+                InputObservation::DigitalControl { control, transition },
             ))
             .expect("digital keyboard observation should always be valid");
 
         self.recompute_action_down_states();
-        match state {
-            ElementState::Pressed if !was_down => self.apply_action_press_for_key(code),
+        match (reconciliation, state) {
+            (false, ElementState::Pressed) if !was_down => self.apply_action_press_for_key(code),
             _ => self.sync_legacy_flags(),
         }
 
-        if let Some(text) = text {
-            for ch in text.chars() {
-                if !ch.is_control() {
-                    self.typed_text.push(ch);
+        if !reconciliation {
+            if let Some(text) = text {
+                for ch in text.chars() {
+                    if !ch.is_control() {
+                        self.typed_text.push(ch);
+                    }
                 }
             }
         }
@@ -427,10 +450,7 @@ impl InputState {
         self.neutral
             .admit(ObservationGroup::single(
                 LEGACY_WINDOW_SOURCE,
-                InputObservation::DigitalControl {
-                    control,
-                    transition,
-                },
+                InputObservation::DigitalControl { control, transition },
             ))
             .expect("digital mouse-button observation should always be valid");
 
@@ -447,13 +467,12 @@ impl InputState {
             .absolute_pointer_position(LEGACY_WINDOW_SOURCE)
             .map(|point| (point.x, point.y))
             .unwrap_or((0.0, 0.0));
-        self.mouse_button_transitions
-            .push(MouseButtonTransitionSample {
-                button,
-                state,
-                position,
-                motion_sample_index: self.mouse_motion_samples.len(),
-            });
+        self.mouse_button_transitions.push(MouseButtonTransitionSample {
+            button,
+            state,
+            position,
+            motion_sample_index: self.mouse_motion_samples.len(),
+        });
 
         match state {
             ElementState::Pressed => {
@@ -514,9 +533,7 @@ impl InputState {
             TouchInputPhase::Ended => NeutralContactPhase::End,
             TouchInputPhase::Cancelled => NeutralContactPhase::Cancel,
         };
-        let pressure = pressure.map(|value| {
-            AnalogMeasurement::new(value, MeasurementDomain::LegacyPressureScalar)
-        });
+        let pressure = pressure.map(|value| AnalogMeasurement::new(value, MeasurementDomain::LegacyPressureScalar));
         if self
             .neutral
             .admit(ObservationGroup::single(
@@ -586,18 +603,11 @@ impl InputState {
     }
 
     pub fn left_mouse_pressed_transition(&self) -> Option<MouseButtonTransitionSample> {
-        self.mouse_button_transitions
-            .iter()
-            .find(|transition| transition.is_left_pressed())
-            .copied()
+        self.mouse_button_transitions.iter().find(|transition| transition.is_left_pressed()).copied()
     }
 
     pub fn left_mouse_released_transition(&self) -> Option<MouseButtonTransitionSample> {
-        self.mouse_button_transitions
-            .iter()
-            .rev()
-            .find(|transition| transition.is_left_released())
-            .copied()
+        self.mouse_button_transitions.iter().rev().find(|transition| transition.is_left_released()).copied()
     }
 
     pub fn touch_samples(&self) -> &[TouchInputSample] {
@@ -662,23 +672,15 @@ impl InputState {
     }
 
     fn key_down(&self, key: KeyCode) -> bool {
-        self.controls.key(key).is_some_and(|control| {
-            self.neutral
-                .control_down(LEGACY_WINDOW_SOURCE, control)
-        })
+        self.controls.key(key).is_some_and(|control| self.neutral.control_down(LEGACY_WINDOW_SOURCE, control))
     }
 
     fn button_down(&self, button: MouseButton) -> bool {
-        self.controls.button(button).is_some_and(|control| {
-            self.neutral
-                .control_down(LEGACY_WINDOW_SOURCE, control)
-        })
+        self.controls.button(button).is_some_and(|control| self.neutral.control_down(LEGACY_WINDOW_SOURCE, control))
     }
 
     pub(crate) fn neutral_touch_active(&self, id: u64) -> bool {
-        self.neutral
-            .contact_state(LEGACY_WINDOW_SOURCE, ContactId::new(id))
-            .is_some()
+        self.neutral.contact_state(LEGACY_WINDOW_SOURCE, ContactId::new(id)).is_some()
     }
 
     pub(crate) fn neutral_active_touch_count(&self) -> usize {
@@ -698,15 +700,9 @@ impl InputState {
     fn apply_binding_change_inner(&mut self, change: InputBindingChange) -> bool {
         match change {
             InputBindingChange::MapKey { action, key } => self.bindings.map_key(action, key),
-            InputBindingChange::MapChord { action, chord } => {
-                self.bindings.map_chord(action, chord)
-            }
-            InputBindingChange::UnmapKey { action, key } => {
-                self.bindings.unmap_key(&action, key) > 0
-            }
-            InputBindingChange::UnmapChord { action, chord } => {
-                self.bindings.unmap_chord(&action, chord)
-            }
+            InputBindingChange::MapChord { action, chord } => self.bindings.map_chord(action, chord),
+            InputBindingChange::UnmapKey { action, key } => self.bindings.unmap_key(&action, key) > 0,
+            InputBindingChange::UnmapChord { action, chord } => self.bindings.unmap_chord(&action, chord),
             InputBindingChange::ClearAction { action } => self.bindings.clear_action(&action),
             InputBindingChange::ResetDefaults => {
                 self.bindings = InputBindings::with_default_bindings();
@@ -728,11 +724,7 @@ impl InputState {
         for action in self.bindings.action_ids() {
             if self.bindings.action_down(
                 action,
-                |key| {
-                    controls.key(key).is_some_and(|control| {
-                        neutral.control_down(LEGACY_WINDOW_SOURCE, control)
-                    })
-                },
+                |key| controls.key(key).is_some_and(|control| neutral.control_down(LEGACY_WINDOW_SOURCE, control)),
                 modifiers,
             ) {
                 actions_down.insert(action.clone());
