@@ -1,7 +1,6 @@
 use crate::app::App;
 use crate::app::domain::mode::AppMode;
 use crate::plugins::InputState;
-use crate::prelude::Time;
 use crate::runtime::platform::PlatformWindowEventQueueResource;
 use crate::*;
 
@@ -13,9 +12,6 @@ impl App {
     /// - Runners only mutate these resources during run preparation and per-frame execution.
     /// - Plugins may override defaults by inserting resources after app construction.
     pub(crate) fn install_builtin_resources(&mut self) {
-        if self.world.resource::<Time>().is_err() {
-            self.world.insert_resource(Time::new());
-        }
         if self.world.resource::<InputState>().is_err() {
             self.world.insert_resource(InputState::new());
         }

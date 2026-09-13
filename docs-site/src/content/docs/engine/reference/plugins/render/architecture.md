@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-21
+last_reviewed: 2026-09-13
 ---
 
 # Render Plugin Architecture
@@ -32,7 +32,8 @@ last_reviewed: 2026-05-21
 ## Runtime Boundary
 
 - Owns: render runtime resources, flow registry integration, and render prepare/submit scheduling.
-- Non-ownership: app input mapping ownership and scene lifecycle ownership.
+- Consumes: `Time` for frame-submit timing/diagnostics; `TimePlugin` owns default installation and progression.
+- Non-ownership: frame-time progression, app input mapping ownership, and scene lifecycle ownership.
 - Prepare/submit boundary artifact: `PreparedRenderFrame` in `engine/src/plugins/render/frame/`.
 - Prepared frame packets carry main/offscreen views, flow input snapshots, prepared flow invocations, dynamic target descriptor snapshots, target alias bindings, UI surface bindings, and history signatures.
 - Runtime compatibility helper: `RenderFrameDataRegistry` for projection helpers/tests only, not active submission.
