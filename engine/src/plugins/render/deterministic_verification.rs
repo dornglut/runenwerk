@@ -97,8 +97,13 @@ pub(super) enum RenderDeterministicVerifiedSubmissionError {
 impl fmt::Display for RenderDeterministicVerifiedSubmissionError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Eligibility(error) => write!(formatter, "verification eligibility failed: {error}"),
-            Self::Execution(error) => write!(formatter, "verified deterministic submission failed: {error}"),
+            Self::Eligibility(error) => {
+                write!(formatter, "verification eligibility failed: {error}")
+            }
+            Self::Execution(error) => write!(
+                formatter,
+                "verified deterministic submission failed: {error}"
+            ),
             Self::ReadbackCardinality { expected, actual } => write!(
                 formatter,
                 "verified deterministic submission retained {actual} output readback correlations for {expected} admitted outputs"

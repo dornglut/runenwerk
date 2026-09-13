@@ -335,11 +335,8 @@ pub async fn submit_deterministic_render(
     admitted: AdmittedDeterministicRender,
     context: &GpuContext,
 ) -> Result<SubmittedDeterministicRender, RenderDeterministicExecutionError> {
-    let lowered = lower_deterministic_render(
-        &admitted,
-        context,
-        DeterministicObservationIntent::Ordinary,
-    )?;
+    let lowered =
+        lower_deterministic_render(&admitted, context, DeterministicObservationIntent::Ordinary)?;
     debug_assert!(lowered.verification_readbacks.is_empty());
     submit_lowered_deterministic_render(
         admitted,
@@ -359,11 +356,8 @@ pub(super) async fn submit_deterministic_render_for_verification(
     admitted: AdmittedDeterministicRender,
     context: &GpuContext,
 ) -> Result<DeterministicVerificationSubmission, RenderDeterministicExecutionError> {
-    let lowered = lower_deterministic_render(
-        &admitted,
-        context,
-        DeterministicObservationIntent::Verify,
-    )?;
+    let lowered =
+        lower_deterministic_render(&admitted, context, DeterministicObservationIntent::Verify)?;
     let verification_readbacks = lowered.verification_readbacks;
     let submitted = submit_lowered_deterministic_render(
         admitted,
@@ -718,7 +712,10 @@ fn lower_output(
                     "read back private canonical output",
                     readbacks.canonical_output,
                 )?;
-                work.operation("read back private semantic definedness", readbacks.definedness)?;
+                work.operation(
+                    "read back private semantic definedness",
+                    readbacks.definedness,
+                )?;
                 work.operation("read back private evaluator status", readbacks.status)?;
             }
             Ok(())
