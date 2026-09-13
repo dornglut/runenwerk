@@ -168,8 +168,7 @@ fn reordered_8x6_request() -> RenderRequest {
         .expect("semantically legal wide R7 perspective"),
     );
     let lattice = || {
-        RenderResultTopology::sample_lattice_2d(8, 6)
-            .expect("R7 maintained structural 8x6 lattice")
+        RenderResultTopology::sample_lattice_2d(8, 6).expect("R7 maintained structural 8x6 lattice")
     };
     RenderRequest::new(
         shutter,
@@ -432,7 +431,11 @@ fn maintained_ordinary_execution_supports_reordered_8x6_subset_outside_verifier_
     .expect("wide reordered 8x6 subset must remain legal maintained evaluator work");
 
     let requested = admitted.admitted().plan().request().outputs();
-    assert_eq!(requested.len(), 2, "structural proof intentionally uses an output subset");
+    assert_eq!(
+        requested.len(),
+        2,
+        "structural proof intentionally uses an output subset"
+    );
     assert!(matches!(
         requested[0].spec().value(),
         RenderOutputValue::ObjectIdentity
