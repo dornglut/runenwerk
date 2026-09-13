@@ -1,16 +1,23 @@
-//! Private static eligibility gate for RR566-EVAL-001 verified-result formation.
+//! Private static eligibility gate and same-submission correlation for RR566-EVAL-001 verified-result formation.
 //!
 //! This module deliberately does not narrow maintained deterministic execution. The ordinary
 //! evaluator accepts every request already proven by `AdmittedDeterministicRender`; this gate asks a
 //! separate question: whether the exact admitted semantics lie inside the first bounded domain for
-//! which RunenRender is allowed to attempt conservative finite-evaluation verification.
+//! which RunenRender is allowed to attempt conservative finite-evaluation verification. Verified
+//! submission additionally proves only that renderer-private observation readbacks are correlated to
+//! the exact accepted RunenGPU submission. Byte readiness, semantic verification, and FORM-001 result
+//! formation remain later steps.
 
 mod numeric;
 
 use super::deterministic_admission::AdmittedDeterministicRender;
+use super::deterministic_execution::{
+    self, DeterministicVerificationSubmission, RenderDeterministicExecutionError,
+};
 use super::request::RenderObservationSpec;
 use super::scene::RenderObjectId;
 use super::space_time::{RenderAffineTransform3, RenderHandedness, RenderObjectSpatialState};
+use runen_gpu::GpuContext;
 use std::collections::BTreeSet;
 use std::error::Error;
 use std::fmt;
@@ -65,6 +72,89 @@ impl fmt::Display for RenderDeterministicVerificationEligibilityError {
 
 impl Error for RenderDeterministicVerificationEligibilityError {}
 
+#[derive(Debug)]
+pub(super) enum RenderDeterministicVerifiedSubmissionError {
+    Eligibility(RenderDeterministicVerificationEligibilityError),
+    Execution(RenderDeterministicExecutionError),
+    ReadbackCardinality {
+        expected: usize,
+        actual: usize,
+    },
+    OutputCorrelationChanged {
+        expected_output_index: usize,
+        actual_output_index: usize,
+    },
+    DuplicateReadbackCorrelation {
+        output_index: usize,
+        channel: &'static str,
+    },
+    MissingSubmissionReadback {
+        output_index: usize,
+        channel: &'static str,
+    },
+}
+
+impl fmt::Display for RenderDeterministicVerifiedSubmissionError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Eligibility(error) => write!(formatter, "verification eligibility failed: {error}"),
+            Self::Execution(error) => write!(formatter, "verified deterministic submission failed: {error}"),
+            Self::ReadbackCardinality { expected, actual } => write!(
+                formatter,
+                "verified deterministic submission retained {actual} output readback correlations for {expected} admitted outputs"
+            ),
+            Self::OutputCorrelationChanged {
+                expected_output_index,
+                actual_output_index,
+            } => write!(
+                formatter,
+                "verified deterministic readback correlation changed from output {expected_output_index} to {actual_output_index}"
+            ),
+            Self::DuplicateReadbackCorrelation {
+                output_index,
+                channel,
+            } => write!(
+                formatter,
+                "output {output_index} {channel} readback reused a correlation identity"
+            ),
+            Self::MissingSubmissionReadback {
+                output_index,
+                channel,
+            } => write!(
+                formatter,
+                "output {output_index} {channel} readback is not owned by the exact returned RunenGPU submission"
+            ),
+        }
+    }
+}
+
+impl Error for RenderDeterministicVerifiedSubmissionError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Eligibility(error) => Some(error),
+            Self::Execution(error) => Some(error),
+            Self::ReadbackCardinality { .. }
+            | Self::OutputCorrelationChanged { .. }
+            | Self::DuplicateReadbackCorrelation { .. }
+            | Self::MissingSubmissionReadback { .. } => None,
+        }
+    }
+}
+
+impl From<RenderDeterministicVerificationEligibilityError>
+    for RenderDeterministicVerifiedSubmissionError
+{
+    fn from(value: RenderDeterministicVerificationEligibilityError) -> Self {
+        Self::Eligibility(value)
+    }
+}
+
+impl From<RenderDeterministicExecutionError> for RenderDeterministicVerifiedSubmissionError {
+    fn from(value: RenderDeterministicExecutionError) -> Self {
+        Self::Execution(value)
+    }
+}
+
 /// Prove only the static RR566-EVAL-001 subset that is knowable before one verified submission.
 ///
 /// Instant shutters and ideal-ray sampling are already invariants of `AdmittedDeterministicRender`.
@@ -102,6 +192,71 @@ pub(super) fn ensure_deterministic_verification_eligible(
     }
 
     Ok(())
+}
+
+/// Select verified-result intent before submission, then prove that every private observation
+/// correlation resolves back into that exact returned `GpuSubmission`.
+///
+/// This function intentionally stops before readback readiness or semantic comparison. A successful
+/// return proves only the static EVAL-001 domain gate plus same-submission correlation for canonical
+/// payload, semantic-definedness, and evaluator-status observations.
+pub(super) async fn submit_deterministic_render_for_verified_formation(
+    maintained: AdmittedDeterministicRender,
+    context: &GpuContext,
+) -> Result<DeterministicVerificationSubmission, RenderDeterministicVerifiedSubmissionError> {
+    ensure_deterministic_verification_eligible(&maintained)?;
+    let verification =
+        deterministic_execution::submit_deterministic_render_for_verification(maintained, context)
+            .await?;
+
+    let submitted = verification.submitted();
+    let expected_outputs = submitted.admitted().admitted().outputs();
+    let readbacks = verification.readbacks();
+    if readbacks.len() != expected_outputs.len() {
+        return Err(
+            RenderDeterministicVerifiedSubmissionError::ReadbackCardinality {
+                expected: expected_outputs.len(),
+                actual: readbacks.len(),
+            },
+        );
+    }
+
+    let mut correlation_ids = BTreeSet::new();
+    for (expected_output, readbacks) in expected_outputs.iter().zip(readbacks) {
+        if readbacks.output_index() != expected_output.output_index() {
+            return Err(
+                RenderDeterministicVerifiedSubmissionError::OutputCorrelationChanged {
+                    expected_output_index: expected_output.output_index(),
+                    actual_output_index: readbacks.output_index(),
+                },
+            );
+        }
+
+        for (channel, id) in [
+            ("canonical-output", readbacks.canonical_output()),
+            ("definedness", readbacks.definedness()),
+            ("evaluator-status", readbacks.status()),
+        ] {
+            if !correlation_ids.insert(id) {
+                return Err(
+                    RenderDeterministicVerifiedSubmissionError::DuplicateReadbackCorrelation {
+                        output_index: readbacks.output_index(),
+                        channel,
+                    },
+                );
+            }
+            if submitted.submission().readback(id).is_none() {
+                return Err(
+                    RenderDeterministicVerifiedSubmissionError::MissingSubmissionReadback {
+                        output_index: readbacks.output_index(),
+                        channel,
+                    },
+                );
+            }
+        }
+    }
+
+    Ok(verification)
 }
 
 fn validate_observation(

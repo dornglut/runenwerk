@@ -23,9 +23,10 @@ use runen_gpu::{
     GpuBufferDescriptor, GpuBufferInitialization, GpuBufferRegion, GpuBufferTextureLayout,
     GpuBufferUsage, GpuClearOperation, GpuComputeOperation, GpuComputePipelineDescriptor,
     GpuContext, GpuContextAffinity, GpuCopyOperation, GpuDispatchIntent, GpuDispatchSize,
-    GpuReconstruction, GpuResourceLifetime, GpuResourceScope, GpuRuntimeBindingValue,
-    GpuSubmission, GpuTextureCopyRegion, GpuUploadOperation, GpuWorkFragment,
-    GpuWorkSubmissionError, PreparedGpuData, TransferData, admit_static_wgsl_sources,
+    GpuReadbackId, GpuReadbackOperation, GpuReconstruction, GpuResourceLifetime, GpuResourceScope,
+    GpuRuntimeBindingValue, GpuSubmission, GpuTextureCopyRegion, GpuUploadOperation,
+    GpuWorkFragment, GpuWorkSubmissionError, PreparedGpuData, TransferData,
+    admit_static_wgsl_sources,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
@@ -61,11 +62,53 @@ impl RenderObjectIdentityDecoder {
     }
 }
 
+/// Renderer-private correlation between one admitted output and the three observations required by
+/// RR566-EVAL-001. The IDs are process-local RunenGPU correlation values bound to one exact
+/// `GpuSubmission`; they are not semantic identity and are never exposed as public renderer state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct DeterministicVerificationReadbacks {
+    output_index: usize,
+    canonical_output: GpuReadbackId,
+    definedness: GpuReadbackId,
+    status: GpuReadbackId,
+}
+
+impl DeterministicVerificationReadbacks {
+    pub(super) const fn output_index(self) -> usize {
+        self.output_index
+    }
+
+    pub(super) const fn canonical_output(self) -> GpuReadbackId {
+        self.canonical_output
+    }
+
+    pub(super) const fn definedness(self) -> GpuReadbackId {
+        self.definedness
+    }
+
+    pub(super) const fn status(self) -> GpuReadbackId {
+        self.status
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DeterministicObservationIntent {
+    Ordinary,
+    Verify,
+}
+
+impl DeterministicObservationIntent {
+    const fn requires_private_readback(self) -> bool {
+        matches!(self, Self::Verify)
+    }
+}
+
 /// One exact ordinary maintained execution after RunenGPU accepted its authored work.
 ///
 /// This is not a second submission lifecycle or a render session. Physical completion/failure stays
-/// entirely on [`GpuSubmission`]. The retained admitted plan and decoder only preserve the renderer
-/// correlation that must remain bound to that exact submission.
+/// entirely on [`GpuSubmission`]. The retained admitted plan and decoder only preserve renderer
+/// correlation that must remain bound to that exact submission. Ordinary execution contains no
+/// verification-readback state and therefore cannot be upgraded after submission.
 #[derive(Debug, Clone)]
 pub struct SubmittedDeterministicRender {
     admitted: AdmittedDeterministicRender,
@@ -84,6 +127,27 @@ impl SubmittedDeterministicRender {
 
     pub const fn object_identity_decoder(&self) -> &RenderObjectIdentityDecoder {
         &self.object_identity_decoder
+    }
+}
+
+/// Private proof witness for a submission whose verification intent was selected before lowering.
+///
+/// This wraps the ordinary submitted-execution value rather than introducing a second submission
+/// lifecycle. Its only additional state is the private correlation required to locate the three
+/// observations that were authored into that same exact `GpuSubmission`.
+#[derive(Debug, Clone)]
+pub(super) struct DeterministicVerificationSubmission {
+    submitted: SubmittedDeterministicRender,
+    readbacks: Vec<DeterministicVerificationReadbacks>,
+}
+
+impl DeterministicVerificationSubmission {
+    pub(super) const fn submitted(&self) -> &SubmittedDeterministicRender {
+        &self.submitted
+    }
+
+    pub(super) fn readbacks(&self) -> &[DeterministicVerificationReadbacks] {
+        &self.readbacks
     }
 }
 
@@ -240,6 +304,12 @@ impl From<RenderDeterministicLoweringError> for RenderDeterministicExecutionErro
 struct LoweredDeterministicRender {
     work_set: RenderWorkSet,
     object_identity_decoder: RenderObjectIdentityDecoder,
+    verification_readbacks: Vec<DeterministicVerificationReadbacks>,
+}
+
+struct LoweredDeterministicOutput {
+    fragment: GpuWorkFragment,
+    verification_readbacks: Option<DeterministicVerificationReadbacks>,
 }
 
 struct PackedOutput {
@@ -247,6 +317,13 @@ struct PackedOutput {
     sample_count: u32,
     output_byte_len: u64,
     texture_row_bytes: Option<u32>,
+}
+
+struct VerificationReadbackOperations {
+    correlation: DeterministicVerificationReadbacks,
+    canonical_output: GpuReadbackOperation,
+    definedness: GpuReadbackOperation,
+    status: GpuReadbackOperation,
 }
 
 /// Submit one ordinary maintained deterministic render invocation.
@@ -258,24 +335,73 @@ pub async fn submit_deterministic_render(
     admitted: AdmittedDeterministicRender,
     context: &GpuContext,
 ) -> Result<SubmittedDeterministicRender, RenderDeterministicExecutionError> {
-    let lowered = lower_deterministic_render(&admitted, context)?;
+    let lowered = lower_deterministic_render(
+        &admitted,
+        context,
+        DeterministicObservationIntent::Ordinary,
+    )?;
+    debug_assert!(lowered.verification_readbacks.is_empty());
+    submit_lowered_deterministic_render(
+        admitted,
+        context,
+        lowered.work_set,
+        lowered.object_identity_decoder,
+    )
+    .await
+}
+
+/// Submit the exact maintained deterministic path with renderer-private same-submission readbacks.
+///
+/// Static verifier eligibility is owned by `deterministic_verification` and must be established
+/// before this function is called. The returned private witness wraps the same ordinary submitted
+/// execution plus only the readback correlation authored before that submission.
+pub(super) async fn submit_deterministic_render_for_verification(
+    admitted: AdmittedDeterministicRender,
+    context: &GpuContext,
+) -> Result<DeterministicVerificationSubmission, RenderDeterministicExecutionError> {
+    let lowered = lower_deterministic_render(
+        &admitted,
+        context,
+        DeterministicObservationIntent::Verify,
+    )?;
+    let verification_readbacks = lowered.verification_readbacks;
+    let submitted = submit_lowered_deterministic_render(
+        admitted,
+        context,
+        lowered.work_set,
+        lowered.object_identity_decoder,
+    )
+    .await?;
+    Ok(DeterministicVerificationSubmission {
+        submitted,
+        readbacks: verification_readbacks,
+    })
+}
+
+async fn submit_lowered_deterministic_render(
+    admitted: AdmittedDeterministicRender,
+    context: &GpuContext,
+    work_set: RenderWorkSet,
+    object_identity_decoder: RenderObjectIdentityDecoder,
+) -> Result<SubmittedDeterministicRender, RenderDeterministicExecutionError> {
     let submission = context
         .submit_work(
             "RunenRender maintained deterministic execution",
-            lowered.work_set.fragments().iter().cloned(),
+            work_set.fragments().iter().cloned(),
         )
         .await
         .map_err(RenderDeterministicExecutionError::Submission)?;
     Ok(SubmittedDeterministicRender {
         admitted,
         submission,
-        object_identity_decoder: lowered.object_identity_decoder,
+        object_identity_decoder,
     })
 }
 
 fn lower_deterministic_render(
     maintained: &AdmittedDeterministicRender,
     context: &GpuContext,
+    intent: DeterministicObservationIntent,
 ) -> Result<LoweredDeterministicRender, RenderDeterministicLoweringError> {
     let admitted = maintained.admitted();
     if admitted.environment().affinity() != context.affinity() {
@@ -308,19 +434,33 @@ fn lower_deterministic_render(
         .map_err(|_| RenderDeterministicLoweringError::HostAllocation {
             field: "maintained output fragments",
         })?;
+    let mut verification_readbacks = Vec::new();
+    if intent.requires_private_readback() {
+        verification_readbacks
+            .try_reserve_exact(admitted.outputs().len())
+            .map_err(|_| RenderDeterministicLoweringError::HostAllocation {
+                field: "verification readback correlation",
+            })?;
+    }
     for output in admitted.outputs() {
-        fragments.push(lower_output(
+        let lowered = lower_output(
             admitted,
             output.output_index(),
             &object_codes,
             context,
             &mut resources,
-        )?);
+            intent,
+        )?;
+        fragments.push(lowered.fragment);
+        if let Some(readbacks) = lowered.verification_readbacks {
+            verification_readbacks.push(readbacks);
+        }
     }
 
     Ok(LoweredDeterministicRender {
         work_set: RenderWorkSet::from_lowering(admitted, fragments),
         object_identity_decoder,
+        verification_readbacks,
     })
 }
 
@@ -354,7 +494,8 @@ fn lower_output(
     object_codes: &BTreeMap<RenderObjectId, u32>,
     context: &GpuContext,
     resources: &mut GpuResourceScope,
-) -> Result<GpuWorkFragment, RenderDeterministicLoweringError> {
+    intent: DeterministicObservationIntent,
+) -> Result<LoweredDeterministicOutput, RenderDeterministicLoweringError> {
     let admitted_output = admitted
         .outputs()
         .iter()
@@ -525,7 +666,42 @@ fn lower_output(
         }
     };
 
-    GpuWorkFragment::build(
+    let verification = if intent.requires_private_readback() {
+        let canonical_readback = GpuReadbackOperation::ordinary(
+            GpuBufferRegion::whole(&canonical_output)
+                .map_err(|error| gpu_authoring("canonical-output readback region", error))?
+                .into(),
+        )
+        .map_err(|error| gpu_authoring("canonical-output readback", error))?;
+        let definedness_readback = GpuReadbackOperation::ordinary(
+            GpuBufferRegion::whole(&definedness)
+                .map_err(|error| gpu_authoring("definedness readback region", error))?
+                .into(),
+        )
+        .map_err(|error| gpu_authoring("definedness readback", error))?;
+        let status_readback = GpuReadbackOperation::ordinary(
+            GpuBufferRegion::whole(&status)
+                .map_err(|error| gpu_authoring("status readback region", error))?
+                .into(),
+        )
+        .map_err(|error| gpu_authoring("status readback", error))?;
+        Some(VerificationReadbackOperations {
+            correlation: DeterministicVerificationReadbacks {
+                output_index,
+                canonical_output: canonical_readback.id(),
+                definedness: definedness_readback.id(),
+                status: status_readback.id(),
+            },
+            canonical_output: canonical_readback,
+            definedness: definedness_readback,
+            status: status_readback,
+        })
+    } else {
+        None
+    };
+    let verification_readbacks = verification.as_ref().map(|readbacks| readbacks.correlation);
+
+    let fragment = GpuWorkFragment::build(
         format!("RunenRender maintained output {output_index}"),
         |work| {
             work.operation("upload deterministic semantic input", input_upload)?;
@@ -537,10 +713,23 @@ fn lower_output(
                 "copy canonical output to admitted destination",
                 destination_copy,
             )?;
+            if let Some(readbacks) = verification {
+                work.operation(
+                    "read back private canonical output",
+                    readbacks.canonical_output,
+                )?;
+                work.operation("read back private semantic definedness", readbacks.definedness)?;
+                work.operation("read back private evaluator status", readbacks.status)?;
+            }
             Ok(())
         },
     )
-    .map_err(|error| gpu_authoring("work-fragment construction", error))
+    .map_err(|error| gpu_authoring("work-fragment construction", error))?;
+
+    Ok(LoweredDeterministicOutput {
+        fragment,
+        verification_readbacks,
+    })
 }
 
 fn pack_output(
@@ -991,6 +1180,12 @@ mod tests {
         };
         assert_eq!(decoder.decode(0), None);
         assert_eq!(decoder.decode(1), None);
+    }
+
+    #[test]
+    fn ordinary_observation_intent_never_requests_private_readback() {
+        assert!(!DeterministicObservationIntent::Ordinary.requires_private_readback());
+        assert!(DeterministicObservationIntent::Verify.requires_private_readback());
     }
 
     #[test]
