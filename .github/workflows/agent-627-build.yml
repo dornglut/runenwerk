@@ -11,21 +11,22 @@ permissions:
 jobs:
   construct:
     if: github.actor != 'github-actions[bot]'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: agent/runenrender-radiance-capture-627
           fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal
       - name: Apply correction
         run: python .github/agent-627-build.py
       - name: Update dependency lock
-        run: cargo update -p runen-gpu
+        run: cargo +stable update -p runen-gpu
       - name: Format
-        run: cargo fmt --all
+        run: cargo +stable fmt --all
       - name: Compile engine tests
-        run: cargo check -p engine --tests
+        run: cargo +stable check -p engine --tests
       - name: Diff hygiene
         run: git diff --check
       - name: Commit candidate
