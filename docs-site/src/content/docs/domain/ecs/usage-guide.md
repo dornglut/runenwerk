@@ -313,7 +313,16 @@ runtime.add_systems::<Update, _, _>(&mut world, observe.in_set(Observe).after(Pr
 runtime.run_schedule::<Update>(&mut world).unwrap();
 ```
 
-The explicit set edge establishes semantic precedence. Deferred commands from the earlier ordered work are applied at an ECS deferred-apply boundary before dependent later work runs. Read/write access conflicts are reported independently and do not create ordering edges or extra visibility boundaries. Current execution-plan stage indices are diagnostic/planning facts rather than application lifecycle or publication identity.
+The explicit set edge is a required same-schedule relation and establishes
+semantic precedence. Deferred commands from the earlier ordered work are
+applied at an ECS deferred-apply boundary before dependent later work runs.
+Use `before_if_present` or `after_if_present` only for a meaningful relation
+whose target may be absent. A missing required target fails schedule validation;
+an absent optional target creates no edge. Read/write access conflicts are
+reported independently and do not create ordering edges or extra visibility
+boundaries. Current execution-plan stage indices are diagnostic/planning facts
+rather than application lifecycle or publication identity. ECS ordering
+references do not represent lifecycle order between different schedules.
 
 Generic broadcast/event channels are not part of the current RunenECS public contract; see [04-events.md](04-events.md).
 

@@ -42,7 +42,7 @@ impl Plugin for UiPlugin {
             RenderPrepare,
             publish_ui_runtime_frame_system
                 .in_set(UiRuntimeSet::RenderPublication)
-                .before(RenderRuntimeSet::FramePrepare),
+                .before_if_present(RenderRuntimeSet::FramePrepare),
         );
     }
 }

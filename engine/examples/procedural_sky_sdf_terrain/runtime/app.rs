@@ -2,10 +2,9 @@ use crate::rendering::{
     DEFAULT_SPRINT_MULTIPLIER, FreeFlightInput, ProceduralSkyTerrainState, build_render_flow,
 };
 use anyhow::Result;
-use engine::SystemConfigExt;
 use engine::plugins::input::domain::action;
 use engine::plugins::{RenderPlugin, ScenePlugin, default_plugins};
-use engine::prelude::{App, CoreSet, InputState, Res, ResMut, Startup, Time, Update, WindowState};
+use engine::prelude::{App, InputState, Res, ResMut, Startup, Time, Update, WindowState};
 use winit::keyboard::KeyCode;
 
 const ACTION_CYCLE_VIEW_MODE: &str = "terrain.view.cycle";
@@ -56,12 +55,7 @@ pub(crate) fn run() -> Result<()> {
     app.insert_resource(ProceduralSkyTerrainState::default());
     app.insert_resource(FpsTracker::default());
     app.add_systems(Startup, setup_terrain_input_bindings);
-    app.add_systems(
-        Update,
-        update_terrain_view_and_animation_system
-            .after(CoreSet::Input)
-            .after(CoreSet::Time),
-    );
+    app.add_systems(Update, update_terrain_view_and_animation_system);
     app.add_render_flow(build_render_flow());
     app.run()
 }

@@ -3,8 +3,7 @@
 use engine::plugins::render::SurfaceFrameSubmissionRegistryResource;
 use engine::prelude::*;
 use engine::runtime::{
-    CoreSet, IntoSystemSetKey, RuntimeJobExecutorConfig, RuntimeJobExecutorResource,
-    SystemConfigExt,
+    IntoSystemSetKey, RuntimeJobExecutorConfig, RuntimeJobExecutorResource, SystemConfigExt,
 };
 use runen_ecs::SystemSetKey;
 
@@ -60,27 +59,20 @@ impl Plugin for DrawingAppPlugin {
 
         app.add_systems(
             Update,
-            route_draw_input_system
-                .in_set(DrawingRuntimeSet::InputRoute)
-                .after(CoreSet::Input)
-                .after(CoreSet::Time),
+            route_draw_input_system.in_set(DrawingRuntimeSet::InputRoute),
         );
         app.add_systems(
             Update,
             process_draw_preview_ink_jobs_system
                 .in_set(DrawingRuntimeSet::PreviewJobs)
-                .after(DrawingRuntimeSet::InputRoute)
-                .after(CoreSet::Input)
-                .after(CoreSet::Time),
+                .after(DrawingRuntimeSet::InputRoute),
         );
         app.add_systems(
             Update,
             process_drawing_ink_gpu_validation_report_system
                 .in_set(DrawingRuntimeSet::GpuValidation)
                 .after(DrawingRuntimeSet::PreviewJobs)
-                .after(DrawingRuntimeSet::InputRoute)
-                .after(CoreSet::Input)
-                .after(CoreSet::Time),
+                .after(DrawingRuntimeSet::InputRoute),
         );
         app.add_systems(
             Update,
@@ -88,9 +80,7 @@ impl Plugin for DrawingAppPlugin {
                 .in_set(DrawingRuntimeSet::FrameSubmit)
                 .after(DrawingRuntimeSet::GpuValidation)
                 .after(DrawingRuntimeSet::PreviewJobs)
-                .after(DrawingRuntimeSet::InputRoute)
-                .after(CoreSet::Input)
-                .after(CoreSet::Time),
+                .after(DrawingRuntimeSet::InputRoute),
         );
     }
 }

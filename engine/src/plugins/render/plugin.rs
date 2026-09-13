@@ -121,7 +121,7 @@ impl Plugin for RenderPlugin {
         app.add_systems(
             RenderPrepare,
             prepare_ui_feature_resource_system
-                .after(UiRuntimeSet::RenderPublication)
+                .after_if_present(UiRuntimeSet::RenderPublication)
                 .before(RenderRuntimeSet::FramePrepare),
         );
         app.add_systems(

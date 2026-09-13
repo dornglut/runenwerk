@@ -33,10 +33,15 @@ last_reviewed: 2026-04-27
 
 ## Fixed Step (`FixedUpdate`)
 
-Order is explicit and not registration-order dependent:
+Net's intrinsic order is explicit and not registration-order dependent:
 
-1. `prediction_step_system` (`CoreSet::Simulation`)
-2. `replication_step_system` (`NetFixedSet::Replication`, after simulation and prediction)
+1. `prediction_step_system` (`NetFixedSet::Prediction`)
+2. `replication_step_system` (`NetFixedSet::Replication`, after prediction)
+
+When a same-`FixedUpdate` `CoreSet::Simulation` owner is installed, the Net
+systems' explicit optional-presence references place relevant work after that
+owner. Assemblies without a Simulation owner remain valid; Simulation is not an
+unconditional part of the intrinsic Net chain.
 
 Server replication behavior:
 

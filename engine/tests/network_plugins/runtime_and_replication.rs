@@ -53,6 +53,28 @@ fn saturate_server_outbox_before_replication(mut world: WorldMut) {
     );
 }
 
+fn produce_simulation_input(mut commands: ResMut<PlayerCommandBuffer>) {
+    commands.push(ClientCommandEnvelope::Ability(AbilityCommand { slot: 73 }));
+}
+
+#[test]
+fn prediction_waits_for_later_registered_simulation_input() {
+    let mut app = App::headless();
+    app.add_plugins(default_plugins());
+    app.add_plugin(NetworkClientPlugin);
+    app.add_systems(FixedUpdate, produce_simulation_input.in_set(CoreSet::Simulation));
+
+    let app = app
+        .run_for_ticks(1)
+        .expect("prediction should run after the present simulation producer");
+
+    assert_eq!(
+        app.world().resource::<AppliedInputLog>().unwrap().inputs,
+        vec![ClientCommandEnvelope::Ability(AbilityCommand { slot: 73 })],
+        "present Simulation ordering must apply input during the same fixed tick"
+    );
+}
+
 #[test]
 fn server_replication_emits_scene_snapshot_payloads_for_runennet_connection() {
     let mut app = App::headless();
@@ -272,7 +294,7 @@ fn server_outbox_backpressure_does_not_mark_rejected_snapshot_as_sent() {
     server.add_systems(
         FixedUpdate,
         saturate_server_outbox_before_replication
-            .after(CoreSet::Simulation)
+            .after_if_present(CoreSet::Simulation)
             .before(engine::plugins::net::NetFixedSet::Replication),
     );
     let connection = ConnectionHandle::new(1);

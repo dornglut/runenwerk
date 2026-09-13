@@ -424,14 +424,14 @@ where
     app.add_systems(
         FixedUpdate,
         sync_connection_streaming_state_system
-            .after(CoreSet::Simulation)
+            .after_if_present(CoreSet::Simulation)
             .before(NetFixedSet::Prediction),
     );
     app.add_systems(
         FixedUpdate,
         replication_step_system::<TDriver>
             .in_set(NetFixedSet::Replication)
-            .after(CoreSet::Simulation)
+            .after_if_present(CoreSet::Simulation)
             .after(NetFixedSet::Prediction),
     );
 }
@@ -448,7 +448,7 @@ where
         FixedUpdate,
         prediction_step_system::<TDriver>
             .in_set(NetFixedSet::Prediction)
-            .after(CoreSet::Simulation),
+            .after_if_present(CoreSet::Simulation),
     );
 }
 

@@ -13,26 +13,36 @@ use world_ops::{
 
 #[derive(Debug, Copy, Clone, Default, runen_ecs::Component, runen_ecs::Resource)]
 pub struct WorldReplicationExtractionCursor {
-    pub last_tick: ChangeCursor,
+    pub last_tick: Option<ChangeCursor>,
 }
 
-fn world_replication_inputs_changed(world: &runen_ecs::World, since_tick: ChangeCursor) -> bool {
-    world.resource_changed_since::<OperationLogResource>(since_tick)
-        || world.resource_changed_since::<SdfChunkStoreResource>(since_tick)
-        || world.resource_changed_since::<WorldChunkRuntimeMapResource>(since_tick)
-        || world.resource_changed_since::<RegionInvalidationJournalResource>(since_tick)
-        || world.resource_changed_since::<WorldAuthorityState>(since_tick)
+fn world_replication_inputs_changed(
+    world: &runen_ecs::World,
+    since_tick: Option<ChangeCursor>,
+) -> Result<bool, runen_ecs::ChangeCursorError> {
+    let Some(since_tick) = since_tick else {
+        return Ok(true);
+    };
+    Ok(
+        world.resource_changed_since::<OperationLogResource>(since_tick)?
+            || world.resource_changed_since::<SdfChunkStoreResource>(since_tick)?
+            || world.resource_changed_since::<WorldChunkRuntimeMapResource>(since_tick)?
+            || world.resource_changed_since::<RegionInvalidationJournalResource>(since_tick)?
+            || world.resource_changed_since::<WorldAuthorityState>(since_tick)?,
+    )
 }
 
-pub fn rebuild_world_replication_state_system(mut world: WorldMut) {
-    let current_tick = world.current_change_tick();
+pub fn rebuild_world_replication_state_system(
+    mut world: WorldMut,
+) -> Result<(), runen_ecs::ChangeCursorError> {
+    let current_tick = world.current_change_cursor();
     let previous_tick = world
         .resource::<WorldReplicationExtractionCursor>()
-        .map(|cursor| cursor.last_tick)
-        .unwrap_or_default();
+        .ok()
+        .and_then(|cursor| cursor.last_tick);
 
-    if !world_replication_inputs_changed(&world, previous_tick) {
-        return;
+    if !world_replication_inputs_changed(&world, previous_tick)? {
+        return Ok(());
     }
 
     let world_revision = world
@@ -164,8 +174,9 @@ pub fn rebuild_world_replication_state_system(mut world: WorldMut) {
     }
 
     if let Ok(cursor) = world.resource_mut::<WorldReplicationExtractionCursor>() {
-        cursor.last_tick = current_tick;
+        cursor.last_tick = Some(current_tick);
     }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -191,55 +202,55 @@ mod tests {
     #[test]
     fn dirty_detection_ignores_unrelated_component_and_resource_changes() {
         let mut world = world_with_replication_inputs();
-        let baseline = world.current_change_tick();
+        let baseline = world.current_change_cursor();
 
         world
             .spawn(UnrelatedComponent)
             .expect("unrelated component should spawn");
         world.insert_resource(UnrelatedResource);
 
-        assert!(!world_replication_inputs_changed(&world, baseline));
+        assert!(!world_replication_inputs_changed(&world, Some(baseline)).unwrap());
     }
 
     #[test]
     fn dirty_detection_tracks_each_replication_input() {
         let mut world = world_with_replication_inputs();
 
-        let baseline = world.current_change_tick();
+        let baseline = world.current_change_cursor();
         let _ = world
             .resource_mut::<OperationLogResource>()
             .expect("operation log should exist");
-        assert!(world_replication_inputs_changed(&world, baseline));
+        assert!(world_replication_inputs_changed(&world, Some(baseline)).unwrap());
 
-        let baseline = world.current_change_tick();
+        let baseline = world.current_change_cursor();
         let _ = world
             .resource_mut::<SdfChunkStoreResource>()
             .expect("SDF chunk store should exist");
-        assert!(world_replication_inputs_changed(&world, baseline));
+        assert!(world_replication_inputs_changed(&world, Some(baseline)).unwrap());
 
-        let baseline = world.current_change_tick();
+        let baseline = world.current_change_cursor();
         let _ = world
             .resource_mut::<WorldChunkRuntimeMapResource>()
             .expect("world chunk runtime map should exist");
-        assert!(world_replication_inputs_changed(&world, baseline));
+        assert!(world_replication_inputs_changed(&world, Some(baseline)).unwrap());
 
-        let baseline = world.current_change_tick();
+        let baseline = world.current_change_cursor();
         let _ = world
             .resource_mut::<RegionInvalidationJournalResource>()
             .expect("region invalidation journal should exist");
-        assert!(world_replication_inputs_changed(&world, baseline));
+        assert!(world_replication_inputs_changed(&world, Some(baseline)).unwrap());
     }
 
     #[test]
     fn dirty_detection_tracks_world_authority_independently() {
         let mut world = world_with_replication_inputs();
-        let baseline = world.current_change_tick();
+        let baseline = world.current_change_cursor();
 
         world
             .resource_mut::<WorldAuthorityState>()
             .expect("world authority state should exist")
             .world_revision = world_ops::WorldRevision(7);
 
-        assert!(world_replication_inputs_changed(&world, baseline));
+        assert!(world_replication_inputs_changed(&world, Some(baseline)).unwrap());
     }
 }
