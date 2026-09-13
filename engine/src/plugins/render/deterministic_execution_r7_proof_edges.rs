@@ -64,8 +64,7 @@ fn instant() -> RenderTimeInterval {
 fn object_state(translation_scene: [f64; 3]) -> RenderObjectState {
     RenderObjectState::new(
         RenderObjectSpatialState::new(
-            RenderSpaceSpec::new(1.0, RenderHandedness::Right)
-                .expect("R7 edge-proof local space"),
+            RenderSpaceSpec::new(1.0, RenderHandedness::Right).expect("R7 edge-proof local space"),
             RenderAffineTransform3::from_row_major_3x4([
                 1.0,
                 0.0,
@@ -134,17 +133,15 @@ fn insert_geometry(
 }
 
 fn insert_emitter(store: &mut RenderSceneStore, wavelength_meters: f64, irradiance: f64) {
-    let object_id = store.allocate_object_id().expect("R7 edge-proof emitter id");
+    let object_id = store
+        .allocate_object_id()
+        .expect("R7 edge-proof emitter id");
     let mut insert = RenderSceneUpdate::new();
     insert.insert_with_state(object_id, object_state([0.0, 0.0, 0.0]));
     store.commit(insert).expect("insert R7 edge-proof emitter");
 
-    let emitter = RenderDirectionalEmitter::new(
-        [0.0, 0.0, 1.0],
-        wavelength_meters,
-        irradiance,
-    )
-    .expect("R7 edge-proof directional emitter");
+    let emitter = RenderDirectionalEmitter::new([0.0, 0.0, 1.0], wavelength_meters, irradiance)
+        .expect("R7 edge-proof directional emitter");
     let participation = RenderObjectParticipation::new(Vec::new(), None, Some(emitter))
         .expect("R7 edge-proof emitter participation");
     let mut attach = RenderSceneUpdate::new();
@@ -190,8 +187,7 @@ fn radiometric() -> RenderRadiometricRepresentation {
 }
 
 fn numeric_tolerance() -> RenderSemanticTolerance {
-    RenderSemanticTolerance::absolute(NUMERIC_TOLERANCE)
-        .expect("R7 edge-proof numeric tolerance")
+    RenderSemanticTolerance::absolute(NUMERIC_TOLERANCE).expect("R7 edge-proof numeric tolerance")
 }
 
 fn probe_radiance_request() -> RenderRequest {
@@ -234,9 +230,8 @@ fn perspective_miss_request() -> RenderRequest {
         )
         .expect("R7 edge-proof perspective"),
     );
-    let lattice = || {
-        RenderResultTopology::sample_lattice_2d(1, 1).expect("R7 edge-proof one-sample lattice")
-    };
+    let lattice =
+        || RenderResultTopology::sample_lattice_2d(1, 1).expect("R7 edge-proof one-sample lattice");
     RenderRequest::new(
         shutter,
         vec![observation],
@@ -444,7 +439,10 @@ fn verified_probe_radiance(context: &GpuContext, emitters: &[(f64, f64)]) -> f64
     wait_for_verification(context, &verification);
     let correlation = verification.readbacks()[0];
     assert_eq!(correlation.output_index(), 0);
-    assert_eq!(ready_first_word(&verification, correlation.definedness()), 1);
+    assert_eq!(
+        ready_first_word(&verification, correlation.definedness()),
+        1
+    );
     assert_eq!(ready_first_word(&verification, correlation.status()), 0);
     let value = f64::from(f32::from_bits(ready_first_word(
         &verification,
@@ -462,7 +460,10 @@ fn maintained_radiance_truthfully_handles_zero_one_and_many_matching_emitters() 
     };
 
     let zero = verified_probe_radiance(&context, &[(600.0e-9, 50.0)]);
-    assert_eq!(zero, 0.0, "non-matching emitters must contribute no radiance");
+    assert_eq!(
+        zero, 0.0,
+        "non-matching emitters must contribute no radiance"
+    );
 
     let one = verified_probe_radiance(&context, &[(TEST_WAVELENGTH_METERS, 1.0)]);
     assert_close(one, 0.5 / std::f64::consts::PI);
@@ -476,7 +477,10 @@ fn maintained_radiance_truthfully_handles_zero_one_and_many_matching_emitters() 
         ],
     );
     assert_close(many, 0.5 * 3.0 / std::f64::consts::PI);
-    assert!(many > one, "multiple matching emitters must add their contributions");
+    assert!(
+        many > one,
+        "multiple matching emitters must add their contributions"
+    );
 }
 
 #[test]
@@ -504,7 +508,10 @@ fn maintained_miss_encodings_are_truthful_and_verifier_certified() {
     };
 
     let radiance = output(0);
-    assert_eq!(ready_first_word(&verification, radiance.canonical_output()), 0);
+    assert_eq!(
+        ready_first_word(&verification, radiance.canonical_output()),
+        0
+    );
     assert_eq!(ready_first_word(&verification, radiance.definedness()), 1);
     assert_eq!(ready_first_word(&verification, radiance.status()), 0);
 
@@ -514,14 +521,14 @@ fn maintained_miss_encodings_are_truthful_and_verifier_certified() {
     assert_eq!(ready_first_word(&verification, depth.status()), 0);
 
     let identity = output(2);
-    assert_eq!(ready_first_word(&verification, identity.canonical_output()), 0);
+    assert_eq!(
+        ready_first_word(&verification, identity.canonical_output()),
+        0
+    );
     assert_eq!(ready_first_word(&verification, identity.definedness()), 0);
     assert_eq!(ready_first_word(&verification, identity.status()), 0);
     assert_eq!(
-        verification
-            .submitted()
-            .object_identity_decoder()
-            .decode(0),
+        verification.submitted().object_identity_decoder().decode(0),
         None,
         "undefined identity code must remain outside semantic object identity"
     );
