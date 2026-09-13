@@ -205,10 +205,7 @@ pub(crate) struct NeutralInputAuthority {
 }
 
 impl NeutralInputAuthority {
-    pub(crate) fn admit(
-        &mut self,
-        group: ObservationGroup,
-    ) -> Result<(), NeutralInputError> {
+    pub(crate) fn admit(&mut self, group: ObservationGroup) -> Result<(), NeutralInputError> {
         if group
             .observations
             .iter()
@@ -277,7 +274,9 @@ impl NeutralInputAuthority {
                 }
             },
             InputObservation::AbsolutePointerPosition { position } => {
-                self.state.absolute_pointer_positions.insert(source, position);
+                self.state
+                    .absolute_pointer_positions
+                    .insert(source, position);
             }
             InputObservation::RelativeMotion { .. } | InputObservation::Scroll { .. } => {}
             InputObservation::Contact {
@@ -438,11 +437,7 @@ mod tests {
 
     #[test]
     fn omitted_pressure_remains_distinct_from_measured_zero() {
-        let position = Point2::new(
-            10.0,
-            12.0,
-            CoordinateSpace::LegacyWindowPhysicalPixels,
-        );
+        let position = Point2::new(10.0, 12.0, CoordinateSpace::LegacyWindowPhysicalPixels);
         let omitted = InputObservation::Contact {
             contact: ContactId::new(9),
             phase: ContactPhase::Update,
