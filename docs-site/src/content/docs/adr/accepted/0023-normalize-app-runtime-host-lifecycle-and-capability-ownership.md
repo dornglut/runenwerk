@@ -215,26 +215,32 @@ that one started runtime may be advanced more than once.
 
 Terminal host/process shutdown follows the `Running -> Terminating -> Terminated` path.
 
-### 8. Startup is one-shot and fail-stop for the runtime instance
+### 8. Startup is one-shot and fail-stop for a surviving runtime instance
 
 The App Startup lifecycle attempt is one-shot for one runtime instance.
 
-The runtime must record that Startup has been attempted **before** the first Startup
-system can execute. A returned error or caught unwind must therefore never make the same
-partially mutated runtime eligible for an implicit retry.
+Current public bounded-run helpers consume `App` and discard it on returned failure, and
+the current windowed runner exits on Startup failure. Therefore current source does not
+establish a maintained public same-instance Startup retry path. However, the underlying
+`startup_ran: bool` records only successful completion; the shared Startup helper leaves
+that flag indistinguishable from "not attempted" after error, and a caught unwind would
+likewise have no explicit failed-attempt state if a future/specialized caller retained
+the runtime.
+
+The normalized contract must not rely on runner destruction or process/event-loop exit to
+make retry impossible. The runtime records that Startup has been attempted **before** the
+first Startup system can execute. If that runtime instance survives a returned error or
+caught unwind, it is explicitly non-runnable rather than retry-eligible.
 
 If Startup succeeds, the runtime enters `Running` and Startup is never executed again.
 If Startup returns an error or panics after execution has begun:
 
 - the runtime does not enter `Running`;
 - already committed owner/system effects are not generically rolled back;
-- Runenwerk does not implicitly retry Startup on the same partially mutated runtime;
-- ordinary advancement of that runtime instance must reject;
+- Runenwerk does not implicitly retry Startup on the same surviving runtime;
+- ordinary advancement of that surviving runtime instance must reject;
 - recovery requires an explicit owner/host recovery contract or reconstruction of the
   runtime instance.
-
-This decision intentionally rejects the current implicit-retry shape where a failed
-Startup can be attempted again merely because a success flag was never set.
 
 Preparation failures before Startup retain the failure/retry contract of the owning host
 or capability; no generic transaction or rollback is introduced here.
@@ -330,8 +336,8 @@ This decision does not absorb adjacent work:
 - Host stability prevents Startup under one host followed by silent continuation under a
   different host.
 - Bounded advancement becomes repeatable without implying App termination.
-- Startup failure becomes explicit fail-stop rather than accidental retry over partially
-  committed state.
+- Startup failure semantics become explicit rather than relying on current runner
+  destruction/exit to prevent reuse.
 - Plugins become truthful installers/integration boundaries rather than labels over
   globally preactivated capability state.
 - Fixed cadence can be separated from simulation identity.
@@ -367,11 +373,11 @@ validated explicitly.
 Rejected. Bounded execution controls advancement; it does not implicitly rewrite the
 runtime's host identity.
 
-### Retry failed Startup automatically
+### Leave Startup failure implicit in runner control flow
 
-Rejected. Startup systems may have already committed effects and no generic rollback
-exists. Retrying would make duplicate/partial initialization an implicit lifecycle
-contract.
+Rejected. Current consuming runners discard/exit on failure, but the lifecycle contract
+must remain correct if a runtime survives a returned error or caught unwind. Failure must
+not become retry eligibility by accident.
 
 ### Make every engine concern a plugin for symmetry
 
