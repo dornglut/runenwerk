@@ -38,6 +38,7 @@ const CERTIFIED_MAX_FULL_FOV_RADIANS: f64 = std::f64::consts::FRAC_PI_2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum RenderDeterministicVerificationEligibilityError {
+    SelectedObservationMissing { observation_index: usize },
     PerspectiveFieldOfViewUnsupported { observation_index: usize },
     ObservationLinearBasisUnsupported { observation_index: usize },
     SelectedObjectStateMissing { object_id: RenderObjectId },
@@ -49,6 +50,10 @@ pub(super) enum RenderDeterministicVerificationEligibilityError {
 impl fmt::Display for RenderDeterministicVerificationEligibilityError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::SelectedObservationMissing { observation_index } => write!(
+                formatter,
+                "admitted output references missing observation {observation_index} during verified result formation"
+            ),
             Self::PerspectiveFieldOfViewUnsupported { observation_index } => write!(
                 formatter,
                 "observation {observation_index} lies outside the certified perspective field-of-view domain"
@@ -309,23 +314,19 @@ pub(super) fn ensure_deterministic_verification_eligible(
     maintained: &AdmittedDeterministicRender,
 ) -> Result<(), RenderDeterministicVerificationEligibilityError> {
     let admitted = maintained.admitted();
-    for (observation_index, observation) in admitted
-        .plan()
-        .request()
-        .observations()
-        .iter()
-        .copied()
-        .enumerate()
-    {
-        validate_observation(observation_index, observation)?;
-    }
-
+    let mut selected_observations = BTreeSet::new();
     let mut selected_objects = BTreeSet::new();
     for output in admitted.outputs() {
+        selected_observations.insert(output.observation_index());
         for object in output.object_representations() {
             selected_objects.insert(object.object_id());
         }
     }
+
+    validate_selected_observations(
+        admitted.plan().request().observations(),
+        selected_observations,
+    )?;
 
     for object_id in selected_objects {
         let state = admitted.plan().scene().object_state(object_id).ok_or(
@@ -336,6 +337,21 @@ pub(super) fn ensure_deterministic_verification_eligible(
         validate_object_spatial_state(object_id, state.spatial())?;
     }
 
+    Ok(())
+}
+
+fn validate_selected_observations(
+    observations: &[RenderObservationSpec],
+    selected_observations: impl IntoIterator<Item = usize>,
+) -> Result<(), RenderDeterministicVerificationEligibilityError> {
+    for observation_index in selected_observations {
+        let observation = observations.get(observation_index).copied().ok_or(
+            RenderDeterministicVerificationEligibilityError::SelectedObservationMissing {
+                observation_index,
+            },
+        )?;
+        validate_observation(observation_index, observation)?;
+    }
     Ok(())
 }
 
@@ -545,6 +561,61 @@ mod tests {
             Err(
                 RenderDeterministicVerificationEligibilityError::ObservationLinearBasisUnsupported {
                     observation_index: 2,
+                }
+            )
+        );
+    }
+
+    #[test]
+    fn selected_observation_gate_ignores_unreferenced_unsupported_observations() {
+        let supported = RenderObservationSpec::Perspective(
+            RenderPerspectiveObservation::new(
+                RenderAffineTransform3::identity(),
+                std::f64::consts::FRAC_PI_4,
+                1.0,
+                instant(),
+                RenderSamplingSupport::ideal_ray(),
+            )
+            .expect("supported perspective"),
+        );
+        let unsupported = RenderObservationSpec::Perspective(
+            RenderPerspectiveObservation::new(
+                RenderAffineTransform3::identity(),
+                std::f64::consts::FRAC_PI_2 * 1.5,
+                1.0,
+                instant(),
+                RenderSamplingSupport::ideal_ray(),
+            )
+            .expect("semantically legal wider perspective"),
+        );
+        let observations = [supported, unsupported];
+
+        assert_eq!(validate_selected_observations(&observations, [0]), Ok(()));
+        assert_eq!(
+            validate_selected_observations(&observations, [1]),
+            Err(
+                RenderDeterministicVerificationEligibilityError::PerspectiveFieldOfViewUnsupported {
+                    observation_index: 1,
+                }
+            )
+        );
+    }
+
+    #[test]
+    fn selected_observation_gate_fails_closed_on_missing_admitted_correlation() {
+        let observation = RenderObservationSpec::Probe(
+            RenderProbeObservation::new(
+                RenderAffineTransform3::identity(),
+                instant(),
+                RenderSamplingSupport::ideal_ray(),
+            )
+            .expect("probe"),
+        );
+        assert_eq!(
+            validate_selected_observations(&[observation], [1]),
+            Err(
+                RenderDeterministicVerificationEligibilityError::SelectedObservationMissing {
+                    observation_index: 1,
                 }
             )
         );

@@ -15,6 +15,7 @@ use super::admission::{AdmittedRenderPlan, RenderOutputDestination};
 use super::derived_transform::{RenderCompiledObjectTransform, RenderCompiledObjectTransformError};
 use super::deterministic_admission::AdmittedDeterministicRender;
 use super::lowering::RenderWorkSet;
+use super::render_result::RenderResult;
 use super::representation::RenderRepresentationId;
 use super::request::{RenderDistanceConvention, RenderObservationSpec, RenderOutputValue};
 use super::scene::RenderObjectId;
@@ -23,10 +24,10 @@ use runen_gpu::{
     GpuBufferDescriptor, GpuBufferInitialization, GpuBufferRegion, GpuBufferTextureLayout,
     GpuBufferUsage, GpuClearOperation, GpuComputeOperation, GpuComputePipelineDescriptor,
     GpuContext, GpuContextAffinity, GpuCopyOperation, GpuDispatchIntent, GpuDispatchSize,
-    GpuReadbackId, GpuReadbackOperation, GpuReconstruction, GpuResourceLifetime, GpuResourceScope,
-    GpuRuntimeBindingValue, GpuSubmission, GpuTextureCopyRegion, GpuUploadOperation,
-    GpuWorkFragment, GpuWorkSubmissionError, PreparedGpuData, TransferData,
-    admit_static_wgsl_sources,
+    GpuReadbackId, GpuReadbackOperation, GpuReadbackStatus, GpuReconstruction, GpuResourceLifetime,
+    GpuResourceScope, GpuRuntimeBindingValue, GpuSubmission, GpuSubmissionFailureKind,
+    GpuSubmissionStatus, GpuTextureCopyRegion, GpuUploadOperation, GpuWorkFragment,
+    GpuWorkSubmissionError, PreparedGpuData, TransferData, admit_static_wgsl_sources,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
@@ -103,17 +104,26 @@ impl DeterministicObservationIntent {
     }
 }
 
-/// One exact ordinary maintained execution after RunenGPU accepted its authored work.
+#[derive(Debug)]
+enum DeterministicVerificationState {
+    NotRequested,
+    Requested(Vec<DeterministicVerificationReadbacks>),
+    Formed,
+}
+
+/// One exact maintained execution after RunenGPU accepted its authored work.
 ///
 /// This is not a second submission lifecycle or a render session. Physical completion/failure stays
-/// entirely on [`GpuSubmission`]. The retained admitted plan and decoder only preserve renderer
-/// correlation that must remain bound to that exact submission. Ordinary execution contains no
-/// verification-readback state and therefore cannot be upgraded after submission.
-#[derive(Debug, Clone)]
+/// entirely on [`GpuSubmission`]. Ordinary execution retains no verification correlation and cannot
+/// be upgraded after submission. When verified-result intent was selected before submission, the
+/// same public submitted-render abstraction privately retains only the same-submission correlation
+/// needed by RR566-EVAL-001 and FORM-001.
+#[derive(Debug)]
 pub struct SubmittedDeterministicRender {
     admitted: AdmittedDeterministicRender,
     submission: GpuSubmission,
     object_identity_decoder: RenderObjectIdentityDecoder,
+    verification: DeterministicVerificationState,
 }
 
 impl SubmittedDeterministicRender {
@@ -128,17 +138,95 @@ impl SubmittedDeterministicRender {
     pub const fn object_identity_decoder(&self) -> &RenderObjectIdentityDecoder {
         &self.object_identity_decoder
     }
+
+    /// Try to form semantic result evidence from this exact verified submission.
+    ///
+    /// This method never drives RunenGPU progress and never blocks waiting for readback. The caller
+    /// retains product/runtime policy for progressing the public RunenGPU context, then polls this
+    /// owner-controlled boundary. `Ok(None)` means the exact submission or one of its private
+    /// same-submission observations is still pending. Successful formation consumes the private
+    /// verification authority exactly once while leaving physical submission inspection available.
+    pub fn try_form_verified_result(
+        &mut self,
+    ) -> Result<Option<RenderResult>, RenderDeterministicResultFormationError> {
+        let verification_readbacks = match &self.verification {
+            DeterministicVerificationState::NotRequested => {
+                return Err(RenderDeterministicResultFormationError::VerificationNotRequested);
+            }
+            DeterministicVerificationState::Formed => {
+                return Err(RenderDeterministicResultFormationError::ResultAlreadyFormed);
+            }
+            DeterministicVerificationState::Requested(readbacks) => readbacks.clone(),
+        };
+
+        match self.submission.status() {
+            GpuSubmissionStatus::Accepted => return Ok(None),
+            GpuSubmissionStatus::Failed(failure) => {
+                return Err(RenderDeterministicResultFormationError::SubmissionFailed {
+                    kind: failure.kind(),
+                });
+            }
+            GpuSubmissionStatus::Completed => {}
+        }
+
+        for correlation in &verification_readbacks {
+            for (channel, id) in [
+                ("canonical-output", correlation.canonical_output()),
+                ("definedness", correlation.definedness()),
+                ("evaluator-status", correlation.status()),
+            ] {
+                let readback = self.submission.readback(id).ok_or(
+                    RenderDeterministicResultFormationError::ReadbackCorrelationLost {
+                        output_index: correlation.output_index(),
+                        channel,
+                    },
+                )?;
+                match readback.status() {
+                    GpuReadbackStatus::Pending => return Ok(None),
+                    GpuReadbackStatus::Failed(failure) => {
+                        return Err(RenderDeterministicResultFormationError::ReadbackFailed {
+                            output_index: correlation.output_index(),
+                            channel,
+                            kind: failure.kind(),
+                        });
+                    }
+                    GpuReadbackStatus::Ready(_) => {}
+                }
+            }
+        }
+
+        let verification = DeterministicVerificationSubmission {
+            submitted: SubmittedDeterministicRender {
+                admitted: self.admitted.clone(),
+                submission: self.submission.clone(),
+                object_identity_decoder: self.object_identity_decoder.clone(),
+                verification: DeterministicVerificationState::Requested(verification_readbacks),
+            },
+        };
+        let verified = super::deterministic_verification::verify_completed_deterministic_render(
+            verification,
+        )
+        .map_err(|error| RenderDeterministicResultFormationError::VerificationRejected {
+            detail: error.to_string(),
+        })?;
+        let result = RenderResult::from_verified_deterministic(verified).map_err(|error| {
+            RenderDeterministicResultFormationError::ResultFormation {
+                detail: error.to_string(),
+            }
+        })?;
+        self.verification = DeterministicVerificationState::Formed;
+        Ok(Some(result))
+    }
 }
 
 /// Private proof witness for a submission whose verification intent was selected before lowering.
 ///
-/// This wraps the ordinary submitted-execution value rather than introducing a second submission
-/// lifecycle. Its only additional state is the private correlation required to locate the three
-/// observations that were authored into that same exact `GpuSubmission`.
-#[derive(Debug, Clone)]
+/// This wrapper exists only so the private verifier can consume the exact owner-controlled submitted
+/// value. The public submitted render itself privately retains the correlation; there is no second
+/// submission lifecycle and no public verification token.
+#[derive(Debug)]
 pub(super) struct DeterministicVerificationSubmission {
     submitted: SubmittedDeterministicRender,
-    readbacks: Vec<DeterministicVerificationReadbacks>,
 }
 
 impl DeterministicVerificationSubmission {
@@ -147,7 +235,16 @@ impl DeterministicVerificationSubmission {
     }
 
     pub(super) fn readbacks(&self) -> &[DeterministicVerificationReadbacks] {
-        &self.readbacks
+        match &self.submitted.verification {
+            DeterministicVerificationState::Requested(readbacks) => readbacks,
+            DeterministicVerificationState::NotRequested | DeterministicVerificationState::Formed => {
+                &[]
+            }
+        }
+    }
+
+    pub(super) fn into_submitted(self) -> SubmittedDeterministicRender {
+        self.submitted
     }
 }
 
@@ -301,6 +398,129 @@ impl From<RenderDeterministicLoweringError> for RenderDeterministicExecutionErro
     }
 }
 
+/// Failure while selecting verified-result intent and authoring its one exact submission.
+#[derive(Debug)]
+pub enum RenderDeterministicVerifiedSubmissionError {
+    Eligibility { detail: String },
+    Execution(RenderDeterministicExecutionError),
+    Correlation { detail: String },
+}
+
+impl fmt::Display for RenderDeterministicVerifiedSubmissionError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Eligibility { detail } => write!(
+                formatter,
+                "verified deterministic submission is outside the certified result-formation domain: {detail}"
+            ),
+            Self::Execution(error) => error.fmt(formatter),
+            Self::Correlation { detail } => write!(
+                formatter,
+                "verified deterministic same-submission correlation failed: {detail}"
+            ),
+        }
+    }
+}
+
+impl Error for RenderDeterministicVerifiedSubmissionError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Execution(error) => Some(error),
+            Self::Eligibility { .. } | Self::Correlation { .. } => None,
+        }
+    }
+}
+
+/// Failure while polling one exact verified submission for semantic result formation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RenderDeterministicResultFormationError {
+    VerificationNotRequested,
+    ResultAlreadyFormed,
+    SubmissionFailed {
+        kind: GpuSubmissionFailureKind,
+    },
+    ReadbackCorrelationLost {
+        output_index: usize,
+        channel: &'static str,
+    },
+    ReadbackFailed {
+        output_index: usize,
+        channel: &'static str,
+        kind: GpuSubmissionFailureKind,
+    },
+    VerificationRejected {
+        detail: String,
+    },
+    ResultFormation {
+        detail: String,
+    },
+}
+
+impl fmt::Display for RenderDeterministicResultFormationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::VerificationNotRequested => formatter.write_str(
+                "this deterministic submission was authored without verified-result observations",
+            ),
+            Self::ResultAlreadyFormed => formatter.write_str(
+                "semantic result evidence was already formed from this deterministic submission",
+            ),
+            Self::SubmissionFailed { kind } => write!(
+                formatter,
+                "RunenGPU submission failed before verified result formation: {kind:?}"
+            ),
+            Self::ReadbackCorrelationLost {
+                output_index,
+                channel,
+            } => write!(
+                formatter,
+                "output {output_index} {channel} verification readback is no longer correlated to the exact submission"
+            ),
+            Self::ReadbackFailed {
+                output_index,
+                channel,
+                kind,
+            } => write!(
+                formatter,
+                "output {output_index} {channel} verification readback failed: {kind:?}"
+            ),
+            Self::VerificationRejected { detail } => write!(
+                formatter,
+                "deterministic finite-evaluation verification rejected result formation: {detail}"
+            ),
+            Self::ResultFormation { detail } => write!(
+                formatter,
+                "renderer-owned deterministic result formation failed: {detail}"
+            ),
+        }
+    }
+}
+
+impl Error for RenderDeterministicResultFormationError {}
+
+fn map_verified_submission_error(
+    error: super::deterministic_verification::RenderDeterministicVerifiedSubmissionError,
+) -> RenderDeterministicVerifiedSubmissionError {
+    use super::deterministic_verification::RenderDeterministicVerifiedSubmissionError as PrivateError;
+
+    match error {
+        PrivateError::Eligibility(error) => RenderDeterministicVerifiedSubmissionError::Eligibility {
+            detail: error.to_string(),
+        },
+        PrivateError::Execution(error) => {
+            RenderDeterministicVerifiedSubmissionError::Execution(error)
+        }
+        PrivateError::ReadbackCardinality { .. }
+        | PrivateError::OutputCorrelationChanged { .. }
+        | PrivateError::DuplicateReadbackCorrelation { .. }
+        | PrivateError::MissingSubmissionReadback { .. } => {
+            RenderDeterministicVerifiedSubmissionError::Correlation {
+                detail: error.to_string(),
+            }
+        }
+    }
+}
+
 struct LoweredDeterministicRender {
     work_set: RenderWorkSet,
     object_identity_decoder: RenderObjectIdentityDecoder,
@@ -343,8 +563,30 @@ pub async fn submit_deterministic_render(
         context,
         lowered.work_set,
         lowered.object_identity_decoder,
+        DeterministicVerificationState::NotRequested,
     )
     .await
+}
+
+/// Submit one maintained deterministic invocation with explicit verified-result intent.
+///
+/// This is the product-accessible counterpart to [`submit_deterministic_render`]. It runs the same
+/// maintained evaluator/lowering and creates exactly one RunenGPU submission, adding only the
+/// renderer-private readback operations required by RR566-EVAL-001. The returned type is the same
+/// owner-controlled [`SubmittedDeterministicRender`]; private readback identities never become
+/// public API. The caller drives RunenGPU progress and polls
+/// [`SubmittedDeterministicRender::try_form_verified_result`] when semantic result evidence is
+/// required.
+pub async fn submit_deterministic_render_for_verified_result(
+    admitted: AdmittedDeterministicRender,
+    context: &GpuContext,
+) -> Result<SubmittedDeterministicRender, RenderDeterministicVerifiedSubmissionError> {
+    super::deterministic_verification::submit_deterministic_render_for_verified_formation(
+        admitted, context,
+    )
+    .await
+    .map(DeterministicVerificationSubmission::into_submitted)
+    .map_err(map_verified_submission_error)
 }
 
 /// Submit the exact maintained deterministic path with renderer-private same-submission readbacks.
@@ -364,12 +606,10 @@ pub(super) async fn submit_deterministic_render_for_verification(
         context,
         lowered.work_set,
         lowered.object_identity_decoder,
+        DeterministicVerificationState::Requested(verification_readbacks),
     )
     .await?;
-    Ok(DeterministicVerificationSubmission {
-        submitted,
-        readbacks: verification_readbacks,
-    })
+    Ok(DeterministicVerificationSubmission { submitted })
 }
 
 async fn submit_lowered_deterministic_render(
@@ -377,6 +617,7 @@ async fn submit_lowered_deterministic_render(
     context: &GpuContext,
     work_set: RenderWorkSet,
     object_identity_decoder: RenderObjectIdentityDecoder,
+    verification: DeterministicVerificationState,
 ) -> Result<SubmittedDeterministicRender, RenderDeterministicExecutionError> {
     let submission = context
         .submit_work(
@@ -389,6 +630,7 @@ async fn submit_lowered_deterministic_render(
         admitted,
         submission,
         object_identity_decoder,
+        verification,
     })
 }
 
