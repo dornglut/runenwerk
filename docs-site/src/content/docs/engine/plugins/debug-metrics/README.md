@@ -18,17 +18,20 @@ Provides an on-screen diagnostics overlay for frame timing and runtime state.
 
 - Plugin: `DebugMetricsPlugin`
 - Timing provider: `TimePlugin` directly or through `default_plugins()`
+- Scene-state provider: `ScenePlugin`
 - Toggle overlay action: `debug.metrics.toggle`
 - Default key: `F10`
 
 The plugin appends UI draw commands to the overlay UI draw list each frame when enabled.
-It consumes `Time` for frame-delta diagnostics but does not install or advance timing state.
+It consumes `Time` for frame-delta diagnostics and `SceneRuntimeState` for scene diagnostics,
+but does not install or advance either owner state. `default_plugins()` supplies `TimePlugin`;
+applications using scene metrics must also select `ScenePlugin` explicitly.
 
 ## Ownership Boundaries
 
 - Owns debug metrics visibility toggle and overlay rendering content.
-- Consumes `Time`, startup state, scene labels, and render/runtime inspection state.
-- Does not own frame-time progression, frame submission, or UI extraction orchestration.
+- Consumes `Time`, startup state, `SceneRuntimeState`, and render/runtime inspection state.
+- Does not own frame-time progression, scene runtime state, frame submission, or UI extraction orchestration.
 
 ## Extension Points
 

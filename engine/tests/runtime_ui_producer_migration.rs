@@ -73,6 +73,7 @@ fn runtime_ui_producer_migration_debug_owner_publishes_debug_frame_submission() 
     let mut app = App::headless();
     app.add_plugin(TimePlugin);
     app.add_plugin(RenderPlugin);
+    app.add_plugin(ScenePlugin);
     app.add_plugin(DebugMetricsPlugin);
     app.add_systems(Update, inject_f10);
 
