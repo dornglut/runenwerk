@@ -12,6 +12,7 @@ use super::super::deterministic_verification::{
 };
 use super::super::r6_proof::FoundingRepresentationRealization;
 use super::super::r6_reference_proof::{direct_lighting_radiance, observation_forward_depth};
+use super::super::render_result::RenderResult;
 use super::super::representation::{RenderSurfaceQuery, RenderSurfaceProtocolEvidence};
 use super::super::scene::RenderSceneSnapshot;
 use super::super::surface_input::{
@@ -628,7 +629,7 @@ fn decode_canonical_words(bytes: &[u8], topology: RenderResultTopology) -> Vec<u
         .expect("R6 logical row byte length");
     assert_eq!(bytes.len() % height, 0);
     let stride = bytes.len() / height;
-    assert!(stride >= logical_row && stride % WORD_BYTES == 0);
+    assert!(stride >= logical_row && stride.is_multiple_of(WORD_BYTES));
     let mut words = Vec::new();
     for row in 0..height {
         let start = row * stride;
@@ -766,4 +767,45 @@ fn founding_renderer_executes_through_maintained_path_and_matches_cpu_reference(
         &admitted_plan,
         "R6 verifier must remain bound to the exact maintained admission"
     );
+
+    let result = RenderResult::from_verified_deterministic(verified)
+        .expect("R6 verified execution must form one complete semantic result");
+    assert_eq!(result.scene_revision(), admitted_plan.scene_revision());
+    assert_eq!(result.scene(), admitted_plan.plan().scene());
+    assert_eq!(result.request(), admitted_plan.plan().request());
+    assert_eq!(
+        result.surface_semantic_inputs(),
+        admitted_plan.surface_semantic_inputs(),
+        "semantic result must retain the exact admitted surface-input provenance"
+    );
+    assert_eq!(
+        result.method_id(),
+        admitted_plan.selected_candidate().method_id(),
+        "semantic result must retain the exact selected method"
+    );
+    assert_eq!(result.outputs().len(), admitted_plan.outputs().len());
+    for (result_output, admitted_output) in result.outputs().iter().zip(admitted_plan.outputs()) {
+        assert_eq!(result_output.output_index(), admitted_output.output_index());
+        assert_eq!(
+            result.request().outputs()[result_output.output_index()].observation_index(),
+            admitted_output.observation_index(),
+            "result output-to-observation correlation must derive from the retained request"
+        );
+        assert_eq!(result_output.approximation(), admitted_output.approximation());
+        assert_eq!(
+            result_output.object_representations().len(),
+            admitted_output.object_representations().len()
+        );
+        for (result_object, admitted_object) in result_output
+            .object_representations()
+            .iter()
+            .zip(admitted_output.object_representations())
+        {
+            assert_eq!(result_object.object_id(), admitted_object.object_id());
+            assert_eq!(
+                result_object.representation(),
+                admitted_object.representation()
+            );
+        }
+    }
 }

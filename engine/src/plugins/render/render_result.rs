@@ -1,4 +1,5 @@
 use super::admission::AdmittedRenderPlan;
+use super::deterministic_verification::VerifiedDeterministicRender;
 use super::method::RenderMethodId;
 use super::request::RenderRequest;
 use super::scene::{RenderObjectId, RenderSceneRevision, RenderSceneSnapshot};
@@ -10,17 +11,16 @@ use std::fmt;
 
 /// Renderer-owned evidence that one deterministic finite output satisfied the requested tolerance.
 ///
-/// This is intentionally not public product API. A RunenRender method/evaluator may construct this
-/// witness only after its concrete finite evaluation has established the requested
-/// `RenderSemanticTolerance` for the correlated admitted output. Physical completion, numeric
-/// format, or semantic/model approximation alone are not sufficient evidence.
+/// This witness is deliberately private to result formation. The only constructor is used while
+/// consuming one execution-scoped [`VerifiedDeterministicRender`], so an output-index token cannot
+/// be detached and reused across submissions or semantic-input substitutions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) struct RenderDeterministicOutputFormationEvidence {
+struct RenderDeterministicOutputFormationEvidence {
     output_index: usize,
 }
 
 impl RenderDeterministicOutputFormationEvidence {
-    pub(super) const fn requested_tolerance_satisfied(output_index: usize) -> Self {
+    const fn requested_tolerance_satisfied(output_index: usize) -> Self {
         Self { output_index }
     }
 
@@ -130,13 +130,31 @@ impl fmt::Display for RenderResultFormationError {
 impl Error for RenderResultFormationError {}
 
 impl RenderResult {
-    /// Form complete semantic result evidence for one deterministic admitted execution.
+    /// Consume one exact execution-scoped EVAL-001 proof and form its semantic result evidence.
     ///
-    /// Every admitted output requires one renderer-owned witness that its concrete finite value has
-    /// satisfied the requested deterministic tolerance. This constructor deliberately does not
-    /// depend on RunenGPU submission/readback types and does not infer evaluation fidelity from GPU
-    /// completion, numeric format, or the admitted semantic/model approximation.
-    pub(super) fn complete_deterministic(
+    /// The verified execution is taken by value so its per-output finite-evaluation evidence cannot
+    /// be reused after formation. Private output witnesses are minted only inside this owner-controlled
+    /// flow from the exact admitted outputs already bound to the verified submission. GPU submission,
+    /// readback, decoder, and completion identities are consumed as proof context and remain outside
+    /// public `RenderResult` identity.
+    pub(super) fn from_verified_deterministic(
+        verified: VerifiedDeterministicRender,
+    ) -> Result<Self, RenderResultFormationError> {
+        let admitted = verified.submitted().admitted().admitted();
+        let output_evidence = admitted.outputs().iter().map(|output| {
+            RenderDeterministicOutputFormationEvidence::requested_tolerance_satisfied(
+                output.output_index(),
+            )
+        });
+        Self::complete_deterministic(admitted, output_evidence)
+    }
+
+    /// Form complete semantic result evidence from one internally correlated deterministic proof.
+    ///
+    /// This raw constructor is private to the module. Callers cannot combine an arbitrary admitted
+    /// plan with detached output-index assertions; the only owner-controlled entry above derives the
+    /// witness set while consuming the exact `VerifiedDeterministicRender` that established it.
+    fn complete_deterministic(
         admitted: &AdmittedRenderPlan,
         output_evidence: impl IntoIterator<Item = RenderDeterministicOutputFormationEvidence>,
     ) -> Result<Self, RenderResultFormationError> {
