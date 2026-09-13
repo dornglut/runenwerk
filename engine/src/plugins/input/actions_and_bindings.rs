@@ -1,5 +1,5 @@
 use crate::plugins::ModifiersSnapshot;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use winit::keyboard::KeyCode;
 
 // Owner: Engine Input Plugin - Action Bindings and Chords
@@ -183,16 +183,19 @@ impl InputBindings {
         actions
     }
 
-    pub(crate) fn action_down(
+    pub(crate) fn action_down<F>(
         &self,
         action: &str,
-        keys_down: &HashSet<KeyCode>,
+        mut key_is_down: F,
         modifiers: ModifiersSnapshot,
-    ) -> bool {
+    ) -> bool
+    where
+        F: FnMut(KeyCode) -> bool,
+    {
         self.by_action.get(action).is_some_and(|chords| {
             chords
                 .iter()
-                .any(|chord| keys_down.contains(&chord.key) && chord.matches(modifiers))
+                .any(|chord| key_is_down(chord.key) && chord.matches(modifiers))
         })
     }
 

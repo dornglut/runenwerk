@@ -5,18 +5,24 @@ use crate::plugins::{
 use winit::event::{ElementState, MouseButton};
 use winit::keyboard::KeyCode;
 
+fn press_key(state: &mut InputState, key: KeyCode) {
+    state.handle_keyboard_input(key, ElementState::Pressed, None);
+}
+
+fn release_key(state: &mut InputState, key: KeyCode) {
+    state.handle_keyboard_input(key, ElementState::Released, None);
+}
+
 #[test]
 fn default_bindings_split_enter_by_shift() {
     let mut submit = InputState::new();
-    submit.keys_down.insert(KeyCode::Enter);
-    submit.apply_action_press_for_key(KeyCode::Enter);
+    press_key(&mut submit, KeyCode::Enter);
     assert!(submit.submitted);
     assert!(!submit.insert_newline);
 
     let mut newline = InputState::new();
-    newline.keys_down.insert(KeyCode::ShiftLeft);
-    newline.keys_down.insert(KeyCode::Enter);
-    newline.apply_action_press_for_key(KeyCode::Enter);
+    press_key(&mut newline, KeyCode::ShiftLeft);
+    press_key(&mut newline, KeyCode::Enter);
     assert!(newline.insert_newline);
     assert!(!newline.submitted);
 }
@@ -24,15 +30,13 @@ fn default_bindings_split_enter_by_shift() {
 #[test]
 fn default_bindings_split_scene_f2_by_shift() {
     let mut next = InputState::new();
-    next.keys_down.insert(KeyCode::F2);
-    next.apply_action_press_for_key(KeyCode::F2);
+    press_key(&mut next, KeyCode::F2);
     assert!(next.scene_next);
     assert!(!next.scene_prev);
 
     let mut prev = InputState::new();
-    prev.keys_down.insert(KeyCode::ShiftLeft);
-    prev.keys_down.insert(KeyCode::F2);
-    prev.apply_action_press_for_key(KeyCode::F2);
+    press_key(&mut prev, KeyCode::ShiftLeft);
+    press_key(&mut prev, KeyCode::F2);
     assert!(prev.scene_prev);
     assert!(!prev.scene_next);
 }
@@ -40,14 +44,12 @@ fn default_bindings_split_scene_f2_by_shift() {
 #[test]
 fn save_template_requires_ctrl_or_super() {
     let mut plain_s = InputState::new();
-    plain_s.keys_down.insert(KeyCode::KeyS);
-    plain_s.apply_action_press_for_key(KeyCode::KeyS);
+    press_key(&mut plain_s, KeyCode::KeyS);
     assert!(!plain_s.save_ui_template);
 
     let mut ctrl_s = InputState::new();
-    ctrl_s.keys_down.insert(KeyCode::ControlLeft);
-    ctrl_s.keys_down.insert(KeyCode::KeyS);
-    ctrl_s.apply_action_press_for_key(KeyCode::KeyS);
+    press_key(&mut ctrl_s, KeyCode::ControlLeft);
+    press_key(&mut ctrl_s, KeyCode::KeyS);
     assert!(ctrl_s.save_ui_template);
 }
 
@@ -57,8 +59,7 @@ fn runtime_map_key_rebinds_world_move_left() {
     assert_eq!(state.unmap_key(action::WORLD_MOVE_LEFT, KeyCode::KeyA), 1);
     state.map_key(action::WORLD_MOVE_LEFT, KeyCode::KeyJ);
 
-    state.keys_down.insert(KeyCode::KeyJ);
-    state.apply_action_press_for_key(KeyCode::KeyJ);
+    press_key(&mut state, KeyCode::KeyJ);
     assert!(state.world_move_left);
     assert!(state.action_pressed(action::WORLD_MOVE_LEFT));
 
@@ -66,9 +67,7 @@ fn runtime_map_key_rebinds_world_move_left() {
     assert!(state.world_move_left);
     assert!(!state.action_pressed(action::WORLD_MOVE_LEFT));
 
-    state.keys_down.remove(&KeyCode::KeyJ);
-    state.recompute_action_down_states();
-    state.sync_legacy_flags();
+    release_key(&mut state, KeyCode::KeyJ);
     assert!(!state.world_move_left);
 }
 
@@ -79,9 +78,8 @@ fn custom_action_is_runtime_queryable() {
         "debug.toggle_freecam",
         KeyChord::new(KeyCode::KeyP).with_shift_required(),
     );
-    state.keys_down.insert(KeyCode::ShiftLeft);
-    state.keys_down.insert(KeyCode::KeyP);
-    state.apply_action_press_for_key(KeyCode::KeyP);
+    press_key(&mut state, KeyCode::ShiftLeft);
+    press_key(&mut state, KeyCode::KeyP);
     assert!(state.action_pressed("debug.toggle_freecam"));
     assert!(state.action_down("debug.toggle_freecam"));
 }
@@ -99,10 +97,7 @@ fn apply_binding_change_supports_event_style_updates() {
         key: KeyCode::KeyJ,
     });
 
-    state.keys_down.insert(KeyCode::KeyJ);
-    state.recompute_action_down_states();
-    state.apply_action_press_for_key(KeyCode::KeyJ);
-    state.sync_legacy_flags();
+    press_key(&mut state, KeyCode::KeyJ);
     assert!(state.world_move_left);
 }
 
@@ -120,10 +115,23 @@ fn apply_binding_changes_batches_operations() {
         },
     ]);
     assert_eq!(applied, 2);
-    state.keys_down.insert(KeyCode::ArrowRight);
-    state.recompute_action_down_states();
-    state.sync_legacy_flags();
+    press_key(&mut state, KeyCode::ArrowRight);
     assert!(state.world_move_right);
+}
+
+#[test]
+fn repeated_key_down_does_not_create_a_second_pressed_edge() {
+    let mut state = InputState::new();
+
+    press_key(&mut state, KeyCode::KeyW);
+    assert!(state.action_pressed(action::WORLD_MOVE_UP));
+    assert!(state.action_down(action::WORLD_MOVE_UP));
+
+    state.clear_frame();
+    press_key(&mut state, KeyCode::KeyW);
+
+    assert!(!state.action_pressed(action::WORLD_MOVE_UP));
+    assert!(state.action_down(action::WORLD_MOVE_UP));
 }
 
 #[test]
@@ -198,12 +206,32 @@ fn mouse_button_transitions_record_position_and_motion_sample_index() {
 }
 
 #[test]
-fn touch_samples_preserve_primary_pointer_history_until_frame_end() {
+fn repeated_mouse_down_does_not_create_a_second_pressed_edge() {
+    let mut state = InputState::new();
+
+    state.handle_mouse_input(ElementState::Pressed, MouseButton::Left);
+    assert!(state.left_mouse_pressed());
+    assert_eq!(state.mouse_button_transitions().len(), 1);
+
+    state.clear_frame();
+    state.handle_mouse_input(ElementState::Pressed, MouseButton::Left);
+
+    assert!(!state.left_mouse_pressed());
+    assert!(state.left_mouse_down());
+    assert!(state.mouse_button_transitions().is_empty());
+}
+
+#[test]
+fn touch_samples_preserve_primary_projection_while_neutral_state_keeps_all_contacts() {
     let mut state = InputState::new();
 
     state.handle_touch_input(TouchInputPhase::Started, 7, 10.0, 12.0, Some(0.4));
     state.handle_touch_input(TouchInputPhase::Moved, 7, 14.0, 16.0, Some(0.5));
     state.handle_touch_input(TouchInputPhase::Started, 8, 50.0, 60.0, Some(0.8));
+    assert_eq!(state.neutral_active_touch_count(), 2);
+    assert!(state.neutral_touch_active(7));
+    assert!(state.neutral_touch_active(8));
+
     state.handle_touch_input(TouchInputPhase::Moved, 7, 21.0, 20.0, Some(1.2));
     state.handle_touch_input(TouchInputPhase::Ended, 7, 25.0, 24.0, Some(0.0));
 
@@ -239,10 +267,30 @@ fn touch_samples_preserve_primary_pointer_history_until_frame_end() {
                 pressure: Some(0.0),
             },
         ],
-        "only the first active touch should be routed as the primary drawing pointer"
+        "legacy drawing projection should remain single-primary in I1A"
     );
+    assert!(!state.neutral_touch_active(7));
+    assert!(state.neutral_touch_active(8));
+    assert_eq!(state.neutral_active_touch_count(), 1);
 
     state.clear_frame();
 
     assert!(state.touch_samples().is_empty());
+    assert!(state.neutral_touch_active(8));
+}
+
+#[test]
+fn frame_clear_keeps_durable_neutral_held_state() {
+    let mut state = InputState::new();
+
+    press_key(&mut state, KeyCode::KeyD);
+    state.handle_mouse_input(ElementState::Pressed, MouseButton::Left);
+    state.handle_touch_input(TouchInputPhase::Started, 11, 4.0, 5.0, None);
+    state.clear_frame();
+
+    assert!(state.action_down(action::WORLD_MOVE_RIGHT));
+    assert!(state.left_mouse_down());
+    assert!(state.neutral_touch_active(11));
+    assert!(!state.action_pressed(action::WORLD_MOVE_RIGHT));
+    assert!(!state.left_mouse_pressed());
 }
