@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-09-08
+last_reviewed: 2026-09-13
 ---
 
 # ADR Index
@@ -38,6 +38,8 @@ Architectural decision records capture long-term decisions, rejected alternative
 - [0018: Semantic Federation and Physical Realization](accepted/0018-semantic-federation-and-physical-realization.md)
 - [0019: Batteries-Included Application Composition](accepted/0019-batteries-included-application-composition.md)
 - [0021: Ratify RunenRender Semantic Rendering Architecture](accepted/0021-ratify-runenrender-semantic-rendering-architecture.md)
+- [0022: Runenwerk-Owned Product and Query Publication Phases](accepted/0022-runenwerk-owned-product-and-query-publication-phases.md)
+- [0023: Normalize App Runtime, Host, Lifecycle, and Capability Ownership](accepted/0023-normalize-app-runtime-host-lifecycle-and-capability-ownership.md)
 
 Accepted ADR identifiers are not required to be contiguous; this index lists the files that currently exist in the accepted lifecycle folder.
 

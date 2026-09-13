@@ -22,7 +22,7 @@ jobs:
     uses: dornglut/github-workflows/.github/workflows/reusable-rust-cargo-validate.yml@624cb41adeed21a6461eb838bc7330bd0a5079fd
 
   runenrender-r6-vulkan-execution:
-    name: RunenRender R6 Vulkan execution proof
+    name: RunenRender Vulkan execution proofs
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -74,9 +74,9 @@ jobs:
           echo "VK_DRIVER_FILES=$icd" >> "$GITHUB_ENV"
           echo "VK_ICD_FILENAMES=$icd" >> "$GITHUB_ENV"
           echo "WGPU_BACKEND=vulkan" >> "$GITHUB_ENV"
-          echo "XDG_RUNTIME_DIR=${RUNNER_TEMP}/runenrender-r6-xdg" >> "$GITHUB_ENV"
-          mkdir -p "${RUNNER_TEMP}/runenrender-r6-xdg"
-          chmod 700 "${RUNNER_TEMP}/runenrender-r6-xdg"
+          echo "XDG_RUNTIME_DIR=${RUNNER_TEMP}/runenrender-vulkan-xdg" >> "$GITHUB_ENV"
+          mkdir -p "${RUNNER_TEMP}/runenrender-vulkan-xdg"
+          chmod 700 "${RUNNER_TEMP}/runenrender-vulkan-xdg"
 
       - name: Prove Vulkan software adapter
         run: vulkaninfo --summary
@@ -89,4 +89,14 @@ jobs:
           set -euo pipefail
           cargo +stable test -p engine \
             r6_spine_proof::execution \
+            --locked -- --nocapture --test-threads=1
+
+      - name: Run maintained R7 same-submission verification proof module
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENRENDER_R7_REQUIRE_GPU: '1'
+        run: |
+          set -euo pipefail
+          cargo +stable test -p engine \
+            deterministic_execution_r7_proof \
             --locked -- --nocapture --test-threads=1
