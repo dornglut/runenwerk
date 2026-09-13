@@ -5,12 +5,12 @@ status: active
 owner: workspace
 layer: investigation
 canonical: false
-last_reviewed: 2026-08-12
+last_reviewed: 2026-09-13
 related_docs:
   - ../../adr/accepted/0017-cross-authority-consistency-and-graph-semantics.md
   - ../../adr/accepted/0018-semantic-federation-and-physical-realization.md
   - ../../adr/accepted/0019-batteries-included-application-composition.md
-  - ../../design/active/net-declarative-replication-authoring.md
+  - ../../design/archived/net-declarative-replication-authoring.md
   - ../../design/active/net-plugin-runtime-bridge.md
   - ../../net/multiplayer-replication-implementation-roadmap.md
   - ../../design/active/runenwerk-domain-workbench-north-star.md

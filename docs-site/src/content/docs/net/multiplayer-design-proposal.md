@@ -1,17 +1,17 @@
 ---
 title: Multiplayer Design Proposal
-description: Historical multiplayer proposal retained for context; superseded by active networking design documents.
+description: Historical multiplayer proposal retained for context; superseded by current networking architecture and migration designs.
 status: superseded
 owner: net
 layer: net
 canonical: false
-last_reviewed: 2026-05-05
+last_reviewed: 2026-09-13
 replaced_by:
+  - net-architecture.md
   - ../design/active/net-authoritative-replication-protocol.md
-  - ../design/active/net-prediction-reconciliation-boundary.md
   - ../design/active/net-plugin-runtime-bridge.md
   - ../design/active/ecs-net-replication-boundary.md
-  - ../design/active/net-declarative-replication-authoring.md
+  - multiplayer-replication-implementation-roadmap.md
 ---
 
 # Multiplayer Design Proposal
@@ -23,12 +23,15 @@ Do not use this page as current implementation guidance.
 
 Current guidance lives in:
 
+- [Networking architecture](net-architecture.md)
 - [Authoritative replication protocol](../design/active/net-authoritative-replication-protocol.md)
-- [Prediction and reconciliation boundary](../design/active/net-prediction-reconciliation-boundary.md)
 - [Engine net plugin runtime bridge](../design/active/net-plugin-runtime-bridge.md)
 - [ECS/net replication boundary](../design/active/ecs-net-replication-boundary.md)
-- [Declarative replication authoring](../design/active/net-declarative-replication-authoring.md)
 - [Implementation roadmap](multiplayer-replication-implementation-roadmap.md)
+
+Reusable prediction/reconciliation semantics now belong to standalone RunenNet. The
+former Runenwerk prediction-boundary and component-registration authoring designs are
+archived as historical evidence rather than current successor authority.
 
 ## Historical Value
 
