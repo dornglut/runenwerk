@@ -8,8 +8,9 @@ use drawing::{
     form_drawing_ink_tiles_for_ids,
 };
 use engine::runtime::{
-    ProductPublicationRuntimeResource, PublicationBoundary, QuerySnapshotRuntimeResource,
-    RuntimeJobExecutorResource, RuntimeJobStatus, RuntimeProductCacheResource,
+    ProductPublicationOccurrence, ProductPublicationRuntimeResource,
+    QuerySnapshotPublicationOccurrence, QuerySnapshotRuntimeResource, RuntimeJobExecutorResource,
+    RuntimeJobStatus, RuntimeProductCacheResource,
 };
 use product::{
     ProductCacheDecisionKind, ProductDescriptorCore, ProductPublicationReport,
@@ -44,8 +45,8 @@ pub struct DrawingPreviewInkJobProcessReport {
     pub stale_count: usize,
 }
 
-pub fn publish_drawing_ink_products_at_boundary(
-    boundary: &PublicationBoundary,
+pub fn dispatch_drawing_ink_product_publication(
+    occurrence: &ProductPublicationOccurrence,
     world: &mut World,
 ) -> Result<()> {
     let Some(mut host) = world.remove_resource::<DrawingHostResource>() else {
@@ -64,7 +65,7 @@ pub fn publish_drawing_ink_products_at_boundary(
                 &mut publications,
                 &mut executor,
                 &mut cache,
-                boundary,
+                occurrence,
             );
             world.insert_resource(cache);
         } else {
@@ -72,12 +73,12 @@ pub fn publish_drawing_ink_products_at_boundary(
                 &mut host.app,
                 &mut publications,
                 &mut executor,
-                boundary,
+                occurrence,
             );
         }
         world.insert_resource(executor);
     } else {
-        publish_drawing_ink_products(&mut host.app, &mut publications, boundary);
+        publish_drawing_ink_products(&mut host.app, &mut publications, occurrence);
     }
 
     world.insert_resource(publications);
@@ -85,8 +86,8 @@ pub fn publish_drawing_ink_products_at_boundary(
     Ok(())
 }
 
-pub fn publish_drawing_ink_query_snapshots_at_boundary(
-    boundary: &PublicationBoundary,
+pub fn dispatch_drawing_ink_query_publication(
+    occurrence: &QuerySnapshotPublicationOccurrence,
     world: &mut World,
 ) -> Result<()> {
     let Some(mut host) = world.remove_resource::<DrawingHostResource>() else {
@@ -97,7 +98,7 @@ pub fn publish_drawing_ink_query_snapshots_at_boundary(
         return Ok(());
     };
 
-    publish_drawing_ink_query_snapshots(&mut host.app, &mut snapshots, boundary);
+    publish_drawing_ink_query_snapshots(&mut host.app, &mut snapshots, occurrence);
 
     world.insert_resource(snapshots);
     world.insert_resource(host);
@@ -107,7 +108,7 @@ pub fn publish_drawing_ink_query_snapshots_at_boundary(
 pub fn publish_drawing_ink_products(
     app: &mut RunenwerkDrawApp,
     publications: &mut ProductPublicationRuntimeResource,
-    boundary: &PublicationBoundary,
+    occurrence: &ProductPublicationOccurrence,
 ) -> ProductPublicationReport {
     let Some(document) = app.document().cloned() else {
         return ProductPublicationReport::default();
@@ -124,7 +125,7 @@ pub fn publish_drawing_ink_products(
         app,
         publications,
         None,
-        boundary,
+        occurrence,
         document,
         dirty_tiles,
         formation,
@@ -283,9 +284,9 @@ pub fn publish_drawing_ink_products_with_executor(
     app: &mut RunenwerkDrawApp,
     publications: &mut ProductPublicationRuntimeResource,
     executor: &mut RuntimeJobExecutorResource,
-    boundary: &PublicationBoundary,
+    occurrence: &ProductPublicationOccurrence,
 ) -> ProductPublicationReport {
-    publish_drawing_ink_products_with_optional_cache(app, publications, executor, None, boundary)
+    publish_drawing_ink_products_with_optional_cache(app, publications, executor, None, occurrence)
 }
 
 pub fn publish_drawing_ink_products_with_executor_and_cache(
@@ -293,14 +294,14 @@ pub fn publish_drawing_ink_products_with_executor_and_cache(
     publications: &mut ProductPublicationRuntimeResource,
     executor: &mut RuntimeJobExecutorResource,
     cache: &mut RuntimeProductCacheResource,
-    boundary: &PublicationBoundary,
+    occurrence: &ProductPublicationOccurrence,
 ) -> ProductPublicationReport {
     publish_drawing_ink_products_with_optional_cache(
         app,
         publications,
         executor,
         Some(cache),
-        boundary,
+        occurrence,
     )
 }
 
@@ -309,14 +310,14 @@ fn publish_drawing_ink_products_with_optional_cache(
     publications: &mut ProductPublicationRuntimeResource,
     executor: &mut RuntimeJobExecutorResource,
     mut cache: Option<&mut RuntimeProductCacheResource>,
-    boundary: &PublicationBoundary,
+    occurrence: &ProductPublicationOccurrence,
 ) -> ProductPublicationReport {
     let completed_report = publish_completed_drawing_ink_jobs(
         app,
         publications,
         executor,
         cache.as_deref_mut(),
-        boundary,
+        occurrence,
     );
     if product_publication_report_has_activity(&completed_report) {
         return completed_report;
@@ -342,7 +343,7 @@ fn publish_drawing_ink_products_with_optional_cache(
             app,
             publications,
             cache,
-            boundary,
+            occurrence,
             DrawingInkCacheLookupRequest {
                 document: document.clone(),
                 dirty_tiles: dirty_tiles.clone(),
@@ -381,14 +382,14 @@ fn publish_drawing_ink_products_with_optional_cache(
         }
     }
 
-    publish_completed_drawing_ink_jobs(app, publications, executor, cache, boundary)
+    publish_completed_drawing_ink_jobs(app, publications, executor, cache, occurrence)
 }
 
 fn try_publish_cached_drawing_ink_products(
     app: &mut RunenwerkDrawApp,
     publications: &mut ProductPublicationRuntimeResource,
     cache: &mut RuntimeProductCacheResource,
-    boundary: &PublicationBoundary,
+    occurrence: &ProductPublicationOccurrence,
     request: DrawingInkCacheLookupRequest,
 ) -> Option<ProductPublicationReport> {
     let DrawingInkCacheLookupRequest {
@@ -451,7 +452,7 @@ fn try_publish_cached_drawing_ink_products(
         app,
         publications,
         Some(cache),
-        boundary,
+        occurrence,
         document,
         dirty_tiles,
         formation,
@@ -463,7 +464,7 @@ fn publish_completed_drawing_ink_jobs(
     publications: &mut ProductPublicationRuntimeResource,
     executor: &mut RuntimeJobExecutorResource,
     mut cache: Option<&mut RuntimeProductCacheResource>,
-    boundary: &PublicationBoundary,
+    occurrence: &ProductPublicationOccurrence,
 ) -> ProductPublicationReport {
     let completions = executor.drain_completed::<DrawingCommittedInkTileJobOutput>();
     let mut aggregate = ProductPublicationReport::default();
@@ -490,7 +491,7 @@ fn publish_completed_drawing_ink_jobs(
                     app,
                     publications,
                     cache.as_deref_mut(),
-                    boundary,
+                    occurrence,
                     output.document,
                     output.dirty_tiles,
                     output.formation,
@@ -523,7 +524,7 @@ fn publish_formed_drawing_ink_products(
     app: &mut RunenwerkDrawApp,
     publications: &mut ProductPublicationRuntimeResource,
     cache: Option<&mut RuntimeProductCacheResource>,
-    boundary: &PublicationBoundary,
+    occurrence: &ProductPublicationOccurrence,
     document: drawing::DrawingDocument,
     dirty_tiles: Vec<drawing::CanvasTileId>,
     formation: drawing::DrawingInkTileFormation,
@@ -602,7 +603,7 @@ fn publish_formed_drawing_ink_products(
     };
 
     publications.stage(outcome);
-    let report = publications.publish_staged(boundary);
+    let report = publications.publish_staged(occurrence);
 
     if report.published_count > 0 && report.rejected_count == 0 {
         let cache_products = formation.products.clone();
@@ -675,7 +676,7 @@ fn committed_ink_tile_policy() -> DrawingTileFormationPolicy {
 pub fn publish_drawing_ink_query_snapshots(
     app: &mut RunenwerkDrawApp,
     snapshots: &mut QuerySnapshotRuntimeResource,
-    boundary: &PublicationBoundary,
+    occurrence: &QuerySnapshotPublicationOccurrence,
 ) -> QuerySnapshotPublicationReport {
     let Some(snapshot_key) = descriptor_generation_key(app.ink_runtime().published_descriptors())
     else {
@@ -699,7 +700,7 @@ pub fn publish_drawing_ink_query_snapshots(
     }
 
     snapshots.stage_all(staged);
-    let report = snapshots.publish_staged(boundary);
+    let report = snapshots.publish_staged(occurrence);
     let accepted = snapshots
         .last_published_entries()
         .iter()

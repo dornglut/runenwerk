@@ -15,8 +15,9 @@ use engine::plugins::render::{
 };
 use engine::plugins::{InputState, TouchInputPhase};
 use engine::runtime::{
-    ProductPublicationRuntimeResource, PublicationBoundary, QuerySnapshotRuntimeResource,
-    RuntimeJobExecutorConfig, RuntimeJobExecutorResource, RuntimeProductCacheResource,
+    ProductPublicationOccurrence, ProductPublicationRuntimeResource,
+    QuerySnapshotPublicationOccurrence, QuerySnapshotRuntimeResource, RuntimeJobExecutorConfig,
+    RuntimeJobExecutorResource, RuntimeProductCacheResource,
 };
 use native_tablet_input::{
     NativeTabletBackendHealth, NativeTabletBackendKind, NativeTabletFrameResource,
@@ -1389,7 +1390,7 @@ fn released_preview_products_stay_visible_until_committed_replacement() {
 }
 
 #[test]
-fn committed_ink_products_publish_snapshot_and_become_visible_only_after_publication_boundaries() {
+fn committed_ink_products_publish_snapshot_and_become_visible_only_after_publication_occurrences() {
     let mut app = RunenwerkDrawApp::new();
     let shell_only_count = rect_primitive_count(app.last_frame());
     let position = center_of_canvas(app.composition_projection().canvas_view.screen_bounds);
@@ -1425,18 +1426,27 @@ fn committed_ink_products_publish_snapshot_and_become_visible_only_after_publica
 
     let mut publications = ProductPublicationRuntimeResource::default();
     let mut snapshots = QuerySnapshotRuntimeResource::default();
-    let publication =
-        publish_drawing_ink_products(&mut app, &mut publications, &publication_boundary());
+    let publication = publish_drawing_ink_products(
+        &mut app,
+        &mut publications,
+        &product_publication_occurrence(),
+    );
     assert_eq!(publication.published_count, 1);
     assert!(!app.ink_runtime().formed_products().is_empty());
     assert!(app.ink_runtime().accepted_snapshot_ids().is_empty());
     assert!(app.ink_runtime().visible_products().next().is_none());
-    let repeated_publication =
-        publish_drawing_ink_products(&mut app, &mut publications, &publication_boundary());
+    let repeated_publication = publish_drawing_ink_products(
+        &mut app,
+        &mut publications,
+        &product_publication_occurrence(),
+    );
     assert_eq!(repeated_publication.published_count, 0);
 
-    let query =
-        publish_drawing_ink_query_snapshots(&mut app, &mut snapshots, &publication_boundary());
+    let query = publish_drawing_ink_query_snapshots(
+        &mut app,
+        &mut snapshots,
+        &query_publication_occurrence(),
+    );
     assert!(query.published_count > 0);
     assert!(!app.ink_runtime().accepted_snapshot_ids().is_empty());
     assert!(app.ink_runtime().preview_products().is_empty());
@@ -1473,8 +1483,12 @@ fn pointer_release_keeps_last_accepted_ink_visible_before_new_publication_bounda
 
     let mut publications = ProductPublicationRuntimeResource::default();
     let mut snapshots = QuerySnapshotRuntimeResource::default();
-    publish_drawing_ink_products(&mut app, &mut publications, &publication_boundary());
-    publish_drawing_ink_query_snapshots(&mut app, &mut snapshots, &publication_boundary());
+    publish_drawing_ink_products(
+        &mut app,
+        &mut publications,
+        &product_publication_occurrence(),
+    );
+    publish_drawing_ink_query_snapshots(&mut app, &mut snapshots, &query_publication_occurrence());
     assert!(app.ink_runtime().visible_products().next().is_some());
     let accepted_count = app.ink_runtime().visible_products().count();
 
@@ -1503,18 +1517,26 @@ fn two_committed_strokes_publish_and_remain_drawable() {
     let mut snapshots = QuerySnapshotRuntimeResource::default();
 
     draw_stroke(&mut app, first_start, first_end);
-    publish_drawing_ink_products(&mut app, &mut publications, &publication_boundary());
-    publish_drawing_ink_query_snapshots(&mut app, &mut snapshots, &publication_boundary());
+    publish_drawing_ink_products(
+        &mut app,
+        &mut publications,
+        &product_publication_occurrence(),
+    );
+    publish_drawing_ink_query_snapshots(&mut app, &mut snapshots, &query_publication_occurrence());
     let first_tiles = visible_tile_ids(&app);
     assert!(!first_tiles.is_empty());
 
     draw_stroke(&mut app, second_start, second_end);
     assert!(
         first_tiles.is_subset(&visible_tile_ids(&app)),
-        "releasing the second stroke must preserve first-stroke visible tiles until the next publication boundary accepts them"
+        "releasing the second stroke must preserve first-stroke visible tiles until the next product publication accepts them"
     );
-    publish_drawing_ink_products(&mut app, &mut publications, &publication_boundary());
-    publish_drawing_ink_query_snapshots(&mut app, &mut snapshots, &publication_boundary());
+    publish_drawing_ink_products(
+        &mut app,
+        &mut publications,
+        &product_publication_occurrence(),
+    );
+    publish_drawing_ink_query_snapshots(&mut app, &mut snapshots, &query_publication_occurrence());
 
     assert_eq!(app.document().expect("document is open").strokes.len(), 2);
     assert!(app.ink_runtime().visible_products().next().is_some());
@@ -1567,7 +1589,7 @@ fn four_committed_strokes_publish_and_remain_drawable() {
 }
 
 #[test]
-fn runtime_winit_fallback_publishes_four_strokes_through_publication_boundaries() {
+fn runtime_winit_fallback_publishes_four_strokes_through_publication_occurrences() {
     let mut runtime = build_headless_app()
         .expect("headless app construction should succeed")
         .run_for_frames(1)
@@ -1702,7 +1724,7 @@ fn runtime_winit_fallback_recovers_after_rapid_worker_pool_strokes() {
 }
 
 #[test]
-fn runtime_winit_fallback_keeps_long_stroke_publishing_through_publication_boundaries() {
+fn runtime_winit_fallback_keeps_long_stroke_publishing_through_publication_occurrences() {
     let mut runtime = build_headless_app()
         .expect("headless app construction should succeed")
         .run_for_frames(1)
@@ -1771,8 +1793,11 @@ fn active_preview_survives_previous_committed_query_acceptance() {
     let first_start = screen_point_for_canvas(&app, 384.0, 384.0);
     let first_end = screen_point_for_canvas(&app, 520.0, 440.0);
     draw_stroke(&mut app, first_start, first_end);
-    let publication =
-        publish_drawing_ink_products(&mut app, &mut publications, &publication_boundary());
+    let publication = publish_drawing_ink_products(
+        &mut app,
+        &mut publications,
+        &product_publication_occurrence(),
+    );
     assert!(publication.published_count > 0);
     assert!(
         !app.ink_runtime().published_descriptors().is_empty(),
@@ -1798,8 +1823,11 @@ fn active_preview_survives_previous_committed_query_acceptance() {
         "active preview should have catch-up products before the old query snapshot accepts"
     );
 
-    let query =
-        publish_drawing_ink_query_snapshots(&mut app, &mut snapshots, &publication_boundary());
+    let query = publish_drawing_ink_query_snapshots(
+        &mut app,
+        &mut snapshots,
+        &query_publication_occurrence(),
+    );
     assert!(query.published_count > 0);
 
     assert!(
@@ -1824,8 +1852,12 @@ fn formation_failure_preserves_last_good_visible_ink_and_records_diagnostics() {
 
     let mut publications = ProductPublicationRuntimeResource::default();
     let mut snapshots = QuerySnapshotRuntimeResource::default();
-    publish_drawing_ink_products(&mut app, &mut publications, &publication_boundary());
-    publish_drawing_ink_query_snapshots(&mut app, &mut snapshots, &publication_boundary());
+    publish_drawing_ink_products(
+        &mut app,
+        &mut publications,
+        &product_publication_occurrence(),
+    );
+    publish_drawing_ink_query_snapshots(&mut app, &mut snapshots, &query_publication_occurrence());
     assert!(app.ink_runtime().visible_products().next().is_some());
     let accepted_count = app.ink_runtime().visible_product_count();
     app.ink_runtime_mut().record_failed_generation(
@@ -1870,13 +1902,20 @@ fn long_stroke_batches_dirty_tiles_instead_of_clearing_canvas() {
     while !app.ink_runtime().dirty_tiles().is_empty() {
         batches += 1;
         assert!(batches <= 8, "dirty tile batches should drain promptly");
-        let report =
-            publish_drawing_ink_products(&mut app, &mut publications, &publication_boundary());
+        let report = publish_drawing_ink_products(
+            &mut app,
+            &mut publications,
+            &product_publication_occurrence(),
+        );
         assert!(
             report.published_count > 0 || report.rejected_count == 0,
             "long stroke batches must not reject solely because the whole stroke spans many tiles"
         );
-        publish_drawing_ink_query_snapshots(&mut app, &mut snapshots, &publication_boundary());
+        publish_drawing_ink_query_snapshots(
+            &mut app,
+            &mut snapshots,
+            &query_publication_occurrence(),
+        );
     }
 
     assert!(
@@ -2519,10 +2558,10 @@ fn committed_ink_cache_hit_stages_products_without_job_submission() {
         &mut publications,
         &mut executor,
         &mut cache,
-        &publication_boundary(),
+        &product_publication_occurrence(),
     );
     assert!(first_report.published_count > 0);
-    publish_drawing_ink_query_snapshots(&mut app, &mut snapshots, &publication_boundary());
+    publish_drawing_ink_query_snapshots(&mut app, &mut snapshots, &query_publication_occurrence());
     assert!(app.ink_runtime().visible_product_count() > 0);
     let submitted_after_first = executor.diagnostics().submitted_count;
     let cached_entries = cache.snapshot().entry_count;
@@ -2550,7 +2589,7 @@ fn committed_ink_cache_hit_stages_products_without_job_submission() {
         &mut publications,
         &mut executor,
         &mut cache,
-        &publication_boundary(),
+        &product_publication_occurrence(),
     );
 
     assert!(second_report.published_count > 0);
@@ -2559,7 +2598,7 @@ fn committed_ink_cache_hit_stages_products_without_job_submission() {
         submitted_after_first,
         "cache hit should stage cached products without submitting another runtime job"
     );
-    publish_drawing_ink_query_snapshots(&mut app, &mut snapshots, &publication_boundary());
+    publish_drawing_ink_query_snapshots(&mut app, &mut snapshots, &query_publication_occurrence());
     assert!(cached_tiles.is_disjoint(app.ink_runtime().dirty_tiles()));
     assert!(
         cache
@@ -2734,8 +2773,11 @@ fn query_snapshots_wait_for_product_publication() {
     let mut app = RunenwerkDrawApp::new();
     let mut snapshots = QuerySnapshotRuntimeResource::default();
 
-    let report =
-        publish_drawing_ink_query_snapshots(&mut app, &mut snapshots, &publication_boundary());
+    let report = publish_drawing_ink_query_snapshots(
+        &mut app,
+        &mut snapshots,
+        &query_publication_occurrence(),
+    );
 
     assert_eq!(report.published_count, 0);
     assert!(snapshots.current_snapshots().is_empty());
@@ -2906,8 +2948,8 @@ fn publish_visible_ink_until_clean(
     while !app.ink_runtime().dirty_tiles().is_empty() {
         batches += 1;
         assert!(batches <= 8, "dirty tile batches should drain promptly");
-        publish_drawing_ink_products(app, publications, &publication_boundary());
-        publish_drawing_ink_query_snapshots(app, snapshots, &publication_boundary());
+        publish_drawing_ink_products(app, publications, &product_publication_occurrence());
+        publish_drawing_ink_query_snapshots(app, snapshots, &query_publication_occurrence());
     }
 }
 
@@ -3027,8 +3069,12 @@ fn dynamic_target_ids(app: &engine::App) -> Vec<String> {
         .collect()
 }
 
-fn publication_boundary() -> PublicationBoundary {
-    PublicationBoundary::new(5, "Update", 0)
+fn product_publication_occurrence() -> ProductPublicationOccurrence {
+    ProductPublicationOccurrence::new(5, "Update")
+}
+
+fn query_publication_occurrence() -> QuerySnapshotPublicationOccurrence {
+    QuerySnapshotPublicationOccurrence::new(5, "Update")
 }
 
 fn rect_primitive_count(frame: &ui_render_data::UiFrame) -> usize {

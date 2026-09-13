@@ -25,7 +25,7 @@ Systems are functions or processes that operate over components and resources. T
 - **Query** – Filters and retrieves entities with matching components.
 - **Command Queue** – Deferred structural mutations collected per system run.
 - **System Set** – A semantic grouping used by explicit ordering constraints.
-- **Deferred Apply Boundary** – The ECS-owned point at which queued structural mutations become visible.
+- **DeferredPublicationFrontier** – The ECS-owned point at which queued structural mutations become visible.
 - **WorldMut** – Built-in exclusive access to the complete world for a system that needs coordinated ECS operations.
 
 ## Implementation / API
@@ -85,7 +85,7 @@ runtime.add_systems::<Update, _, _>(
 );
 ```
 
-The explicit `after(Gameplay)` edge establishes semantic precedence. Deferred commands produced by earlier ordered work are applied at an ECS deferred-apply boundary before dependent later work executes. Without such an ordering edge, systems remain semantically unordered even when their access facts conflict.
+The explicit `after(Gameplay)` edge establishes semantic precedence. Deferred commands produced by earlier ordered work are applied at an ECS deferred-publication frontier before dependent later work executes. Without such an ordering edge, systems remain semantically unordered even when their access facts conflict.
 
 `before` and `after` name a required target set in the same schedule. If no
 other system in that schedule belongs to a required target set, schedule
@@ -102,8 +102,8 @@ between schedules is not ECS set ordering.
 - Missing required ordering targets fail schedule validation; optional missing targets do not create an edge.
 - Engine lifecycle schedule order is distinct from ECS set ordering.
 - The serial reference executor uses deterministic registration order for otherwise unordered systems.
-- Structural changes are **deferred** and become visible only after an ECS deferred-apply boundary.
-- Systems that execute before the same deferred-apply boundary do not observe one another's deferred structural mutations.
+- Structural changes are **deferred** and become visible only after an ECS deferred-publication frontier.
+- Systems that execute before the same deferred-publication frontier do not observe one another's deferred structural mutations.
 - `WorldMut` is an ECS-owned exclusive parameter; it cannot be combined with sibling world borrows in one system.
 - Avoid hidden side effects outside system parameters when deterministic behavior matters.
 - Runtime errors preserve ECS-owned categories while user failures remain causes.

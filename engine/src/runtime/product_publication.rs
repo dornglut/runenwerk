@@ -1,4 +1,4 @@
-use crate::runtime::publication::PublicationBoundary;
+use crate::runtime::publication::ProductPublicationOccurrence;
 use anyhow::Result;
 use product::{
     FieldProductDiagnostic, FieldProductDiagnosticCode, ProductIdentity, ProductJobId,
@@ -10,9 +10,8 @@ use runen_ecs::World;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProductPublicationJournalEntry {
-    pub publication_boundary_index: usize,
+    pub publication_sequence: u64,
     pub schedule_label: &'static str,
-    pub deferred_apply_index: usize,
     pub stage_sequence: u64,
     pub product_job_id: ProductJobId,
     pub status: ProductPublicationStatus,
@@ -47,7 +46,10 @@ impl ProductPublicationRuntimeResource {
         &self.last_report
     }
 
-    pub fn publish_staged(&mut self, boundary: &PublicationBoundary) -> ProductPublicationReport {
+    pub fn publish_staged(
+        &mut self,
+        occurrence: &ProductPublicationOccurrence,
+    ) -> ProductPublicationReport {
         let mut staged = std::mem::take(&mut self.staged);
         staged.sort_by_key(|outcome| (outcome.stage_sequence, outcome.product_job.job_id.raw()));
 
@@ -67,9 +69,8 @@ impl ProductPublicationRuntimeResource {
 
             report.record(&outcome);
             self.journal.push(ProductPublicationJournalEntry {
-                publication_boundary_index: boundary.index,
-                schedule_label: boundary.schedule_label,
-                deferred_apply_index: boundary.deferred_apply_index,
+                publication_sequence: occurrence.sequence(),
+                schedule_label: occurrence.schedule_label(),
                 stage_sequence: outcome.stage_sequence,
                 product_job_id: outcome.product_job.job_id,
                 status: outcome.status,
@@ -82,11 +83,11 @@ impl ProductPublicationRuntimeResource {
 }
 
 pub fn publish_staged_product_outcomes(
-    boundary: &PublicationBoundary,
+    occurrence: &ProductPublicationOccurrence,
     world: &mut World,
 ) -> Result<()> {
     if let Ok(publications) = world.resource_mut::<ProductPublicationRuntimeResource>() {
-        publications.publish_staged(boundary);
+        publications.publish_staged(occurrence);
     }
     Ok(())
 }
@@ -99,8 +100,8 @@ mod tests {
         ProductScaleBand, ProductScope,
     };
 
-    fn boundary(index: usize) -> PublicationBoundary {
-        PublicationBoundary::new(index, "Update", 0)
+    fn occurrence(sequence: u64) -> ProductPublicationOccurrence {
+        ProductPublicationOccurrence::new(sequence, "Update")
     }
 
     fn job(id: u64) -> ProductJobDescriptor {
@@ -126,7 +127,7 @@ mod tests {
     }
 
     #[test]
-    fn staged_outcomes_publish_at_engine_publication_boundary() {
+    fn staged_outcomes_publish_at_engine_publication_occurrence() {
         let mut resource = ProductPublicationRuntimeResource::default();
         resource.stage(ProductPublicationOutcome::ready(
             job(2),
@@ -137,14 +138,13 @@ mod tests {
         assert_eq!(resource.journal().len(), 0);
         assert_eq!(resource.staged().len(), 1);
 
-        let report = resource.publish_staged(&boundary(4));
+        let report = resource.publish_staged(&occurrence(4));
 
         assert_eq!(report.published_count, 1);
         assert_eq!(resource.staged().len(), 0);
         assert_eq!(resource.journal().len(), 1);
-        assert_eq!(resource.journal()[0].publication_boundary_index, 4);
+        assert_eq!(resource.journal()[0].publication_sequence, 4);
         assert_eq!(resource.journal()[0].schedule_label, "Update");
-        assert_eq!(resource.journal()[0].deferred_apply_index, 0);
     }
 
     #[test]
@@ -166,7 +166,7 @@ mod tests {
             10,
         ));
 
-        resource.publish_staged(&boundary(1));
+        resource.publish_staged(&occurrence(1));
 
         let ids = resource
             .journal()
@@ -185,7 +185,7 @@ mod tests {
             1,
         ));
 
-        let report = resource.publish_staged(&boundary(1));
+        let report = resource.publish_staged(&occurrence(1));
 
         assert_eq!(report.rejected_count, 1);
         assert_eq!(resource.journal().len(), 0);

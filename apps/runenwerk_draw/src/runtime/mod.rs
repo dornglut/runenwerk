@@ -15,10 +15,10 @@ pub use gpu_ink::{
     register_drawing_ink_gpu_flow,
 };
 pub use ink::{
-    DrawingPreviewInkJobProcessReport, process_drawing_preview_ink_jobs,
-    publish_drawing_ink_products, publish_drawing_ink_products_at_boundary,
-    publish_drawing_ink_products_with_executor_and_cache, publish_drawing_ink_query_snapshots,
-    publish_drawing_ink_query_snapshots_at_boundary,
+    DrawingPreviewInkJobProcessReport, dispatch_drawing_ink_product_publication,
+    dispatch_drawing_ink_query_publication, process_drawing_preview_ink_jobs,
+    publish_drawing_ink_products, publish_drawing_ink_products_with_executor_and_cache,
+    publish_drawing_ink_query_snapshots,
 };
 pub use ink_jobs::{
     DrawingCommittedInkTileJob, DrawingCommittedInkTileJobOutput, DrawingPreviewInkTileJob,

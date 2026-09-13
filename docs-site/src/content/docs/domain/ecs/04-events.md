@@ -28,7 +28,7 @@ Messaging semantics that have a real maintained owner must live with that owner 
 
 ## Scheduling Interaction
 
-Deferred structural mutation is distinct from event transport. `Commands` are collected per system and applied at ECS deferred-apply boundaries. Systems that execute before the same boundary do not observe one another's deferred structural mutations; explicitly ordered dependent work after the boundary does.
+Deferred structural mutation is distinct from event transport. `Commands` are collected per system and applied at ECS deferred-publication frontiers. Systems that execute before the same frontier do not observe one another's deferred structural mutations; explicitly ordered dependent work after the frontier does.
 
 Access incompatibility remains diagnostic metadata and does not create semantic ordering or additional deferred-command visibility boundaries.
 

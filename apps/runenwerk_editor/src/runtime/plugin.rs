@@ -5,8 +5,11 @@ use engine::plugins::render::{
     RenderGpuResidencyResource, RenderRuntimeSet, SurfaceFrameSubmissionRegistryResource,
 };
 use engine::prelude::*;
-use engine::runtime::{IntoSystemSetKey, SystemConfigExt, WindowStateRegistryResource};
-use engine::runtime::{ProductPublicationRuntimeResource, PublicationBoundary};
+use engine::runtime::{
+    IntoSystemSetKey, ProductPublicationOccurrence, ProductPublicationRuntimeResource,
+    SystemConfigExt, WindowStateRegistryResource, dispatch_product_publication_system,
+    dispatch_query_snapshot_publication_system,
+};
 use runen_ecs::{SystemSetKey, World};
 
 use crate::asset_pipeline::publish_pending_field_product_publications;
@@ -16,7 +19,7 @@ use crate::runtime::composition::{
     dispatch_editor_target_input_system, sync_editor_composition_transitions_system,
 };
 use crate::runtime::procgen::{
-    publish_procgen_products_at_boundary, publish_procgen_query_snapshots_at_boundary,
+    dispatch_procgen_product_publication, dispatch_procgen_query_publication,
     sync_procgen_viewport_overlay_system,
 };
 use crate::runtime::resources::{
@@ -38,8 +41,8 @@ use crate::runtime::viewport::{
     ViewportProductTargetRegistryResource, ViewportRenderJobResource,
     ViewportRenderStateCommandQueueResource, ViewportRenderStateResource,
     ViewportRuntimeSettingsHydrationResource, ViewportSurfaceSetResource,
-    apply_viewport_render_state_commands_system, prepare_viewport_render_product_selections_system,
-    publish_viewport_query_snapshots_at_boundary, summarize_viewport_gpu_residency_system,
+    apply_viewport_render_state_commands_system, dispatch_viewport_query_publication,
+    prepare_viewport_render_product_selections_system, summarize_viewport_gpu_residency_system,
     sync_viewport_presentation_products_system, sync_viewport_product_targets_system,
     sync_viewport_render_jobs_system,
 };
@@ -53,11 +56,13 @@ pub enum EditorRuntimeSet {
     InputBridge,
     CompositionTransitions,
     TargetInput,
+    ProductPublication,
     WindowPresentationRequests,
     ViewportLifecycle,
     FrameSubmit,
     ViewportRenderStateCommands,
     ViewportPresentationSync,
+    QuerySnapshotPublication,
     ProcgenViewportOverlay,
     ViewportProductTargets,
     ViewportRenderJobs,
@@ -81,6 +86,9 @@ impl IntoSystemSetKey for EditorRuntimeSet {
             Self::TargetInput => {
                 SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::TargetInput")
             }
+            Self::ProductPublication => {
+                SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::ProductPublication")
+            }
             Self::WindowPresentationRequests => {
                 SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::WindowPresentationRequests")
             }
@@ -95,6 +103,9 @@ impl IntoSystemSetKey for EditorRuntimeSet {
             ),
             Self::ViewportPresentationSync => {
                 SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::ViewportPresentationSync")
+            }
+            Self::QuerySnapshotPublication => {
+                SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::QuerySnapshotPublication")
             }
             Self::ProcgenViewportOverlay => {
                 SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::ProcgenViewportOverlay")
@@ -153,11 +164,11 @@ impl Plugin for EditorAppPlugin {
         app.init_resource::<PreparedRenderProductSelectionResource>();
         app.init_resource::<RenderGpuResidencyResource>();
         app.init_resource::<RenderGpuResidencyBudgetResource>();
-        app.add_product_publication_handler(publish_editor_field_products_at_boundary);
-        app.add_product_publication_handler(publish_procgen_products_at_boundary);
-        app.add_product_publication_handler(publish_editor_material_preview_products_at_boundary);
-        app.add_query_snapshot_publication_handler(publish_viewport_query_snapshots_at_boundary);
-        app.add_query_snapshot_publication_handler(publish_procgen_query_snapshots_at_boundary);
+        app.add_product_publication_handler(publish_editor_field_products);
+        app.add_product_publication_handler(dispatch_procgen_product_publication);
+        app.add_product_publication_handler(publish_editor_material_preview_products);
+        app.add_query_snapshot_publication_handler(dispatch_viewport_query_publication);
+        app.add_query_snapshot_publication_handler(dispatch_procgen_query_publication);
 
         app.add_systems(Startup, bootstrap_editor_demo_system);
         app.add_systems(Startup, seed_viewport_runtime_contracts_system);
@@ -191,6 +202,12 @@ impl Plugin for EditorAppPlugin {
         );
         app.add_systems(
             Update,
+            dispatch_product_publication_system
+                .in_set(EditorRuntimeSet::ProductPublication)
+                .after(EditorRuntimeSet::TargetInput),
+        );
+        app.add_systems(
+            Update,
             sync_editor_window_presentation_requests_system
                 .in_set(EditorRuntimeSet::WindowPresentationRequests)
                 .after(EditorRuntimeSet::TargetInput),
@@ -206,6 +223,7 @@ impl Plugin for EditorAppPlugin {
             Update,
             submit_editor_frame_system
                 .in_set(EditorRuntimeSet::FrameSubmit)
+                .after(EditorRuntimeSet::ProductPublication)
                 .after(EditorRuntimeSet::ViewportLifecycle),
         );
         app.add_systems(
@@ -216,9 +234,15 @@ impl Plugin for EditorAppPlugin {
         );
         app.add_systems(
             Update,
+            dispatch_query_snapshot_publication_system
+                .in_set(EditorRuntimeSet::QuerySnapshotPublication)
+                .after(EditorRuntimeSet::ViewportPresentationSync),
+        );
+        app.add_systems(
+            Update,
             sync_procgen_viewport_overlay_system
                 .in_set(EditorRuntimeSet::ProcgenViewportOverlay)
-                .after(EditorRuntimeSet::ViewportPresentationSync),
+                .after(EditorRuntimeSet::QuerySnapshotPublication),
         );
         app.add_systems(
             Update,
@@ -304,8 +328,8 @@ fn sync_editor_window_presentation_requests(
     synced
 }
 
-fn publish_editor_field_products_at_boundary(
-    boundary: &PublicationBoundary,
+fn publish_editor_field_products(
+    occurrence: &ProductPublicationOccurrence,
     world: &mut World,
 ) -> anyhow::Result<()> {
     let Some(mut host) = world.remove_resource::<EditorHostResource>() else {
@@ -317,15 +341,15 @@ fn publish_editor_field_products_at_boundary(
         return Ok(());
     };
 
-    publish_pending_field_product_publications(&mut host.app, &mut publications, boundary);
+    publish_pending_field_product_publications(&mut host.app, &mut publications, occurrence);
 
     world.insert_resource(publications);
     world.insert_resource(host);
     Ok(())
 }
 
-fn publish_editor_material_preview_products_at_boundary(
-    boundary: &PublicationBoundary,
+fn publish_editor_material_preview_products(
+    occurrence: &ProductPublicationOccurrence,
     world: &mut World,
 ) -> anyhow::Result<()> {
     let Some(mut host) = world.remove_resource::<EditorHostResource>() else {
@@ -337,7 +361,7 @@ fn publish_editor_material_preview_products_at_boundary(
         return Ok(());
     };
 
-    publish_pending_material_preview_publications(&mut host.app, &mut publications, boundary);
+    publish_pending_material_preview_publications(&mut host.app, &mut publications, occurrence);
 
     world.insert_resource(publications);
     world.insert_resource(host);

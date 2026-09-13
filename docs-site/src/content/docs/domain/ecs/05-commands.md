@@ -10,7 +10,7 @@ last_reviewed: 2026-09-10
 
 # ECS Commands
 
-Commands are deferred structural mutations collected during system execution and applied at ECS deferred-apply boundaries.
+Commands are deferred structural mutations collected during system execution and applied at ECS deferred-publication frontiers.
 
 ## Purpose
 
@@ -22,7 +22,7 @@ Commands are deferred structural mutations collected during system execution and
 
 - `Commands`: per-system deferred command queue.
 - `BatchCommands`: grouped command list applied in deterministic order.
-- **Deferred Apply Boundary**: ECS-owned visibility point reported only after the corresponding queued commands have been applied successfully.
+- **DeferredPublicationFrontier**: ECS-owned visibility point reported only after the corresponding queued commands have been applied successfully.
 
 ## API Notes
 
@@ -33,7 +33,7 @@ Commands are deferred structural mutations collected during system execution and
 
 ## Invariants
 
-- Runtime-deferred structural changes become visible only after the applicable ECS deferred-apply boundary.
+- Runtime-deferred structural changes become visible only after the applicable ECS deferred-publication frontier.
 - Deferred queues are staged only for successful system runs; failed schedule execution does not replay discarded queues later.
 - Command queues are applied in deterministic reference-execution order.
 - `BatchCommands` preserves command order and stops on the first error; earlier successful mutations remain applied according to the documented batch failure contract.

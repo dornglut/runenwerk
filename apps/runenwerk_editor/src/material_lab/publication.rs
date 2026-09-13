@@ -1,5 +1,5 @@
 use asset::{AssetArtifactDescriptor, AssetArtifactId, AssetDiagnosticCode, AssetDiagnosticRecord};
-use engine::runtime::{ProductPublicationRuntimeResource, PublicationBoundary};
+use engine::runtime::{ProductPublicationOccurrence, ProductPublicationRuntimeResource};
 use material_graph::MaterialProductId;
 use product::{
     FieldProductDiagnostic, FieldProductDiagnosticCode, ProductIdentity, ProductPublicationOutcome,
@@ -65,7 +65,7 @@ impl EditorMaterialPreviewPublication {
 pub fn publish_pending_material_preview_publications(
     app: &mut RunenwerkEditorApp,
     publications: &mut ProductPublicationRuntimeResource,
-    boundary: &PublicationBoundary,
+    occurrence: &ProductPublicationOccurrence,
 ) -> ProductPublicationReport {
     let pending = app.take_pending_material_preview_publications();
     if pending.is_empty() {
@@ -79,7 +79,7 @@ pub fn publish_pending_material_preview_publications(
     }
 
     let journal_start = publications.journal().len();
-    let report = publications.publish_staged(boundary);
+    let report = publications.publish_staged(occurrence);
     let published_entries = &publications.journal()[journal_start..];
 
     for diagnostic in &report.diagnostics {
@@ -138,10 +138,10 @@ pub fn publish_pending_material_preview_publications(
             status: pending_publication.status,
         });
         app.append_console_line(format!(
-            "[material] preview publication {:?} artifact {} via publication boundary {}",
+            "[material] preview publication {:?} artifact {} via product publication sequence {}",
             pending_publication.status,
             pending_publication.artifact_id().raw(),
-            boundary.index
+            occurrence.sequence()
         ));
     }
 

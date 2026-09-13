@@ -15,7 +15,7 @@ These goals described the former standalone `domain/scheduler` package. That pac
 
 Current ownership is deliberately split:
 
-- RunenECS owns reusable ECS system identity, schedule labels, system sets, explicit semantic ordering, access facts, validation, deterministic serial reference execution, and deferred structural-command boundaries.
+- RunenECS owns reusable ECS system identity, schedule labels, system sets, explicit semantic ordering, access facts, validation, deterministic serial reference execution, and deferred structural-command publication frontiers.
 - Runenwerk Engine owns frame/fixed/render/startup/shutdown lifecycle, host execution policy, product/query-snapshot publication, and other application barriers.
 
 The former generic DAG, wave, application-phase, publication-barrier, graph-export, and scheduler-global telemetry goals are historical evidence only. They do not authorize a replacement scheduler framework or compatibility surface.
