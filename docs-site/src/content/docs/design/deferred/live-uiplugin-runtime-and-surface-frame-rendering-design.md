@@ -1,24 +1,33 @@
 ---
 title: Live UiPlugin Runtime And Surface Frame Rendering
-description: Design record for the live engine UiPlugin runtime, app-facing typed screen/action ergonomics, and staged generic surface-frame render publication.
-status: active
+description: Deferred Runenwerk consumer-integration design record preserving the historical Live UiPlugin runtime and surface-frame direction without authorizing reusable-framework expansion or a standalone RunenUI cutover.
+status: deferred
 owner: ui
 layer: design
-canonical: true
-last_reviewed: 2026-08-04
+canonical: false
+last_reviewed: 2026-09-13
 related_docs:
   - ../../architecture/ui-framework-architecture.md
-  - ./ui-framework-app-integration-direction-review.md
+  - ../../architecture/live-uiplugin-runtime-platform-architecture.md
+  - ../archived/ui-framework-app-integration-direction-review.md
+  - ../archived/live-uiplugin-runtime-full-cutover-plan.md
+  - ../implemented/ui-program-architecture.md
+  - ../../domain/ui/roadmap.md
   - ../../reports/investigations/live-uiplugin-runtime-current-state-investigation.md
-  - ../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md
-  - ../../workspace/planning/roadmap.md
-  - ../../workspace/planning/decision-register.md
-  - ../../workspace/engineering-workflow.md
-  - ../../workspace/authority-model.md
-  - ../../guidelines/programming-principles.md
+  - ../../reports/closeouts/pt-ui-runtime-platform-011-closeout.md
 ---
 
 # Live UiPlugin Runtime And Surface Frame Rendering
+
+## Deferred consumer-integration disposition
+
+This file preserves the complete historical `PT-UI-RUNTIME-PLATFORM-001` design as possible future **Runenwerk consumer-integration** context. It is not current reusable-framework authority and does not authorize a standalone RunenUI cutover.
+
+Current accepted Runenwerk source/tests and the canonical Live UiPlugin runtime architecture own local implementation truth. The accepted tree already contains the engine-owned `UiPlugin`, typed mounting/action contracts, runtime evaluation paths, and producer-generic surface-frame publication. Historical statements below that describe those contracts as future, missing, or unimplemented are point-in-time design evidence rather than current-state claims.
+
+Any future Runenwerk consumer integration with standalone RunenUI must be re-derived from the exact accepted standalone RunenUI revision under a new owning issue. That work must explicitly decide coexistence/migration for current Runenwerk-local runtime contracts; this deferred record does not make that decision.
+
+The remainder of this file is preserved historical design content. Do not use its old PR numbers, implementation sequence, module-creation instructions, or target API claims as activation authority.
 
 ID: `PT-UI-RUNTIME-PLATFORM-001`
 
