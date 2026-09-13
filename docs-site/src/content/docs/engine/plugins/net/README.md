@@ -1,21 +1,21 @@
 ---
 title: "Net Plugin"
-description: "Documentation for Net Plugin."
+description: "Current Runenwerk engine integration with standalone RunenNet and retained networking migration contracts."
 status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-09-13
 ---
 
 # Net Plugin
 
 ## Purpose
 
-`engine/src/plugins/net` bridges runtime networking contracts from
-`engine_net` into ECS resources and schedules.
+`engine/src/plugins/net` integrates standalone RunenNet lifecycle/session authority and the
+remaining Runenwerk replication/input migration contracts with engine resources and schedules.
 
-The game-facing entry point is now:
+The game-facing entry point is:
 
 ```rust
 use engine::net::prelude::*;
@@ -23,61 +23,86 @@ use engine::net::prelude::*;
 app.add_plugins(NetPlugin::<MyDriver>::new(NetRole::Client));
 ```
 
-No manual runtime orchestration is required in gameplay code beyond
-inserting a `NetworkRuntimeHandle` at startup.
+`NetRole::Server` and `NetRole::Host` select the corresponding retained integration roles.
 
-## Multi-Client Model
+`NetPlugin` does **not** install a replacement networking lifecycle runtime or transport. There
+is no `NetworkRuntimeHandle` boundary. Application/host lifecycle code places and invokes the
+accepted RunenNet negotiation/session owners, and successful bindings are exposed to scheduled
+engine integration through the derived `RunenNetSessionProjection`.
 
-Server replication is keyed by `ConnectionId` and maintains explicit
-per-connection baseline checkpoints:
+## Ownership Boundary
 
-- `ConnectionBaselineCheckpoint`
-  - `last_ack_cursor`
-  - `last_sent_cursor`
-  - `last_full_snapshot_cursor`
-  - `last_full_snapshot_tick`
-  - `needs_full_resync`
-- `ServerSnapshotReplicationState<TSnapshot>`
-  - `checkpoints: BTreeMap<ConnectionId, ConnectionBaselineCheckpoint>`
-  - `snapshot_history`
-  - `latest_snapshot`
-- `ClientSnapshotReplicationState<TSnapshot>`
-  - last applied cursor/tick snapshot state on clients
+Standalone RunenNet owns reusable networking semantics, including connection identity,
+compatibility negotiation, participant/session lifecycle, delivery/recovery contracts,
+replication consistency/recovery, and participant-input prediction/reconciliation.
 
-Server outbox delivery is explicit:
+Runenwerk engine integration owns:
 
-- `OutboundServerMessage::ToConnection { connection_id, message }`
-- `OutboundServerMessage::Broadcast(message)`
+- schedule placement for retained receive, streaming, prediction, replication, flush, and
+  diagnostics work;
+- the read-only `RunenNetSessionProjection` used for engine routing and diagnostics;
+- product/session metadata and host reconnect/deployment policy;
+- bounded inbox/outbox staging for retained replication/application payloads;
+- retained `engine_net` replication/input integration while RN8 migration continues.
+
+The projection is derived state. It never authorizes admission, loss, retention, replacement,
+expiry, removal, or closure.
+
+## Multi-Connection Replication
+
+Retained server replication is keyed by RunenNet `ConnectionHandle` and maintains independent
+per-connection baseline state.
+
+- `ConnectionBaselineCheckpoint` tracks sent/acknowledged snapshot cursors and full-resync state.
+- `ServerSnapshotReplicationState<TSnapshot>` stores checkpoints and snapshot history per
+  `ConnectionHandle`.
+- `ClientSnapshotReplicationState<TSnapshot>` stores the client's retained applied-snapshot
+  state.
+- `OutboundServerMessage::ToConnection { connection, message }` stages targeted output;
+  `OutboundServerMessage::Broadcast(message)` stages broadcast output.
+
+ACK/input processing that requires connection identity is accepted only for a `ConnectionHandle`
+that remains authorized by `RunenNetSessionProjection`.
+
+## Staging, Not Transport
+
+`NetworkClientInbox`, `NetworkServerInbox`, `NetworkClientOutbox`, and `NetworkServerOutbox` are
+bounded Runenwerk work queues for retained payload integration. `NetworkInboundQueue` and
+`NetworkOutboundQueue` expose engine-visible staged work.
+
+Queue admission and frame-end flush are **not** RunenNet delivery acceptance and are not concrete
+transport realization. A concrete transport adapter is selected only by a maintained product
+consumer; the engine plugin does not recreate the retired runtime/transport facade.
 
 ## Schedule Ownership
 
 - `PreUpdate` / `NetPreUpdateSet::Receive`
-  - `network_runtime_receive_system`
   - `client_receive_system`
   - `server_receive_system`
 - `FixedUpdate`
-  - `prediction_step_system` in `NetFixedSet::Prediction`
-  - `replication_step_system` in `NetFixedSet::Replication`
-  - required intrinsic ordering: `Prediction -> Replication`
+  - `sync_connection_streaming_state_system` after an optional `CoreSet::Simulation` owner and
+    before prediction;
+  - `prediction_step_system` in `NetFixedSet::Prediction`;
+  - `replication_step_system` in `NetFixedSet::Replication`, after prediction;
   - when a same-`FixedUpdate` `CoreSet::Simulation` owner is installed, explicit
-    optional-presence references place it before relevant Net work
+    optional-presence ordering places relevant Net work after it.
 - `FrameEnd` / `CoreSet::FrameEnd`
-  - `client_flush_system`
-  - `server_flush_system`
+  - role-appropriate `client_flush_system` / `server_flush_system`;
+  - `sync_net_diagnostics_view_system`.
 
-The Net plugin is also valid in assemblies without a `CoreSet::Simulation`
-owner. Simulation-to-Net ordering is conditional composition; it is not an
-unconditional intrinsic Net chain.
+The Net plugin remains valid in assemblies without a `CoreSet::Simulation` owner. Simulation is
+conditional composition, not an unconditional intrinsic Net dependency.
 
 ## Related Docs
 
-- [NETWORK_RUNTIME_FLOW.md](network-runtime-flow.md)
-- [NET_PLUGIN.md](net-plugin.md)
-- [NETWORKING_USAGE_GUIDE.md](networking-usage-guide.md)
-- [engine_net REPLICATION_PIPELINE](../../../net/engine-net/replication-pipeline.md)
+- [Network integration flow](network-runtime-flow.md)
+- [Networking usage guide](networking-usage-guide.md)
+- [Engine Net integration design](../../../design/active/net-plugin-runtime-bridge.md)
+- [Runenwerk networking architecture](../../../net/net-architecture.md)
+- [engine_net replication pipeline](../../../net/engine-net/replication-pipeline.md)
 
 ## Guides
 
-- Usage: [../../../docs/reference/plugins/net/usage-guide.md](../../reference/plugins/net/usage-guide.md)
-- Advanced: [../../../docs/reference/plugins/net/advanced-guide.md](../../reference/plugins/net/advanced-guide.md)
-- Architecture: [../../../docs/reference/plugins/net/architecture.md](../../reference/plugins/net/architecture.md)
+- Usage: [Net Plugin Usage Guide](../../reference/plugins/net/usage-guide.md)
+- Advanced: [Net Plugin Advanced Guide](../../reference/plugins/net/advanced-guide.md)
+- Architecture: [Net Plugin Architecture](../../reference/plugins/net/architecture.md)
