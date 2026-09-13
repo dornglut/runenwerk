@@ -6,15 +6,13 @@ use crate::plugins::InputState;
 use crate::plugins::render::features::{DEFAULT_EDITOR_FONT_ID, UiFontAtlasResource};
 use crate::plugins::render::inspect::{RenderDebugTimingsState, WorldRuntimeInspectorSnapshot};
 use crate::plugins::render::{
-    RenderFrameProducerId, SurfaceFrameRoute, SurfaceFrameSubmission, SurfaceFrameSubmissionOrder,
-    SurfaceFrameSubmissionRegistryResource,
+    RenderFrameProducerId, RenderReadinessPhase, RenderReadinessState, SurfaceFrameRoute,
+    SurfaceFrameSubmission, SurfaceFrameSubmissionOrder, SurfaceFrameSubmissionRegistryResource,
 };
 use crate::plugins::time::domain::Time;
 use crate::plugins::ui::UiRuntimeSet;
 use crate::runtime::{RenderPrepare, Res, ResMut, Startup, SystemConfigExt};
-use crate::state::{
-    DebugMetricsState, SceneRuntimeState, StartupPhase, StartupState, UiOverlayState,
-};
+use crate::state::{DebugMetricsState, SceneRuntimeState, UiOverlayState};
 use ui_math::{UiInsets, UiRect, UiSize};
 use ui_runtime::{
     ComputedLayout, ComputedLayoutMap, InteractionVisualState, LabelNode, PanelNode, UiNode,
@@ -39,7 +37,6 @@ const fn render_frame_producer_id(raw: u64) -> RenderFrameProducerId {
 impl Plugin for DebugMetricsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<DebugMetricsState>();
-        app.init_resource::<StartupState>();
         app.init_resource::<UiOverlayState>();
         app.init_resource::<SurfaceFrameSubmissionRegistryResource>();
         app.init_resource::<WorldRuntimeInspectorSnapshot>();
@@ -60,7 +57,7 @@ fn setup_debug_metrics_input_binding(mut input: ResMut<InputState>) {
 fn debug_metrics_overlay_system(
     input: Res<InputState>,
     time: Res<Time>,
-    startup: Res<StartupState>,
+    readiness: Res<RenderReadinessState>,
     scene: Res<SceneRuntimeState>,
     world_runtime: Res<WorldRuntimeInspectorSnapshot>,
     render_debug_timings: Res<RenderDebugTimingsState>,
@@ -87,9 +84,9 @@ fn debug_metrics_overlay_system(
     let w = (380.0 * scale).min((screen_w - x * 2.0).max(120.0));
     let h = 350.0 * scale;
 
-    let phase = match startup.phase {
-        StartupPhase::Loading => "loading",
-        StartupPhase::Ready => "ready",
+    let phase = match readiness.phase {
+        RenderReadinessPhase::Loading => "loading",
+        RenderReadinessPhase::Ready => "ready",
     };
     let fps = debug_metrics.fps_ema;
     let frame_ms = debug_metrics.frame_ms_ema;
@@ -107,8 +104,8 @@ fn debug_metrics_overlay_system(
     lines.push("Diagnostics (F10)".to_string());
     lines.push(format!("fps={fps:>6.1} frame={frame_ms:>6.2}ms"));
     lines.push(format!(
-        "startup={} stable={}/{}",
-        phase, startup.stable_frames, startup.required_stable_frames
+        "readiness={} stable={}/{}",
+        phase, readiness.stable_frames, readiness.required_stable_frames
     ));
     lines.push(format!(
         "scene={} overlay={}",
@@ -306,6 +303,7 @@ fn debug_overlay_font_atlas() -> &'static UiFontAtlasResource {
 #[cfg(test)]
 mod tests {
     use super::DebugMetricsPlugin;
+    use crate::plugins::render::RenderReadinessState;
     use crate::plugins::{InputState, ScenePlugin, TimePlugin};
     use crate::prelude::*;
     use winit::event::ElementState;
@@ -320,6 +318,7 @@ mod tests {
         let mut app = App::headless();
         app.add_plugin(TimePlugin);
         app.add_plugin(ScenePlugin);
+        app.insert_resource(RenderReadinessState::default());
         app.add_plugin(DebugMetricsPlugin);
         app.add_systems(Update, inject_f10);
         let app = app.run_for_frames(1).expect("debug metrics should run");
