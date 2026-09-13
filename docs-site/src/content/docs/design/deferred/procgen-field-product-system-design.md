@@ -5,10 +5,10 @@ status: deferred
 owner: workspace
 layer: domain / engine-runtime
 canonical: false
-last_reviewed: 2026-05-12
+last_reviewed: 2026-09-13
 related_designs:
   - ../accepted/sdf-first-production-capability-map.md
-  - ../active/sdf-prefab-composition-system-design.md
+  - ./sdf-prefab-composition-system-design.md
   - ./field-vegetation-system-design.md
 ---
 

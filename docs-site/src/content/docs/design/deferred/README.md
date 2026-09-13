@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-09-10
+last_reviewed: 2026-09-13
 ---
 
 # Deferred Designs
@@ -43,6 +43,7 @@ Use this folder for designs that remain valid but are intentionally postponed.
 - [ECS Parallel System Execution Design](ecs-parallel-system-execution-design.md)
 - [Game Runtime UI Projection And HUD Platform](game-runtime-ui-projection-and-hud-platform-design.md)
 - [Sparse SDF Terrain Runtime Integration](sparse-sdf-terrain-runtime-integration-design.md)
+- [Viewport Camera And Projection Contract Platform](viewport-camera-and-projection-contract-platform-design.md)
 
 ### Deferred Domain Authoring Patterns
 
@@ -52,6 +53,8 @@ Use this folder for designs that remain valid but are intentionally postponed.
 ### SDF-First Capability Detail Drafts
 
 - [SDF World Production Slice Design](sdf-world-production-slice-design.md)
+- [SDF Prefab Composition System Design](sdf-prefab-composition-system-design.md)
+- [SDF Procedural Animation and Animated Models Design](sdf-procedural-animation-and-animated-models-design.md)
 - [Field Vegetation System Design](field-vegetation-system-design.md)
 - [Day Night Atmosphere System Design](day-night-atmosphere-system-design.md)
 - [Water Wetness Field System Design](water-wetness-field-system-design.md)
@@ -60,9 +63,3 @@ Use this folder for designs that remain valid but are intentionally postponed.
 - [Procgen Field Product System Design](procgen-field-product-system-design.md)
 - [Field VFX Particles System Design](field-vfx-particles-system-design.md)
 - [Fluid Snow Erosion World Processes System Design](fluid-snow-erosion-world-processes-system-design.md)
-
-Promoted out of deferred:
-
-- [SDF Prefab Composition System Design](../active/sdf-prefab-composition-system-design.md) is active, but V2-gated behind
-  rendered-world V1 and source-backed asset identity.
-- [SDF Procedural Animation and Animated Models Design](../active/sdf-procedural-animation-and-animated-models-design.md) is active and supersedes the older SDF character animation draft.

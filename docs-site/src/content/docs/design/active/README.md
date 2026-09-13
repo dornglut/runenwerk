@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-09-12
+last_reviewed: 2026-09-13
 ---
 
 # Active Designs
@@ -149,7 +149,4 @@ active design contains older conflicting target language.
 - [UI Program Contract Design](ui-program-contract-design.md)
 - [UI Program Proof Slice Plan](ui-program-proof-slice-plan.md)
 - [UI Runtime Rendering Pipeline Roadmap](ui-runtime-rendering-pipeline-roadmap.md)
-- [SDF Prefab Composition System Design](sdf-prefab-composition-system-design.md)
-- [SDF Procedural Animation and Animated Models Design](sdf-procedural-animation-and-animated-models-design.md)
 - [Semantic Graph IR and Compilation Design](semantic-graph-ir-and-compilation-design.md)
-- [Viewport Camera And Projection Contract Platform](viewport-camera-and-projection-contract-platform-design.md)

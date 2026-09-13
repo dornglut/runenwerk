@@ -5,13 +5,13 @@ status: active
 owner: editor
 layer: domain
 canonical: true
-last_reviewed: 2026-09-12
+last_reviewed: 2026-09-13
 related_designs:
   - ../accepted/sdf-first-field-world-platform-design.md
   - ../implemented/editor-rendered-world-and-multi-entity-viewport-design.md
   - ../implemented/field-visualizer-product-workflow-design.md
   - ./material-lab-and-material-preview-design.md
-  - ./sdf-prefab-composition-system-design.md
+  - ../deferred/sdf-prefab-composition-system-design.md
   - ./editor-procedural-content-and-simulation-workflow-plan.md
   - ./gameplay-graph-atr-ir-and-ecs-lowering-design.md
   - ../implemented/editor-workspace-document-mode-panel-architecture.md
@@ -65,7 +65,7 @@ Current state after the 2026-05-16 WR-020 repair closeout:
 
 - Source-backed Asset Core contracts are implemented in `domain/asset`: V1 catalog source roots with backward-compatible deserialization, strict project-relative source/artifact/catalog paths, project catalog descriptors, source descriptors with importer choice, artifact-kind-aware deterministic import plans, separate source-kind and artifact-kind import compatibility, dependency graph contracts, diagnostics, composed catalog ratification, and checked prior-valid artifact preservation for SDF graph, field product, material graph/material, UI definition, and prefab descriptor families.
 - Editor adapter work remains deferred to `WR-026`: project catalog load/save, import job orchestration, diagnostics surfacing, and prior-valid preservation UI must consume the domain contracts instead of becoming semantic asset truth.
-- Prefabs get source/catalog/design identity through `docs-site/src/content/docs/design/active/sdf-prefab-composition-system-design.md`; runtime prefab instancing remains V2-gated behind rendered-world V1 and source-backed asset identity.
+- The deferred SDF prefab target records source/catalog/design identity in `docs-site/src/content/docs/design/deferred/sdf-prefab-composition-system-design.md`; runtime prefab instancing remains V2-gated behind rendered-world V1 and source-backed asset identity.
 - Material Lab sources are explicit material graph documents from `docs-site/src/content/docs/design/active/material-lab-and-material-preview-design.md`; canvas state must remain a projection.
 - no project-owned data hot reload stream or runtime preview application of changed asset/product revisions;
 - no persisted asset catalog file load/save loop or project-owned cache garbage collection workflow;

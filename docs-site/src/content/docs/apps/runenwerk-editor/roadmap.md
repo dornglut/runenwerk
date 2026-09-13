@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-09-12
+last_reviewed: 2026-09-13
 related_designs:
   - ../../design/accepted/sdf-first-field-world-platform-design.md
   - ../../design/implemented/ui-definition-formation-foundation-design.md
@@ -597,7 +597,7 @@ Interaction V2 is implemented for the retained UI target under accepted ADR
   - not missing: it is the already-promoted self-authoring path in `docs-site/src/content/docs/design/implemented/editor-self-authoring-and-final-ui-design.md`;
   - roadmap wording should continue to call this UI Designer / self-authoring so the feature is visible to product planning.
 - SDF Prefabs
-  - active V2-gated design: `docs-site/src/content/docs/design/active/sdf-prefab-composition-system-design.md`;
+  - deferred V2-gated design: `docs-site/src/content/docs/design/deferred/sdf-prefab-composition-system-design.md`;
   - prefab runtime instancing waits for rendered-world V1 and source-backed prefab descriptor identity.
 
 ### What Was Missing Or Under-Specified
@@ -609,7 +609,7 @@ Interaction V2 is implemented for the retained UI target under accepted ADR
 - Payload ECS enums were listed as deferred, but the trigger condition was not explicit. They now wait for concrete payload-backed reflected fields.
 - Material Lab was present as provider stubs but not roadmap-visible as a product track. It is now explicit and gated behind rendered-world V1 plus field visualizer routing.
 - UI Designer looked missing because the roadmap used self-authoring language. It is now identified as the same promoted path, not a separate missing feature.
-- SDF prefabs were grouped with deferred SDF detail drafts. The design is now active, but implementation remains V2-gated behind rendered-world V1 and source-backed asset identity.
+- SDF prefabs remain a useful long-term product target, but the design is deferred because no current owning issue activates prefab implementation; implementation remains V2-gated behind rendered-world V1 and source-backed asset identity.
 - Repeated editor UI polish issues were listed as individual bugs. Accepted ADR 0009 and Interaction V2 now turn popup, scroll, focus, menu sizing, chrome, docking, and status overflow into shared contracts.
 - Editor shell polish is now explicitly behind Interaction V2. It may consume
   defined retained-UI contract slices or provide compatibility evidence, but it
