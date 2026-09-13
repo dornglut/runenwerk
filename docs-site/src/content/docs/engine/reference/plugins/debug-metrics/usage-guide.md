@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-09-13
 ---
 
 # Debug Metrics Plugin Usage Guide
@@ -23,16 +23,22 @@ Renders runtime diagnostics into overlay draw commands and supports visibility t
 ## Minimal Setup
 
 ```rust
-use engine::plugins::debug_metrics::DebugMetricsPlugin;
+use engine::plugins::{DebugMetricsPlugin, TimePlugin};
 
+app.add_plugin(TimePlugin);
 app.add_plugin(DebugMetricsPlugin);
 ```
+
+`DebugMetricsPlugin` consumes frame timing for its diagnostics but does not own it. Applications
+that already use `default_plugins()` get `TimePlugin` from that stack and only need to add
+`DebugMetricsPlugin`.
 
 ## Runtime Contract
 
 - Schedule placement: Startup, RenderPrepare
+- Timing prerequisite: `Time` supplied by `TimePlugin` (directly or through a plugin stack).
 - Ownership: Debug overlay state and draw-list publication.
-- Non-ownership: Render submission execution and input transport.
+- Non-ownership: Frame-time progression, render submission execution, and input transport.
 - Runtime timing surface: frame workload, preflight, flow encode, shader poll,
   diagnostics report, frame pacing mode/FPS cap, and preflight cache status are
   read from runtime/render inspection resources and displayed without owning
