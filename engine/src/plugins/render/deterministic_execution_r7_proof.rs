@@ -15,8 +15,8 @@ use super::deterministic_execution::submit_deterministic_render;
 use super::deterministic_verification::submit_deterministic_render_for_verified_formation;
 use super::participation::RenderObjectParticipation;
 use super::representation::{
-    RENDER_SURFACE_QUERY_PROTOCOL_REVISION, RenderRefinementEvidence, RenderRepresentationId,
-    RenderRepresentationRecord, RenderSurfaceProtocolEvidence,
+    RENDER_SURFACE_QUERY_PROTOCOL_REVISION, RenderRefinementEvidence, RenderRepresentationRecord,
+    RenderSurfaceProtocolEvidence,
 };
 use super::request::{
     RenderObservationSpec, RenderOutputSpec, RenderOutputValue, RenderPerspectiveObservation,

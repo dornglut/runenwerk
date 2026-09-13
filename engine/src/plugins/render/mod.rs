@@ -44,6 +44,8 @@ mod texture_upload;
 #[cfg(test)]
 mod derived_transform_r7_proof;
 #[cfg(test)]
+mod deterministic_execution_r7_proof;
+#[cfg(test)]
 mod r6_proof;
 #[cfg(test)]
 mod r6_reference_proof;
