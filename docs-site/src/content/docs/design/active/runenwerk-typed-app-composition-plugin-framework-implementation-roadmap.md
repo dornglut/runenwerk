@@ -11,7 +11,7 @@ related_docs:
   - ./runenwerk-domain-workbench-north-star.md
   - ../implemented/ui-program-architecture.md
   - ../implemented/ui-program-architecture-owner-map.md
-  - ./ui-component-platform-base-control-packages-design.md
+  - ../implemented/ui-component-platform-base-control-packages-design.md
   - ./ui-component-platform-ownership-realignment-design.md
   - ../../workspace/engineering-workflow.md
   - ../../workspace/authority-model.md
