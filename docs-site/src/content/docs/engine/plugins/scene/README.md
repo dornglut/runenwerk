@@ -35,7 +35,6 @@ same catalog before the plugin is selected. Plugin installation preserves those 
 
 The plugin owns the runtime scene manager and republishes transport-neutral scene state through:
 
-- `SceneCatalog`
 - `SceneRuntimeState`
 - `GameplayRuntimeConfig`
 - `UiOverlayState`
