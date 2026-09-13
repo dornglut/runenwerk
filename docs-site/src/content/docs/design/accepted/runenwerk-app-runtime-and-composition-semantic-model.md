@@ -296,16 +296,17 @@ gates:
 | Gate | Question |
 |---|---|
 | Ownership | Is the invariant genuinely Runenwerk App/runtime-integration semantics? |
-| Universality | Does every supported path that claims this state require it? |
-| Independence | Is it meaningful with every optional domain/product capability absent? |
-| Necessity | Would its absence invalidate the relevant App runtime rather than one capability? |
+| Universality | Does every currently supported App host/runtime require it? |
+| Independence | Is it meaningful with every optional capability absent? |
+| Necessity | Would its absence invalidate App itself rather than one optional capability? |
 | Authority safety | Does installation avoid manufacturing foreign/fake semantic authority? |
 | Cost | Is universal installation independently acceptable? |
 
 Failure of any gate means **not App-owned core runtime state**.
 
 This test is deliberately stricter than "many products use it" and stricter than
-"current code expects it".
+"current code expects it". Host-specific state fails the Universality gate and belongs
+to the Host even when Runenwerk owns that host integration.
 
 The test does not classify:
 
@@ -374,7 +375,7 @@ composition failures diagnosable at the integration boundary.
 
 ### 4.3 Starting
 
-Runenwerk executes App Startup at most once per runtime instance.
+Runenwerk executes App Startup at most once successfully per runtime instance.
 
 Product/domain "startup", loading, warm-up, readiness, connection establishment, or
 resource residency are separate owner state machines unless an accepted owner design
