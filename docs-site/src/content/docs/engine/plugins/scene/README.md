@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-09-13
 ---
 
 # Scene Plugin
@@ -17,11 +17,15 @@ Coordinates world/overlay scene lifecycle, authoritative scene simulation, and s
 ## Usage
 
 - Plugin: `ScenePlugin`
+- Timing provider: `TimePlugin` directly or through `default_plugins()`
 - Schedules:
   - `Startup`: initialize the scene manager
   - `PreUpdate`: process transition commands and input-driven scene state
   - `FixedUpdate`: run authoritative world-scene simulation
   - `Update`: apply world-to-overlay message flow and republish scene state
+
+The plugin consumes `Time` during scene transition/runtime processing but does not install or
+advance frame timing state.
 
 The plugin owns the runtime scene manager and republishes transport-neutral scene state through:
 
@@ -42,7 +46,8 @@ It also defines the current authoritative scene replay/snapshot DTOs:
 - Owns world scene runtime updates and overlay/world interaction state.
 - Owns the authoritative scene snapshot/restore boundary used by replay and replication.
 - Owns applying compiled scene/template authoring outputs to runtime state.
-- Does not own render graph execution or input device event collection.
+- Consumes `Time` supplied by `TimePlugin`.
+- Does not own frame-time progression, render graph execution, or input device event collection.
 
 ## Extension Points
 
@@ -56,4 +61,3 @@ It also defines the current authoritative scene replay/snapshot DTOs:
 - Usage: [../../../docs/reference/plugins/scene/usage-guide.md](../../reference/plugins/scene/usage-guide.md)
 - Advanced: [../../../docs/reference/plugins/scene/advanced-guide.md](../../reference/plugins/scene/advanced-guide.md)
 - Architecture: [../../../docs/reference/plugins/scene/architecture.md](../../reference/plugins/scene/architecture.md)
-
