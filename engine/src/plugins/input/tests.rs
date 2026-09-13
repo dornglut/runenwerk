@@ -1,6 +1,9 @@
 // Owner: Engine Input Plugin - Tests
 use crate::plugins::{
-    InputBindingChange, InputBindingChangeResult, InputState, KeyChord, TouchInputPhase, action,
+    DigitalState, InputBindingChange, InputBindingChangeResult, InputContext, InputDeviceId,
+    InputSourceId, InputState, KeyChord, KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey,
+    ObservationOrigin, PhysicalKeyIdentity, PointerButton, PointerButtonInput, TouchInputPhase,
+    action,
 };
 use winit::event::{ElementState, MouseButton};
 use winit::keyboard::KeyCode;
@@ -11,6 +14,17 @@ fn press_key(state: &mut InputState, key: KeyCode) {
 
 fn release_key(state: &mut InputState, key: KeyCode) {
     state.handle_keyboard_input(key, ElementState::Released, None);
+}
+
+fn normalized_key(state: DigitalState) -> KeyboardInput {
+    KeyboardInput {
+        physical_key: PhysicalKeyIdentity::code("KeyW"),
+        logical_key: LogicalKey::Native(NativeLogicalKey::Unidentified),
+        location: KeyLocation::Standard,
+        state,
+        repeat: false,
+        origin: ObservationOrigin::SourceReport,
+    }
 }
 
 #[test]
@@ -135,6 +149,48 @@ fn repeated_key_down_does_not_create_a_second_pressed_edge() {
 }
 
 #[test]
+fn normalized_repeat_metadata_cannot_create_a_pressed_edge() {
+    let mut state = InputState::new();
+    let context = InputContext::new(InputSourceId::new(90), None);
+    let first = normalized_key(DigitalState::Pressed);
+    state.handle_normalized_keyboard(context, &first);
+    assert!(state.action_pressed(action::WORLD_MOVE_UP));
+
+    state.clear_frame();
+    let repeat = KeyboardInput {
+        repeat: true,
+        ..first
+    };
+    state.handle_normalized_keyboard(context, &repeat);
+
+    assert!(state.action_down(action::WORLD_MOVE_UP));
+    assert!(!state.action_pressed(action::WORLD_MOVE_UP));
+}
+
+#[test]
+fn device_scoped_key_state_keeps_product_press_edge_aggregate() {
+    let mut state = InputState::new();
+    let source = InputSourceId::new(90);
+    let context_a = InputContext::new(source, Some(InputDeviceId::new(1)));
+    let context_b = InputContext::new(source, Some(InputDeviceId::new(2)));
+
+    state.handle_normalized_keyboard(context_a, &normalized_key(DigitalState::Pressed));
+    assert!(state.action_pressed(action::WORLD_MOVE_UP));
+    assert!(state.action_down(action::WORLD_MOVE_UP));
+
+    state.clear_frame();
+    state.handle_normalized_keyboard(context_b, &normalized_key(DigitalState::Pressed));
+    assert!(!state.action_pressed(action::WORLD_MOVE_UP));
+    assert!(state.action_down(action::WORLD_MOVE_UP));
+
+    state.handle_normalized_keyboard(context_a, &normalized_key(DigitalState::Released));
+    assert!(state.action_down(action::WORLD_MOVE_UP));
+
+    state.handle_normalized_keyboard(context_b, &normalized_key(DigitalState::Released));
+    assert!(!state.action_down(action::WORLD_MOVE_UP));
+}
+
+#[test]
 fn keyboard_reconciliation_changes_held_state_without_pressed_edges() {
     let mut state = InputState::new();
 
@@ -235,6 +291,40 @@ fn repeated_mouse_down_does_not_create_a_second_pressed_edge() {
 }
 
 #[test]
+fn device_scoped_button_state_keeps_legacy_edges_aggregate() {
+    let mut state = InputState::new();
+    let source = InputSourceId::new(91);
+    let context_a = InputContext::new(source, Some(InputDeviceId::new(1)));
+    let context_b = InputContext::new(source, Some(InputDeviceId::new(2)));
+    let pressed = PointerButtonInput {
+        button: PointerButton::Left,
+        state: DigitalState::Pressed,
+    };
+    let released = PointerButtonInput {
+        button: PointerButton::Left,
+        state: DigitalState::Released,
+    };
+
+    state.handle_pointer_button(context_a, pressed);
+    assert!(state.left_mouse_pressed());
+    assert!(state.left_mouse_down());
+
+    state.clear_frame();
+    state.handle_pointer_button(context_b, pressed);
+    assert!(!state.left_mouse_pressed());
+    assert!(state.left_mouse_down());
+    assert!(state.mouse_button_transitions().is_empty());
+
+    state.handle_pointer_button(context_a, released);
+    assert!(!state.left_mouse_released());
+    assert!(state.left_mouse_down());
+
+    state.handle_pointer_button(context_b, released);
+    assert!(state.left_mouse_released());
+    assert!(!state.left_mouse_down());
+}
+
+#[test]
 fn touch_samples_preserve_primary_projection_while_neutral_state_keeps_all_contacts() {
     let mut state = InputState::new();
 
@@ -280,7 +370,7 @@ fn touch_samples_preserve_primary_projection_while_neutral_state_keeps_all_conta
                 pressure: Some(0.0),
             },
         ],
-        "legacy drawing projection should remain single-primary in I1A"
+        "legacy drawing projection should remain single-primary while neutral state keeps all contacts"
     );
     assert!(!state.neutral_touch_active(7));
     assert!(state.neutral_touch_active(8));

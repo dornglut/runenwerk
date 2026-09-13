@@ -19,6 +19,7 @@ pub mod query_snapshot;
 pub mod schedules;
 pub mod system;
 pub mod window;
+pub(crate) mod winit_input;
 pub mod winit_runner;
 
 pub use fixed_time::*;

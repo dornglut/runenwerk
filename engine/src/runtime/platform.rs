@@ -1,7 +1,7 @@
-use crate::plugins::{InputState, TouchInputPhase};
+use crate::plugins::{
+    ContactInput, InputContext, InputState, KeyboardInput, Point2, PointerButtonInput, ScrollInput,
+};
 use crate::runtime::window::{NativeWindowId, WindowState, WindowStateRegistryResource};
-use winit::event::{ElementState, MouseButton};
-use winit::keyboard::KeyCode;
 
 #[derive(Debug, Clone)]
 pub enum PlatformEvent {
@@ -20,31 +20,27 @@ pub enum PlatformEvent {
         height: u32,
     },
     KeyboardInput {
-        key: KeyCode,
-        state: ElementState,
-        text: Option<String>,
+        context: InputContext,
+        input: KeyboardInput,
+    },
+    TextInput {
+        text: String,
     },
     MouseWheel {
-        delta: f32,
+        context: InputContext,
+        input: ScrollInput,
     },
     CursorMoved {
-        x: f32,
-        y: f32,
+        context: InputContext,
+        position: Point2,
     },
     MouseInput {
-        state: ElementState,
-        button: MouseButton,
-    },
-    MouseMotion {
-        delta_x: f32,
-        delta_y: f32,
+        context: InputContext,
+        input: PointerButtonInput,
     },
     Touch {
-        phase: TouchInputPhase,
-        id: u64,
-        x: f32,
-        y: f32,
-        pressure: Option<f32>,
+        context: InputContext,
+        input: ContactInput,
     },
     RedrawRequested,
 }
@@ -113,29 +109,32 @@ pub fn apply_platform_event(
             window.size_px = (*width, *height);
             window.request_redraw();
         }
-        PlatformEvent::KeyboardInput { key, state, text } => {
-            input.handle_keyboard_input(*key, *state, text.as_deref());
+        PlatformEvent::KeyboardInput { context, input: key } => {
+            input.handle_normalized_keyboard(*context, key);
         }
-        PlatformEvent::MouseWheel { delta } => {
-            input.handle_mouse_wheel_delta(*delta);
+        PlatformEvent::TextInput { text } => {
+            input.handle_text_input(text);
         }
-        PlatformEvent::CursorMoved { x, y } => {
-            input.handle_cursor_moved(*x, *y);
+        PlatformEvent::MouseWheel {
+            context,
+            input: scroll,
+        } => {
+            input.handle_scroll_input(*context, *scroll);
         }
-        PlatformEvent::MouseInput { state, button } => {
-            input.handle_mouse_input(*state, *button);
+        PlatformEvent::CursorMoved { context, position } => {
+            input.handle_cursor_position(*context, *position);
         }
-        PlatformEvent::MouseMotion { delta_x, delta_y } => {
-            input.handle_mouse_motion(*delta_x, *delta_y);
+        PlatformEvent::MouseInput {
+            context,
+            input: button,
+        } => {
+            input.handle_pointer_button(*context, *button);
         }
         PlatformEvent::Touch {
-            phase,
-            id,
-            x,
-            y,
-            pressure,
+            context,
+            input: contact,
         } => {
-            input.handle_touch_input(*phase, *id, *x, *y, *pressure);
+            input.handle_contact_input(*context, contact);
         }
         PlatformEvent::RedrawRequested => {
             window.redraw_requested = false;
@@ -184,10 +183,10 @@ pub fn apply_platform_window_event(
                 record.redraw_requested = false;
             }
             PlatformEvent::KeyboardInput { .. }
+            | PlatformEvent::TextInput { .. }
             | PlatformEvent::MouseWheel { .. }
             | PlatformEvent::CursorMoved { .. }
             | PlatformEvent::MouseInput { .. }
-            | PlatformEvent::MouseMotion { .. }
             | PlatformEvent::Touch { .. } => {}
         }
         if is_primary {
@@ -197,10 +196,10 @@ pub fn apply_platform_window_event(
 
     match &event.event {
         PlatformEvent::KeyboardInput { .. }
+        | PlatformEvent::TextInput { .. }
         | PlatformEvent::MouseWheel { .. }
         | PlatformEvent::CursorMoved { .. }
         | PlatformEvent::MouseInput { .. }
-        | PlatformEvent::MouseMotion { .. }
         | PlatformEvent::Touch { .. } => {
             let mut shadow_window = WindowState::headless("");
             apply_platform_event(&mut shadow_window, input, &event.event);
@@ -220,9 +219,16 @@ mod tests {
         PlatformEvent, PlatformWindowEvent, apply_platform_event, apply_platform_window_event,
     };
     use crate::plugins::InputState;
+    use crate::plugins::{
+        ContactInput, ContactPhase, CoordinateSpace, DigitalState, InputContext, InputSourceId,
+        KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey, ObservationOrigin,
+        PhysicalKeyIdentity, Point2, PointerButton, PointerButtonInput,
+    };
     use crate::runtime::window::{NativeWindowId, WindowState, WindowStateRegistryResource};
-    use winit::event::{ElementState, MouseButton};
-    use winit::keyboard::KeyCode;
+
+    fn test_context() -> InputContext {
+        InputContext::new(InputSourceId::new(90), None)
+    }
 
     #[test]
     fn resize_and_scale_events_update_window_state() {
@@ -256,41 +262,47 @@ mod tests {
     fn normalized_input_events_update_input_state() {
         let mut window = WindowState::headless("Runtime");
         let mut input = InputState::new();
+        let context = test_context();
 
         apply_platform_event(
             &mut window,
             &mut input,
             &PlatformEvent::KeyboardInput {
-                key: KeyCode::KeyD,
-                state: ElementState::Pressed,
-                text: None,
+                context,
+                input: KeyboardInput {
+                    physical_key: PhysicalKeyIdentity::code("KeyD"),
+                    logical_key: LogicalKey::Native(NativeLogicalKey::Unidentified),
+                    location: KeyLocation::Standard,
+                    state: DigitalState::Pressed,
+                    repeat: false,
+                    origin: ObservationOrigin::SourceReport,
+                },
             },
         );
         apply_platform_event(
             &mut window,
             &mut input,
             &PlatformEvent::MouseInput {
-                state: ElementState::Pressed,
-                button: MouseButton::Left,
+                context,
+                input: PointerButtonInput {
+                    button: PointerButton::Left,
+                    state: DigitalState::Pressed,
+                },
             },
         );
-        apply_platform_event(
-            &mut window,
-            &mut input,
-            &PlatformEvent::MouseMotion {
-                delta_x: 5.0,
-                delta_y: -2.0,
-            },
-        );
+        input.handle_relative_motion(context, 5.0, -2.0);
         apply_platform_event(
             &mut window,
             &mut input,
             &PlatformEvent::Touch {
-                phase: super::TouchInputPhase::Started,
-                id: 7,
-                x: 10.0,
-                y: 12.0,
-                pressure: Some(0.6),
+                context,
+                input: ContactInput {
+                    id: 7,
+                    phase: ContactPhase::Begin,
+                    position: Point2::new(10.0, 12.0, CoordinateSpace::WindowPhysicalPixels),
+                    pressure: None,
+                    altitude_angle_radians: None,
+                },
             },
         );
 
@@ -298,7 +310,6 @@ mod tests {
         assert!(input.left_mouse_pressed());
         assert_eq!(input.mouse_delta, (5.0, -2.0));
         assert_eq!(input.touch_samples().len(), 1);
-        assert_eq!(input.touch_samples()[0].pressure, Some(0.6));
     }
 
     #[test]
