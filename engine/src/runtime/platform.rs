@@ -109,7 +109,10 @@ pub fn apply_platform_event(
             window.size_px = (*width, *height);
             window.request_redraw();
         }
-        PlatformEvent::KeyboardInput { context, input: key } => {
+        PlatformEvent::KeyboardInput {
+            context,
+            input: key,
+        } => {
             input.handle_normalized_keyboard(*context, key);
         }
         PlatformEvent::TextInput { text } => {
