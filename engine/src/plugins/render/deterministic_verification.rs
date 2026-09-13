@@ -5,6 +5,8 @@
 //! separate question: whether the exact admitted semantics lie inside the first bounded domain for
 //! which RunenRender is allowed to attempt conservative finite-evaluation verification.
 
+mod numeric;
+
 use super::deterministic_admission::AdmittedDeterministicRender;
 use super::request::RenderObservationSpec;
 use super::scene::RenderObjectId;
