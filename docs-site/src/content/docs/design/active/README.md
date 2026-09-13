@@ -62,17 +62,11 @@ spines win when an active design contains older conflicting target language.
 
 ### Repository Family Extraction
 
-- [RunenGPU Architecture Design](runengpu-architecture-design.md)
-- [RunenGPU G3 Access and Work Graph Design](runengpu-g3-access-work-graph-design.md)
-- [RunenGPU G3R Definite Initialization Semantics Correction](runengpu-g3r-definite-initialization-correction.md)
-- [RunenGPU G4 Context, Program, and WGPU Realization Design](runengpu-g4-context-program-realization-design.md)
-- [RunenGPU Shader Authoring and Canonical WGSL Artifact Boundary](runengpu-shader-authoring-artifact-boundary.md)
-- [RunenGPU G4B Contracts and G4C Delivery Design](runengpu-g4b-contracts-g4c-delivery-design.md)
-- [RunenGPU G4C2 Presentation-Surface Binding Boundary](runengpu-g4c2-presentation-surface-binding-boundary.md)
-- [RunenGPU G5 Execution Lifecycle Design](runengpu-g5-execution-lifecycle-design.md)
-- [RunenGPU Post-G5C Hardening Design](runengpu-post-g5c-hardening-design.md)
-- [RunenGPU Phase Requirements and Proof Matrix](runengpu-phase-requirements-proof-matrix.md)
-- [RunenGPU and RunenRender Decomposition Execution Plan](runenrender-internal-decomposition-execution-plan.md)
+- [RunenRender Decomposition Execution Plan](runenrender-internal-decomposition-execution-plan.md)
+
+Standalone RunenGPU owns current reusable GPU execution semantics, public contracts,
+conformance, and framework evolution. Runenwerk does not keep active RunenGPU semantic
+predecessor designs after the accepted standalone transfer.
 
 ### Domain Authoring / App Proof
 
@@ -86,3 +80,4 @@ spines win when an active design contains older conflicting target language.
 - [Native Tablet Input and Latency Contract](native-tablet-input-and-latency-contract.md)
 - [Runenwerk UI Story V2 Consumer and Proof Boundary](runenwerk-ui-story-driven-golden-workflow-design.md)
 - [Semantic Graph IR and Compilation Design](semantic-graph-ir-and-compilation-design.md)
+- [Shader Authoring and Canonical Artifact Policy](shader-authoring-and-canonical-artifact-policy.md)

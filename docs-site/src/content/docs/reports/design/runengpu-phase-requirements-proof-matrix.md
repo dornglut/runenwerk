@@ -1,29 +1,48 @@
 ---
 title: RunenGPU Phase Requirements and Proof Matrix
-description: Canonical proof roles, observable evidence, and retained artifact requirements for RunenGPU from accepted G5 execution through standalone extraction.
-status: active
-owner: gpu
-layer: framework/gpu
-canonical: true
-last_reviewed: 2026-09-05
+description: Historical Runenwerk proof taxonomy and predecessor-program evidence retained after reusable RunenGPU authority transferred to standalone RunenGPU.
+status: superseded
+owner: workspace
+layer: reports
+canonical: false
+last_reviewed: 2026-09-13
 related_docs:
-  - ./runengpu-architecture-design.md
-  - ./runengpu-g3-access-work-graph-design.md
-  - ./runengpu-g3r-definite-initialization-correction.md
-  - ./runengpu-g5-execution-lifecycle-design.md
-  - ./runengpu-post-g5c-hardening-design.md
-  - ./runengpu-shader-authoring-artifact-boundary.md
   - ../../architecture/repository-family-architecture.md
-  - ../../reports/investigations/runengpu-proof-workload-strategy.md
-  - ../../reports/investigations/runengpu-public-api-ergonomics-review.md
-  - ../../workspace/planning/roadmap.md
+  - ../../adr/accepted/0015-separate-gpu-execution-from-rendering.md
+  - ../../design/active/shader-authoring-and-canonical-artifact-policy.md
+  - ../../design/accepted/runenrender-decomposition-design.md
+  - ../../design/active/runenrender-internal-decomposition-execution-plan.md
 ---
 
 # RunenGPU Phase Requirements and Proof Matrix
 
+## Historical disposition
+
+This document is retained as historical proof/program evidence after the accepted
+standalone RunenGPU transfer. It is **not current RunenGPU semantic, API, conformance,
+release, roadmap, or work-status authority**.
+
+Current reusable RunenGPU authority belongs to
+[`dornglut/runen-gpu`](https://github.com/dornglut/runen-gpu). Runenwerk currently
+consumes exact accepted revision
+`77c7c8d5ad6922b6f46c6b25e31b1a224c1314a4`; that exact dependency plus Runenwerk
+integration validation is the product compatibility claim, not a second framework
+semantic owner.
+
+The complete predecessor at the #494 accepted-base census remains immutable in Git
+history:
+
+[`design/active/runengpu-phase-requirements-proof-matrix.md` at `d0597eb8...`](https://github.com/dornglut/runenwerk/blob/d0597eb8250072add682fe9328cbc64c1d72e07e/docs-site/src/content/docs/design/active/runengpu-phase-requirements-proof-matrix.md)
+
+The preserved predecessor body below intentionally retains historical G-phase language,
+semantic-owner references, future-tense gates, and Runenwerk-era terminology. Read those
+statements as evidence of the program that established the standalone boundary, not as
+current activation or authority. Current standalone source/tests/CI and repository-local
+architecture supersede this document for reusable RunenGPU meaning.
+
 ## Purpose and authority
 
-This document owns **proof role, observable evidence, and retained artifact requirements**. It does not own the semantic contract being proved.
+This document historically owned **proof role, observable evidence, and retained artifact requirements**. It did not own the semantic contract being proved.
 
 ```text
 phase / focused design
@@ -33,17 +52,17 @@ this matrix
     how acceptance demonstrates that guarantee
 ```
 
-It also does not own:
+It also did not own:
 
-- durable phase order — the roadmap owns sequence;
-- activation, blockers, current branch, or completion state — GitHub issues own live work;
-- implementation handoff detail — a workspace RON spec may be created only for an active bounded slice and remains subordinate;
-- source-language/toolchain promotion — the shader-authoring design and Runenwerk tooling policy own that;
-- image/video codecs or persisted artifact policy — Runenwerk proof/batch tooling owns those.
+- durable phase order — the roadmap owned sequence;
+- activation, blockers, current branch, or completion state — GitHub issues owned live work;
+- implementation handoff detail — a workspace RON spec could be created only for an active bounded slice and remained subordinate;
+- source-language/toolchain promotion — the shader-authoring design and Runenwerk tooling policy owned that;
+- image/video codecs or persisted artifact policy — Runenwerk proof/batch tooling owned those.
 
-Requirement IDs are stable references for future issues, tests, CI descriptions, and closeouts. Future issues should reference the IDs and the semantic owner instead of copying this document.
+Requirement IDs are retained as stable historical references for issues, tests, CI descriptions, and closeouts.
 
-Historical accepted phases are not reopened merely because their proof evidence is retained here. New retained-evidence requirements apply when a later phase deliberately reuses that workload.
+Historical accepted phases are not reopened merely because their proof evidence is retained here.
 
 ## Evidence taxonomy
 
@@ -164,7 +183,7 @@ No visual artifact is required.
 
 # G5C — final execution cutover
 
-G5C semantics are owned by the accepted G5 design and historical G5C implementation authority; this matrix retains the required integration and ownership evidence only.
+G5C semantics were owned by the accepted G5 design and historical G5C implementation authority; this matrix retained the required integration and ownership evidence only.
 
 ## G5C-I01 — normal-frame authority
 
@@ -186,7 +205,7 @@ The proof must show that the normal path no longer owns raw renderer command enc
 
 **Role:** exact semantic correction evidence.
 
-**Semantic owner:** post-G5C hardening design, G5R section. That design narrowly supersedes G3R's accepted `Prepared descriptor -> checked prepared initialized coverage` rule while retaining the rest of G3R's requirement/effect separation.
+**Semantic owner:** post-G5C hardening design, G5R section. That design narrowly superseded G3R's accepted `Prepared descriptor -> checked prepared initialized coverage` rule while retaining the rest of G3R's requirement/effect separation.
 
 **Evidence cases:**
 
@@ -199,11 +218,11 @@ The proof must show that the normal path no longer owns raw renderer command enc
 7. a generic shader write to previously uninitialized coverage still does not establish definite initialization;
 8. structural review finds no hidden constructor/queue transfer authority.
 
-No visual artifact is required. G6 remains blocked until this requirement is accepted.
+No visual artifact is required. G6 was blocked until this requirement was accepted.
 
 # G6 — framework proof
 
-G6 combines retained narrow correctness with representative integration, ergonomics, scale, and direct-backend cost evidence. Visual output supplements rather than replaces exact or structural proof.
+G6 combined retained narrow correctness with representative integration, ergonomics, scale, and direct-backend cost evidence. Visual output supplements rather than replaces exact or structural proof.
 
 ## G6-C01 — known-pattern offscreen draw
 
@@ -326,7 +345,7 @@ An explicit shader interface is not itself a failure if that remains the accepte
 
 **Role:** architecture/API conformance.
 
-**Semantic owner:** shader-authoring design unless explicitly revised by an accepted G6 decision.
+**Semantic owner:** historical shader-authoring design unless explicitly revised by an accepted G6 decision.
 
 **Evidence:**
 
@@ -336,20 +355,20 @@ An explicit shader interface is not itself a failure if that remains the accepte
 - no inferred G3 hazards, retained-state semantics, application meaning, or runtime-resource selection from shader reflection;
 - no second pipeline/interface path for the ordinary API.
 
-If G6 changes interface authority, the owning shader-authoring design must be revised in the same accepted decision; this matrix alone cannot change it.
+If G6 changed interface authority, the owning shader-authoring design had to be revised in the same accepted decision; this matrix alone could not change it.
 
 ## G6-A01 — capability aperture
 
 **Role:** capability-admission evidence.
 
-Every G6 feature/format addition must identify:
+Every G6 feature/format addition had to identify:
 
 - the retained workload requiring it;
 - semantic/correctness/performance need;
 - portability effect;
-- observed evidence that justifies permanent public vocabulary.
+- observed evidence that justified permanent public vocabulary.
 
-Backend enum breadth alone is not evidence. Reaction diffusion may compare storage-buffer and storage-texture representations only when that comparison answers a concrete question.
+Backend enum breadth alone was not evidence. Reaction diffusion could compare storage-buffer and storage-texture representations only when that comparison answered a concrete question.
 
 # G7B — loss, generations, reconstruction, continuity
 
@@ -451,7 +470,7 @@ Persisted capture growth remains a Runenwerk/product concern unless a future acc
 
 **Role:** release conformance.
 
-**Semantic owner:** RunenGPU architecture design, external cutover and definition of done.
+**Semantic owner:** historical RunenGPU architecture design, external cutover and definition of done.
 
 **Evidence:** establish:
 
@@ -470,7 +489,7 @@ Persisted capture growth remains a Runenwerk/product concern unless a future acc
 
 **Role:** release conformance.
 
-The standalone package retains at minimum:
+The standalone package retained at minimum:
 
 - `G5-C01` prefix scan;
 - `G5-C02` Game of Life;
@@ -488,7 +507,7 @@ The standalone package retains at minimum:
 - `G7B-L01/L02` initialized/content continuity and reconstruction evidence;
 - applicable G8 diagnostics, operational, browser-claim, neutrality, and reproducibility-fact evidence.
 
-G5C renderer-cutover evidence remains Runenwerk integration history and is not falsely reclassified as a standalone package test. `GX-X01` independently proves the final external migration/deletion boundary.
+G5C renderer-cutover evidence remains Runenwerk integration history and is not falsely reclassified as a standalone package test. `GX-X01` independently proved the final external migration/deletion boundary.
 
 Unsupported hardware/environment paths produce structured skip/environment evidence rather than false success.
 
@@ -515,23 +534,23 @@ Unsupported hardware/environment paths produce structured skip/environment evide
 | G8-* | operational/architecture | diagnostics/profiling/browser/audits/facts | reports/captures as applicable |
 | GX-* | release | package/support/downstream/retained proof | runnable documented examples |
 
-# Normalized ownership stack
+# Normalized historical ownership stack
 
 ```text
 roadmap
-    phase order and dependencies only
+    historical phase order and dependencies
 
 phase / focused designs
-    semantic contracts and boundaries
+    historical semantic contracts and boundaries
 
 this matrix
-    proof role, evidence, and retained artifact requirements only
+    historical proof role, evidence, and retained artifact requirements
 
 GitHub issue
-    one active bounded implementation slice
+    historical bounded implementation activation
 
-workspace RON spec, only when useful after activation
-    subordinate implementation constraints
+workspace RON spec
+    historical subordinate implementation constraints
 
 pull request + exact-head CI
     delivery/review/validation evidence
@@ -540,15 +559,17 @@ investigation reports
     rationale/history, not acceptance authority
 ```
 
-Do not pre-create G5R/G6/G7B/G8/GX RON specs. Create one only after the corresponding bounded issue activates and structured handoff detail materially helps implementation.
+Current reusable RunenGPU authority is now the standalone repository rather than this
+historical stack.
 
 # Interpretation of older material
 
-1. Live/candidate status embedded in older RunenGPU designs is historical context; GitHub owns current state.
-2. The roadmap owns the post-G5C sequence; older future-tail text does not override it.
+1. Live/candidate status embedded in older RunenGPU designs is historical context; current standalone GitHub state owns current work.
+2. The former Runenwerk roadmap no longer owns standalone RunenGPU phase evolution.
 3. The proof-workload and ergonomics investigations remain rationale, not parallel acceptance authorities.
-4. The shader-authoring design remains the semantic owner for interface authority and frontend/toolchain policy until explicitly revised.
-5. G5R narrowly supersedes G3R's prepared-descriptor initialization rule; all other G3R requirement/effect distinctions remain unless explicitly revised.
+4. Current shader runtime admission belongs to standalone RunenGPU; current Runenwerk authoring/toolchain policy belongs to the active shader authoring policy.
+5. G5R historically narrowed G3R's prepared-descriptor initialization rule; current exact behavior belongs to standalone source/tests.
 6. Historical RON lifecycle/base/issue fields are snapshots and never determine current activation/completion.
 
-This interpretation is a compatibility rule for existing documentation, not permission to add new stale live-state prose to canonical designs.
+This interpretation preserves predecessor evidence without reactivating a Runenwerk-local
+RunenGPU authority.
