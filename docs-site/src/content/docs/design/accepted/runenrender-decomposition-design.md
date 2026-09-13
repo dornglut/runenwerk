@@ -5,7 +5,7 @@ status: accepted
 owner: render
 layer: framework/render
 canonical: true
-last_reviewed: 2026-09-12
+last_reviewed: 2026-09-13
 related_docs:
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
@@ -13,9 +13,7 @@ related_docs:
   - ../../adr/accepted/0017-cross-authority-consistency-and-graph-semantics.md
   - ../../adr/accepted/0018-semantic-federation-and-physical-realization.md
   - ../../adr/accepted/0021-ratify-runenrender-semantic-rendering-architecture.md
-  - ../active/runengpu-architecture-design.md
-  - ../active/runengpu-g3-access-work-graph-design.md
-  - ../active/runengpu-shader-authoring-artifact-boundary.md
+  - ../active/shader-authoring-and-canonical-artifact-policy.md
   - ../active/runenrender-internal-decomposition-execution-plan.md
   - ../../reports/investigations/2026-08-04-runenrender-long-term-capability-and-scalability-review.md
   - ../../reports/investigations/runenrender-extraction-investigation.md

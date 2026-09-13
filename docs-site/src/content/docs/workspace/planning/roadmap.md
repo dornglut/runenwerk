@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-09-09
+last_reviewed: 2026-09-13
 related_docs:
   - ../engineering-workflow.md
   - ../../architecture/runenwerk-platform-architecture.md
@@ -13,10 +13,8 @@ related_docs:
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
   - ../../adr/accepted/0015-separate-gpu-execution-from-rendering.md
   - ../../adr/accepted/0021-ratify-runenrender-semantic-rendering-architecture.md
-  - ../../design/active/runengpu-architecture-design.md
-  - ../../design/active/runengpu-post-g5c-hardening-design.md
-  - ../../design/active/runengpu-phase-requirements-proof-matrix.md
   - ../../design/accepted/runenrender-decomposition-design.md
+  - ../../design/active/runenrender-internal-decomposition-execution-plan.md
 ---
 
 # Roadmap
@@ -55,11 +53,12 @@ Target layering:
 ```text
 Runenwerk host, source, and product policy
     -> RunenRender semantic rendering and renderer-native planning/admission
-        -> RunenGPU generic resources, programs, work, realization, and execution
-            -> private WGPU backend
+        -> standalone RunenGPU public GPU-execution contracts
+            -> private backend implementation
 ```
 
-Non-render consumers may lower directly into RunenGPU without depending on RunenRender.
+Non-render consumers may use standalone RunenGPU directly without depending on
+RunenRender.
 
 ## RunenSDF extraction direction
 
@@ -69,71 +68,37 @@ product and domain integration above that boundary.
 Runenwerk now contains no `domain/sdf` package, source mirror, forwarding namespace,
 submodule, source include, or unused external dependency.
 
-## RunenGPU sequence
+## RunenGPU direction
 
-The durable RunenGPU program is ordered as:
+RunenGPU's internal G-phase proof/extraction program is complete as a Runenwerk
+predecessor program. Current reusable RunenGPU semantics, implementation, conformance,
+release policy, and future framework evolution belong to `dornglut/runen-gpu`.
 
-```text
-G1A logical resource identity
-    -> G2 capabilities and logical resources
-        -> G3 checked access and work graph
-            -> G4 backend realization and ownership cutover
-                -> G3R initialization-semantics correction
-                    -> G4R backend-baseline refresh
-                        -> G5A/B executable work and surface-independent execution lifecycle
-                            -> G7A minimal durable surface foundation
-                                -> G5C final renderer execution cutover
-                                    -> G5R initialization-materialization correction
-                                        -> G6 representative breadth, scale, ergonomics, offscreen proof, and cost characterization
-                                            -> G7B complete surface/device loss, generations, reconstruction, and retained-state continuity
-                                                -> G8 operational, diagnostics, browser, backend-neutrality, extension, and no-reach-through conformance
-                                                    -> GX standalone successor acceptance
-                                                        -> exact-revision Runenwerk consumer cutover and predecessor deletion
-```
-
-`G3R` and `G4R` are corrective predecessor phases discovered by G5 owner review. They are
-ordered deliberately: backend-independent semantic correctness is repaired first, then
-the corrected G1-G4 authority is re-proven against the refreshed private WGPU/Naga
-baseline.
-
-`G7A` is intentionally narrower than complete G7. It establishes only the durable
-generic surface identity/generation/capability/acquisition/presentation foundation
-required so the final G5C renderer cutover does not create a disposable pre-G7 surface
-execution architecture. Full loss/reconstruction policy remains G7B.
-
-`G5R` is a bounded correctness gate between final execution cutover and representative
-proof. It requires graph initialization truth and physical content materialization to
-agree before G6 may characterize performance, ergonomics, or application breadth. The
-focused post-G5C hardening design owns the detailed G5R/G6/G7B/G8/GX semantic gates; the
-RunenGPU phase requirements and proof matrix owns the corresponding retained proof roles
-and observable evidence/artifacts.
-
-G4 is itself ordered:
+Runenwerk's durable responsibility is downstream integration:
 
 ```text
-G4A context admission
-    -> G4B program/interface/pipeline contracts
-        -> G4C1 private resource realization
-            -> G4C2 private program/layout/binding realization
-                -> G4C3 private pipeline realization and final G4 cutover
+accepted standalone RunenGPU revision
+    -> exact Runenwerk dependency pin
+        -> Runenwerk / RunenRender integration validation
 ```
 
-Each phase consumes accepted predecessor authority, not an unmerged implementation
-branch. The owning GitHub issue determines whether a phase is proposed, active, blocked,
-or complete at any particular time.
+A moving standalone branch is not Runenwerk's compatibility contract. Repinning to a
+new accepted RunenGPU revision is an explicit integration change with its own validation.
+Runenwerk does not keep a parallel G-phase roadmap, semantic design set, or framework
+proof matrix after the authority transfer.
 
-Detailed semantic contracts belong to accepted RunenGPU designs. Proof roles,
-observable evidence, and retained artifact requirements belong to the RunenGPU proof
-matrix. A workspace RON spec is subordinate implementation-handoff detail created only
-when an activated bounded slice benefits from it; this roadmap does not duplicate any
-of those requirements.
+Historical G1A-G8/GX ordering and retained proof-role identifiers remain available as
+noncanonical evidence in the
+[RunenGPU historical proof report](../../reports/design/runengpu-phase-requirements-proof-matrix.md)
+and Git history. They are not current activation or framework-roadmap authority.
 
 ## RunenRender sequence
 
-RunenRender remains downstream of RunenGPU. ADR 0021 establishes semantic rendering as
-its mission and inserts a mandatory pre-implementation R0 architecture gate.
+RunenRender remains downstream of standalone RunenGPU. ADR 0021 establishes semantic
+rendering as its mission and the accepted RunenRender design owns the permanent semantic
+architecture.
 
-The permanent normalized direction is:
+The normalized direction is:
 
 ```text
 RenderSceneStore
@@ -172,17 +137,15 @@ R8  generality, scale, public-surface qualification, conformance, and extraction
 RX  standalone RunenRender transfer and clean cutover
 ```
 
-R0 is architecture/documentation only. It is a prerequisite for any R1 Rust activation.
-
-The canonical RunenRender architecture owns detailed semantics and conformance. The
-owning issues determine activation and current status.
+R0 is architecture/documentation only. The canonical RunenRender design owns detailed
+semantics and conformance; the active RunenRender execution plan owns durable delivery
+boundaries. GitHub issues determine activation and current status.
 
 ## Other repository-family programs
 
-RunenSDF remains the accepted standalone field-mathematics authority. RunenECS,
-RunenSpatial, and RunenUI continue through separately owned programs and may proceed in
-parallel only when repository, branch, workspace, files, authority, and dependencies do
-not conflict.
+RunenSDF and RunenGPU are standalone semantic owners. RunenECS, RunenSpatial, and RunenUI
+continue through separately owned programs and may proceed in parallel only when
+repository, branch, workspace, files, authority, and dependencies do not conflict.
 
 A cross-family dependency belongs here only when it is durable architecture or sequence,
 not merely because one current implementation happens to be waiting for another.
@@ -195,7 +158,9 @@ not merely because one current implementation happens to be waiting for another.
    exact accepted revisions, or completion tables into this page.
 3. Do not use the roadmap to authorize implementation. An owning GitHub issue activates
    work and a reviewed pull request delivers it.
-4. Detailed architecture and public contracts belong in accepted ADRs/designs, not in
-   roadmap prose.
+4. Detailed architecture and public contracts belong in accepted ADRs/designs or the
+   standalone framework owner, not in roadmap prose.
 5. Historical chronology belongs in reports, closeouts, pull requests, and Git history.
-6. Change this roadmap only when durable sequence or dependency truth changes.
+6. Do not keep a Runenwerk-local semantic roadmap for a framework after standalone
+   authority transfer.
+7. Change this roadmap only when durable sequence or dependency truth changes.
