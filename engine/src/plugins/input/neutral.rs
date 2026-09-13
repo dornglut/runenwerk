@@ -326,9 +326,7 @@ fn is_finite(observation: &InputObservation) -> bool {
         }
         InputObservation::Scroll { delta, domain } => {
             let _ = domain;
-            delta
-                .horizontal
-                .is_none_or(|value| value.is_finite())
+            delta.horizontal.is_none_or(|value| value.is_finite())
                 && delta.vertical.is_none_or(|value| value.is_finite())
         }
         InputObservation::Contact {
