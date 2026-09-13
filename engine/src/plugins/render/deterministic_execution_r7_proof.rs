@@ -34,10 +34,10 @@ use super::surface_input::{
     RenderSurfaceSemanticInputRequirement,
 };
 use runen_gpu::{
-    GpuBufferDescriptor, GpuBufferInitialization, GpuBufferUsage, GpuCapabilityProfile, GpuContext,
-    GpuContextDescriptor, GpuContextRequestErrorCategory, GpuReadbackId, GpuReadbackStatus,
-    GpuReconstruction, GpuResourceLifetime, GpuSubmission, GpuSubmissionStatus,
-    GpuWorkResourceIdAllocator,
+    GpuCapabilityProfile, GpuContext, GpuContextDescriptor, GpuContextRequestErrorCategory,
+    GpuFormatRole, GpuReadbackId, GpuReadbackStatus, GpuReconstruction, GpuResourceLifetime,
+    GpuSubmission, GpuSubmissionStatus, GpuTextureDescriptor, GpuTextureFormat,
+    GpuTextureInitialization, GpuTextureUsage, GpuWorkResourceIdAllocator,
 };
 use std::time::{Duration, Instant};
 
@@ -124,7 +124,8 @@ fn maintained_fixture() -> MaintainedExecutionFixture {
             0,
             RenderOutputSpec::new(
                 RenderOutputValue::ObjectIdentity,
-                RenderResultTopology::scalar(),
+                RenderResultTopology::sample_lattice_2d(1, 1)
+                    .expect("R7 maintained 1x1 lattice topology"),
                 RenderSemanticTolerance::exact(),
             )
             .expect("R7 maintained object-identity output"),
@@ -155,6 +156,7 @@ fn maintained_fixture() -> MaintainedExecutionFixture {
 fn request_execution_context() -> Option<GpuContext> {
     let descriptor =
         GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements())
+            .require_format_role(GpuTextureFormat::R32Uint, GpuFormatRole::CopyDestination)
             .with_label("RunenRender R7 maintained execution proof");
     match pollster::block_on(GpuContext::request(descriptor)) {
         Ok(context) => Some(context),
@@ -177,21 +179,23 @@ fn admit_with_writable_only_destination(
 ) -> AdmittedDeterministicRender {
     let mut allocator = GpuWorkResourceIdAllocator::new();
     let destination = allocator
-        .allocate_buffer_handle(
-            GpuBufferDescriptor::ordinary_owned(
+        .allocate_texture_handle(
+            GpuTextureDescriptor::ordinary_owned_2d(
                 label,
                 GpuResourceLifetime::Transient,
                 GpuReconstruction::SourceBacked,
-                4,
-                [GpuBufferUsage::CopyDestination],
-                GpuBufferInitialization::Uninitialized,
+                1,
+                1,
+                GpuTextureFormat::R32Uint,
+                [GpuTextureUsage::CopyDestination],
+                GpuTextureInitialization::Uninitialized,
             )
-            .expect("R7 maintained writable-only scalar descriptor"),
+            .expect("R7 maintained writable-only lattice descriptor"),
         )
-        .expect("R7 maintained writable-only scalar handle");
+        .expect("R7 maintained writable-only lattice handle");
     let output_bindings = [RenderOutputBinding::new(
         0,
-        RenderOutputDestination::ScalarBuffer(destination),
+        RenderOutputDestination::SampleLatticeTexture(destination),
     )];
     admit_deterministic_render(
         &fixture.scene,
