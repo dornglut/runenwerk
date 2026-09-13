@@ -18,7 +18,7 @@ related:
   - ./ui-game-and-worldspace-host-requirements-design.md
   - ./ui-accessibility-internationalization-and-text-conformance-design.md
   - ./ui-testing-conformance-and-proof-matrix-design.md
-  - ./ui-program-architecture.md
+  - ../implemented/ui-program-architecture.md
   - ./runenwerk-typed-app-composition-plugin-framework-design.md
 ---
 

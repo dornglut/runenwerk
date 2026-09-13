@@ -21,8 +21,8 @@ related:
   - ./ui-devtools-inspection-and-workbench-design.md
   - ./ui-testing-conformance-and-proof-matrix-design.md
   - ./ui-package-security-versioning-and-migration-design.md
-  - ./ui-program-architecture.md
-  - ./ui-program-architecture-owner-map.md
+  - ../implemented/ui-program-architecture.md
+  - ../implemented/ui-program-architecture-owner-map.md
   - ./domain-authoring-source-and-program-pattern.md
 ---
 

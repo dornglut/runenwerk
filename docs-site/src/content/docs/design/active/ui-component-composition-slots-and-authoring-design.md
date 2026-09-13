@@ -12,7 +12,7 @@ related:
   - ./ui-reactive-runtime-and-invalidation-design.md
   - ./ui-live-editing-and-preview-design.md
   - ./ui-layout-style-theme-and-motion-design.md
-  - ./ui-program-architecture-owner-map.md
+  - ../implemented/ui-program-architecture-owner-map.md
 ---
 
 # UI Component Composition Slots And Authoring Design

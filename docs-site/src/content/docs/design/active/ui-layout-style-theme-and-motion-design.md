@@ -12,7 +12,7 @@ related:
   - ./ui-accessibility-internationalization-and-text-conformance-design.md
   - ./ui-performance-virtualization-assets-and-profiling-design.md
   - ./ui-game-and-worldspace-host-requirements-design.md
-  - ./ui-program-architecture-owner-map.md
+  - ../implemented/ui-program-architecture-owner-map.md
 ---
 
 # UI Layout Style Theme And Motion Design

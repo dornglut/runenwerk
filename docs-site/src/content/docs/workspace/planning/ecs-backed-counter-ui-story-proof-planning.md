@@ -10,7 +10,7 @@ related_docs:
   - ../../design/active/ui-framework-app-integration-direction-review.md
   - ../../design/active/runenwerk-ui-story-driven-golden-workflow-design.md
   - ../../design/active/ui-runtime-rendering-pipeline-roadmap.md
-  - ../../design/active/ui-program-architecture.md
+  - ../../design/implemented/ui-program-architecture.md
   - ../../design/active/editor-ui-runtime-v2-and-interaction-formation-design.md
   - ../../adr/accepted/0009-ui-interaction-formation-v2.md
   - ../../domain/ui/roadmap.md
@@ -101,7 +101,7 @@ Supporting authority:
 docs-site/src/content/docs/domain/ui/roadmap.md
 docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
 docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md
-docs-site/src/content/docs/design/active/ui-program-architecture.md
+docs-site/src/content/docs/design/implemented/ui-program-architecture.md
 docs-site/src/content/docs/adr/accepted/0009-ui-interaction-formation-v2.md
 ```
 

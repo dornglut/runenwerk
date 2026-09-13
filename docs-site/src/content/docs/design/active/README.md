@@ -144,8 +144,6 @@ active design contains older conflicting target language.
 - [Live UiPlugin Runtime Full Cutover Plan](live-uiplugin-runtime-full-cutover-plan.md)
 - [Runenwerk UI Platform Capability Roadmap](runenwerk-ui-platform-capability-roadmap.md)
 - [Runenwerk UI Story Driven Golden Workflow Design](runenwerk-ui-story-driven-golden-workflow-design.md)
-- [UI Program Architecture](ui-program-architecture.md)
-- [UI Program Architecture Owner Map](ui-program-architecture-owner-map.md)
 - [UI Program Contract Design](ui-program-contract-design.md)
 - [UI Program Proof Slice Plan](ui-program-proof-slice-plan.md)
 - [UI Runtime Rendering Pipeline Roadmap](ui-runtime-rendering-pipeline-roadmap.md)

@@ -11,7 +11,7 @@ related:
   - ./ui-performance-virtualization-assets-and-profiling-design.md
   - ./ui-reactive-runtime-and-invalidation-design.md
   - ./ui-game-and-worldspace-host-requirements-design.md
-  - ./ui-program-architecture-owner-map.md
+  - ../implemented/ui-program-architecture-owner-map.md
 ---
 
 # UI Render Output And Host Renderer Boundary Design

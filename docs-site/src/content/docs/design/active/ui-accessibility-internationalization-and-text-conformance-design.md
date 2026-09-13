@@ -12,7 +12,7 @@ related:
   - ./ui-reactive-runtime-and-invalidation-design.md
   - ./ui-data-binding-forms-and-effects-design.md
   - ./ui-platform-input-windowing-and-os-integration-design.md
-  - ./ui-program-architecture-owner-map.md
+  - ../implemented/ui-program-architecture-owner-map.md
 ---
 
 # UI Accessibility Internationalization And Text Conformance Design

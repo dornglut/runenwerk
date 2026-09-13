@@ -8,7 +8,7 @@ canonical: true
 last_reviewed: 2026-06-16
 related_designs:
   - ./ui-runtime-rendering-pipeline-roadmap.md
-  - ./ui-program-architecture.md
+  - ../implemented/ui-program-architecture.md
   - ./ui-program-contract-design.md
 related_docs:
   - ../../domain/ui/architecture.md
