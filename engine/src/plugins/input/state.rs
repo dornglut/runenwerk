@@ -1,7 +1,7 @@
 use super::neutral::{
     AnalogMeasurement, ContactId, ContactPhase as NeutralContactPhase, ControlId, CoordinateSpace,
     DigitalTransition, InputObservation, InputSourceId, MeasurementDomain, NeutralInputAuthority,
-    ObservationGroup, Point2, RelativeMotionUnit, ScrollDomain, Vector2,
+    ObservationGroup, Point2, RelativeMotionUnit, ScrollDelta, ScrollDomain, Vector2,
 };
 use crate::plugins::{
     InputBindingChange, InputBindingChangeResult, InputBindings, KeyChord, action,
@@ -417,7 +417,7 @@ impl InputState {
             .admit(ObservationGroup::single(
                 LEGACY_WINDOW_SOURCE,
                 InputObservation::Scroll {
-                    delta: Vector2::new(0.0, delta),
+                    delta: ScrollDelta::legacy_vertical(delta),
                     domain: ScrollDomain::LegacyVerticalScalarUnknown,
                 },
             ))

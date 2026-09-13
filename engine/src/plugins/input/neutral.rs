@@ -125,6 +125,21 @@ impl Vector2 {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct ScrollDelta {
+    pub(crate) horizontal: Option<f32>,
+    pub(crate) vertical: Option<f32>,
+}
+
+impl ScrollDelta {
+    pub(crate) const fn legacy_vertical(vertical: f32) -> Self {
+        Self {
+            horizontal: None,
+            vertical: Some(vertical),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct AnalogMeasurement {
     pub(crate) value: f32,
     pub(crate) domain: MeasurementDomain,
@@ -150,7 +165,7 @@ pub(crate) enum InputObservation {
         unit: RelativeMotionUnit,
     },
     Scroll {
-        delta: Vector2,
+        delta: ScrollDelta,
         domain: ScrollDomain,
     },
     Contact {
@@ -311,7 +326,10 @@ fn is_finite(observation: &InputObservation) -> bool {
         }
         InputObservation::Scroll { delta, domain } => {
             let _ = domain;
-            delta.x.is_finite() && delta.y.is_finite()
+            delta
+                .horizontal
+                .is_none_or(|value| value.is_finite())
+                && delta.vertical.is_none_or(|value| value.is_finite())
         }
         InputObservation::Contact {
             position, pressure, ..
@@ -433,6 +451,21 @@ mod tests {
             ))
             .expect("cancel should admit");
         assert!(!authority.control_down(SOURCE_A, CONTROL));
+    }
+
+    #[test]
+    fn legacy_scalar_scroll_keeps_horizontal_absent_not_measured_zero() {
+        let delta = ScrollDelta::legacy_vertical(0.0);
+
+        assert_eq!(delta.horizontal, None);
+        assert_eq!(delta.vertical, Some(0.0));
+        assert_ne!(
+            delta,
+            ScrollDelta {
+                horizontal: Some(0.0),
+                vertical: Some(0.0),
+            }
+        );
     }
 
     #[test]
