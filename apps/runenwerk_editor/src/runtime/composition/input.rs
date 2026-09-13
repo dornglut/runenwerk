@@ -215,11 +215,7 @@ fn pointer_button(button: EnginePointerButton) -> Option<PointerButton> {
     }
 }
 
-fn update_modifiers(
-    modifiers: &mut Modifiers,
-    key: &PhysicalKeyIdentity,
-    state: DigitalState,
-) {
+fn update_modifiers(modifiers: &mut Modifiers, key: &PhysicalKeyIdentity, state: DigitalState) {
     let pressed = state == DigitalState::Pressed;
     let PhysicalKeyIdentity::Code(code) = key else {
         return;
@@ -279,9 +275,7 @@ fn key_from_physical(key: &PhysicalKeyIdentity) -> Option<Key> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use engine::plugins::{
-        ContactInput, CoordinateSpace, InputContext, InputSourceId, Point2,
-    };
+    use engine::plugins::{ContactInput, CoordinateSpace, InputContext, InputSourceId, Point2};
 
     fn test_context() -> InputContext {
         InputContext::new(InputSourceId::new(1), None)
