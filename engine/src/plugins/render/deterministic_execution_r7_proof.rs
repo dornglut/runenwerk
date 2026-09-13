@@ -21,9 +21,9 @@ use super::representation::{
     RenderSurfaceProtocolEvidence,
 };
 use super::request::{
-    RenderObservationSpec, RenderOutputSpec, RenderOutputValue, RenderPerspectiveObservation,
-    RenderRequest, RenderRequestedOutput, RenderResultTopology, RenderSamplingSupport,
-    RenderSemanticTolerance,
+    RenderDistanceConvention, RenderObservationSpec, RenderOutputSpec, RenderOutputValue,
+    RenderPerspectiveObservation, RenderRequest, RenderRequestedOutput, RenderResultTopology,
+    RenderSamplingSupport, RenderSemanticTolerance,
 };
 use super::scene::{RenderObjectState, RenderSceneSnapshot, RenderSceneStore, RenderSceneUpdate};
 use super::space_time::{
@@ -155,6 +155,51 @@ fn maintained_fixture() -> MaintainedExecutionFixture {
     }
 }
 
+fn reordered_8x6_request() -> RenderRequest {
+    let shutter = instant();
+    let observation = RenderObservationSpec::Perspective(
+        RenderPerspectiveObservation::new(
+            RenderAffineTransform3::identity(),
+            std::f64::consts::FRAC_PI_2 * 1.25,
+            8.0 / 6.0,
+            shutter,
+            RenderSamplingSupport::ideal_ray(),
+        )
+        .expect("semantically legal wide R7 perspective"),
+    );
+    let lattice = || {
+        RenderResultTopology::sample_lattice_2d(8, 6)
+            .expect("R7 maintained structural 8x6 lattice")
+    };
+    RenderRequest::new(
+        shutter,
+        vec![observation],
+        vec![
+            RenderRequestedOutput::new(
+                0,
+                RenderOutputSpec::new(
+                    RenderOutputValue::ObjectIdentity,
+                    lattice(),
+                    RenderSemanticTolerance::exact(),
+                )
+                .expect("R7 reordered identity output"),
+            ),
+            RenderRequestedOutput::new(
+                0,
+                RenderOutputSpec::new(
+                    RenderOutputValue::Distance {
+                        convention: RenderDistanceConvention::ObservationForwardDepth,
+                    },
+                    lattice(),
+                    RenderSemanticTolerance::exact(),
+                )
+                .expect("R7 reordered depth output"),
+            ),
+        ],
+    )
+    .expect("R7 reordered 8x6 request")
+}
+
 fn request_execution_context() -> Option<GpuContext> {
     let descriptor =
         GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements())
@@ -208,6 +253,33 @@ fn admit_with_writable_only_destination(
         context,
     )
     .expect("R7 maintained fixture must reach maintained deterministic admission")
+}
+
+fn lattice_bindings(width: u32, height: u32, output_count: usize) -> Vec<RenderOutputBinding> {
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    (0..output_count)
+        .map(|output_index| {
+            let destination = allocator
+                .allocate_texture_handle(
+                    GpuTextureDescriptor::ordinary_owned_2d(
+                        format!("R7 structural output {output_index}"),
+                        GpuResourceLifetime::Transient,
+                        GpuReconstruction::SourceBacked,
+                        width,
+                        height,
+                        GpuTextureFormat::R32Uint,
+                        [GpuTextureUsage::CopyDestination],
+                        GpuTextureInitialization::Uninitialized,
+                    )
+                    .expect("R7 structural lattice descriptor"),
+                )
+                .expect("R7 structural lattice handle");
+            RenderOutputBinding::new(
+                output_index,
+                RenderOutputDestination::SampleLatticeTexture(destination),
+            )
+        })
+        .collect()
 }
 
 fn wait_for_submission(context: &GpuContext, submission: &GpuSubmission) {
@@ -339,4 +411,51 @@ fn maintained_execution_keeps_ordinary_unobserved_and_verified_same_submission_o
         verified.submitted().submission().status(),
         GpuSubmissionStatus::Completed
     ));
+}
+
+#[test]
+fn maintained_ordinary_execution_supports_reordered_8x6_subset_outside_verifier_domain() {
+    let Some(context) = request_execution_context() else {
+        return;
+    };
+    let fixture = maintained_fixture();
+    let request = reordered_8x6_request();
+    let output_bindings = lattice_bindings(8, 6, request.outputs().len());
+    let admitted = admit_deterministic_render(
+        &fixture.scene,
+        &request,
+        &fixture.semantic_inputs,
+        &fixture.availability,
+        &output_bindings,
+        &context,
+    )
+    .expect("wide reordered 8x6 subset must remain legal maintained evaluator work");
+
+    let requested = admitted.admitted().plan().request().outputs();
+    assert_eq!(requested.len(), 2, "structural proof intentionally uses an output subset");
+    assert!(matches!(
+        requested[0].spec().value(),
+        RenderOutputValue::ObjectIdentity
+    ));
+    assert!(matches!(
+        requested[1].spec().value(),
+        RenderOutputValue::Distance {
+            convention: RenderDistanceConvention::ObservationForwardDepth
+        }
+    ));
+    for output in requested {
+        assert_eq!(
+            output.spec().topology().sample_lattice_dimensions(),
+            Some((8, 6)),
+            "maintained topology must come from the exact request"
+        );
+    }
+
+    let submitted = pollster::block_on(submit_deterministic_render(admitted, &context))
+        .expect("reordered 8x6 subset must submit through ordinary maintained execution");
+    assert!(
+        submitted.submission().readbacks().is_empty(),
+        "structural ordinary execution must not gain verification readbacks"
+    );
+    wait_for_submission(&context, submitted.submission());
 }
