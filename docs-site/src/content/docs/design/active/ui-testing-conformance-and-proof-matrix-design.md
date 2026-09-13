@@ -17,7 +17,7 @@ related:
   - ./ui-render-output-and-host-renderer-boundary-design.md
   - ./ui-platform-input-windowing-and-os-integration-design.md
   - ./ui-devtools-inspection-and-workbench-design.md
-  - ./ui-program-architecture-owner-map.md
+  - ../implemented/ui-program-architecture-owner-map.md
 ---
 
 # UI Testing Conformance And Proof Matrix Design

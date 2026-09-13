@@ -9,8 +9,8 @@ last_reviewed: 2026-08-12
 related:
   - ../architecture/runenwerk-platform-architecture.md
   - ./architecture.md
-  - ../design/active/ui-program-architecture.md
-  - ../design/active/ui-program-architecture-owner-map.md
+  - ../design/implemented/ui-program-architecture.md
+  - ../design/implemented/ui-program-architecture-owner-map.md
   - ../adr/accepted/0017-cross-authority-consistency-and-graph-semantics.md
   - ../adr/accepted/0018-semantic-federation-and-physical-realization.md
 ---

@@ -13,8 +13,8 @@ related_docs:
   - ./runenwerk-ui-platform-capability-roadmap.md
   - ./runenwerk-ui-story-driven-golden-workflow-design.md
   - ./ui-runtime-rendering-pipeline-roadmap.md
-  - ./ui-program-architecture.md
-  - ./ui-program-architecture-owner-map.md
+  - ../implemented/ui-program-architecture.md
+  - ../implemented/ui-program-architecture-owner-map.md
   - ./editor-ui-runtime-v2-and-interaction-formation-design.md
   - ../../adr/accepted/0009-ui-interaction-formation-v2.md
   - ./runenwerk-typed-app-composition-plugin-framework-design.md
@@ -81,8 +81,8 @@ This direction review is based on the following current authorities and code-sta
 ```text
 docs-site/src/content/docs/domain/ui/architecture.md
 docs-site/src/content/docs/domain/ui/roadmap.md
-docs-site/src/content/docs/design/active/ui-program-architecture.md
-docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md
+docs-site/src/content/docs/design/implemented/ui-program-architecture.md
+docs-site/src/content/docs/design/implemented/ui-program-architecture-owner-map.md
 docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
 docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
 docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md

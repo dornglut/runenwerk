@@ -9,8 +9,8 @@ last_reviewed: 2026-08-04
 related_docs:
   - ./runenwerk-typed-app-composition-plugin-framework-design.md
   - ./runenwerk-domain-workbench-north-star.md
-  - ./ui-program-architecture.md
-  - ./ui-program-architecture-owner-map.md
+  - ../implemented/ui-program-architecture.md
+  - ../implemented/ui-program-architecture-owner-map.md
   - ./ui-component-platform-base-control-packages-design.md
   - ./ui-component-platform-ownership-realignment-design.md
   - ../../workspace/engineering-workflow.md

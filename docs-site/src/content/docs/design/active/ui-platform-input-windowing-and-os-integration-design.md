@@ -12,7 +12,7 @@ related:
   - ./ui-accessibility-internationalization-and-text-conformance-design.md
   - ./ui-game-and-worldspace-host-requirements-design.md
   - ./ui-package-security-versioning-and-migration-design.md
-  - ./ui-program-architecture-owner-map.md
+  - ../implemented/ui-program-architecture-owner-map.md
 ---
 
 # UI Platform Input Windowing And OS Integration Design

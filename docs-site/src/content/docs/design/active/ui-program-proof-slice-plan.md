@@ -7,7 +7,7 @@ layer: domain
 canonical: true
 last_reviewed: 2026-05-31
 related:
-  - ./ui-program-architecture.md
+  - ../implemented/ui-program-architecture.md
   - ./runenwerk-domain-workbench-north-star.md
   - ../../domain/ui/architecture.md
   - ../../domain/ui/roadmap.md
@@ -18,7 +18,7 @@ related:
 ## 1. Status And Authority
 
 This document is the bounded proof-slice planning contract for Stage 6 of
-[UI Program Architecture](./ui-program-architecture.md), under the accepted
+[UI Program Architecture](../implemented/ui-program-architecture.md), under the accepted
 [Runenwerk Domain Workbench North Star](./runenwerk-domain-workbench-north-star.md).
 
 It treats UI Program Architecture as accepted design direction. It does not

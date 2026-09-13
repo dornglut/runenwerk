@@ -10,8 +10,8 @@ related:
   - ./ui-framework-runtime-requirements-design.md
   - ./ui-reactive-runtime-and-invalidation-design.md
   - ./ui-source-projection-and-program-lowering-design.md
-  - ./ui-program-architecture.md
-  - ./ui-program-architecture-owner-map.md
+  - ../implemented/ui-program-architecture.md
+  - ../implemented/ui-program-architecture-owner-map.md
 ---
 
 # UI Live Editing And Preview Design

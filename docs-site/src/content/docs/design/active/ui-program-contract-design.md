@@ -8,7 +8,7 @@ canonical: false
 last_reviewed: 2026-05-31
 related:
   - ./runenwerk-domain-workbench-north-star.md
-  - ./ui-program-architecture.md
+  - ../implemented/ui-program-architecture.md
   - ./ui-program-proof-slice-plan.md
   - ../../reports/audits/pt-ui-program-truth-claim-correction.md
 ---

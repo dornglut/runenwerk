@@ -39,6 +39,8 @@ checked against code, tests, closeout evidence, and known drift.
 
 - [UI Definition Formation Framework Design](ui-definition-formation-foundation-design.md)
 - [Editor UI Runtime V2 And Interaction Formation Design](editor-ui-runtime-v2-and-interaction-formation-design.md)
+- [UI Program Architecture](ui-program-architecture.md)
+- [UI Program Architecture Owner Map](ui-program-architecture-owner-map.md)
 
 ### Engine Runtime
 

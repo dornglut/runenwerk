@@ -12,7 +12,7 @@ related:
   - ../../design/active/runenwerk-ui-story-driven-golden-workflow-design.md
   - ../../design/active/runenwerk-ui-platform-capability-roadmap.md
   - ../../design/active/ui-runtime-rendering-pipeline-roadmap.md
-  - ../../design/active/ui-program-architecture.md
+  - ../../design/implemented/ui-program-architecture.md
   - ../../design/implemented/ui-definition-formation-foundation-design.md
   - ../../reports/audits/editor-ui-priority-code-audit-2026-05-05.md
   - ../../design/implemented/editor-self-authoring-and-final-ui-design.md
