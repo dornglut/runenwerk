@@ -122,7 +122,8 @@ A state item may be installed as bare **App-owned runtime/integration state** on
 all of the following hold:
 
 1. Runenwerk application/runtime-integration semantics own the invariant.
-2. Every currently supported App host/runtime path requiring that invariant needs it.
+2. Every currently supported App runtime path requires it, independent of optional
+   capabilities and Host realization.
 3. It remains meaningful with every optional domain/product capability absent.
 4. Its absence invalidates the App runtime itself rather than one optional capability.
 5. Installing it does not manufacture foreign semantic authority or a fake host or
@@ -217,6 +218,10 @@ Terminal host/process shutdown follows the `Running -> Terminating -> Terminated
 ### 8. Startup is one-shot and fail-stop for the runtime instance
 
 The App Startup lifecycle attempt is one-shot for one runtime instance.
+
+The runtime must record that Startup has been attempted **before** the first Startup
+system can execute. A returned error or caught unwind must therefore never make the same
+partially mutated runtime eligible for an implicit retry.
 
 If Startup succeeds, the runtime enters `Running` and Startup is never executed again.
 If Startup returns an error or panics after execution has begun:
