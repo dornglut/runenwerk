@@ -78,7 +78,7 @@ struct WindowPlugin;
 impl Plugin for WindowPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(default_plugins());
-        app.add_systems(Update, update_title.after(CoreSet::Time));
+        app.add_systems(Update, update_title);
     }
 }
 
@@ -94,6 +94,11 @@ fn main() -> Result<()> {
     app.run()
 }
 ```
+
+`TimePlugin` updates time in `PreUpdate`. The Engine lifecycle runs `PreUpdate`
+before `Update`, so an `Update` system already observes the current time without
+an ECS ordering declaration. ECS `before` / `after` references are schedule-local
+and must not be used to represent the Engine's order between schedules.
 
 Windowed apps default to `FramePacingPolicyResource::continuous_capped(60)`.
 Use `App::with_frame_pacing(FramePacingPolicyResource::on_demand())` for tools

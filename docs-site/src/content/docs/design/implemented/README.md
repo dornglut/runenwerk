@@ -41,6 +41,23 @@ checked against code, tests, closeout evidence, and known drift.
 - [Editor UI Runtime V2 And Interaction Formation Design](editor-ui-runtime-v2-and-interaction-formation-design.md)
 - [UI Program Architecture](ui-program-architecture.md)
 - [UI Program Architecture Owner Map](ui-program-architecture-owner-map.md)
+- [UI Component Platform Accessibility / Focus / Inspection Design](ui-component-platform-accessibility-focus-inspection-design.md)
+- [UI Component Platform Authoring Kit Design](ui-component-platform-authoring-kit-design.md)
+- [UI Component Platform Base Control Packages Design](ui-component-platform-base-control-packages-design.md)
+- [UI Component Platform Catalog / Discovery / Inspection Design](ui-component-platform-catalog-discovery-inspection-design.md)
+- [UI Component Platform Control Kernel Design](ui-component-platform-control-kernel-design.md)
+- [UI Component Platform Executable Interaction Story Design](ui-component-platform-executable-interaction-story-design.md)
+- [UI Component Platform Generic Interaction Design](ui-component-platform-generic-interaction-design.md)
+- [UI Component Platform Generic Text Design](ui-component-platform-generic-text-design.md)
+- [UI Component Platform Input / Gesture / Device Design](ui-component-platform-input-gesture-device-design.md)
+- [UI Component Platform Layout / Container / Virtualization Design](ui-component-platform-layout-container-virtualization-design.md)
+- [UI Component Platform Overlay / Popup / Layering Design](ui-component-platform-overlay-popup-layering-design.md)
+- [UI Component Platform Render Surface Output Design](ui-component-platform-render-surface-output-design.md)
+- [UI Component Platform State Binding / Host Intent Design](ui-component-platform-state-binding-host-intent-design.md)
+- [UI Component Platform Story Proof Envelope Design](ui-component-platform-story-proof-envelope-design.md)
+- [UI Component Platform Surface2D Design](ui-component-platform-surface2d-design.md)
+- [UI Component Platform Text Editing / Editable Text Behavior Design](ui-component-platform-text-editing-design.md)
+- [UI Component Platform Theme / State / Style Design](ui-component-platform-theme-state-style-design.md)
 
 ### Engine Runtime
 

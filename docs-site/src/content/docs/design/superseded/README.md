@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-09-12
+last_reviewed: 2026-09-13
 ---
 
 # Superseded Designs
@@ -25,6 +25,9 @@ No superseded foundation design documents are currently tracked in this folder.
 ### UI Domain
 
 - [Runenwerk UI Platform Capability Roadmap](runenwerk-ui-platform-capability-roadmap.md)
+- [UI Program Contract Design](ui-program-contract-design.md)
+- [UI Runtime Rendering Pipeline Roadmap](ui-runtime-rendering-pipeline-roadmap.md)
+- [UI Component Platform Ownership Realignment Design](ui-component-platform-ownership-realignment-design.md)
 
 ### Engine Runtime
 
@@ -34,7 +37,8 @@ No superseded foundation design documents are currently tracked in this folder.
 
 ### App / Tooling
 
-No superseded app/tooling design documents are currently tracked in this folder.
+- [Runenwerk Typed App Composition Plugin Framework Design](runenwerk-typed-app-composition-plugin-framework-design.md)
+- [Runenwerk Typed App Composition Plugin Framework Roadmap](runenwerk-typed-app-composition-plugin-framework-implementation-roadmap.md)
 
 ### Workspace / Cross-Domain
 

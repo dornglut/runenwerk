@@ -26,6 +26,10 @@ Use this folder for designs that remain valid but are intentionally postponed.
 
 - [UI Model Multiple Execution Strategies Design](ui-model-multiple-execution-strategies-design.md)
 
+### Application Composition / App Proof
+
+- [Typed App Program And UI Proof Design](typed-app-program-and-ui-proof-design.md)
+
 ### Gameplay Domain
 
 - [Architecture Review Summary](domain-gameplay-architecture-review-evaluation.md)
@@ -42,6 +46,7 @@ Use this folder for designs that remain valid but are intentionally postponed.
 - [Game Runtime, Editor, ECS, Scripting, and Hot Reload Preserved Target Draft](engine-game-runtime-editor-ecs-scripting-hot-reload-preserved-target-draft.md)
 - [ECS Parallel System Execution Design](ecs-parallel-system-execution-design.md)
 - [Game Runtime UI Projection And HUD Platform](game-runtime-ui-projection-and-hud-platform-design.md)
+- [Live UiPlugin Runtime And Surface Frame Rendering](live-uiplugin-runtime-and-surface-frame-rendering-design.md)
 - [Sparse SDF Terrain Runtime Integration](sparse-sdf-terrain-runtime-integration-design.md)
 - [Viewport Camera And Projection Contract Platform](viewport-camera-and-projection-contract-platform-design.md)
 

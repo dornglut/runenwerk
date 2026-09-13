@@ -50,11 +50,15 @@ Client state is isolated:
 
 Fixed-step execution is explicit:
 
-- `prediction_step_system` in `NetFixedSet::Prediction` (after `CoreSet::Simulation`)
-- `replication_step_system` in `NetFixedSet::Replication`
-- `Replication` runs after `Simulation` and prediction
+- `prediction_step_system` belongs to `NetFixedSet::Prediction`.
+- `replication_step_system` belongs to `NetFixedSet::Replication`.
+- `Prediction -> Replication` is the intrinsic required Net relation.
+- When a same-`FixedUpdate` `CoreSet::Simulation` owner is present, explicit
+  optional-presence references place relevant Net work after it.
 
-This avoids registration-order coupling.
+The Simulation relation is conditional because valid network assemblies may not
+install a Simulation owner. When that owner is present, the explicit
+same-schedule relation avoids registration-order coupling.
 
 ## Resource Contract
 

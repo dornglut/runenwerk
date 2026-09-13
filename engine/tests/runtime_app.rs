@@ -162,7 +162,7 @@ impl Plugin for DemoLogicPlugin {
             Update,
             (
                 inject_demo_input.in_set(CoreSet::Input),
-                update_demo_title.after(CoreSet::Input).after(CoreSet::Time),
+                update_demo_title.after(CoreSet::Input),
             ),
         );
     }

@@ -1,318 +1,263 @@
 ---
-title: Runenwerk UI Story Acceptance and Review Checklist
-description: Acceptance, proof, and review checklist for the story-driven UI golden workflow and future UI platform components.
+title: Runenwerk UI Story V2 Acceptance and Review Checklist
+description: Current Runenwerk-local acceptance and review checklist for Story V2 workflow proof, gallery/CLI consumers, and mount decisions.
 status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-06-16
+last_reviewed: 2026-09-13
 related_designs:
   - ../../design/active/runenwerk-ui-story-driven-golden-workflow-design.md
-  - ../../design/active/runenwerk-ui-platform-capability-roadmap.md
-  - ../../design/active/ui-runtime-rendering-pipeline-roadmap.md
 related_docs:
   - ./architecture.md
   - ./roadmap.md
+  - ../../architecture/ui-framework-architecture.md
 ---
 
-# Runenwerk UI Story Acceptance and Review Checklist
+# Runenwerk UI Story V2 Acceptance and Review Checklist
 
 ## Purpose
 
-This checklist defines the quality bar for Runenwerk UI stories, components,
-surfaces, advanced platform controls, gallery inspection, and mount eligibility.
+This checklist summarizes the review bar for the current Runenwerk-local Story V2
+workflow. It is a consumer/proof checklist over current Runenwerk code; it is not
+a reusable UI-framework conformance specification.
 
-A UI artifact is not complete because it renders. It is complete only when the
-story workflow proves its authored source, program formation, runtime artifact,
-runtime view, bindings, routes, layout, style, text, accessibility,
-interaction, render primitives, render data, static mount, diagnostics, and
-mount policy.
+Standalone [`dornglut/runen-ui`](https://github.com/dornglut/runen-ui) owns
+future reusable framework testing and product-maturity semantics.
 
-## Global Acceptance Rule
+## Global rule
 
-Every UI unit must pass through `UiStoryRunReport`.
+A Story V2 claim is valid only when the selected workflow graph and its
+owner-produced evidence pass the manifest's declared expectation. A rendered or
+visible result alone is not sufficient proof.
 
-Accepted units:
+The former rule "every UI unit must pass through `UiStoryRunReport`" is obsolete.
+Current code uses V2 manifests, workflow profiles, workflow reports, and mount
+decisions.
 
-- primitive controls;
-- compound components;
-- full surfaces;
-- state stories;
-- failure stories;
-- interaction stories;
-- layout stories;
-- accessibility stories;
-- host-profile stories;
-- advanced platform controls such as GraphCanvas and Timeline.
+## Manifest V2 checklist
 
-No direct mounting without story proof.
+A current local story manifest should provide valid:
 
-## Story Manifest Checklist
-
-A story manifest is acceptable when it defines:
-
-- [ ] stable `story_id`;
-- [ ] human `title`;
-- [ ] `category`;
-- [ ] `source_kind` as `node` or `template`;
-- [ ] `source_path`;
-- [ ] `source_id`;
-- [ ] `program_id`;
-- [ ] `control_package`;
-- [ ] host kind/profile;
-- [ ] theme profile;
+- [ ] schema version;
+- [ ] stable story id;
+- [ ] story revision;
+- [ ] title and category id;
+- [ ] source descriptor;
+- [ ] program id where required by the selected workflow;
+- [ ] host profile id;
+- [ ] theme profile id;
 - [ ] viewport matrix;
-- [ ] pass/fail expectation;
-- [ ] mount policy;
-- [ ] diagnostic expectations for failure stories;
-- [ ] route map or explicit route policy;
-- [ ] host data if bindings are used;
-- [ ] state profiles if the component is interactive;
-- [ ] input traces if the component is interactive;
-- [ ] accessibility policy.
+- [ ] workflow profile id;
+- [ ] expected outcome;
+- [ ] mount policy.
 
-## Source Checklist
+The manifest selects a workflow profile; it must not smuggle in a second ad-hoc
+stage graph.
 
-Authored source is acceptable when:
+## Workflow profile checklist
 
-- [ ] it is parsed through the declared `source_kind`;
-- [ ] template stories use `AuthoredUiTemplate`;
-- [ ] component/control stories use `UiNodeDefinition` or an approved
-  equivalent;
-- [ ] source identity is stable;
-- [ ] source maps attach to all rows that claim source identity;
-- [ ] no runtime widget IDs, ECS IDs, renderer IDs, or app command
-  implementations leak into authored source;
-- [ ] source declares intent, not renderer execution.
+Current built-in profile ids include:
 
-## Definition And Schema Checklist
+```text
+ui_story.workflow.source_load_only
+ui_story.workflow.compiler_only
+ui_story.workflow.static_preview
+ui_story.workflow.executable_interaction_proof
+```
 
-Definition/schema stage is acceptable when:
+Review passes when:
 
-- [ ] template IDs are valid;
-- [ ] node IDs are valid;
-- [ ] duplicate IDs fail;
-- [ ] invalid child counts fail;
-- [ ] invalid menus/focus/availability records fail;
-- [ ] unknown control kinds fail formation;
-- [ ] unknown properties fail by default;
-- [ ] missing required properties fail;
-- [ ] invalid enum values fail;
-- [ ] non-finite numeric values fail;
-- [ ] route refs validate as route refs;
-- [ ] diagnostics include source path, story ID, stage, stable code, and
-  actionable message.
+- [ ] the profile id is registered;
+- [ ] the graph is valid and deterministic;
+- [ ] required dependencies between nodes are present;
+- [ ] no consumer silently inserts a second private workflow;
+- [ ] evidence is attached to the node that owns the observation;
+- [ ] skipped/blocked nodes remain explicit rather than being reported as pass.
 
-## Control Package Checklist
+## Source and program evidence
 
-A control package contribution is acceptable when it provides:
+Where the selected workflow includes source/program work:
 
-- [ ] property schema;
-- [ ] state schema;
-- [ ] event payload schema;
-- [ ] layout kernel;
-- [ ] interaction kernel;
-- [ ] visual kernel;
-- [ ] accessibility kernel;
-- [ ] inspection kernel;
-- [ ] migration hook;
-- [ ] package ID;
-- [ ] package version;
-- [ ] stable control kind ID;
-- [ ] package diagnostics.
+- [ ] source identity is stable and source maps remain attributable;
+- [ ] authored source does not contain runtime widget, ECS, renderer, or app
+  mutation identity;
+- [ ] definition/schema validation fails closed;
+- [ ] unknown control kinds do not fabricate package/program facts;
+- [ ] `UiProgram` formation receives explicit package/catalog authority where
+  required;
+- [ ] diagnostics remain stable and source-attributable;
+- [ ] program rows and capabilities are owned by the current local program
+  contracts, not inferred by the story runner.
 
-Missing schema or kernel data must fail catalog derivation.
+## Compiler and runtime evidence
 
-## Program Formation Checklist
+Where the selected workflow includes compilation/runtime observation:
 
-`UiProgramFormationReport` is acceptable when:
+- [ ] compiler diagnostics pass;
+- [ ] a valid runtime artifact is produced when required;
+- [ ] artifact tables remain inspectable;
+- [ ] runtime/read-model evidence derives from accepted artifact/runtime inputs;
+- [ ] runtime evidence does not reread or reinterpret authored source as a
+  parallel semantic path;
+- [ ] retained-runtime evidence and artifact-backed evidence are not conflated
+  into a claim that one local execution path has fully replaced the other.
 
-- [ ] it receives an explicit `ControlPackageRegistrySnapshot`;
-- [ ] it does not infer package truth from strings;
-- [ ] unknown control kinds fail closed;
-- [ ] skipped control kinds are reported;
-- [ ] invalid properties stop usable rows from being treated as renderable;
-- [ ] graph-family rows are source-mapped;
-- [ ] combined diagnostics are carried into the story report.
+## Static preview workflow
 
-## Compiler And Artifact Checklist
+For `ui_story.workflow.static_preview`, review the current graph as an ordered
+proof dependency:
 
-Compiler output is acceptable when:
+```text
+manifest
+  -> source_load
+  -> source_parse
+  -> program_formation
+  -> compiler
+  -> runtime_view
+  -> render_primitives
+  -> render_data
+  -> static_mount
+  -> preview_frame
+```
 
-- [ ] `UiCompilerReport` passes;
-- [ ] package resolution diagnostics pass;
-- [ ] capability diagnostics pass;
-- [ ] graph integrity diagnostics pass;
-- [ ] `UiRuntimeArtifact` is produced;
-- [ ] artifact tables are inspectable;
-- [ ] manifest rows include package/control/schema/route/kernel/capability/source-map
-  identity;
-- [ ] artifact snapshots are deterministic where required.
+Review passes when every required node has valid owner-produced evidence and the
+aggregate workflow outcome matches the manifest expectation.
 
-## Runtime View Checklist
+## Executable interaction workflow
 
-Runtime view is acceptable when:
+For `ui_story.workflow.executable_interaction_proof`, review the current
+interaction proof chain, including:
 
-- [ ] it derives from `UiRuntimeArtifact` plus declared host data;
-- [ ] it does not reread authored source for runtime facts;
-- [ ] it exposes IDs, labels, state, routes, capabilities, style axes,
-  accessibility data, source maps, and diagnostics;
-- [ ] missing/stale host data is diagnostic-bearing;
-- [ ] control-specific views are optional inspector adapters, not the primary
-  gallery pipeline.
+```text
+interaction_story
+  -> interaction_replay
+  -> live_interaction_proof
+  -> replay_live_parity
+  -> interaction_static_mount
+  -> preview_frame
+```
 
-## Binding And Host Route Checklist
+Verify that:
 
-Bindings/routes are acceptable when:
+- [ ] replay and live proof use the declared workflow rather than a second
+  private runner;
+- [ ] route/action facts remain schema/capability checked;
+- [ ] interaction does not directly mutate app/editor/game truth inside generic
+  UI owners;
+- [ ] replay/live parity failures are visible in the workflow report;
+- [ ] preview evidence cannot hide a failed interaction dependency.
 
-- [ ] every binding references declared host data or an approved missing-data
-  failure case;
-- [ ] dirty propagation is deterministic;
-- [ ] authorization failures produce diagnostics;
-- [ ] every real host route maps through `ui_hosts` or host/app route tables;
-- [ ] route proposals carry payload schema and capability information;
-- [ ] generic UI never mutates host/domain/app state directly.
+## Workflow report V2
 
-## Layout, Style, Text, And Accessibility Checklist
+`UiStoryWorkflowReportV2` is acceptable when it truthfully exposes:
 
-Layout is acceptable when:
+- [ ] workflow identity/graph;
+- [ ] node reports and outcomes;
+- [ ] diagnostics;
+- [ ] aggregate outcome;
+- [ ] expected-failure matching where applicable;
+- [ ] first blocker when the workflow cannot pass.
 
-- [ ] bounds are computed;
-- [ ] constraints are visible;
-- [ ] clipping/scroll parents are visible;
-- [ ] overflow is visible;
-- [ ] failed constraints are diagnostic-bearing.
+The report is proof/inspection data. It is not authored UI source, product state,
+or renderer authority.
 
-Style is acceptable when:
+## Expected-failure checklist
 
-- [ ] semantic tokens resolve;
-- [ ] missing tokens fail or follow explicit fallback policy;
-- [ ] raw values are only inside token/theme definitions unless explicitly
-  marked as test fixture values;
-- [ ] renderer does not hardcode product UI colors.
+Expected failure is accepted proof only when:
 
-Text is acceptable when:
+- [ ] the story explicitly expects failure;
+- [ ] the observed failing node/diagnostic matches the declared expectation;
+- [ ] unrelated failures are not hidden by the expected-failure declaration;
+- [ ] the aggregate report records the expected failure truthfully;
+- [ ] the story is not treated as production-mount eligible.
 
-- [ ] text layout requests/results are inspectable;
-- [ ] text measurement affects layout where relevant;
-- [ ] glyph runs or text primitives are deterministic;
-- [ ] overflow/wrap/ellipsis are visible;
-- [ ] missing glyph/localization expansion issues are diagnostic-bearing.
+## Mount decision V2
 
-Accessibility is acceptable when:
+`UiStoryMountDecisionV2` must remain fail-closed.
 
-- [ ] interactive controls produce accessibility nodes;
-- [ ] roles are valid;
-- [ ] labels are resolved;
-- [ ] focusability is inspectable;
-- [ ] invalid accessibility records fail;
-- [ ] visible text can be proven as accessible name when explicit label is
-  omitted.
+A positive local decision requires:
 
-## Interaction Checklist
+```text
+mount_policy == EligibleWhenPassed
+required preview proof == passed
+workflow outcome == Passed
+```
 
-Interactive UI is acceptable when stories prove:
+Review must reject mounting when:
 
-- [ ] pointer hover;
-- [ ] pointer press/release;
-- [ ] keyboard activation;
-- [ ] focus traversal;
-- [ ] gamepad activation if game-facing;
-- [ ] disabled state blocks activation;
-- [ ] modal/popover behavior where relevant;
-- [ ] drag/drop lifecycle where relevant;
-- [ ] emitted route proposals are schema-valid;
-- [ ] interaction does not directly mutate host/domain/app state.
+- [ ] workflow validation failed;
+- [ ] the story is an expected-failure case;
+- [ ] mount policy is `Never`;
+- [ ] mount policy is gallery-only for the attempted product mount;
+- [ ] required preview evidence is absent, blocked, or failed;
+- [ ] aggregate workflow outcome is not `Passed`.
 
-## Render And Static Mount Checklist
+A positive story mount decision still does not bypass app/engine authorization,
+route/capability checks, product lifecycle policy, or host-owned mutation.
 
-Rendering proof is acceptable when:
+## Gallery and CLI checklist
 
-- [ ] render primitives are derived from runtime views/artifacts;
-- [ ] invalid runtime views produce diagnostics, not guessed primitives;
-- [ ] render primitive output is deterministic;
-- [ ] render data preserves provenance;
-- [ ] static mount passes;
-- [ ] frame has required surfaces/layers/primitives;
-- [ ] stable draw order is proven;
-- [ ] the visible frame is not treated as success if upstream reports failed.
+Current local gallery/CLI consumers are acceptable when:
 
-## Component Completion Checklist
+- [ ] checked-in stories are discovered through the V2 registry/catalog path;
+- [ ] gallery and CLI consume the same domain-owned workflow semantics;
+- [ ] neither keeps a button-specific or private semantic runner;
+- [ ] inspection presents workflow/node diagnostics rather than guessing success
+  from pixels;
+- [ ] expected failures are distinguishable from regressions;
+- [ ] mount decisions are shown as derived proof, not as product mutation
+  authority.
 
-A component is complete only when it has:
+## Ownership checklist
 
-- [ ] control package contract;
-- [ ] schema validation;
-- [ ] runtime view projection;
-- [ ] binding/route behavior if applicable;
-- [ ] layout/style/text/accessibility behavior;
-- [ ] interaction behavior if applicable;
-- [ ] render primitive lowering if visual;
-- [ ] default story;
-- [ ] state stories;
-- [ ] failure stories;
-- [ ] interaction traces;
-- [ ] visual snapshots where required;
-- [ ] docs page;
-- [ ] validation tests.
+Story orchestration may aggregate evidence but must preserve the semantic owner:
 
-## Surface Completion Checklist
+- [ ] `ui_definition` owns definition/normalization facts;
+- [ ] `ui_program_lowering` owns local program-formation facts;
+- [ ] `ui_compiler` / `ui_artifacts` own compiler/artifact facts;
+- [ ] runtime/read-model owners own runtime evidence;
+- [ ] render/static/headless owners own renderer-neutral output evidence;
+- [ ] app/editor/game hosts own domain state, commands, effects, IO, and concrete
+  mutation.
 
-A surface is complete only when it has:
+## Local-versus-framework boundary
 
-- [ ] authored template;
-- [ ] surface story manifest;
-- [ ] host profile;
-- [ ] route map;
-- [ ] host data contract;
-- [ ] viewport matrix;
-- [ ] theme profile;
-- [ ] accessibility proof;
-- [ ] interaction proof;
-- [ ] render/static mount proof;
-- [ ] mount eligibility pass;
-- [ ] docs page or owning design reference.
+Review must stop or split when a change tries to use this checklist to define
+future reusable framework semantics such as:
 
-## Advanced Platform Component Checklist
+- generic future controls or composition kits;
+- framework-wide animation/transition policy;
+- virtualization architecture;
+- platform/windowing/OS integration;
+- reusable renderer/backend architecture;
+- production accessibility/text maturity;
+- reusable framework devtools or release qualification.
 
-GraphCanvas, Timeline, CodeEditor/RichText, drag/drop, world-space UI, UI
-effects, and visual builder work must satisfy all preceding checks plus:
+Those questions belong to standalone RunenUI unless a new Runenwerk consumer
+issue is specifically integrating an accepted RunenUI contract.
 
-- [ ] reusable platform ownership;
-- [ ] no product/domain-specific semantics in generic UI;
-- [ ] story matrix covering normal, empty, large, invalid, interaction,
-  accessibility, and performance states;
-- [ ] clear host/domain mutation boundary;
-- [ ] renderer contract only if existing primitives cannot express the visual
-  output;
-- [ ] no parallel one-off editor implementation.
+## Review evidence
 
-## Review Checklist
+For a Runenwerk Story V2 change, record:
 
-A review passes only when:
+- [ ] exact changed files and owning issue;
+- [ ] exact source and test evidence used for behavior claims;
+- [ ] focused validation actually executed;
+- [ ] canonical repository validation for the unchanged reviewed head;
+- [ ] any host/product behavior that remains outside story ownership;
+- [ ] whether any standalone RunenUI consumer boundary changed (normally no).
 
-- [ ] exact files and methods changed are listed;
-- [ ] every new crate has accepted authority;
-- [ ] generated docs are not edited directly;
-- [ ] active design index is updated if a new active design is added;
-- [ ] story manifests are assets, not Rust constants;
-- [ ] story runner is domain-owned;
-- [ ] gallery consumes `UiStoryRunReport`;
-- [ ] CLI and gallery share the same runner;
-- [ ] validators reject legacy/bypass paths;
-- [ ] tests cover passing and failing stories;
-- [ ] validation commands are recorded with results.
+## Stop conditions
 
-## Stop Conditions
+Stop and redesign if a change:
 
-Stop and redesign if:
-
-- [ ] implementation renders directly from `.ron`;
-- [ ] renderer owns UI semantics;
-- [ ] hardcoded gallery fixtures remain as a production path;
-- [ ] button-specific gallery pipeline remains primary;
-- [ ] story manifests are bypassed for mountable surfaces;
-- [ ] visual builder writes a second format;
-- [ ] GraphCanvas/Timeline duplicate drag/selection/focus systems;
-- [ ] generic UI mutates app/editor/game/domain state directly;
-- [ ] failed upstream reports still produce claimed-success visible output.
+- [ ] restores the retired flat `UiStoryRunReport` authority;
+- [ ] invents a second workflow runner for gallery or CLI;
+- [ ] treats visible output as success after an upstream workflow failure;
+- [ ] gives `ui_story` app/editor/game mutation ownership;
+- [ ] gives renderer code UI semantic ownership;
+- [ ] creates a Runenwerk-local future framework roadmap that competes with
+  standalone RunenUI;
+- [ ] claims standalone RunenUI adoption without an explicit accepted consumer
+  cutover.

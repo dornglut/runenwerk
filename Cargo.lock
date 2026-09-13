@@ -2588,7 +2588,7 @@ dependencies = [
 [[package]]
 name = "runen-ecs"
 version = "0.1.0"
-source = "git+https://github.com/dornglut/runen-ecs?rev=fed4f080abd4a2124dac10b80518469dd678d9f0#fed4f080abd4a2124dac10b80518469dd678d9f0"
+source = "git+https://github.com/dornglut/runen-ecs?rev=98006db2f428e1d98d989db28a0e4a0d43152df9#98006db2f428e1d98d989db28a0e4a0d43152df9"
 dependencies = [
  "runen-ecs-macros",
  "thiserror 2.0.18",
@@ -2597,7 +2597,7 @@ dependencies = [
 [[package]]
 name = "runen-ecs-macros"
 version = "0.1.0"
-source = "git+https://github.com/dornglut/runen-ecs?rev=fed4f080abd4a2124dac10b80518469dd678d9f0#fed4f080abd4a2124dac10b80518469dd678d9f0"
+source = "git+https://github.com/dornglut/runen-ecs?rev=98006db2f428e1d98d989db28a0e4a0d43152df9#98006db2f428e1d98d989db28a0e4a0d43152df9"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",

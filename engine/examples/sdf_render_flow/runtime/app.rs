@@ -1,8 +1,7 @@
 use crate::rendering::{Sdf3dRenderState, build_render_flow};
 use anyhow::Result;
-use engine::SystemConfigExt;
 use engine::plugins::{RenderPlugin, ScenePlugin, default_plugins};
-use engine::prelude::{App, CoreSet, InputState, Res, ResMut, Startup, Time, Update, WindowState};
+use engine::prelude::{App, InputState, Res, ResMut, Startup, Time, Update, WindowState};
 use winit::keyboard::KeyCode;
 
 const ACTION_CYCLE_VIEW_MODE: &str = "sdf.view.cycle";
@@ -15,12 +14,7 @@ pub(crate) fn run() -> Result<()> {
     app.add_plugin(RenderPlugin);
     app.insert_resource(Sdf3dRenderState::default());
     app.add_systems(Startup, setup_sdf_input_bindings);
-    app.add_systems(
-        Update,
-        update_sdf_view_and_animation_system
-            .after(CoreSet::Input)
-            .after(CoreSet::Time),
-    );
+    app.add_systems(Update, update_sdf_view_and_animation_system);
     app.add_render_flow(build_render_flow());
     app.run()
 }

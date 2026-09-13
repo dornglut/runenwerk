@@ -72,19 +72,19 @@ impl Plugin for ReplayPlugin {
         app.init_resource::<ReplayControllerResource>();
         app.add_systems(
             PreUpdate,
-            replay_capture_initial_checkpoint_system.before(CoreSet::Scene),
+            replay_capture_initial_checkpoint_system.before_if_present(CoreSet::Scene),
         );
         app.add_systems(
             FixedUpdate,
             replay_record_command_frame_system
-                .before(CoreSet::Scene)
-                .before(CoreSet::Simulation),
+                .before_if_present(CoreSet::Scene)
+                .before_if_present(CoreSet::Simulation),
         );
         app.add_systems(
             FixedUpdate,
             replay_capture_checkpoint_system
-                .after(CoreSet::Scene)
-                .after(CoreSet::Simulation),
+                .after_if_present(CoreSet::Scene)
+                .after_if_present(CoreSet::Simulation),
         );
         app.add_systems(FrameEnd, replay_frame_end_system.in_set(CoreSet::FrameEnd));
     }

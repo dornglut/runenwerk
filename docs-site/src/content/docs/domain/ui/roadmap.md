@@ -5,13 +5,11 @@ status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-09-12
+last_reviewed: 2026-09-13
 related:
   - ./architecture.md
   - ./story-acceptance-and-review-checklist.md
   - ../../design/active/runenwerk-ui-story-driven-golden-workflow-design.md
-  - ../../design/active/runenwerk-ui-platform-capability-roadmap.md
-  - ../../design/active/ui-runtime-rendering-pipeline-roadmap.md
   - ../../design/implemented/ui-program-architecture.md
   - ../../design/implemented/ui-definition-formation-foundation-design.md
   - ../../reports/audits/editor-ui-priority-code-audit-2026-05-05.md
@@ -27,9 +25,9 @@ related:
 
 ## Purpose
 
-Track implementation sequencing for UI substrate, retained UI surfaces, UiProgram architecture, runtime artifacts, and the future artifact-backed rendering path from current code truth.
+Track implementation sequencing for Runenwerk UI substrate, retained UI surfaces, UiProgram architecture, runtime artifacts, and local consumer integration from current code truth.
 
-This roadmap is intentionally execution-oriented. Target architecture belongs in active design docs. The artifact-backed rendering roadmap is now tracked in [UI Runtime Rendering Pipeline Roadmap](../../design/active/ui-runtime-rendering-pipeline-roadmap.md).
+This roadmap is intentionally execution-oriented. Target architecture belongs in current architecture and lifecycle-owned design docs. This file owns durable **Runenwerk-local** sequencing only. Future reusable UI-framework semantics and maturity belong to standalone `dornglut/runen-ui`; this roadmap does not mirror that framework roadmap.
 
 ## Current Code Truth
 
@@ -50,8 +48,9 @@ Implemented and in use:
 - `ui_program_lowering/src/lower.rs::lower_control_nodes` now fails closed for unknown authored control kinds and emits no package-contract-derived graph rows;
 - `ui_runtime_view` exposes artifact-backed runtime views, including a button-specific report carrying label, route, capability, selected/disabled state, accessibility label, style axes, source-map indexes, and diagnostics;
 - `ui_render_primitives` owns backend-neutral button primitive generation from runtime views, resolves theme tokens and text layout through `ThemeTokens` and `AtlasTextLayouter`, and emits `GlyphRunPrimitive` label text before a `UiFrame` reaches renderer-facing code;
-- `ui_story` owns the domain-level story manifest, checked-in gallery catalog, registry, runner, CLI summary, report, and mount-eligibility contracts; product host mounting remains downstream story-platform work;
-- `runenwerk_editor` now has a standalone `runenwerk_ui_gallery` host and CLI inspection path that consume checked-in `UiStoryRunReport` output with render primitive, render-data, static-mount, preview-frame, and mount-eligibility stages before submitting a prepared `UiFrame` through the existing editor UI composite pass.
+- `ui_story` owns the Runenwerk-local V2 story manifest, registry, workflow graph/profile selection, run/report, expected-failure, CLI projection, and fail-closed mount-decision contracts;
+- `runenwerk_editor` gallery/CLI consumers use the V2 story workflow. The retired flat `UiStoryRunReport` model is not current API authority;
+- standalone RunenUI owns future reusable-framework semantics; current Runenwerk `domain/ui/*` remains valid until an explicit accepted consumer cutover changes a named boundary.
 
 Evidence in code:
 
@@ -62,6 +61,7 @@ Evidence in code:
 - `domain/ui/ui_controls/src/*`
 - `domain/ui/ui_compiler/src/*`
 - `domain/ui/ui_artifacts/src/*`
+- `domain/ui/ui_story/src/*`
 - `apps/runenwerk_editor/src/shell/dispatch_shell_command.rs`
 - `apps/runenwerk_editor/src/runtime/viewport/routing.rs`
 - `apps/runenwerk_editor/tests/viewport_architecture_guards.rs`
@@ -244,23 +244,23 @@ Phase 8 owns the durable interaction semantics formerly consumed by WR-024. Hist
 
 ### Phase 9 - Artifact-Backed Runtime Rendering Pipeline
 
-Status: deferred as a standalone implementation slice. WR-173 /
-PM-UI-RUNTIME-RENDERING-001 is retained only as temporary static-gallery
-evidence; runtime rendering proof must return through
-PM-UI-STORY-004 after the story manifest, registry, runner, report, and
-mount-eligibility contracts exist.
+Status: the original standalone delivery program is historical; the implemented local UiProgram/component/render/story owners now carry its surviving semantics.
 
-Owning design:
+Authority:
 
-- `docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md`
+- this canonical UI roadmap owns durable Runenwerk-local sequence only;
+- `docs-site/src/content/docs/design/implemented/ui-program-architecture.md` owns implemented semantic-program truth;
+- `docs-site/src/content/docs/design/implemented/ui-component-platform-render-surface-output-design.md` owns the current renderer-neutral output contract;
+- `docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md` owns the current Runenwerk-local Story V2 proof/consumer boundary.
 
-Decision:
+Durable decision:
 
-- a visible button is not allowed to be a hand-written widget proof;
-- rendering may begin only after artifact-backed runtime view, layout, style, text, accessibility, and render primitive reports exist;
-- renderer/backend code consumes backend-neutral derived primitives only and must not own UI semantics.
+- rendering must consume owner-produced runtime/render facts rather than authored `.ron` or package descriptors directly;
+- unknown controls and invalid package/schema facts fail closed;
+- renderer/backend code consumes backend-neutral derived products and does not own UI semantics;
+- visible output never overrides failed upstream proof.
 
-Milestone order:
+Historical milestone decomposition retained for provenance:
 
 | ID | Milestone | Gate |
 |---|---|---|
@@ -284,105 +284,36 @@ Milestone order:
 | M21 | UI Gallery inspector | authored source through rendered preview and interaction trace are inspectable. |
 | M22 | Production readiness evidence integration | production-ready claims require complete, fresh, owner-correct evidence. |
 
-Render permission gates:
+The M1-M22 labels are historical delivery decomposition, not a current future-framework roadmap.
 
-```text
-After M12: headless render output may be trusted.
-After M13: visible static button may be shown.
-After M15: interactive button may be claimed.
-After M16: accessible button may be claimed.
-After M22: production-ready UI rendering may be claimed.
-```
+### Phase 10 - Runenwerk-local Story V2 Proof Workflow
 
-Stop conditions:
+Status: implemented at the current local proof/consumer scope.
 
-- rendering from authored `.ron` directly;
-- rendering from `ControlPackageDescriptor` alone;
-- inferring package truth from a control-kind string;
-- letting unknown control kinds or broken package metadata pass formation;
-- hardcoding visual semantics in backend renderer code;
-- mutating editor/game/domain/app truth from generic UI code;
-- creating new crates without WR/production authority.
+Owning local authority:
 
-### Phase 10 - Story-Driven Golden Workflow Productization
+- `domain/ui/ui_story` code and tests;
+- [Runenwerk UI Story V2 Consumer and Proof Boundary](../../design/active/runenwerk-ui-story-driven-golden-workflow-design.md);
+- [Story V2 Acceptance and Review Checklist](./story-acceptance-and-review-checklist.md).
 
-Status: active design intake; implementation not authorized by this roadmap
-section alone.
+Current contract:
 
-Owning designs:
+- `UiStoryManifestV2` selects a workflow profile instead of a universal flat stage list;
+- built-in profiles include source-load-only, compiler-only, static-preview, and executable-interaction proof;
+- owner-produced evidence attaches to workflow nodes;
+- `UiStoryWorkflowReportV2` records graph/node outcomes, diagnostics, expected-failure matching, aggregate outcome, and first blocker;
+- `UiStoryMountDecisionV2` is fail-closed and derives local mount eligibility from passed required proof plus mount policy;
+- gallery and CLI consume the same V2 story semantics;
+- the retired flat `UiStoryRunReport` model is not current authority.
 
-- `docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md`
-- `docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md`
+This phase does not own future generic framework controls, NodeCanvas,
+PortGraphCanvas, ProgressionTreeView, TrackSurface/Timeline, transitions/effects,
+platform integration, reusable renderer semantics, or release maturity. Future
+reusable framework semantics belong to standalone RunenUI. Runenwerk product
+semantics remain with their product/domain owners.
 
-Decision:
-
-- `UiStory` is the canonical unit for UI authoring, preview, validation,
-  inspection, proof, and mount eligibility.
-- A story may wrap either a bare `UiNodeDefinition` or a full
-  `AuthoredUiTemplate`.
-- Story manifests live in assets, not hardcoded Rust constants.
-- The current hardcoded button gallery path is valid first-slice evidence, but
-  it is not the final gallery architecture.
-- Gallery and CLI must share the same domain-owned story runner.
-- Gallery inspection must consume `UiStoryRunReport`, not button-specific
-  reports.
-- Normal surfaces using existing controls should be cheap to author, while new
-  reusable component classes are component-platform work after story proof
-  exists.
-- `PT-UI-STORY-PLATFORM` owns only the story proof substrate:
-  `UiStoryManifest`, `UiStoryRegistry`, `UiStoryRunner`,
-  `UiStoryRunReport`, `UiStoryMountEligibility`, gallery/CLI story execution,
-  and story-gated static/runtime rendering proof.
-- GraphCanvas, Timeline, RichText/CodeEditor, advanced drag/drop, and generic
-  component-level UI effects move to `PT-UI-COMPONENT-PLATFORM`.
-- Visual UI Builder and authoring product workflows remain in
-  Designer/Workbench tracks.
-- Screen-space game HUD behavior remains in `PT-GAME-RUNTIME-UI`.
-- World-space/entity-attached UI remains deferred in
-  `PT-GAME-WORLDSPACE-UI`.
-- Camera/projection/surface-fit contracts remain in
-  `PT-VIEWPORT-PROJECTION`.
-
-First production milestone to prepare through normal WR/production gates:
-
-```text
-PM-UI-STORY-001 - Story Workflow Authority And Track Activation
-```
-
-Outcome:
-
-- activate `PT-UI-STORY-PLATFORM` as the story-first UI production track;
-- defer standalone static gallery rendering as a production growth path;
-- record the future `UiStoryManifest`, `UiStoryRegistry`, `UiStoryRunner`,
-  `UiStoryRunReport`, and `UiStoryMountEligibility` contracts;
-- keep runtime code, crate creation, gallery migration, and product mounting
-  blocked until their owning WR and production plan exist;
-- keep component maturity, visual authoring product work, screen HUD behavior,
-  world-space/entity-attached UI, and viewport projection contracts in their
-  owning tracks.
-
-Later implementation contract target files and functions:
-
-```text
-domain/ui/ui_story/src/gallery.rs::checked_in_gallery_registry
-domain/ui/ui_story/src/cli.rs::UiStoryCliReport::from_reports
-apps/runenwerk_editor/src/runtime/ui_gallery.rs::run_checked_in_gallery_stories
-apps/runenwerk_editor/src/runtime/ui_gallery.rs::inspect_checked_in_gallery_stories
-apps/runenwerk_editor/src/runtime/ui_gallery.rs::submit_ui_gallery_frame_system
-domain/ui/ui_story/src/runner.rs::UiStoryRunner::run_story
-domain/ui/ui_story/src/runner.rs::UiStoryRunner::run_story_with_stage_reports
-domain/ui/ui_story/src/report.rs::UiStoryRunReport
-domain/ui/ui_story/src/mount.rs::UiStoryMountEligibility::from_report
-```
-
-Stop conditions:
-
-- do not implement `domain/ui/ui_story` before crate creation authority exists;
-- do not keep `apps/runenwerk_editor/src/runtime/ui_gallery.rs::UI_GALLERY_FIXTURES`
-  as a production story registry after cutover;
-- do not add renderer-owned UI semantics;
-- do not let generic UI mutate editor, game, domain, or app state directly;
-- do not mount a surface without story-derived mount eligibility.
+Future Runenwerk adoption of standalone RunenUI requires a new owning issue and
+must be re-derived against the exact accepted RunenUI revision at that time.
 
 ## Current Now Tasks
 
@@ -393,13 +324,13 @@ Stop conditions:
 - [x] Complete active UI/editor definition consumption before adding more hard-coded editor surfaces. Status: implemented as of 2026-05-09 for M4A-M4D. Active templates/editor bindings feed the shell frame, command bindings resolve authored route ids to app-owned known commands, shortcuts and menus dispatch through that command spine, active toolbar/menu definitions can replace checked-in fixture menu items, and panel/tool-surface registries drive future shell creation/switch choices without mutating existing workspace state.
 - [x] Broaden reusable control adoption in editor surfaces. Status: implemented as of 2026-05-09 for the M4E cleanup. `editor_shell` now owns shared retained surface fixture helpers, shared compact reusable-control polish, and self-authoring control-panel composition; app providers supply DTOs/actions/routes instead of direct reusable-control construction.
 - [x] Preserve and extend guard coverage for structural routing, capability gating, and seam ownership. Status: updated as of 2026-05-09; guard coverage rejects direct app-provider reusable-control construction while preserving existing `ui_definition` behavior-isolation and surface-routing checks.
-- [ ] Keep future UI execution strategies design-gated. Status: active/open; compiled-reactive UI and ECS-driven UI remain future formation targets only after a new active design or accepted ADR identifies the concrete surface, formation product, invalidation/debug model, and command/ratification boundaries. Any future target must consume normalized definitions plus formed interaction contracts.
+- [ ] Keep future local UI execution strategies design-gated. Status: active/open; compiled-reactive UI and ECS-driven UI remain potential Runenwerk execution targets only after a new active design or accepted ADR identifies the concrete local consumer, formation product, invalidation/debug model, and command/ratification boundaries.
 - [x] Migrate retained UI slices to Interaction V2 contracts. Status: complete for the named WR-025 retained-slice catalog with code-bearing slices and doctrine-repair evidence landed for `IV2-menu-stack`, `IV2-scroll-ownership`, `IV2-menu-sizing`, `IV2-chrome-slots`, `IV2-dock-drop-zones`, and `IV2-status-and-viewport-arbitration`.
 - [x] Complete the M3.5 UI definition formation framework before M3.6 and M4. Status: implemented and validated; crates, fixtures, retained formation, app fixture validation, toolbar route-slot integration, toolbar popup binding data, normal shell chrome formation, and common provider surface fixture formation exist. Provider behavior remains outside `ui_definition`.
 - [x] Implement the promoted UI self-authoring workspace before M4. Status: complete as of 2026-05-06; `editor_definition` owns durable editor schemas and validation guards, `editor_shell` exposes the Editor Design workspace/profile and self-authoring surface kinds, and `runenwerk_editor` loads checked-in UI fixtures as editable documents with validation, retained preview, command diff summaries, retained authoring control routes, UI node/theme/workspace-layout draft edits, and explicit apply/rollback.
 - [x] Keep UI Designer visible as the promoted self-authoring path. Status: complete/current; UI Designer is not a missing roadmap item, it is the Editor Design/self-authoring workspace tracked by `docs-site/src/content/docs/design/implemented/editor-self-authoring-and-final-ui-design.md`.
-- [x] Continue artifact-backed runtime rendering only through story gates. Status: WR-177 / PM-UI-STORY-004 re-runs the former static gallery proof through `UiStoryRunReport` render primitive, render-data, static-mount, preview-frame, and mount-eligibility stages. Product host mounting remains future story-platform work.
-- [ ] Prepare the story-driven golden workflow through normal WR/production gates. Status: active design intake; `PM-UI-STORY-001` activates planning authority only, while later PM-UI-STORY milestones introduce the story runner, gallery/CLI execution, runtime rendering proof, and mount eligibility.
+- [x] Keep local artifact-backed rendering and gallery proof behind Story V2 workflow/mount gates. Current V2 code/tests own the exact API and proof behavior.
+- [ ] Keep standalone RunenUI adoption explicit and issue-owned. No current Runenwerk roadmap item implies dependency adoption or consumer cutover; any future cutover must start from exact then-current RunenUI and Runenwerk revisions.
 - [ ] Keep cross-doc sequencing aligned so workspace index docs do not restate stale phase history. Status: active; generated production docs must remain outputs of their source files and must not be hand-edited.
 
 ## Non-Goals for This Track
@@ -410,10 +341,5 @@ Stop conditions:
 - moving privileged ratification ownership into generic UI substrate code;
 - using ECS entities, runtime widget ids, or shell session ids as durable authored UI/editor identity;
 - rendering from authored `.ron` files or package descriptors directly;
-- creating additional runtime/rendering crates or backend adapters without explicit WR/production authority.
-
-<!-- BEGIN RUNENWERK:UI_COMPONENT_PLATFORM:domain-ui-note -->
-## UI Component Platform activation note
-
-The active Component Platform roadmap is `PT-UI-COMPONENT-PLATFORM`: reusable, story-proven `ControlPackage` and surface maturity after `PM-UI-STORY-004`. The platform introduces reusable kernels for control packages, authoring, story proof, catalog/discovery, input/gesture/device, state/binding/host intent, theme/token styling, accessibility/focus, layout/container/virtualization, render/surface output, overlay/popup/layering, text, Surface2D, SpatialCanvas, NodeCanvas, PortGraphCanvas, ProgressionTreeView, TrackSurface/Timeline, transitions/effects, and adoption gates.
-<!-- END RUNENWERK:UI_COMPONENT_PLATFORM:domain-ui-note -->
+- creating additional runtime/rendering crates or backend adapters without explicit owning authority;
+- recreating standalone RunenUI's reusable-framework roadmap inside Runenwerk.

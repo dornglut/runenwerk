@@ -26,10 +26,15 @@ an extra visibility boundary.
 
 ## Ordering
 
-`in_set`, `before`, and `after` express semantic precedence. `ScheduleLabel` and
-`SystemSet` are generic ECS identities. Ordering cycles are rejected during
-schedule validation; otherwise unordered systems use deterministic registration
-order in the serial reference executor.
+`in_set`, `before`, and `after` express semantic precedence. `before` and `after`
+require another member of the target set in the same schedule; an unresolved
+required reference fails schedule validation. Use `before_if_present` and
+`after_if_present` for meaningful conditional same-schedule composition. An
+absent optional target creates no edge. `ScheduleLabel` and `SystemSet` are
+generic ECS identities. Ordering cycles are rejected during schedule validation;
+otherwise unordered systems use deterministic registration order in the serial
+reference executor. Engine lifecycle order between schedules is not represented
+by ECS set references.
 
 The runtime exposes `DeferredApplyBoundary` for a host callback that needs to
 run after a successful flush. Its index is only ECS deferred-apply progress,
