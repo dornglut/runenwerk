@@ -131,7 +131,15 @@ impl SubmittedDeterministicRender {
         &self.admitted
     }
 
-    pub const fn submission(&self) -> &GpuSubmission {
+    /// Current physical status of the exact RunenGPU submission.
+    ///
+    /// The underlying submission and its readback collection remain renderer-private so verified
+    /// result formation does not leak private observation identities or bytes through RunenRender.
+    pub fn submission_status(&self) -> GpuSubmissionStatus {
+        self.submission.status()
+    }
+
+    pub(super) const fn submission(&self) -> &GpuSubmission {
         &self.submission
     }
 
@@ -145,7 +153,7 @@ impl SubmittedDeterministicRender {
     /// retains product/runtime policy for progressing the public RunenGPU context, then polls this
     /// owner-controlled boundary. `Ok(None)` means the exact submission or one of its private
     /// same-submission observations is still pending. Successful formation consumes the private
-    /// verification authority exactly once while leaving physical submission inspection available.
+    /// verification authority exactly once while leaving physical submission status available.
     pub fn try_form_verified_result(
         &mut self,
     ) -> Result<Option<RenderResult>, RenderDeterministicResultFormationError> {
