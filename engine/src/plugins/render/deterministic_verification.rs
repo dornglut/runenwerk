@@ -8,9 +8,7 @@
 use super::deterministic_admission::AdmittedDeterministicRender;
 use super::request::RenderObservationSpec;
 use super::scene::RenderObjectId;
-use super::space_time::{
-    RenderAffineTransform3, RenderHandedness, RenderObjectSpatialState,
-};
+use super::space_time::{RenderAffineTransform3, RenderHandedness, RenderObjectSpatialState};
 use std::collections::BTreeSet;
 use std::error::Error;
 use std::fmt;
@@ -24,24 +22,12 @@ const CERTIFIED_MAX_FULL_FOV_RADIANS: f64 = std::f64::consts::FRAC_PI_2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum RenderDeterministicVerificationEligibilityError {
-    PerspectiveFieldOfViewUnsupported {
-        observation_index: usize,
-    },
-    ObservationLinearBasisUnsupported {
-        observation_index: usize,
-    },
-    SelectedObjectStateMissing {
-        object_id: RenderObjectId,
-    },
-    ObjectLocalScaleUnsupported {
-        object_id: RenderObjectId,
-    },
-    ObjectHandednessUnsupported {
-        object_id: RenderObjectId,
-    },
-    ObjectLinearBasisUnsupported {
-        object_id: RenderObjectId,
-    },
+    PerspectiveFieldOfViewUnsupported { observation_index: usize },
+    ObservationLinearBasisUnsupported { observation_index: usize },
+    SelectedObjectStateMissing { object_id: RenderObjectId },
+    ObjectLocalScaleUnsupported { object_id: RenderObjectId },
+    ObjectHandednessUnsupported { object_id: RenderObjectId },
+    ObjectLinearBasisUnsupported { object_id: RenderObjectId },
 }
 
 impl fmt::Display for RenderDeterministicVerificationEligibilityError {
@@ -105,15 +91,11 @@ pub(super) fn ensure_deterministic_verification_eligible(
     }
 
     for object_id in selected_objects {
-        let state = admitted
-            .plan()
-            .scene()
-            .object_state(object_id)
-            .ok_or(
-                RenderDeterministicVerificationEligibilityError::SelectedObjectStateMissing {
-                    object_id,
-                },
-            )?;
+        let state = admitted.plan().scene().object_state(object_id).ok_or(
+            RenderDeterministicVerificationEligibilityError::SelectedObjectStateMissing {
+                object_id,
+            },
+        )?;
         validate_object_spatial_state(object_id, state.spatial())?;
     }
 
