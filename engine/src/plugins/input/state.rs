@@ -400,12 +400,10 @@ impl InputState {
             self.sync_legacy_flags();
         }
 
-        if !reconciliation {
-            if let Some(text) = text {
-                for ch in text.chars() {
-                    if !ch.is_control() {
-                        self.typed_text.push(ch);
-                    }
+        if !reconciliation && let Some(text) = text {
+            for ch in text.chars() {
+                if !ch.is_control() {
+                    self.typed_text.push(ch);
                 }
             }
         }
