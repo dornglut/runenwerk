@@ -3,6 +3,7 @@ use super::method::RenderMethodId;
 use super::request::RenderRequest;
 use super::scene::{RenderObjectId, RenderSceneRevision, RenderSceneSnapshot};
 use super::semantic_plan::{RenderApplicableRepresentationUse, RenderOutputApproximation};
+use super::surface_input::RenderSurfaceSemanticInputBinding;
 use std::collections::BTreeSet;
 use std::error::Error;
 use std::fmt;
@@ -79,12 +80,14 @@ impl RenderResultOutputEvidence {
 ///
 /// This is intentionally not a value container. Output values may remain in physical bindings,
 /// retained renderer products, readback results, or presentation destinations. The result retains
-/// only immutable semantic provenance projected from the exact admitted plan that produced the work.
+/// only immutable semantic provenance projected from the exact admitted plan that produced the work,
+/// including the exact selected request-scoped semantic surface inputs once at result level.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RenderResult {
     scene: RenderSceneSnapshot,
     request: RenderRequest,
     method_id: RenderMethodId,
+    surface_semantic_inputs: Vec<RenderSurfaceSemanticInputBinding>,
     outputs: Vec<RenderResultOutputEvidence>,
 }
 
@@ -182,6 +185,7 @@ impl RenderResult {
             scene: admitted.plan().scene().clone(),
             request: admitted.plan().request().clone(),
             method_id: admitted.selected_candidate().method_id(),
+            surface_semantic_inputs: admitted.surface_semantic_inputs().to_vec(),
             outputs,
         })
     }
@@ -200,6 +204,10 @@ impl RenderResult {
 
     pub(crate) const fn method_id(&self) -> RenderMethodId {
         self.method_id
+    }
+
+    pub(crate) fn surface_semantic_inputs(&self) -> &[RenderSurfaceSemanticInputBinding] {
+        &self.surface_semantic_inputs
     }
 
     pub(crate) fn outputs(&self) -> &[RenderResultOutputEvidence] {
