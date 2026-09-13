@@ -118,12 +118,14 @@ pub(in crate::plugins::render) fn observe_completed_deterministic_verification(
     }
 
     let mut observations = Vec::new();
-    observations.try_reserve_exact(correlations.len()).map_err(|_| {
-        RenderDeterministicVerificationObservationError::HostAllocation {
-            output_index: 0,
-            channel: "observation-set",
-        }
-    })?;
+    observations
+        .try_reserve_exact(correlations.len())
+        .map_err(
+            |_| RenderDeterministicVerificationObservationError::HostAllocation {
+                output_index: 0,
+                channel: "observation-set",
+            },
+        )?;
 
     for correlation in correlations {
         let output_index = correlation.output_index();
@@ -201,17 +203,21 @@ fn ready_buffer_readback(
     )?;
     let bytes = match readback.status() {
         GpuReadbackStatus::Pending => {
-            return Err(RenderDeterministicVerificationObservationError::ReadbackPending {
-                output_index,
-                channel,
-            });
+            return Err(
+                RenderDeterministicVerificationObservationError::ReadbackPending {
+                    output_index,
+                    channel,
+                },
+            );
         }
         GpuReadbackStatus::Failed(failure) => {
-            return Err(RenderDeterministicVerificationObservationError::ReadbackFailed {
-                output_index,
-                channel,
-                kind: failure.kind(),
-            });
+            return Err(
+                RenderDeterministicVerificationObservationError::ReadbackFailed {
+                    output_index,
+                    channel,
+                    kind: failure.kind(),
+                },
+            );
         }
         GpuReadbackStatus::Ready(bytes) => bytes,
     };
@@ -271,12 +277,13 @@ fn normalize_canonical_words(
         return invalid_layout(output_index, "canonical-output", actual_byte_len);
     }
 
-    let sample_count = usize::try_from(semantic_sample_count(output_index, topology)?).map_err(
-        |_| RenderDeterministicVerificationObservationError::SizeOverflow {
-            output_index,
-            field: "logical canonical sample count",
-        },
-    )?;
+    let sample_count =
+        usize::try_from(semantic_sample_count(output_index, topology)?).map_err(|_| {
+            RenderDeterministicVerificationObservationError::SizeOverflow {
+                output_index,
+                field: "logical canonical sample count",
+            }
+        })?;
     let row_stride_bytes = usize::try_from(row_stride_bytes).map_err(|_| {
         RenderDeterministicVerificationObservationError::SizeOverflow {
             output_index,
@@ -316,13 +323,13 @@ fn normalize_canonical_words(
                 field: "canonical row range",
             },
         )?;
-        let row_bytes = bytes
-            .get(start..end)
-            .ok_or(RenderDeterministicVerificationObservationError::InvalidPhysicalLayout {
+        let row_bytes = bytes.get(start..end).ok_or(
+            RenderDeterministicVerificationObservationError::InvalidPhysicalLayout {
                 output_index,
                 channel: "canonical-output",
                 byte_len: actual_byte_len,
-            })?;
+            },
+        )?;
         for chunk in row_bytes.chunks_exact(WORD_BYTES) {
             words.push(decode_word(chunk));
         }
@@ -403,10 +410,7 @@ mod tests {
     use super::*;
 
     fn words_to_bytes(words: &[u32]) -> Vec<u8> {
-        words
-            .iter()
-            .flat_map(|word| word.to_ne_bytes())
-            .collect()
+        words.iter().flat_map(|word| word.to_ne_bytes()).collect()
     }
 
     #[test]
