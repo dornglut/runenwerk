@@ -89,12 +89,12 @@ repository: dornglut/runen-sdf
 commit: d52badefc640d6dc6dcdd40268af3aea1bb8eefe
 ```
 
-Runenwerk then completed the retirement-only clean cutover under issue `#133` and
-PR `#157`, accepted as merge `f171c5bad51fa476d1875b3b88807e202088f692`,
-after proving zero real code consumers. Current Runenwerk source contains no tracked
+`PT-RUNENSDF-004` later completed the retirement-only Runenwerk cutover after
+proving zero real code consumers. Current Runenwerk source contains no tracked
 `domain/sdf` package, workspace member, or duplicate implementation and carries no
 unused external RunenSDF dependency; Runenwerk retains only product/world integration
-such as `domain/world_sdf`.
+such as `domain/world_sdf`. Exact migration and retirement evidence remains in the
+[PT-RUNENSDF-004 closeout](../../reports/closeouts/pt-runensdf-004-internal-sdf-retirement-closeout.md).
 
 ### RunenECS
 
