@@ -7,7 +7,7 @@ layer: domain
 canonical: true
 last_reviewed: 2026-09-10
 related:
-  - ./ui-program-architecture.md
+  - ../implemented/ui-program-architecture.md
   - ../deferred/game-runtime-ui-projection-and-hud-platform-design.md
   - ../../domain/ui/architecture.md
   - ../../domain/ui/roadmap.md

@@ -11,8 +11,8 @@ related_docs:
   - ../domain/ui/architecture.md
   - ../domain/ui/roadmap.md
   - ../design/active/ui-framework-app-integration-direction-review.md
-  - ../design/active/ui-program-architecture.md
-  - ../design/active/ui-program-architecture-owner-map.md
+  - ../design/implemented/ui-program-architecture.md
+  - ../design/implemented/ui-program-architecture-owner-map.md
   - ../design/active/runenwerk-ui-story-driven-golden-workflow-design.md
   - ../design/active/ui-runtime-rendering-pipeline-roadmap.md
   - ../design/deferred/game-runtime-ui-projection-and-hud-platform-design.md
@@ -400,8 +400,8 @@ Diagram source:
 - [UI Domain Current-State Architecture](../domain/ui/architecture.md)
 - [UI Substrate and Surface Roadmap](../domain/ui/roadmap.md)
 - [UI Framework App Integration Direction Review](../design/active/ui-framework-app-integration-direction-review.md)
-- [UI Program Architecture](../design/active/ui-program-architecture.md)
-- [UI Program Architecture Owner Map](../design/active/ui-program-architecture-owner-map.md)
+- [UI Program Architecture](../design/implemented/ui-program-architecture.md)
+- [UI Program Architecture Owner Map](../design/implemented/ui-program-architecture-owner-map.md)
 - [Runenwerk UI Story Driven Golden Workflow Design](../design/active/runenwerk-ui-story-driven-golden-workflow-design.md)
 - [UI Runtime Rendering Pipeline Roadmap](../design/active/ui-runtime-rendering-pipeline-roadmap.md)
 - [Game Runtime UI Projection And HUD Platform](../design/deferred/game-runtime-ui-projection-and-hud-platform-design.md)

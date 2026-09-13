@@ -11,7 +11,7 @@ related:
   - ./ui-source-projection-and-program-lowering-design.md
   - ./domain-authoring-source-and-program-pattern.md
   - ./ui-testing-conformance-and-proof-matrix-design.md
-  - ./ui-program-architecture-owner-map.md
+  - ../implemented/ui-program-architecture-owner-map.md
 ---
 
 # UI Package Security Versioning And Migration Design

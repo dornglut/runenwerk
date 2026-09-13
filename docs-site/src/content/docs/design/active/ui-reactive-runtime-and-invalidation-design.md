@@ -10,8 +10,8 @@ related:
   - ./ui-framework-runtime-requirements-design.md
   - ./ui-source-projection-and-program-lowering-design.md
   - ./typed-app-program-counter-proof-design.md
-  - ./ui-program-architecture.md
-  - ./ui-program-architecture-owner-map.md
+  - ../implemented/ui-program-architecture.md
+  - ../implemented/ui-program-architecture-owner-map.md
 ---
 
 # UI Reactive Runtime And Invalidation Design

@@ -12,7 +12,7 @@ related:
   - ./ui-reactive-runtime-and-invalidation-design.md
   - ./ui-testing-conformance-and-proof-matrix-design.md
   - ./ui-performance-virtualization-assets-and-profiling-design.md
-  - ./ui-program-architecture-owner-map.md
+  - ../implemented/ui-program-architecture-owner-map.md
 ---
 
 # UI Devtools Inspection And Workbench Design

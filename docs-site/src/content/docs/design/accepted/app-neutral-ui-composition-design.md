@@ -11,7 +11,7 @@ related_adrs:
 related_designs:
   - ./adaptive-ui-composition-design.md
   - ./editor-native-multi-window-presentation-design.md
-  - ../active/ui-program-architecture-owner-map.md
+  - ../implemented/ui-program-architecture-owner-map.md
 related_roadmaps:
   - ../../domain/ui/roadmap.md
 ---
