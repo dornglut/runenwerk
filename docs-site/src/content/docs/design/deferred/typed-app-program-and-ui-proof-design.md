@@ -96,23 +96,26 @@ pressure evidence. They do not activate this design.
 
 ## Reactivation conditions
 
-Reactivate this design only through a new owning GitHub issue that re-derives the
-boundary from current source and accepted authority and proves all of the
-following:
+Reactivate this direction only after accepted architecture and live work both
+justify it. A future attempt must satisfy all of the following:
 
-1. A concrete Runenwerk consumer needs reusable model/action/reducer/effect/replay
-   contracts beyond ordinary ADR-0019 `App`/plugin composition.
-2. `App` remains the single live runtime composition root; any helper lowers to
+1. An accepted App-program or Plan architecture establishes the semantic model
+   and reconciles it with ADR 0019 and the then-current Runenwerk platform
+   architecture. An open proposal or unmerged candidate is not sufficient.
+2. A new owning GitHub issue selects a concrete Runenwerk consumer and first
+   proof that need reusable model/action/reducer/effect/replay contracts beyond
+   ordinary `App`/plugin composition.
+3. `App` remains the single live runtime composition root; any helper lowers to
    ordinary App/plugins/resources and does not become persistent parallel
    composition truth.
-3. App/domain semantic ownership stays outside UI, renderer, generic ECS storage,
+4. App/domain semantic ownership stays outside UI, renderer, generic ECS storage,
    and foundation utilities.
-4. The proposal reuses current UI source/program/event/host contracts instead of
+5. The proposal reuses current UI source/program/event/host contracts instead of
    duplicating them and names exact owner files, dependencies, validation, and
    stop conditions.
-5. Any proposed shared extraction is justified by repeated structurally
+6. Any proposed shared extraction is justified by repeated structurally
    different consumers rather than the UI proof alone.
-6. If `typed-app-program-counter-proof-design.md` is used as the proving
+7. If `typed-app-program-counter-proof-design.md` is used as the proving
    consumer, issue #281 must first resolve and that Counter design must be
    separately re-reviewed against the resulting accepted architecture.
 
