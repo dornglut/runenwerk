@@ -5,10 +5,9 @@ status: accepted
 owner: workspace
 layer: architecture
 canonical: true
-last_reviewed: 2026-08-25
+last_reviewed: 2026-09-13
 related_designs:
   - ../../architecture/repository-family-architecture.md
-  - ../../design/active/runensdf-extraction-design.md
   - ../../design/accepted/runenecs-extraction-boundary-design.md
   - ../../design/active/runengpu-architecture-design.md
   - ../../design/accepted/runenrender-decomposition-design.md
@@ -81,16 +80,21 @@ because an application may accelerate or display their outputs.
 
 ### RunenSDF
 
-The corrected standalone repository transfer completed at:
+Current reusable RunenSDF architecture and implementation authority belongs to
+[`dornglut/runen-sdf`](https://github.com/dornglut/runen-sdf/blob/main/ARCHITECTURE.md).
+The corrected standalone source transfer completed at:
 
 ```text
 repository: dornglut/runen-sdf
 commit: d52badefc640d6dc6dcdd40268af3aea1bb8eefe
 ```
 
-Current Runenwerk `main` does not yet contain a merged clean-cutover removal of
-`domain/sdf`. That decision remains separate from the completed standalone
-transfer.
+Runenwerk then completed the retirement-only clean cutover under issue `#133` and
+PR `#157`, accepted as merge `f171c5bad51fa476d1875b3b88807e202088f692`,
+after proving zero real code consumers. Current Runenwerk source contains no tracked
+`domain/sdf` package, workspace member, or duplicate implementation and carries no
+unused external RunenSDF dependency; Runenwerk retains only product/world integration
+such as `domain/world_sdf`.
 
 ### RunenECS
 
