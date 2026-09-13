@@ -23,9 +23,9 @@ use runen_gpu::{
     GpuBufferDescriptor, GpuBufferInitialization, GpuBufferRegion, GpuBufferTextureLayout,
     GpuBufferUsage, GpuClearOperation, GpuComputeOperation, GpuComputePipelineDescriptor,
     GpuContext, GpuContextAffinity, GpuCopyOperation, GpuDispatchIntent, GpuDispatchSize,
-    GpuReconstruction, GpuResourceLifetime, GpuResourceScope, GpuRuntimeBindingValue, GpuSubmission,
-    GpuTextureCopyRegion, GpuUploadOperation, GpuWorkFragment, GpuWorkSubmissionError,
-    PreparedGpuData, TransferData, admit_static_wgsl_sources,
+    GpuReconstruction, GpuResourceLifetime, GpuResourceScope, GpuRuntimeBindingValue,
+    GpuSubmission, GpuTextureCopyRegion, GpuUploadOperation, GpuWorkFragment,
+    GpuWorkSubmissionError, PreparedGpuData, TransferData, admit_static_wgsl_sources,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
@@ -186,7 +186,10 @@ impl fmt::Display for RenderDeterministicLoweringError {
                 "RunenGPU exposed unusable texture bytes-per-row alignment {alignment}"
             ),
             Self::SizeOverflow { field } => {
-                write!(formatter, "{field} exceeds maintained physical indexing limits")
+                write!(
+                    formatter,
+                    "{field} exceeds maintained physical indexing limits"
+                )
             }
             Self::HostAllocation { field } => {
                 write!(formatter, "host allocation failed for {field}")
@@ -365,9 +368,7 @@ fn lower_output(
         .copied()
         .ok_or(RenderDeterministicLoweringError::OutputCorrelationChanged { output_index })?;
     if requested.observation_index() != admitted_output.observation_index() {
-        return Err(RenderDeterministicLoweringError::OutputCorrelationChanged {
-            output_index,
-        });
+        return Err(RenderDeterministicLoweringError::OutputCorrelationChanged { output_index });
     }
     let observation = admitted
         .plan()
@@ -479,12 +480,9 @@ fn lower_output(
     )
     .map_err(|error| gpu_authoring("status clear", error))?;
 
-    let [source] = admit_static_wgsl_sources([(
-        "runenrender.maintained.deterministic",
-        1,
-        MAINTAINED_WGSL,
-    )])
-    .map_err(|error| gpu_authoring("maintained WGSL admission", error))?;
+    let [source] =
+        admit_static_wgsl_sources([("runenrender.maintained.deterministic", 1, MAINTAINED_WGSL)])
+            .map_err(|error| gpu_authoring("maintained WGSL admission", error))?;
     let pipeline = GpuComputePipelineDescriptor::ordinary(source, "main")
         .map_err(|error| gpu_authoring("compute-pipeline descriptor", error))?;
     let runtime_bindings = pipeline
@@ -535,7 +533,10 @@ fn lower_output(
             work.operation("clear semantic definedness", definedness_clear)?;
             work.operation("clear evaluator status", status_clear)?;
             work.compute("evaluate deterministic output", compute)?;
-            work.operation("copy canonical output to admitted destination", destination_copy)?;
+            work.operation(
+                "copy canonical output to admitted destination",
+                destination_copy,
+            )?;
             Ok(())
         },
     )
@@ -551,7 +552,9 @@ fn pack_output(
     context: &GpuContext,
 ) -> Result<PackedOutput, RenderDeterministicLoweringError> {
     let output_index = admitted_output.output_index();
-    let topology = admitted.plan().request().outputs()[output_index].spec().topology();
+    let topology = admitted.plan().request().outputs()[output_index]
+        .spec()
+        .topology();
     let (sample_count, width, height, row_stride_words, output_byte_len, texture_row_bytes) =
         if let Some((width, height)) = topology.sample_lattice_dimensions() {
             let sample_count = width.checked_mul(height).ok_or(
@@ -572,9 +575,9 @@ fn pack_output(
                 .ok_or(RenderDeterministicLoweringError::MissingBytesPerRowAlignment)?;
             let row_bytes = align_up(logical_row_bytes, alignment)?;
             if row_bytes % WORD_BYTES != 0 {
-                return Err(RenderDeterministicLoweringError::InvalidBytesPerRowAlignment {
-                    alignment,
-                });
+                return Err(
+                    RenderDeterministicLoweringError::InvalidBytesPerRowAlignment { alignment },
+                );
             }
             let row_stride_words = u32::try_from(row_bytes / WORD_BYTES).map_err(|_| {
                 RenderDeterministicLoweringError::SizeOverflow {
@@ -644,14 +647,18 @@ fn pack_output(
         })?;
     for object in admitted_output.object_representations() {
         let representation_id = object.representation().representation_id();
-        let input = admitted
-            .surface_semantic_input(representation_id)
-            .ok_or(RenderDeterministicLoweringError::MissingSurfaceInput {
+        let input = admitted.surface_semantic_input(representation_id).ok_or(
+            RenderDeterministicLoweringError::MissingSurfaceInput {
                 output_index,
                 object_id: object.object_id(),
                 representation_id,
-            })?;
-        geometry.push((object.object_id(), representation_id, input.execution_view()));
+            },
+        )?;
+        geometry.push((
+            object.object_id(),
+            representation_id,
+            input.execution_view(),
+        ));
     }
     geometry.sort_by_key(|(object_id, representation_id, _)| (*object_id, *representation_id));
 
@@ -661,35 +668,29 @@ fn pack_output(
         Vec::new()
     };
     let emitter_offset = HEADER_WORDS
-        .checked_add(
-            geometry
-                .len()
-                .checked_mul(GEOMETRY_WORDS)
-                .ok_or(RenderDeterministicLoweringError::SizeOverflow {
-                    field: "geometry input words",
-                })?,
-        )
+        .checked_add(geometry.len().checked_mul(GEOMETRY_WORDS).ok_or(
+            RenderDeterministicLoweringError::SizeOverflow {
+                field: "geometry input words",
+            },
+        )?)
         .ok_or(RenderDeterministicLoweringError::SizeOverflow {
             field: "emitter input offset",
         })?;
     let total_words = emitter_offset
-        .checked_add(
-            emitters
-                .len()
-                .checked_mul(EMITTER_WORDS)
-                .ok_or(RenderDeterministicLoweringError::SizeOverflow {
-                    field: "emitter input words",
-                })?,
-        )
+        .checked_add(emitters.len().checked_mul(EMITTER_WORDS).ok_or(
+            RenderDeterministicLoweringError::SizeOverflow {
+                field: "emitter input words",
+            },
+        )?)
         .ok_or(RenderDeterministicLoweringError::SizeOverflow {
             field: "packed input words",
         })?;
     let mut words = Vec::new();
-    words
-        .try_reserve_exact(total_words)
-        .map_err(|_| RenderDeterministicLoweringError::HostAllocation {
+    words.try_reserve_exact(total_words).map_err(|_| {
+        RenderDeterministicLoweringError::HostAllocation {
             field: "packed maintained semantic input",
-        })?;
+        }
+    })?;
     words.resize(total_words, 0_u32);
 
     words[0] = sample_count;
@@ -717,14 +718,12 @@ fn pack_output(
 
     for (index, (object_id, _, input)) in geometry.into_iter().enumerate() {
         let base = HEADER_WORDS + index * GEOMETRY_WORDS;
-        let state = admitted
-            .plan()
-            .scene()
-            .object_state(object_id)
-            .ok_or(RenderDeterministicLoweringError::MissingObjectState {
+        let state = admitted.plan().scene().object_state(object_id).ok_or(
+            RenderDeterministicLoweringError::MissingObjectState {
                 output_index,
                 object_id,
-            })?;
+            },
+        )?;
         let transform = RenderCompiledObjectTransform::compile(state.spatial()).map_err(
             |RenderCompiledObjectTransformError::NonInvertibleObjectTransform| {
                 RenderDeterministicLoweringError::NonInvertibleObjectTransform {
@@ -733,9 +732,9 @@ fn pack_output(
                 }
             },
         )?;
-        words[base + 1] = *object_codes.get(&object_id).ok_or(
-            RenderDeterministicLoweringError::OutputCorrelationChanged { output_index },
-        )?;
+        words[base + 1] = *object_codes
+            .get(&object_id)
+            .ok_or(RenderDeterministicLoweringError::OutputCorrelationChanged { output_index })?;
         words[base + 2] = if output_kind == OUTPUT_RADIANCE {
             let material = admitted
                 .plan()
@@ -769,10 +768,8 @@ fn pack_output(
             } => {
                 words[base] = SHAPE_SPHERE;
                 pack_vec3(&mut words, base + 25, center_local_units)?;
-                words[base + 28] = positive_f32_bits(
-                    radius_local_units,
-                    "surface-input sphere radius",
-                )?;
+                words[base + 28] =
+                    positive_f32_bits(radius_local_units, "surface-input sphere radius")?;
             }
             RenderSurfaceSemanticInputView::Plane {
                 point_local_units,
