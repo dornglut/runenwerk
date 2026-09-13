@@ -24,39 +24,153 @@ related_docs:
 
 This document is the detailed normative model under ADR 0023 and ADR 0019.
 
-It defines the semantic categories, current-source disposition pressure, and mechanical
-fitness rules that future App/runtime cleanup must preserve. It is **not** a statement
-that current Rust already conforms, and it does not select final Rust type names for
-every concept.
+It owns current-source classification, disposition pressure, failure/admission semantics,
+and mechanical fitness rules for later App/runtime cleanup. It does **not** claim current
+Rust already conforms and does not select final Rust type names for every concept.
 
-Current code/tests remain the source of truth for current behavior. Where this design
-and current implementation differ, the difference is an implementation gap requiring a
-separately accepted delivery issue.
+Current code/tests remain the authority for current behavior. Where this design differs
+from current behavior, the difference is an implementation gap requiring a separately
+accepted delivery issue.
 
-## Scope
-
-This model answers:
+The current-source census below was revalidated against accepted `main`:
 
 ```text
-What is App?
-What may App-owned runtime state contain?
-What may App contain without taking semantic ownership?
-What is composition rather than runtime authority?
-What belongs to a host?
-What is advancement policy?
-What is an App lifecycle occurrence?
-How do owner-specific capabilities participate without transferring authority?
-How should current builtin state be classified before cleanup?
-What must future product/plugin groups lower into?
+423eb85dbd46ce1106c725784775183c1663f02f
 ```
 
-It does not define a universal Runen semantic model, Plan IR, generic DI framework,
-service locator, dynamic plugin runtime, new scheduler, compile-time feature topology,
-or the reusable semantics owned by peer frameworks.
+## 1. Exact current-source findings
 
-## 1. Normalized top-level model
+The normalized design is driven by concrete current behavior rather than directory names.
 
-The target mental model is:
+### 1.1 Current `App` mixes independent roles
+
+Current `App` stores:
+
+```text
+runen_ecs::World
+runen_ecs::Runtime
+Box<dyn AppRunner>
+startup_ran
+AppMode(Windowed | Headless)
+title
+winit::event_loop::ControlFlow
+```
+
+It also exposes both core composition operations and capability-specific scene, render,
+input, simulation, replay, pacing, and direct-World operations.
+
+### 1.2 Current construction installs broad state
+
+`App::install_builtin_resources()` currently installs or initializes:
+
+```text
+Time
+InputState
+WindowState
+FramePacingPolicyResource
+FramePacingRuntimeStateResource
+WindowStateRegistryResource
+PlatformWindowEventQueueResource
+NativeWindowHookRegistryResource
+SceneCatalog
+StartupState
+SceneRuntimeState
+UiOverlayState
+GameplayRuntimeConfig
+FixedTimeConfig
+CatchupBudget
+FixedTimeState
+SimulationTick
+ProductPublicationRuntimeResource
+QuerySnapshotRuntimeResource
+RuntimeJobExecutorResource
+RuntimeProductCacheResource
+SimulationProfileConfig
+SimulationSessionId
+SimulationSeed
+SimulationRng
+```
+
+and installs the built-in product/query publication handlers.
+
+Bootstrap placement is implementation evidence, not semantic ownership.
+
+### 1.3 Current host and advancement semantics are conflated
+
+`App::new()` records `AppMode::Windowed`; `App::headless()` records
+`AppMode::Headless`. However:
+
+```text
+run_for_frames(...)
+run_for_ticks(...)
+```
+
+always route through `run_headless()` regardless of stored mode, then return the same
+`App` value to the caller.
+
+Therefore current mode, host preparation, and bounded advancement are not one coherent
+semantic axis.
+
+### 1.4 Bounded advancement is demonstrably repeatable
+
+`run_for_frames` and `run_for_ticks` consume and return `Self`. A caller can receive the
+same runtime back and advance it again. `startup_ran` prevents successful Startup from
+running again.
+
+Therefore **normal bounded completion cannot semantically mean App termination**.
+
+### 1.5 Current Startup has an unsafe implicit retry shape
+
+`run_startup_if_needed` sets `startup_ran = true` only after the Startup schedule
+returns success.
+
+If Startup mutates state and then returns an error, the same App can be advanced again
+and Startup will be attempted again over partially committed state. There is no generic
+rollback contract.
+
+That current behavior is not accepted as the normalized lifecycle contract.
+
+### 1.6 Current bounded tick advancement leaks simulation/timing ownership
+
+`FixedTicksRunner` directly reads:
+
+```text
+SimulationTick
+FixedTimeConfig
+Time
+```
+
+and mutates `Time::delta_seconds` to drive progress.
+
+That proves the current runner is not a neutral App advancement abstraction: it borrows
+simulation identity and timing state from other semantic owners.
+
+### 1.7 Current headless preparation still uses window-shaped state
+
+`prepare_world_for_run` mutates `WindowState` to represent both headless and windowed
+run preparation. Bare App bootstrap also installs the native window registry, platform
+event queue, native-window hooks, and Winit pacing state for headless construction.
+
+The normalized model must not require synthetic native-window state as the marker for a
+headless host.
+
+### 1.8 Some plugins are nominal rather than truthful activators
+
+For example, `ScenePlugin` initializes `SceneRuntimeState`, `GameplayRuntimeConfig`, and
+`UiOverlayState` that bare App bootstrap already installs.
+
+Likewise current fixed/time/input plugin boundaries do not fully align with actual state
+activation. A plugin name is therefore not ownership proof.
+
+### 1.9 Publication is already separately governed
+
+ADR 0022 and issue #591 own the active Product/Query publication lifecycle cutover.
+That work preserves/refines narrow publication handler registration and currently keeps
+built-in handler registration in App construction.
+
+This design classifies semantic ownership without overriding #591's exact cutover.
+
+## 2. Normalized top-level model
 
 ```text
 Product / application intent
@@ -76,7 +190,7 @@ owner plugins / adapters / product behavior
 |                                                              |
 |  contained owner runtimes / adapters                         |
 |    current example: RunenECS World + Runtime                 |
-|    semantics remain owned by the contained owner             |
+|    owner semantics remain with the contained owner           |
 |                                                              |
 |  accepted composition                                        |
 +--------------------------------------------------------------+
@@ -99,100 +213,84 @@ owner plugins / adapters / product behavior
             owner-specific semantic/runtime state
 ```
 
-The critical rules are:
+The critical laws are:
 
-> **Composition, containment, hosting, advancement, lifecycle occurrence, and
-> domain/framework state are different semantic roles even when one Rust object
-> currently contains several of them.**
+```text
+composition != semantic ownership
+containment != semantic ownership
+host != advancement policy
+lifecycle occurrence != owner state
+resource presence != authority
+schedule position != domain ownership
+```
 
-and:
+## 3. Semantic roles
 
-> **Containment is not semantic ownership.**
-
-## 2. Semantic roles
-
-### 2.1 App
+### 3.1 `App`
 
 `App` is the one live Runenwerk application/runtime composition root.
 
-Its semantic responsibilities are limited to:
+It may:
 
-- accepting explicit pre-run composition operations;
-- owning genuine Runenwerk application/integration lifecycle state;
-- containing/invoking selected owner runtimes and adapters without taking their
-  semantics;
-- connecting accepted composition to a selected host and advancement policy;
-- invoking Runenwerk-owned lifecycle integration according to accepted architecture;
-- exposing owner integration without becoming the owner of foreign invariants.
+- accept explicit composition operations while configuring;
+- own genuine Runenwerk application/integration lifecycle state;
+- contain/invoke selected owner runtimes and adapters;
+- connect accepted composition to a selected Host and Advancement Policy;
+- invoke Runenwerk-owned lifecycle integration;
+- expose typed owner integration without taking foreign semantic ownership.
 
-`App` is not:
+It is not:
 
 - a universal semantic object database;
 - an application-domain model;
 - a replacement for owner frameworks;
 - a generic service container;
-- a capability registry whose entries themselves determine semantics;
+- a persistent capability registry;
 - a product preset database;
 - a universal executor;
-- a semantic owner merely because it stores an owner runtime.
+- the semantic owner of a runtime merely because it stores it.
 
-### 2.2 Application Composition
+### 3.2 Application Composition
 
-Application Composition is the pre-run selection/configuration of owner capabilities and
-product behavior.
+Application Composition selects and configures what participates in one App instance.
 
-Examples include:
+Examples:
 
 ```text
-add owner plugin
-add product plugin
+install owner/product plugin
+register systems
 insert owner configuration
-register owner systems
 install a cross-framework adapter
-select host configuration
-select advancement policy
+select Host configuration
+select Advancement Policy
 set host-neutral application metadata
 ```
 
-Composition is authoritative only for **which integration has been selected for this App
-instance**. It does not acquire the semantics of the selected owner.
+Composition owns **selection/integration facts**, not the semantics of the selected
+owner.
 
-### 2.3 Integration / Runtime Container
+Ordinary plugin/capability topology is mutable only while configuring. Once runtime
+preparation/start begins, it is stable unless a separately accepted dynamic-topology
+design explicitly says otherwise.
 
-The Integration / Runtime Container is the live Runenwerk application integration that
-holds the state and owner runtimes required to execute the accepted composition.
+### 3.3 Integration / Runtime Container
 
-It contains three semantically different categories:
+The live container may hold:
 
 ```text
-A. App-owned integration/lifecycle state
+A. App-owned Runenwerk integration/lifecycle state
 B. contained foreign-owner runtime instances/handles
-C. owner capability state installed into a shared runtime such as World
+C. owner capability state installed in a shared runtime such as World
 ```
 
-Those categories must not collapse merely because they are reachable through `App`.
+Those categories remain semantically distinct even when one Rust object exposes them.
 
-#### Current RunenECS containment
+Current `runen_ecs::World` and `runen_ecs::Runtime` are category B: Runenwerk contains
+and invokes them; RunenECS owns ECS semantics.
 
-Current `App` mechanically contains:
+### 3.4 Host
 
-```text
-runen_ecs::World
-runen_ecs::Runtime
-```
-
-RunenECS owns their ECS semantics. Runenwerk owns their application integration and
-invocation at Runenwerk lifecycle points.
-
-This design does **not** make ECS the universal Runen semantic ontology. It also does not
-remove or optionalize the current structural RunenECS integration. Either kind of
-future topology change requires independent evidence.
-
-Presence of a resource inside `World` likewise does not make that resource App-owned.
-
-### 2.4 Host
-
-A Host realizes the App runtime in an execution environment.
+A Host realizes the runtime in an execution environment.
 
 Current demonstrated host classes are conceptually:
 
@@ -201,46 +299,48 @@ NativeWindowHost
 HeadlessHost
 ```
 
-These names do not require matching public Rust types.
+These are semantic roles, not required public type names.
 
 The current native-window host owns Runenwerk's Winit realization, native-window
-lifecycle, platform/window event delivery, redraw policy, current event-loop pacing, and
-event-loop control.
+lifecycle, platform/window event delivery, redraw/event-loop policy, native-window hooks,
+surface-host integration, and current Winit pacing behavior.
 
-The headless host owns the absence of native-window lifecycle. It is not a window host
-with synthetic sentinel windows.
+A headless host is a host with no native-window lifecycle. It is not represented by fake
+native-window state merely to satisfy APIs designed around Winit.
 
-A future host class must be justified by a real environment/consumer. This design does
-not pre-authorize a generic host-plugin framework.
+### 3.5 Advancement Policy
 
-### 2.5 Advancement Policy
-
-Advancement Policy decides how execution opportunities are supplied to or bounded for
-the App runtime.
+Advancement Policy determines how execution opportunities are supplied, bounded, or
+paced.
 
 Current demonstrated needs include:
 
 ```text
-native event-loop driven execution
-bounded N-frame execution for tests/proofs/headless tools
-bounded fixed-step-oriented proof execution
+native event-loop driven advancement
+bounded N-frame advancement
+bounded fixed-step-oriented proof advancement
 ```
 
-Advancement is distinct from Host. A test driver controlling how many runtime
-occurrences happen does not redefine the host's semantic environment.
+A future generic cross-host pacing/throttling policy also belongs here if real consumers
+prove it.
 
-A future generic cross-host pacing/throttling policy, if proven, belongs here rather
-than being inferred from the current Winit frame-pacing implementation.
+Advancement is not Host identity.
 
-### 2.6 Plugin
+### 3.6 Owner Capability State
 
-A Runenwerk `Plugin` is a composition action that installs/configures a capability or
-integration in the App runtime.
+Owner Capability State belongs to the domain/framework/product/integration owner whose
+invariants define it.
 
-A plugin is not automatically the semantic owner of the values it installs. Semantic
-ownership follows the invariant owner.
+Examples include scene state, UI state, simulation state, native-window state,
+publication state, product-job/cache state, networking state, and replay state.
 
-A truthful plugin boundary has these properties:
+Presence inside `World` or reachability through `App` does not transfer ownership.
+
+### 3.7 Plugin
+
+A `Plugin` is a Runenwerk composition/install mechanism.
+
+A truthful plugin boundary means:
 
 ```text
 plugin selected
@@ -248,95 +348,119 @@ plugin selected
 
 plugin absent
     -> capability-owned state/systems are absent
-       unless another explicit owner legitimately supplies the same requirement
+       unless another explicit owner legitimately supplies the requirement
 ```
 
-A plugin that only reinitializes state already globally activated elsewhere is a
-boundary defect unless that shared state is independently proven Runenwerk App-owned
-integration state or explicitly supplied by another owner.
+A plugin that only reinitializes already globally activated state is a boundary defect
+unless the shared state is independently proven App-owned or explicitly supplied by
+another owner.
 
-### 2.7 Product/Plugin Group
+### 3.8 Product/plugin group
 
-A Product/Plugin Group is an ephemeral deterministic composition recipe accepted by ADR
-0019.
-
-Conceptually:
+A future Product/Plugin Group remains the ADR-0019 concept:
 
 ```text
-Group
-  -> ordered owner plugin/configuration selection
-  -> validation/admission
-  -> ordinary App composition
-  -> no independent runtime authority remains
+ordered inspectable composition recipe
+-> owner plugins/configuration
+-> validation/admission
+-> ordinary App composition
+-> no independent runtime authority
 ```
 
-The future group mechanism may support only proven requirements such as deterministic
-membership/order, legal replacement/removal/configuration, composition, and useful
-incompatibility diagnostics.
+Do not implement groups merely to hide current bootstrap debt.
 
-Groups must not be implemented early merely to wrap current global builtin debt.
+## 4. App-owned runtime-state qualification
 
-### 2.8 Owner Capability State
-
-Owner Capability State is state whose invariant belongs to a selected domain/framework,
-product, or Runenwerk integration capability rather than universal App-owned runtime
-state.
-
-Examples include scene state, UI state, simulation state, native-window state,
-publication state, product-job execution/cache state, networking state, and replay
-state.
-
-The owner installs and validates such state directly or through a Runenwerk adapter.
-
-## 3. App-owned runtime-state qualification test
-
-Every candidate **App-owned runtime field/resource/integration state** must pass all six
+Every candidate bare App-owned runtime field/resource/integration state must pass all six
 gates:
 
 | Gate | Question |
 |---|---|
 | Ownership | Is the invariant genuinely Runenwerk App/runtime-integration semantics? |
-| Universality | Does every currently supported App host/runtime require it? |
-| Independence | Is it meaningful with every optional capability absent? |
-| Necessity | Would its absence invalidate App itself rather than one optional capability? |
+| Universality | Does every current runtime path requiring this invariant need it independent of optional capabilities? |
+| Independence | Is it meaningful with every optional domain/product capability absent? |
+| Necessity | Would its absence invalidate App/runtime integration itself rather than one optional capability? |
 | Authority safety | Does installation avoid manufacturing foreign/fake semantic authority? |
 | Cost | Is universal installation independently acceptable? |
 
 Failure of any gate means **not App-owned core runtime state**.
 
-This test is deliberately stricter than "many products use it" and stricter than
-"current code expects it". Host-specific state fails the Universality gate and belongs
-to the Host even when Runenwerk owns that host integration.
-
 The test does not classify:
 
-- host-neutral pre-run application configuration/metadata such as a title;
+- host-neutral pre-run metadata such as a title;
 - contained foreign-owner runtimes whose semantics remain with their owner;
-- optional owner resources installed through the composition.
+- optional owner resources installed through composition.
 
-Those have their own semantic categories and must not be forced into App-owned runtime
-state merely because `App` stores or exposes them.
+## 5. Host/Advancement compatibility and stability
 
-## 4. Composition and App lifecycle state machine
+Host and Advancement Policy are independent semantic dimensions but not an unrestricted
+Cartesian product.
 
-The conceptual App lifecycle is:
+Composition/preparation must reject unsupported combinations explicitly. Examples of
+questions an implementation must answer include:
+
+```text
+Does this Host support externally bounded advancement?
+Does this Advancement Policy require a host clock or event pump?
+Does a selected capability require a native window before Startup?
+Can this host realize the capability required by the product?
+```
+
+### 5.1 Host identity becomes stable before Startup
+
+Once selected-host preparation or Startup begins, Host identity is stable for that
+runtime instance unless a separately accepted host-transition contract explicitly allows
+change.
+
+Therefore a bounded runner must not silently implement itself by changing a Windowed
+runtime into a Headless host, or vice versa.
+
+Current `run_for_frames`/`run_for_ticks` routing through `run_headless()` regardless of
+stored `AppMode` is predecessor behavior to normalize, not a target law.
+
+### 5.2 Bounded advancement is repeatable
+
+Normal bounded completion is an Advancement Policy result. It returns control without
+terminating the live App.
+
+Conceptually:
+
+```text
+Running
+  -- advance N frames --> Running
+
+Running
+  -- advance until accepted bounded condition --> Running
+```
+
+A caller may advance the same started runtime again when the selected Host/Advancement
+combination permits it.
+
+### 5.3 Terminal host shutdown is different
+
+Host/process termination follows the App terminal path and is not equivalent to a
+bounded driver simply reaching its requested bound.
+
+## 6. Composition and lifecycle state model
+
+The conceptual lifecycle is:
 
 ```text
 Configuring
     |
-    | composition admitted / sealed for ordinary execution
+    | composition admitted / sealed
     v
 Prepared
     |
-    | selected host/runtime integration preparation succeeds
+    | selected host/runtime preparation succeeds
     v
 Starting
     |
-    | Startup schedule succeeds exactly once
+    | Startup succeeds once
     v
 Running
     |
-    | host termination / bounded driver completion / fatal error
+    | terminal host/process stop
     v
 Terminating
     |
@@ -344,9 +468,9 @@ Terminating
 Terminated
 ```
 
-This model is normative semantics, not a requirement for one public Rust enum.
+This is semantic vocabulary, not a required public enum.
 
-### 4.1 Configuring
+### 6.1 Configuring
 
 Allowed:
 
@@ -355,56 +479,74 @@ Allowed:
 - owner resources/configuration;
 - owner adapters;
 - product declarations;
-- host/advancement configuration;
+- Host/Advancement configuration;
 - host-neutral application metadata.
 
-Not authorized by this model:
+Not authorized:
 
-- executing normal runtime schedules while composition is still changing;
-- arbitrary live plugin add/remove after start;
-- hidden autodiscovery that mutates composition behind the application.
+- normal runtime advancement while topology is still changing;
+- arbitrary plugin add/remove after start;
+- hidden autodiscovery that silently mutates composition.
 
-### 4.2 Prepared
+### 6.2 Prepared
 
-Prepared means the selected composition and host/runtime prerequisites have passed the
-required admission checks for startup.
+Prepared means the selected composition has been admitted far enough to begin concrete
+host/runtime preparation.
 
-The model does not require one monolithic `prepare()` function or one validation
-registry. Owners may validate through their normal typed contracts. Runenwerk must make
-composition failures diagnosable at the integration boundary.
+The model does not require one universal validation registry or one monolithic error
+type. Owners may validate through typed owner contracts; Runenwerk supplies integration
+context and diagnostics.
 
-### 4.3 Starting
+### 6.3 Starting
 
-Runenwerk executes App Startup at most once successfully per runtime instance.
+Startup is a one-shot lifecycle attempt for one runtime instance.
 
-Product/domain "startup", loading, warm-up, readiness, connection establishment, or
-resource residency are separate owner state machines unless an accepted owner design
-says otherwise.
+On success:
 
-### 4.4 Running
+```text
+Starting -> Running
+```
 
-Running contains lifecycle occurrences such as frame/update/fixed/render/publication
-integration according to their accepted owners and placements.
+On error or panic after Startup execution begins:
 
-A lifecycle occurrence is a point at which owner integration may run. It is not a claim
-that all state touched there is App-owned.
+```text
+Starting -> invalid/non-runnable runtime instance
+```
 
-### 4.5 Terminating / Terminated
+Required failure law:
 
-The App runtime has stopped accepting normal advancement. Concrete host behavior may
-differ by platform; for example an event loop may not return normally on every target.
+- no generic rollback is implied;
+- already committed effects remain committed;
+- Runenwerk does not implicitly retry Startup on the same runtime;
+- ordinary advancement of that runtime must reject;
+- recovery requires an explicit owner/host recovery contract or reconstruction.
 
-This model defines the semantic terminal transition without pre-authorizing a universal
-`Shutdown` schedule or global teardown callback registry.
+Current `startup_ran` behavior, which retries after failure because only success marks the
+flag, is predecessor implementation behavior and is not the target contract.
 
-## 5. Lifecycle occurrences and authority
+### 6.4 Running
 
-The central normalization law is:
+`Running` means Startup completed and the runtime is eligible for valid advancement.
+It does not mean a host callback or bounded runner is continuously executing.
 
-> **Runenwerk may own when integration work occurs without owning the semantic meaning
-> of the state that participates.**
+A successful bounded advancement operation leaves the App `Running`.
 
-### 5.1 Fixed-step example
+Owner-specific loading, warm-up, connection, readiness, residency, pause, and similar
+state machines remain with their owners unless another accepted design says otherwise.
+
+### 6.5 Terminating / Terminated
+
+Terminal Host/process shutdown may transition through Terminating to Terminated.
+
+This design does not create a universal `Shutdown` ECS schedule or teardown callback
+registry.
+
+## 7. Lifecycle occurrence is not owner state
+
+Runenwerk may own **when** integration happens without owning the semantic meaning of
+state participating there.
+
+### Fixed step
 
 ```text
 Runenwerk fixed-step occurrence
@@ -413,147 +555,53 @@ Runenwerk fixed-step occurrence
     -> world/product systems may execute fixed-step behavior
 ```
 
-The occurrence and each consumer's semantic state remain separate.
+The occurrence and consumer state remain separate.
 
-### 5.2 Window/input example
+### Window/input
 
 ```text
 Winit WindowEvent / DeviceEvent
     -> Runenwerk native-host translation
-    -> neutral/device facts when/if the accepted input repair provides them
-    -> Runenwerk product action mapping and/or RunenUI adapter
+    -> physical/device input boundary when accepted
+    -> Runenwerk product mapping and/or RunenUI adapter
 ```
 
-Native-window lifecycle does not become physical-input semantic authority.
+Native-window lifecycle does not become reusable physical-input authority.
 
-### 5.3 Rendering example
+### Rendering
 
 ```text
 Runenwerk RenderPrepare / RenderSubmit lifecycle position
     -> renderer integration executes
 ```
 
-The schedule position does not become renderer scene/material/lighting/image-formation
-semantic authority.
+The position does not become renderer semantic authority.
 
-### 5.4 Publication example
+### Publication
 
-ADR 0022 defines explicit ProductPublication and QuerySnapshotPublication occurrences.
-Those lifecycle classes own placement/provenance, while product/query semantics remain
-with their actual owners.
+ADR 0022 defines ProductPublication and QuerySnapshotPublication occurrences. Those own
+placement/provenance; product/query payload semantics remain with their actual owners.
 
-## 6. Host model
+## 8. Fixed cadence, timing, and simulation
 
-### 6.1 Native-window host
+### 8.1 Fixed cadence
 
-The following current concepts are host realization facts and must not be treated as
-universal App-owned runtime state solely because they currently live in
-App/bootstrap/runtime:
+Runenwerk owns the application fixed-step lifecycle/cadence and invocation of
+`FixedUpdate` according to accepted application lifecycle semantics.
 
-```text
-winit::ControlFlow
-WindowState
-WindowStateRegistryResource
-PlatformWindowEventQueueResource
-NativeWindowHookRegistryResource
-FramePacingPolicyResource
-FramePacingRuntimeStateResource
-native window lifecycle state
-redraw requests
-focus/resize/scale-factor projection
-```
+The current `FixedStepPlugin` is not a truthful final boundary because fixed-step work is
+already run by the frame lifecycle while bootstrap already installs its state.
 
-The current host owns creation, destruction, resumption/suspension translation where
-applicable, window event dispatch, current event-loop pacing, and platform constraints.
+A later implementation must choose one evidence-backed truth:
 
-A host may expose Runenwerk-owned normalized integration facts. That does not require
-Winit types in the App semantic vocabulary.
+1. **Universal fixed cadence** — fixed cadence is proven App lifecycle; App owns only
+   minimal Runenwerk cadence integration and the redundant plugin disappears.
+2. **Selectable fixed cadence** — a real fixed-step capability activates cadence and its
+   Runenwerk-local state; bare App does not silently run it when absent.
 
-If a future headless or cross-host throttling policy is demonstrated, that generic
-policy belongs to Advancement Policy rather than extending the current Winit-specific
-pacing resources by assumption.
+### 8.2 Simulation identity
 
-### 6.2 Headless host
-
-A headless runtime has no native-window authority unless an explicitly selected
-capability creates an offscreen/native surface for its own purpose.
-
-Bare headless construction therefore does not need a synthetic `WindowState`, registry,
-native hook registry, Winit `ControlFlow`, or redraw/event-loop-pacing state merely as
-placeholders.
-
-### 6.3 Application metadata
-
-Application/product metadata such as a title is host-neutral pre-run configuration.
-Host adapters may project that value into host-specific concepts such as a primary
-window title.
-
-The projection does not reverse ownership, and the title does not need to satisfy the
-App-owned runtime-state qualification test merely because the current implementation
-stores it on `App`.
-
-## 7. Advancement model
-
-### 7.1 Event-driven advancement
-
-The native-window host may drive runtime work in response to its event-loop/redraw
-semantics.
-
-The event loop is host realization. App lifecycle scheduling remains Runenwerk-owned.
-
-### 7.2 Bounded-frame advancement
-
-Tests, proof runners, headless tools, and deterministic harnesses may advance a runtime
-for a bounded number of frame occurrences.
-
-The bound belongs to Advancement Policy. It must not force native-window state to
-pretend to be headless or vice versa.
-
-### 7.3 Bounded fixed-step advancement
-
-A proof may need to run until a number of Runenwerk fixed-step occurrences or an
-owner-specific simulation condition has been reached.
-
-Those are distinct predicates. A generic App advancement driver must not use
-`SimulationTick` as the universal App fixed-step identity.
-
-## 8. Fixed-step and simulation normalization
-
-Current implementation directly increments `engine_sim::SimulationTick` from the
-Runenwerk fixed-step executor. That is a concrete ownership leak.
-
-The normalized target is:
-
-```text
-Runenwerk
-  owns fixed cadence and FixedUpdate invocation
-
-Simulation integration
-  owns SimulationTick / profile / authority / session / seed / RNG
-  observes/adapts Runenwerk lifecycle as required
-```
-
-### 8.1 FixedStepPlugin disposition gate
-
-The current `FixedStepPlugin` cannot remain permanently in its current semantic state:
-it initializes resources App construction already installs while the frame lifecycle
-already runs fixed-step work unconditionally.
-
-A later implementation must choose exactly one truth:
-
-1. **Universal fixed cadence** — fixed cadence is proven Runenwerk App lifecycle, so App
-   owns only the minimal Runenwerk cadence integration state and the redundant
-   `FixedStepPlugin` is removed; owner-specific simulation state remains separate.
-2. **Selectable fixed cadence** — fixed cadence itself is optional, so a real
-   fixed-step capability/plugin activates the cadence and owns its Runenwerk-local state;
-   App does not silently run the capability when absent.
-
-The decision must come from then-current maintained consumers and this semantic model,
-not from preserving the existing plugin name.
-
-### 8.2 Simulation state
-
-These current builtins do not become App-owned merely by existing in bootstrap:
+These are simulation semantics, not App fixed-step identity:
 
 ```text
 SimulationTick
@@ -563,146 +611,154 @@ SimulationSeed
 SimulationRng
 ```
 
-Their types and invariants belong to simulation integration and must be installed by the
-correct simulation owner/path after the clean cut.
+Simulation integration may observe a Runenwerk fixed-step occurrence and advance its own
+identity. The occurrence does not acquire that identity.
 
-## 9. Time normalization
+### 8.3 Bounded tick-oriented advancement
+
+Current `FixedTicksRunner` directly uses `SimulationTick`, `FixedTimeConfig`, and `Time`.
+That is a concrete ownership leak.
+
+A future bounded App advancement primitive must use a Runenwerk-owned advancement
+predicate/occurrence count or explicitly be a **simulation-owned** convenience. It must
+not make simulation tick identity the universal App runner contract.
+
+### 8.4 Time
 
 Current `TimePlugin` installs a system while bare App construction installs the `Time`
 resource.
 
-The target distinguishes:
+The target separates:
 
 ```text
-host/advancement progression facts
+Host/Advancement progression facts
 !=
 system-visible Time projection/service
 ```
 
-If `TimePlugin` survives, it must truthfully own the resource/system contract it exposes.
-If the final implementation instead proves a minimal timing state to be App-owned core
-runtime state, that proof must satisfy all App-owned runtime-state gates and must not
-merely cite current usage.
+If `TimePlugin` survives, it must truthfully own the resource/system behavior it exposes.
+If a minimal timing state is later proven App-owned, that proof must satisfy the App-owned
+runtime-state qualification gates rather than relying on current usage.
 
-Fixed-step policy may consume advancement timing without making `Time` the authority over
-the host itself.
+## 9. Host state normalization
 
-## 10. Input normalization boundary
-
-The completed input investigation concluded:
+The following current resources are native-host realization facts, not universal App
+state:
 
 ```text
-RUNENINPUT_I0 = INTERNAL_BOUNDARY_REPAIR_FIRST
+winit::ControlFlow
+WindowState
+WindowStateRegistryResource
+PlatformWindowEventQueueResource
+NativeWindowHookRegistryResource
+FramePacingPolicyResource
+FramePacingRuntimeStateResource
 ```
 
-Therefore this App design records only the boundary:
+Current frame pacing is Winit/event-loop specific. A later generic cross-host pacing
+policy, if demonstrated, would be Advancement Policy instead of an automatic expansion
+of these host resources.
+
+Headless construction must not require native-window sentinels, window registries, Winit
+control flow, native-window hooks, or Winit pacing state merely to mark itself headless.
+
+Host-neutral application metadata such as title may remain composition/configuration and
+be projected by a host into its own native state.
+
+## 10. Input boundary
+
+Preserve the accepted RunenInput I0 result:
+
+```text
+INTERNAL_BOUNDARY_REPAIR_FIRST
+```
+
+The App model therefore records only this ownership split:
 
 ```text
 platform/window lifecycle       Runenwerk Host
-physical/device input facts     input boundary under separate repair
+physical/device input facts     separate input-boundary repair
 product action mapping          Runenwerk/product
 UI interaction semantics        RunenUI
 ```
 
-Current `InputState` mixes several of these. It must not be blessed as universal
-App-owned state merely to preserve current bootstrap/tests.
+Current mixed `InputState` must not be promoted to App-owned core state merely to
+preserve bootstrap/tests.
 
-Future App cleanup must coordinate with the input repair rather than invent a local
-replacement taxonomy.
+## 11. Scene, product, UI, and readiness state
 
-## 11. Scene/product/readiness normalization
-
-### 11.1 SceneCatalog
+### SceneCatalog
 
 Scene registration/catalog state exists because the Scene capability is selected.
 Target owner: Scene integration/plugin.
 
-### 11.2 SceneRuntimeState
+### SceneRuntimeState
 
 Scene runtime state exists because the Scene capability is selected.
 Target owner: Scene integration/plugin.
 
-### 11.3 GameplayRuntimeConfig
+### GameplayRuntimeConfig
 
-Gameplay policy is product/game integration state, not a universal application-runtime
-invariant. Its exact final owner may be product/world/scene integration according to the
-then-current consumers, but bare App is not the owner.
+Gameplay policy is product/game integration state, not universal App state. Its final
+owner must follow then-current product/world/scene consumers.
 
-### 11.4 UiOverlayState
+### UiOverlayState
 
-UI overlay state is UI/render/product integration state. Bare App is not its owner.
-The exact final owner must follow then-current UI/render integration authority at the
-implementation slice.
+UI overlay state is UI/render/product integration state. Its final owner follows
+then-current UI/render integration authority.
 
-### 11.5 StartupState
+### StartupState
 
-Current `StartupState` tracks loading/readiness based on renderer warm frames and timeout
-behavior. That is not the invariant "App Startup schedule has executed".
+Current `StartupState` models product/render readiness from renderer warm frames and
+timeout behavior. It is not App Startup lifecycle.
 
-The implementation should rename/rehome this state under its actual readiness owner when
-the relevant consumer slice is active. Do not retain the generic name as implied App
-lifecycle authority.
+It should be renamed/reowned when its consumer slice is active so its name cannot imply
+application lifecycle authority.
 
-## 12. Publication and execution-fabric normalization
+## 12. Publication and execution-fabric boundary
 
-ADR 0022, issue #591, and the Execution Fabric design already own this area. This App
-model therefore classifies ownership without freezing predecessor types or competing
-with the active cutover.
+ADR 0022, issue #591, and the accepted Execution Fabric design already own this area.
+This model must not create competing authority.
 
-### 12.1 Publication lifecycle and occurrence state
+### Publication lifecycle
 
-`ProductPublication` and `QuerySnapshotPublication` are Runenwerk-owned lifecycle
-classes under ADR 0022. Product/query payload semantics remain with their actual owners.
+`ProductPublication` and `QuerySnapshotPublication` are Runenwerk lifecycle classes under
+ADR 0022. Product/query payload semantics remain owner-local.
 
-Current `ProductPublicationRuntimeResource`, `QuerySnapshotRuntimeResource`,
-`PublicationBoundary`, and related predecessor state are implementation evidence under
-the active #591 cutover, not stable App semantic types selected by this design.
+Current predecessor types such as:
 
-Their exact replacement/removal/placement belongs to #591.
+```text
+ProductPublicationRuntimeResource
+QuerySnapshotRuntimeResource
+PublicationBoundary
+```
 
-### 12.2 Publication handler registries
+are implementation evidence under #591, not types frozen by this design.
 
-Issue #591 explicitly retains/refines the narrow product and query handler-registration
-mechanism and keeps built-in engine handlers installed during `App` construction as part
-of deterministic registration order.
+### Publication handler registry
 
-That accepted App-construction placement is valid Runenwerk integration ownership. It
-does **not** make product/query payload semantics App-owned and does not authorize a
-generic lifecycle bus.
+#591 explicitly retains/refines the narrow product/query handler-registration mechanism
+and keeps built-in handler registration during App construction as part of deterministic
+registration order.
 
-This semantic model must therefore not reclassify the handler registry as optional or
-move it independently of #591.
+That is valid Runenwerk integration ownership. It does not make product/query payloads
+App-owned. App cleanup must not independently move or redesign this mechanism while #591
+owns the cutover.
 
-### 12.3 RuntimeJobExecutorResource
+### RuntimeJobExecutorResource
 
-The runtime job executor is owned by the accepted Execution Fabric subsystem. Current
-bare-App bootstrap placement does not by itself answer whether the final executor
-installation is universal App integration or selected capability state.
+Execution Fabric owns executor semantics. Current bare-App placement does not prove that
+executor installation is universally App-owned or optional. Final installation requires
+a then-current Execution Fabric consumer census.
 
-That classification requires the then-current Execution Fabric consumer census. This
-App design fixes the semantic owner, not an installation answer that existing authority
-has not separately proven.
+### RuntimeProductCacheResource
 
-### 12.4 RuntimeProductCacheResource
+Execution Fabric/product integration owns cache semantics. Final installation placement
+must follow current consumers rather than bootstrap history.
 
-The runtime product cache is product execution/cache state owned under the Execution
-Fabric/product boundary. Current bootstrap placement does not transfer source/product
-semantic authority to App.
+## 13. Capability-specific App API and temporal contracts
 
-Its final installation placement must follow then-current Execution Fabric consumers and
-must not be guessed merely from current bootstrap.
-
-### 12.5 Concurrency boundary
-
-Issue #591 owns the active ADR-0022 Rust cutover across overlapping runtime/App/product
-surfaces. This semantic model must not duplicate or race that implementation.
-
-Any later App cleanup touching those surfaces must start from then-current accepted
-state after #591 is accepted or explicitly re-reconcile the overlap.
-
-## 13. Capability-specific App API normalization
-
-Current inherent `App` methods mix core composition with capability authoring:
+Current inherent `App` APIs mix several roles:
 
 ```text
 core/integration-shaped
@@ -712,25 +768,27 @@ core/integration-shaped
   set_runner
   world / world_mut
 
-capability-specific
+capability-specific configuration/authoring
   add_input_bindings
   add_render_flow
-  update_render_debug_*
   set_simulation_profile
   set_authority_role
   set_simulation_seed
-  start/stop/load/seek replay
   add_scene / add_scene_template
+
+capability-specific runtime control/query
+  update_render_debug_*
+  start/stop/load/seek replay
+  current_tick
 ```
 
-The normalized rule is not "delete convenience". It is:
+The normalized rule is:
 
-> **Convenience must be owned by the capability whose semantics it manipulates.**
+> **Convenience is owned by the capability whose semantics it manipulates, and every
+> operation retains an explicit temporal contract.**
 
-Owner-specific extension traits/modules over the same App root are a preferred
-long-term direction when they improve discoverability without moving authority.
-
-Directionally only:
+Owner-specific extensions over the same App/runtime are a preferred direction when they
+improve discoverability:
 
 ```text
 AppSceneExt
@@ -740,238 +798,228 @@ AppReplayExt
 AppInput/ProductActionExt
 ```
 
-Names and exact trait boundaries require source-level implementation review. No
-compatibility aliases are pre-authorized.
+Names are illustrative only.
 
-`world()`/`world_mut()` and direct RunenECS integration also remain current implementation
-facts. This design does not decide whether every future application path must expose or
-require those APIs; changing that structural contract would need its own evidence.
+Moving an operation to an owner extension must not silently reclassify it as pre-run
+composition. Owner APIs must distinguish as applicable:
 
-## 14. Composition admission and duplicate semantics
+```text
+composition/configuration command
+runtime command
+runtime query
+runtime diagnostic/control operation
+```
 
-A correct composition model must support deterministic rejection of invalid assembly.
+Whether a specific operation is legal before or after Startup follows its owner contract.
+
+`world()`/`world_mut()` remain current expert escape hatches. This design does not decide
+their final exposure; any restriction requires a separate current-consumer review.
+
+## 14. Composition admission and inspection
+
+A correct composition path rejects invalid assembly deterministically where the failure
+is knowable before Startup.
 
 Potential invalid classes include:
 
 ```text
 required owner capability absent
 illegal duplicate plugin/capability
-mutually incompatible host/capability choice
+mutually incompatible Host/Advancement combination
 owner configuration invalid
-required host capability unavailable
+required Host capability unavailable
 cross-owner adapter prerequisite unsatisfied
 ```
 
-The design does not require a universal `CompositionError` type or registry. Diagnostics
-may be composed from owner-local errors plus Runenwerk integration context.
+The model does not require a universal `CompositionError` type, registry, or service
+locator. Diagnostics may compose owner-local errors with Runenwerk integration context.
 
-Where failure can be known before Startup, fail before Startup rather than allowing a
-later missing-resource panic to become the primary contract.
-
-## 15. Effective composition inspection
-
-Future tooling may inspect the effective composition selected for one App instance.
-
-Useful derived facts may include:
+Future tooling may expose a **derived** effective-composition view containing facts such
+as:
 
 ```text
-selected plugin/group names
-expansion/membership order
-owner configuration identity or summary where meaningful
-host choice
-advancement policy
-rejected/duplicate/incompatible selection diagnostics
+selected plugins/groups
+expansion/installation order
+owner configuration identity/summary where meaningful
+selected Host
+selected Advancement Policy
+rejected/duplicate/incompatible selections
 ```
 
-This is a read model over actual composition. It must not become a writable service
-locator or independent persistence authority.
+That view is read-oriented derived state, not mutable runtime authority.
 
-## 16. Current builtin/field disposition matrix
+## 15. Failure semantics
 
-This matrix is normative **ownership pressure**, not permission to change every row in
-one implementation PR.
+Failure behavior is part of the boundary contract.
 
-| Current item | Current placement | Normalized class | Target disposition |
-|---|---|---|---|
-| `World` | `App` | Contained RunenECS owner runtime | Keep current containment until separately redesigned; RunenECS owns ECS semantics |
-| RunenECS `Runtime` | `App` | Contained RunenECS owner runtime | Keep current containment until separately redesigned; RunenECS owns schedule semantics |
-| `startup_ran` | `App` | Runenwerk App lifecycle state | Keep semantic responsibility; representation may change |
-| `title` | `App` | Host-neutral application metadata/configuration | Keep as composition/configuration concept; host projects it as needed |
-| `AppMode` | `App` | Host selection mixed with runtime mode | Replace/refine around explicit Host semantics as implementation warrants |
-| `AppRunner` | `App` | Advancement Policy implementation | Normalize independently from Host |
-| Winit `ControlFlow` | `App` | Native-host policy | Move to native-window host |
-| `WindowState` | bootstrap | Native-host state | Native-window host only; no required headless sentinel |
-| `WindowStateRegistryResource` | bootstrap | Native-host state | Native-window host |
-| `PlatformWindowEventQueueResource` | bootstrap | Host/platform integration | Native-window/platform host |
-| `NativeWindowHookRegistryResource` | bootstrap | Host/platform integration | Native-window host |
-| `FramePacingPolicyResource` | bootstrap | Current native event-loop pacing policy | Native host in current model; future generic cross-host pacing would be Advancement Policy |
-| `FramePacingRuntimeStateResource` | bootstrap | Current native event-loop pacing state | Same owner boundary as current pacing policy |
-| `Time` | bootstrap | Timing projection/service | Time owner/plugin unless separately proven App-owned core integration state |
-| `FixedTimeConfig` | bootstrap | Fixed cadence policy | App fixed lifecycle or real fixed capability; final implementation decision required |
-| `CatchupBudget` | bootstrap | Fixed cadence policy | Same as fixed cadence owner |
-| `FixedTimeState` | bootstrap | Fixed cadence runtime | Same as fixed cadence owner |
-| `SimulationTick` | bootstrap | Simulation identity | Simulation integration owner |
-| `SimulationProfileConfig` | bootstrap | Simulation policy | Simulation integration owner |
-| `SimulationSessionId` | bootstrap | Simulation identity | Simulation integration owner |
-| `SimulationSeed` | bootstrap | Simulation input/identity | Simulation integration owner |
-| `SimulationRng` | bootstrap | Simulation runtime state | Simulation integration owner |
-| `InputState` | bootstrap | Mixed input/product state | Separate input-boundary repair; not App-owned core state |
-| `SceneCatalog` | bootstrap | Scene capability | Scene plugin/owner |
-| `SceneRuntimeState` | bootstrap + ScenePlugin | Scene capability | Scene plugin/owner; remove duplicate bootstrap authority |
-| `GameplayRuntimeConfig` | bootstrap + ScenePlugin | Product/game policy | Actual product/world/scene owner; not App-owned core state |
-| `UiOverlayState` | bootstrap + ScenePlugin | UI/render/product integration | Actual UI/render integration owner; not App-owned core state |
-| current `StartupState` | bootstrap | Product/render readiness | Rename/rehome under readiness owner; not App lifecycle |
-| current product/query publication runtime resources | bootstrap | ADR 0022 publication integration predecessor state | Exact replacement/removal/placement owned by #591; do not freeze current types here |
-| publication handler registries | App construction / runtime integration | Runenwerk publication integration | Preserve/refine according to #591; built-in App-construction registration does not transfer payload authority |
-| `RuntimeJobExecutorResource` | bootstrap | Execution Fabric subsystem | Execution Fabric owns semantics; final installation universality requires separate consumer proof |
-| `RuntimeProductCacheResource` | bootstrap | Product execution/cache | Execution Fabric/product owner; final installation follows then-current consumers |
+### 15.1 Composition rejection
 
-An implementation census may refine a target owner where this table intentionally names
-an owner family rather than a final Rust module. It may not collapse the categories back
-into bare App ownership for convenience without a new architecture decision.
+Where invalid composition is known before preparation/Startup, reject there with
+owner-aware diagnostics.
 
-## 17. Product/application composition pressure
+Do not intentionally defer a missing required capability until a missing-resource panic.
 
-Current Draw and Editor both repeat a generic capability prefix around default runtime,
-diagnostics, scene, and render before adding product-specific behavior. Runtime Preview
-is materially smaller.
+### 15.2 Host preparation failure
 
-This confirms ADR 0019's future product-group pressure, but the normalized order is:
+Host preparation failure belongs to the Host/integration boundary. Cleanup and retry are
+allowed only according to that Host's explicit contract. This design introduces no
+generic transaction or rollback.
+
+### 15.3 Startup failure
+
+Startup execution is fail-stop for that runtime instance:
 
 ```text
-first
-  truthful App/plugin/host/capability ownership
-
-then
-  prove useful product/plugin-group machinery over those real owners
+attempt once
+-> success: Running
+-> error/panic: non-runnable instance
 ```
 
-Do not introduce groups early as a facade around duplicate global builtins.
+No automatic retry and no generic rollback.
 
-## 18. Failure semantics
+### 15.4 Runtime owner/system failure
 
-### 18.1 Composition failures
+Owner/system/runtime failures retain their accepted owner semantics. The current
+advancement call must surface failure; this design does not declare every runtime error
+terminal and does not invent generic rollback/retry.
 
-Where determinable before Startup, invalid composition should fail during
-composition/admission with owner-aware diagnostics.
+A retry/recovery path exists only when the relevant owner/Host contract defines it.
 
-Do not rely on a later panic from `world.resource_mut::<T>().expect(...)` as the intended
-contract for a missing selected capability.
+### 15.5 Bounded completion
 
-### 18.2 Runtime failures
+A bounded driver reaching its requested bound is success-shaped Advancement Policy
+completion and leaves the live App `Running`. It is not App termination or Host shutdown.
 
-Owner/system/runtime failures retain their accepted owner semantics. This model does not
-add generic transactional rollback.
+## 16. Current field/resource disposition matrix
 
-### 18.3 Host failures
+This matrix is normative ownership pressure, not permission to move every row in one PR.
 
-Window/event-loop/window-creation failure is Host realization failure. It must not be
-reported as a scene/render/simulation semantic failure unless an owner adapter actually
-failed.
+| Current item | Normalized class | Target disposition |
+|---|---|---|
+| `World` | contained RunenECS runtime | retain current containment until separately redesigned; ECS semantics remain RunenECS-owned |
+| RunenECS `Runtime` | contained RunenECS runtime | retain current containment until separately redesigned; schedule semantics remain RunenECS-owned |
+| `startup_ran` | predecessor App lifecycle marker | replace/refine with lifecycle state that records one-shot Startup attempt, including failure |
+| `title` | host-neutral application metadata | composition/configuration; Host projects it as needed |
+| `AppMode` | Host selection mixed with run mode | replace/refine around explicit Host selection |
+| `AppRunner` | Advancement Policy realization | normalize independently from Host and foreign owner state |
+| Winit `ControlFlow` | native-host policy | native-window Host |
+| `WindowState` | native-host state | native-window Host only; no required headless sentinel |
+| `WindowStateRegistryResource` | native-host state | native-window Host |
+| `PlatformWindowEventQueueResource` | Host/platform integration | native-window/platform Host |
+| `NativeWindowHookRegistryResource` | native-host integration | native-window Host |
+| `FramePacingPolicyResource` | current Winit/event-loop pacing | native Host now; future generic cross-host pacing would be Advancement Policy |
+| `FramePacingRuntimeStateResource` | current Winit/event-loop pacing state | same owner as current pacing policy |
+| `Time` | timing projection/service | truthful Time owner/plugin unless separately proven App-owned |
+| `FixedTimeConfig` | fixed cadence policy | App lifecycle or real fixed-step capability; separate implementation decision |
+| `CatchupBudget` | fixed cadence policy | same fixed-cadence owner |
+| `FixedTimeState` | fixed cadence runtime state | same fixed-cadence owner |
+| `SimulationTick` | simulation identity | simulation integration owner |
+| `SimulationProfileConfig` | simulation policy | simulation integration owner |
+| `SimulationSessionId` | simulation identity | simulation integration owner |
+| `SimulationSeed` | simulation input/identity | simulation integration owner |
+| `SimulationRng` | simulation runtime state | simulation integration owner |
+| `InputState` | mixed input/product state | separate input repair; not App-owned core state |
+| `SceneCatalog` | scene capability | Scene plugin/owner |
+| `SceneRuntimeState` | scene capability | Scene plugin/owner; remove duplicate bootstrap authority |
+| `GameplayRuntimeConfig` | product/game policy | actual product/world/scene owner; not App-owned core state |
+| `UiOverlayState` | UI/render/product integration | actual UI/render integration owner; not App-owned core state |
+| current `StartupState` | product/render readiness | rename/rehome under readiness owner; not App lifecycle |
+| current product/query publication resources | ADR-0022 predecessor integration state | exact replacement/removal/placement remains #591-owned |
+| publication handler registries | Runenwerk publication integration | preserve/refine per #591; App registration does not transfer payload authority |
+| `RuntimeJobExecutorResource` | Execution Fabric subsystem | Execution Fabric owns semantics; final installation universality needs consumer proof |
+| `RuntimeProductCacheResource` | product execution/cache | Execution Fabric/product owner; final placement follows current consumers |
 
-### 18.4 Advancement completion
+If an implementation census cannot resolve one final owner from this matrix and current
+consumers, that row is not decision-complete enough to move.
 
-A bounded runner completing normally is an Advancement Policy result, not an App semantic
-failure and not necessarily a host shutdown event.
+## 17. Ordering and determinism
 
-## 19. Determinism and ordering
+- composition/group expansion must be deterministic for the same explicit input;
+- composition order does not substitute for semantic system ordering;
+- Host/Advancement compatibility must be admitted explicitly;
+- owner system ordering continues to use accepted owner/schedule contracts;
+- lifecycle schedule order must not be reconstructed from physical executor order;
+- effective-composition inspection reports actual accepted order rather than a separately
+  maintained expected order.
 
-- plugin/group expansion order must be deterministic for the same explicit composition;
-- owner system ordering continues to use accepted schedule/owner contracts;
-- composition order must not substitute for semantic system ordering;
-- lifecycle schedule order must not be encoded through cross-schedule RunenECS ordering
-  references;
-- physical executor order must not create semantic capability ownership;
-- derived effective-composition inspection must report actual accepted order rather than
-  a separately maintained expected order.
+## 18. Mechanical fitness tests for future implementation
 
-## 20. Mechanical fitness tests for future implementation
+A future clean cut must eventually prove the applicable subset below.
 
-A future clean cut must eventually prove all of the following.
+### Minimal/headless
 
-### 20.1 Minimal App / headless
-
-- bare headless construction has no native-window state;
+- headless construction has no native-window sentinel state;
 - no scene/UI/render/network/replay/simulation state appears merely because App exists;
-- execution-fabric/publication integration state follows its accepted owner decisions
-  rather than being moved mechanically;
-- no synthetic `WindowState` is required as a headless marker;
 - no Winit `ControlFlow` is App-owned core state;
-- current contained RunenECS runtime remains semantically RunenECS-owned even where
-  mechanically present.
+- contained RunenECS runtime remains semantically RunenECS-owned.
 
-### 20.2 Host
+### Host/Advancement
 
-- windowed host creates/owns native-window/event-loop/current-pacing state;
-- headless host remains valid without that state;
-- title/application metadata projects into a window host without ownership reversal;
-- any future generic cross-host pacing policy is separated from Winit host state.
+- Host and Advancement are represented/validated independently;
+- unsupported Host × Advancement combinations reject clearly;
+- bounded advancement does not silently switch Host;
+- bounded completion leaves the live runtime eligible for later advancement;
+- title/metadata projects into a window Host without ownership reversal.
 
-### 20.3 Fixed lifecycle / simulation
+### Lifecycle
 
-- fixed cadence does not require `engine_sim::SimulationTick` as App identity;
-- simulation integration advances its own tick semantics from the accepted lifecycle;
-- `FixedStepPlugin` receives one truthful disposition rather than duplicate activation.
+- composition topology is sealed before preparation/Startup;
+- successful Startup executes once;
+- failed/panicking Startup cannot be implicitly retried on the same runtime;
+- partial Startup effects are not claimed to be generically rolled back;
+- terminal shutdown is distinct from bounded completion.
 
-### 20.4 Time
+### Fixed/simulation/time
 
-- Time state is installed by its truthful owner;
-- host progression does not depend semantically on Time resource presence alone.
+- App fixed cadence does not use `SimulationTick` as universal identity;
+- simulation integration advances its own tick semantics from accepted lifecycle;
+- `FixedStepPlugin` receives one truthful disposition;
+- bounded App advancement is not defined by simulation identity unless the API is
+  explicitly simulation-owned;
+- Time is installed by its truthful owner.
 
-### 20.5 Scene/product/UI
+### Scene/UI/input
 
-- selecting Scene installs required scene state exactly once;
+- selecting Scene installs required scene state once;
 - omitting Scene leaves scene state absent;
-- gameplay/UI/readiness state is not globally manufactured by bare App.
+- gameplay/UI/readiness state is not globally manufactured by bare App;
+- App cleanup does not bless mixed `InputState` as universal authority.
 
-### 20.6 Input
+### Publication/execution fabric
 
-- App cleanup does not bless the current mixed `InputState` as universal authority;
-- later input repair can supply neutral/product/UI adapters without fighting an App
-  ownership claim.
+- ADR 0022 and #591 behavior remains intact;
+- App cleanup does not resurrect predecessor publication-boundary semantics;
+- product/query payload authority is not transferred by handler placement;
+- executor/cache placement changes only after Execution Fabric consumer proof.
 
-### 20.7 Publication/execution fabric
+### API/composition
 
-- ADR 0022 publication behavior and #591 handler-registration requirements remain intact;
-- App cleanup does not resurrect predecessor `PublicationBoundary` semantics;
-- product/query payload authority is not transferred to App by handler placement;
-- execution-fabric executor/cache placement is changed only after its own consumer proof.
+- capability-specific APIs retain owner and temporal semantics;
+- direct expert composition and future groups lower to the same owners;
+- illegal duplicate/incompatible selection rejects deterministically;
+- composition inspection is derived rather than separately authored;
+- no compatibility alias is retained solely to preserve rejected ownership.
 
-### 20.8 Composition
+## 19. Migration doctrine
 
-- direct expert plugins and future groups lower to the same runtime owners;
-- illegal duplicate/incompatible selection is rejected deterministically;
-- effective-composition diagnostics are derived rather than separately authored;
-- containing an owner runtime never transfers its semantic authority to App.
-
-### 20.9 API
-
-- capability-specific authoring remains ergonomic;
-- App's core surface does not need to own render/scene/simulation/replay/input semantics;
-- no forwarding aliases are required solely to preserve rejected ownership;
-- no claim that RunenECS is universal App ontology is introduced by cleanup.
-
-## 21. Migration doctrine
-
-Implementation follows clean cuts, not indefinite dual authority.
-
-For each delivery slice:
+Implementation proceeds one semantic boundary at a time:
 
 ```text
 re-resolve current main
 -> census exact owner + consumers + tests
--> select one coherent semantic boundary
--> move/install owner state and migrate consumers atomically
--> delete predecessor ownership/aliases in the same accepted cut where feasible
+-> select one coherent boundary
+-> reconcile active overlapping work
+-> migrate owner state/Host/Advancement/API consumers atomically
+-> delete predecessor ownership/aliases where the clean cut permits
 -> focused tests + cargo validate + exact-head CI
 -> accepted-main proof
--> derive next slice only then
+-> only then derive the next slice
 ```
 
-Do not open the full implementation tree in advance. Current work such as the ADR-0022
-publication cutover may change the correct first implementation boundary.
+Do not pre-open the full migration tree. #591 may materially change the correct first
+implementation boundary.
 
-## 22. Explicit non-goals
+## 20. Explicit non-goals
 
 This model does not authorize:
 
@@ -982,66 +1030,41 @@ service locator / generic DI
 live dynamic plugin runtime
 universal lifecycle bus
 second scheduler
-Plan / AppProgram / semantic database
+Plan / AppProgram implementation or semantic database
 product/plugin group implementation
 RunenInput extraction
 RunenRender or other framework semantic redesign
-RunenECS semantic redesign or removal from current App
+RunenECS semantic redesign/removal from current App
 Cargo feature/binary modularity redesign
 publication implementation owned by #591
 compatibility forwarding layers
 ```
 
-## 23. External comparison
-
-### 23.1 Bevy
-
-Useful pressure:
-
-- one application composition root;
-- individual plugins and customizable plugin groups;
-- explicit duplicate-plugin behavior;
-- ordinary composition need not expose every internal subsystem boundary.
-
-Not adopted:
-
-- Bevy's ECS-centered ownership model;
-- its exact App/PluginGroup API or default membership;
-- the assumption that every Runen capability must be a plugin;
-- ECS as the semantic ontology of the Runen family.
-
-### 23.2 Winit
-
-Useful pressure:
-
-- event-loop `ControlFlow` belongs to the event-loop host;
-- native resume/suspend/window events are host/platform lifecycle;
-- window creation has platform lifecycle constraints.
-
-Runen adaptation:
-
-- contain Winit under the Runenwerk native host;
-- do not make its types the normalized App semantic vocabulary;
-- do not infer generic Advancement Policy from Winit-specific pacing machinery.
+Issue #281 may later accept a logical Plan/programming model. If so, Plan may lower into
+ordinary App composition but must not become a second live runtime or override the Host,
+Advancement, lifecycle, containment, and owner-state boundaries defined here.
 
 ## Completion condition
 
 This model is implementation-ready when a reviewer can classify any App field/resource,
-contained runtime, or convenience API by answering, in order:
+contained runtime, lifecycle operation, or convenience API by answering, in order:
 
 ```text
 Who owns the invariant?
 Is App merely containing/invoking another owner?
 Is it App-owned runtime integration state?
-Is it host realization?
-Is it advancement policy?
+Is it Host realization?
+Is it Advancement Policy?
+Is this Host/Advancement combination valid?
 Is it host-neutral composition/configuration metadata?
-Is it merely a lifecycle occurrence?
+Is it only a lifecycle occurrence?
 Which capability installs it?
-What explicit dependency/admission makes it valid?
+At what lifecycle phase is the operation legal?
+What failure/retry contract applies?
 What state must be absent when the capability is absent?
-What clean predecessor authority is deleted during migration?
+What predecessor authority is deleted during migration?
 ```
 
-If those questions do not yield one ownership/disposition result, the implementation
-slice is not decision-complete and must stop rather than preserve ambiguity.
+If those questions do not yield one coherent ownership/disposition result, the
+implementation slice is not decision-complete and must stop rather than preserve
+ambiguity.
