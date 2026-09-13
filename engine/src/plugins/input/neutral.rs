@@ -398,7 +398,10 @@ impl NeutralInputAuthority {
             return Err(NeutralInputError::NonFiniteObservation);
         }
 
-        let source_sequence = self.source_sequences.entry(group.context.source).or_default();
+        let source_sequence = self
+            .source_sequences
+            .entry(group.context.source)
+            .or_default();
         *source_sequence = source_sequence.next();
         self.admission_sequence = self.admission_sequence.next();
 
