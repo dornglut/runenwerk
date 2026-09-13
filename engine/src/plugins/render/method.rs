@@ -164,7 +164,12 @@ impl RenderMethodOutputKind {
     }
 }
 
-/// Final renderer-output accuracy promised by a method when its declared prerequisites hold.
+/// Renderer-semantic/model approximation promised by a method when its declared prerequisites hold.
+///
+/// This contract describes only the semantic/model relation between the requested output and the
+/// method's modeled output. It does not establish finite-evaluation fidelity for one concrete
+/// execution, satisfy `RenderSemanticTolerance` by itself, or promise any bit-exact/numeric GPU
+/// realization. Those concerns require their own evidence later in the execution/result path.
 ///
 /// R4 intentionally has only the bounded distance guarantee required by the founding proof. Other
 /// output-specific approximation contracts must be added only when a concrete method requires them.

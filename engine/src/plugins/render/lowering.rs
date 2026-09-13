@@ -15,8 +15,9 @@ use runen_gpu::GpuWorkFragment;
 /// correlation anchored to the authority that admitted them. The contained RunenGPU fragments are
 /// backend-neutral logical work; RunenGPU remains responsible for preparing and executing them.
 ///
-/// A future work set may contain more than one device-local fragment, merge work, readback work, or
-/// presentation work. R6 therefore does not encode a permanent one-fragment/one-device assumption.
+/// A work set may contain more than one device-local fragment, private observation work, merge work,
+/// or presentation work. R6 therefore does not encode a permanent one-fragment/one-device
+/// assumption.
 #[derive(Debug, Clone)]
 pub struct RenderWorkSet {
     admitted_plan: AdmittedRenderPlan,
@@ -24,18 +25,12 @@ pub struct RenderWorkSet {
 }
 
 impl RenderWorkSet {
-    /// Construct a work set after renderer lowering has produced complete checked RunenGPU work.
+    /// Construct a work set after renderer-owned lowering has produced complete checked RunenGPU
+    /// work.
     ///
     /// This remains crate-private so callers cannot attach arbitrary GPU work to semantic renderer
-    /// authority. R6's founding method implementation is deliberately proof-private until a later
-    /// maintained product consumer exists; the permanent R6 proof target is the caller in this phase.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "R6 founding lowering is intentionally proof-private; no product consumer is authorized in this phase"
-        )
-    )]
+    /// authority. Maintained renderer execution is responsible for selecting the exact admitted
+    /// method and deriving every fragment before crossing into RunenGPU.
     pub(crate) fn from_lowering(
         admitted_plan: &AdmittedRenderPlan,
         fragments: Vec<GpuWorkFragment>,
@@ -51,7 +46,7 @@ impl RenderWorkSet {
         &self.admitted_plan
     }
 
-    /// Backend-neutral logical RunenGPU work authored by the renderer lowering.
+    /// Backend-neutral logical RunenGPU work authored by renderer lowering.
     pub fn fragments(&self) -> &[GpuWorkFragment] {
         &self.fragments
     }

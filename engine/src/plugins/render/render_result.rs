@@ -1,25 +1,26 @@
 use super::admission::AdmittedRenderPlan;
+use super::deterministic_verification::VerifiedDeterministicRender;
 use super::method::RenderMethodId;
 use super::request::RenderRequest;
 use super::scene::{RenderObjectId, RenderSceneRevision, RenderSceneSnapshot};
 use super::semantic_plan::{RenderApplicableRepresentationUse, RenderOutputApproximation};
+use super::surface_input::RenderSurfaceSemanticInputBinding;
 use std::collections::BTreeSet;
 use std::error::Error;
 use std::fmt;
 
 /// Renderer-owned evidence that one deterministic finite output satisfied the requested tolerance.
 ///
-/// This is intentionally not public product API. A RunenRender method/evaluator may construct this
-/// witness only after its concrete finite evaluation has established the requested
-/// `RenderSemanticTolerance` for the correlated admitted output. Physical completion, numeric
-/// format, or semantic/model approximation alone are not sufficient evidence.
+/// This witness is deliberately private to result formation. The only constructor is used while
+/// consuming one execution-scoped [`VerifiedDeterministicRender`], so an output-index token cannot
+/// be detached and reused across submissions or semantic-input substitutions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) struct RenderDeterministicOutputFormationEvidence {
+struct RenderDeterministicOutputFormationEvidence {
     output_index: usize,
 }
 
 impl RenderDeterministicOutputFormationEvidence {
-    pub(super) const fn requested_tolerance_satisfied(output_index: usize) -> Self {
+    const fn requested_tolerance_satisfied(output_index: usize) -> Self {
         Self { output_index }
     }
 
@@ -33,44 +34,43 @@ impl RenderDeterministicOutputFormationEvidence {
 /// Physical bindings, GPU execution evidence, readback identities, and output bytes deliberately do
 /// not participate in this semantic result evidence.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct RenderResultObjectRepresentation {
+pub struct RenderResultObjectRepresentation {
     object_id: RenderObjectId,
     representation: RenderApplicableRepresentationUse,
 }
 
 impl RenderResultObjectRepresentation {
-    pub(crate) const fn object_id(&self) -> RenderObjectId {
+    pub const fn object_id(&self) -> RenderObjectId {
         self.object_id
     }
 
-    pub(crate) const fn representation(&self) -> RenderApplicableRepresentationUse {
+    pub const fn representation(&self) -> RenderApplicableRepresentationUse {
         self.representation
     }
 }
 
 /// Semantic evidence for one successfully formed requested output.
+///
+/// Output-to-observation correlation is intentionally not duplicated here. `RenderResult` retains
+/// the exact immutable `RenderRequest`, so callers derive that relation through the requested output
+/// at `output_index`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct RenderResultOutputEvidence {
+pub struct RenderResultOutputEvidence {
     output_index: usize,
-    observation_index: usize,
     approximation: RenderOutputApproximation,
     object_representations: Vec<RenderResultObjectRepresentation>,
 }
 
 impl RenderResultOutputEvidence {
-    pub(crate) const fn output_index(&self) -> usize {
+    pub const fn output_index(&self) -> usize {
         self.output_index
     }
 
-    pub(crate) const fn observation_index(&self) -> usize {
-        self.observation_index
-    }
-
-    pub(crate) const fn approximation(&self) -> RenderOutputApproximation {
+    pub const fn approximation(&self) -> RenderOutputApproximation {
         self.approximation
     }
 
-    pub(crate) fn object_representations(&self) -> &[RenderResultObjectRepresentation] {
+    pub fn object_representations(&self) -> &[RenderResultObjectRepresentation] {
         &self.object_representations
     }
 }
@@ -79,12 +79,14 @@ impl RenderResultOutputEvidence {
 ///
 /// This is intentionally not a value container. Output values may remain in physical bindings,
 /// retained renderer products, readback results, or presentation destinations. The result retains
-/// only immutable semantic provenance projected from the exact admitted plan that produced the work.
+/// only immutable semantic provenance projected from the exact admitted plan that produced the work,
+/// including the exact selected request-scoped semantic surface inputs once at result level.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct RenderResult {
+pub struct RenderResult {
     scene: RenderSceneSnapshot,
     request: RenderRequest,
     method_id: RenderMethodId,
+    surface_semantic_inputs: Vec<RenderSurfaceSemanticInputBinding>,
     outputs: Vec<RenderResultOutputEvidence>,
 }
 
@@ -128,13 +130,31 @@ impl fmt::Display for RenderResultFormationError {
 impl Error for RenderResultFormationError {}
 
 impl RenderResult {
-    /// Form complete semantic result evidence for one deterministic admitted execution.
+    /// Consume one exact execution-scoped EVAL-001 proof and form its semantic result evidence.
     ///
-    /// Every admitted output requires one renderer-owned witness that its concrete finite value has
-    /// satisfied the requested deterministic tolerance. This constructor deliberately does not
-    /// depend on RunenGPU submission/readback types and does not infer evaluation fidelity from GPU
-    /// completion, numeric format, or the admitted semantic/model approximation.
-    pub(super) fn complete_deterministic(
+    /// The verified execution is taken by value so its per-output finite-evaluation evidence cannot
+    /// be reused after formation. Private output witnesses are minted only inside this owner-controlled
+    /// flow from the exact admitted outputs already bound to the verified submission. GPU submission,
+    /// readback, decoder, and completion identities are consumed as proof context and remain outside
+    /// public `RenderResult` identity.
+    pub(super) fn from_verified_deterministic(
+        verified: VerifiedDeterministicRender,
+    ) -> Result<Self, RenderResultFormationError> {
+        let admitted = verified.submitted().admitted().admitted();
+        let output_evidence = admitted.outputs().iter().map(|output| {
+            RenderDeterministicOutputFormationEvidence::requested_tolerance_satisfied(
+                output.output_index(),
+            )
+        });
+        Self::complete_deterministic(admitted, output_evidence)
+    }
+
+    /// Form complete semantic result evidence from one internally correlated deterministic proof.
+    ///
+    /// This raw constructor is private to the module. Callers cannot combine an arbitrary admitted
+    /// plan with detached output-index assertions; the only owner-controlled entry above derives the
+    /// witness set while consuming the exact `VerifiedDeterministicRender` that established it.
+    fn complete_deterministic(
         admitted: &AdmittedRenderPlan,
         output_evidence: impl IntoIterator<Item = RenderDeterministicOutputFormationEvidence>,
     ) -> Result<Self, RenderResultFormationError> {
@@ -165,7 +185,6 @@ impl RenderResult {
             .iter()
             .map(|output| RenderResultOutputEvidence {
                 output_index: output.output_index(),
-                observation_index: output.observation_index(),
                 approximation: output.approximation(),
                 object_representations: output
                     .object_representations()
@@ -182,27 +201,32 @@ impl RenderResult {
             scene: admitted.plan().scene().clone(),
             request: admitted.plan().request().clone(),
             method_id: admitted.selected_candidate().method_id(),
+            surface_semantic_inputs: admitted.surface_semantic_inputs().to_vec(),
             outputs,
         })
     }
 
-    pub(crate) const fn scene_revision(&self) -> RenderSceneRevision {
+    pub const fn scene_revision(&self) -> RenderSceneRevision {
         self.scene.revision()
     }
 
-    pub(crate) const fn scene(&self) -> &RenderSceneSnapshot {
+    pub const fn scene(&self) -> &RenderSceneSnapshot {
         &self.scene
     }
 
-    pub(crate) const fn request(&self) -> &RenderRequest {
+    pub const fn request(&self) -> &RenderRequest {
         &self.request
     }
 
-    pub(crate) const fn method_id(&self) -> RenderMethodId {
+    pub const fn method_id(&self) -> RenderMethodId {
         self.method_id
     }
 
-    pub(crate) fn outputs(&self) -> &[RenderResultOutputEvidence] {
+    pub fn surface_semantic_inputs(&self) -> &[RenderSurfaceSemanticInputBinding] {
+        &self.surface_semantic_inputs
+    }
+
+    pub fn outputs(&self) -> &[RenderResultOutputEvidence] {
         &self.outputs
     }
 }
