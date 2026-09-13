@@ -21,7 +21,11 @@ fn drawing_app_plugin_installs_product_execution_resources() {
         executor.config(),
         &RuntimeJobExecutorConfig::worker_pool(2, 64)
     );
-    assert!(app.world().resource::<RuntimeProductCacheResource>().is_ok());
+    assert!(
+        app.world()
+            .resource::<RuntimeProductCacheResource>()
+            .is_ok()
+    );
 }
 
 #[test]
