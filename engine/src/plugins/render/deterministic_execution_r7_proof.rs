@@ -4,14 +4,18 @@
 //! through `admit_deterministic_render`, then proves the maintained ordinary and verified paths use
 //! their intended observation policy: ordinary execution authors no readback at all, while verified
 //! execution retains exactly the renderer-private canonical-output, definedness, and evaluator-status
-//! readbacks from the same exact `GpuSubmission` and can establish the private RR566-EVAL-001 witness.
+//! readbacks from the same exact `GpuSubmission`, can establish the private RR566-EVAL-001 witness,
+//! and can form public FORM-001 result evidence through the maintained submitted-render surface.
 
 use super::admission::{
     RenderOutputBinding, RenderOutputDestination, RenderRepresentationAvailabilityFact,
     RenderRepresentationAvailabilityState,
 };
 use super::deterministic_admission::{AdmittedDeterministicRender, admit_deterministic_render};
-use super::deterministic_execution::submit_deterministic_render;
+use super::deterministic_execution::{
+    RenderDeterministicResultFormationError, submit_deterministic_render,
+    submit_deterministic_render_for_verified_result,
+};
 use super::deterministic_verification::{
     submit_deterministic_render_for_verified_formation, verify_completed_deterministic_render,
 };
@@ -410,6 +414,51 @@ fn maintained_execution_keeps_ordinary_unobserved_and_verified_same_submission_o
         verified.submitted().submission().status(),
         GpuSubmissionStatus::Completed
     ));
+}
+
+#[test]
+fn public_verified_result_path_forms_once_from_exact_submission() {
+    let Some(context) = request_execution_context() else {
+        return;
+    };
+    let fixture = maintained_fixture();
+    let admitted =
+        admit_with_writable_only_destination(&fixture, &context, "R7 public verified destination");
+    let mut submitted = pollster::block_on(submit_deterministic_render_for_verified_result(
+        admitted, &context,
+    ))
+    .expect("public verified-result path must author one maintained submission");
+
+    assert_eq!(
+        submitted.submission().readbacks().len(),
+        3,
+        "one public verified output must retain exactly three renderer-private observations"
+    );
+
+    let deadline = Instant::now() + Duration::from_secs(15);
+    let result = loop {
+        context.progress();
+        match submitted.try_form_verified_result() {
+            Ok(Some(result)) => break result,
+            Ok(None) => {}
+            Err(error) => panic!("public verified-result formation failed: {error}"),
+        }
+        assert!(
+            Instant::now() < deadline,
+            "public verified-result formation did not complete before timeout"
+        );
+        std::thread::yield_now();
+    };
+
+    assert_eq!(result.request().outputs().len(), 1);
+    assert_eq!(result.surface_semantic_inputs(), fixture.semantic_inputs.as_slice());
+    assert_eq!(result.outputs().len(), 1);
+    assert_eq!(result.outputs()[0].output_index(), 0);
+    assert_eq!(
+        submitted.try_form_verified_result(),
+        Err(RenderDeterministicResultFormationError::ResultAlreadyFormed),
+        "one exact verified submission must not mint semantic result evidence twice"
+    );
 }
 
 #[test]
