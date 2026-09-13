@@ -5,14 +5,14 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-09-13
 ---
 
 # Input Plugin
 
 ## Purpose
 
-Provides action-mapped input state and frame pulse handling, decoupling gameplay/UI systems from concrete key bindings.
+Provides action-mapped input state and frame pulse handling, decoupling gameplay/UI systems from concrete key bindings. The plugin now hosts an internal backend-neutral observation/state seam for migrated device facts; product actions and frame-local convenience remain downstream projections.
 
 ## Usage
 
@@ -23,17 +23,21 @@ Provides action-mapped input state and frame pulse handling, decoupling gameplay
 
 OS input events are consumed through `InputState::handle_window_event` and `InputState::handle_device_event`.
 The runtime also feeds normalized platform events through the same `InputState` methods.
+Full winit/platform-edge normalization remains a later input-boundary migration; current entry points adapt the facts they already receive into the internal neutral seam.
 
 ## Ownership Boundaries
 
-- Owns action mapping, per-frame action pulses, and key/chord rebinding behavior.
-- Does not own scene/render behavior that consumes input.
+- The internal neutral seam owns confirmed held-control and active-contact state for the device facts migrated into it.
+- `InputState` owns Runenwerk action mapping, per-frame action pulses, text/frame convenience, and key/chord rebinding behavior above that seam.
+- Legacy mouse/touch histories and public movement/menu fields remain downstream projections for current consumers.
+- Does not own scene/render behavior that consumes input, RunenUI routing/focus semantics, or native-tablet backend policy.
 
 ## Extension Points
 
 - Add new action ids and default bindings in `InputBindings::with_default_bindings()`.
 - Add rebinding flows by applying `InputBindingChange` collections.
 - Add higher-level input events/resources on top of `InputState`.
+- Extend neutral device semantics only under the accepted input-boundary design and owning issue; do not add product actions or UI semantics to the neutral reducer.
 
 ## Additional Details
 
@@ -42,6 +46,7 @@ The runtime also feeds normalized platform events through the same `InputState` 
 - Keep engine/game systems decoupled from concrete keys.
 - Allow runtime rebinding (`map_key`, `map_chord`, `unmap_*`) without changing system code.
 - Keep action queries and public movement/menu booleans synchronized in `InputState`.
+- Keep migrated device facts single-authority while preserving current product-facing behavior during the staged input cleanup.
 
 ### Core Types
 
@@ -52,16 +57,22 @@ The runtime also feeds normalized platform events through the same `InputState` 
 - `ModifierRule`
 - `action::*` constants (built-in action ids)
 
+The backend-neutral observation/reducer types are internal implementation authority, not a new public framework API.
+
 ### Runtime Model
 
-`InputState` tracks:
+`InputState` hosts two distinct responsibilities during the staged migration:
 
-- physical key/button state (`keys_down`, mouse buttons)
-- action state:
-  - `action_pressed(action_id)`: fired this frame
-  - `action_down(action_id)`: currently held
+- an internal neutral reducer is the semantic authority for migrated held physical controls and active touch contacts;
+- product/action state derives from that authority:
+  - `action_pressed(action_id)`: fired this frame from an ordinary accepted press edge;
+  - `action_down(action_id)`: currently held according to neutral confirmed state and current bindings.
 
-Public movement/menu fields are synchronized from the action state each frame so scene/UI systems can read a stable input view.
+Absolute cursor position, raw relative motion, legacy scalar scroll, button-transition history, and touch sample history remain distinct observations/projections. The existing drawing-facing touch sample projection remains single-primary for compatibility with current consumers, while the neutral authority retains all admitted concurrent touch contacts.
+
+Committed text remains separate from physical held-key authority. Synthetic keyboard reconciliation can change held state without creating ordinary action-pressed edges.
+
+Public movement/menu fields are synchronized from action state so scene/UI systems can read the current product-facing view.
 
 ### Default Action Map
 
@@ -144,12 +155,10 @@ let applied = input.apply_binding_changes(changes);
 - End-of-frame reset is done by `InputFinalizePlugin`, which calls:
   - `InputState::clear_frame`
 
-`clear_frame` clears per-frame pulses and keeps held actions in sync with current key state.
+`clear_frame` clears frame-local pulses, deltas, and sample-history projections. It does not clear durable neutral held-control or active-contact state; held actions are recomputed from that state and the current bindings.
 
 ## Guides
 
 - Usage: [../../../docs/reference/plugins/input/usage-guide.md](../../reference/plugins/input/usage-guide.md)
 - Advanced: [../../../docs/reference/plugins/input/advanced-guide.md](../../reference/plugins/input/advanced-guide.md)
 - Architecture: [../../../docs/reference/plugins/input/architecture.md](../../reference/plugins/input/architecture.md)
-
-
