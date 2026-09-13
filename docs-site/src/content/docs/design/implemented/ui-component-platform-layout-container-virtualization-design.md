@@ -7,7 +7,7 @@ layer: domain
 canonical: true
 last_reviewed: 2026-09-13
 related_designs:
-  - ../active/ui-component-platform-ownership-realignment-design.md
+  - ../superseded/ui-component-platform-ownership-realignment-design.md
   - ./ui-component-platform-accessibility-focus-inspection-design.md
   - ./ui-component-platform-theme-state-style-design.md
 related_docs:

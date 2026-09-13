@@ -1,23 +1,28 @@
 ---
 title: UI Domain Current-State Architecture
-description: Current-state architecture, ownership boundaries, and migration direction for Runenwerk UI.
+description: Current-state architecture, ownership boundaries, and migration direction for Runenwerk-local UI.
 status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-09-12
+last_reviewed: 2026-09-13
 ---
 
 # UI Domain Current-State Architecture
 
-This document records current code truth and current UI-domain ownership
+This document records current Runenwerk code truth and current UI-domain ownership
 boundaries.
 
-For the top-down target framework architecture, see:
-[Runenwerk UI Framework Architecture](../../architecture/ui-framework-architecture.md).
+For the top-down local integration/adoption architecture, see:
+[Runenwerk UI Local Runtime and Integration Architecture](../../architecture/ui-framework-architecture.md).
 
-This file must not duplicate the whole target architecture. It records current
-reality, current crate map, current migration seams, and current known gaps.
+Future reusable UI-framework semantics belong to standalone
+[`dornglut/runen-ui`](https://github.com/dornglut/runen-ui). This file does not
+mirror that framework's target architecture or maturity roadmap.
+
+This file must not duplicate the whole local integration architecture. It records
+current reality, current crate map, current migration seams, and current known
+gaps.
 
 ## Purpose
 Establish the factual, current-state architecture for Runenwerk UI, define correct ownership boundaries, and document remaining migration direction from implemented substrate extraction to full editor/runtime convergence.
@@ -34,7 +39,7 @@ This document covers:
 - engine render/UI integration paths used to submit and draw UI frames
 - general UI definition/formation contracts where they clarify `domain/ui` ownership
 
-This document does not define visual design direction, docking product UX, or authored editor-definition workflows.
+This document does not define visual design direction, docking product UX, authored editor-definition workflows, or future reusable-framework semantics.
 
 ## Current Reality
 As of the audited repository state:
@@ -73,6 +78,13 @@ As of the audited repository state:
   require exactly one observed viewport and are not a path for new
   viewport/product work.
 - Substrate output now has baseline snapshot tests and a lightweight gallery harness example (`domain/ui/ui_runtime/examples/substrate_gallery.rs`).
+- The implemented UiProgram family (`ui_schema`, `ui_program`, `ui_controls`,
+  `ui_program_lowering`, `ui_compiler`, `ui_artifacts`, `ui_evaluator`,
+  `ui_runtime_view`, `ui_binding`, `ui_accessibility`, and adjacent proof/output
+  crates) coexists with the retained runtime path; it does not establish total
+  retained-UI replacement.
+- `domain/ui/ui_story` uses the V2 workflow-graph model. The former flat
+  `UiStoryRunReport` model is not current API authority.
 
 ## Current Crate Map
 
@@ -125,7 +137,7 @@ This layer owns general authored UI definitions and their formation pipeline:
 - execution-neutral normalized UI templates that do not encode retained `UiNodeKind`, runtime `WidgetId`, ECS entity ids, or concrete command execution;
 - first retained-tree formation target for templates, slots, repeaters, embeds, menus, and availability products consumed by `ui_tree`, `ui_widgets`, and `ui_runtime`.
 
-The authored and normalized UI definition model is source/IR. It should remain stable if a future accepted design adds compiled-reactive or ECS-driven UI execution. Those strategies would be additional formation targets from the normalized model, not a reason to rewrite authored templates.
+The authored and normalized UI definition model is source/IR. It should remain stable if a future accepted local design adds another Runenwerk execution strategy. Such a strategy would be an additional local formation target from the normalized model, not a reason to rewrite authored templates and not a reusable-framework claim.
 
 It must not own editor workspace profiles, `ToolSurfaceKind`, panel/tab identity, app provider registries, concrete command execution, or editor-specific command semantics. Those belong in editor definition/shell/app layers.
 
@@ -265,6 +277,9 @@ Related non-`domain/ui` owners currently in the runtime path:
   - `ui_tree` (retained nodes/tree/layout records)
   - `ui_runtime` (tree orchestration, anchored popup layout/hit-testing, popup overlay layer ordering, input routing, frame generation)
   - `ui_widgets` (control/widget constructors)
+- implemented UiProgram/program-lowering/compiler/artifact/evaluator/read-model,
+  binding, accessibility, story/proof, and control-package contracts where those
+  local crates are the current code owner.
 
 ## What `domain/ui/*` Does Not Yet Own
 
@@ -277,12 +292,14 @@ Related non-`domain/ui` owners currently in the runtime path:
   (correctly editor/app-owned); legacy structural workspace state is now
   read-only compatibility input until the docking-runtime gate
 - app/runtime glue and viewport product orchestration (correctly owned by `runenwerk_editor`)
+- future reusable UI-framework semantics (owned by standalone RunenUI)
 
 ## Relationship Between `domain/ui`, `editor_shell`, `runenwerk_editor`, and Engine Render Integration
 
 ### `domain/ui`
-Provides reusable engine-agnostic UI primitives/contracts, app-neutral
-structural composition, and renderer-facing frame data contracts.
+Provides current Runenwerk UI primitives/contracts, app-neutral structural
+composition, local runtime/program/proof contracts, and renderer-facing frame
+data contracts.
 
 ### `editor_shell`
 Currently owns:
@@ -325,25 +342,25 @@ This layer should continue consuming UI frame contracts, not owning UI semantics
    No new independent mutation path may be added to either boundary.
 
 ## Target Ownership Model
-Target ownership (partially implemented):
+Target ownership for remaining **Runenwerk-local** integration work (partially implemented):
 
-- `domain/ui/*` owns reusable UI substrate runtime layers:
-  - retained tree/runtime orchestration
-  - reusable control runtime
-  - input/focus/invalidation behavior
-  - shared testing harness
+- `domain/ui/*` owns current local UI substrate/runtime/program/proof layers only
+  where the repository still consumes them;
 - `domain/ui/ui_composition` owns generic saved and ratified structural
   composition, typed structural transactions, structural-only history, neutral
-  persistence envelopes, and atomic generation activation.
+  persistence envelopes, and atomic generation activation;
 - `domain/ui/ui_adaptive_composition` owns transient projection and interaction
   mechanism over immutable composition snapshots and emits proposals for a
-  host policy to accept or reject. It does not own structural commits.
-- `domain/ui/ui_definition` owns general authored UI definition and formation contracts, while `domain/ui` runtime crates consume formed products.
+  host policy to accept or reject. It does not own structural commits;
+- `domain/ui/ui_definition` owns general authored UI definition and formation contracts, while `domain/ui` runtime crates consume formed products;
 - `editor_shell` owns product-facing workspace wording, editor-specific
   extension semantics, and shell command routing; structural changes flow
-  through `ui_composition` after cutover.
-- `runenwerk_editor` owns app/runtime wiring and viewport/editor-specific runtime integrations.
+  through `ui_composition` after cutover;
+- `runenwerk_editor` owns app/runtime wiring and viewport/editor-specific runtime integrations;
 - engine render layer continues to own rendering integration and consumes UI frame contracts as data.
+
+This target model does not claim future reusable-framework ownership. Standalone
+RunenUI owns that scope.
 
 ## Migration Direction
 The accepted composition migration is a single-branch clean cutover with
@@ -361,8 +378,11 @@ reviewable checkpoint gates, not indefinite dual authority:
 6. delete mapped legacy authorities at cleanup and run final truth closeout.
 
 Reusable retained controls and opaque render-data slot mapping continue as
-orthogonal substrate work; they must not reintroduce a second composition
-authority.
+orthogonal local substrate work; they must not reintroduce a second composition
+authority or become a future reusable-framework roadmap.
+
+Standalone RunenUI adoption is not part of this migration sequence. Any future
+consumer cutover requires a new issue and an exact then-current RunenUI review.
 
 ## Testing and Verification Expectations
 
@@ -371,6 +391,7 @@ authority.
 - Keep retained-runtime interaction coverage for keyboard/text/focus/invalidation and control interactions.
 - Keep UI frame snapshot/fixture verification for stable render-data expectations (`domain/ui/ui_runtime/src/output/build_ui_frame.rs` tests).
 - Keep the lightweight substrate gallery harness runnable (`domain/ui/ui_runtime/examples/substrate_gallery.rs`).
+- Keep local Story V2 proof tests authoritative for current manifest/workflow/report/mount behavior.
 - Preserve smoke/architecture tests proving no fallback regression for viewport/tool-surface binding behavior.
 
 ## Explicit Non-Goals
@@ -380,22 +401,21 @@ authority.
 - authored editor-definition/meta-editor system specification here
 - turning `domain/ui` or `domain/ui/ui_definition` into editor semantics crates
 - speculative future feature taxonomy beyond current audited constraints
+- recreating standalone RunenUI's future framework architecture inside Runenwerk
+- claiming a standalone RunenUI consumer cutover from current local code
 
 ## Related Architecture and Workspace Docs
 
-- [Runenwerk UI Framework Architecture](../../architecture/ui-framework-architecture.md)
+- [Runenwerk UI Local Runtime and Integration Architecture](../../architecture/ui-framework-architecture.md)
 - [Workspace Architecture Boundaries](../../guidelines/architecture.md)
 - [Runenwerk Architecture Doctrine](../../guidelines/runenwerk-architecture.md)
 - [Module Structure Guidelines](../../guidelines/module-structure-guidelines.md)
 - [UI Definition Formation Framework Design](../../design/implemented/ui-definition-formation-foundation-design.md)
+- [UI Program Architecture](../../design/implemented/ui-program-architecture.md)
+- [Runenwerk UI Story V2 Consumer and Proof Boundary](../../design/active/runenwerk-ui-story-driven-golden-workflow-design.md)
 - [ADR 0009: UI Interaction Formation V2](../../adr/accepted/0009-ui-interaction-formation-v2.md)
 - [Editor / UI / Workspace / Tool-Surface Architecture](../../design/active/editor-ui-workspace-tool-surface-architecture.md)
 - [Viewport Expression Upgrade Design](../../design/implemented/workspace-viewport-expression-upgrade-design.md)
 - [Workspace Identity Contract and Migration Map](../../design/implemented/workspace-identity-contract-and-migration-map.md)
 - [UI Substrate Roadmap](./roadmap.md)
-
-<!-- BEGIN RUNENWERK:UI_COMPONENT_PLATFORM:domain-ui-note -->
-## UI Component Platform activation note
-
-The active Component Platform roadmap is `PT-UI-COMPONENT-PLATFORM`: reusable, story-proven `ControlPackage` and surface maturity after `PM-UI-STORY-004`. The platform introduces reusable kernels for control packages, authoring, story proof, catalog/discovery, input/gesture/device, state/binding/host intent, theme/token styling, accessibility/focus, layout/container/virtualization, render/surface output, overlay/popup/layering, text, Surface2D, SpatialCanvas, NodeCanvas, PortGraphCanvas, ProgressionTreeView, TrackSurface/Timeline, transitions/effects, and adoption gates.
-<!-- END RUNENWERK:UI_COMPONENT_PLATFORM:domain-ui-note -->
+- [Standalone RunenUI Architecture](https://github.com/dornglut/runen-ui/blob/main/ARCHITECTURE.md)

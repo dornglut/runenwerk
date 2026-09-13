@@ -1,641 +1,250 @@
 ---
-title: Runenwerk UI Story Driven Golden Workflow Design
-description: Productization design for making Runenwerk UI authoring, preview, validation, inspection, proof, and mount eligibility flow through one story-driven workflow without renderer-owned UI truth.
+title: Runenwerk UI Story V2 Consumer and Proof Boundary
+description: Current Runenwerk-local story manifest, workflow, report, gallery/CLI, proof, and mount-decision boundary without claiming reusable-framework authority.
 status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-06-16
+last_reviewed: 2026-09-13
 related_designs:
   - ../implemented/ui-program-architecture.md
 related_docs:
   - ../../domain/ui/architecture.md
   - ../../domain/ui/roadmap.md
   - ../../domain/ui/story-acceptance-and-review-checklist.md
-  - ../../workspace/production-track-planning-model.md
-  - ../../workspace/planning-and-implementation-workflow.md
+  - ../../architecture/ui-framework-architecture.md
 ---
 
-# Runenwerk UI Story Driven Golden Workflow Design
+# Runenwerk UI Story V2 Consumer and Proof Boundary
 
 ## Status
 
-This is an active UI productization design. It defines the canonical UI-only
-direction for authoring, preview, validation, inspection, proof, and mount
-eligibility through `UiStory`.
+This document records the current **Runenwerk-local** Story V2 proof and consumer
+boundary implemented by `domain/ui/ui_story` and its current gallery/CLI
+consumers.
 
-This document does not authorize implementation, crate creation, generated
-planning-document edits, or runtime behavior changes by itself. Implementation
-still requires the normal accepted design, WR roadmap, production-track,
-validation, and closeout gates.
+It is not a future reusable-framework specification. Standalone
+[`dornglut/runen-ui`](https://github.com/dornglut/runen-ui) owns future reusable
+UI-framework semantics, testing architecture, host profiles, renderer contracts,
+controls, and production maturity. This document does not claim that Runenwerk
+has adopted RunenUI.
 
 ## Decision
 
-Runenwerk UI authoring, validation, preview, inspection, testing, and mount
-eligibility must be centered on one first-class product unit: `UiStory`.
+Runenwerk keeps its current local story system as proof and product-consumer
+infrastructure until a separately authorized consumer cutover replaces a named
+boundary.
 
-A `UiStory` is the canonical developer-facing proof envelope for one UI unit. A
-story may describe a primitive control, a compound component, a full surface,
-an interaction state, a responsive viewport state, an accessibility state, or
-an intentionally failing diagnostic fixture.
+The current story model is V2 and workflow-graph based. The former flat
+`UiStoryRunReport` / fixed-stage architecture is not current API authority.
 
-The final workflow is:
+Current shape:
 
 ```text
-UiStory manifest
-  -> authored source load
-  -> authored source parse
-  -> definition validation
-  -> definition normalization
-  -> control package/schema validation
-  -> UiProgramFormationReport
-  -> UiProgram
-  -> UiCompilerReport
-  -> UiRuntimeArtifact
-  -> UiRuntimeViewReport
-  -> binding/host data report
-  -> host route report
-  -> layout/style/text/accessibility reports
-  -> interaction trace report
-  -> backend-neutral render primitive report
-  -> render data report
-  -> static mount report
-  -> gallery preview
-  -> inspection report
-  -> mount eligibility verdict
+UiStoryManifestV2
+  -> UiStoryRegistryV2
+  -> selected UiStoryWorkflowProfileV2
+  -> UiStoryRunV2 / owner-produced workflow evidence
+  -> UiStoryWorkflowReportV2
+  -> UiStoryMountDecisionV2
+  -> gallery / CLI / host consumer
 ```
 
-A UI surface may mount into an editor, game, headless, or world-space host only
-after its story has passed every required stage for that host profile.
+## Manifest V2
 
-## Existing Repository Truth
-
-This design productizes the current UI direction. It does not replace it.
-
-Current evidence anchors:
-
-- `docs-site/src/content/docs/domain/ui/roadmap.md` owns the durable Runenwerk-local sequence from authored UI plus control package snapshot, host data, theme tokens, and viewport constraints into formation, compiler, runtime artifact, runtime view, reports, render primitives, backend adapter, and visible UI.
-- The canonical UI roadmap forbids rendering from authored `.ron` directly, inventing package truth, inferring control semantics from strings, and bypassing formation/compiler/evaluator diagnostics.
-- `domain/ui/ui_definition` owns authored UI definitions, validation,
-  normalization, retained formation, template references, repeaters, embeds,
-  menus, availability products, and stable authored IDs.
-- `domain/ui/ui_program_lowering` exposes
-  `form_ui_program_report_from_node_with_registry_snapshot(...)`.
-- `domain/ui/ui_compiler` exposes `UiCompiler::compile_report(...)`.
-- `domain/ui/ui_runtime_view` is the canonical runtime read model over compiled
-  artifact tables.
-- `domain/ui/ui_controls` models package-backed controls including button,
-  label, inspector field, color picker, action prompt, list view, tree view,
-  and table view.
-- `domain/ui/ui_binding` models host data, binding snapshots, dirty
-  propagation, authorization, and diagnostics.
-- `domain/ui/ui_hosts` models editor, game, world-space, and headless host
-  kinds plus route-to-command mapping.
-- `domain/ui/ui_render_primitives`, `domain/ui/ui_headless_render_data`, and
-  `domain/ui/ui_static_mount` form the renderer-facing proof path.
-- `apps/runenwerk_editor/src/runtime/ui_gallery.rs` currently hosts a
-  hardcoded, button-specific gallery path. That path is useful first-slice proof
-  but must not remain the final ergonomic architecture.
-
-## Problem
-
-Runenwerk has enough UI substrate for a serious pipeline, but the current
-authoring/product workflow is still too implicit.
-
-Current weaknesses to remove:
-
-1. Gallery fixtures are hardcoded in app-local Rust code.
-2. Gallery execution is button-specific instead of story-generic.
-3. Bare node fixtures and full authored templates do not share one
-   user-facing story envelope.
-4. Validation, compilation, binding, route, layout, style, text,
-   accessibility, interaction, render, and static-mount diagnostics are not
-   presented as one inspectable run report.
-5. Mounting policy is not yet expressed as a story-derived eligibility
-   contract.
-6. Advanced platform components such as graph canvas, timeline, rich text,
-   drag/drop, world-space UI, effects, and visual builder do not yet have a
-   reusable story matrix gate.
-
-The result is architectural correctness without enough product ergonomics.
-
-## Goals
-
-The final UI workflow must make normal UI creation pleasant and advanced UI
-platform work disciplined.
-
-Goals:
-
-- create one canonical `UiStory` workflow for components, surfaces, states,
-  failure cases, interactions, and host profiles;
-- replace hardcoded gallery fixture lists with manifest-driven discovery;
-- make `UiStoryRunReport` the single inspection object from authored source to
-  mounted frame;
-- make the gallery an inspector over story reports, not a hand-authored preview
-  shell;
-- enforce story-first mount eligibility;
-- require story matrices for every reusable platform component;
-- preserve renderer ignorance of UI/product semantics;
-- preserve app/editor/game ownership of host commands and domain mutation;
-- preserve control package/schema truth as explicit inputs or snapshot
-  artifacts;
-- provide a clean cutover path with no permanent compatibility layer.
-
-## Non-Goals
-
-This design does not authorize:
-
-- creating new crates without accepted design and WR/production authority;
-- editing generated production documents directly;
-- adding a parallel visual-builder file format;
-- adding renderer-owned button, graph, timeline, text editor, or world-space UI
-  semantics;
-- using debug overlay behavior as production UI proof;
-- making editor/game/domain state mutable from generic UI code;
-- treating a visible result as proof when upstream reports failed;
-- preserving a permanent hardcoded button gallery path beside the story path.
-
-## Core Concept: UiStory
-
-`UiStory` is the stable contract for one UI proof case.
-
-A story describes:
-
-- what authored source to load;
-- whether the source is a bare `UiNodeDefinition` or a full
-  `AuthoredUiTemplate`;
-- which control package snapshot to use;
-- which host kind and route map to validate against;
-- which theme/profile to resolve;
-- which viewport matrix to test;
-- which host data to evaluate;
-- which input traces to replay;
-- which diagnostics are expected;
-- whether the story is expected to pass or intentionally fail;
-- whether the story is mount-eligible.
-
-Story categories:
-
-| Category | Purpose |
-|---|---|
-| `control` | primitive or package-backed control proof |
-| `component` | compound reusable component proof |
-| `surface` | complete authored panel/screen/surface proof |
-| `state` | hover, pressed, focused, disabled, selected, invalid, loading, empty |
-| `interaction` | deterministic pointer/keyboard/gamepad trace |
-| `accessibility` | accessibility-tree and role/label proof |
-| `layout` | responsive, clipping, overflow, split, grid, scroll proof |
-| `failure` | intentionally invalid fixture with exact diagnostic expectation |
-| `host` | editor/game/world-space/headless route and binding proof |
-
-## Proposed Crate: `domain/ui/ui_story`
-
-Preferred long-term owner:
+`UiStoryManifestV2` identifies one local story and selects the proof workflow
+that applies to it. Current manifest facts include:
 
 ```text
-domain/ui/ui_story
-```
-
-This crate is an orchestrator. It does not replace existing UI crates.
-
-Public module target:
-
-```text
-domain/ui/ui_story/src/lib.rs
-domain/ui/ui_story/src/manifest.rs
-domain/ui/ui_story/src/source.rs
-domain/ui/ui_story/src/registry.rs
-domain/ui/ui_story/src/runner.rs
-domain/ui/ui_story/src/report.rs
-domain/ui/ui_story/src/diagnostics.rs
-domain/ui/ui_story/src/states.rs
-domain/ui/ui_story/src/interaction.rs
-domain/ui/ui_story/src/mount.rs
-```
-
-Target public types:
-
-| Type | Purpose |
-|---|---|
-| `UiStoryManifest` | parsed story manifest |
-| `UiStoryId` | stable story identifier |
-| `UiStorySourceKind` | `node` or `template` |
-| `UiStoryHostProfile` | host kind, capability policy, route policy |
-| `UiStoryThemeProfile` | theme id/profile and token policy |
-| `UiStoryViewportProfile` | width, height, scale, target profile |
-| `UiStoryStateProfile` | default/hover/focus/disabled/etc. |
-| `UiStoryInputTrace` | deterministic input replay |
-| `UiStoryRunRequest` | one runner invocation |
-| `UiStoryRunReport` | full pipeline report |
-| `UiStoryStageReport` | one stage report |
-| `UiStoryDiagnostic` | unified diagnostic envelope |
-| `UiStoryVerdict` | pass/fail/skipped with first failing stage |
-| `UiStoryMountEligibility` | explicit mount decision |
-
-Crate creation remains subject to normal repository authority. If an accepted
-future slice designates an existing crate as the story runner owner, that crate
-must expose the same public story contract and preserve the ownership rules in
-this document.
-
-## Story Manifest File Layout
-
-Stories live in assets, not Rust constants.
-
-```text
-assets/ui_gallery/stories/
-  controls/
-    button/
-      basic.story.ron
-      selected.story.ron
-      disabled.story.ron
-      missing_label.failure.story.ron
-  surfaces/
-    editor_toolbar.story.ron
-    inspector.story.ron
-  platform/
-    graph_canvas/
-    timeline/
-    rich_text/
-    drag_drop/
-    world_space/
-    effects/
-```
-
-The current hardcoded gallery fixture array must be removed during cutover.
-
-Required manifest fields:
-
-```text
-story_id
-category
+schema version
+story id
+story revision
 title
-source_kind
-source_path
-source_id
-program_id
-control_package
-host_profile
-viewport_matrix
-theme_profile
-expected
-mount_policy
+category id
+source
+program id
+host profile id
+theme profile id
+viewport matrix
+workflow profile id
+expected outcome
+mount policy
 ```
 
-Optional manifest fields:
+The manifest selects a workflow profile. It does not define one universal flat
+stage list for every story.
+
+## Workflow profiles
+
+Current built-in workflow profiles include:
 
 ```text
-host_data
-route_map
-state_profiles
-input_traces
-snapshot_policy
-diagnostic_expectations
-accessibility_policy
-performance_budget
-localization_profile
+ui_story.workflow.source_load_only
+ui_story.workflow.compiler_only
+ui_story.workflow.static_preview
+ui_story.workflow.executable_interaction_proof
 ```
 
-Every story must explicitly declare whether it is expected to pass or fail.
-Failure stories are first-class because they prove diagnostic quality.
+The profile owns the graph shape and required dependencies between proof nodes.
+Different story kinds may therefore prove different bounded contracts without
+inventing a second runner or pretending every consumer has identical stages.
 
-## Example Control Story
+### Static preview profile
 
-```ron
-(
-    story_id: "ui.controls.button.basic",
-    category: "controls/button",
-    title: "Button / Basic",
-    source_kind: "node",
-    source_path: "assets/ui_gallery/button/basic.ron",
-    source_id: "assets.ui_gallery.button.basic",
-    program_id: "ui.gallery.button.basic",
-    control_package: "runenwerk.ui.controls@1",
-    host_profile: (
-        kind: "headless",
-        route_policy: "visual_unmapped_allowed",
-    ),
-    viewport_matrix: [
-        (id: "default", width: 240, height: 96, scale: 1.0),
-    ],
-    theme_profile: "editor.dark",
-    expected: (
-        verdict: "pass",
-        require_definition_validation: true,
-        require_formation: true,
-        require_compiler: true,
-        require_runtime_view: true,
-        require_accessibility: true,
-        require_render_primitives: true,
-        require_static_mount: true,
-    ),
-    mount_policy: "gallery_only",
-)
-```
-
-## Example Surface Story
-
-```ron
-(
-    story_id: "ui.surfaces.editor.settings_panel.default",
-    category: "surfaces/editor",
-    title: "Editor Settings Panel / Default",
-    source_kind: "template",
-    source_path: "assets/editor/ui/surfaces/settings_panel.ron",
-    source_id: "assets.editor.ui.surfaces.settings_panel",
-    program_id: "editor.settings_panel",
-    control_package: "runenwerk.ui.controls@1",
-    host_profile: (
-        kind: "editor",
-        route_policy: "all_routes_mapped",
-    ),
-    viewport_matrix: [
-        (id: "compact", width: 360, height: 560, scale: 1.0),
-        (id: "default", width: 420, height: 640, scale: 1.0),
-        (id: "wide", width: 760, height: 640, scale: 1.0),
-    ],
-    theme_profile: "editor.dark",
-    host_data: {
-        "settings.graphics.vsync": Bool(true),
-        "settings.audio.master_volume": Number(0.75),
-    },
-    route_map: {
-        "settings.graphics.set_vsync": "editor.settings.graphics.set_vsync",
-        "settings.audio.set_master_volume": "editor.settings.audio.set_master_volume",
-        "settings.apply": "editor.settings.apply",
-    },
-    expected: (
-        verdict: "pass",
-        require_accessibility: true,
-        require_interaction_traces: true,
-        require_static_mount: true,
-    ),
-    mount_policy: "eligible_when_passed",
-)
-```
-
-## UiStoryRunReport
-
-`UiStoryRunReport` is the one object the CLI, gallery, tests, docs, and mount
-eligibility gate inspect.
-
-Required report sections:
-
-| Section | Required owner |
-|---|---|
-| `manifest` | `ui_story` |
-| `source_load` | `ui_story::source` |
-| `source_parse` | `ui_story::source` |
-| `definition_validation` | `ui_definition` |
-| `definition_normalization` | `ui_definition` |
-| `schema_validation` | `ui_schema` and `ui_controls` |
-| `control_package` | `ui_controls` |
-| `program_formation` | `ui_program_lowering` |
-| `compiler` | `ui_compiler` |
-| `runtime_artifact` | `ui_artifacts` |
-| `runtime_view` | `ui_runtime_view` |
-| `binding` | `ui_binding` |
-| `host_routes` | `ui_hosts` |
-| `layout` | `ui_layout` / `ui_geometry` |
-| `style` | `ui_theme` |
-| `text` | `ui_text` |
-| `accessibility` | `ui_accessibility` |
-| `interaction` | `ui_runtime` / `ui_input` |
-| `render_primitives` | `ui_render_primitives` |
-| `render_data` | `ui_headless_render_data` |
-| `static_mount` | `ui_static_mount` |
-| `preview_frame` | `ui_render_data` |
-| `mount_eligibility` | `ui_story::mount` |
-| `verdict` | `ui_story` |
-
-The report must carry stage timings, source maps where available, stable
-diagnostic codes, and first-failing-stage information.
-
-## Mount Eligibility
-
-A surface is mount-eligible only when:
-
-1. the story is not an expected-failure story;
-2. the source loads and parses;
-3. definition validation and normalization pass;
-4. control package/schema validation passes;
-5. program formation passes;
-6. compilation passes;
-7. runtime artifact/source maps are valid;
-8. runtime view passes;
-9. host data/bindings pass;
-10. routes are mapped for the target host;
-11. layout, style, text, accessibility, and interaction requirements pass;
-12. render primitive report passes;
-13. render-data report passes;
-14. static mount passes;
-15. every required viewport/theme/state/input trace passes.
-
-Normal product rule:
+The current static-preview graph includes the local chain:
 
 ```text
-story first
-mount second
+manifest
+  -> source_load
+  -> source_parse
+  -> program_formation
+  -> compiler
+  -> runtime_view
+  -> render_primitives
+  -> render_data
+  -> static_mount
+  -> preview_frame
 ```
 
-Forbidden rule:
+### Executable interaction profile
+
+The executable interaction proof extends the compiled/runtime path with
+interaction evidence:
 
 ```text
-mount first
-debug visually later
+manifest
+  -> source_load
+  -> source_parse
+  -> program_formation
+  -> compiler
+  -> runtime_view
+  -> interaction_story
+       -> interaction_replay
+       -> live_interaction_proof
+  -> replay_live_parity
+  -> interaction_static_mount
+  -> preview_frame
 ```
 
-## Gallery Product Design
+These graphs are current Runenwerk implementation facts. They are not a promise
+that standalone RunenUI uses the same public API or internal decomposition.
 
-The gallery is the UI development product.
+## Evidence ownership
 
-Required panels:
+`ui_story` orchestrates proof. It does not take semantic ownership away from the
+crate that produces the evidence.
 
-| Panel | Purpose |
-|---|---|
-| Story Browser | discover and select all stories |
-| Preview | rendered selected story |
-| Manifest | parsed story manifest |
-| Source | authored source with source-map links |
-| Pipeline | stage timeline and pass/fail states |
-| Diagnostics | ordered diagnostics with exact owner/stage |
-| Program Graph | `UiProgram` rows and source maps |
-| Artifact Tables | compiled runtime artifact tables |
-| Runtime View | canonical derived control/surface view |
-| Bindings | host data, binding snapshots, dirty/authorization status |
-| Routes | route proposals and host route map |
-| Layout | resolved boxes, constraints, clipping, scroll ownership |
-| Style | semantic tokens and resolved raw values |
-| Text | layout requests/results, glyph runs, overflow, localization |
-| Accessibility | role/label/focus tree and failures |
-| Interaction Trace | pointer/keyboard/gamepad replay |
-| Render Primitives | backend-neutral primitive list |
-| Render Data | frame/surface/layer/primitive output |
-| Static Mount | final visual proof gate |
-| Snapshot | visual snapshot and diff status |
+Examples:
 
-## CLI Product Design
+- `ui_definition` owns source validation/normalization facts;
+- `ui_program_lowering` owns local program-formation facts;
+- `ui_compiler` / `ui_artifacts` own compilation and artifact facts;
+- `ui_runtime_view` / current runtime owners own runtime-read-model facts;
+- `ui_render_primitives`, `ui_render_data`, and static/headless proof owners own
+  their derived output;
+- app/editor/game owners retain product state, commands, mutation, and effects.
 
-The CLI and gallery must share `UiStoryRunner`.
+Application-owned or host-owned evidence attaches to workflow nodes. Story
+orchestration does not convert those facts into `ui_story` semantic ownership.
 
-Required commands:
+## Workflow report V2
+
+`UiStoryWorkflowReportV2` is the current local aggregate proof report. It records
+at least the workflow graph, node reports/outcomes, diagnostics, expected-failure
+matching, aggregate outcome, and first blocker.
+
+The report is a proof/inspection product. It is not authored UI truth, product
+state, renderer truth, or a generic reusable-framework conformance standard.
+
+## Expected failures
+
+Expected-failure matching is explicit. A failure story is useful proof only when
+the observed failing node/diagnostic matches the declared expectation. An
+expected failure is not mount permission.
+
+## Mount decision V2
+
+`UiStoryMountDecisionV2` is fail-closed.
+
+Mount is blocked when any required workflow condition is invalid or incomplete,
+including a failed workflow, an expected-failure story, a `Never` or
+`GalleryOnly` mount policy for production mounting, missing/failed required
+preview proof, or a non-passed aggregate outcome.
+
+The current positive rule is deliberately narrow:
 
 ```text
-tools/ui discover
-tools/ui run <story_id>
-tools/ui run-all
-tools/ui validate <path>
-tools/ui inspect <story_id>
-tools/ui explain <diagnostic_code>
-tools/ui snapshot <story_id>
-tools/ui mount-check <story_id>
-tools/ui new-story
-tools/ui new-component-story
-tools/ui new-surface-story
+mount_policy == EligibleWhenPassed
+AND required preview proof passed
+AND workflow outcome == Passed
+-> locally mount-eligible
 ```
 
-No duplicate CLI-specific runner is allowed.
+Local mount eligibility does not bypass app/engine policy, route/capability
+checks, or product mutation ownership.
 
-## Advanced UI Platform Consumers
+## Gallery and CLI consumers
 
-The following wanted features must be owned by their bounded production tracks,
-not by ad-hoc editor features and not by `PT-UI-STORY-PLATFORM`.
+Runenwerk's gallery and CLI consume the same V2 story authority rather than
+maintaining a second button-specific proof model.
 
-| Feature | Correct platform form |
-|---|---|
-| base controls, interaction, text | `PT-UI-COMPONENT-PLATFORM` reusable component work |
-| node graph editor | `PT-UI-COMPONENT-PLATFORM` `GraphCanvas` package-backed component |
-| animation timeline | `PT-UI-COMPONENT-PLATFORM` `Timeline` package-backed component |
-| visual UI builder | Designer/Workbench tracks editing authored source and consuming story reports |
-| generic component transitions/effects | `PT-UI-COMPONENT-PLATFORM` only when component-scoped |
-| screen-space game HUD | `PT-GAME-RUNTIME-UI` |
-| world-space/entity-attached UI | deferred `PT-GAME-WORLDSPACE-UI` |
-| camera/projection/surface-fit contracts | `PT-VIEWPORT-PROJECTION` |
+Current local responsibilities include:
 
-These capabilities must consume `UiStoryRunReport` where story-derived proof is
-relevant. Consuming story reports does not make the story platform the owner of
-component maturity, designer product authoring, game HUD behavior, world-space
-UI, or viewport projection contracts.
+- checked-in story assets and registry discovery;
+- V2 workflow execution;
+- CLI summary/inspection projection;
+- gallery preview and inspection;
+- expected-failure diagnostics;
+- local mount-decision reporting;
+- deterministic proof data used by tests and review.
 
-## Cutover Rule
+The editor/app remains a consumer. Gallery UI does not become reusable control,
+renderer, host, or product-state authority merely because it visualizes story
+evidence.
 
-Clean cutover only.
+## Local adoption boundary
 
-The current hardcoded button gallery path may be used as the source evidence for
-the first slice, but it must not remain as a parallel production path.
+The local `ui_story` crate may continue supporting existing Runenwerk code while
+Runenwerk still owns those consumers. New work must not use this document to
+expand Runenwerk into a second reusable UI framework.
 
-The first implementation slice must remove or fully convert:
+Future reusable story/testing semantics belong to RunenUI. A future Runenwerk
+cutover must be re-derived against the exact accepted RunenUI revision at that
+time and must be owned by a new issue naming the concrete consumer path being
+replaced.
 
-```text
-apps/runenwerk_editor/src/runtime/ui_gallery.rs::UI_GALLERY_FIXTURES
-apps/runenwerk_editor/src/runtime/ui_gallery.rs::load_fixture_node
-apps/runenwerk_editor/src/runtime/ui_gallery.rs::compile_fixture_button_report
-```
+## Product-specific consumers
 
-The final gallery resource must consume story reports, not button-specific
-reports.
+Graph editors, timelines, progression systems, game HUDs, world-space UI, visual
+design tools, and other products keep their product/domain semantics outside
+`ui_story`.
 
-## First Production Milestone To Record
+Story proof may be consumed by a product where the current local code requires
+it. That does not make this document authority for future generic NodeCanvas,
+TrackSurface, transition/effect, platform, accessibility, renderer, or
+virtualization framework semantics.
 
-`PM-UI-STORY-001 - Story Workflow Authority And Track Activation`
+## Non-goals
 
-Outcome:
+This document does not authorize:
 
-- activate `PT-UI-STORY-PLATFORM` as the single story-first UI production
-  track;
-- defer the standalone static gallery rendering path as temporary evidence;
-- record `UiStoryManifest`, `UiStoryRegistry`, `UiStoryRunner`,
-  `UiStoryRunReport`, and `UiStoryMountEligibility` as future public
-  contracts;
-- keep runtime code, crate creation, gallery migration, and product mounting
-  forbidden until the owning WR and production plan exist;
-- sequence runtime rendering proof after story runner/report creation.
+- standalone RunenUI adoption or dependency changes;
+- recreating RunenUI's roadmap inside Runenwerk;
+- the retired flat `UiStoryRunReport` API;
+- a universal fixed stage list for every story;
+- new generic framework controls or platform targets;
+- direct host/app/editor/game mutation from generic UI;
+- renderer-owned UI semantics;
+- a second gallery/CLI runner;
+- mounting when V2 workflow/mount proof fails.
 
-Target files and functions for the later implementation contract:
+## Validation boundary
 
-- `apps/runenwerk_editor/src/runtime/ui_gallery.rs::UI_GALLERY_FIXTURES`
-- `apps/runenwerk_editor/src/runtime/ui_gallery.rs::load_fixture_node`
-- `apps/runenwerk_editor/src/runtime/ui_gallery.rs::compile_fixture_button_report`
-- `apps/runenwerk_editor/src/runtime/ui_gallery.rs::submit_ui_gallery_frame_system`
-- `domain/ui/ui_story/src/runner.rs::UiStoryRunner::run_story`
-- `domain/ui/ui_story/src/report.rs::UiStoryRunReport`
-- `domain/ui/ui_story/src/registry.rs::UiStoryRegistry::discover`
-- `domain/ui/ui_story/src/mount.rs::UiStoryMountEligibility::from_report`
+Current code/tests are the behavior authority for the exact V2 APIs. The
+[Story Acceptance and Review Checklist](../../domain/ui/story-acceptance-and-review-checklist.md)
+summarizes the local review obligations without redefining the reusable
+framework.
 
-The milestone is intentionally recorded here as design intake only. It must not
-be implemented until the repository roadmap and production-track gates authorize
-it.
-
-## Validation Expectations
-
-Design/docs validation:
-
-```text
-task docs:validate
-task production:validate
-task production:check
-task planning:validate
-```
-
-Implementation validation must add focused tests before broad CI.
-
-Minimum first-slice envelope:
-
-```text
-cargo fmt --all
-cargo test -p ui_definition
-cargo test -p ui_schema
-cargo test -p ui_program_lowering
-cargo test -p ui_compiler
-cargo test -p ui_artifacts
-cargo test -p ui_binding
-cargo test -p ui_accessibility
-cargo test -p ui_runtime_view
-cargo test -p ui_render_primitives
-cargo test -p ui_headless_render_data
-cargo test -p ui_static_mount
-cargo test -p ui_story
-```
-
-If a crate does not yet exist, the implementation slice must either create it
-through accepted authority or keep the validation command out of the first slice
-and record why.
-
-## Acceptance Criteria For This Design
-
-This design is intake-ready when:
-
-- it is added as an active design source;
-- the active design index links it;
-- it does not claim implementation authority;
-- it cites current pipeline ownership and current gaps;
-- it defines `UiStory` as the golden workflow unit;
-- it defines the new `ui_story` orchestrator crate target;
-- it defines gallery and CLI product requirements;
-- it defines clean cutover requirements;
-- it defines mount eligibility;
-- it defines advanced UI platform features as story-gated platform tracks;
-- it names validation expectations.
-
-## Stop Conditions
-
-Stop and redesign if any implementation:
-
-- renders directly from authored `.ron`;
-- keeps hardcoded gallery fixtures as a production path;
-- adds a button/control-specific gallery pipeline instead of story reports;
-- infers package truth from control-kind strings;
-- lets unknown control kinds pass formation;
-- allows renderer-owned component semantics;
-- allows app/editor/game state mutation from generic UI;
-- creates a second visual-builder UI format;
-- creates component-specific drag/drop/selection/focus systems instead of
-  platform interaction primitives;
-- mounts a surface before story mount eligibility passes.
-
-<!-- BEGIN RUNENWERK:UI_COMPONENT_PLATFORM:story-workflow-consumption -->
-## Component Platform consumption of story reports
-
-`PT-UI-COMPONENT-PLATFORM` consumes UI Story as the proof orchestration substrate. `ui_story` owns manifest, registry, workflow graph contracts, app-owned evidence, reports, expected-failure matching, CLI summaries, and mount decisions. It does not own reusable control behavior, interaction execution, text shaping, surface behavior, renderer resources, Designer product authoring, game HUD behavior, or world-space UI behavior.
-
-Component Platform stories must project evidence through the story proof envelope for control state, interaction, text, accessibility, binding, theme/token, layout, render primitive, surface, budget, diagnostics, expected-failure, and mount eligibility facts.
-<!-- END RUNENWERK:UI_COMPONENT_PLATFORM:story-workflow-consumption -->
+If a future change needs reusable framework behavior rather than Runenwerk-local
+consumer behavior, start from standalone RunenUI authority instead of extending
+this design.

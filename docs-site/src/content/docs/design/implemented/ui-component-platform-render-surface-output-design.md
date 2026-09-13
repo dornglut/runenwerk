@@ -7,7 +7,7 @@ layer: domain
 canonical: true
 last_reviewed: 2026-09-13
 related_designs:
-  - ../active/ui-component-platform-ownership-realignment-design.md
+  - ../superseded/ui-component-platform-ownership-realignment-design.md
   - ./ui-component-platform-layout-container-virtualization-design.md
   - ../active/runenwerk-ui-story-driven-golden-workflow-design.md
 related_docs:
