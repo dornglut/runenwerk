@@ -314,7 +314,10 @@ mod tests {
 
         assert_ne!(primary_context.source, secondary_context.source);
         assert_eq!(primary_context.device, secondary_context.device);
-        assert_eq!(primary_context, adapter.window_context(primary, backend_device));
+        assert_eq!(
+            primary_context,
+            adapter.window_context(primary, backend_device)
+        );
     }
 
     #[test]
