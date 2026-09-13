@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-14
+last_reviewed: 2026-09-14
 related_designs:
   - ../../design/accepted/execution-fabric-and-product-jobs-design.md
   - ../../design/accepted/sdf-first-field-world-platform-design.md
@@ -40,15 +40,20 @@ implementation batch, not excluded from the program.
 - `engine/src/runtime/jobs` owns the serial and bounded worker runtime job
   executor, typed handles, generations, stale suppression, panic capture,
   queue backpressure diagnostics, and clean shutdown.
+- Engine owns reusable runtime executor/cache semantics; application/product
+  composition selects whether those resources participate. Bare `App` does not
+  imply product-job execution or runtime product-cache state.
 - Runtime product publication helpers and Draw committed tile jobs publish
   through existing product publication and query snapshot barriers.
 - Draw preview-quality CPU ink now splits immediate UI feedback from visual
   tile catch-up: `StrokePrimitive` is screen-space feedback, while preview tile
   products are asynchronous catch-up output.
+- `DrawingAppPlugin` selects Draw's bounded worker executor and runtime product
+  cache while preserving resources explicitly supplied by the application.
 - RPJ1-RPJ7A are implemented for the local runtime substrate. Draw
   responsiveness, backend-neutral cache identity, preview/final tile identity
   separation, fixed worker-pool execution, work-stealing execution, and runtime
-  job inspection diagnostics exist. Engine now owns metadata-only runtime cache
+  job inspection diagnostics exist. Engine owns metadata-only runtime cache
   decisions, while Draw owns the in-memory tile payload cache proof.
 - Persistent disk caches/package sidecars, GPU jobs, ECS parallel waves, and
   cross-process/distributed jobs remain later phases.
@@ -81,9 +86,10 @@ Requirements:
 
 - provide `RuntimeJobExecutorResource`, `RuntimeJob`, typed handles,
   generations, statuses, completions, submission errors, and diagnostics;
-- default to serial execution so product-job behavior stays deterministic and
-  easy to test;
-- install the executor resource from app bootstrap;
+- retain serial execution as the default executor configuration so product-job
+  behavior stays deterministic and easy to test;
+- keep executor installation explicit in application/product composition rather
+  than manufacturing it from bare App bootstrap;
 - keep product visibility behind existing product publication and query snapshot
   barriers.
 
@@ -159,8 +165,11 @@ Implementation Notes:
   product publication barrier;
 - preview tile jobs form visual catch-up products behind the runtime job
   executor and update app-owned preview products on the main thread;
-- Draw installs a bounded worker executor by default while the engine default
-  remains serial;
+- `DrawingAppPlugin` installs `RuntimeJobExecutorResource` with the maintained
+  bounded worker configuration when no executor was explicitly supplied and
+  initializes `RuntimeProductCacheResource` non-overwritingly;
+- an application-supplied executor or cache remains authoritative through Draw
+  composition;
 - preview tiles are not authoritative drawing state, and `StrokePrimitive` is
   not a product cache entry.
 
@@ -314,6 +323,10 @@ Requirements:
   worker threads or product publication.
 - `engine/src/runtime/jobs` owns execution, queues, workers, completions, and
   runtime diagnostics.
+- Engine runtime owns generic cache metadata/decision semantics; owning products
+  retain payload/cache-content policy.
+- Executor/cache resource installation follows explicit application/product
+  composition; bare `App` does not create capability authority.
 - Product visibility changes only through publication/query barriers.
 - Serial fallback remains permanent.
 - Failed, stale, panicked, rejected, or timed-out jobs are diagnosable and must

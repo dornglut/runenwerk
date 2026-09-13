@@ -3,8 +3,9 @@
 use engine::plugins::render::SurfaceFrameSubmissionRegistryResource;
 use engine::prelude::*;
 use engine::runtime::{
-    IntoSystemSetKey, RuntimeJobExecutorConfig, RuntimeJobExecutorResource, SystemConfigExt,
-    dispatch_product_publication_system, dispatch_query_snapshot_publication_system,
+    IntoSystemSetKey, RuntimeJobExecutorConfig, RuntimeJobExecutorResource,
+    RuntimeProductCacheResource, SystemConfigExt, dispatch_product_publication_system,
+    dispatch_query_snapshot_publication_system,
 };
 use runen_ecs::SystemSetKey;
 
@@ -59,6 +60,7 @@ impl IntoSystemSetKey for DrawingRuntimeSet {
 impl Plugin for DrawingAppPlugin {
     fn build(&self, app: &mut App) {
         install_draw_runtime_job_executor(app);
+        app.init_resource::<RuntimeProductCacheResource>();
         app.init_resource::<DrawingHostResource>();
         app.init_resource::<DrawingInkUploadTrackerResource>();
         app.init_resource::<DrawingInkGpuValidationReportCursorResource>();
@@ -105,12 +107,11 @@ impl Plugin for DrawingAppPlugin {
 }
 
 fn install_draw_runtime_job_executor(app: &mut App) {
-    let should_install_draw_default = app
+    if app
         .world()
         .resource::<RuntimeJobExecutorResource>()
-        .map(|executor| executor.config() == &RuntimeJobExecutorConfig::default())
-        .unwrap_or(true);
-    if should_install_draw_default {
+        .is_err()
+    {
         app.insert_resource(RuntimeJobExecutorResource::with_config(
             RuntimeJobExecutorConfig::worker_pool(2, 64),
         ));
