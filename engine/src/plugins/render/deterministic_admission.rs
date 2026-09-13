@@ -25,8 +25,12 @@ const LATTICE_CARRIER_FORMAT: GpuTextureFormat = GpuTextureFormat::R32Uint;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RenderDeterministicCompatibilityError {
-    ObservationShutterNotInstant { observation_index: usize },
-    ObservationSamplingSupportUnsupported { observation_index: usize },
+    ObservationShutterNotInstant {
+        observation_index: usize,
+    },
+    ObservationSamplingSupportUnsupported {
+        observation_index: usize,
+    },
     CopyCapabilityUnsupported,
     CopyCapabilityNotEnabled,
     LatticeCarrierFormatUnsupported,
@@ -36,13 +40,17 @@ pub enum RenderDeterministicCompatibilityError {
         expected_size_bytes: u64,
         actual_size_bytes: u64,
     },
-    ScalarDestinationNotCopyDestination { output_index: usize },
+    ScalarDestinationNotCopyDestination {
+        output_index: usize,
+    },
     LatticeDestinationFormat {
         output_index: usize,
         expected: GpuTextureFormat,
         actual: GpuTextureFormat,
     },
-    LatticeDestinationNotCopyDestination { output_index: usize },
+    LatticeDestinationNotCopyDestination {
+        output_index: usize,
+    },
 }
 
 impl fmt::Display for RenderDeterministicCompatibilityError {
