@@ -16,9 +16,7 @@ use super::request::{RenderObservationSpec, RenderRequest};
 use super::scene::{RenderObjectId, RenderObjectState, RenderSceneSnapshot};
 use super::semantic_plan::{RenderPlanningFailure, plan_render};
 use super::surface_input::{RenderSurfaceSemanticInput, RenderSurfaceSemanticInputBinding};
-use runen_gpu::{
-    GpuBufferUsage, GpuCapabilityFeature, GpuContext, GpuTextureFormat, GpuTextureUsage,
-};
+use runen_gpu::{GpuBufferUsage, GpuContext, GpuTextureFormat, GpuTextureUsage};
 use std::error::Error;
 use std::fmt;
 
@@ -46,8 +44,6 @@ pub enum RenderDeterministicCompatibilityError {
         output_index: usize,
         object_id: RenderObjectId,
     },
-    CopyCapabilityUnsupported,
-    CopyCapabilityNotEnabled,
     LatticeCarrierFormatUnsupported,
     LatticeCarrierCopyDestinationUnsupported,
     ScalarDestinationSize {
@@ -101,12 +97,6 @@ impl fmt::Display for RenderDeterministicCompatibilityError {
                 formatter,
                 "output {output_index} object {object_id:?} has a non-invertible semantic transform unsupported by the maintained evaluator"
             ),
-            Self::CopyCapabilityUnsupported => {
-                formatter.write_str("RunenGPU copy capability is unsupported")
-            }
-            Self::CopyCapabilityNotEnabled => {
-                formatter.write_str("RunenGPU copy capability is not enabled")
-            }
             Self::LatticeCarrierFormatUnsupported => write!(
                 formatter,
                 "{LATTICE_CARRIER_FORMAT:?} lattice carrier is unsupported"
@@ -227,16 +217,6 @@ fn validate_maintained_compatibility(
     validate_selected_evaluator_inputs(admitted)?;
 
     let capabilities = context.adapter_facts().supported();
-    if !capabilities.supports(GpuCapabilityFeature::Copy) {
-        return Err(RenderDeterministicCompatibilityError::CopyCapabilityUnsupported);
-    }
-    if !context
-        .device_facts()
-        .is_enabled(GpuCapabilityFeature::Copy)
-    {
-        return Err(RenderDeterministicCompatibilityError::CopyCapabilityNotEnabled);
-    }
-
     if admitted.outputs().iter().any(|output| {
         matches!(
             output.binding().destination(),
