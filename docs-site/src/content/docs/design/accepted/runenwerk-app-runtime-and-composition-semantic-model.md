@@ -509,24 +509,21 @@ context and diagnostics.
 Startup is a one-shot lifecycle attempt for one runtime instance.
 
 Current public runners do not return the same App after Startup failure, so this design
-does not claim a maintained public retry bug. The target nevertheless records the Startup
-attempt before the first Startup system executes. If a runtime survives a returned error
-or caught unwind, it cannot remain semantically indistinguishable from "not attempted."
+does not claim a maintained public retry bug. The target nevertheless records a
+**non-retry-eligible Startup-attempt state** before the first Startup system executes. If
+a runtime survives a returned error or caught unwind, it cannot remain semantically
+indistinguishable from "not attempted."
 
-On success:
-
-```text
-Starting -> Running
-```
-
-On error or panic after Startup execution begins, for any runtime instance that survives
-the failure:
+Conceptually:
 
 ```text
-Starting -> invalid/non-runnable runtime instance
+Prepared
+  -> Starting / Attempting   # recorded before the first Startup system
+      -> Running             # Startup succeeds
+      -> Failed/NonRunnable  # Startup returns error or unwinds
 ```
 
-Required failure law:
+Required failure law for a surviving runtime:
 
 - no generic rollback is implied;
 - already committed effects remain committed;
@@ -882,9 +879,9 @@ maintained public same-instance retry path. The normalized contract is neverthel
 explicit for any runtime instance that survives the failure:
 
 ```text
-record attempt before executing Startup systems
+record Attempting/non-retry-eligible before executing Startup systems
 -> success: Running
--> returned error / caught unwind: non-runnable surviving instance
+-> returned error / caught unwind: Failed/NonRunnable
 ```
 
 No automatic retry and no generic rollback. Failure semantics must not depend on runner
@@ -911,7 +908,7 @@ This matrix is normative ownership pressure, not permission to move every row in
 |---|---|---|
 | `World` | contained RunenECS runtime | retain current containment until separately redesigned; ECS semantics remain RunenECS-owned |
 | RunenECS `Runtime` | contained RunenECS runtime | retain current containment until separately redesigned; schedule semantics remain RunenECS-owned |
-| `startup_ran` | predecessor App lifecycle marker | replace/refine only when implementing explicit failed-attempt/non-runnable lifecycle semantics; current consuming runners already discard/exit on Startup failure |
+| `startup_ran` | predecessor App lifecycle marker | replace/refine only when implementing explicit attempting/failed/non-runnable lifecycle semantics; current consuming runners already discard/exit on Startup failure |
 | `title` | host-neutral application metadata | composition/configuration; Host projects it as needed |
 | `AppMode` | Host selection mixed with run mode | replace/refine around explicit Host selection |
 | `AppRunner` | Advancement Policy realization | normalize independently from Host and foreign owner state |
@@ -977,11 +974,11 @@ A future clean cut must eventually prove the applicable subset below.
 ### Lifecycle
 
 - composition topology is sealed before preparation/Startup;
-- if a runtime can survive Startup failure, failed-attempt state is recorded before
-  Startup systems execute;
+- if a runtime can survive Startup failure, a non-retry-eligible `Starting/Attempting`
+  state is recorded before Startup systems execute;
 - successful Startup executes once;
-- a surviving runtime cannot implicitly retry failed/panicking Startup, including after
-  a caught unwind;
+- returned error / caught unwind transitions any surviving runtime to a failed/non-runnable
+  state rather than restoring retry eligibility;
 - partial Startup effects are not claimed to be generically rolled back;
 - terminal shutdown is distinct from bounded completion.
 
