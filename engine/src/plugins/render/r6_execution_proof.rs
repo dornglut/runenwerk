@@ -1789,6 +1789,11 @@ fn founding_renderer_executes_and_matches_cpu_reference_through_public_runengpu(
     assert_eq!(result.scene(), admitted.plan().scene());
     assert_eq!(result.request(), admitted.plan().request());
     assert_eq!(
+        result.surface_semantic_inputs(),
+        admitted.surface_semantic_inputs(),
+        "semantic result must retain exact admitted surface semantic-input provenance"
+    );
+    assert_eq!(
         result.method_id(),
         admitted.selected_candidate().method_id(),
         "semantic result must retain the selected method identity"
@@ -1797,8 +1802,9 @@ fn founding_renderer_executes_and_matches_cpu_reference_through_public_runengpu(
     for (result_output, admitted_output) in result.outputs().iter().zip(admitted.outputs()) {
         assert_eq!(result_output.output_index(), admitted_output.output_index());
         assert_eq!(
-            result_output.observation_index(),
-            admitted_output.observation_index()
+            result.request().outputs()[result_output.output_index()].observation_index(),
+            admitted_output.observation_index(),
+            "semantic output-to-observation correlation must be derived from retained request"
         );
         assert_eq!(result_output.approximation(), admitted_output.approximation());
         assert_eq!(

@@ -50,10 +50,13 @@ impl RenderResultObjectRepresentation {
 }
 
 /// Semantic evidence for one successfully formed requested output.
+///
+/// Output-to-observation correlation is intentionally not duplicated here. `RenderResult` retains
+/// the exact immutable `RenderRequest`, so callers derive that relation through the requested output
+/// at `output_index`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RenderResultOutputEvidence {
     output_index: usize,
-    observation_index: usize,
     approximation: RenderOutputApproximation,
     object_representations: Vec<RenderResultObjectRepresentation>,
 }
@@ -61,10 +64,6 @@ pub(crate) struct RenderResultOutputEvidence {
 impl RenderResultOutputEvidence {
     pub(crate) const fn output_index(&self) -> usize {
         self.output_index
-    }
-
-    pub(crate) const fn observation_index(&self) -> usize {
-        self.observation_index
     }
 
     pub(crate) const fn approximation(&self) -> RenderOutputApproximation {
@@ -168,7 +167,6 @@ impl RenderResult {
             .iter()
             .map(|output| RenderResultOutputEvidence {
                 output_index: output.output_index(),
-                observation_index: output.observation_index(),
                 approximation: output.approximation(),
                 object_representations: output
                     .object_representations()
