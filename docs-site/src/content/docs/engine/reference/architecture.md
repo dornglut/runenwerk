@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-13
+last_reviewed: 2026-09-13
 ---
 
 # Engine Architecture
@@ -27,12 +27,15 @@ Builtin resource installation:
 
 - Installed during `App` construction via:
   - `App::install_builtin_resources` in `engine/src/app/runtime/bootstrap.rs`
-- Includes core resources such as:
-  - `Time`, `InputState`, `WindowState`
+- Includes current bootstrap resources such as:
+  - `InputState`, `WindowState`
   - `FixedTimeConfig`, `CatchupBudget`, `FixedTimeState`, `SimulationTick`
   - `ProductPublicationRuntimeResource`
   - `QuerySnapshotRuntimeResource`
   - scene/runtime state resources used by built-in plugins
+
+`Time` is not a bare App builtin. `TimePlugin` owns default `Time` installation and frame-time
+progression; `default_plugins()` includes `TimePlugin` for the ordinary engine stack.
 
 Startup contract:
 
@@ -116,7 +119,7 @@ Canonical implementation:
 
 Rules:
 
-1. Read and clamp `FixedTimeConfig::step_seconds`, frame `Time::delta_seconds`, and `CatchupBudget::max_steps_per_frame`.
+1. Read and clamp `FixedTimeConfig::step_seconds` and `CatchupBudget::max_steps_per_frame`; use frame `Time::delta_seconds` when `Time` is installed, otherwise use the fixed step as the frame delta fallback.
 2. Add frame delta to `FixedTimeState::accumulator_seconds`.
 3. Loop while accumulator has at least one fixed step and budget remains:
    - increment `SimulationTick`

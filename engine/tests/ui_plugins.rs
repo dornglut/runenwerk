@@ -1,9 +1,10 @@
-use engine::plugins::ScenePlugin;
+use engine::plugins::{ScenePlugin, TimePlugin};
 use engine::prelude::*;
 
 #[test]
 fn ui_plugins_populate_overlay_state_when_overlay_is_visible() {
     let mut app = App::headless();
+    app.add_plugin(TimePlugin);
     app.add_plugin(ScenePlugin);
     app.world_mut()
         .resource_mut::<InputState>()
@@ -28,6 +29,7 @@ fn ui_plugins_populate_overlay_state_when_overlay_is_visible() {
 #[test]
 fn ui_input_plugin_marks_overlay_consumed_when_editor_mode_is_toggled() {
     let mut app = App::headless();
+    app.add_plugin(TimePlugin);
     app.add_plugin(ScenePlugin);
     {
         let input = app

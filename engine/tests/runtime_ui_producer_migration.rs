@@ -4,7 +4,7 @@ use engine::plugins::render::{
     SurfaceFrameRoute, SurfaceFrameSubmission, SurfaceFrameSubmissionOrder,
     SurfaceFrameSubmissionRegistryResource,
 };
-use engine::plugins::{DebugMetricsPlugin, ScenePlugin};
+use engine::plugins::{DebugMetricsPlugin, ScenePlugin, TimePlugin};
 use engine::prelude::{App, InputState, ResMut, Update};
 use winit::event::ElementState;
 use winit::keyboard::KeyCode;
@@ -22,6 +22,7 @@ const fn render_frame_producer_id(raw: u64) -> RenderFrameProducerId {
 #[test]
 fn runtime_ui_producer_migration_scene_owner_publishes_scene_frame_submission() {
     let mut app = App::headless();
+    app.add_plugin(TimePlugin);
     app.add_plugin(RenderPlugin);
     app.add_scene("engine/tests/fixtures/scene_templates/main_menu.ron");
     app.add_plugin(ScenePlugin);
@@ -70,6 +71,7 @@ fn runtime_ui_producer_migration_scene_owner_publishes_scene_frame_submission() 
 #[test]
 fn runtime_ui_producer_migration_debug_owner_publishes_debug_frame_submission() {
     let mut app = App::headless();
+    app.add_plugin(TimePlugin);
     app.add_plugin(RenderPlugin);
     app.add_plugin(DebugMetricsPlugin);
     app.add_systems(Update, inject_f10);
@@ -117,6 +119,7 @@ fn runtime_ui_producer_migration_debug_owner_publishes_debug_frame_submission() 
 #[test]
 fn runtime_ui_producer_migration_render_plugin_does_not_collect_scene_or_debug_producers() {
     let mut app = App::headless();
+    app.add_plugin(TimePlugin);
     app.add_plugin(RenderPlugin);
     {
         let registry = app
@@ -167,6 +170,7 @@ fn inject_f10(mut input: ResMut<InputState>) {
 #[test]
 fn runtime_ui_producer_migration_preserves_runtime_producer_order_for_primary_surface() {
     let mut app = App::headless();
+    app.add_plugin(TimePlugin);
     app.add_plugin(RenderPlugin);
     app.add_scene("engine/tests/fixtures/scene_templates/main_menu.ron");
     app.add_plugin(ScenePlugin);

@@ -9,6 +9,7 @@ pub struct TimePlugin;
 
 impl Plugin for TimePlugin {
     fn build(&self, app: &mut App) {
+        app.init_resource::<Time>();
         app.add_systems(PreUpdate, time_system.in_set(CoreSet::Time));
     }
 }
