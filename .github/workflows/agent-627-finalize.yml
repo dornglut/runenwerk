@@ -1,0 +1,110 @@
+name: "Finalize #627 candidate"
+
+on:
+  push:
+    branches:
+      - agent/runenrender-radiance-capture-627
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Check out candidate branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: agent/runenrender-radiance-capture-627
+          fetch-depth: 0
+
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Install Mesa Vulkan fallback
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes mesa-vulkan-drivers vulkan-tools xvfb xauth libxkbcommon-x11-0
+          icd="$(find /usr/share/vulkan/icd.d -maxdepth 1 -type f -name 'lvp_icd*.json' -print -quit)"
+          test -n "$icd"
+          echo "Lavapipe ICD: $icd"
+          echo "VK_DRIVER_FILES=$icd" >> "$GITHUB_ENV"
+          echo "VK_ICD_FILENAMES=$icd" >> "$GITHUB_ENV"
+          echo "WGPU_BACKEND=vulkan" >> "$GITHUB_ENV"
+          echo "XDG_RUNTIME_DIR=${RUNNER_TEMP}/runenrender-vulkan-xdg" >> "$GITHUB_ENV"
+          mkdir -p "${RUNNER_TEMP}/runenrender-vulkan-xdg"
+          chmod 700 "${RUNNER_TEMP}/runenrender-vulkan-xdg"
+
+      - name: Apply final #627 proof and lock hygiene
+        run: python .github/agent-627-finalize.py
+
+      - name: Format
+        run: cargo +stable fmt --all
+
+      - name: Compile engine tests against locked graph
+        run: cargo +stable check -p engine --tests --locked
+
+      - name: Prove public deterministic radiance capture
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENRENDER_CAPTURE_REQUIRE_GPU: '1'
+        run: |
+          set -euo pipefail
+          cargo +stable test -p engine \
+            --test runenrender_radiance_capture_public \
+            --locked -- --nocapture --test-threads=1
+
+      - name: Reprove R6 public RunenGPU execution
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENRENDER_R6_REQUIRE_GPU: '1'
+        run: |
+          set -euo pipefail
+          cargo +stable test -p engine \
+            r6_spine_proof::execution \
+            --locked -- --nocapture --test-threads=1
+
+      - name: Reprove R7 same-submission verification
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENRENDER_R7_REQUIRE_GPU: '1'
+        run: |
+          set -euo pipefail
+          cargo +stable test -p engine \
+            deterministic_execution_r7_proof \
+            --locked -- --nocapture --test-threads=1
+
+      - name: Canonical repository validation
+        run: cargo +stable validate
+
+      - name: Diff hygiene
+        run: |
+          set -euo pipefail
+          git diff --check
+          grep -F 'rev = "31649491e9e7746da8e128ad984d2be315961640"' Cargo.toml
+          python - <<'PY'
+          import subprocess
+          from pathlib import Path
+          main = "69f2e09ce64eb44bf450a38120350a2dda4be48d"
+          old = "git+https://github.com/dornglut/runen-gpu?rev=77c7c8d5ad6922b6f46c6b25e31b1a224c1314a4#77c7c8d5ad6922b6f46c6b25e31b1a224c1314a4"
+          new = "git+https://github.com/dornglut/runen-gpu?rev=31649491e9e7746da8e128ad984d2be315961640#31649491e9e7746da8e128ad984d2be315961640"
+          expected = subprocess.check_output(["git", "show", f"{main}:Cargo.lock"], text=True).replace(old, new, 1)
+          actual = Path("Cargo.lock").read_text()
+          if actual != expected:
+              raise SystemExit("Cargo.lock differs from accepted main beyond the exact RunenGPU source revision")
+          PY
+
+      - name: Commit reviewed candidate
+        run: |
+          set -euo pipefail
+          rm .github/workflows/agent-627-finalize.yml .github/agent-627-finalize.py
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "render: prove public deterministic radiance capture"
+          git push origin HEAD:agent/runenrender-radiance-capture-627
