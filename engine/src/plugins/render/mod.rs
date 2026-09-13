@@ -25,6 +25,7 @@ pub mod params;
 pub mod participation;
 pub mod pipelines;
 pub mod procedural;
+pub mod readiness;
 #[cfg_attr(not(test), allow(dead_code))]
 mod render_result;
 pub mod renderer;
@@ -72,6 +73,7 @@ pub use material_compiler::*;
 pub use params::*;
 pub use plugin::RenderPlugin;
 pub use procedural::*;
+pub use readiness::{RenderReadinessPhase, RenderReadinessState};
 pub use render_result::{
     RenderResult, RenderResultObjectRepresentation, RenderResultOutputEvidence,
 };

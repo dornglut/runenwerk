@@ -31,7 +31,10 @@ last_reviewed: 2026-09-13
 
 ## Runtime Boundary
 
-- Owns: render runtime resources, flow registry integration, and render prepare/submit scheduling.
+- Owns: render runtime resources, flow registry integration, render prepare/submit scheduling, and `RenderReadinessState`.
+- Readiness provider: `RenderPlugin` installs a default loading `RenderReadinessState` through non-overwriting resource initialization; bare App construction does not install it.
+- Readiness progression: successful render submission observes render warm-frame evidence and advances the maintained stability/timeout state toward ready.
+- Lifecycle distinction: `RenderReadinessState` is Render capability state and is not the Runenwerk App `Startup` lifecycle.
 - Consumes: `Time` for frame-submit timing/diagnostics; `TimePlugin` owns default installation and progression.
 - Non-ownership: frame-time progression, app input mapping ownership, and scene lifecycle ownership.
 - Prepare/submit boundary artifact: `PreparedRenderFrame` in `engine/src/plugins/render/frame/`.

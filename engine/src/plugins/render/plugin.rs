@@ -29,6 +29,7 @@ use super::inspect::{
     WorldRuntimeInspectorSnapshot,
 };
 use super::pipelines::PipelineCacheResource;
+use super::readiness::RenderReadinessState;
 use super::residency::{
     RenderGpuResidencyBudgetResource, RenderGpuResidencyResource,
     derive_render_gpu_residency_system,
@@ -44,7 +45,7 @@ use crate::plugin::Plugin;
 use crate::plugins::scene::SceneResource;
 use crate::plugins::ui::UiRuntimeSet;
 use crate::runtime::{RenderPrepare, RenderSubmit, SystemConfigExt};
-use crate::state::{DebugMetricsState, StartupState};
+use crate::state::DebugMetricsState;
 
 pub struct RenderPlugin;
 
@@ -113,7 +114,7 @@ impl Plugin for RenderPlugin {
         app.init_resource::<RenderDebugFrameReportState>();
         app.init_resource::<RenderFrameDiagnosticsTransactionState>();
         app.init_resource::<WorldRuntimeInspectorSnapshot>();
-        app.init_resource::<StartupState>();
+        app.init_resource::<RenderReadinessState>();
         app.init_resource::<DebugMetricsState>();
 
         app.add_systems(RenderPrepare, sync_render_flow_registry_system);

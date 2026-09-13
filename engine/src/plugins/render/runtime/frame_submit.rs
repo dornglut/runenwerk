@@ -17,7 +17,7 @@ use crate::plugins::render::*;
 use crate::plugins::time::domain::Time;
 use crate::runtime::FramePacingRuntimeStateResource;
 use crate::runtime::{SimulationTick, WorldMut};
-use crate::state::{DebugMetricsState, StartupState};
+use crate::state::DebugMetricsState;
 use anyhow::anyhow;
 
 const FRAME_TIMING_LOG_THRESHOLD_MS: f32 = 20.0;
@@ -40,7 +40,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
     }
 
     let _submit_span = tracing::info_span!("systems.frame_render_submit").entered();
-    let startup_ready_before = world.resource::<StartupState>()?.is_ready();
+    let readiness_ready_before = world.resource::<RenderReadinessState>()?.is_ready();
     let delta_seconds = world.resource::<Time>()?.delta_seconds;
     let timing_log_enabled = render_timing_logging_enabled();
 
@@ -306,14 +306,14 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
             let mesh_hot = timings.renderer.mesh_hot_path;
             let warm_frame = mesh_hot.is_warm_frame();
             let (warmup_completed, elapsed_loading_seconds, stable_frames, required_stable_frames) = {
-                let startup = world.resource_mut::<StartupState>()?;
+                let readiness = world.resource_mut::<RenderReadinessState>()?;
                 let warmup_completed =
-                    startup.observe_render_warm_frame(warm_frame, delta_seconds.max(0.0));
+                    readiness.observe_render_warm_frame(warm_frame, delta_seconds.max(0.0));
                 (
                     warmup_completed,
-                    startup.elapsed_loading_seconds,
-                    startup.stable_frames,
-                    startup.required_stable_frames,
+                    readiness.elapsed_loading_seconds,
+                    readiness.stable_frames,
+                    readiness.required_stable_frames,
                 )
             };
 
@@ -323,11 +323,11 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                     stable_frames,
                     required_stable_frames,
                     warm_frame,
-                    "startup warmup complete; scene flow can transition out of loading screen"
+                    "render readiness warmup complete; scene flow can transition out of loading screen"
                 );
             }
 
-            if startup_ready_before
+            if readiness_ready_before
                 && timing_log_enabled
                 && workload_ms > FRAME_TIMING_LOG_THRESHOLD_MS
             {
@@ -368,7 +368,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                 );
             }
 
-            if startup_ready_before
+            if readiness_ready_before
                 && timing_log_enabled
                 && timings.renderer.prepare_mesh_ms > MESH_HOT_PATH_LOG_THRESHOLD_MS
             {
