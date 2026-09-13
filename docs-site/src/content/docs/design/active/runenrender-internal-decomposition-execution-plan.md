@@ -1,18 +1,15 @@
 ---
-title: RunenGPU and RunenRender Decomposition Execution Plan
-description: Durable dependency-ordered program from the combined Runenwerk renderer to clean RunenGPU and RunenRender public boundaries and external repositories.
+title: RunenRender Decomposition Execution Plan
+description: Durable dependency-ordered RunenRender implementation, proof, and external-cutover program downstream of standalone RunenGPU.
 status: active
 owner: render
 layer: engine/render
 canonical: true
-last_reviewed: 2026-09-09
+last_reviewed: 2026-09-13
 related_docs:
-  - ./runengpu-architecture-design.md
-  - ./runengpu-g3-access-work-graph-design.md
-  - ./runengpu-g4-context-program-realization-design.md
-  - ./runengpu-g4b-contracts-g4c-delivery-design.md
-  - ./runengpu-shader-authoring-artifact-boundary.md
+  - ./shader-authoring-and-canonical-artifact-policy.md
   - ../accepted/runenrender-decomposition-design.md
+  - ../../reports/design/runengpu-phase-requirements-proof-matrix.md
   - ../../reports/investigations/2026-08-04-runenrender-long-term-capability-and-scalability-review.md
   - ../../reports/investigations/runenrender-extraction-investigation.md
   - ../../architecture/repository-family-architecture.md
@@ -22,59 +19,70 @@ related_docs:
   - ../../workspace/planning/roadmap.md
 ---
 
-# RunenGPU and RunenRender Decomposition Execution Plan
+# RunenRender Decomposition Execution Plan
 
 ## Purpose
 
-Decompose the combined Runenwerk renderer into independently owned boundaries:
+Implement and prove the accepted RunenRender semantic architecture, then perform a clean
+standalone RunenRender transfer, while consuming standalone RunenGPU only through its
+public contracts.
+
+The current ownership shape is:
 
 ```text
-RunenGPU
-    validated generic GPU execution
+standalone RunenGPU
+    reusable generic GPU execution
 
 RunenRender
-    semantic rendering through RunenGPU
+    semantic rendering through public RunenGPU contracts
 
 Runenwerk
     lifecycle, source/domain projection, windows, scheduling,
     product/recovery/authoring/artifact policy, and integration
 ```
 
-This document owns durable dependency order, phase responsibility, proof boundaries, and
+This document owns durable RunenRender phase responsibility, proof boundaries, and
 cutover gates. GitHub issues own activation and live status. Pull requests own delivery
-and exact-head evidence. The roadmap owns the high-level sequence.
+and exact-head evidence. The roadmap owns the high-level sequence. Standalone RunenGPU
+owns current reusable GPU semantics and conformance.
 
 Implementation requires an owning issue, accepted current architecture, an exact-current
 census, and repository validation. No phase is activated merely because it appears here.
 
-## Target repositories
+## Standalone RunenGPU prerequisite
+
+The RunenGPU G-phase predecessor program and GX transfer are complete. Current reusable
+RunenGPU semantics, implementation, validation, and future framework evolution belong to
+`dornglut/runen-gpu`.
+
+Runenwerk currently consumes exact accepted RunenGPU revision:
 
 ```text
-dornglut/runen-gpu
-dornglut/runen-render
+77c7c8d5ad6922b6f46c6b25e31b1a224c1314a4
 ```
 
-Each begins with one public package.
+That exact pin is a Runenwerk integration-compatibility fact, not a local RunenGPU
+semantic owner. A future repin requires explicit integration review and validation.
+Historical G-phase requirement/proof identifiers remain available in the noncanonical
+[RunenGPU proof report](../../reports/design/runengpu-phase-requirements-proof-matrix.md)
+and Git history.
+
+RunenRender must not recreate the retired Runenwerk-local RunenGPU G-phase authority in
+order to advance an R phase. If a reusable GPU capability is missing, change the
+standalone owner under its own accepted work and then deliberately repin/integrate it.
 
 ## Durable sequence
 
 ```text
-S0
--> G1A -> G2 -> G3
--> G4A -> G4B -> G4C
--> G5 -> G6 -> G7 -> G8
--> GX
--> R0
--> R1 -> R2 -> R3 -> R4 -> R5 -> R6 -> R7 -> R8
--> RX
--> A1
--> V1+
+accepted standalone RunenGPU public boundary
+    -> R0
+    -> R1 -> R2 -> R3 -> R4 -> R5 -> R6 -> R7 -> R8
+    -> RX
+    -> A1
+    -> V1+
 ```
 
 ```text
-S0   current-source and consumer inventory
-G*   internal RunenGPU future-public-boundary proof
-GX   external RunenGPU clean cutover
 R0   RunenRender normative architecture gate
 R*   internal RunenRender future-public-boundary proof
 RX   external RunenRender clean cutover
@@ -82,64 +90,34 @@ A1   reusable adapter review
 V1+  advanced renderer program
 ```
 
-R0 is mandatory. There is no direct `GX -> R1` implementation path.
+R0 is mandatory. Historical RunenGPU G-phase sequencing is no longer an active prefix of
+this Runenwerk execution plan.
 
 ## Global invariants
 
-Every phase preserves:
+Every RunenRender phase preserves:
 
-- one public package per target repository initially;
-- no Runenwerk, product, ECS, SDF, UI, editor, or application types in framework public
-  contracts;
+- one public package for the target repository initially;
+- no Runenwerk, product, ECS, SDF, UI, editor, or application types in future framework
+  public contracts;
 - no direct/private WGPU ownership in RunenRender;
-- no renderer or domain meaning in RunenGPU;
+- public standalone RunenGPU contracts are the only GPU execution boundary;
 - no dependency cycle;
 - no source mirror, forwarding namespace, compatibility package, source include,
   submodule, or moving-branch dependency;
-- no old/new parallel authority after accepted cutover;
+- no old/new parallel semantic authority after accepted cutover;
 - owner-local typed identities rather than universal cross-framework identity;
-- accepted GPU work receives exactly one terminal outcome;
-- bounded queues, caches, histories, sessions, diagnostics, variants, and backing memory
-  expose pressure or bounded waits;
+- bounded caches, histories, sessions, diagnostics, variants, and retained state expose
+  pressure or bounded waits;
 - derived state remains non-authoritative and dependency/generation-bound;
-- semantic meaning remains distinct from physical realization;
-- Runenwerk owns product recovery, compatibility policy, persisted capture/reproducibility
-  artifacts, authoring policy, and artifact encoding;
+- renderer semantic meaning remains distinct from physical GPU realization;
+- Runenwerk owns product recovery, integration compatibility, persisted
+  capture/reproducibility artifacts, authoring policy, and artifact encoding;
 - proof categories remain separated: correctness, integration, operations, recovery,
   performance, showcase, and public-boundary/usability qualification;
-- each implementation phase migrates consumers of replaced authority and deletes that
-  authority in the same accepted slice;
+- each implementation phase migrates consumers of replaced RunenRender authority and
+  deletes that authority in the same accepted slice;
 - exact-head validation and repository CI remain merge evidence.
-
-# Inventory and RunenGPU program
-
-## S0 — ownership and consumer inventory
-
-S0 is historical discovery evidence. Every implementation phase repeats an exact
-current-main affected declaration/consumer census.
-
-## RunenGPU phases
-
-RunenGPU phase detail remains owned by the accepted RunenGPU architecture, focused
-phase designs, proof matrix, roadmap, and owning issues. This plan retains only the
-durable boundary order needed by RunenRender:
-
-```text
-G1A  owner-scoped logical work-resource identity
-G2   capabilities, logical resources, typed handles, prepared data
-G3   checked access, initialization, hazards, generic work and preparation
-G4A  context and adapter/device admission
-G4B  program/interface/binding/layout/pipeline contracts
-G4C  private backend realization and reusable-authority cutover
-G5   execution, progress, completion, readback and retirement
-G6   representative offscreen/shared-consumer/cost proof
-G7   surfaces, generations, loss and reconstruction
-G8   operational conformance and residual no-reach-through audit
-GX   standalone RunenGPU authority transfer and Runenwerk exact-revision cutover
-```
-
-RunenRender implementation remains downstream of accepted external RunenGPU authority
-and consumes only public RunenGPU contracts.
 
 # RunenRender internal proof
 
