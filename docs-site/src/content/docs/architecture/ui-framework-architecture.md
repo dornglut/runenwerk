@@ -5,16 +5,16 @@ status: active
 owner: ui
 layer: architecture
 canonical: true
-last_reviewed: 2026-09-10
+last_reviewed: 2026-09-13
 related_docs:
   - ../domain/ui/README.md
   - ../domain/ui/architecture.md
   - ../domain/ui/roadmap.md
-  - ../design/active/ui-framework-app-integration-direction-review.md
+  - ./live-uiplugin-runtime-platform-architecture.md
+  - ../design/deferred/live-uiplugin-runtime-and-surface-frame-rendering-design.md
   - ../design/implemented/ui-program-architecture.md
   - ../design/implemented/ui-program-architecture-owner-map.md
   - ../design/active/runenwerk-ui-story-driven-golden-workflow-design.md
-  - ../design/active/ui-runtime-rendering-pipeline-roadmap.md
   - ../design/deferred/game-runtime-ui-projection-and-hud-platform-design.md
   - ../design/deferred/ui-model-multiple-execution-strategies-design.md
   - domain-authoring-platform-overview.md
@@ -67,8 +67,8 @@ derived from that boundary and its source/proof chain.
 This architecture spine does not authorize:
 
 - product Rust code changes;
-- public `AppUiExt` APIs;
-- a new public app framework surface;
+- new reusable-framework authority inside Runenwerk;
+- standalone RunenUI consumer cutover;
 - compiled-reactive or Svelte-like UI implementation;
 - ECS-driven UI as an implemented semantic model;
 - SDF-owned UI semantics;
@@ -258,14 +258,16 @@ Host responsibilities include:
 - route-map and capability policy;
 - side effects and persistence.
 
-`ui_app_integration` is currently a renderer-neutral proof bridge, but it is
-ECS-host-specific and proof-local. It is not the final host-neutral app
-framework and does not expose final public `engine::App` ergonomics.
+The accepted Runenwerk tree now contains the local engine integration surface:
+`engine::plugins::ui::UiPlugin`, `AppUiExt::mount_ui(...)`, the
+`app.ui().mount(...)` facade, typed `UiScreen`/source/action contracts, typed
+`UiActionHandler` dispatch, mounted runtime/session resources, and
+producer-generic surface-frame publication. These are Runenwerk-local
+implementation facts; they do not establish standalone RunenUI adoption or
+future reusable-framework ownership.
 
-App authors should eventually get ergonomic `AppUiExt`-style APIs for resources,
-systems, screens, routers, and typed UI actions. Public `AppUiExt` remains
-deferred to a separate accepted phase after the proof bridge and dependency
-direction are validated.
+`ui_app_integration` remains narrow proof/evidence infrastructure and is not the
+owner of the public engine integration surface.
 
 ## Render/projection targets, including SDF
 
@@ -321,13 +323,16 @@ Current code already contains substantial pieces of the target pipeline:
 - `ui_binding` and `ui_hosts` host/binding contract vocabulary;
 - `ui_story`, `ui_testing`, headless/static mount/render proof crates;
 - retained UI runtime and renderer-facing `UiFrame` output;
-- `ui_app_integration` as the narrow ECS-backed proof bridge.
+- Runenwerk-local engine `UiPlugin`, app mounting, typed screen/action/host
+  integration, mounted runtime/session evaluation, and producer-generic
+  surface-frame publication;
+- `ui_app_integration` as narrow historical/proof evidence.
 
-Current limitations:
+Current limitations and boundaries:
 
-- the public host-neutral app framework is not complete;
-- public `AppUiExt` ergonomics are deferred;
-- `ui_app_integration` is proof-local and ECS-host-specific;
+- standalone RunenUI adoption/cutover is not established by this architecture;
+- current Runenwerk-local UI contracts remain valid until an explicit accepted
+  consumer cutover changes them;
 - SDF/game/world-space targets must remain consumers until separate target
   proof promotes their exact contracts;
 - compiled-reactive and ECS-driven execution strategies remain deferred.
@@ -337,17 +342,19 @@ Current limitations:
 This architecture spine is the canonical top-down architecture summary, not
 active planning.
 
-Workspace planning owns current focus, milestones, production-track blockers,
-and state transitions. Active designs own slice-level tradeoffs. This spine
-should be updated only when the canonical top-down model changes, not for every
-phase status update.
+Workspace planning and current GitHub issues own current focus, milestones,
+production-track blockers, and state transitions. Active designs own
+slice-level tradeoffs. This spine should be updated only when the canonical
+top-down model changes, not for every phase status update.
 
-Current focus is owned by workspace planning. As of the PR #75 closeout, the
-ECS-backed Counter UI Story Proof is completed evidence and the active focus is
-PR #74 / `PT-UI-RUNTIME-PLATFORM-001` intake review and hardening. That intake
-does not authorize Live `UiPlugin` runtime implementation, compiler DSLs, SDF
-UI, `SpatialCanvas`, public `AppUiExt` code, generic plugin framework
-extraction, or alternate execution strategies.
+The historical PR #74/#75 app-integration and runtime-platform intake is
+evidence, not current activation authority. The accepted tree now contains a
+Runenwerk-local engine `UiPlugin`, typed app-facing mounting/action contracts,
+and producer-generic surface-frame publication. Current code/tests plus
+[Live UiPlugin Runtime Platform Architecture](./live-uiplugin-runtime-platform-architecture.md)
+describe that local implementation. Any future Runenwerk consumer integration
+with standalone RunenUI is deferred and must be re-derived from an exact
+accepted RunenUI revision under a new owning issue.
 
 ## Folder and crate ownership map
 
@@ -366,7 +373,8 @@ extraction, or alternate execution strategies.
 | Host and binding contracts | `domain/ui/ui_hosts`, `domain/ui/ui_binding` |
 | Story/proof | `domain/ui/ui_story`, `domain/ui/ui_testing` |
 | Render data | `domain/ui/ui_render_data`, `domain/ui/ui_render_primitives`, `domain/ui/ui_static_mount` |
-| ECS-backed proof bridge | `domain/ui/ui_app_integration` |
+| Runenwerk app-facing UI integration | `engine::plugins::ui` consuming domain UI contracts |
+| Historical/proof bridge | `domain/ui/ui_app_integration` |
 | Editor host mutation/effects | `domain/editor/*`, `apps/runenwerk_editor` |
 | Game/SDF/world-space target proofs | Owning game/runtime/render/world-space designs and future accepted contracts |
 
@@ -378,7 +386,8 @@ Stop and redesign if a follow-up tries to:
 - make renderer output, SDF fields, or raster primitives source truth;
 - make ECS entities the durable UI semantic model;
 - make `ui_app_integration` the final host-neutral framework;
-- expose public `AppUiExt` before a separate accepted API phase;
+- treat current Runenwerk `AppUiExt`/`UiPlugin` implementation as proof of
+  standalone RunenUI adoption or authority;
 - let generic controls mutate host/app/editor/game/domain state directly;
 - bypass `ui_definition`, `FormedInteractionModel`, `UiProgram`, or `UiStory`;
 - promote compiled-reactive or ECS-driven execution from the deferred design
@@ -399,11 +408,11 @@ Diagram source:
 - [UI Domain](../domain/ui/README.md)
 - [UI Domain Current-State Architecture](../domain/ui/architecture.md)
 - [UI Substrate and Surface Roadmap](../domain/ui/roadmap.md)
-- [UI Framework App Integration Direction Review](../design/active/ui-framework-app-integration-direction-review.md)
+- [Live UiPlugin Runtime Platform Architecture](./live-uiplugin-runtime-platform-architecture.md)
+- [Deferred Live UiPlugin Consumer Integration](../design/deferred/live-uiplugin-runtime-and-surface-frame-rendering-design.md)
 - [UI Program Architecture](../design/implemented/ui-program-architecture.md)
 - [UI Program Architecture Owner Map](../design/implemented/ui-program-architecture-owner-map.md)
 - [Runenwerk UI Story Driven Golden Workflow Design](../design/active/runenwerk-ui-story-driven-golden-workflow-design.md)
-- [UI Runtime Rendering Pipeline Roadmap](../design/active/ui-runtime-rendering-pipeline-roadmap.md)
 - [Game Runtime UI Projection And HUD Platform](../design/deferred/game-runtime-ui-projection-and-hud-platform-design.md)
 - [UI Model Multiple Execution Strategies Design](../design/deferred/ui-model-multiple-execution-strategies-design.md)
 - [ADR 0009: UI Interaction Formation V2](../adr/accepted/0009-ui-interaction-formation-v2.md)

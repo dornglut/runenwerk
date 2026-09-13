@@ -9,7 +9,6 @@ last_reviewed: 2026-09-13
 related_designs:
   - ../active/ui-component-platform-ownership-realignment-design.md
   - ./ui-component-platform-layout-container-virtualization-design.md
-  - ../active/ui-runtime-rendering-pipeline-roadmap.md
   - ../active/runenwerk-ui-story-driven-golden-workflow-design.md
 related_docs:
   - ../../domain/ui/architecture.md

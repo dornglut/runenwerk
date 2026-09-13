@@ -8,8 +8,6 @@ canonical: true
 last_reviewed: 2026-06-16
 related_designs:
   - ../../design/active/runenwerk-ui-story-driven-golden-workflow-design.md
-  - ../../design/active/runenwerk-ui-platform-capability-roadmap.md
-  - ../../design/active/ui-runtime-rendering-pipeline-roadmap.md
 related_docs:
   - ./architecture.md
   - ./roadmap.md

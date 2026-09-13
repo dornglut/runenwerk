@@ -5,13 +5,11 @@ status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-09-12
+last_reviewed: 2026-09-13
 related:
   - ./architecture.md
   - ./story-acceptance-and-review-checklist.md
   - ../../design/active/runenwerk-ui-story-driven-golden-workflow-design.md
-  - ../../design/active/runenwerk-ui-platform-capability-roadmap.md
-  - ../../design/active/ui-runtime-rendering-pipeline-roadmap.md
   - ../../design/implemented/ui-program-architecture.md
   - ../../design/implemented/ui-definition-formation-foundation-design.md
   - ../../reports/audits/editor-ui-priority-code-audit-2026-05-05.md
@@ -29,7 +27,7 @@ related:
 
 Track implementation sequencing for UI substrate, retained UI surfaces, UiProgram architecture, runtime artifacts, and the future artifact-backed rendering path from current code truth.
 
-This roadmap is intentionally execution-oriented. Target architecture belongs in active design docs. The artifact-backed rendering roadmap is now tracked in [UI Runtime Rendering Pipeline Roadmap](../../design/active/ui-runtime-rendering-pipeline-roadmap.md).
+This roadmap is intentionally execution-oriented. Target architecture belongs in current architecture and lifecycle-owned design docs. This file owns the durable Runenwerk-local artifact-backed rendering sequence; current story-productization direction remains in [Runenwerk UI Story Driven Golden Workflow Design](../../design/active/runenwerk-ui-story-driven-golden-workflow-design.md).
 
 ## Current Code Truth
 
@@ -250,9 +248,12 @@ evidence; runtime rendering proof must return through
 PM-UI-STORY-004 after the story manifest, registry, runner, report, and
 mount-eligibility contracts exist.
 
-Owning design:
+Authority:
 
-- `docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md`
+- this canonical UI roadmap owns the durable Runenwerk-local sequence;
+- `docs-site/src/content/docs/design/implemented/ui-program-architecture.md` owns implemented semantic-program truth;
+- `docs-site/src/content/docs/design/implemented/ui-component-platform-render-surface-output-design.md` owns the current renderer-neutral output contract;
+- `docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md` owns current story-productization direction.
 
 Decision:
 
@@ -309,10 +310,9 @@ Stop conditions:
 Status: active design intake; implementation not authorized by this roadmap
 section alone.
 
-Owning designs:
+Owning design:
 
 - `docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md`
-- `docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md`
 
 Decision:
 

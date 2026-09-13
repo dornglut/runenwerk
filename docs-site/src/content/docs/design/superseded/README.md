@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-09-12
+last_reviewed: 2026-09-13
 ---
 
 # Superseded Designs
@@ -25,6 +25,8 @@ No superseded foundation design documents are currently tracked in this folder.
 ### UI Domain
 
 - [Runenwerk UI Platform Capability Roadmap](runenwerk-ui-platform-capability-roadmap.md)
+- [UI Program Contract Design](ui-program-contract-design.md)
+- [UI Runtime Rendering Pipeline Roadmap](ui-runtime-rendering-pipeline-roadmap.md)
 
 ### Engine Runtime
 

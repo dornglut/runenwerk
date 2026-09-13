@@ -9,7 +9,6 @@ last_reviewed: 2026-09-13
 related_designs:
   - ./ui-component-platform-authoring-kit-design.md
   - ./ui-component-platform-story-proof-envelope-design.md
-  - ../active/runenwerk-ui-platform-capability-roadmap.md
   - ./editor-ui-runtime-v2-and-interaction-formation-design.md
 related_docs:
   - ../../domain/ui/architecture.md

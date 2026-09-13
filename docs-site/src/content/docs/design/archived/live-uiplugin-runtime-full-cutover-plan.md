@@ -1,26 +1,33 @@
 ---
 title: Live UiPlugin Runtime Full Platform Cutover Plan
-description: Full implementation-planning contract for the Live UiPlugin Runtime Platform cutover.
-status: active
+description: Historical full implementation-planning contract for the Runenwerk-local Live UiPlugin runtime platform delivery.
+status: archived
 owner: ui
 layer: design
-canonical: true
-last_reviewed: 2026-09-11
+canonical: false
+last_reviewed: 2026-09-13
 related_docs:
   - ../../architecture/live-uiplugin-runtime-platform-architecture.md
   - ../../architecture/diagrams/live-uiplugin-runtime-platform.puml
   - ../../architecture/diagrams/live-uiplugin-runtime-sequence.puml
-  - ./live-uiplugin-runtime-and-surface-frame-rendering-design.md
+  - ../deferred/live-uiplugin-runtime-and-surface-frame-rendering-design.md
   - ./ui-framework-app-integration-direction-review.md
   - ../../architecture/ui-framework-architecture.md
   - ../../reports/investigations/live-uiplugin-runtime-current-state-investigation.md
-  - ../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md
+  - ../../reports/closeouts/pt-ui-runtime-platform-011-closeout.md
   - ../../workspace/planning/roadmap.md
   - ../../workspace/planning/decision-register.md
-  - ../../guidelines/programming-principles.md
 ---
 
 # Live UiPlugin Runtime Full Platform Cutover Plan
+
+## Archive disposition
+
+This file preserves the complete delivery-era phase program. It is historical evidence, not current activation authority. Current accepted code/tests and the canonical Live UiPlugin runtime architecture own the landed Runenwerk-local implementation truth.
+
+Closeout evidence exists for phases 003 through 011 in the accepted tree. No phase-012 closeout was found during the #510 authority audit. Therefore the Counter-product, reload/persistence, closeout/adoption-lock, and any other unfinished/future instructions below must not be resumed from this archive.
+
+Any future Runenwerk consumer integration with standalone RunenUI must be re-derived from an exact accepted standalone RunenUI revision and activated by a new owning issue. The deferred Live UiPlugin consumer-integration design records that reactivation boundary.
 
 ID: `PT-UI-RUNTIME-PLATFORM-002`
 

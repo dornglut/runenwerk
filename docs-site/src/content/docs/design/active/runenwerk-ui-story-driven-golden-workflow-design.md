@@ -7,9 +7,7 @@ layer: domain
 canonical: true
 last_reviewed: 2026-06-16
 related_designs:
-  - ./ui-runtime-rendering-pipeline-roadmap.md
   - ../implemented/ui-program-architecture.md
-  - ./ui-program-contract-design.md
 related_docs:
   - ../../domain/ui/architecture.md
   - ../../domain/ui/roadmap.md
@@ -76,14 +74,8 @@ This design productizes the current UI direction. It does not replace it.
 
 Current evidence anchors:
 
-- `docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md`
-  already defines the durable target from authored UI plus control package
-  snapshot, host data, theme tokens, and viewport constraints into formation,
-  compiler, runtime artifact, runtime view, reports, render primitives, backend
-  adapter, and visible UI.
-- The same roadmap already forbids rendering from authored `.ron` directly,
-  inventing package truth, inferring control semantics from strings, and
-  bypassing formation/compiler/evaluator diagnostics.
+- `docs-site/src/content/docs/domain/ui/roadmap.md` owns the durable Runenwerk-local sequence from authored UI plus control package snapshot, host data, theme tokens, and viewport constraints into formation, compiler, runtime artifact, runtime view, reports, render primitives, backend adapter, and visible UI.
+- The canonical UI roadmap forbids rendering from authored `.ron` directly, inventing package truth, inferring control semantics from strings, and bypassing formation/compiler/evaluator diagnostics.
 - `domain/ui/ui_definition` owns authored UI definitions, validation,
   normalization, retained formation, template references, repeaters, embeds,
   menus, availability products, and stable authored IDs.

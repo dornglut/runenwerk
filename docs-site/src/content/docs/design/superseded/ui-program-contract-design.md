@@ -1,19 +1,25 @@
 ---
 title: UI Program Contract Design
-description: Current truth contract for the bounded UiProgram proof-slice evidence and the remaining concrete architecture implementation gap.
-status: active
+description: Superseded historical truth contract retained to show the former UiProgram architecture gap before runtime-proven implementation landed.
+status: superseded
 owner: ui
 layer: domain
 canonical: false
-last_reviewed: 2026-05-31
+last_reviewed: 2026-09-13
 related:
-  - ./runenwerk-domain-workbench-north-star.md
   - ../implemented/ui-program-architecture.md
-  - ./ui-program-proof-slice-plan.md
+  - ../implemented/ui-program-architecture-owner-map.md
+  - ../archived/ui-program-proof-slice-plan.md
   - ../../reports/audits/pt-ui-program-truth-claim-correction.md
 ---
 
 # UI Program Contract Design
+
+## Supersession disposition
+
+This document is retained because it records the former truth correction that distinguished bounded proof slices from the then-missing concrete UiProgram architecture. Its central "architecture unproven" claim is now obsolete: current code/tests plus the implemented UiProgram architecture and owner map are current truth.
+
+The body below is historical evidence only. Its future-track and downstream-gate wording does not authorize or block current work.
 
 ## Status
 
