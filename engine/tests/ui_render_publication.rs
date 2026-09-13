@@ -13,6 +13,7 @@ use engine::plugins::ui::{
     UiRuntimeFramePublicationTarget, UiRuntimeTraceEventKind, UiRuntimeTraceResource, UiScreen,
     UiTypedScreenId, UiTypedSource, publish_latest_ui_runtime_frame,
 };
+use engine::plugins::TimePlugin;
 use engine::prelude::{App, AppUiExt};
 use ui_binding::HostDataSnapshot;
 use ui_controls::{BUTTON_CONTROL_KIND_ID, ControlPackageRegistry, runenwerk_control_package};
@@ -158,6 +159,7 @@ fn ui_render_publication_missing_evaluation_records_report_and_diagnostic() {
 #[test]
 fn ui_render_publication_prepares_payload_when_plugins_run_render_prepare() {
     let mut app = App::headless();
+    app.add_plugin(TimePlugin);
     app.add_plugin(RenderPlugin);
     app.add_plugin(UiPlugin);
     app.insert_resource(evaluated_counter_runtime("Clicked 3 / 5", 3));
@@ -219,6 +221,7 @@ fn ui_render_publication_can_feed_prepare_resource_directly() {
     assert!(report.is_published());
 
     let mut app = App::headless();
+    app.add_plugin(TimePlugin);
     app.add_plugin(RenderPlugin);
     app.insert_resource(submissions);
     let app = app
