@@ -5,11 +5,11 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-09-10
+last_reviewed: 2026-09-13
 related_docs:
   - ../operating-model.md
   - ./phase-implementation-spec.md
-  - ../../design/active/runengpu-g4b-contracts-g4c-delivery-design.md
+  - ../../architecture/repository-family-architecture.md
 ---
 
 # Workspace Specs
@@ -54,14 +54,19 @@ old lifecycle string.
 
 ## Current use
 
-RON phase specs are retained where they contain useful bounded implementation detail,
-including the RunenGPU G4 family. The current RunenGPU implementation slice and exact
-accepted base are determined from the owning issue and current roadmap, not from stale
-RON lifecycle fields.
+RON phase specs are retained only where they contain useful bounded implementation or
+historical handoff detail. Their presence does not make recorded lifecycle state current
+authority.
 
-Older RunenECS, RunenSDF and UI RON files may remain as historical handoff snapshots
-until their owning documentation cleanup decides whether the detail is still useful.
-Their presence does not make their recorded `lifecycle_state` current authority.
+The retained RunenGPU G-phase RON files are **historical predecessor handoffs after the
+completed standalone transfer**. Current reusable RunenGPU semantics, validation, work,
+and repository state belong to `dornglut/runen-gpu`; Runenwerk's current compatibility
+claim is its exact dependency pin plus integration validation. Do not derive a current
+RunenGPU phase or implementation target from a retained Runenwerk RON file.
+
+Older RunenECS, RunenSDF and UI RON files may likewise remain as historical handoff
+snapshots until their owning documentation cleanup decides whether the detail is still
+useful. Their presence does not make their recorded `lifecycle_state` current authority.
 
 The generic [Phase Implementation Spec](phase-implementation-spec.md) is superseded as
 a repository-wide lifecycle template. Its historical rules do not reactivate a phase
@@ -82,6 +87,7 @@ schema or deterministic constraints, but it must remain subordinate to accepted
 Markdown, the owning GitHub issue, and the repository validation commands defined by
 [TESTING.md](../../../../../../TESTING.md).
 
-In particular, tooling must not update RON lifecycle fields to mirror GitHub state or
-reject a current issue because an older retained spec records an earlier planning
-snapshot.
+In particular, tooling must not update RON lifecycle fields to mirror GitHub state,
+reject current GitHub authority because an older retained spec records an earlier
+planning snapshot, or treat a predecessor RunenGPU spec as authority over standalone
+`dornglut/runen-gpu`.
