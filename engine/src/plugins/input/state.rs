@@ -1,7 +1,7 @@
 use super::neutral::{
     AnalogMeasurement, ContactId, ContactInput, ContactPhase as NeutralContactPhase, ControlId,
-    CoordinateSpace, DigitalState, DigitalTransition, InputContext, InputObservation, InputSourceId,
-    KeyLocation, KeyboardInput, LogicalKey, MeasurementDomain, NativeLogicalKey,
+    CoordinateSpace, DigitalState, DigitalTransition, InputContext, InputObservation,
+    InputSourceId, KeyLocation, KeyboardInput, LogicalKey, MeasurementDomain, NativeLogicalKey,
     NeutralInputAuthority, ObservationGroup, ObservationOrigin, PhysicalKeyIdentity, Point2,
     PointerButton, PointerButtonInput, RelativeMotionUnit, ScrollDelta, ScrollDomain, ScrollInput,
     Vector2,
@@ -623,13 +623,13 @@ impl InputState {
                 id: input.id,
                 phase: input.phase.into(),
                 position: (input.position.x, input.position.y),
-                delta: (
-                    input.position.x - previous.0,
-                    input.position.y - previous.1,
-                ),
+                delta: (input.position.x - previous.0, input.position.y - previous.1),
                 pressure: input.pressure.and_then(legacy_pressure_projection),
             });
-            if matches!(input.phase, NeutralContactPhase::End | NeutralContactPhase::Cancel) {
+            if matches!(
+                input.phase,
+                NeutralContactPhase::End | NeutralContactPhase::Cancel
+            ) {
                 self.primary_touch = None;
             }
         }
@@ -914,12 +914,10 @@ mod interner_tests {
     #[test]
     fn distinct_physical_controls_do_not_alias() {
         let mut interner = LegacyControlInterner::default();
-        let native_a = interner.intern_key(&PhysicalKeyIdentity::Native(
-            NativePhysicalKeyCode::Xkb(41),
-        ));
-        let native_b = interner.intern_key(&PhysicalKeyIdentity::Native(
-            NativePhysicalKeyCode::Xkb(42),
-        ));
+        let native_a =
+            interner.intern_key(&PhysicalKeyIdentity::Native(NativePhysicalKeyCode::Xkb(41)));
+        let native_b =
+            interner.intern_key(&PhysicalKeyIdentity::Native(NativePhysicalKeyCode::Xkb(42)));
         let known = interner.intern_key(&PhysicalKeyIdentity::code("F13"));
         let button = interner.intern_button(PointerButton::Left);
 
