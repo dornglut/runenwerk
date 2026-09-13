@@ -451,7 +451,10 @@ fn public_verified_result_path_forms_once_from_exact_submission() {
     };
 
     assert_eq!(result.request().outputs().len(), 1);
-    assert_eq!(result.surface_semantic_inputs(), fixture.semantic_inputs.as_slice());
+    assert_eq!(
+        result.surface_semantic_inputs(),
+        fixture.semantic_inputs.as_slice()
+    );
     assert_eq!(result.outputs().len(), 1);
     assert_eq!(result.outputs()[0].output_index(), 0);
     assert_eq!(
