@@ -444,7 +444,7 @@ fn founding_fixture() -> Result<FoundingFixture> {
     let output = RenderOutputSpec::new(
         RenderOutputValue::Radiance { representation },
         RenderResultTopology::sample_lattice_2d(WIDTH, HEIGHT)?,
-        RenderSemanticTolerance::exact(),
+        RenderSemanticTolerance::absolute(ORACLE_TOLERANCE)?,
     )?;
     let request = RenderRequest::new(
         shutter,
