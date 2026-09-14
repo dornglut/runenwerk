@@ -1,16 +1,21 @@
 ---
 title: Runenwerk Editor Workspace-Document-Mode-Panel Architecture
-description: Repository-grounded architecture for task workspaces, document tabs, interaction modes, reusable panels, and context providers.
-status: implemented
+description: Historical repository-grounded architecture for task workspaces, document tabs, interaction modes, reusable panels, and context providers.
+status: superseded
 owner: editor
 layer: domain
-canonical: true
-last_reviewed: 2026-05-16
+canonical: false
+last_reviewed: 2026-09-14
+superseded_by:
+  - ../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md
+  - ../accepted/runenwerk-editor-coordination-semantic-model.md
+  - ../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
 related_designs:
   - ./editor-ui-workspace-tool-surface-architecture.md
-  - ./editor-self-authoring-and-final-ui-design.md
-  - ./workspace-identity-contract-and-migration-map.md
-  - ./engine-game-runtime-editor-ecs-scripting-hot-reload-design.md
+  - ../implemented/editor-self-authoring-and-final-ui-design.md
+  - ../implemented/workspace-identity-contract-and-migration-map.md
+  - ../active/engine-game-runtime-editor-ecs-scripting-hot-reload-design.md
+  - ../implemented/editor-tool-suite-registry-and-workbench-host-design.md
 related:
   - ../../apps/runenwerk-editor/current-architecture.md
   - ../../apps/runenwerk-editor/roadmap.md
@@ -20,8 +25,18 @@ related:
 # Runenwerk Editor Workspace-Document-Mode-Panel Architecture
 
 ## Status
-Active implementation. The accepted architecture is a per-surface-instance
-provider seam.
+
+Superseded historical implementation-era architecture.
+
+The document below is retained to preserve the model that shaped current code and its migration evidence. Its global `Document`/`EditorSession`/mode/selection/history/dirty-state target is no longer current normative editor semantics.
+
+Current authority is split explicitly:
+
+- normalized editor coordination: [ADR 0025](../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md) and the [accepted semantic model](../accepted/runenwerk-editor-coordination-semantic-model.md);
+- structural composition: [ADR 0013](../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md) and `ui_composition`;
+- tool-suite/provider host contracts: the [implemented Tool Suite / Workbench design](../implemented/editor-tool-suite-registry-and-workbench-host-design.md).
+
+Code and tests continue to own exact current behavior. The remaining sections are historical design and implementation evidence; future-tense or “should adopt” language below does not reactivate this architecture.
 
 ## Purpose
 
@@ -253,7 +268,7 @@ Scripting remains language-neutral at the contract level; Rhai is the first conc
 - Modes: layout-edit, ui-layout-edit, command-bind, create/manage, style-edit, validation, preview.
 
 This remains a later-phase track and aligns with authored editor-definition groundwork in
-`docs-site/src/content/docs/design/active/editor-ui-workspace-tool-surface-architecture.md` (Phase E) and the concrete self-authoring/final UI target in `docs-site/src/content/docs/design/implemented/editor-self-authoring-and-final-ui-design.md`.
+`docs-site/src/content/docs/design/superseded/editor-ui-workspace-tool-surface-architecture.md` (historical Phase E) and the concrete self-authoring/final UI target in `docs-site/src/content/docs/design/implemented/editor-self-authoring-and-final-ui-design.md`.
 
 The dedicated self-authoring design now exists and covers:
 
