@@ -76,3 +76,4 @@ predecessor designs after the accepted standalone transfer.
 - [Runen Federated Semantic Composition and Plan Interface Design](runen-federated-semantic-composition-design.md)
 - [Runenwerk UI Story V2 Consumer and Proof Boundary](runenwerk-ui-story-driven-golden-workflow-design.md)
 - [Semantic Graph IR and Compilation Design](semantic-graph-ir-and-compilation-design.md)
+- [Shader Authoring and Canonical Artifact Policy](shader-authoring-and-canonical-artifact-policy.md)
