@@ -1,6 +1,6 @@
 ---
 title: Runenwerk Platform Architecture
-description: Canonical top-down architecture spine for the Runenwerk integration platform, semantic federation, specialized execution, Workbench inspection, and batteries-included application composition.
+description: Canonical top-down architecture spine for the Runenwerk integration platform, semantic federation, typed federated composition, specialized execution, Workbench inspection, and batteries-included application composition.
 status: accepted
 owner: workspace
 layer: architecture
@@ -12,8 +12,10 @@ related_adrs:
   - ../adr/accepted/0017-cross-authority-consistency-and-graph-semantics.md
   - ../adr/accepted/0018-semantic-federation-and-physical-realization.md
   - ../adr/accepted/0019-batteries-included-application-composition.md
+  - ../adr/accepted/0020-adopt-federated-semantic-composition.md
 related_docs:
   - ./repository-family-architecture.md
+  - ../design/active/runen-federated-semantic-composition-design.md
   - ../guidelines/domain-program-architecture-pattern.md
   - ../reports/investigations/2026-08-12-semantic-federation-and-inspection-provenance.md
   - ../reports/investigations/2026-08-12-application-composition-and-networking-ergonomics.md
@@ -38,6 +40,7 @@ Its long-term target combines:
 
 - independently useful typed frameworks and domain owners;
 - explicit semantic ownership and cross-owner contracts;
+- optional typed federated composition when one useful artifact materially spans owners;
 - freedom to choose specialized CPU, GPU, spatial, field, network, persisted, or other
   physical representations;
 - specialized execution rather than one universal runtime substrate;
@@ -53,6 +56,7 @@ The compact form is:
 Independent owners.
 One semantic grammar.
 Explicit typed integration.
+Optional typed cross-owner composition.
 Owner-local versions; consumer-owned admission.
 Many physical realizations.
 Specialized execution.
@@ -108,6 +112,11 @@ machinery.
 ```
 
 This is an ownership/integration map, not one mandatory dataflow pipeline.
+
+ADR 0020 adds an optional Level-B typed composition/interface target over this map. Such
+a composition describes explicit cross-owner relationships and delegates owner-specific
+verification, planning, admission, lowering, and execution back to the applicable
+owner. It is not a universal semantic representation beneath every owner.
 
 # 1. Framework ownership and Runenwerk integration
 
@@ -202,6 +211,46 @@ Diagnostic / Report
 Cross-domain explanatory verbs such as `Observe`, `Propose`, `Derive`, `Adapt`,
 `Admit`, `Realize`, `Execute`, and `Commit` are open vocabulary, not a closed enum or
 universal execution pipeline.
+
+## Typed federated composition
+
+ADR 0020 accepts one narrower cross-owner mechanism: an **optional typed composition
+artifact** for cases where the composition itself is a durable useful thing to validate,
+inspect, explain, or lower.
+
+The governing boundary is:
+
+```text
+owner-native semantic model
+        |
+        | explicit opt-in contract / interface
+        v
+cross-owner composition
+        |
+        | deterministic partition / delegation
+        v
+owner-native planning / admission / lowering
+        |
+        v
+specialized realization / execution
+```
+
+The shared composition layer may carry owner-qualified operation/contract references,
+explicit dependency or correspondence relationships, requirements, effect-owner facts,
+provenance/source maps, partition boundaries, and diagnostics. It must remain smaller
+than the semantic models it composes.
+
+It does not establish one family-wide type lattice, relation algebra, effect taxonomy,
+evaluation-lifetime model, query language, object identity, or semantic database.
+Owner-native plans such as RunenRender `RenderPlan` remain owner-native.
+
+Unknown or owner-specific semantics fail closed for generic transformation: a generic
+pass may preserve, route, or inspect them, but may rewrite, reorder, fuse, duplicate,
+eliminate, substitute, or lower them only through an explicit interface proving the
+required legality. Structural similarity is not semantic equivalence.
+
+Direct owner-native APIs remain first-class and need not participate in a shared Plan at
+all.
 
 # 3. Versions and compatibility
 
@@ -349,17 +398,24 @@ The acceptance bar rises with commitment:
 ```text
 Level A
   conceptual law / vocabulary
+  accepted by ADR 0018
 
 Level B
-  interoperability / reflection contract
+  optional typed federated composition/interface protocol
+  accepted by ADR 0020 as an architecture target
+  other peer-neutral interoperability/reflection contracts remain separately gated
+  concrete shared Rust machinery still requires bounded implementation proof
 
 Level C
-  shared runtime mechanism
+  shared planner/runtime/database/optimizer/executor or other retained mechanism
+  not pre-authorized
 ```
 
-ADR 0018 accepts Level-A semantic federation. It does not pre-authorize a shared
-Workbench protocol, query engine, dataflow runtime, global store, generic optimizer, or
-meta-executor.
+ADR 0020 does not bypass ADR 0017's proof discipline. A concrete shared Plan
+representation must first prove the same neutral composition invariant across at least
+two structurally different real cross-owner cases, preserve direct owner-native use, and
+remain free of proving-domain semantic branches. Extraction into a peer package or
+repository remains a separate ADR 0014 decision.
 
 # 8. Workbench
 
@@ -405,7 +461,11 @@ Inspection should remain optional, lazy, bounded, pressure-aware, and device/loc
 aware. Inspecting GPU metadata must not imply payload readback; inspecting a field must
 not imply eager dense materialization.
 
-Any peer-neutral inspection/reflection API requires a separate Level-B decision.
+ADR 0020 permits Workbench to consume typed federated composition explanations where a
+Plan exists, alongside owner-native projections. Owners that do not participate in a
+shared Plan must remain inspectable. ADR 0020 does not create a concrete peer-neutral
+Workbench reflection ABI or universal query database; any such implementation remains
+separately proof-gated.
 
 # 9. Application and product experience
 
@@ -476,6 +536,10 @@ compile-time / binary-size modularity
 
 Product groups, App builtin cleanup, and compile-time capability subtraction require
 separate implementation/design proof.
+
+A future product composition Plan may describe and validate a cross-owner product
+composition before construction, but it must lower into the same ordinary `App` +
+owner-plugin/resource/adapter path and must not remain a parallel writable runtime truth.
 
 # 10. Networking
 
@@ -585,7 +649,13 @@ managed backend services
 Workbench reflection ABI
 ```
 
-These may exist locally. Shared extraction remains possible after real repeated proof.
+ADR 0020 does not weaken this list. Its optional typed composition/interface protocol
+standardizes only the neutral cross-owner composition invariant that explicit
+participating interfaces can prove; it does not promote a universal query engine,
+compiler/evaluator, database, planner runtime, or execution substrate.
+
+These mechanisms may exist locally. Shared extraction remains possible after real
+repeated proof.
 
 # 13. Accepted architecture versus future implementation
 
@@ -598,21 +668,27 @@ Accepted durable Runenwerk authority includes:
 - graph/feedback separation and incremental/full correctness;
 - semantic/physical realization separation;
 - semantic-federation reasoning vocabulary;
+- optional typed federated cross-owner composition as a Level-B architecture target;
+- interface-gated generic transformation with fail-closed unknown semantics;
 - no pre-authorized shared meta runtime;
 - `App` as the one runtime composition root;
 - product/plugin groups as the accepted future composition concept;
-- custom Runen networking semantic ownership with contained transport realization.
+- standalone RunenNet reusable networking ownership with Runenwerk integration and
+  contained transport realization.
 
 Still separately gated:
 
+- concrete shared Plan/IR Rust representation and API;
+- federation catalog implementation or peer-neutral Workbench reflection ABI;
+- cross-owner optimizer/planner runtime or any other Level-C shared mechanism;
+- extraction of shared composition machinery into another crate/repository;
 - concrete product/plugin-group API and memberships;
 - moving current `App` builtin resources;
 - Cargo feature/dependency topology for smaller builds;
-- peer-neutral Workbench inspection/reflection protocol;
 - Workbench query capabilities;
 - low-boilerplate standard ECS networking completion;
 - managed backend/provider integrations;
-- any new shared runtime mechanism.
+- any other new shared runtime mechanism.
 
 Documentation must not describe these future items as already implemented.
 
@@ -634,7 +710,11 @@ The architecture remains healthy when:
 12. custom Runen systems can use contained lower-level libraries without giving away
     their higher-level semantic ownership;
 13. docs distinguish accepted architecture, current implementation, future target, and
-    historical evidence.
+    historical evidence;
+14. typed federated composition remains optional and never replaces direct owner-native
+    APIs or owner-native plans;
+15. generic cross-owner transforms occur only through interfaces that prove the required
+    semantic/effect legality.
 
 # 15. Cold-start reading path
 
@@ -648,11 +728,13 @@ For cross-domain architecture work:
    authority, consistency, graph, incremental, capability, extraction, and safety laws.
 5. [ADR 0018](../adr/accepted/0018-semantic-federation-and-physical-realization.md) —
    positive semantic-federation, physical-realization, and Workbench direction.
-6. [ADR 0019](../adr/accepted/0019-batteries-included-application-composition.md) —
+6. [ADR 0020](../adr/accepted/0020-adopt-federated-semantic-composition.md) —
+   optional typed federated composition/interface target and Level-B safety boundary.
+7. [ADR 0019](../adr/accepted/0019-batteries-included-application-composition.md) —
    product-facing `App` and usability doctrine.
-7. [Framework Integration Architecture](./repository-family-architecture.md) and the owning
+8. [Framework Integration Architecture](./repository-family-architecture.md) and the owning
    subsystem/framework design for the work at hand.
-8. [Dornglut Engineering Software Design Standard](https://github.com/dornglut/engineering/blob/main/standards/software-design.md)
+9. [Dornglut Engineering Software Design Standard](https://github.com/dornglut/engineering/blob/main/standards/software-design.md)
    or [Domain Program Architecture Pattern](../guidelines/domain-program-architecture-pattern.md)
    when those specialized guidelines apply.
 
@@ -669,6 +751,7 @@ while participating in one coherent product:
 ```text
 owners keep meaning
 contracts make boundaries explicit
+optional typed composition makes cross-owner relationships inspectable
 admission makes multi-owner use deliberate
 realizations stay free to optimize
 execution stays specialized
