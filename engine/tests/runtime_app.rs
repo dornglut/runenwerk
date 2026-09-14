@@ -23,7 +23,7 @@ struct MinimalPlugin;
 impl Plugin for MinimalPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<FrameCounter>();
-        app.add_systems(Startup, setup);
+        app.add_systems(Startup, setup.on_invoker_thread());
         app.add_systems(Update, movement);
     }
 }
@@ -156,7 +156,7 @@ impl Plugin for DemoLogicPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<DemoFrames>();
         app.add_plugins(default_plugins());
-        app.add_systems(Startup, setup_demo_player);
+        app.add_systems(Startup, setup_demo_player.on_invoker_thread());
         app.add_systems(
             Update,
             (

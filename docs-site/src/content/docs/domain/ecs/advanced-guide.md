@@ -76,7 +76,12 @@ frame or application revision.
 Use built-in `Res`, `ResMut`, `Query`, `Commands`, and `WorldMut`, or derive a
 composed parameter with `#[derive(SystemParam)]`. `WorldMut` is the supported
 exclusive whole-world parameter and cannot be combined with sibling world
-borrows in the same system.
+borrows in the same system. Raw registration proves `Transferable` from the
+callable, cached state, and parameter bounds. Mark systems using `WorldMut`,
+ordinary `Commands`, non-Send closures, or another local-only parameter with
+`.on_invoker_thread()` before adding set or ordering configuration. The
+registration mobility is additive diagnostic information and does not create
+worker execution or change serial ordering.
 
 The low-level `SystemParam` trait is doc-hidden and manual downstream
 implementations are unsupported. Its unsafe contract covers lifetime-independent

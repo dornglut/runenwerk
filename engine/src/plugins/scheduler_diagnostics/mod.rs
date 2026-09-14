@@ -7,7 +7,7 @@ use crate::plugins::diagnostics::core::model::{
     DiagnosticsEntry, DiagnosticsSeverity, DiagnosticsStatus,
 };
 use crate::plugins::time::domain::Time;
-use crate::runtime::{RenderSubmit, SimulationTick, WindowState, WorldMut};
+use crate::runtime::{RenderSubmit, SimulationTick, SystemMobilityExt, WindowState, WorldMut};
 use serde::Serialize;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -15,7 +15,10 @@ pub struct SchedulerDiagnosticsPlugin;
 
 impl Plugin for SchedulerDiagnosticsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(RenderSubmit, scheduler_diagnostics_system);
+        app.add_systems(
+            RenderSubmit,
+            scheduler_diagnostics_system.on_invoker_thread(),
+        );
     }
 }
 

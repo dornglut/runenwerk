@@ -13,7 +13,7 @@ pub use core::{
 
 use crate::app::App;
 use crate::plugin::Plugin;
-use crate::runtime::{CoreSet, FrameEnd, PreUpdate, SystemConfigExt};
+use crate::runtime::{CoreSet, FrameEnd, PreUpdate, SystemConfigExt, SystemMobilityExt};
 
 pub struct DiagnosticsPlugin;
 
@@ -32,7 +32,9 @@ impl Plugin for DiagnosticsPlugin {
 
         app.add_systems(
             FrameEnd,
-            core::finalize_diagnostics_reports_system.before(CoreSet::FrameEnd),
+            core::finalize_diagnostics_reports_system
+                .on_invoker_thread()
+                .before(CoreSet::FrameEnd),
         );
         app.add_systems(
             FrameEnd,
@@ -44,7 +46,9 @@ impl Plugin for DiagnosticsPlugin {
         );
         app.add_systems(
             FrameEnd,
-            adapters::emit_console_feed_system.before(CoreSet::FrameEnd),
+            adapters::emit_console_feed_system
+                .on_invoker_thread()
+                .before(CoreSet::FrameEnd),
         );
     }
 }

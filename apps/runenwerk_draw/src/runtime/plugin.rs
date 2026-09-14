@@ -4,8 +4,8 @@ use engine::plugins::render::SurfaceFrameSubmissionRegistryResource;
 use engine::prelude::*;
 use engine::runtime::{
     IntoSystemSetKey, RuntimeJobExecutorConfig, RuntimeJobExecutorResource,
-    RuntimeProductCacheResource, SystemConfigExt, dispatch_product_publication_system,
-    dispatch_query_snapshot_publication_system,
+    RuntimeProductCacheResource, SystemConfigExt, SystemMobilityExt,
+    dispatch_product_publication_system, dispatch_query_snapshot_publication_system,
 };
 use runen_ecs::SystemSetKey;
 
@@ -81,12 +81,14 @@ impl Plugin for DrawingAppPlugin {
         app.add_systems(
             Update,
             dispatch_product_publication_system
+                .on_invoker_thread()
                 .in_set(DrawingRuntimeSet::ProductPublication)
                 .after(DrawingRuntimeSet::PreviewJobs),
         );
         app.add_systems(
             Update,
             dispatch_query_snapshot_publication_system
+                .on_invoker_thread()
                 .in_set(DrawingRuntimeSet::QuerySnapshotPublication)
                 .after(DrawingRuntimeSet::ProductPublication),
         );

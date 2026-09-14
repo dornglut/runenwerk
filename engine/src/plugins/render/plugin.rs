@@ -44,7 +44,7 @@ use crate::app::App;
 use crate::plugin::Plugin;
 use crate::plugins::scene::SceneResource;
 use crate::plugins::ui::UiRuntimeSet;
-use crate::runtime::{RenderPrepare, RenderSubmit, SystemConfigExt};
+use crate::runtime::{RenderPrepare, RenderSubmit, SystemConfigExt, SystemMobilityExt};
 use crate::state::DebugMetricsState;
 
 pub struct RenderPlugin;
@@ -133,8 +133,10 @@ impl Plugin for RenderPlugin {
         );
         app.add_systems(
             RenderPrepare,
-            frame_render_prepare_system.in_set(RenderRuntimeSet::FramePrepare),
+            frame_render_prepare_system
+                .on_invoker_thread()
+                .in_set(RenderRuntimeSet::FramePrepare),
         );
-        app.add_systems(RenderSubmit, frame_render_submit_system);
+        app.add_systems(RenderSubmit, frame_render_submit_system.on_invoker_thread());
     }
 }

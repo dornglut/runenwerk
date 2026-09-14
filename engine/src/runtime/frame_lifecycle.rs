@@ -67,7 +67,7 @@ mod tests {
         PublicationHandlers, dispatch_product_publication_system,
         dispatch_query_snapshot_publication_system,
     };
-    use crate::runtime::system::SystemConfigExt;
+    use crate::runtime::system::{SystemConfigExt, SystemMobilityExt};
     use anyhow::anyhow;
     use runen_ecs::{Commands, Res, SystemSet};
 
@@ -198,17 +198,21 @@ mod tests {
         let mut runtime = Runtime::new();
         runtime.add_systems::<Update, _, _>(
             &mut world,
-            queue_optional_deferred_commands.in_set(DeferredProducerSet),
+            queue_optional_deferred_commands
+                .on_invoker_thread()
+                .in_set(DeferredProducerSet),
         );
         runtime.add_systems::<Update, _, _>(
             &mut world,
             dispatch_product_publication_system
+                .on_invoker_thread()
                 .in_set(ProductPublicationSet)
                 .after(DeferredProducerSet),
         );
         runtime.add_systems::<Update, _, _>(
             &mut world,
             dispatch_query_snapshot_publication_system
+                .on_invoker_thread()
                 .in_set(QueryPublicationSet)
                 .after(ProductPublicationSet),
         );

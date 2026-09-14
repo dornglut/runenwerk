@@ -27,6 +27,7 @@ Systems are functions or processes that operate over components and resources. T
 - **System Set** – A semantic grouping used by explicit ordering constraints.
 - **DeferredPublicationFrontier** – The ECS-owned point at which queued structural mutations become visible.
 - **WorldMut** – Built-in exclusive access to the complete world for a system that needs coordinated ECS operations.
+- **ExecutionMobility** – The registered system capability: `Transferable` or explicitly `InvokerThreadOnly`.
 
 ## Implementation / API
 
@@ -57,7 +58,16 @@ Systems can queue structural changes safely:
 fn spawn_entity(mut commands: Commands) {
     commands.spawn(Position { x: 0.0, y: 0.0 });
 }
+
+runtime.add_systems::<Update, _, _>(&mut world, spawn_entity.on_invoker_thread());
 ```
+
+Raw systems are registered as `Transferable` only when their callable, cached
+parameter state, and system parameters prove that capability. `WorldMut`,
+ordinary `Commands`, non-Send closures, and other local-only parameters must be
+marked explicitly with `.on_invoker_thread()` before applying set or ordering
+configuration. This wrapper changes execution mobility only; it does not alter
+system ordering or deferred-publication semantics.
 
 ### Set Ordering
 
@@ -81,7 +91,10 @@ impl SystemSet for PostGameplay {}
 runtime.add_systems::<Update, _, _>(&mut world, tick.in_set(Gameplay));
 runtime.add_systems::<Update, _, _>(
     &mut world,
-    spawn_entity.in_set(PostGameplay).after(Gameplay),
+    spawn_entity
+        .on_invoker_thread()
+        .in_set(PostGameplay)
+        .after(Gameplay),
 );
 ```
 

@@ -21,7 +21,7 @@ struct RuntimeMinimalPlugin;
 impl Plugin for RuntimeMinimalPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<FrameCounter>();
-        app.add_systems(Startup, setup);
+        app.add_systems(Startup, setup.on_invoker_thread());
         app.add_systems(Update, movement);
     }
 }
