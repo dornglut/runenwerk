@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-09-12
+last_reviewed: 2026-09-14
 ---
 
 # Design Documents
@@ -46,7 +46,7 @@ Index:
 Examples:
 
 ```text
-active/editor-ui-workspace-tool-surface-architecture.md
+active/editor-asset-pipeline-and-content-workflow-design.md
 ```
 
 ## `accepted/`

@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-09-12
+last_reviewed: 2026-09-14
 ---
 
 # Implemented Designs
@@ -32,7 +32,6 @@ checked against code, tests, closeout evidence, and known drift.
 - [Editor Product UX Lab And Game UI Ready Foundations](editor-product-ux-lab-and-game-ui-ready-foundations-design.md)
 - [UI Lab Productization Design](ui-lab-productization-design.md)
 - [Surface Workflow Contract Redesign](surface-workflow-contract-redesign.md)
-- [Runenwerk Editor Workspace-Document-Mode-Panel Architecture](editor-workspace-document-mode-panel-architecture.md)
 - [Workspace Identity Contract and Migration Map](workspace-identity-contract-and-migration-map.md)
 
 ### UI Domain

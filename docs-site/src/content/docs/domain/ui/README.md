@@ -5,7 +5,7 @@ status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-14
 ---
 
 # UI Domain
@@ -103,10 +103,12 @@ hit-test, preview, drag/resize-session, proposal, accessibility, and explicit
 promotion-delta products from immutable composition snapshots. It cannot mutate
 or persist canonical composition state.
 
-Editor and Draw static structure now project through `ui_composition`. Legacy
-editor workspace structure is read-only compatibility input until the governed
-docking-runtime gate. `ui_surface` remains a temporary mapped compatibility
-boundary; neither legacy area is a parallel target authority.
+Editor and Draw structure project through `ui_composition`. Current editor
+structural commands commit through the composition transaction path; legacy
+`WorkspaceState` structures remain compatibility/test or migration inputs where
+current source still retains them, not a parallel live structural authority.
+`ui_surface` remains a temporary mapped compatibility boundary rather than a
+second structural target owner.
 
 ## Interaction / Runtime
 
@@ -121,10 +123,18 @@ boundary; neither legacy area is a parallel target authority.
 The UiProgram-era crates coexist with retained `ui_tree`, `ui_widgets`, and
 `ui_runtime`; their existence does not imply total retained-UI replacement.
 
-## Legacy Shell / Workspace / Tool Surfaces
+## Editor Coordination And Legacy Predecessors
 
-- [Editor UI Workspace Tool Surface Architecture](../../design/active/editor-ui-workspace-tool-surface-architecture.md)
-- [Editor Workspace Document Mode Panel Architecture](../../design/implemented/editor-workspace-document-mode-panel-architecture.md)
+Current normalized editor coordination authority:
+
+- [ADR 0025: Normalize Editor Coordination and Semantic Ownership](../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md)
+- [Runenwerk Editor Coordination Semantic Model](../../design/accepted/runenwerk-editor-coordination-semantic-model.md)
+- [Editor Tool Suite Registry And Workbench Host Design](../../design/implemented/editor-tool-suite-registry-and-workbench-host-design.md)
+
+Historical predecessor designs retained for migration/provenance only:
+
+- [Editor UI Workspace Tool Surface Architecture](../../design/superseded/editor-ui-workspace-tool-surface-architecture.md)
+- [Editor Workspace Document Mode Panel Architecture](../../design/superseded/editor-workspace-document-mode-panel-architecture.md)
 
 ## Deferred Execution Targets
 

@@ -5,18 +5,21 @@ status: accepted
 owner: editor
 layer: domain/app
 canonical: true
-last_reviewed: 2026-09-12
+last_reviewed: 2026-09-14
 related_adrs:
   - ../../adr/accepted/0001-use-domain-owned-commands.md
   - ../../adr/accepted/0004-separate-description-from-execution.md
   - ../../adr/accepted/0005-projections-are-derived-state.md
+  - ../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
+  - ../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md
   - ../../adr/superseded/0006-editor-surface-provider-plugin-seam.md
   - ../../adr/superseded/0012-capability-workbench-clean-break.md
 related_designs:
   - ../implemented/ui-lab-productization-design.md
   - ./ui-designer-interface-lab-platform-design.md
-  - ../active/editor-tool-suite-registry-and-workbench-host-design.md
-  - ../active/editor-ui-workspace-tool-surface-architecture.md
+  - ../implemented/editor-tool-suite-registry-and-workbench-host-design.md
+  - ./runenwerk-editor-coordination-semantic-model.md
+  - ./app-neutral-ui-composition-design.md
   - ../implemented/surface-workflow-contract-redesign.md
   - ./ui-designer-target-projection-profiles-design.md
   - ./ui-designer-component-surface-and-widget-recipe-library-design.md
@@ -89,9 +92,14 @@ Architecture governance accepts this direction:
 - `apps/runenwerk_editor` owns the concrete Runenwerk editor command catalog,
   command execution bridge, dynamic command availability, app diagnostics, and
   provider implementation.
-- `domain/editor/editor_shell` owns app-neutral structural command projection
-  contracts, routed shell action types, surface definition contracts, tool-suite
-  registry validation, workspace projection, and host capability policy.
+- `domain/editor/editor_shell` owns editor-local routed action/projection
+  contracts, surface definition contracts, Tool Suite registry validation,
+  Workbench/profile/provider projection adapters, and host capability policy.
+  It does not own app-neutral structural topology or structural transaction
+  authority.
+- `domain/ui/ui_composition` owns presentation targets, roots, regions,
+  split/stack/mounted topology, structural transactions/history, and
+  composition persistence. Editor shell projections consume that authority.
 - `domain/editor/editor_definition` may declare editor/workbench command,
   menu, shortcut, and surface references, but it must not execute app commands.
 - `domain/ui/ui_definition` remains generic and behavior-free. It may hold UI
@@ -100,9 +108,10 @@ Architecture governance accepts this direction:
 
 No new ADR is required for PM-UI-LAB-002 because the accepted ADRs already
 cover domain-owned commands, description-versus-execution, derived projections,
-provider seams, and Workbench clean-break identity. A new ADR or accepted
-design update is required before generic UI definitions own concrete editor
-commands, app provider behavior, or project/runtime execution.
+Workbench host identity, app-neutral structural composition, and normalized
+editor coordination. A new ADR or accepted design update is required before
+generic UI definitions own concrete editor commands, app provider behavior, or
+project/runtime execution.
 
 ## EditorCommandCatalog Contract
 
@@ -216,7 +225,8 @@ Registry validation must report:
 - provider support for a key not declared by the installed registry.
 
 These diagnostics may be app-owned if they include app command behavior. Shell
-diagnostics remain structural and must not depend on app runtime state.
+diagnostics remain editor-host/projection diagnostics and must not depend on app
+runtime state or redefine `ui_composition` structural semantics.
 
 ## Fitness Functions
 

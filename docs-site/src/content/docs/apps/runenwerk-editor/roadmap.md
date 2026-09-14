@@ -5,12 +5,11 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-14
 related_designs:
   - ../../design/accepted/sdf-first-field-world-platform-design.md
   - ../../design/implemented/ui-definition-formation-foundation-design.md
-  - ../../design/implemented/editor-workspace-document-mode-panel-architecture.md
-  - ../../design/active/editor-ui-workspace-tool-surface-architecture.md
+  - ../../design/accepted/runenwerk-editor-coordination-semantic-model.md
   - ../../design/implemented/editor-tool-suite-registry-and-workbench-host-design.md
   - ../../design/accepted/editor-native-multi-window-presentation-design.md
   - ../../design/implemented/workspace-viewport-expression-upgrade-design.md
@@ -25,6 +24,8 @@ related_designs:
 related_adrs:
   - ../../adr/accepted/0009-ui-interaction-formation-v2.md
   - ../../adr/accepted/0007-external-runtime-preview-process.md
+  - ../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
+  - ../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md
 related_roadmaps:
   - ../../workspace/planning/roadmap.md
   - ../../domain/ui/roadmap.md
@@ -63,15 +64,17 @@ Make the Runenwerk editor feature-complete end to end:
 
 This is not a deferral list. Every phase below is required for feature completion. Later phases are ordered after their prerequisites, not optional.
 
+This roadmap owns app-level implementation sequencing, not editor semantic or structural authority. ADR 0025 and the accepted editor coordination semantic model govern normalized editor semantics; ADR 0013 and `domain/ui/ui_composition` govern structural composition. Completed milestone sections below are retained as point-in-time implementation evidence and do not override those current authorities.
+
 ## Repo Truth Audit
 
 Current implemented baseline:
 
 - Editor MVP acceptance is closed in `docs-site/src/content/docs/apps/runenwerk-editor/execution-priority-checklist.md`.
 - Workspace profile identity exists in `domain/editor/editor_shell/src/workspace/profile.rs::WorkspaceProfile`.
-- Profile-addressed workspace layout persistence exists in `apps/runenwerk_editor/src/persistence/workspace_layout.rs::default_workspace_layout_path_for_profile`.
-- Structural workspace identities exist in `domain/editor/editor_shell/src/workspace/state.rs::WorkspaceState`.
-- Tab reorder, tab rehome, floating host placeholders, and split resizing exist in `domain/editor/editor_shell/src/workspace/reducer.rs::WorkspaceMutation`.
+- Atomic composition-bundle persistence for editor layouts is owned by `apps/runenwerk_editor/src/persistence/workspace_layout.rs` through `CompositionBundleRepository`; legacy V1-V5 workspace files are unsupported compatibility input.
+- Structural composition authority is `domain/ui/ui_composition::CompositionState`; `RunenwerkEditorShellState` installs a validated `EditorCompositionRuntime`. `WorkspaceState` is compatibility/import/test input, not live structural authority.
+- Ordinary structural tab/stack/layout actions commit through the `ui_composition` transaction path; legacy `WorkspaceMutation`/`reduce_workspace` remain compatibility/test evidence where current source still requires them.
 - Provider DTOs exist in `domain/editor/editor_shell/src/surface_provider.rs`.
 - Concrete app providers exist in `apps/runenwerk_editor/src/shell/providers/mod.rs::EditorSurfaceProviderRegistry`.
 - Retained UI substrate and widgets exist in `domain/ui/*`, including select, tree, table, tabs, toggle, numeric input, text input, scroll, split, and viewport embed.
@@ -88,8 +91,8 @@ Current implemented baseline:
 
 Current post-M3 gaps:
 
-- M1 structural seams are closed: `DocumentKind` has the explicit M1 taxonomy, `EditorSession` owns ordered document tabs, active switching, dirty/save/close transitions, document compatibility validation, and mode ids/descriptors/registry compatibility rules; app-local generic document-tab runtime state is split from scene-specific document state.
-- M2 shell seams are closed: tab chrome, editor type switching, new-tab allocation, close/split/duplicate/reset area commands, dynamic split composition, projected-host split resizing, and workspace layout persistence have automated coverage.
+- M1 implementation seams are closed in the current predecessor-shaped `editor_core`: `DocumentKind` has the explicit M1 taxonomy, `EditorSession` owns ordered document tabs, active switching, dirty/save/close transitions, document compatibility validation, and mode ids/descriptors/registry compatibility rules; app-local generic document-tab runtime state is split from scene-specific document state. These are current implementation facts, not the normalized long-term ownership model accepted by ADR 0025.
+- M2 shell seams are closed as implementation history: tab chrome, editor type switching, new-tab allocation, close/split/duplicate/reset area commands, dynamic split composition, projected-host split resizing, and workspace layout persistence have automated coverage. Current structural mutation and persistence authority has since cut over to `ui_composition`; legacy workspace contracts remain compatibility/test inputs.
 - M3 scene-authoring seams are closed: scene command intents cover child creation, subtree duplication, batch delete, SDF primitive creation, transform set/reset, and component add/remove; rotate/scale viewport tools, transform preview, retained outliner tree rows, common reflected inspector editing, SDF authoring DTOs, and normalized save/load paths have focused coverage.
 - The M3.5 UI definition/formation closeout is implemented: `domain/ui/ui_definition`, `domain/editor/editor_definition`, checked-in RON fixtures under `assets/editor/ui/`, retained formation, inert route/embed products, toolbar/menu fixture formation, normal shell chrome formation, common provider surface fixture formation, and app-owned fixture validation exist. Provider data, viewport overlays, editor mutations, and route execution remain outside `ui_definition`.
 - The M4 asset foundation exists: `domain/asset` owns asset ids, taxonomy, source/artifact descriptors, dependency graph, deterministic import plans, diagnostics, and ratification; `ProjectFileV2` migration exists in `domain/editor/editor_persistence/src/project_file.rs`; `world_sdf` owns field-product descriptors and ratification; `world_ops` owns generic product invalidation/build helpers; and the editor app owns initial catalog runtime, import jobs, field-product jobs, and first Asset Browser/Import Inspector/Field Product Viewer/SDF Brush Browser providers. M5 now adds external runtime preview, project-owned reload status classification, world_sdf runtime intake, and restart boundaries for the existing product families.
@@ -103,7 +106,7 @@ Current post-M3 gaps:
 
 - M1 through M3 are complete against current editor, shell, UI, scene, SDF, and persistence docs.
 - M3.5 is closed as the UI/editor infrastructure slice: the closeout candidate landed on 2026-05-06, and the follow-up toolbar/provider fixture migration seams were closed afterward.
-- M3.6 is complete as of 2026-05-06 for authored definition editing, retained preview, and explicit apply/rollback snapshots. Follow-up self-authoring maturity now wires applied theme definitions into the live editor host theme, forms applied workspace layout definitions into live `WorkspaceState`, exports definitions as versioned packages, and activates UI template/editor-binding/menu/shortcut/command-binding/panel-registry/tool-surface-registry catalogs before the next shell frame.
+- M3.6 is complete as of 2026-05-06 for authored definition editing, retained preview, and explicit apply/rollback snapshots. Follow-up self-authoring maturity now wires applied theme definitions into the live editor host theme, converts applied workspace layout definitions into candidate composition runtime state installed through the composition boundary, exports definitions as versioned packages, and activates UI template/editor-binding/menu/shortcut/command-binding/panel-registry/tool-surface-registry catalogs before the next shell frame.
 - M3.7 is complete as a no-compromise viewport expression architecture closeout as of 2026-05-08. Multi-viewport previews now have explicit viewport instances, viewport-scoped products, per-viewport render jobs, persisted restore metadata and runtime settings, lifecycle-before-frame-submit sync, viewport-keyed camera/debug/root commands, camera orbit/pan/zoom routing, and duplicate/close lifecycle cleanup. The follow-on provider surface workflow redesign and surface/product maturity pass are also complete as of 2026-05-08 for typed surface wrappers, entity-table query workflows, inspector enum mutation routing, reusable-control polish, visible descriptor-only field/atlas/volume/brickmap/history viewport products, and guard coverage. The M4A-M4I integrated UI/editor/asset foundation and M5 external runtime preview/reload boundary are complete as of 2026-05-09; the SDF-first execution program subsequently completed through Phase 6D and is now a historical substrate record rather than a current activation gate.
 - Native multi-window editing is designed in `docs-site/src/content/docs/design/accepted/editor-native-multi-window-presentation-design.md`. It follows the render product-surface foundation and should land before second-monitor workflows are treated as product-ready.
 - M4 is the integrated UI/editor/asset foundation and now ends at M4I. M4A-M4E finished active UI/editor consumption and reusable-control cleanup; M4F-M4I add the first SDF/field-first asset contracts, `ProjectFileV2`, field-product descriptors, generic product invalidation, app-owned import/field-product jobs, first asset surfaces, scene-manifest catalog adapter, and displayable `Rgba8Unorm` viewport debug products. M5 is complete for external runtime preview, project-owned data reload classification, and restart boundaries over the existing product families.
@@ -622,7 +625,7 @@ Interaction V2 is implemented for the retained UI target under accepted ADR
 
 Exit criteria:
 
-- This roadmap is canonical for app-level sequencing.
+- This roadmap is canonical for app-level sequencing; ADR 0025 plus the accepted coordination model own normalized editor semantics, while ADR 0013 plus `ui_composition` own structural composition.
 - Asset pipeline architecture is captured in `docs-site/src/content/docs/design/active/editor-asset-pipeline-and-content-workflow-design.md`.
 - Procedural authoring, material/texturing, particles, physics, animation, and simulation workflows are captured in `docs-site/src/content/docs/design/active/editor-procedural-content-and-simulation-workflow-plan.md`.
 - Gameplay graph ATR IR, compiler passes, SDF physics relations, and ECS query/event/schedule lowering are captured in `docs-site/src/content/docs/design/active/gameplay-graph-atr-ir-and-ecs-lowering-design.md`.
@@ -802,7 +805,7 @@ Validation:
 
 Purpose: move the former final self-authoring/UI design work into the Now track so Runenwerk can style, inspect, validate, preview, and author UI definitions before later asset, procedural, gameplay, runtime, overlay, and in-game UI surfaces are built.
 
-Status: complete as of 2026-05-06 for the self-authoring document lifecycle and retained preview path. Implemented: versioned UI definition migration wrapper, editor-owned workspace/profile/layout/theme/menu/shortcut/command-binding/panel/tool-surface schemas, editor-definition validation guards for runtime/session identity leakage, Editor Design workspace/profile, structural self-authoring tool-surface kinds, app-owned fixture document loading, retained UI preview, validation diagnostics, command diff/apply preview, retained provider control routes, draft UI hierarchy text edits, draft theme color edits, draft workspace-layout add-tab/split-root/close-tab edits, explicit apply/rollback shell commands, live activation for applied theme definitions, and provider surfaces for definition outliner, UI hierarchy, UI canvas, style inspector, bindings, dock/layout preview, theme editor, shortcut editor, menu editor, definition validation, and command diff. Follow-up maturity completed on 2026-05-08: applied workspace layout definitions now form and replace live `WorkspaceState`, UI templates and editor bindings feed live toolbar/shell-chrome formation, menu/shortcut/command-binding definitions activate into app-owned catalogs, panel/tool-surface registries activate with active-workspace compatibility checks, tool-surface registries feed future switch/create choices, reusable field/control polish covers the active editor surfaces, and export writes a versioned package instead of a bare definition document. M4A-M4I completed on 2026-05-09: active menu consumption, active shortcut dispatch, active panel/tool-surface registry projection, shared reusable-control composition, first asset/import/field-product provider surfaces, and first field/volume debug products are now implemented. M5 completed on 2026-05-09: external runtime preview process contracts, reload status classification/projection, world_sdf runtime intake, and restart boundaries are implemented. Still separate future tracks: richer asset import controls, persisted catalog/cache management, payload ECS enum variants, native OS menu/shortcut integration, external marketplace workflows, compiled-reactive UI execution, and ECS-driven UI execution.
+Status: complete as of 2026-05-06 for the self-authoring document lifecycle and retained preview path. Implemented: versioned UI definition migration wrapper, editor-owned workspace/profile/layout/theme/menu/shortcut/command-binding/panel/tool-surface schemas, editor-definition validation guards for runtime/session identity leakage, Editor Design workspace/profile, structural self-authoring tool-surface kinds, app-owned fixture document loading, retained UI preview, validation diagnostics, command diff/apply preview, retained provider control routes, draft UI hierarchy text edits, draft theme color edits, draft workspace-layout add-tab/split-root/close-tab edits, explicit apply/rollback shell commands, live activation for applied theme definitions, and provider surfaces for definition outliner, UI hierarchy, UI canvas, style inspector, bindings, dock/layout preview, theme editor, shortcut editor, menu editor, definition validation, and command diff. Follow-up maturity completed on 2026-05-08: applied workspace layout definitions now form candidate composition runtime state and install it through the composition boundary, UI templates and editor bindings feed live toolbar/shell-chrome formation, menu/shortcut/command-binding definitions activate into app-owned catalogs, panel/tool-surface registries activate with active-workspace compatibility checks, tool-surface registries feed future switch/create choices, reusable field/control polish covers the active editor surfaces, and export writes a versioned package instead of a bare definition document. M4A-M4I completed on 2026-05-09: active menu consumption, active shortcut dispatch, active panel/tool-surface registry projection, shared reusable-control composition, first asset/import/field-product provider surfaces, and first field/volume debug products are now implemented. M5 completed on 2026-05-09: external runtime preview process contracts, reload status classification/projection, world_sdf runtime intake, and restart boundaries are implemented. Still separate future tracks: richer asset import controls, persisted catalog/cache management, payload ECS enum variants, native OS menu/shortcut integration, external marketplace workflows, compiled-reactive UI execution, and ECS-driven UI execution.
 
 Owning design:
 
@@ -851,7 +854,7 @@ Implementation targets:
 
 Validation:
 
-- Implemented and covered: create, duplicate, rename, delete, import, export, validate, preview, apply, rollback, migrate, retained provider control routing, draft UI node text edits, draft theme color edits, draft workspace-layout add-tab/split-root/close-tab edits, live host theme activation for applied theme definitions, live workspace-state replacement for applied workspace layout definitions, versioned export packaging, and reusable field/control polish at the app/domain seam; validation blocks malformed definitions from becoming active; checked-in UI fixtures load as editable definition documents; retained previews form before apply; active runtime/session-only id vocabulary is rejected in editor authored ids; self-authoring follows the retained UI execution strategy closed in M0 and does not choose compiled-reactive or ECS-driven UI execution for the first time.
+- Implemented and covered: create, duplicate, rename, delete, import, export, validate, preview, apply, rollback, migrate, retained provider control routing, draft UI node text edits, draft theme color edits, draft workspace-layout add-tab/split-root/close-tab edits, live host theme activation for applied theme definitions, composition-runtime installation for applied workspace layout definitions, versioned export packaging, and reusable field/control polish at the app/domain seam; validation blocks malformed definitions from becoming active; checked-in UI fixtures load as editable definition documents; retained previews form before apply; active runtime/session-only id vocabulary is rejected in editor authored ids; self-authoring follows the retained UI execution strategy closed in M0 and does not choose compiled-reactive or ECS-driven UI execution for the first time.
 - Completed after M3.6 in the integrated M4 track: live menu/shortcut/command-binding/panel/tool-surface consumption as of 2026-05-09. Still deferred beyond M3.6: asset/procedural/gameplay/runtime overlay authoring after the asset foundations start; payload ECS enum variants when reflected payload fields exist; native OS menu/shortcut integration; external marketplace workflows; compiled-reactive UI execution; and ECS-driven UI execution.
 
 ### M3.7 - Viewport Expression Architecture Closeout

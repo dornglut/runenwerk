@@ -12,7 +12,7 @@ superseded_by:
 related:
   - ../../apps/runenwerk-editor/current-architecture.md
   - ../../apps/runenwerk-editor/execution-priority-checklist.md
-  - ../active/editor-ui-workspace-tool-surface-architecture.md
+  - ./editor-ui-workspace-tool-surface-architecture.md
   - ../implemented/editor-ui-runtime-v2-and-interaction-formation-design.md
   - ../../adr/accepted/0009-ui-interaction-formation-v2.md
   - ../implemented/surface-workflow-contract-redesign.md

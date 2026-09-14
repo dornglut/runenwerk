@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: domain
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-14
 related_designs:
   - ../accepted/sdf-first-field-world-platform-design.md
   - ../implemented/editor-rendered-world-and-multi-entity-viewport-design.md
@@ -14,10 +14,13 @@ related_designs:
   - ../deferred/sdf-prefab-composition-system-design.md
   - ./editor-procedural-content-and-simulation-workflow-plan.md
   - ./gameplay-graph-atr-ir-and-ecs-lowering-design.md
-  - ../implemented/editor-workspace-document-mode-panel-architecture.md
-  - ./editor-ui-workspace-tool-surface-architecture.md
+  - ../accepted/runenwerk-editor-coordination-semantic-model.md
+  - ../implemented/editor-tool-suite-registry-and-workbench-host-design.md
   - ../implemented/editor-self-authoring-and-final-ui-design.md
   - ./engine-game-runtime-editor-ecs-scripting-hot-reload-design.md
+related_adrs:
+  - ../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
+  - ../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md
 related_roadmaps:
   - ../../apps/runenwerk-editor/roadmap.md
 related_reports:
@@ -111,9 +114,11 @@ Owns chunk/page/brick SDF payload records, hierarchy summaries, cave summaries, 
 
 Own world coordinate, chunk, region, clipmap, and desired residency vocabulary. Asset catalogs may name spatial scopes and product coverage; they do not own coordinate meaning or residency policy.
 
-### `domain/editor/editor_core`
+### Current `domain/editor/editor_core` compatibility
 
-Owns document identity, document kinds, active document switching, dirty state, and workspace/document compatibility.
+Current `editor_core` still carries predecessor-shaped document identity/kinds, active-document switching, dirty state, and workspace/document compatibility. Those are current implementation facts and compatibility inputs, not the normalized target owner for asset, scene, UI, graph, or other foreign semantic identity, persistence, selection, or history.
+
+Under ADR 0025, editor coordination relates to owner-governed semantic scopes through explicit bindings/providers and owner-scoped coordination contexts. Asset/domain compatibility and mutation validity remain owner/provider-defined; dirty/save state derives from the applicable persistence owner rather than one mandatory editor-global document model.
 
 ### `domain/editor/editor_persistence`
 
@@ -313,7 +318,7 @@ Initial asset kinds:
 - editor definition;
 - diagnostics capture.
 
-The taxonomy belongs in `domain/asset/src/kind.rs`. Document kind compatibility belongs in `domain/editor/editor_core/src/document.rs`.
+The asset taxonomy belongs in `domain/asset/src/kind.rs`. Current `editor_core::DocumentKind` compatibility may classify some open editor targets, but it is not the normalized registry of all semantic asset/document kinds. Editor admission and compatibility for a concrete semantic scope are owner/provider-defined through the normalized binding/session boundary.
 
 Theme, UI layout, workspace definition, menu, shortcut, command binding, panel
 registry, tool-surface definition, and editor definition assets should feed the

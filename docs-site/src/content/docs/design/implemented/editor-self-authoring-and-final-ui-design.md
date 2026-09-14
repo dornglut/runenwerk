@@ -5,22 +5,27 @@ status: implemented
 owner: editor
 layer: domain
 canonical: true
-last_reviewed: 2026-05-16
+last_reviewed: 2026-09-14
 related:
   - ./ui-definition-formation-foundation-design.md
-  - ./editor-ui-workspace-tool-surface-architecture.md
-  - ./editor-workspace-document-mode-panel-architecture.md
+  - ../accepted/runenwerk-editor-coordination-semantic-model.md
+  - ./editor-tool-suite-registry-and-workbench-host-design.md
   - ./workspace-identity-contract-and-migration-map.md
   - ../../apps/runenwerk-editor/execution-priority-checklist.md
   - ../../domain/ui/roadmap.md
   - ../../reports/audits/editor-ui-priority-code-audit-2026-05-05.md
+related_adrs:
+  - ../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
+  - ../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md
 ---
 
 # Editor Self-Authoring and UI Workspace Design
 
 ## Status
 
-Active design.
+Implemented product/design authority for the self-authoring and UI workspace capabilities recorded below.
+
+[ADR 0025](../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md) and the [accepted editor coordination semantic model](../accepted/runenwerk-editor-coordination-semantic-model.md) supersede this document wherever older text below treats one generic `Document`, `EditorSession`, mode, selection, history, dirty/save state, or workspace model as universal editor semantic ownership. [ADR 0013](../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md) is authoritative for structural composition. Product words such as document, workspace, mode, and dirty state remain valid UI/current-implementation vocabulary without re-establishing those predecessor authorities.
 
 This document is now part of the immediate editor/UI roadmap. The implementation order is M3.5 UI definition formation framework first, then M3.6 UI self-authoring workspace before the asset/procedural/gameplay expansion milestones.
 
@@ -81,7 +86,7 @@ Area tabs are not document tabs.
 
 ### Document Tab
 
-A document tab is an open authored or inspected target in `editor_core`.
+A document tab is current product/current `editor_core` implementation vocabulary for an open authored or inspected target. It is not the normalized universal semantic owner of that target.
 
 Examples:
 
@@ -92,7 +97,7 @@ Examples:
 - runtime debug query document;
 - editor-design document.
 
-Document tabs determine the semantic context that providers observe.
+Current document tabs determine provider context in the predecessor implementation.
 
 ### Authored Definition
 
@@ -224,7 +229,7 @@ Required controls:
 - plus button for new/open document;
 - context menu for duplicate, rename, save as, reveal, close others.
 
-Document tabs are backed by `DocumentId`, not `PanelInstanceId`.
+Document tabs are backed by `DocumentId`, not `PanelInstanceId` in the current implementation. ADR 0025 prevents that runtime/editor identity from becoming universal foreign semantic or durable reopen identity.
 
 ### Mode/Tool Bar
 
@@ -243,7 +248,7 @@ Examples:
 - Preview;
 - Validate.
 
-Mode availability is derived from `(workspace_profile, document_kind)`.
+Mode availability is derived from `(workspace_profile, document_kind)` in the current implementation. This is not a requirement for one global normalized active mode.
 
 ### Editor Area Chrome
 
@@ -325,6 +330,8 @@ The area menu owns structure-level commands:
 - reset area;
 - lock area type;
 - save area layout as preset.
+
+Committed live structural mutation is governed by `ui_composition` under ADR 0013.
 
 ### Docking and Split UX
 
@@ -486,6 +493,8 @@ Owns:
 - default floating hosts;
 - constraints and restore policy.
 
+These are authored layout-definition semantics. Formation/activation into live structure enters the `ui_composition` authority rather than creating a second writable workspace graph.
+
 ### UI Layout Definition
 
 Owns:
@@ -537,7 +546,7 @@ Owns:
 - capability requirements;
 - UI placement;
 - route target;
-- undo/redo semantics;
+- undo/redo semantics where the applicable owner/history contract supports them;
 - validation behavior.
 
 ### Panel Registry Definition
@@ -697,7 +706,7 @@ Core operations:
 - reset area;
 - save as preset.
 
-All operations produce explicit workspace-definition commands.
+All authored layout edits produce explicit owner-defined changes. Applying them to live structural state enters the `ui_composition` transaction boundary.
 
 ### UI Layout Editing
 
@@ -822,15 +831,17 @@ Ratification must check:
 
 ## Persistence And Versioning
 
-Definitions should be persisted as versioned authored documents.
+Definitions should be persisted as versioned authored documents by their concrete schema/persistence owners.
 
-Target ownership:
+Current implementation responsibilities include:
 
-- editor definition schemas: future domain editor definition crate/module;
-- workspace structural contracts: `domain/editor/editor_shell`;
-- document/session references: `domain/editor/editor_core`;
+- editor definition schemas: `domain/editor/editor_definition`;
+- structural composition state/persistence: `domain/ui/ui_composition`;
+- current predecessor-shaped editor document/session/persistence adapters where source still contains them: `domain/editor/editor_core` and `domain/editor/editor_persistence`;
 - UI node/layout contracts: `domain/ui`;
-- app file IO and project storage: `apps/runenwerk_editor`.
+- app file IO and project storage paths: `apps/runenwerk_editor`.
+
+ADR 0025's normalized target uses explicit owner-scoped persistence coordination rather than one universal `EditorSession` dirty/save authority.
 
 Do not store active runtime-only identities as durable authored identities.
 
@@ -852,7 +863,7 @@ Session ids:
 
 ## Architecture Ownership
 
-### Planned `domain/ui/ui_definition`
+### `domain/ui/ui_definition`
 
 Owns general UI definition and formation contracts:
 
@@ -863,32 +874,20 @@ Owns general UI definition and formation contracts:
 
 It must not own editor workspaces, tool-surface semantics, provider registries, or command execution.
 
-### `domain/editor/editor_core`
+### Current `domain/editor/editor_core`
 
-Owns:
-
-- document descriptors;
-- document kind taxonomy;
-- active document switching;
-- mode contracts;
-- ratified editor change records.
+Current implementation contains predecessor-shaped document descriptors/taxonomy, active document/mode state, generic selection/history/session state, and editor change records. These are implementation facts to migrate under ADR 0025, not the normalized universal semantic owner.
 
 ### `domain/editor/editor_shell`
 
-Owns:
+Owns editor-local shell/tool-host/provider integration, bounded Tool Suite/Workbench contracts, editor chrome/routing, and compatibility adapters. Current source still contains workspace-era structures, but `ui_composition` owns live structural topology, transactions, structural history, and composition persistence.
 
-- workspace structural graph;
-- tab stack and panel identity;
-- tool-surface host contracts;
-- surface capability/retention contracts;
-- projection/routing contracts.
-
-### Future Editor Definition Domain
+### `domain/editor/editor_definition`
 
 Owns:
 
 - editor-specific authored definition schemas;
-- workspace profile catalogs and default layout definitions;
+- workspace profile catalogs and default layout-definition data;
 - editor menu, shortcut, command binding, panel registry, and tool-surface definitions;
 - normalization;
 - formation;
@@ -909,9 +908,10 @@ Owns:
 - text;
 - theme tokens;
 - reusable widgets;
-- render data contracts.
+- render data contracts;
+- app-neutral structural composition through `ui_composition`.
 
-It must not own editor semantics.
+It must not own editor semantic coordination.
 
 ### `apps/runenwerk_editor`
 
@@ -924,7 +924,7 @@ Owns:
 - preview instantiation;
 - engine/window integration.
 
-It must not become the semantic owner of self-authoring definitions.
+It must not become the semantic owner of self-authoring definitions merely because it integrates them.
 
 ## Guard Coverage Required
 
@@ -938,7 +938,8 @@ Add or preserve guards that prevent:
 - document tabs from being confused with area tabs;
 - self-authoring commands from mutating definitions without ratification;
 - invalid definitions from becoming active;
-- active layouts from persisting session-only ids as authored ids.
+- active layouts from persisting session-only ids as authored ids;
+- current predecessor-shaped document/session/history/persistence contracts from being reasserted as future universal editor authority.
 
 ## Implementation Phases
 
@@ -949,6 +950,8 @@ This design is implemented as M3.6 in `docs-site/src/content/docs/apps/runenwerk
 M3.6 is not a replacement for M3.5. It consumes the M3.5 definition framework and makes it usable through an editor workspace before the integrated M4 UI/editor/asset foundation expands live definition consumption and introduces asset/import/field-product surfaces.
 
 The later M8 roadmap slot is no longer the first self-authoring implementation. It is reserved for packaging, externalization, and long-lived migration hardening after the main editor feature tracks exist.
+
+The historical phase decomposition below does not override ADR 0013 or ADR 0025 ownership.
 
 ### Phase 0 - Design Closeout
 
@@ -1062,5 +1065,5 @@ The promoted self-authoring milestone is complete when:
 - validation catches malformed UI templates, slot refs, route refs, theme refs, and unsupported embeds;
 - a valid definition can be formed into an active workspace/UI preview;
 - valid definitions can be applied or rolled back through ratified commands;
-- edits are undoable through ratified commands;
+- edits are undoable where the applicable owner/history contract supports undo;
 - no active runtime/session-only ids are persisted as authored ids.

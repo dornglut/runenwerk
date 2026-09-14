@@ -5,7 +5,7 @@ status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-14
 ---
 
 # UI Domain Current-State Architecture
@@ -34,7 +34,7 @@ This document covers:
 
 - `domain/ui/*` crates
 - retained UI runtime crates under `domain/ui/*`
-- temporary workspace/tool-surface host ownership in `editor_shell`
+- editor-specific workspace/tool-surface host integration in `editor_shell`
 - runtime/app glue in `apps/runenwerk_editor`
 - engine render/UI integration paths used to submit and draw UI frames
 - general UI definition/formation contracts where they clarify `domain/ui` ownership
@@ -45,14 +45,16 @@ This document does not define visual design direction, docking product UX, autho
 As of the audited repository state:
 
 - `domain/ui/*` now owns both primitive crates and retained runtime crates (`ui_tree`, `ui_runtime`, `ui_widgets`).
-- `domain/ui/ui_composition` now owns the first app-neutral structural
-  composition and persistence checkpoints: versioned definitions, ratified
+- `domain/ui/ui_composition` owns the app-neutral structural
+  composition and persistence authority: versioned definitions, ratified
   structural state, typed policy-authorized transactions, structural-only
   history, explicit promotion, content-liveness vocabulary, neutral fixture
   contracts, canonical linked bundles, and atomic generation activation.
-- Editor and Draw now form and project static structure through
-  `ui_composition`; legacy editor workspace structure is read-only
-  compatibility input until docking runtime completes.
+- Editor and Draw form and project structure through `ui_composition`. Ordinary
+  editor structural commands now commit through the `ui_composition`
+  transaction path. Legacy editor workspace structures remain compatibility,
+  test, or migration inputs where current source still retains them; they are
+  not a parallel live structural authority.
 - `domain/ui/ui_adaptive_composition` now derives headless projection, reflow,
   hit-test, preview, drag/resize-session, proposal, accessibility, and explicit
   promotion-delta products from immutable composition snapshots. It has no
@@ -60,7 +62,10 @@ As of the audited repository state:
   product semantics.
 - `ui_surface` remains temporary compatibility input for later mapped
   replacement. It is not a parallel target authority.
-- Workspace identity/projection/reducer/tool-surface host infrastructure is implemented and belongs to `editor_shell`.
+- Workspace-era identity/projection/reducer/tool-surface host infrastructure is
+  implemented in `editor_shell` as editor-specific integration and
+  compatibility machinery. Structural topology and mutation authority remain
+  in `ui_composition`.
 - `apps/runenwerk_editor` owns app runtime bridging and viewport runtime resources/bindings.
 - Engine render integration for UI frame submission/extraction is implemented.
 - Viewport slot semantic ownership is in `editor_viewport`; renderer-facing embed payload slots are opaque IDs in `ui_render_data`, mapped through integration adapters.
@@ -167,8 +172,9 @@ Ownership is split intentionally:
   testing, focus, scroll ownership, input ownership, and frame output;
 - `domain/editor/editor_definition` owns editor-specific descriptors that refer
   to generic contracts without making editor commands generic UI semantics;
-- `domain/editor/editor_shell` owns shell composition and compatibility
-  adapters from current shell state into formed contracts;
+- `domain/editor/editor_shell` owns editor-specific chrome, provider/routing
+  integration, and compatibility adapters from current shell state into formed
+  contracts; structural state and transactions remain owned by `ui_composition`;
 - `apps/runenwerk_editor` owns viewport arbitration, runtime integration, app
   IO, fixture loading, and concrete command execution.
 
@@ -195,7 +201,7 @@ The current retained UI migration slice catalog is:
 | `IV2-scroll-ownership` | scroll owner and axis policy, boundary-consumption, scrollbar capture, and input ownership reporting | editor/app layers keep viewport zoom and provider behavior outside UI authority until UI declines ownership |
 | `IV2-menu-sizing` | menu sizing/stretch policy, retained menu measurement, clamp, and scroll fallback | editor descriptors provide menu intent without one-off shell/runtime defaults |
 | `IV2-chrome-slots` | generic chrome slot vocabulary and retained slot formation/enforcement | editor shell owns tab/workspace chrome semantics, labels, commands, and route mapping |
-| `IV2-dock-drop-zones` | generic drop-zone/hit priority vocabulary where reusable; retained runtime enforces formed preview hit policy | editor shell owns workspace docking intent, preview-only state, and workspace mutation on commit |
+| `IV2-dock-drop-zones` | generic drop-zone/hit priority vocabulary where reusable; retained runtime enforces formed preview hit policy | editor/app adapters own editor-specific docking intent and submit committed structural changes through `ui_composition`; preview-only interaction state remains local |
 | `IV2-status-and-viewport-arbitration` | status overflow policy and UI input ownership reporting | app/editor layers own metrics data, viewport resources, and fail-closed viewport input arbitration |
 
 Landed slice status as of 2026-05-15:
@@ -231,8 +237,9 @@ Landed slice status as of 2026-05-15:
 - `IV2-dock-drop-zones` now carries formed dock/drop-zone records in
   `domain/ui/ui_definition/src/interaction.rs`. The editor shell publishes tab
   reorder, split-insertion, and floating-host drop zones from
-  `domain/editor/editor_shell/src/composition/build_editor_shell.rs::dock_drop_zone_interaction_model`
-  while keeping workspace mutation in editor/app command owners, and
+  `domain/editor/editor_shell/src/composition/build_editor_shell.rs::dock_drop_zone_interaction_model`;
+  committed structural mutation enters the `ui_composition` transaction path
+  through editor/app adapters, and
   `domain/ui/ui_runtime/src/input/hit_test.rs` guards preview child hit
   precedence.
 - `IV2-status-and-viewport-arbitration` now carries formed viewport
@@ -250,7 +257,8 @@ Landed slice status as of 2026-05-15:
 Related non-`domain/ui` owners currently in the runtime path:
 
 - `domain/editor/editor_shell`
-  - shell composition, workspace host model, command routing, compatibility re-exports for substrate types.
+  - editor-specific shell chrome/provider integration, command routing, and
+    compatibility adapters over `ui_composition` structure.
 - `apps/runenwerk_editor`
   - app runtime resource wiring, viewport presentation/product runtime resources, tool-surface runtime binding registry.
 - `engine/src/plugins/render`
@@ -283,14 +291,14 @@ Related non-`domain/ui` owners currently in the runtime path:
 
 ## What `domain/ui/*` Does Not Yet Own
 
-- editor runtime chrome or docking integration onto the adaptive mechanism;
-  that remains the next governed checkpoint
+- editor-specific chrome, provider behavior, and product-facing docking UX
+  policy; structural topology/transactions are already owned by `ui_composition`
 - Draw runtime interaction integration onto `ui_composition`; its static
   structural projection is complete
 - fully converged app-side usage of all reusable controls in editor shell surfaces
 - product-facing editor workspace wording and app extension semantics
-  (correctly editor/app-owned); legacy structural workspace state is now
-  read-only compatibility input until the docking-runtime gate
+  (correctly editor/app-owned); legacy structural workspace state remains only
+  compatibility/test/migration input where current source retains it
 - app/runtime glue and viewport product orchestration (correctly owned by `runenwerk_editor`)
 - future reusable UI-framework semantics (owned by standalone RunenUI)
 
@@ -304,13 +312,14 @@ data contracts.
 ### `editor_shell`
 Currently owns:
 
-- legacy workspace structural identity and graph state as read-only
-  compatibility input until the docking-runtime gate
-- product-facing workspace wording, editor extension state, and
-  host/panel/tab/tool-surface semantics
-- shell command routing from UI interactions
+- editor-specific workspace/product wording, extension data, shell chrome,
+  provider/tool-host integration, and compatibility adapters over retained
+  workspace-era types
+- shell command/action routing from UI interactions into the owning structural,
+  editor, app, or domain path
 
-It is not the target owner of generic structural composition.
+`editor_shell` is not the owner of generic structural topology or structural
+transactions; `ui_composition` is the live structural authority.
 
 ### `runenwerk_editor`
 Owns app/runtime glue:
@@ -336,10 +345,11 @@ This layer should continue consuming UI frame contracts, not owning UI semantics
    `apps/runenwerk_editor/src/runtime/viewport/routing.rs::resolve_structural_viewport_products`
    before first structural tool-surface binding generation. New viewport and
    product work must use structural viewport binding.
-4. Editor structural workspace state and `ui_surface` still predate the
-   accepted composition authority. Editor workspace structure is read-only;
-   `ui_surface` remains live only where its supersession map has not completed.
-   No new independent mutation path may be added to either boundary.
+4. Workspace-era editor structures and `ui_surface` still predate the accepted
+   composition authority. The workspace-era structures may remain only as
+   compatibility/test/migration inputs where current source still needs them;
+   committed structural mutation must not bypass `ui_composition`. `ui_surface`
+   remains live only where its supersession map has not completed.
 
 ## Target Ownership Model
 Target ownership for remaining **Runenwerk-local** integration work (partially implemented):
@@ -354,8 +364,8 @@ Target ownership for remaining **Runenwerk-local** integration work (partially i
   host policy to accept or reject. It does not own structural commits;
 - `domain/ui/ui_definition` owns general authored UI definition and formation contracts, while `domain/ui` runtime crates consume formed products;
 - `editor_shell` owns product-facing workspace wording, editor-specific
-  extension semantics, and shell command routing; structural changes flow
-  through `ui_composition` after cutover;
+  extension/chrome/provider semantics, compatibility adapters, and shell
+  command routing; structural changes enter `ui_composition` transactions;
 - `runenwerk_editor` owns app/runtime wiring and viewport/editor-specific runtime integrations;
 - engine render layer continues to own rendering integration and consumes UI frame contracts as data.
 
@@ -363,19 +373,22 @@ This target model does not claim future reusable-framework ownership. Standalone
 RunenUI owns that scope.
 
 ## Migration Direction
-The accepted composition migration is a single-branch clean cutover with
-reviewable checkpoint gates, not indefinite dual authority:
+The accepted composition migration is a clean authority cutover with reviewable
+checkpoint gates, not indefinite dual authority:
 
 1. complete core contracts and invariants (complete);
 2. add deterministic persistence envelopes and atomic core/app extension
    linking (complete);
-3. project editor and Draw static structure, then make legacy editor workspace
-   state read-only (complete);
-4. add adaptive headless proposals (implemented in WR-185), then integrate the
-   selected Region Compass direction in editor runtime (WR-186);
-5. route all structural mutation through `ui_composition` transactions after
-   the editor docking runtime gate;
-6. delete mapped legacy authorities at cleanup and run final truth closeout.
+3. project editor and Draw structure through `ui_composition` and demote legacy
+   editor workspace structure to compatibility/migration input (complete for the
+   live structural-authority cut);
+4. add adaptive headless proposals and integrate the selected editor adaptive
+   direction through bounded checkpoints;
+5. ordinary editor structural mutation now commits through `ui_composition`
+   transactions; the old read-only/static-mutation-deferred gate is historical
+   and must not be described as current architecture;
+6. remaining work is cleanup of mapped compatibility authorities and final
+   truth closeout, not activation of a second structural mutation owner.
 
 Reusable retained controls and opaque render-data slot mapping continue as
 orthogonal local substrate work; they must not reintroduce a second composition
@@ -414,7 +427,8 @@ consumer cutover requires a new issue and an exact then-current RunenUI review.
 - [UI Program Architecture](../../design/implemented/ui-program-architecture.md)
 - [Runenwerk UI Story V2 Consumer and Proof Boundary](../../design/active/runenwerk-ui-story-driven-golden-workflow-design.md)
 - [ADR 0009: UI Interaction Formation V2](../../adr/accepted/0009-ui-interaction-formation-v2.md)
-- [Editor / UI / Workspace / Tool-Surface Architecture](../../design/active/editor-ui-workspace-tool-surface-architecture.md)
+- [ADR 0013: App-Neutral UI Composition Clean Cutover](../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md)
+- [Runenwerk Editor Coordination Semantic Model](../../design/accepted/runenwerk-editor-coordination-semantic-model.md)
 - [Viewport Expression Upgrade Design](../../design/implemented/workspace-viewport-expression-upgrade-design.md)
 - [Workspace Identity Contract and Migration Map](../../design/implemented/workspace-identity-contract-and-migration-map.md)
 - [UI Substrate Roadmap](./roadmap.md)

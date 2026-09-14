@@ -10,7 +10,8 @@ related:
   - ../../domain/ui/architecture.md
   - ../../domain/ui/roadmap.md
   - ../../apps/runenwerk-editor/roadmap.md
-  - ./editor-ui-workspace-tool-surface-architecture.md
+  - ../accepted/runenwerk-editor-coordination-semantic-model.md
+  - ./editor-tool-suite-registry-and-workbench-host-design.md
   - ./editor-self-authoring-and-final-ui-design.md
   - ../deferred/ui-model-multiple-execution-strategies-design.md
 ---

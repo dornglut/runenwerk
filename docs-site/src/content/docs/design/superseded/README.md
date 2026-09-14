@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-14
 ---
 
 # Superseded Designs
@@ -20,6 +20,8 @@ No superseded foundation design documents are currently tracked in this folder.
 
 ### Editor Domain
 
+- [Runenwerk Editor Workspace-Document-Mode-Panel Architecture](editor-workspace-document-mode-panel-architecture.md)
+- [Editor UI Workspace Tool Surface Architecture](editor-ui-workspace-tool-surface-architecture.md)
 - [Editor UI Popup, Adornment, And Drop Preview Contract](editor-ui-popup-adornment-drop-preview-contract.md)
 
 ### UI Domain
