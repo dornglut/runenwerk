@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-14
 ---
 
 # Scene Plugin
@@ -36,8 +36,10 @@ same catalog before the plugin is selected. Plugin installation preserves those 
 The plugin owns the runtime scene manager and republishes transport-neutral scene state through:
 
 - `SceneRuntimeState`
-- `GameplayRuntimeConfig`
 - `UiOverlayState`
+
+Gameplay configuration remains Scene-owned runtime context and is captured/restored through the
+Scene snapshot/replay boundary; it is not duplicated as a separate public runtime resource.
 
 It also defines the current authoritative scene replay/snapshot DTOs:
 
