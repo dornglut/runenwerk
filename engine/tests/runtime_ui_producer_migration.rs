@@ -4,8 +4,8 @@ use engine::plugins::render::{
     SurfaceFrameRoute, SurfaceFrameSubmission, SurfaceFrameSubmissionOrder,
     SurfaceFrameSubmissionRegistryResource,
 };
-use engine::plugins::{DebugMetricsPlugin, ScenePlugin, TimePlugin};
-use engine::prelude::{App, InputState, ResMut, Update};
+use engine::plugins::{DebugMetricsPlugin, InputFinalizePlugin, ScenePlugin, TimePlugin};
+use engine::prelude::{App, CoreSet, InputState, PreUpdate, ResMut, SystemConfigExt};
 use winit::event::ElementState;
 use winit::keyboard::KeyCode;
 
@@ -72,10 +72,11 @@ fn runtime_ui_producer_migration_scene_owner_publishes_scene_frame_submission() 
 fn runtime_ui_producer_migration_debug_owner_publishes_debug_frame_submission() {
     let mut app = App::headless();
     app.add_plugin(TimePlugin);
+    app.add_plugin(InputFinalizePlugin);
     app.add_plugin(RenderPlugin);
     app.add_plugin(ScenePlugin);
     app.add_plugin(DebugMetricsPlugin);
-    app.add_systems(Update, inject_f10);
+    app.add_systems(PreUpdate, inject_f10.before(CoreSet::Input));
 
     let app = app
         .run_for_frames(1)
@@ -172,11 +173,12 @@ fn inject_f10(mut input: ResMut<InputState>) {
 fn runtime_ui_producer_migration_preserves_runtime_producer_order_for_primary_surface() {
     let mut app = App::headless();
     app.add_plugin(TimePlugin);
+    app.add_plugin(InputFinalizePlugin);
     app.add_plugin(RenderPlugin);
     app.add_scene("engine/tests/fixtures/scene_templates/main_menu.ron");
     app.add_plugin(ScenePlugin);
     app.add_plugin(DebugMetricsPlugin);
-    app.add_systems(Update, inject_f10);
+    app.add_systems(PreUpdate, inject_f10.before(CoreSet::Input));
 
     let app = app
         .run_for_frames(1)

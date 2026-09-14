@@ -3,7 +3,8 @@ use super::super::runtime::{
     process_overlay_pointer_input, publish_scene_state, sync_overlay_viewport,
     sync_world_scene_context_from_input,
 };
-use crate::plugins::{InputState, SceneResource};
+use crate::plugins::input::domain::action;
+use crate::plugins::{ActionState, InputState, SceneResource};
 use crate::prelude::Time;
 use crate::prelude::domain::{SceneCommand, SceneId};
 use crate::runtime::{FixedTimeConfig, WindowState, WorldMut};
@@ -16,6 +17,7 @@ pub(crate) fn scene_transition_system(mut world: WorldMut) -> Result<()> {
     let fixed_step_seconds = world.resource::<FixedTimeConfig>()?.step_seconds;
 
     let mut input = world.remove_resource::<InputState>().unwrap_or_default();
+    let actions = world.remove_resource::<ActionState>().unwrap_or_default();
     let mut scene_templates = world
         .remove_resource::<SceneTemplateFlowResource>()
         .unwrap_or_default();
@@ -36,7 +38,13 @@ pub(crate) fn scene_transition_system(mut world: WorldMut) -> Result<()> {
         };
 
         sync_overlay_viewport(manager, &window);
-        sync_world_scene_context_from_input(manager, &input, delta_seconds, fixed_step_seconds);
+        sync_world_scene_context_from_input(
+            manager,
+            &input,
+            &actions,
+            delta_seconds,
+            fixed_step_seconds,
+        );
 
         if scene_templates.has_scenes() {
             process_overlay_pointer_input(
@@ -45,7 +53,7 @@ pub(crate) fn scene_transition_system(mut world: WorldMut) -> Result<()> {
                 &mut scene_templates,
                 delta_seconds,
             )?;
-            if input.toggle_pause_menu {
+            if actions.action_pressed(action::SYSTEM_TOGGLE_PAUSE_MENU) {
                 match scene_templates.active_scene_id() {
                     Some("game_scene") => {
                         let action = SceneTemplateAction::GoTo("pause_menu".to_string());
@@ -69,7 +77,7 @@ pub(crate) fn scene_transition_system(mut world: WorldMut) -> Result<()> {
                 }
             }
         } else {
-            if input.toggle_pause_menu {
+            if actions.action_pressed(action::SYSTEM_TOGGLE_PAUSE_MENU) {
                 let show_overlay = !manager.overlay_visible();
                 manager.set_active_overlay_visible(show_overlay);
                 manager.queue(SceneCommand::PauseWorld(show_overlay));
@@ -77,25 +85,25 @@ pub(crate) fn scene_transition_system(mut world: WorldMut) -> Result<()> {
                     manager.queue(SceneCommand::ReplaceOverlay(SceneId::HudUi));
                 }
             }
-            if input.scene_next {
+            if actions.action_pressed(action::SCENE_NEXT) {
                 let next = manager.active_overlay().next_overlay();
                 manager.queue(SceneCommand::ReplaceOverlay(next));
             }
-            if input.scene_prev {
+            if actions.action_pressed(action::SCENE_PREV) {
                 let prev = manager.active_overlay().previous_overlay();
                 manager.queue(SceneCommand::ReplaceOverlay(prev));
             }
-            if input.scene_console {
+            if actions.action_pressed(action::SCENE_CONSOLE) {
                 manager.queue(SceneCommand::ReplaceOverlay(SceneId::ConsoleUi));
             }
-            if input.scene_hud {
+            if actions.action_pressed(action::SCENE_HUD) {
                 manager.queue(SceneCommand::ReplaceOverlay(SceneId::HudUi));
             }
-            if input.scene_overlay_push {
+            if actions.action_pressed(action::SCENE_OVERLAY_PUSH) {
                 let next = manager.active_overlay().next_overlay();
                 manager.queue(SceneCommand::PushOverlay(next));
             }
-            if input.scene_overlay_pop {
+            if actions.action_pressed(action::SCENE_OVERLAY_POP) {
                 manager.queue(SceneCommand::PopOverlay);
             }
         }
@@ -111,6 +119,7 @@ pub(crate) fn scene_transition_system(mut world: WorldMut) -> Result<()> {
     })();
 
     world.insert_resource(input);
+    world.insert_resource(actions);
     world.insert_resource(scene_templates);
     world.insert_resource(scene_resource);
     world.insert_resource(scene_state);

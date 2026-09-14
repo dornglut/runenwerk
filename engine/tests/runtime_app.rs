@@ -1,4 +1,5 @@
-use engine::plugins::{TimePlugin, default_plugins};
+use engine::plugins::input::domain::action;
+use engine::plugins::{ActionState, TimePlugin, default_plugins};
 use engine::prelude::*;
 use winit::event::ElementState;
 use winit::keyboard::KeyCode;
@@ -157,13 +158,8 @@ impl Plugin for DemoLogicPlugin {
         app.init_resource::<DemoFrames>();
         app.add_plugins(default_plugins());
         app.add_systems(Startup, setup_demo_player.on_invoker_thread());
-        app.add_systems(
-            Update,
-            (
-                inject_demo_input.in_set(CoreSet::Input),
-                update_demo_title.after(CoreSet::Input),
-            ),
-        );
+        app.add_systems(PreUpdate, inject_demo_input.before(CoreSet::Input));
+        app.add_systems(Update, update_demo_title);
     }
 }
 
@@ -180,18 +176,18 @@ fn inject_demo_input(mut input: ResMut<InputState>, mut frames: ResMut<DemoFrame
 }
 
 fn update_demo_title(
-    input: Res<InputState>,
+    actions: Res<ActionState>,
     time: Res<Time>,
     mut window: ResMut<WindowState>,
     mut query: Query<&mut Position>,
 ) {
     let position = query.single().expect("demo should have one position");
-    if input.world_move_right {
+    if actions.action_down(action::WORLD_MOVE_RIGHT) {
         position.x += 1;
     }
 
     window.set_title(format!("x={} dt={:.4}", position.x, time.delta_seconds));
-    if input.toggle_pause_menu {
+    if actions.action_pressed(action::SYSTEM_TOGGLE_PAUSE_MENU) {
         window.request_close();
     }
 }

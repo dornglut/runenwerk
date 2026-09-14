@@ -3,9 +3,10 @@ use crate::rendering::{
 };
 use anyhow::Result;
 use engine::plugins::input::domain::action;
-use engine::plugins::{RenderPlugin, ScenePlugin, default_plugins};
+use engine::plugins::{
+    ActionState, PhysicalKeyIdentity, RenderPlugin, ScenePlugin, default_plugins,
+};
 use engine::prelude::{App, InputState, Res, ResMut, Startup, Time, Update, WindowState};
-use winit::keyboard::KeyCode;
 
 const ACTION_CYCLE_VIEW_MODE: &str = "terrain.view.cycle";
 const ACTION_MOVE_UP: &str = "terrain.move_up";
@@ -60,43 +61,56 @@ pub(crate) fn run() -> Result<()> {
     app.run()
 }
 
-fn setup_terrain_input_bindings(mut input: ResMut<InputState>) {
-    input.map_key(ACTION_CYCLE_VIEW_MODE, KeyCode::Tab);
-    input.map_key(ACTION_MOVE_UP, KeyCode::Space);
-    input.map_key(ACTION_MOVE_DOWN, KeyCode::ControlLeft);
-    input.map_key(ACTION_MOVE_DOWN, KeyCode::ControlRight);
+fn setup_terrain_input_bindings(input: Res<InputState>, mut actions: ResMut<ActionState>) {
+    actions.map_key(
+        &input,
+        ACTION_CYCLE_VIEW_MODE,
+        PhysicalKeyIdentity::code("Tab"),
+    );
+    actions.map_key(&input, ACTION_MOVE_UP, PhysicalKeyIdentity::code("Space"));
+    actions.map_key(
+        &input,
+        ACTION_MOVE_DOWN,
+        PhysicalKeyIdentity::code("ControlLeft"),
+    );
+    actions.map_key(
+        &input,
+        ACTION_MOVE_DOWN,
+        PhysicalKeyIdentity::code("ControlRight"),
+    );
 }
 
 fn update_terrain_view_and_animation_system(
     input: Res<InputState>,
+    actions: Res<ActionState>,
     time: Res<Time>,
     mut state: ResMut<ProceduralSkyTerrainState>,
     mut fps: ResMut<FpsTracker>,
     mut window: ResMut<WindowState>,
 ) {
-    let forward_axis = (if input.action_down(action::WORLD_MOVE_UP) {
+    let forward_axis = (if actions.action_down(action::WORLD_MOVE_UP) {
         1.0
     } else {
         0.0
-    }) - (if input.action_down(action::WORLD_MOVE_DOWN) {
-        1.0
-    } else {
-        0.0
-    });
-    let right_axis = (if input.action_down(action::WORLD_MOVE_RIGHT) {
-        1.0
-    } else {
-        0.0
-    }) - (if input.action_down(action::WORLD_MOVE_LEFT) {
+    }) - (if actions.action_down(action::WORLD_MOVE_DOWN) {
         1.0
     } else {
         0.0
     });
-    let up_axis = (if input.action_down(ACTION_MOVE_UP) {
+    let right_axis = (if actions.action_down(action::WORLD_MOVE_RIGHT) {
         1.0
     } else {
         0.0
-    }) - (if input.action_down(ACTION_MOVE_DOWN) {
+    }) - (if actions.action_down(action::WORLD_MOVE_LEFT) {
+        1.0
+    } else {
+        0.0
+    });
+    let up_axis = (if actions.action_down(ACTION_MOVE_UP) {
+        1.0
+    } else {
+        0.0
+    }) - (if actions.action_down(ACTION_MOVE_DOWN) {
         1.0
     } else {
         0.0
@@ -116,7 +130,7 @@ fn update_terrain_view_and_animation_system(
             mouse_delta: input.mouse_delta,
         },
     );
-    if input.action_pressed(ACTION_CYCLE_VIEW_MODE) {
+    if actions.action_pressed(ACTION_CYCLE_VIEW_MODE) {
         state.cycle_view_mode();
     }
     fps.observe_frame_delta(time.delta_seconds);

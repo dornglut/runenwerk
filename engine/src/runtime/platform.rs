@@ -221,7 +221,8 @@ mod tests {
     use super::{
         PlatformEvent, PlatformWindowEvent, apply_platform_event, apply_platform_window_event,
     };
-    use crate::plugins::InputState;
+    use crate::plugins::input::domain::action;
+    use crate::plugins::{ActionState, InputState};
     use crate::plugins::{
         ContactInput, ContactPhase, CoordinateSpace, DigitalState, InputContext, InputSourceId,
         KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey, ObservationOrigin,
@@ -309,7 +310,9 @@ mod tests {
             },
         );
 
-        assert!(input.world_move_right);
+        let mut actions = ActionState::new();
+        actions.project(&input);
+        assert!(actions.action_down(action::WORLD_MOVE_RIGHT));
         assert!(input.left_mouse_pressed());
         assert_eq!(input.mouse_delta, (5.0, -2.0));
         assert_eq!(input.touch_samples().len(), 1);

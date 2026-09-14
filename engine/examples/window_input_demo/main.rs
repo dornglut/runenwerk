@@ -1,6 +1,6 @@
 use anyhow::Result;
-use engine::plugins::default_plugins;
 use engine::plugins::input::domain::action;
+use engine::plugins::{ActionState, default_plugins};
 use engine::prelude::*;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Component, runen_ecs::Resource)]
@@ -27,26 +27,26 @@ fn setup(mut commands: Commands) {
 }
 
 fn update_demo(
-    input: Res<InputState>,
+    actions: Res<ActionState>,
     time: Res<Time>,
     mut window: ResMut<WindowState>,
     mut query: Query<&mut Position>,
 ) {
     let position = query.single().expect("demo should have one player");
-    if input.action_down(action::WORLD_MOVE_LEFT) {
+    if actions.action_down(action::WORLD_MOVE_LEFT) {
         position.x -= 1;
     }
-    if input.action_down(action::WORLD_MOVE_RIGHT) {
+    if actions.action_down(action::WORLD_MOVE_RIGHT) {
         position.x += 1;
     }
-    if input.action_down(action::WORLD_MOVE_UP) {
+    if actions.action_down(action::WORLD_MOVE_UP) {
         position.y -= 1;
     }
-    if input.action_down(action::WORLD_MOVE_DOWN) {
+    if actions.action_down(action::WORLD_MOVE_DOWN) {
         position.y += 1;
     }
 
-    if input.action_pressed(action::SYSTEM_TOGGLE_PAUSE_MENU) {
+    if actions.action_pressed(action::SYSTEM_TOGGLE_PAUSE_MENU) {
         window.request_close();
     }
 

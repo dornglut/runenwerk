@@ -5,19 +5,21 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-09-14
 ---
 
 # Input Plugin Usage Guide
 
 ## Purpose
 
-Maintains action-mapped input state and frame pulse clearing.
+Maintains backend-neutral physical/device input state and a separate Runenwerk product action/binding projection with frame-local action pulses.
 
 ## Entry Points
 
 - Module: engine/src/plugins/input/mod.rs
 - Entry: InputFinalizePlugin
+- Physical/device state: InputState
+- Product action/binding state: ActionState
 - Local README: engine/src/plugins/input/README.md
 
 ## Minimal Setup
@@ -30,9 +32,10 @@ app.add_plugin(InputFinalizePlugin);
 
 ## Runtime Contract
 
-- Schedule placement: FrameEnd (CoreSet::FrameEnd)
-- Ownership: Input action and pulse lifecycle.
-- Non-ownership: Gameplay systems consuming input.
+- `PreUpdate` / `CoreSet::Input`: derive `ActionState` from confirmed `InputState` plus accepted frame-local keyboard press evidence.
+- `FrameEnd` / `CoreSet::FrameEnd`: clear action pulses and physical frame-local compatibility samples without clearing durable confirmed held state.
+- `InputState` owns physical/device truth; `ActionState` owns Runenwerk action vocabulary, bindings, rebinding, `action_pressed`, and `action_down`.
+- Gameplay/editor/scene systems consume these resources but do not own the input authorities.
 
 ## Related
 
