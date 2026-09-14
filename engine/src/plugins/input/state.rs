@@ -1,46 +1,49 @@
 use super::neutral::{
-    AnalogMeasurement, ContactId, ContactPhase as NeutralContactPhase, ControlId, CoordinateSpace,
-    DigitalTransition, InputObservation, InputSourceId, MeasurementDomain, NeutralInputAuthority,
-    ObservationGroup, Point2, RelativeMotionUnit, ScrollDelta, ScrollDomain, Vector2,
+    AnalogMeasurement, ContactId, ContactInput, ContactPhase as NeutralContactPhase, ControlId,
+    CoordinateSpace, DigitalState, DigitalTransition, InputContext, InputObservation,
+    InputSourceId, KeyLocation, KeyboardInput, LogicalKey, MeasurementDomain, NativeLogicalKey,
+    NeutralInputAuthority, ObservationGroup, ObservationOrigin, PhysicalKeyIdentity, Point2,
+    PointerButton, PointerButtonInput, RelativeMotionUnit, ScrollDelta, ScrollDomain, ScrollInput,
+    Vector2,
 };
 use crate::plugins::{
     InputBindingChange, InputBindingChangeResult, InputBindings, KeyChord, action,
 };
 use std::collections::{HashMap, HashSet};
-use winit::event::{
-    DeviceEvent, ElementState, MouseButton, MouseScrollDelta, TouchPhase, WindowEvent,
-};
-use winit::keyboard::{KeyCode, PhysicalKey};
+use winit::event::{ElementState, MouseButton};
+use winit::keyboard::KeyCode;
 
 const LEGACY_WINDOW_SOURCE: InputSourceId = InputSourceId::new(1);
 const LEGACY_DEVICE_SOURCE: InputSourceId = InputSourceId::new(2);
+const LEGACY_WINDOW_CONTEXT: InputContext = InputContext::new(LEGACY_WINDOW_SOURCE, None);
+const LEGACY_DEVICE_CONTEXT: InputContext = InputContext::new(LEGACY_DEVICE_SOURCE, None);
 
 #[derive(Debug, Default)]
 struct LegacyControlInterner {
     next_control: u64,
-    keys: HashMap<PhysicalKey, ControlId>,
-    buttons: HashMap<MouseButton, ControlId>,
+    keys: HashMap<PhysicalKeyIdentity, ControlId>,
+    buttons: HashMap<PointerButton, ControlId>,
 }
 
 impl LegacyControlInterner {
-    fn intern_key(&mut self, key: PhysicalKey) -> ControlId {
-        if let Some(control) = self.keys.get(&key).copied() {
+    fn intern_key(&mut self, key: &PhysicalKeyIdentity) -> ControlId {
+        if let Some(control) = self.keys.get(key).copied() {
             return control;
         }
         let control = self.next_control();
-        self.keys.insert(key, control);
+        self.keys.insert(key.clone(), control);
         control
     }
 
-    fn key(&self, key: PhysicalKey) -> Option<ControlId> {
-        self.keys.get(&key).copied()
+    fn key(&self, key: &PhysicalKeyIdentity) -> Option<ControlId> {
+        self.keys.get(key).copied()
     }
 
     fn key_code(&self, key: KeyCode) -> Option<ControlId> {
-        self.key(PhysicalKey::Code(key))
+        self.key(&physical_identity_for_key_code(key))
     }
 
-    fn intern_button(&mut self, button: MouseButton) -> ControlId {
+    fn intern_button(&mut self, button: PointerButton) -> ControlId {
         if let Some(control) = self.buttons.get(&button).copied() {
             return control;
         }
@@ -49,7 +52,7 @@ impl LegacyControlInterner {
         control
     }
 
-    fn button(&self, button: MouseButton) -> Option<ControlId> {
+    fn button(&self, button: PointerButton) -> Option<ControlId> {
         self.buttons.get(&button).copied()
     }
 
@@ -59,6 +62,46 @@ impl LegacyControlInterner {
             .checked_add(1)
             .expect("legacy input control identity exhausted");
         ControlId::new(self.next_control)
+    }
+}
+
+fn physical_identity_for_key_code(key: KeyCode) -> PhysicalKeyIdentity {
+    PhysicalKeyIdentity::code(format!("{key:?}"))
+}
+
+fn pointer_button_from_legacy(button: MouseButton) -> PointerButton {
+    match button {
+        MouseButton::Left => PointerButton::Left,
+        MouseButton::Right => PointerButton::Right,
+        MouseButton::Middle => PointerButton::Middle,
+        MouseButton::Back => PointerButton::Back,
+        MouseButton::Forward => PointerButton::Forward,
+        MouseButton::Other(value) => PointerButton::Other(value),
+    }
+}
+
+fn legacy_mouse_button(button: PointerButton) -> MouseButton {
+    match button {
+        PointerButton::Left => MouseButton::Left,
+        PointerButton::Right => MouseButton::Right,
+        PointerButton::Middle => MouseButton::Middle,
+        PointerButton::Back => MouseButton::Back,
+        PointerButton::Forward => MouseButton::Forward,
+        PointerButton::Other(value) => MouseButton::Other(value),
+    }
+}
+
+fn digital_state_from_legacy(state: ElementState) -> DigitalState {
+    match state {
+        ElementState::Pressed => DigitalState::Pressed,
+        ElementState::Released => DigitalState::Released,
+    }
+}
+
+fn legacy_element_state(state: DigitalState) -> ElementState {
+    match state {
+        DigitalState::Pressed => ElementState::Pressed,
+        DigitalState::Released => ElementState::Released,
     }
 }
 
@@ -95,13 +138,13 @@ pub enum TouchInputPhase {
     Cancelled,
 }
 
-impl From<TouchPhase> for TouchInputPhase {
-    fn from(value: TouchPhase) -> Self {
+impl From<NeutralContactPhase> for TouchInputPhase {
+    fn from(value: NeutralContactPhase) -> Self {
         match value {
-            TouchPhase::Started => Self::Started,
-            TouchPhase::Moved => Self::Moved,
-            TouchPhase::Ended => Self::Ended,
-            TouchPhase::Cancelled => Self::Cancelled,
+            NeutralContactPhase::Begin => Self::Started,
+            NeutralContactPhase::Update => Self::Moved,
+            NeutralContactPhase::End => Self::Ended,
+            NeutralContactPhase::Cancel => Self::Cancelled,
         }
     }
 }
@@ -156,7 +199,7 @@ pub struct InputState {
     mouse_motion_samples: Vec<MouseMotionSample>,
     mouse_button_transitions: Vec<MouseButtonTransitionSample>,
     touch_samples: Vec<TouchInputSample>,
-    primary_touch_id: Option<u64>,
+    primary_touch: Option<(InputContext, u64)>,
     pub scroll_delta: f32,
     left_mouse_pressed: bool,
     left_mouse_released: bool,
@@ -208,7 +251,7 @@ impl Default for InputState {
             mouse_motion_samples: Vec::new(),
             mouse_button_transitions: Vec::new(),
             touch_samples: Vec::new(),
-            primary_touch_id: None,
+            primary_touch: None,
             scroll_delta: 0.0,
             left_mouse_pressed: false,
             left_mouse_released: false,
@@ -306,46 +349,50 @@ impl InputState {
         self.actions_pressed.contains(action)
     }
 
-    pub fn handle_window_event(&mut self, event: &WindowEvent) {
-        match event {
-            WindowEvent::KeyboardInput {
-                event,
-                is_synthetic,
-                ..
-            } => {
-                self.handle_keyboard_physical(
-                    event.physical_key,
-                    event.state,
-                    event.text.as_deref(),
-                    *is_synthetic,
-                );
+    pub(crate) fn handle_normalized_keyboard(
+        &mut self,
+        context: InputContext,
+        input: &KeyboardInput,
+    ) {
+        let control = self.controls.intern_key(&input.physical_key);
+        let was_down_for_product = self.neutral.control_down_anywhere(control);
+        let transition = match (input.origin, input.state) {
+            (ObservationOrigin::SourceReport, DigitalState::Pressed) => DigitalTransition::Down,
+            (ObservationOrigin::SourceReport, DigitalState::Released) => DigitalTransition::Up,
+            (ObservationOrigin::BackendSyntheticReconciliation, DigitalState::Pressed) => {
+                DigitalTransition::ReconcileDown
             }
-            WindowEvent::MouseWheel { delta, .. } => self.handle_mouse_wheel_delta(match delta {
-                MouseScrollDelta::LineDelta(_, y) => *y,
-                MouseScrollDelta::PixelDelta(p) => p.y as f32,
-            }),
-            WindowEvent::CursorMoved { position, .. } => {
-                self.handle_cursor_moved(position.x as f32, position.y as f32);
+            (ObservationOrigin::BackendSyntheticReconciliation, DigitalState::Released) => {
+                DigitalTransition::Cancel
             }
-            WindowEvent::MouseInput { state, button, .. } => {
-                self.handle_mouse_input(*state, *button);
-            }
-            WindowEvent::Touch(touch) => {
-                self.handle_touch_input(
-                    TouchInputPhase::from(touch.phase),
-                    touch.id,
-                    touch.location.x as f32,
-                    touch.location.y as f32,
-                    touch.force.map(|force| force.normalized() as f32),
-                );
-            }
-            _ => {}
+        };
+        self.neutral
+            .admit(ObservationGroup::single_in(
+                context,
+                InputObservation::DigitalControl {
+                    control,
+                    transition,
+                },
+            ))
+            .expect("digital keyboard observation should always be valid");
+
+        self.recompute_action_down_states();
+        if input.origin == ObservationOrigin::SourceReport
+            && input.state == DigitalState::Pressed
+            && !input.repeat
+            && !was_down_for_product
+        {
+            self.apply_action_press_for_physical(&input.physical_key);
+        } else {
+            self.sync_legacy_flags();
         }
     }
 
-    pub fn handle_device_event(&mut self, event: &DeviceEvent) {
-        if let DeviceEvent::MouseMotion { delta } = event {
-            self.handle_mouse_motion(delta.0 as f32, delta.1 as f32);
+    pub(crate) fn handle_text_input(&mut self, text: &str) {
+        for ch in text.chars() {
+            if !ch.is_control() {
+                self.typed_text.push(ch);
+            }
         }
     }
 
@@ -355,122 +402,118 @@ impl InputState {
         state: ElementState,
         text: Option<&str>,
     ) {
-        self.handle_keyboard_physical(PhysicalKey::Code(code), state, text, false);
+        let input = KeyboardInput {
+            physical_key: physical_identity_for_key_code(code),
+            logical_key: LogicalKey::Native(NativeLogicalKey::Unidentified),
+            location: KeyLocation::Standard,
+            state: digital_state_from_legacy(state),
+            repeat: false,
+            origin: ObservationOrigin::SourceReport,
+        };
+        self.handle_normalized_keyboard(LEGACY_WINDOW_CONTEXT, &input);
+        if let Some(text) = text {
+            self.handle_text_input(text);
+        }
     }
 
     #[cfg(test)]
     pub(crate) fn handle_keyboard_reconciliation(&mut self, code: KeyCode, state: ElementState) {
-        self.handle_keyboard_physical(PhysicalKey::Code(code), state, None, true);
+        let input = KeyboardInput {
+            physical_key: physical_identity_for_key_code(code),
+            logical_key: LogicalKey::Native(NativeLogicalKey::Unidentified),
+            location: KeyLocation::Standard,
+            state: digital_state_from_legacy(state),
+            repeat: false,
+            origin: ObservationOrigin::BackendSyntheticReconciliation,
+        };
+        self.handle_normalized_keyboard(LEGACY_WINDOW_CONTEXT, &input);
     }
 
-    fn handle_keyboard_physical(
-        &mut self,
-        physical_key: PhysicalKey,
-        state: ElementState,
-        text: Option<&str>,
-        reconciliation: bool,
-    ) {
-        let control = self.controls.intern_key(physical_key);
-        let was_down = self.neutral.control_down(LEGACY_WINDOW_SOURCE, control);
-        let transition = match (reconciliation, state) {
-            (false, ElementState::Pressed) => DigitalTransition::Down,
-            (false, ElementState::Released) => DigitalTransition::Up,
-            (true, ElementState::Pressed) => DigitalTransition::ReconcileDown,
-            (true, ElementState::Released) => DigitalTransition::Cancel,
-        };
-        self.neutral
-            .admit(ObservationGroup::single(
-                LEGACY_WINDOW_SOURCE,
-                InputObservation::DigitalControl {
-                    control,
-                    transition,
+    pub(crate) fn handle_scroll_input(&mut self, context: InputContext, input: ScrollInput) {
+        if self
+            .neutral
+            .admit(ObservationGroup::single_in(
+                context,
+                InputObservation::Scroll {
+                    delta: input.delta,
+                    domain: input.domain,
+                    phase: input.phase,
                 },
             ))
-            .expect("digital keyboard observation should always be valid");
-
-        self.recompute_action_down_states();
-        if let PhysicalKey::Code(code) = physical_key {
-            match (reconciliation, state) {
-                (false, ElementState::Pressed) if !was_down => {
-                    self.apply_action_press_for_key(code);
-                }
-                _ => self.sync_legacy_flags(),
-            }
-        } else {
-            self.sync_legacy_flags();
-        }
-
-        if !reconciliation && let Some(text) = text {
-            for ch in text.chars() {
-                if !ch.is_control() {
-                    self.typed_text.push(ch);
-                }
-            }
+            .is_ok()
+            && let Some(vertical) = input.delta.vertical
+        {
+            self.scroll_delta += vertical;
         }
     }
 
     pub fn handle_mouse_wheel_delta(&mut self, delta: f32) {
-        if self
-            .neutral
-            .admit(ObservationGroup::single(
-                LEGACY_WINDOW_SOURCE,
-                InputObservation::Scroll {
-                    delta: ScrollDelta::legacy_vertical(delta),
-                    domain: ScrollDomain::LegacyVerticalScalarUnknown,
-                },
-            ))
-            .is_ok()
-        {
-            self.scroll_delta += delta;
-        }
+        self.handle_scroll_input(
+            LEGACY_WINDOW_CONTEXT,
+            ScrollInput {
+                delta: ScrollDelta::legacy_vertical(delta),
+                domain: ScrollDomain::LegacyVerticalScalarUnknown,
+                phase: None,
+            },
+        );
     }
 
-    pub fn handle_cursor_moved(&mut self, x: f32, y: f32) {
+    pub(crate) fn handle_cursor_position(&mut self, context: InputContext, position: Point2) {
         let previous = self
             .neutral
-            .absolute_pointer_position(LEGACY_WINDOW_SOURCE)
+            .absolute_pointer_position(context.source)
             .map(|point| (point.x, point.y))
             .unwrap_or((0.0, 0.0));
         if self
             .neutral
-            .admit(ObservationGroup::single(
-                LEGACY_WINDOW_SOURCE,
-                InputObservation::AbsolutePointerPosition {
-                    position: Point2::new(x, y, CoordinateSpace::LegacyWindowPhysicalPixels),
-                },
+            .admit(ObservationGroup::single_in(
+                context,
+                InputObservation::AbsolutePointerPosition { position },
             ))
             .is_err()
         {
             return;
         }
 
-        self.mouse_position = (x, y);
+        self.mouse_position = (position.x, position.y);
         self.mouse_motion_samples.push(MouseMotionSample {
-            position: (x, y),
-            delta: (x - previous.0, y - previous.1),
+            position: (position.x, position.y),
+            delta: (position.x - previous.0, position.y - previous.1),
         });
     }
 
-    pub fn handle_mouse_input(&mut self, state: ElementState, button: MouseButton) {
-        let control = self.controls.intern_button(button);
-        let was_down = self.neutral.control_down(LEGACY_WINDOW_SOURCE, control);
-        let transition = match state {
-            ElementState::Pressed => DigitalTransition::Down,
-            ElementState::Released => DigitalTransition::Up,
+    pub fn handle_cursor_moved(&mut self, x: f32, y: f32) {
+        self.handle_cursor_position(
+            LEGACY_WINDOW_CONTEXT,
+            Point2::new(x, y, CoordinateSpace::LegacyWindowPhysicalPixels),
+        );
+    }
+
+    pub(crate) fn handle_pointer_button(
+        &mut self,
+        context: InputContext,
+        input: PointerButtonInput,
+    ) {
+        let control = self.controls.intern_button(input.button);
+        let was_down_for_product = self.neutral.control_down_anywhere(control);
+        let transition = match input.state {
+            DigitalState::Pressed => DigitalTransition::Down,
+            DigitalState::Released => DigitalTransition::Up,
         };
         self.neutral
-            .admit(ObservationGroup::single(
-                LEGACY_WINDOW_SOURCE,
+            .admit(ObservationGroup::single_in(
+                context,
                 InputObservation::DigitalControl {
                     control,
                     transition,
                 },
             ))
-            .expect("digital mouse-button observation should always be valid");
+            .expect("digital pointer-button observation should always be valid");
+        let is_down_for_product = self.neutral.control_down_anywhere(control);
 
-        let changed = match state {
-            ElementState::Pressed => !was_down,
-            ElementState::Released => was_down,
+        let changed = match input.state {
+            DigitalState::Pressed => !was_down_for_product && is_down_for_product,
+            DigitalState::Released => was_down_for_product && !is_down_for_product,
         };
         if !changed {
             return;
@@ -478,44 +521,54 @@ impl InputState {
 
         let position = self
             .neutral
-            .absolute_pointer_position(LEGACY_WINDOW_SOURCE)
+            .absolute_pointer_position(context.source)
             .map(|point| (point.x, point.y))
             .unwrap_or((0.0, 0.0));
         self.mouse_button_transitions
             .push(MouseButtonTransitionSample {
-                button,
-                state,
+                button: legacy_mouse_button(input.button),
+                state: legacy_element_state(input.state),
                 position,
                 motion_sample_index: self.mouse_motion_samples.len(),
             });
 
-        match state {
-            ElementState::Pressed => {
-                if button == MouseButton::Left {
+        match input.state {
+            DigitalState::Pressed => {
+                if input.button == PointerButton::Left {
                     self.left_mouse_pressed = true;
-                } else if button == MouseButton::Right {
+                } else if input.button == PointerButton::Right {
                     self.right_mouse_pressed = true;
-                } else if button == MouseButton::Middle {
+                } else if input.button == PointerButton::Middle {
                     self.middle_mouse_pressed = true;
                 }
             }
-            ElementState::Released => {
-                if button == MouseButton::Left {
+            DigitalState::Released => {
+                if input.button == PointerButton::Left {
                     self.left_mouse_released = true;
-                } else if button == MouseButton::Right {
+                } else if input.button == PointerButton::Right {
                     self.right_mouse_released = true;
-                } else if button == MouseButton::Middle {
+                } else if input.button == PointerButton::Middle {
                     self.middle_mouse_released = true;
                 }
             }
         }
     }
 
-    pub fn handle_mouse_motion(&mut self, dx: f32, dy: f32) {
+    pub fn handle_mouse_input(&mut self, state: ElementState, button: MouseButton) {
+        self.handle_pointer_button(
+            LEGACY_WINDOW_CONTEXT,
+            PointerButtonInput {
+                button: pointer_button_from_legacy(button),
+                state: digital_state_from_legacy(state),
+            },
+        );
+    }
+
+    pub(crate) fn handle_relative_motion(&mut self, context: InputContext, dx: f32, dy: f32) {
         if self
             .neutral
-            .admit(ObservationGroup::single(
-                LEGACY_DEVICE_SOURCE,
+            .admit(ObservationGroup::single_in(
+                context,
                 InputObservation::RelativeMotion {
                     delta: Vector2::new(dx, dy),
                     unit: RelativeMotionUnit::BackendDeviceUnits,
@@ -528,6 +581,60 @@ impl InputState {
         }
     }
 
+    pub fn handle_mouse_motion(&mut self, dx: f32, dy: f32) {
+        self.handle_relative_motion(LEGACY_DEVICE_CONTEXT, dx, dy);
+    }
+
+    pub(crate) fn handle_contact_input(&mut self, context: InputContext, input: &ContactInput) {
+        let contact = ContactId::new(input.id);
+        let previous = self
+            .neutral
+            .contact_state_in(context, contact)
+            .map(|state| (state.position.x, state.position.y))
+            .unwrap_or((input.position.x, input.position.y));
+        if self
+            .neutral
+            .admit(ObservationGroup::single_in(
+                context,
+                InputObservation::Contact {
+                    contact,
+                    phase: input.phase,
+                    position: input.position,
+                    pressure: input.pressure,
+                    altitude_angle_radians: input.altitude_angle_radians,
+                },
+            ))
+            .is_err()
+        {
+            return;
+        }
+
+        let key = (context, input.id);
+        let accepted = match input.phase {
+            NeutralContactPhase::Begin if self.primary_touch.is_none() => {
+                self.primary_touch = Some(key);
+                true
+            }
+            _ => self.primary_touch == Some(key),
+        };
+
+        if accepted {
+            self.touch_samples.push(TouchInputSample {
+                id: input.id,
+                phase: input.phase.into(),
+                position: (input.position.x, input.position.y),
+                delta: (input.position.x - previous.0, input.position.y - previous.1),
+                pressure: input.pressure.and_then(legacy_pressure_projection),
+            });
+            if matches!(
+                input.phase,
+                NeutralContactPhase::End | NeutralContactPhase::Cancel
+            ) {
+                self.primary_touch = None;
+            }
+        }
+    }
+
     pub fn handle_touch_input(
         &mut self,
         phase: TouchInputPhase,
@@ -536,56 +643,24 @@ impl InputState {
         y: f32,
         pressure: Option<f32>,
     ) {
-        let contact = ContactId::new(id);
-        let previous = self
-            .neutral
-            .contact_state(LEGACY_WINDOW_SOURCE, contact)
-            .map(|state| (state.position.x, state.position.y))
-            .unwrap_or((x, y));
-        let neutral_phase = match phase {
+        let phase = match phase {
             TouchInputPhase::Started => NeutralContactPhase::Begin,
             TouchInputPhase::Moved => NeutralContactPhase::Update,
             TouchInputPhase::Ended => NeutralContactPhase::End,
             TouchInputPhase::Cancelled => NeutralContactPhase::Cancel,
         };
-        let pressure = pressure
-            .map(|value| AnalogMeasurement::new(value, MeasurementDomain::LegacyPressureScalar));
-        if self
-            .neutral
-            .admit(ObservationGroup::single(
-                LEGACY_WINDOW_SOURCE,
-                InputObservation::Contact {
-                    contact,
-                    phase: neutral_phase,
-                    position: Point2::new(x, y, CoordinateSpace::LegacyWindowPhysicalPixels),
-                    pressure,
-                },
-            ))
-            .is_err()
-        {
-            return;
-        }
-
-        let accepted = match phase {
-            TouchInputPhase::Started if self.primary_touch_id.is_none() => {
-                self.primary_touch_id = Some(id);
-                true
-            }
-            _ => self.primary_touch_id == Some(id),
-        };
-
-        if accepted {
-            self.touch_samples.push(TouchInputSample {
+        self.handle_contact_input(
+            LEGACY_WINDOW_CONTEXT,
+            &ContactInput {
                 id,
                 phase,
-                position: (x, y),
-                delta: (x - previous.0, y - previous.1),
-                pressure: pressure.map(|measurement| measurement.value.clamp(0.0, 1.0)),
-            });
-            if matches!(phase, TouchInputPhase::Ended | TouchInputPhase::Cancelled) {
-                self.primary_touch_id = None;
-            }
-        }
+                position: Point2::new(x, y, CoordinateSpace::LegacyWindowPhysicalPixels),
+                pressure: pressure.map(|value| {
+                    AnalogMeasurement::new(value, MeasurementDomain::LegacyPressureScalar)
+                }),
+                altitude_angle_radians: None,
+            },
+        );
     }
 
     pub fn clear_frame(&mut self) {
@@ -607,7 +682,7 @@ impl InputState {
     }
 
     pub fn left_mouse_down(&self) -> bool {
-        self.button_down(MouseButton::Left)
+        self.button_down(PointerButton::Left)
     }
 
     pub fn mouse_motion_samples(&self) -> &[MouseMotionSample] {
@@ -638,11 +713,11 @@ impl InputState {
     }
 
     pub fn right_mouse_down(&self) -> bool {
-        self.button_down(MouseButton::Right)
+        self.button_down(PointerButton::Right)
     }
 
     pub fn middle_mouse_down(&self) -> bool {
-        self.button_down(MouseButton::Middle)
+        self.button_down(PointerButton::Middle)
     }
 
     pub fn left_mouse_pressed(&self) -> bool {
@@ -697,19 +772,19 @@ impl InputState {
     fn key_down(&self, key: KeyCode) -> bool {
         self.controls
             .key_code(key)
-            .is_some_and(|control| self.neutral.control_down(LEGACY_WINDOW_SOURCE, control))
+            .is_some_and(|control| self.neutral.control_down_anywhere(control))
     }
 
-    fn button_down(&self, button: MouseButton) -> bool {
+    fn button_down(&self, button: PointerButton) -> bool {
         self.controls
             .button(button)
-            .is_some_and(|control| self.neutral.control_down(LEGACY_WINDOW_SOURCE, control))
+            .is_some_and(|control| self.neutral.control_down_anywhere(control))
     }
 
     #[cfg(test)]
     pub(crate) fn neutral_touch_active(&self, id: u64) -> bool {
         self.neutral
-            .contact_state(LEGACY_WINDOW_SOURCE, ContactId::new(id))
+            .contact_state_in(LEGACY_WINDOW_CONTEXT, ContactId::new(id))
             .is_some()
     }
 
@@ -718,9 +793,11 @@ impl InputState {
         self.neutral.active_contact_count(LEGACY_WINDOW_SOURCE)
     }
 
-    pub(crate) fn apply_action_press_for_key(&mut self, key: KeyCode) {
+    fn apply_action_press_for_physical(&mut self, key: &PhysicalKeyIdentity) {
         let modifiers = self.modifiers_snapshot();
-        let actions = self.bindings.matching_actions_for_key(key, modifiers);
+        let actions = self
+            .bindings
+            .matching_actions_for_physical_identity(key, modifiers);
         for action in actions {
             self.actions_pressed.insert(action.clone());
             self.actions_down.insert(action);
@@ -764,7 +841,7 @@ impl InputState {
                 |key| {
                     controls
                         .key_code(key)
-                        .is_some_and(|control| neutral.control_down(LEGACY_WINDOW_SOURCE, control))
+                        .is_some_and(|control| neutral.control_down_anywhere(control))
                 },
                 modifiers,
             ) {
@@ -805,6 +882,22 @@ impl InputState {
     }
 }
 
+fn legacy_pressure_projection(measurement: AnalogMeasurement) -> Option<f32> {
+    let normalized = match measurement.domain {
+        MeasurementDomain::CalibratedForce { .. } => {
+            let max_possible_force = measurement.domain.max_possible_force()?;
+            if max_possible_force <= 0.0 {
+                return None;
+            }
+            measurement.value / max_possible_force
+        }
+        MeasurementDomain::LegacyPressureScalar | MeasurementDomain::NormalizedUnitInterval => {
+            measurement.value
+        }
+    };
+    normalized.is_finite().then(|| normalized.clamp(0.0, 1.0))
+}
+
 #[derive(Debug, Copy, Clone, Default)]
 pub struct ModifiersSnapshot {
     pub(crate) shift: bool,
@@ -816,16 +909,17 @@ pub struct ModifiersSnapshot {
 #[cfg(test)]
 mod interner_tests {
     use super::LegacyControlInterner;
-    use winit::event::MouseButton;
-    use winit::keyboard::{KeyCode, NativeKeyCode, PhysicalKey};
+    use crate::plugins::{NativePhysicalKeyCode, PhysicalKeyIdentity, PointerButton};
 
     #[test]
     fn distinct_physical_controls_do_not_alias() {
         let mut interner = LegacyControlInterner::default();
-        let native_a = interner.intern_key(PhysicalKey::Unidentified(NativeKeyCode::Xkb(41)));
-        let native_b = interner.intern_key(PhysicalKey::Unidentified(NativeKeyCode::Xkb(42)));
-        let known = interner.intern_key(PhysicalKey::Code(KeyCode::F13));
-        let button = interner.intern_button(MouseButton::Left);
+        let native_a =
+            interner.intern_key(&PhysicalKeyIdentity::Native(NativePhysicalKeyCode::Xkb(41)));
+        let native_b =
+            interner.intern_key(&PhysicalKeyIdentity::Native(NativePhysicalKeyCode::Xkb(42)));
+        let known = interner.intern_key(&PhysicalKeyIdentity::code("F13"));
+        let button = interner.intern_button(PointerButton::Left);
 
         assert_ne!(native_a, native_b);
         assert_ne!(native_a, known);

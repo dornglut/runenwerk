@@ -16,12 +16,16 @@ use crate::runtime::window::{
     NativeWindowCreationRequest, NativeWindowId, WindowCursorIcon, WindowState,
     WindowStateRegistryResource,
 };
+use crate::runtime::winit_input::{
+    WinitInputAdapter, contact_input, cursor_position, keyboard_input, pointer_button_input,
+    scroll_input, text_input,
+};
 use anyhow::{Context, Result, anyhow};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
 use winit::application::ApplicationHandler;
-use winit::event::{DeviceEvent, MouseScrollDelta, WindowEvent};
+use winit::event::{DeviceEvent, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{CursorIcon, Window, WindowAttributes, WindowId};
 
@@ -37,6 +41,7 @@ pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
         window: None,
         windows: BTreeMap::new(),
         native_windows_by_winit: BTreeMap::new(),
+        input_adapter: WinitInputAdapter::default(),
         last_primary_redraw_at: None,
         fatal_error: None,
     };
@@ -55,6 +60,7 @@ struct WinitRunner {
     window: Option<Arc<Window>>,
     windows: BTreeMap<WindowId, Arc<Window>>,
     native_windows_by_winit: BTreeMap<WindowId, NativeWindowId>,
+    input_adapter: WinitInputAdapter,
     last_primary_redraw_at: Option<Instant>,
     fatal_error: Option<anyhow::Error>,
 }
@@ -118,10 +124,10 @@ impl WinitRunner {
                 self.sync_primary_window_registries(&window_state);
             }
             PlatformEvent::KeyboardInput { .. }
+            | PlatformEvent::TextInput { .. }
             | PlatformEvent::MouseWheel { .. }
             | PlatformEvent::CursorMoved { .. }
             | PlatformEvent::MouseInput { .. }
-            | PlatformEvent::MouseMotion { .. }
             | PlatformEvent::Touch { .. } => {
                 let mut window_state = WindowState::headless("");
                 let input = self
@@ -142,10 +148,10 @@ impl WinitRunner {
     ) {
         match &event {
             PlatformEvent::KeyboardInput { .. }
+            | PlatformEvent::TextInput { .. }
             | PlatformEvent::MouseWheel { .. }
             | PlatformEvent::CursorMoved { .. }
             | PlatformEvent::MouseInput { .. }
-            | PlatformEvent::MouseMotion { .. }
             | PlatformEvent::Touch { .. } => {
                 if let Ok(input) = self.state.world.resource_mut::<InputState>() {
                     let mut shadow_window = WindowState::headless("");
@@ -189,15 +195,30 @@ impl WinitRunner {
                         }
                         PlatformEvent::RedrawRequested => record.redraw_requested = false,
                         PlatformEvent::KeyboardInput { .. }
+                        | PlatformEvent::TextInput { .. }
                         | PlatformEvent::MouseWheel { .. }
                         | PlatformEvent::CursorMoved { .. }
                         | PlatformEvent::MouseInput { .. }
-                        | PlatformEvent::MouseMotion { .. }
                         | PlatformEvent::Touch { .. } => {}
                     }
                 }
             }
         }
+    }
+
+    fn apply_raw_mouse_motion(
+        &mut self,
+        context: crate::plugins::InputContext,
+        dx: f32,
+        dy: f32,
+    ) -> Result<()> {
+        let input = self
+            .state
+            .world
+            .resource_mut::<InputState>()
+            .context("missing InputState resource")?;
+        input.handle_relative_motion(context, dx, dy);
+        Ok(())
     }
 
     fn sync_primary_window_registries(&mut self, window_state: &WindowState) {
@@ -219,7 +240,6 @@ impl WinitRunner {
     }
 
     fn run_startup_if_needed(&mut self) -> Result<()> {
-        // Windowed flow uses the same startup contract as headless.
         prepare_world_for_run(&mut self.state.world, &self.state.title, false);
         run_startup_if_needed(
             &mut self.state.world,
@@ -229,7 +249,6 @@ impl WinitRunner {
     }
 
     fn run_frame(&mut self) -> Result<()> {
-        // Windowed flow uses the same per-frame schedule order as headless.
         if let Some(window) = self.window.clone() {
             with_native_window_hooks(&mut self.state.world, |registry, world| {
                 registry.dispatch_frame(&window, world);
@@ -673,54 +692,80 @@ impl ApplicationHandler for WinitRunner {
                     },
                 )
             }
-            WindowEvent::KeyboardInput { event, .. } => match event.physical_key {
-                winit::keyboard::PhysicalKey::Code(code) => {
-                    let result = self.apply_event_for_native_window(
+            WindowEvent::KeyboardInput {
+                device_id,
+                event,
+                is_synthetic,
+            } => {
+                let context = self
+                    .input_adapter
+                    .window_context(native_window_id, device_id);
+                let text = text_input(&event, is_synthetic);
+                let input = keyboard_input(&event, is_synthetic);
+                let mut result = self.apply_event_for_native_window(
+                    native_window_id,
+                    PlatformEvent::KeyboardInput { context, input },
+                );
+                if result.is_ok()
+                    && let Some(text) = text
+                {
+                    result = self.apply_event_for_native_window(
                         native_window_id,
-                        PlatformEvent::KeyboardInput {
-                            key: code,
-                            state: event.state,
-                            text: event.text.as_deref().map(str::to_string),
-                        },
+                        PlatformEvent::TextInput { text },
                     );
-                    if result.is_ok() {
-                        self.request_redraw_for_native_window(native_window_id);
-                    }
-                    result
                 }
-                _ => Ok(()),
-            },
-            WindowEvent::MouseWheel { delta, .. } => {
-                let delta = match delta {
-                    MouseScrollDelta::LineDelta(_, y) => y,
-                    MouseScrollDelta::PixelDelta(position) => position.y as f32,
-                };
+                if result.is_ok() {
+                    self.request_redraw_for_native_window(native_window_id);
+                }
+                result
+            }
+            WindowEvent::MouseWheel {
+                device_id,
+                delta,
+                phase,
+            } => {
+                let context = self
+                    .input_adapter
+                    .window_context(native_window_id, device_id);
+                let input = scroll_input(delta, phase);
                 let result = self.apply_event_for_native_window(
                     native_window_id,
-                    PlatformEvent::MouseWheel { delta },
+                    PlatformEvent::MouseWheel { context, input },
                 );
                 if result.is_ok() {
                     self.request_redraw_for_native_window(native_window_id);
                 }
                 result
             }
-            WindowEvent::CursorMoved { position, .. } => {
+            WindowEvent::CursorMoved {
+                device_id,
+                position,
+            } => {
+                let context = self
+                    .input_adapter
+                    .window_context(native_window_id, device_id);
+                let position = cursor_position(position);
                 let result = self.apply_event_for_native_window(
                     native_window_id,
-                    PlatformEvent::CursorMoved {
-                        x: position.x as f32,
-                        y: position.y as f32,
-                    },
+                    PlatformEvent::CursorMoved { context, position },
                 );
                 if result.is_ok() {
                     self.request_redraw_for_native_window(native_window_id);
                 }
                 result
             }
-            WindowEvent::MouseInput { state, button, .. } => {
+            WindowEvent::MouseInput {
+                device_id,
+                state,
+                button,
+            } => {
+                let context = self
+                    .input_adapter
+                    .window_context(native_window_id, device_id);
+                let input = pointer_button_input(state, button);
                 let result = self.apply_event_for_native_window(
                     native_window_id,
-                    PlatformEvent::MouseInput { state, button },
+                    PlatformEvent::MouseInput { context, input },
                 );
                 if result.is_ok() {
                     self.request_redraw_for_native_window(native_window_id);
@@ -728,15 +773,13 @@ impl ApplicationHandler for WinitRunner {
                 result
             }
             WindowEvent::Touch(touch) => {
+                let context = self
+                    .input_adapter
+                    .window_context(native_window_id, touch.device_id);
+                let input = contact_input(touch);
                 let result = self.apply_event_for_native_window(
                     native_window_id,
-                    PlatformEvent::Touch {
-                        phase: touch.phase.into(),
-                        id: touch.id,
-                        x: touch.location.x as f32,
-                        y: touch.location.y as f32,
-                        pressure: touch.force.map(|force| force.normalized() as f32),
-                    },
+                    PlatformEvent::Touch { context, input },
                 );
                 if result.is_ok() {
                     self.request_redraw_for_native_window(native_window_id);
@@ -786,17 +829,15 @@ impl ApplicationHandler for WinitRunner {
     fn device_event(
         &mut self,
         event_loop: &ActiveEventLoop,
-        _device_id: winit::event::DeviceId,
+        device_id: winit::event::DeviceId,
         event: DeviceEvent,
     ) {
         self.dispatch_native_device_event(&event);
 
         let result = match event {
             DeviceEvent::MouseMotion { delta } => {
-                let result = self.apply_event(PlatformEvent::MouseMotion {
-                    delta_x: delta.0 as f32,
-                    delta_y: delta.1 as f32,
-                });
+                let context = self.input_adapter.raw_device_context(device_id);
+                let result = self.apply_raw_mouse_motion(context, delta.0 as f32, delta.1 as f32);
                 if result.is_ok() {
                     self.request_redraw_for_native_window(NativeWindowId::primary());
                 }
@@ -891,6 +932,7 @@ mod tests {
             window: None,
             windows: BTreeMap::new(),
             native_windows_by_winit: BTreeMap::new(),
+            input_adapter: WinitInputAdapter::default(),
             last_primary_redraw_at: None,
             fatal_error: None,
         };
@@ -931,7 +973,6 @@ mod tests {
     #[test]
     fn winit_window_event_route_rejects_unknown_window_id() {
         let native_windows_by_winit = BTreeMap::new();
-
         assert_eq!(
             native_window_id_for_winit_event(&native_windows_by_winit, WindowId::dummy()),
             None
@@ -942,7 +983,6 @@ mod tests {
     fn winit_window_event_route_maps_known_primary_window() {
         let mut native_windows_by_winit = BTreeMap::new();
         native_windows_by_winit.insert(WindowId::dummy(), NativeWindowId::primary());
-
         assert_eq!(
             native_window_id_for_winit_event(&native_windows_by_winit, WindowId::dummy()),
             Some(NativeWindowId::primary())
@@ -955,7 +995,6 @@ mod tests {
             NativeWindowId::try_from_raw(2).expect("test native window id should be non-zero");
         let mut native_windows_by_winit = BTreeMap::new();
         native_windows_by_winit.insert(WindowId::dummy(), secondary_window);
-
         assert_eq!(
             native_window_id_for_winit_event(&native_windows_by_winit, WindowId::dummy()),
             Some(secondary_window)
@@ -969,7 +1008,6 @@ mod tests {
         let mut native_windows_by_winit = BTreeMap::new();
         native_windows_by_winit.insert(WindowId::dummy(), secondary_window);
         native_windows_by_winit.remove(&WindowId::dummy());
-
         assert_eq!(
             native_window_id_for_winit_event(&native_windows_by_winit, WindowId::dummy()),
             None
@@ -985,6 +1023,7 @@ mod tests {
             window: None,
             windows: BTreeMap::new(),
             native_windows_by_winit: BTreeMap::new(),
+            input_adapter: WinitInputAdapter::default(),
             last_primary_redraw_at: None,
             fatal_error: None,
         };
