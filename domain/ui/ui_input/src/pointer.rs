@@ -27,6 +27,17 @@ pub enum PointerEventKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct PointerDeviceId(pub u64);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct PointerContactId(pub u64);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PointerContactPhase {
+    Begin,
+    Update,
+    End,
+    Cancel,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum PointerSourceKind {
     #[default]
@@ -243,6 +254,8 @@ pub struct PointerPacket {
     pub source_kind: PointerSourceKind,
     pub tool_kind: PointerToolKind,
     pub device_id: Option<PointerDeviceId>,
+    pub contact_id: Option<PointerContactId>,
+    pub contact_phase: Option<PointerContactPhase>,
     pub timestamp_micros: Option<u64>,
     pub contact: PointerContactState,
     pub pressure: Option<f32>,
@@ -282,6 +295,16 @@ impl PointerPacket {
             },
             ..Self::default()
         }
+    }
+
+    pub fn with_contact_lifecycle(
+        mut self,
+        contact_id: PointerContactId,
+        contact_phase: PointerContactPhase,
+    ) -> Self {
+        self.contact_id = Some(contact_id);
+        self.contact_phase = Some(contact_phase);
+        self
     }
 
     pub fn with_timestamp_micros(mut self, timestamp_micros: u64) -> Self {
@@ -373,6 +396,8 @@ impl PointerPacket {
     pub fn is_pointer_fallback(&self) -> bool {
         self.source_kind == PointerSourceKind::Mouse
             && self.device_id.is_none()
+            && self.contact_id.is_none()
+            && self.contact_phase.is_none()
             && self.pressure.is_none()
             && self.tilt.is_none()
             && self.twist_degrees.is_none()
@@ -381,7 +406,8 @@ impl PointerPacket {
     }
 
     pub fn is_valid(&self) -> bool {
-        self.pressure.is_none_or(unit_value)
+        self.contact_id.is_some() == self.contact_phase.is_some()
+            && self.pressure.is_none_or(unit_value)
             && self.tilt.is_none_or(PointerTilt::is_valid)
             && self
                 .twist_degrees
@@ -405,6 +431,8 @@ impl Default for PointerPacket {
             source_kind: PointerSourceKind::Mouse,
             tool_kind: PointerToolKind::Mouse,
             device_id: None,
+            contact_id: None,
+            contact_phase: None,
             timestamp_micros: None,
             contact: PointerContactState::Contact,
             pressure: None,

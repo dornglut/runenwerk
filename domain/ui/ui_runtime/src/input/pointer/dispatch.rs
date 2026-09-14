@@ -3,7 +3,7 @@
 
 use ui_input::{
     EventPropagation, FocusChange, FocusTargetId, InputResponse, PointerButton, PointerCapture,
-    PointerEvent, PointerEventKind,
+    PointerContactPhase, PointerEvent, PointerEventKind,
 };
 
 use crate::{
@@ -39,6 +39,52 @@ pub fn dispatch_pointer_event(
         Some(widget) => Some(widget),
         None => hit_test_widget(tree, layouts, event.position),
     };
+
+    if event.packet.contact_phase == Some(PointerContactPhase::Cancel) {
+        if let Some(graph_target) = target.filter(|widget_id| {
+            graph_canvas_node(tree, *widget_id).is_some()
+                && state
+                    .graph_canvas_gestures
+                    .get(widget_id)
+                    .is_some_and(|gesture| gesture.active.is_some())
+        }) {
+            return dispatch_graph_canvas_pointer_event(tree, layouts, state, graph_target, event);
+        }
+
+        let previous_pressed = state.pressed_widget;
+        let had_capture = state.captured_widget.is_some()
+            || state.middle_pan_anchor.is_some()
+            || state.scrollbar_thumb_drag.is_some();
+        let target = state.captured_widget.or(target);
+        state.pressed_widget = None;
+        state.captured_widget = None;
+        state.middle_pan_anchor = None;
+        state.middle_pan_last_position = None;
+        state.scrollbar_thumb_drag = None;
+
+        let mut interactions = UiInteractionResults::new();
+        push_pressed_change_if_needed(&mut interactions, previous_pressed, None);
+
+        return outcome(
+            target,
+            InputResponse {
+                propagation: if previous_pressed.is_some() || had_capture {
+                    EventPropagation::Stop
+                } else {
+                    EventPropagation::Continue
+                },
+                capture: if had_capture {
+                    PointerCapture::Release
+                } else {
+                    PointerCapture::None
+                },
+                focus_change: FocusChange::None,
+                repaint: previous_pressed.is_some() || had_capture,
+                relayout: false,
+            },
+            interactions,
+        );
+    }
 
     if matches!(event.kind, PointerEventKind::Move | PointerEventKind::Up)
         && let Some(graph_target) =

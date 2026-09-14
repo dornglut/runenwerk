@@ -2,8 +2,8 @@
 //! Purpose: Graph canvas pointer gesture dispatch.
 
 use ui_input::{
-    EventPropagation, FocusChange, FocusTargetId, InputResponse, PointerCapture, PointerEvent,
-    PointerEventKind,
+    EventPropagation, FocusChange, FocusTargetId, InputResponse, PointerCapture,
+    PointerContactPhase, PointerEvent, PointerEventKind,
 };
 
 use crate::{
@@ -40,6 +40,39 @@ pub(super) fn dispatch_graph_canvas_pointer_event(
     let graph_point = graph_point_for_pointer(layout.bounds, viewport, event.position);
     let hit = graph_canvas.canvas.hit_test_scene.hit_test(graph_point);
     let modifiers = graph_input_modifiers(event.modifiers);
+
+    if event.packet.contact_phase == Some(PointerContactPhase::Cancel) {
+        let previous_pressed = state.pressed_widget;
+        state.pressed_widget = None;
+        state.captured_widget = None;
+        state.middle_pan_anchor = None;
+        state.middle_pan_last_position = None;
+        state.scrollbar_thumb_drag = None;
+
+        let action = state
+            .graph_canvas_gestures
+            .entry(target)
+            .or_default()
+            .cancel();
+        let repaint = previous_pressed.is_some() || action.is_some();
+        let mut interactions = UiInteractionResults::new();
+        push_pressed_change_if_needed(&mut interactions, previous_pressed, None);
+        if let Some(action) = action {
+            interactions.push(UiInteraction::GraphCanvasAction { target, action });
+        }
+
+        return outcome(
+            Some(target),
+            InputResponse {
+                propagation: EventPropagation::Stop,
+                capture: PointerCapture::Release,
+                focus_change: FocusChange::None,
+                repaint,
+                relayout: false,
+            },
+            interactions,
+        );
+    }
 
     match event.kind {
         PointerEventKind::Down => {
