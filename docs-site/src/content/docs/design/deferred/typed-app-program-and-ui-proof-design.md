@@ -111,8 +111,8 @@ justify it. A future attempt must satisfy all of the following:
    with ADR 0019, ADR 0020, ADR 0023, and the then-current Runenwerk platform
    architecture. ADR 0020's Level-B architecture target alone is not sufficient.
 2. A new owning GitHub issue selects a concrete Runenwerk consumer and first
-   proof that need reusable model/action/reducer/effect/replay contracts beyond
-   ordinary `App`/plugin composition.
+   proof demonstrating a need for reusable model/action/reducer/effect/replay
+   contracts beyond ordinary `App`/plugin composition.
 3. `App` remains the single live runtime composition root; any helper lowers to
    ordinary App/plugins/resources and does not become persistent parallel
    composition truth.
