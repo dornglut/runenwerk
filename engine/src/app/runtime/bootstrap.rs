@@ -60,9 +60,6 @@ impl App {
         if !self.world.has_resource::<UiOverlayState>() {
             self.world.insert_resource(UiOverlayState::default());
         }
-        if !self.world.has_resource::<GameplayRuntimeConfig>() {
-            self.world.insert_resource(GameplayRuntimeConfig::default());
-        }
         if !self.world.has_resource::<FixedTimeConfig>() {
             self.world.insert_resource(FixedTimeConfig::default());
         }

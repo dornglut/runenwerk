@@ -17,9 +17,7 @@ use crate::runtime::app::{
     ACTION_EDITOR_TOOL_SELECT, ACTION_EDITOR_TOOL_TRANSLATE, ACTION_EDITOR_UNDO,
     ACTION_EDITOR_VIEWPORT_FOCUS, ACTION_EDITOR_VIEWPORT_TOOL_RADIAL,
 };
-use crate::runtime::composition::{
-    EditorTargetInputRuntimeResource, translate_platform_event,
-};
+use crate::runtime::composition::{EditorTargetInputRuntimeResource, translate_platform_event};
 use crate::runtime::resources::{
     EditorCameraPointerButton, EditorHostResource, EditorInputBridgeState, EditorPointerOwner,
     scaled_shell_theme,
@@ -131,7 +129,9 @@ pub fn dispatch_editor_input_system(
     let mut scroll_consumed_by_ui = false;
     for event in primary_ui_events {
         let pointer = match &event {
-            UiInputEvent::Pointer(pointer) if pointer.packet.source_kind == PointerSourceKind::Mouse => {
+            UiInputEvent::Pointer(pointer)
+                if pointer.packet.source_kind == PointerSourceKind::Mouse =>
+            {
                 Some(pointer)
             }
             _ => None,

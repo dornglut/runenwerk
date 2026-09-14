@@ -5,7 +5,7 @@ use crate::plugins::{ActionState, InputState, SceneManager, SceneResource};
 use crate::prelude::domain::{
     GAMEPLAY_CONFIG_PATH, gameplay_config_modified, load_gameplay_config_with_modified_and_error,
 };
-use crate::{GameplayRuntimeConfig, SceneRuntimeState, UiOverlayState, WindowState};
+use crate::{SceneRuntimeState, UiOverlayState, WindowState};
 use anyhow::Result;
 
 // Owner: Engine Scene Plugin - Runtime State Sync
@@ -119,17 +119,15 @@ pub(crate) fn sync_world_scene_context_from_input(
 pub(crate) fn publish_scene_state(
     manager: &SceneManager,
     scene_state: &mut SceneRuntimeState,
-    gameplay: &mut GameplayRuntimeConfig,
     overlay: &mut UiOverlayState,
 ) {
-    let (scene_state_value, gameplay_value, overlay_value) = snapshot_public_scene_state(manager);
+    let (scene_state_value, overlay_value) = snapshot_public_scene_state(manager);
     *scene_state = scene_state_value;
-    *gameplay = gameplay_value;
     *overlay = overlay_value;
 }
 
 pub(crate) fn republish_scene_resources(world: &mut runen_ecs::World) -> Result<()> {
-    let Some((scene_state_value, gameplay_value, overlay_value)) = world
+    let Some((scene_state_value, overlay_value)) = world
         .resource::<SceneResource>()
         .ok()
         .and_then(|scene_resource| scene_resource.manager.as_ref())
@@ -140,9 +138,6 @@ pub(crate) fn republish_scene_resources(world: &mut runen_ecs::World) -> Result<
 
     if let Ok(scene_state) = world.resource_mut::<SceneRuntimeState>() {
         *scene_state = scene_state_value;
-    }
-    if let Ok(gameplay) = world.resource_mut::<GameplayRuntimeConfig>() {
-        *gameplay = gameplay_value;
     }
     if let Ok(overlay) = world.resource_mut::<UiOverlayState>() {
         *overlay = overlay_value;

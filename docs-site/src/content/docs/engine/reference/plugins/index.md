@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-09-14
 ---
 
 # Plugin Guides Index
@@ -22,10 +22,6 @@ Canonical guide map for engine plugin modules.
   - [Usage](fixed-step/usage-guide.md)
   - [Advanced](fixed-step/advanced-guide.md)
   - [Architecture](fixed-step/architecture.md)
-- Grid
-  - [Usage](grid/usage-guide.md)
-  - [Advanced](grid/advanced-guide.md)
-  - [Architecture](grid/architecture.md)
 - Input
   - [Usage](input/usage-guide.md)
   - [Advanced](input/advanced-guide.md)

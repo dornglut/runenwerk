@@ -1,18 +1,26 @@
 use super::*;
 use engine::plugins::{
-    AnalogMeasurement, ContactInput, CoordinateSpace, InputSourceId, KeyboardInput, KeyLocation,
-    Point2, ScrollDelta, ScrollInput,
+    AnalogMeasurement, ContactInput, CoordinateSpace, InputSourceId, KeyLocation, KeyboardInput,
+    Point2, PointerButtonInput, ScrollDelta, ScrollInput,
 };
 
 fn window() -> NativeWindowId {
     NativeWindowId::primary()
 }
 
-fn context(device: Option<u64>) -> InputContext {
-    InputContext::new(InputSourceId::new(7), device.map(InputDeviceId::new))
+fn scoped_context(source: u64, device: Option<u64>) -> InputContext {
+    InputContext::new(
+        InputSourceId::new(source),
+        device.map(InputDeviceId::new),
+    )
 }
 
-fn keyboard(
+fn context(device: Option<u64>) -> InputContext {
+    scoped_context(7, device)
+}
+
+fn keyboard_in(
+    context: InputContext,
     physical: &str,
     logical: LogicalKey,
     state: DigitalState,
@@ -20,7 +28,7 @@ fn keyboard(
     origin: ObservationOrigin,
 ) -> PlatformEvent {
     PlatformEvent::KeyboardInput {
-        context: context(Some(9)),
+        context,
         input: KeyboardInput {
             physical_key: PhysicalKeyIdentity::code(physical),
             logical_key: logical,
@@ -30,6 +38,23 @@ fn keyboard(
             origin,
         },
     }
+}
+
+fn keyboard(
+    physical: &str,
+    logical: LogicalKey,
+    state: DigitalState,
+    repeat: bool,
+    origin: ObservationOrigin,
+) -> PlatformEvent {
+    keyboard_in(
+        context(Some(9)),
+        physical,
+        logical,
+        state,
+        repeat,
+        origin,
+    )
 }
 
 fn one(runtime: &mut EditorTargetInputRuntimeResource, event: PlatformEvent) -> UiInputEvent {
@@ -154,6 +179,82 @@ fn left_and_right_modifier_lifetimes_do_not_alias() {
 }
 
 #[test]
+fn modifier_lifetimes_are_aggregated_without_aliasing_devices() {
+    let mut runtime = EditorTargetInputRuntimeResource::default();
+    let first = scoped_context(7, Some(9));
+    let second = scoped_context(7, Some(10));
+    for keyboard_context in [first, second] {
+        let _ = translate_platform_event(
+            &mut runtime,
+            window(),
+            keyboard_in(
+                keyboard_context,
+                "ShiftLeft",
+                LogicalKey::Named("Shift".to_owned()),
+                DigitalState::Pressed,
+                false,
+                ObservationOrigin::SourceReport,
+            ),
+        );
+    }
+    let _ = translate_platform_event(
+        &mut runtime,
+        window(),
+        keyboard_in(
+            first,
+            "ShiftLeft",
+            LogicalKey::Named("Shift".to_owned()),
+            DigitalState::Released,
+            false,
+            ObservationOrigin::SourceReport,
+        ),
+    );
+    let still_shifted = one(
+        &mut runtime,
+        keyboard_in(
+            first,
+            "KeyA",
+            LogicalKey::Character("a".to_owned()),
+            DigitalState::Pressed,
+            false,
+            ObservationOrigin::SourceReport,
+        ),
+    );
+    assert!(matches!(
+        still_shifted,
+        UiInputEvent::Keyboard(KeyboardEvent { modifiers, .. }) if modifiers.shift
+    ));
+
+    let _ = translate_platform_event(
+        &mut runtime,
+        window(),
+        keyboard_in(
+            second,
+            "ShiftLeft",
+            LogicalKey::Named("Shift".to_owned()),
+            DigitalState::Released,
+            false,
+            ObservationOrigin::SourceReport,
+        ),
+    );
+    let unshifted = one(
+        &mut runtime,
+        keyboard_in(
+            first,
+            "KeyB",
+            LogicalKey::Character("b".to_owned()),
+            DigitalState::Pressed,
+            false,
+            ObservationOrigin::SourceReport,
+        ),
+    );
+    assert!(matches!(
+        unshifted,
+        UiInputEvent::Keyboard(KeyboardEvent { modifiers, .. }) if !modifiers.shift
+    ));
+}
+
+#[test]
 fn text_is_a_sibling_path() {
     let mut runtime = EditorTargetInputRuntimeResource::default();
     assert!(matches!(
@@ -180,6 +281,42 @@ fn text_is_a_sibling_path() {
             text: "ä".to_owned()
         })
     );
+}
+
+#[test]
+fn mouse_position_is_scoped_to_the_normalized_source_stream() {
+    let mut runtime = EditorTargetInputRuntimeResource::default();
+    let first = scoped_context(7, Some(1));
+    let second = scoped_context(8, Some(2));
+    let _ = one(
+        &mut runtime,
+        PlatformEvent::CursorMoved {
+            context: first,
+            position: Point2::new(10.0, 20.0, CoordinateSpace::WindowPhysicalPixels),
+        },
+    );
+    let _ = one(
+        &mut runtime,
+        PlatformEvent::CursorMoved {
+            context: second,
+            position: Point2::new(100.0, 200.0, CoordinateSpace::WindowPhysicalPixels),
+        },
+    );
+    let event = one(
+        &mut runtime,
+        PlatformEvent::MouseInput {
+            context: first,
+            input: PointerButtonInput {
+                button: EnginePointerButton::Left,
+                state: DigitalState::Pressed,
+            },
+        },
+    );
+    assert!(matches!(
+        event,
+        UiInputEvent::Pointer(PointerEvent { position, .. })
+            if position == UiPoint::new(10.0, 20.0)
+    ));
 }
 
 #[test]
@@ -238,6 +375,127 @@ fn touch_contacts_keep_independent_lifetimes_and_cancel_is_not_semantic_cancel()
             ..
         }) if packet.contact_id == Some(PointerContactId(2))
             && packet.contact_phase == Some(PointerContactPhase::Cancel)
+    ));
+}
+
+#[test]
+fn equal_touch_ids_on_distinct_devices_do_not_alias() {
+    let mut runtime = EditorTargetInputRuntimeResource::default();
+    let touch = |touch_context, phase, x, y| PlatformEvent::Touch {
+        context: touch_context,
+        input: ContactInput {
+            id: 1,
+            phase,
+            position: Point2::new(x, y, CoordinateSpace::WindowPhysicalPixels),
+            pressure: None,
+            altitude_angle_radians: None,
+        },
+    };
+    let first = scoped_context(7, Some(3));
+    let second = scoped_context(7, Some(4));
+    let first_begin = one(
+        &mut runtime,
+        touch(first, ContactPhase::Begin, 10.0, 10.0),
+    );
+    let second_begin = one(
+        &mut runtime,
+        touch(second, ContactPhase::Begin, 100.0, 100.0),
+    );
+    let first_update = one(
+        &mut runtime,
+        touch(first, ContactPhase::Update, 13.0, 15.0),
+    );
+
+    let first_device = match first_begin {
+        UiInputEvent::Pointer(event) => event.packet.device_id,
+        _ => None,
+    };
+    let second_device = match second_begin {
+        UiInputEvent::Pointer(event) => event.packet.device_id,
+        _ => None,
+    };
+    assert_ne!(first_device, second_device);
+    assert!(matches!(
+        first_update,
+        UiInputEvent::Pointer(PointerEvent { delta, packet, .. })
+            if delta == UiVector::new(3.0, 5.0)
+                && packet.contact_id == Some(PointerContactId(1))
+                && packet.device_id == first_device
+    ));
+}
+
+#[test]
+fn non_finite_observations_are_rejected_before_ui_state_changes() {
+    let mut runtime = EditorTargetInputRuntimeResource::default();
+    let pointer_context = context(Some(3));
+    let _ = one(
+        &mut runtime,
+        PlatformEvent::CursorMoved {
+            context: pointer_context,
+            position: Point2::new(10.0, 20.0, CoordinateSpace::WindowPhysicalPixels),
+        },
+    );
+    assert!(
+        translate_platform_event(
+            &mut runtime,
+            window(),
+            PlatformEvent::CursorMoved {
+                context: pointer_context,
+                position: Point2::new(
+                    f32::INFINITY,
+                    30.0,
+                    CoordinateSpace::WindowPhysicalPixels,
+                ),
+            },
+        )
+        .is_empty()
+    );
+    let button = one(
+        &mut runtime,
+        PlatformEvent::MouseInput {
+            context: pointer_context,
+            input: PointerButtonInput {
+                button: EnginePointerButton::Left,
+                state: DigitalState::Pressed,
+            },
+        },
+    );
+    assert!(matches!(
+        button,
+        UiInputEvent::Pointer(PointerEvent { position, .. })
+            if position == UiPoint::new(10.0, 20.0)
+    ));
+
+    let touch = |phase, x, pressure| PlatformEvent::Touch {
+        context: pointer_context,
+        input: ContactInput {
+            id: 9,
+            phase,
+            position: Point2::new(x, 1.0, CoordinateSpace::WindowPhysicalPixels),
+            pressure,
+            altitude_angle_radians: None,
+        },
+    };
+    let _ = one(&mut runtime, touch(ContactPhase::Begin, 1.0, None));
+    assert!(
+        translate_platform_event(
+            &mut runtime,
+            window(),
+            touch(
+                ContactPhase::Update,
+                2.0,
+                Some(AnalogMeasurement {
+                    value: f32::NAN,
+                    domain: MeasurementDomain::NormalizedUnitInterval,
+                }),
+            ),
+        )
+        .is_empty()
+    );
+    let update = one(&mut runtime, touch(ContactPhase::Update, 3.0, None));
+    assert!(matches!(
+        update,
+        UiInputEvent::Pointer(PointerEvent { delta, .. }) if delta == UiVector::new(2.0, 0.0)
     ));
 }
 

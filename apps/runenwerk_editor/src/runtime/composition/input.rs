@@ -49,11 +49,8 @@ pub fn dispatch_editor_target_input_system(
             host.shell_state.clear_tab_drag_for_target(target_id);
             continue;
         }
-        let ui_events = translate_platform_event(
-            &mut runtime,
-            native_window_id,
-            window_event.event,
-        );
+        let ui_events =
+            translate_platform_event(&mut runtime, native_window_id, window_event.event);
         if ui_events.is_empty() {
             continue;
         }

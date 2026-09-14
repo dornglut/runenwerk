@@ -1,100 +1,30 @@
-use std::collections::{BTreeMap, HashMap};
+mod state;
 
 use engine::plugins::{
-    ContactPhase, DigitalState, InputContext, InputDeviceId, LogicalKey, MeasurementDomain,
-    ObservationOrigin, PhysicalKeyIdentity, PointerButton as EnginePointerButton, ScrollDomain,
+    ContactPhase, DigitalState, LogicalKey, MeasurementDomain, ObservationOrigin,
+    PointerButton as EnginePointerButton, ScrollDomain,
 };
-use engine::runtime::platform::PlatformEvent;
 use engine::runtime::NativeWindowId;
+use engine::runtime::platform::PlatformEvent;
 use ui_input::{
-    Key, KeyState, KeyboardEvent, Modifiers, PointerButton, PointerContactId, PointerContactPhase,
+    Key, KeyState, KeyboardEvent, PointerButton, PointerContactId, PointerContactPhase,
     PointerContactState, PointerDeviceId, PointerEvent, PointerEventKind, PointerPacket,
     PointerSourceKind, PointerToolKind, TextInputEvent, UiInputEvent,
 };
 use ui_math::{UiPoint, UiVector};
 
+pub use state::EditorTargetInputRuntimeResource;
+
 const UI_WHEEL_STEP_PX: f32 = 28.0;
-
-#[derive(Clone, Copy, Debug, Default)]
-struct ModifierState {
-    shift_left: bool,
-    shift_right: bool,
-    control_left: bool,
-    control_right: bool,
-    alt_left: bool,
-    alt_right: bool,
-    meta_left: bool,
-    meta_right: bool,
-}
-
-impl ModifierState {
-    fn update(&mut self, key: &PhysicalKeyIdentity, state: DigitalState) {
-        let pressed = state == DigitalState::Pressed;
-        let PhysicalKeyIdentity::Code(code) = key else {
-            return;
-        };
-        match code.as_str() {
-            "ShiftLeft" => self.shift_left = pressed,
-            "ShiftRight" => self.shift_right = pressed,
-            "ControlLeft" => self.control_left = pressed,
-            "ControlRight" => self.control_right = pressed,
-            "AltLeft" => self.alt_left = pressed,
-            "AltRight" => self.alt_right = pressed,
-            "SuperLeft" => self.meta_left = pressed,
-            "SuperRight" => self.meta_right = pressed,
-            _ => {}
-        }
-    }
-
-    const fn snapshot(self) -> Modifiers {
-        Modifiers {
-            shift: self.shift_left || self.shift_right,
-            ctrl: self.control_left || self.control_right,
-            alt: self.alt_left || self.alt_right,
-            meta: self.meta_left || self.meta_right,
-        }
-    }
-}
-
-#[derive(Debug, Default)]
-struct TargetInputState {
-    mouse_cursor: UiPoint,
-    touch_positions: BTreeMap<u64, UiPoint>,
-    modifiers: ModifierState,
-}
-
-#[derive(Debug, Default, runen_ecs::Resource)]
-pub struct EditorTargetInputRuntimeResource {
-    by_window: BTreeMap<NativeWindowId, TargetInputState>,
-    device_ids: HashMap<InputDeviceId, PointerDeviceId>,
-    next_device_id: u64,
-}
-
-impl EditorTargetInputRuntimeResource {
-    pub(crate) fn clear_window(&mut self, native_window_id: NativeWindowId) {
-        self.by_window.remove(&native_window_id);
-    }
-
-    fn device_id(&mut self, context: InputContext) -> Option<PointerDeviceId> {
-        let device = context.device?;
-        if let Some(id) = self.device_ids.get(&device) {
-            return Some(*id);
-        }
-        self.next_device_id = self
-            .next_device_id
-            .checked_add(1)
-            .expect("editor UI input device identity exhausted");
-        let id = PointerDeviceId(self.next_device_id);
-        self.device_ids.insert(device, id);
-        Some(id)
-    }
-}
 
 pub(crate) fn translate_platform_event(
     runtime: &mut EditorTargetInputRuntimeResource,
     native_window_id: NativeWindowId,
     event: PlatformEvent,
 ) -> Vec<UiInputEvent> {
+    if !platform_event_is_finite(&event) {
+        return Vec::new();
+    }
     if matches!(event, PlatformEvent::Focused { focused: false }) {
         runtime.clear_window(native_window_id);
         return Vec::new();
@@ -114,33 +44,34 @@ pub(crate) fn translate_platform_event(
         | PlatformEvent::TextInput { .. }
         | PlatformEvent::RedrawRequested => None,
     };
-    let state = runtime.by_window.entry(native_window_id).or_default();
+    let state = runtime.target_mut(native_window_id);
 
     match event {
-        PlatformEvent::CursorMoved { position, .. } => {
+        PlatformEvent::CursorMoved { context, position } => {
             let next = UiPoint::new(position.x, position.y);
-            let delta = next - state.mouse_cursor;
-            state.mouse_cursor = next;
+            let delta = state.observe_mouse_position(context.source, next);
             vec![UiInputEvent::Pointer(pointer_event(
                 PointerEventKind::Move,
                 next,
                 delta,
                 None,
-                state.modifiers.snapshot(),
+                state.modifiers(),
                 0,
                 pointer_packet(PointerSourceKind::Mouse, PointerToolKind::Mouse, device_id),
             ))]
         }
-        PlatformEvent::MouseWheel { input, .. } => vec![UiInputEvent::Pointer(pointer_event(
-            PointerEventKind::Scroll,
-            state.mouse_cursor,
-            scroll_delta(input.delta.horizontal, input.delta.vertical, input.domain),
-            None,
-            state.modifiers.snapshot(),
-            0,
-            pointer_packet(PointerSourceKind::Mouse, PointerToolKind::Mouse, device_id),
-        ))],
-        PlatformEvent::MouseInput { input, .. } => pointer_button(input.button)
+        PlatformEvent::MouseWheel { context, input } => {
+            vec![UiInputEvent::Pointer(pointer_event(
+                PointerEventKind::Scroll,
+                state.mouse_position(context.source),
+                scroll_delta(input.delta.horizontal, input.delta.vertical, input.domain),
+                None,
+                state.modifiers(),
+                0,
+                pointer_packet(PointerSourceKind::Mouse, PointerToolKind::Mouse, device_id),
+            ))]
+        }
+        PlatformEvent::MouseInput { context, input } => pointer_button(input.button)
             .map(|button| {
                 vec![UiInputEvent::Pointer(pointer_event(
                     if input.state == DigitalState::Pressed {
@@ -148,17 +79,17 @@ pub(crate) fn translate_platform_event(
                     } else {
                         PointerEventKind::Up
                     },
-                    state.mouse_cursor,
+                    state.mouse_position(context.source),
                     UiVector::ZERO,
                     Some(button),
-                    state.modifiers.snapshot(),
+                    state.modifiers(),
                     u8::from(input.state == DigitalState::Pressed),
                     pointer_packet(PointerSourceKind::Mouse, PointerToolKind::Mouse, device_id),
                 ))]
             })
             .unwrap_or_default(),
-        PlatformEvent::KeyboardInput { input, .. } => {
-            state.modifiers.update(&input.physical_key, input.state);
+        PlatformEvent::KeyboardInput { context, input } => {
+            state.update_modifiers(context, &input.physical_key, input.state);
             if input.origin == ObservationOrigin::BackendSyntheticReconciliation {
                 return Vec::new();
             }
@@ -167,7 +98,7 @@ pub(crate) fn translate_platform_event(
                     vec![UiInputEvent::Keyboard(KeyboardEvent {
                         key,
                         state: key_state(input.state, input.repeat),
-                        modifiers: state.modifiers.snapshot(),
+                        modifiers: state.modifiers(),
                     })]
                 })
                 .unwrap_or_default()
@@ -179,35 +110,25 @@ pub(crate) fn translate_platform_event(
                 vec![UiInputEvent::Text(TextInputEvent { text })]
             }
         }
-        PlatformEvent::Touch { input, .. } => {
+        PlatformEvent::Touch { context, input } => {
             let next = UiPoint::new(input.position.x, input.position.y);
-            let previous = state.touch_positions.get(&input.id).copied().unwrap_or(next);
-            let delta = next - previous;
-            match input.phase {
-                ContactPhase::Begin | ContactPhase::Update => {
-                    state.touch_positions.insert(input.id, next);
-                }
-                ContactPhase::End | ContactPhase::Cancel => {
-                    state.touch_positions.remove(&input.id);
-                }
-            }
+            let delta = state.observe_touch(context, input.id, input.phase, next);
             let (kind, phase) = match input.phase {
                 ContactPhase::Begin => (PointerEventKind::Down, PointerContactPhase::Begin),
                 ContactPhase::Update => (PointerEventKind::Move, PointerContactPhase::Update),
                 ContactPhase::End => (PointerEventKind::Up, PointerContactPhase::End),
                 ContactPhase::Cancel => (PointerEventKind::Leave, PointerContactPhase::Cancel),
             };
-            let mut packet = pointer_packet(
-                PointerSourceKind::Touch,
-                PointerToolKind::Finger,
-                device_id,
-            )
-            .with_contact_lifecycle(PointerContactId(input.id), phase)
-            .with_contact(if matches!(input.phase, ContactPhase::Begin | ContactPhase::Update) {
-                PointerContactState::Contact
-            } else {
-                PointerContactState::OutOfRange
-            });
+            let mut packet =
+                pointer_packet(PointerSourceKind::Touch, PointerToolKind::Finger, device_id)
+                    .with_contact_lifecycle(PointerContactId(input.id), phase)
+                    .with_contact(
+                        if matches!(input.phase, ContactPhase::Begin | ContactPhase::Update) {
+                            PointerContactState::Contact
+                        } else {
+                            PointerContactState::OutOfRange
+                        },
+                    );
             if let Some(pressure) = input.pressure
                 && pressure.domain == MeasurementDomain::NormalizedUnitInterval
             {
@@ -218,7 +139,7 @@ pub(crate) fn translate_platform_event(
                 next,
                 delta,
                 Some(PointerButton::Primary),
-                state.modifiers.snapshot(),
+                state.modifiers(),
                 u8::from(input.phase == ContactPhase::Begin),
                 packet,
             ))]
@@ -229,6 +150,41 @@ pub(crate) fn translate_platform_event(
         | PlatformEvent::Resized { .. }
         | PlatformEvent::ScaleFactorChanged { .. }
         | PlatformEvent::RedrawRequested => Vec::new(),
+    }
+}
+
+fn platform_event_is_finite(event: &PlatformEvent) -> bool {
+    match event {
+        PlatformEvent::MouseWheel { input, .. } => {
+            input.delta.horizontal.is_none_or(f32::is_finite)
+                && input.delta.vertical.is_none_or(f32::is_finite)
+        }
+        PlatformEvent::CursorMoved { position, .. } => {
+            position.x.is_finite() && position.y.is_finite()
+        }
+        PlatformEvent::Touch { input, .. } => {
+            input.position.x.is_finite()
+                && input.position.y.is_finite()
+                && input.pressure.is_none_or(|pressure| {
+                    pressure.value.is_finite()
+                        && pressure
+                            .domain
+                            .max_possible_force()
+                            .is_none_or(f32::is_finite)
+                })
+                && input
+                    .altitude_angle_radians
+                    .is_none_or(f32::is_finite)
+        }
+        PlatformEvent::Resumed
+        | PlatformEvent::CloseRequested
+        | PlatformEvent::Focused { .. }
+        | PlatformEvent::Resized { .. }
+        | PlatformEvent::ScaleFactorChanged { .. }
+        | PlatformEvent::KeyboardInput { .. }
+        | PlatformEvent::TextInput { .. }
+        | PlatformEvent::MouseInput { .. }
+        | PlatformEvent::RedrawRequested => true,
     }
 }
 
@@ -250,7 +206,7 @@ fn pointer_event(
     position: UiPoint,
     delta: UiVector,
     button: Option<PointerButton>,
-    modifiers: Modifiers,
+    modifiers: ui_input::Modifiers,
     click_count: u8,
     packet: PointerPacket,
 ) -> PointerEvent {
@@ -330,7 +286,10 @@ fn scroll_delta(horizontal: Option<f32>, vertical: Option<f32>, domain: ScrollDo
         ScrollDomain::LegacyVerticalScalarUnknown | ScrollDomain::Lines => 1.0,
         ScrollDomain::WindowPhysicalPixels => 1.0 / UI_WHEEL_STEP_PX,
     };
-    UiVector::new(horizontal.unwrap_or(0.0) * scale, vertical.unwrap_or(0.0) * scale)
+    UiVector::new(
+        horizontal.unwrap_or(0.0) * scale,
+        vertical.unwrap_or(0.0) * scale,
+    )
 }
 
 #[cfg(test)]

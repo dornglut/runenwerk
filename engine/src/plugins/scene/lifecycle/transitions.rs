@@ -8,7 +8,7 @@ use crate::plugins::{ActionState, InputState, SceneResource};
 use crate::prelude::Time;
 use crate::prelude::domain::{SceneCommand, SceneId};
 use crate::runtime::{FixedTimeConfig, WindowState, WorldMut};
-use crate::{GameplayRuntimeConfig, SceneRuntimeState, UiOverlayState};
+use crate::{SceneRuntimeState, UiOverlayState};
 use anyhow::Result;
 
 pub(crate) fn scene_transition_system(mut world: WorldMut) -> Result<()> {
@@ -24,9 +24,6 @@ pub(crate) fn scene_transition_system(mut world: WorldMut) -> Result<()> {
     let mut scene_resource = world.remove_resource::<SceneResource>().unwrap_or_default();
     let mut scene_state = world
         .remove_resource::<SceneRuntimeState>()
-        .unwrap_or_default();
-    let mut gameplay = world
-        .remove_resource::<GameplayRuntimeConfig>()
         .unwrap_or_default();
     let mut overlay = world
         .remove_resource::<UiOverlayState>()
@@ -114,7 +111,7 @@ pub(crate) fn scene_transition_system(mut world: WorldMut) -> Result<()> {
         }
 
         flush_lifecycle_status(manager);
-        publish_scene_state(manager, &mut scene_state, &mut gameplay, &mut overlay);
+        publish_scene_state(manager, &mut scene_state, &mut overlay);
         Ok(())
     })();
 
@@ -123,7 +120,6 @@ pub(crate) fn scene_transition_system(mut world: WorldMut) -> Result<()> {
     world.insert_resource(scene_templates);
     world.insert_resource(scene_resource);
     world.insert_resource(scene_state);
-    world.insert_resource(gameplay);
     world.insert_resource(overlay);
     result
 }
