@@ -601,7 +601,7 @@ Interaction V2 is implemented for the retained UI target under accepted ADR
   - roadmap wording should continue to call this UI Designer / self-authoring so the feature is visible to product planning.
 - SDF Prefabs
   - deferred V2-gated design: `docs-site/src/content/docs/design/deferred/sdf-prefab-composition-system-design.md`;
-  - prefab runtime instancing waits for rendered-world V1 and source-backed asset identity.
+  - prefab runtime instancing waits for rendered-world V1 and source-backed prefab descriptor identity.
 
 ### What Was Missing Or Under-Specified
 
