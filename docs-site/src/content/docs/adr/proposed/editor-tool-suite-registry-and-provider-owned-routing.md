@@ -5,10 +5,10 @@ status: superseded
 owner: editor
 layer: domain/app
 canonical: true
-last_reviewed: 2026-05-17
+last_reviewed: 2026-09-14
 related_designs:
-  - ../../design/active/editor-tool-suite-registry-and-workbench-host-design.md
-  - ../../design/active/editor-ui-workspace-tool-surface-architecture.md
+  - ../../design/implemented/editor-tool-suite-registry-and-workbench-host-design.md
+  - ../../design/superseded/editor-ui-workspace-tool-surface-architecture.md
   - ../../design/active/material-lab-and-material-preview-design.md
 related_adrs:
   - ../accepted/0001-use-domain-owned-commands.md
