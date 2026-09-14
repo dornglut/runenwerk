@@ -29,6 +29,10 @@ Commands are deferred structural mutations collected during system execution and
 - Helpers: `spawn`, `despawn`, `insert`, `remove`, `queue`, and `batch`.
 - `commands.apply(world)` applies queued commands immediately when using manual world commands outside runtime-managed system execution.
 - Runtime-managed `Commands` params are scope-bound to the system execution and collected by the runtime.
+- Ordinary runtime-managed `Commands` are invoker-thread-only. Register their system with
+  `.on_invoker_thread()` before applying set or ordering configuration. Use
+  `TransferableCommands` only when the command effects and system parameter proof support
+  transferable registration.
 - Current planner stages may determine where the serial reference executor performs a flush, but planner-stage identity is not the public deferred-visibility contract.
 
 ## Invariants

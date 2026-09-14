@@ -308,7 +308,7 @@ fn observe() {}
 
 let mut world = World::new();
 let mut runtime = Runtime::new();
-runtime.add_systems::<Update, _, _>(&mut world, produce.in_set(Produce));
+runtime.add_systems::<Update, _, _>(&mut world, produce.on_invoker_thread().in_set(Produce));
 runtime.add_systems::<Update, _, _>(&mut world, observe.in_set(Observe).after(Produce));
 runtime.run_schedule::<Update>(&mut world).unwrap();
 ```

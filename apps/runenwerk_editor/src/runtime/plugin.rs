@@ -7,8 +7,8 @@ use engine::plugins::render::{
 use engine::prelude::*;
 use engine::runtime::{
     IntoSystemSetKey, ProductPublicationOccurrence, ProductPublicationRuntimeResource,
-    SystemConfigExt, WindowStateRegistryResource, dispatch_product_publication_system,
-    dispatch_query_snapshot_publication_system,
+    SystemConfigExt, SystemMobilityExt, WindowStateRegistryResource,
+    dispatch_product_publication_system, dispatch_query_snapshot_publication_system,
 };
 use runen_ecs::{SystemSetKey, World};
 
@@ -170,15 +170,18 @@ impl Plugin for EditorAppPlugin {
         app.add_query_snapshot_publication_handler(dispatch_viewport_query_publication);
         app.add_query_snapshot_publication_handler(dispatch_procgen_query_publication);
 
-        app.add_systems(Startup, bootstrap_editor_demo_system);
+        app.add_systems(Startup, bootstrap_editor_demo_system.on_invoker_thread());
         app.add_systems(Startup, seed_viewport_runtime_contracts_system);
         app.add_systems(
             Update,
-            produce_editor_picking_system.in_set(EditorRuntimeSet::Picking),
+            produce_editor_picking_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::Picking),
         );
         app.add_systems(
             Update,
             dispatch_editor_input_system
+                .on_invoker_thread()
                 .in_set(EditorRuntimeSet::InputBridge)
                 .after(EditorRuntimeSet::Picking),
         );
@@ -191,30 +194,35 @@ impl Plugin for EditorAppPlugin {
         app.add_systems(
             Update,
             sync_editor_composition_transitions_system
+                .on_invoker_thread()
                 .in_set(EditorRuntimeSet::CompositionTransitions)
                 .after(EditorRuntimeSet::InputBridge),
         );
         app.add_systems(
             Update,
             dispatch_editor_target_input_system
+                .on_invoker_thread()
                 .in_set(EditorRuntimeSet::TargetInput)
                 .after(EditorRuntimeSet::CompositionTransitions),
         );
         app.add_systems(
             Update,
             dispatch_product_publication_system
+                .on_invoker_thread()
                 .in_set(EditorRuntimeSet::ProductPublication)
                 .after(EditorRuntimeSet::TargetInput),
         );
         app.add_systems(
             Update,
             sync_editor_window_presentation_requests_system
+                .on_invoker_thread()
                 .in_set(EditorRuntimeSet::WindowPresentationRequests)
                 .after(EditorRuntimeSet::TargetInput),
         );
         app.add_systems(
             Update,
             sync_viewport_instances_system
+                .on_invoker_thread()
                 .in_set(EditorRuntimeSet::ViewportLifecycle)
                 .after(EditorRuntimeSet::ViewportRenderStateCommands)
                 .after(EditorRuntimeSet::WindowPresentationRequests),
@@ -222,6 +230,7 @@ impl Plugin for EditorAppPlugin {
         app.add_systems(
             Update,
             submit_editor_frame_system
+                .on_invoker_thread()
                 .in_set(EditorRuntimeSet::FrameSubmit)
                 .after(EditorRuntimeSet::ProductPublication)
                 .after(EditorRuntimeSet::ViewportLifecycle),
@@ -229,18 +238,21 @@ impl Plugin for EditorAppPlugin {
         app.add_systems(
             Update,
             sync_viewport_presentation_products_system
+                .on_invoker_thread()
                 .in_set(EditorRuntimeSet::ViewportPresentationSync)
                 .after(EditorRuntimeSet::FrameSubmit),
         );
         app.add_systems(
             Update,
             dispatch_query_snapshot_publication_system
+                .on_invoker_thread()
                 .in_set(EditorRuntimeSet::QuerySnapshotPublication)
                 .after(EditorRuntimeSet::ViewportPresentationSync),
         );
         app.add_systems(
             Update,
             sync_procgen_viewport_overlay_system
+                .on_invoker_thread()
                 .in_set(EditorRuntimeSet::ProcgenViewportOverlay)
                 .after(EditorRuntimeSet::QuerySnapshotPublication),
         );
@@ -259,12 +271,14 @@ impl Plugin for EditorAppPlugin {
         app.add_systems(
             RenderPrepare,
             prepare_viewport_render_product_selections_system
+                .on_invoker_thread()
                 .in_set(EditorRuntimeSet::ViewportRenderProductSelection)
                 .before(RenderRuntimeSet::GpuResidency),
         );
         app.add_systems(
             RenderPrepare,
             prepare_material_preview_render_resource_system
+                .on_invoker_thread()
                 .in_set(EditorRuntimeSet::MaterialPreviewRenderHandoff)
                 .after(EditorRuntimeSet::ViewportRenderProductSelection)
                 .before(RenderRuntimeSet::FramePrepare),
@@ -272,6 +286,7 @@ impl Plugin for EditorAppPlugin {
         app.add_systems(
             RenderPrepare,
             produce_material_preview_dynamic_uploads_system
+                .on_invoker_thread()
                 .in_set(EditorRuntimeSet::MaterialPreviewProductUpload)
                 .after(EditorRuntimeSet::MaterialPreviewRenderHandoff)
                 .before(RenderRuntimeSet::FramePrepare),
@@ -279,6 +294,7 @@ impl Plugin for EditorAppPlugin {
         app.add_systems(
             RenderPrepare,
             produce_texture_preview_dynamic_uploads_system
+                .on_invoker_thread()
                 .in_set(EditorRuntimeSet::TexturePreviewProductUpload)
                 .after(EditorRuntimeSet::MaterialPreviewProductUpload)
                 .before(RenderRuntimeSet::FramePrepare),
@@ -286,6 +302,7 @@ impl Plugin for EditorAppPlugin {
         app.add_systems(
             RenderPrepare,
             summarize_viewport_gpu_residency_system
+                .on_invoker_thread()
                 .in_set(EditorRuntimeSet::ViewportGpuResidencySummary)
                 .after(RenderRuntimeSet::GpuResidency)
                 .before(RenderRuntimeSet::FramePrepare),

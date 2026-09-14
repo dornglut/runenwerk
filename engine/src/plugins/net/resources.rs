@@ -1,5 +1,5 @@
 use super::*;
-use crate::{App, CoreSet, FixedUpdate, FrameEnd, PreUpdate, SystemConfigExt};
+use crate::{App, CoreSet, FixedUpdate, FrameEnd, PreUpdate, SystemConfigExt, SystemMobilityExt};
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 use engine_net::*;
 use engine_sim::SimulationTick;
@@ -361,11 +361,15 @@ where
 {
     app.add_systems(
         PreUpdate,
-        client_receive_system::<TDriver>.in_set(NetPreUpdateSet::Receive),
+        client_receive_system::<TDriver>
+            .on_invoker_thread()
+            .in_set(NetPreUpdateSet::Receive),
     );
     app.add_systems(
         PreUpdate,
-        server_receive_system::<TDriver>.in_set(NetPreUpdateSet::Receive),
+        server_receive_system::<TDriver>
+            .on_invoker_thread()
+            .in_set(NetPreUpdateSet::Receive),
     );
 }
 
@@ -386,10 +390,17 @@ pub(crate) fn configure_client_role(app: &mut App) {
     app.init_resource::<NetworkReplicationMetadata>();
     app.init_resource::<NetStreamingStateResource>();
     app.init_resource::<NetworkDiagnostics>();
-    app.add_systems(FrameEnd, client_flush_system.in_set(CoreSet::FrameEnd));
     app.add_systems(
         FrameEnd,
-        sync_net_diagnostics_view_system.in_set(CoreSet::FrameEnd),
+        client_flush_system
+            .on_invoker_thread()
+            .in_set(CoreSet::FrameEnd),
+    );
+    app.add_systems(
+        FrameEnd,
+        sync_net_diagnostics_view_system
+            .on_invoker_thread()
+            .in_set(CoreSet::FrameEnd),
     );
 }
 
@@ -405,10 +416,17 @@ pub(crate) fn configure_server_role(app: &mut App) {
     app.init_resource::<NetworkReplicationMetadata>();
     app.init_resource::<NetStreamingStateResource>();
     app.init_resource::<NetworkDiagnostics>();
-    app.add_systems(FrameEnd, server_flush_system.in_set(CoreSet::FrameEnd));
     app.add_systems(
         FrameEnd,
-        sync_net_diagnostics_view_system.in_set(CoreSet::FrameEnd),
+        server_flush_system
+            .on_invoker_thread()
+            .in_set(CoreSet::FrameEnd),
+    );
+    app.add_systems(
+        FrameEnd,
+        sync_net_diagnostics_view_system
+            .on_invoker_thread()
+            .in_set(CoreSet::FrameEnd),
     );
 }
 
@@ -424,12 +442,14 @@ where
     app.add_systems(
         FixedUpdate,
         sync_connection_streaming_state_system
+            .on_invoker_thread()
             .after_if_present(CoreSet::Simulation)
             .before(NetFixedSet::Prediction),
     );
     app.add_systems(
         FixedUpdate,
         replication_step_system::<TDriver>
+            .on_invoker_thread()
             .in_set(NetFixedSet::Replication)
             .after_if_present(CoreSet::Simulation)
             .after(NetFixedSet::Prediction),
@@ -447,6 +467,7 @@ where
     app.add_systems(
         FixedUpdate,
         prediction_step_system::<TDriver>
+            .on_invoker_thread()
             .in_set(NetFixedSet::Prediction)
             .after_if_present(CoreSet::Simulation),
     );

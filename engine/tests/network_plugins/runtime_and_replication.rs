@@ -294,6 +294,7 @@ fn server_outbox_backpressure_does_not_mark_rejected_snapshot_as_sent() {
     server.add_systems(
         FixedUpdate,
         saturate_server_outbox_before_replication
+            .on_invoker_thread()
             .after_if_present(CoreSet::Simulation)
             .before(engine::plugins::net::NetFixedSet::Replication),
     );

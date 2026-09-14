@@ -7,7 +7,7 @@ use crate::plugins::scene::{
 };
 use crate::runtime::{
     CoreSet, FixedTimeConfig, FixedUpdate, FrameEnd, PreUpdate, Res, ResMut, SimulationTick,
-    SystemConfigExt,
+    SystemConfigExt, SystemMobilityExt,
 };
 use anyhow::{Result, anyhow};
 use engine_replay::{
@@ -72,17 +72,21 @@ impl Plugin for ReplayPlugin {
         app.init_resource::<ReplayControllerResource>();
         app.add_systems(
             PreUpdate,
-            replay_capture_initial_checkpoint_system.before_if_present(CoreSet::Scene),
+            replay_capture_initial_checkpoint_system
+                .on_invoker_thread()
+                .before_if_present(CoreSet::Scene),
         );
         app.add_systems(
             FixedUpdate,
             replay_record_command_frame_system
+                .on_invoker_thread()
                 .before_if_present(CoreSet::Scene)
                 .before_if_present(CoreSet::Simulation),
         );
         app.add_systems(
             FixedUpdate,
             replay_capture_checkpoint_system
+                .on_invoker_thread()
                 .after_if_present(CoreSet::Scene)
                 .after_if_present(CoreSet::Simulation),
         );

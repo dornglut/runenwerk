@@ -17,7 +17,7 @@ struct WindowInputDemoPlugin;
 impl Plugin for WindowInputDemoPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(default_plugins());
-        app.add_systems(Startup, setup);
+        app.add_systems(Startup, setup.on_invoker_thread());
         app.add_systems(Update, update_demo);
     }
 }

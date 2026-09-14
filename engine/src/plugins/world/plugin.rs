@@ -2,6 +2,7 @@ use crate::app::App;
 use crate::plugin::Plugin;
 use crate::runtime::{
     CoreSet, FixedUpdate, IntoSystemSetKey, RenderPrepare, Res, ResMut, SystemConfigExt,
+    SystemMobilityExt,
 };
 use engine_sim::{AuthorityRole, SimulationProfileConfig};
 use runen_ecs::SystemSetKey;
@@ -198,6 +199,7 @@ impl Plugin for WorldPlugin {
         app.add_systems(
             FixedUpdate,
             flush_world_render_cache_invalidations_system
+                .on_invoker_thread()
                 .in_set(WorldRuntimeSet::RenderCacheSync)
                 .in_set(CoreSet::Simulation)
                 .after(WorldRuntimeSet::BuildIntegrate),
@@ -205,10 +207,14 @@ impl Plugin for WorldPlugin {
         app.add_systems(
             FixedUpdate,
             rebuild_world_replication_state_system
+                .on_invoker_thread()
                 .in_set(WorldRuntimeSet::ReplicationState)
                 .in_set(CoreSet::Simulation)
                 .after(WorldRuntimeSet::RenderCacheSync),
         );
-        app.add_systems(RenderPrepare, prepare_world_feature_contributions_system);
+        app.add_systems(
+            RenderPrepare,
+            prepare_world_feature_contributions_system.on_invoker_thread(),
+        );
     }
 }
