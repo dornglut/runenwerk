@@ -24,6 +24,8 @@ pub fn map_native_tablet_packet(packet: &NativeTabletPacket) -> NativeTabletMapp
         source_kind: packet.source_kind,
         tool_kind: pointer_tool_kind(packet),
         device_id: Some(PointerDeviceId(packet.device_id)),
+        contact_id: None,
+        contact_phase: None,
         timestamp_micros: packet.timestamp_micros,
         contact: if capabilities.hover {
             packet.contact
