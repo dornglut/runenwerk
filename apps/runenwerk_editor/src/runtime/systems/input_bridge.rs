@@ -79,13 +79,9 @@ pub fn dispatch_editor_input_system(
             _ => None,
         };
         primary_ui_events.extend(
-            translate_platform_event(
-                &mut target_input,
-                primary_window_id,
-                window_event.event,
-            )
-            .into_iter()
-            .map(|event| (event, viewport_scroll_delta)),
+            translate_platform_event(&mut target_input, primary_window_id, window_event.event)
+                .into_iter()
+                .map(|event| (event, viewport_scroll_delta)),
         );
         if focus_lost {
             host.shell_state.runtime_mut().set_focused_widget(None);
