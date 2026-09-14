@@ -1,3 +1,4 @@
+use super::neutral::PhysicalKeyIdentity;
 use crate::plugins::ModifiersSnapshot;
 use std::collections::HashMap;
 use winit::keyboard::KeyCode;
@@ -166,16 +167,19 @@ impl InputBindings {
         self.by_action.keys().map(String::as_str)
     }
 
-    pub(crate) fn matching_actions_for_key(
+    pub(crate) fn matching_actions_for_physical_identity(
         &self,
-        key: KeyCode,
+        key: &PhysicalKeyIdentity,
         modifiers: ModifiersSnapshot,
     ) -> Vec<String> {
+        let PhysicalKeyIdentity::Code(code) = key else {
+            return Vec::new();
+        };
         let mut actions = Vec::new();
         for (action, chords) in &self.by_action {
             if chords
                 .iter()
-                .any(|chord| chord.key == key && chord.matches(modifiers))
+                .any(|chord| format!("{:?}", chord.key) == *code && chord.matches(modifiers))
             {
                 actions.push(action.clone());
             }

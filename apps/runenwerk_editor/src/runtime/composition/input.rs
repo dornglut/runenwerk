@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 
-use engine::plugins::TouchInputPhase;
+use engine::plugins::{
+    ContactPhase, DigitalState, PhysicalKeyIdentity, PointerButton as EnginePointerButton,
+};
 use engine::runtime::platform::{PlatformEvent, PlatformWindowEventQueueResource};
 use engine::runtime::{NativeWindowId, Res, ResMut, WindowStateRegistryResource};
 use ui_input::{
@@ -9,8 +11,6 @@ use ui_input::{
     UiInputEvent, UiSemanticAction,
 };
 use ui_math::{UiPoint, UiRect, UiVector};
-use winit::event::{ElementState, MouseButton as WinitMouseButton};
-use winit::keyboard::KeyCode;
 
 use crate::runtime::resources::{EditorHostResource, scaled_shell_theme};
 use crate::runtime::viewport::{
@@ -106,26 +106,23 @@ pub fn dispatch_editor_target_input_system(
 
 fn translate_event(state: &mut TargetInputState, event: PlatformEvent) -> Vec<UiInputEvent> {
     match event {
-        PlatformEvent::CursorMoved { x, y } => {
-            let next = UiPoint::new(x, y);
+        PlatformEvent::CursorMoved { position, .. } => {
+            let next = UiPoint::new(position.x, position.y);
             let delta = next - state.cursor;
             state.cursor = next;
             vec![pointer_event(state, PointerEventKind::Move, delta, None)]
         }
-        PlatformEvent::MouseWheel { delta } => vec![pointer_event(
+        PlatformEvent::MouseWheel { input, .. } => vec![pointer_event(
             state,
             PointerEventKind::Scroll,
-            UiVector::new(0.0, delta),
+            UiVector::new(0.0, input.delta.vertical.unwrap_or(0.0)),
             None,
         )],
-        PlatformEvent::MouseInput {
-            state: element_state,
-            button,
-        } => pointer_button(button)
+        PlatformEvent::MouseInput { input, .. } => pointer_button(input.button)
             .map(|button| {
                 vec![pointer_event(
                     state,
-                    if element_state == ElementState::Pressed {
+                    if input.state == DigitalState::Pressed {
                         PointerEventKind::Down
                     } else {
                         PointerEventKind::Up
@@ -135,17 +132,13 @@ fn translate_event(state: &mut TargetInputState, event: PlatformEvent) -> Vec<Ui
                 )]
             })
             .unwrap_or_default(),
-        PlatformEvent::KeyboardInput {
-            key,
-            state: element_state,
-            text,
-        } => {
-            update_modifiers(&mut state.modifiers, key, element_state);
-            let mut events = key_from_winit(key)
+        PlatformEvent::KeyboardInput { input, .. } => {
+            update_modifiers(&mut state.modifiers, &input.physical_key, input.state);
+            key_from_physical(&input.physical_key)
                 .map(|key| {
                     vec![UiInputEvent::Keyboard(KeyboardEvent {
                         key,
-                        state: if element_state == ElementState::Pressed {
+                        state: if input.state == DigitalState::Pressed {
                             KeyState::Pressed
                         } else {
                             KeyState::Released
@@ -153,23 +146,24 @@ fn translate_event(state: &mut TargetInputState, event: PlatformEvent) -> Vec<Ui
                         modifiers: state.modifiers,
                     })]
                 })
-                .unwrap_or_default();
-            if element_state == ElementState::Pressed
-                && let Some(text) = text.filter(|value| !value.is_empty())
-            {
-                events.push(UiInputEvent::Text(TextInputEvent { text }));
-            }
-            events
+                .unwrap_or_default()
         }
-        PlatformEvent::Touch { phase, x, y, .. } => {
-            let next = UiPoint::new(x, y);
+        PlatformEvent::TextInput { text } => {
+            if text.is_empty() {
+                Vec::new()
+            } else {
+                vec![UiInputEvent::Text(TextInputEvent { text })]
+            }
+        }
+        PlatformEvent::Touch { input, .. } => {
+            let next = UiPoint::new(input.position.x, input.position.y);
             let delta = next - state.cursor;
             state.cursor = next;
-            let kind = match phase {
-                TouchInputPhase::Started => PointerEventKind::Down,
-                TouchInputPhase::Moved => PointerEventKind::Move,
-                TouchInputPhase::Ended => PointerEventKind::Up,
-                TouchInputPhase::Cancelled => {
+            let kind = match input.phase {
+                ContactPhase::Begin => PointerEventKind::Down,
+                ContactPhase::Update => PointerEventKind::Move,
+                ContactPhase::End => PointerEventKind::Up,
+                ContactPhase::Cancel => {
                     return vec![UiInputEvent::Semantic(SemanticActionEvent::new(
                         SemanticInputSource::Touch,
                         UiSemanticAction::Cancel,
@@ -189,7 +183,6 @@ fn translate_event(state: &mut TargetInputState, event: PlatformEvent) -> Vec<Ui
         | PlatformEvent::CloseRequested
         | PlatformEvent::Resized { .. }
         | PlatformEvent::ScaleFactorChanged { .. }
-        | PlatformEvent::MouseMotion { .. }
         | PlatformEvent::RedrawRequested => Vec::new(),
     }
 }
@@ -211,64 +204,70 @@ fn pointer_event(
     })
 }
 
-fn pointer_button(button: WinitMouseButton) -> Option<PointerButton> {
+fn pointer_button(button: EnginePointerButton) -> Option<PointerButton> {
     match button {
-        WinitMouseButton::Left => Some(PointerButton::Primary),
-        WinitMouseButton::Right => Some(PointerButton::Secondary),
-        WinitMouseButton::Middle => Some(PointerButton::Middle),
-        WinitMouseButton::Back => Some(PointerButton::Other(4)),
-        WinitMouseButton::Forward => Some(PointerButton::Other(5)),
-        WinitMouseButton::Other(value) => Some(PointerButton::Other(value)),
+        EnginePointerButton::Left => Some(PointerButton::Primary),
+        EnginePointerButton::Right => Some(PointerButton::Secondary),
+        EnginePointerButton::Middle => Some(PointerButton::Middle),
+        EnginePointerButton::Back => Some(PointerButton::Other(4)),
+        EnginePointerButton::Forward => Some(PointerButton::Other(5)),
+        EnginePointerButton::Other(value) => Some(PointerButton::Other(value)),
     }
 }
 
-fn update_modifiers(modifiers: &mut Modifiers, key: KeyCode, state: ElementState) {
-    let pressed = state == ElementState::Pressed;
-    match key {
-        KeyCode::ShiftLeft | KeyCode::ShiftRight => modifiers.shift = pressed,
-        KeyCode::ControlLeft | KeyCode::ControlRight => modifiers.ctrl = pressed,
-        KeyCode::AltLeft | KeyCode::AltRight => modifiers.alt = pressed,
-        KeyCode::SuperLeft | KeyCode::SuperRight => modifiers.meta = pressed,
+fn update_modifiers(modifiers: &mut Modifiers, key: &PhysicalKeyIdentity, state: DigitalState) {
+    let pressed = state == DigitalState::Pressed;
+    let PhysicalKeyIdentity::Code(code) = key else {
+        return;
+    };
+    match code.as_str() {
+        "ShiftLeft" | "ShiftRight" => modifiers.shift = pressed,
+        "ControlLeft" | "ControlRight" => modifiers.ctrl = pressed,
+        "AltLeft" | "AltRight" => modifiers.alt = pressed,
+        "SuperLeft" | "SuperRight" => modifiers.meta = pressed,
         _ => {}
     }
 }
 
-fn key_from_winit(key: KeyCode) -> Option<Key> {
-    Some(match key {
-        KeyCode::Enter | KeyCode::NumpadEnter => Key::Enter,
-        KeyCode::Escape => Key::Escape,
-        KeyCode::Backspace => Key::Backspace,
-        KeyCode::Delete => Key::Delete,
-        KeyCode::Tab => Key::Tab,
-        KeyCode::Space => Key::Space,
-        KeyCode::ArrowLeft => Key::Left,
-        KeyCode::ArrowRight => Key::Right,
-        KeyCode::ArrowUp => Key::Up,
-        KeyCode::ArrowDown => Key::Down,
-        KeyCode::Home => Key::Home,
-        KeyCode::End => Key::End,
-        KeyCode::PageUp => Key::PageUp,
-        KeyCode::PageDown => Key::PageDown,
-        KeyCode::Insert => Key::Insert,
-        KeyCode::F1 => Key::F(1),
-        KeyCode::F2 => Key::F(2),
-        KeyCode::F3 => Key::F(3),
-        KeyCode::F4 => Key::F(4),
-        KeyCode::F5 => Key::F(5),
-        KeyCode::F6 => Key::F(6),
-        KeyCode::F7 => Key::F(7),
-        KeyCode::F8 => Key::F(8),
-        KeyCode::F9 => Key::F(9),
-        KeyCode::F10 => Key::F(10),
-        KeyCode::F11 => Key::F(11),
-        KeyCode::F12 => Key::F(12),
-        KeyCode::KeyA => Key::Character("a".to_owned()),
-        KeyCode::KeyC => Key::Character("c".to_owned()),
-        KeyCode::KeyD => Key::Character("d".to_owned()),
-        KeyCode::KeyV => Key::Character("v".to_owned()),
-        KeyCode::KeyX => Key::Character("x".to_owned()),
-        KeyCode::KeyY => Key::Character("y".to_owned()),
-        KeyCode::KeyZ => Key::Character("z".to_owned()),
+fn key_from_physical(key: &PhysicalKeyIdentity) -> Option<Key> {
+    let PhysicalKeyIdentity::Code(code) = key else {
+        return None;
+    };
+    Some(match code.as_str() {
+        "Enter" | "NumpadEnter" => Key::Enter,
+        "Escape" => Key::Escape,
+        "Backspace" => Key::Backspace,
+        "Delete" => Key::Delete,
+        "Tab" => Key::Tab,
+        "Space" => Key::Space,
+        "ArrowLeft" => Key::Left,
+        "ArrowRight" => Key::Right,
+        "ArrowUp" => Key::Up,
+        "ArrowDown" => Key::Down,
+        "Home" => Key::Home,
+        "End" => Key::End,
+        "PageUp" => Key::PageUp,
+        "PageDown" => Key::PageDown,
+        "Insert" => Key::Insert,
+        "F1" => Key::F(1),
+        "F2" => Key::F(2),
+        "F3" => Key::F(3),
+        "F4" => Key::F(4),
+        "F5" => Key::F(5),
+        "F6" => Key::F(6),
+        "F7" => Key::F(7),
+        "F8" => Key::F(8),
+        "F9" => Key::F(9),
+        "F10" => Key::F(10),
+        "F11" => Key::F(11),
+        "F12" => Key::F(12),
+        "KeyA" => Key::Character("a".to_owned()),
+        "KeyC" => Key::Character("c".to_owned()),
+        "KeyD" => Key::Character("d".to_owned()),
+        "KeyV" => Key::Character("v".to_owned()),
+        "KeyX" => Key::Character("x".to_owned()),
+        "KeyY" => Key::Character("y".to_owned()),
+        "KeyZ" => Key::Character("z".to_owned()),
         _ => return None,
     })
 }
@@ -276,20 +275,29 @@ fn key_from_winit(key: KeyCode) -> Option<Key> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use engine::plugins::{ContactInput, CoordinateSpace, InputContext, InputSourceId, Point2};
+
+    fn test_context() -> InputContext {
+        InputContext::new(InputSourceId::new(1), None)
+    }
+
+    fn touch_event(phase: ContactPhase) -> PlatformEvent {
+        PlatformEvent::Touch {
+            context: test_context(),
+            input: ContactInput {
+                id: 1,
+                phase,
+                position: Point2::new(12.0, 18.0, CoordinateSpace::WindowPhysicalPixels),
+                pressure: None,
+                altitude_angle_radians: None,
+            },
+        }
+    }
 
     #[test]
-    fn touch_events_preserve_touch_identity_and_cancel_semantically() {
+    fn touch_events_preserve_existing_editor_translation_during_i1b() {
         let mut state = TargetInputState::default();
-        let started = translate_event(
-            &mut state,
-            PlatformEvent::Touch {
-                phase: TouchInputPhase::Started,
-                id: 1,
-                x: 12.0,
-                y: 18.0,
-                pressure: None,
-            },
-        );
+        let started = translate_event(&mut state, touch_event(ContactPhase::Begin));
         assert!(matches!(
             started.as_slice(),
             [UiInputEvent::Pointer(PointerEvent {
@@ -299,22 +307,21 @@ mod tests {
                 && packet.tool_kind == PointerToolKind::Finger
         ));
 
-        let cancelled = translate_event(
-            &mut state,
-            PlatformEvent::Touch {
-                phase: TouchInputPhase::Cancelled,
-                id: 1,
-                x: 12.0,
-                y: 18.0,
-                pressure: None,
-            },
-        );
+        let cancelled = translate_event(&mut state, touch_event(ContactPhase::Cancel));
         assert_eq!(
             cancelled,
             vec![UiInputEvent::Semantic(SemanticActionEvent::new(
                 SemanticInputSource::Touch,
                 UiSemanticAction::Cancel,
             ))]
+        );
+    }
+
+    #[test]
+    fn physical_character_mapping_remains_deliberately_legacy_until_i1d() {
+        assert_eq!(
+            key_from_physical(&PhysicalKeyIdentity::code("KeyZ")),
+            Some(Key::Character("z".to_owned()))
         );
     }
 }
