@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-14
 ---
 
 # Active Designs
@@ -78,6 +78,7 @@ predecessor designs after the accepted standalone transfer.
 - [Drawing Domain Crate Design](drawing-domain-crate-design.md)
 - [Material Lab And Material Preview Design](material-lab-and-material-preview-design.md)
 - [Native Tablet Input and Latency Contract](native-tablet-input-and-latency-contract.md)
+- [Runen Federated Semantic Composition and Plan Interface Design](runen-federated-semantic-composition-design.md)
 - [Runenwerk UI Story V2 Consumer and Proof Boundary](runenwerk-ui-story-driven-golden-workflow-design.md)
 - [Semantic Graph IR and Compilation Design](semantic-graph-ir-and-compilation-design.md)
 - [Shader Authoring and Canonical Artifact Policy](shader-authoring-and-canonical-artifact-policy.md)
