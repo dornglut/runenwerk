@@ -5,13 +5,16 @@ status: active
 owner: editor
 layer: app / engine-runtime / render-runtime
 canonical: false
-last_reviewed: 2026-05-21
+last_reviewed: 2026-09-14
 related_designs:
   - ../../../design/accepted/editor-native-multi-window-presentation-design.md
+  - ../../../design/accepted/runenwerk-editor-coordination-semantic-model.md
   - ../../../design/accepted/render-product-graph-platform-design.md
   - ../../../design/accepted/product-surface-platform-hardening-design.md
-  - ../../../design/implemented/editor-workspace-document-mode-panel-architecture.md
   - ../../../design/implemented/render-product-surface-foundation-bundle-design.md
+related_adrs:
+  - ../../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
+  - ../../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md
 related_roadmaps:
   - ../../../workspace/roadmap-items.yaml
   - ../../../workspace/production-tracks.yaml
@@ -37,11 +40,14 @@ EditorWindowId
   -> submit/present into that surface only
 ```
 
-The app owns the binding between editor windows, native windows, and render
-surfaces. The editor domain owns logical workspace/window state. The engine
-runtime owns native window records and window-scoped platform events. The
-render runtime owns render surfaces, swapchains, surface-scoped prepare,
-submit, present, resize, loss recovery, and diagnostics.
+The app owns the binding between logical editor windows, native windows, and
+render surfaces. The editor domain owns editor-local window/presentation
+coordination and current compatibility adapters; `ui_composition` remains the
+structural presentation/layout authority. The engine runtime owns native window
+records and window-scoped platform events. The render runtime owns render
+surfaces, swapchains, surface-scoped prepare, submit, present, resize, loss
+recovery, and diagnostics. ADR 0025 governs any semantic contexts shared across
+those windows.
 
 The renderer remains an execution and presentation layer. It must not own
 product truth, product selection, freshness, authority, fallback legality,
@@ -54,6 +60,8 @@ workspace policy.
 - Bounded implementation row: `WR-009`.
 - Accepted PM-006 design:
   `docs-site/src/content/docs/design/accepted/editor-native-multi-window-presentation-design.md`.
+- Editor coordination boundary:
+  `docs-site/src/content/docs/design/accepted/runenwerk-editor-coordination-semantic-model.md`.
 - Boundary design:
   `docs-site/src/content/docs/design/accepted/render-product-graph-platform-design.md`.
 - Product-surface prerequisite closeout:
@@ -145,14 +153,21 @@ engine/src/plugins/render/renderer/mod.rs
 ```
 
 Use nearby module names if implementation shows a better local fit, but keep
-the ownership boundary explicit. Do not create catch-all helper files.
+the ownership boundary explicit. Current `workspace/*` module names are
+implementation-era anchors, not permission to re-establish structural authority
+outside `ui_composition`. Do not create catch-all helper files.
 
 ## Required Contracts
 
 The implementation must add or refine typed, inspectable contracts for:
 
-- logical editor window identity and workspace-root ownership;
+- logical editor window identity and its app/editor association to a structural
+  presentation/layout root owned by `ui_composition`;
 - app-owned `EditorWindowId -> NativeWindowId -> RenderSurfaceId` binding;
+- explicit attachment/sharing of `EditorBinding`, `SelectionContext`,
+  `HistoryContext`, and `PersistenceContext` relationships when required;
+- independent per-window `ActivationScope`, focus, input capture, and local
+  presentation state;
 - native runtime window registry keyed by engine-owned native window ids;
 - window-scoped platform events, focus, cursor, redraw, close, resize, and DPI;
 - render surface registry keyed by render surface/native window identity;
@@ -174,7 +189,8 @@ surface, not product truth.
 1. Add editor-domain logical window identity, records, commands, reducer
    transitions, and focused tests under
    `domain/editor/editor_shell/src/workspace` and
-   `domain/editor/editor_shell/src/commands`.
+   `domain/editor/editor_shell/src/commands`, treating workspace-era structures
+   as current implementation anchors rather than new structural authority.
 2. Add app-owned window binding state in
    `apps/runenwerk_editor/src/shell/state.rs` and command dispatch in
    `apps/runenwerk_editor/src/shell/dispatch_shell_command.rs` without placing
@@ -200,9 +216,11 @@ surface, not product truth.
 9. Prove one viewport/product surface in each of two windows can route to the
    correct surface without changing product truth, freshness, fallback,
    authority, rebuild, or residency policy.
-10. Update render/editor roadmap and reference docs for the final
+10. Prove any shared semantic/editor contexts are explicitly attached and that
+    each window retains independent activation/focus/presentation state.
+11. Update render/editor roadmap and reference docs for the final
     multi-surface ownership model.
-11. After validation passes, create closeout evidence and only then update
+12. After validation passes, create closeout evidence and only then update
     `PM-RENDER-PG-006` completion metadata.
 
 ## Explicit Non-Goals
@@ -222,18 +240,25 @@ Do not implement:
   viewport systems, or preview systems;
 - full workspace persistence redesign beyond the multi-window placement/layout
   data required by this milestone;
+- universal editor session/document/history/persistence semantics as a shortcut
+  for multi-window sharing;
 - monitor enumeration beyond the minimal policy needed for `Window > New
   Window`, unless the existing runtime abstraction already exposes it cleanly.
 
 ## Acceptance Criteria
 
 - `Window > New Window` opens a real native OS window.
-- Two editor windows can edit the same project/session.
-- Each window has independent workspace focus, UI frame, input capture, native
-  window state, render surface, swapchain, DPI scale, cursor state, redraw
-  state, and close/surface-loss lifecycle.
-- Closing a secondary window removes only that window host/layout state and
-  does not close the project.
+- Two editor windows can edit the same project only through explicitly shared
+  required `EditorBinding`s and owner/app contexts; a global editor session is
+  not inferred from project or window identity.
+- Each window has an independent `ActivationScope`, presentation focus, UI
+  frame, input capture, native window state, render surface, swapchain, DPI
+  scale, cursor state, redraw state, and close/surface-loss lifecycle.
+- Shared `SelectionContext`, `HistoryContext`, and `PersistenceContext`
+  relationships are explicit and may differ between windows.
+- Closing a secondary window removes only that window host/presentation state
+  and does not close the project or shared semantic/persistence contexts unless
+  explicit lifetime policy requires it.
 - Prepared render frames, backend surface state, submit, and present are scoped
   by native window or render surface identity.
 - Submit and present cannot silently target the wrong surface.
@@ -260,6 +285,7 @@ cargo test -p runenwerk_editor --test viewport_architecture_guards
 Add or extend tests for:
 
 - logical editor window identity, focus, close, move, and duplicate commands;
+- explicit semantic-context sharing and independent per-window activation;
 - absence of native handles in editor-domain state;
 - native runtime window registry and window-scoped platform events;
 - window-scoped input, cursor, close, resize, scale factor, and redraw routing;
@@ -268,7 +294,8 @@ Add or extend tests for:
 - cross-surface mismatch rejection;
 - viewport/product presentation in two native windows without product-policy
   inference;
-- secondary-window close preserving project/session state.
+- secondary-window close preserving project state and explicitly shared
+  semantic/persistence contexts according to their lifetime policy.
 
 GPU/runtime proof required for final closeout when host support is available:
 
@@ -308,6 +335,8 @@ Stop and report instead of coding if:
 - implementation needs product truth, product policy, material lowering,
   fragment assets, production-readiness capture/replay, or broad renderer
   inspection;
+- implementation would require one global editor session/document/history/
+  persistence owner merely to share state across windows;
 - engine/runtime APIs would need to depend on editor-domain concepts;
 - editor-domain state would need native handles, swapchains, backend surface
   objects, or renderer-private handles;
