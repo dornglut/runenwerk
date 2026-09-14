@@ -13,8 +13,6 @@ related_designs:
   - ./render-product-graph-platform-design.md
   - ./product-surface-platform-hardening-design.md
   - ./runenwerk-editor-coordination-semantic-model.md
-  - ../superseded/editor-workspace-document-mode-panel-architecture.md
-  - ../superseded/editor-ui-workspace-tool-surface-architecture.md
   - ../implemented/render-product-surface-foundation-bundle-design.md
   - ../implemented/workspace-viewport-expression-upgrade-design.md
 related_roadmaps:

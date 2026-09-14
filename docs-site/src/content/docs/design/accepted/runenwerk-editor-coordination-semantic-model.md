@@ -407,7 +407,9 @@ ConfirmedEffect
 Unknown
 ```
 
-`ConfirmedEffect` requires owner-defined evidence proving effect. `ConfirmedNoEffect` requires owner-defined evidence proving no effect could have occurred. Anything else remains `Unknown`.
+`ConfirmedEffect` requires owner-defined evidence proving at least one relevant committed effect occurred for that attempt. `ConfirmedNoEffect` requires owner-defined evidence proving no effect could have occurred. Anything else remains `Unknown`.
+
+`ConfirmedEffect` is an attempt-history fact, not a claim that the requested state remains current forever. Later compensation, rollback, undo, or reversion may change current authoritative state, but they do not rewrite the earlier attempt from `ConfirmedEffect` to `ConfirmedNoEffect`.
 
 A later observation equal to the desired value does not by itself prove this attempt caused it.
 

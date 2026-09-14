@@ -17,7 +17,6 @@ related_adrs:
   - ../../adr/superseded/0012-capability-workbench-clean-break.md
 related_designs:
   - ../accepted/runenwerk-editor-coordination-semantic-model.md
-  - ../superseded/editor-ui-workspace-tool-surface-architecture.md
   - ../active/material-lab-and-material-preview-design.md
   - ../superseded/runenwerk-capability-workbench-target-architecture.md
 related_reports:
