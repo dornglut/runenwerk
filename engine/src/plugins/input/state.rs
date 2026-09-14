@@ -784,7 +784,7 @@ impl InputState {
     #[cfg(test)]
     pub(crate) fn neutral_touch_active(&self, id: u64) -> bool {
         self.neutral
-            .contact_state(LEGACY_WINDOW_SOURCE, ContactId::new(id))
+            .contact_state_in(LEGACY_WINDOW_CONTEXT, ContactId::new(id))
             .is_some()
     }
 
