@@ -37,7 +37,6 @@ spines win when an active design contains older conflicting target language.
 
 - [Editor Asset Pipeline and Content Workflow Design](editor-asset-pipeline-and-content-workflow-design.md)
 - [Editor Procedural Content and Simulation Workflow Plan](editor-procedural-content-and-simulation-workflow-plan.md)
-- [Editor UI Workspace Tool Surface Architecture](editor-ui-workspace-tool-surface-architecture.md)
 
 ### Engine Runtime
 
@@ -77,4 +76,3 @@ predecessor designs after the accepted standalone transfer.
 - [Runen Federated Semantic Composition and Plan Interface Design](runen-federated-semantic-composition-design.md)
 - [Runenwerk UI Story V2 Consumer and Proof Boundary](runenwerk-ui-story-driven-golden-workflow-design.md)
 - [Semantic Graph IR and Compilation Design](semantic-graph-ir-and-compilation-design.md)
-- [Shader Authoring and Canonical Artifact Policy](shader-authoring-and-canonical-artifact-policy.md)
