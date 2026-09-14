@@ -25,12 +25,7 @@ struct ModifierState {
 }
 
 impl ModifierState {
-    fn update(
-        &mut self,
-        context: InputContext,
-        key: &PhysicalKeyIdentity,
-        state: DigitalState,
-    ) {
+    fn update(&mut self, context: InputContext, key: &PhysicalKeyIdentity, state: DigitalState) {
         let Some(control) = modifier_control(key) else {
             return;
         };
@@ -60,10 +55,16 @@ impl ModifierState {
                 )
             }),
             alt: self.held.iter().any(|(_, control)| {
-                matches!(control, ModifierControl::AltLeft | ModifierControl::AltRight)
+                matches!(
+                    control,
+                    ModifierControl::AltLeft | ModifierControl::AltRight
+                )
             }),
             meta: self.held.iter().any(|(_, control)| {
-                matches!(control, ModifierControl::MetaLeft | ModifierControl::MetaRight)
+                matches!(
+                    control,
+                    ModifierControl::MetaLeft | ModifierControl::MetaRight
+                )
             }),
         }
     }

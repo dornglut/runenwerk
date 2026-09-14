@@ -9,10 +9,7 @@ fn window() -> NativeWindowId {
 }
 
 fn scoped_context(source: u64, device: Option<u64>) -> InputContext {
-    InputContext::new(
-        InputSourceId::new(source),
-        device.map(InputDeviceId::new),
-    )
+    InputContext::new(InputSourceId::new(source), device.map(InputDeviceId::new))
 }
 
 fn context(device: Option<u64>) -> InputContext {
@@ -47,14 +44,7 @@ fn keyboard(
     repeat: bool,
     origin: ObservationOrigin,
 ) -> PlatformEvent {
-    keyboard_in(
-        context(Some(9)),
-        physical,
-        logical,
-        state,
-        repeat,
-        origin,
-    )
+    keyboard_in(context(Some(9)), physical, logical, state, repeat, origin)
 }
 
 fn one(runtime: &mut EditorTargetInputRuntimeResource, event: PlatformEvent) -> UiInputEvent {
@@ -393,18 +383,12 @@ fn equal_touch_ids_on_distinct_devices_do_not_alias() {
     };
     let first = scoped_context(7, Some(3));
     let second = scoped_context(7, Some(4));
-    let first_begin = one(
-        &mut runtime,
-        touch(first, ContactPhase::Begin, 10.0, 10.0),
-    );
+    let first_begin = one(&mut runtime, touch(first, ContactPhase::Begin, 10.0, 10.0));
     let second_begin = one(
         &mut runtime,
         touch(second, ContactPhase::Begin, 100.0, 100.0),
     );
-    let first_update = one(
-        &mut runtime,
-        touch(first, ContactPhase::Update, 13.0, 15.0),
-    );
+    let first_update = one(&mut runtime, touch(first, ContactPhase::Update, 13.0, 15.0));
 
     let first_device = match first_begin {
         UiInputEvent::Pointer(event) => event.packet.device_id,
@@ -441,11 +425,7 @@ fn non_finite_observations_are_rejected_before_ui_state_changes() {
             window(),
             PlatformEvent::CursorMoved {
                 context: pointer_context,
-                position: Point2::new(
-                    f32::INFINITY,
-                    30.0,
-                    CoordinateSpace::WindowPhysicalPixels,
-                ),
+                position: Point2::new(f32::INFINITY, 30.0, CoordinateSpace::WindowPhysicalPixels,),
             },
         )
         .is_empty()

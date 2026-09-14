@@ -172,9 +172,7 @@ fn platform_event_is_finite(event: &PlatformEvent) -> bool {
                             .max_possible_force()
                             .is_none_or(f32::is_finite)
                 })
-                && input
-                    .altitude_angle_radians
-                    .is_none_or(f32::is_finite)
+                && input.altitude_angle_radians.is_none_or(f32::is_finite)
         }
         PlatformEvent::Resumed
         | PlatformEvent::CloseRequested
