@@ -330,3 +330,54 @@ fn collect_rust_sources(root: &Path, output: &mut Vec<PathBuf>) {
     }
     output.sort();
 }
+
+#[test]
+fn normalized_editor_ui_ingress_uses_one_backend_neutral_adapter() {
+    let secondary = include_str!("../src/runtime/composition/input.rs");
+    let adapter = include_str!("../src/runtime/composition/input_adapter.rs");
+    let primary = include_str!("../src/runtime/systems/input_bridge.rs");
+    let ui_input_manifest = include_str!("../../../domain/ui/ui_input/Cargo.toml");
+
+    assert_eq!(
+        secondary.matches("translate_platform_event(").count(),
+        1,
+        "secondary editor targets must use the shared normalized UI adapter"
+    );
+    assert_eq!(
+        primary.matches("translate_platform_event(").count(),
+        1,
+        "primary editor target must use the shared normalized UI adapter"
+    );
+
+    for retired in [
+        "fn translate_event(",
+        "key_from_physical(",
+        "SemanticActionEvent::new",
+    ] {
+        assert!(
+            !secondary.contains(retired),
+            "secondary editor ingress restored retired translation: {retired}"
+        );
+    }
+    for retired in [
+        "dispatch_shell_keyboard_and_text",
+        "dispatch_shell_key_event",
+        "action::UI_BACKSPACE",
+        "action::UI_DELETE",
+        "action::UI_SUBMIT",
+    ] {
+        assert!(
+            !primary.contains(retired),
+            "primary editor ingress restored ActionState/raw-key UI translation: {retired}"
+        );
+    }
+
+    assert!(
+        !adapter.contains("winit::"),
+        "normalized-to-UI adapter must remain backend-neutral"
+    );
+    assert!(
+        !ui_input_manifest.contains("winit"),
+        "current local UI semantic owner must not gain a winit dependency"
+    );
+}
