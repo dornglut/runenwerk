@@ -235,6 +235,24 @@ pub fn run_founding_direct(output_root: impl AsRef<Path>) -> Result<ArtifactPath
 
     let oracle = compare_with_oracle(&captured);
     if oracle.result != Classification::Pass {
+        for (index, actual) in captured
+            .samples()
+            .iter()
+            .copied()
+            .enumerate()
+            .filter(|(index, actual)| {
+                (f64::from(*actual) - reference_radiance(*index)).abs() > ORACLE_TOLERANCE
+            })
+            .take(8)
+        {
+            eprintln!(
+                "founding-direct oracle mismatch at ({}, {}): actual={} expected={}",
+                index % usize::try_from(WIDTH).expect("width fits usize"),
+                index / usize::try_from(WIDTH).expect("width fits usize"),
+                actual,
+                reference_radiance(index),
+            );
+        }
         bail!(
             "founding-direct independent oracle rejected the captured radiance lattice: {oracle:?}"
         );
