@@ -36,17 +36,17 @@ Editor coordination owns editing-coordination invariants. It does not acquire ow
 
 The editor is therefore an orchestrator of explicit owner contracts rather than the universal source of documents, selection, history, persistence, workspace state, or domain commands.
 
-## Current Source Census
+## Historical Pre-migration Source Census
 
-At accepted Runenwerk revision `95647afca71f5d590f1d9066358d19bfabf6dffb`, current source demonstrates the predecessor shape that later work must migrate deliberately.
+At accepted Runenwerk revision `95647afca71f5d590f1d9066358d19bfabf6dffb`, the source census recorded the predecessor shape that later work must migrate deliberately.
 
 ### `domain/editor/editor_core`
 
-Current implementation includes:
+The predecessor implementation included:
 
 - `document.rs`: `DocumentId`, a central `DocumentKind` enum spanning scene, material, texture, procgen, gameplay, particle, physics, animation, UI, script, asset, runtime-debug, and editor-definition families, plus `DocumentDescriptor` dirty state;
 - `session.rs`: one `EditorSession` owning the document map/tab order, one active document, one active tool, one active mode, one `SelectionSet`, and one `HistoryStack`;
-- `selection.rs`: one generic `SelectionTarget` enum with document/entity/component/resource/asset/custom variants;
+- `selection.rs`: one generic `SelectionTarget` enum with document/entity/component/resource/asset/custom variants. This predecessor module was removed when scene selection moved to its owner;
 - `history.rs`: one generic undo/redo `HistoryStack`;
 - generic command/executor/transaction, ratification, sharing, reconciliation, workflow, migration, and capability contracts.
 
@@ -599,8 +599,8 @@ No native-window or render-surface ownership is reopened.
 | Current source area | Current role | Normalized target disposition |
 | --- | --- | --- |
 | `editor_core/document.rs` | central document taxonomy/dirty metadata | current implementation to migrate; owner scopes exposed through bindings/persistence contracts |
-| `editor_core/session.rs` | global document/tool/mode/selection/history aggregation | current implementation to decompose into explicit coordination contexts |
-| `editor_core/selection.rs` | cross-domain target enum | current implementation to replace with owner/provider selection protocols |
+| `editor_core/session.rs` | predecessor global document/tool/mode/selection/history aggregation | current implementation to decompose into explicit coordination contexts; scene selection is now owner-local |
+| `editor_core/selection.rs` | predecessor cross-domain target enum | removed by the scene-owned selection boundary; no generic replacement |
 | `editor_core/history.rs` | generic history stack | current implementation to replace/narrow behind history contexts |
 | `editor_core` command/executor/transaction | generic editor mutation machinery | review case-by-case; retain only true editor-local coordination, owner commands stay owner-defined |
 | `editor_definition` | editor-authored definition schemas/formation | retain owner-specific definition responsibility; do not generalize into universal edited-state authority |

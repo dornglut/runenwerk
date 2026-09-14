@@ -76,10 +76,13 @@ IO/runtime wiring.
 ## Current Migration Pressure
 
 Current `editor_core` still centralizes a broad `DocumentKind`, one
-`EditorSession` active document/tool/mode, one generic `SelectionSet`, and one
-`HistoryStack`. That is current implementation truth and must not be hidden.
-It is also the primary semantic boundary that later ADR-0025 implementation work
-must decompose without compatibility aliases or duplicate authority.
+`EditorSession` active document/tool/mode, and one `HistoryStack`. Scene
+selection is now owned by `editor_scene` and the Runenwerk runtime through a
+scene-scoped selection context; it is no longer generic `editor_core` session
+state. The remaining session/history aggregation is current implementation
+truth and must not be hidden. It is also the primary semantic boundary that
+later ADR-0025 implementation work must decompose without compatibility aliases
+or duplicate authority.
 
 Likewise, existing product docs may still use “document”, “workspace”, “mode”,
 “dirty”, and similar user-facing/current-implementation vocabulary. Those terms

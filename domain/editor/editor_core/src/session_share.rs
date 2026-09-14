@@ -4,7 +4,7 @@
 use std::collections::VecDeque;
 use std::time::SystemTime;
 
-use crate::{ChangeOrigin, ModeId, SelectionTarget, ToolId};
+use crate::{ChangeOrigin, ModeId, ToolId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct SessionShareSequence(pub u64);
@@ -19,8 +19,6 @@ pub enum SessionSharePolicy {
 pub enum SessionShareKind {
     ActiveToolSet { tool_id: Option<ToolId> },
     ModeSet { mode: ModeId },
-    SelectionSetSingle { target: SelectionTarget },
-    SelectionCleared,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

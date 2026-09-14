@@ -122,7 +122,10 @@ fn begin_transform_preview(
     tool: TransformToolKind,
 ) -> Result<(), EditorMutationError> {
     app.dispatch_tool_action(ToolAction::SelectSingle(
-        editor_core::SelectionTarget::Entity(entity),
+        editor_scene::SceneSelectionAddress::entity(
+            app.runtime().scene_selection().scope(),
+            entity,
+        ),
     ))?;
     app.dispatch_tool_action(ToolAction::BeginTransformPreview(tool))?;
     Ok(())

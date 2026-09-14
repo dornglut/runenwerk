@@ -1,8 +1,8 @@
-use editor_core::SelectionTarget;
+use editor_scene::SceneSelectionAddress;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ToolAction {
-    SelectSingle(SelectionTarget),
+    SelectSingle(SceneSelectionAddress),
     ClearSelection,
     Scene(editor_scene::SceneCommandIntent),
     HoverEntity(Option<editor_core::EntityId>),

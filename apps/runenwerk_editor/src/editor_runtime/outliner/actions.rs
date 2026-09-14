@@ -1,5 +1,5 @@
 use editor_core::EditorMutationError;
-use editor_core::{EntityId, SelectionTarget};
+use editor_core::EntityId;
 use editor_inspector::InspectTarget;
 
 use crate::editor_runtime::{
@@ -18,10 +18,14 @@ pub fn clear_outliner_selection(runtime: &mut RunenwerkEditorRuntime) {
 }
 
 pub fn selected_outliner_entity(runtime: &RunenwerkEditorRuntime) -> Option<EntityId> {
-    match runtime.session().selection().primary() {
-        Some(SelectionTarget::Entity(entity)) => Some(*entity),
-        _ => None,
-    }
+    runtime
+        .scene_selection()
+        .primary()
+        .and_then(|address| match address.target() {
+            editor_scene::SceneSelectionTarget::Entity(entity) => Some(entity),
+            editor_scene::SceneSelectionTarget::Component { .. } => None,
+        })
+        .copied()
 }
 
 pub fn selected_outliner_inspect_target(runtime: &RunenwerkEditorRuntime) -> Option<InspectTarget> {

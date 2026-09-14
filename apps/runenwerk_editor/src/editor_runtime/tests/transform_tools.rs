@@ -1,5 +1,5 @@
-use editor_core::{CommandId, ComponentTypeId, EntityId, SelectionTarget};
-use editor_scene::SceneCommandIntent;
+use editor_core::{CommandId, ComponentTypeId, EntityId};
+use editor_scene::{SceneCommandIntent, SceneSelectionAddress};
 use scene::{LocalTransform, QuatValue, Vec3Value};
 
 use crate::editor_app::RunenwerkEditorApp;
@@ -77,9 +77,10 @@ fn commit_preview_applies_translation_delta_to_local_transform() {
     )
     .expect("add LocalTransform should succeed");
 
-    app.dispatch_tool_action(ToolAction::SelectSingle(SelectionTarget::Entity(EntityId(
-        1,
-    ))))
+    app.dispatch_tool_action(ToolAction::SelectSingle(entity_selection(
+        &app,
+        EntityId(1),
+    )))
     .expect("select should succeed");
 
     app.dispatch_tool_action(ToolAction::BeginPreview)
@@ -137,9 +138,10 @@ fn cancel_preview_does_not_mutate_local_transform() {
     )
     .expect("add LocalTransform should succeed");
 
-    app.dispatch_tool_action(ToolAction::SelectSingle(SelectionTarget::Entity(EntityId(
-        1,
-    ))))
+    app.dispatch_tool_action(ToolAction::SelectSingle(entity_selection(
+        &app,
+        EntityId(1),
+    )))
     .expect("select should succeed");
 
     app.dispatch_tool_action(ToolAction::BeginPreview)
@@ -170,9 +172,10 @@ fn cancel_preview_does_not_mutate_local_transform() {
 fn commit_preview_applies_rotation_delta_to_local_transform() {
     let mut app = transform_app();
 
-    app.dispatch_tool_action(ToolAction::SelectSingle(SelectionTarget::Entity(EntityId(
-        1,
-    ))))
+    app.dispatch_tool_action(ToolAction::SelectSingle(entity_selection(
+        &app,
+        EntityId(1),
+    )))
     .expect("select should succeed");
     app.dispatch_tool_action(ToolAction::BeginTransformPreview(TransformToolKind::Rotate))
         .expect("begin rotate preview should succeed");
@@ -193,9 +196,10 @@ fn commit_preview_applies_rotation_delta_to_local_transform() {
 fn commit_preview_applies_scale_delta_to_local_transform() {
     let mut app = transform_app();
 
-    app.dispatch_tool_action(ToolAction::SelectSingle(SelectionTarget::Entity(EntityId(
-        1,
-    ))))
+    app.dispatch_tool_action(ToolAction::SelectSingle(entity_selection(
+        &app,
+        EntityId(1),
+    )))
     .expect("select should succeed");
     app.dispatch_tool_action(ToolAction::BeginTransformPreview(TransformToolKind::Scale))
         .expect("begin scale preview should succeed");
@@ -275,4 +279,8 @@ fn entity_transform(app: &RunenwerkEditorApp, entity: EntityId) -> LocalTransfor
         .world()
         .get::<LocalTransform>(ecs_entity)
         .expect("LocalTransform should exist")
+}
+
+fn entity_selection(app: &RunenwerkEditorApp, entity: EntityId) -> SceneSelectionAddress {
+    SceneSelectionAddress::entity(app.runtime().scene_selection().scope(), entity)
 }
