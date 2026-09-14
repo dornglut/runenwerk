@@ -131,6 +131,7 @@ Concrete QUIC realization is consumed from external `runen-net-quic` where requi
 | `runenwerk_editor` | `apps/runenwerk_editor` | app | Runnable editor app and authoring workflows. |
 | `runenwerk_draw` | `apps/runenwerk_draw` | app | Focused drawing app shell and shared engine/UI/render runtime integration. |
 | `runenwerk_runtime_preview` | `apps/runenwerk_runtime_preview` | app | External runtime-preview child process and preview/play app shell. |
+| `runenwerk_render_lab` | `apps/runenwerk_render_lab` | app | Headless deterministic render artifact and evidence producer for accepted RunenRender verification scenarios. |
 | `native_tablet_input` | `adapters/native_tablet_input` | adapter/tool | Native tablet packet normalization for platform-neutral UI stylus events. |
 
 ## External peer frameworks consumed by Runenwerk
