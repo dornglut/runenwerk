@@ -1,8 +1,7 @@
 use crate::rendering::{Sdf3dRenderState, build_render_flow};
 use anyhow::Result;
-use engine::plugins::{RenderPlugin, ScenePlugin, default_plugins};
+use engine::plugins::{ActionState, PhysicalKeyIdentity, RenderPlugin, ScenePlugin, default_plugins};
 use engine::prelude::{App, InputState, Res, ResMut, Startup, Time, Update, WindowState};
-use winit::keyboard::KeyCode;
 
 const ACTION_CYCLE_VIEW_MODE: &str = "sdf.view.cycle";
 
@@ -19,18 +18,22 @@ pub(crate) fn run() -> Result<()> {
     app.run()
 }
 
-fn setup_sdf_input_bindings(mut input: ResMut<InputState>) {
-    input.map_key(ACTION_CYCLE_VIEW_MODE, KeyCode::Tab);
+fn setup_sdf_input_bindings(input: Res<InputState>, mut actions: ResMut<ActionState>) {
+    actions.map_key(
+        &input,
+        ACTION_CYCLE_VIEW_MODE,
+        PhysicalKeyIdentity::code("Tab"),
+    );
 }
 
 fn update_sdf_view_and_animation_system(
-    input: Res<InputState>,
+    actions: Res<ActionState>,
     time: Res<Time>,
     mut state: ResMut<Sdf3dRenderState>,
     mut window: ResMut<WindowState>,
 ) {
     state.advance_by_frame_delta(time.delta_seconds);
-    if input.action_pressed(ACTION_CYCLE_VIEW_MODE) {
+    if actions.action_pressed(ACTION_CYCLE_VIEW_MODE) {
         state.cycle_view_mode();
     }
     window.set_title(format!(

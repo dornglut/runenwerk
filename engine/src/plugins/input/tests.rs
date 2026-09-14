@@ -1,19 +1,30 @@
 // Owner: Engine Input Plugin - Tests
 use crate::plugins::{
-    DigitalState, InputBindingChange, InputBindingChangeResult, InputContext, InputDeviceId,
-    InputSourceId, InputState, KeyChord, KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey,
-    ObservationOrigin, PhysicalKeyIdentity, PointerButton, PointerButtonInput, TouchInputPhase,
-    action,
+    ActionState, DigitalState, InputBindingChange, InputBindingChangeResult, InputContext,
+    InputDeviceId, InputSourceId, InputState, KeyChord, KeyLocation, KeyboardInput, LogicalKey,
+    NativeLogicalKey, ObservationOrigin, PhysicalKeyIdentity, PointerButton, PointerButtonInput,
+    TouchInputPhase, action,
 };
 use winit::event::{ElementState, MouseButton};
 use winit::keyboard::KeyCode;
 
-fn press_key(state: &mut InputState, key: KeyCode) {
-    state.handle_keyboard_input(key, ElementState::Pressed, None);
+fn physical_key(key: KeyCode) -> PhysicalKeyIdentity {
+    PhysicalKeyIdentity::code(format!("{key:?}"))
 }
 
-fn release_key(state: &mut InputState, key: KeyCode) {
-    state.handle_keyboard_input(key, ElementState::Released, None);
+fn press_key(input: &mut InputState, actions: &mut ActionState, key: KeyCode) {
+    input.handle_keyboard_input(key, ElementState::Pressed, None);
+    actions.project(input);
+}
+
+fn release_key(input: &mut InputState, actions: &mut ActionState, key: KeyCode) {
+    input.handle_keyboard_input(key, ElementState::Released, None);
+    actions.project(input);
+}
+
+fn clear_frame(input: &mut InputState, actions: &mut ActionState) {
+    actions.clear_frame(input);
+    input.clear_frame();
 }
 
 fn normalized_key(state: DigitalState) -> KeyboardInput {
@@ -29,178 +40,268 @@ fn normalized_key(state: DigitalState) -> KeyboardInput {
 
 #[test]
 fn default_bindings_split_enter_by_shift() {
-    let mut submit = InputState::new();
-    press_key(&mut submit, KeyCode::Enter);
-    assert!(submit.submitted);
-    assert!(!submit.insert_newline);
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    press_key(&mut input, &mut actions, KeyCode::Enter);
+    assert!(actions.action_pressed(action::UI_SUBMIT));
+    assert!(!actions.action_pressed(action::UI_INSERT_NEWLINE));
 
-    let mut newline = InputState::new();
-    press_key(&mut newline, KeyCode::ShiftLeft);
-    press_key(&mut newline, KeyCode::Enter);
-    assert!(newline.insert_newline);
-    assert!(!newline.submitted);
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    press_key(&mut input, &mut actions, KeyCode::ShiftLeft);
+    press_key(&mut input, &mut actions, KeyCode::Enter);
+    assert!(actions.action_pressed(action::UI_INSERT_NEWLINE));
+    assert!(!actions.action_pressed(action::UI_SUBMIT));
 }
 
 #[test]
 fn default_bindings_split_scene_f2_by_shift() {
-    let mut next = InputState::new();
-    press_key(&mut next, KeyCode::F2);
-    assert!(next.scene_next);
-    assert!(!next.scene_prev);
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    press_key(&mut input, &mut actions, KeyCode::F2);
+    assert!(actions.action_pressed(action::SCENE_NEXT));
+    assert!(!actions.action_pressed(action::SCENE_PREV));
 
-    let mut prev = InputState::new();
-    press_key(&mut prev, KeyCode::ShiftLeft);
-    press_key(&mut prev, KeyCode::F2);
-    assert!(prev.scene_prev);
-    assert!(!prev.scene_next);
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    press_key(&mut input, &mut actions, KeyCode::ShiftLeft);
+    press_key(&mut input, &mut actions, KeyCode::F2);
+    assert!(actions.action_pressed(action::SCENE_PREV));
+    assert!(!actions.action_pressed(action::SCENE_NEXT));
 }
 
 #[test]
 fn save_template_requires_ctrl_or_super() {
-    let mut plain_s = InputState::new();
-    press_key(&mut plain_s, KeyCode::KeyS);
-    assert!(!plain_s.save_ui_template);
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    press_key(&mut input, &mut actions, KeyCode::KeyS);
+    assert!(!actions.action_pressed(action::UI_SAVE_TEMPLATE));
 
-    let mut ctrl_s = InputState::new();
-    press_key(&mut ctrl_s, KeyCode::ControlLeft);
-    press_key(&mut ctrl_s, KeyCode::KeyS);
-    assert!(ctrl_s.save_ui_template);
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    press_key(&mut input, &mut actions, KeyCode::ControlLeft);
+    press_key(&mut input, &mut actions, KeyCode::KeyS);
+    assert!(actions.action_pressed(action::UI_SAVE_TEMPLATE));
+}
+
+#[test]
+fn press_time_modifiers_survive_later_modifier_release_before_projection() {
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+
+    input.handle_keyboard_input(KeyCode::ShiftLeft, ElementState::Pressed, None);
+    input.handle_keyboard_input(KeyCode::Enter, ElementState::Pressed, None);
+    input.handle_keyboard_input(KeyCode::ShiftLeft, ElementState::Released, None);
+    actions.project(&input);
+
+    assert!(actions.action_pressed(action::UI_INSERT_NEWLINE));
+    assert!(!actions.action_pressed(action::UI_SUBMIT));
 }
 
 #[test]
 fn runtime_map_key_rebinds_world_move_left() {
-    let mut state = InputState::new();
-    assert_eq!(state.unmap_key(action::WORLD_MOVE_LEFT, KeyCode::KeyA), 1);
-    state.map_key(action::WORLD_MOVE_LEFT, KeyCode::KeyJ);
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    assert_eq!(
+        actions.unmap_key(
+            &input,
+            action::WORLD_MOVE_LEFT,
+            &physical_key(KeyCode::KeyA)
+        ),
+        1
+    );
+    actions.map_key(
+        &input,
+        action::WORLD_MOVE_LEFT,
+        physical_key(KeyCode::KeyJ),
+    );
 
-    press_key(&mut state, KeyCode::KeyJ);
-    assert!(state.world_move_left);
-    assert!(state.action_pressed(action::WORLD_MOVE_LEFT));
+    press_key(&mut input, &mut actions, KeyCode::KeyJ);
+    assert!(actions.action_pressed(action::WORLD_MOVE_LEFT));
+    assert!(actions.action_down(action::WORLD_MOVE_LEFT));
 
-    state.clear_frame();
-    assert!(state.world_move_left);
-    assert!(!state.action_pressed(action::WORLD_MOVE_LEFT));
+    clear_frame(&mut input, &mut actions);
+    assert!(actions.action_down(action::WORLD_MOVE_LEFT));
+    assert!(!actions.action_pressed(action::WORLD_MOVE_LEFT));
 
-    release_key(&mut state, KeyCode::KeyJ);
-    assert!(!state.world_move_left);
+    release_key(&mut input, &mut actions, KeyCode::KeyJ);
+    assert!(!actions.action_down(action::WORLD_MOVE_LEFT));
+}
+
+#[test]
+fn binding_changes_while_held_recompute_down_without_fabricating_pressed() {
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+
+    press_key(&mut input, &mut actions, KeyCode::KeyA);
+    assert!(actions.action_pressed(action::WORLD_MOVE_LEFT));
+    clear_frame(&mut input, &mut actions);
+
+    assert_eq!(
+        actions.unmap_key(
+            &input,
+            action::WORLD_MOVE_LEFT,
+            &physical_key(KeyCode::KeyA)
+        ),
+        1
+    );
+    assert!(!actions.action_down(action::WORLD_MOVE_LEFT));
+    assert!(!actions.action_pressed(action::WORLD_MOVE_LEFT));
+
+    actions.map_key(
+        &input,
+        action::WORLD_MOVE_LEFT,
+        physical_key(KeyCode::KeyA),
+    );
+    assert!(actions.action_down(action::WORLD_MOVE_LEFT));
+    assert!(!actions.action_pressed(action::WORLD_MOVE_LEFT));
+
+    actions.reset_default_bindings(&input);
+    assert!(actions.action_down(action::WORLD_MOVE_LEFT));
+    assert!(!actions.action_pressed(action::WORLD_MOVE_LEFT));
 }
 
 #[test]
 fn custom_action_is_runtime_queryable() {
-    let mut state = InputState::new();
-    state.map_chord(
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    actions.map_chord(
+        &input,
         "debug.toggle_freecam",
-        KeyChord::new(KeyCode::KeyP).with_shift_required(),
+        KeyChord::code("KeyP").with_shift_required(),
     );
-    press_key(&mut state, KeyCode::ShiftLeft);
-    press_key(&mut state, KeyCode::KeyP);
-    assert!(state.action_pressed("debug.toggle_freecam"));
-    assert!(state.action_down("debug.toggle_freecam"));
+    press_key(&mut input, &mut actions, KeyCode::ShiftLeft);
+    press_key(&mut input, &mut actions, KeyCode::KeyP);
+    assert!(actions.action_pressed("debug.toggle_freecam"));
+    assert!(actions.action_down("debug.toggle_freecam"));
 }
 
 #[test]
 fn apply_binding_change_supports_event_style_updates() {
-    let mut state = InputState::new();
-    let result = state.apply_binding_change(InputBindingChange::UnmapKey {
-        action: action::WORLD_MOVE_LEFT.to_string(),
-        key: KeyCode::KeyA,
-    });
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    let result = actions.apply_binding_change(
+        &input,
+        InputBindingChange::UnmapKey {
+            action: action::WORLD_MOVE_LEFT.to_string(),
+            key: physical_key(KeyCode::KeyA),
+        },
+    );
     assert_eq!(result, InputBindingChangeResult::Applied);
-    state.apply_binding_change(InputBindingChange::MapKey {
-        action: action::WORLD_MOVE_LEFT.to_string(),
-        key: KeyCode::KeyJ,
-    });
+    actions.apply_binding_change(
+        &input,
+        InputBindingChange::MapKey {
+            action: action::WORLD_MOVE_LEFT.to_string(),
+            key: physical_key(KeyCode::KeyJ),
+        },
+    );
 
-    press_key(&mut state, KeyCode::KeyJ);
-    assert!(state.world_move_left);
+    press_key(&mut input, &mut actions, KeyCode::KeyJ);
+    assert!(actions.action_down(action::WORLD_MOVE_LEFT));
 }
 
 #[test]
 fn apply_binding_changes_batches_operations() {
-    let mut state = InputState::new();
-    let applied = state.apply_binding_changes([
-        InputBindingChange::UnmapKey {
-            action: action::WORLD_MOVE_RIGHT.to_string(),
-            key: KeyCode::KeyD,
-        },
-        InputBindingChange::MapChord {
-            action: action::WORLD_MOVE_RIGHT.to_string(),
-            chord: KeyChord::new(KeyCode::ArrowRight),
-        },
-    ]);
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    let applied = actions.apply_binding_changes(
+        &input,
+        [
+            InputBindingChange::UnmapKey {
+                action: action::WORLD_MOVE_RIGHT.to_string(),
+                key: physical_key(KeyCode::KeyD),
+            },
+            InputBindingChange::MapChord {
+                action: action::WORLD_MOVE_RIGHT.to_string(),
+                chord: KeyChord::code("ArrowRight"),
+            },
+        ],
+    );
     assert_eq!(applied, 2);
-    press_key(&mut state, KeyCode::ArrowRight);
-    assert!(state.world_move_right);
+    press_key(&mut input, &mut actions, KeyCode::ArrowRight);
+    assert!(actions.action_down(action::WORLD_MOVE_RIGHT));
 }
 
 #[test]
 fn repeated_key_down_does_not_create_a_second_pressed_edge() {
-    let mut state = InputState::new();
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
 
-    press_key(&mut state, KeyCode::KeyW);
-    assert!(state.action_pressed(action::WORLD_MOVE_UP));
-    assert!(state.action_down(action::WORLD_MOVE_UP));
+    press_key(&mut input, &mut actions, KeyCode::KeyW);
+    assert!(actions.action_pressed(action::WORLD_MOVE_UP));
+    assert!(actions.action_down(action::WORLD_MOVE_UP));
 
-    state.clear_frame();
-    press_key(&mut state, KeyCode::KeyW);
+    clear_frame(&mut input, &mut actions);
+    press_key(&mut input, &mut actions, KeyCode::KeyW);
 
-    assert!(!state.action_pressed(action::WORLD_MOVE_UP));
-    assert!(state.action_down(action::WORLD_MOVE_UP));
+    assert!(!actions.action_pressed(action::WORLD_MOVE_UP));
+    assert!(actions.action_down(action::WORLD_MOVE_UP));
 }
 
 #[test]
 fn normalized_repeat_metadata_cannot_create_a_pressed_edge() {
-    let mut state = InputState::new();
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
     let context = InputContext::new(InputSourceId::new(90), None);
     let first = normalized_key(DigitalState::Pressed);
-    state.handle_normalized_keyboard(context, &first);
-    assert!(state.action_pressed(action::WORLD_MOVE_UP));
+    input.handle_normalized_keyboard(context, &first);
+    actions.project(&input);
+    assert!(actions.action_pressed(action::WORLD_MOVE_UP));
 
-    state.clear_frame();
+    clear_frame(&mut input, &mut actions);
     let repeat = KeyboardInput {
         repeat: true,
         ..first
     };
-    state.handle_normalized_keyboard(context, &repeat);
+    input.handle_normalized_keyboard(context, &repeat);
+    actions.project(&input);
 
-    assert!(state.action_down(action::WORLD_MOVE_UP));
-    assert!(!state.action_pressed(action::WORLD_MOVE_UP));
+    assert!(actions.action_down(action::WORLD_MOVE_UP));
+    assert!(!actions.action_pressed(action::WORLD_MOVE_UP));
 }
 
 #[test]
 fn device_scoped_key_state_keeps_product_press_edge_aggregate() {
-    let mut state = InputState::new();
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
     let source = InputSourceId::new(90);
     let context_a = InputContext::new(source, Some(InputDeviceId::new(1)));
     let context_b = InputContext::new(source, Some(InputDeviceId::new(2)));
 
-    state.handle_normalized_keyboard(context_a, &normalized_key(DigitalState::Pressed));
-    assert!(state.action_pressed(action::WORLD_MOVE_UP));
-    assert!(state.action_down(action::WORLD_MOVE_UP));
+    input.handle_normalized_keyboard(context_a, &normalized_key(DigitalState::Pressed));
+    actions.project(&input);
+    assert!(actions.action_pressed(action::WORLD_MOVE_UP));
+    assert!(actions.action_down(action::WORLD_MOVE_UP));
 
-    state.clear_frame();
-    state.handle_normalized_keyboard(context_b, &normalized_key(DigitalState::Pressed));
-    assert!(!state.action_pressed(action::WORLD_MOVE_UP));
-    assert!(state.action_down(action::WORLD_MOVE_UP));
+    clear_frame(&mut input, &mut actions);
+    input.handle_normalized_keyboard(context_b, &normalized_key(DigitalState::Pressed));
+    actions.project(&input);
+    assert!(!actions.action_pressed(action::WORLD_MOVE_UP));
+    assert!(actions.action_down(action::WORLD_MOVE_UP));
 
-    state.handle_normalized_keyboard(context_a, &normalized_key(DigitalState::Released));
-    assert!(state.action_down(action::WORLD_MOVE_UP));
+    input.handle_normalized_keyboard(context_a, &normalized_key(DigitalState::Released));
+    actions.project(&input);
+    assert!(actions.action_down(action::WORLD_MOVE_UP));
 
-    state.handle_normalized_keyboard(context_b, &normalized_key(DigitalState::Released));
-    assert!(!state.action_down(action::WORLD_MOVE_UP));
+    input.handle_normalized_keyboard(context_b, &normalized_key(DigitalState::Released));
+    actions.project(&input);
+    assert!(!actions.action_down(action::WORLD_MOVE_UP));
 }
 
 #[test]
 fn keyboard_reconciliation_changes_held_state_without_pressed_edges() {
-    let mut state = InputState::new();
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
 
-    state.handle_keyboard_reconciliation(KeyCode::KeyW, ElementState::Pressed);
-    assert!(state.action_down(action::WORLD_MOVE_UP));
-    assert!(!state.action_pressed(action::WORLD_MOVE_UP));
+    input.handle_keyboard_reconciliation(KeyCode::KeyW, ElementState::Pressed);
+    actions.project(&input);
+    assert!(actions.action_down(action::WORLD_MOVE_UP));
+    assert!(!actions.action_pressed(action::WORLD_MOVE_UP));
 
-    state.handle_keyboard_reconciliation(KeyCode::KeyW, ElementState::Released);
-    assert!(!state.action_down(action::WORLD_MOVE_UP));
-    assert!(!state.action_pressed(action::WORLD_MOVE_UP));
+    input.handle_keyboard_reconciliation(KeyCode::KeyW, ElementState::Released);
+    actions.project(&input);
+    assert!(!actions.action_down(action::WORLD_MOVE_UP));
+    assert!(!actions.action_pressed(action::WORLD_MOVE_UP));
 }
 
 #[test]
@@ -383,17 +484,18 @@ fn touch_samples_preserve_primary_projection_while_neutral_state_keeps_all_conta
 }
 
 #[test]
-fn frame_clear_keeps_durable_neutral_held_state() {
-    let mut state = InputState::new();
+fn frame_clear_keeps_durable_neutral_and_action_held_state() {
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
 
-    press_key(&mut state, KeyCode::KeyD);
-    state.handle_mouse_input(ElementState::Pressed, MouseButton::Left);
-    state.handle_touch_input(TouchInputPhase::Started, 11, 4.0, 5.0, None);
-    state.clear_frame();
+    press_key(&mut input, &mut actions, KeyCode::KeyD);
+    input.handle_mouse_input(ElementState::Pressed, MouseButton::Left);
+    input.handle_touch_input(TouchInputPhase::Started, 11, 4.0, 5.0, None);
+    clear_frame(&mut input, &mut actions);
 
-    assert!(state.action_down(action::WORLD_MOVE_RIGHT));
-    assert!(state.left_mouse_down());
-    assert!(state.neutral_touch_active(11));
-    assert!(!state.action_pressed(action::WORLD_MOVE_RIGHT));
-    assert!(!state.left_mouse_pressed());
+    assert!(actions.action_down(action::WORLD_MOVE_RIGHT));
+    assert!(input.left_mouse_down());
+    assert!(input.neutral_touch_active(11));
+    assert!(!actions.action_pressed(action::WORLD_MOVE_RIGHT));
+    assert!(!input.left_mouse_pressed());
 }

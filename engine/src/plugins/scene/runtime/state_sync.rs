@@ -1,6 +1,7 @@
 use super::helpers::snapshot_public_scene_state;
 use crate::plugins::shared::{ReloadStatusPayload, should_reload};
-use crate::plugins::{InputState, SceneManager, SceneResource};
+use crate::plugins::{ActionState, InputState, SceneManager, SceneResource};
+use crate::plugins::input::domain::action;
 use crate::prelude::domain::{
     GAMEPLAY_CONFIG_PATH, gameplay_config_modified, load_gameplay_config_with_modified_and_error,
 };
@@ -18,6 +19,7 @@ pub(crate) fn sync_overlay_viewport(manager: &mut SceneManager, window: &WindowS
 pub(crate) fn sync_world_scene_context_from_input(
     manager: &mut SceneManager,
     input: &InputState,
+    actions: &ActionState,
     frame_delta_seconds: f32,
     fixed_step_seconds: f32,
 ) {
@@ -27,10 +29,24 @@ pub(crate) fn sync_world_scene_context_from_input(
     let runtime = &mut manager.world_runtime;
     runtime.ctx.overlay_consumed = input.overlay_consumed;
     runtime.ctx.overlay_scene_label = active_overlay_label;
-    runtime.ctx.player_move_x = (if input.world_move_right { 1.0 } else { 0.0 })
-        - (if input.world_move_left { 1.0 } else { 0.0 });
-    runtime.ctx.player_move_y = (if input.world_move_up { 1.0 } else { 0.0 })
-        - (if input.world_move_down { 1.0 } else { 0.0 });
+    runtime.ctx.player_move_x = (if actions.action_down(action::WORLD_MOVE_RIGHT) {
+        1.0
+    } else {
+        0.0
+    }) - (if actions.action_down(action::WORLD_MOVE_LEFT) {
+        1.0
+    } else {
+        0.0
+    });
+    runtime.ctx.player_move_y = (if actions.action_down(action::WORLD_MOVE_UP) {
+        1.0
+    } else {
+        0.0
+    }) - (if actions.action_down(action::WORLD_MOVE_DOWN) {
+        1.0
+    } else {
+        0.0
+    });
     runtime.ctx.fixed_step_seconds = fixed_step_seconds;
 
     if !overlay_visible && !world_paused {

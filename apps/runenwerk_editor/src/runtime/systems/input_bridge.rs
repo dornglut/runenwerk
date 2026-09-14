@@ -44,7 +44,8 @@ struct ViewportPointerRoute {
 
 #[allow(clippy::too_many_arguments)]
 pub fn dispatch_editor_input_system(
-    mut input: ResMut<engine::plugins::InputState>,
+    input: Res<engine::plugins::InputState>,
+    mut actions: ResMut<engine::plugins::ActionState>,
     mut window: ResMut<WindowState>,
     mut host: ResMut<EditorHostResource>,
     mut bridge: ResMut<EditorInputBridgeState>,
@@ -55,7 +56,7 @@ pub fn dispatch_editor_input_system(
     tool_surface_bindings: Res<ToolSurfaceRuntimeBindingRegistryResource>,
     mut viewport_render_commands: ResMut<ViewportRenderStateCommandQueueResource>,
 ) {
-    sync_active_editor_shortcut_bindings(&mut input, &host, &mut bridge);
+    sync_active_editor_shortcut_bindings(&input, &mut actions, &host, &mut bridge);
     if !window.focused {
         host.shell_state.runtime_mut().set_focused_widget(None);
         host.shell_state.clear_tab_drag();
@@ -84,7 +85,7 @@ pub fn dispatch_editor_input_system(
     };
 
     dispatch_global_shortcuts(
-        &input,
+        &actions,
         &mut host,
         &bridge,
         &mut viewport_presentations,
@@ -438,6 +439,7 @@ pub fn dispatch_editor_input_system(
 
     dispatch_shell_keyboard_and_text(
         &input,
+        &actions,
         &mut host,
         &shell_theme,
         bounds,
@@ -452,7 +454,7 @@ pub fn dispatch_editor_input_system(
 
     let viewport_shortcuts_blocked = shell_focus_captures_viewport_shortcuts(&host.shell_state);
     handle_viewport_tool_radial_shortcut(
-        &input,
+        &actions,
         &mut host,
         &shell_theme,
         bounds,
@@ -468,7 +470,7 @@ pub fn dispatch_editor_input_system(
 
     if !viewport_shortcuts_blocked {
         dispatch_viewport_shortcuts(
-            &input,
+            &actions,
             &mut host,
             &bridge,
             &mut viewport_presentations,
@@ -480,12 +482,12 @@ pub fn dispatch_editor_input_system(
         );
     }
 
-    if !input.action_down(ACTION_EDITOR_VIEWPORT_TOOL_RADIAL) {
+    if !actions.action_down(ACTION_EDITOR_VIEWPORT_TOOL_RADIAL) {
         host.app
             .surface_sessions_mut()
             .close_tab_hold_viewport_radial_menus();
     }
-    if input.toggle_pause_menu {
+    if actions.action_pressed(action::SYSTEM_TOGGLE_PAUSE_MENU) {
         host.app
             .surface_sessions_mut()
             .close_all_viewport_tool_radial_menus();
@@ -498,7 +500,8 @@ pub fn dispatch_editor_input_system(
 }
 
 fn sync_active_editor_shortcut_bindings(
-    input: &mut engine::plugins::InputState,
+    input: &engine::plugins::InputState,
+    actions: &mut engine::plugins::ActionState,
     host: &EditorHostResource,
     bridge: &mut EditorInputBridgeState,
 ) {
@@ -529,11 +532,11 @@ fn sync_active_editor_shortcut_bindings(
     }
 
     for action_id in bridge.active_shortcut_action_ids.drain(..) {
-        input.clear_action_bindings(&action_id);
+        actions.clear_action_bindings(input, &action_id);
     }
     bridge.active_shortcut_commands.clear();
     for shortcut in resolved {
-        input.map_chord(shortcut.action_id.clone(), shortcut.chord);
+        actions.map_chord(input, shortcut.action_id.clone(), shortcut.chord);
         bridge
             .active_shortcut_commands
             .insert(shortcut.action_id.clone(), shortcut.command);
@@ -557,7 +560,7 @@ fn window_cursor_icon(cursor_intent: ShellCursorIntent) -> WindowCursorIcon {
 
 #[allow(clippy::too_many_arguments)]
 fn dispatch_global_shortcuts(
-    input: &engine::plugins::InputState,
+    actions: &engine::plugins::ActionState,
     host: &mut EditorHostResource,
     bridge: &EditorInputBridgeState,
     viewport_presentations: &mut ViewportPresentationStateResource,
@@ -565,7 +568,7 @@ fn dispatch_global_shortcuts(
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
 ) {
     dispatch_active_editor_shortcuts(
-        input,
+        actions,
         host,
         bridge,
         viewport_presentations,
@@ -576,7 +579,7 @@ fn dispatch_global_shortcuts(
         return;
     }
 
-    if input.action_pressed(ACTION_EDITOR_UNDO)
+    if actions.action_pressed(ACTION_EDITOR_UNDO)
         && let Err(error) = dispatch_shell_command(
             &mut host.app,
             Some(&mut host.shell_state),
@@ -590,7 +593,7 @@ fn dispatch_global_shortcuts(
         eprintln!("undo shortcut failed: {error}");
     }
 
-    if input.action_pressed(ACTION_EDITOR_REDO)
+    if actions.action_pressed(ACTION_EDITOR_REDO)
         && let Err(error) = dispatch_shell_command(
             &mut host.app,
             Some(&mut host.shell_state),
@@ -604,7 +607,7 @@ fn dispatch_global_shortcuts(
         eprintln!("redo shortcut failed: {error}");
     }
 
-    if input.action_pressed(action::UI_SAVE_TEMPLATE)
+    if actions.action_pressed(action::UI_SAVE_TEMPLATE)
         && let Err(error) = dispatch_shell_command(
             &mut host.app,
             Some(&mut host.shell_state),
@@ -621,7 +624,7 @@ fn dispatch_global_shortcuts(
 
 #[allow(clippy::too_many_arguments)]
 fn dispatch_active_editor_shortcuts(
-    input: &engine::plugins::InputState,
+    actions: &engine::plugins::ActionState,
     host: &mut EditorHostResource,
     bridge: &EditorInputBridgeState,
     viewport_presentations: &mut ViewportPresentationStateResource,
@@ -631,7 +634,7 @@ fn dispatch_active_editor_shortcuts(
     let pressed = bridge
         .active_shortcut_commands
         .iter()
-        .filter_map(|(action_id, command)| input.action_pressed(action_id).then_some(*command))
+        .filter_map(|(action_id, command)| actions.action_pressed(action_id).then_some(*command))
         .collect::<Vec<_>>();
     for command in pressed {
         if let Err(error) = dispatch_known_editor_command(
@@ -666,7 +669,7 @@ fn dispatch_known_editor_command(
 
 #[allow(clippy::too_many_arguments)]
 fn dispatch_viewport_shortcuts(
-    input: &engine::plugins::InputState,
+    actions: &engine::plugins::ActionState,
     host: &mut EditorHostResource,
     bridge: &EditorInputBridgeState,
     viewport_presentations: &mut ViewportPresentationStateResource,
@@ -677,8 +680,8 @@ fn dispatch_viewport_shortcuts(
     preferred_viewport_id: Option<ViewportId>,
 ) {
     if !bridge.active_shortcut_catalog_active
-        && (input.action_pressed(ACTION_EDITOR_TOOL_SELECT)
-            || input.action_pressed(action::UI_EDITOR_RESTORE_ALL))
+        && (actions.action_pressed(ACTION_EDITOR_TOOL_SELECT)
+            || actions.action_pressed(action::UI_EDITOR_RESTORE_ALL))
         && let Err(error) = dispatch_shell_command(
             &mut host.app,
             Some(&mut host.shell_state),
@@ -693,8 +696,8 @@ fn dispatch_viewport_shortcuts(
     }
 
     if !bridge.active_shortcut_catalog_active
-        && (input.action_pressed(ACTION_EDITOR_TOOL_TRANSLATE)
-            || input.action_pressed(action::UI_EDITOR_HIDE_SELECTED))
+        && (actions.action_pressed(ACTION_EDITOR_TOOL_TRANSLATE)
+            || actions.action_pressed(action::UI_EDITOR_HIDE_SELECTED))
         && let Err(error) = dispatch_shell_command(
             &mut host.app,
             Some(&mut host.shell_state),
@@ -709,7 +712,7 @@ fn dispatch_viewport_shortcuts(
     }
 
     if !bridge.active_shortcut_catalog_active
-        && input.action_pressed(ACTION_EDITOR_TOOL_ROTATE)
+        && actions.action_pressed(ACTION_EDITOR_TOOL_ROTATE)
         && let Err(error) = dispatch_shell_command(
             &mut host.app,
             Some(&mut host.shell_state),
@@ -724,7 +727,7 @@ fn dispatch_viewport_shortcuts(
     }
 
     if !bridge.active_shortcut_catalog_active
-        && input.action_pressed(ACTION_EDITOR_TOOL_SCALE)
+        && actions.action_pressed(ACTION_EDITOR_TOOL_SCALE)
         && let Err(error) = dispatch_shell_command(
             &mut host.app,
             Some(&mut host.shell_state),
@@ -738,7 +741,7 @@ fn dispatch_viewport_shortcuts(
         eprintln!("scale-tool shortcut failed: {error}");
     }
 
-    if input.action_pressed(ACTION_EDITOR_VIEWPORT_FOCUS)
+    if actions.action_pressed(ACTION_EDITOR_VIEWPORT_FOCUS)
         && let Some(orbit_target) = selected_entity_origin(&host.app)
         && let Some(binding) =
             viewport_binding_for_focus(tool_surface_bindings, cursor, preferred_viewport_id)
@@ -829,7 +832,7 @@ fn shell_focus_captures_viewport_shortcuts(shell_state: &RunenwerkEditorShellSta
 
 #[allow(clippy::too_many_arguments)]
 fn handle_viewport_tool_radial_shortcut(
-    input: &engine::plugins::InputState,
+    actions: &engine::plugins::ActionState,
     host: &mut EditorHostResource,
     shell_theme: &ui_theme::ThemeTokens,
     bounds: UiRect,
@@ -842,7 +845,7 @@ fn handle_viewport_tool_radial_shortcut(
     cursor: UiPoint,
     viewport_shortcuts_blocked: bool,
 ) {
-    if !input.action_pressed(ACTION_EDITOR_VIEWPORT_TOOL_RADIAL) {
+    if !actions.action_pressed(ACTION_EDITOR_VIEWPORT_TOOL_RADIAL) {
         return;
     }
 
@@ -961,6 +964,7 @@ fn dispatch_shell_key_event(
 #[allow(clippy::too_many_arguments)]
 fn dispatch_shell_keyboard_and_text(
     input: &engine::plugins::InputState,
+    actions: &engine::plugins::ActionState,
     host: &mut EditorHostResource,
     shell_theme: &ui_theme::ThemeTokens,
     bounds: UiRect,
@@ -997,28 +1001,28 @@ fn dispatch_shell_keyboard_and_text(
             );
         };
 
-    if input.backspace {
+    if actions.action_pressed(action::UI_BACKSPACE) {
         send_key(
             ui_input::Key::Backspace,
             host,
             viewport_presentations.as_deref_mut(),
         );
     }
-    if input.delete {
+    if actions.action_pressed(action::UI_DELETE) {
         send_key(
             ui_input::Key::Delete,
             host,
             viewport_presentations.as_deref_mut(),
         );
     }
-    if input.submitted {
+    if actions.action_pressed(action::UI_SUBMIT) {
         send_key(
             ui_input::Key::Enter,
             host,
             viewport_presentations.as_deref_mut(),
         );
     }
-    if input.toggle_pause_menu {
+    if actions.action_pressed(action::SYSTEM_TOGGLE_PAUSE_MENU) {
         send_key(
             ui_input::Key::Escape,
             host,
@@ -1260,7 +1264,7 @@ mod tests {
     use crate::shell::{RunenwerkEditorShellController, SELECT_TOOL_ID, validate_editor_shortcuts};
     use editor_definition::{EditorShortcutDefinition, EditorShortcutSetDefinition};
     use editor_viewport::ViewportId;
-    use engine::plugins::InputState;
+    use engine::plugins::{ActionState, InputState};
     use engine::plugins::render::UiFontAtlasResource;
     use ui_input::InputResponse;
     use ui_theme::ThemeTokens;
@@ -1295,16 +1299,18 @@ mod tests {
             )
             .expect("active shortcut set should validate");
         let mut input = InputState::default();
+        let mut actions = ActionState::default();
         let mut bridge = EditorInputBridgeState::default();
         let mut viewport_presentations = ViewportPresentationStateResource::default();
         let viewport_observations = ViewportArtifactObservationResource::default();
         let tool_surface_bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
 
-        sync_active_editor_shortcut_bindings(&mut input, &host, &mut bridge);
+        sync_active_editor_shortcut_bindings(&input, &mut actions, &host, &mut bridge);
         input.handle_keyboard_input(KeyCode::SuperLeft, ElementState::Pressed, None);
         input.handle_keyboard_input(KeyCode::Digit1, ElementState::Pressed, None);
+        actions.project(&input);
         dispatch_active_editor_shortcuts(
-            &input,
+            &actions,
             &mut host,
             &bridge,
             &mut viewport_presentations,
@@ -1316,12 +1322,16 @@ mod tests {
             Some(SELECT_TOOL_ID)
         );
 
-        input.clear_frame();
-        input.handle_keyboard_input(KeyCode::Digit1, ElementState::Released, None);
+        let mut input = InputState::default();
+        let mut actions = ActionState::default();
+        let mut bridge = EditorInputBridgeState::default();
+        sync_active_editor_shortcut_bindings(&input, &mut actions, &host, &mut bridge);
+        input.handle_keyboard_input(KeyCode::SuperLeft, ElementState::Pressed, None);
         input.handle_keyboard_input(KeyCode::ShiftLeft, ElementState::Pressed, None);
         input.handle_keyboard_input(KeyCode::KeyA, ElementState::Pressed, None);
+        actions.project(&input);
         dispatch_active_editor_shortcuts(
-            &input,
+            &actions,
             &mut host,
             &bridge,
             &mut viewport_presentations,

@@ -2,7 +2,7 @@ use std::sync::OnceLock;
 
 use crate::app::App;
 use crate::plugin::Plugin;
-use crate::plugins::InputState;
+use crate::plugins::{ActionState, InputState, PhysicalKeyIdentity};
 use crate::plugins::render::features::{DEFAULT_EDITOR_FONT_ID, UiFontAtlasResource};
 use crate::plugins::render::inspect::{RenderDebugTimingsState, WorldRuntimeInspectorSnapshot};
 use crate::plugins::render::{
@@ -20,7 +20,6 @@ use ui_runtime::{
 };
 use ui_text::{FontId, TextLineHeightPolicy, TextStyle};
 use ui_theme::{ThemeTokens, UiColor};
-use winit::keyboard::KeyCode;
 
 pub struct DebugMetricsPlugin;
 
@@ -49,13 +48,17 @@ impl Plugin for DebugMetricsPlugin {
     }
 }
 
-fn setup_debug_metrics_input_binding(mut input: ResMut<InputState>) {
-    input.map_key(ACTION_TOGGLE_METRICS, KeyCode::F10);
+fn setup_debug_metrics_input_binding(input: Res<InputState>, mut actions: ResMut<ActionState>) {
+    actions.map_key(
+        &input,
+        ACTION_TOGGLE_METRICS,
+        PhysicalKeyIdentity::code("F10"),
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
 fn debug_metrics_overlay_system(
-    input: Res<InputState>,
+    actions: Res<ActionState>,
     time: Res<Time>,
     readiness: Res<RenderReadinessState>,
     scene: Res<SceneRuntimeState>,
@@ -65,7 +68,7 @@ fn debug_metrics_overlay_system(
     mut ui: ResMut<UiOverlayState>,
     mut submissions: ResMut<SurfaceFrameSubmissionRegistryResource>,
 ) {
-    if input.action_pressed(ACTION_TOGGLE_METRICS) {
+    if actions.action_pressed(ACTION_TOGGLE_METRICS) {
         debug_metrics.visible = !debug_metrics.visible;
     }
 
@@ -304,13 +307,14 @@ fn debug_overlay_font_atlas() -> &'static UiFontAtlasResource {
 mod tests {
     use super::DebugMetricsPlugin;
     use crate::plugins::render::RenderReadinessState;
-    use crate::plugins::{InputState, ScenePlugin, TimePlugin};
+    use crate::plugins::{ActionState, InputState, ScenePlugin, TimePlugin};
     use crate::prelude::*;
     use winit::event::ElementState;
     use winit::keyboard::KeyCode;
 
-    fn inject_f10(mut input: ResMut<InputState>) {
+    fn inject_f10(mut input: ResMut<InputState>, mut actions: ResMut<ActionState>) {
         input.handle_keyboard_input(KeyCode::F10, ElementState::Pressed, None);
+        actions.project(&input);
     }
 
     #[test]

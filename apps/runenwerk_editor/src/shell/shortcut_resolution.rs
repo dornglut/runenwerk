@@ -2,9 +2,8 @@
 //! Purpose: App-owned resolution of authored editor shortcuts to engine input chords.
 
 use editor_definition::{EditorShortcutDefinition, EditorShortcutSetDefinition};
-use engine::plugins::{KeyChord, ModifierRule};
+use engine::plugins::{KeyChord, ModifierRule, PhysicalKeyIdentity};
 use ui_definition::UiDefinitionDiagnostic;
-use winit::keyboard::KeyCode;
 
 use crate::shell::{ActiveEditorDefinitionCatalogs, KnownEditorCommand};
 
@@ -120,10 +119,9 @@ pub fn parse_editor_shortcut_chord(chord: &str) -> Result<KeyChord, String> {
                 if key.is_some() {
                     return Err(format!("'{chord}' contains more than one key token"));
                 }
-                key =
-                    Some(parse_key_code(part).ok_or_else(|| {
-                        format!("'{part}' is not a supported editor shortcut key")
-                    })?);
+                key = Some(parse_physical_key(part).ok_or_else(|| {
+                    format!("'{part}' is not a supported editor shortcut key")
+                })?);
             }
         }
     }
@@ -149,84 +147,53 @@ fn normalized_modifier(part: &str) -> Option<&'static str> {
     }
 }
 
-fn parse_key_code(part: &str) -> Option<KeyCode> {
+fn parse_physical_key(part: &str) -> Option<PhysicalKeyIdentity> {
     let normalized = part.trim().to_ascii_lowercase();
-    if normalized.len() == 1 {
+    let code = if normalized.len() == 1 {
         let byte = normalized.as_bytes()[0];
         if byte.is_ascii_lowercase() {
-            return Some(match byte {
-                b'a' => KeyCode::KeyA,
-                b'b' => KeyCode::KeyB,
-                b'c' => KeyCode::KeyC,
-                b'd' => KeyCode::KeyD,
-                b'e' => KeyCode::KeyE,
-                b'f' => KeyCode::KeyF,
-                b'g' => KeyCode::KeyG,
-                b'h' => KeyCode::KeyH,
-                b'i' => KeyCode::KeyI,
-                b'j' => KeyCode::KeyJ,
-                b'k' => KeyCode::KeyK,
-                b'l' => KeyCode::KeyL,
-                b'm' => KeyCode::KeyM,
-                b'n' => KeyCode::KeyN,
-                b'o' => KeyCode::KeyO,
-                b'p' => KeyCode::KeyP,
-                b'q' => KeyCode::KeyQ,
-                b'r' => KeyCode::KeyR,
-                b's' => KeyCode::KeyS,
-                b't' => KeyCode::KeyT,
-                b'u' => KeyCode::KeyU,
-                b'v' => KeyCode::KeyV,
-                b'w' => KeyCode::KeyW,
-                b'x' => KeyCode::KeyX,
-                b'y' => KeyCode::KeyY,
-                b'z' => KeyCode::KeyZ,
-                _ => return None,
-            });
+            Some(format!("Key{}", (byte as char).to_ascii_uppercase()))
+        } else if byte.is_ascii_digit() {
+            Some(format!("Digit{}", byte as char))
+        } else {
+            None
         }
-        if byte.is_ascii_digit() {
-            return Some(match byte {
-                b'0' => KeyCode::Digit0,
-                b'1' => KeyCode::Digit1,
-                b'2' => KeyCode::Digit2,
-                b'3' => KeyCode::Digit3,
-                b'4' => KeyCode::Digit4,
-                b'5' => KeyCode::Digit5,
-                b'6' => KeyCode::Digit6,
-                b'7' => KeyCode::Digit7,
-                b'8' => KeyCode::Digit8,
-                b'9' => KeyCode::Digit9,
-                _ => return None,
-            });
+    } else {
+        match normalized.as_str() {
+            "escape" | "esc" => Some("Escape".to_string()),
+            "tab" => Some("Tab".to_string()),
+            "enter" | "return" => Some("Enter".to_string()),
+            "backspace" => Some("Backspace".to_string()),
+            "delete" | "del" => Some("Delete".to_string()),
+            "space" => Some("Space".to_string()),
+            "home" => Some("Home".to_string()),
+            "end" => Some("End".to_string()),
+            "pageup" | "page_up" | "page-up" => Some("PageUp".to_string()),
+            "pagedown" | "page_down" | "page-down" => Some("PageDown".to_string()),
+            "arrowleft" | "arrow_left" | "arrow-left" | "left" => {
+                Some("ArrowLeft".to_string())
+            }
+            "arrowright" | "arrow_right" | "arrow-right" | "right" => {
+                Some("ArrowRight".to_string())
+            }
+            "arrowup" | "arrow_up" | "arrow-up" | "up" => Some("ArrowUp".to_string()),
+            "arrowdown" | "arrow_down" | "arrow-down" | "down" => {
+                Some("ArrowDown".to_string())
+            }
+            "f1" => Some("F1".to_string()),
+            "f2" => Some("F2".to_string()),
+            "f3" => Some("F3".to_string()),
+            "f4" => Some("F4".to_string()),
+            "f5" => Some("F5".to_string()),
+            "f6" => Some("F6".to_string()),
+            "f7" => Some("F7".to_string()),
+            "f8" => Some("F8".to_string()),
+            "f9" => Some("F9".to_string()),
+            "f10" => Some("F10".to_string()),
+            "f11" => Some("F11".to_string()),
+            "f12" => Some("F12".to_string()),
+            _ => None,
         }
-    }
-    match normalized.as_str() {
-        "escape" | "esc" => Some(KeyCode::Escape),
-        "tab" => Some(KeyCode::Tab),
-        "enter" | "return" => Some(KeyCode::Enter),
-        "backspace" => Some(KeyCode::Backspace),
-        "delete" | "del" => Some(KeyCode::Delete),
-        "space" => Some(KeyCode::Space),
-        "home" => Some(KeyCode::Home),
-        "end" => Some(KeyCode::End),
-        "pageup" | "page_up" | "page-up" => Some(KeyCode::PageUp),
-        "pagedown" | "page_down" | "page-down" => Some(KeyCode::PageDown),
-        "arrowleft" | "arrow_left" | "arrow-left" | "left" => Some(KeyCode::ArrowLeft),
-        "arrowright" | "arrow_right" | "arrow-right" | "right" => Some(KeyCode::ArrowRight),
-        "arrowup" | "arrow_up" | "arrow-up" | "up" => Some(KeyCode::ArrowUp),
-        "arrowdown" | "arrow_down" | "arrow-down" | "down" => Some(KeyCode::ArrowDown),
-        "f1" => Some(KeyCode::F1),
-        "f2" => Some(KeyCode::F2),
-        "f3" => Some(KeyCode::F3),
-        "f4" => Some(KeyCode::F4),
-        "f5" => Some(KeyCode::F5),
-        "f6" => Some(KeyCode::F6),
-        "f7" => Some(KeyCode::F7),
-        "f8" => Some(KeyCode::F8),
-        "f9" => Some(KeyCode::F9),
-        "f10" => Some(KeyCode::F10),
-        "f11" => Some(KeyCode::F11),
-        "f12" => Some(KeyCode::F12),
-        _ => None,
-    }
+    }?;
+    Some(PhysicalKeyIdentity::code(code))
 }

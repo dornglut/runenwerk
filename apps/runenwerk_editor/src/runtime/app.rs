@@ -1,13 +1,12 @@
 use anyhow::Result;
 use engine::plugins::{
-    DiagnosticsConfigResource, RenderFlow, RenderPlugin, ScenePlugin, SchedulerDiagnosticsPlugin,
-    default_plugins,
+    DiagnosticsConfigResource, PhysicalKeyIdentity, RenderFlow, RenderPlugin, ScenePlugin,
+    SchedulerDiagnosticsPlugin, default_plugins,
 };
 use engine::prelude::*;
 use runen_gpu::GpuBindingKey;
 #[cfg(test)]
 use runen_gpu::GpuWorkResourceId;
-use winit::keyboard::KeyCode;
 
 use crate::runtime::plugin::EditorAppPlugin;
 use crate::runtime::resources::{EditorHostResource, EditorViewportRenderState};
@@ -103,14 +102,20 @@ fn configure_app_for_workbench(app: &mut App, workbench: RunenwerkRuntimeWorkben
     configure_editor_diagnostics(app);
 
     app.add_input_bindings([
-        (ACTION_EDITOR_UNDO, KeyCode::KeyZ),
-        (ACTION_EDITOR_REDO, KeyCode::KeyY),
-        (ACTION_EDITOR_TOOL_SELECT, KeyCode::Digit1),
-        (ACTION_EDITOR_TOOL_TRANSLATE, KeyCode::Digit2),
-        (ACTION_EDITOR_TOOL_ROTATE, KeyCode::Digit3),
-        (ACTION_EDITOR_TOOL_SCALE, KeyCode::Digit4),
-        (ACTION_EDITOR_VIEWPORT_FOCUS, KeyCode::KeyF),
-        (ACTION_EDITOR_VIEWPORT_TOOL_RADIAL, KeyCode::Tab),
+        (ACTION_EDITOR_UNDO, PhysicalKeyIdentity::code("KeyZ")),
+        (ACTION_EDITOR_REDO, PhysicalKeyIdentity::code("KeyY")),
+        (ACTION_EDITOR_TOOL_SELECT, PhysicalKeyIdentity::code("Digit1")),
+        (
+            ACTION_EDITOR_TOOL_TRANSLATE,
+            PhysicalKeyIdentity::code("Digit2"),
+        ),
+        (ACTION_EDITOR_TOOL_ROTATE, PhysicalKeyIdentity::code("Digit3")),
+        (ACTION_EDITOR_TOOL_SCALE, PhysicalKeyIdentity::code("Digit4")),
+        (ACTION_EDITOR_VIEWPORT_FOCUS, PhysicalKeyIdentity::code("KeyF")),
+        (
+            ACTION_EDITOR_VIEWPORT_TOOL_RADIAL,
+            PhysicalKeyIdentity::code("Tab"),
+        ),
     ]);
     Ok(())
 }
