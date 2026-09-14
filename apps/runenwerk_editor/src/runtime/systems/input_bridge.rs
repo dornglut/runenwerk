@@ -74,11 +74,19 @@ pub fn dispatch_editor_input_system(
             &window_event.event,
             PlatformEvent::Focused { focused: false }
         );
-        primary_ui_events.extend(translate_platform_event(
-            &mut target_input,
-            primary_window_id,
-            window_event.event,
-        ));
+        let viewport_scroll_delta = match &window_event.event {
+            PlatformEvent::MouseWheel { input, .. } => input.delta.vertical,
+            _ => None,
+        };
+        primary_ui_events.extend(
+            translate_platform_event(
+                &mut target_input,
+                primary_window_id,
+                window_event.event,
+            )
+            .into_iter()
+            .map(|event| (event, viewport_scroll_delta)),
+        );
         if focus_lost {
             host.shell_state.runtime_mut().set_focused_widget(None);
             host.shell_state.clear_tab_drag();
@@ -126,8 +134,7 @@ pub fn dispatch_editor_input_system(
         bridge.last_logged_picking_revision = picking_results.global_revision();
     }
 
-    let mut scroll_consumed_by_ui = false;
-    for event in primary_ui_events {
+    for (event, viewport_scroll_delta) in primary_ui_events {
         let pointer = match &event {
             UiInputEvent::Pointer(pointer)
                 if pointer.packet.source_kind == PointerSourceKind::Mouse =>
@@ -158,7 +165,18 @@ pub fn dispatch_editor_input_system(
 
         match (pointer.kind, pointer.button) {
             (PointerEventKind::Scroll, _) => {
-                scroll_consumed_by_ui |= pointer_event_consumed_by_ui(&outcome);
+                if !pointer_event_consumed_by_ui(&outcome)
+                    && let Some(scroll_delta) = viewport_scroll_delta
+                    && scroll_delta.abs() > f32::EPSILON
+                    && let Some(binding) =
+                        fallback_viewport_binding(&tool_surface_bindings, pointer.position)
+                {
+                    bridge.last_target_viewport = Some(binding.viewport_id);
+                    viewport_render_commands.push(ViewportRenderStateCommand::ZoomCamera {
+                        viewport_id: binding.viewport_id,
+                        scroll_delta,
+                    });
+                }
             }
             (PointerEventKind::Down, Some(PointerButton::Primary)) => {
                 let pointer_route = outcome.as_ref().and_then(|value| {
@@ -279,17 +297,6 @@ pub fn dispatch_editor_input_system(
             }
             _ => {}
         }
-    }
-
-    if input.scroll_delta.abs() > f32::EPSILON
-        && !scroll_consumed_by_ui
-        && let Some(binding) = fallback_viewport_binding(&tool_surface_bindings, position)
-    {
-        bridge.last_target_viewport = Some(binding.viewport_id);
-        viewport_render_commands.push(ViewportRenderStateCommand::ZoomCamera {
-            viewport_id: binding.viewport_id,
-            scroll_delta: input.scroll_delta,
-        });
     }
 
     if input.left_mouse_down()
