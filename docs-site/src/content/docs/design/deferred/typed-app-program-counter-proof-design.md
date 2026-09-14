@@ -1,13 +1,16 @@
 ---
 title: Typed App Program Counter Proof Design
-description: Counter app-program proof design for model/action/reducer/effect/projection/replay with UI source projection and a derived win screen at count ten.
-status: active
-owner: ui
+description: Deferred Counter app-program proof design for model/action/reducer/effect/projection/replay with UI source projection and a derived win screen at count ten.
+status: deferred
+owner: workspace
 layer: design
 canonical: false
-last_reviewed: 2026-07-08
+last_reviewed: 2026-09-14
 related:
-  - ../deferred/typed-app-program-and-ui-proof-design.md
+  - ../../adr/accepted/0019-batteries-included-application-composition.md
+  - ../../adr/accepted/0020-adopt-federated-semantic-composition.md
+  - ../../adr/accepted/0023-normalize-app-runtime-host-lifecycle-and-capability-ownership.md
+  - ./typed-app-program-and-ui-proof-design.md
   - ../superseded/domain-authoring-source-and-program-pattern.md
   - ../implemented/ui-program-architecture.md
   - ../../architecture/ui-framework-architecture.md
@@ -16,23 +19,29 @@ related:
 
 # Typed App Program Counter Proof Design
 
-## Status
+## Deferred disposition
 
-Active design for the Counter proof target. This document does not authorize
-product implementation by itself. Implementation still requires an owning GitHub issue
-or equivalent planning contract naming files, validation commands, stop
-conditions, and evidence expectations.
+This document preserves the Counter proof proposal as deferred design evidence. It is
+not current application-composition authority and does not authorize product
+implementation.
 
-`owner: ui` is temporary for the first UI proving slice. The app-program pattern
-must not become permanently UI-owned. Counter uses UI because UI is the first
-available proof domain.
+The architecture question that previously blocked lifecycle disposition is now resolved:
+ADR 0019 and ADR 0023 keep `App` as Runenwerk's one live application/runtime composition
+root, while ADR 0020 accepts only an optional typed cross-owner composition/interface
+architecture target. ADR 0020 does not accept a concrete shared Plan/App-program
+representation, App-program runtime, or second application authority.
 
-This document narrows the Counter target so future implementation slices do not
-turn the product app into UI runtime plumbing.
+Counter therefore remains a possible future proving workload only after a separately
+accepted bounded issue establishes a legal concrete representation and selects this
+workload as evidence. The original `owner: ui` reflected the first proposed proof
+surface; UI is not the semantic owner of a reusable app-program abstraction.
 
-## Decision
+The detailed proposal below is retained so a future re-evaluation can reuse its useful
+proof pressure without treating its illustrative API or runtime shape as accepted.
 
-Counter is a typed app program.
+## Preserved candidate decision
+
+The proposal treats Counter as a typed app program.
 
 It is not:
 

@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-14
 ---
 
 # Deferred Designs
@@ -29,6 +29,7 @@ Use this folder for designs that remain valid but are intentionally postponed.
 ### Application Composition / App Proof
 
 - [Typed App Program And UI Proof Design](typed-app-program-and-ui-proof-design.md)
+- [Typed App Program Counter Proof Design](typed-app-program-counter-proof-design.md)
 
 ### Gameplay Domain
 
