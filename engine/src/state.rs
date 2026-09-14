@@ -173,23 +173,6 @@ impl DebugMetricsState {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Component, runen_ecs::Resource)]
-pub struct GameplayRuntimeConfig {
-    pub chunk_size: f32,
-    pub chunk_load_radius: u32,
-    pub infinite_world: bool,
-}
-
-impl Default for GameplayRuntimeConfig {
-    fn default() -> Self {
-        Self {
-            chunk_size: 24.0,
-            chunk_load_radius: 2,
-            infinite_world: true,
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Component, runen_ecs::Resource)]
 pub struct SceneRuntimeState {
     pub world_scene_label: String,
@@ -197,7 +180,6 @@ pub struct SceneRuntimeState {
     pub overlay_visible: bool,
     pub world_paused: bool,
     pub enemy_kills: u32,
-    pub gameplay: GameplayRuntimeConfig,
 }
 
 impl Default for SceneRuntimeState {
@@ -208,7 +190,6 @@ impl Default for SceneRuntimeState {
             overlay_visible: false,
             world_paused: false,
             enemy_kills: 0,
-            gameplay: GameplayRuntimeConfig::default(),
         }
     }
 }

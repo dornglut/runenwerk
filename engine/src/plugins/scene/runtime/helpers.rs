@@ -1,6 +1,6 @@
 use crate::plugins::SceneManager;
 use crate::prelude::domain::{SceneId, SceneSlot, build_overlay_runtime};
-use crate::{GameplayRuntimeConfig, SceneRuntimeState, UiOverlayState};
+use crate::{SceneRuntimeState, UiOverlayState};
 use anyhow::Result;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -35,26 +35,20 @@ pub(crate) fn rebuild_overlay_stack(manager: &mut SceneManager, slots: &[SceneSl
 
 pub(crate) fn snapshot_public_scene_state(
     manager: &SceneManager,
-) -> (SceneRuntimeState, GameplayRuntimeConfig, UiOverlayState) {
-    let gameplay = GameplayRuntimeConfig {
-        chunk_size: manager.world_runtime.ctx.gameplay_config.chunk_size,
-        chunk_load_radius: manager.world_runtime.ctx.gameplay_config.chunk_load_radius,
-        infinite_world: manager.world_runtime.ctx.gameplay_config.infinite_world,
-    };
+) -> (SceneRuntimeState, UiOverlayState) {
     let scene_state = SceneRuntimeState {
         world_scene_label: manager.world.active.label().to_string(),
         overlay_scene_label: manager.active_overlay().label().to_string(),
         overlay_visible: manager.overlay_visible(),
         world_paused: manager.world.paused,
         enemy_kills: manager.world_runtime.ctx.enemy_kills,
-        gameplay,
     };
     let overlay = UiOverlayState {
         screen_size: manager.overlay_runtime.ui.screen_size,
         scale: manager.overlay_runtime.ui.scale,
         ..UiOverlayState::default()
     };
-    (scene_state, gameplay, overlay)
+    (scene_state, overlay)
 }
 
 pub(crate) fn system_time_to_millis(value: Option<SystemTime>) -> Option<u64> {

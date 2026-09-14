@@ -8,7 +8,6 @@ const GUARDED_PATHS: &[&str] = &[
     "src/plugins/fixed_step.rs",
     "src/plugins/time/mod.rs",
     "src/plugins/input/mod.rs",
-    "src/plugins/grid/mod.rs",
     "src/plugins/debug_metrics/mod.rs",
     "examples/runtime_minimal",
     "examples/window_input_demo",
