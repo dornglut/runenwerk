@@ -1,6 +1,6 @@
 use crate::app::App;
 use crate::app::domain::mode::AppMode;
-use crate::plugins::InputState;
+use crate::plugins::{ActionState, InputState};
 use crate::runtime::platform::PlatformWindowEventQueueResource;
 use crate::*;
 
@@ -14,6 +14,9 @@ impl App {
     pub(crate) fn install_builtin_resources(&mut self) {
         if self.world.resource::<InputState>().is_err() {
             self.world.insert_resource(InputState::new());
+        }
+        if self.world.resource::<ActionState>().is_err() {
+            self.world.insert_resource(ActionState::new());
         }
         if self.world.resource::<WindowState>().is_err() {
             let state = match self.mode {

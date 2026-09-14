@@ -6,10 +6,7 @@ use super::neutral::{
     PointerButton, PointerButtonInput, RelativeMotionUnit, ScrollDelta, ScrollDomain, ScrollInput,
     Vector2,
 };
-use crate::plugins::{
-    InputBindingChange, InputBindingChangeResult, InputBindings, KeyChord, action,
-};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use winit::event::{ElementState, MouseButton};
 use winit::keyboard::KeyCode;
 
@@ -158,41 +155,18 @@ pub struct TouchInputSample {
     pub pressure: Option<f32>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct KeyboardPressSample {
+    pub(super) physical_key: PhysicalKeyIdentity,
+    pub(super) modifiers: ModifiersSnapshot,
+}
+
 #[derive(Debug, runen_ecs::Component, runen_ecs::Resource)]
 pub struct InputState {
     neutral: NeutralInputAuthority,
     controls: LegacyControlInterner,
-    bindings: InputBindings,
-    actions_down: HashSet<String>,
-    actions_pressed: HashSet<String>,
+    keyboard_press_samples: Vec<KeyboardPressSample>,
     pub typed_text: String,
-    pub submitted: bool,
-    pub insert_newline: bool,
-    pub backspace: bool,
-    pub delete: bool,
-    pub move_left: bool,
-    pub move_right: bool,
-    pub move_up: bool,
-    pub move_down: bool,
-    pub move_home: bool,
-    pub move_end: bool,
-    pub page_up: bool,
-    pub page_down: bool,
-    pub world_move_left: bool,
-    pub world_move_right: bool,
-    pub world_move_up: bool,
-    pub world_move_down: bool,
-    pub toggle_pause_menu: bool,
-    pub toggle_ui_editor_mode: bool,
-    pub save_ui_template: bool,
-    pub editor_hide_selected: bool,
-    pub editor_restore_all: bool,
-    pub scene_next: bool,
-    pub scene_prev: bool,
-    pub scene_console: bool,
-    pub scene_hud: bool,
-    pub scene_overlay_push: bool,
-    pub scene_overlay_pop: bool,
     pub overlay_consumed: bool,
     pub mouse_delta: (f32, f32),
     pub mouse_position: (f32, f32),
@@ -214,37 +188,8 @@ impl Default for InputState {
         Self {
             neutral: NeutralInputAuthority::default(),
             controls: LegacyControlInterner::default(),
-            bindings: InputBindings::with_default_bindings(),
-            actions_down: HashSet::new(),
-            actions_pressed: HashSet::new(),
+            keyboard_press_samples: Vec::new(),
             typed_text: String::new(),
-            submitted: false,
-            insert_newline: false,
-            backspace: false,
-            delete: false,
-            move_left: false,
-            move_right: false,
-            move_up: false,
-            move_down: false,
-            move_home: false,
-            move_end: false,
-            page_up: false,
-            page_down: false,
-            world_move_left: false,
-            world_move_right: false,
-            world_move_up: false,
-            world_move_down: false,
-            toggle_pause_menu: false,
-            toggle_ui_editor_mode: false,
-            save_ui_template: false,
-            editor_hide_selected: false,
-            editor_restore_all: false,
-            scene_next: false,
-            scene_prev: false,
-            scene_console: false,
-            scene_hud: false,
-            scene_overlay_push: false,
-            scene_overlay_pop: false,
             overlay_consumed: false,
             mouse_delta: (0.0, 0.0),
             mouse_position: (0.0, 0.0),
@@ -268,94 +213,13 @@ impl InputState {
         Self::default()
     }
 
-    pub fn bindings(&self) -> &InputBindings {
-        &self.bindings
-    }
-
-    pub fn set_bindings(&mut self, bindings: InputBindings) {
-        self.bindings = bindings;
-        self.actions_pressed.clear();
-        self.refresh_action_state_from_bindings();
-    }
-
-    pub fn reset_default_bindings(&mut self) {
-        self.set_bindings(InputBindings::with_default_bindings());
-    }
-
-    pub fn map_key(&mut self, action: impl Into<String>, key: KeyCode) {
-        self.map_chord(action, KeyChord::new(key));
-    }
-
-    pub fn map_chord(&mut self, action: impl Into<String>, chord: KeyChord) {
-        if self.bindings.map_chord(action, chord) {
-            self.refresh_action_state_from_bindings();
-        }
-    }
-
-    pub fn unmap_key(&mut self, action: &str, key: KeyCode) -> usize {
-        let removed = self.bindings.unmap_key(action, key);
-        if removed > 0 {
-            self.refresh_action_state_from_bindings();
-        }
-        removed
-    }
-
-    pub fn unmap_chord(&mut self, action: &str, chord: KeyChord) -> bool {
-        let removed = self.bindings.unmap_chord(action, chord);
-        if removed {
-            self.refresh_action_state_from_bindings();
-        }
-        removed
-    }
-
-    pub fn clear_action_bindings(&mut self, action: &str) -> bool {
-        let removed = self.bindings.clear_action(action);
-        if removed {
-            self.refresh_action_state_from_bindings();
-        }
-        removed
-    }
-
-    pub fn apply_binding_change(&mut self, change: InputBindingChange) -> InputBindingChangeResult {
-        if self.apply_binding_change_inner(change) {
-            self.refresh_action_state_from_bindings();
-            InputBindingChangeResult::Applied
-        } else {
-            InputBindingChangeResult::Noop
-        }
-    }
-
-    pub fn apply_binding_changes<I>(&mut self, changes: I) -> usize
-    where
-        I: IntoIterator<Item = InputBindingChange>,
-    {
-        let mut applied = 0usize;
-        for change in changes {
-            if self.apply_binding_change_inner(change) {
-                applied = applied.saturating_add(1);
-            }
-        }
-        if applied > 0 {
-            self.refresh_action_state_from_bindings();
-        }
-        applied
-    }
-
-    pub fn action_down(&self, action: &str) -> bool {
-        self.actions_down.contains(action)
-    }
-
-    pub fn action_pressed(&self, action: &str) -> bool {
-        self.actions_pressed.contains(action)
-    }
-
     pub(crate) fn handle_normalized_keyboard(
         &mut self,
         context: InputContext,
         input: &KeyboardInput,
     ) {
         let control = self.controls.intern_key(&input.physical_key);
-        let was_down_for_product = self.neutral.control_down_anywhere(control);
+        let was_down_anywhere = self.neutral.control_down_anywhere(control);
         let transition = match (input.origin, input.state) {
             (ObservationOrigin::SourceReport, DigitalState::Pressed) => DigitalTransition::Down,
             (ObservationOrigin::SourceReport, DigitalState::Released) => DigitalTransition::Up,
@@ -376,15 +240,15 @@ impl InputState {
             ))
             .expect("digital keyboard observation should always be valid");
 
-        self.recompute_action_down_states();
         if input.origin == ObservationOrigin::SourceReport
             && input.state == DigitalState::Pressed
             && !input.repeat
-            && !was_down_for_product
+            && !was_down_anywhere
         {
-            self.apply_action_press_for_physical(&input.physical_key);
-        } else {
-            self.sync_legacy_flags();
+            self.keyboard_press_samples.push(KeyboardPressSample {
+                physical_key: input.physical_key.clone(),
+                modifiers: self.modifiers_snapshot(),
+            });
         }
     }
 
@@ -664,8 +528,8 @@ impl InputState {
     }
 
     pub fn clear_frame(&mut self) {
+        self.keyboard_press_samples.clear();
         self.typed_text.clear();
-        self.actions_pressed.clear();
         self.overlay_consumed = false;
         self.mouse_delta = (0.0, 0.0);
         self.mouse_motion_samples.clear();
@@ -678,7 +542,6 @@ impl InputState {
         self.right_mouse_released = false;
         self.middle_mouse_pressed = false;
         self.middle_mouse_released = false;
-        self.refresh_action_state_from_bindings();
     }
 
     pub fn left_mouse_down(&self) -> bool {
@@ -760,7 +623,7 @@ impl InputState {
         self.key_down(KeyCode::SuperLeft) || self.key_down(KeyCode::SuperRight)
     }
 
-    fn modifiers_snapshot(&self) -> ModifiersSnapshot {
+    pub(super) fn modifiers_snapshot(&self) -> ModifiersSnapshot {
         ModifiersSnapshot {
             shift: self.shift_down(),
             ctrl: self.ctrl_down(),
@@ -773,6 +636,16 @@ impl InputState {
         self.controls
             .key_code(key)
             .is_some_and(|control| self.neutral.control_down_anywhere(control))
+    }
+
+    pub(super) fn physical_key_down(&self, key: &PhysicalKeyIdentity) -> bool {
+        self.controls
+            .key(key)
+            .is_some_and(|control| self.neutral.control_down_anywhere(control))
+    }
+
+    pub(super) fn keyboard_press_samples(&self) -> &[KeyboardPressSample] {
+        &self.keyboard_press_samples
     }
 
     fn button_down(&self, button: PointerButton) -> bool {
@@ -792,94 +665,6 @@ impl InputState {
     pub(crate) fn neutral_active_touch_count(&self) -> usize {
         self.neutral.active_contact_count(LEGACY_WINDOW_SOURCE)
     }
-
-    fn apply_action_press_for_physical(&mut self, key: &PhysicalKeyIdentity) {
-        let modifiers = self.modifiers_snapshot();
-        let actions = self
-            .bindings
-            .matching_actions_for_physical_identity(key, modifiers);
-        for action in actions {
-            self.actions_pressed.insert(action.clone());
-            self.actions_down.insert(action);
-        }
-        self.sync_legacy_flags();
-    }
-
-    fn apply_binding_change_inner(&mut self, change: InputBindingChange) -> bool {
-        match change {
-            InputBindingChange::MapKey { action, key } => self.bindings.map_key(action, key),
-            InputBindingChange::MapChord { action, chord } => {
-                self.bindings.map_chord(action, chord)
-            }
-            InputBindingChange::UnmapKey { action, key } => {
-                self.bindings.unmap_key(&action, key) > 0
-            }
-            InputBindingChange::UnmapChord { action, chord } => {
-                self.bindings.unmap_chord(&action, chord)
-            }
-            InputBindingChange::ClearAction { action } => self.bindings.clear_action(&action),
-            InputBindingChange::ResetDefaults => {
-                self.bindings = InputBindings::with_default_bindings();
-                true
-            }
-        }
-    }
-
-    fn refresh_action_state_from_bindings(&mut self) {
-        self.recompute_action_down_states();
-        self.sync_legacy_flags();
-    }
-
-    pub(crate) fn recompute_action_down_states(&mut self) {
-        let modifiers = self.modifiers_snapshot();
-        let neutral = &self.neutral;
-        let controls = &self.controls;
-        let mut actions_down = HashSet::new();
-        for action in self.bindings.action_ids() {
-            if self.bindings.action_down(
-                action,
-                |key| {
-                    controls
-                        .key_code(key)
-                        .is_some_and(|control| neutral.control_down_anywhere(control))
-                },
-                modifiers,
-            ) {
-                actions_down.insert(action.clone());
-            }
-        }
-        self.actions_down = actions_down;
-    }
-
-    pub(crate) fn sync_legacy_flags(&mut self) {
-        self.submitted = self.action_pressed(action::UI_SUBMIT);
-        self.insert_newline = self.action_pressed(action::UI_INSERT_NEWLINE);
-        self.backspace = self.action_pressed(action::UI_BACKSPACE);
-        self.delete = self.action_pressed(action::UI_DELETE);
-        self.move_left = self.action_down(action::UI_MOVE_LEFT);
-        self.move_right = self.action_down(action::UI_MOVE_RIGHT);
-        self.move_up = self.action_down(action::UI_MOVE_UP);
-        self.move_down = self.action_down(action::UI_MOVE_DOWN);
-        self.move_home = self.action_down(action::UI_MOVE_HOME);
-        self.move_end = self.action_down(action::UI_MOVE_END);
-        self.page_up = self.action_down(action::UI_PAGE_UP);
-        self.page_down = self.action_down(action::UI_PAGE_DOWN);
-        self.world_move_left = self.action_down(action::WORLD_MOVE_LEFT);
-        self.world_move_right = self.action_down(action::WORLD_MOVE_RIGHT);
-        self.world_move_up = self.action_down(action::WORLD_MOVE_UP);
-        self.world_move_down = self.action_down(action::WORLD_MOVE_DOWN);
-        self.toggle_pause_menu = self.action_pressed(action::SYSTEM_TOGGLE_PAUSE_MENU);
-        self.toggle_ui_editor_mode = self.action_pressed(action::UI_TOGGLE_EDITOR_MODE);
-        self.save_ui_template = self.action_pressed(action::UI_SAVE_TEMPLATE);
-        self.editor_hide_selected = self.action_pressed(action::UI_EDITOR_HIDE_SELECTED);
-        self.editor_restore_all = self.action_pressed(action::UI_EDITOR_RESTORE_ALL);
-        self.scene_next = self.action_pressed(action::SCENE_NEXT);
-        self.scene_prev = self.action_pressed(action::SCENE_PREV);
-        self.scene_console = self.action_pressed(action::SCENE_CONSOLE);
-        self.scene_hud = self.action_pressed(action::SCENE_HUD);
-        self.scene_overlay_push = self.action_pressed(action::SCENE_OVERLAY_PUSH);
-        self.scene_overlay_pop = self.action_pressed(action::SCENE_OVERLAY_POP);
-    }
 }
 
 fn legacy_pressure_projection(measurement: AnalogMeasurement) -> Option<f32> {
@@ -898,7 +683,7 @@ fn legacy_pressure_projection(measurement: AnalogMeasurement) -> Option<f32> {
     normalized.is_finite().then(|| normalized.clamp(0.0, 1.0))
 }
 
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
 pub struct ModifiersSnapshot {
     pub(crate) shift: bool,
     pub(crate) ctrl: bool,

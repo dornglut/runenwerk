@@ -12,7 +12,12 @@ use crate::runtime::{CoreSet, FixedUpdate, PreUpdate, Startup, SystemConfigExt, 
 
 pub(crate) fn install_scene_runtime_systems(app: &mut App) {
     app.add_systems(Startup, scene_setup_system);
-    app.add_systems(PreUpdate, scene_transition_system.in_set(CoreSet::Scene));
+    app.add_systems(
+        PreUpdate,
+        scene_transition_system
+            .in_set(CoreSet::Scene)
+            .after_if_present(CoreSet::Input),
+    );
     app.add_systems(
         FixedUpdate,
         world_scene_update_system.in_set(CoreSet::Scene),

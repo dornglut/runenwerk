@@ -1,4 +1,4 @@
-use crate::plugins::{InputState, TimePlugin};
+use crate::plugins::{InputFinalizePlugin, InputState, TimePlugin};
 // Owner: Engine Scene Plugin - Tests
 use super::super::domain::{QuestState, WorldToOverlayMessage};
 use super::super::{
@@ -8,6 +8,7 @@ use super::super::{
 use crate::prelude::*;
 use ui_render_data::UiPrimitive;
 use winit::event::{ElementState, MouseButton};
+use winit::keyboard::KeyCode;
 
 #[test]
 fn format_world_message_renders_all_variants() {
@@ -46,11 +47,12 @@ fn format_world_message_renders_all_variants() {
 fn scene_plugin_toggles_pause_overlay_and_updates_public_state() {
     let mut app = App::headless();
     app.add_plugin(TimePlugin);
+    app.add_plugin(InputFinalizePlugin);
     app.add_plugin(ScenePlugin);
     app.world_mut()
         .resource_mut::<InputState>()
         .expect("input state should exist")
-        .toggle_pause_menu = true;
+        .handle_keyboard_input(KeyCode::Escape, ElementState::Pressed, None);
 
     let app = app.run_for_frames(1).expect("scene plugin should run");
     let scene = app
