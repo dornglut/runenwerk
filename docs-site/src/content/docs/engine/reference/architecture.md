@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-14
 ---
 
 # Engine Architecture
@@ -32,7 +32,6 @@ Builtin resource installation:
   - `FixedTimeConfig`, `CatchupBudget`, `FixedTimeState`, `SimulationTick`
   - `ProductPublicationRuntimeResource`
   - `QuerySnapshotRuntimeResource`
-  - scene/runtime state resources used by built-in plugins
 
 `Time` is not a bare App builtin. `TimePlugin` owns default `Time` installation and frame-time
 progression; `default_plugins()` includes `TimePlugin` for the ordinary engine stack.
@@ -79,6 +78,22 @@ The default engine handler ratifies staged snapshots, enforces strict
 product-domain consumption decisions, preserves prior snapshots on rejected
 updates, invalidates snapshots deterministically on source-generation changes,
 and keeps accepted, rejected, preserved, and invalidated decisions inspectable.
+
+## Execution Fabric Runtime
+
+Engine runtime owns the reusable execution and cache-metadata semantics exposed
+by `RuntimeJobExecutorResource` and `RuntimeProductCacheResource`. Resource
+installation is application/product composition, not a bare-App invariant.
+
+A bare `App` therefore does not imply product-job execution or runtime product
+cache state. Current Draw composition selects both through `DrawingAppPlugin`:
+it installs the maintained bounded worker executor only when the application did
+not explicitly supply an executor and initializes the runtime product cache
+non-overwritingly. Explicit caller resources remain authoritative.
+
+Product-job completion visibility remains governed by the existing product
+publication and query snapshot barriers. Selecting executor/cache resources does
+not transfer product payload truth or publication authority to the App.
 
 ## Render Product Selection Runtime
 
