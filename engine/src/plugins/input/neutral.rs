@@ -8,6 +8,10 @@ impl InputSourceId {
     pub const fn new(raw: u64) -> Self {
         Self(raw)
     }
+
+    pub const fn raw(self) -> u64 {
+        self.0
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -17,6 +21,10 @@ impl InputDeviceId {
     /// Creates a runtime/session-scoped device identity. This value is not persistent identity.
     pub const fn new(raw: u64) -> Self {
         Self(raw)
+    }
+
+    pub const fn raw(self) -> u64 {
+        self.0
     }
 }
 
@@ -33,7 +41,20 @@ impl InputContext {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct ControlId(u64);
+pub struct ToolId(u64);
+
+impl ToolId {
+    pub const fn new(raw: u64) -> Self {
+        Self(raw)
+    }
+
+    pub const fn raw(self) -> u64 {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ControlId(u64);
 
 impl ControlId {
     pub(crate) const fn new(raw: u64) -> Self {
@@ -42,11 +63,15 @@ impl ControlId {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct ContactId(u64);
+pub struct ContactId(u64);
 
 impl ContactId {
-    pub(crate) const fn new(raw: u64) -> Self {
+    pub const fn new(raw: u64) -> Self {
         Self(raw)
+    }
+
+    pub const fn raw(self) -> u64 {
+        self.0
     }
 }
 
@@ -99,7 +124,45 @@ pub enum ObservationOrigin {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum DigitalTransition {
+pub enum EvidenceStatus {
+    ObservedConfirmed,
+    EstimatedRevisable,
+    PredictedProvisional,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeliveryRole {
+    OrdinaryCurrent,
+    HistoricalCoalesced,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceTimeUnit {
+    Microseconds,
+    Milliseconds,
+    Nanoseconds,
+    NativeTicks { ticks_per_second: u64 },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SourceTime {
+    pub context: InputContext,
+    pub value: u64,
+    pub unit: SourceTimeUnit,
+}
+
+impl SourceTime {
+    pub const fn new(context: InputContext, value: u64, unit: SourceTimeUnit) -> Self {
+        Self {
+            context,
+            value,
+            unit,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DigitalTransition {
     Down,
     ReconcileDown,
     Up,
@@ -194,7 +257,7 @@ pub enum CoordinateSpace {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum RelativeMotionUnit {
+pub enum RelativeMotionUnit {
     BackendDeviceUnits,
 }
 
@@ -217,7 +280,10 @@ pub enum ScrollPhase {
 pub enum MeasurementDomain {
     LegacyPressureScalar,
     NormalizedUnitInterval,
+    SignedNormalizedUnitInterval,
     CalibratedForce { max_possible_force: f32 },
+    Bounded { min: f32, max: f32 },
+    Degrees { min: f32, max: f32 },
 }
 
 impl MeasurementDomain {
@@ -230,7 +296,31 @@ impl MeasurementDomain {
     pub fn max_possible_force(self) -> Option<f32> {
         match self {
             Self::CalibratedForce { max_possible_force } => Some(max_possible_force),
-            Self::LegacyPressureScalar | Self::NormalizedUnitInterval => None,
+            Self::LegacyPressureScalar
+            | Self::NormalizedUnitInterval
+            | Self::SignedNormalizedUnitInterval
+            | Self::Bounded { .. }
+            | Self::Degrees { .. } => None,
+        }
+    }
+
+    pub(crate) fn accepts(self, value: f32) -> bool {
+        if !value.is_finite() {
+            return false;
+        }
+        match self {
+            Self::LegacyPressureScalar | Self::NormalizedUnitInterval => {
+                (0.0..=1.0).contains(&value)
+            }
+            Self::SignedNormalizedUnitInterval => (-1.0..=1.0).contains(&value),
+            Self::CalibratedForce { max_possible_force } => {
+                max_possible_force.is_finite()
+                    && max_possible_force >= 0.0
+                    && (0.0..=max_possible_force).contains(&value)
+            }
+            Self::Bounded { min, max } | Self::Degrees { min, max } => {
+                min.is_finite() && max.is_finite() && min <= max && (min..=max).contains(&value)
+            }
         }
     }
 }
@@ -249,13 +339,13 @@ impl Point2 {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) struct Vector2 {
-    pub(crate) x: f32,
-    pub(crate) y: f32,
+pub struct Vector2 {
+    pub x: f32,
+    pub y: f32,
 }
 
 impl Vector2 {
-    pub(crate) const fn new(x: f32, y: f32) -> Self {
+    pub const fn new(x: f32, y: f32) -> Self {
         Self { x, y }
     }
 }
@@ -296,9 +386,70 @@ pub struct AnalogMeasurement {
 }
 
 impl AnalogMeasurement {
-    pub(crate) const fn new(value: f32, domain: MeasurementDomain) -> Self {
+    pub const fn new(value: f32, domain: MeasurementDomain) -> Self {
         Self { value, domain }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputToolKind {
+    Mouse,
+    Pen,
+    Brush,
+    Marker,
+    Airbrush,
+    Eraser,
+    Finger,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContactPresence {
+    Hover,
+    Contact,
+    OutOfRange,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct PhysicalTabletControls {
+    pub eraser: bool,
+    pub barrel_primary: bool,
+    pub barrel_secondary: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct StylusTilt {
+    pub x_degrees: f32,
+    pub y_degrees: f32,
+}
+
+impl StylusTilt {
+    pub const fn new(x_degrees: f32, y_degrees: f32) -> Self {
+        Self {
+            x_degrees,
+            y_degrees,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TabletObservation {
+    pub contact: ContactId,
+    pub tool: Option<ToolId>,
+    pub tool_kind: InputToolKind,
+    pub phase: ContactPhase,
+    pub presence: ContactPresence,
+    pub position: Point2,
+    pub delta: Vector2,
+    pub pressure: Option<AnalogMeasurement>,
+    pub tangential_pressure: Option<AnalogMeasurement>,
+    pub tilt: Option<StylusTilt>,
+    pub twist: Option<AnalogMeasurement>,
+    pub controls: PhysicalTabletControls,
+    pub source_time: Option<SourceTime>,
+    pub evidence: EvidenceStatus,
+    pub delivery: DeliveryRole,
+    pub origin: ObservationOrigin,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -310,8 +461,8 @@ pub struct ContactInput {
     pub altitude_angle_radians: Option<f32>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) enum InputObservation {
+#[derive(Debug, Clone, PartialEq)]
+pub enum InputObservation {
     DigitalControl {
         control: ControlId,
         transition: DigitalTransition,
@@ -335,26 +486,38 @@ pub(crate) enum InputObservation {
         pressure: Option<AnalogMeasurement>,
         altitude_angle_radians: Option<f32>,
     },
+    Tablet(TabletObservation),
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct ObservationGroup {
-    context: InputContext,
-    observations: Vec<InputObservation>,
+pub struct InputObservationGroup {
+    pub context: InputContext,
+    pub observations: Vec<InputObservation>,
 }
 
-impl ObservationGroup {
-    pub(crate) fn new_in(context: InputContext, observations: Vec<InputObservation>) -> Self {
+impl InputObservationGroup {
+    pub fn new(context: InputContext, observations: Vec<InputObservation>) -> Self {
         Self {
             context,
             observations,
         }
     }
 
+    pub fn single(context: InputContext, observation: InputObservation) -> Self {
+        Self::new(context, vec![observation])
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_in(context: InputContext, observations: Vec<InputObservation>) -> Self {
+        Self::new(context, observations)
+    }
+
     pub(crate) fn single_in(context: InputContext, observation: InputObservation) -> Self {
-        Self::new_in(context, vec![observation])
+        Self::single(context, observation)
     }
 }
+
+pub(crate) type ObservationGroup = InputObservationGroup;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct ContactState {
@@ -362,8 +525,10 @@ pub(crate) struct ContactState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum NeutralInputError {
+pub enum NeutralInputError {
     NonFiniteObservation,
+    InvalidMeasurement,
+    SourceTimeContextMismatch,
 }
 
 #[derive(Debug, Default)]
@@ -388,6 +553,28 @@ impl NeutralInputAuthority {
             .any(|observation| !is_finite(observation))
         {
             return Err(NeutralInputError::NonFiniteObservation);
+        }
+        if group
+            .observations
+            .iter()
+            .any(|observation| !has_valid_measurements(observation))
+        {
+            return Err(NeutralInputError::InvalidMeasurement);
+        }
+        for observation in &group.observations {
+            if let InputObservation::Tablet(tablet) = observation
+                && tablet.source_time.is_some_and(|time| {
+                    time.context != group.context
+                        || matches!(
+                            time.unit,
+                            SourceTimeUnit::NativeTicks {
+                                ticks_per_second: 0
+                            }
+                        )
+                })
+            {
+                return Err(NeutralInputError::SourceTimeContextMismatch);
+            }
         }
 
         let source_sequence = self
@@ -493,6 +680,31 @@ impl NeutralInputAuthority {
                         .remove(&(context.source, context.device, contact));
                 }
             },
+            InputObservation::Tablet(observation) => {
+                if observation.evidence == EvidenceStatus::PredictedProvisional {
+                    return;
+                }
+                match observation.phase {
+                    ContactPhase::Begin | ContactPhase::Update
+                        if observation.presence == ContactPresence::Contact =>
+                    {
+                        self.state.contacts.insert(
+                            (context.source, context.device, observation.contact),
+                            ContactState {
+                                position: observation.position,
+                            },
+                        );
+                    }
+                    ContactPhase::End | ContactPhase::Cancel => {
+                        self.state.contacts.remove(&(
+                            context.source,
+                            context.device,
+                            observation.contact,
+                        ));
+                    }
+                    ContactPhase::Begin | ContactPhase::Update => {}
+                }
+            }
         }
     }
 }
@@ -518,6 +730,22 @@ fn is_finite(observation: &InputObservation) -> bool {
                 && pressure.is_none_or(measurement_is_finite)
                 && altitude_angle_radians.is_none_or(|value| value.is_finite())
         }
+        InputObservation::Tablet(observation) => {
+            point_is_finite(observation.position)
+                && observation.delta.x.is_finite()
+                && observation.delta.y.is_finite()
+                && observation.pressure.is_none_or(measurement_is_finite)
+                && observation
+                    .tangential_pressure
+                    .is_none_or(measurement_is_finite)
+                && observation.twist.is_none_or(measurement_is_finite)
+                && observation.tilt.is_none_or(|tilt| {
+                    tilt.x_degrees.is_finite()
+                        && tilt.y_degrees.is_finite()
+                        && (-90.0..=90.0).contains(&tilt.x_degrees)
+                        && (-90.0..=90.0).contains(&tilt.y_degrees)
+                })
+        }
     }
 }
 
@@ -527,6 +755,30 @@ fn measurement_is_finite(measurement: AnalogMeasurement) -> bool {
             .domain
             .max_possible_force()
             .is_none_or(f32::is_finite)
+}
+
+fn has_valid_measurements(observation: &InputObservation) -> bool {
+    match observation {
+        // Legacy touch pressure keeps its historical scalar projection semantics; the stricter
+        // measured-domain admission below applies to native tablet observations.
+        InputObservation::Contact { .. } => true,
+        InputObservation::Tablet(observation) => {
+            observation
+                .pressure
+                .is_none_or(|measurement| measurement.domain.accepts(measurement.value))
+                && observation
+                    .tangential_pressure
+                    .is_none_or(|measurement| measurement.domain.accepts(measurement.value))
+                && observation
+                    .twist
+                    .is_none_or(|measurement| measurement.domain.accepts(measurement.value))
+                && observation.tilt.is_none_or(|tilt| {
+                    (-90.0..=90.0).contains(&tilt.x_degrees)
+                        && (-90.0..=90.0).contains(&tilt.y_degrees)
+                })
+        }
+        _ => true,
+    }
 }
 
 fn point_is_finite(point: Point2) -> bool {
@@ -758,6 +1010,112 @@ mod tests {
 
         assert_eq!(result, Err(NeutralInputError::NonFiniteObservation));
         assert!(!authority.control_down_in(CONTEXT_A, CONTROL));
+        assert_eq!(authority.admission_sequence().get(), 0);
+    }
+
+    fn tablet_observation(
+        phase: ContactPhase,
+        evidence: EvidenceStatus,
+        position: Point2,
+        pressure: Option<AnalogMeasurement>,
+    ) -> TabletObservation {
+        TabletObservation {
+            contact: ContactId::new(44),
+            tool: Some(ToolId::new(8)),
+            tool_kind: InputToolKind::Pen,
+            phase,
+            presence: ContactPresence::Contact,
+            position,
+            delta: Vector2::new(1.0, 2.0),
+            pressure,
+            tangential_pressure: None,
+            tilt: None,
+            twist: None,
+            controls: PhysicalTabletControls::default(),
+            source_time: Some(SourceTime::new(
+                CONTEXT_A,
+                100,
+                SourceTimeUnit::Microseconds,
+            )),
+            evidence,
+            delivery: DeliveryRole::OrdinaryCurrent,
+            origin: ObservationOrigin::SourceReport,
+        }
+    }
+
+    #[test]
+    fn predicted_tablet_observation_does_not_mutate_confirmed_contact_state() {
+        let mut authority = NeutralInputAuthority::default();
+        let position = Point2::new(10.0, 12.0, CoordinateSpace::WindowPhysicalPixels);
+        let contact = ContactId::new(44);
+
+        authority
+            .admit(ObservationGroup::single_in(
+                CONTEXT_A,
+                InputObservation::Tablet(tablet_observation(
+                    ContactPhase::Begin,
+                    EvidenceStatus::ObservedConfirmed,
+                    position,
+                    Some(AnalogMeasurement::new(
+                        0.2,
+                        MeasurementDomain::NormalizedUnitInterval,
+                    )),
+                )),
+            ))
+            .expect("confirmed tablet observation should admit");
+        authority
+            .admit(ObservationGroup::single_in(
+                CONTEXT_A,
+                InputObservation::Tablet(tablet_observation(
+                    ContactPhase::Update,
+                    EvidenceStatus::PredictedProvisional,
+                    Point2::new(99.0, 101.0, CoordinateSpace::WindowPhysicalPixels),
+                    Some(AnalogMeasurement::new(
+                        0.9,
+                        MeasurementDomain::NormalizedUnitInterval,
+                    )),
+                )),
+            ))
+            .expect("predicted tablet observation should admit");
+
+        assert_eq!(
+            authority
+                .contact_state_in(CONTEXT_A, contact)
+                .unwrap()
+                .position,
+            position
+        );
+    }
+
+    #[test]
+    fn invalid_tablet_measurement_rejects_group_without_partial_state() {
+        let mut authority = NeutralInputAuthority::default();
+        let result = authority.admit(ObservationGroup::new_in(
+            CONTEXT_A,
+            vec![
+                InputObservation::Tablet(tablet_observation(
+                    ContactPhase::Begin,
+                    EvidenceStatus::ObservedConfirmed,
+                    Point2::new(10.0, 12.0, CoordinateSpace::WindowPhysicalPixels),
+                    Some(AnalogMeasurement::new(
+                        0.3,
+                        MeasurementDomain::NormalizedUnitInterval,
+                    )),
+                )),
+                InputObservation::Tablet(tablet_observation(
+                    ContactPhase::Update,
+                    EvidenceStatus::ObservedConfirmed,
+                    Point2::new(11.0, 13.0, CoordinateSpace::WindowPhysicalPixels),
+                    Some(AnalogMeasurement::new(
+                        1.5,
+                        MeasurementDomain::NormalizedUnitInterval,
+                    )),
+                )),
+            ],
+        ));
+
+        assert_eq!(result, Err(NeutralInputError::InvalidMeasurement));
+        assert_eq!(authority.active_contact_count(SOURCE_A), 0);
         assert_eq!(authority.admission_sequence().get(), 0);
     }
 }

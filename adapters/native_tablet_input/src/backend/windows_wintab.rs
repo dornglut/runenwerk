@@ -1,16 +1,23 @@
 //! Optional Wacom Wintab backend.
 
-use ui_input::{
-    PointerBarrelButtons, PointerButton, PointerCalibration, PointerContactState, PointerDelta,
-    PointerEventKind, PointerLatencyClass, PointerPosition, PointerTilt,
-};
-
 use crate::backend::NativeTabletBackendAdapter;
 use crate::model::{
-    NativeTabletBackendHealth, NativeTabletBackendKind, NativeTabletCapabilities,
-    NativeTabletDeviceControlResource, NativeTabletPacket, NativeTabletRuntimeResource,
-    NativeTabletSample, NativeTabletToolKind,
+    NativeTabletBackendHealth, NativeTabletBackendKind, NativeTabletBarrelButtons,
+    NativeTabletButton, NativeTabletCalibration, NativeTabletCapabilities,
+    NativeTabletContactState, NativeTabletDelta, NativeTabletDeviceControlResource,
+    NativeTabletEventKind, NativeTabletLatencyClass, NativeTabletPacket, NativeTabletPosition,
+    NativeTabletRuntimeResource, NativeTabletSample, NativeTabletTilt, NativeTabletToolKind,
 };
+
+type PointerPosition = NativeTabletPosition;
+type PointerDelta = NativeTabletDelta;
+type PointerTilt = NativeTabletTilt;
+type PointerButton = NativeTabletButton;
+type PointerCalibration = NativeTabletCalibration;
+type PointerContactState = NativeTabletContactState;
+type PointerEventKind = NativeTabletEventKind;
+type PointerLatencyClass = NativeTabletLatencyClass;
+type PointerBarrelButtons = NativeTabletBarrelButtons;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct WindowsWintabPacketDto {
@@ -25,6 +32,7 @@ pub struct WindowsWintabPacketDto {
     pub barrel_buttons: PointerBarrelButtons,
     pub eraser: bool,
     pub in_proximity: bool,
+    pub in_contact: bool,
 }
 
 impl WindowsWintabPacketDto {
@@ -41,6 +49,7 @@ impl WindowsWintabPacketDto {
             barrel_buttons: PointerBarrelButtons::none(),
             eraser: false,
             in_proximity: true,
+            in_contact: false,
         }
     }
 }
@@ -117,8 +126,10 @@ pub fn map_windows_wintab_packet(
             .with_capabilities(capabilities)
             .with_calibration(calibration)
             .with_latency_class(PointerLatencyClass::LowLatencyPreview)
-            .with_contact(if dto.in_proximity {
+            .with_contact(if dto.in_contact {
                 PointerContactState::Contact
+            } else if dto.in_proximity {
+                PointerContactState::Hover
             } else {
                 PointerContactState::OutOfRange
             })
@@ -174,6 +185,16 @@ pub fn map_windows_wintab_history(
         .collect::<Vec<_>>();
 
     let mut packet = map_windows_wintab_packet(current, last_position, calibration);
+    packet.capabilities.pressure |= coalesced_samples
+        .iter()
+        .any(|sample| sample.pressure.is_some());
+    packet.capabilities.tilt |= coalesced_samples.iter().any(|sample| sample.tilt.is_some());
+    packet.capabilities.twist |= coalesced_samples
+        .iter()
+        .any(|sample| sample.twist_degrees.is_some());
+    packet.capabilities.tangential_pressure |= coalesced_samples
+        .iter()
+        .any(|sample| sample.tangential_pressure.is_some());
     if !coalesced_samples.is_empty() {
         packet.capabilities.coalesced_samples = true;
         packet = packet.with_coalesced_samples(coalesced_samples);
@@ -186,8 +207,10 @@ fn native_sample_from_wintab(
     delta: PointerDelta,
 ) -> NativeTabletSample {
     let mut native =
-        NativeTabletSample::new(sample.position, delta).with_contact(if sample.in_proximity {
+        NativeTabletSample::new(sample.position, delta).with_contact(if sample.in_contact {
             PointerContactState::Contact
+        } else if sample.in_proximity {
+            PointerContactState::Hover
         } else {
             PointerContactState::OutOfRange
         });
@@ -212,9 +235,9 @@ fn native_sample_from_wintab(
 fn event_button_for_kind(kind: PointerEventKind) -> Option<PointerButton> {
     match kind {
         PointerEventKind::Down | PointerEventKind::Up | PointerEventKind::Move => {
-            Some(PointerButton::Primary)
+            Some(PointerButton::Left)
         }
-        PointerEventKind::Enter | PointerEventKind::Leave | PointerEventKind::Scroll => None,
+        PointerEventKind::Enter | PointerEventKind::Leave => None,
     }
 }
 
@@ -294,6 +317,7 @@ mod tests {
             },
             eraser: false,
             in_proximity: true,
+            in_contact: true,
         };
 
         let packet = map_windows_wintab_packet(
