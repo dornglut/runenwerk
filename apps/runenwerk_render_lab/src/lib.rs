@@ -174,6 +174,13 @@ struct ReferenceHit {
     t: f64,
     normal: [f64; 3],
     reflectance: f64,
+    primitive: ReferencePrimitive,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ReferencePrimitive {
+    Sphere,
+    Plane,
 }
 
 pub fn run_founding_direct(output_root: impl AsRef<Path>) -> Result<ArtifactPaths> {
@@ -656,7 +663,7 @@ fn reference_radiance(index: usize) -> f64 {
         -1.0,
     ]);
     let origin = [0.0, 0.0, 0.0];
-    let Some(hit) = nearest_reference_hit(origin, direction) else {
+    let Some(hit) = nearest_reference_hit(origin, direction, None) else {
         return 0.0;
     };
     let light_direction = normalize(LIGHT_DIRECTION);
@@ -664,16 +671,24 @@ fn reference_radiance(index: usize) -> f64 {
     if cosine == 0.0 {
         return 0.0;
     }
-    // The controlled light points toward the camera, so neither the plane nor the sphere blocks it.
+    let hit_position = add(origin, scale(direction, hit.t));
+    if nearest_reference_hit(hit_position, light_direction, Some(hit.primitive)).is_some() {
+        return 0.0;
+    }
     hit.reflectance * LIGHT_IRRADIANCE * cosine / std::f64::consts::PI
 }
 
-fn nearest_reference_hit(origin: [f64; 3], direction: [f64; 3]) -> Option<ReferenceHit> {
+fn nearest_reference_hit(
+    origin: [f64; 3],
+    direction: [f64; 3],
+    ignored: Option<ReferencePrimitive>,
+) -> Option<ReferenceHit> {
     let sphere = sphere_hit(origin, direction);
     let plane = plane_hit(origin, direction);
     [sphere, plane]
         .into_iter()
         .flatten()
+        .filter(|hit| Some(hit.primitive) != ignored)
         .min_by(|left, right| left.t.total_cmp(&right.t))
 }
 
@@ -698,6 +713,7 @@ fn sphere_hit(origin: [f64; 3], direction: [f64; 3]) -> Option<ReferenceHit> {
         t,
         normal: normalize(sub(position, SPHERE_CENTER)),
         reflectance: SPHERE_REFLECTANCE,
+        primitive: ReferencePrimitive::Sphere,
     })
 }
 
@@ -714,6 +730,7 @@ fn plane_hit(origin: [f64; 3], direction: [f64; 3]) -> Option<ReferenceHit> {
         t,
         normal: normalize(PLANE_NORMAL),
         reflectance: PLANE_REFLECTANCE,
+        primitive: ReferencePrimitive::Plane,
     })
 }
 
