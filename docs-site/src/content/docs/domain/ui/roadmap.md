@@ -5,7 +5,7 @@ status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-14
 related:
   - ./architecture.md
   - ./story-acceptance-and-review-checklist.md
@@ -15,9 +15,12 @@ related:
   - ../../reports/audits/editor-ui-priority-code-audit-2026-05-05.md
   - ../../design/implemented/editor-self-authoring-and-final-ui-design.md
   - ../../design/implemented/editor-ui-runtime-v2-and-interaction-formation-design.md
-  - ../../design/active/editor-ui-workspace-tool-surface-architecture.md
+  - ../../design/accepted/runenwerk-editor-coordination-semantic-model.md
+  - ../../design/implemented/editor-tool-suite-registry-and-workbench-host-design.md
   - ../../design/deferred/ui-model-multiple-execution-strategies-design.md
   - ../../adr/accepted/0009-ui-interaction-formation-v2.md
+  - ../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
+  - ../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md
   - ../../design/implemented/workspace-identity-contract-and-migration-map.md
 ---
 
