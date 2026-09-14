@@ -1,4 +1,4 @@
-//! Runtime plugin that bridges native tablet backends into UI input packets.
+//! Runtime plugin that publishes native tablet observations into engine input authority.
 
 use anyhow::Result;
 use engine::prelude::{App, Plugin};

@@ -15,7 +15,9 @@ use crate::runtime::gpu_ink::{
 use crate::runtime::ink::{
     dispatch_drawing_ink_product_publication, dispatch_drawing_ink_query_publication,
 };
-use crate::runtime::resources::{DrawingHostResource, DrawingInkUploadTrackerResource};
+use crate::runtime::resources::{
+    DrawingHostResource, DrawingInkUploadTrackerResource, NativeClaimStateResource,
+};
 use crate::runtime::systems::{
     process_draw_preview_ink_jobs_system, route_draw_input_system, submit_draw_frame_system,
 };
@@ -63,6 +65,7 @@ impl Plugin for DrawingAppPlugin {
         app.init_resource::<RuntimeProductCacheResource>();
         app.init_resource::<DrawingHostResource>();
         app.init_resource::<DrawingInkUploadTrackerResource>();
+        app.init_resource::<NativeClaimStateResource>();
         app.init_resource::<DrawingInkGpuValidationReportCursorResource>();
         app.init_resource::<SurfaceFrameSubmissionRegistryResource>();
         app.add_product_publication_handler(dispatch_drawing_ink_product_publication);

@@ -1,10 +1,10 @@
 use super::neutral::{
     AnalogMeasurement, ContactId, ContactInput, ContactPhase as NeutralContactPhase, ControlId,
     CoordinateSpace, DigitalState, DigitalTransition, InputContext, InputObservation,
-    InputSourceId, KeyLocation, KeyboardInput, LogicalKey, MeasurementDomain, NativeLogicalKey,
-    NeutralInputAuthority, ObservationGroup, ObservationOrigin, PhysicalKeyIdentity, Point2,
-    PointerButton, PointerButtonInput, RelativeMotionUnit, ScrollDelta, ScrollDomain, ScrollInput,
-    Vector2,
+    InputObservationGroup, InputSourceId, KeyLocation, KeyboardInput, LogicalKey,
+    MeasurementDomain, NativeLogicalKey, NeutralInputAuthority, ObservationGroup,
+    ObservationOrigin, PhysicalKeyIdentity, Point2, PointerButton, PointerButtonInput,
+    RelativeMotionUnit, ScrollDelta, ScrollDomain, ScrollInput, Vector2,
 };
 use std::collections::HashMap;
 use winit::event::{ElementState, MouseButton};
@@ -173,6 +173,7 @@ pub struct InputState {
     mouse_motion_samples: Vec<MouseMotionSample>,
     mouse_button_transitions: Vec<MouseButtonTransitionSample>,
     touch_samples: Vec<TouchInputSample>,
+    device_observation_groups: Vec<InputObservationGroup>,
     primary_touch: Option<(InputContext, u64)>,
     pub scroll_delta: f32,
     left_mouse_pressed: bool,
@@ -196,6 +197,7 @@ impl Default for InputState {
             mouse_motion_samples: Vec::new(),
             mouse_button_transitions: Vec::new(),
             touch_samples: Vec::new(),
+            device_observation_groups: Vec::new(),
             primary_touch: None,
             scroll_delta: 0.0,
             left_mouse_pressed: false,
@@ -211,6 +213,19 @@ impl Default for InputState {
 impl InputState {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn admit_device_observation_group(
+        &mut self,
+        group: InputObservationGroup,
+    ) -> Result<(), super::neutral::NeutralInputError> {
+        self.neutral.admit(group.clone())?;
+        self.device_observation_groups.push(group);
+        Ok(())
+    }
+
+    pub fn drain_device_observation_groups(&mut self) -> Vec<InputObservationGroup> {
+        std::mem::take(&mut self.device_observation_groups)
     }
 
     pub(crate) fn handle_normalized_keyboard(
@@ -535,6 +550,7 @@ impl InputState {
         self.mouse_motion_samples.clear();
         self.mouse_button_transitions.clear();
         self.touch_samples.clear();
+        self.device_observation_groups.clear();
         self.scroll_delta = 0.0;
         self.left_mouse_pressed = false;
         self.left_mouse_released = false;
@@ -678,6 +694,14 @@ fn legacy_pressure_projection(measurement: AnalogMeasurement) -> Option<f32> {
         }
         MeasurementDomain::LegacyPressureScalar | MeasurementDomain::NormalizedUnitInterval => {
             measurement.value
+        }
+        MeasurementDomain::SignedNormalizedUnitInterval => measurement.value,
+        MeasurementDomain::Bounded { min, max } | MeasurementDomain::Degrees { min, max } => {
+            let span = max - min;
+            if span <= 0.0 {
+                return None;
+            }
+            (measurement.value - min) / span
         }
     };
     normalized.is_finite().then(|| normalized.clamp(0.0, 1.0))

@@ -2,18 +2,28 @@
 
 use std::collections::{HashMap, VecDeque};
 
-use ui_input::{
-    PointerBarrelButtons, PointerButton, PointerCalibration, PointerContactState, PointerDelta,
-    PointerEventKind, PointerLatencyClass, PointerPosition, PointerSourceKind, PointerTilt,
-};
 use winit::event_loop::EventLoopBuilder;
 
 use crate::backend::NativeTabletBackendAdapter;
 use crate::model::{
-    NativeTabletBackendHealth, NativeTabletBackendKind, NativeTabletCapabilities,
-    NativeTabletDeviceControlResource, NativeTabletPacket, NativeTabletRuntimeResource,
-    NativeTabletSample, NativeTabletToolKind,
+    NativeTabletBackendHealth, NativeTabletBackendKind, NativeTabletBarrelButtons,
+    NativeTabletButton, NativeTabletCalibration, NativeTabletCapabilities,
+    NativeTabletContactState, NativeTabletDelta, NativeTabletDeviceControlResource,
+    NativeTabletEventKind, NativeTabletLatencyClass, NativeTabletPacket, NativeTabletPosition,
+    NativeTabletRuntimeResource, NativeTabletSample, NativeTabletSourceKind, NativeTabletTilt,
+    NativeTabletToolKind,
 };
+
+type PointerPosition = NativeTabletPosition;
+type PointerDelta = NativeTabletDelta;
+type PointerTilt = NativeTabletTilt;
+type PointerBarrelButtons = NativeTabletBarrelButtons;
+type PointerButton = NativeTabletButton;
+type PointerCalibration = NativeTabletCalibration;
+type PointerContactState = NativeTabletContactState;
+type PointerEventKind = NativeTabletEventKind;
+type PointerLatencyClass = NativeTabletLatencyClass;
+type PointerSourceKind = NativeTabletSourceKind;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WindowsPointerInputKind {
@@ -25,6 +35,7 @@ pub enum WindowsPointerInputKind {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct WindowsPointerHistorySample {
     pub pointer_id: u32,
+    pub source_device: Option<u64>,
     pub input_kind: WindowsPointerInputKind,
     pub position: PointerPosition,
     pub timestamp_micros: Option<u64>,
@@ -43,6 +54,7 @@ impl WindowsPointerHistorySample {
     pub fn mouse(pointer_id: u32, position: PointerPosition) -> Self {
         Self {
             pointer_id,
+            source_device: None,
             input_kind: WindowsPointerInputKind::Mouse,
             position,
             timestamp_micros: None,
@@ -51,7 +63,7 @@ impl WindowsPointerHistorySample {
             twist_degrees: None,
             eraser: false,
             barrel_buttons: PointerBarrelButtons::none(),
-            event_button: Some(PointerButton::Primary),
+            event_button: Some(PointerButton::Left),
             primary_button_down: true,
             in_contact: true,
             in_range: true,
@@ -61,6 +73,7 @@ impl WindowsPointerHistorySample {
     pub fn pen(pointer_id: u32, position: PointerPosition) -> Self {
         Self {
             pointer_id,
+            source_device: None,
             input_kind: WindowsPointerInputKind::Pen,
             position,
             timestamp_micros: None,
@@ -69,7 +82,7 @@ impl WindowsPointerHistorySample {
             twist_degrees: None,
             eraser: false,
             barrel_buttons: PointerBarrelButtons::none(),
-            event_button: Some(PointerButton::Primary),
+            event_button: Some(PointerButton::Left),
             primary_button_down: true,
             in_contact: true,
             in_range: true,
@@ -79,6 +92,7 @@ impl WindowsPointerHistorySample {
     pub fn touch(pointer_id: u32, position: PointerPosition) -> Self {
         Self {
             pointer_id,
+            source_device: None,
             input_kind: WindowsPointerInputKind::Touch,
             position,
             timestamp_micros: None,
@@ -87,7 +101,7 @@ impl WindowsPointerHistorySample {
             twist_degrees: None,
             eraser: false,
             barrel_buttons: PointerBarrelButtons::none(),
-            event_button: Some(PointerButton::Primary),
+            event_button: Some(PointerButton::Left),
             primary_button_down: true,
             in_contact: true,
             in_range: true,
@@ -96,6 +110,11 @@ impl WindowsPointerHistorySample {
 
     pub fn with_timestamp_micros(mut self, timestamp_micros: u64) -> Self {
         self.timestamp_micros = Some(timestamp_micros);
+        self
+    }
+
+    pub fn with_source_device(mut self, source_device: u64) -> Self {
+        self.source_device = Some(source_device);
         self
     }
 
@@ -137,7 +156,7 @@ pub struct WindowsPointerBackend {
     queue: SharedWindowsPointerQueue,
     last_positions: HashMap<u32, PointerPosition>,
     messages_seen: u64,
-    packets_published: u64,
+    packets_queued: u64,
 }
 
 impl WindowsPointerBackend {
@@ -169,24 +188,31 @@ impl WindowsPointerBackend {
         let mut drained = 0_u64;
         while let Some(history) = self.queue.pop_front() {
             drained = drained.saturating_add(1);
-            let previous = self.last_positions.get(&history.pointer_id).copied();
-            if let Some(packet) =
-                map_windows_pointer_history(history, previous, control.calibration)
-            {
-                self.last_positions
-                    .insert(packet.device_id as u32, packet.position);
-                runtime.push_packet(packet);
+            let pointer_id = history.pointer_id;
+            let previous = self.last_positions.get(&pointer_id).copied();
+            match map_windows_pointer_history(history, previous, control.calibration) {
+                Ok(packet) => {
+                    self.last_positions
+                        .insert(packet.contact_id as u32, packet.position);
+                    let terminal =
+                        matches!(packet.kind, PointerEventKind::Up | PointerEventKind::Leave);
+                    runtime.push_packet(packet);
+                    self.packets_queued = self.packets_queued.saturating_add(1);
+                    if terminal {
+                        self.last_positions.remove(&pointer_id);
+                    }
+                }
+                Err(diagnostic) => runtime.diagnostics.push(diagnostic),
             }
         }
         if drained > 0 {
             self.messages_seen = self.messages_seen.saturating_add(drained);
-            self.packets_published = self.packets_published.saturating_add(drained);
             runtime.set_backend_health(NativeTabletBackendHealth::active(
                 NativeTabletBackendKind::WindowsPointer,
                 format!(
-                    "active; observed {messages} WM_POINTER messages, published {packets} packets",
+                    "active; observed {messages} WM_POINTER messages, queued {packets} packets for neutral admission",
                     messages = self.messages_seen,
-                    packets = self.packets_published
+                    packets = self.packets_queued
                 ),
             ));
         }
@@ -235,7 +261,7 @@ pub fn map_windows_pointer_history(
     history: WindowsPointerHistoryPacket,
     previous_position: Option<PointerPosition>,
     calibration: PointerCalibration,
-) -> Option<NativeTabletPacket> {
+) -> Result<NativeTabletPacket, crate::model::NativeTabletDiagnostic> {
     let mut chronological = history
         .samples_newest_first
         .into_iter()
@@ -243,7 +269,17 @@ pub fn map_windows_pointer_history(
         .collect::<Vec<_>>();
     chronological.reverse();
 
-    let (current, coalesced) = chronological.split_last()?;
+    let (current, coalesced) = chronological.split_last().ok_or(
+        crate::model::NativeTabletDiagnostic::InvalidObservation("empty pointer history".into()),
+    )?;
+    let established_devices = chronological
+        .iter()
+        .chain(std::iter::once(current))
+        .filter_map(|sample| sample.source_device)
+        .collect::<std::collections::BTreeSet<_>>();
+    if established_devices.len() > 1 {
+        return Err(crate::model::NativeTabletDiagnostic::ConflictingDeviceIdentity);
+    }
     let mut last_position = previous_position;
     let coalesced_samples = coalesced
         .iter()
@@ -258,9 +294,11 @@ pub fn map_windows_pointer_history(
     let capabilities = capabilities_from_windows_sample(*current, !coalesced_samples.is_empty());
     if current.input_kind == WindowsPointerInputKind::Mouse
         && matches!(history.kind, PointerEventKind::Down | PointerEventKind::Up)
-        && current.event_button != Some(PointerButton::Primary)
+        && current.event_button != Some(PointerButton::Left)
     {
-        return None;
+        return Err(crate::model::NativeTabletDiagnostic::InvalidObservation(
+            "non-primary mouse transition".into(),
+        ));
     }
     let (mut packet, tool_kind) = match current.input_kind {
         WindowsPointerInputKind::Mouse => (
@@ -325,7 +363,9 @@ pub fn map_windows_pointer_history(
         packet = packet.with_timestamp_micros(timestamp);
     }
 
-    Some(packet)
+    packet.device_id = established_devices.into_iter().next();
+    packet.contact_id = u64::from(history.pointer_id);
+    Ok(packet)
 }
 
 fn native_sample_from_windows(
@@ -402,17 +442,14 @@ fn event_button_for_sample(
     match sample.input_kind {
         WindowsPointerInputKind::Mouse => match kind {
             PointerEventKind::Down | PointerEventKind::Up => sample.event_button,
-            PointerEventKind::Move if sample.primary_button_down => Some(PointerButton::Primary),
-            PointerEventKind::Move
-            | PointerEventKind::Enter
-            | PointerEventKind::Leave
-            | PointerEventKind::Scroll => None,
+            PointerEventKind::Move if sample.primary_button_down => Some(PointerButton::Left),
+            PointerEventKind::Move | PointerEventKind::Enter | PointerEventKind::Leave => None,
         },
         WindowsPointerInputKind::Pen | WindowsPointerInputKind::Touch => match kind {
             PointerEventKind::Down | PointerEventKind::Up | PointerEventKind::Move => {
-                Some(PointerButton::Primary)
+                Some(PointerButton::Left)
             }
-            PointerEventKind::Enter | PointerEventKind::Leave | PointerEventKind::Scroll => None,
+            PointerEventKind::Enter | PointerEventKind::Leave => None,
         },
     }
 }
@@ -742,18 +779,17 @@ mod platform {
         let mut sample = WindowsPointerHistorySample::pen(info.pointerInfo.pointerId, position);
         sample.timestamp_micros = Some(u64::from(info.pointerInfo.dwTime) * 1_000);
         if info.penMask & PEN_MASK_PRESSURE != 0 {
-            sample.pressure = Some((info.pressure as f32 / 1024.0).clamp(0.0, 1.0));
+            sample.pressure = Some(info.pressure as f32 / 1024.0);
         }
+        let source_device = info.pointerInfo.sourceDevice as usize;
+        sample.source_device = (source_device != 0).then_some(source_device as u64);
         let has_tilt_x = info.penMask & PEN_MASK_TILT_X != 0;
         let has_tilt_y = info.penMask & PEN_MASK_TILT_Y != 0;
-        if has_tilt_x || has_tilt_y {
-            sample.tilt = Some(PointerTilt::new(
-                if has_tilt_x { info.tiltX as f32 } else { 0.0 },
-                if has_tilt_y { info.tiltY as f32 } else { 0.0 },
-            ));
+        if has_tilt_x && has_tilt_y {
+            sample.tilt = Some(PointerTilt::new(info.tiltX as f32, info.tiltY as f32));
         }
         if info.penMask & PEN_MASK_ROTATION != 0 {
-            sample.twist_degrees = Some((info.rotation as f32).clamp(0.0, 360.0));
+            sample.twist_degrees = Some(info.rotation as f32);
         }
         sample.eraser = info.penFlags & (PEN_FLAG_ERASER | PEN_FLAG_INVERTED) != 0;
         sample.barrel_buttons = PointerBarrelButtons {
@@ -774,8 +810,10 @@ mod platform {
         let mut sample = WindowsPointerHistorySample::touch(info.pointerInfo.pointerId, position);
         sample.timestamp_micros = Some(u64::from(info.pointerInfo.dwTime) * 1_000);
         if info.touchMask & TOUCH_MASK_PRESSURE != 0 {
-            sample.pressure = Some((info.pressure as f32 / 1024.0).clamp(0.0, 1.0));
+            sample.pressure = Some(info.pressure as f32 / 1024.0);
         }
+        let source_device = info.pointerInfo.sourceDevice as usize;
+        sample.source_device = (source_device != 0).then_some(source_device as u64);
         sample.in_contact = info.pointerInfo.pointerFlags & POINTER_FLAG_INCONTACT != 0;
         sample.in_range = info.pointerInfo.pointerFlags & POINTER_FLAG_INRANGE != 0;
         sample
@@ -784,6 +822,8 @@ mod platform {
     fn pointer_info_to_mouse_sample(info: POINTER_INFO, hwnd: HWND) -> WindowsPointerHistorySample {
         let position = client_position(info.ptPixelLocation, info.hwndTarget, hwnd);
         let mut sample = WindowsPointerHistorySample::mouse(info.pointerId, position);
+        let source_device = info.sourceDevice as usize;
+        sample.source_device = (source_device != 0).then_some(source_device as u64);
         sample.timestamp_micros = Some(u64::from(info.dwTime) * 1_000);
         sample.event_button = pointer_button_from_change(info.ButtonChangeType);
         sample.primary_button_down = info.pointerFlags & POINTER_FLAG_FIRSTBUTTON != 0;
@@ -796,10 +836,10 @@ mod platform {
     fn pointer_button_from_change(change: i32) -> Option<PointerButton> {
         match change {
             POINTER_CHANGE_FIRSTBUTTON_DOWN | POINTER_CHANGE_FIRSTBUTTON_UP => {
-                Some(PointerButton::Primary)
+                Some(PointerButton::Left)
             }
             POINTER_CHANGE_SECONDBUTTON_DOWN | POINTER_CHANGE_SECONDBUTTON_UP => {
-                Some(PointerButton::Secondary)
+                Some(PointerButton::Right)
             }
             POINTER_CHANGE_THIRDBUTTON_DOWN | POINTER_CHANGE_THIRDBUTTON_UP => {
                 Some(PointerButton::Middle)
@@ -882,7 +922,6 @@ mod platform {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ui_input::PointerSampleRole;
 
     #[test]
     fn windows_pointer_history_maps_newest_first_to_ordered_coalesced_samples() {
@@ -929,15 +968,12 @@ mod tests {
             packet.coalesced_samples[1].delta,
             PointerDelta::new(10.0, 0.0)
         );
-        assert!(packet.coalesced_samples.iter().all(|sample| {
-            sample
-                .into_pointer_sample(
-                    PointerSampleRole::Coalesced,
-                    packet.capabilities,
-                    packet.calibration,
-                )
-                .is_valid()
-        }));
+        assert!(
+            packet
+                .coalesced_samples
+                .iter()
+                .all(|sample| sample.position.x.is_finite() && sample.position.y.is_finite())
+        );
     }
 
     #[test]
@@ -956,7 +992,7 @@ mod tests {
 
         assert_eq!(packet.source_kind, PointerSourceKind::Touch);
         assert_eq!(packet.tool_kind, NativeTabletToolKind::Finger);
-        assert_eq!(packet.event_button, Some(PointerButton::Primary));
+        assert_eq!(packet.event_button, Some(PointerButton::Left));
     }
 
     #[test]
@@ -983,7 +1019,7 @@ mod tests {
 
         assert_eq!(packet.source_kind, PointerSourceKind::Mouse);
         assert_eq!(packet.tool_kind, NativeTabletToolKind::Mouse);
-        assert_eq!(packet.event_button, Some(PointerButton::Primary));
+        assert_eq!(packet.event_button, Some(PointerButton::Left));
         assert_eq!(packet.position, PointerPosition::new(36.0, 18.0));
         assert_eq!(packet.delta, PointerDelta::new(12.0, 6.0));
         assert_eq!(packet.coalesced_samples.len(), 2);
@@ -1003,13 +1039,68 @@ mod tests {
     #[test]
     fn windows_pointer_mouse_secondary_contact_does_not_start_native_primary_stream() {
         let mut sample = WindowsPointerHistorySample::mouse(12, PointerPosition::new(8.0, 9.0));
-        sample.event_button = Some(PointerButton::Secondary);
+        sample.event_button = Some(PointerButton::Right);
 
         let history = WindowsPointerHistoryPacket::new(PointerEventKind::Down, 12, [sample]);
 
         assert!(
-            map_windows_pointer_history(history, None, PointerCalibration::identity()).is_none(),
+            map_windows_pointer_history(history, None, PointerCalibration::identity()).is_err(),
             "secondary mouse down must not become a native primary drawing stream"
         );
+    }
+
+    #[test]
+    fn windows_pointer_keeps_source_device_separate_from_pointer_contact() {
+        let history = WindowsPointerHistoryPacket::new(
+            PointerEventKind::Move,
+            17,
+            [
+                WindowsPointerHistorySample::pen(17, PointerPosition::new(1.0, 2.0))
+                    .with_source_device(9001),
+            ],
+        );
+
+        let packet = map_windows_pointer_history(history, None, PointerCalibration::identity())
+            .expect("pointer sample should map");
+
+        assert_eq!(packet.device_id, Some(9001));
+        assert_eq!(packet.contact_id, 17);
+    }
+
+    #[test]
+    fn windows_pointer_does_not_synthesize_device_from_pointer_contact() {
+        let history = WindowsPointerHistoryPacket::new(
+            PointerEventKind::Move,
+            18,
+            [WindowsPointerHistorySample::pen(
+                18,
+                PointerPosition::new(1.0, 2.0),
+            )],
+        );
+
+        let packet = map_windows_pointer_history(history, None, PointerCalibration::identity())
+            .expect("pointer sample should map");
+
+        assert_eq!(packet.device_id, None);
+        assert_eq!(packet.contact_id, 18);
+    }
+
+    #[test]
+    fn windows_pointer_rejects_conflicting_source_devices_atomically() {
+        let history = WindowsPointerHistoryPacket::new(
+            PointerEventKind::Move,
+            19,
+            [
+                WindowsPointerHistorySample::pen(19, PointerPosition::new(1.0, 2.0))
+                    .with_source_device(9001),
+                WindowsPointerHistorySample::pen(19, PointerPosition::new(3.0, 4.0))
+                    .with_source_device(9002),
+            ],
+        );
+
+        assert!(matches!(
+            map_windows_pointer_history(history, None, PointerCalibration::identity()),
+            Err(crate::model::NativeTabletDiagnostic::ConflictingDeviceIdentity)
+        ));
     }
 }

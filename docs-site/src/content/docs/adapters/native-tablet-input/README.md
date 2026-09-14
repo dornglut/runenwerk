@@ -14,16 +14,17 @@ last_reviewed: 2026-05-14
 Runenwerk drawing workflows.
 
 It maps Windows Pointer/Ink packets, optional Wintab DTOs, and macOS NSEvent
-DTOs into platform-neutral `domain/ui/ui_input` pointer events. winit
-mouse/touch remains the app/runtime fallback path through the same `ui_input`
-vocabulary. The crate is intentionally a normalization boundary only.
+DTOs into engine-owned, backend-neutral tablet observations. Draw performs the
+explicit lossy projection into `domain/ui/ui_input`; winit mouse/touch remains
+the app/runtime fallback path.
 
 ## Ownership
 
 This crate belongs to the adapter/tool layer.
 
 It may translate native packet shape, detected capabilities, and packet samples
-into `ui_input` contracts, but it must not own drawing semantics, stroke
+into engine neutral observations, but it must not own UI packet construction,
+drawing semantics, stroke
 ratification, brush smoothing, canvas state, package IO, or render/tile
 formation.
 
@@ -42,6 +43,8 @@ The current adapter contract supports:
   flags;
 - missing-capability diagnostics;
 - low-latency preview packet classification.
+- source/device/tool/contact identity, source-clock provenance, and orthogonal
+  evidence/delivery roles for confirmed, historical, and predicted samples.
 
 ## Known Gaps
 
@@ -59,7 +62,7 @@ The current adapter contract supports:
 In scope:
 
 - native tablet packet DTOs;
-- mapping packet facts into `PointerEvent` and `PointerPacket`;
+- mapping packet facts into engine neutral observation groups;
 - preserving supported stylus facts without inventing unsupported values;
 - reporting missing tablet capabilities through adapter diagnostics;
 - backend health, capability, calibration, and fallback metadata.
@@ -78,5 +81,5 @@ Run:
 
 ```text
 cargo test -p native_tablet_input
-cargo test -p ui_input
+cargo test -p runenwerk_draw
 ```

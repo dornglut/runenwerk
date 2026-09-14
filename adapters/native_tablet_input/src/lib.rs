@@ -1,5 +1,5 @@
 //! File: adapters/native_tablet_input/src/lib.rs
-//! Purpose: Native tablet packet capture and normalization into platform-neutral UI input events.
+//! Purpose: Native tablet acquisition and translation into engine-owned neutral observations.
 
 pub mod backend;
 pub mod mapping;
