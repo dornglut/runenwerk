@@ -131,6 +131,7 @@ pub(crate) fn translate_platform_event(
                     );
             if let Some(pressure) = input.pressure
                 && pressure.domain == MeasurementDomain::NormalizedUnitInterval
+                && (0.0..=1.0).contains(&pressure.value)
             {
                 packet = packet.with_pressure(pressure.value);
             }

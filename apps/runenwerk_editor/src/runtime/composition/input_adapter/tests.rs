@@ -1,7 +1,8 @@
 use super::*;
 use engine::plugins::{
-    AnalogMeasurement, ContactInput, CoordinateSpace, InputSourceId, KeyLocation, KeyboardInput,
-    Point2, PointerButtonInput, ScrollDelta, ScrollInput,
+    AnalogMeasurement, ContactInput, CoordinateSpace, InputContext, InputDeviceId, InputSourceId,
+    KeyLocation, KeyboardInput, PhysicalKeyIdentity, Point2, PointerButtonInput, ScrollDelta,
+    ScrollInput,
 };
 
 fn window() -> NativeWindowId {
@@ -514,6 +515,17 @@ fn only_normalized_pressure_projects_into_ui_pressure() {
     );
     assert!(matches!(
         calibrated,
+        UiInputEvent::Pointer(PointerEvent { packet, .. }) if packet.pressure.is_none()
+    ));
+    let out_of_range_normalized = one(
+        &mut runtime,
+        touch(Some(AnalogMeasurement {
+            value: 1.25,
+            domain: MeasurementDomain::NormalizedUnitInterval,
+        })),
+    );
+    assert!(matches!(
+        out_of_range_normalized,
         UiInputEvent::Pointer(PointerEvent { packet, .. }) if packet.pressure.is_none()
     ));
 }
