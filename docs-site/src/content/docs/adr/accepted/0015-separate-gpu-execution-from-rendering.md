@@ -5,7 +5,7 @@ status: accepted
 owner: workspace
 layer: architecture
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-14
 related_designs:
   - ../../architecture/repository-family-architecture.md
   - ../../design/accepted/runenrender-decomposition-design.md
@@ -60,7 +60,7 @@ The RunenGPU standalone transfer and Runenwerk consumer cutover are complete. Ru
 currently consumes exact accepted RunenGPU revision:
 
 ```text
-77c7c8d5ad6922b6f46c6b25e31b1a224c1314a4
+31649491e9e7746da8e128ad984d2be315961640
 ```
 
 That exact pin plus Runenwerk integration validation is the current product compatibility

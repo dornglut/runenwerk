@@ -8,6 +8,8 @@ pub mod derived_state;
 #[cfg_attr(not(test), allow(dead_code))]
 mod derived_transform;
 pub mod deterministic_admission;
+mod deterministic_capture;
+mod deterministic_carrier;
 pub mod deterministic_execution;
 #[allow(dead_code)]
 mod deterministic_verification;
@@ -64,6 +66,10 @@ pub use adapters::*;
 pub use api::*;
 pub use bytemuck;
 pub use composition::*;
+pub use deterministic_capture::{
+    RenderCapturedDeterministicRadiance, RenderDeterministicRadianceCaptureError,
+    RenderDeterministicRadianceCaptureRequest, RenderDeterministicRadianceCaptureRequestError,
+};
 pub use engine_render_macros::{GpuStorage, GpuUniform};
 pub use features::*;
 pub use frame::*;

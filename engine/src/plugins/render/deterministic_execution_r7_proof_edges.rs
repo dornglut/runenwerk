@@ -10,6 +10,7 @@ use super::admission::{
 };
 use super::appearance::{RenderDiffuseMaterial, RenderDirectionalEmitter};
 use super::deterministic_admission::admit_deterministic_render;
+use super::deterministic_carrier::{decode_word, maintained_evaluation_value};
 use super::deterministic_execution::DeterministicVerificationSubmission;
 use super::deterministic_verification::{
     submit_deterministic_render_for_verified_formation, verify_completed_deterministic_render,
@@ -422,7 +423,7 @@ fn ready_first_word(verification: &DeterministicVerificationSubmission, id: GpuR
         .as_bytes()
         .get(..4)
         .expect("R7 edge readback must contain at least one word");
-    u32::from_ne_bytes(word.try_into().expect("R7 edge word has four bytes"))
+    decode_word(word.try_into().expect("R7 edge word has four bytes"))
 }
 
 fn assert_close(actual: f64, expected: f64) {
@@ -444,10 +445,13 @@ fn verified_probe_radiance(context: &GpuContext, emitters: &[(f64, f64)]) -> f64
         1
     );
     assert_eq!(ready_first_word(&verification, correlation.status()), 0);
-    let value = f64::from(f32::from_bits(ready_first_word(
-        &verification,
-        correlation.canonical_output(),
-    )));
+    let value = f64::from(
+        maintained_evaluation_value(ready_first_word(
+            &verification,
+            correlation.canonical_output(),
+        ))
+        .expect("R7 edge maintained radiance must be finite"),
+    );
     verify_completed_deterministic_render(verification)
         .expect("R7 edge radiance must satisfy EVAL-001");
     value

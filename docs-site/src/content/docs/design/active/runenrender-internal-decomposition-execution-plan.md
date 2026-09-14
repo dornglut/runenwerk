@@ -5,7 +5,7 @@ status: active
 owner: render
 layer: engine/render
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-14
 related_docs:
   - ./shader-authoring-and-canonical-artifact-policy.md
   - ../accepted/runenrender-decomposition-design.md
@@ -58,7 +58,7 @@ RunenGPU semantics, implementation, validation, and future framework evolution b
 Runenwerk currently consumes exact accepted RunenGPU revision:
 
 ```text
-77c7c8d5ad6922b6f46c6b25e31b1a224c1314a4
+31649491e9e7746da8e128ad984d2be315961640
 ```
 
 That exact pin is a Runenwerk integration-compatibility fact, not a local RunenGPU
