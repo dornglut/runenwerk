@@ -14,7 +14,10 @@ use anyhow::Result;
 pub(crate) fn scene_transition_system(mut world: WorldMut) -> Result<()> {
     let window = world.resource::<WindowState>()?.clone();
     let delta_seconds = world.resource::<Time>()?.delta_seconds;
-    let fixed_step_seconds = world.resource::<FixedTimeConfig>()?.step_seconds;
+    let fixed_step_seconds = world
+        .resource::<FixedTimeConfig>()
+        .ok()
+        .map(|config| config.step_seconds);
 
     let mut input = world.remove_resource::<InputState>().unwrap_or_default();
     let actions = world.remove_resource::<ActionState>().unwrap_or_default();
@@ -35,6 +38,8 @@ pub(crate) fn scene_transition_system(mut world: WorldMut) -> Result<()> {
         };
 
         sync_overlay_viewport(manager, &window);
+        let fixed_step_seconds =
+            fixed_step_seconds.unwrap_or(manager.world_runtime.ctx.fixed_step_seconds);
         sync_world_scene_context_from_input(
             manager,
             &input,

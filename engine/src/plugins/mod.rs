@@ -12,6 +12,7 @@ pub mod replay;
 pub mod scene;
 pub mod scheduler_diagnostics;
 pub(crate) mod shared;
+pub mod simulation;
 pub mod time;
 pub mod ui;
 pub mod world;
@@ -35,6 +36,7 @@ pub use scene::plugin::ScenePlugin;
 pub use scene::runtime::controls::*;
 pub use scene::types::*;
 pub use scheduler_diagnostics::*;
+pub use simulation::SimulationPlugin;
 pub use time::TimePlugin;
 pub use ui::{
     UiPlugin, UiRuntimeDiagnostic, UiRuntimeDiagnosticCode, UiRuntimeDiagnosticSeverity,
@@ -52,6 +54,7 @@ pub fn default_plugins() -> Vec<Box<dyn Plugin>> {
     vec![
         Box::new(TimePlugin),
         Box::new(FixedStepPlugin),
+        Box::new(SimulationPlugin),
         Box::new(ReplayPlugin),
         Box::new(InputFinalizePlugin),
         Box::new(DiagnosticsPlugin),

@@ -16,14 +16,27 @@ use engine::plugins::world::{
     },
     build::jobs::WorldBuildStaleness,
 };
+use engine::plugins::{FixedStepPlugin, SimulationPlugin};
 use engine::prelude::{App, AuthorityRole};
-use engine_sim::SimulationTick;
 use runen_spatial::{ChunkCoord3, ChunkId, WorldId};
 use world_ops::{
     BrushShape, BuildGeneration, ChunkGeneration, ChunkRevision, DirtyReason, Operation,
     WorldQuantizationScale, quantize_aabb, quantize_position,
 };
 use world_sdf::{RegionSdfSummary, SdfChunkPayload};
+
+fn world_app() -> App {
+    let mut app = App::headless();
+    app.add_plugin(SimulationPlugin);
+    app.add_plugin(WorldPlugin);
+    app
+}
+
+fn fixed_world_app() -> App {
+    let mut app = world_app();
+    app.add_plugin(FixedStepPlugin);
+    app
+}
 
 fn test_quantization_scale() -> WorldQuantizationScale {
     WorldQuantizationScale::try_new(1024).expect("test quantization scale is valid")
@@ -47,8 +60,7 @@ fn sdf_chunk_payload(
 
 #[test]
 fn dirty_chunk_without_runtime_record_is_bootstrapped_and_built() {
-    let mut app = App::headless();
-    app.add_plugin(WorldPlugin);
+    let mut app = fixed_world_app();
 
     let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 2, y: -1, z: 4 });
     {
@@ -60,8 +72,8 @@ fn dirty_chunk_without_runtime_record_is_bootstrapped_and_built() {
     }
 
     let app = app
-        .run_for_ticks(1)
-        .expect("world plugin systems should run for one fixed tick");
+        .run_for_fixed_steps(1)
+        .expect("world plugin systems should run for one fixed step");
 
     let chunk_runtime = app
         .world()
@@ -78,7 +90,7 @@ fn dirty_chunk_without_runtime_record_is_bootstrapped_and_built() {
         .expect("sdf store should be available");
     assert!(
         sdf_store.chunks.contains_key(&chunk_id),
-        "dirty chunk should produce an integrated chunk payload in the same tick"
+        "dirty chunk should produce an integrated chunk payload in the same fixed step"
     );
 
     let authority = app
@@ -93,8 +105,7 @@ fn dirty_chunk_without_runtime_record_is_bootstrapped_and_built() {
 
 #[test]
 fn ratified_world_sdf_payload_package_flows_through_runtime_intake() {
-    let mut app = App::headless();
-    app.add_plugin(WorldPlugin);
+    let mut app = fixed_world_app();
 
     let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 1, y: 2, z: 3 });
     {
@@ -126,7 +137,7 @@ fn ratified_world_sdf_payload_package_flows_through_runtime_intake() {
     }
 
     let app = app
-        .run_for_ticks(1)
+        .run_for_fixed_steps(1)
         .expect("runtime intake should integrate through world systems");
     let sdf_store = app
         .world()
@@ -143,8 +154,7 @@ fn ratified_world_sdf_payload_package_flows_through_runtime_intake() {
 
 #[test]
 fn ingress_rejects_operations_in_client_replica_mode() {
-    let mut app = App::headless();
-    app.add_plugin(WorldPlugin);
+    let mut app = world_app();
     {
         let world_runtime = app
             .world_mut()
@@ -194,8 +204,7 @@ fn ingress_rejects_operations_in_client_replica_mode() {
 
 #[test]
 fn world_runtime_mode_tracks_authority_role() {
-    let mut app = App::headless();
-    app.add_plugin(WorldPlugin);
+    let mut app = world_app();
 
     let initial_mode = app
         .world()
@@ -235,8 +244,7 @@ fn world_runtime_mode_tracks_authority_role() {
 
 #[test]
 fn ingress_invalidation_uses_world_quantization_scale() {
-    let mut app = App::headless();
-    app.add_plugin(WorldPlugin);
+    let mut app = world_app();
     let quantization_scale =
         WorldQuantizationScale::try_new(1).expect("test quantization scale should be valid");
     {
@@ -275,8 +283,7 @@ fn ingress_invalidation_uses_world_quantization_scale() {
 
 #[test]
 fn world_revision_advances_only_for_integrated_outputs() {
-    let mut app = App::headless();
-    app.add_plugin(WorldPlugin);
+    let mut app = fixed_world_app();
 
     let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 1, y: 1, z: 1 });
     {
@@ -288,7 +295,7 @@ fn world_revision_advances_only_for_integrated_outputs() {
     }
 
     let mut app = app
-        .run_for_ticks(1)
+        .run_for_fixed_steps(1)
         .expect("first dirty build should integrate");
     let revision_after_integrate = app
         .world()
@@ -298,15 +305,9 @@ fn world_revision_advances_only_for_integrated_outputs() {
         .0;
     assert!(revision_after_integrate > 0);
 
-    let next_tick = app
-        .world()
-        .resource::<SimulationTick>()
-        .expect("simulation tick should exist")
-        .0
-        .saturating_add(1);
     app = app
-        .run_for_ticks(next_tick)
-        .expect("idle fixed tick should not change world revision");
+        .run_for_fixed_steps(1)
+        .expect("idle fixed step should not change world revision");
     let revision_after_idle = app
         .world()
         .resource::<WorldAuthorityState>()
@@ -347,14 +348,8 @@ fn world_revision_advances_only_for_integrated_outputs() {
         });
     }
 
-    let next_tick = app
-        .world()
-        .resource::<SimulationTick>()
-        .expect("simulation tick should exist")
-        .0
-        .saturating_add(1);
     app = app
-        .run_for_ticks(next_tick)
+        .run_for_fixed_steps(1)
         .expect("stale output should be dropped without revision bump");
     let revision_after_stale = app
         .world()
@@ -378,8 +373,7 @@ fn world_revision_advances_only_for_integrated_outputs() {
 
 #[test]
 fn dirty_reasons_while_rebuilding_are_preserved_for_followup_build() {
-    let mut app = App::headless();
-    app.add_plugin(WorldPlugin);
+    let mut app = fixed_world_app();
 
     let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 3, y: 2, z: -1 });
     {
@@ -424,7 +418,7 @@ fn dirty_reasons_while_rebuilding_are_preserved_for_followup_build() {
     }
 
     let app = app
-        .run_for_ticks(1)
+        .run_for_fixed_steps(1)
         .expect("integration should preserve rebuild-time dirty reasons");
     let runtime_chunks = app
         .world()
@@ -450,8 +444,7 @@ fn dirty_reasons_while_rebuilding_are_preserved_for_followup_build() {
 
 #[test]
 fn stamp_operation_produces_authoritative_chunk_payload() {
-    let mut app = App::headless();
-    app.add_plugin(WorldPlugin);
+    let mut app = fixed_world_app();
 
     let quantization_scale = test_quantization_scale();
     let op_id = submit_world_operation(
@@ -473,7 +466,7 @@ fn stamp_operation_produces_authoritative_chunk_payload() {
     );
 
     let app = app
-        .run_for_ticks(1)
+        .run_for_fixed_steps(1)
         .expect("stamp operation should build and integrate");
     let store = app
         .world()
@@ -501,8 +494,7 @@ fn stamp_operation_produces_authoritative_chunk_payload() {
 
 #[test]
 fn material_field_edit_preserves_existing_chunk_solidity() {
-    let mut app = App::headless();
-    app.add_plugin(WorldPlugin);
+    let mut app = fixed_world_app();
 
     let quantization_scale = test_quantization_scale();
     let add_op = submit_world_operation(
@@ -523,7 +515,7 @@ fn material_field_edit_preserves_existing_chunk_solidity() {
     assert!(add_op.is_some(), "add operation should be accepted");
 
     let mut app = app
-        .run_for_ticks(1)
+        .run_for_fixed_steps(1)
         .expect("initial csg add should integrate into chunk payload");
 
     let edit_op = submit_world_operation(
@@ -542,7 +534,7 @@ fn material_field_edit_preserves_existing_chunk_solidity() {
     assert!(edit_op.is_some(), "material field edit should be accepted");
 
     app = app
-        .run_for_ticks(2)
+        .run_for_fixed_steps(1)
         .expect("material field edit should rebuild payload without topology loss");
     let store = app
         .world()
@@ -572,8 +564,7 @@ fn material_field_edit_preserves_existing_chunk_solidity() {
 
 #[test]
 fn integration_drops_output_when_payload_revision_contract_mismatches() {
-    let mut app = App::headless();
-    app.add_plugin(WorldPlugin);
+    let mut app = fixed_world_app();
 
     let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 6, y: 0, z: -2 });
     {
@@ -611,7 +602,7 @@ fn integration_drops_output_when_payload_revision_contract_mismatches() {
     }
 
     let app = app
-        .run_for_ticks(1)
+        .run_for_fixed_steps(1)
         .expect("integration should reject mismatched payload revision contract");
     let authority = app
         .world()
@@ -646,8 +637,7 @@ fn integration_drops_output_when_payload_revision_contract_mismatches() {
 
 #[test]
 fn integration_drops_output_when_payload_chunk_id_contract_mismatches() {
-    let mut app = App::headless();
-    app.add_plugin(WorldPlugin);
+    let mut app = fixed_world_app();
 
     let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: -4, y: 1, z: 3 });
     let wrong_chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: -3, y: 1, z: 3 });
@@ -691,7 +681,7 @@ fn integration_drops_output_when_payload_chunk_id_contract_mismatches() {
     }
 
     let app = app
-        .run_for_ticks(1)
+        .run_for_fixed_steps(1)
         .expect("integration should reject mismatched payload chunk-id contract");
     let authority = app
         .world()

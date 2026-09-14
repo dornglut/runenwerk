@@ -869,7 +869,7 @@ fn native_window_id_for_winit_event(
 mod tests {
     use super::*;
     use crate::app::App;
-    use crate::plugins::TimePlugin;
+    use crate::plugins::{FixedStepPlugin, SimulationPlugin, TimePlugin};
     use crate::runtime::fixed_time::{
         CatchupBudget, FixedTimeConfig, FixedTimeState, SimulationTick,
     };
@@ -880,7 +880,7 @@ mod tests {
     struct FixedTickLog(Vec<u64>);
 
     fn configure_probe(app: &mut App) {
-        app.add_plugin(TimePlugin);
+        app.add_plugins((TimePlugin, FixedStepPlugin, SimulationPlugin));
         app.init_resource::<FixedTickLog>();
         app.insert_resource(FixedTimeConfig {
             step_seconds: 1.0 / 60.0,

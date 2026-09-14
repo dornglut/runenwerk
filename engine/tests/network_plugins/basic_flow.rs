@@ -288,12 +288,15 @@ fn network_server_plugin_drains_client_messages_and_flushes_server_messages() {
 fn replication_and_prediction_plugins_run_on_fixed_update() {
     let mut app = App::headless();
     app.add_plugin(NetworkServerPlugin);
+    app.add_plugin(FixedStepPlugin);
     app.world_mut()
         .resource_mut::<PlayerCommandBuffer>()
         .unwrap()
         .push(ClientCommandEnvelope::Ability(AbilityCommand { slot: 2 }));
 
-    let app = app.run_for_ticks(2).expect("fixed ticks should run");
+    let app = app
+        .run_for_fixed_steps(2)
+        .expect("fixed steps should run");
 
     let replication = app.world().resource::<ReplicationDiagnostics>().unwrap();
     assert_eq!(replication.fixed_steps_observed, 2);

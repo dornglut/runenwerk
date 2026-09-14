@@ -26,7 +26,7 @@ fn run_backpressure_protocol_frame(mut app: App, context: &str) -> App {
         .unwrap_or_else(|error| panic!("{context}: {error:#}"))
 }
 
-fn run_backpressure_fixed_tick(mut app: App, context: &str) -> App {
+fn run_backpressure_fixed_step(mut app: App, context: &str) -> App {
     let step_seconds = app
         .world()
         .resource::<FixedTimeConfig>()
@@ -65,13 +65,13 @@ fn prediction_waits_for_later_registered_simulation_input() {
     app.add_systems(FixedUpdate, produce_simulation_input.in_set(CoreSet::Simulation));
 
     let app = app
-        .run_for_ticks(1)
+        .run_for_fixed_steps(1)
         .expect("prediction should run after the present simulation producer");
 
     assert_eq!(
         app.world().resource::<AppliedInputLog>().unwrap().inputs,
         vec![ClientCommandEnvelope::Ability(AbilityCommand { slot: 73 })],
-        "present Simulation ordering must apply input during the same fixed tick"
+        "present Simulation ordering must apply input during the same fixed step"
     );
 }
 
@@ -84,8 +84,8 @@ fn server_replication_emits_scene_snapshot_payloads_for_runennet_connection() {
     install_runennet_connections(&mut app, &[(connection, ParticipantId::new(1))]);
 
     let app = app
-        .run_for_ticks(1)
-        .expect("server replication tick should run");
+        .run_for_fixed_steps(1)
+        .expect("server replication fixed step should run");
     let outbound = app.world().resource::<NetworkOutboundQueue>().unwrap();
     let message = outbound
         .server_messages()
@@ -119,7 +119,9 @@ fn client_snapshot_application_sends_ack_and_reconciles_prediction() {
             x: -0.75,
             y: 0.5,
         }));
-    let server = server.run_for_ticks(1).expect("server tick should run");
+    let server = server
+        .run_for_fixed_steps(1)
+        .expect("server fixed step should run");
     let authoritative_snapshot = server
         .world()
         .resource::<NetworkOutboundQueue>()
@@ -144,8 +146,8 @@ fn client_snapshot_application_sends_ack_and_reconciles_prediction() {
         .unwrap()
         .push(ClientCommandEnvelope::Move(MoveCommand { x: 1.0, y: 0.0 }));
     let mut client = client
-        .run_for_ticks(1)
-        .expect("client prediction tick should run");
+        .run_for_fixed_steps(1)
+        .expect("client prediction fixed step should run");
     assert_eq!(
         client
             .world()
@@ -214,8 +216,8 @@ fn prediction_replay_updates_prediction_diagnostics_counter() {
         .unwrap()
         .push(ClientCommandEnvelope::Move(MoveCommand { x: 1.0, y: 0.0 }));
     let mut client = client
-        .run_for_ticks(1)
-        .expect("first prediction tick should run");
+        .run_for_fixed_steps(1)
+        .expect("first prediction fixed step should run");
 
     let payload = TestReplicationDriver::encode_snapshot(&TestSnapshot::default())
         .expect("snapshot payload encoding should succeed");
@@ -257,9 +259,9 @@ fn client_outbox_backpressure_does_not_record_unsent_prediction_frame() {
         .unwrap()
         .push(command.clone());
 
-    let client = run_backpressure_fixed_tick(
+    let client = run_backpressure_fixed_step(
         client,
-        "client prediction tick should survive outbox backpressure",
+        "client prediction fixed step should survive outbox backpressure",
     );
 
     assert_eq!(
@@ -302,8 +304,8 @@ fn server_outbox_backpressure_does_not_mark_rejected_snapshot_as_sent() {
     install_runennet_connections(&mut server, &[(connection, ParticipantId::new(1))]);
 
     let server = server
-        .run_for_ticks(1)
-        .expect("server replication tick should survive outbox backpressure");
+        .run_for_fixed_steps(1)
+        .expect("server replication fixed step should survive outbox backpressure");
 
     let state = server.world().resource::<ServerSnapshotState>().unwrap();
     let checkpoint = state
@@ -378,7 +380,7 @@ fn saturated_input_staging_does_not_send_or_record_rejected_local_input() {
         .resource_mut::<PlayerCommandBuffer>()
         .unwrap()
         .push(ClientCommandEnvelope::Ability(AbilityCommand { slot: 252 }));
-    let host = run_backpressure_fixed_tick(
+    let host = run_backpressure_fixed_step(
         host,
         "local input rejected by saturated staging should not escape staging",
     );

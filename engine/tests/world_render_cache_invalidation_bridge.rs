@@ -11,7 +11,8 @@ use engine::plugins::world::chunks::render_cache_bridge::{
 };
 use engine::plugins::world::edits::ingress::{WorldEditIngressMeta, submit_world_operation};
 use engine::plugins::world::plugin::WorldPlugin;
-use engine::prelude::{App, SimulationTick};
+use engine::plugins::{FixedStepPlugin, SimulationPlugin};
+use engine::prelude::App;
 use runen_spatial::{ChunkCoord3, ChunkId, WorldId};
 use world_ops::{
     DirtyReason, Operation, QuantizedAabb, WorldQuantizationScale, quantize_aabb, quantize_position,
@@ -36,10 +37,16 @@ fn world_quantization_scale(app: &App) -> WorldQuantizationScale {
         .expect("world quantization scale should exist")
 }
 
+fn world_app() -> App {
+    let mut app = App::headless();
+    app.add_plugins((FixedStepPlugin, SimulationPlugin));
+    app.add_plugin(WorldPlugin);
+    app
+}
+
 #[test]
 fn ingress_bounds_marks_render_cache_stale_next_fixed_tick() {
-    let mut app = App::headless();
-    app.add_plugin(WorldPlugin);
+    let mut app = world_app();
     app.world_mut()
         .insert_resource(WorldRuntimeCacheResource::default());
 
@@ -56,8 +63,8 @@ fn ingress_bounds_marks_render_cache_stale_next_fixed_tick() {
     assert!(op_id.is_some(), "ingress should append an operation");
 
     let app = app
-        .run_for_ticks(1)
-        .expect("world systems should process one fixed tick");
+        .run_for_fixed_steps(1)
+        .expect("world systems should process one fixed step");
 
     let runtime_cache = app
         .world()
@@ -72,8 +79,7 @@ fn ingress_bounds_marks_render_cache_stale_next_fixed_tick() {
 
 #[test]
 fn duplicate_edits_same_chunk_dedupe_invalidation() {
-    let mut app = App::headless();
-    app.add_plugin(WorldPlugin);
+    let mut app = world_app();
     app.world_mut()
         .insert_resource(WorldRuntimeCacheResource::default());
 
@@ -93,8 +99,8 @@ fn duplicate_edits_same_chunk_dedupe_invalidation() {
     }
 
     let app = app
-        .run_for_ticks(1)
-        .expect("world systems should process one fixed tick");
+        .run_for_fixed_steps(1)
+        .expect("world systems should process one fixed step");
 
     let runtime_cache = app
         .world()
@@ -111,8 +117,7 @@ fn duplicate_edits_same_chunk_dedupe_invalidation() {
 
 #[test]
 fn multi_chunk_bounds_invalidation_marks_all_touched_chunks_stale() {
-    let mut app = App::headless();
-    app.add_plugin(WorldPlugin);
+    let mut app = world_app();
     app.world_mut()
         .insert_resource(WorldRuntimeCacheResource::default());
 
@@ -129,8 +134,8 @@ fn multi_chunk_bounds_invalidation_marks_all_touched_chunks_stale() {
     assert!(op_id.is_some(), "ingress should append an operation");
 
     let app = app
-        .run_for_ticks(1)
-        .expect("world systems should process one fixed tick");
+        .run_for_fixed_steps(1)
+        .expect("world systems should process one fixed step");
 
     let runtime_cache = app
         .world()
@@ -150,8 +155,7 @@ fn multi_chunk_bounds_invalidation_marks_all_touched_chunks_stale() {
 
 #[test]
 fn integrated_build_output_marks_chunk_stale() {
-    let mut app = App::headless();
-    app.add_plugin(WorldPlugin);
+    let mut app = world_app();
     app.world_mut()
         .insert_resource(WorldRuntimeCacheResource::default());
 
@@ -165,8 +169,8 @@ fn integrated_build_output_marks_chunk_stale() {
     }
 
     let app = app
-        .run_for_ticks(1)
-        .expect("dirty->build->integrate path should run for one fixed tick");
+        .run_for_fixed_steps(1)
+        .expect("dirty->build->integrate path should run for one fixed step");
 
     let runtime_cache = app
         .world()
@@ -180,8 +184,7 @@ fn integrated_build_output_marks_chunk_stale() {
 
 #[test]
 fn bridge_does_not_drop_queue_without_render_cache_resource() {
-    let mut app = App::headless();
-    app.add_plugin(WorldPlugin);
+    let mut app = world_app();
 
     let quantization_scale = world_quantization_scale(&app);
     let op_id = submit_world_operation(
@@ -196,7 +199,7 @@ fn bridge_does_not_drop_queue_without_render_cache_resource() {
     assert!(op_id.is_some(), "ingress should append an operation");
 
     let app = app
-        .run_for_ticks(1)
+        .run_for_fixed_steps(1)
         .expect("missing render cache resource must not fail world runtime");
 
     let queue = app
@@ -239,8 +242,7 @@ fn bridge_does_not_drop_queue_without_render_cache_resource() {
 
 #[test]
 fn missing_render_cache_then_recreate_flushes_pending_invalidation() {
-    let mut app = App::headless();
-    app.add_plugin(WorldPlugin);
+    let mut app = world_app();
 
     let quantization_scale = world_quantization_scale(&app);
     let op_id = submit_world_operation(
@@ -255,7 +257,7 @@ fn missing_render_cache_then_recreate_flushes_pending_invalidation() {
     assert!(op_id.is_some(), "ingress should append an operation");
 
     let mut app = app
-        .run_for_ticks(1)
+        .run_for_fixed_steps(1)
         .expect("missing render cache resource must keep invalidations queued");
 
     let queued_before = app
@@ -269,14 +271,8 @@ fn missing_render_cache_then_recreate_flushes_pending_invalidation() {
 
     app.world_mut()
         .insert_resource(WorldRuntimeCacheResource::default());
-    let next_tick = app
-        .world()
-        .resource::<SimulationTick>()
-        .expect("simulation tick should exist")
-        .0
-        .saturating_add(1);
     let app = app
-        .run_for_ticks(next_tick)
+        .run_for_fixed_steps(1)
         .expect("pending invalidations should flush after render cache resource is restored");
 
     let runtime_cache = app
@@ -300,8 +296,7 @@ fn missing_render_cache_then_recreate_flushes_pending_invalidation() {
 
 #[test]
 fn world_render_cache_invalidates_matching_typed_gpu_cache_entry() {
-    let mut app = App::headless();
-    app.add_plugin(WorldPlugin);
+    let mut app = world_app();
 
     let target = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
     let mut runtime_cache = WorldRuntimeCacheResource::default();
@@ -328,8 +323,8 @@ fn world_render_cache_invalidates_matching_typed_gpu_cache_entry() {
     assert!(op_id.is_some(), "ingress should append an operation");
 
     let app = app
-        .run_for_ticks(1)
-        .expect("world systems should process one fixed tick");
+        .run_for_fixed_steps(1)
+        .expect("world systems should process one fixed step");
 
     let runtime_cache = app
         .world()
@@ -344,8 +339,7 @@ fn world_render_cache_invalidates_matching_typed_gpu_cache_entry() {
 
 #[test]
 fn integrated_build_without_render_cache_enqueues_build_sourced_record() {
-    let mut app = App::headless();
-    app.add_plugin(WorldPlugin);
+    let mut app = world_app();
 
     let target = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 2, y: -1, z: 4 });
     {
@@ -357,7 +351,7 @@ fn integrated_build_without_render_cache_enqueues_build_sourced_record() {
     }
 
     let app = app
-        .run_for_ticks(1)
+        .run_for_fixed_steps(1)
         .expect("dirty->build->integrate path should run with queue preserved");
 
     let queue = app

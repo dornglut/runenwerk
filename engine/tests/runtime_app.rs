@@ -1,5 +1,7 @@
 use engine::plugins::input::domain::action;
-use engine::plugins::{ActionState, TimePlugin, default_plugins};
+use engine::plugins::{
+    ActionState, FixedStepPlugin, SimulationPlugin, TimePlugin, default_plugins,
+};
 use engine::prelude::*;
 use winit::event::ElementState;
 use winit::keyboard::KeyCode;
@@ -247,12 +249,13 @@ fn log_frame_end(mut log: ResMut<FixedScheduleLog>) {
 }
 
 #[test]
-fn run_for_ticks_executes_fixed_update_deterministically() {
+fn run_for_fixed_steps_executes_fixed_update_deterministically() {
     let mut app = App::headless();
+    app.add_plugins((FixedStepPlugin, SimulationPlugin));
     app.add_plugin(FixedTickPlugin);
     let app = app
-        .run_for_ticks(3)
-        .expect("fixed-tick runner should stop on the requested tick");
+        .run_for_fixed_steps(3)
+        .expect("fixed-step runner should stop after the requested step count");
 
     assert_eq!(app.world().resource::<SimulationTick>().unwrap().0, 3);
     assert_eq!(
@@ -276,6 +279,7 @@ fn run_for_ticks_executes_fixed_update_deterministically() {
     let fixed_state = app.world().resource::<FixedTimeState>().unwrap();
     assert_eq!(fixed_state.steps_ran_last_frame, 1);
     assert_eq!(fixed_state.saturated_frames, 0);
+    assert_eq!(fixed_state.total_completed_steps, 3);
 }
 
 #[derive(Debug, Default, Component, runen_ecs::Resource)]
@@ -310,7 +314,7 @@ fn count_fixed_update(mut state: ResMut<ScriptedDeltaState>) {
 #[test]
 fn fixed_step_schedule_supports_zero_and_batched_ticks_per_frame() {
     let mut app = App::headless();
-    app.add_plugin(TimePlugin);
+    app.add_plugins((TimePlugin, FixedStepPlugin, SimulationPlugin));
     app.add_plugin(ScriptedDeltaPlugin);
     let app = app
         .run_for_frames(2)
@@ -323,6 +327,7 @@ fn fixed_step_schedule_supports_zero_and_batched_ticks_per_frame() {
     let fixed_state = app.world().resource::<FixedTimeState>().unwrap();
     assert_eq!(fixed_state.steps_ran_last_frame, 3);
     assert_eq!(fixed_state.saturated_frames, 0);
+    assert_eq!(fixed_state.total_completed_steps, 3);
 }
 
 #[derive(Debug, Default, Component, runen_ecs::Resource)]
@@ -353,9 +358,9 @@ fn observe_tick_during_fixed_update(tick: Res<SimulationTick>, mut log: ResMut<T
 }
 
 #[test]
-fn fixed_step_advances_tick_before_each_fixed_update_step() {
+fn simulation_plugin_advances_tick_before_each_fixed_update_step() {
     let mut app = App::headless();
-    app.add_plugin(TimePlugin);
+    app.add_plugins((TimePlugin, FixedStepPlugin, SimulationPlugin));
     app.add_plugin(TickVisibilityPlugin);
     let app = app.run_for_frames(1).expect("fixed-step frame should run");
 
@@ -403,7 +408,7 @@ fn count_saturation_fixed_step(mut count: ResMut<SaturationFixedStepCounter>) {
 #[test]
 fn fixed_step_saturation_tracks_dropped_backlog_when_budget_is_exhausted() {
     let mut app = App::headless();
-    app.add_plugin(TimePlugin);
+    app.add_plugins((TimePlugin, FixedStepPlugin, SimulationPlugin));
     app.add_plugin(SaturationPlugin);
     let app = app.run_for_frames(1).expect("saturation frame should run");
 
@@ -420,6 +425,7 @@ fn fixed_step_saturation_tracks_dropped_backlog_when_budget_is_exhausted() {
     assert_eq!(fixed_state.steps_ran_last_frame, 1);
     assert_eq!(fixed_state.saturated_frames, 1);
     assert_eq!(fixed_state.accumulator_seconds, 0.0);
+    assert_eq!(fixed_state.total_completed_steps, 1);
 }
 
 #[derive(Debug, Default, Component, runen_ecs::Resource)]
@@ -475,8 +481,9 @@ fn lifecycle_log_frame_end(mut log: ResMut<RuntimeLifecycleLog>) {
 }
 
 #[test]
-fn runtime_lifecycle_runs_startup_then_canonical_frame_order() {
+fn runtime_lifecycle_runs_startup_then_selected_fixed_cadence_then_frame_order() {
     let mut app = App::headless();
+    app.add_plugin(FixedStepPlugin);
     app.add_plugin(RuntimeLifecyclePlugin);
     let app = app.run_for_frames(1).expect("lifecycle frame should run");
 
@@ -531,7 +538,7 @@ fn force_zero_delta(mut time: ResMut<Time>) {
 #[test]
 fn zero_fixed_step_frames_do_not_advance_simulation_tick() {
     let mut app = App::headless();
-    app.add_plugin(TimePlugin);
+    app.add_plugins((TimePlugin, FixedStepPlugin, SimulationPlugin));
     app.add_plugin(ZeroDeltaPlugin);
     let app = app
         .run_for_frames(2)

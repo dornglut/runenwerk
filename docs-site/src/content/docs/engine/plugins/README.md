@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-09-14
 ---
 
 # Engine Plugins
@@ -37,7 +37,10 @@ This directory is the feature composition layer for `engine`.
   - Purpose: frame time progression.
 - `fixed_step.rs`
   - Guides: [`../../docs/reference/plugins/fixed-step/usage-guide.md`](../reference/plugins/fixed-step/usage-guide.md)
-  - Purpose: fixed-step resource installation (`FixedTimeConfig`, `CatchupBudget`, `FixedTimeState`, `SimulationTick`).
+  - Purpose: explicit fixed-cadence activation and non-overwriting installation of `FixedTimeConfig`, `CatchupBudget`, and `FixedTimeState`.
+- `simulation.rs`
+  - Guides: [`../../docs/reference/plugins/simulation/usage-guide.md`](../reference/plugins/simulation/usage-guide.md)
+  - Purpose: Runenwerk integration for `engine_sim` owner state and `SimulationTick` advancement at `FixedStepBegin`.
 - `replay.rs`
   - Guides: [`../../docs/reference/plugins/replay/usage-guide.md`](../reference/plugins/replay/usage-guide.md)
   - Purpose: replay recording/playback resources and fixed-step replay hooks.

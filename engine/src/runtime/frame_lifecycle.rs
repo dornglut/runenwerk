@@ -1,3 +1,4 @@
+use crate::plugins::fixed_step::fixed_step_is_active;
 use crate::runtime::fixed_step_executor::run_fixed_update_frame;
 use crate::runtime::schedules::{
     FrameEnd, PreUpdate, RenderPrepare, RenderSubmit, Startup, Update,
@@ -37,18 +38,21 @@ pub(crate) fn run_startup_if_needed(
 /// Runs one runtime frame using the canonical Engine-owned lifecycle order:
 ///
 /// 1. `PreUpdate`
-/// 2. fixed-step loop (`FixedUpdate` zero or more times)
+/// 2. selected fixed cadence: (`FixedStepBegin` -> `FixedUpdate`) zero or more times
 /// 3. `Update`
 /// 4. `RenderPrepare`
 /// 5. `RenderSubmit`
 /// 6. `FrameEnd`
 ///
-/// RunenECS executes each generic schedule and owns its ECS deferred visibility.
-/// Runenwerk product/query publication is installed explicitly by application
+/// Fixed cadence is selectable through `FixedStepPlugin`; a bare App skips fixed-step
+/// execution entirely. RunenECS executes each generic schedule and owns its ECS deferred
+/// visibility. Runenwerk product/query publication is installed explicitly by application
 /// systems at the lifecycle positions that require it.
 pub(crate) fn run_frame(world: &mut World, scheduler: &mut Runtime) -> Result<()> {
     scheduler.run_schedule::<PreUpdate>(world)?;
-    run_fixed_update_frame(world, scheduler)?;
+    if fixed_step_is_active(world) {
+        run_fixed_update_frame(world, scheduler)?;
+    }
     scheduler.run_schedule::<Update>(world)?;
     scheduler.run_schedule::<RenderPrepare>(world)?;
     scheduler.run_schedule::<RenderSubmit>(world)?;
@@ -60,9 +64,6 @@ pub(crate) fn run_frame(world: &mut World, scheduler: &mut Runtime) -> Result<()
 mod tests {
     use super::*;
     use crate::plugins::time::domain::Time;
-    use crate::runtime::fixed_time::{
-        CatchupBudget, FixedTimeConfig, FixedTimeState, SimulationTick,
-    };
     use crate::runtime::publication::{
         PublicationHandlers, dispatch_product_publication_system,
         dispatch_query_snapshot_publication_system,
@@ -76,10 +77,6 @@ mod tests {
         let mut time = Time::default();
         time.delta_seconds = 0.0;
         world.insert_resource(time);
-        world.insert_resource(FixedTimeConfig::default());
-        world.insert_resource(CatchupBudget::default());
-        world.insert_resource(FixedTimeState::default());
-        world.insert_resource(SimulationTick(0));
         world
     }
 

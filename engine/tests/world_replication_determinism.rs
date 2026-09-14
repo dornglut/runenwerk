@@ -9,6 +9,7 @@ use engine::plugins::world::adapters::resources::{
 };
 use engine::plugins::world::edits::ingress::{WorldEditIngressMeta, submit_world_operation};
 use engine::plugins::world::plugin::{WorldAuthorityState, WorldPlugin};
+use engine::plugins::{FixedStepPlugin, SimulationPlugin};
 use engine::prelude::App;
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 use runen_net::identity::{ConnectionHandle, ParticipantId, SessionId};
@@ -27,6 +28,13 @@ use world_ops::{
     mark_dirty_chunks_from_operation_log, operations_for_replay_window, quantize_aabb,
     quantize_position,
 };
+
+fn fixed_world_app() -> App {
+    let mut app = App::headless();
+    app.add_plugins((FixedStepPlugin, SimulationPlugin));
+    app.add_plugin(WorldPlugin);
+    app
+}
 
 fn test_quantization_scale() -> WorldQuantizationScale {
     WorldQuantizationScale::try_new(1024).expect("test quantization scale is valid")
@@ -243,8 +251,7 @@ fn op_log_replay_and_invalidation_are_deterministic() {
 
 #[test]
 fn world_replication_state_is_built_from_world_runtime() {
-    let mut app = App::headless();
-    app.add_plugin(WorldPlugin);
+    let mut app = fixed_world_app();
 
     let fixed_point_scale = **app
         .world()
@@ -266,8 +273,8 @@ fn world_replication_state_is_built_from_world_runtime() {
     assert!(op_id.is_some(), "world ingress should append operation");
 
     let app = app
-        .run_for_ticks(1)
-        .expect("world runtime should process one fixed tick");
+        .run_for_fixed_steps(1)
+        .expect("world runtime should process one fixed step");
 
     let replication = app
         .world()
@@ -340,8 +347,7 @@ fn world_replication_state_is_built_from_world_runtime() {
 #[test]
 fn world_region_invalidation_projection_is_deterministic() {
     fn run_projection() -> Vec<RegionInvalidationDelta> {
-        let mut app = App::headless();
-        app.add_plugin(WorldPlugin);
+        let mut app = fixed_world_app();
         let fixed_point_scale = **app
             .world()
             .resource::<WorldQuantizationScaleResource>()
@@ -374,8 +380,8 @@ fn world_region_invalidation_projection_is_deterministic() {
         }
 
         let app = app
-            .run_for_ticks(1)
-            .expect("world tick should publish replication projection");
+            .run_for_fixed_steps(1)
+            .expect("world fixed step should publish replication projection");
         app.world()
             .resource::<ReplicationStateResource>()
             .expect("replication resource should exist")
@@ -393,8 +399,7 @@ fn world_region_invalidation_projection_is_deterministic() {
 
 #[test]
 fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
-    let mut app = App::headless();
-    app.add_plugin(WorldPlugin);
+    let mut app = fixed_world_app();
     app.add_plugin(NetPlugin::<ReplicationProbeDriver>::new(NetRole::Server));
 
     let connection = ConnectionHandle::new(55);
@@ -424,8 +429,8 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
     );
 
     let mut app = app
-        .run_for_ticks(1)
-        .expect("fixed tick should produce one replication step");
+        .run_for_fixed_steps(1)
+        .expect("fixed step should produce one replication step");
 
     {
         let interest = app
@@ -469,15 +474,9 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
         }),
     )
     .expect("server inbox enqueue should succeed");
-    let next_tick = app
-        .world()
-        .resource::<SimulationTick>()
-        .expect("simulation tick should exist")
-        .0
-        .saturating_add(1);
     app = app
-        .run_for_ticks(next_tick)
-        .expect("ack tick should update world streaming cursor state");
+        .run_for_fixed_steps(1)
+        .expect("ack fixed step should update world streaming cursor state");
 
     let second_chunk = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 2, y: 0, z: 0 });
     {
@@ -509,15 +508,9 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
             deterministic_seed: 18,
         },
     );
-    let next_tick = app
-        .world()
-        .resource::<SimulationTick>()
-        .expect("simulation tick should exist")
-        .0
-        .saturating_add(1);
     app = app
-        .run_for_ticks(next_tick)
-        .expect("region delta tick should update per-connection relevant chunks");
+        .run_for_fixed_steps(1)
+        .expect("region delta fixed step should update per-connection relevant chunks");
 
     {
         let interest = app
@@ -549,15 +542,9 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
     app.world_mut().insert_resource(projection);
     sync_runennet_session_projection(app.world_mut());
 
-    let cleanup_tick = app
-        .world()
-        .resource::<SimulationTick>()
-        .expect("simulation tick should exist")
-        .0
-        .saturating_add(1);
     app = app
-        .run_for_ticks(cleanup_tick)
-        .expect("post-loss tick should clean streaming projection state");
+        .run_for_fixed_steps(1)
+        .expect("post-loss fixed step should clean streaming projection state");
 
     let interest = app
         .world()
