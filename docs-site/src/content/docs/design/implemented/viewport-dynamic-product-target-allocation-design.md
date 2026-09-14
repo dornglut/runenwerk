@@ -9,7 +9,8 @@ last_reviewed: 2026-05-16
 related_designs:
   - ./render-product-surface-foundation-bundle-design.md
   - ./workspace-viewport-expression-upgrade-design.md
-  - ./editor-ui-workspace-tool-surface-architecture.md
+  - ../accepted/runenwerk-editor-coordination-semantic-model.md
+  - ./editor-tool-suite-registry-and-workbench-host-design.md
 related_roadmaps:
   - ../../apps/runenwerk-editor/viewport-expression-implementation-roadmap.md
 related:
