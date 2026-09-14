@@ -2726,6 +2726,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "runenwerk_render_lab"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "blake3",
+ "engine",
+ "image",
+ "pollster",
+ "runen-gpu",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "runenwerk_runtime_preview"
 version = "0.1.0"
 dependencies = [

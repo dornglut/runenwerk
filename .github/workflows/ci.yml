@@ -100,3 +100,24 @@ jobs:
           cargo +stable test -p engine \
             deterministic_execution_r7_proof \
             --locked -- --nocapture --test-threads=1
+
+      - name: Run Render Lab founding-direct artifact proof
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENWERK_SOURCE_REVISION: ${{ steps.revision.outputs.expected_revision }}
+        run: |
+          set -euo pipefail
+          cargo +stable run -p runenwerk_render_lab --locked -- render-lab
+          test -s render-lab/founding-direct/radiance.png
+          test -s render-lab/founding-direct/evidence.json
+          jq -e '.classification == "pass" and .width == 128 and .height == 128 and .oracle.result == "pass"' \
+            render-lab/founding-direct/evidence.json
+
+      - name: Upload Render Lab founding-direct artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        with:
+          name: runenwerk-render-lab-founding-direct
+          path: render-lab/founding-direct
+          if-no-files-found: error
+          retention-days: 7

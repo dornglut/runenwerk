@@ -69,6 +69,7 @@ The former `domain/scheduler` crate was retired by RunenECS C8. Its retained doc
 | `runenwerk_editor` | `apps/runenwerk_editor` | current | [`../apps/runenwerk-editor/current-architecture.md`](../apps/runenwerk-editor/current-architecture.md) |
 | `runenwerk_draw` | `apps/runenwerk_draw` | current | [`../apps/runenwerk-draw/README.md`](../apps/runenwerk-draw/README.md) |
 | `runenwerk_runtime_preview` | `apps/runenwerk_runtime_preview` | current | [`../reports/closeouts/m5-runtime-preview/closeout.md`](../reports/closeouts/m5-runtime-preview/closeout.md) |
+| `runenwerk_render_lab` | `apps/runenwerk_render_lab` | current | [`../design/accepted/runenwerk-render-lab-product-design.md`](../design/accepted/runenwerk-render-lab-product-design.md) |
 | `native_tablet_input` | `adapters/native_tablet_input` | current | [`../adapters/native-tablet-input/README.md`](../adapters/native-tablet-input/README.md) |
 
 ## Long-Term Maintenance
