@@ -5,22 +5,29 @@ status: implemented
 owner: editor
 layer: domain
 canonical: true
-last_reviewed: 2026-05-16
+last_reviewed: 2026-09-14
 related:
   - ./ui-definition-formation-foundation-design.md
-  - ./editor-ui-workspace-tool-surface-architecture.md
-  - ./editor-workspace-document-mode-panel-architecture.md
+  - ../accepted/runenwerk-editor-coordination-semantic-model.md
+  - ./editor-tool-suite-registry-and-workbench-host-design.md
+  - ../superseded/editor-ui-workspace-tool-surface-architecture.md
+  - ../superseded/editor-workspace-document-mode-panel-architecture.md
   - ./workspace-identity-contract-and-migration-map.md
   - ../../apps/runenwerk-editor/execution-priority-checklist.md
   - ../../domain/ui/roadmap.md
   - ../../reports/audits/editor-ui-priority-code-audit-2026-05-05.md
+related_adrs:
+  - ../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
+  - ../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md
 ---
 
 # Editor Self-Authoring and UI Workspace Design
 
 ## Status
 
-Active design.
+Implemented product/design authority for the self-authoring and UI workspace capabilities recorded below.
+
+[ADR 0025](../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md) and the [accepted editor coordination semantic model](../accepted/runenwerk-editor-coordination-semantic-model.md) supersede this document wherever older text below treats one generic `Document`, `EditorSession`, active mode, selection, history, dirty/save state, or workspace model as universal editor semantic ownership. [ADR 0013](../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md) remains authoritative for structural composition. Product words such as document, workspace, mode, and dirty state may remain valid UI/current-implementation vocabulary without re-establishing those predecessor authorities.
 
 This document is now part of the immediate editor/UI roadmap. The implementation order is M3.5 UI definition formation framework first, then M3.6 UI self-authoring workspace before the asset/procedural/gameplay expansion milestones.
 
@@ -81,7 +88,7 @@ Area tabs are not document tabs.
 
 ### Document Tab
 
-A document tab is an open authored or inspected target in `editor_core`.
+A document tab is current product/current `editor_core` implementation vocabulary for an open authored or inspected target. It is not the normalized universal semantic owner of that target; ADR 0025 models owner-governed semantic scopes through explicit `EditorBinding`s and coordination contexts.
 
 Examples:
 
@@ -92,7 +99,7 @@ Examples:
 - runtime debug query document;
 - editor-design document.
 
-Document tabs determine the semantic context that providers observe.
+Current document tabs determine provider context in the predecessor implementation.
 
 ### Authored Definition
 
@@ -214,7 +221,7 @@ Switching a workspace changes layout, default tool surfaces, and mode set. It do
 
 ### Document Tab Bar
 
-Document tabs manage authored targets.
+Document tabs manage authored targets in the current product/current implementation.
 
 Required controls:
 
@@ -224,7 +231,7 @@ Required controls:
 - plus button for new/open document;
 - context menu for duplicate, rename, save as, reveal, close others.
 
-Document tabs are backed by `DocumentId`, not `PanelInstanceId`.
+Current document tabs are backed by `DocumentId`, not `PanelInstanceId`. ADR 0025 explicitly prevents that runtime/editor identity from becoming a universal foreign semantic or durable reopen identity.
 
 ### Mode/Tool Bar
 
@@ -243,7 +250,7 @@ Examples:
 - Preview;
 - Validate.
 
-Mode availability is derived from `(workspace_profile, document_kind)`.
+Current mode availability is derived from `(workspace_profile, document_kind)`. This is implementation evidence, not the normalized requirement for one global active mode; future routing follows ADR 0025 `ActivationScope`/`InvocationContext` and owner/provider validation.
 
 ### Editor Area Chrome
 
@@ -299,7 +306,7 @@ Current code has the internal command path for this behavior through `ShellComma
 
 The plus button creates a new area tab in the current `TabStackId`.
 
-Expected flow:
+Expected current-model flow:
 
 1. User clicks `+` in a tab stack.
 2. A new tab menu opens.
@@ -310,7 +317,7 @@ Expected flow:
 7. The new tab becomes active.
 8. Provider resolution builds the selected surface for the active document context.
 
-The plus button is separate from document-tab creation.
+The plus button is separate from document-tab creation. Long-term structural authority is `ui_composition`; these current compatibility identities must not be promoted into a parallel structural model.
 
 ### Area Menu
 
@@ -325,6 +332,8 @@ The area menu owns structure-level commands:
 - reset area;
 - lock area type;
 - save area layout as preset.
+
+Committed structural mutation is owned by `ui_composition` under ADR 0013.
 
 ### Docking and Split UX
 
@@ -351,6 +360,8 @@ The status bar should show:
 - dirty state;
 - focused surface;
 - command feedback.
+
+These labels are product presentation. Selection, history, persistence/dirty state, and activation semantics remain governed by their explicit ADR-0025 contexts rather than one mandatory global session.
 
 ## Final Workspace Designs
 
@@ -474,9 +485,11 @@ Default modes:
 
 ## Self-Authoring Document Types
 
+These names are authored-definition/product vocabulary; their semantic and persistence ownership remains with the concrete definition owner rather than a universal editor document model.
+
 ### Workspace Layout Definition
 
-Owns:
+Owns authored layout intent such as:
 
 - split host tree;
 - tab stacks;
@@ -485,6 +498,8 @@ Owns:
 - default active panels;
 - default floating hosts;
 - constraints and restore policy.
+
+Formation/activation must enter the `ui_composition` structural authority rather than establish a second writable workspace graph.
 
 ### UI Layout Definition
 
@@ -537,8 +552,10 @@ Owns:
 - capability requirements;
 - UI placement;
 - route target;
-- undo/redo semantics;
+- undo/redo metadata used by the current editor binding path;
 - validation behavior.
+
+It does not make one generic editor history stack authoritative for foreign domains.
 
 ### Panel Registry Definition
 
@@ -600,9 +617,9 @@ Runtime/editor-ready product.
 
 Responsibilities:
 
-- convert definitions into workspace shell contracts;
+- convert definitions into candidates/contracts consumed by the current structural/editor owners;
 - prepare provider requests;
-- prepare command routes;
+- prepare command/action routes;
 - prepare theme tokens;
 - prepare concrete UI products for the selected execution target.
 
@@ -615,10 +632,12 @@ Active runtime/editor state.
 Responsibilities:
 
 - allocate session identities;
-- mount tool surfaces;
+- mount tool surfaces/content through current structural integration;
 - create retained UI tree state;
-- bind document context;
-- enter command routing.
+- bind current semantic context;
+- enter command/action routing.
+
+Runtime/session identities allocated here are not durable semantic reopen identities unless the owning semantic/persistence contract separately defines a durable locator.
 
 ## Create And Manage Flows
 
@@ -627,10 +646,10 @@ Responsibilities:
 1. User chooses `Create`.
 2. User chooses definition type.
 3. The editor creates an authored draft.
-4. The draft opens as a document tab.
+4. The draft opens as a document tab in the current product model.
 5. Validation runs immediately.
 6. The user edits until no blocking issues remain.
-7. The user saves or applies the definition.
+7. The user saves or applies the definition through the owning persistence/action path.
 
 ### Duplicate Definition
 
@@ -638,7 +657,7 @@ Responsibilities:
 2. User chooses duplicate.
 3. The editor copies authored source with new stable definition identity.
 4. Internal references are remapped where ownership requires it.
-5. The duplicate opens as a dirty document.
+5. The duplicate opens with owner-derived unsaved/dirty presentation in the current product model.
 
 ### Delete Definition
 
@@ -648,7 +667,7 @@ Rules:
 
 - active definitions cannot be deleted without replacement;
 - referenced definitions require dependency confirmation;
-- deletion creates a ratified change and is undoable where possible.
+- deletion creates an owner-ratified change and is undoable only when the applicable history owner supports it.
 
 ### Rename Definition
 
@@ -697,7 +716,7 @@ Core operations:
 - reset area;
 - save as preset.
 
-All operations produce explicit workspace-definition commands.
+These are editor-facing structural intents. Active structural mutation enters through `ui_composition`; authored workspace/layout-definition edits remain owner-defined authored-content changes.
 
 ### UI Layout Editing
 
@@ -726,7 +745,7 @@ Shows:
 - document hierarchy;
 - references;
 - validation state;
-- dirty state.
+- owner-derived persistence/dirty state.
 
 ### Dock/Layout Preview
 
@@ -765,7 +784,7 @@ Show:
 
 Edits selected definition nodes.
 
-Inspector fields must route through command proposals and ratification, not direct state mutation.
+Inspector fields must route through command proposals and owner/editor ratification, not direct foreign state mutation.
 
 ### Validation Panel
 
@@ -780,11 +799,11 @@ Shows:
 
 ### Command Diff Panel
 
-Shows the exact change that will be applied before formation or activation.
+Shows the exact proposed change before formation or activation.
 
 ## Command And Ratification Model
 
-Self-authoring mutations must use explicit commands.
+Self-authoring mutations must use explicit commands/actions.
 
 Command families:
 
@@ -809,50 +828,48 @@ Command families:
 - `editor.shortcut.bind`;
 - `editor.shortcut.unbind`.
 
-Ratification must check:
+Ratification/invocation must revalidate the applicable owner/provider context, including:
 
-- current workspace/document compatibility;
-- capability requirements;
-- valid target identity;
-- no structural cycles;
+- current compatibility/capability requirements;
+- valid target identity and owner preconditions;
+- no structural cycles where defined by the owning schema;
 - no duplicate stable ids;
 - no dangling references;
-- command route safety;
+- command/action route safety;
 - migration compatibility.
+
+Availability is advisory and does not replace invocation-time validation.
 
 ## Persistence And Versioning
 
-Definitions should be persisted as versioned authored documents.
+Definitions should be persisted as versioned authored documents by their concrete persistence/schema owners.
 
-Target ownership:
+Current implementation responsibilities include:
 
-- editor definition schemas: future domain editor definition crate/module;
-- workspace structural contracts: `domain/editor/editor_shell`;
-- document/session references: `domain/editor/editor_core`;
+- editor definition schemas: `domain/editor/editor_definition`;
+- structural composition state/persistence: `domain/ui/ui_composition`;
+- predecessor document/session/persistence adapters where current code still contains them: `domain/editor/editor_core` and `domain/editor/editor_persistence`;
 - UI node/layout contracts: `domain/ui`;
-- app file IO and project storage: `apps/runenwerk_editor`.
+- app file IO and project storage paths: `apps/runenwerk_editor`.
+
+ADR 0025's normalized target uses explicit `PersistenceContext`s; current `EditorSession` dirty/save state is implementation to migrate, not future universal persistence authority.
 
 Do not store active runtime-only identities as durable authored identities.
 
-Durable ids:
+Durable ids are owner/schema-defined, for example:
 
 - definition id;
 - authored node id;
-- authored panel id;
-- authored tool-surface slot id;
-- command id;
+- authored panel/content declaration id;
+- authored tool-surface slot/key id;
+- command/binding id;
 - theme token id.
 
-Session ids:
-
-- `PanelInstanceId`;
-- `ToolSurfaceInstanceId`;
-- UI runtime widget focus/capture state;
-- temporary preview ids.
+Runtime/session ids include current shell identities such as `PanelInstanceId`/`ToolSurfaceInstanceId`, UI runtime focus/capture/widget ids, preview ids, and ADR-0025 `EditorBindingId`/`SurfaceSessionId`/`ActivationScopeId`/route/publication-generation-local identities. They must not be reinterpreted as durable semantic identity.
 
 ## Architecture Ownership
 
-### Planned `domain/ui/ui_definition`
+### `domain/ui/ui_definition`
 
 Owns general UI definition and formation contracts:
 
@@ -863,32 +880,29 @@ Owns general UI definition and formation contracts:
 
 It must not own editor workspaces, tool-surface semantics, provider registries, or command execution.
 
-### `domain/editor/editor_core`
+### Current `domain/editor/editor_core`
 
-Owns:
+Current implementation owns predecessor-shaped:
 
-- document descriptors;
-- document kind taxonomy;
-- active document switching;
-- mode contracts;
-- ratified editor change records.
+- document descriptors and document kind taxonomy;
+- active document switching and mode contracts;
+- generic selection/history/session state;
+- generic editor change records.
+
+These are current implementation facts, not the normalized target semantic owner. ADR 0025 requires later boundary repair into explicit bindings, surface sessions, activation/invocation, owner-specific selection/history/persistence contexts, and owner-defined domain commands.
 
 ### `domain/editor/editor_shell`
 
-Owns:
+Owns current editor-local shell/tool-host/provider integration, including bounded Tool Suite/Workbench contracts and compatibility adapters.
 
-- workspace structural graph;
-- tab stack and panel identity;
-- tool-surface host contracts;
-- surface capability/retention contracts;
-- projection/routing contracts.
+Current source still contains workspace/panel/tool-surface structures, but `ui_composition` is the structural authority for targets, roots, regions, mounted units, structural transactions/history, and composition persistence. `editor_shell` must not re-establish those invariants or universal document/selection/history/persistence semantics.
 
-### Future Editor Definition Domain
+### `domain/editor/editor_definition`
 
 Owns:
 
 - editor-specific authored definition schemas;
-- workspace profile catalogs and default layout definitions;
+- workspace/profile catalogs and default layout-definition data;
 - editor menu, shortcut, command binding, panel registry, and tool-surface definitions;
 - normalization;
 - formation;
@@ -896,7 +910,7 @@ Owns:
 - validation;
 - self-authoring operation contracts.
 
-It may consume general UI definition contracts, but it must not move generic UI substrate behavior or runtime widget identity into editor-authored definitions.
+It may consume general UI definition contracts, but it must not move generic UI substrate behavior, foreign domain semantics, or runtime widget identity into editor-authored definitions.
 
 ### `domain/ui`
 
@@ -909,9 +923,10 @@ Owns:
 - text;
 - theme tokens;
 - reusable widgets;
-- render data contracts.
+- render data contracts;
+- app-neutral structural composition through `ui_composition`.
 
-It must not own editor semantics.
+It must not own editor semantic coordination.
 
 ### `apps/runenwerk_editor`
 
@@ -922,23 +937,25 @@ Owns:
 - file IO;
 - runtime integration;
 - preview instantiation;
-- engine/window integration.
+- engine/window integration;
+- concrete command execution and owner adapters.
 
-It must not become the semantic owner of self-authoring definitions.
+It must not become the semantic owner of self-authoring definitions or foreign domain truth merely because it integrates them.
 
 ## Guard Coverage Required
 
 Add or preserve guards that prevent:
 
-- shell layout code from owning document semantics;
+- shell layout code from owning foreign semantic state;
 - UI substrate from depending on editor-specific semantics;
 - authored definitions from becoming active without formation;
-- editor area type switches from changing `PanelInstanceId`;
-- new tab creation from reusing stale `ToolSurfaceInstanceId`;
+- editor area type switches from changing semantic owner identity;
+- new tab creation from reusing stale runtime tool-surface identity;
 - document tabs from being confused with area tabs;
-- self-authoring commands from mutating definitions without ratification;
+- self-authoring commands from mutating definitions without owner ratification;
 - invalid definitions from becoming active;
-- active layouts from persisting session-only ids as authored ids.
+- active layouts from persisting session-only ids as authored ids;
+- current global `EditorSession`/selection/history/persistence assumptions from being reasserted as future normative architecture.
 
 ## Implementation Phases
 
@@ -949,6 +966,8 @@ This design is implemented as M3.6 in `docs-site/src/content/docs/apps/runenwerk
 M3.6 is not a replacement for M3.5. It consumes the M3.5 definition framework and makes it usable through an editor workspace before the integrated M4 UI/editor/asset foundation expands live definition consumption and introduces asset/import/field-product surfaces.
 
 The later M8 roadmap slot is no longer the first self-authoring implementation. It is reserved for packaging, externalization, and long-lived migration hardening after the main editor feature tracks exist.
+
+The historical phases below preserve implementation decomposition. They do not override ADR 0025/0013 target ownership.
 
 ### Phase 0 - Design Closeout
 
@@ -1062,5 +1081,5 @@ The promoted self-authoring milestone is complete when:
 - validation catches malformed UI templates, slot refs, route refs, theme refs, and unsupported embeds;
 - a valid definition can be formed into an active workspace/UI preview;
 - valid definitions can be applied or rolled back through ratified commands;
-- edits are undoable through ratified commands;
+- edits are undoable through the applicable owner/history context rather than requiring one universal editor history stack;
 - no active runtime/session-only ids are persisted as authored ids.
