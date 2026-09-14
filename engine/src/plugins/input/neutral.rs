@@ -344,19 +344,11 @@ pub(crate) struct ObservationGroup {
 }
 
 impl ObservationGroup {
-    pub(crate) fn new(source: InputSourceId, observations: Vec<InputObservation>) -> Self {
-        Self::new_in(InputContext::new(source, None), observations)
-    }
-
     pub(crate) fn new_in(context: InputContext, observations: Vec<InputObservation>) -> Self {
         Self {
             context,
             observations,
         }
-    }
-
-    pub(crate) fn single(source: InputSourceId, observation: InputObservation) -> Self {
-        Self::single_in(InputContext::new(source, None), observation)
     }
 
     pub(crate) fn single_in(context: InputContext, observation: InputObservation) -> Self {
@@ -412,10 +404,7 @@ impl NeutralInputAuthority {
         Ok(())
     }
 
-    pub(crate) fn control_down(&self, source: InputSourceId, control: ControlId) -> bool {
-        self.control_down_in(InputContext::new(source, None), control)
-    }
-
+    #[cfg(test)]
     pub(crate) fn control_down_in(&self, context: InputContext, control: ControlId) -> bool {
         self.state
             .held_controls
@@ -431,14 +420,6 @@ impl NeutralInputAuthority {
 
     pub(crate) fn absolute_pointer_position(&self, source: InputSourceId) -> Option<Point2> {
         self.state.absolute_pointer_positions.get(&source).copied()
-    }
-
-    pub(crate) fn contact_state(
-        &self,
-        source: InputSourceId,
-        contact: ContactId,
-    ) -> Option<ContactState> {
-        self.contact_state_in(InputContext::new(source, None), contact)
     }
 
     pub(crate) fn contact_state_in(
@@ -558,6 +539,8 @@ mod tests {
 
     const SOURCE_A: InputSourceId = InputSourceId::new(1);
     const SOURCE_B: InputSourceId = InputSourceId::new(2);
+    const CONTEXT_A: InputContext = InputContext::new(SOURCE_A, None);
+    const CONTEXT_B: InputContext = InputContext::new(SOURCE_B, None);
     const CONTROL: ControlId = ControlId::new(7);
 
     #[test]
@@ -565,8 +548,8 @@ mod tests {
         let mut authority = NeutralInputAuthority::default();
 
         authority
-            .admit(ObservationGroup::single(
-                SOURCE_A,
+            .admit(ObservationGroup::single_in(
+                CONTEXT_A,
                 InputObservation::DigitalControl {
                     control: CONTROL,
                     transition: DigitalTransition::Down,
@@ -577,8 +560,8 @@ mod tests {
         assert_eq!(authority.admission_sequence().get(), 1);
 
         authority
-            .admit(ObservationGroup::single(
-                SOURCE_B,
+            .admit(ObservationGroup::single_in(
+                CONTEXT_B,
                 InputObservation::RelativeMotion {
                     delta: Vector2::new(1.0, -1.0),
                     unit: RelativeMotionUnit::BackendDeviceUnits,
@@ -589,8 +572,8 @@ mod tests {
         assert_eq!(authority.admission_sequence().get(), 2);
 
         authority
-            .admit(ObservationGroup::single(
-                SOURCE_A,
+            .admit(ObservationGroup::single_in(
+                CONTEXT_A,
                 InputObservation::DigitalControl {
                     control: CONTROL,
                     transition: DigitalTransition::Up,
@@ -606,27 +589,27 @@ mod tests {
         let mut authority = NeutralInputAuthority::default();
 
         authority
-            .admit(ObservationGroup::single(
-                SOURCE_A,
+            .admit(ObservationGroup::single_in(
+                CONTEXT_A,
                 InputObservation::DigitalControl {
                     control: CONTROL,
                     transition: DigitalTransition::Down,
                 },
             ))
             .expect("down should admit");
-        assert!(authority.control_down(SOURCE_A, CONTROL));
+        assert!(authority.control_down_in(CONTEXT_A, CONTROL));
         assert_eq!(authority.admission_sequence().get(), 1);
 
         authority
-            .admit(ObservationGroup::single(
-                SOURCE_A,
+            .admit(ObservationGroup::single_in(
+                CONTEXT_A,
                 InputObservation::DigitalControl {
                     control: CONTROL,
                     transition: DigitalTransition::Up,
                 },
             ))
             .expect("up should admit");
-        assert!(!authority.control_down(SOURCE_A, CONTROL));
+        assert!(!authority.control_down_in(CONTEXT_A, CONTROL));
         assert_eq!(authority.admission_sequence().get(), 2);
     }
 
@@ -694,26 +677,26 @@ mod tests {
         let mut authority = NeutralInputAuthority::default();
 
         authority
-            .admit(ObservationGroup::single(
-                SOURCE_A,
+            .admit(ObservationGroup::single_in(
+                CONTEXT_A,
                 InputObservation::DigitalControl {
                     control: CONTROL,
                     transition: DigitalTransition::ReconcileDown,
                 },
             ))
             .expect("reconciliation down should admit");
-        assert!(authority.control_down(SOURCE_A, CONTROL));
+        assert!(authority.control_down_in(CONTEXT_A, CONTROL));
 
         authority
-            .admit(ObservationGroup::single(
-                SOURCE_A,
+            .admit(ObservationGroup::single_in(
+                CONTEXT_A,
                 InputObservation::DigitalControl {
                     control: CONTROL,
                     transition: DigitalTransition::Cancel,
                 },
             ))
             .expect("cancel should admit");
-        assert!(!authority.control_down(SOURCE_A, CONTROL));
+        assert!(!authority.control_down_in(CONTEXT_A, CONTROL));
     }
 
     #[test]
@@ -759,8 +742,8 @@ mod tests {
     fn invalid_numeric_group_is_rejected_atomically() {
         let mut authority = NeutralInputAuthority::default();
 
-        let result = authority.admit(ObservationGroup::new(
-            SOURCE_A,
+        let result = authority.admit(ObservationGroup::new_in(
+            CONTEXT_A,
             vec![
                 InputObservation::DigitalControl {
                     control: CONTROL,
@@ -774,7 +757,7 @@ mod tests {
         ));
 
         assert_eq!(result, Err(NeutralInputError::NonFiniteObservation));
-        assert!(!authority.control_down(SOURCE_A, CONTROL));
+        assert!(!authority.control_down_in(CONTEXT_A, CONTROL));
         assert_eq!(authority.admission_sequence().get(), 0);
     }
 }

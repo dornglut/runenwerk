@@ -188,7 +188,7 @@ fn physical_key(key: PhysicalKey) -> PhysicalKeyIdentity {
 fn native_physical_key_code(code: NativeKeyCode) -> NativePhysicalKeyCode {
     match code {
         NativeKeyCode::Unidentified => NativePhysicalKeyCode::Unidentified,
-        NativeKeyCode::Android(code) => NativePhysicalKeyCode::Android(code as u32),
+        NativeKeyCode::Android(code) => NativePhysicalKeyCode::Android(code),
         NativeKeyCode::MacOS(code) => NativePhysicalKeyCode::MacOs(code as u32),
         NativeKeyCode::Windows(code) => NativePhysicalKeyCode::Windows(code as u32),
         NativeKeyCode::Xkb(code) => NativePhysicalKeyCode::Xkb(code),
@@ -207,7 +207,7 @@ fn logical_key(key: &Key) -> LogicalKey {
 fn native_logical_key(key: &NativeKey) -> NativeLogicalKey {
     match key {
         NativeKey::Unidentified => NativeLogicalKey::Unidentified,
-        NativeKey::Android(code) => NativeLogicalKey::Android(*code as u32),
+        NativeKey::Android(code) => NativeLogicalKey::Android(*code),
         NativeKey::MacOS(code) => NativeLogicalKey::MacOs(*code as u32),
         NativeKey::Windows(code) => NativeLogicalKey::Windows(*code as u32),
         NativeKey::Xkb(code) => NativeLogicalKey::Xkb(*code),
