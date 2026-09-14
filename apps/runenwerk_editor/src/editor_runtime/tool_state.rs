@@ -1,4 +1,5 @@
-use editor_core::{EditorMutationError, EntityId, SelectionTarget};
+use editor_core::{EditorMutationError, EntityId};
+use editor_scene::SceneSelectionAddress;
 use editor_viewport::SnapSettings;
 use scene::Vec3Value;
 
@@ -62,18 +63,10 @@ impl EditorToolRuntimeState {
 
     pub fn begin_preview(
         &mut self,
-        selection: SelectionTarget,
+        selection: SceneSelectionAddress,
         tool: TransformToolKind,
     ) -> Result<(), EditorMutationError> {
-        let entity = match selection {
-            SelectionTarget::Entity(entity) => entity,
-            SelectionTarget::Component { entity, .. } => entity,
-            _ => {
-                return Err(EditorMutationError::session_rejected(
-                    "selection target is not previewable",
-                ));
-            }
-        };
+        let entity = selection.entity_id();
 
         self.preview = Some(TransformPreviewSession::new(entity, tool, selection));
         self.translate_axis = None;

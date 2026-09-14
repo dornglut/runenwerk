@@ -1,4 +1,5 @@
-use editor_core::{EntityId, SelectionTarget};
+use editor_core::EntityId;
+use editor_scene::SceneSelectionAddress;
 use scene::Vec3Value;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -12,7 +13,7 @@ pub enum TransformToolKind {
 pub struct TransformPreviewSession {
     pub entity: EntityId,
     pub tool: TransformToolKind,
-    pub started_from_selection: SelectionTarget,
+    pub started_from_selection: SceneSelectionAddress,
     pub translation_delta: Vec3Value,
     pub rotation_delta_radians: Vec3Value,
     pub scale_delta: Vec3Value,
@@ -22,7 +23,7 @@ impl TransformPreviewSession {
     pub fn new(
         entity: EntityId,
         tool: TransformToolKind,
-        started_from_selection: SelectionTarget,
+        started_from_selection: SceneSelectionAddress,
     ) -> Self {
         Self {
             entity,

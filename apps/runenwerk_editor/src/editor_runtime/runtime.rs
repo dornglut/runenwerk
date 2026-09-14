@@ -7,7 +7,9 @@ use editor_core::{
 use editor_inspector::{InspectTarget, InspectorEditError, InspectorEditValue, InspectorPath};
 use editor_scene::{
     SceneComponentDescriptor, SceneMaterialAssignmentState, SceneMaterialSlotId,
-    SceneModelMeshMaterialRegionSourceId, SceneRuntime, SdfPrimitiveSourceId,
+    SceneModelMeshMaterialRegionSourceId, SceneRuntime, SceneSelectionAddress,
+    SceneSelectionChange, SceneSelectionChangeKind, SceneSelectionContext, SceneSelectionScope,
+    SceneSelectionTarget, SdfPrimitiveSourceId,
 };
 
 use crate::editor_runtime::{
@@ -41,6 +43,8 @@ impl SceneRealityStore {
 
 pub struct RunenwerkEditorRuntime {
     session: EditorSession,
+    scene_selection: SceneSelectionContext,
+    scene_selection_changes: editor_scene::SceneSelectionChangeLog,
     document_tabs: DocumentTabRuntimeState,
     scene_realities: SceneRealityStore,
     retention_store: SceneRetentionStore,
@@ -60,6 +64,7 @@ pub struct RunenwerkEditorRuntime {
     next_shared_change_sequence: u64,
     next_workflow_event_id: u64,
     scene_reality_version: u64,
+    next_scene_selection_scope: u64,
 }
 
 impl Default for RunenwerkEditorRuntime {
@@ -80,6 +85,8 @@ impl RunenwerkEditorRuntime {
         ));
         Self {
             session,
+            scene_selection: SceneSelectionContext::new(SceneSelectionScope(1)),
+            scene_selection_changes: editor_scene::SceneSelectionChangeLog::new(),
             document_tabs,
             scene_realities: SceneRealityStore::new(),
             retention_store: SceneRetentionStore::new(),
@@ -99,6 +106,7 @@ impl RunenwerkEditorRuntime {
             next_shared_change_sequence: 1,
             next_workflow_event_id: 1,
             scene_reality_version: 0,
+            next_scene_selection_scope: 2,
         }
     }
 
@@ -108,6 +116,14 @@ impl RunenwerkEditorRuntime {
 
     pub fn session_mut(&mut self) -> &mut EditorSession {
         &mut self.session
+    }
+
+    pub fn scene_selection(&self) -> &SceneSelectionContext {
+        &self.scene_selection
+    }
+
+    pub fn scene_selection_changes(&self) -> &editor_scene::SceneSelectionChangeLog {
+        &self.scene_selection_changes
     }
 
     pub fn document_tabs(&self) -> &DocumentTabRuntimeState {
@@ -175,27 +191,67 @@ impl RunenwerkEditorRuntime {
 
     pub(crate) fn set_selection_single_with_origin(
         &mut self,
-        target: editor_core::SelectionTarget,
+        address: SceneSelectionAddress,
         origin: editor_core::ChangeOrigin,
     ) {
-        self.session.select_single(target.clone());
-        self.record_session_change(
+        self.scene_selection
+            .set_single(address.clone())
+            .expect("selection producers must use the current scene selection scope");
+        self.scene_selection_changes.push(SceneSelectionChange::new(
             origin,
-            editor_core::SessionChangeKind::SelectionSetSingle { target },
-        );
+            SceneSelectionChangeKind::SetSingle { address },
+        ));
     }
 
     pub(crate) fn clear_selection_with_origin(
         &mut self,
         origin: editor_core::ChangeOrigin,
     ) -> bool {
-        if self.session.selection().is_empty() {
+        if self.scene_selection.is_empty() {
             return false;
         }
 
-        self.session.clear_selection();
-        self.record_session_change(origin, editor_core::SessionChangeKind::SelectionCleared);
+        self.scene_selection.clear();
+        self.scene_selection_changes.push(SceneSelectionChange::new(
+            origin,
+            SceneSelectionChangeKind::Cleared,
+        ));
         true
+    }
+
+    pub(crate) fn validate_scene_selection_address(
+        &self,
+        address: &SceneSelectionAddress,
+    ) -> Result<(), EditorMutationError> {
+        if address.scope() != self.scene_selection.scope() {
+            return Err(EditorMutationError::session_rejected(
+                "scene selection address belongs to an expired scene scope",
+            ));
+        }
+
+        match address.target() {
+            SceneSelectionTarget::Entity(entity) => {
+                if self.ids().resolve_entity(*entity).is_none() {
+                    return Err(EditorMutationError::session_rejected(
+                        "editor entity is not registered",
+                    ));
+                }
+            }
+            SceneSelectionTarget::Component {
+                entity,
+                component_type,
+            } => {
+                if self.ids().resolve_entity(*entity).is_none()
+                    || !self.entity_has_component(*entity, *component_type)
+                {
+                    return Err(EditorMutationError::session_rejected(
+                        "scene selection address is no longer valid",
+                    ));
+                }
+            }
+        }
+
+        Ok(())
     }
 
     pub(crate) fn pop_undo_history_entry(&mut self) -> Option<editor_core::HistoryEntry> {
@@ -537,6 +593,10 @@ impl RunenwerkEditorRuntime {
     pub(crate) fn prepare_for_scene_load(&mut self) {
         self.clear_scene_entities_only();
         self.session = EditorSession::new();
+        let scene_selection_scope = SceneSelectionScope(self.next_scene_selection_scope);
+        self.next_scene_selection_scope = self.next_scene_selection_scope.saturating_add(1);
+        self.scene_selection = SceneSelectionContext::new(scene_selection_scope);
+        self.scene_selection_changes = editor_scene::SceneSelectionChangeLog::new();
         ensure_default_scene_document(&mut self.session);
         self.document_tabs = DocumentTabRuntimeState::new();
         self.document_tabs.upsert(DocumentTabRuntimeRecord::new(
@@ -960,14 +1020,6 @@ fn map_session_change_to_share(
         }
         editor_core::SessionChangeKind::ModeSet { mode } => {
             Some(editor_core::SessionShareKind::ModeSet { mode: *mode })
-        }
-        editor_core::SessionChangeKind::SelectionSetSingle { target } => {
-            Some(editor_core::SessionShareKind::SelectionSetSingle {
-                target: target.clone(),
-            })
-        }
-        editor_core::SessionChangeKind::SelectionCleared => {
-            Some(editor_core::SessionShareKind::SelectionCleared)
         }
     }
 }
