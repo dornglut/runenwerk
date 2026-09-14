@@ -12,7 +12,7 @@ use crate::plugins::time::domain::Time;
 use crate::plugins::ui::UiRuntimeSet;
 use crate::plugins::{ActionState, InputState, PhysicalKeyIdentity};
 use crate::runtime::{RenderPrepare, Res, ResMut, Startup, SystemConfigExt};
-use crate::state::{DebugMetricsState, SceneRuntimeState, UiOverlayState};
+use crate::state::{DebugMetricsState, SceneOverlayViewportState, SceneRuntimeState};
 use ui_math::{UiInsets, UiRect, UiSize};
 use ui_runtime::{
     ComputedLayout, ComputedLayoutMap, InteractionVisualState, LabelNode, PanelNode, UiNode,
@@ -36,7 +36,6 @@ const fn render_frame_producer_id(raw: u64) -> RenderFrameProducerId {
 impl Plugin for DebugMetricsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<DebugMetricsState>();
-        app.init_resource::<UiOverlayState>();
         app.init_resource::<SurfaceFrameSubmissionRegistryResource>();
         app.init_resource::<WorldRuntimeInspectorSnapshot>();
         app.init_resource::<RenderDebugTimingsState>();
@@ -62,10 +61,10 @@ fn debug_metrics_overlay_system(
     time: Res<Time>,
     readiness: Res<RenderReadinessState>,
     scene: Res<SceneRuntimeState>,
+    viewport: Res<SceneOverlayViewportState>,
     world_runtime: Res<WorldRuntimeInspectorSnapshot>,
     render_debug_timings: Res<RenderDebugTimingsState>,
     mut debug_metrics: ResMut<DebugMetricsState>,
-    mut ui: ResMut<UiOverlayState>,
     mut submissions: ResMut<SurfaceFrameSubmissionRegistryResource>,
 ) {
     if actions.action_pressed(ACTION_TOGGLE_METRICS) {
@@ -73,15 +72,14 @@ fn debug_metrics_overlay_system(
     }
 
     debug_metrics.observe_frame_delta(time.delta_seconds);
-    ui.debug_frame = ui_render_data::UiFrame::default();
 
     if !debug_metrics.visible {
-        publish_debug_metrics_frame(&ui.debug_frame, &mut submissions);
+        submissions.remove(&DEBUG_METRICS_FRAME_PRODUCER_ID);
         return;
     }
 
-    let (screen_w, screen_h) = ui.screen_size;
-    let scale = ui.scale.max(0.5);
+    let (screen_w, screen_h) = viewport.screen_size;
+    let scale = viewport.scale.max(0.5);
     let x = 12.0 * scale;
     let y = 12.0 * scale;
     let w = (380.0 * scale).min((screen_w - x * 2.0).max(120.0));
@@ -203,8 +201,8 @@ fn debug_metrics_overlay_system(
         world_runtime.region_journal_latest_sequence, world_runtime.region_journal_record_count
     ));
 
-    ui.debug_frame = build_debug_metrics_frame((screen_w, screen_h), x, y, w, h, scale, &lines);
-    publish_debug_metrics_frame(&ui.debug_frame, &mut submissions);
+    let frame = build_debug_metrics_frame((screen_w, screen_h), x, y, w, h, scale, &lines);
+    publish_debug_metrics_frame(&frame, &mut submissions);
 }
 
 fn publish_debug_metrics_frame(
@@ -305,8 +303,8 @@ fn debug_overlay_font_atlas() -> &'static UiFontAtlasResource {
 
 #[cfg(test)]
 mod tests {
-    use super::DebugMetricsPlugin;
-    use crate::plugins::render::RenderReadinessState;
+    use super::{DEBUG_METRICS_FRAME_PRODUCER_ID, DebugMetricsPlugin};
+    use crate::plugins::render::{RenderReadinessState, SurfaceFrameSubmissionRegistryResource};
     use crate::plugins::{ActionState, InputState, ScenePlugin, TimePlugin};
     use crate::prelude::*;
     use winit::event::ElementState;
@@ -318,7 +316,7 @@ mod tests {
     }
 
     #[test]
-    fn debug_metrics_plugin_populates_overlay_draw_state() {
+    fn debug_metrics_plugin_publishes_overlay_frame() {
         let mut app = App::headless();
         app.add_plugin(TimePlugin);
         app.add_plugin(ScenePlugin);
@@ -329,7 +327,13 @@ mod tests {
 
         let metrics = app.world().resource::<DebugMetricsState>().unwrap();
         assert!(metrics.visible);
-        let overlay = app.world().resource::<UiOverlayState>().unwrap();
-        assert!(!overlay.debug_frame.is_empty());
+        let registry = app
+            .world()
+            .resource::<SurfaceFrameSubmissionRegistryResource>()
+            .expect("debug metrics should install the generic submission registry");
+        let submission = registry
+            .get(&DEBUG_METRICS_FRAME_PRODUCER_ID)
+            .expect("visible debug metrics should publish producer 2");
+        assert!(submission.primitive_count_hint() > 0);
     }
 }

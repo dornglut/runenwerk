@@ -2,7 +2,6 @@ use crate::plugins::render::renderer::GfxFrameTimings;
 use runen_ecs::Component;
 use std::collections::HashMap;
 use std::path::Path;
-use ui_render_data::UiFrame;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SceneRegistration {
@@ -195,18 +194,16 @@ impl Default for SceneRuntimeState {
 }
 
 #[derive(Debug, Clone, PartialEq, Component, runen_ecs::Resource)]
-pub struct UiOverlayState {
+pub struct SceneOverlayViewportState {
     pub screen_size: (f32, f32),
     pub scale: f32,
-    pub debug_frame: UiFrame,
 }
 
-impl Default for UiOverlayState {
+impl Default for SceneOverlayViewportState {
     fn default() -> Self {
         Self {
             screen_size: (1280.0, 720.0),
             scale: 1.0,
-            debug_frame: UiFrame::default(),
         }
     }
 }

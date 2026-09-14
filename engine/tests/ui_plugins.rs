@@ -4,7 +4,7 @@ use winit::event::ElementState;
 use winit::keyboard::KeyCode;
 
 #[test]
-fn ui_plugins_populate_overlay_state_when_overlay_is_visible() {
+fn ui_plugins_populate_overlay_viewport_when_overlay_is_visible() {
     let mut app = App::headless();
     app.add_plugin(TimePlugin);
     app.add_plugin(InputFinalizePlugin);
@@ -21,10 +21,10 @@ fn ui_plugins_populate_overlay_state_when_overlay_is_visible() {
         .expect("scene state should exist");
     assert!(scene.overlay_visible);
 
-    let overlay = app
+    let viewport = app
         .world()
-        .resource::<UiOverlayState>()
-        .expect("ui overlay state should exist");
-    assert!(overlay.scale > 0.0);
-    assert!(overlay.screen_size.0 > 0.0 && overlay.screen_size.1 > 0.0);
+        .resource::<SceneOverlayViewportState>()
+        .expect("scene overlay viewport state should exist");
+    assert!(viewport.scale > 0.0);
+    assert!(viewport.screen_size.0 > 0.0 && viewport.screen_size.1 > 0.0);
 }

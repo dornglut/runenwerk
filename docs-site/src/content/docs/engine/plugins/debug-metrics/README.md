@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-14
 ---
 
 # Debug Metrics Plugin
@@ -18,22 +18,27 @@ Provides an on-screen diagnostics overlay for frame timing and runtime state.
 
 - Plugin: `DebugMetricsPlugin`
 - Timing provider: `TimePlugin` directly or through `default_plugins()`
-- Scene-state provider: `ScenePlugin`
+- Scene-state and viewport provider: `ScenePlugin`
 - Render-readiness provider: `RenderPlugin`
 - Toggle overlay action: `debug.metrics.toggle`
 - Default key: `F10`
 
-The plugin appends UI draw commands to the overlay UI draw list each frame when enabled.
-It consumes `Time` for frame-delta diagnostics, `SceneRuntimeState` for scene diagnostics, and
-`RenderReadinessState` for render-readiness diagnostics. It does not install or advance those owner
-states. `default_plugins()` supplies `TimePlugin`; applications using the overlay must also select
-`ScenePlugin` and `RenderPlugin` for the maintained scene/readiness diagnostic surface.
+The plugin publishes its diagnostics frame directly through
+`SurfaceFrameSubmissionRegistryResource` when enabled. It consumes `Time` for frame-delta
+diagnostics, `SceneRuntimeState` for scene diagnostics, `SceneOverlayViewportState` for the active
+overlay viewport size/scale, and `RenderReadinessState` for render-readiness diagnostics. It does
+not install or advance those owner states. `default_plugins()` supplies `TimePlugin`; applications
+using the maintained diagnostics surface must also select `ScenePlugin` and `RenderPlugin`.
+
+DebugMetrics does not store its frame in shared Scene viewport state. Frame generation is
+producer-local; producer id 2 is published directly to the generic surface-frame submission
+registry.
 
 ## Ownership Boundaries
 
-- Owns debug metrics visibility toggle and overlay rendering content.
-- Consumes `Time`, `RenderReadinessState`, `SceneRuntimeState`, and render/runtime inspection state.
-- Does not own frame-time progression, render readiness, scene runtime state, frame submission, or UI extraction orchestration.
+- Owns debug metrics visibility toggle and diagnostics frame content/publication.
+- Consumes `Time`, `RenderReadinessState`, `SceneRuntimeState`, `SceneOverlayViewportState`, and render/runtime inspection state.
+- Does not own frame-time progression, render readiness, scene runtime/viewport state, frame submission execution, or UI extraction orchestration.
 - `RenderReadinessState` is Render capability state derived from render warm-frame evidence; it is distinct from the Runenwerk App `Startup` lifecycle.
 
 ## Extension Points

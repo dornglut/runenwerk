@@ -57,9 +57,6 @@ impl App {
             self.world
                 .insert_resource(NativeWindowHookRegistryResource::default());
         }
-        if !self.world.has_resource::<UiOverlayState>() {
-            self.world.insert_resource(UiOverlayState::default());
-        }
         if !self.world.has_resource::<FixedTimeConfig>() {
             self.world.insert_resource(FixedTimeConfig::default());
         }
