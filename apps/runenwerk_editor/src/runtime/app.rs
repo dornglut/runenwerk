@@ -104,14 +104,26 @@ fn configure_app_for_workbench(app: &mut App, workbench: RunenwerkRuntimeWorkben
     app.add_input_bindings([
         (ACTION_EDITOR_UNDO, PhysicalKeyIdentity::code("KeyZ")),
         (ACTION_EDITOR_REDO, PhysicalKeyIdentity::code("KeyY")),
-        (ACTION_EDITOR_TOOL_SELECT, PhysicalKeyIdentity::code("Digit1")),
+        (
+            ACTION_EDITOR_TOOL_SELECT,
+            PhysicalKeyIdentity::code("Digit1"),
+        ),
         (
             ACTION_EDITOR_TOOL_TRANSLATE,
             PhysicalKeyIdentity::code("Digit2"),
         ),
-        (ACTION_EDITOR_TOOL_ROTATE, PhysicalKeyIdentity::code("Digit3")),
-        (ACTION_EDITOR_TOOL_SCALE, PhysicalKeyIdentity::code("Digit4")),
-        (ACTION_EDITOR_VIEWPORT_FOCUS, PhysicalKeyIdentity::code("KeyF")),
+        (
+            ACTION_EDITOR_TOOL_ROTATE,
+            PhysicalKeyIdentity::code("Digit3"),
+        ),
+        (
+            ACTION_EDITOR_TOOL_SCALE,
+            PhysicalKeyIdentity::code("Digit4"),
+        ),
+        (
+            ACTION_EDITOR_VIEWPORT_FOCUS,
+            PhysicalKeyIdentity::code("KeyF"),
+        ),
         (
             ACTION_EDITOR_VIEWPORT_TOOL_RADIAL,
             PhysicalKeyIdentity::code("Tab"),

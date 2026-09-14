@@ -87,7 +87,8 @@ impl App {
                 .insert_resource(QuerySnapshotRuntimeResource::default());
         }
         if !self.world.has_resource::<SimulationProfileConfig>() {
-            self.world.insert_resource(SimulationProfileConfig::default());
+            self.world
+                .insert_resource(SimulationProfileConfig::default());
         }
         self.add_product_publication_handler(publish_staged_product_outcomes);
         self.add_query_snapshot_publication_handler(publish_staged_query_snapshots);

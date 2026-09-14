@@ -119,9 +119,10 @@ pub fn parse_editor_shortcut_chord(chord: &str) -> Result<KeyChord, String> {
                 if key.is_some() {
                     return Err(format!("'{chord}' contains more than one key token"));
                 }
-                key = Some(parse_physical_key(part).ok_or_else(|| {
-                    format!("'{part}' is not a supported editor shortcut key")
-                })?);
+                key =
+                    Some(parse_physical_key(part).ok_or_else(|| {
+                        format!("'{part}' is not a supported editor shortcut key")
+                    })?);
             }
         }
     }
@@ -170,16 +171,12 @@ fn parse_physical_key(part: &str) -> Option<PhysicalKeyIdentity> {
             "end" => Some("End".to_string()),
             "pageup" | "page_up" | "page-up" => Some("PageUp".to_string()),
             "pagedown" | "page_down" | "page-down" => Some("PageDown".to_string()),
-            "arrowleft" | "arrow_left" | "arrow-left" | "left" => {
-                Some("ArrowLeft".to_string())
-            }
+            "arrowleft" | "arrow_left" | "arrow-left" | "left" => Some("ArrowLeft".to_string()),
             "arrowright" | "arrow_right" | "arrow-right" | "right" => {
                 Some("ArrowRight".to_string())
             }
             "arrowup" | "arrow_up" | "arrow-up" | "up" => Some("ArrowUp".to_string()),
-            "arrowdown" | "arrow_down" | "arrow-down" | "down" => {
-                Some("ArrowDown".to_string())
-            }
+            "arrowdown" | "arrow_down" | "arrow-down" | "down" => Some("ArrowDown".to_string()),
             "f1" => Some("F1".to_string()),
             "f2" => Some("F2".to_string()),
             "f3" => Some("F3".to_string()),

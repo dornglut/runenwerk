@@ -187,12 +187,7 @@ impl InputBindings {
         actions
     }
 
-    fn action_down<F>(
-        &self,
-        action: &str,
-        mut key_is_down: F,
-        modifiers: ModifiersSnapshot,
-    ) -> bool
+    fn action_down<F>(&self, action: &str, mut key_is_down: F, modifiers: ModifiersSnapshot) -> bool
     where
         F: FnMut(&PhysicalKeyIdentity) -> bool,
     {
@@ -227,7 +222,10 @@ impl InputBindings {
         self.map_key(action::UI_BACKSPACE, PhysicalKeyIdentity::code("Backspace"));
         self.map_key(action::UI_DELETE, PhysicalKeyIdentity::code("Delete"));
         self.map_key(action::UI_MOVE_LEFT, PhysicalKeyIdentity::code("ArrowLeft"));
-        self.map_key(action::UI_MOVE_RIGHT, PhysicalKeyIdentity::code("ArrowRight"));
+        self.map_key(
+            action::UI_MOVE_RIGHT,
+            PhysicalKeyIdentity::code("ArrowRight"),
+        );
         self.map_key(action::UI_MOVE_UP, PhysicalKeyIdentity::code("ArrowUp"));
         self.map_key(action::UI_MOVE_DOWN, PhysicalKeyIdentity::code("ArrowDown"));
         self.map_key(action::UI_MOVE_HOME, PhysicalKeyIdentity::code("Home"));
@@ -486,11 +484,10 @@ impl ActionState {
         let modifiers = input.modifiers_snapshot();
         let mut actions_down = HashSet::new();
         for action in self.bindings.action_ids() {
-            if self.bindings.action_down(
-                action,
-                |key| input.physical_key_down(key),
-                modifiers,
-            ) {
+            if self
+                .bindings
+                .action_down(action, |key| input.physical_key_down(key), modifiers)
+            {
                 actions_down.insert(action.clone());
             }
         }

@@ -3,7 +3,9 @@ use crate::rendering::{
 };
 use anyhow::Result;
 use engine::plugins::input::domain::action;
-use engine::plugins::{ActionState, PhysicalKeyIdentity, RenderPlugin, ScenePlugin, default_plugins};
+use engine::plugins::{
+    ActionState, PhysicalKeyIdentity, RenderPlugin, ScenePlugin, default_plugins,
+};
 use engine::prelude::{App, InputState, Res, ResMut, Startup, Time, Update, WindowState};
 
 const ACTION_CYCLE_VIEW_MODE: &str = "terrain.view.cycle";
@@ -65,11 +67,7 @@ fn setup_terrain_input_bindings(input: Res<InputState>, mut actions: ResMut<Acti
         ACTION_CYCLE_VIEW_MODE,
         PhysicalKeyIdentity::code("Tab"),
     );
-    actions.map_key(
-        &input,
-        ACTION_MOVE_UP,
-        PhysicalKeyIdentity::code("Space"),
-    );
+    actions.map_key(&input, ACTION_MOVE_UP, PhysicalKeyIdentity::code("Space"));
     actions.map_key(
         &input,
         ACTION_MOVE_DOWN,

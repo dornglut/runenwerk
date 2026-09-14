@@ -110,11 +110,7 @@ fn runtime_map_key_rebinds_world_move_left() {
         ),
         1
     );
-    actions.map_key(
-        &input,
-        action::WORLD_MOVE_LEFT,
-        physical_key(KeyCode::KeyJ),
-    );
+    actions.map_key(&input, action::WORLD_MOVE_LEFT, physical_key(KeyCode::KeyJ));
 
     press_key(&mut input, &mut actions, KeyCode::KeyJ);
     assert!(actions.action_pressed(action::WORLD_MOVE_LEFT));
@@ -148,11 +144,7 @@ fn binding_changes_while_held_recompute_down_without_fabricating_pressed() {
     assert!(!actions.action_down(action::WORLD_MOVE_LEFT));
     assert!(!actions.action_pressed(action::WORLD_MOVE_LEFT));
 
-    actions.map_key(
-        &input,
-        action::WORLD_MOVE_LEFT,
-        physical_key(KeyCode::KeyA),
-    );
+    actions.map_key(&input, action::WORLD_MOVE_LEFT, physical_key(KeyCode::KeyA));
     assert!(actions.action_down(action::WORLD_MOVE_LEFT));
     assert!(!actions.action_pressed(action::WORLD_MOVE_LEFT));
 
