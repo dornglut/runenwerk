@@ -18,7 +18,7 @@ related_adrs:
 related_designs:
   - ./semantic-graph-ir-and-compilation-design.md
   - ./gameplay-graph-atr-ir-and-ecs-lowering-design.md
-  - ./typed-app-program-counter-proof-design.md
+  - ../deferred/typed-app-program-counter-proof-design.md
 related_docs:
   - ../../architecture/runenwerk-platform-architecture.md
   - ../../guidelines/domain-program-architecture-pattern.md

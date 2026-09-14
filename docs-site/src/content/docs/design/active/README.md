@@ -68,10 +68,6 @@ Standalone RunenGPU owns current reusable GPU execution semantics, public contra
 conformance, and framework evolution. Runenwerk does not keep active RunenGPU semantic
 predecessor designs after the accepted standalone transfer.
 
-### Domain Authoring / App Proof
-
-- [Typed App Program Counter Proof Design](typed-app-program-counter-proof-design.md)
-
 ### Workspace / Cross-Domain
 
 - [Drawing Authoring and Comic Layout Platform Design](drawing-authoring-and-comic-layout-platform-design.md)

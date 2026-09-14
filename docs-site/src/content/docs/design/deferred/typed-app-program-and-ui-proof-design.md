@@ -5,14 +5,16 @@ status: deferred
 owner: ui
 layer: design
 canonical: false
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-14
 related_docs:
   - ../../adr/accepted/0019-batteries-included-application-composition.md
+  - ../../adr/accepted/0020-adopt-federated-semantic-composition.md
   - ../../architecture/runenwerk-platform-architecture.md
   - ../../reports/investigations/typed-app-program-current-state-investigation.md
   - ../implemented/ui-program-architecture.md
   - ../implemented/ui-program-architecture-owner-map.md
   - ../archived/ui-framework-app-integration-direction-review.md
+  - ./typed-app-program-counter-proof-design.md
 ---
 
 # Deferred Typed App Program And UI Proof Design
@@ -27,9 +29,12 @@ implementation authorization.
 Current durable product-composition law is owned by:
 
 - [ADR 0019: Batteries-Included Application Composition](../../adr/accepted/0019-batteries-included-application-composition.md);
+- [ADR 0020: Adopt Federated Semantic Composition](../../adr/accepted/0020-adopt-federated-semantic-composition.md);
 - [Runenwerk Platform Architecture](../../architecture/runenwerk-platform-architecture.md).
 
-Those authorities keep `App` as the one live runtime composition root. This
+Those authorities keep `App` as the one live runtime composition root. ADR 0020
+accepts only an optional typed cross-owner composition/interface architecture
+target; it does not accept a concrete App-program or shared Plan runtime. This
 deferred design must not be read as authorization for a second App runtime,
 persistent app-program configuration authority, or a meta-framework beside
 ordinary plugins/resources/configuration.
@@ -92,19 +97,22 @@ cost is not justified without a concrete consumer showing that ordinary
 required behavior cleanly.
 
 The earlier headless Counter proof and associated planning remain historical
-pressure evidence. They do not activate this design.
+pressure evidence. They do not activate this design. After ADR 0020 was accepted,
+the Counter proof was re-reviewed and remains deferred rather than becoming a
+current proving consumer.
 
 ## Reactivation conditions
 
 Reactivate this direction only after accepted architecture and live work both
 justify it. A future attempt must satisfy all of the following:
 
-1. An accepted App-program or Plan architecture establishes the semantic model
-   and reconciles it with ADR 0019 and the then-current Runenwerk platform
-   architecture. An open proposal or unmerged candidate is not sufficient.
+1. A separately accepted bounded implementation/design decision establishes a
+   concrete App-program or shared composition representation and reconciles it
+   with ADR 0019, ADR 0020, ADR 0023, and the then-current Runenwerk platform
+   architecture. ADR 0020's Level-B architecture target alone is not sufficient.
 2. A new owning GitHub issue selects a concrete Runenwerk consumer and first
-   proof that need reusable model/action/reducer/effect/replay contracts beyond
-   ordinary `App`/plugin composition.
+   proof demonstrating a need for reusable model/action/reducer/effect/replay
+   contracts beyond ordinary `App`/plugin composition.
 3. `App` remains the single live runtime composition root; any helper lowers to
    ordinary App/plugins/resources and does not become persistent parallel
    composition truth.
@@ -115,9 +123,10 @@ justify it. A future attempt must satisfy all of the following:
    stop conditions.
 6. Any proposed shared extraction is justified by repeated structurally
    different consumers rather than the UI proof alone.
-7. If `typed-app-program-counter-proof-design.md` is used as the proving
-   consumer, issue #281 must first resolve and that Counter design must be
-   separately re-reviewed against the resulting accepted architecture.
+7. If [Typed App Program Counter Proof Design](typed-app-program-counter-proof-design.md)
+   is selected as a proving consumer, a new bounded owning issue must explicitly
+   reactivate it from deferred status against the concrete accepted representation;
+   #281/ADR 0020 resolution by itself does not activate the Counter proof.
 
 Until those gates are met, this document is design evidence only.
 
@@ -150,6 +159,6 @@ This deferred record does not authorize:
 - `AppRecipe` / `PluginSuite` machinery;
 - `foundation/meta`;
 - editor/game/world-space integration;
-- Counter implementation or lifecycle changes;
+- Counter implementation or lifecycle activation;
 - shared plugin framework extraction;
 - any current work item.
