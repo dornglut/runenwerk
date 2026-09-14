@@ -17,7 +17,8 @@ related_docs:
 related_designs:
   - ./drawing-domain-crate-design.md
   - ./semantic-graph-ir-and-compilation-design.md
-  - ./editor-ui-workspace-tool-surface-architecture.md
+  - ../accepted/runenwerk-editor-coordination-semantic-model.md
+  - ../implemented/editor-tool-suite-registry-and-workbench-host-design.md
   - ../accepted/render-fragment-data-driven-maturity-design.md
   - ../implemented/viewport-dynamic-product-target-allocation-design.md
   - ../implemented/render-product-surface-foundation-bundle-design.md
