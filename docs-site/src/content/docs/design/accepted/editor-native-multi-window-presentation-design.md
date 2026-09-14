@@ -1,16 +1,20 @@
 ---
 title: Editor Native Multi-Window Presentation Design
-description: Accepted design for Window > New Window, independent OS windows, multi-swapchain rendering, second-monitor workflows, and shared editor-session editing.
+description: Accepted design for Window > New Window, independent OS windows, multi-swapchain rendering, second-monitor workflows, and explicit editor-context sharing.
 status: accepted
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-09-12
+last_reviewed: 2026-09-14
+related_adrs:
+  - ../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
+  - ../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md
 related_designs:
   - ./render-product-graph-platform-design.md
   - ./product-surface-platform-hardening-design.md
-  - ../implemented/editor-workspace-document-mode-panel-architecture.md
-  - ../active/editor-ui-workspace-tool-surface-architecture.md
+  - ./runenwerk-editor-coordination-semantic-model.md
+  - ../superseded/editor-workspace-document-mode-panel-architecture.md
+  - ../superseded/editor-ui-workspace-tool-surface-architecture.md
   - ../implemented/render-product-surface-foundation-bundle-design.md
   - ../implemented/workspace-viewport-expression-upgrade-design.md
 related_roadmaps:
@@ -40,7 +44,18 @@ If an implementation slice needs files outside the legal `WR-009` write scopes,
 the roadmap row must be repaired through the normal roadmap workflow before
 code changes start.
 
-This design makes native OS windows a first-class editor capability: the user can choose `Window > New Window`, move the new window to another monitor, and keep editing the same project/session through a separate workspace root with its own swapchain, input focus, DPI scale, and render surface lifecycle.
+This design makes native OS windows a first-class editor capability: the user
+can choose `Window > New Window`, move the new window to another monitor, and
+keep editing the same project through a separate presentation root with its own
+swapchain, input focus, DPI scale, and render surface lifecycle. Semantic state
+is shared only through explicit editor/owner coordination contexts.
+
+[ADR 0025](../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md)
+and the [editor coordination semantic model](./runenwerk-editor-coordination-semantic-model.md)
+govern semantic sharing. This design remains authority for logical/native/render
+window identity, app-owned correlation, focus/input/presentation, and
+native/render lifecycle; it does not create one mandatory global document,
+command, selection, history, or persistence authority.
 
 ## Locked Decisions
 
@@ -65,11 +80,16 @@ This design makes native OS windows a first-class editor capability: the user ca
 - The renderer must not infer product selection, source truth, freshness,
   fallback legality, authority, rebuild policy, residency policy, material
   semantics, or document semantics.
-- Each editor window has independent focus, input capture, workspace root,
-  active panel/tab, UI frame, DPI scale, cursor state, redraw state, and surface
-  lifecycle while sharing the authoritative project/session where appropriate.
+- Windows may explicitly share `EditorBinding`s, `SelectionContext`s,
+  `HistoryContext`s, and `PersistenceContext`s according to owner/app policy.
+  Sharing is not inferred from project identity, paths, labels, or equal observed
+  values.
+- Each editor window retains an independent `ActivationScope`, native/presentation
+  focus, input capture, UI frame, DPI scale, cursor state, redraw state, surface
+  lifecycle, and local presentation state unless a separate explicit policy
+  shares a narrower local fact.
 - Secondary-window close policy must not close the project unless it is the
-  last project window and the app-level quit policy allows it.
+  last project window and the app-level quit/persistence policy allows it.
 - ADR review is required before changing global runtime/window ownership,
   platform event ownership, or render-surface ownership policy beyond the
   accepted boundary.
@@ -82,22 +102,27 @@ Support this workflow:
 Window > New Window
   -> create native OS window
   -> create logical editor window record
-  -> attach or create workspace root layout
+  -> attach or create presentation/layout root
+  -> attach explicit shared editor contexts where requested
   -> prepare UI and render products for that window
   -> render through that window's swapchain
-  -> route input and commands through that window's focus context
+  -> route input and editor actions through that window's ActivationScope
 ```
 
-The new window is not a fake floating panel inside the main window. It is an independent native window that can be placed on a second monitor and can edit the same project through the same authoritative editor session.
+The new window is not a fake floating panel inside the main window. It is an
+independent native window that can be placed on a second monitor and can edit
+the same project by explicitly sharing the owner/editor contexts required for
+that workflow. It does not inherit one global authoritative editor session by
+construction.
 
 ## Non-Negotiable Outcomes
 
 - `Window > New Window` creates a real OS window.
 - Each OS window has its own swapchain/surface, DPI scale, size, cursor, redraw state, and surface-loss lifecycle.
-- All windows share the same editor session, project state, documents, command bus, undo/redo model, and runtime where appropriate.
-- Each window has its own workspace root, focus state, input capture, active panel/tab, and UI frame.
-- Closing a secondary window removes only that window's host/layout state; it does not close the project unless the last project window is closed and the app policy says to quit.
-- Moving a tab, panel, viewport, or workspace area into a new window preserves explicit `PanelInstanceId`, `ToolSurfaceInstanceId`, document context, and provider/session state according to the move policy.
+- Windows may explicitly share editor bindings, selection contexts, history contexts, persistence contexts, project associations, and runtime relationships where owner/app policy allows; none is implied merely by being another window of the same app.
+- Each window has its own activation/focus state, input capture, presentation root/frame, and local presentation state.
+- Closing a secondary window removes only that window's presentation/host state and attachments; it does not close shared semantic or persistence contexts unless explicit ownership/lifetime policy says that window owns them.
+- Moving a tab, panel, viewport, or workspace area into a new window preserves the structural and provider/session identity required by the current move policy; ADR 0013 remains authoritative for long-term structural identity, and ADR 0025 remains authoritative for semantic context sharing.
 - Render submission is surface-scoped. Rendering one window cannot accidentally present into another window's swapchain.
 - Viewport/product targets remain viewport/product-owned, not window-owned, but presentation into a window uses that window's UI frame and scale.
 
@@ -117,6 +142,11 @@ Remaining runtime and presentation state is still singleton-shaped:
 
 Those are sufficient for a single-window editor and internal floating layouts, but not for `Window > New Window`.
 
+Current editor implementation may still expose predecessor-shaped global
+`EditorSession`/document/history state. This design does not bless that current
+shape as the target multi-window sharing contract; later editor-boundary work is
+governed by ADR 0025.
+
 ## PM-006 Scope
 
 PM-006 is the production-track milestone that turns accepted design into
@@ -125,7 +155,7 @@ native window and render-surface presentation mechanics.
 
 In scope:
 
-- logical editor window identity and window-local workspace focus/routing;
+- logical editor window identity and window-local presentation focus/routing;
 - runtime-native window registry and window-scoped platform events;
 - render surface registry keyed by native window or render surface identity;
 - surface-scoped frame prepare, submit, present, resize, surface-loss recovery,
@@ -133,7 +163,8 @@ In scope:
 - app-owned binding from `EditorWindowId` to `NativeWindowId` and
   `RenderSurfaceId`;
 - `Window > New Window` and close/focus policy needed to prove two native
-  editor windows can render and edit the same session;
+  editor windows can render while explicitly sharing selected editor/owner
+  contexts;
 - focused viewport/product proof that presentation surface identity is correct.
 
 Out of scope:
@@ -147,8 +178,8 @@ Out of scope:
 - broad product-surface hardening beyond the already completed PM-005 contract;
 - renderer-owned editor/window policy shortcuts;
 - renderer-private handles passed to editor viewport or preview producers;
-- unrelated editor command, persistence, or workspace redesigns that are not
-  required for native multi-window presentation.
+- unrelated editor command, persistence, selection, history, or semantic-owner
+  redesign beyond the explicit sharing correction established by ADR 0025.
 
 ## Ownership Boundaries
 
@@ -166,10 +197,12 @@ domain/editor/editor_shell/src/commands/shell_command.rs
 Responsibilities:
 
 - define logical `EditorWindowId`;
-- define which workspace root belongs to which editor window;
-- define window-local active panel, focus, and routing context;
-- define commands for new window, close window, move tab/panel to window, duplicate workspace into window, and focus window;
-- keep document/session semantics out of window records.
+- define which current presentation/workspace root belongs to which editor window;
+- define window-local activation/focus/routing context;
+- define commands for new window, close window, move presentation content to a window, duplicate layout into a window, and focus window;
+- keep owner semantic state and native handles out of window records.
+
+Current module names and workspace types are implementation-era anchors. ADR 0013 governs long-term structural composition; this design does not re-establish a parallel workspace structural authority.
 
 The editor domain does not own native OS handles or swapchains.
 
@@ -188,9 +221,10 @@ Responsibilities:
 
 - allocate logical editor windows;
 - request native windows from engine runtime;
-- persist multi-window workspace placement/layout where appropriate;
+- persist multi-window presentation/layout placement where appropriate;
 - route each window's frame model through provider registry context;
-- enforce app policy for closing last window, unsaved documents, and project quit.
+- attach/share editor coordination contexts according to explicit policy;
+- enforce app policy for closing the last window, persistence contexts, project close, and quit.
 
 ### Engine Runtime
 
@@ -248,7 +282,7 @@ pub struct EditorWindowRecord {
 }
 ```
 
-This record belongs to editor shell/app state. It references workspace identity and window-local UI state, not native handles.
+This implementation-era record belongs to editor shell/app state. It references presentation/layout identity and window-local UI state, not native handles or universal semantic session ownership.
 
 ### Native Runtime Window
 
@@ -273,7 +307,9 @@ The app binds logical editor windows to native runtime windows:
 EditorWindowId -> NativeWindowId -> RenderSurfaceId
 ```
 
-The binding is app-owned because it composes editor shell state, runtime window state, and render surface state.
+The binding is app-owned because it composes editor presentation state, runtime window state, and render surface state.
+
+Semantic/editor-context sharing is a separate mapping governed by ADR 0025 and owner/app policy. The native/render binding must not be used as proof that two windows share bindings, selection, history, persistence, or foreign semantic state.
 
 ## User-Facing Commands
 
@@ -289,10 +325,10 @@ Add shell/app commands:
 
 Initial `Window > New Window` should create a new logical window with either:
 
-- the same workspace profile and a fresh default layout; or
-- a duplicated current workspace layout, if the command variant requests duplication.
+- the same product/profile presentation policy and a fresh default layout; or
+- a duplicated current layout, if the command variant requests duplication.
 
-The default should be fresh layout for predictable identity. Duplication should be explicit because copied viewports/panels may carry camera/presentation state.
+The default should be fresh presentation/layout identity for predictable structural identity. Duplication should be explicit because copied viewports/panels may carry local camera/presentation state. Sharing owner/editor semantic contexts is separately explicit.
 
 ## Rendering Flow
 
@@ -331,11 +367,11 @@ The app maps `NativeWindowId` to `EditorWindowId`, then routes:
 - keyboard focus;
 - pointer hover/capture;
 - drag/drop;
-- tab/panel commands;
+- presentation/structural commands;
 - viewport-local input;
-- command palette context.
+- command palette/editor-action context.
 
-Focus is per window. A capture in one window must not consume pointer events in another.
+Focus is per window. A capture in one window must not consume pointer events in another. Editor action routing uses the window/view's independent `ActivationScope`; physical input normalization, UI interaction, activation, invocation, and editor action semantics remain separate owners.
 
 ## Lifecycle
 
@@ -347,14 +383,15 @@ Focus is per window. A capture in one window must not consume pointer events in 
 4. Runtime creates native window and `RuntimeWindowRecord`.
 5. Render creates surface/swapchain state for that native window.
 6. Shell projects a UI frame for the new editor window.
+7. App attaches any explicitly requested shared editor/owner contexts independently of native-window creation.
 
 ### Close Window
 
 1. Runtime receives native close event.
 2. App maps native id to editor window id.
-3. App checks unsaved/project close policy.
-4. Secondary window closes by removing its logical workspace root binding and native window.
-5. Last-window close follows application quit policy.
+3. App evaluates window-local presentation close plus affected `PersistenceContext`/project/quit policy.
+4. Secondary window closes by detaching its presentation and native window; shared semantic contexts survive unless their explicit lifetime policy says otherwise.
+5. Last-window close follows application quit policy and any owner-defined persistence/close requirements.
 
 ### Surface Loss Or Resize
 
@@ -379,8 +416,9 @@ Change:
 Exit criteria:
 
 - shell state can represent multiple logical editor windows;
-- commands can create, close, focus, and move/duplicate workspace content across logical windows;
-- no native window handles enter domain state.
+- commands can create, close, focus, and move/duplicate presentation/layout content across logical windows;
+- no native window handles enter domain state;
+- window records do not imply one universal shared semantic editor session.
 
 ### MW2 - Runtime Window Registry
 
@@ -426,7 +464,8 @@ Exit criteria:
 
 - `Window > New Window` creates a real native window;
 - new window renders editor shell UI;
-- close/focus commands are routed through shell/app state.
+- close/focus commands are routed through shell/app state;
+- semantic context sharing is explicit rather than inferred from native-window creation.
 
 ### MW5 - Cross-Window Workspace Operations
 
@@ -439,8 +478,9 @@ Change:
 Exit criteria:
 
 - active tab/panel can move to a new window;
-- workspace layout can duplicate into a new window;
-- provider/session state follows the selected move/copy policy.
+- presentation/layout state can duplicate into a new window;
+- provider/session/local presentation state follows the selected move/copy policy;
+- shared semantic contexts follow explicit ADR-0025 owner/app policy rather than structural placement alone.
 
 ### MW6 - Multi-Window Viewport And Product Proof
 
@@ -484,10 +524,11 @@ the strongest deterministic surface-scoping tests that ran.
 ## Final Acceptance Criteria
 
 - `Window > New Window` opens a real OS window.
-- Two editor windows can edit the same project/session.
-- Each window has independent workspace focus, UI frame, input capture, render surface, swapchain, and DPI scale.
-- Moving a tab/panel/viewport to another window preserves explicit identity and command routing.
-- Closing a secondary window does not close the project.
+- Two editor windows can edit the same project by explicitly sharing the required `EditorBinding`s and owner/app contexts rather than by inheriting one mandatory global editor session.
+- Each window has an independent `ActivationScope`, presentation focus, UI frame, input capture, render surface, swapchain, DPI scale, and local presentation state.
+- Shared `SelectionContext`, `HistoryContext`, and `PersistenceContext` relationships are explicit and may differ between windows.
+- Moving a tab/panel/viewport to another window preserves required structural/provider identity and does not silently change semantic ownership.
+- Closing a secondary window does not close the project or shared semantic/persistence contexts unless explicit close/lifetime policy requires it.
 - Render surface loss, resize, and presentation are isolated per window.
 - Multi-window support does not introduce editor concepts into generic render/runtime APIs.
 
@@ -497,9 +538,11 @@ The render product surface foundation bundle is a prerequisite for robust viewpo
 
 Product surfaces answer: "what texture/product is this viewport or preview presenting?"
 
-Native multi-window answers: "which OS window and swapchain presents this editor workspace UI?"
+Native multi-window answers: "which OS window and swapchain presents this editor UI?"
 
 The two contracts are intentionally separate. PM-006 may route an already
 prepared product surface into a window-local UI frame and render surface, but it
 must not make native windows the owner of product truth or turn render surfaces
 into product selection authorities.
+
+Likewise, native-window correlation does not decide semantic editor sharing. ADR 0025 owns that coordination boundary.
