@@ -1,7 +1,7 @@
 use crate::app::domain::mode::AppMode;
 use crate::app::domain::runner::{AppRunner, FixedFramesRunner};
 use crate::app::domain::state::WindowedAppState;
-use crate::plugins::input::InputState;
+use crate::plugins::input::{ActionState, InputState, PhysicalKeyIdentity};
 use crate::plugins::render::inspect::{RenderDebugConfigResource, RenderDebugControlResource};
 use crate::plugins::render::{RenderFlow, RenderFlowRegistryResource};
 use crate::plugins::{
@@ -17,7 +17,6 @@ use anyhow::Result;
 use engine_sim::*;
 use runen_ecs::{Resource, Runtime, ScheduleLabel, World};
 use winit::event_loop::ControlFlow;
-use winit::keyboard::KeyCode;
 
 const DEFAULT_WINDOW_TITLE: &str = "Runenwerk - Engine";
 
@@ -156,15 +155,24 @@ impl App {
 
     pub fn add_input_bindings<I>(&mut self, bindings: I) -> &mut Self
     where
-        I: IntoIterator<Item = (&'static str, KeyCode)>,
+        I: IntoIterator<Item = (&'static str, PhysicalKeyIdentity)>,
     {
         self.init_resource::<InputState>();
-        if let Ok(input) = self.world.resource_mut::<InputState>() {
-            let input = &mut *input;
+        self.init_resource::<ActionState>();
+        let mut actions = self
+            .world
+            .remove_resource::<ActionState>()
+            .unwrap_or_default();
+        {
+            let input = self
+                .world
+                .resource::<InputState>()
+                .expect("input state should be installed");
             for (action, key) in bindings {
-                input.map_key(action.to_string(), key);
+                actions.map_key(&input, action.to_string(), key);
             }
         }
+        self.world.insert_resource(actions);
         self
     }
 

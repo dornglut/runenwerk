@@ -8,7 +8,7 @@ pub mod domain;
 
 use crate::app::App;
 use crate::plugin::Plugin;
-use crate::runtime::{CoreSet, FrameEnd, ResMut, SystemConfigExt};
+use crate::runtime::{CoreSet, FrameEnd, PreUpdate, Res, ResMut, SystemConfigExt};
 
 pub use actions_and_bindings::*;
 pub use neutral::{
@@ -23,10 +23,19 @@ pub struct InputFinalizePlugin;
 
 impl Plugin for InputFinalizePlugin {
     fn build(&self, app: &mut App) {
+        app.add_systems(
+            PreUpdate,
+            project_actions_system.in_set(CoreSet::Input),
+        );
         app.add_systems(FrameEnd, clear_input_system.in_set(CoreSet::FrameEnd));
     }
 }
 
-fn clear_input_system(mut input: ResMut<state::InputState>) {
+fn project_actions_system(input: Res<state::InputState>, mut actions: ResMut<ActionState>) {
+    actions.project(&input);
+}
+
+fn clear_input_system(mut input: ResMut<state::InputState>, mut actions: ResMut<ActionState>) {
+    actions.clear_frame(&input);
     input.clear_frame();
 }
