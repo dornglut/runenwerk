@@ -169,7 +169,7 @@ impl App {
                 .resource::<InputState>()
                 .expect("input state should be installed");
             for (action, key) in bindings {
-                actions.map_key(&input, action.to_string(), key);
+                actions.map_key(input, action.to_string(), key);
             }
         }
         self.world.insert_resource(actions);
