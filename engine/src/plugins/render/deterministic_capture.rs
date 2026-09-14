@@ -9,9 +9,10 @@ use super::deterministic_carrier::{WORD_BYTES, decode_word, maintained_evaluatio
 use super::deterministic_execution::SubmittedDeterministicRender;
 use super::request::{RenderOutputValue, RenderRadiometricRepresentation, RenderResultTopology};
 use runen_gpu::{
-    GpuContext, GpuContextAffinity, GpuOpaqueContentContinuity, GpuReadbackId, GpuReadbackStatus,
-    GpuResourceLifetime, GpuResourceRef, GpuSubmission, GpuSubmissionFailureKind, GpuSubmissionId,
-    GpuSubmissionStatus, GpuTextureFormat, GpuTextureUsage, GpuTransferRegion,
+    GpuContext, GpuContextAffinity, GpuDataLayout, GpuOpaqueContentContinuity, GpuReadbackId,
+    GpuReadbackStatus, GpuResourceLifetime, GpuResourceRef, GpuSubmission,
+    GpuSubmissionFailureKind, GpuSubmissionId, GpuSubmissionStatus, GpuTextureFormat,
+    GpuTextureUsage, GpuTransferRegion,
 };
 use std::error::Error;
 use std::fmt;
@@ -263,6 +264,58 @@ pub(super) fn mint_request(
     })
 }
 
+/// Decode the already-normalized physical tail of one maintained radiance readback.
+///
+/// Correlation and ownership are checked by [`capture`] before calling this helper. The helper is
+/// intentionally pure so the defensive metadata branches remain directly provable without
+/// weakening RunenGPU's normalized-readback encapsulation. Native carrier meaning remains solely
+/// in `deterministic_carrier`.
+fn decode_radiance_samples(
+    width: u32,
+    height: u32,
+    format: Option<GpuTextureFormat>,
+    layout: GpuDataLayout,
+    bytes: &[u8],
+) -> Result<Vec<f32>, RenderDeterministicRadianceCaptureError> {
+    if format != Some(CARRIER_FORMAT) {
+        return Err(RenderDeterministicRadianceCaptureError::ReadbackFormatMismatch);
+    }
+    let expected_byte_len = u64::from(width)
+        .checked_mul(u64::from(height))
+        .and_then(|samples| samples.checked_mul(WORD_BYTES as u64))
+        .ok_or(RenderDeterministicRadianceCaptureError::ReadbackLayoutMismatch)?;
+    let expected_row_bytes = u64::from(width)
+        .checked_mul(WORD_BYTES as u64)
+        .ok_or(RenderDeterministicRadianceCaptureError::ReadbackLayoutMismatch)?;
+    if layout.byte_len() != expected_byte_len
+        || layout.alignment() != WORD_BYTES as u64
+        || layout.stride() != expected_row_bytes
+        || layout.element_count() != u64::from(height)
+    {
+        return Err(RenderDeterministicRadianceCaptureError::ReadbackLayoutMismatch);
+    }
+    if u64::try_from(bytes.len()).ok() != Some(expected_byte_len) {
+        return Err(RenderDeterministicRadianceCaptureError::ReadbackByteLengthMismatch);
+    }
+
+    let sample_count = usize::try_from(u64::from(width) * u64::from(height))
+        .map_err(|_| RenderDeterministicRadianceCaptureError::ReadbackLayoutMismatch)?;
+    let mut samples = Vec::new();
+    samples
+        .try_reserve_exact(sample_count)
+        .map_err(|_| RenderDeterministicRadianceCaptureError::HostAllocation)?;
+    for word_bytes in bytes.as_chunks::<WORD_BYTES>().0 {
+        let word = decode_word(word_bytes);
+        let value = maintained_evaluation_value(word)
+            .ok_or(RenderDeterministicRadianceCaptureError::NonFiniteSample)?;
+        samples.push(value);
+    }
+    if samples.len() != sample_count {
+        return Err(RenderDeterministicRadianceCaptureError::ReadbackByteLengthMismatch);
+    }
+    Ok(samples)
+}
+
 pub(super) fn capture(
     submitted: &SubmittedDeterministicRender,
     request: RenderDeterministicRadianceCaptureRequest,
@@ -367,47 +420,73 @@ pub(super) fn capture(
         GpuReadbackStatus::Ready(bytes) => bytes,
     };
 
-    if bytes.texture_format() != Some(CARRIER_FORMAT) {
-        return Err(RenderDeterministicRadianceCaptureError::ReadbackFormatMismatch);
-    }
-    let expected_byte_len = u64::from(width)
-        .checked_mul(u64::from(height))
-        .and_then(|samples| samples.checked_mul(WORD_BYTES as u64))
-        .ok_or(RenderDeterministicRadianceCaptureError::ReadbackLayoutMismatch)?;
-    let expected_row_bytes = u64::from(width)
-        .checked_mul(WORD_BYTES as u64)
-        .ok_or(RenderDeterministicRadianceCaptureError::ReadbackLayoutMismatch)?;
-    let layout = bytes.layout();
-    if layout.byte_len() != expected_byte_len
-        || layout.alignment() != WORD_BYTES as u64
-        || layout.stride() != expected_row_bytes
-        || layout.element_count() != u64::from(height)
-    {
-        return Err(RenderDeterministicRadianceCaptureError::ReadbackLayoutMismatch);
-    }
-    if u64::try_from(bytes.as_bytes().len()).ok() != Some(expected_byte_len) {
-        return Err(RenderDeterministicRadianceCaptureError::ReadbackByteLengthMismatch);
-    }
-
-    let sample_count = usize::try_from(u64::from(width) * u64::from(height))
-        .map_err(|_| RenderDeterministicRadianceCaptureError::ReadbackLayoutMismatch)?;
-    let mut samples = Vec::new();
-    samples
-        .try_reserve_exact(sample_count)
-        .map_err(|_| RenderDeterministicRadianceCaptureError::HostAllocation)?;
-    for word_bytes in bytes.as_bytes().as_chunks::<WORD_BYTES>().0 {
-        let word = decode_word(word_bytes);
-        let value = maintained_evaluation_value(word)
-            .ok_or(RenderDeterministicRadianceCaptureError::NonFiniteSample)?;
-        samples.push(value);
-    }
-    if samples.len() != sample_count {
-        return Err(RenderDeterministicRadianceCaptureError::ReadbackByteLengthMismatch);
-    }
+    let samples = decode_radiance_samples(
+        width,
+        height,
+        bytes.texture_format(),
+        bytes.layout(),
+        bytes.as_bytes(),
+    )?;
     Ok(RenderCapturedDeterministicRadiance {
         output_index: request.output_index,
         topology,
         representation,
         samples,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn layout(byte_len: u64, stride: u64, element_count: u64) -> GpuDataLayout {
+        GpuDataLayout::new(
+            "radiance metadata proof",
+            byte_len,
+            WORD_BYTES as u64,
+            stride,
+            element_count,
+        )
+        .expect("test metadata must be a valid RunenGPU layout")
+    }
+
+    #[test]
+    fn physical_metadata_and_finite_carrier_validation_fail_closed() {
+        let valid_layout = layout(16, 8, 2);
+        let valid_bytes = [
+            0.0_f32.to_bits().to_ne_bytes(),
+            1.25_f32.to_bits().to_ne_bytes(),
+            2.5_f32.to_bits().to_ne_bytes(),
+            3.75_f32.to_bits().to_ne_bytes(),
+        ]
+        .concat();
+        assert_eq!(
+            decode_radiance_samples(
+                2,
+                2,
+                Some(GpuTextureFormat::Rgba8Unorm),
+                valid_layout,
+                &valid_bytes
+            ),
+            Err(RenderDeterministicRadianceCaptureError::ReadbackFormatMismatch)
+        );
+        assert_eq!(
+            decode_radiance_samples(2, 2, Some(CARRIER_FORMAT), layout(16, 16, 1), &valid_bytes),
+            Err(RenderDeterministicRadianceCaptureError::ReadbackLayoutMismatch)
+        );
+        assert_eq!(
+            decode_radiance_samples(2, 2, Some(CARRIER_FORMAT), valid_layout, &valid_bytes[..12]),
+            Err(RenderDeterministicRadianceCaptureError::ReadbackByteLengthMismatch)
+        );
+        let non_finite = [f32::NAN.to_bits().to_ne_bytes()].concat();
+        assert_eq!(
+            decode_radiance_samples(1, 1, Some(CARRIER_FORMAT), layout(4, 4, 1), &non_finite),
+            Err(RenderDeterministicRadianceCaptureError::NonFiniteSample)
+        );
+        assert_eq!(
+            decode_radiance_samples(2, 2, Some(CARRIER_FORMAT), valid_layout, &valid_bytes,)
+                .expect("valid row-major carrier must decode"),
+            vec![0.0, 1.25, 2.5, 3.75]
+        );
+    }
 }

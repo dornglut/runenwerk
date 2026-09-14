@@ -15,7 +15,8 @@ use super::appearance::RenderDiffuseMaterial;
 use super::deterministic_admission::{AdmittedDeterministicRender, admit_deterministic_render};
 use super::deterministic_execution::{
     RenderDeterministicRadianceCaptureRequestError, RenderDeterministicResultFormationError,
-    submit_deterministic_render, submit_deterministic_render_for_verified_result,
+    SubmittedDeterministicRender, submit_deterministic_render,
+    submit_deterministic_render_for_verified_result,
 };
 use super::deterministic_verification::{
     submit_deterministic_render_for_verified_formation, verify_completed_deterministic_render,
@@ -44,9 +45,10 @@ use super::surface_input::{
 };
 use runen_gpu::{
     GpuCapabilityProfile, GpuContext, GpuContextDescriptor, GpuContextRequestErrorCategory,
-    GpuFormatRole, GpuReadbackId, GpuReadbackOperation, GpuReadbackStatus, GpuReconstruction,
-    GpuResourceLifetime, GpuSubmission, GpuSubmissionStatus, GpuTextureDescriptor,
-    GpuTextureFormat, GpuTextureInitialization, GpuTextureUsage, GpuWorkFragment,
+    GpuCopyExtent, GpuCopyOperation, GpuFormatRole, GpuReadbackId, GpuReadbackOperation,
+    GpuReadbackStatus, GpuReconstruction, GpuResourceLifetime, GpuSubmission, GpuSubmissionStatus,
+    GpuTextureCopyRegion, GpuTextureDescriptor, GpuTextureFormat, GpuTextureInitialization,
+    GpuTextureOrigin, GpuTextureUsage, GpuTransferRegion, GpuWorkFragment,
     GpuWorkResourceIdAllocator,
 };
 use std::time::{Duration, Instant};
@@ -306,21 +308,17 @@ fn admit_with_writable_only_destination(
     .expect("R7 maintained fixture must reach maintained deterministic admission")
 }
 
-fn admit_with_retained_radiance_destination(
+fn admit_with_retained_destination(
     fixture: &MaintainedExecutionFixture,
+    request: RenderRequest,
     context: &GpuContext,
+    label: &str,
 ) -> AdmittedDeterministicRender {
-    let fixture = MaintainedExecutionFixture {
-        scene: fixture.scene.clone(),
-        request: radiance_lattice_request(),
-        semantic_inputs: fixture.semantic_inputs.clone(),
-        availability: fixture.availability.clone(),
-    };
     let mut allocator = GpuWorkResourceIdAllocator::new();
     let destination = allocator
         .allocate_texture_handle(
             GpuTextureDescriptor::ordinary_owned_2d(
-                "R7 maintained retained radiance destination",
+                label,
                 GpuResourceLifetime::Retained,
                 GpuReconstruction::SourceBacked,
                 2,
@@ -341,13 +339,25 @@ fn admit_with_retained_radiance_destination(
     )];
     admit_deterministic_render(
         &fixture.scene,
-        &fixture.request,
+        &request,
         &fixture.semantic_inputs,
         &fixture.availability,
         &output_bindings,
         context,
     )
     .expect("R7 maintained retained radiance fixture must admit")
+}
+
+fn admit_with_retained_radiance_destination(
+    fixture: &MaintainedExecutionFixture,
+    context: &GpuContext,
+) -> AdmittedDeterministicRender {
+    admit_with_retained_destination(
+        fixture,
+        radiance_lattice_request(),
+        context,
+        "R7 maintained retained radiance destination",
+    )
 }
 
 fn lattice_bindings(width: u32, height: u32, output_count: usize) -> Vec<RenderOutputBinding> {
@@ -431,6 +441,102 @@ fn wait_for_readbacks(
         );
         std::thread::yield_now();
     }
+}
+
+fn form_verified_render(
+    submitted: SubmittedDeterministicRender,
+    context: &GpuContext,
+) -> SubmittedDeterministicRender {
+    let mut submitted = submitted;
+    let deadline = Instant::now() + Duration::from_secs(15);
+    loop {
+        context.progress();
+        match submitted.try_form_verified_result() {
+            Ok(Some(_)) => return submitted,
+            Ok(None) => {}
+            Err(error) => panic!("R7 maintained verified result formation failed: {error}"),
+        }
+        assert!(
+            Instant::now() < deadline,
+            "R7 maintained verified result formation did not complete before timeout"
+        );
+        std::thread::yield_now();
+    }
+}
+
+fn submit_product_readback(
+    context: &GpuContext,
+    source: GpuTransferRegion,
+    readback_id: GpuReadbackId,
+) -> GpuSubmission {
+    let readback = GpuReadbackOperation::new(source, readback_id)
+        .expect("product readback source must be publicly constructible");
+    let fragment = GpuWorkFragment::build("R7 negative radiance readback", |work| {
+        work.operation("read back radiance lattice", readback)?;
+        Ok(())
+    })
+    .expect("product readback fragment must be authorable");
+    let submission =
+        pollster::block_on(context.submit_work("R7 negative radiance readback", [fragment]))
+            .expect("product readback must submit");
+    wait_for_readbacks(context, &submission, &[readback_id]);
+    submission
+}
+
+fn partial_texture_source(source: &GpuTransferRegion) -> GpuTransferRegion {
+    let GpuTransferRegion::Texture(region) = source else {
+        panic!("radiance capture source must be a texture region");
+    };
+    GpuTextureCopyRegion::new(
+        region.texture(),
+        region.mip_level(),
+        GpuTextureOrigin::new(0, 0, 0),
+        region.aspect(),
+        GpuCopyExtent::new(1, 2, 1).expect("partial radiance source extent"),
+    )
+    .expect("partial texture source must be publicly constructible")
+    .into()
+}
+
+fn submit_intervening_texture_write(
+    context: &GpuContext,
+    destination: &GpuTransferRegion,
+) -> GpuSubmission {
+    let GpuTransferRegion::Texture(destination) = destination else {
+        panic!("radiance capture destination must be a texture region");
+    };
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let source_texture = allocator
+        .allocate_texture_handle(
+            GpuTextureDescriptor::ordinary_owned_2d(
+                "R7 intervening radiance writer source",
+                GpuResourceLifetime::Transient,
+                GpuReconstruction::SourceBacked,
+                2,
+                2,
+                GpuTextureFormat::R32Uint,
+                [GpuTextureUsage::CopySource],
+                GpuTextureInitialization::Zeroed,
+            )
+            .expect("intervening writer source descriptor"),
+        )
+        .expect("intervening writer source handle");
+    let operation = GpuCopyOperation::texture_to_texture(
+        GpuTextureCopyRegion::whole_base_mip(&source_texture)
+            .expect("intervening writer source region"),
+        destination.clone(),
+    )
+    .expect("intervening texture writer must use public copy validation");
+    let fragment = GpuWorkFragment::build("R7 intervening radiance writer", |work| {
+        work.operation("overwrite retained radiance destination", operation)?;
+        Ok(())
+    })
+    .expect("intervening writer fragment must be authorable");
+    let submission =
+        pollster::block_on(context.submit_work("R7 intervening radiance writer", [fragment]))
+            .expect("intervening writer must submit");
+    wait_for_submission(context, &submission);
+    submission
 }
 
 #[test]
@@ -618,6 +724,157 @@ fn public_radiance_capture_uses_a_separate_product_readback_submission() {
     assert!(captured.samples().iter().all(|sample| sample.is_finite()));
     assert!(captured.samples().iter().all(|sample| *sample == 0.0));
     assert_eq!(result.outputs().len(), 1);
+}
+
+#[test]
+fn formed_non_radiance_output_rejects_radiance_capture_request() {
+    let Some(context) = request_execution_context() else {
+        return;
+    };
+    let fixture = maintained_fixture();
+    let admitted = admit_with_retained_destination(
+        &fixture,
+        fixture.request.clone(),
+        &context,
+        "R7 retained non-radiance destination",
+    );
+    let submitted = form_verified_render(
+        pollster::block_on(submit_deterministic_render_for_verified_result(
+            admitted, &context,
+        ))
+        .expect("formed non-radiance submission must submit"),
+        &context,
+    );
+    assert!(matches!(
+        submitted.request_deterministic_radiance_capture(0),
+        Err(RenderDeterministicRadianceCaptureRequestError::OutputNotRadiance)
+    ));
+}
+
+#[test]
+fn radiance_capture_rejects_correlation_affinity_and_replaced_writer_evidence() {
+    let Some(context_a) = request_execution_context() else {
+        return;
+    };
+    let Some(context_b) = request_execution_context() else {
+        return;
+    };
+    let fixture = maintained_fixture();
+    let submitted_a = form_verified_render(
+        pollster::block_on(submit_deterministic_render_for_verified_result(
+            admit_with_retained_radiance_destination(&fixture, &context_a),
+            &context_a,
+        ))
+        .expect("first radiance submission must submit"),
+        &context_a,
+    );
+
+    let missing_request = submitted_a
+        .request_deterministic_radiance_capture(0)
+        .expect("formed radiance result must mint a missing-ID proof request");
+    let missing_submission = submit_product_readback(
+        &context_a,
+        missing_request.source().clone(),
+        GpuReadbackId::allocate().expect("missing-ID proof allocation"),
+    );
+    assert_eq!(
+        submitted_a.capture_deterministic_radiance(
+            missing_request,
+            &context_a,
+            &missing_submission,
+        ),
+        Err(super::deterministic_execution::RenderDeterministicRadianceCaptureError::ReadbackCorrelationMissing)
+    );
+
+    let wrong_source_request = submitted_a
+        .request_deterministic_radiance_capture(0)
+        .expect("formed radiance result must mint a wrong-source proof request");
+    let wrong_source_submission = submit_product_readback(
+        &context_a,
+        partial_texture_source(wrong_source_request.source()),
+        wrong_source_request.readback_id(),
+    );
+    assert_eq!(
+        submitted_a.capture_deterministic_radiance(
+            wrong_source_request,
+            &context_a,
+            &wrong_source_submission,
+        ),
+        Err(super::deterministic_execution::RenderDeterministicRadianceCaptureError::ReadbackSourceMismatch)
+    );
+
+    let submitted_b = form_verified_render(
+        pollster::block_on(submit_deterministic_render_for_verified_result(
+            admit_with_retained_radiance_destination(&fixture, &context_b),
+            &context_b,
+        ))
+        .expect("second radiance submission must submit"),
+        &context_b,
+    );
+    assert_ne!(
+        submitted_a.submission().affinity(),
+        submitted_b.submission().affinity(),
+        "fresh contexts must have distinct submission affinities"
+    );
+    assert_eq!(
+        submitted_a.submission().id(),
+        submitted_b.submission().id(),
+        "fresh contexts should independently allocate colliding submission IDs"
+    );
+
+    let foreign_context_request = submitted_a
+        .request_deterministic_radiance_capture(0)
+        .expect("formed radiance result must mint a foreign-context proof request");
+    assert_eq!(
+        submitted_a.capture_deterministic_radiance(
+            foreign_context_request,
+            &context_b,
+            submitted_b.submission(),
+        ),
+        Err(super::deterministic_execution::RenderDeterministicRadianceCaptureError::ContextAffinityMismatch)
+    );
+
+    let mismatched_render_request = submitted_a
+        .request_deterministic_radiance_capture(0)
+        .expect("formed radiance result must mint a render-correlation proof request");
+    assert_eq!(
+        submitted_b.capture_deterministic_radiance(
+            mismatched_render_request,
+            &context_b,
+            submitted_b.submission(),
+        ),
+        Err(super::deterministic_execution::RenderDeterministicRadianceCaptureError::RequestCorrelationMismatch)
+    );
+
+    let foreign_product_request = submitted_a
+        .request_deterministic_radiance_capture(0)
+        .expect("formed radiance result must mint a product-affinity proof request");
+    assert_eq!(
+        submitted_a.capture_deterministic_radiance(
+            foreign_product_request,
+            &context_a,
+            submitted_b.submission(),
+        ),
+        Err(super::deterministic_execution::RenderDeterministicRadianceCaptureError::ProductSubmissionAffinityMismatch)
+    );
+
+    let replaced_writer_request = submitted_a
+        .request_deterministic_radiance_capture(0)
+        .expect("formed radiance result must mint a replaced-writer proof request");
+    submit_intervening_texture_write(&context_a, replaced_writer_request.source());
+    let replaced_writer_submission = submit_product_readback(
+        &context_a,
+        replaced_writer_request.source().clone(),
+        replaced_writer_request.readback_id(),
+    );
+    assert_eq!(
+        submitted_a.capture_deterministic_radiance(
+            replaced_writer_request,
+            &context_a,
+            &replaced_writer_submission,
+        ),
+        Err(super::deterministic_execution::RenderDeterministicRadianceCaptureError::RendererWriteNoLongerCurrent)
+    );
 }
 
 #[test]
