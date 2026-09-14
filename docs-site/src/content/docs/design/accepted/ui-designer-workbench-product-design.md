@@ -18,7 +18,8 @@ related_designs:
   - ./ui-designer-interface-lab-platform-design.md
   - ../implemented/ui-lab-productization-design.md
   - ../implemented/editor-product-ux-lab-and-game-ui-ready-foundations-design.md
-  - ../active/editor-ui-workspace-tool-surface-architecture.md
+  - ./runenwerk-editor-coordination-semantic-model.md
+  - ../implemented/editor-tool-suite-registry-and-workbench-host-design.md
   - ../deferred/game-runtime-ui-projection-and-hud-platform-design.md
   - ./ui-designer-canonical-ir-and-composition-design.md
   - ./ui-designer-target-projection-profiles-design.md
