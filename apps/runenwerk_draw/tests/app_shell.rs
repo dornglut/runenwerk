@@ -1241,6 +1241,11 @@ fn native_tablet_hover_down_still_begins_stroke_from_event_kind() {
         .resource::<DrawingHostResource>()
         .expect("drawing host resource should exist");
     assert_eq!(
+        host.app.routed_inputs().len(),
+        1,
+        "native Down must own its frame even when contact presence is stale Hover"
+    );
+    assert_eq!(
         host.app
             .routed_inputs()
             .last()

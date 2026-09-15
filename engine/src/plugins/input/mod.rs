@@ -18,7 +18,7 @@ pub use neutral::{
     MeasurementDomain, NativeLogicalKey, NativePhysicalKeyCode, NeutralInputError,
     ObservationOrigin, PhysicalKeyIdentity, PhysicalTabletControls, Point2, PointerButton,
     PointerButtonInput, ScrollDelta, ScrollDomain, ScrollInput, ScrollPhase, SourceTime,
-    SourceTimeUnit, StylusTilt, TabletObservation, ToolId, Vector2,
+    SourceTimeUnit, StylusTilt, TabletCapabilities, TabletObservation, ToolId, Vector2,
 };
 pub use state::*;
 

@@ -38,6 +38,7 @@ pub struct WindowsPointerHistorySample {
     pub source_device: Option<u64>,
     pub input_kind: WindowsPointerInputKind,
     pub position: PointerPosition,
+    pub predicted_position: Option<PointerPosition>,
     pub timestamp_micros: Option<u64>,
     pub pressure: Option<f32>,
     pub tilt: Option<PointerTilt>,
@@ -48,6 +49,7 @@ pub struct WindowsPointerHistorySample {
     pub primary_button_down: bool,
     pub in_contact: bool,
     pub in_range: bool,
+    pub cancelled: bool,
 }
 
 impl WindowsPointerHistorySample {
@@ -57,6 +59,7 @@ impl WindowsPointerHistorySample {
             source_device: None,
             input_kind: WindowsPointerInputKind::Mouse,
             position,
+            predicted_position: None,
             timestamp_micros: None,
             pressure: None,
             tilt: None,
@@ -67,6 +70,7 @@ impl WindowsPointerHistorySample {
             primary_button_down: true,
             in_contact: true,
             in_range: true,
+            cancelled: false,
         }
     }
 
@@ -76,6 +80,7 @@ impl WindowsPointerHistorySample {
             source_device: None,
             input_kind: WindowsPointerInputKind::Pen,
             position,
+            predicted_position: None,
             timestamp_micros: None,
             pressure: None,
             tilt: None,
@@ -86,6 +91,7 @@ impl WindowsPointerHistorySample {
             primary_button_down: true,
             in_contact: true,
             in_range: true,
+            cancelled: false,
         }
     }
 
@@ -95,6 +101,7 @@ impl WindowsPointerHistorySample {
             source_device: None,
             input_kind: WindowsPointerInputKind::Touch,
             position,
+            predicted_position: None,
             timestamp_micros: None,
             pressure: None,
             tilt: None,
@@ -105,6 +112,7 @@ impl WindowsPointerHistorySample {
             primary_button_down: true,
             in_contact: true,
             in_range: true,
+            cancelled: false,
         }
     }
 
@@ -115,6 +123,16 @@ impl WindowsPointerHistorySample {
 
     pub fn with_source_device(mut self, source_device: u64) -> Self {
         self.source_device = Some(source_device);
+        self
+    }
+
+    pub fn with_predicted_position(mut self, position: PointerPosition) -> Self {
+        self.predicted_position = Some(position);
+        self
+    }
+
+    pub fn with_cancelled(mut self, cancelled: bool) -> Self {
+        self.cancelled = cancelled;
         self
     }
 
@@ -194,8 +212,7 @@ impl WindowsPointerBackend {
                 Ok(packet) => {
                     self.last_positions
                         .insert(packet.contact_id as u32, packet.position);
-                    let terminal =
-                        matches!(packet.kind, PointerEventKind::Up | PointerEventKind::Leave);
+                    let terminal = packet.is_terminal();
                     runtime.push_packet(packet);
                     self.packets_queued = self.packets_queued.saturating_add(1);
                     if terminal {
@@ -291,7 +308,8 @@ pub fn map_windows_pointer_history(
         .collect::<Vec<_>>();
 
     let current_delta = delta_from(last_position, current.position);
-    let capabilities = capabilities_from_windows_sample(*current, !coalesced_samples.is_empty());
+    let capabilities =
+        capabilities_from_windows_history(&chronological, !coalesced_samples.is_empty());
     if current.input_kind == WindowsPointerInputKind::Mouse
         && matches!(history.kind, PointerEventKind::Down | PointerEventKind::Up)
         && current.event_button != Some(PointerButton::Left)
@@ -300,11 +318,16 @@ pub fn map_windows_pointer_history(
             "non-primary mouse transition".into(),
         ));
     }
+    let packet_kind = if current.cancelled {
+        PointerEventKind::Leave
+    } else {
+        history.kind
+    };
     let (mut packet, tool_kind) = match current.input_kind {
         WindowsPointerInputKind::Mouse => (
             NativeTabletPacket::windows_pointer_mouse(
                 u64::from(history.pointer_id),
-                history.kind,
+                packet_kind,
                 current.position,
                 current_delta,
             ),
@@ -313,7 +336,7 @@ pub fn map_windows_pointer_history(
         WindowsPointerInputKind::Pen => (
             NativeTabletPacket::windows_pointer(
                 u64::from(history.pointer_id),
-                history.kind,
+                packet_kind,
                 current.position,
                 current_delta,
             ),
@@ -326,7 +349,7 @@ pub fn map_windows_pointer_history(
         WindowsPointerInputKind::Touch => (
             NativeTabletPacket::windows_pointer(
                 u64::from(history.pointer_id),
-                history.kind,
+                packet_kind,
                 current.position,
                 current_delta,
             )
@@ -342,7 +365,7 @@ pub fn map_windows_pointer_history(
         .with_latency_class(PointerLatencyClass::LowLatencyPreview)
         .with_coalesced_samples(coalesced_samples)
         .with_contact(contact_from_windows_sample(*current))
-        .with_event_button(event_button_for_sample(history.kind, *current));
+        .with_event_button(event_button_for_sample(packet_kind, *current));
 
     if let Some(pressure) = current.pressure {
         packet = packet.with_pressure(pressure);
@@ -358,6 +381,14 @@ pub fn map_windows_pointer_history(
     }
     if current.barrel_buttons.primary || current.barrel_buttons.secondary {
         packet = packet.with_barrel_buttons(current.barrel_buttons);
+    }
+    if let Some(predicted_position) = current.predicted_position {
+        let mut predicted = NativeTabletSample::new(predicted_position, PointerDelta::ZERO)
+            .with_contact(contact_from_windows_sample(*current));
+        if let Some(timestamp) = current.timestamp_micros {
+            predicted = predicted.with_timestamp_micros(timestamp);
+        }
+        packet = packet.with_predicted_samples([predicted]);
     }
     if let Some(timestamp) = current.timestamp_micros {
         packet = packet.with_timestamp_micros(timestamp);
@@ -389,29 +420,22 @@ fn native_sample_from_windows(
     native
 }
 
-fn capabilities_from_windows_sample(
-    sample: WindowsPointerHistorySample,
+fn capabilities_from_windows_history(
+    samples: &[WindowsPointerHistorySample],
     has_coalesced_samples: bool,
 ) -> NativeTabletCapabilities {
-    match sample.input_kind {
+    let input_kind = samples
+        .last()
+        .map(|sample| sample.input_kind)
+        .unwrap_or(WindowsPointerInputKind::Pen);
+    let mut capabilities = match input_kind {
         WindowsPointerInputKind::Mouse => NativeTabletCapabilities {
             coalesced_samples: has_coalesced_samples,
             ..NativeTabletCapabilities::windows_pointer_mouse()
         },
-        WindowsPointerInputKind::Pen => NativeTabletCapabilities {
-            pressure: sample.pressure.is_some(),
-            tilt: sample.tilt.is_some(),
-            twist: sample.twist_degrees.is_some(),
-            tangential_pressure: false,
-            hover: true,
-            eraser: sample.eraser,
-            barrel_buttons: sample.barrel_buttons.primary || sample.barrel_buttons.secondary,
-            coalesced_samples: has_coalesced_samples,
-            predicted_samples: false,
-            calibration: true,
-        },
+        WindowsPointerInputKind::Pen => NativeTabletCapabilities::windows_pointer(),
         WindowsPointerInputKind::Touch => NativeTabletCapabilities {
-            pressure: sample.pressure.is_some(),
+            pressure: false,
             tilt: false,
             twist: false,
             tangential_pressure: false,
@@ -422,7 +446,18 @@ fn capabilities_from_windows_sample(
             predicted_samples: false,
             calibration: true,
         },
+    };
+    for sample in samples {
+        capabilities.pressure |= sample.pressure.is_some();
+        capabilities.tilt |= sample.tilt.is_some();
+        capabilities.twist |= sample.twist_degrees.is_some();
+        capabilities.eraser |= sample.eraser;
+        capabilities.barrel_buttons |=
+            sample.barrel_buttons.primary || sample.barrel_buttons.secondary;
+        capabilities.predicted_samples |= sample.predicted_position.is_some();
     }
+    capabilities.coalesced_samples = has_coalesced_samples;
+    capabilities
 }
 
 fn contact_from_windows_sample(sample: WindowsPointerHistorySample) -> PointerContactState {
@@ -496,9 +531,9 @@ mod platform {
         POINTER_CHANGE_FIRSTBUTTON_DOWN, POINTER_CHANGE_FIRSTBUTTON_UP,
         POINTER_CHANGE_FOURTHBUTTON_DOWN, POINTER_CHANGE_FOURTHBUTTON_UP, POINTER_CHANGE_NONE,
         POINTER_CHANGE_SECONDBUTTON_DOWN, POINTER_CHANGE_SECONDBUTTON_UP,
-        POINTER_CHANGE_THIRDBUTTON_DOWN, POINTER_CHANGE_THIRDBUTTON_UP, POINTER_FLAG_FIRSTBUTTON,
-        POINTER_FLAG_INCONTACT, POINTER_FLAG_INRANGE, POINTER_INFO, POINTER_PEN_INFO,
-        POINTER_TOUCH_INFO,
+        POINTER_CHANGE_THIRDBUTTON_DOWN, POINTER_CHANGE_THIRDBUTTON_UP, POINTER_FLAG_CANCELED,
+        POINTER_FLAG_FIRSTBUTTON, POINTER_FLAG_INCONTACT, POINTER_FLAG_INRANGE, POINTER_INFO,
+        POINTER_PEN_INFO, POINTER_TOUCH_INFO,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         MSG, PEN_FLAG_BARREL, PEN_FLAG_ERASER, PEN_FLAG_INVERTED, PEN_MASK_PRESSURE,
@@ -798,16 +833,22 @@ mod platform {
         };
         sample.in_contact = info.pointerInfo.pointerFlags & POINTER_FLAG_INCONTACT != 0;
         sample.in_range = info.pointerInfo.pointerFlags & POINTER_FLAG_INRANGE != 0;
+        sample.cancelled = info.pointerInfo.pointerFlags & POINTER_FLAG_CANCELED != 0;
         sample
     }
 
     fn touch_info_to_sample(info: POINTER_TOUCH_INFO, hwnd: HWND) -> WindowsPointerHistorySample {
         let position = client_position(
-            info.pointerInfo.ptPixelLocation,
+            info.pointerInfo.ptPixelLocationRaw,
             info.pointerInfo.hwndTarget,
             hwnd,
         );
         let mut sample = WindowsPointerHistorySample::touch(info.pointerInfo.pointerId, position);
+        sample.predicted_position = Some(client_position(
+            info.pointerInfo.ptPixelLocation,
+            info.pointerInfo.hwndTarget,
+            hwnd,
+        ));
         sample.timestamp_micros = Some(u64::from(info.pointerInfo.dwTime) * 1_000);
         if info.touchMask & TOUCH_MASK_PRESSURE != 0 {
             sample.pressure = Some(info.pressure as f32 / 1024.0);
@@ -816,6 +857,7 @@ mod platform {
         sample.source_device = (source_device != 0).then_some(source_device as u64);
         sample.in_contact = info.pointerInfo.pointerFlags & POINTER_FLAG_INCONTACT != 0;
         sample.in_range = info.pointerInfo.pointerFlags & POINTER_FLAG_INRANGE != 0;
+        sample.cancelled = info.pointerInfo.pointerFlags & POINTER_FLAG_CANCELED != 0;
         sample
     }
 
@@ -830,6 +872,7 @@ mod platform {
         sample.in_contact =
             info.pointerFlags & (POINTER_FLAG_INCONTACT | POINTER_FLAG_FIRSTBUTTON) != 0;
         sample.in_range = true;
+        sample.cancelled = info.pointerFlags & POINTER_FLAG_CANCELED != 0;
         sample
     }
 
@@ -1102,5 +1145,89 @@ mod tests {
             map_windows_pointer_history(history, None, PointerCalibration::identity()),
             Err(crate::model::NativeTabletDiagnostic::ConflictingDeviceIdentity)
         ));
+    }
+
+    #[test]
+    fn windows_pointer_history_preserves_historical_only_capabilities() {
+        let history = WindowsPointerHistoryPacket::new(
+            PointerEventKind::Move,
+            20,
+            [
+                WindowsPointerHistorySample::pen(20, PointerPosition::new(30.0, 0.0)),
+                WindowsPointerHistorySample::pen(20, PointerPosition::new(20.0, 0.0))
+                    .with_pressure(0.8)
+                    .with_tilt(PointerTilt::new(10.0, -5.0)),
+            ],
+        );
+
+        let packet = map_windows_pointer_history(history, None, PointerCalibration::identity())
+            .expect("history should map");
+
+        assert_eq!(packet.pressure, None);
+        assert_eq!(packet.tilt, None);
+        assert!(packet.capabilities.pressure);
+        assert!(packet.capabilities.tilt);
+    }
+
+    #[test]
+    fn windows_pointer_touch_preserves_raw_and_predicted_positions_separately() {
+        let history = WindowsPointerHistoryPacket::new(
+            PointerEventKind::Move,
+            21,
+            [
+                WindowsPointerHistorySample::touch(21, PointerPosition::new(10.0, 20.0))
+                    .with_predicted_position(PointerPosition::new(11.0, 21.0)),
+            ],
+        );
+
+        let packet = map_windows_pointer_history(history, None, PointerCalibration::identity())
+            .expect("touch history should map");
+
+        assert_eq!(packet.position, PointerPosition::new(10.0, 20.0));
+        assert_eq!(packet.predicted_samples.len(), 1);
+        assert_eq!(
+            packet.predicted_samples[0].position,
+            PointerPosition::new(11.0, 21.0)
+        );
+        assert!(packet.capabilities.predicted_samples);
+    }
+
+    #[test]
+    fn windows_pointer_cancellation_is_terminal_and_reused_ids_start_without_stale_delta() {
+        let mut backend = WindowsPointerBackend::new();
+        let control = NativeTabletDeviceControlResource::default();
+        let mut runtime = NativeTabletRuntimeResource::default();
+        let mut frame = crate::model::NativeTabletFrameResource::default();
+
+        backend.push_history_for_test(WindowsPointerHistoryPacket::new(
+            PointerEventKind::Move,
+            22,
+            [
+                WindowsPointerHistorySample::pen(22, PointerPosition::new(100.0, 100.0))
+                    .with_cancelled(true),
+            ],
+        ));
+        backend.frame(&mut runtime, &control);
+        runtime.publish_frame(
+            &mut frame,
+            &mut NativeTabletDeviceControlResource::default(),
+        );
+        assert_eq!(frame.packets[0].kind, PointerEventKind::Leave);
+        frame.publish_to_neutral(&mut engine::plugins::InputState::new());
+
+        backend.push_history_for_test(WindowsPointerHistoryPacket::new(
+            PointerEventKind::Move,
+            22,
+            [WindowsPointerHistorySample::pen(
+                22,
+                PointerPosition::new(150.0, 100.0),
+            )],
+        ));
+        backend.frame(&mut runtime, &control);
+        runtime.publish_frame(
+            &mut frame,
+            &mut NativeTabletDeviceControlResource::default(),
+        );
+        assert_eq!(frame.packets[0].delta, PointerDelta::ZERO);
     }
 }

@@ -6,6 +6,6 @@ pub use super::neutral::{
     MeasurementDomain, NativeLogicalKey, NativePhysicalKeyCode, ObservationOrigin,
     PhysicalKeyIdentity, PhysicalTabletControls, Point2, PointerButton, PointerButtonInput,
     ScrollDelta, ScrollDomain, ScrollInput, ScrollPhase, SourceTime, SourceTimeUnit, StylusTilt,
-    TabletObservation, ToolId, Vector2,
+    TabletCapabilities, TabletObservation, ToolId, Vector2,
 };
 pub use super::state::*;

@@ -52,7 +52,7 @@ pub enum NativeTabletEventKind {
     Enter,
     Leave,
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NativeTabletSourceKind {
     Mouse,
     Stylus,
@@ -627,6 +627,7 @@ pub struct NativeTabletDeviceDescriptor {
 pub struct NativeTabletSampleTelemetry {
     pub packets_this_frame: u32,
     pub samples_this_frame: u32,
+    pub confirmed_samples_this_frame: u32,
     pub coalesced_samples_this_frame: u32,
     pub predicted_samples_this_frame: u32,
     pub dropped_samples_this_frame: u32,
@@ -641,6 +642,7 @@ impl Default for NativeTabletSampleTelemetry {
         Self {
             packets_this_frame: 0,
             samples_this_frame: 0,
+            confirmed_samples_this_frame: 0,
             coalesced_samples_this_frame: 0,
             predicted_samples_this_frame: 0,
             dropped_samples_this_frame: 0,
@@ -659,16 +661,22 @@ impl NativeTabletSampleTelemetry {
         previous: Option<NativeTabletPosition>,
     ) {
         self.packets_this_frame = self.packets_this_frame.saturating_add(1);
-        let count = 1usize + packet.coalesced_samples.len() + packet.predicted_samples.len();
-        self.samples_this_frame = self.samples_this_frame.saturating_add(count as u32);
+        let confirmed_count = 1usize + packet.coalesced_samples.len();
+        let delivered_count = confirmed_count + packet.predicted_samples.len();
+        self.samples_this_frame = self
+            .samples_this_frame
+            .saturating_add(delivered_count as u32);
+        self.confirmed_samples_this_frame = self
+            .confirmed_samples_this_frame
+            .saturating_add(confirmed_count as u32);
         self.coalesced_samples_this_frame = self
             .coalesced_samples_this_frame
             .saturating_add(packet.coalesced_samples.len() as u32);
         self.predicted_samples_this_frame = self
             .predicted_samples_this_frame
             .saturating_add(packet.predicted_samples.len() as u32);
-        self.pressure_available |= packet.capabilities.pressure && packet.pressure.is_some();
-        self.tilt_available |= packet.capabilities.tilt && packet.tilt.is_some();
+        self.pressure_available |= packet.capabilities.pressure;
+        self.tilt_available |= packet.capabilities.tilt;
         let mut last = previous;
         for position in packet
             .coalesced_samples
@@ -699,7 +707,7 @@ impl NativeTabletSampleTelemetry {
             let elapsed = last.saturating_sub(first);
             if elapsed > 0 {
                 self.sample_rate_hz =
-                    (count.saturating_sub(1) as f32) * 1_000_000.0 / elapsed as f32;
+                    (confirmed_count.saturating_sub(1) as f32) * 1_000_000.0 / elapsed as f32;
             }
         }
     }
@@ -709,7 +717,6 @@ impl NativeTabletSampleTelemetry {
 pub struct NativeTabletDeviceControlResource {
     pub backend_preference: NativeTabletBackendPreference,
     pub calibration: NativeTabletCalibration,
-    pub suppress_winit_fallback_while_native_active: bool,
     pub reset_calibration_requested: bool,
 }
 impl Default for NativeTabletDeviceControlResource {
@@ -717,7 +724,6 @@ impl Default for NativeTabletDeviceControlResource {
         Self {
             backend_preference: NativeTabletBackendPreference::AutoOsFirst,
             calibration: NativeTabletCalibration::identity(),
-            suppress_winit_fallback_while_native_active: true,
             reset_calibration_requested: false,
         }
     }
@@ -741,9 +747,7 @@ pub struct NativeTabletFrameResource {
     pub backend_health: Vec<NativeTabletBackendHealth>,
     pub telemetry: NativeTabletSampleTelemetry,
     pub diagnostics: Vec<NativeTabletDiagnostic>,
-    pub active_native_contact: bool,
-    pub frames_since_native_event: u32,
-    last_position: Option<NativeTabletPosition>,
+    stream_positions: std::collections::HashMap<NativeTabletStreamKey, NativeTabletPosition>,
 }
 impl NativeTabletFrameResource {
     pub fn push_packet(&mut self, packet: NativeTabletPacket) {
@@ -752,8 +756,9 @@ impl NativeTabletFrameResource {
     pub fn publish_to_neutral(&mut self, input: &mut InputState) {
         let packets = std::mem::take(&mut self.packets);
         self.telemetry = NativeTabletSampleTelemetry::default();
-        let mut accepted = 0u32;
         for packet in packets {
+            let stream_key = NativeTabletStreamKey::from_packet(&packet);
+            let previous = self.stream_positions.get(&stream_key).copied();
             match crate::mapping::map_native_tablet_packet(&packet) {
                 Ok(mapping) => {
                     for diagnostic in mapping.diagnostics {
@@ -763,9 +768,12 @@ impl NativeTabletFrameResource {
                     }
                     match input.admit_device_observation_group(mapping.group) {
                         Ok(()) => {
-                            self.telemetry.observe_packet(&packet, self.last_position);
-                            self.last_position = Some(packet.position);
-                            accepted = accepted.saturating_add(1);
+                            self.telemetry.observe_packet(&packet, previous);
+                            if packet.is_terminal() {
+                                self.stream_positions.remove(&stream_key);
+                            } else {
+                                self.stream_positions.insert(stream_key, packet.position);
+                            }
                         }
                         Err(error) => {
                             self.diagnostics
@@ -778,11 +786,38 @@ impl NativeTabletFrameResource {
                 Err(diagnostic) => self.diagnostics.push(diagnostic),
             }
         }
-        if accepted == 0 {
-            self.frames_since_native_event = self.frames_since_native_event.saturating_add(1);
-        } else {
-            self.frames_since_native_event = 0;
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct NativeTabletStreamKey {
+    backend: NativeTabletBackendKind,
+    source_kind: NativeTabletSourceKind,
+    device_id: Option<u64>,
+    tool_id: Option<u64>,
+    tool_kind: NativeTabletToolKind,
+    contact_id: u64,
+}
+
+impl NativeTabletStreamKey {
+    fn from_packet(packet: &NativeTabletPacket) -> Self {
+        Self {
+            backend: packet.backend,
+            source_kind: packet.source_kind,
+            device_id: packet.device_id,
+            tool_id: packet.tool_id,
+            tool_kind: packet.tool_kind,
+            contact_id: packet.contact_id,
         }
+    }
+}
+
+impl NativeTabletPacket {
+    pub(crate) fn is_terminal(&self) -> bool {
+        matches!(
+            self.kind,
+            NativeTabletEventKind::Up | NativeTabletEventKind::Leave
+        ) || self.contact == NativeTabletContactState::OutOfRange
     }
 }
 
@@ -792,24 +827,10 @@ pub struct NativeTabletRuntimeResource {
     pub devices: Vec<NativeTabletDeviceDescriptor>,
     pub backend_health: Vec<NativeTabletBackendHealth>,
     pub diagnostics: Vec<NativeTabletDiagnostic>,
-    pub active_native_contact: bool,
-    frames_since_native_event: u32,
-    last_position: Option<NativeTabletPosition>,
 }
 impl NativeTabletRuntimeResource {
     pub fn push_packet(&mut self, packet: NativeTabletPacket) {
         self.upsert_device(&packet, true);
-        self.active_native_contact = packet.contact == NativeTabletContactState::Contact
-            && !matches!(
-                packet.kind,
-                NativeTabletEventKind::Up | NativeTabletEventKind::Leave
-            );
-        if matches!(
-            packet.kind,
-            NativeTabletEventKind::Up | NativeTabletEventKind::Leave
-        ) {
-            self.active_native_contact = false;
-        }
         self.pending_packets.push_back(packet);
     }
     pub fn set_backend_health(&mut self, health: NativeTabletBackendHealth) {
@@ -838,14 +859,6 @@ impl NativeTabletRuntimeResource {
         frame.devices = self.devices.clone();
         frame.backend_health = self.backend_health.clone();
         frame.diagnostics = self.diagnostics.clone();
-        frame.active_native_contact = self.active_native_contact;
-        frame.frames_since_native_event = self.frames_since_native_event;
-        frame.last_position = self.last_position;
-        if frame.packets.is_empty() {
-            self.frames_since_native_event = self.frames_since_native_event.saturating_add(1);
-        } else {
-            self.frames_since_native_event = 0;
-        }
     }
     fn upsert_device(&mut self, packet: &NativeTabletPacket, active: bool) {
         let descriptor = NativeTabletDeviceDescriptor {
@@ -897,8 +910,18 @@ pub(crate) fn calibrated_pressure(
         Some(pressure * calibration.pressure_scale + calibration.pressure_bias)
     })
 }
-pub(crate) fn input_context(device_id: Option<u64>) -> InputContext {
-    InputContext::new(InputSourceId::new(3), device_id.map(InputDeviceId::new))
+pub(crate) fn input_context(
+    backend: NativeTabletBackendKind,
+    device_id: Option<u64>,
+) -> InputContext {
+    let source = match backend {
+        NativeTabletBackendKind::WindowsPointer => InputSourceId::new(3),
+        NativeTabletBackendKind::WindowsWintab => InputSourceId::new(4),
+        NativeTabletBackendKind::MacosNsevent => InputSourceId::new(5),
+        NativeTabletBackendKind::MacosWacomDriver => InputSourceId::new(6),
+        NativeTabletBackendKind::WinitFallback => InputSourceId::new(7),
+    };
+    InputContext::new(source, device_id.map(InputDeviceId::new))
 }
 pub(crate) fn point(position: NativeTabletPosition) -> Point2 {
     Point2::new(
@@ -924,4 +947,143 @@ pub(crate) fn measurement(
     value
         .filter(|_| capabilities)
         .map(|value| AnalogMeasurement::new(value, domain))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn packet(
+        device_id: u64,
+        contact_id: u64,
+        kind: NativeTabletEventKind,
+        position: NativeTabletPosition,
+    ) -> NativeTabletPacket {
+        let mut packet =
+            NativeTabletPacket::windows_pointer(device_id, kind, position, NativeTabletDelta::ZERO);
+        packet.contact_id = contact_id;
+        packet
+    }
+
+    #[test]
+    fn telemetry_previous_positions_are_scoped_to_complete_stream_identity() {
+        let mut frame = NativeTabletFrameResource::default();
+        let mut input = InputState::new();
+        frame.push_packet(packet(
+            1,
+            1,
+            NativeTabletEventKind::Down,
+            NativeTabletPosition::new(0.0, 0.0),
+        ));
+        frame.push_packet(packet(
+            2,
+            2,
+            NativeTabletEventKind::Down,
+            NativeTabletPosition::new(1_000.0, 0.0),
+        ));
+        frame.publish_to_neutral(&mut input);
+        assert_eq!(frame.telemetry.max_segment_gap_px, 0.0);
+
+        frame.push_packet(packet(
+            1,
+            1,
+            NativeTabletEventKind::Move,
+            NativeTabletPosition::new(10.0, 0.0),
+        ));
+        frame.push_packet(packet(
+            2,
+            2,
+            NativeTabletEventKind::Move,
+            NativeTabletPosition::new(1_010.0, 0.0),
+        ));
+        frame.publish_to_neutral(&mut input);
+
+        assert_eq!(frame.telemetry.packets_this_frame, 2);
+        assert_eq!(frame.telemetry.max_segment_gap_px, 10.0);
+    }
+
+    #[test]
+    fn terminal_and_rejected_packets_do_not_seed_telemetry_state() {
+        let mut frame = NativeTabletFrameResource::default();
+        let mut input = InputState::new();
+        frame.push_packet(packet(
+            3,
+            3,
+            NativeTabletEventKind::Down,
+            NativeTabletPosition::new(0.0, 0.0),
+        ));
+        frame.publish_to_neutral(&mut input);
+
+        frame.push_packet(packet(
+            3,
+            3,
+            NativeTabletEventKind::Up,
+            NativeTabletPosition::new(100.0, 0.0),
+        ));
+        frame.publish_to_neutral(&mut input);
+
+        frame.push_packet(packet(
+            3,
+            3,
+            NativeTabletEventKind::Move,
+            NativeTabletPosition::new(105.0, 0.0),
+        ));
+        frame.publish_to_neutral(&mut input);
+        assert_eq!(frame.telemetry.max_segment_gap_px, 0.0);
+
+        let rejected = packet(
+            4,
+            4,
+            NativeTabletEventKind::Move,
+            NativeTabletPosition::new(f32::NAN, 0.0),
+        );
+        frame.push_packet(rejected);
+        frame.publish_to_neutral(&mut input);
+        assert_eq!(frame.telemetry.packets_this_frame, 0);
+        assert_eq!(frame.telemetry.max_segment_gap_px, 0.0);
+
+        frame.push_packet(packet(
+            4,
+            4,
+            NativeTabletEventKind::Move,
+            NativeTabletPosition::new(20.0, 0.0),
+        ));
+        frame.publish_to_neutral(&mut input);
+        assert_eq!(frame.telemetry.max_segment_gap_px, 0.0);
+    }
+
+    #[test]
+    fn predicted_samples_are_delivered_without_inflating_confirmed_sample_rate() {
+        let packet = packet(
+            5,
+            5,
+            NativeTabletEventKind::Move,
+            NativeTabletPosition::new(30.0, 0.0),
+        )
+        .with_timestamp_micros(300)
+        .with_coalesced_samples([
+            NativeTabletSample::new(
+                NativeTabletPosition::new(10.0, 0.0),
+                NativeTabletDelta::ZERO,
+            )
+            .with_timestamp_micros(100),
+            NativeTabletSample::new(
+                NativeTabletPosition::new(20.0, 0.0),
+                NativeTabletDelta::ZERO,
+            )
+            .with_timestamp_micros(200),
+        ])
+        .with_predicted_samples([NativeTabletSample::new(
+            NativeTabletPosition::new(40.0, 0.0),
+            NativeTabletDelta::ZERO,
+        )]);
+        let mut telemetry = NativeTabletSampleTelemetry::default();
+
+        telemetry.observe_packet(&packet, None);
+
+        assert_eq!(telemetry.confirmed_samples_this_frame, 3);
+        assert_eq!(telemetry.samples_this_frame, 4);
+        assert_eq!(telemetry.predicted_samples_this_frame, 1);
+        assert_eq!(telemetry.sample_rate_hz, 10_000.0);
+    }
 }

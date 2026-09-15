@@ -164,9 +164,24 @@ pub fn map_windows_wintab_history(
     samples: impl IntoIterator<Item = WindowsWintabPacketDto>,
     previous_position: Option<PointerPosition>,
     calibration: PointerCalibration,
-) -> Option<NativeTabletPacket> {
+) -> Result<NativeTabletPacket, crate::model::NativeTabletDiagnostic> {
     let mut chronological = samples.into_iter().collect::<Vec<_>>();
-    let current = chronological.pop()?;
+    let current = chronological.pop().ok_or_else(|| {
+        crate::model::NativeTabletDiagnostic::InvalidObservation("empty Wintab history".into())
+    })?;
+    let devices = chronological
+        .iter()
+        .chain(std::iter::once(&current))
+        .map(|sample| sample.device_id)
+        .collect::<std::collections::BTreeSet<_>>();
+    if devices.len() > 1 {
+        return Err(crate::model::NativeTabletDiagnostic::ConflictingDeviceIdentity);
+    }
+    let historical_eraser = chronological.iter().any(|sample| sample.eraser);
+    let historical_barrel_buttons = chronological
+        .iter()
+        .any(|sample| sample.barrel_buttons.primary || sample.barrel_buttons.secondary);
+    let historical_hover = chronological.iter().any(|sample| sample.in_proximity);
     let mut last_position = previous_position;
     let coalesced_samples = chronological
         .into_iter()
@@ -195,11 +210,16 @@ pub fn map_windows_wintab_history(
     packet.capabilities.tangential_pressure |= coalesced_samples
         .iter()
         .any(|sample| sample.tangential_pressure.is_some());
+    packet.capabilities.eraser |= historical_eraser || current.eraser;
+    packet.capabilities.barrel_buttons |= historical_barrel_buttons
+        || current.barrel_buttons.primary
+        || current.barrel_buttons.secondary;
+    packet.capabilities.hover |= historical_hover || current.in_proximity;
     if !coalesced_samples.is_empty() {
         packet.capabilities.coalesced_samples = true;
         packet = packet.with_coalesced_samples(coalesced_samples);
     }
-    Some(packet)
+    Ok(packet)
 }
 
 fn native_sample_from_wintab(
@@ -334,5 +354,53 @@ mod tests {
         assert_eq!(packet.twist_degrees, Some(270.0));
         assert!(packet.capabilities.tangential_pressure);
         assert!(packet.barrel_buttons.primary);
+    }
+
+    #[test]
+    fn wintab_history_rejects_mixed_device_identity_atomically() {
+        let history = [
+            WindowsWintabPacketDto::new(
+                55,
+                PointerEventKind::Move,
+                PointerPosition::new(10.0, 20.0),
+            ),
+            WindowsWintabPacketDto::new(
+                56,
+                PointerEventKind::Move,
+                PointerPosition::new(12.0, 22.0),
+            ),
+        ];
+
+        assert_eq!(
+            map_windows_wintab_history(history, None, PointerCalibration::identity()),
+            Err(crate::model::NativeTabletDiagnostic::ConflictingDeviceIdentity)
+        );
+    }
+
+    #[test]
+    fn wintab_history_preserves_historical_only_capability_evidence() {
+        let current = WindowsWintabPacketDto::new(
+            55,
+            PointerEventKind::Move,
+            PointerPosition::new(10.0, 20.0),
+        );
+        let historical = WindowsWintabPacketDto {
+            normal_pressure: Some(0.4),
+            tangential_pressure: Some(-0.2),
+            tilt: Some(PointerTilt::new(10.0, -5.0)),
+            rotation_degrees: Some(45.0),
+            ..current
+        };
+
+        let packet =
+            map_windows_wintab_history([historical, current], None, PointerCalibration::identity())
+                .expect("coherent Wintab history should map");
+
+        assert_eq!(packet.pressure, None);
+        assert_eq!(packet.tilt, None);
+        assert!(packet.capabilities.pressure);
+        assert!(packet.capabilities.tilt);
+        assert!(packet.capabilities.twist);
+        assert!(packet.capabilities.tangential_pressure);
     }
 }
