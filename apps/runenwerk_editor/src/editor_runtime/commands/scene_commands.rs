@@ -7,7 +7,7 @@ use editor_scene::{SceneCommandIntent, SceneEditorCommand, scene_intent_to_comma
 use super::ratification::ratify_scene_change;
 use crate::editor_runtime::parity::assert_scene_projection_parity;
 use crate::editor_runtime::{
-    RetainedSceneTransaction, RunenwerkEditorRuntime, sync_selection_after_scene_change,
+    RunenwerkEditorRuntime, SceneHistoryEntry, sync_selection_after_scene_change,
 };
 
 pub use editor_scene::ExecutedSceneCommand;
@@ -43,14 +43,13 @@ pub(crate) fn execute_scene_command_and_push_history_with_origin(
 ) -> Result<Option<RatifiedChange>, GoverningChangeError> {
     let transaction_label = transaction_label.into();
     let before_snapshot = runtime.capture_scene_snapshot();
-
     let transaction =
         editor_core::TransactionMetadata::new(transaction_id, transaction_label.clone());
-    let executed_command_metadata =
-        runtime.with_scene_command_context(|ctx| -> Result<_, GoverningChangeError> {
-            editor_scene::execute_scene_command_and_push_history(ctx, &mut command, transaction)
-                .map(|executed| executed.map(|executed| executed.metadata))
-        })?;
+
+    let executed_command_metadata = runtime
+        .with_scene_command_context(|ctx| editor_scene::execute_scene_command(ctx, &mut command))
+        .map_err(|error| GoverningChangeError::mutation_rejected(error.message))?
+        .map(|executed| executed.metadata);
 
     sync_selection_after_scene_change(runtime);
     assert_scene_projection_parity(runtime);
@@ -62,7 +61,7 @@ pub(crate) fn execute_scene_command_and_push_history_with_origin(
     let ratified_change = ratify_scene_change(
         runtime,
         SceneChangeRatificationParams::new(
-            editor_core::TransactionMetadata::new(transaction_id, transaction_label),
+            transaction,
             vec![command_metadata],
             origin,
             vec![SemanticOperation::SceneCommandApplied],
@@ -72,9 +71,7 @@ pub(crate) fn execute_scene_command_and_push_history_with_origin(
     runtime.record_ratified_change(ratified_change.clone());
     let after_snapshot = runtime.capture_scene_snapshot();
 
-    runtime.clear_redo_retained_transactions();
-    runtime.store_applied_retained_transaction(RetainedSceneTransaction::new(
-        transaction_id,
+    runtime.record_scene_history_entry(SceneHistoryEntry::new(
         before_snapshot,
         after_snapshot,
         ratified_change.clone(),
@@ -107,7 +104,7 @@ mod tests {
         .expect("scene intent execution should succeed");
 
         assert!(result.is_some());
-        assert_eq!(runtime.session().history().undo_len(), 0);
+        assert_eq!(runtime.scene_history().undo_len(), 0);
     }
 
     #[test]
@@ -130,7 +127,8 @@ mod tests {
         .expect("scene command execution should succeed");
 
         assert!(result.is_some());
-        assert_eq!(runtime.session().history().undo_len(), 1);
+        assert_eq!(runtime.scene_history().undo_len(), 1);
+        assert_eq!(runtime.scene_history().redo_len(), 0);
     }
 
     #[test]

@@ -709,12 +709,19 @@ pub fn build_editor_shell_frame_model_with_frame_metrics(
 ) -> EditorShellFrameModel {
     let scene_version = app.runtime().current_scene_reality_version();
     let session = app.runtime().session_reality();
-    let history = session.history();
+    let scene_history_active = app
+        .runtime()
+        .session()
+        .active_document_descriptor()
+        .is_some_and(|document| matches!(&document.kind, DocumentKind::Scene));
+    let history = scene_history_active.then(|| app.runtime().scene_history());
+    let can_undo = history.is_some_and(|history| history.can_undo());
+    let can_redo = history.is_some_and(|history| history.can_redo());
     let active_definitions = shell_state.active_editor_definitions();
     let toolbar_frame = build_toolbar_observation_frame(
         session.active_tool(),
-        history.can_undo(),
-        history.can_redo(),
+        can_undo,
+        can_redo,
         app.debug_logs_enabled(),
         shell_state.active_toolbar_menu(),
         shell_state.active_workspace_profile_id(),
@@ -768,8 +775,7 @@ pub fn build_editor_shell_frame_model_with_frame_metrics(
             .get(&bindings.shell_chrome_template)
             .cloned()
     });
-    let route_actions =
-        active_route_actions_by_target(active_definitions, history.can_undo(), history.can_redo());
+    let route_actions = active_route_actions_by_target(active_definitions, can_undo, can_redo);
     let available_panel_kinds = active_definitions.available_panel_kinds();
     let available_tool_surface_keys = active_definitions.available_tool_surface_keys();
     let available_tool_surface_create_candidates = build_tool_surface_create_candidates(
