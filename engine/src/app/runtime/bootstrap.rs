@@ -50,13 +50,6 @@ impl App {
         }
         if !self
             .world
-            .has_resource::<NativeWindowHookRegistryResource>()
-        {
-            self.world
-                .insert_resource(NativeWindowHookRegistryResource::default());
-        }
-        if !self
-            .world
             .has_resource::<ProductPublicationRuntimeResource>()
         {
             self.world
