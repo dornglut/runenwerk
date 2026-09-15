@@ -33,15 +33,8 @@ fn shell_undo_availability_follows_the_admitted_scene_history_context() {
     let registry = EditorSurfaceProviderRegistry::runenwerk_default();
     let theme = ThemeTokens::default();
 
-    let scene_frame = build_editor_shell_frame_model(
-        &app,
-        &shell_state,
-        &registry,
-        &theme,
-        None,
-        None,
-        None,
-    );
+    let scene_frame =
+        build_editor_shell_frame_model(&app, &shell_state, &registry, &theme, None, None, None);
     assert_eq!(
         scene_frame.route_actions_by_route_target.get(UNDO_ROUTE),
         Some(&RoutedShellAction::Undo { enabled: true })
@@ -51,15 +44,8 @@ fn shell_undo_availability_follows_the_admitted_scene_history_context() {
         .activate_default_material_graph_document()
         .expect("material graph document should activate");
 
-    let material_frame = build_editor_shell_frame_model(
-        &app,
-        &shell_state,
-        &registry,
-        &theme,
-        None,
-        None,
-        None,
-    );
+    let material_frame =
+        build_editor_shell_frame_model(&app, &shell_state, &registry, &theme, None, None, None);
     assert_eq!(
         material_frame.route_actions_by_route_target.get(UNDO_ROUTE),
         Some(&RoutedShellAction::Undo { enabled: false }),
