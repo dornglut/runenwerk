@@ -29,10 +29,13 @@ use runen_gpu::{
     GpuBufferDescriptor, GpuBufferInitialization, GpuBufferRegion, GpuBufferTextureLayout,
     GpuBufferUsage, GpuClearOperation, GpuComputeOperation, GpuComputePipelineDescriptor,
     GpuContext, GpuContextAffinity, GpuCopyOperation, GpuDispatchIntent, GpuDispatchSize,
-    GpuReadbackId, GpuReadbackOperation, GpuReadbackStatus, GpuReconstruction, GpuResourceLifetime,
-    GpuResourceScope, GpuRuntimeBindingValue, GpuSubmission, GpuSubmissionFailureKind,
-    GpuSubmissionStatus, GpuTextureCopyRegion, GpuUploadOperation, GpuWorkFragment,
-    GpuWorkSubmissionError, PreparedGpuData, TransferData, admit_static_wgsl_sources,
+    GpuExportKey, GpuExportRelationship, GpuInitialCoverage, GpuReadbackId, GpuReadbackOperation,
+    GpuReadbackStatus, GpuReconstruction, GpuResourceAccessIntent, GpuResourceLifetime,
+    GpuResourceProvenance, GpuResourceRef, GpuResourceScope, GpuRuntimeBindingValue, GpuSubmission,
+    GpuSubmissionFailureKind, GpuSubmissionStatus, GpuTextureAccessResource, GpuTextureCopyRegion,
+    GpuTextureFormat, GpuTextureHandle, GpuUploadOperation, GpuWorkFragment, GpuWorkImport,
+    GpuWorkOutput, GpuWorkSubmissionError, PreparedGpuData, TransferData,
+    admit_static_wgsl_sources,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
@@ -65,6 +68,83 @@ impl RenderObjectIdentityDecoder {
     pub fn decode(&self, code: u32) -> Option<RenderObjectId> {
         let index = usize::try_from(code.checked_sub(1)?).ok()?;
         self.objects_by_code.get(index).copied()
+    }
+}
+
+/// One renderer-owned, ordinary maintained execution prepared for composition.
+///
+/// Construction remains private to the maintained lowerer. The prepared fragments are the same
+/// backend-neutral work that ordinary submission uses; the only additional public correlation is
+/// for an admitted composable R32Float radiance destination.
+#[derive(Debug, Clone)]
+pub struct PreparedDeterministicRender {
+    admitted: AdmittedDeterministicRender,
+    work_set: RenderWorkSet,
+    object_identity_decoder: RenderObjectIdentityDecoder,
+    radiance_outputs: Vec<PreparedDeterministicRadianceOutput>,
+}
+
+impl PreparedDeterministicRender {
+    pub const fn admitted(&self) -> &AdmittedDeterministicRender {
+        &self.admitted
+    }
+
+    pub const fn work_set(&self) -> &RenderWorkSet {
+        &self.work_set
+    }
+
+    pub fn radiance_outputs(&self) -> &[PreparedDeterministicRadianceOutput] {
+        &self.radiance_outputs
+    }
+
+    pub fn radiance_output(
+        &self,
+        output_index: usize,
+    ) -> Option<&PreparedDeterministicRadianceOutput> {
+        self.radiance_outputs
+            .iter()
+            .find(|output| output.output_index() == output_index)
+    }
+}
+
+/// Renderer-owned correlation for one ordinary composable radiance output.
+///
+/// The correlation carries the exact admitted destination and typed RunenGPU export relationship.
+/// Consumers import it through [`Self::import`] and never derive an export key or inspect the
+/// maintained evaluator's private carrier.
+#[derive(Debug, Clone)]
+pub struct PreparedDeterministicRadianceOutput {
+    output_index: usize,
+    relationship: GpuExportRelationship,
+}
+
+impl PreparedDeterministicRadianceOutput {
+    pub const fn output_index(&self) -> usize {
+        self.output_index
+    }
+
+    pub fn resource(&self) -> &GpuResourceRef {
+        self.relationship.resource()
+    }
+
+    pub fn texture(&self) -> Option<&GpuTextureHandle> {
+        match self.resource() {
+            GpuResourceRef::Texture(texture) => Some(texture),
+            _ => None,
+        }
+    }
+
+    pub fn export_relationship(&self) -> &GpuExportRelationship {
+        &self.relationship
+    }
+
+    pub fn import(&self, provenance: GpuResourceProvenance) -> GpuWorkImport {
+        GpuWorkImport::new(
+            self.relationship.resource().clone(),
+            self.relationship.export_key().clone(),
+            GpuResourceAccessIntent::Read,
+            provenance,
+        )
     }
 }
 
@@ -565,11 +645,13 @@ struct LoweredDeterministicRender {
     work_set: RenderWorkSet,
     object_identity_decoder: RenderObjectIdentityDecoder,
     verification_readbacks: Vec<DeterministicVerificationReadbacks>,
+    composable_radiance_outputs: Vec<PreparedDeterministicRadianceOutput>,
 }
 
 struct LoweredDeterministicOutput {
     fragment: GpuWorkFragment,
     verification_readbacks: Option<DeterministicVerificationReadbacks>,
+    composable_radiance_output: Option<PreparedDeterministicRadianceOutput>,
 }
 
 struct PackedOutput {
@@ -595,17 +677,28 @@ pub async fn submit_deterministic_render(
     admitted: AdmittedDeterministicRender,
     context: &GpuContext,
 ) -> Result<SubmittedDeterministicRender, RenderDeterministicExecutionError> {
+    let prepared = prepare_deterministic_render(admitted, context)?;
+    submit_prepared_deterministic_render(prepared, context).await
+}
+
+/// Prepare one ordinary maintained deterministic render without submitting it.
+///
+/// This is the owner-controlled composition seam. It performs the same maintained lowering as
+/// [`submit_deterministic_render`], authors no CPU readbacks, and exposes only renderer-authored
+/// fragments plus typed correlation for ordinary R32Float radiance outputs.
+pub fn prepare_deterministic_render(
+    admitted: AdmittedDeterministicRender,
+    context: &GpuContext,
+) -> Result<PreparedDeterministicRender, RenderDeterministicExecutionError> {
     let lowered =
         lower_deterministic_render(&admitted, context, DeterministicObservationIntent::Ordinary)?;
     debug_assert!(lowered.verification_readbacks.is_empty());
-    submit_lowered_deterministic_render(
+    Ok(PreparedDeterministicRender {
         admitted,
-        context,
-        lowered.work_set,
-        lowered.object_identity_decoder,
-        DeterministicVerificationState::NotRequested,
-    )
-    .await
+        work_set: lowered.work_set,
+        object_identity_decoder: lowered.object_identity_decoder,
+        radiance_outputs: lowered.composable_radiance_outputs,
+    })
 }
 
 /// Submit one maintained deterministic invocation with explicit verified-result intent.
@@ -674,6 +767,25 @@ async fn submit_lowered_deterministic_render(
     })
 }
 
+async fn submit_prepared_deterministic_render(
+    prepared: PreparedDeterministicRender,
+    context: &GpuContext,
+) -> Result<SubmittedDeterministicRender, RenderDeterministicExecutionError> {
+    let submission = context
+        .submit_work(
+            "RunenRender maintained deterministic execution",
+            prepared.work_set.fragments().iter().cloned(),
+        )
+        .await
+        .map_err(RenderDeterministicExecutionError::Submission)?;
+    Ok(SubmittedDeterministicRender {
+        admitted: prepared.admitted,
+        submission,
+        object_identity_decoder: prepared.object_identity_decoder,
+        verification: DeterministicVerificationState::NotRequested,
+    })
+}
+
 fn lower_deterministic_render(
     maintained: &AdmittedDeterministicRender,
     context: &GpuContext,
@@ -711,6 +823,7 @@ fn lower_deterministic_render(
             field: "maintained output fragments",
         })?;
     let mut verification_readbacks = Vec::new();
+    let mut composable_radiance_outputs = Vec::new();
     if intent.requires_private_readback() {
         verification_readbacks
             .try_reserve_exact(admitted.outputs().len())
@@ -731,12 +844,16 @@ fn lower_deterministic_render(
         if let Some(readbacks) = lowered.verification_readbacks {
             verification_readbacks.push(readbacks);
         }
+        if let Some(output) = lowered.composable_radiance_output {
+            composable_radiance_outputs.push(output);
+        }
     }
 
     Ok(LoweredDeterministicRender {
         work_set: RenderWorkSet::from_lowering(admitted, fragments),
         object_identity_decoder,
         verification_readbacks,
+        composable_radiance_outputs,
     })
 }
 
@@ -921,26 +1038,70 @@ fn lower_output(
     )
     .map_err(|error| gpu_authoring("compute operation", error))?;
 
-    let destination_copy = match admitted_output.binding().destination() {
-        RenderOutputDestination::ScalarBuffer(destination) => GpuCopyOperation::buffer_to_buffer(
-            GpuBufferRegion::whole(&canonical_output)
-                .map_err(|error| gpu_authoring("scalar source region", error))?,
-            GpuBufferRegion::whole(destination)
-                .map_err(|error| gpu_authoring("scalar destination region", error))?,
-        )
-        .map_err(|error| gpu_authoring("scalar destination copy", error))?,
-        RenderOutputDestination::SampleLatticeTexture(destination) => {
-            let row_bytes = packed.texture_row_bytes.ok_or(
-                RenderDeterministicLoweringError::OutputCorrelationChanged { output_index },
-            )?;
-            let source = GpuBufferTextureLayout::new(&canonical_output, 0, row_bytes, 0)
-                .map_err(|error| gpu_authoring("lattice source layout", error))?;
-            let destination = GpuTextureCopyRegion::whole_base_mip(destination)
-                .map_err(|error| gpu_authoring("lattice destination region", error))?;
-            GpuCopyOperation::buffer_to_texture(source, destination)
-                .map_err(|error| gpu_authoring("lattice destination copy", error))?
-        }
-    };
+    let (destination_copy, composable_gpu_output, composable_radiance_output) =
+        match admitted_output.binding().destination() {
+            RenderOutputDestination::ScalarBuffer(destination) => {
+                GpuCopyOperation::buffer_to_buffer(
+                    GpuBufferRegion::whole(&canonical_output)
+                        .map_err(|error| gpu_authoring("scalar source region", error))?,
+                    GpuBufferRegion::whole(destination)
+                        .map_err(|error| gpu_authoring("scalar destination region", error))?,
+                )
+                .map(|copy| (copy, None, None))
+                .map_err(|error| gpu_authoring("scalar destination copy", error))?
+            }
+            RenderOutputDestination::SampleLatticeTexture(destination) => {
+                let row_bytes = packed.texture_row_bytes.ok_or(
+                    RenderDeterministicLoweringError::OutputCorrelationChanged { output_index },
+                )?;
+                let source = GpuBufferTextureLayout::new(&canonical_output, 0, row_bytes, 0)
+                    .map_err(|error| gpu_authoring("lattice source layout", error))?;
+                let destination_region = GpuTextureCopyRegion::whole_base_mip(destination)
+                    .map_err(|error| gpu_authoring("lattice destination region", error))?;
+                let destination_copy =
+                    GpuCopyOperation::buffer_to_texture(source, destination_region.clone())
+                        .map_err(|error| gpu_authoring("lattice destination copy", error))?;
+                let composable = if matches!(intent, DeterministicObservationIntent::Ordinary)
+                    && matches!(requested.spec().value(), RenderOutputValue::Radiance { .. })
+                    && destination.descriptor().format() == GpuTextureFormat::R32Float
+                {
+                    let relationship = GpuExportRelationship::new(
+                        GpuResourceRef::Texture(destination.clone()),
+                        GpuExportKey::new(format!(
+                            "runenrender.maintained.radiance.output.{output_index}"
+                        ))
+                        .map_err(|error| gpu_authoring("radiance export key", error))?,
+                        GpuResourceAccessIntent::Write,
+                        GpuResourceProvenance::new(
+                            destination.descriptor().common().label().clone(),
+                            None,
+                            None,
+                        ),
+                    );
+                    let coverage = GpuInitialCoverage::texture_subresources(
+                        &GpuTextureAccessResource::Texture(destination.clone()),
+                        [destination_region.subresources()],
+                    )
+                    .map_err(|error| gpu_authoring("radiance output coverage", error))?;
+                    let output = GpuWorkOutput::new(relationship.clone(), coverage)
+                        .map_err(|error| gpu_authoring("radiance output relationship", error))?;
+                    Some((
+                        output,
+                        PreparedDeterministicRadianceOutput {
+                            output_index,
+                            relationship,
+                        },
+                    ))
+                } else {
+                    None
+                };
+                let (gpu_output, correlation) = match composable {
+                    Some((output, correlation)) => (Some(output), Some(correlation)),
+                    None => (None, None),
+                };
+                (destination_copy, gpu_output, correlation)
+            }
+        };
 
     let verification = if intent.requires_private_readback() {
         let canonical_readback = GpuReadbackOperation::ordinary(
@@ -989,6 +1150,9 @@ fn lower_output(
                 "copy canonical output to admitted destination",
                 destination_copy,
             )?;
+            if let Some(output) = composable_gpu_output {
+                work.add_output(output)?;
+            }
             if let Some(readbacks) = verification {
                 work.operation(
                     "read back private canonical output",
@@ -1008,6 +1172,7 @@ fn lower_output(
     Ok(LoweredDeterministicOutput {
         fragment,
         verification_readbacks,
+        composable_radiance_output,
     })
 }
 

@@ -12,7 +12,7 @@ use super::admission::{
 use super::derived_transform::{RenderCompiledObjectTransform, RenderCompiledObjectTransformError};
 use super::maintained_method::maintained_deterministic_method;
 use super::representation::RenderRepresentationId;
-use super::request::{RenderObservationSpec, RenderRequest};
+use super::request::{RenderObservationSpec, RenderOutputValue, RenderRequest};
 use super::scene::{RenderObjectId, RenderObjectState, RenderSceneSnapshot};
 use super::semantic_plan::{RenderPlanningFailure, plan_render};
 use super::surface_input::{RenderSurfaceSemanticInput, RenderSurfaceSemanticInputBinding};
@@ -21,7 +21,8 @@ use std::error::Error;
 use std::fmt;
 
 const SCALAR_CARRIER_BYTES: u64 = 4;
-const LATTICE_CARRIER_FORMAT: GpuTextureFormat = GpuTextureFormat::R32Uint;
+const LEGACY_LATTICE_FORMAT: GpuTextureFormat = GpuTextureFormat::R32Uint;
+const COMPOSABLE_RADIANCE_LATTICE_FORMAT: GpuTextureFormat = GpuTextureFormat::R32Float;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RenderDeterministicCompatibilityError {
@@ -44,8 +45,14 @@ pub enum RenderDeterministicCompatibilityError {
         output_index: usize,
         object_id: RenderObjectId,
     },
-    LatticeCarrierFormatUnsupported,
-    LatticeCarrierCopyDestinationUnsupported,
+    LatticeFormatUnsupported {
+        output_index: usize,
+        format: GpuTextureFormat,
+    },
+    LatticeCopyDestinationUnsupported {
+        output_index: usize,
+        format: GpuTextureFormat,
+    },
     ScalarDestinationSize {
         output_index: usize,
         expected_size_bytes: u64,
@@ -56,7 +63,6 @@ pub enum RenderDeterministicCompatibilityError {
     },
     LatticeDestinationFormat {
         output_index: usize,
-        expected: GpuTextureFormat,
         actual: GpuTextureFormat,
     },
     LatticeDestinationNotCopyDestination {
@@ -97,13 +103,19 @@ impl fmt::Display for RenderDeterministicCompatibilityError {
                 formatter,
                 "output {output_index} object {object_id:?} has a non-invertible semantic transform unsupported by the maintained evaluator"
             ),
-            Self::LatticeCarrierFormatUnsupported => write!(
+            Self::LatticeFormatUnsupported {
+                output_index,
+                format,
+            } => write!(
                 formatter,
-                "{LATTICE_CARRIER_FORMAT:?} lattice carrier is unsupported"
+                "lattice output {output_index} requires admitted {format:?} format capabilities"
             ),
-            Self::LatticeCarrierCopyDestinationUnsupported => write!(
+            Self::LatticeCopyDestinationUnsupported {
+                output_index,
+                format,
+            } => write!(
                 formatter,
-                "{LATTICE_CARRIER_FORMAT:?} lacks copy-destination support"
+                "lattice output {output_index} destination format {format:?} lacks CopyDestination support"
             ),
             Self::ScalarDestinationSize {
                 output_index,
@@ -119,11 +131,10 @@ impl fmt::Display for RenderDeterministicCompatibilityError {
             ),
             Self::LatticeDestinationFormat {
                 output_index,
-                expected,
                 actual,
             } => write!(
                 formatter,
-                "lattice output {output_index} requires {expected:?}, got {actual:?}"
+                "lattice output {output_index} does not admit destination format {actual:?} for its semantic value"
             ),
             Self::LatticeDestinationNotCopyDestination { output_index } => write!(
                 formatter,
@@ -216,25 +227,16 @@ fn validate_maintained_compatibility(
 
     validate_selected_evaluator_inputs(admitted)?;
 
-    let capabilities = context.adapter_facts().supported();
-    if admitted.outputs().iter().any(|output| {
-        matches!(
-            output.binding().destination(),
-            RenderOutputDestination::SampleLatticeTexture(_)
-        )
-    }) {
-        let Some(format_capabilities) = capabilities.format(LATTICE_CARRIER_FORMAT) else {
-            return Err(RenderDeterministicCompatibilityError::LatticeCarrierFormatUnsupported);
-        };
-        if !format_capabilities.copy_destination {
-            return Err(
-                RenderDeterministicCompatibilityError::LatticeCarrierCopyDestinationUnsupported,
-            );
-        }
-    }
-
     for output in admitted.outputs() {
-        validate_destination(output.output_index(), output.binding().destination())?;
+        let value = admitted.plan().request().outputs()[output.output_index()]
+            .spec()
+            .value();
+        validate_destination(
+            output.output_index(),
+            value,
+            output.binding().destination(),
+            Some(context),
+        )?;
     }
     Ok(())
 }
@@ -320,7 +322,9 @@ fn validate_observation(
 
 fn validate_destination(
     output_index: usize,
+    value: RenderOutputValue,
     destination: &RenderOutputDestination,
+    context: Option<&GpuContext>,
 ) -> Result<(), RenderDeterministicCompatibilityError> {
     match destination {
         RenderOutputDestination::ScalarBuffer(buffer) => {
@@ -347,12 +351,23 @@ fn validate_destination(
         }
         RenderOutputDestination::SampleLatticeTexture(texture) => {
             let descriptor = texture.descriptor();
-            if descriptor.format() != LATTICE_CARRIER_FORMAT {
+            let format = descriptor.format();
+            let format_admitted = match value {
+                RenderOutputValue::Radiance { .. } => {
+                    matches!(
+                        format,
+                        LEGACY_LATTICE_FORMAT | COMPOSABLE_RADIANCE_LATTICE_FORMAT
+                    )
+                }
+                RenderOutputValue::Distance { .. } | RenderOutputValue::ObjectIdentity => {
+                    format == LEGACY_LATTICE_FORMAT
+                }
+            };
+            if !format_admitted {
                 return Err(
                     RenderDeterministicCompatibilityError::LatticeDestinationFormat {
                         output_index,
-                        expected: LATTICE_CARRIER_FORMAT,
-                        actual: descriptor.format(),
+                        actual: format,
                     },
                 );
             }
@@ -365,6 +380,25 @@ fn validate_destination(
                         output_index,
                     },
                 );
+            }
+            if let Some(context) = context {
+                let Some(format_capabilities) = context.adapter_facts().supported().format(format)
+                else {
+                    return Err(
+                        RenderDeterministicCompatibilityError::LatticeFormatUnsupported {
+                            output_index,
+                            format,
+                        },
+                    );
+                };
+                if !format_capabilities.copy_destination {
+                    return Err(
+                        RenderDeterministicCompatibilityError::LatticeCopyDestinationUnsupported {
+                            output_index,
+                            format,
+                        },
+                    );
+                }
             }
         }
     }
@@ -575,7 +609,12 @@ mod tests {
             )
             .expect("scalar handle");
         assert_eq!(
-            validate_destination(0, &RenderOutputDestination::ScalarBuffer(valid_scalar)),
+            validate_destination(
+                0,
+                RenderOutputValue::ObjectIdentity,
+                &RenderOutputDestination::ScalarBuffer(valid_scalar),
+                None,
+            ),
             Ok(())
         );
 
@@ -593,7 +632,12 @@ mod tests {
             )
             .expect("oversized scalar handle");
         assert_eq!(
-            validate_destination(1, &RenderOutputDestination::ScalarBuffer(oversized_scalar)),
+            validate_destination(
+                1,
+                RenderOutputValue::ObjectIdentity,
+                &RenderOutputDestination::ScalarBuffer(oversized_scalar),
+                None,
+            ),
             Err(
                 RenderDeterministicCompatibilityError::ScalarDestinationSize {
                     output_index: 1,
@@ -619,7 +663,9 @@ mod tests {
         assert_eq!(
             validate_destination(
                 2,
-                &RenderOutputDestination::ScalarBuffer(storage_only_scalar)
+                RenderOutputValue::ObjectIdentity,
+                &RenderOutputDestination::ScalarBuffer(storage_only_scalar),
+                None,
             ),
             Err(
                 RenderDeterministicCompatibilityError::ScalarDestinationNotCopyDestination {
@@ -646,13 +692,87 @@ mod tests {
         assert_eq!(
             validate_destination(
                 3,
-                &RenderOutputDestination::SampleLatticeTexture(wrong_format)
+                RenderOutputValue::ObjectIdentity,
+                &RenderOutputDestination::SampleLatticeTexture(wrong_format),
+                None,
             ),
             Err(
                 RenderDeterministicCompatibilityError::LatticeDestinationFormat {
                     output_index: 3,
-                    expected: GpuTextureFormat::R32Uint,
                     actual: GpuTextureFormat::Rgba8Unorm,
+                }
+            )
+        );
+
+        let radiance_format = allocator
+            .allocate_texture_handle(
+                GpuTextureDescriptor::ordinary_owned_2d(
+                    "composable radiance lattice format",
+                    GpuResourceLifetime::Transient,
+                    GpuReconstruction::SourceBacked,
+                    2,
+                    2,
+                    GpuTextureFormat::R32Float,
+                    [GpuTextureUsage::CopyDestination],
+                    GpuTextureInitialization::Uninitialized,
+                )
+                .expect("valid composable radiance descriptor"),
+            )
+            .expect("composable radiance texture handle");
+        let radiance_value = RenderOutputValue::Radiance {
+            representation: super::super::request::RenderRadiometricRepresentation::
+                spectral_at_wavelength_meters(550.0e-9)
+                .expect("radiance representation"),
+        };
+        assert_eq!(
+            validate_destination(
+                5,
+                radiance_value,
+                &RenderOutputDestination::SampleLatticeTexture(radiance_format.clone()),
+                None,
+            ),
+            Ok(())
+        );
+
+        let radiance_without_copy_destination = allocator
+            .allocate_texture_handle(
+                GpuTextureDescriptor::ordinary_owned_2d(
+                    "radiance without copy destination",
+                    GpuResourceLifetime::Transient,
+                    GpuReconstruction::SourceBacked,
+                    2,
+                    2,
+                    GpuTextureFormat::R32Float,
+                    [GpuTextureUsage::StorageWrite],
+                    GpuTextureInitialization::Uninitialized,
+                )
+                .expect("valid radiance storage-only descriptor"),
+            )
+            .expect("radiance storage-only texture handle");
+        assert_eq!(
+            validate_destination(
+                6,
+                radiance_value,
+                &RenderOutputDestination::SampleLatticeTexture(radiance_without_copy_destination,),
+                None,
+            ),
+            Err(
+                RenderDeterministicCompatibilityError::LatticeDestinationNotCopyDestination {
+                    output_index: 6,
+                }
+            )
+        );
+        assert_eq!(
+            validate_destination(
+                7,
+                RenderOutputValue::ObjectIdentity,
+                &RenderOutputDestination::SampleLatticeTexture(radiance_format),
+                None,
+            ),
+            Err(
+                RenderDeterministicCompatibilityError::LatticeDestinationFormat {
+                    output_index: 7,
+                    actual: GpuTextureFormat::R32Float,
                 }
             )
         );
@@ -675,11 +795,13 @@ mod tests {
         assert_eq!(
             validate_destination(
                 4,
-                &RenderOutputDestination::SampleLatticeTexture(storage_only_lattice)
+                RenderOutputValue::ObjectIdentity,
+                &RenderOutputDestination::SampleLatticeTexture(storage_only_lattice),
+                None,
             ),
             Err(
                 RenderDeterministicCompatibilityError::LatticeDestinationNotCopyDestination {
-                    output_index: 4
+                    output_index: 4,
                 }
             )
         );

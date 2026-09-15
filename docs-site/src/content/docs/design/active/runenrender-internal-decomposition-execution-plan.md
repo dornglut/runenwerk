@@ -58,7 +58,7 @@ RunenGPU semantics, implementation, validation, and future framework evolution b
 Runenwerk currently consumes exact accepted RunenGPU revision:
 
 ```text
-31649491e9e7746da8e128ad984d2be315961640
+c292b77ff1a3b3e984dc2263bbbf8d8c06e93777
 ```
 
 That exact pin is a Runenwerk integration-compatibility fact, not a local RunenGPU

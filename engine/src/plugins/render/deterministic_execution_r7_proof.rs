@@ -53,11 +53,11 @@ use runen_gpu::{
 };
 use std::time::{Duration, Instant};
 
-struct MaintainedExecutionFixture {
-    scene: RenderSceneSnapshot,
-    request: RenderRequest,
-    semantic_inputs: Vec<RenderSurfaceSemanticInputBinding>,
-    availability: Vec<RenderRepresentationAvailabilityFact>,
+pub(super) struct MaintainedExecutionFixture {
+    pub(super) scene: RenderSceneSnapshot,
+    pub(super) request: RenderRequest,
+    pub(super) semantic_inputs: Vec<RenderSurfaceSemanticInputBinding>,
+    pub(super) availability: Vec<RenderRepresentationAvailabilityFact>,
 }
 
 fn instant() -> RenderTimeInterval {
@@ -93,7 +93,7 @@ fn maintained_surface_evidence() -> RenderSurfaceProtocolEvidence {
         .with_semantic_input_requirement(RenderSurfaceSemanticInputRequirement::current())
 }
 
-fn maintained_fixture() -> MaintainedExecutionFixture {
+pub(super) fn maintained_fixture() -> MaintainedExecutionFixture {
     let mut store = RenderSceneStore::new();
     let object_id = store
         .allocate_object_id()
@@ -348,7 +348,7 @@ fn admit_with_retained_destination(
     .expect("R7 maintained retained radiance fixture must admit")
 }
 
-fn admit_with_retained_radiance_destination(
+pub(super) fn admit_with_retained_radiance_destination(
     fixture: &MaintainedExecutionFixture,
     context: &GpuContext,
 ) -> AdmittedDeterministicRender {
