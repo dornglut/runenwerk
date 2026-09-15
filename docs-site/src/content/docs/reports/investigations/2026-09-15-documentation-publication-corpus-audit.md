@@ -38,18 +38,24 @@ mirror, ledger, or second authority.
 ## Evidence and authority
 
 ~~~text
-Runenwerk main:       bb10167a7fbddc5638884b4313a5388b6555524a
-Runenwerk tree:       6bde4be304d2407ab3e2f9f671f814f1343fc6b7
+Audit-base main:      bb10167a7fbddc5638884b4313a5388b6555524a
+Audit-base tree:      6bde4be304d2407ab3e2f9f671f814f1343fc6b7
+Current main:         60e97651a88de7ffdd2e13313c68277dd310a145
+Current tree:         ce31d594c4fe8a74039b7692e5cf52ecc840bbd6
 Engineering main:     782125ad30fa14ebcb1a875e3c4d7f78e8b89e7e
 Issue:                dornglut/runenwerk#690 (open)
-PR #699 predecessor:  37b404725ac8462547d0e5a9b5f7c7f4ffb284ea (draft)
+Correction parent:    4af00cdb8b37e174e2935f7c1af8a1efa4bf13b2
 ~~~
 
-The candidate was rebased onto current main; unrelated Render Lab changes in
-the user's main checkout were not used. The source census is from:
+The current-main delta from the audit base is exactly #703: deletion of seven
+runtime-bootstrap lines and addition of the native-window ownership test. No
+in-scope documentation, asset, docs control, tooling, or publication input
+changed. The correction therefore continues linearly from 4af00cdb without a
+blind rebase. Unrelated Render Lab changes in the user's main checkout were
+not used. The current-main census is from:
 
 ~~~text
-git ls-tree -r --name-only bb10167a7fbddc5638884b4313a5388b6555524a docs-site/src/content/docs
+git ls-tree -r --name-only 60e97651a88de7ffdd2e13313c68277dd310a145 docs-site/src/content/docs
 ~~~
 
 Engineering main contains and was read in full:
@@ -110,16 +116,16 @@ These sets are disjoint and complete.
 | index.mdx, adapters/, apps/, domain/, engine/, foundation/, net/ | 143 | PUBLISH_PRIMARY |
 | architecture/ | 6 | 5 reference, 1 delete |
 | adr/ | 31 | 26 reference, 5 history |
-| design/ | 178 | 86 reference, 3 current, 89 delete |
+| design/ | 178 | 87 reference, 2 current, 89 delete |
 | guidelines/ | 7 | 6 reference, 1 delete |
-| reports/ | 520 | 15 reference, 2 current, 1 history, 502 delete |
+| reports/ | 520 | 15 reference, 1 history, 504 delete |
 | workspace/ | 28 | 10 current, 18 delete |
-| **Total** | **913** | **143 primary + 138 reference + 15 current + 5 history + 1 reclassify + 611 delete** |
+| **Total** | **913** | **143 primary + 139 reference + 12 current + 5 history + 1 reclassify + 613 delete** |
 
 The 398 assets are 356 reports, 15 design, 23 Workspace, and 4
 architecture/app assets. Four primary assets, ten reference assets, and 384
-asset deletions reconcile this total. All 14 repository docs and 16 controls
-are KEEP_REPOSITORY_CURRENT.
+asset deletions reconcile this total. All 14 repository docs and 14 controls
+are KEEP_REPOSITORY_CURRENT; the two historical helper scripts are DELETE.
 
 ## Proven publication census and defect
 
@@ -145,15 +151,15 @@ landing page is engineering-first instead of a project/developer entrypoint.
 | Disposition | Exact set | Paths |
 | --- | --- | ---: |
 | PUBLISH_PRIMARY | 143 primary docs + 4 primary assets | 147 |
-| PUBLISH_REFERENCE | 138 reference docs + 10 reference assets | 148 |
-| KEEP_REPOSITORY_CURRENT | 10 Workspace docs + 3 design fixtures + 2 plan fixtures + 14 repo docs + 16 controls | 45 |
+| PUBLISH_REFERENCE | 139 reference docs + 10 reference assets | 149 |
+| KEEP_REPOSITORY_CURRENT | 10 Workspace docs + 2 design fixtures + 14 repo docs + 14 controls | 40 |
 | KEEP_REPOSITORY_HISTORY | 5 superseded/rejected ADR docs | 5 |
 | RECLASSIFY_OR_MOVE | RunenGPU proof matrix | 1 |
-| DELETE | every remaining in-scope path, including unlisted assets | 995 |
+| DELETE | every remaining in-scope path, including unlisted assets and two helper scripts | 999 |
 | SPLIT / REDUCE / MERGE | none | 0 |
 | **Total** | **all in-scope paths** | **1,341** |
 
-Target live tree: 1,341 - 995 = 346. There is no merge output: the two
+Target live tree: 1,341 - 999 = 342. There is no merge output: the two
 generic Workspace sources are deleted and only their Runenwerk-specific
 material migrates into the existing planning owner.
 
@@ -162,7 +168,7 @@ material migrates into the existing planning owner.
 | Family | All paths | Final result |
 | --- | ---: | --- |
 | reports/closeouts/** | 341 | DELETE |
-| reports/implementation-plans/** | 186 | DELETE except two fixtures |
+| reports/implementation-plans/** | 186 | DELETE; migrate then remove the two test dependencies |
 | reports/roadmap-intake/** | 152 | DELETE |
 | reports/investigations/** | 33 | 8 reference, 25 DELETE |
 | reports/batches/** | 13 | DELETE |
@@ -198,9 +204,12 @@ RunenGPU proof matrix to repository history, not current framework authority.
 
 Consumer resolution is exact:
 
-- Tests read implementation-plans/wr-029-model-mesh-material-binding/plan.md
-  and wr-030-model-mesh-renderable-scene-contract/plan.md; retain both as
-  KEEP_REPOSITORY_CURRENT.
+- Tests currently read implementation-plans/wr-029-model-mesh-material-binding/plan.md
+  and wr-030-model-mesh-renderable-scene-contract/plan.md. They protect the
+  current source-of-truth ownership, SDF non-regression, and Mesh Preview-first
+  boundary already carried by the active Material Lab design and current code.
+  Migrate the assertions to those current owners, then DELETE both plans; they
+  are not retained fixtures.
 - wr-150-kernel-source-model-closure/plan.contract.yaml only names historical
   execution-evidence outputs and has no current code/tool consumer; delete it.
 - reports/execution-evidence/** has no current reader. The matching editor visual
@@ -230,11 +239,12 @@ design/deferred/sdf-prefab-composition-system-design.md
 design/deferred/ui-model-multiple-execution-strategies-design.md
 ~~~
 
-The first eight implemented docs are PUBLISH_REFERENCE because current
-editor/UI/render roadmaps use them as durable reference points. The last three
-implemented docs are KEEP_REPOSITORY_CURRENT because the viewport architecture
-test reads the exact editor path and the UI design-conformance fixture reads the
-exact UI program and owner-map paths. The two deferred docs are
+The nine retained implemented docs are PUBLISH_REFERENCE because current
+editor/UI/render roadmaps or architecture use them as durable reference points,
+including editor-rendered-world-and-multi-entity-viewport. The two UI program
+docs are KEEP_REPOSITORY_CURRENT because the current design-conformance fixture
+and architecture roadmap treat them as current semantic-program authority; that
+is semantic retention, not merely a test-path exception. The two deferred docs are
 PUBLISH_REFERENCE because current editor/UI roadmaps and the active asset
 pipeline design identify them as future intent.
 
@@ -278,6 +288,36 @@ README or decision register. No new authority is created.
 Current links and the docs_authority_cutover test are bounded migration/link
 repair work. They do not justify retaining obsolete corpus.
 
+## Build and validation controls
+
+The 16 controls were audited individually. Fourteen remain current:
+
+| Control | Why it remains |
+| --- | --- |
+| .github/workflows/ci.yml | Canonical repository validation caller |
+| .github/workflows/docs-deploy.yml | Current Pages publication caller |
+| .github/workflows/docs-validation.yml | Current documentation build/validation caller |
+| docs-site/.gitignore | Keeps generated site output out of source |
+| docs-site/astro.config.mjs | Current Starlight publication input |
+| docs-site/package.json | Build scripts and dependency contract |
+| docs-site/pnpm-lock.yaml | Reproducible docs dependency resolution |
+| docs-site/pnpm-workspace.yaml | Current package workspace boundary |
+| docs-site/src/content.config.ts | Current docs collection/schema loader |
+| docs-site/tsconfig.json | Current docs type-check configuration |
+| tools/docs/validate_docs.py | Invoked by TESTING.md, docs-site/README.md, and xtask |
+| tools/xtask/src/main.rs | Owns cargo validate orchestration |
+| tools/xtask/tests/docs_authority_cutover.rs | Current authority-boundary regression test |
+| tools/xtask/tests/retired_workflow_authority.rs | Current retired-workflow regression test |
+
+The two remaining scripts are DELETE. The README case migration script has no
+caller or maintained reference; its one-off result is already present in the
+current tree. The agent-workflow script identifies itself as a historical
+compatibility entrypoint and has no legitimate caller beyond its own comments;
+current docs are maintained directly and it only invokes validate_docs.py. No
+forwarding compatibility entrypoint is retained.
+
+The resulting control disposition is 14 KEEP_REPOSITORY_CURRENT and 2 DELETE.
+
 ## Supersession and retained boundaries
 
 | Earlier authority | Earlier rationale | Current decision |
@@ -296,8 +336,8 @@ not unresolved retention decisions.
 ## Publication architecture and feasibility
 
 Use one Starlight build over the surviving canonical tree and one explicit
-frontmatter field such as publication: primary|reference|history. Do not
-duplicate documents.
+frontmatter field such as publication: primary|reference|repository-current|history.
+Do not duplicate documents.
 
 A disposable build experiment used Astro 6.1.1 / Starlight 0.38.2 and a
 temporary page with:
@@ -308,51 +348,60 @@ sidebar:
   hidden: true
 ~~~
 
-Observed: the page generated a stable HTML route and sitemap URL, was absent
-from the homepage sidebar, and was absent from Pagefind output. Thus route,
-sidebar, and search are separable already. The experiment also proved that
-pagefind: false and sidebar.hidden do not remove a route from the sitemap. A
-small sitemap filter in the existing Astro config is required for history.
-Minimal implementation: publication metadata, filtered primary/reference
-sidebars, pagefind: false for non-default-search pages, a sitemap filter for
-history, removal of the empty Software Development entry, and a
+Observed for pagefind:false and sidebar.hidden: the page generated a stable
+HTML route and sitemap URL, was absent from the homepage sidebar, and was absent
+from Pagefind output. A second disposable build with draft:true generated no
+HTML route, Pagefind entry, or sitemap URL. The selected model is therefore:
+repository-current and history documents remain in the repository but use
+draft:true and are outside production route generation; primary/reference docs
+remain routed, with reference pages excluded from default Pagefind as needed.
+Direct repository links remain GitHub links, while published primary/reference
+links remain stable site links. Minimal implementation: publication metadata with
+all four classes, filtered primary/reference sidebars, draft:true for
+repository-current/history, pagefind:false for non-default-search reference
+pages, removal of the empty Software Development entry, and a
 project/developer-first index.mdx.
 
 Projected counts, not yet built:
 
 | Measure | Current | Target |
 | --- | ---: | ---: |
-| live-tree paths | 1,341 | 346 |
-| routed primary/reference docs | 913 | 281 |
+| live-tree paths | 1,341 | 342 |
+| routed primary/reference docs | 913 | 282 |
 | default Pagefind docs | 913 | 143 primary |
-| sitemap primary/reference docs | 913 | 281 |
+| sitemap primary/reference docs | 913 | 282 |
 | homepage sidebar | 376 mixed links | 143 primary links plus reference entry |
 
-The 281 route projection excludes five repository-history ADR routes and the
-reclassified proof matrix. The proven current values are only the accepted-main
-build values above.
+The 282 route projection excludes ten repository-current docs, five
+repository-history ADR routes, and the reclassified proof matrix. The proven
+current values are only the accepted-main build values above; 282 is projected
+from the draft:true route-suppression experiment.
 
 ## Implementation order and validation
 
-1. Delete the exact historical corpus, preserving named exceptions; repair
-   current links and relation/provenance references.
-2. Migrate crate-docs-status validation and the small Runenwerk planning subset;
-   update docs-authority tests.
-3. Apply publication metadata, navigation, sitemap, Pagefind, and landing-page
-   corrections.
+1. Delete the exact historical corpus with no current executable or tooling
+   authority: ordinary closeouts, intake, batches, audits, execution evidence,
+   unowned investigations/design history, obsolete Workspace records, and the
+   two helper scripts.
+2. Migrate crate-docs-status validation, migrate WR-029/WR-030 assertions to
+   current Material Lab/code/design owners, remove the historical test
+   dependency, migrate the small Runenwerk planning subset, and update
+   docs-authority tests. Then delete those now-unowned plans.
+3. Apply publication metadata, draft-based route suppression, navigation,
+   sitemap, Pagefind, and landing-page corrections.
 4. On each bounded implementation candidate run git diff --check, cargo validate,
    the docs build, exact-head hosted CI, and a full diff review. Keep PR #699
    draft until all pass.
 
-Observed before this follow-up:
+Observed for the final candidate:
 
 ~~~text
 Accepted-main docs build: 914 HTML files, 913 routes, 913 Pagefind fragments,
                           913 sitemap document URLs, 376 sidebar links
-Candidate predecessor:   docs build passed
-Candidate predecessor:   cargo validate passed
-Candidate predecessor:   git diff --check passed
-PR #699 predecessor CI:  repository baseline PASS; docs build PASS; Vulkan PASS
+Candidate final build:   915 HTML files, 914 routes, 914 Pagefind fragments,
+                          914 sitemap document URLs
+Candidate final local:   cargo validate PASS; git diff --check PASS
+PR #699 final CI:        repository baseline PASS; docs build PASS; Vulkan PASS
 ~~~
 
 Only these two files are in scope:
@@ -363,7 +412,6 @@ docs-site/src/content/docs/reports/investigations/README.md
 ~~~
 
 The final follow-up is a normal non-rewriting commit on top of
-37b404725ac8462547d0e5a9b5f7c7f4ffb284ea. The PR body records the final head,
-base, tree, Engineering SHA, counts, dispositions, validation, and blockers.
-PR #699 remains draft until the new exact-head hosted checks and full diff
-review pass.
+4af00cdb8b37e174e2935f7c1af8a1efa4bf13b2. Its exact head, current base/tree,
+Engineering SHA, counts, dispositions, validation, and blockers are recorded
+in the PR body. PR #699 remains draft pending independent diff review.
