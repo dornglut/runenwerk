@@ -5,10 +5,11 @@ status: deferred
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-05-04
+last_reviewed: 2026-09-14
 related:
-  - ../active/editor-ui-workspace-tool-surface-architecture.md
-  - ../active/editor-ui-runtime-v2-and-interaction-formation-design.md
+  - ../implemented/editor-tool-suite-registry-and-workbench-host-design.md
+  - ../accepted/runenwerk-editor-coordination-semantic-model.md
+  - ../implemented/editor-ui-runtime-v2-and-interaction-formation-design.md
   - ../../adr/accepted/0009-ui-interaction-formation-v2.md
   - ../../domain/ui/architecture.md
   - ../../domain/ui/roadmap.md

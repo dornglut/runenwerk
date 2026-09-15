@@ -9,7 +9,6 @@ license.workspace = true
 anyhow = "1.0.100"
 runen_ecs.workspace = true
 engine = { path = "../../engine" }
-ui_input = { workspace = true }
 winit = "0.30.9"
 
 [target.'cfg(windows)'.dependencies]

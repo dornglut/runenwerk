@@ -1,16 +1,23 @@
 //! macOS AppKit/NSEvent tablet backend DTO mapping.
 
-use ui_input::{
-    PointerBarrelButtons, PointerButton, PointerCalibration, PointerContactState, PointerDelta,
-    PointerEventKind, PointerLatencyClass, PointerPosition, PointerTilt,
-};
-
 use crate::backend::NativeTabletBackendAdapter;
 use crate::model::{
-    NativeTabletBackendHealth, NativeTabletBackendKind, NativeTabletCapabilities,
-    NativeTabletDeviceControlResource, NativeTabletPacket, NativeTabletRuntimeResource,
-    NativeTabletToolKind,
+    NativeTabletBackendHealth, NativeTabletBackendKind, NativeTabletBarrelButtons,
+    NativeTabletButton, NativeTabletCalibration, NativeTabletCapabilities,
+    NativeTabletContactState, NativeTabletDelta, NativeTabletDeviceControlResource,
+    NativeTabletEventKind, NativeTabletLatencyClass, NativeTabletPacket, NativeTabletPosition,
+    NativeTabletRuntimeResource, NativeTabletTilt, NativeTabletToolKind,
 };
+
+type PointerPosition = NativeTabletPosition;
+type PointerDelta = NativeTabletDelta;
+type PointerTilt = NativeTabletTilt;
+type PointerButton = NativeTabletButton;
+type PointerCalibration = NativeTabletCalibration;
+type PointerContactState = NativeTabletContactState;
+type PointerEventKind = NativeTabletEventKind;
+type PointerLatencyClass = NativeTabletLatencyClass;
+type PointerBarrelButtons = NativeTabletBarrelButtons;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MacosNseventTabletSubtype {
@@ -33,6 +40,7 @@ pub struct MacosNseventPacketDto {
     pub tangential_pressure: Option<f32>,
     pub barrel_buttons: PointerBarrelButtons,
     pub in_proximity: bool,
+    pub in_contact: bool,
 }
 
 impl MacosNseventPacketDto {
@@ -54,6 +62,7 @@ impl MacosNseventPacketDto {
             tangential_pressure: None,
             barrel_buttons: PointerBarrelButtons::none(),
             in_proximity: true,
+            in_contact: false,
         }
     }
 }
@@ -132,8 +141,10 @@ pub fn map_macos_nsevent_packet(
             .with_capabilities(capabilities)
             .with_calibration(calibration)
             .with_latency_class(PointerLatencyClass::LowLatencyPreview)
-            .with_contact(if dto.in_proximity {
+            .with_contact(if dto.in_contact {
                 PointerContactState::Contact
+            } else if dto.in_proximity {
+                PointerContactState::Hover
             } else {
                 PointerContactState::OutOfRange
             })
@@ -167,9 +178,9 @@ pub fn map_macos_nsevent_packet(
 fn event_button_for_kind(kind: PointerEventKind) -> Option<PointerButton> {
     match kind {
         PointerEventKind::Down | PointerEventKind::Up | PointerEventKind::Move => {
-            Some(PointerButton::Primary)
+            Some(PointerButton::Left)
         }
-        PointerEventKind::Enter | PointerEventKind::Leave | PointerEventKind::Scroll => None,
+        PointerEventKind::Enter | PointerEventKind::Leave => None,
     }
 }
 
@@ -218,6 +229,7 @@ mod tests {
                 secondary: true,
             },
             in_proximity: true,
+            in_contact: true,
         };
 
         let packet = map_macos_nsevent_packet(

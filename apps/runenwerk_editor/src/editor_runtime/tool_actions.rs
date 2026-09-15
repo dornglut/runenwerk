@@ -10,6 +10,8 @@ pub fn commit_transform_preview_into_local_transform(
     runtime: &mut RunenwerkEditorRuntime,
     preview: &TransformPreviewSession,
 ) -> Result<(), EditorMutationError> {
+    runtime.validate_scene_selection_address(&preview.started_from_selection)?;
+
     match preview.tool {
         TransformToolKind::Translate => commit_translation_preview_into_local_transform(
             runtime,

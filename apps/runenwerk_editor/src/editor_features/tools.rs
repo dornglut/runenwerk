@@ -3,40 +3,26 @@ use crate::editor_features::ToolAction;
 use crate::editor_features::scene_commands::execute_intent_with_history_from_origin;
 use crate::editor_runtime::{
     TransformToolKind, clear_selection_with_origin, commit_transform_preview_into_local_transform,
-    select_single_component_with_origin, select_single_entity_with_origin,
 };
 use editor_core::EditorMutationError;
+use editor_scene::SceneSelectionTarget;
 
 pub fn dispatch_tool_action(
     app: &mut RunenwerkEditorApp,
     action: ToolAction,
 ) -> Result<(), EditorMutationError> {
     match action {
-        ToolAction::SelectSingle(target) => match target {
-            editor_core::SelectionTarget::Entity(entity) => {
-                select_single_entity_with_origin(
-                    app.runtime_mut(),
-                    entity,
-                    editor_core::ChangeOrigin::ToolInteraction,
-                )?;
+        ToolAction::SelectSingle(address) => {
+            app.runtime().validate_scene_selection_address(&address)?;
+            match address.target() {
+                SceneSelectionTarget::Entity(_) | SceneSelectionTarget::Component { .. } => {
+                    app.runtime_mut().set_selection_single_with_origin(
+                        address,
+                        editor_core::ChangeOrigin::ToolInteraction,
+                    );
+                }
             }
-            editor_core::SelectionTarget::Component {
-                entity,
-                component_type,
-            } => {
-                select_single_component_with_origin(
-                    app.runtime_mut(),
-                    entity,
-                    component_type,
-                    editor_core::ChangeOrigin::ToolInteraction,
-                )?;
-            }
-            _ => {
-                return Err(EditorMutationError::session_rejected(
-                    "unsupported selection target for tool action",
-                ));
-            }
-        },
+        }
         ToolAction::ClearSelection => {
             clear_selection_with_origin(
                 app.runtime_mut(),
@@ -85,15 +71,9 @@ fn begin_preview(
     app: &mut RunenwerkEditorApp,
     tool: TransformToolKind,
 ) -> Result<(), EditorMutationError> {
-    let selection = app
-        .runtime()
-        .session()
-        .selection()
-        .primary()
-        .cloned()
-        .ok_or(EditorMutationError::session_rejected(
-            "cannot begin preview without a primary selection",
-        ))?;
+    let selection = app.runtime().scene_selection().primary().cloned().ok_or(
+        EditorMutationError::session_rejected("cannot begin preview without a primary selection"),
+    )?;
 
     app.tool_runtime_state_mut()
         .begin_preview(selection, tool)?;

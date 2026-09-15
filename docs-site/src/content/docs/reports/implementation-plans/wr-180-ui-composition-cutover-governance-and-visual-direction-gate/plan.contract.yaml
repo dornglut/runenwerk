@@ -11,7 +11,7 @@ writer_strategy: verification_writer
 allowed_outputs:
 - docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
 - docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md
-- docs-site/src/content/docs/design/active/editor-ui-workspace-tool-surface-architecture.md
+- docs-site/src/content/docs/design/superseded/editor-ui-workspace-tool-surface-architecture.md
 - docs-site/src/content/docs/design/active/game-runtime-ui-projection-and-hud-platform-design.md
 - docs-site/src/content/docs/adr/README.md
 - docs-site/src/content/docs/adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md

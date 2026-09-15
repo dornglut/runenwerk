@@ -677,13 +677,13 @@ mod tests {
     use crate::editor_runtime::{execute_scene_intent, register_mvp_component_types};
     use crate::runtime::viewport::{ToolSurfaceRuntimeBindingRecord, ViewportRenderStateCommand};
     use asset::{asset_id, asset_source_id, asset_source_revision_id};
-    use editor_core::{ChangeOrigin, CommandId, EntityId, SelectionTarget};
+    use editor_core::{ChangeOrigin, CommandId, EntityId};
     use editor_scene::{
         SceneCommandIntent, SceneMaterialAssignmentState, SceneMaterialPalette, SceneMaterialSlot,
         SceneMaterialSlotId, SceneMeshMaterialRegionId, SceneModelMeshMaterialRegionSourceId,
-        SceneModelMeshMaterialSlotAssignment, SceneModelMeshSourceId, SceneQuat, SceneTransform,
-        SceneVec3, SdfBooleanIntent, SdfPrimitiveKind, SdfPrimitiveMaterialSlotAssignment,
-        SdfPrimitiveSourceId, SdfPrimitiveSpec,
+        SceneModelMeshMaterialSlotAssignment, SceneModelMeshSourceId, SceneQuat,
+        SceneSelectionAddress, SceneTransform, SceneVec3, SdfBooleanIntent, SdfPrimitiveKind,
+        SdfPrimitiveMaterialSlotAssignment, SdfPrimitiveSourceId, SdfPrimitiveSpec,
     };
     use editor_shell::{PanelInstanceId, TabStackId, ToolSurfaceInstanceId, WidgetId};
     use editor_viewport::ViewportId;
@@ -852,7 +852,7 @@ mod tests {
             SdfPrimitiveKind::Sphere,
         );
         runtime.set_selection_single_with_origin(
-            SelectionTarget::Entity(selected),
+            SceneSelectionAddress::entity(runtime.scene_selection().scope(), selected),
             ChangeOrigin::Runtime,
         );
 

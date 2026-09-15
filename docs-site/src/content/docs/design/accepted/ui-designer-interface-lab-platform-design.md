@@ -5,15 +5,19 @@ status: accepted
 owner: editor
 layer: domain/app
 canonical: true
-last_reviewed: 2026-09-12
+last_reviewed: 2026-09-14
 related_adrs:
   - ../../adr/accepted/0001-use-domain-owned-commands.md
   - ../../adr/accepted/0004-separate-description-from-execution.md
   - ../../adr/accepted/0005-projections-are-derived-state.md
+  - ../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
+  - ../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md
   - ../../adr/superseded/0006-editor-surface-provider-plugin-seam.md
   - ../../adr/accepted/0010-graph-substrate-canvas-boundary.md
   - ../../adr/superseded/0012-capability-workbench-clean-break.md
 related_designs:
+  - ./runenwerk-editor-coordination-semantic-model.md
+  - ./app-neutral-ui-composition-design.md
   - ./ui-designer-canonical-ir-and-composition-design.md
   - ./ui-designer-target-projection-profiles-design.md
   - ./ui-designer-visual-layout-and-interface-composition-design.md
@@ -25,7 +29,6 @@ related_designs:
   - ./ui-designer-production-readiness-and-evidence-design.md
   - ../implemented/editor-tool-suite-registry-and-workbench-host-design.md
   - ../superseded/runenwerk-capability-workbench-target-architecture.md
-  - ../active/editor-ui-workspace-tool-surface-architecture.md
 related_roadmaps:
   - ../../domain/ui/roadmap.md
 ---
@@ -97,14 +100,21 @@ canonical-IR design fixes this as the near-term owner. A future standalone
 `domain/ui_definition` crate remains a possible extraction only after a new
 accepted design or ADR.
 
+`domain/ui/ui_composition` owns app-neutral presentation targets, roots,
+regions, split/stack/mounted topology, structural transactions/history,
+promotion, and composition persistence. Editor/workbench definitions may
+reference or form structural intent for that owner; they do not create a
+parallel editor-owned workspace graph.
+
 `domain/editor/editor_definition` owns editor/workbench-specific extensions:
-workbench profiles, suites, panels, menus, shortcuts, docking/splits/tabs, tool
-surfaces, provider families, host policy references, and editor command
-declarations.
+workbench profiles, suites, panels, menus, shortcuts, tool surfaces, provider
+families, host policy references, editor command declarations, and editor-owned
+metadata/adapters that bind authored products to the structural owner.
 
 `domain/editor/editor_shell` owns Workbench host contracts,
-suite/profile/provider declarations, host policy, and fail-closed projection
-vocabulary for the editor/workbench target.
+suite/profile/provider declarations, host policy, editor-local routing, and
+fail-closed projection vocabulary for the editor/workbench target. It consumes
+`ui_composition` for structural placement rather than re-owning it.
 
 Future `domain/game_ui` or `domain/game/interface` owns game-runtime UI target
 extensions: HUDs, health bars, stamina/mana bars, inventory screens, equipment
@@ -171,7 +181,9 @@ The editor/workbench target covers:
 - diagnostics and tool-lab surfaces.
 
 This target may depend on `domain/editor/editor_shell` and accepted Workbench
-contracts.
+contracts. Docking/split/tab structural state and mutation remain owned by
+`ui_composition`; the editor target profile describes and consumes that
+structure rather than becoming its authority.
 
 ### Game Runtime UI Target
 

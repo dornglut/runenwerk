@@ -10,7 +10,7 @@ wr: WR-183
 milestone: PM-UI-COMPOSITION-004
 related_designs:
   - ../../../design/accepted/app-neutral-ui-composition-design.md
-  - ../../../design/active/editor-ui-workspace-tool-surface-architecture.md
+  - ../../../design/superseded/editor-ui-workspace-tool-surface-architecture.md
 related_adrs:
   - ../../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
 related_roadmaps:

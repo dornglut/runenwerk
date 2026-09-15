@@ -1,9 +1,7 @@
 //! File: domain/editor/editor_inspector/src/target.rs
 //! Purpose: Inspector target surface for editor-owned and external domain state.
 
-use editor_core::{
-    AssetId, ComponentTypeId, DocumentId, EntityId, ResourceTypeId, SelectionTarget,
-};
+use editor_core::{AssetId, ComponentTypeId, DocumentId, EntityId, ResourceTypeId};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum InspectTarget {
@@ -22,23 +20,4 @@ pub enum InspectTarget {
         domain: &'static str,
         id: u64,
     },
-}
-
-impl From<&SelectionTarget> for InspectTarget {
-    fn from(value: &SelectionTarget) -> Self {
-        match value {
-            SelectionTarget::Document(id) => Self::Document(*id),
-            SelectionTarget::Entity(id) => Self::Entity(*id),
-            SelectionTarget::Component {
-                entity,
-                component_type,
-            } => Self::Component {
-                entity: *entity,
-                component_type: *component_type,
-            },
-            SelectionTarget::Resource(id) => Self::Resource(*id),
-            SelectionTarget::Asset(id) => Self::Asset(*id),
-            SelectionTarget::Custom { domain, id } => Self::Custom { domain, id: *id },
-        }
-    }
 }

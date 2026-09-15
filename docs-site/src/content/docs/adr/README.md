@@ -42,6 +42,7 @@ Architectural decision records capture long-term decisions, rejected alternative
 - [0022: Runenwerk-Owned Product and Query Publication Phases](accepted/0022-runenwerk-owned-product-and-query-publication-phases.md)
 - [0023: Normalize App Runtime, Host, Lifecycle, and Capability Ownership](accepted/0023-normalize-app-runtime-host-lifecycle-and-capability-ownership.md)
 - [0024: Normalize Device-Level Input Observation Semantics](accepted/0024-normalize-physical-input-observation-semantics.md)
+- [0025: Normalize Editor Coordination and Semantic Ownership](accepted/0025-normalize-editor-coordination-and-semantic-ownership.md)
 
 Accepted ADR identifiers are not required to be contiguous; this index lists the files that currently exist in the accepted lifecycle folder.
 

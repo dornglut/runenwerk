@@ -5,12 +5,14 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-06-20
+last_reviewed: 2026-09-14
 related_designs:
   - ../../design/accepted/app-neutral-ui-composition-design.md
-  - ../../design/active/editor-ui-workspace-tool-surface-architecture.md
+  - ../../design/accepted/runenwerk-editor-coordination-semantic-model.md
+  - ../../design/implemented/editor-tool-suite-registry-and-workbench-host-design.md
 related_adrs:
   - ../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
+  - ../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md
 ---
 
 # Runenwerk Editor Current Architecture
@@ -18,6 +20,10 @@ related_adrs:
 `apps/runenwerk_editor` is the runnable editor application. It composes editor
 domain behavior, the app-neutral UI composition model, retained UI projection,
 engine runtime systems, persistence, and viewport expression routing.
+
+Code and tests own current behavior. ADR 0025 and the accepted editor coordination
+semantic model define normalized target ownership for later editor-boundary repair;
+they do not imply that current Rust already conforms to that target.
 
 ## Entry Points
 
@@ -34,13 +40,18 @@ It does not depend on editor, engine, native-window, renderer, `UiProgram`, or
 `ui_surface` contracts.
 
 `domain/editor/editor_shell/src/composition/structural` owns the editor-specific
-one-way importer, typed extension schema, diagnostics, and pure static shell
-projection. `apps/runenwerk_editor` owns providers, sessions, storage paths,
-profile selection, target-to-presentation bindings, native-window policy, and
-command execution.
+one-way importer, typed extension schema, diagnostics, and shell projection.
+`apps/runenwerk_editor` owns providers, sessions, storage paths, profile
+selection, target-to-presentation bindings, native-window policy, and command
+execution.
 
 Product-facing UI may still say “workspace” for a task-oriented editor profile.
 `WorkspaceState` is not the live structural authority.
+
+The current editor implementation still contains predecessor-shaped generic
+`editor_core` document/session/mode/selection/history contracts. Those are
+current implementation facts. They are not the normalized long-term semantic
+ownership model accepted by ADR 0025.
 
 ## Structural Composition Runtime
 
@@ -48,7 +59,7 @@ Product-facing UI may still say “workspace” for a task-oriented editor profi
 ratified `CompositionState` with one validated `EditorCompositionExtensionV1`.
 It also stores the derived `EditorCompositionProjectionArtifact`. Installing a
 runtime validates the core state, extension coverage, compatibility identities,
-static target binding, and projection before replacing any live state.
+target binding, and projection before replacing live state.
 
 The editor extension contains only app/editor associations that do not belong
 in the neutral graph: profile identity, panel and surface compatibility IDs,
@@ -56,36 +67,38 @@ stable content keys, tab-stack chrome IDs, floating bounds, and viewport restore
 identity. Split topology, parentage, mounted-unit order, active units, targets,
 and roots remain exclusively in `CompositionState`.
 
-The current built-in editor profiles are imported once through
+The current built-in editor profiles are imported through
 `import_legacy_workspace`. The resulting `WorkspaceState` input is dropped.
-Legacy workspace construction and reduction remain available only to crate
-tests as a temporary parity oracle while the clean cutover branch proceeds.
+Legacy workspace construction and reduction remain only as compatibility/test
+inputs where current source still requires them; they are not a second live
+structural authority.
 
 Reusable shell projection DTOs and route assembly are owned by
 `composition/structural/projection.rs`. The legacy
-`workspace/projection.rs::project_workspace_for_shell` path only produces that
-composition-owned artifact for parity tests.
+`workspace/projection.rs::project_workspace_for_shell` path exists for parity
+coverage rather than as the normal structural owner.
 
-## Static Cutover Gate
+## Structural Transactions
 
-This checkpoint intentionally projects a static composition. Profile selection,
-provider content, viewport interaction, retained controls, focus, and product
-actions remain operational. Structural tab, split, close, duplicate, reset,
-lock, drag, and docking commands emit
-`editor_composition.static.mutation_deferred` and do not mutate the graph.
+The earlier static cutover gate is no longer current behavior.
 
-Region Compass is the selected visual direction, but its chrome and adaptive
-docking runtime belong to later governed checkpoints. This branch state is not
-mergeable until those checkpoints, cleanup, accessibility acceptance, and the
-final closeout pass.
+Current architecture guards prove that ordinary structural shell commands commit
+through the `ui_composition` transaction path and advance composition revision.
+The same guard explicitly rejects a return of the old
+`editor_composition.static.mutation_deferred` behavior for that path.
+
+Structural tab/stack/layout actions therefore use the composition gateway rather
+than a writable `WorkspaceState` reducer authority. This statement describes
+current tested behavior only; it does not claim the normalized ADR 0025 editor
+coordination model is implemented.
 
 ## Provider And Content Liveness
 
 Mounted provider requests are projected from core mounted units plus typed
 editor extension records. Requests, surface sessions, viewport instances,
 routes, and pruning use `MountedUnitId` as their structural key.
-`ToolSurfaceInstanceId` remains temporary editor compatibility metadata, not
-the authority.
+`ToolSurfaceInstanceId` remains compatibility/editor metadata where current code
+still needs it; it is not structural authority.
 
 Content resolution has seven explicit states: resolved, missing, loading,
 suspended, denied, unsupported profile, and crashed. Unavailable content uses
@@ -96,16 +109,19 @@ this order:
 3. hidden only when both the mounted content policy and host allow hiding.
 
 Every rejection carries a stable `editor_composition.*` code, severity, stage,
-mounted-unit or other typed subject, and an actionable message. Editor records
-convert to the foundation diagnostic contract.
+typed subject, and actionable message. Editor records convert to the foundation
+diagnostic contract.
 
 ## Presentation Targets And Native Windows
 
 The composition graph owns `PresentationTargetId`; the app binds supported
-targets to `EditorWindowPresentationBinding`. The static editor checkpoint
-accepts exactly one target and binds it to the primary app-owned native window
-and render surface. Native-window lifecycle, monitor bounds, DPI, restore
-policy, and OS vetoes remain app/engine-owned.
+targets to `EditorWindowPresentationBinding`. Native-window lifecycle, monitor
+bounds, DPI, restore policy, and OS vetoes remain app/engine-owned.
+
+The accepted native multi-window design owns the future/native presentation
+mechanics. ADR 0025 separately governs semantic sharing: windows may explicitly
+share editor bindings, selection contexts, history contexts, or persistence
+contexts, while activation/focus/local presentation remain independently scoped.
 
 ## Persistence
 
@@ -116,9 +132,14 @@ extension. Load validates the linked core envelope, app compatibility,
 extension schema, hashes, and editor extension before installation.
 
 V1 through V5 workspace files are unsupported compatibility input. The app may
-probe them to emit a diagnostic, but it does not migrate, rewrite, delete, or
-load them. See [`composition-layouts.md`](./composition-layouts.md) for the
+probe them to emit a diagnostic, but it does not make them live structural
+authority. See [`composition-layouts.md`](./composition-layouts.md) for the
 operator and developer contract.
+
+Editor/domain semantic persistence is not implied by composition persistence.
+Current project/scene/editor persistence contracts retain their concrete owners;
+ADR 0025 defines the future coordination boundary through explicit
+`PersistenceContext`s.
 
 ## Viewport Runtime
 
@@ -130,7 +151,7 @@ structural authorities.
 
 Viewport product targets, render jobs, picking, and retained
 `ViewportSurfaceEmbed` projection remain app/runtime concerns. They do not write
-composition structure during frame updates.
+composition structure during ordinary frame updates.
 
 ## Self-Authoring State
 
@@ -138,12 +159,19 @@ The app-owned self-authoring document lifecycle remains in
 `apps/runenwerk_editor/src/shell/self_authoring`. It edits definition documents,
 forms retained previews, validates them through owning domain crates, and keeps
 applied snapshots for rollback. Applied workspace-layout definitions are
-converted into a candidate composition runtime and installed atomically; they
-do not replace live state through a workspace reducer.
+converted into candidate composition runtime state and installed through the
+composition boundary rather than establishing a parallel workspace reducer
+source of truth.
+
+Current self-authoring product wording may still refer to documents, workspaces,
+modes, and dirty state. Those terms describe existing product/implementation
+behavior unless a concrete owner defines them; the normalized editor semantic
+owner is ADR 0025 plus its companion model.
 
 ## Related Docs
 
+- Normalized editor coordination: [`../../design/accepted/runenwerk-editor-coordination-semantic-model.md`](../../design/accepted/runenwerk-editor-coordination-semantic-model.md)
 - Composition layout guide: [`composition-layouts.md`](./composition-layouts.md)
 - Domain UI architecture: [`../../domain/ui/architecture.md`](../../domain/ui/architecture.md)
-- Editor domain contracts: [`../../domain/editor/README.md`](../../domain/editor/README.md)
+- Editor implementation grouping: [`../../domain/editor/README.md`](../../domain/editor/README.md)
 - UI composition usage: [`../../domain/ui/ui-composition-usage.md`](../../domain/ui/ui-composition-usage.md)

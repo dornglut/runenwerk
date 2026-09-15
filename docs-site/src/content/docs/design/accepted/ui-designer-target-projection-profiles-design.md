@@ -5,16 +5,19 @@ status: accepted
 owner: editor
 layer: domain/ui-definition
 canonical: true
-last_reviewed: 2026-05-22
+last_reviewed: 2026-09-14
 related_adrs:
   - ../../adr/accepted/0004-separate-description-from-execution.md
   - ../../adr/accepted/0005-projections-are-derived-state.md
+  - ../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
+  - ../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md
   - ../../adr/superseded/0012-capability-workbench-clean-break.md
 related_designs:
   - ./ui-designer-canonical-ir-and-composition-design.md
   - ./ui-designer-interface-lab-platform-design.md
-  - ../active/editor-tool-suite-registry-and-workbench-host-design.md
-  - ../active/editor-ui-workspace-tool-surface-architecture.md
+  - ./runenwerk-editor-coordination-semantic-model.md
+  - ../implemented/editor-tool-suite-registry-and-workbench-host-design.md
+  - ./app-neutral-ui-composition-design.md
 related_roadmaps:
   - ../../domain/ui/roadmap.md
 ---
@@ -61,8 +64,12 @@ Architecture governance accepts this split:
 - `domain/editor/editor_definition` owns editor/workbench-specific profile
   extensions and authored editor binding metadata.
 - `domain/editor/editor_shell` owns Workbench host vocabulary, provider
-  declarations, suite/profile identity, command routing, docking/splits/tabs,
-  host policy, and fail-closed editor projection compatibility checks.
+  declarations, suite/profile identity, command routing, host policy, and
+  fail-closed editor projection compatibility checks.
+- `domain/ui/ui_composition` owns structural presentation targets, roots,
+  regions, split/stack/mounted topology, structural transactions/history, and
+  composition persistence. Docking/split/tab/floating projection for the
+  editor target consumes that authority; `editor_shell` does not re-own it.
 - Future game-runtime UI extensions must be owned by a game-runtime UI domain
   design and must not depend on `domain/editor/editor_shell`.
 - `apps/runenwerk_editor` owns concrete preview orchestration and app command
@@ -112,8 +119,11 @@ The profile covers:
 - diagnostics and tool-lab surfaces.
 
 The Workbench projection may depend on `domain/editor/editor_definition` and
-`domain/editor/editor_shell` contracts. It may reuse PT-WB-CAP identity and host
-policy vocabulary as historical/decomposition terminology.
+`domain/editor/editor_shell` contracts. Structural projection and mutation for
+docking, splits, tabs, floating hosts, and mounted content remain governed by
+`ui_composition`; this target profile describes/consumes that structure rather
+than becoming a parallel structural authority. It may reuse PT-WB-CAP identity
+and host policy vocabulary as historical/decomposition terminology.
 
 Workbench projection must not:
 

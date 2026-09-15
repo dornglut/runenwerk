@@ -10,7 +10,8 @@ related_designs:
   - ../../design/implemented/workspace-viewport-expression-upgrade-design.md
   - ../../design/implemented/render-product-surface-foundation-bundle-design.md
   - ../../design/implemented/viewport-dynamic-product-target-allocation-design.md
-  - ../../design/active/editor-ui-workspace-tool-surface-architecture.md
+  - ../../design/accepted/runenwerk-editor-coordination-semantic-model.md
+  - ../../design/implemented/editor-tool-suite-registry-and-workbench-host-design.md
   - ../../design/implemented/editor-rendered-world-and-multi-entity-viewport-design.md
   - ../../design/implemented/field-visualizer-product-workflow-design.md
 related_roadmaps:

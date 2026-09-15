@@ -5,13 +5,15 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-09
+last_reviewed: 2026-09-14
 related_designs:
-  - ./editor-ui-workspace-tool-surface-architecture.md
+  - ../accepted/runenwerk-editor-coordination-semantic-model.md
+  - ../implemented/editor-tool-suite-registry-and-workbench-host-design.md
   - ../accepted/sdf-first-field-world-platform-design.md
   - ../deferred/engine-game-runtime-editor-ecs-scripting-hot-reload-preserved-target-draft.md
 related_adrs:
   - ../../adr/accepted/0007-external-runtime-preview-process.md
+  - ../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md
 related_roadmaps:
   - ../../apps/runenwerk-editor/roadmap.md
 related_reports:

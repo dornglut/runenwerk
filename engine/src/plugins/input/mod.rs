@@ -12,10 +12,13 @@ use crate::runtime::{CoreSet, FrameEnd, PreUpdate, Res, ResMut, SystemConfigExt}
 
 pub use actions_and_bindings::*;
 pub use neutral::{
-    AnalogMeasurement, ContactInput, ContactPhase, CoordinateSpace, DigitalState, InputContext,
-    InputDeviceId, InputSourceId, KeyLocation, KeyboardInput, LogicalKey, MeasurementDomain,
-    NativeLogicalKey, NativePhysicalKeyCode, ObservationOrigin, PhysicalKeyIdentity, Point2,
-    PointerButton, PointerButtonInput, ScrollDelta, ScrollDomain, ScrollInput, ScrollPhase,
+    AnalogMeasurement, ContactId, ContactInput, ContactPhase, ContactPresence, CoordinateSpace,
+    DeliveryRole, DigitalState, EvidenceStatus, InputContext, InputDeviceId, InputObservation,
+    InputObservationGroup, InputSourceId, InputToolKind, KeyLocation, KeyboardInput, LogicalKey,
+    MeasurementDomain, NativeLogicalKey, NativePhysicalKeyCode, NeutralInputError,
+    ObservationOrigin, PhysicalKeyIdentity, PhysicalTabletControls, Point2, PointerButton,
+    PointerButtonInput, ScrollDelta, ScrollDomain, ScrollInput, ScrollPhase, SourceTime,
+    SourceTimeUnit, StylusTilt, TabletCapabilities, TabletObservation, ToolId, Vector2,
 };
 pub use state::*;
 

@@ -5,7 +5,7 @@ status: implemented
 owner: editor
 layer: domain/app
 canonical: true
-last_reviewed: 2026-09-12
+last_reviewed: 2026-09-14
 related_adrs:
   - ../../adr/accepted/0001-use-domain-owned-commands.md
   - ../../adr/accepted/0004-separate-description-from-execution.md
@@ -13,10 +13,11 @@ related_adrs:
   - ../../adr/superseded/0006-editor-surface-provider-plugin-seam.md
   - ../../adr/accepted/0010-graph-substrate-canvas-boundary.md
   - ../../adr/superseded/0012-capability-workbench-clean-break.md
+  - ../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md
 related_designs:
   - ../accepted/ui-designer-interface-lab-platform-design.md
   - ./editor-tool-suite-registry-and-workbench-host-design.md
-  - ../active/editor-ui-workspace-tool-surface-architecture.md
+  - ../accepted/runenwerk-editor-coordination-semantic-model.md
   - ./editor-self-authoring-and-final-ui-design.md
   - ./surface-workflow-contract-redesign.md
   - ../accepted/ui-designer-canonical-ir-and-composition-design.md

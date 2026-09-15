@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-05-12
+last_reviewed: 2026-09-14
 related:
   - ./mvp/implementation-sequence.md
   - ./mvp/acceptance-criteria.md
@@ -13,11 +13,15 @@ related:
   - ./roadmap.md
   - ../../reports/audits/editor-ui-priority-code-audit-2026-05-05.md
   - ../../domain/ui/roadmap.md
+  - ../../design/accepted/runenwerk-editor-coordination-semantic-model.md
+  - ../../design/implemented/editor-tool-suite-registry-and-workbench-host-design.md
   - ../../design/implemented/editor-self-authoring-and-final-ui-design.md
-  - ../../design/implemented/editor-workspace-document-mode-panel-architecture.md
   - ../../design/active/editor-asset-pipeline-and-content-workflow-design.md
   - ../../design/active/editor-procedural-content-and-simulation-workflow-plan.md
   - ../../design/active/engine-game-runtime-editor-ecs-scripting-hot-reload-design.md
+related_adrs:
+  - ../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
+  - ../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md
 ---
 
 # Runenwerk Editor Execution Priority Checklist

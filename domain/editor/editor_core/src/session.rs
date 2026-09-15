@@ -4,8 +4,7 @@
 use std::collections::BTreeMap;
 
 use crate::{
-    DocumentDescriptor, DocumentId, DocumentKind, EditorMutationError, HistoryStack, SelectionSet,
-    ToolId,
+    DocumentDescriptor, DocumentId, DocumentKind, EditorMutationError, HistoryStack, ToolId,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -235,7 +234,6 @@ pub struct EditorSession {
     active_document: Option<DocumentId>,
     active_tool: Option<ToolId>,
     active_mode: ModeId,
-    selection: SelectionSet,
     history: HistoryStack,
 }
 
@@ -415,32 +413,12 @@ impl EditorSession {
         Ok(removed)
     }
 
-    pub fn selection(&self) -> &SelectionSet {
-        &self.selection
-    }
-
-    pub fn selection_mut(&mut self) -> &mut SelectionSet {
-        &mut self.selection
-    }
-
     pub fn history(&self) -> &HistoryStack {
         &self.history
     }
 
     pub fn history_mut(&mut self) -> &mut HistoryStack {
         &mut self.history
-    }
-
-    pub fn clear_selection(&mut self) {
-        self.selection.clear();
-    }
-
-    pub fn select_single(&mut self, target: crate::SelectionTarget) {
-        self.selection.set_single(target);
-    }
-
-    pub fn add_selection(&mut self, target: crate::SelectionTarget) {
-        self.selection.add(target);
     }
 
     pub fn set_document_dirty(

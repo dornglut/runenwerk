@@ -1,4 +1,4 @@
-use editor_core::{ComponentTypeId, EntityId, SelectionTarget};
+use editor_core::{ComponentTypeId, EntityId};
 use editor_inspector::{
     InspectTarget, InspectorEditValue, InspectorField, InspectorPath, InspectorSection,
 };
@@ -302,11 +302,15 @@ fn _is_component_selected(
     component_type: ComponentTypeId,
 ) -> bool {
     matches!(
-        runtime.session().selection().primary(),
-        Some(SelectionTarget::Component {
-            entity: selected_entity,
-            component_type: selected_component_type,
-        }) if *selected_entity == entity && *selected_component_type == component_type
+        runtime.scene_selection().primary(),
+        Some(address)
+            if matches!(
+                address.target(),
+                editor_scene::SceneSelectionTarget::Component {
+                    entity: selected_entity,
+                    component_type: selected_component_type,
+                } if *selected_entity == entity && *selected_component_type == component_type
+            )
     )
 }
 

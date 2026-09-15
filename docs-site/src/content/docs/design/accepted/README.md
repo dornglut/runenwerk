@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-14
 ---
 
 # Accepted Designs
@@ -27,6 +27,7 @@ Move a design to `implemented/` only after code has been checked against it and 
 
 ### Editor Domain
 
+- [Runenwerk Editor Coordination Semantic Model](runenwerk-editor-coordination-semantic-model.md)
 - [Editor Native Multi-Window Presentation Design](editor-native-multi-window-presentation-design.md)
 - [UI Designer And Interface Lab Platform](ui-designer-interface-lab-platform-design.md)
 - [UI Designer Canonical IR And Composition Design](ui-designer-canonical-ir-and-composition-design.md)

@@ -13,8 +13,8 @@ related_designs:
   - ./semantic-graph-ir-and-compilation-design.md
   - ./gameplay-graph-atr-ir-and-ecs-lowering-design.md
   - ../implemented/workspace-viewport-expression-upgrade-design.md
-  - ./editor-ui-workspace-tool-surface-architecture.md
-  - ../implemented/editor-workspace-document-mode-panel-architecture.md
+  - ../accepted/runenwerk-editor-coordination-semantic-model.md
+  - ../implemented/editor-tool-suite-registry-and-workbench-host-design.md
 related_roadmaps:
   - ../../apps/runenwerk-editor/roadmap.md
   - ../../engine/plugins/render/docs/roadmap.md

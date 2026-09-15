@@ -13,21 +13,25 @@ use engine::plugins::render::{
     RenderDynamicTextureTargetRequestRegistryResource, RenderDynamicTextureUploadRegistryResource,
     SurfaceFrameSubmissionRegistryResource,
 };
-use engine::plugins::{InputState, TouchInputPhase};
+use engine::plugins::{
+    ContactId, InputContext, InputDeviceId, InputSourceId, InputState, ToolId, TouchInputPhase,
+};
 use engine::runtime::{
     ProductPublicationOccurrence, ProductPublicationRuntimeResource,
     QuerySnapshotPublicationOccurrence, QuerySnapshotRuntimeResource, RuntimeJobExecutorConfig,
     RuntimeJobExecutorResource, RuntimeProductCacheResource,
 };
 use native_tablet_input::{
-    NativeTabletBackendHealth, NativeTabletBackendKind, NativeTabletFrameResource,
-    NativeTabletPacket, NativeTabletSample, map_native_tablet_packet,
+    NativeTabletBackendHealth, NativeTabletBackendKind, NativeTabletContactState,
+    NativeTabletDelta, NativeTabletEventKind, NativeTabletFrameResource, NativeTabletPacket,
+    NativeTabletPosition, NativeTabletSample,
 };
 use product::ProductScaleBand;
 use runenwerk_draw::app::{
     DRAWING_UI_SURFACE_ID, DrawingInkGpuValidationMetrics, DrawingInkRuntimeState,
     DrawingInkSurfaceKind, DrawingToolRouteKind, RunenwerkDrawApp, minimal_drawing_document,
 };
+use runenwerk_draw::runtime::resources::{NativeClaimStateResource, NativeInputStreamKey};
 use runenwerk_draw::runtime::{
     DRAWING_UI_FRAME_PRODUCER_ID, DrawingHostResource, DrawingInkGpuFlowResource,
     build_headless_app, process_drawing_preview_ink_jobs, publish_drawing_ink_products,
@@ -641,26 +645,26 @@ fn native_tablet_move_burst_routes_as_one_coalesced_preview_update() {
             .world_mut()
             .resource_mut::<NativeTabletFrameResource>()
             .expect("native tablet frame resource should exist");
-        native_frame.events.push(stylus_pointer_event(
-            PointerEventKind::Down,
+        native_frame.push_packet(stylus_tablet_packet(
+            NativeTabletEventKind::Down,
             positions[0],
             10_000,
             0.3,
         ));
-        native_frame.events.push(stylus_pointer_event(
-            PointerEventKind::Move,
+        native_frame.push_packet(stylus_tablet_packet(
+            NativeTabletEventKind::Move,
             positions[1],
             10_100,
             0.5,
         ));
-        native_frame.events.push(stylus_pointer_event(
-            PointerEventKind::Move,
+        native_frame.push_packet(stylus_tablet_packet(
+            NativeTabletEventKind::Move,
             positions[2],
             10_200,
             0.7,
         ));
-        native_frame.events.push(stylus_pointer_event(
-            PointerEventKind::Move,
+        native_frame.push_packet(stylus_tablet_packet(
+            NativeTabletEventKind::Move,
             positions[3],
             10_300,
             0.9,
@@ -728,28 +732,30 @@ fn native_windows_pointer_mouse_history_routes_before_winit_mouse_fallback() {
             .expect("native tablet frame resource should exist");
         let down = NativeTabletPacket::windows_pointer_mouse(
             601,
-            PointerEventKind::Down,
-            start,
-            UiVector::ZERO,
+            NativeTabletEventKind::Down,
+            NativeTabletPosition::new(start.x, start.y),
+            NativeTabletDelta::ZERO,
         )
-        .with_event_button(Some(PointerButton::Primary));
+        .with_event_button(Some(native_tablet_input::NativeTabletButton::Left));
         let movement = NativeTabletPacket::windows_pointer_mouse(
             601,
-            PointerEventKind::Move,
-            current,
-            UiVector::new(current.x - c2.x, current.y - c2.y),
+            NativeTabletEventKind::Move,
+            NativeTabletPosition::new(current.x, current.y),
+            NativeTabletDelta::new(current.x - c2.x, current.y - c2.y),
         )
-        .with_event_button(Some(PointerButton::Primary))
+        .with_event_button(Some(native_tablet_input::NativeTabletButton::Left))
         .with_coalesced_samples([
-            NativeTabletSample::new(c1, UiVector::new(c1.x - start.x, c1.y - start.y)),
-            NativeTabletSample::new(c2, UiVector::new(c2.x - c1.x, c2.y - c1.y)),
+            NativeTabletSample::new(
+                NativeTabletPosition::new(c1.x, c1.y),
+                NativeTabletDelta::new(c1.x - start.x, c1.y - start.y),
+            ),
+            NativeTabletSample::new(
+                NativeTabletPosition::new(c2.x, c2.y),
+                NativeTabletDelta::new(c2.x - c1.x, c2.y - c1.y),
+            ),
         ]);
-        native_frame
-            .events
-            .push(map_native_tablet_packet(&down).event);
-        native_frame
-            .events
-            .push(map_native_tablet_packet(&movement).event);
+        native_frame.push_packet(down);
+        native_frame.push_packet(movement);
     }
 
     runtime = runtime
@@ -817,14 +823,12 @@ fn native_tablet_events_route_before_winit_touch_fallback() {
             .expect("native tablet frame resource should exist");
         let packet = NativeTabletPacket::windows_pointer(
             501,
-            PointerEventKind::Down,
-            native_start,
-            UiVector::ZERO,
+            NativeTabletEventKind::Down,
+            NativeTabletPosition::new(native_start.x, native_start.y),
+            NativeTabletDelta::ZERO,
         )
         .with_pressure(0.7);
-        native_frame
-            .events
-            .push(map_native_tablet_packet(&packet).event);
+        native_frame.push_packet(packet);
     }
     {
         let input = runtime
@@ -879,14 +883,12 @@ fn native_tablet_hover_does_not_drop_winit_fallback_contact() {
             .expect("native tablet frame resource should exist");
         let packet = NativeTabletPacket::windows_pointer(
             505,
-            PointerEventKind::Move,
-            native_hover,
-            UiVector::ZERO,
+            NativeTabletEventKind::Move,
+            NativeTabletPosition::new(native_hover.x, native_hover.y),
+            NativeTabletDelta::ZERO,
         )
-        .with_contact(PointerContactState::Hover);
-        native_frame
-            .events
-            .push(map_native_tablet_packet(&packet).event);
+        .with_contact(NativeTabletContactState::Hover);
+        native_frame.push_packet(packet);
     }
     {
         let input = runtime
@@ -943,11 +945,15 @@ fn active_native_contact_suppresses_fallback_without_new_native_samples() {
         screen_point_for_canvas(&host.app, 1_000.0, 1_000.0)
     };
     {
-        let native_frame = runtime
+        let native_claims = runtime
             .world_mut()
-            .resource_mut::<NativeTabletFrameResource>()
-            .expect("native tablet frame resource should exist");
-        native_frame.active_native_contact = true;
+            .resource_mut::<NativeClaimStateResource>()
+            .expect("native claim state resource should exist");
+        native_claims.observe_contact(NativeInputStreamKey {
+            context: InputContext::new(InputSourceId::new(3), Some(InputDeviceId::new(505))),
+            tool: Some(ToolId::new(1)),
+            contact: ContactId::new(1),
+        });
     }
     {
         let input = runtime
@@ -991,15 +997,23 @@ fn stale_native_contact_allows_winit_fallback_recovery() {
         screen_point_for_canvas(&host.app, 1_000.0, 1_000.0)
     };
     {
-        let native_frame = runtime
+        let native_claims = runtime
             .world_mut()
-            .resource_mut::<NativeTabletFrameResource>()
-            .expect("native tablet frame resource should exist");
-        native_frame.active_native_contact = true;
-        native_frame.frames_since_native_event =
-            runenwerk_draw::runtime::systems::NATIVE_CONTACT_FALLBACK_SUPPRESSION_IDLE_FRAME_LIMIT
-                + 1;
+            .resource_mut::<NativeClaimStateResource>()
+            .expect("native claim state resource should exist");
+        native_claims.observe_contact(NativeInputStreamKey {
+            context: InputContext::new(InputSourceId::new(3), Some(InputDeviceId::new(506))),
+            tool: Some(ToolId::new(1)),
+            contact: ContactId::new(1),
+        });
     }
+    runtime = runtime
+        .run_for_frames(
+            runenwerk_draw::runtime::systems::NATIVE_CONTACT_FALLBACK_SUPPRESSION_IDLE_FRAME_LIMIT
+                as usize
+                + 1,
+        )
+        .expect("stale native contact should expire");
     {
         let input = runtime
             .world_mut()
@@ -1060,31 +1074,37 @@ fn native_tablet_coalesced_samples_become_ordered_preview_samples() {
             .world_mut()
             .resource_mut::<NativeTabletFrameResource>()
             .expect("native tablet frame resource should exist");
-        let down =
-            NativeTabletPacket::windows_pointer(502, PointerEventKind::Down, start, UiVector::ZERO)
-                .with_pressure(0.4);
+        let down = NativeTabletPacket::windows_pointer(
+            502,
+            NativeTabletEventKind::Down,
+            NativeTabletPosition::new(start.x, start.y),
+            NativeTabletDelta::ZERO,
+        )
+        .with_pressure(0.4);
         let movement = NativeTabletPacket::windows_pointer(
             502,
-            PointerEventKind::Move,
-            current,
-            UiVector::new(current.x - c2.x, current.y - c2.y),
+            NativeTabletEventKind::Move,
+            NativeTabletPosition::new(current.x, current.y),
+            NativeTabletDelta::new(current.x - c2.x, current.y - c2.y),
         )
         .with_pressure(0.9)
         .with_timestamp_micros(40)
         .with_coalesced_samples([
-            NativeTabletSample::new(c1, UiVector::new(c1.x - start.x, c1.y - start.y))
-                .with_timestamp_micros(20)
-                .with_pressure(0.5),
-            NativeTabletSample::new(c2, UiVector::new(c2.x - c1.x, c2.y - c1.y))
-                .with_timestamp_micros(30)
-                .with_pressure(0.7),
+            NativeTabletSample::new(
+                NativeTabletPosition::new(c1.x, c1.y),
+                NativeTabletDelta::new(c1.x - start.x, c1.y - start.y),
+            )
+            .with_timestamp_micros(20)
+            .with_pressure(0.5),
+            NativeTabletSample::new(
+                NativeTabletPosition::new(c2.x, c2.y),
+                NativeTabletDelta::new(c2.x - c1.x, c2.y - c1.y),
+            )
+            .with_timestamp_micros(30)
+            .with_pressure(0.7),
         ]);
-        native_frame
-            .events
-            .push(map_native_tablet_packet(&down).event);
-        native_frame
-            .events
-            .push(map_native_tablet_packet(&movement).event);
+        native_frame.push_packet(down);
+        native_frame.push_packet(movement);
     }
 
     runtime = runtime
@@ -1130,12 +1150,14 @@ fn native_tablet_hover_release_ends_and_commits_active_stroke() {
             .world_mut()
             .resource_mut::<NativeTabletFrameResource>()
             .expect("native tablet frame resource should exist");
-        let down =
-            NativeTabletPacket::windows_pointer(504, PointerEventKind::Down, start, UiVector::ZERO)
-                .with_pressure(0.4);
-        native_frame
-            .events
-            .push(map_native_tablet_packet(&down).event);
+        let down = NativeTabletPacket::windows_pointer(
+            504,
+            NativeTabletEventKind::Down,
+            NativeTabletPosition::new(start.x, start.y),
+            NativeTabletDelta::ZERO,
+        )
+        .with_pressure(0.4);
+        native_frame.push_packet(down);
     }
     runtime = runtime
         .run_for_frames(1)
@@ -1148,14 +1170,12 @@ fn native_tablet_hover_release_ends_and_commits_active_stroke() {
             .expect("native tablet frame resource should exist");
         let up = NativeTabletPacket::windows_pointer(
             504,
-            PointerEventKind::Up,
-            end,
-            UiVector::new(end.x - start.x, end.y - start.y),
+            NativeTabletEventKind::Up,
+            NativeTabletPosition::new(end.x, end.y),
+            NativeTabletDelta::new(end.x - start.x, end.y - start.y),
         )
-        .with_contact(PointerContactState::Hover);
-        native_frame
-            .events
-            .push(map_native_tablet_packet(&up).event);
+        .with_contact(NativeTabletContactState::Hover);
+        native_frame.push_packet(up);
     }
     runtime = runtime
         .run_for_frames(1)
@@ -1202,12 +1222,14 @@ fn native_tablet_hover_down_still_begins_stroke_from_event_kind() {
             .world_mut()
             .resource_mut::<NativeTabletFrameResource>()
             .expect("native tablet frame resource should exist");
-        let down =
-            NativeTabletPacket::windows_pointer(506, PointerEventKind::Down, start, UiVector::ZERO)
-                .with_contact(PointerContactState::Hover);
-        native_frame
-            .events
-            .push(map_native_tablet_packet(&down).event);
+        let down = NativeTabletPacket::windows_pointer(
+            506,
+            NativeTabletEventKind::Down,
+            NativeTabletPosition::new(start.x, start.y),
+            NativeTabletDelta::ZERO,
+        )
+        .with_contact(NativeTabletContactState::Hover);
+        native_frame.push_packet(down);
     }
 
     runtime = runtime
@@ -1218,6 +1240,11 @@ fn native_tablet_hover_down_still_begins_stroke_from_event_kind() {
         .world()
         .resource::<DrawingHostResource>()
         .expect("drawing host resource should exist");
+    assert_eq!(
+        host.app.routed_inputs().len(),
+        1,
+        "native Down must own its frame even when contact presence is stale Hover"
+    );
     assert_eq!(
         host.app
             .routed_inputs()
@@ -2884,29 +2911,21 @@ fn assert_point_close(actual: UiPoint, expected: UiPoint) {
     );
 }
 
-fn stylus_pointer_event(
-    kind: PointerEventKind,
+fn stylus_tablet_packet(
+    kind: NativeTabletEventKind,
     position: UiPoint,
     timestamp_micros: u64,
     pressure: f32,
-) -> UiInputEvent {
-    UiInputEvent::Pointer(
-        PointerEvent::new(
-            kind,
-            position,
-            UiVector::ZERO,
-            Some(PointerButton::Primary),
-            Modifiers::default(),
-            if kind == PointerEventKind::Down { 1 } else { 0 },
-        )
-        .with_packet(
-            PointerPacket::stylus(PointerDeviceId(901), PointerToolKind::Pen)
-                .with_contact(PointerContactState::Contact)
-                .with_timestamp_micros(timestamp_micros)
-                .with_pressure(pressure)
-                .with_latency_class(PointerLatencyClass::LowLatencyPreview),
-        ),
+) -> NativeTabletPacket {
+    NativeTabletPacket::windows_pointer(
+        901,
+        kind,
+        NativeTabletPosition::new(position.x, position.y),
+        NativeTabletDelta::ZERO,
     )
+    .with_contact(NativeTabletContactState::Contact)
+    .with_timestamp_micros(timestamp_micros)
+    .with_pressure(pressure)
 }
 
 fn draw_stroke(app: &mut RunenwerkDrawApp, start: UiPoint, end: UiPoint) {

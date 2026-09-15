@@ -1,154 +1,200 @@
-//! Mapping from native tablet DTOs into platform-neutral UI input events.
+//! Translation from native tablet DTOs into engine-owned neutral observations.
 
-use ui_input::{
-    PointerBarrelButtons, PointerContactState, PointerDeviceId, PointerEvent, PointerPacket,
-    PointerSampleRole, PointerToolKind, UiInputEvent,
+use engine::plugins::{
+    ContactPhase, ContactPresence, DeliveryRole, EvidenceStatus, InputObservation,
+    InputObservationGroup, MeasurementDomain, ObservationOrigin, PhysicalTabletControls,
+    TabletCapabilities, TabletObservation,
 };
 
 use crate::model::{
-    NativeTabletCapabilities, NativeTabletCapabilityKind, NativeTabletDiagnostic,
-    NativeTabletPacket, calibrated_position, calibrated_pressure,
+    NativeTabletCapabilityKind, NativeTabletContactState, NativeTabletDiagnostic,
+    NativeTabletEventKind, NativeTabletPacket, NativeTabletSample, calibrated_position,
+    calibrated_pressure, input_context, measurement, point, source_time, vector,
 };
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct NativeTabletMapping {
-    pub event: UiInputEvent,
+    pub group: InputObservationGroup,
     pub diagnostics: Vec<NativeTabletDiagnostic>,
 }
 
-pub fn map_native_tablet_packet(packet: &NativeTabletPacket) -> NativeTabletMapping {
-    let capabilities = packet.capabilities;
-    let pointer_capabilities = ui_input::PointerDeviceCapabilities::from(capabilities);
-    let diagnostics = missing_capability_diagnostics(capabilities);
-    let pointer_packet = PointerPacket {
-        source_kind: packet.source_kind,
-        tool_kind: pointer_tool_kind(packet),
-        device_id: Some(PointerDeviceId(packet.device_id)),
-        contact_id: None,
-        contact_phase: None,
-        timestamp_micros: packet.timestamp_micros,
-        contact: if capabilities.hover {
-            packet.contact
-        } else {
-            PointerContactState::Contact
-        },
-        pressure: calibrated_pressure(packet.pressure, capabilities, packet.calibration),
-        tilt: packet.tilt.filter(|_| capabilities.tilt),
-        twist_degrees: packet.twist_degrees.filter(|_| capabilities.twist),
-        tangential_pressure: packet
-            .tangential_pressure
-            .filter(|_| capabilities.tangential_pressure),
-        eraser: packet.eraser && capabilities.eraser,
-        barrel_buttons: if capabilities.barrel_buttons {
-            packet.barrel_buttons
-        } else {
-            PointerBarrelButtons::none()
-        },
-        capabilities: pointer_capabilities,
-        calibration: packet.calibration.filter(|_| capabilities.calibration),
-        latency_class: packet.latency_class,
-        coalesced_samples: packet
-            .coalesced_samples
-            .iter()
-            .copied()
-            .map(|sample| {
-                sample.into_pointer_sample(
-                    PointerSampleRole::Coalesced,
-                    capabilities,
-                    packet.calibration,
-                )
-            })
-            .collect(),
-        predicted_samples: packet
-            .predicted_samples
-            .iter()
-            .copied()
-            .map(|sample| {
-                sample.into_pointer_sample(
-                    PointerSampleRole::Predicted,
-                    capabilities,
-                    packet.calibration,
-                )
-            })
-            .collect(),
-    };
-    let position = calibrated_position(packet.position, packet.calibration);
-    let event = PointerEvent {
-        kind: packet.kind,
-        position,
-        delta: packet.delta,
-        button: packet.event_button,
-        modifiers: packet.modifiers,
-        click_count: packet.click_count,
-        packet: pointer_packet,
-    };
+pub fn map_native_tablet_packet(
+    packet: &NativeTabletPacket,
+) -> Result<NativeTabletMapping, NativeTabletDiagnostic> {
+    let context = input_context(packet.backend, packet.device_id);
+    let diagnostics = missing_capability_diagnostics(packet);
+    let mut observations =
+        Vec::with_capacity(packet.coalesced_samples.len() + packet.predicted_samples.len() + 1);
 
-    NativeTabletMapping {
-        event: UiInputEvent::Pointer(event),
+    for sample in &packet.coalesced_samples {
+        observations.push(InputObservation::Tablet(tablet_observation(
+            packet,
+            context,
+            *sample,
+            DeliveryRole::HistoricalCoalesced,
+            EvidenceStatus::ObservedConfirmed,
+        )));
+    }
+    observations.push(InputObservation::Tablet(tablet_observation(
+        packet,
+        context,
+        NativeTabletSample {
+            position: packet.position,
+            delta: packet.delta,
+            timestamp_micros: packet.timestamp_micros,
+            pressure: packet.pressure,
+            tilt: packet.tilt,
+            twist_degrees: packet.twist_degrees,
+            tangential_pressure: packet.tangential_pressure,
+            contact: packet.contact,
+        },
+        DeliveryRole::OrdinaryCurrent,
+        EvidenceStatus::ObservedConfirmed,
+    )));
+    for sample in &packet.predicted_samples {
+        observations.push(InputObservation::Tablet(tablet_observation(
+            packet,
+            context,
+            *sample,
+            DeliveryRole::OrdinaryCurrent,
+            EvidenceStatus::PredictedProvisional,
+        )));
+    }
+
+    Ok(NativeTabletMapping {
+        group: InputObservationGroup::new(context, observations),
         diagnostics,
+    })
+}
+
+fn tablet_observation(
+    packet: &NativeTabletPacket,
+    context: engine::plugins::InputContext,
+    sample: NativeTabletSample,
+    delivery: DeliveryRole,
+    evidence: EvidenceStatus,
+) -> TabletObservation {
+    let position = calibrated_position(sample.position, packet.calibration);
+    TabletObservation {
+        contact: engine::plugins::ContactId::new(packet.contact_id),
+        tool: packet.tool_id.map(engine::plugins::ToolId::new),
+        tool_kind: packet.tool_kind,
+        phase: phase_for_event(packet.kind),
+        presence: presence(sample.contact),
+        position: point(position),
+        delta: vector(sample.delta),
+        pressure: measurement(
+            calibrated_pressure(sample.pressure, packet.capabilities, packet.calibration),
+            packet.capabilities.pressure,
+            MeasurementDomain::NormalizedUnitInterval,
+        ),
+        tangential_pressure: measurement(
+            sample.tangential_pressure,
+            packet.capabilities.tangential_pressure,
+            MeasurementDomain::SignedNormalizedUnitInterval,
+        ),
+        tilt: sample
+            .tilt
+            .filter(|_| packet.capabilities.tilt)
+            .map(|tilt| engine::plugins::StylusTilt::new(tilt.x_degrees, tilt.y_degrees)),
+        twist: measurement(
+            sample.twist_degrees,
+            packet.capabilities.twist,
+            MeasurementDomain::Degrees {
+                min: 0.0,
+                max: 360.0,
+            },
+        ),
+        controls: PhysicalTabletControls {
+            eraser: packet.eraser && packet.capabilities.eraser,
+            barrel_primary: packet.capabilities.barrel_buttons && packet.barrel_buttons.primary,
+            barrel_secondary: packet.capabilities.barrel_buttons && packet.barrel_buttons.secondary,
+        },
+        capabilities: TabletCapabilities {
+            pressure: packet.capabilities.pressure,
+            tilt: packet.capabilities.tilt,
+            twist: packet.capabilities.twist,
+            tangential_pressure: packet.capabilities.tangential_pressure,
+            hover: packet.capabilities.hover,
+            eraser: packet.capabilities.eraser,
+            barrel_controls: packet.capabilities.barrel_buttons,
+            historical_samples: packet.capabilities.coalesced_samples,
+            predicted_samples: packet.capabilities.predicted_samples,
+        },
+        source_time: source_time(context, sample.timestamp_micros),
+        evidence,
+        delivery,
+        origin: ObservationOrigin::SourceReport,
     }
 }
 
-fn pointer_tool_kind(packet: &NativeTabletPacket) -> PointerToolKind {
-    if packet.eraser && packet.capabilities.eraser {
-        PointerToolKind::Eraser
-    } else {
-        PointerToolKind::from(packet.tool_kind)
+fn phase_for_event(kind: NativeTabletEventKind) -> ContactPhase {
+    match kind {
+        NativeTabletEventKind::Down => ContactPhase::Begin,
+        NativeTabletEventKind::Move | NativeTabletEventKind::Enter => ContactPhase::Update,
+        NativeTabletEventKind::Up => ContactPhase::End,
+        NativeTabletEventKind::Leave => ContactPhase::Cancel,
     }
 }
 
-fn missing_capability_diagnostics(
-    capabilities: NativeTabletCapabilities,
-) -> Vec<NativeTabletDiagnostic> {
+fn presence(state: NativeTabletContactState) -> ContactPresence {
+    match state {
+        NativeTabletContactState::Hover => ContactPresence::Hover,
+        NativeTabletContactState::Contact => ContactPresence::Contact,
+        NativeTabletContactState::OutOfRange => ContactPresence::OutOfRange,
+    }
+}
+
+fn missing_capability_diagnostics(packet: &NativeTabletPacket) -> Vec<NativeTabletDiagnostic> {
     let mut diagnostics = Vec::new();
     push_missing(
         &mut diagnostics,
-        capabilities.pressure,
+        packet.capabilities.pressure,
         NativeTabletCapabilityKind::Pressure,
     );
     push_missing(
         &mut diagnostics,
-        capabilities.tilt,
+        packet.capabilities.tilt,
         NativeTabletCapabilityKind::Tilt,
     );
     push_missing(
         &mut diagnostics,
-        capabilities.twist,
+        packet.capabilities.twist,
         NativeTabletCapabilityKind::Twist,
     );
     push_missing(
         &mut diagnostics,
-        capabilities.tangential_pressure,
+        packet.capabilities.tangential_pressure,
         NativeTabletCapabilityKind::TangentialPressure,
     );
     push_missing(
         &mut diagnostics,
-        capabilities.hover,
+        packet.capabilities.hover,
         NativeTabletCapabilityKind::Hover,
     );
     push_missing(
         &mut diagnostics,
-        capabilities.eraser,
+        packet.capabilities.eraser,
         NativeTabletCapabilityKind::Eraser,
     );
     push_missing(
         &mut diagnostics,
-        capabilities.barrel_buttons,
+        packet.capabilities.barrel_buttons,
         NativeTabletCapabilityKind::BarrelButtons,
     );
     push_missing(
         &mut diagnostics,
-        capabilities.coalesced_samples,
+        packet.capabilities.coalesced_samples,
         NativeTabletCapabilityKind::CoalescedSamples,
     );
     push_missing(
         &mut diagnostics,
-        capabilities.predicted_samples,
+        packet.capabilities.predicted_samples,
         NativeTabletCapabilityKind::PredictedSamples,
     );
     push_missing(
         &mut diagnostics,
-        capabilities.calibration,
+        packet.capabilities.calibration,
         NativeTabletCapabilityKind::Calibration,
     );
     diagnostics
@@ -167,111 +213,112 @@ fn push_missing(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        NativeTabletCapabilities, NativeTabletSample,
-        model::{NativeTabletPacket, NativeTabletToolKind},
+    use crate::model::{
+        NativeTabletBarrelButtons, NativeTabletCapabilities, NativeTabletDelta,
+        NativeTabletLatencyClass, NativeTabletPosition, NativeTabletTilt,
     };
-    use ui_input::{
-        PointerBarrelButtons, PointerButton, PointerCalibration, PointerDelta, PointerEventKind,
-        PointerLatencyClass, PointerPosition, PointerSampleRole, PointerSourceKind, PointerTilt,
-    };
+    use engine::plugins::{InputState, SourceTimeUnit};
 
     #[test]
-    fn macos_wacom_packet_maps_pressure_tilt_and_samples() {
-        let packet = NativeTabletPacket::macos_wacom(
+    fn mapping_preserves_neutral_identity_and_orthogonal_sample_roles() {
+        let packet = NativeTabletPacket::macos_nsevent(
             314,
-            PointerEventKind::Move,
-            PointerPosition::new(42.0, 24.0),
-            PointerDelta::new(1.0, 2.0),
+            NativeTabletEventKind::Move,
+            NativeTabletPosition::new(42.0, 24.0),
+            NativeTabletDelta::new(1.0, 2.0),
         )
         .with_timestamp_micros(25_000)
         .with_pressure(0.7)
-        .with_tilt(PointerTilt::new(-20.0, 15.0))
+        .with_tilt(NativeTabletTilt::new(-20.0, 15.0))
         .with_twist_degrees(45.0)
-        .with_barrel_buttons(PointerBarrelButtons {
+        .with_barrel_buttons(NativeTabletBarrelButtons {
             primary: true,
             secondary: false,
         })
-        .with_latency_class(PointerLatencyClass::LowLatencyPreview)
+        .with_latency_class(NativeTabletLatencyClass::LowLatencyPreview)
         .with_coalesced_samples([NativeTabletSample::new(
-            PointerPosition::new(40.0, 21.0),
-            PointerDelta::new(0.5, 1.0),
+            NativeTabletPosition::new(40.0, 21.0),
+            NativeTabletDelta::new(0.5, 1.0),
         )
         .with_timestamp_micros(24_900)
-        .with_pressure(0.6)
-        .with_tilt(PointerTilt::new(-18.0, 12.0))])
+        .with_pressure(0.6)])
         .with_predicted_samples([NativeTabletSample::new(
-            PointerPosition::new(44.0, 27.0),
-            PointerDelta::new(2.0, 3.0),
+            NativeTabletPosition::new(44.0, 27.0),
+            NativeTabletDelta::new(2.0, 3.0),
         )
         .with_timestamp_micros(25_100)
         .with_pressure(0.75)]);
 
-        let mapping = map_native_tablet_packet(&packet);
-        assert!(mapping.diagnostics.is_empty());
-        let UiInputEvent::Pointer(event) = mapping.event else {
-            panic!("native tablet mapping must produce a pointer event");
+        let mapping = map_native_tablet_packet(&packet).expect("packet should map");
+        assert_eq!(mapping.group.context.device.unwrap().raw(), 314);
+        assert_eq!(mapping.group.observations.len(), 3);
+        let InputObservation::Tablet(history) = &mapping.group.observations[0] else {
+            panic!("history should be tablet observation")
         };
-
-        assert_eq!(event.kind, PointerEventKind::Move);
-        assert_eq!(event.position, PointerPosition::new(42.0, 24.0));
-        assert_eq!(event.packet.source_kind, PointerSourceKind::Stylus);
-        assert_eq!(event.packet.device_id, Some(PointerDeviceId(314)));
-        assert_eq!(event.packet.timestamp_micros, Some(25_000));
-        assert_eq!(event.packet.pressure, Some(0.7));
-        assert_eq!(event.packet.tilt, Some(PointerTilt::new(-20.0, 15.0)));
-        assert_eq!(event.packet.twist_degrees, Some(45.0));
-        assert!(event.packet.barrel_buttons.primary);
+        assert_eq!(history.delivery, DeliveryRole::HistoricalCoalesced);
+        assert_eq!(history.evidence, EvidenceStatus::ObservedConfirmed);
+        let InputObservation::Tablet(predicted) = &mapping.group.observations[2] else {
+            panic!("prediction should be tablet observation")
+        };
+        assert_eq!(predicted.evidence, EvidenceStatus::PredictedProvisional);
+        assert_eq!(predicted.delivery, DeliveryRole::OrdinaryCurrent);
         assert_eq!(
-            event.packet.latency_class,
-            PointerLatencyClass::LowLatencyPreview
+            predicted.source_time.unwrap().unit,
+            SourceTimeUnit::Microseconds
         );
-        assert_eq!(event.packet.coalesced_samples.len(), 1);
-        assert_eq!(
-            event.packet.coalesced_samples[0].role,
-            PointerSampleRole::Coalesced
-        );
-        assert_eq!(event.packet.predicted_samples.len(), 1);
-        assert_eq!(
-            event.packet.predicted_samples[0].role,
-            PointerSampleRole::Predicted
-        );
-        assert!(event.packet.is_valid());
     }
 
     #[test]
-    fn eraser_packet_routes_to_eraser_tool() {
-        let packet = NativeTabletPacket::macos_wacom(
-            12,
-            PointerEventKind::Down,
-            PointerPosition::new(3.0, 4.0),
-            PointerDelta::ZERO,
+    fn native_backend_source_clocks_remain_distinct_for_equal_device_ids() {
+        let windows = map_native_tablet_packet(
+            &NativeTabletPacket::windows_pointer(
+                314,
+                NativeTabletEventKind::Move,
+                NativeTabletPosition::new(1.0, 2.0),
+                NativeTabletDelta::ZERO,
+            )
+            .with_timestamp_micros(10),
         )
-        .with_eraser(true)
-        .with_event_button(Some(PointerButton::Primary));
+        .expect("Windows Pointer packet should map");
+        let wintab = map_native_tablet_packet(
+            &NativeTabletPacket::windows_wintab(
+                314,
+                NativeTabletEventKind::Move,
+                NativeTabletPosition::new(1.0, 2.0),
+                NativeTabletDelta::ZERO,
+            )
+            .with_timestamp_micros(10),
+        )
+        .expect("Wintab packet should map");
 
-        let mapping = map_native_tablet_packet(&packet);
-        let UiInputEvent::Pointer(event) = mapping.event else {
-            panic!("native tablet mapping must produce a pointer event");
+        assert_ne!(windows.group.context.source, wintab.group.context.source);
+        let InputObservation::Tablet(windows_observation) = &windows.group.observations[0] else {
+            panic!("Windows observation should be a tablet observation")
         };
-
-        assert_eq!(event.button, Some(PointerButton::Primary));
-        assert!(event.packet.eraser);
-        assert_eq!(event.packet.tool_kind, PointerToolKind::Eraser);
-        assert!(event.packet.capabilities.eraser);
+        let InputObservation::Tablet(wintab_observation) = &wintab.group.observations[0] else {
+            panic!("Wintab observation should be a tablet observation")
+        };
+        assert_eq!(
+            windows_observation.source_time.unwrap().context,
+            windows.group.context
+        );
+        assert_eq!(
+            wintab_observation.source_time.unwrap().context,
+            wintab.group.context
+        );
     }
 
     #[test]
-    fn missing_capabilities_are_reported_without_fake_values() {
-        let packet = NativeTabletPacket::macos_wacom(
+    fn missing_capabilities_do_not_fabricate_measurements() {
+        let packet = NativeTabletPacket::windows_pointer(
             8,
-            PointerEventKind::Move,
-            PointerPosition::new(10.0, 10.0),
-            PointerDelta::ZERO,
+            NativeTabletEventKind::Move,
+            NativeTabletPosition::new(10.0, 10.0),
+            NativeTabletDelta::ZERO,
         )
         .with_pressure(0.9)
-        .with_tilt(PointerTilt::new(10.0, 20.0))
-        .with_contact(PointerContactState::Hover)
+        .with_tilt(NativeTabletTilt::new(10.0, 20.0))
+        .with_contact(NativeTabletContactState::Hover)
         .with_capabilities(NativeTabletCapabilities {
             pressure: false,
             tilt: false,
@@ -285,7 +332,7 @@ mod tests {
             calibration: true,
         });
 
-        let mapping = map_native_tablet_packet(&packet);
+        let mapping = map_native_tablet_packet(&packet).expect("packet should map");
         assert!(
             mapping
                 .diagnostics
@@ -293,72 +340,26 @@ mod tests {
                     NativeTabletCapabilityKind::Pressure
                 ))
         );
-        assert!(
-            mapping
-                .diagnostics
-                .contains(&NativeTabletDiagnostic::MissingCapability(
-                    NativeTabletCapabilityKind::Tilt
-                ))
-        );
-        assert!(
-            mapping
-                .diagnostics
-                .contains(&NativeTabletDiagnostic::MissingCapability(
-                    NativeTabletCapabilityKind::Hover
-                ))
-        );
-        let UiInputEvent::Pointer(event) = mapping.event else {
-            panic!("native tablet mapping must produce a pointer event");
+        let InputObservation::Tablet(current) = &mapping.group.observations[0] else {
+            panic!("current observation should be tablet observation")
         };
-
-        assert_eq!(event.packet.pressure, None);
-        assert_eq!(event.packet.tilt, None);
-        assert_eq!(event.packet.contact, PointerContactState::Contact);
-        assert!(!event.packet.capabilities.pressure);
-        assert!(!event.packet.capabilities.tilt);
-        assert!(!event.packet.capabilities.hover);
-        assert!(event.packet.is_valid());
+        assert_eq!(current.pressure, None);
+        assert_eq!(current.tilt, None);
+        assert_eq!(current.presence, ContactPresence::Hover);
     }
 
     #[test]
-    fn calibration_offsets_position_and_pressure() {
+    fn invalid_measurement_is_rejected_by_neutral_admission() {
         let packet = NativeTabletPacket::windows_pointer(
             91,
-            PointerEventKind::Move,
-            PointerPosition::new(100.0, 200.0),
-            PointerDelta::ZERO,
+            NativeTabletEventKind::Move,
+            NativeTabletPosition::new(100.0, 200.0),
+            NativeTabletDelta::ZERO,
         )
-        .with_pressure(0.5)
-        .with_calibration(PointerCalibration {
-            cursor_offset: PointerDelta::new(3.0, -2.0),
-            pressure_scale: 1.5,
-            pressure_bias: -0.1,
-        });
-
-        let mapping = map_native_tablet_packet(&packet);
-        let UiInputEvent::Pointer(event) = mapping.event else {
-            panic!("native tablet mapping must produce a pointer event");
-        };
-
-        assert_eq!(event.position, PointerPosition::new(103.0, 198.0));
-        assert_eq!(event.packet.pressure, Some(0.65));
-    }
-
-    #[test]
-    fn windows_wintab_constructor_uses_wacom_backend_and_full_capabilities() {
-        let packet = NativeTabletPacket::windows_wintab(
-            44,
-            PointerEventKind::Move,
-            PointerPosition::new(1.0, 2.0),
-            PointerDelta::ZERO,
-        )
-        .with_tool_kind(NativeTabletToolKind::Airbrush);
-
-        assert_eq!(
-            packet.backend,
-            crate::NativeTabletBackendKind::WindowsWintab
-        );
-        assert_eq!(packet.vendor, crate::NativeTabletVendor::Wacom);
-        assert!(packet.capabilities.tangential_pressure);
+        .with_pressure(1.5);
+        let mapping = map_native_tablet_packet(&packet).expect("mapping does not clamp input");
+        let mut input = InputState::new();
+        assert!(input.admit_device_observation_group(mapping.group).is_err());
+        assert!(input.drain_device_observation_groups().is_empty());
     }
 }

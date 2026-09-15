@@ -37,7 +37,6 @@ spines win when an active design contains older conflicting target language.
 
 - [Editor Asset Pipeline and Content Workflow Design](editor-asset-pipeline-and-content-workflow-design.md)
 - [Editor Procedural Content and Simulation Workflow Plan](editor-procedural-content-and-simulation-workflow-plan.md)
-- [Editor UI Workspace Tool Surface Architecture](editor-ui-workspace-tool-surface-architecture.md)
 
 ### Engine Runtime
 
@@ -67,10 +66,6 @@ spines win when an active design contains older conflicting target language.
 Standalone RunenGPU owns current reusable GPU execution semantics, public contracts,
 conformance, and framework evolution. Runenwerk does not keep active RunenGPU semantic
 predecessor designs after the accepted standalone transfer.
-
-### Domain Authoring / App Proof
-
-- [Typed App Program Counter Proof Design](typed-app-program-counter-proof-design.md)
 
 ### Workspace / Cross-Domain
 

@@ -18,9 +18,9 @@ Active implementation contract.
 
 The first implementation slice adds `engine/src/runtime/native_window_hooks.rs`
 as a generic window hook registry, expands `adapters/native_tablet_input` into
-neutral DTOs plus Windows Pointer, Wintab, and macOS NSEvent adapter modules, and
-routes `runenwerk_draw` through native tablet packets before winit mouse/touch
-fallback. Hardware validation still needs real Windows Ink, Wacom Wintab, and
+neutral DTOs plus Windows Pointer, Wintab, and macOS NSEvent adapter modules. The
+native path now enters engine neutral observations before `runenwerk_draw`'s
+explicit UI projection and winit mouse/touch fallback. Hardware validation still needs real Windows Ink, Wacom Wintab, and
 macOS Wacom devices.
 
 ## Goal
@@ -35,9 +35,11 @@ hiding it in brush code.
 - `engine/src/runtime/native_window_hooks.rs`: generic live-window attachment,
   event observation, per-frame drain, and detach hooks.
 - `adapters/native_tablet_input`: native backend DTOs, capability reporting,
-  backend health, calibration controls, and mapping into `ui_input`.
-- `apps/runenwerk_draw`: native-first input routing, fallback suppression during
-  active native stylus contact, and visible device/backend diagnostics.
+  backend health, calibration controls, and mapping into engine-owned neutral
+  observations. It has no `ui_input` dependency.
+- `apps/runenwerk_draw`: neutral-to-UI adaptation, native-first routing,
+  contact-aware persistent claims, fallback suppression, and visible
+  device/backend diagnostics.
 - `domain/drawing`: consumes only platform-neutral `ui_input::PointerPacket`
   facts and never depends on operating-system or Wacom APIs.
 
@@ -75,12 +77,16 @@ optional polish.
 Backends must preserve:
 
 - device id, backend kind, platform, and vendor;
+- source/device/tool/contact identity without deriving device identity from a
+  contact or pointer id;
 - source kind and tool kind;
 - pressure, tilt, twist, tangential pressure, eraser, barrel buttons, hover, and
   proximity when present;
 - timestamps;
 - coalesced samples in chronological order before the current sample;
 - calibration metadata;
+- confirmed/estimated/predicted evidence and ordinary/historical delivery
+  roles, with source-clock context attached to timestamps;
 - missing-capability diagnostics when a backend cannot provide a field.
 
 Windows Pointer history APIs return history newest-first. The adapter must
@@ -110,6 +116,8 @@ Required automated coverage:
 - native packets route before winit fallback in `runenwerk_draw`;
 - active native contact suppresses duplicate fallback input;
 - native coalesced samples append as ordered stroke samples;
+- predicted samples do not mutate confirmed neutral state;
+- conflicting device identities in one history group reject atomically;
 - `AutoOsFirst` backend arbitration chooses one active native stream instead of
   publishing duplicate streams;
 - Wintab/macOS proximity and contact facts map separately so hover packets do

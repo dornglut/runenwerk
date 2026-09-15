@@ -1,6 +1,5 @@
 use editor_core::{
-    ChangeOrigin, ComponentTypeId, EditorMutationError, EntityId, RealityVersion, SelectionTarget,
-    SessionChangeKind, WorkflowEventKind,
+    ChangeOrigin, ComponentTypeId, EditorMutationError, EntityId, RealityVersion, WorkflowEventKind,
 };
 use editor_definition::{
     EditorDefinitionDocument, EditorDefinitionDocumentContent, EditorDefinitionDocumentKind,
@@ -11,6 +10,7 @@ use editor_definition::{
     EditorWorkspaceProfileDefinition,
 };
 use editor_inspector::{InspectorEditValue, InspectorPath};
+use editor_scene::{SceneSelectionAddress, SceneSelectionChangeKind};
 use editor_shell::{
     CONSOLE_SCROLL_WIDGET_ID, CommandCapabilityKey, DockDropCandidateState,
     DockDropInvalidTargetReason, EDITOR_DESIGN_WORKSPACE_PROFILE_ID, ENTITY_TABLE_LIST_WIDGET_ID,
@@ -5505,21 +5505,27 @@ fn dispatch_shell_command_selects_outliner_entity() {
 
     assert_eq!(app.outliner_state().selected_entity, Some(EntityId(1)));
     assert_eq!(
-        app.runtime().session().selection().primary(),
-        Some(&SelectionTarget::Entity(EntityId(1)))
-    );
-    assert!(matches!(
-        app.runtime()
-            .session_change_log()
-            .last()
-            .map(|change| (change.origin, change.kind.clone())),
-        Some((
-            ChangeOrigin::OutlinerPanel,
-            SessionChangeKind::SelectionSetSingle {
-                target: SelectionTarget::Entity(EntityId(1))
-            }
+        app.runtime().scene_selection().primary(),
+        Some(&SceneSelectionAddress::entity(
+            app.runtime().scene_selection().scope(),
+            EntityId(1),
         ))
-    ));
+    );
+    let selection_change = app
+        .runtime()
+        .scene_selection_changes()
+        .last()
+        .expect("scene selection change should be recorded");
+    assert_eq!(selection_change.origin, ChangeOrigin::OutlinerPanel);
+    assert_eq!(
+        selection_change.kind,
+        SceneSelectionChangeKind::SetSingle {
+            address: SceneSelectionAddress::entity(
+                app.runtime().scene_selection().scope(),
+                EntityId(1),
+            )
+        }
+    );
 }
 
 #[test]
@@ -5561,8 +5567,11 @@ fn outliner_tree_row_interaction_selects_entity() {
     .expect("outliner row command should dispatch");
 
     assert_eq!(
-        app.runtime().session().selection().primary(),
-        Some(&SelectionTarget::Entity(EntityId(1))),
+        app.runtime().scene_selection().primary(),
+        Some(&SceneSelectionAddress::entity(
+            app.runtime().scene_selection().scope(),
+            EntityId(1),
+        )),
     );
 }
 
@@ -5642,21 +5651,27 @@ fn entity_table_row_interaction_selects_entity_with_structural_target() {
     .expect("entity table provider-local command should dispatch");
 
     assert_eq!(
-        app.runtime().session().selection().primary(),
-        Some(&SelectionTarget::Entity(EntityId(1)))
-    );
-    assert!(matches!(
-        app.runtime()
-            .session_change_log()
-            .last()
-            .map(|change| (change.origin, change.kind.clone())),
-        Some((
-            ChangeOrigin::EntityTablePanel,
-            SessionChangeKind::SelectionSetSingle {
-                target: SelectionTarget::Entity(EntityId(1))
-            }
+        app.runtime().scene_selection().primary(),
+        Some(&SceneSelectionAddress::entity(
+            app.runtime().scene_selection().scope(),
+            EntityId(1),
         ))
-    ));
+    );
+    let selection_change = app
+        .runtime()
+        .scene_selection_changes()
+        .last()
+        .expect("scene selection change should be recorded");
+    assert_eq!(selection_change.origin, ChangeOrigin::EntityTablePanel);
+    assert_eq!(
+        selection_change.kind,
+        SceneSelectionChangeKind::SetSingle {
+            address: SceneSelectionAddress::entity(
+                app.runtime().scene_selection().scope(),
+                EntityId(1),
+            )
+        }
+    );
 }
 
 #[test]
@@ -5876,7 +5891,7 @@ fn stale_provider_local_action_fails_closed_after_rebuild() {
     )
     .expect("stale provider-local action should fail closed without mutation error");
 
-    assert_eq!(app.runtime().session().selection().primary(), None);
+    assert_eq!(app.runtime().scene_selection().primary(), None);
 }
 
 #[test]
@@ -5933,7 +5948,7 @@ fn provider_id_mismatch_on_local_action_is_rejected_without_mutation() {
     );
 
     assert!(result.is_err());
-    assert_eq!(app.runtime().session().selection().primary(), None);
+    assert_eq!(app.runtime().scene_selection().primary(), None);
 }
 
 #[test]

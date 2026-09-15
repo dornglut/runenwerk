@@ -1,30 +1,42 @@
 ---
 title: Editor UI Workspace Tool Surface Architecture
-description: Architecture for editor UI workspace surfaces, tool-surface ownership, viewport-local interaction, and presentation separation.
-status: active
+description: Historical architecture for editor UI workspace surfaces, tool-surface ownership, viewport-local interaction, and presentation separation.
+status: superseded
 owner: editor
 layer: domain
-canonical: true
-last_reviewed: 2026-06-19
+canonical: false
+last_reviewed: 2026-09-14
+superseded_by:
+  - ../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md
+  - ../accepted/runenwerk-editor-coordination-semantic-model.md
+  - ../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
+  - ../implemented/editor-tool-suite-registry-and-workbench-host-design.md
 related:
   - ../implemented/ui-definition-formation-foundation-design.md
   - ../implemented/editor-self-authoring-and-final-ui-design.md
-  - ../implemented/editor-workspace-document-mode-panel-architecture.md
+  - ./editor-workspace-document-mode-panel-architecture.md
 related_designs:
   - ../accepted/app-neutral-ui-composition-design.md
   - ../accepted/adaptive-ui-composition-design.md
-  - ./editor-tool-suite-registry-and-workbench-host-design.md
+  - ../implemented/editor-tool-suite-registry-and-workbench-host-design.md
 ---
 
 # Editor / UI / Workspace / Tool-Surface Architecture
 
 ## Status
 
-Active architecture baseline. The host/editor shell still owns runtime
-composition, routing, and command execution, but authored editor/UI definitions
-already exist for UI, layout, theme, menu, shortcut, binding, catalog, panel,
-and tool-surface documents. The self-authoring/UI Designer path is a promoted
-capability, not a distant future stage.
+Superseded historical architecture and migration evidence.
+
+The sections below preserve the architecture that shaped the current shell, UI-definition, workspace, and tool-surface implementation. They are no longer current normative editor-coordination or structural authority.
+
+Current ownership is split explicitly:
+
+- structural composition: [ADR 0013](../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md), the accepted app-neutral composition designs, and `ui_composition`;
+- tool-suite/provider host contracts: the [implemented Tool Suite Registry and Workbench Host design](../implemented/editor-tool-suite-registry-and-workbench-host-design.md);
+- normalized editor coordination: [ADR 0025](../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md) and the [accepted editor coordination semantic model](../accepted/runenwerk-editor-coordination-semantic-model.md);
+- reusable UI semantics: current UI authority.
+
+Code and tests own exact current behavior. Future-tense and “Final Decision” language retained below is historical design evidence and does not reactivate this document as parallel authority.
 
 ## Purpose
 Define the long-term architecture for Runenwerk’s editor, UI, workspace, docking, tab-hosting, and tool-surface framework.

@@ -15,7 +15,8 @@ related_designs:
   - ./ui-designer-interface-lab-platform-design.md
   - ../implemented/ui-definition-formation-foundation-design.md
   - ../implemented/editor-self-authoring-and-final-ui-design.md
-  - ../active/editor-ui-workspace-tool-surface-architecture.md
+  - ./runenwerk-editor-coordination-semantic-model.md
+  - ../implemented/editor-tool-suite-registry-and-workbench-host-design.md
 related_roadmaps:
   - ../../domain/ui/roadmap.md
 ---

@@ -1,6 +1,6 @@
-use editor_core::{CommandId, ComponentTypeId, EntityId, SelectionTarget};
-use editor_scene::SceneCommandIntent;
-use scene::Vec3Value;
+use editor_core::{CommandId, ComponentTypeId, EntityId};
+use editor_scene::{SceneCommandIntent, SceneSelectionAddress, SceneSelectionScope};
+use scene::{LocalTransform, Vec3Value};
 
 use crate::editor_app::RunenwerkEditorApp;
 use crate::editor_features::ToolAction;
@@ -22,9 +22,10 @@ fn tool_action_select_single_entity_updates_selection_and_inspector() {
     )
     .expect("create should succeed");
 
-    app.dispatch_tool_action(ToolAction::SelectSingle(SelectionTarget::Entity(EntityId(
-        1,
-    ))))
+    app.dispatch_tool_action(ToolAction::SelectSingle(entity_selection(
+        &app,
+        EntityId(1),
+    )))
     .expect("tool select should succeed");
 
     assert_eq!(app.outliner_state().selected_entity, Some(EntityId(1)));
@@ -35,7 +36,7 @@ fn tool_action_select_single_entity_updates_selection_and_inspector() {
 }
 
 #[test]
-fn tool_action_clear_selection_clears_shared_selection() {
+fn tool_action_clear_selection_clears_scene_selection() {
     let mut app = RunenwerkEditorApp::new();
 
     execute_scene_intent(
@@ -48,9 +49,10 @@ fn tool_action_clear_selection_clears_shared_selection() {
     )
     .expect("create should succeed");
 
-    app.dispatch_tool_action(ToolAction::SelectSingle(SelectionTarget::Entity(EntityId(
-        1,
-    ))))
+    app.dispatch_tool_action(ToolAction::SelectSingle(entity_selection(
+        &app,
+        EntityId(1),
+    )))
     .expect("tool select should succeed");
 
     app.dispatch_tool_action(ToolAction::ClearSelection)
@@ -121,9 +123,10 @@ fn tool_action_preview_lifecycle_updates_tool_runtime_state() {
     )
     .expect("create should succeed");
 
-    app.dispatch_tool_action(ToolAction::SelectSingle(SelectionTarget::Entity(EntityId(
-        1,
-    ))))
+    app.dispatch_tool_action(ToolAction::SelectSingle(entity_selection(
+        &app,
+        EntityId(1),
+    )))
     .expect("tool select should succeed");
 
     app.dispatch_tool_action(ToolAction::BeginPreview)
@@ -146,7 +149,7 @@ fn tool_action_preview_lifecycle_updates_tool_runtime_state() {
     assert_eq!(preview.translation_delta, Vec3Value::new(2.0, 4.0, -1.0));
     assert_eq!(
         preview.started_from_selection,
-        SelectionTarget::Entity(EntityId(1))
+        entity_selection(&app, EntityId(1))
     );
     assert_eq!(
         preview.tool,
@@ -165,6 +168,94 @@ fn tool_action_begin_preview_requires_primary_selection() {
     assert_eq!(
         error.message,
         "cannot begin preview without a primary selection"
+    );
+}
+
+#[test]
+fn stale_preview_address_is_rejected_after_scene_reset_and_id_reuse() {
+    let mut app = RunenwerkEditorApp::new();
+    let transform_type = ComponentTypeId(500);
+    app.runtime_mut()
+        .register_component_type::<LocalTransform>(transform_type);
+
+    execute_scene_intent(
+        app.runtime_mut(),
+        CommandId(1),
+        SceneCommandIntent::CreateEntity {
+            parent: None,
+            display_name: "Original".to_string(),
+        },
+    )
+    .expect("original entity creation should succeed");
+    execute_scene_intent(
+        app.runtime_mut(),
+        CommandId(2),
+        SceneCommandIntent::AddComponent {
+            entity: EntityId(1),
+            component_type: transform_type,
+        },
+    )
+    .expect("original transform component should be added");
+
+    app.dispatch_tool_action(ToolAction::SelectSingle(entity_selection(
+        &app,
+        EntityId(1),
+    )))
+    .expect("original selection should succeed");
+    app.dispatch_tool_action(ToolAction::BeginPreview)
+        .expect("preview should begin");
+    app.update_translation_preview(Vec3Value::new(2.0, 0.0, 0.0))
+        .expect("preview should update");
+
+    app.runtime_mut().prepare_for_scene_load();
+    let stale_selection = SceneSelectionAddress::entity(SceneSelectionScope(1), EntityId(1));
+    execute_scene_intent(
+        app.runtime_mut(),
+        CommandId(3),
+        SceneCommandIntent::CreateEntity {
+            parent: None,
+            display_name: "Replacement".to_string(),
+        },
+    )
+    .expect("replacement entity creation should succeed");
+    execute_scene_intent(
+        app.runtime_mut(),
+        CommandId(4),
+        SceneCommandIntent::AddComponent {
+            entity: EntityId(1),
+            component_type: transform_type,
+        },
+    )
+    .expect("replacement transform component should be added");
+
+    let error = app
+        .dispatch_tool_action(ToolAction::SelectSingle(stale_selection))
+        .expect_err("stale selection must not retarget the replacement entity");
+    assert_eq!(
+        error.message,
+        "scene selection address belongs to an expired scene scope"
+    );
+
+    let error = app
+        .dispatch_tool_action(ToolAction::CommitPreview)
+        .expect_err("stale preview must not retarget the replacement entity");
+    assert_eq!(
+        error.message,
+        "scene selection address belongs to an expired scene scope"
+    );
+
+    let replacement = app
+        .runtime()
+        .ids()
+        .resolve_entity(EntityId(1))
+        .expect("replacement entity should exist");
+    assert_eq!(
+        app.runtime()
+            .world()
+            .get::<LocalTransform>(replacement)
+            .expect("replacement transform should exist")
+            .translation,
+        Vec3Value::zero()
     );
 }
 
@@ -193,9 +284,10 @@ fn tool_action_cancel_preview_clears_preview_session() {
     )
     .expect("create should succeed");
 
-    app.dispatch_tool_action(ToolAction::SelectSingle(SelectionTarget::Entity(EntityId(
-        1,
-    ))))
+    app.dispatch_tool_action(ToolAction::SelectSingle(entity_selection(
+        &app,
+        EntityId(1),
+    )))
     .expect("tool select should succeed");
 
     app.dispatch_tool_action(ToolAction::BeginPreview)
@@ -206,4 +298,8 @@ fn tool_action_cancel_preview_clears_preview_session() {
         .expect("cancel preview should succeed");
     assert!(!app.tool_runtime_state().preview_active());
     assert_eq!(app.tool_runtime_state().preview(), None);
+}
+
+fn entity_selection(app: &RunenwerkEditorApp, entity: EntityId) -> SceneSelectionAddress {
+    SceneSelectionAddress::entity(app.runtime().scene_selection().scope(), entity)
 }
