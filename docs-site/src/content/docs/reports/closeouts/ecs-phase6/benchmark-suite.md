@@ -1,18 +1,16 @@
 ---
 title: "ECS Phase 6 Benchmark Artifacts"
-description: "Documentation for ECS Phase 6 Benchmark Artifacts."
+description: "Historical benchmark evidence for the completed Runenwerk ECS Phase 6 program."
 status: completed
 owner: ecs
-layer: domain
-canonical: true
-last_reviewed: 2026-04-27
+layer: reports
+canonical: false
+last_reviewed: 2026-09-15
 ---
 
 # ECS Phase 6 Benchmark Artifacts
 
-Roadmap source of truth: [`phase6-closeout-roadmap.md`](../../../domain/ecs/roadmaps/phase6-closeout-roadmap.md)
-
-This folder stores the final Phase 6 measurement set, including required command outputs, same-session comparison refreshes, and the closeout reports.
+This folder stores historical measurement evidence from the completed Runenwerk ECS Phase 6 program. The predecessor closeout roadmap is retained in Git history rather than as current domain authority.
 
 ## Workload Coverage
 
@@ -37,8 +35,7 @@ cargo bench -p engine --bench phase6_runtime -- --quick
 
 ## Comparison Refresh Commands
 
-Used to satisfy the comparison set in
-`phase6-closeout-roadmap.md`.
+These commands supplied the comparison set recorded by the historical Phase 6 closeout plan.
 
 ```powershell
 cargo bench -p ecs --bench phase5b --features telemetry -- --quick

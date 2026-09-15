@@ -5,7 +5,7 @@ status: completed
 owner: workspace
 layer: workspace
 canonical: false
-last_reviewed: 2026-09-12
+last_reviewed: 2026-09-15
 replaced_by: ./planning/roadmap.md
 related_adrs:
   - ../adr/accepted/0008-adopt-sdf-first-field-product-architecture.md
@@ -97,27 +97,25 @@ streaming work is not activated by this completed roadmap. Such work must use it
 current owning design/roadmap plus an owning GitHub issue and must consume the
 established product contracts rather than inventing a parallel execution path.
 
-## Current Ownership After RunenECS C8
+## Current Ownership After RunenECS Cutover
 
-The May 2026 roadmap predated the accepted RunenECS C8 scheduler boundary repair.
-Current ownership is therefore:
+The May 2026 roadmap predates the completed standalone RunenECS extraction and consumer
+cutover. Current reusable ECS semantics, public execution contracts, validation, and
+conformance belong to [standalone RunenECS](https://github.com/dornglut/runen-ecs/blob/main/ARCHITECTURE.md).
 
-- standalone RunenECS owns reusable ECS system identity, access facts, explicit
-  semantic ordering/system sets, schedule validation, deterministic reference
-  execution, deferred commands, and ECS deferred-apply boundaries;
-- RunenECS access incompatibility does not create semantic order or an application
-  lifecycle boundary;
-- Runenwerk Engine/application integration owns host frame/fixed/render lifecycle,
-  product and query-snapshot publication policy, and other application barriers;
-- the former standalone generic `domain/scheduler` package is retired and must not be
-  reconstructed as a forwarding package or generic scheduling authority;
-- current multiplayer sequencing belongs to the
-  [multiplayer replication implementation roadmap](../net/multiplayer-replication-implementation-roadmap.md),
-  not the superseded ECS/runtime convergence roadmap.
+Runenwerk Engine/application integration owns host frame/fixed/render lifecycle,
+product and query-snapshot publication policy, and other application barriers around
+the exact RunenECS revision it consumes. The former standalone generic
+`domain/scheduler` package is retired and must not be reconstructed as a forwarding
+package or generic scheduling authority. Current multiplayer sequencing belongs to the
+[multiplayer replication implementation roadmap](../net/multiplayer-replication-implementation-roadmap.md),
+not the superseded ECS/runtime convergence roadmap.
 
-For the accepted boundary, use the
-[RunenECS boundary repair execution plan](../design/accepted/runenecs-boundary-repair-execution-plan.md)
-and the current [RunenECS architecture](../domain/ecs/architecture.md).
+For the durable Runenwerk/framework boundary, use
+[ADR 0014](../adr/accepted/0014-repository-family-extraction-boundaries.md). For current
+reusable ECS architecture, use standalone RunenECS. Historical RunenECS repair and
+extraction sequencing remains available in Git history and retained investigation
+reports.
 
 ## Historical Terminology
 

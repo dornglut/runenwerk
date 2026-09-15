@@ -5,7 +5,7 @@ status: superseded
 owner: net
 layer: net
 canonical: false
-last_reviewed: 2026-09-10
+last_reviewed: 2026-09-15
 replaced_by: ./multiplayer-replication-implementation-roadmap.md
 ---
 
@@ -17,9 +17,8 @@ Its former priorities assumed generic ECS `Broadcast*`, `WorkQueue*`, and `TickB
 
 Use current authority instead:
 
-- [Accepted RunenECS boundary repair plan](../design/accepted/runenecs-boundary-repair-execution-plan.md) for ECS repair and conformance sequencing;
-- [Accepted RunenECS extraction boundary](../design/accepted/runenecs-extraction-boundary-design.md) for ECS/Runenwerk ownership;
-- [Current multiplayer replication implementation roadmap](./multiplayer-replication-implementation-roadmap.md) for retained networking work;
-- [Current RunenECS architecture](../domain/ecs/architecture.md) for implemented ECS semantics.
+- [Standalone RunenECS architecture](https://github.com/dornglut/runen-ecs/blob/main/ARCHITECTURE.md) for reusable ECS semantics and conformance;
+- [Repository Family Extraction Boundaries](../adr/accepted/0014-repository-family-extraction-boundaries.md) for Runenwerk/framework ownership;
+- [Current multiplayer replication implementation roadmap](./multiplayer-replication-implementation-roadmap.md) for retained networking work.
 
 The original roadmap remains available through repository history for provenance. It must not be used to reactivate removed messaging/scheduler surfaces or to infer current priorities.

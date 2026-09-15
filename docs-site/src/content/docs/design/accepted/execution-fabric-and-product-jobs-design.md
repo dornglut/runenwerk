@@ -5,13 +5,14 @@ status: accepted
 owner: engine
 layer: domain / engine-runtime
 canonical: true
-last_reviewed: 2026-08-25
+last_reviewed: 2026-09-15
+related_docs:
+  - ../../architecture/repository-family-architecture.md
 related_adrs:
   - ../../adr/accepted/0004-separate-description-from-execution.md
   - ../../adr/accepted/0008-adopt-sdf-first-field-product-architecture.md
+  - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
 related_designs:
-  - ./runenecs-extraction-boundary-design.md
-  - ./runenecs-boundary-repair-execution-plan.md
   - ./sdf-first-field-world-platform-design.md
   - ./field-product-contracts-diagnostics-and-residency-design.md
   - ./sdf-product-renderer-and-gpu-residency-design.md
@@ -28,22 +29,22 @@ supersedes:
 Accepted execution architecture.
 
 This design defines the Runenwerk application/product execution layer without
-creating a universal scheduler. It does not own ECS-internal scheduling semantics.
-The accepted
-[RunenECS Extraction Boundary Design](./runenecs-extraction-boundary-design.md)
-owns the ECS boundary, and the accepted
-[RunenECS Boundary Repair Execution Plan](./runenecs-boundary-repair-execution-plan.md)
-owns the repair sequence.
+creating a universal scheduler. It does not own ECS-internal scheduling or
+execution semantics.
 
-Issue #198 established the durable split:
+Current reusable RunenECS semantics, execution capabilities, and conformance are
+owned by standalone [`dornglut/runen-ecs`](https://github.com/dornglut/runen-ecs/blob/main/ARCHITECTURE.md).
+[ADR 0014](../../adr/accepted/0014-repository-family-extraction-boundaries.md) and
+the [framework integration architecture](../../architecture/repository-family-architecture.md)
+own the Runenwerk-side framework boundary. Historical Issue #198 evidence remains in
+the [current-main census](../../reports/investigations/runenecs-issue-198-current-main-census.md).
+
+The durable split is:
 
 ```text
 RunenECS
-  ECS system identity and access facts
-  explicit ECS ordering and sets
-  ECS schedule validation
-  deferred ECS command boundaries
-  deterministic serial ECS reference execution
+  reusable ECS state/query/system/schedule/deferred-command semantics
+  standalone execution capabilities and conformance
 
 Runenwerk
   application/frame/fixed/render lifecycle
@@ -57,10 +58,7 @@ RunenNet
 ```
 
 There is no accepted external RunenScheduler dependency or `runen_schedule`
-package. The
-[Issue 198 current-main census](../../reports/investigations/runenecs-issue-198-current-main-census.md)
-records the source evidence used for that reconciliation. No implementation or
-source transfer is authorized by this clarification alone.
+package.
 
 Implementation sequence for Runenwerk product jobs is tracked by the
 [Runtime Product Job Executor Roadmap](../../engine/roadmaps/runtime-product-job-executor-roadmap.md).
@@ -75,8 +73,7 @@ background jobs.
 The execution fabric coordinates these without collapsing ownership:
 
 ```text
-ECS remains live runtime state.
-RunenECS owns ECS schedule semantics and reference execution.
+ECS remains live runtime state under standalone RunenECS contracts.
 Field products remain formed product state.
 Runenwerk owns product-job planning, host execution, and publication policy.
 RunenNet owns reusable networking semantics.
@@ -88,19 +85,10 @@ Diagnostics explain failures and provenance.
 
 ### RunenECS
 
-RunenECS owns:
-
-- entity/component/resource storage contracts;
-- query and system-parameter access facts;
-- ECS system identity and registration;
-- explicit system ordering and sets;
-- access-conflict classification and schedule validation;
-- deferred ECS command semantics and application boundaries;
-- deterministic standalone serial execution as the correctness/reference model;
-- ECS plan diagnostics and explainability.
-
-Runenwerk may inspect or present these facts through public RunenECS APIs. It does
-not reconstruct or redefine them in a second scheduler.
+RunenECS owns its reusable ECS semantics, public execution contract, diagnostics,
+and conformance. Runenwerk consumes those facts through the exact accepted public
+revision declared in its workspace and must not reconstruct or redefine them in a
+second scheduler or local semantic handbook.
 
 ### Runenwerk
 
@@ -110,16 +98,15 @@ Runenwerk owns:
 - product-job descriptions and dependency planning;
 - execution of product jobs;
 - invocation of accepted RunenECS schedules at application-owned lifecycle points;
-- worker threads and future product-job parallel lanes;
+- worker threads and product-job parallel lanes owned by the Runenwerk execution fabric;
 - main-thread/backend affinity and host constraints;
 - product publication, query-snapshot publication, and application barriers;
 - cross-framework failure/recovery policy, runtime metrics, and plugin composition;
 - host/application networking integration and archival replay/capture policy.
 
-A Runenwerk product plan may contain a node that invokes a prepared RunenECS
-schedule, but that node is an integration boundary. The product planner does not
-reinterpret the schedule's internal order, access conflicts, or deferred-command
-semantics.
+A Runenwerk product plan may contain a node that invokes a RunenECS schedule, but
+that node is an integration boundary. The product planner does not reinterpret the
+schedule's internal ordering, access, execution, or deferred-command semantics.
 
 ### RunenNet
 
@@ -139,11 +126,9 @@ justified. It does not become ECS or product execution authority.
 Runenwerk does not expose one universal execution-plan type for all work.
 
 ```text
-RunenECS Schedule / PreparedSchedule
-  explicit ECS order
-  access compatibility
+RunenECS schedule contract
+  reusable ECS ordering/access/execution semantics
   deferred-command boundaries
-  canonical serial execution
   ECS diagnostics
 
 Runenwerk Product Plan
@@ -151,7 +136,7 @@ Runenwerk Product Plan
   lifecycle placement
   product publication barriers
   host/backend affinity
-  invocation of prepared ECS schedules
+  invocation of ECS schedules
   product diagnostics
 ```
 
@@ -184,12 +169,12 @@ through accepted RunenECS APIs or explicit application-owned requests.
 ## ECS deferred mutation boundary
 
 Deferred ECS mutation is a RunenECS semantic contract, not a Runenwerk product
-scheduler contract. RunenECS defines command buffering, deterministic application,
-failure behavior, and the points at which a prepared ECS schedule applies deferred
-structural changes.
+scheduler contract. Runenwerk consumes the public RunenECS behavior exposed by its
+exact dependency revision rather than specifying command buffering, publication,
+or failure semantics locally.
 
 Runenwerk may place application/product barriers before or after an ECS schedule
-invocation. It must not merge, reorder, or partially apply ECS command buffers
+invocation. It must not merge, reorder, or partially reinterpret ECS deferred work
 outside the RunenECS contract.
 
 ## Query snapshots
@@ -242,9 +227,9 @@ RunenECS scheduling concepts.
 
 Required inspection surfaces include:
 
-- RunenECS schedule/explain view consumed through its public diagnostics;
+- RunenECS schedule/explain information consumed through its public diagnostics;
 - product-plan and product-job views;
-- ECS deferred-command diagnostics from RunenECS;
+- ECS deferred-command diagnostics exposed by RunenECS;
 - query-derived product freshness/provenance;
 - runtime metrics;
 - host networking/replay integration diagnostics.
@@ -254,14 +239,17 @@ network, rendering, or product semantics into one execution-fabric error model.
 
 ## Validation expectations
 
-Future implementation work should prove:
+Future Runenwerk implementation work should prove:
 
-- RunenECS serial execution defines ECS correctness and any optimized executor is
-  observationally equivalent under accepted ECS semantics;
-- access conflicts prevent unsafe ECS overlap without inventing semantic order;
 - Runenwerk product publications happen only at explicit product barriers;
-- Runenwerk invokes RunenECS schedules without reinterpreting their internal plan;
+- Runenwerk invokes RunenECS schedules through the accepted public contract without
+  reinterpreting framework-internal planning or execution semantics;
+- product-job execution configuration does not transfer ECS semantic ownership into
+  Runenwerk;
 - stale query-derived products are diagnosable;
 - authoritative product plans reject visual-only nondeterministic jobs;
 - networking integration consumes RunenNet contracts rather than duplicating
   session, replication, or recovery semantics.
+
+Reusable RunenECS executor equivalence, failure behavior, and framework conformance are
+validated by the standalone RunenECS repository, not by this Runenwerk design.

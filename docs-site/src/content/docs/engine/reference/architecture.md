@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-14
+last_reviewed: 2026-09-15
 ---
 
 # Engine Architecture
@@ -214,11 +214,12 @@ systems set the intent on `WindowState` rather than calling winit directly.
 
 ## Integration Boundaries
 
-- `engine` consumes:
-  - `ecs` for world/resources/components/queries
-  - `scheduler` for typed schedule execution
-  - `engine_sim`, `engine_net`, `engine_replay` for simulation/network/replay domains
-- `engine` does not own internals of domain/net crates.
+- `engine` consumes the exact standalone `runen-ecs` dependency for ECS world, resource, component, query, system, schedule, and deferred-command contracts.
+- `engine` owns Runenwerk host lifecycle, schedule invocation, plugin composition, and product/publication policy around those framework contracts.
+- `engine` consumes `engine_sim`, `engine_net`, and `engine_replay` for Runenwerk-local simulation/network/replay integration domains.
+- `engine` does not own standalone RunenECS internals or the internals of local domain/net crates.
+
+For reusable RunenECS semantics and current framework architecture, use [standalone RunenECS](https://github.com/dornglut/runen-ecs/blob/main/ARCHITECTURE.md). For API/examples matching this Runenwerk checkout, use the [package guide at the exact consumed revision](https://github.com/dornglut/runen-ecs/blob/6a7af7bbd15da960ce0b68484b446134940fa479/crates/runen-ecs/README.md).
 
 ## Related Source Entrypoints
 

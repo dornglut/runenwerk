@@ -1,16 +1,16 @@
 ---
 title: "Phase 6 Progress Report"
-description: "Documentation for Phase 6 Progress Report."
+description: "Historical progress and benchmark evidence for the completed Runenwerk ECS Phase 6 program."
 status: completed
 owner: ecs
-layer: domain
-canonical: true
-last_reviewed: 2026-04-27
+layer: reports
+canonical: false
+last_reviewed: 2026-09-15
 ---
 
 # Phase 6 Progress Report
 
-Roadmap source of truth: [`phase6-closeout-roadmap.md`](../../../domain/ecs/roadmaps/phase6-closeout-roadmap.md)
+The predecessor Phase 6 closeout roadmap is retained in Git history. This report preserves the point-in-time execution and benchmark evidence from that completed program.
 
 Run date: 2026-03-12
 
@@ -136,4 +136,4 @@ Values are taken from `phase6_profile.txt` workload blocks.
 ### Closeout context
 
 - Phase closeout status is unchanged: this report updates readability and interpretation only.
-- The authoritative closeout decision and rationale remain in [`final-decision-report.md`](final-decision-report.md).
+- The authoritative historical closeout decision and rationale remain in [`final-decision-report.md`](final-decision-report.md).

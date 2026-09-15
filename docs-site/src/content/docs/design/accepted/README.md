@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-09-14
+last_reviewed: 2026-09-15
 ---
 
 # Accepted Designs
@@ -55,8 +55,6 @@ Move a design to `implemented/` only after code has been checked against it and 
 
 ### Repository Family Extraction
 
-- [RunenECS Extraction Boundary Design](runenecs-extraction-boundary-design.md)
-- [RunenECS Boundary Repair Execution Plan](runenecs-boundary-repair-execution-plan.md)
 - [RunenRender Architecture and Decomposition Design](runenrender-decomposition-design.md)
 
 ### Workspace / Cross-Domain

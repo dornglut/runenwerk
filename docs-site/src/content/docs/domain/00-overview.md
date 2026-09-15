@@ -5,7 +5,7 @@ status: active
 owner: domain
 layer: domain
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-15
 ---
 
 # Domain Layer Overview
@@ -32,7 +32,7 @@ Domain crates must not depend on:
 
 | Area | Crates | Primary docs |
 | --- | --- | --- |
-| ECS integration | standalone [`runen-ecs`](https://github.com/dornglut/runen-ecs), consumed by Runenwerk through an exact accepted revision | Retained Runenwerk-facing API and integration guidance: [`ecs/00-overview.md`](./ecs/00-overview.md), [`ecs/README.md`](./ecs/README.md), [`ecs/usage-guide.md`](./ecs/usage-guide.md) |
+| ECS integration | standalone [`runen-ecs`](https://github.com/dornglut/runen-ecs), consumed by Runenwerk through an exact accepted revision | Current reusable architecture: [standalone RunenECS](https://github.com/dornglut/runen-ecs/blob/main/ARCHITECTURE.md). Version-matched API/examples: [RunenECS package guide at the consumed revision](https://github.com/dornglut/runen-ecs/blob/6a7af7bbd15da960ce0b68484b446134940fa479/crates/runen-ecs/README.md). Runenwerk integration: [`../engine/reference/architecture.md`](../engine/reference/architecture.md), [`../engine/reference/usage-guide.md`](../engine/reference/usage-guide.md), [`../engine/reference/advanced-guide.md`](../engine/reference/advanced-guide.md). |
 | Scene | `domain/scene` | [`scene/README.md`](./scene/README.md) |
 | Asset and product contracts | `domain/asset`, `domain/product` | Workspace-level current-state contract summaries live in [`../workspace/sdf-first-execution-roadmap.md`](../workspace/sdf-first-execution-roadmap.md), [`../design/accepted/field-product-contracts-diagnostics-and-residency-design.md`](../design/accepted/field-product-contracts-diagnostics-and-residency-design.md), and [`../design/accepted/sdf-first-production-capability-map.md`](../design/accepted/sdf-first-production-capability-map.md) until deeper crate guides are written. |
 | Geometry | `domain/geometry` | [`geometry/README.md`](./geometry/README.md), [`geometry/ownership-boundary.md`](./geometry/ownership-boundary.md), [`geometry/api-notes.md`](./geometry/api-notes.md) |
@@ -43,11 +43,7 @@ Domain crates must not depend on:
 | UI substrate and definitions | `domain/ui/*`, including `domain/ui/ui_definition` | [`ui/README.md`](./ui/README.md), [`ui/architecture.md`](./ui/architecture.md), [`ui/roadmap.md`](./ui/roadmap.md) |
 | Editor domains and definitions | `domain/editor/*`, including `domain/editor/editor_definition` | [`editor/README.md`](./editor/README.md) |
 
-Generic ECS schedule identity, system sets, semantic ordering, access facts,
-validation, deterministic serial reference execution, and deferred-command
-visibility are owned by standalone RunenECS. Runenwerk consumes those public
-contracts; it does not retain a local ECS implementation or an active
-standalone `domain/scheduler` crate.
+Reusable ECS semantics, API, execution contracts, validation, and conformance are owned by standalone RunenECS. Runenwerk owns only its downstream compatibility claim and application/product integration. The exact dependency revision is declared by the root workspace manifest; current upstream framework evolution does not silently change the API consumed by this checkout.
 
 ## Planned Domain Areas
 
@@ -90,9 +86,9 @@ Domain documentation should not own:
 
 Start here when working in the domain layer:
 
-- ECS: [`ecs/00-overview.md`](./ecs/00-overview.md)
-- ECS usage: [`ecs/usage-guide.md`](./ecs/usage-guide.md)
-- ECS advanced guide: [`ecs/advanced-guide.md`](./ecs/advanced-guide.md)
+- ECS semantics and architecture: [standalone RunenECS](https://github.com/dornglut/runen-ecs/blob/main/ARCHITECTURE.md)
+- ECS API/examples matching this checkout: [RunenECS package guide at `6a7af7b…`](https://github.com/dornglut/runen-ecs/blob/6a7af7bbd15da960ce0b68484b446134940fa479/crates/runen-ecs/README.md)
+- Runenwerk ECS integration: [`../engine/reference/architecture.md`](../engine/reference/architecture.md), [`../engine/reference/usage-guide.md`](../engine/reference/usage-guide.md), [`../engine/reference/advanced-guide.md`](../engine/reference/advanced-guide.md)
 - Geometry: [`geometry/README.md`](./geometry/README.md)
 - Asset/product contracts: [`../design/accepted/field-product-contracts-diagnostics-and-residency-design.md`](../design/accepted/field-product-contracts-diagnostics-and-residency-design.md)
 - Spatial mechanics: standalone [RunenSpatial](https://github.com/dornglut/runen-spatial); Runenwerk retains world-operation, SDF, and runtime integration policy.
