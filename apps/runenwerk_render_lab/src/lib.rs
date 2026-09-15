@@ -11,10 +11,15 @@ use engine::plugins::render::admission::{
     RenderRepresentationAvailabilityState,
 };
 use engine::plugins::render::appearance::{RenderDiffuseMaterial, RenderDirectionalEmitter};
+use engine::plugins::render::backend::RenderSurfaceId;
 use engine::plugins::render::deterministic_admission::admit_deterministic_render;
 use engine::plugins::render::deterministic_execution::{
     RenderCapturedDeterministicRadiance, SubmittedDeterministicRender,
     submit_deterministic_render_for_verified_result,
+};
+use engine::plugins::render::frame::{
+    PreparedFlowInvocationRequest, PreparedRenderFrameRequestResource,
+    RenderDeterministicFrameContribution, RenderDeterministicFrameContributionResource,
 };
 use engine::plugins::render::participation::{RenderMaterialAssignment, RenderObjectParticipation};
 use engine::plugins::render::representation::{
@@ -28,6 +33,8 @@ use engine::plugins::render::request::{
     RenderRadiometricRepresentation, RenderRequest, RenderRequestedOutput, RenderResultTopology,
     RenderSamplingSupport, RenderSemanticTolerance,
 };
+use engine::plugins::render::runtime::RenderDynamicTextureTargetRequestRegistryResource;
+use engine::plugins::render::runtime::RenderRuntimeSet;
 use engine::plugins::render::scene::{
     RenderObjectState, RenderSceneSnapshot, RenderSceneStore, RenderSceneUpdate,
 };
@@ -40,6 +47,17 @@ use engine::plugins::render::surface_input::{
     RenderSurfaceSemanticInput, RenderSurfaceSemanticInputBinding,
     RenderSurfaceSemanticInputRequirement,
 };
+use engine::plugins::render::{
+    RenderDynamicTextureRetention, RenderDynamicTextureTargetDescriptor,
+    RenderDynamicTextureTargetKey, RenderFlow, RenderPlugin, RenderTargetAliasKind,
+    RenderTextureSampleMode, RenderTextureTargetFormat, RenderTextureTargetUsage,
+};
+use engine::plugins::{ScenePlugin, default_plugins};
+use engine::prelude::{
+    App, FramePacingPolicyResource, InputState, Plugin, RenderPrepare, Res, ResMut, Update,
+    WindowState, WindowStateRegistryResource,
+};
+use engine::runtime::SystemConfigExt;
 use image::{GrayImage, ImageFormat};
 use runen_gpu::{
     GpuCapabilityProfile, GpuContext, GpuContextDescriptor, GpuContextRequestErrorCategory,
@@ -67,6 +85,87 @@ const SPHERE_CENTER: [f64; 3] = [0.0, 0.0, -3.0];
 const SPHERE_RADIUS: f64 = 1.0;
 const PLANE_POINT: [f64; 3] = [0.0, -1.0, 0.0];
 const PLANE_NORMAL: [f64; 3] = [0.0, 1.0, 0.0];
+const RL2_FLOW_ID: &str = "runenwerk.render_lab.rl2";
+const RL2_PASS_ID: &str = "runenwerk.render_lab.rl2.visualize";
+const RL2_PRESENT_ID: &str = "runenwerk.render_lab.rl2.present";
+const RL2_RADIANCE_ALIAS: &str = "rl2.radiance";
+const RL2_TARGET_NAMESPACE: &str = "runenwerk.render_lab.rl2";
+const RL2_TARGET_ID: &str = "radiance";
+const RL2_PRODUCER_ID: u64 = 6892;
+
+#[derive(Debug, Clone, Copy, PartialEq, runen_ecs::Resource)]
+struct RenderLabCamera {
+    yaw_radians: f64,
+    pitch_radians: f64,
+    distance: f64,
+    pan: [f64; 2],
+}
+
+#[derive(Debug, Clone, Copy, runen_ecs::Resource)]
+struct RenderLabFlowId(engine::plugins::render::RenderFlowId);
+
+#[derive(runen_ecs::SystemParam)]
+struct RenderLabFramePublicationResources<'w> {
+    targets: ResMut<'w, RenderDynamicTextureTargetRequestRegistryResource>,
+    frame_requests: ResMut<'w, PreparedRenderFrameRequestResource>,
+    contributions: ResMut<'w, RenderDeterministicFrameContributionResource>,
+}
+
+impl Default for RenderLabCamera {
+    fn default() -> Self {
+        Self {
+            yaw_radians: 0.0,
+            pitch_radians: 0.0,
+            distance: 3.0,
+            pan: [0.0, 0.0],
+        }
+    }
+}
+
+impl RenderLabCamera {
+    fn observation_to_scene(self) -> RenderAffineTransform3 {
+        let (sin_yaw, cos_yaw) = self.yaw_radians.sin_cos();
+        let (sin_pitch, cos_pitch) = self.pitch_radians.sin_cos();
+        let right = [cos_yaw, 0.0, sin_yaw];
+        let up = [-sin_yaw * sin_pitch, cos_pitch, cos_yaw * sin_pitch];
+        let backward = [-sin_yaw * cos_pitch, -sin_pitch, cos_yaw * cos_pitch];
+        let view = scale(backward, -1.0);
+        let target = [0.0, 0.0, -3.0];
+        let origin = add(
+            sub(target, scale(view, self.distance)),
+            add(scale(right, self.pan[0]), scale(up, self.pan[1])),
+        );
+        RenderAffineTransform3::from_row_major_3x4([
+            right[0],
+            up[0],
+            backward[0],
+            origin[0],
+            right[1],
+            up[1],
+            backward[1],
+            origin[1],
+            right[2],
+            up[2],
+            backward[2],
+            origin[2],
+        ])
+        .expect("Render Lab camera basis is finite and invertible")
+    }
+}
+
+struct RenderLabPlugin;
+
+impl Plugin for RenderLabPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<RenderLabCamera>();
+        app.add_systems(Update, update_render_lab_camera_system);
+        app.add_systems(Update, approve_render_lab_close_system);
+        app.add_systems(
+            RenderPrepare,
+            publish_render_lab_frame_system.before(RenderRuntimeSet::FramePrepare),
+        );
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Classification {
@@ -329,6 +428,128 @@ pub fn run_founding_direct(output_root: impl AsRef<Path>) -> Result<ArtifactPath
     })
 }
 
+pub fn run_native() -> Result<()> {
+    let mut app = App::new();
+    app.set_title("Runenwerk Render Lab — RL2 native interaction");
+    app.with_frame_pacing(FramePacingPolicyResource::continuous_capped(60));
+    app.add_plugins(default_plugins());
+    app.add_plugin(ScenePlugin);
+    app.add_plugin(RenderPlugin);
+    app.add_plugin(RenderLabPlugin);
+    let flow = render_lab_flow()?;
+    app.insert_resource(RenderLabFlowId(flow.id()));
+    app.add_render_flow(flow);
+    app.run()
+}
+
+fn render_lab_flow() -> Result<RenderFlow> {
+    let flow = RenderFlow::new(RL2_FLOW_ID)
+        .with_target_alias(RL2_RADIANCE_ALIAS, RenderTargetAliasKind::Texture)?
+        .with_surface_color()?
+        .fullscreen_pass(RL2_PASS_ID)
+        .main_surface_only()
+        .shader_asset("assets/shaders/runenwerk_render_lab_radiance.wgsl")
+        .sample_texture_load(runen_gpu::GpuBindingKey::try_new(0, 0)?, RL2_RADIANCE_ALIAS)
+        .clear_color([0.0, 0.0, 0.0, 1.0])
+        .write_surface_color()?
+        .finish()
+        .present_pass(RL2_PRESENT_ID)?
+        .main_surface_only()
+        .surface_color()?
+        .finish()
+        .validate()?;
+    Ok(flow)
+}
+
+fn update_render_lab_camera_system(input: Res<InputState>, mut camera: ResMut<RenderLabCamera>) {
+    let (delta_x, delta_y) = input.mouse_delta;
+    if input.left_mouse_down() {
+        camera.yaw_radians += f64::from(delta_x) * 0.01;
+        camera.pitch_radians =
+            (camera.pitch_radians - f64::from(delta_y) * 0.01).clamp(-1.45, 1.45);
+    }
+    if input.middle_mouse_down() {
+        camera.pan[0] += f64::from(delta_x) * 0.01;
+        camera.pan[1] -= f64::from(delta_y) * 0.01;
+    }
+    if input.scroll_delta != 0.0 {
+        camera.distance =
+            (camera.distance * (-f64::from(input.scroll_delta) * 0.1).exp()).clamp(1.0, 8.0);
+    }
+}
+
+fn approve_render_lab_close_system(
+    mut window: ResMut<WindowState>,
+    mut windows: ResMut<WindowStateRegistryResource>,
+) {
+    if window.close_intent_pending {
+        window.request_close();
+    }
+    if let Some(primary_window_id) = windows.primary_window_id()
+        && let Some(primary_window) = windows.record_mut(primary_window_id)
+        && primary_window.close_intent_pending
+    {
+        primary_window.request_close();
+    }
+}
+
+fn publish_render_lab_frame_system(
+    camera: Res<RenderLabCamera>,
+    flow_id: Res<RenderLabFlowId>,
+    window: Res<WindowState>,
+    publication: RenderLabFramePublicationResources<'_>,
+) -> Result<()> {
+    let RenderLabFramePublicationResources {
+        mut targets,
+        mut frame_requests,
+        mut contributions,
+    } = publication;
+    let extent = (window.size_px.0.max(1), window.size_px.1.max(1));
+    let producer_id = engine::plugins::render::RenderFrameProducerId::try_from_raw(RL2_PRODUCER_ID)
+        .expect("Render Lab producer id is non-zero");
+    let (width, height) = extent;
+    let target_key = RenderDynamicTextureTargetKey::new(RL2_TARGET_NAMESPACE, RL2_TARGET_ID);
+    let target = RenderDynamicTextureTargetDescriptor::new(
+        target_key.clone(),
+        width,
+        height,
+        RenderTextureTargetFormat::R32Float,
+        RenderTextureTargetUsage {
+            color_attachment: false,
+            depth_attachment: false,
+            sampled: true,
+            storage: false,
+            copy_src: false,
+            copy_dst: true,
+        },
+        RenderTextureSampleMode::NonFilterableFloat,
+        RenderDynamicTextureRetention::RetainWhileRequested,
+    );
+    targets.remove_contribution(producer_id);
+    targets.replace_contribution(producer_id, [target])?;
+
+    let invocation =
+        PreparedFlowInvocationRequest::new(format!("{RL2_FLOW_ID}.main"), flow_id.0, "main")
+            .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, target_key.clone())?;
+    frame_requests.remove_contribution(producer_id);
+    frame_requests.replace_contribution(producer_id, [], [invocation])?;
+
+    let fixture =
+        founding_fixture_with_observation_and_extent(camera.observation_to_scene(), width, height)?;
+    contributions.remove(producer_id);
+    contributions.replace(RenderDeterministicFrameContribution {
+        producer_id,
+        render_surface_id: RenderSurfaceId::primary(),
+        scene: fixture.scene,
+        request: fixture.request,
+        semantic_inputs: fixture.semantic_inputs,
+        availability: fixture.availability,
+        output_index: 0,
+        target_key,
+    });
+    Ok(())
+}
+
 fn request_context() -> Result<GpuContext> {
     let descriptor =
         GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements())
@@ -364,6 +585,20 @@ fn output_destination() -> Result<runen_gpu::GpuTextureHandle> {
 }
 
 fn founding_fixture() -> Result<FoundingFixture> {
+    founding_fixture_with_observation(RenderAffineTransform3::identity())
+}
+
+fn founding_fixture_with_observation(
+    observation_to_scene: RenderAffineTransform3,
+) -> Result<FoundingFixture> {
+    founding_fixture_with_observation_and_extent(observation_to_scene, WIDTH, HEIGHT)
+}
+
+fn founding_fixture_with_observation_and_extent(
+    observation_to_scene: RenderAffineTransform3,
+    width: u32,
+    height: u32,
+) -> Result<FoundingFixture> {
     let mut store = RenderSceneStore::new();
     let sphere_id = store.allocate_object_id()?;
     let plane_id = store.allocate_object_id()?;
@@ -458,9 +693,9 @@ fn founding_fixture() -> Result<FoundingFixture> {
 
     let shutter = RenderTimeInterval::instant(RenderTimePoint::from_seconds(0.0)?);
     let observation = RenderObservationSpec::Perspective(RenderPerspectiveObservation::new(
-        RenderAffineTransform3::identity(),
+        observation_to_scene,
         std::f64::consts::FRAC_PI_3,
-        1.0,
+        f64::from(width) / f64::from(height.max(1)),
         shutter,
         RenderSamplingSupport::ideal_ray(),
     )?);
@@ -468,7 +703,7 @@ fn founding_fixture() -> Result<FoundingFixture> {
         RenderRadiometricRepresentation::spectral_at_wavelength_meters(WAVELENGTH_METERS)?;
     let output = RenderOutputSpec::new(
         RenderOutputValue::Radiance { representation },
-        RenderResultTopology::sample_lattice_2d(WIDTH, HEIGHT)?,
+        RenderResultTopology::sample_lattice_2d(width, height)?,
         RenderSemanticTolerance::absolute(ORACLE_TOLERANCE)?,
     )?;
     let request = RenderRequest::new(
@@ -794,6 +1029,46 @@ mod tests {
                     .collect::<Vec<_>>()
             )
             .is_ok()
+        );
+    }
+
+    #[test]
+    fn rl2_camera_starts_at_the_rl1_observation_frame() {
+        let camera = RenderLabCamera::default();
+        assert_eq!(
+            camera.observation_to_scene().row_major_3x4(),
+            RenderAffineTransform3::identity().row_major_3x4()
+        );
+    }
+
+    #[test]
+    fn rl2_camera_orbit_is_right_handed_and_changes_semantic_request() {
+        let camera = RenderLabCamera {
+            yaw_radians: 0.25,
+            pitch_radians: -0.15,
+            ..RenderLabCamera::default()
+        };
+        let transform = camera.observation_to_scene();
+        let matrix = transform.row_major_3x4();
+        assert_ne!(matrix, RenderAffineTransform3::identity().row_major_3x4());
+        assert!((matrix[0] * matrix[5] * matrix[10]).abs() > 0.5);
+
+        let baseline = founding_fixture().expect("baseline fixture");
+        let moved = founding_fixture_with_observation(transform).expect("moved fixture");
+        assert_ne!(
+            baseline.request.observations(),
+            moved.request.observations()
+        );
+    }
+
+    #[test]
+    fn rl2_flow_has_one_sampler_free_radiance_input_and_present() {
+        let flow = render_lab_flow().expect("RL2 flow should author");
+        assert_eq!(
+            flow.lexical_pass_order()
+                .expect("RL2 flow should compile")
+                .len(),
+            2
         );
     }
 }

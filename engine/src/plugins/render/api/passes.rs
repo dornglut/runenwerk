@@ -329,12 +329,33 @@ impl FullscreenPassBuilder {
         add_shader_binding(
             &mut self.pass,
             texture_binding,
-            RenderShaderBindingResource::SampledTexture(id),
+            RenderShaderBindingResource::SampledTexture {
+                resource: id,
+                sample_class: runen_gpu::GpuTextureSampleClass::FloatFilterable,
+            },
         );
         add_shader_binding(
             &mut self.pass,
             sampler_binding,
             RenderShaderBindingResource::Sampler,
+        );
+        push_unique_resource(&mut self.pass.sampled_textures, id);
+        self
+    }
+
+    pub fn sample_texture_load(
+        mut self,
+        texture_binding: GpuBindingKey,
+        resource_label: impl Into<String>,
+    ) -> Self {
+        let id = require_resource_id(&self.flow, resource_label.into().as_str());
+        add_shader_binding(
+            &mut self.pass,
+            texture_binding,
+            RenderShaderBindingResource::SampledTexture {
+                resource: id,
+                sample_class: runen_gpu::GpuTextureSampleClass::FloatUnfilterable,
+            },
         );
         push_unique_resource(&mut self.pass.sampled_textures, id);
         self
@@ -579,12 +600,33 @@ impl GraphicsPassBuilder {
         add_shader_binding(
             &mut self.pass,
             texture_binding,
-            RenderShaderBindingResource::SampledTexture(id),
+            RenderShaderBindingResource::SampledTexture {
+                resource: id,
+                sample_class: runen_gpu::GpuTextureSampleClass::FloatFilterable,
+            },
         );
         add_shader_binding(
             &mut self.pass,
             sampler_binding,
             RenderShaderBindingResource::Sampler,
+        );
+        push_unique_resource(&mut self.pass.sampled_textures, id);
+        self
+    }
+
+    pub fn sample_texture_load(
+        mut self,
+        texture_binding: GpuBindingKey,
+        resource_label: impl Into<String>,
+    ) -> Self {
+        let id = require_resource_id(&self.flow, resource_label.into().as_str());
+        add_shader_binding(
+            &mut self.pass,
+            texture_binding,
+            RenderShaderBindingResource::SampledTexture {
+                resource: id,
+                sample_class: runen_gpu::GpuTextureSampleClass::FloatUnfilterable,
+            },
         );
         push_unique_resource(&mut self.pass.sampled_textures, id);
         self

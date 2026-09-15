@@ -70,6 +70,12 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
         return Ok(());
     };
 
+    // Contributions are frame-scoped: product code must republish semantic work every frame.
+    let deterministic_contributions = world
+        .resource_mut::<RenderDeterministicFrameContributionResource>()
+        .map(|resource| resource.take_all())
+        .unwrap_or_default();
+
     let (target_w, target_h) = prepared_frame
         .views
         .iter()
@@ -136,6 +142,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
 
         gfx.render(
             &prepared_frame,
+            &deterministic_contributions,
             &mut shader_registry,
             compiled_flows,
             ui_rect_shader,
@@ -147,7 +154,9 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
         )
     };
 
+    let render_was_skipped = matches!(&render_result, Ok(timings) if !timings.submitted);
     let result = match render_result {
+        Ok(_) if render_was_skipped => Ok(()),
         Ok(timings) => {
             world.resource_mut::<DebugMetricsState>()?.last_timings = Some(timings);
 
@@ -419,18 +428,23 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
         }
     };
 
-    let result = result.and_then(|_| {
-        render_additional_surfaces(
-            &mut world,
-            &additional_prepared_frames,
-            &mut gfx,
-            &mut shader_registry,
-            &ui_font_atlas,
-            preflight_config,
-            &debug_control,
-            &debug_config,
-        )
-    });
+    let result = if render_was_skipped {
+        result
+    } else {
+        result.and_then(|_| {
+            render_additional_surfaces(
+                &mut world,
+                &additional_prepared_frames,
+                &deterministic_contributions,
+                &mut gfx,
+                &mut shader_registry,
+                &ui_font_atlas,
+                preflight_config,
+                &debug_control,
+                &debug_config,
+            )
+        })
+    };
 
     world.insert_resource(shader_registry);
     world.insert_resource(gfx);
@@ -441,6 +455,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
 fn render_additional_surfaces(
     world: &mut WorldMut,
     prepared_frames: &[PreparedRenderFrame],
+    deterministic_contributions: &[RenderDeterministicFrameContribution],
     gfx: &mut Gfx,
     shader_registry: &mut ShaderRegistryResource,
     ui_font_atlas: &UiFontAtlasResource,
@@ -487,6 +502,7 @@ fn render_additional_surfaces(
             .and_then(|id| shader_registry.handle(id));
         let render_result = gfx.render(
             prepared_frame,
+            deterministic_contributions,
             shader_registry,
             flow_registry.compiled_flows(),
             ui_rect_shader,

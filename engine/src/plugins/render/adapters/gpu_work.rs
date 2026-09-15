@@ -202,11 +202,31 @@ struct AuthoredRenderFragment {
 /// this one fragment in deterministic frame execution sequence. That gives G3 direct authority over
 /// cross-invocation RAW/WAR/WAW hazards and initialization without using fragment collection order
 /// or reconstructing resource dependencies in RunenRender.
-pub(crate) fn prepare_render_gpu_frame_work(
+#[allow(dead_code)]
+fn prepare_render_gpu_frame_work_legacy(
     graph_label: GpuResourceLabel,
     nodes: impl IntoIterator<Item = ResolvedRenderGpuWorkNode>,
 ) -> Result<GpuPreparedWorkGraph, RenderGpuWorkAdapterError> {
-    prepare_resolved_render_gpu_work(graph_label, nodes)
+    prepare_resolved_render_gpu_work(None, graph_label, nodes, &[], &[])
+}
+
+/// Prepares the canonical frame together with renderer-owned composable work. Imports are added
+/// only to the canonical consumer fragment; G3 therefore derives producer-to-visualizer ordering
+/// from the typed export relationship rather than from fragment order or a product-authored edge.
+pub(crate) fn prepare_render_gpu_frame_work(
+    context: &GpuContext,
+    graph_label: GpuResourceLabel,
+    nodes: impl IntoIterator<Item = ResolvedRenderGpuWorkNode>,
+    producer_fragments: &[GpuWorkFragment],
+    imports: &[GpuWorkImport],
+) -> Result<GpuPreparedWorkGraph, RenderGpuWorkAdapterError> {
+    prepare_resolved_render_gpu_work(
+        Some(context),
+        graph_label,
+        nodes,
+        producer_fragments,
+        imports,
+    )
 }
 
 /// Prepares one bounded render work set from execution-complete logical GPU occurrences.
@@ -222,17 +242,30 @@ pub(crate) fn prepare_render_gpu_frame_work(
 /// own dependency result, and retains only unsatisfied render-control requirements for the final
 /// preparation. No access intersection or hazard rule is duplicated in RunenRender.
 fn prepare_resolved_render_gpu_work(
+    context: Option<&GpuContext>,
     graph_label: GpuResourceLabel,
     nodes: impl IntoIterator<Item = ResolvedRenderGpuWorkNode>,
+    producer_fragments: &[GpuWorkFragment],
+    imports: &[GpuWorkImport],
 ) -> Result<GpuPreparedWorkGraph, RenderGpuWorkAdapterError> {
     let nodes = nodes.into_iter().collect::<Vec<_>>();
     validate_occurrences(&nodes)?;
 
     let graph_provenance = GpuResourceProvenance::new(graph_label.clone(), None, None);
-    let resources = collect_operation_resources(&nodes)?;
+    let mut resources = collect_operation_resources(&nodes)?;
+    for import in imports {
+        resources
+            .entry(import.resource().diagnostic_identity())
+            .or_insert_with(|| import.resource().clone());
+    }
     let inputs = resources
         .values()
-        .filter(|resource| !matches!(resource, GpuResourceRef::QuerySet(_)))
+        .filter(|resource| {
+            !matches!(resource, GpuResourceRef::QuerySet(_))
+                && !imports.iter().any(|import| {
+                    import.resource().diagnostic_identity() == resource.diagnostic_identity()
+                })
+        })
         .map(|resource| {
             Ok(GpuWorkResourceInput::new(
                 resource.clone(),
@@ -250,9 +283,11 @@ fn prepare_resolved_render_gpu_work(
         &graph_label,
         &graph_provenance,
         &BTreeSet::new(),
+        imports,
     )?;
-    let provisional_graph =
-        GpuPreparedWorkGraph::prepare(graph_label.clone(), [provisional.fragment])?;
+    let mut provisional_fragments = producer_fragments.to_vec();
+    provisional_fragments.push(provisional.fragment);
+    let provisional_graph = prepare_graph(context, graph_label.clone(), provisional_fragments)?;
     let provisional_occurrences =
         map_prepared_occurrences(&provisional_graph, &provisional.occurrence_nodes)?;
     let required_explicit_orders = normalize_control_orders(
@@ -271,11 +306,25 @@ fn prepare_resolved_render_gpu_work(
             &graph_label,
             &graph_provenance,
             &required_explicit_orders,
+            imports,
         )?;
-        GpuPreparedWorkGraph::prepare(graph_label, [final_fragment.fragment])?
+        let mut final_fragments = producer_fragments.to_vec();
+        final_fragments.push(final_fragment.fragment);
+        prepare_graph(context, graph_label, final_fragments)?
     };
 
     Ok(graph)
+}
+
+fn prepare_graph(
+    context: Option<&GpuContext>,
+    graph_label: GpuResourceLabel,
+    fragments: Vec<GpuWorkFragment>,
+) -> Result<GpuPreparedWorkGraph, RenderGpuWorkAdapterError> {
+    context
+        .map(|context| context.prepare_work_graph(graph_label.clone(), fragments.clone()))
+        .unwrap_or_else(|| GpuPreparedWorkGraph::prepare(graph_label, fragments))
+        .map_err(RenderGpuWorkAdapterError::from)
 }
 
 fn validate_occurrences(
@@ -322,6 +371,7 @@ fn author_render_fragment(
     graph_label: &GpuResourceLabel,
     graph_provenance: &GpuResourceProvenance,
     explicit_orders: &BTreeSet<(RenderGpuWorkOccurrenceId, RenderGpuWorkOccurrenceId)>,
+    imports: &[GpuWorkImport],
 ) -> Result<AuthoredRenderFragment, RenderGpuWorkAdapterError> {
     for occurrence in explicit_orders
         .iter()
@@ -344,6 +394,9 @@ fn author_render_fragment(
             }
             for input in inputs {
                 builder.add_input(input.clone())?;
+            }
+            for import in imports {
+                builder.add_import(import.clone())?;
             }
 
             for node in nodes {
@@ -639,7 +692,7 @@ mod tests {
             ),
         ];
 
-        let prepared = prepare_render_gpu_frame_work(label("render frame test work"), nodes)
+        let prepared = prepare_render_gpu_frame_work_legacy(label("render frame test work"), nodes)
             .expect("bounded frame work should prepare");
         let node_id = |label: &str| {
             prepared
@@ -744,8 +797,9 @@ mod tests {
             ),
         ];
 
-        let prepared = prepare_render_gpu_frame_work(label("capture stage order test"), nodes)
-            .expect("capture stage work should prepare");
+        let prepared =
+            prepare_render_gpu_frame_work_legacy(label("capture stage order test"), nodes)
+                .expect("capture stage work should prepare");
         let prepared_node = |label: &str| {
             prepared
                 .nodes()
@@ -828,7 +882,7 @@ mod tests {
             ),
         ];
 
-        let prepared = prepare_render_gpu_frame_work(label("terminal Present test"), nodes)
+        let prepared = prepare_render_gpu_frame_work_legacy(label("terminal Present test"), nodes)
             .expect("G3 should order a zero-control Present from resource hazards");
         let prepared_node = |label: &str| {
             prepared

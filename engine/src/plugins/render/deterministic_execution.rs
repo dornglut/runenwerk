@@ -26,16 +26,16 @@ use super::request::{RenderDistanceConvention, RenderObservationSpec, RenderOutp
 use super::scene::RenderObjectId;
 use super::surface_input::RenderSurfaceSemanticInputView;
 use runen_gpu::{
-    GpuBufferDescriptor, GpuBufferInitialization, GpuBufferRegion, GpuBufferTextureLayout,
-    GpuBufferUsage, GpuClearOperation, GpuComputeOperation, GpuComputePipelineDescriptor,
-    GpuContext, GpuContextAffinity, GpuCopyOperation, GpuDispatchIntent, GpuDispatchSize,
-    GpuExportKey, GpuExportRelationship, GpuInitialCoverage, GpuReadbackId, GpuReadbackOperation,
-    GpuReadbackStatus, GpuReconstruction, GpuResourceAccessIntent, GpuResourceLifetime,
-    GpuResourceProvenance, GpuResourceRef, GpuResourceScope, GpuRuntimeBindingValue, GpuSubmission,
-    GpuSubmissionFailureKind, GpuSubmissionStatus, GpuTextureAccessResource, GpuTextureCopyRegion,
-    GpuTextureFormat, GpuTextureHandle, GpuUploadOperation, GpuWorkFragment, GpuWorkImport,
-    GpuWorkOutput, GpuWorkSubmissionError, PreparedGpuData, TransferData,
-    admit_static_wgsl_sources,
+    GpuBufferDescriptor, GpuBufferHandle, GpuBufferInitialization, GpuBufferRegion,
+    GpuBufferTextureLayout, GpuBufferUsage, GpuClearOperation, GpuComputeOperation,
+    GpuComputePipelineDescriptor, GpuContext, GpuContextAffinity, GpuCopyOperation,
+    GpuDispatchIntent, GpuDispatchSize, GpuExportKey, GpuExportRelationship, GpuInitialCoverage,
+    GpuReadbackId, GpuReadbackOperation, GpuReadbackStatus, GpuReconstruction,
+    GpuResourceAccessIntent, GpuResourceLifetime, GpuResourceProvenance, GpuResourceRef,
+    GpuRuntimeBindingValue, GpuSubmission, GpuSubmissionFailureKind, GpuSubmissionStatus,
+    GpuTextureAccessResource, GpuTextureCopyRegion, GpuTextureFormat, GpuTextureHandle,
+    GpuUploadOperation, GpuWorkFragment, GpuWorkImport, GpuWorkOutput, GpuWorkResourceIdAllocator,
+    GpuWorkSubmissionError, PreparedGpuData, TransferData, admit_static_wgsl_sources,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
@@ -54,6 +54,48 @@ const OBSERVATION_PROBE: u32 = 2;
 const SHAPE_SPHERE: u32 = 1;
 const SHAPE_PLANE: u32 = 2;
 const MAINTAINED_WGSL: &str = include_str!("deterministic_execution.wgsl");
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum DeterministicBufferKind {
+    Input,
+    CanonicalOutput,
+    Definedness,
+    Status,
+}
+
+/// Renderer-owned logical buffer identities reused by ordinary composed frames.
+///
+/// RunenGPU's bind-group realization retains the resource dependencies of each realized binding.
+/// Rebuilding these identities for every interactive frame would therefore grow the authoritative
+/// realization registry without bound. The cache is scoped to one renderer/context generation;
+/// a descriptor change, such as a resize, deliberately allocates a replacement identity.
+#[derive(Debug, Default)]
+pub(crate) struct DeterministicResourceCache {
+    identities: GpuWorkResourceIdAllocator,
+    buffers: BTreeMap<(usize, DeterministicBufferKind), GpuBufferHandle>,
+}
+
+impl DeterministicResourceCache {
+    fn buffer(
+        &mut self,
+        output_index: usize,
+        kind: DeterministicBufferKind,
+        descriptor: GpuBufferDescriptor,
+    ) -> Result<GpuBufferHandle, RenderDeterministicLoweringError> {
+        let key = (output_index, kind);
+        if let Some(existing) = self.buffers.get(&key)
+            && existing.descriptor() == &descriptor
+        {
+            return Ok(existing.clone());
+        }
+        let handle = self
+            .identities
+            .allocate_buffer_handle(descriptor)
+            .map_err(|error| gpu_authoring("deterministic buffer allocation", error))?;
+        self.buffers.insert(key, handle.clone());
+        Ok(handle)
+    }
+}
 
 /// Physical object-identity decoder owned by one exact maintained execution.
 ///
@@ -690,8 +732,22 @@ pub fn prepare_deterministic_render(
     admitted: AdmittedDeterministicRender,
     context: &GpuContext,
 ) -> Result<PreparedDeterministicRender, RenderDeterministicExecutionError> {
-    let lowered =
-        lower_deterministic_render(&admitted, context, DeterministicObservationIntent::Ordinary)?;
+    let mut resources = DeterministicResourceCache::default();
+    prepare_deterministic_render_with_cache(admitted, context, &mut resources)
+}
+
+/// Prepare one ordinary maintained deterministic render using renderer-owned reusable resources.
+pub(crate) fn prepare_deterministic_render_with_cache(
+    admitted: AdmittedDeterministicRender,
+    context: &GpuContext,
+    resources: &mut DeterministicResourceCache,
+) -> Result<PreparedDeterministicRender, RenderDeterministicExecutionError> {
+    let lowered = lower_deterministic_render(
+        &admitted,
+        context,
+        DeterministicObservationIntent::Ordinary,
+        resources,
+    )?;
     debug_assert!(lowered.verification_readbacks.is_empty());
     Ok(PreparedDeterministicRender {
         admitted,
@@ -731,8 +787,12 @@ pub(super) async fn submit_deterministic_render_for_verification(
     admitted: AdmittedDeterministicRender,
     context: &GpuContext,
 ) -> Result<DeterministicVerificationSubmission, RenderDeterministicExecutionError> {
-    let lowered =
-        lower_deterministic_render(&admitted, context, DeterministicObservationIntent::Verify)?;
+    let lowered = lower_deterministic_render(
+        &admitted,
+        context,
+        DeterministicObservationIntent::Verify,
+        &mut DeterministicResourceCache::default(),
+    )?;
     let verification_readbacks = lowered.verification_readbacks;
     let submitted = submit_lowered_deterministic_render(
         admitted,
@@ -790,6 +850,7 @@ fn lower_deterministic_render(
     maintained: &AdmittedDeterministicRender,
     context: &GpuContext,
     intent: DeterministicObservationIntent,
+    resources: &mut DeterministicResourceCache,
 ) -> Result<LoweredDeterministicRender, RenderDeterministicLoweringError> {
     let admitted = maintained.admitted();
     if admitted.environment().affinity() != context.affinity() {
@@ -815,7 +876,6 @@ fn lower_deterministic_render(
         })
         .collect::<Result<BTreeMap<_, _>, _>>()?;
 
-    let mut resources = GpuResourceScope::new();
     let mut fragments = Vec::new();
     fragments
         .try_reserve_exact(admitted.outputs().len())
@@ -837,7 +897,7 @@ fn lower_deterministic_render(
             output.output_index(),
             &object_codes,
             context,
-            &mut resources,
+            resources,
             intent,
         )?;
         fragments.push(lowered.fragment);
@@ -886,7 +946,7 @@ fn lower_output(
     output_index: usize,
     object_codes: &BTreeMap<RenderObjectId, u32>,
     context: &GpuContext,
-    resources: &mut GpuResourceScope,
+    resources: &mut DeterministicResourceCache,
     intent: DeterministicObservationIntent,
 ) -> Result<LoweredDeterministicOutput, RenderDeterministicLoweringError> {
     let admitted_output = admitted
@@ -931,70 +991,70 @@ fn lower_output(
     )
     .map_err(|error| gpu_authoring("semantic-input preparation", error))?;
 
-    let input = resources
-        .buffer(
-            GpuBufferDescriptor::ordinary_owned(
-                format!("RunenRender output {output_index} packed input"),
-                GpuResourceLifetime::Transient,
-                GpuReconstruction::SourceBacked,
-                input_payload.layout().byte_len(),
-                [GpuBufferUsage::Storage, GpuBufferUsage::CopyDestination],
-                GpuBufferInitialization::Uninitialized,
-            )
-            .map_err(|error| gpu_authoring("input-buffer descriptor", error))?,
+    let input = resources.buffer(
+        output_index,
+        DeterministicBufferKind::Input,
+        GpuBufferDescriptor::ordinary_owned(
+            format!("RunenRender output {output_index} packed input"),
+            GpuResourceLifetime::Transient,
+            GpuReconstruction::SourceBacked,
+            input_payload.layout().byte_len(),
+            [GpuBufferUsage::Storage, GpuBufferUsage::CopyDestination],
+            GpuBufferInitialization::Uninitialized,
         )
-        .map_err(|error| gpu_authoring("input-buffer allocation", error))?;
-    let canonical_output = resources
-        .buffer(
-            GpuBufferDescriptor::ordinary_owned(
-                format!("RunenRender output {output_index} canonical words"),
-                GpuResourceLifetime::Transient,
-                GpuReconstruction::SourceBacked,
-                packed.output_byte_len,
-                [
-                    GpuBufferUsage::Storage,
-                    GpuBufferUsage::CopySource,
-                    GpuBufferUsage::CopyDestination,
-                ],
-                GpuBufferInitialization::Uninitialized,
-            )
-            .map_err(|error| gpu_authoring("canonical-output descriptor", error))?,
+        .map_err(|error| gpu_authoring("input-buffer descriptor", error))?,
+    )?;
+    let canonical_output = resources.buffer(
+        output_index,
+        DeterministicBufferKind::CanonicalOutput,
+        GpuBufferDescriptor::ordinary_owned(
+            format!("RunenRender output {output_index} canonical words"),
+            GpuResourceLifetime::Transient,
+            GpuReconstruction::SourceBacked,
+            packed.output_byte_len,
+            [
+                GpuBufferUsage::Storage,
+                GpuBufferUsage::CopySource,
+                GpuBufferUsage::CopyDestination,
+            ],
+            GpuBufferInitialization::Uninitialized,
         )
-        .map_err(|error| gpu_authoring("canonical-output allocation", error))?;
-    let definedness = resources
-        .buffer(
-            GpuBufferDescriptor::ordinary_owned(
-                format!("RunenRender output {output_index} definedness"),
-                GpuResourceLifetime::Transient,
-                GpuReconstruction::SourceBacked,
-                sample_byte_len,
-                [
-                    GpuBufferUsage::Storage,
-                    GpuBufferUsage::CopySource,
-                    GpuBufferUsage::CopyDestination,
-                ],
-                GpuBufferInitialization::Uninitialized,
-            )
-            .map_err(|error| gpu_authoring("definedness descriptor", error))?,
+        .map_err(|error| gpu_authoring("canonical-output descriptor", error))?,
+    )?;
+    let definedness = resources.buffer(
+        output_index,
+        DeterministicBufferKind::Definedness,
+        GpuBufferDescriptor::ordinary_owned(
+            format!("RunenRender output {output_index} definedness"),
+            GpuResourceLifetime::Transient,
+            GpuReconstruction::SourceBacked,
+            sample_byte_len,
+            [
+                GpuBufferUsage::Storage,
+                GpuBufferUsage::CopySource,
+                GpuBufferUsage::CopyDestination,
+            ],
+            GpuBufferInitialization::Uninitialized,
         )
-        .map_err(|error| gpu_authoring("definedness allocation", error))?;
-    let status = resources
-        .buffer(
-            GpuBufferDescriptor::ordinary_owned(
-                format!("RunenRender output {output_index} evaluator status"),
-                GpuResourceLifetime::Transient,
-                GpuReconstruction::SourceBacked,
-                sample_byte_len,
-                [
-                    GpuBufferUsage::Storage,
-                    GpuBufferUsage::CopySource,
-                    GpuBufferUsage::CopyDestination,
-                ],
-                GpuBufferInitialization::Uninitialized,
-            )
-            .map_err(|error| gpu_authoring("status descriptor", error))?,
+        .map_err(|error| gpu_authoring("definedness descriptor", error))?,
+    )?;
+    let status = resources.buffer(
+        output_index,
+        DeterministicBufferKind::Status,
+        GpuBufferDescriptor::ordinary_owned(
+            format!("RunenRender output {output_index} evaluator status"),
+            GpuResourceLifetime::Transient,
+            GpuReconstruction::SourceBacked,
+            sample_byte_len,
+            [
+                GpuBufferUsage::Storage,
+                GpuBufferUsage::CopySource,
+                GpuBufferUsage::CopyDestination,
+            ],
+            GpuBufferInitialization::Uninitialized,
         )
-        .map_err(|error| gpu_authoring("status allocation", error))?;
+        .map_err(|error| gpu_authoring("status descriptor", error))?,
+    )?;
 
     let input_upload = GpuUploadOperation::whole_buffer(&input, input_payload)
         .map_err(|error| gpu_authoring("input upload", error))?;

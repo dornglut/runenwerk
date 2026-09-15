@@ -2,6 +2,10 @@ use super::{
     PreparedFrameContext, PreparedFrameContributions, PreparedUiFrameContribution,
     PreparedViewFrame,
 };
+use crate::plugins::render::admission::RenderRepresentationAvailabilityFact;
+use crate::plugins::render::request::RenderRequest;
+use crate::plugins::render::scene::RenderSceneSnapshot;
+use crate::plugins::render::surface_input::RenderSurfaceSemanticInputBinding;
 use crate::plugins::render::{
     RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey,
     RenderDynamicTextureUploadDescriptor, RenderFlowId, RenderFrameProducerId,
@@ -18,6 +22,48 @@ pub struct PreparedRenderFrameResource {
     frames: BTreeMap<RenderSurfaceId, PreparedRenderFrame>,
     next_frame_index: u64,
     next_prepare_epoch: u64,
+}
+
+/// Product-owned semantic work published for exactly one native render frame.
+///
+/// This is intentionally free of GPU objects and maintained-carrier details. The renderer admits
+/// and lowers it only after the frame's dynamic targets have been realized, then composes its
+/// typed work into the canonical frame graph.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderDeterministicFrameContribution {
+    pub producer_id: RenderFrameProducerId,
+    pub render_surface_id: RenderSurfaceId,
+    pub scene: RenderSceneSnapshot,
+    pub request: RenderRequest,
+    pub semantic_inputs: Vec<RenderSurfaceSemanticInputBinding>,
+    pub availability: Vec<RenderRepresentationAvailabilityFact>,
+    pub output_index: usize,
+    pub target_key: RenderDynamicTextureTargetKey,
+}
+
+#[derive(Debug, Default, runen_ecs::Component, runen_ecs::Resource)]
+pub struct RenderDeterministicFrameContributionResource {
+    contributions: BTreeMap<RenderFrameProducerId, RenderDeterministicFrameContribution>,
+}
+
+impl RenderDeterministicFrameContributionResource {
+    pub fn replace(&mut self, contribution: RenderDeterministicFrameContribution) {
+        self.contributions
+            .insert(contribution.producer_id, contribution);
+    }
+
+    pub fn remove(
+        &mut self,
+        producer_id: impl Into<RenderFrameProducerId>,
+    ) -> Option<RenderDeterministicFrameContribution> {
+        self.contributions.remove(&producer_id.into())
+    }
+
+    pub fn take_all(&mut self) -> Vec<RenderDeterministicFrameContribution> {
+        std::mem::take(&mut self.contributions)
+            .into_values()
+            .collect()
+    }
 }
 
 impl PreparedRenderFrameResource {

@@ -14,7 +14,10 @@ use crate::plugins::render::{
     RenderGpuWorkOccurrenceId, RenderPassId, ResolvedRenderGpuWorkNode,
     prepare_render_gpu_frame_work,
 };
-use runen_gpu::{GpuPresentOperation, GpuResourceLabel, GpuTextureHandle, GpuTextureViewHandle};
+use runen_gpu::{
+    GpuPresentOperation, GpuResourceLabel, GpuResourceProvenance, GpuTextureHandle,
+    GpuTextureViewHandle, GpuWorkFragment, GpuWorkImport,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FeaturePassAction {
@@ -70,6 +73,7 @@ impl Renderer {
         surface_view: &GpuTextureViewHandle,
         acquired_surface_extent: (u32, u32),
         prepared_frame: &PreparedRenderFrame,
+        deterministic_contributions: &[crate::plugins::render::RenderDeterministicFrameContribution],
         packet: RendererPreparedPacket,
         compiled_flows: &[CompiledRenderFlowPlan],
         shader_registry: &ShaderRegistryResource,
@@ -157,6 +161,12 @@ impl Renderer {
         }
         nodes.append(&mut frame.nodes);
 
+        let (producer_fragments, radiance_imports) = self.prepare_deterministic_compositions(
+            context,
+            prepared_frame,
+            deterministic_contributions,
+        )?;
+
         let mut terminal_controls =
             resolve_terminal_present_controls(frame.terminal_present_controls)?;
         if !batch.final_captures.is_empty() {
@@ -191,12 +201,15 @@ impl Renderer {
         let encode_submit_start = Instant::now();
         let _span = tracing::info_span!("renderer.prepare_submit").entered();
         let graph = prepare_render_gpu_frame_work(
+            context,
             GpuResourceLabel::new(format!(
                 "render.frame.{}.surface.{}",
                 prepared_frame.context.frame_index,
                 prepared_frame.surface.render_surface_id.raw()
             ))?,
             nodes,
+            &producer_fragments,
+            &radiance_imports,
         )?;
         let prepared = pollster::block_on(context.prepare_submission(graph))?;
         let submission = context.submit_prepared(prepared).map_err(|rejection| {
@@ -694,6 +707,68 @@ impl Renderer {
         })
     }
 
+    fn prepare_deterministic_compositions(
+        &mut self,
+        context: &GpuContext,
+        prepared_frame: &PreparedRenderFrame,
+        contributions: &[crate::plugins::render::RenderDeterministicFrameContribution],
+    ) -> Result<(Vec<GpuWorkFragment>, Vec<GpuWorkImport>)> {
+        let mut fragments = Vec::new();
+        let mut imports = Vec::new();
+        for contribution in contributions.iter().filter(|contribution| {
+            contribution.render_surface_id == prepared_frame.surface.render_surface_id
+        }) {
+            let target = self
+                .dynamic_texture_targets
+                .texture_handle(&contribution.target_key)?;
+            let binding = crate::plugins::render::admission::RenderOutputBinding::new(
+                contribution.output_index,
+                crate::plugins::render::admission::RenderOutputDestination::SampleLatticeTexture(
+                    target,
+                ),
+            );
+            let admitted =
+                crate::plugins::render::deterministic_admission::admit_deterministic_render(
+                    &contribution.scene,
+                    &contribution.request,
+                    &contribution.semantic_inputs,
+                    &contribution.availability,
+                    std::slice::from_ref(&binding),
+                    context,
+                )
+                .map_err(|error| {
+                    anyhow::anyhow!("deterministic render admission failed: {error}")
+                })?;
+            let prepared =
+                crate::plugins::render::deterministic_execution::prepare_deterministic_render_with_cache(
+                    admitted,
+                    context,
+                    &mut self.deterministic_resources,
+                )
+                .map_err(|error| {
+                    anyhow::anyhow!("deterministic render preparation failed: {error}")
+                })?;
+            let output = prepared
+                .radiance_output(contribution.output_index)
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "deterministic render did not produce radiance output {}",
+                        contribution.output_index
+                    )
+                })?;
+            fragments.extend(prepared.work_set().fragments().iter().cloned());
+            imports.push(output.import(GpuResourceProvenance::new(
+                GpuResourceLabel::new(format!(
+                    "render.lab.radiance.visualizer.{}",
+                    contribution.target_key
+                ))?,
+                None,
+                None,
+            )));
+        }
+        Ok((fragments, imports))
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn render(
         &mut self,
@@ -702,6 +777,7 @@ impl Renderer {
         surface_view: &GpuTextureViewHandle,
         acquired_surface_extent: (u32, u32),
         prepared_frame: &PreparedRenderFrame,
+        deterministic_contributions: &[crate::plugins::render::RenderDeterministicFrameContribution],
         shader_registry: &mut ShaderRegistryResource,
         compiled_flows: &[CompiledRenderFlowPlan],
         ui_rect_shader: Option<ShaderHandle>,
@@ -728,6 +804,7 @@ impl Renderer {
             surface_view,
             acquired_surface_extent,
             prepared_frame,
+            deterministic_contributions,
             packet,
             compiled_flows,
             shader_registry,

@@ -117,6 +117,10 @@ impl WgpuCtx {
                 ][..],
             ),
             (
+                GpuTextureFormat::R32Float,
+                &[GpuFormatRole::Sampled, GpuFormatRole::CopyDestination][..],
+            ),
+            (
                 GpuTextureFormat::Depth32Float,
                 &[
                     GpuFormatRole::Sampled,

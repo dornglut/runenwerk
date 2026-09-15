@@ -66,7 +66,11 @@ impl Renderer {
         let mut resolved_entries = Vec::<RuntimeBindingResolved>::new();
         for entry in &bindings.bind_group.entries {
             match entry {
-                CompiledBindingEntry::SampledTexture { key, resource } => {
+                CompiledBindingEntry::SampledTexture {
+                    key,
+                    resource,
+                    sample_class,
+                } => {
                     let resource_key = runtime_resources.resolve_resource_key(
                         pass_id,
                         resource,
@@ -101,7 +105,7 @@ impl Renderer {
                     }
                     let refinement = (!is_depth).then(|| {
                         GpuBindingLayoutRefinement::new(*key)
-                            .with_texture_sample_class(GpuTextureSampleClass::FloatFilterable)
+                            .with_texture_sample_class(*sample_class)
                     });
                     resolved_entries.push(RuntimeBindingResolved {
                         key: *key,

@@ -811,6 +811,8 @@ pub struct Renderer {
     product_surface_pass: Option<ProductSurfacePass>,
     product_surface_pass_format: Option<GpuTextureFormat>,
     glyph_atlas_gpu: BTreeMap<u64, UiGlyphAtlasGpu>,
+    deterministic_resources:
+        crate::plugins::render::deterministic_execution::DeterministicResourceCache,
     dynamic_texture_targets: dynamic_targets::RendererDynamicTextureTargetCache,
     flow_runtime_cache: BTreeMap<RenderFlowId, render_flow::FlowRuntimeResources>,
     flow_pipeline_cache: pipeline_cache::FlowPipelineArtifactCache,
@@ -837,6 +839,7 @@ pub struct Gfx {
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct GfxFrameTimings {
+    pub submitted: bool,
     pub acquire_ms: f32,
     pub renderer: RendererFrameTimings,
     pub present_ms: f32,
@@ -897,6 +900,7 @@ impl Gfx {
     pub fn render(
         &mut self,
         prepared_frame: &PreparedRenderFrame,
+        deterministic_contributions: &[crate::plugins::render::RenderDeterministicFrameContribution],
         shader_registry: &mut ShaderRegistryResource,
         compiled_flows: &[CompiledRenderFlowPlan],
         ui_rect_shader: Option<ShaderHandle>,
@@ -909,21 +913,23 @@ impl Gfx {
         let mut timings = GfxFrameTimings::default();
         self.renderer
             .begin_frame_gpu_observation(self.ctx.context());
+        if !deterministic_contributions.is_empty()
+            && self.ctx.context().execution_stats().in_flight_submissions() > 0
+        {
+            return Ok(timings);
+        }
         let render_surface_id = prepared_frame.surface.render_surface_id;
         let acquire_start = Instant::now();
         let acquired = self.ctx.acquire_surface_image(render_surface_id)?;
         timings.acquire_ms = acquire_start.elapsed().as_secs_f32() * 1000.0;
         let acquired_extent = acquired.texture().descriptor().extent();
-        let gpu_timing_capability = if self
-            .ctx
-            .context()
-            .device_facts()
-            .is_enabled(runen_gpu::GpuCapabilityFeature::TimestampQuery)
-        {
-            RenderGpuTimingCapability::Supported
-        } else {
-            RenderGpuTimingCapability::Unsupported
-        };
+        let gpu_timing_capability = frame_gpu_timing_capability(
+            self.ctx
+                .context()
+                .device_facts()
+                .is_enabled(runen_gpu::GpuCapabilityFeature::TimestampQuery),
+            !deterministic_contributions.is_empty(),
+        );
         let context = self.ctx.context();
         timings.renderer = self.renderer.render(
             context,
@@ -931,6 +937,7 @@ impl Gfx {
             acquired.default_view(),
             (acquired_extent.width(), acquired_extent.height()),
             prepared_frame,
+            deterministic_contributions,
             shader_registry,
             compiled_flows,
             ui_rect_shader,
@@ -948,9 +955,26 @@ impl Gfx {
         self.renderer.publish_progressed_gpu_observations();
 
         // The one terminal Present is part of the accepted RunenGPU submission above.
+        timings.submitted = true;
         timings.present_ms = 0.0;
         Ok(timings)
     }
+}
+
+fn frame_gpu_timing_capability(
+    timestamp_queries_enabled: bool,
+    has_deterministic_composition: bool,
+) -> RenderGpuTimingCapability {
+    if !timestamp_queries_enabled {
+        return RenderGpuTimingCapability::Unsupported;
+    }
+    if has_deterministic_composition {
+        // The flow timing plan does not include separately composed deterministic producer
+        // fragments. Treat timing as unavailable for the complete frame instead of authoring a
+        // partial query/resolve tail alongside that producer.
+        return RenderGpuTimingCapability::UnavailableThisFrame;
+    }
+    RenderGpuTimingCapability::Supported
 }
 
 mod dynamic_targets;
@@ -967,8 +991,8 @@ pub use frame_bindings::RenderFrameDataRegistry;
 
 #[cfg(test)]
 mod tests {
-    use super::Renderer;
-    use crate::plugins::render::inspect::RenderPassTimingEvidence;
+    use super::{Renderer, frame_gpu_timing_capability};
+    use crate::plugins::render::inspect::{RenderGpuTimingCapability, RenderPassTimingEvidence};
 
     #[test]
     fn clip_to_scissor_clamps_and_rejects_empty() {
@@ -978,6 +1002,22 @@ mod tests {
 
         let none = Renderer::clip_to_scissor([200.0, 200.0, 10.0, 10.0], 100, 80);
         assert!(none.is_none());
+    }
+
+    #[test]
+    fn deterministic_composition_suppresses_partial_flow_gpu_timings() {
+        assert_eq!(
+            frame_gpu_timing_capability(true, true),
+            RenderGpuTimingCapability::UnavailableThisFrame
+        );
+        assert_eq!(
+            frame_gpu_timing_capability(true, false),
+            RenderGpuTimingCapability::Supported
+        );
+        assert_eq!(
+            frame_gpu_timing_capability(false, true),
+            RenderGpuTimingCapability::Unsupported
+        );
     }
 
     #[test]
