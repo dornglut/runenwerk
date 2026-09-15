@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-14
+last_reviewed: 2026-09-15
 ---
 
 # Engine Crate
@@ -82,6 +82,8 @@ plugin wiring, and integrated engine-facing systems (scene, render, input, repla
 - `SimulationPlugin` supplies Runenwerk's integration of existing `engine_sim` state and advances
   `SimulationTick` at `FixedStepBegin`.
 - Windowed and headless modes share the same schedule model, with different platform runners.
+- Host selection is stable during execution; bounded advancement never changes a windowed App into a
+  headless App.
 
 ## Plugin Entry Points
 
@@ -101,9 +103,10 @@ plugin wiring, and integrated engine-facing systems (scene, render, input, repla
   - `engine::App`
   - `engine::Plugin`
   - `engine::prelude::*`
-- Use `App::run_for_frames(n)` for frame-count advancement.
-- Use `App::run_for_fixed_steps(n)` only after selecting `FixedStepPlugin`; the stop condition is
-  cadence progress, not simulation identity.
+- On `App::headless()`, use `App::run_for_frames(n)` for frame-count advancement.
+- On `App::headless()`, use `App::run_for_fixed_steps(n)` only after selecting
+  `FixedStepPlugin`; the stop condition is cadence progress, not simulation identity.
+- Bounded helpers reject `App::new()` rather than silently changing the selected Host.
 - Net-specific integration:
   - `engine::net::prelude::*`
 - Schedule and system ordering helpers are re-exported through the prelude/runtime surface.

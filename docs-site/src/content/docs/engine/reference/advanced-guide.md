@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-14
+last_reviewed: 2026-09-15
 ---
 
 # Engine Advanced Guide
@@ -79,12 +79,18 @@ otherwise reason about simulation identity independently of Runenwerk fixed-step
 
 ## Headless Control Patterns
 
+Bounded advancement is a headless Advancement Policy; it does not select or change Host.
+Construct the runtime with `App::headless()` before using these controls:
+
 - Use `run_for_frames(n)` for frame-count flows.
 - Use `run_for_fixed_steps(n)` for exactly `n` additional completed fixed steps after selecting
   `FixedStepPlugin`.
 - `run_for_fixed_steps` uses `FixedTimeState::total_completed_steps`, not `SimulationTick`, as its
   stop condition.
-- Set a custom `AppRunner` for test harnesses or tools that need other frame-gating logic.
+- Set a custom `AppRunner` on `App::headless()` for test harnesses or tools that need other
+  frame-gating logic.
+- `App::new()` selects the windowed/native Host path; bounded helpers reject it rather than silently
+  switching that runtime to headless execution.
 
 Primary runner implementations:
 

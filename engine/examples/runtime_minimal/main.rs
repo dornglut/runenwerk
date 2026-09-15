@@ -39,7 +39,7 @@ fn movement(mut query: Query<(&mut Position, &Velocity)>, mut frames: ResMut<Fra
 }
 
 fn main() -> Result<()> {
-    let mut app = App::new();
+    let mut app = App::headless();
     app.add_plugin(RuntimeMinimalPlugin);
     let app = app.run_for_frames(3)?;
 
