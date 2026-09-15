@@ -56,7 +56,9 @@ mod tests {
     static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(1);
 
     #[derive(Debug, Clone, Default, runen_ecs::Component, runen_ecs::Reflect)]
-    struct RuntimeOnlyComponent;
+    struct RuntimeOnlyComponent {
+        _value: i32,
+    }
 
     fn temp_root(name: &str) -> std::path::PathBuf {
         let id = NEXT_TEMP_ID.fetch_add(1, Ordering::Relaxed);
@@ -176,7 +178,7 @@ mod tests {
         app.runtime_mut()
             .register_component_type::<RuntimeOnlyComponent>(runtime_only_type);
         app.runtime_mut()
-            .insert_component_for_editor_entity(entity, RuntimeOnlyComponent)
+            .insert_component_for_editor_entity(entity, RuntimeOnlyComponent::default())
             .expect("runtime-only component insertion should succeed");
 
         assert!(
