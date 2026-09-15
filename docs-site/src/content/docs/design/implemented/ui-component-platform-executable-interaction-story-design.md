@@ -9,7 +9,6 @@ last_reviewed: 2026-09-13
 related_docs:
   - ../../domain/ui/architecture.md
   - ../../domain/ui/roadmap.md
-  - ../../reports/closeouts/pt-ui-component-platform-012a-executable-interaction-story-implementation-scope-closeout.md
   - ./ui-component-platform-generic-interaction-design.md
   - ./ui-component-platform-story-proof-envelope-design.md
   - ./ui-component-platform-input-gesture-device-design.md

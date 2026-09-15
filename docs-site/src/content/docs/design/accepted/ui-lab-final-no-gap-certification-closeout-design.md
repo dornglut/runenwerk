@@ -19,12 +19,6 @@ related_designs:
   - ./ui-lab-command-surface-source-truth-closure-design.md
   - ./ui-lab-direct-manipulation-ux-closure-design.md
   - ./ui-lab-persistence-api-examples-ergonomics-closure-design.md
-related_reports:
-  - ../../reports/closeouts/pm-ui-lab-perf-001-governance-audit-doctrine-and-code-truth-matrix/closeout.md
-  - ../../reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/closeout.md
-  - ../../reports/closeouts/pm-ui-lab-perf-003-command-and-surface-source-truth-closure/closeout.md
-  - ../../reports/closeouts/pm-ui-lab-perf-004-direct-manipulation-ux-closure/closeout.md
-  - ../../reports/closeouts/pm-ui-lab-perf-005-persistence-diff-apply-api-and-examples-ergonomics/closeout.md
 related_roadmaps:
   - ../../domain/ui/roadmap.md
 ---

@@ -27,8 +27,6 @@ related_designs:
   - ./ui-lab-api-docs-examples-runtime-closeout-design.md
 related_roadmaps:
   - ../../domain/ui/roadmap.md
-related_reports:
-  - ../../reports/implementation-plans/wr-100-ui-lab-perfectionist-governance-and-no-gap-audit-doctrine/plan.md
 ---
 
 # UI Lab Perfectionist Audit Design

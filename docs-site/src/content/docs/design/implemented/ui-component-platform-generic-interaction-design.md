@@ -9,7 +9,6 @@ last_reviewed: 2026-09-13
 related_docs:
   - ../../domain/ui/architecture.md
   - ../../domain/ui/roadmap.md
-  - ../../reports/closeouts/pt-ui-component-platform-012-generic-interaction-closeout.md
   - ./ui-component-platform-input-gesture-device-design.md
   - ./ui-component-platform-executable-interaction-story-design.md
   - ./ui-component-platform-overlay-popup-layering-design.md

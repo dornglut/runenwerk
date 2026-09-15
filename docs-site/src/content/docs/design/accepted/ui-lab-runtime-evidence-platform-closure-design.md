@@ -11,9 +11,6 @@ related_designs:
   - ./ui-lab-preview-lab-runtime-evidence-design.md
   - ./ui-lab-persistence-project-io-diff-apply-rollback-design.md
   - ../implemented/ui-lab-productization-design.md
-related_reports:
-  - ../../reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/closeout.md
-  - ../../reports/closeouts/pm-ui-lab-perf-001-governance-audit-doctrine-and-code-truth-matrix/closeout.md
 related_roadmaps:
   - ../../domain/ui/roadmap.md
 ---

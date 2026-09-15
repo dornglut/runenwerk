@@ -20,8 +20,6 @@ related_designs:
   - ./ui-designer-visual-layout-and-interface-composition-design.md
   - ./ui-designer-view-model-capability-and-intent-binding-design.md
   - ./ui-designer-persistence-migration-diff-and-activation-design.md
-related_reports:
-  - ../../reports/closeouts/pm-ui-lab-003-app-hosted-editor-lab-surface-shell/closeout.md
 related_roadmaps:
   - ../../domain/ui/roadmap.md
 ---

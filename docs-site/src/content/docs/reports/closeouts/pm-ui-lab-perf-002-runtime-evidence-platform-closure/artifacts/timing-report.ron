@@ -1,8 +1,0 @@
-(
-    scenario_id: "editor-lab.performance",
-    setup_micros: 5313,
-    retained_surface_micros: 1230,
-    artifact_count: 14,
-    artifact_bytes: 261587,
-    unsupported_checks: [],
-)

@@ -30,9 +30,6 @@ related_roadmaps:
   - ../../workspace/planning/roadmap.md
   - ../../domain/ui/roadmap.md
   - ../../engine/plugins/render/docs/roadmap.md
-related_reports:
-  - ../../reports/audits/editor-ui-priority-code-audit-2026-05-05.md
-  - ../../reports/closeouts/m5-runtime-preview/closeout.md
 related:
   - ./execution-priority-checklist.md
   - ./current-architecture.md

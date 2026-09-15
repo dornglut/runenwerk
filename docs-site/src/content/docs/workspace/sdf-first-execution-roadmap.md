@@ -20,16 +20,6 @@ related_roadmaps:
   - ../apps/runenwerk-editor/roadmap.md
   - ../net/multiplayer-replication-implementation-roadmap.md
   - ../engine/plugins/render/docs/roadmap.md
-related_reports:
-  - ../reports/closeouts/sdf-first-execution-phase-1/closeout.md
-  - ../reports/closeouts/sdf-first-execution-phase-2/closeout.md
-  - ../reports/closeouts/sdf-first-execution-phase-3/closeout.md
-  - ../reports/closeouts/sdf-first-execution-phase-4/closeout.md
-  - ../reports/closeouts/sdf-first-execution-phase-5/closeout.md
-  - ../reports/closeouts/sdf-first-execution-phase-6a/closeout.md
-  - ../reports/closeouts/sdf-first-execution-phase-6b/closeout.md
-  - ../reports/closeouts/sdf-first-execution-phase-6c/closeout.md
-  - ../reports/closeouts/sdf-first-execution-phase-6d/closeout.md
 ---
 
 # SDF-First Execution Roadmap (Completed)
@@ -132,15 +122,7 @@ restored.
 
 Detailed phase evidence remains in the retained closeouts:
 
-- [Phase 1 — serial product jobs and publication barriers](../reports/closeouts/sdf-first-execution-phase-1/closeout.md)
-- [Phase 2 — query snapshots and strict consumer policy](../reports/closeouts/sdf-first-execution-phase-2/closeout.md)
-- [Phase 3 — render product selection producers](../reports/closeouts/sdf-first-execution-phase-3/closeout.md)
-- [Phase 4 — derived GPU residency](../reports/closeouts/sdf-first-execution-phase-4/closeout.md)
-- [Phase 5 — procgen readiness](../reports/closeouts/sdf-first-execution-phase-5/closeout.md)
-- [Phase 6A — procgen domain product track](../reports/closeouts/sdf-first-execution-phase-6a/closeout.md)
-- [Phase 6B — visible procgen overlay proof](../reports/closeouts/sdf-first-execution-phase-6b/closeout.md)
-- [Phase 6C — concrete terrain/material CPU preview proof](../reports/closeouts/sdf-first-execution-phase-6c/closeout.md)
-- [Phase 6D — bake, rollback, persistence, and reload proof](../reports/closeouts/sdf-first-execution-phase-6d/closeout.md)
+Detailed phase evidence remains in Git history.
 
 Those reports are historical evidence. Git history retains the original detailed phase
 roadmap and its exact contemporary wording.

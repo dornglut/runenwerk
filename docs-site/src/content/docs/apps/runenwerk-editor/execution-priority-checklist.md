@@ -11,7 +11,6 @@ related:
   - ./mvp/acceptance-criteria.md
   - ./mvp/first-3d-editor-mvp.md
   - ./roadmap.md
-  - ../../reports/audits/editor-ui-priority-code-audit-2026-05-05.md
   - ../../domain/ui/roadmap.md
   - ../../design/accepted/runenwerk-editor-coordination-semantic-model.md
   - ../../design/implemented/editor-tool-suite-registry-and-workbench-host-design.md

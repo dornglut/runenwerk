@@ -11,8 +11,6 @@ related_designs:
   - ../accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
   - ../accepted/renderer-scale-residency-and-gpu-driven-visibility-design.md
   - ../accepted/runenrender-decomposition-design.md
-related_reports:
-  - ../../reports/closeouts/pt-render-procedural-population-runtime-proven/closeout.md
 ---
 
 # Renderer Procedural Population Hardening Platform
