@@ -5,7 +5,7 @@ status: active
 owner: gameplay
 layer: cross-domain
 canonical: true
-last_reviewed: 2026-07-24
+last_reviewed: 2026-09-15
 related_designs:
   - ./semantic-graph-ir-and-compilation-design.md
   - ./engine-game-runtime-editor-ecs-scripting-hot-reload-design.md
@@ -17,8 +17,6 @@ related_designs:
   - ../deferred/engine-gameplay-power-runtime-design.md
 related:
   - ../../domain/graph/README.md
-  - ../../domain/ecs/README.md
-  - ../../domain/ecs/03-queries.md
   - ../../domain/world-sdf/README.md
 ---
 
@@ -34,7 +32,7 @@ The goal is declarative, analyzable gameplay authoring:
 - a compiler builds an abstract gameplay graph;
 - compiler passes validate and normalize the graph;
 - the graph lowers into Action/Trigger/Rule IR;
-- formed products become ECS query descriptors, event subscriptions, system descriptors, schedule edges, generated ids, schemas, diagnostics metadata, runtime registries, and multiplayer authority metadata.
+- formed products become ECS query descriptors, domain-owned event products, system descriptors, schedule edges, generated ids, schemas, diagnostics metadata, runtime registries, and multiplayer authority metadata.
 
 Runtime must execute formed products. It must not interpret editor-authored gameplay graphs every frame.
 
@@ -44,8 +42,8 @@ Implemented today:
 
 - `domain/graph` owns neutral graph structure and validation.
 - `docs-site/src/content/docs/design/active/semantic-graph-ir-and-compilation-design.md` defines the generic semantic graph pipeline and the `SELECT`, `RELATE`, `TRANSFORM` primitive family.
-- Standalone `dornglut/runen-ecs` owns live ECS state, queries, systems, events, schedules, and deferred ECS commands.
-- Standalone RunenECS owns deterministic ECS execution ordering contracts; Runenwerk owns only host lifecycle and adapter policy.
+- Standalone `dornglut/runen-ecs` owns the reusable ECS state, query, system, schedule, deferred-command, execution, and conformance contracts exposed by its accepted public API. Gameplay/domain event semantics require their own owner; RunenECS is not a generic gameplay event bus.
+- Runenwerk owns host lifecycle and adapter policy around the exact RunenECS revision it consumes.
 - Standalone `dornglut/runen-sdf` owns reusable SDF field queries, including raymarch, projection, classification, and sweep foundations.
 - `domain/world_sdf` owns world-scale SDF payloads and collision query readiness contracts.
 - Deferred gameplay action/power designs exist, but they do not define an active gameplay graph compiler.
@@ -71,7 +69,7 @@ Authored gameplay input
   -> compiler passes
   -> ratified Action/Trigger/Rule IR
   -> formed runtime products
-  -> ECS/scheduler/runtime instantiation
+  -> ECS/runtime instantiation
   -> observed diagnostics and editor/debug products
 ```
 
@@ -156,7 +154,7 @@ These primitives are compiler categories, not a visual scripting node taxonomy.
 
 ### SELECT
 
-`SELECT` declares a typed scope. It may lower to an ECS query descriptor, event subscription, resource read, field-product read, asset reference, or formed product lookup.
+`SELECT` declares a typed scope. It may lower to an ECS query descriptor, domain event subscription, resource read, field-product read, asset reference, or formed product lookup.
 
 Examples:
 
@@ -172,6 +170,7 @@ Rules:
 
 - every select has an owner, type, revision policy, and read capability;
 - every ECS-facing select lowers to explicit query/access metadata;
+- every event-facing select consumes a contract owned by its gameplay/event domain;
 - every field/SDF select declares product freshness and readiness requirements;
 - hidden reads of runtime internals are invalid.
 
@@ -244,9 +243,9 @@ TRANSFORM emit DamageRequested {
 Formed products:
 
 - ECS query descriptor for `Damageable` targets;
-- event subscription descriptor for `PhysicsHit`;
+- domain-owned event subscription descriptor for `PhysicsHit`;
 - relation matcher descriptor for contact-pair source/target matching;
-- `DamageRequested` event channel descriptor;
+- domain-owned `DamageRequested` event product/channel descriptor;
 - system descriptor such as `gameplay.damage.emit_from_hit`;
 - schedule edge after physics collision publication and before health resolution;
 - source map from formed products back to source graph nodes;
@@ -280,11 +279,11 @@ Initial formed product families:
 - `GameplayQueryProduct`
   - ECS query descriptors, filter descriptors, component/resource access metadata, and query source maps.
 - `GameplayEventProduct`
-  - event channel definitions, payload schemas, subscriptions, reliability/authority class, and source maps.
+  - domain-owned event channel definitions, payload schemas, subscriptions, reliability/authority class, and source maps.
 - `GameplaySystemProduct`
   - system descriptor, fixed executor kind, input products, output products, and schedule dependencies.
 - `GameplayScheduleProduct`
-  - stage labels, ordering edges, conflict metadata, and scheduler input contracts.
+  - stage labels, ordering edges, conflict metadata, and ECS scheduling input contracts.
 - `GameplayRegistryProduct`
   - generated ids, action ids, event ids, state ids, quest ids, and runtime registry metadata.
 - `GameplayNetworkProduct`
@@ -298,9 +297,11 @@ The first implementation should form descriptors and fixed executor products, no
 
 ### Boundary With ECS
 
-Standalone `runen-ecs` owns live state and execution.
+Standalone `runen-ecs` owns reusable ECS live-state and execution contracts.
 
-Gameplay graph lowering may emit ECS query descriptors, event descriptors, system descriptors, access metadata, and schedule edges. It must not own ECS storage internals, bypass ECS command queues, or mutate ECS state from graph nodes.
+Gameplay graph lowering may emit ECS query descriptors, system descriptors, access metadata, and schedule edges through the accepted RunenECS public boundary. Domain-owned gameplay event products remain owned outside RunenECS and integrate explicitly with ECS/runtime when required.
+
+Gameplay graph lowering must not own ECS storage internals, bypass ECS deferred-command mechanisms, or mutate ECS state from graph nodes.
 
 ### Boundary With SDF Physics
 
@@ -364,7 +365,7 @@ Implementation targets:
 - future `domain/gameplay_graph/src/passes/`
   - compiler passes listed above.
 - future `domain/gameplay_graph/src/lowering/ecs.rs`
-  - ECS query/event/system/schedule product lowering.
+  - ECS query/system/schedule product lowering plus explicit adaptation of domain event products where required.
 - future `domain/gameplay_graph/src/lowering/network.rs`
   - authority and replication product lowering.
 - future `domain/gameplay_graph/src/lowering/sdf_physics.rs`
@@ -372,7 +373,7 @@ Implementation targets:
 - future `domain/gameplay_graph/src/formed/product.rs`
   - formed gameplay products, source maps, and issue codes.
 - future `engine/src/plugins/gameplay_graph/`
-  - fixed runtime adapters that instantiate formed products into ECS/scheduler/runtime resources.
+  - fixed runtime adapters that instantiate formed products into ECS/runtime resources.
 - future `apps/runenwerk_editor/src/shell/providers/gameplay_graph_canvas.rs::GameplayGraphCanvasProvider`
   - graph authoring without making canvas state authoritative.
 - future `apps/runenwerk_editor/src/shell/providers/gameplay_compiler_diagnostics.rs::GameplayCompilerDiagnosticsProvider`
@@ -390,7 +391,7 @@ The first slice should support:
 - `TRANSFORM EmitEvent`, `TRANSFORM RequestAction`, and `TRANSFORM StateTransition`;
 - source maps for graph node/edge/port to formed query/event/system products;
 - ECS query descriptor lowering;
-- event subscription and event emission product lowering;
+- domain event subscription and event emission product lowering;
 - schedule edge lowering;
 - SDF/world-field readiness diagnostics for `HIT`;
 - authority class diagnostics for every state-changing transform;
@@ -427,7 +428,7 @@ Exit criteria:
 
 Exit criteria:
 
-- first-slice `SELECT` records lower to ECS query/event/resource descriptors;
+- first-slice `SELECT` records lower to ECS query/resource descriptors and domain event subscriptions;
 - first-slice `TRANSFORM` records lower to event/action/state products;
 - schedule edges and ECS access metadata are deterministic.
 
@@ -464,7 +465,7 @@ Required tests:
 - unresolved concept ids are rejected;
 - `SELECT EntitySet` lowers to stable ECS query descriptors;
 - `RELATE HIT` rejects missing collision product readiness;
-- `TRANSFORM EmitEvent` produces an event channel descriptor and source map;
+- `TRANSFORM EmitEvent` produces a domain event product and source map;
 - state-changing transforms reject missing authority policy;
 - dependency ordering produces deterministic schedule edges;
 - formed products omit graph canvas/editor session state;

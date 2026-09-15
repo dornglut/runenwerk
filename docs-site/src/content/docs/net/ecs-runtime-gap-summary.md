@@ -5,7 +5,7 @@ status: superseded
 owner: net
 layer: net
 canonical: false
-last_reviewed: 2026-09-10
+last_reviewed: 2026-09-15
 replaced_by: ./multiplayer-replication-implementation-roadmap.md
 ---
 
@@ -17,8 +17,8 @@ Later accepted RunenECS C6-C8 work removed or reassigned several capabilities th
 
 Current authority is split deliberately:
 
-- [RunenECS boundary repair plan](../design/accepted/runenecs-boundary-repair-execution-plan.md) owns the ECS repair/conformance sequence;
-- [RunenECS architecture](../domain/ecs/architecture.md) describes the current ECS runtime boundary;
+- [Standalone RunenECS architecture](https://github.com/dornglut/runen-ecs/blob/main/ARCHITECTURE.md) owns current reusable ECS semantics and conformance;
+- [Repository Family Extraction Boundaries](../adr/accepted/0014-repository-family-extraction-boundaries.md) owns Runenwerk's durable framework/integration boundary;
 - [Multiplayer replication implementation roadmap](./multiplayer-replication-implementation-roadmap.md) owns current retained networking work.
 
 Do not infer current API support from the historical `Broadcast*`, `WorkQueue*`, `TickBuffer*`, ownership, frame/tick finalization, or scheduler-barrier entries in the former audit. The original snapshot remains available through repository history.

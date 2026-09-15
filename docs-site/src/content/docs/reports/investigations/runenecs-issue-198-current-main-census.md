@@ -1,13 +1,11 @@
 ---
 title: RunenECS Issue 198 Current-Main Census
-description: Command-verified current-main evidence for the RunenECS boundary reconciliation in GitHub issue 198.
-status: active
+description: Historical command-verified current-main evidence for the RunenECS boundary reconciliation in GitHub issue 198.
+status: completed
 owner: ecs
 layer: investigation
-last_reviewed: 2026-08-25
+last_reviewed: 2026-09-15
 related_docs:
-  - ../../design/accepted/runenecs-extraction-boundary-design.md
-  - ../../design/accepted/runenecs-boundary-repair-execution-plan.md
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
   - ../../adr/accepted/0017-cross-authority-consistency-and-graph-semantics.md
@@ -20,39 +18,45 @@ related_docs:
 
 ## Role and scope
 
-This report is the source-grounded evidence record for GitHub issue `#198`.
-It does not own durable architecture, phase sequencing, activation, or delivery
-state. The accepted boundary design owns durable RunenECS ownership; the accepted
-boundary repair execution plan owns the one canonical C0-C9 sequence; GitHub issues
-own current work state.
+This report is the source-grounded evidence record for completed GitHub issue `#198`.
+It describes the predecessor Runenwerk ECS/scheduler state at its checked-out 2026-08-25
+census base. It does not own current reusable ECS architecture, phase sequencing,
+activation, or delivery state.
+
+Current reusable RunenECS authority belongs to
+[standalone RunenECS](https://github.com/dornglut/runen-ecs/blob/main/ARCHITECTURE.md).
+Runenwerk's durable downstream framework/integration boundary is owned by
+[ADR 0014](../../adr/accepted/0014-repository-family-extraction-boundaries.md) and the
+[framework integration architecture](../../architecture/repository-family-architecture.md).
+The completed C0-C9 repair/extraction designs remain recoverable from Git history.
 
 This report does not authorize implementation, package renames, source movement,
-dependency changes, external-repository population, compatibility paths, or
-creation of the C1/R1 issue.
+dependency changes, external-repository population, compatibility paths, or current
+RunenECS work.
 
-The checked-out census resolved accepted `main` as:
+The checked-out census resolved accepted `main` at the time as:
 
 ```text
 25c20a8b7643dc391ec49d870b24458767dd6033
 ```
 
 The checkout started clean from that revision. No unmerged feature branch was
-used as authority. Issue amendments establish that #200 and #201 are closed
-not-planned and PR #202 is closed unmerged, so no external RunenScheduler
-repository or dependency is an accepted prerequisite.
+used as authority. Issue amendments established that #200 and #201 were closed
+not-planned and PR #202 was closed unmerged, so no external RunenScheduler
+repository or dependency was an accepted prerequisite.
 
 ## Package, dependency, and consumer closure
 
 `cargo metadata --format-version 1 --locked` and the required dependency-tree
-commands establish:
+commands established:
 
-| Current package | Manifest | Direct boundary facts |
+| Predecessor package | Manifest | Direct boundary facts |
 |---|---|---|
-| `ecs` | `domain/ecs/Cargo.toml` | depends on `ecs_macros`, `geometry`, and `scheduler`; no declared MSRV |
-| `ecs_macros` | `domain/ecs_macros/Cargo.toml` | proc-macro crate; depends on `proc-macro-crate`, `proc-macro2`, `quote`, and `syn`; no declared MSRV |
-| `scheduler` | `domain/scheduler/Cargo.toml` | depends on `anyhow` and `tracing`; no declared MSRV |
+| `ecs` | `domain/ecs/Cargo.toml` | depended on `ecs_macros`, `geometry`, and `scheduler`; no declared MSRV |
+| `ecs_macros` | `domain/ecs_macros/Cargo.toml` | proc-macro crate; depended on `proc-macro-crate`, `proc-macro2`, `quote`, and `syn`; no declared MSRV |
+| `scheduler` | `domain/scheduler/Cargo.toml` | depended on `anyhow` and `tracing` |
 
-Inverse workspace closure:
+Inverse workspace closure at the census point:
 
 ```text
 ecs         <- editor_inspector, engine, engine_net, engine_sim,
@@ -71,13 +75,13 @@ cargo tree -p scheduler --locked
 cargo tree -i scheduler --workspace --locked
 ```
 
-The current `ecs -> scheduler` edge is real. The target removes that dependency;
-it does not replace it with another generic scheduler framework.
+The then-current `ecs -> scheduler` edge was real. The accepted repair target removed
+that dependency without replacing it with another generic scheduler framework.
 
-## Target package identity
+## Target package identity recorded by the census
 
-Current repository-family convention and the existing proc-macro requirement bind
-the eventual standalone names as:
+Repository-family convention and the proc-macro requirement bound the eventual
+standalone names as:
 
 ```text
 repository                    Cargo package       Rust crate
@@ -85,17 +89,15 @@ dornglut/runen-ecs            runen-ecs           runen_ecs
                               runen-ecs-macros    runen_ecs_macros
 ```
 
-The proc-macro package remains separate while technically required. This report
-performs no rename or source movement.
+The proc-macro package was expected to remain separate while technically required. The
+report itself performed no rename or source movement.
 
-### External repository shell status
+### External repository status at the 2026-08-25 review point
 
-Current GitHub inspection confirms that `dornglut/runen-ecs` already exists. At
-this review point its `main` root contains only `LICENSE`: there is no Cargo
-manifest, ECS source tree, package implementation, or release authority there.
-The repository is therefore an inert shell, not current RunenECS source/package
-authority. It must remain unpopulated until the separately accepted post-C9
-transfer/cutover boundary authorizes source movement.
+At that review point `dornglut/runen-ecs` existed only as an inert shell whose `main`
+root contained `LICENSE`; it was not yet source/package authority. This statement is
+historical. The transfer and Runenwerk consumer cutover later completed, and current
+standalone authority now belongs to `dornglut/runen-ecs`.
 
 ## Deterministic source and public-surface inventory
 
@@ -104,37 +106,37 @@ find domain/ecs domain/ecs_macros domain/scheduler -type f | sort
 ```
 
 returned 128 files: 108 under `domain/ecs`, 3 under `domain/ecs_macros`, and 17
-under `domain/scheduler`. The inventory covers storage, bundles, commands,
+under `domain/scheduler`. The inventory covered storage, bundles, commands,
 queries, reflection, system/runtime code, messaging/change/ownership facilities,
 spatial indexing, tests, examples, and Criterion benchmarks.
 
-`domain/ecs/src/lib.rs` publicly reexports bundles, commands, components,
+`domain/ecs/src/lib.rs` publicly reexported bundles, commands, components,
 resources, entities, allocator/errors, spatial indexes, queries, reflection,
 system runtime types, world runtime/state, messaging, ownership, and change
-families. `domain/ecs/src/prelude.rs` exposes a similarly broad surface.
-`engine/src/prelude.rs` additionally reexports ECS `Bundle`, `Component`,
+families. `domain/ecs/src/prelude.rs` exposed a similarly broad surface.
+`engine/src/prelude.rs` additionally reexported ECS `Bundle`, `Component`,
 `Entity`, `Resource`, and `World`, plus `scheduler::SystemSet`.
 
 ## Entity identity and allocator evidence
 
-Current identity/lifecycle owner files are `domain/ecs/src/entity.rs`,
+Current identity/lifecycle owner files at that point were `domain/ecs/src/entity.rs`,
 `domain/ecs/src/world/entity/lifecycle.rs`, and `domain/ecs/src/errors.rs`;
-`domain/ecs/src/world/state.rs` owns current `World` construction/state.
-Current `Entity` is publicly forgeable as `{ id: u32, generation: u32 }`.
-`EntityAllocator::free` accepts arbitrary live-looking values, increments
-with saturating arithmetic, and has no explicit double-free or exhaustion error.
-Two fresh worlds can create identical entity bits, while `World::contains` tests
+`domain/ecs/src/world/state.rs` owned `World` construction/state.
+`Entity` was publicly forgeable as `{ id: u32, generation: u32 }`.
+`EntityAllocator::free` accepted arbitrary live-looking values, incremented with
+saturating arithmetic, and had no explicit double-free or exhaustion error.
+Two fresh worlds could create identical entity bits, while `World::contains` tested
 only the entity value stored in that world.
 
-Therefore index+generation alone cannot satisfy guaranteed cross-world rejection.
-The C1/R1 target mechanism is:
+Therefore index+generation alone could not satisfy guaranteed cross-world rejection.
+The C1/R1 target mechanism recorded by the census was:
 
 ```text
 Entity = opaque WorldScopeId + slot/index + generation
 World  = owns exactly one matching WorldScopeId
 ```
 
-Required semantics:
+Required semantics recorded then:
 
 - the allocator emits only entities carrying its world's scope;
 - every world operation validates scope before slot/generation;
@@ -149,7 +151,7 @@ Required semantics:
 - diagnostic accessors do not create persistence or wire contracts;
 - WorldScopeId, slot, and generation are never stable network/persistence IDs.
 
-The direct C1/R1 migration inventory is:
+The direct C1/R1 migration inventory was:
 
 ```text
 domain/ecs/src/entity.rs
@@ -171,22 +173,21 @@ editor persistence's separate EntityId/SceneEntityRecordV2 paths
 ```
 
 `world/state.rs`, `lib.rs`, and `prelude.rs` were already present in the verified
-104-file typed search below; listing them here corrects the direct C1 migration
-inventory to match the accepted world-scope mechanism and reviewed export surface.
-It does not extend the underlying census.
+104-file typed search below; listing them corrected the direct C1 migration inventory
+to match the accepted world-scope mechanism and reviewed export surface.
 
-The only production raw construction identified outside ECS implementation is in
-`engine/src/plugins/scene/ui/mod.rs`, where default sentinel entities are
-constructed. Storage literals are internal/test sites. The broader typed search:
+The only production raw construction identified outside ECS implementation was in
+`engine/src/plugins/scene/ui/mod.rs`, where default sentinel entities were constructed.
+Storage literals were internal/test sites. The broader typed search:
 
 ```text
 rg -l '\bEntity\b|ecs::Entity|EntityAllocator|EntityError' domain engine net apps adapters --glob '*.rs' | sort
 ```
 
-returned 104 files. Most use `Entity` opaquely and therefore require compile and
+returned 104 files. Most used `Entity` opaquely and therefore required compile and
 behavior verification during C1 rather than identity redesign. Editor persistence
-already uses a separate `EntityId`/scene-record identity; networking extraction
-also has an explicit mapping boundary rather than a stable raw-Entity contract.
+already used a separate `EntityId`/scene-record identity; networking extraction also
+had an explicit mapping boundary rather than a stable raw-Entity contract.
 
 ## Query/SystemParam safety and structural atomicity
 
@@ -198,29 +199,29 @@ rg -n '\becs\b|ecs::|scheduler::' --glob Cargo.toml --glob '*.rs' .
 rg -n 'Entity\s*\{|\.id\b|\.generation\b|EntityAllocator|EntityError' domain engine net apps adapters --glob '*.rs'
 ```
 
-`QueryData`, `QuerySpec`, `QueryWorldRef`, and `SystemParam` are public,
-externally implementable traits whose unsafe fetch/extract paths receive raw
-world or state pointers. `QueryState` caches a world pointer; `Query` and
-`QueryIter` retain raw pointers and lifetime markers; tuple/component
-implementations rely on declared access facts. Current tests cover only a narrow
+`QueryData`, `QuerySpec`, `QueryWorldRef`, and `SystemParam` were public,
+externally implementable traits whose unsafe fetch/extract paths received raw
+world or state pointers. `QueryState` cached a world pointer; `Query` and
+`QueryIter` retained raw pointers and lifetime markers; tuple/component
+implementations relied on declared access facts. Tests covered only a narrow
 subset of the unsafe contract.
 
-Disposition: seal or privatize low-level implementation traits initially, keep
-raw-pointer operations inside the ECS owner boundary, and expose supported safe
-query and derive-based parameter forms. Any later unsafe extension contract needs
-downstream, Miri, sanitizer, and explicit safety documentation.
+The accepted disposition was to seal or privatize low-level implementation traits
+initially, keep raw-pointer operations inside the ECS owner boundary, and expose
+supported safe query and derive-based parameter forms. Any later unsafe extension
+contract needed downstream, Miri, sanitizer, and explicit safety documentation.
 
-Bundle insertion and `World::spawn` currently mutate sequentially and use an
-`expect` on insertion. `BatchCommands` applies earlier commands before a later
-failure. C2 therefore owns atomic preflight, failure, rollback/non-rollback, and
-batch semantics; C1 does not silently absorb that redesign.
+Bundle insertion and `World::spawn` then mutated sequentially and used an `expect` on
+insertion. `BatchCommands` applied earlier commands before a later failure. C2 owned
+atomic preflight, failure, rollback/non-rollback, and batch semantics; C1 did not
+silently absorb that redesign.
 
 ## Reflection evidence
 
-Reflection is split between world-owned maps and
-`domain/ecs/src/reflect/registry.rs`'s process-global
-`GLOBAL_TYPE_REGISTRY` (`OnceLock<Mutex<TypeRegistry>>`). Macros also generate
-`OnceLock` descriptors and use global ID allocation.
+Reflection was split between world-owned maps and
+`domain/ecs/src/reflect/registry.rs`'s process-global `GLOBAL_TYPE_REGISTRY`
+(`OnceLock<Mutex<TypeRegistry>>`). Macros also generated `OnceLock` descriptors and used
+global ID allocation.
 
 Target distinction:
 
@@ -230,8 +231,8 @@ registry identity  explicit instance-local identity
 stable schema key  separately governed persistence/schema identity
 ```
 
-C4 removes hidden mutable registration authority. Macros generate descriptors;
-they do not establish global registry state.
+C4 was intended to remove hidden mutable registration authority. Macros were to generate
+descriptors rather than establish global registry state.
 
 ## Geometry and spatial evidence
 
@@ -239,11 +240,11 @@ they do not establish global registry state.
 rg -n 'SpatialIndex|SpatialHashIndex|SpatialHashConfig|geometry::Aabb3' .
 ```
 
-shows geometry-based entity indexes under ECS while separate spatial ownership
-already exists. RunenECS therefore drops general geometry/spatial-index
-ownership. It may retain generic local change facts; Runenwerk integration maps
-selected ECS changes into accepted RunenSpatial facilities. No new RunenSpatial
-repository or dependency is authorized by #198.
+showed geometry-based entity indexes under ECS while separate spatial ownership already
+existed. RunenECS therefore was to drop general geometry/spatial-index ownership. It
+could retain generic local change facts; Runenwerk integration would map selected ECS
+changes into accepted RunenSpatial facilities. No new RunenSpatial repository or
+dependency was authorized by #198.
 
 ## Messaging, change, networking, replay, and lifecycle evidence
 
@@ -253,9 +254,9 @@ The required inventory included:
 rg -n 'OwnerId|OwnerRole|tick_buffer|work_queue|change_extraction|interest|replay|replication|rollback' domain engine net apps adapters
 ```
 
-Evidence-backed disposition:
+Evidence-backed disposition at the time:
 
-| Current facility | Owner/disposition |
+| Predecessor facility | Owner/disposition |
 |---|---|
 | ECS-local typed events/broadcast and bounded FIFO semantics | RunenECS only when retention, cursor, overflow, terminal, and recovery behavior are ECS-local |
 | ECS-local component/resource change observation | RunenECS; no network meaning implied |
@@ -268,8 +269,8 @@ Evidence-backed disposition:
 | archival/editor replay formats and retention | Runenwerk/application |
 | unsupported generic queue/retry/ack residue without an owner | Delete |
 
-This preserves the standalone RunenNet boundary: Runenwerk is a downstream
-integration host, not the owner of reusable networking semantics.
+This preserved the standalone RunenNet boundary: Runenwerk was a downstream integration
+host, not the owner of reusable networking semantics.
 
 ## Scheduler census and ownership
 
@@ -277,22 +278,21 @@ integration host, not the owner of reusable networking semantics.
 rg -n 'ExecutionPhaseKind|BarrierKind|set_slow_node_logging_enabled|frame_render_submit' .
 ```
 
-Current evidence separates:
+The census separated:
 
 1. semantic ordering from explicit labels, sets, and before/after constraints;
 2. ECS access incompatibility from read/write/drain/structural access facts;
 3. deferred structural-command boundaries;
 4. Runenwerk lifecycle and product barriers.
 
-`domain/scheduler/src/plan.rs` does not convert an access conflict into semantic
-order. Its phase/barrier enums nevertheless include render, product publication,
-query-snapshot publication, replay/network capture, and generation-finalization
-policy. `scheduler_core.rs`, `builder.rs`, `dag.rs`, `utils.rs`, telemetry globals,
-filesystem DOT export, and the demo contain generic or product-shaped residue.
-`engine` owns live frame/fixed/render execution calls and application product
-barriers.
+`domain/scheduler/src/plan.rs` did not convert an access conflict into semantic order.
+Its phase/barrier enums nevertheless included render, product publication,
+query-snapshot publication, replay/network capture, and generation-finalization policy.
+`scheduler_core.rs`, `builder.rs`, `dag.rs`, `utils.rs`, telemetry globals, filesystem
+DOT export, and the demo contained generic or product-shaped residue. `engine` owned live
+frame/fixed/render execution calls and application product barriers.
 
-Ownership/disposition:
+Ownership/disposition recorded then:
 
 | Behavior | Owner/disposition |
 |---|---|
@@ -304,10 +304,10 @@ Ownership/disposition:
 | unsupported generic DAG/demo/DOT/filesystem/global telemetry residue | Delete after consumer migration |
 | external `runen-scheduler`/`runen_schedule` dependency | Not required or authorized |
 
-C8 removes the `ecs -> scheduler` dependency only after C7 has separated lifecycle,
-networking, replay, ownership, and host policy. Any later parallel executor is an
-optimization and must be observationally equivalent to accepted serial ECS
-semantics.
+C8 was to remove the `ecs -> scheduler` dependency after C7 separated lifecycle,
+networking, replay, ownership, and host policy. Later parallel execution remained a
+separate standalone framework concern. Current execution behavior is defined by
+standalone RunenECS, not by this historical census.
 
 ## Validation and support evidence
 
@@ -331,23 +331,20 @@ cargo bench -p ecs --bench phase6 --locked -- w1_broad_transform_update
 
 Reported focused results were 35 ECS tests and 14 scheduler tests passing, with
 doc-tests passing. Criterion phase6 compilation and the selected workload passed.
-The exact merge-readiness revision and exact-head CI evidence are owned by the PR,
-not by this report. Because the candidate is documentation-only, these source
-facts remain tied to the accepted source base unless a later code-bearing head
-changes them.
+The exact merge-readiness revision and exact-head CI evidence were owned by the PR,
+not by this report.
 
-Support gaps are explicit:
+Support gaps recorded then were explicit:
 
-- no repository-authoritative Miri command/workflow or installed `cargo-miri` was
-  found;
+- no repository-authoritative Miri command/workflow or installed `cargo-miri` was found;
 - no repository-authoritative sanitizer command/workflow was found;
-- `ecs`, `ecs_macros`, and `scheduler` declare no ECS MSRV and the repository has
-  no ECS MSRV command;
-- observed `rustc 1.97.1` on `aarch64-apple-darwin` is not MSRV evidence;
-- Criterion support exists, but the full release benchmark baseline remains a C9
-  conformance obligation.
+- `ecs`, `ecs_macros`, and `scheduler` declared no ECS MSRV and the repository had no ECS MSRV command;
+- observed `rustc 1.97.1` on `aarch64-apple-darwin` was not MSRV evidence;
+- Criterion support existed, while the full release benchmark baseline remained a C9 conformance obligation.
 
 ## Move / stay / redesign / delete map
+
+The census recorded this predecessor disposition:
 
 ```text
 STAY IN RUNENECS
@@ -377,16 +374,16 @@ DELETE AFTER CONSUMER MIGRATION
   unsupported generic queue/retry/ack residue.
 ```
 
-There is no existing `runen_schedule` package to delete.
+There was no existing `runen_schedule` package to delete.
 
-## Evidence relationship to the canonical plan
+## Historical relationship to the completed repair plan
 
-This report does not duplicate the phase sequence. The accepted execution plan owns
-C0-C9. Current evidence supports C1/R1 as the first implementation slice, C7
-lifecycle/network separation before C8 scheduler decontamination, and C9
-standalone conformance after all internal repairs.
+This report did not duplicate the C0-C9 phase sequence. At the time, the accepted repair
+plan owned that sequence and this evidence supported C1/R1 first, C7 lifecycle/network
+separation before C8 scheduler decontamination, and C9 standalone conformance after all
+internal repairs.
 
-The standalone proof must validate `runen-ecs` / `runen_ecs` and
-`runen-ecs-macros` / `runen_ecs_macros` without Runenwerk and without a generic
-scheduler dependency. External repository population and cutover remain a
-separately accepted post-C9 delivery boundary.
+That program and the later source-authority transfer are now completed historical
+provenance. Current standalone RunenECS architecture and work belong to
+`dornglut/runen-ecs`; Runenwerk retains only its downstream integration/compatibility
+responsibility under ADR 0014.

@@ -5,10 +5,9 @@ status: accepted
 owner: workspace
 layer: architecture
 canonical: true
-last_reviewed: 2026-09-14
+last_reviewed: 2026-09-15
 related_designs:
   - ../../architecture/repository-family-architecture.md
-  - ../../design/accepted/runenecs-extraction-boundary-design.md
   - ../../design/accepted/runenrender-decomposition-design.md
 related_roadmaps:
   - ../../workspace/planning/roadmap.md
@@ -24,7 +23,7 @@ frameworks:
 ```text
 product       repository                 package       crate
 RunenSDF      dornglut/runen-sdf         runen-sdf     runen_sdf
-RunenECS      target dornglut/runen-ecs  topology refined by accepted RunenECS design
+RunenECS      dornglut/runen-ecs         runen-ecs     runen_ecs
 RunenGPU      dornglut/runen-gpu         runen-gpu     runen_gpu
 RunenRender   dornglut/runen-render      runen-render  runen_render
 RunenUI       dornglut/runen-ui          existing workspace; current packages include runenui_core and runenui_runtime
@@ -33,20 +32,20 @@ RunenUI       dornglut/runen-ui          existing workspace; current packages in
 Historical `Crystonix/*` paths remain provenance only; active repository identity uses
 the `dornglut/*` namespace.
 
-RunenSDF, RunenGPU, and RunenUI have standalone repository authority. RunenECS and
-RunenRender remain governed by their own accepted boundaries and current cutover state.
-This ADR owns the durable dependency and ownership laws, not a duplicate copy of any
-standalone framework's semantics or live work status.
+RunenSDF, RunenECS, RunenGPU, and RunenUI have standalone repository authority.
+RunenRender remains governed by its accepted Runenwerk-local boundary and current
+cutover state. This ADR owns the durable dependency and ownership laws, not a
+duplicate copy of any standalone framework's semantics or live work status.
 
 Framework repositories must not depend on Runenwerk. Integration-specific translation,
 application lifecycle, product policy, and cross-framework composition remain in
 Runenwerk.
 
 RunenGPU and RunenRender each begin with one public package. This decision does not
-redefine RunenUI package topology. The accepted RunenECS extraction design refines its
-initial topology to Cargo package `runen-ecs` / Rust crate `runen_ecs` plus the
-technically required Cargo package `runen-ecs-macros` / Rust crate
-`runen_ecs_macros` proc-macro companion. Additional packages require independently
+redefine RunenUI package topology. Current RunenECS package topology and reusable API
+are owned by `dornglut/runen-ecs`; Runenwerk consumes the accepted `runen-ecs` and
+`runen-ecs-macros` public contracts through an exact revision rather than restating
+their repository-local package policy here. Additional packages require independently
 useful dependency, backend, release, ABI, or compile-time pressure. Repository
 extraction is not itself justification for package proliferation.
 
@@ -101,9 +100,22 @@ RunenSDF dependency; Runenwerk retains only product/world integration such as
 
 ### RunenECS
 
-RunenECS work remains governed by its accepted repository-local boundary and standalone
-repository authority where transferred. This ADR does not duplicate its current
-implementation or live cutover status.
+The standalone transfer and Runenwerk consumer cutover are complete. Current reusable
+RunenECS semantics, implementation, public API, conformance, validation, and framework
+evolution belong to
+[`dornglut/runen-ecs`](https://github.com/dornglut/runen-ecs/blob/main/ARCHITECTURE.md).
+
+Runenwerk consumes `runen-ecs` through an exact accepted Git revision. At this review
+the workspace pin is:
+
+```text
+6a7af7bbd15da960ce0b68484b446134940fa479
+```
+
+That pin is Runenwerk's downstream compatibility claim; it is not a second semantic
+authority and does not freeze standalone RunenECS evolution. Runenwerk no longer keeps
+active predecessor ECS semantic designs, framework tutorials, or extraction sequencing
+as current authority.
 
 ### RunenGPU
 
@@ -148,9 +160,10 @@ standalone RunenGPU authority
         -> standalone RunenRender cutover
 ```
 
-Historical RunenGPU G-phase ordering and proof evidence are provenance, not a current
-Runenwerk work queue. Current activation belongs to GitHub issues and the Engineering
-Portfolio. Current reusable RunenGPU evolution belongs to `dornglut/runen-gpu`.
+Historical RunenGPU G-phase and RunenECS C-phase ordering and proof evidence are
+provenance, not a current Runenwerk work queue. Current activation belongs to GitHub
+issues and the Engineering Portfolio. Current reusable framework evolution belongs to
+the owning standalone repositories.
 
 ## Clean cutover
 
@@ -189,13 +202,14 @@ execution, or product policy.
 
 ### RunenECS
 
-RunenECS owns entity/component/resource lifecycle, storage and query semantics, deferred
-structural mutation, system identity and access contracts, explicit ECS ordering/sets,
-ECS schedule validation, deterministic serial reference execution, and explicit
-reflection.
+Reusable ECS semantics and their public contracts are owned by standalone RunenECS.
+Runenwerk consumes those contracts through its exact dependency and must not restate or
+reinterpret framework-internal storage, query, scheduling, execution, deferred-command,
+reflection, or conformance rules as local authority.
 
-General spatial indexing, application/frame lifecycle scheduling, rendering extraction,
-networking, replay, world policy, and product scheduling remain outside ECS core.
+Runenwerk retains application/frame lifecycle scheduling, rendering extraction,
+networking/replay integration, world policy, product scheduling, and the explicit
+adapters that translate between RunenECS and other product/framework contracts.
 
 ### RunenGPU
 
@@ -226,8 +240,7 @@ Runenwerk owns application/product lifecycle scheduling, windows/event loops,
 ECS/domain extraction, scene/world/material/SDF/UI/editor/simulation adapters, shader
 source discovery and reload policy, product quality/capability selection, diagnostics
 presentation, recovery, and integration evidence. It chooses when an ECS schedule runs
-but does not redefine RunenECS-internal ordering, access, validation, deferred-command,
-or reference-execution semantics.
+but does not redefine RunenECS-internal semantics.
 
 ## Adapter rule
 
@@ -270,15 +283,15 @@ IDs are not silently promoted into persisted identity.
 ## Consequences
 
 - Existing code location is implementation evidence, not permanent ownership.
-- RunenSDF and RunenGPU have completed standalone authority transfer.
+- RunenSDF, RunenECS, and RunenGPU have completed standalone authority transfer.
 - Runenwerk consumes standalone frameworks at exact accepted revisions where integrated.
 - Runenwerk does not keep active predecessor semantic designs after accepted authority
   transfer.
 - RunenRender consumes RunenGPU through the standalone public boundary.
 - RunenRender extraction remains separately governed by its accepted architecture and
   owning issues.
-- RunenECS owns ECS-native scheduling semantics; Runenwerk owns application/product
-  lifecycle scheduling and integration.
+- Runenwerk owns application/product lifecycle scheduling and integration around
+  standalone RunenECS; reusable ECS scheduling/execution semantics remain upstream.
 - RunenUI remains independent.
 - Connector inspection does not substitute for executable validation.
 
@@ -296,8 +309,7 @@ Rejected:
 - retaining WGPU ownership in RunenRender;
 - moving Runenwerk-specific product policy into framework packages;
 - creating a generic scheduler framework merely to host ECS scheduling semantics;
-- retaining Runenwerk-local RunenGPU semantic documents as current authority after the
-  standalone transfer.
+- retaining Runenwerk-local RunenGPU or RunenECS semantic documents as current authority after standalone transfer.
 
 ## Fitness functions
 
