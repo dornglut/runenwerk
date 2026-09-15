@@ -76,10 +76,11 @@ IO/runtime wiring.
 ## Current Migration Pressure
 
 Current `editor_core` still centralizes a broad `DocumentKind` and one
-`EditorSession` for active document/tool/mode plus document dirty/save/close
-coordination. Scene selection is now owned by `editor_scene` and the Runenwerk
-runtime through a scene-scoped selection context; it is no longer generic
-`editor_core` session state.
+`EditorSession` for active document/tool/mode plus generic document-tab
+activation and ordering. It no longer owns universal document dirty/save/close
+persistence authority. Scene selection is owned by `editor_scene` and the
+Runenwerk runtime through a scene-scoped selection context; it is no longer
+generic `editor_core` session state.
 
 Scene undo/redo is likewise no longer a universal `editor_core` session stack.
 The Runenwerk editor integration owns one explicit scene history context that
@@ -88,11 +89,29 @@ snapshots and supplies the current shell Undo/Redo availability. Material Lab,
 `ui_composition`, and self-authoring histories remain separate owner-specific
 histories.
 
-The remaining `EditorSession` document/tool/mode/dirty-state aggregation is
-current implementation truth and must not be hidden. It remains predecessor
-shape for later ADR-0025 implementation work to decompose without compatibility
-aliases or duplicate authority. E1 selection and E2 scene-history migration do
-not claim full conformance with ADR 0025.
+Scene persistence is also explicit and owner-specific. The Runenwerk app host
+owns one `ScenePersistenceContext`; `editor_persistence` retains the concrete
+`SceneFileV2` DTO, normalization, formation, codec, and migration contracts.
+Scene cleanliness is derived from the current normalized persistence projection
+versus the context's unbound scene origin or, after successful scene IO, the last
+successfully loaded/written normalized scene baseline. The persisted target and
+baseline advance only after successful scene write or successful load apply.
+Failed scene IO preserves the previous persistence-context knowledge.
+
+This comparison is intentionally limited to content represented by the current
+`SceneFileV2`. Runtime/reflected state outside that persistence projection does
+not become scene persistence state merely because the editor can inspect or
+mutate it. Primary-window close admission reads this explicit scene persistence
+state; it does not scan generic document descriptors. Generic
+`SaveDocumentTab`/`CloseDocumentTab` persistence commands are not retained as
+fake authority. Asset/project, Material Lab, editor-definition, and structural
+composition persistence remain independent owners.
+
+The remaining `EditorSession` document/tool/mode aggregation is current
+implementation truth and must not be hidden. It remains predecessor shape for
+later ADR-0025 implementation work to decompose without compatibility aliases or
+duplicate authority. E1 selection, E2 scene-history, and E3 scene-persistence
+migration do not claim full conformance with ADR 0025.
 
 Likewise, existing product docs may still use “document”, “workspace”, “mode”,
 “dirty”, and similar user-facing/current-implementation vocabulary. Those terms
@@ -102,8 +121,8 @@ says they do.
 ## Integration
 
 - `apps/runenwerk_editor` wires editor crates into the runnable editor app and
-  owns concrete providers, host IO, runtime/window integration, and app command
-  execution.
+  owns concrete providers, host IO, runtime/window integration, app command
+  execution, and the current scene persistence context.
 - `domain/ui/*` owns reusable UI substrate and app-neutral structural
   composition.
 - scene, asset, graph, material, drawing, world, runtime, and future domain

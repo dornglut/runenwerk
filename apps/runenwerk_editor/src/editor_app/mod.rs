@@ -1,6 +1,7 @@
 mod console;
 mod facade;
 mod project_loading;
+mod scene_persistence;
 mod sdf_operations;
 mod state;
 

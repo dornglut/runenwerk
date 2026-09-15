@@ -1,5 +1,6 @@
 use crate::editor_runtime::runtime::RunenwerkEditorRuntime;
 use crate::editor_runtime::tool_state::EditorToolRuntimeState;
+use crate::persistence::{ScenePersistenceContext, normalized_scene_file_from_runtime};
 use std::sync::Arc;
 
 use editor_definition::EditorDefinitionDocument;
@@ -34,6 +35,7 @@ use super::sdf_operations::SdfOperationWorkspaceState;
 
 pub struct RunenwerkEditorApp {
     pub(crate) runtime: RunenwerkEditorRuntime,
+    pub(crate) scene_persistence: ScenePersistenceContext,
     pub(crate) runtime_mode_sessions: RuntimeModeSessions,
     pub(crate) tool_runtime_state: EditorToolRuntimeState,
     pub(crate) console_lines: Vec<ConsoleMessage>,
@@ -101,8 +103,14 @@ impl RunenwerkEditorApp {
     }
 
     fn with_workbench_host(workbench_host: RunenwerkWorkbenchHost) -> Self {
+        let runtime = RunenwerkEditorRuntime::new();
+        let scene_persistence = ScenePersistenceContext::new_unbound(
+            normalized_scene_file_from_runtime(&runtime)
+                .expect("fresh editor scene persistence projection must normalize"),
+        );
         Self {
-            runtime: RunenwerkEditorRuntime::new(),
+            runtime,
+            scene_persistence,
             runtime_mode_sessions: RuntimeModeSessions::default(),
             tool_runtime_state: EditorToolRuntimeState::new(),
             console_lines: Vec::new(),
@@ -138,6 +146,25 @@ impl RunenwerkEditorApp {
 
     pub fn runtime_mut(&mut self) -> &mut RunenwerkEditorRuntime {
         &mut self.runtime
+    }
+
+    pub fn scene_persistence(&self) -> &ScenePersistenceContext {
+        &self.scene_persistence
+    }
+
+    pub fn scene_persistence_is_dirty(
+        &self,
+    ) -> Result<bool, editor_persistence::SceneNormalizationError> {
+        let current_scene = normalized_scene_file_from_runtime(&self.runtime)?;
+        Ok(self.scene_persistence.is_dirty(&current_scene))
+    }
+
+    pub(crate) fn establish_scene_persistence(
+        &mut self,
+        target: impl Into<std::path::PathBuf>,
+        persisted_scene: editor_persistence::SceneFileV2,
+    ) {
+        self.scene_persistence.establish(target, persisted_scene);
     }
 
     pub fn runtime_mode_sessions(&self) -> &RuntimeModeSessions {

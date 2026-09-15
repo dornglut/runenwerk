@@ -42,17 +42,18 @@ It does not depend on editor, engine, native-window, renderer, `UiProgram`, or
 `domain/editor/editor_shell/src/composition/structural` owns the editor-specific
 one-way importer, typed extension schema, diagnostics, and shell projection.
 `apps/runenwerk_editor` owns providers, sessions, storage paths, profile
-selection, target-to-presentation bindings, native-window policy, and command
-execution.
+selection, target-to-presentation bindings, native-window policy, command
+execution, and the current scene persistence context.
 
 Product-facing UI may still say “workspace” for a task-oriented editor profile.
 `WorkspaceState` is not the live structural authority.
 
 The current editor implementation still contains predecessor-shaped generic
-`editor_core` document/session/mode contracts. Scene selection and scene history
-have been removed from that generic session authority and now use explicit
-scene-owned/integration-owned contexts. Those current repairs do not mean the
-whole Rust implementation already conforms to ADR 0025.
+`editor_core` document/session/mode contracts. Scene selection, scene history,
+and generic scene dirty/save authority have been removed from that generic
+session authority and now use explicit scene-owned/integration-owned contexts.
+Those current repairs do not mean the whole Rust implementation already conforms
+to ADR 0025.
 
 ## Structural Composition Runtime
 
@@ -122,6 +123,40 @@ ActivationScope/InvocationContext work may replace the bounded document-kind
 admission with explicit context resolution; E2 does not invent that later
 coordination subsystem.
 
+## Scene Persistence
+
+`RunenwerkEditorApp` owns one explicit `ScenePersistenceContext`. This is an app
+host integration context for the current scene persistence owner, not a generic
+editor registry or a new `editor_core` document service.
+
+The context stores either an unbound scene origin or, after successful scene IO,
+a concrete persistence target plus the last successfully loaded/written
+normalized `SceneFileV2` projection. It does not store a dirty boolean or use a
+monotonic editor/runtime revision as cleanliness authority. Current cleanliness
+is derived on observation by forming and normalizing the current persistence-owned
+scene projection and comparing it with the context comparison projection. This
+means saving content A, editing away from A, undoing back to A, and redoing away
+from A yields clean/dirty/clean/dirty according to effective persisted content.
+
+Scene save advances the persisted target/baseline only after the normalized
+projection is successfully written. Scene load advances it only after decode,
+normalization, formation, and scene apply succeed. Failed save/load leaves the
+previous context knowledge intact. A successful real scene load does not run the
+MVP empty-scene bootstrap afterward, because that bootstrap creates authored
+entities represented by `SceneFileV2` and would immediately diverge from an
+empty loaded file. Startup/demo bootstrap remains a separate new-session concern.
+
+The comparison boundary is intentionally exactly the current `SceneFileV2`
+projection. Reflected/runtime-only components and resources not represented by
+that DTO do not silently become persistence-owned content in E3. Material Lab,
+asset/project, editor-definition, retained-change, and structural-composition
+persistence are not folded into this scene context.
+
+Primary native-window close admission queries the scene persistence context. A
+dirty scene vetoes close; a clean scene admits it; inability to form the current
+persistence projection fails closed. The removed generic `SaveDocumentTab` and
+`CloseDocumentTab` commands are not retained as aliases for scene persistence.
+
 ## Provider And Content Liveness
 
 Mounted provider requests are projected from core mounted units plus typed
@@ -167,9 +202,10 @@ authority. See [`composition-layouts.md`](./composition-layouts.md) for the
 operator and developer contract.
 
 Editor/domain semantic persistence is not implied by composition persistence.
-Current project/scene/editor persistence contracts retain their concrete owners;
-ADR 0025 defines the future coordination boundary through explicit
-`PersistenceContext`s.
+The current scene path uses the explicit app-owned scene context described above;
+project, asset, editor-definition, Material Lab, retained-change, and other
+persistence contracts retain their concrete owners. This is a bounded ADR-0025
+ownership repair, not a universal persistence framework.
 
 ## Viewport Runtime
 

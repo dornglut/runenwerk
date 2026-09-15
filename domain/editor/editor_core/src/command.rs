@@ -34,14 +34,6 @@ pub enum CommandOutcome {
 
 pub trait CommandContext {
     type Error;
-
-    fn mark_document_dirty(
-        &mut self,
-        _document_id: crate::DocumentId,
-        _is_dirty: bool,
-    ) -> Result<(), Self::Error> {
-        Ok(())
-    }
 }
 
 pub trait Command: Send + Sync {
