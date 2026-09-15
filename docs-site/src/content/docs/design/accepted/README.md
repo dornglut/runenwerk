@@ -37,7 +37,7 @@ Move a design to `implemented/` only after code has been checked against it and 
 - [UI Designer Component Surface And Widget Recipe Library Design](ui-designer-component-surface-and-widget-recipe-library-design.md)
 - [UI Designer View-Model Capability And Intent Binding Design](ui-designer-view-model-capability-and-intent-binding-design.md)
 - [UI Designer Live Preview Fixtures Scenarios And Target Matrix Design](ui-designer-live-preview-fixtures-scenarios-and-target-matrix-design.md)
-- [UI Designer Persistence Migration Diff And Activation Design](ui-designer-persistence-migration-diff-activation-design.md)
+- [UI Designer Persistence Migration Diff And Activation Design](ui-designer-persistence-migration-diff-and-activation-design.md)
 - [UI Designer Production Readiness And Evidence Design](ui-designer-production-readiness-and-evidence-design.md)
 - [UI Designer Workbench Product Design](ui-designer-workbench-product-design.md)
 - [UI Lab Command Catalog And Surface Registry Design](ui-lab-command-catalog-and-surface-registry-design.md)

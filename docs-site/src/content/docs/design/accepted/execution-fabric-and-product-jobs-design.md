@@ -6,12 +6,13 @@ owner: engine
 layer: domain / engine-runtime
 canonical: true
 last_reviewed: 2026-09-15
+related_docs:
+  - ../../architecture/repository-family-architecture.md
 related_adrs:
   - ../../adr/accepted/0004-separate-description-from-execution.md
   - ../../adr/accepted/0008-adopt-sdf-first-field-product-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
 related_designs:
-  - ../../architecture/repository-family-architecture.md
   - ./sdf-first-field-world-platform-design.md
   - ./field-product-contracts-diagnostics-and-residency-design.md
   - ./sdf-product-renderer-and-gpu-residency-design.md
