@@ -90,10 +90,12 @@ impl SceneHistoryContext {
         Self::default()
     }
 
+    #[cfg(test)]
     pub fn undo_len(&self) -> usize {
         self.undo.len()
     }
 
+    #[cfg(test)]
     pub fn redo_len(&self) -> usize {
         self.redo.len()
     }
