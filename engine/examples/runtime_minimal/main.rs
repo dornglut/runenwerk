@@ -45,7 +45,7 @@ fn main() -> Result<()> {
 
     let frame_count = app.world().resource::<FrameCounter>()?.0;
     let world = app.world();
-    let query = world.query_state::<&Position, ()>();
+    let query = world.query::<&Position>();
     let positions: Vec<_> = query
         .iter(world)
         .map(|position| (position.x, position.y))

@@ -52,7 +52,7 @@ fn app_runs_startup_once_and_updates_each_frame() {
     assert_eq!(app.world().resource::<FrameCounter>().unwrap().0, 3);
 
     let world = app.world();
-    let query = world.query_state::<&Position, ()>();
+    let query = world.query::<&Position>();
     let positions: Vec<_> = query.iter(world).copied().collect();
     assert_eq!(positions, vec![Position { x: 6, y: 3 }]);
 }
@@ -206,7 +206,7 @@ fn demo_style_plugin_updates_title_and_close_state_headlessly() {
     assert!(window.title.contains("dt="));
 
     let world = app.world();
-    let query = world.query_state::<&Position, ()>();
+    let query = world.query::<&Position>();
     let positions: Vec<_> = query.iter(world).copied().collect();
     assert_eq!(positions, vec![Position { x: 1, y: 0 }]);
 }
