@@ -44,6 +44,18 @@ impl ScenePersistenceContext {
         self.comparison_scene() != current_scene
     }
 
+    pub(crate) fn adopt_unbound_origin(&mut self, origin_scene: SceneFileV2) -> bool {
+        match &mut self.anchor {
+            ScenePersistenceAnchor::Unbound {
+                origin_scene: current_origin,
+            } => {
+                *current_origin = origin_scene;
+                true
+            }
+            ScenePersistenceAnchor::Persisted { .. } => false,
+        }
+    }
+
     pub(crate) fn establish(
         &mut self,
         target: impl Into<PathBuf>,
@@ -75,6 +87,34 @@ mod tests {
         assert_eq!(context.target(), None);
         assert_eq!(context.persisted_scene(), None);
         assert!(!context.is_dirty(&origin));
+    }
+
+    #[test]
+    fn unbound_origin_can_follow_one_shot_new_scene_initialization() {
+        let initial = SceneFileV2::new(Vec::new());
+        let mut initialized = SceneFileV2::new(Vec::new());
+        initialized.version += 1;
+        let mut context = ScenePersistenceContext::new_unbound(initial);
+
+        assert!(context.is_dirty(&initialized));
+        assert!(context.adopt_unbound_origin(initialized.clone()));
+        assert_eq!(context.target(), None);
+        assert_eq!(context.persisted_scene(), None);
+        assert!(!context.is_dirty(&initialized));
+    }
+
+    #[test]
+    fn persisted_baseline_cannot_be_replaced_by_unbound_initialization() {
+        let persisted = SceneFileV2::new(Vec::new());
+        let mut other = SceneFileV2::new(Vec::new());
+        other.version += 1;
+        let mut context = ScenePersistenceContext::new_unbound(persisted.clone());
+        context.establish("scene.ron", persisted.clone());
+
+        assert!(!context.adopt_unbound_origin(other));
+        assert_eq!(context.target(), Some(Path::new("scene.ron")));
+        assert_eq!(context.persisted_scene(), Some(&persisted));
+        assert!(!context.is_dirty(&persisted));
     }
 
     #[test]

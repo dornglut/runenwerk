@@ -9,6 +9,7 @@ use engine::runtime::ResMut;
 
 use crate::editor_runtime::{bootstrap_mvp_scene_if_empty, register_mvp_component_types};
 use crate::material_lab::ensure_default_scene_material_preview;
+use crate::persistence::normalized_scene_file_from_runtime;
 use crate::runtime::resources::EditorHostResource;
 use crate::runtime::viewport::{
     MAIN_VIEWPORT_ID, ViewportArtifactObservationResource, ViewportPickingResultsResource,
@@ -22,8 +23,20 @@ pub fn bootstrap_editor_demo_system(
 ) {
     initialize_editor_shader_root(&mut shader_registry);
     register_mvp_component_types(host.app.runtime_mut());
-    if let Err(error) = bootstrap_mvp_scene_if_empty(host.app.runtime_mut()) {
-        eprintln!("editor mvp bootstrap failed: {error}");
+    match bootstrap_mvp_scene_if_empty(host.app.runtime_mut()) {
+        Ok(()) => match normalized_scene_file_from_runtime(host.app.runtime()) {
+            Ok(origin_scene) => {
+                let _ = host
+                    .app
+                    .scene_persistence
+                    .adopt_unbound_origin(origin_scene);
+            }
+            Err(error) => eprintln!(
+                "editor scene persistence origin bootstrap failed: {}",
+                error.as_static_str()
+            ),
+        },
+        Err(error) => eprintln!("editor mvp bootstrap failed: {error}"),
     }
     if let Err(error) = ensure_default_scene_material_preview(&mut host.app, &mut shader_registry) {
         eprintln!("editor default material bootstrap failed: {error}");
