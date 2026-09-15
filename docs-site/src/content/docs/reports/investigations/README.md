@@ -26,6 +26,7 @@ Investigations do not authorize implementation by themselves.
 
 - [Semantic Federation and Inspection Provenance Investigation](2026-08-12-semantic-federation-and-inspection-provenance.md)
 - [Application Composition and Networking Ergonomics Investigation](2026-08-12-application-composition-and-networking-ergonomics.md)
+- [Documentation Publication Surface and Corpus Audit](2026-09-15-documentation-publication-corpus-audit.md)
 
 ## Repository family and framework extraction
 
