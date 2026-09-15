@@ -6,11 +6,11 @@ use engine::plugins::render::{
 };
 use engine::prelude::*;
 use engine::runtime::{
-    IntoSystemSetKey, ProductPublicationOccurrence, ProductPublicationRuntimeResource,
-    SystemConfigExt, SystemMobilityExt, WindowStateRegistryResource,
-    dispatch_product_publication_system, dispatch_query_snapshot_publication_system,
+    ProductPublicationOccurrence, ProductPublicationRuntimeResource, SystemConfigExt,
+    SystemMobilityExt, WindowStateRegistryResource, dispatch_product_publication_system,
+    dispatch_query_snapshot_publication_system,
 };
-use runen_ecs::{SystemSetKey, World};
+use runen_ecs::World;
 
 use crate::asset_pipeline::publish_pending_field_product_publications;
 use crate::material_lab::publish_pending_material_preview_publications;
@@ -50,7 +50,7 @@ use crate::shell::EditorWindowPresentationBinding;
 
 pub struct EditorAppPlugin;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, SystemSet)]
 pub enum EditorRuntimeSet {
     Picking,
     InputBridge,
@@ -71,68 +71,6 @@ pub enum EditorRuntimeSet {
     MaterialPreviewProductUpload,
     TexturePreviewProductUpload,
     ViewportGpuResidencySummary,
-}
-
-impl IntoSystemSetKey for EditorRuntimeSet {
-    fn system_set_key(&self) -> SystemSetKey {
-        match self {
-            Self::Picking => SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::Picking"),
-            Self::InputBridge => {
-                SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::InputBridge")
-            }
-            Self::CompositionTransitions => {
-                SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::CompositionTransitions")
-            }
-            Self::TargetInput => {
-                SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::TargetInput")
-            }
-            Self::ProductPublication => {
-                SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::ProductPublication")
-            }
-            Self::WindowPresentationRequests => {
-                SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::WindowPresentationRequests")
-            }
-            Self::ViewportLifecycle => {
-                SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::ViewportLifecycle")
-            }
-            Self::FrameSubmit => {
-                SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::FrameSubmit")
-            }
-            Self::ViewportRenderStateCommands => SystemSetKey::of::<EditorRuntimeSet>(
-                "EditorRuntimeSet::ViewportRenderStateCommands",
-            ),
-            Self::ViewportPresentationSync => {
-                SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::ViewportPresentationSync")
-            }
-            Self::QuerySnapshotPublication => {
-                SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::QuerySnapshotPublication")
-            }
-            Self::ProcgenViewportOverlay => {
-                SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::ProcgenViewportOverlay")
-            }
-            Self::ViewportProductTargets => {
-                SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::ViewportProductTargets")
-            }
-            Self::ViewportRenderJobs => {
-                SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::ViewportRenderJobs")
-            }
-            Self::ViewportRenderProductSelection => SystemSetKey::of::<EditorRuntimeSet>(
-                "EditorRuntimeSet::ViewportRenderProductSelection",
-            ),
-            Self::MaterialPreviewRenderHandoff => SystemSetKey::of::<EditorRuntimeSet>(
-                "EditorRuntimeSet::MaterialPreviewRenderHandoff",
-            ),
-            Self::MaterialPreviewProductUpload => SystemSetKey::of::<EditorRuntimeSet>(
-                "EditorRuntimeSet::MaterialPreviewProductUpload",
-            ),
-            Self::TexturePreviewProductUpload => SystemSetKey::of::<EditorRuntimeSet>(
-                "EditorRuntimeSet::TexturePreviewProductUpload",
-            ),
-            Self::ViewportGpuResidencySummary => SystemSetKey::of::<EditorRuntimeSet>(
-                "EditorRuntimeSet::ViewportGpuResidencySummary",
-            ),
-        }
-    }
 }
 
 impl Plugin for EditorAppPlugin {

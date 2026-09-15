@@ -1,11 +1,10 @@
 use crate::app::App;
 use crate::plugin::Plugin;
 use crate::runtime::{
-    CoreSet, FixedUpdate, IntoSystemSetKey, RenderPrepare, Res, ResMut, SystemConfigExt,
-    SystemMobilityExt,
+    CoreSet, FixedUpdate, RenderPrepare, Res, ResMut, SystemConfigExt, SystemMobilityExt,
 };
 use engine_sim::{AuthorityRole, SimulationProfileConfig};
-use runen_ecs::SystemSetKey;
+use runen_ecs::SystemSet;
 
 use super::build::integration::{
     integrate_completed_build_outputs_system, sync_world_runtime_debug_metrics_system,
@@ -65,7 +64,7 @@ pub struct WorldRuntimeState {
 
 pub struct WorldPlugin;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, SystemSet)]
 pub enum WorldRuntimeSet {
     ModeSync,
     Lifecycle,
@@ -74,30 +73,6 @@ pub enum WorldRuntimeSet {
     BuildIntegrate,
     RenderCacheSync,
     ReplicationState,
-}
-
-impl IntoSystemSetKey for WorldRuntimeSet {
-    fn system_set_key(&self) -> SystemSetKey {
-        match self {
-            Self::ModeSync => SystemSetKey::of::<WorldRuntimeSet>("WorldRuntimeSet::ModeSync"),
-            Self::Lifecycle => SystemSetKey::of::<WorldRuntimeSet>("WorldRuntimeSet::Lifecycle"),
-            Self::BuildDispatch => {
-                SystemSetKey::of::<WorldRuntimeSet>("WorldRuntimeSet::BuildDispatch")
-            }
-            Self::BuildMetrics => {
-                SystemSetKey::of::<WorldRuntimeSet>("WorldRuntimeSet::BuildMetrics")
-            }
-            Self::BuildIntegrate => {
-                SystemSetKey::of::<WorldRuntimeSet>("WorldRuntimeSet::BuildIntegrate")
-            }
-            Self::RenderCacheSync => {
-                SystemSetKey::of::<WorldRuntimeSet>("WorldRuntimeSet::RenderCacheSync")
-            }
-            Self::ReplicationState => {
-                SystemSetKey::of::<WorldRuntimeSet>("WorldRuntimeSet::ReplicationState")
-            }
-        }
-    }
 }
 
 pub fn world_runtime_mode_for_authority(authority: AuthorityRole) -> WorldRuntimeMode {

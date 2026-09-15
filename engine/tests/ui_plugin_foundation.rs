@@ -2,8 +2,7 @@ use engine::plugins::ui::{
     UiPlugin, UiRuntimeDiagnosticsResource, UiRuntimeInstallState, UiRuntimeReport,
     UiRuntimeReportResource, UiRuntimeResource, UiRuntimeSet,
 };
-use engine::prelude::App;
-use engine::runtime::IntoSystemSetKey;
+use engine::prelude::{App, SystemSet};
 
 #[test]
 fn ui_plugin_installs_foundation_resources_without_panicking() {
@@ -81,13 +80,15 @@ fn ui_plugin_default_resources_are_stable() {
 
 #[test]
 fn ui_plugin_schedule_labels_are_stable() {
-    let foundation = UiRuntimeSet::Foundation.system_set_key();
-    let report = UiRuntimeSet::Report.system_set_key();
-    let render_publication = UiRuntimeSet::RenderPublication.system_set_key();
+    let foundation = UiRuntimeSet::Foundation.key();
+    let foundation_again = UiRuntimeSet::Foundation.key();
+    let report = UiRuntimeSet::Report.key();
+    let render_publication = UiRuntimeSet::RenderPublication.key();
 
     assert_eq!(foundation.name(), "UiRuntimeSet::Foundation");
     assert_eq!(report.name(), "UiRuntimeSet::Report");
     assert_eq!(render_publication.name(), "UiRuntimeSet::RenderPublication");
     assert_ne!(foundation, report);
     assert_ne!(report, render_publication);
+    assert_eq!(foundation, foundation_again);
 }
