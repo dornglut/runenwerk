@@ -70,7 +70,8 @@ mod tests {
     fn saved_mvp_scene(name: &str) -> (RunenwerkEditorApp, std::path::PathBuf) {
         let mut app = RunenwerkEditorApp::new();
         register_mvp_component_types(app.runtime_mut());
-        bootstrap_mvp_scene_if_empty(app.runtime_mut()).expect("MVP scene bootstrap should succeed");
+        bootstrap_mvp_scene_if_empty(app.runtime_mut())
+            .expect("MVP scene bootstrap should succeed");
         let root = temp_root(name);
         let path = root.join("scene.ron");
         app.save_scene_persistence_to_path(&path)
@@ -82,9 +83,10 @@ mod tests {
     fn fresh_unbound_scene_is_clean_without_claiming_a_persisted_baseline() {
         let app = RunenwerkEditorApp::new();
 
-        assert!(!app
-            .scene_persistence_is_dirty()
-            .expect("fresh scene projection should normalize"));
+        assert!(
+            !app.scene_persistence_is_dirty()
+                .expect("fresh scene projection should normalize")
+        );
         assert_eq!(app.scene_persistence().target(), None);
         assert_eq!(app.scene_persistence().persisted_scene(), None);
     }
@@ -96,9 +98,10 @@ mod tests {
 
         assert_eq!(app.scene_persistence().target(), Some(path.as_path()));
         assert_eq!(app.scene_persistence().persisted_scene(), Some(&persisted));
-        assert!(!app
-            .scene_persistence_is_dirty()
-            .expect("saved scene projection should normalize"));
+        assert!(
+            !app.scene_persistence_is_dirty()
+                .expect("saved scene projection should normalize")
+        );
 
         let entity = app
             .runtime()
@@ -122,9 +125,10 @@ mod tests {
             },
         )
         .expect("same-name rename should execute");
-        assert!(!app
-            .scene_persistence_is_dirty()
-            .expect("no-op scene projection should normalize"));
+        assert!(
+            !app.scene_persistence_is_dirty()
+                .expect("no-op scene projection should normalize")
+        );
 
         execute_intent_with_history(
             app.runtime_mut(),
@@ -135,23 +139,26 @@ mod tests {
             },
         )
         .expect("scene edit should execute");
-        assert!(app
-            .scene_persistence_is_dirty()
-            .expect("edited scene projection should normalize"));
+        assert!(
+            app.scene_persistence_is_dirty()
+                .expect("edited scene projection should normalize")
+        );
 
         undo_last_scene_change(app.runtime_mut(), ChangeOrigin::EditorShell)
             .expect("scene undo should succeed")
             .expect("scene undo should consume the edit");
-        assert!(!app
-            .scene_persistence_is_dirty()
-            .expect("undone scene projection should normalize"));
+        assert!(
+            !app.scene_persistence_is_dirty()
+                .expect("undone scene projection should normalize")
+        );
 
         redo_last_scene_change(app.runtime_mut(), ChangeOrigin::EditorShell)
             .expect("scene redo should succeed")
             .expect("scene redo should restore the edit");
-        assert!(app
-            .scene_persistence_is_dirty()
-            .expect("redone scene projection should normalize"));
+        assert!(
+            app.scene_persistence_is_dirty()
+                .expect("redone scene projection should normalize")
+        );
 
         let _ = std::fs::remove_dir_all(path.parent().expect("temp scene has parent"));
     }
@@ -172,9 +179,10 @@ mod tests {
             .insert_component_for_editor_entity(entity, RuntimeOnlyComponent)
             .expect("runtime-only component insertion should succeed");
 
-        assert!(!app
-            .scene_persistence_is_dirty()
-            .expect("persisted scene projection should ignore runtime-only component"));
+        assert!(
+            !app.scene_persistence_is_dirty()
+                .expect("persisted scene projection should ignore runtime-only component")
+        );
 
         let _ = std::fs::remove_dir_all(path.parent().expect("temp scene has parent"));
     }
@@ -197,9 +205,10 @@ mod tests {
             },
         )
         .expect("scene edit should execute");
-        assert!(app
-            .scene_persistence_is_dirty()
-            .expect("edited scene projection should normalize"));
+        assert!(
+            app.scene_persistence_is_dirty()
+                .expect("edited scene projection should normalize")
+        );
         let baseline_before_failure = app.scene_persistence().clone();
 
         let blocker = temp_root("save_blocker");
@@ -208,9 +217,10 @@ mod tests {
         assert!(app.save_scene_persistence_to_path(&failing_path).is_err());
 
         assert_eq!(app.scene_persistence(), &baseline_before_failure);
-        assert!(app
-            .scene_persistence_is_dirty()
-            .expect("dirty scene projection should remain observable"));
+        assert!(
+            app.scene_persistence_is_dirty()
+                .expect("dirty scene projection should remain observable")
+        );
 
         let _ = std::fs::remove_file(blocker);
         let _ = std::fs::remove_dir_all(path.parent().expect("temp scene has parent"));
@@ -222,8 +232,8 @@ mod tests {
         std::fs::create_dir_all(&root).expect("empty-load root should be creatable");
         let path = root.join("scene.ron");
         let empty_scene = editor_persistence::SceneFileV2::new(Vec::new());
-        let source = editor_persistence::encode_ron_pretty(&empty_scene)
-            .expect("empty scene should encode");
+        let source =
+            editor_persistence::encode_ron_pretty(&empty_scene).expect("empty scene should encode");
         std::fs::write(&path, source).expect("empty scene fixture should be writable");
         let mut app = RunenwerkEditorApp::new();
 
@@ -232,10 +242,14 @@ mod tests {
 
         assert_eq!(app.runtime().document().entity_ids().count(), 0);
         assert_eq!(app.scene_persistence().target(), Some(path.as_path()));
-        assert_eq!(app.scene_persistence().persisted_scene(), Some(&empty_scene));
-        assert!(!app
-            .scene_persistence_is_dirty()
-            .expect("loaded empty scene projection should normalize"));
+        assert_eq!(
+            app.scene_persistence().persisted_scene(),
+            Some(&empty_scene)
+        );
+        assert!(
+            !app.scene_persistence_is_dirty()
+                .expect("loaded empty scene projection should normalize")
+        );
 
         let _ = std::fs::remove_dir_all(root);
     }
@@ -248,9 +262,10 @@ mod tests {
         app.load_scene_persistence_from_path(&path)
             .expect("scene load should succeed");
         assert_eq!(app.scene_persistence().target(), Some(path.as_path()));
-        assert!(!app
-            .scene_persistence_is_dirty()
-            .expect("loaded scene projection should normalize"));
+        assert!(
+            !app.scene_persistence_is_dirty()
+                .expect("loaded scene projection should normalize")
+        );
         let baseline_before_failure = app.scene_persistence().clone();
 
         let invalid_root = temp_root("invalid_load");
@@ -261,9 +276,11 @@ mod tests {
 
         assert!(app.load_scene_persistence_from_path(&invalid_path).is_err());
         assert_eq!(app.scene_persistence(), &baseline_before_failure);
-        assert!(app
-            .scene_persistence_is_dirty()
-            .expect("failed load should leave current state distinguishable from prior baseline"));
+        assert!(
+            app.scene_persistence_is_dirty().expect(
+                "failed load should leave current state distinguishable from prior baseline"
+            )
+        );
 
         let _ = std::fs::remove_dir_all(invalid_root);
         let _ = std::fs::remove_dir_all(path.parent().expect("temp scene has parent"));

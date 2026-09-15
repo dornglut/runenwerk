@@ -1,9 +1,7 @@
-const EDITOR_CORE_COMMAND: &str =
-    include_str!("../../../domain/editor/editor_core/src/command.rs");
+const EDITOR_CORE_COMMAND: &str = include_str!("../../../domain/editor/editor_core/src/command.rs");
 const EDITOR_CORE_DOCUMENT: &str =
     include_str!("../../../domain/editor/editor_core/src/document.rs");
-const EDITOR_CORE_SESSION: &str =
-    include_str!("../../../domain/editor/editor_core/src/session.rs");
+const EDITOR_CORE_SESSION: &str = include_str!("../../../domain/editor/editor_core/src/session.rs");
 const EDITOR_SCENE_RUNTIME: &str =
     include_str!("../../../domain/editor/editor_scene/src/bridge/scene_runtime.rs");
 const EDITOR_SHELL_COMMAND: &str =
@@ -14,7 +12,11 @@ const SCENE_PERSISTENCE_CONTEXT: &str = include_str!("../src/persistence/scene_c
 #[test]
 fn generic_editor_dirty_and_save_authority_stays_retired() {
     for (owner, source, forbidden) in [
-        ("editor_core command", EDITOR_CORE_COMMAND, "mark_document_dirty"),
+        (
+            "editor_core command",
+            EDITOR_CORE_COMMAND,
+            "mark_document_dirty",
+        ),
         ("editor_core document", EDITOR_CORE_DOCUMENT, "is_dirty"),
         ("editor_core document", EDITOR_CORE_DOCUMENT, "with_dirty"),
         (
@@ -37,11 +39,7 @@ fn generic_editor_dirty_and_save_authority_stays_retired() {
             EDITOR_CORE_SESSION,
             "mark_document_saved",
         ),
-        (
-            "editor_scene bridge",
-            EDITOR_SCENE_RUNTIME,
-            "EditorSession",
-        ),
+        ("editor_scene bridge", EDITOR_SCENE_RUNTIME, "EditorSession"),
         (
             "editor_scene bridge",
             EDITOR_SCENE_RUNTIME,

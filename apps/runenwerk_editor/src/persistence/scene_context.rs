@@ -56,11 +56,7 @@ impl ScenePersistenceContext {
         }
     }
 
-    pub(crate) fn establish(
-        &mut self,
-        target: impl Into<PathBuf>,
-        persisted_scene: SceneFileV2,
-    ) {
+    pub(crate) fn establish(&mut self, target: impl Into<PathBuf>, persisted_scene: SceneFileV2) {
         self.anchor = ScenePersistenceAnchor::Persisted {
             target: target.into(),
             scene: persisted_scene,
