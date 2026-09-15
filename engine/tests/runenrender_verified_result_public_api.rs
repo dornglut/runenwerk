@@ -1,13 +1,25 @@
 use engine::plugins::render::deterministic_execution::{
+    PreparedDeterministicRadianceOutput, PreparedDeterministicRender,
     RenderCapturedDeterministicRadiance, RenderDeterministicRadianceCaptureError,
     RenderDeterministicRadianceCaptureRequest, RenderDeterministicRadianceCaptureRequestError,
     RenderDeterministicResultFormationError, RenderDeterministicVerifiedSubmissionError,
-    SubmittedDeterministicRender, submit_deterministic_render_for_verified_result,
+    SubmittedDeterministicRender, prepare_deterministic_render,
+    submit_deterministic_render_for_verified_result,
 };
 use runen_gpu::{GpuContext, GpuReadbackOperation, GpuSubmission};
 
 #[test]
 fn verified_result_formation_surface_is_public_to_downstream_consumers() {
+    let _ = prepare_deterministic_render;
+    let _ = PreparedDeterministicRender::admitted;
+    let _ = PreparedDeterministicRender::work_set;
+    let _ = PreparedDeterministicRender::radiance_outputs;
+    let _ = PreparedDeterministicRender::radiance_output;
+    let _ = PreparedDeterministicRadianceOutput::output_index;
+    let _ = PreparedDeterministicRadianceOutput::resource;
+    let _ = PreparedDeterministicRadianceOutput::texture;
+    let _ = PreparedDeterministicRadianceOutput::export_relationship;
+    let _ = PreparedDeterministicRadianceOutput::import;
     let _ = submit_deterministic_render_for_verified_result;
     let _ = SubmittedDeterministicRender::submission_status;
     let _ = SubmittedDeterministicRender::try_form_verified_result;

@@ -60,7 +60,7 @@ The RunenGPU standalone transfer and Runenwerk consumer cutover are complete. Ru
 currently consumes exact accepted RunenGPU revision:
 
 ```text
-31649491e9e7746da8e128ad984d2be315961640
+c292b77ff1a3b3e984dc2263bbbf8d8c06e93777
 ```
 
 That exact pin plus Runenwerk integration validation is the current product compatibility

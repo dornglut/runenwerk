@@ -128,7 +128,7 @@ Runenwerk consumes `runen-gpu` through an exact accepted Git revision. At this r
 workspace pin is:
 
 ```text
-31649491e9e7746da8e128ad984d2be315961640
+c292b77ff1a3b3e984dc2263bbbf8d8c06e93777
 ```
 
 That pin is Runenwerk's integration compatibility claim; it is not a second semantic
