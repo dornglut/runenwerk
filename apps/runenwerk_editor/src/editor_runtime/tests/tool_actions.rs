@@ -90,7 +90,7 @@ fn tool_action_scene_executes_history_backed_scene_intent() {
         app.runtime()
             .entity_has_component(EntityId(1), position_type)
     );
-    assert_eq!(app.runtime().session().history().undo_len(), 1);
+    assert_eq!(app.runtime().scene_history().undo_len(), 1);
 }
 
 #[test]

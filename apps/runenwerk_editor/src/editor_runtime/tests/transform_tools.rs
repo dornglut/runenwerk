@@ -107,7 +107,7 @@ fn commit_preview_applies_translation_delta_to_local_transform() {
     assert_eq!(transform.translation, Vec3Value::new(3.0, -2.0, 1.5));
     assert!(!app.tool_runtime_state().preview_active());
     assert_eq!(app.tool_runtime_state().preview(), None);
-    assert_eq!(app.runtime().session().history().undo_len(), 1);
+    assert_eq!(app.runtime().scene_history().undo_len(), 1);
 }
 
 #[test]

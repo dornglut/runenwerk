@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: domain
 canonical: true
-last_reviewed: 2026-09-14
+last_reviewed: 2026-09-15
 related_designs:
   - ../../design/accepted/runenwerk-editor-coordination-semantic-model.md
   - ../../design/implemented/editor-tool-suite-registry-and-workbench-host-design.md
@@ -26,10 +26,10 @@ not claim current Rust already conforms.
 
 ## Current Crates
 
-- `editor_core`: current shared editor session, document, selection, history,
-  command, transaction, and coordination-era contracts. Several of these are
-  predecessor-shaped implementation to migrate rather than durable universal
-  editor ownership.
+- `editor_core`: current shared editor session, document, command, transaction,
+  ratification, sharing, reconciliation, and coordination-era contracts. Several
+  of these are predecessor-shaped implementation to migrate rather than durable
+  universal editor ownership.
 - `editor_definition`: durable editor-definition schemas, validation, and pure
   formation helpers for editor-owned UI/theme/menu/shortcut/binding/catalog
   definition families.
@@ -75,14 +75,24 @@ IO/runtime wiring.
 
 ## Current Migration Pressure
 
-Current `editor_core` still centralizes a broad `DocumentKind`, one
-`EditorSession` active document/tool/mode, and one `HistoryStack`. Scene
-selection is now owned by `editor_scene` and the Runenwerk runtime through a
-scene-scoped selection context; it is no longer generic `editor_core` session
-state. The remaining session/history aggregation is current implementation
-truth and must not be hidden. It is also the primary semantic boundary that
-later ADR-0025 implementation work must decompose without compatibility aliases
-or duplicate authority.
+Current `editor_core` still centralizes a broad `DocumentKind` and one
+`EditorSession` for active document/tool/mode plus document dirty/save/close
+coordination. Scene selection is now owned by `editor_scene` and the Runenwerk
+runtime through a scene-scoped selection context; it is no longer generic
+`editor_core` session state.
+
+Scene undo/redo is likewise no longer a universal `editor_core` session stack.
+The Runenwerk editor integration owns one explicit scene history context that
+retains the originating ratified change together with before/after scene
+snapshots and supplies the current shell Undo/Redo availability. Material Lab,
+`ui_composition`, and self-authoring histories remain separate owner-specific
+histories.
+
+The remaining `EditorSession` document/tool/mode/dirty-state aggregation is
+current implementation truth and must not be hidden. It remains predecessor
+shape for later ADR-0025 implementation work to decompose without compatibility
+aliases or duplicate authority. E1 selection and E2 scene-history migration do
+not claim full conformance with ADR 0025.
 
 Likewise, existing product docs may still use “document”, “workspace”, “mode”,
 “dirty”, and similar user-facing/current-implementation vocabulary. Those terms

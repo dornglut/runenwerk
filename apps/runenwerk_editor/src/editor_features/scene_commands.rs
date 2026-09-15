@@ -1,4 +1,4 @@
-use editor_core::{ChangeOrigin, GoverningChangeError, RatifiedChange};
+use editor_core::{ChangeOrigin, DocumentKind, GoverningChangeError, RatifiedChange};
 use editor_scene::{SceneCommandIntent, SceneEditorCommand};
 
 use crate::editor_runtime::{
@@ -240,6 +240,9 @@ pub fn undo_last_scene_change(
     runtime: &mut RunenwerkEditorRuntime,
     origin: ChangeOrigin,
 ) -> Result<Option<RatifiedChange>, GoverningChangeError> {
+    if !scene_history_is_current_command_target(runtime) {
+        return Ok(None);
+    }
     ratify_scene_undo(runtime, origin)
 }
 
@@ -247,5 +250,59 @@ pub fn redo_last_scene_change(
     runtime: &mut RunenwerkEditorRuntime,
     origin: ChangeOrigin,
 ) -> Result<Option<RatifiedChange>, GoverningChangeError> {
+    if !scene_history_is_current_command_target(runtime) {
+        return Ok(None);
+    }
     ratify_scene_redo(runtime, origin)
+}
+
+fn scene_history_is_current_command_target(runtime: &RunenwerkEditorRuntime) -> bool {
+    runtime
+        .session()
+        .active_document_descriptor()
+        .is_some_and(|document| matches!(&document.kind, DocumentKind::Scene))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use editor_core::{DocumentDescriptor, DocumentId};
+
+    #[test]
+    fn non_scene_active_document_fails_closed_without_consuming_scene_history() {
+        let mut runtime = RunenwerkEditorRuntime::new();
+        execute_intent_with_history(
+            &mut runtime,
+            "Create Scene Entity",
+            SceneCommandIntent::CreateEntity {
+                parent: None,
+                display_name: "Scene Entity".to_string(),
+            },
+        )
+        .expect("scene edit should succeed");
+        assert_eq!(runtime.scene_history().undo_len(), 1);
+
+        runtime
+            .activate_or_open_document(
+                DocumentDescriptor::new(DocumentId(2), DocumentKind::MaterialGraph, "Material"),
+                true,
+            )
+            .expect("material document should activate");
+
+        let undo = undo_last_scene_change(&mut runtime, ChangeOrigin::Shortcut)
+            .expect("non-scene undo routing should fail closed without error");
+        assert!(undo.is_none());
+        assert_eq!(runtime.scene_history().undo_len(), 1);
+        assert_eq!(runtime.scene_history().redo_len(), 0);
+
+        runtime
+            .session_mut()
+            .activate_document(DocumentId(1))
+            .expect("scene document should reactivate");
+        let undo = undo_last_scene_change(&mut runtime, ChangeOrigin::Shortcut)
+            .expect("scene undo should succeed once scene context is active");
+        assert!(undo.is_some());
+        assert_eq!(runtime.scene_history().undo_len(), 0);
+        assert_eq!(runtime.scene_history().redo_len(), 1);
+    }
 }
