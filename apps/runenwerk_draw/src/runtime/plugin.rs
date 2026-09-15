@@ -3,11 +3,10 @@
 use engine::plugins::render::SurfaceFrameSubmissionRegistryResource;
 use engine::prelude::*;
 use engine::runtime::{
-    IntoSystemSetKey, RuntimeJobExecutorConfig, RuntimeJobExecutorResource,
-    RuntimeProductCacheResource, SystemConfigExt, SystemMobilityExt,
-    dispatch_product_publication_system, dispatch_query_snapshot_publication_system,
+    RuntimeJobExecutorConfig, RuntimeJobExecutorResource, RuntimeProductCacheResource,
+    SystemConfigExt, SystemMobilityExt, dispatch_product_publication_system,
+    dispatch_query_snapshot_publication_system,
 };
-use runen_ecs::SystemSetKey;
 
 use crate::runtime::gpu_ink::{
     DrawingInkGpuValidationReportCursorResource, process_drawing_ink_gpu_validation_report_system,
@@ -24,7 +23,7 @@ use crate::runtime::systems::{
 
 pub struct DrawingAppPlugin;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, SystemSet)]
 pub enum DrawingRuntimeSet {
     InputRoute,
     PreviewJobs,
@@ -32,31 +31,6 @@ pub enum DrawingRuntimeSet {
     QuerySnapshotPublication,
     GpuValidation,
     FrameSubmit,
-}
-
-impl IntoSystemSetKey for DrawingRuntimeSet {
-    fn system_set_key(&self) -> SystemSetKey {
-        match self {
-            Self::InputRoute => {
-                SystemSetKey::of::<DrawingRuntimeSet>("DrawingRuntimeSet::InputRoute")
-            }
-            Self::PreviewJobs => {
-                SystemSetKey::of::<DrawingRuntimeSet>("DrawingRuntimeSet::PreviewJobs")
-            }
-            Self::ProductPublication => {
-                SystemSetKey::of::<DrawingRuntimeSet>("DrawingRuntimeSet::ProductPublication")
-            }
-            Self::QuerySnapshotPublication => {
-                SystemSetKey::of::<DrawingRuntimeSet>("DrawingRuntimeSet::QuerySnapshotPublication")
-            }
-            Self::GpuValidation => {
-                SystemSetKey::of::<DrawingRuntimeSet>("DrawingRuntimeSet::GpuValidation")
-            }
-            Self::FrameSubmit => {
-                SystemSetKey::of::<DrawingRuntimeSet>("DrawingRuntimeSet::FrameSubmit")
-            }
-        }
-    }
 }
 
 impl Plugin for DrawingAppPlugin {

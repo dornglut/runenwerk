@@ -102,7 +102,7 @@ struct OrderLog(Vec<&'static str>);
 struct InputStage;
 
 impl SystemSet for InputStage {
-    fn name() -> &'static str {
+    fn name(&self) -> &'static str {
         "InputStage"
     }
 }

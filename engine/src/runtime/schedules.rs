@@ -1,5 +1,4 @@
-use crate::runtime::system::IntoSystemSetKey;
-use runen_ecs::{ScheduleLabel, SystemSetKey};
+use runen_ecs::{ScheduleLabel, SystemSet};
 
 /// Core runtime schedules.
 ///
@@ -78,23 +77,11 @@ impl ScheduleLabel for FrameEnd {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, SystemSet)]
 pub enum CoreSet {
     Input,
     Time,
     Scene,
     Simulation,
     FrameEnd,
-}
-
-impl IntoSystemSetKey for CoreSet {
-    fn system_set_key(&self) -> SystemSetKey {
-        match self {
-            Self::Input => SystemSetKey::of::<CoreSet>("CoreSet::Input"),
-            Self::Time => SystemSetKey::of::<CoreSet>("CoreSet::Time"),
-            Self::Scene => SystemSetKey::of::<CoreSet>("CoreSet::Scene"),
-            Self::Simulation => SystemSetKey::of::<CoreSet>("CoreSet::Simulation"),
-            Self::FrameEnd => SystemSetKey::of::<CoreSet>("CoreSet::FrameEnd"),
-        }
-    }
 }

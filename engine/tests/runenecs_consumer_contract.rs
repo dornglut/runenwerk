@@ -38,7 +38,7 @@ fn app_rejects_registration_errors_before_startup() {
 struct MissingSet;
 
 impl SystemSet for MissingSet {
-    fn name() -> &'static str {
+    fn name(&self) -> &'static str {
         "MissingSet"
     }
 }

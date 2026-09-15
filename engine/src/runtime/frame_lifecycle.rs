@@ -130,7 +130,7 @@ mod tests {
     struct DeferredProducerSet;
 
     impl SystemSet for DeferredProducerSet {
-        fn name() -> &'static str {
+        fn name(&self) -> &'static str {
             "DeferredProducerSet"
         }
     }
@@ -139,7 +139,7 @@ mod tests {
     struct ProductPublicationSet;
 
     impl SystemSet for ProductPublicationSet {
-        fn name() -> &'static str {
+        fn name(&self) -> &'static str {
             "ProductPublicationSet"
         }
     }
@@ -148,7 +148,7 @@ mod tests {
     struct QueryPublicationSet;
 
     impl SystemSet for QueryPublicationSet {
-        fn name() -> &'static str {
+        fn name(&self) -> &'static str {
             "QueryPublicationSet"
         }
     }
