@@ -367,9 +367,8 @@ mod tests {
 
     #[test]
     fn create_entity_command_applies_and_undoes() {
-        let mut session = editor_core::EditorSession::new();
         let mut runtime = MockSceneRuntime::default();
-        let mut ctx = SceneCommandContext::new(&mut session, &mut runtime);
+        let mut ctx = SceneCommandContext::new(&mut runtime);
 
         let mut command = SceneEditorCommand::from_intent(
             editor_core::CommandId(1),
@@ -399,7 +398,6 @@ mod tests {
 
     #[test]
     fn edit_component_field_command_round_trips() {
-        let mut session = editor_core::EditorSession::new();
         let mut runtime = MockSceneRuntime::default();
         let entity = runtime
             .create_entity(None, "Player")
@@ -416,7 +414,7 @@ mod tests {
             )
             .expect("seed value should be written");
 
-        let mut ctx = SceneCommandContext::new(&mut session, &mut runtime);
+        let mut ctx = SceneCommandContext::new(&mut runtime);
 
         let mut command = SceneEditorCommand::from_intent(
             editor_core::CommandId(2),
@@ -448,7 +446,6 @@ mod tests {
 
     #[test]
     fn edit_component_field_command_round_trips_enum_symbols() {
-        let mut session = editor_core::EditorSession::new();
         let mut runtime = MockSceneRuntime::default();
         let entity = runtime
             .create_entity(None, "Player")
@@ -465,7 +462,7 @@ mod tests {
             )
             .expect("seed value should be written");
 
-        let mut ctx = SceneCommandContext::new(&mut session, &mut runtime);
+        let mut ctx = SceneCommandContext::new(&mut runtime);
 
         let mut command = SceneEditorCommand::from_intent(
             editor_core::CommandId(20),
@@ -500,7 +497,6 @@ mod tests {
 
     #[test]
     fn edit_resource_field_command_round_trips_enum_symbols() {
-        let mut session = editor_core::EditorSession::new();
         let mut runtime = MockSceneRuntime::default();
         let resource_type = ResourceTypeId(20);
         let path = InspectorPath::root().child_field("filter");
@@ -513,7 +509,7 @@ mod tests {
             )
             .expect("seed value should be written");
 
-        let mut ctx = SceneCommandContext::new(&mut session, &mut runtime);
+        let mut ctx = SceneCommandContext::new(&mut runtime);
 
         let mut command = SceneEditorCommand::from_intent(
             editor_core::CommandId(21),
@@ -547,13 +543,12 @@ mod tests {
 
     #[test]
     fn rename_entity_command_round_trips() {
-        let mut session = editor_core::EditorSession::new();
         let mut runtime = MockSceneRuntime::default();
         let entity = runtime
             .create_entity(None, "Player")
             .expect("entity create should succeed");
 
-        let mut ctx = SceneCommandContext::new(&mut session, &mut runtime);
+        let mut ctx = SceneCommandContext::new(&mut runtime);
 
         let mut command = SceneEditorCommand::from_intent(
             editor_core::CommandId(3),
