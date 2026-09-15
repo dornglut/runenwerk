@@ -276,7 +276,8 @@ let mut world = World::new();
 world.insert_resource(Frame(0));
 
 let mut runtime = Runtime::new();
-runtime.add_systems::<Update, _, _>(&mut world, tick);
+runtime.add_systems(Update, tick).unwrap();
+runtime.validate().unwrap();
 runtime.run_schedule::<Update>(&mut world).unwrap();
 assert_eq!(world.resource::<Frame>().unwrap().0, 1);
 ```
@@ -308,8 +309,13 @@ fn observe() {}
 
 let mut world = World::new();
 let mut runtime = Runtime::new();
-runtime.add_systems::<Update, _, _>(&mut world, produce.on_invoker_thread().in_set(Produce));
-runtime.add_systems::<Update, _, _>(&mut world, observe.in_set(Observe).after(Produce));
+runtime
+    .add_systems(Update, produce.in_set(Produce))
+    .unwrap();
+runtime
+    .add_systems(Update, observe.in_set(Observe).after(Produce))
+    .unwrap();
+runtime.validate().unwrap();
 runtime.run_schedule::<Update>(&mut world).unwrap();
 ```
 

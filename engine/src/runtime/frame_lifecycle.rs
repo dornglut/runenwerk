@@ -88,7 +88,7 @@ mod tests {
 
         let mut world = test_world();
         let mut runtime = Runtime::new();
-        runtime.add_systems::<FrameEnd, _, _>(&mut world, fail_frame_end);
+        runtime.add_systems(FrameEnd, fail_frame_end).unwrap();
 
         let err = run_frame(&mut world, &mut runtime).expect_err("frame should fail");
         assert!(format!("{err:#}").contains("frame end failure"));
@@ -193,26 +193,30 @@ mod tests {
             });
 
         let mut runtime = Runtime::new();
-        runtime.add_systems::<Update, _, _>(
-            &mut world,
-            queue_optional_deferred_commands
-                .on_invoker_thread()
-                .in_set(DeferredProducerSet),
-        );
-        runtime.add_systems::<Update, _, _>(
-            &mut world,
-            dispatch_product_publication_system
-                .on_invoker_thread()
-                .in_set(ProductPublicationSet)
-                .after(DeferredProducerSet),
-        );
-        runtime.add_systems::<Update, _, _>(
-            &mut world,
-            dispatch_query_snapshot_publication_system
-                .on_invoker_thread()
-                .in_set(QueryPublicationSet)
-                .after(ProductPublicationSet),
-        );
+        runtime
+            .add_systems(
+                Update,
+                queue_optional_deferred_commands.in_set(DeferredProducerSet),
+            )
+            .unwrap();
+        runtime
+            .add_systems(
+                Update,
+                dispatch_product_publication_system
+                    .on_invoker_thread()
+                    .in_set(ProductPublicationSet)
+                    .after(DeferredProducerSet),
+            )
+            .unwrap();
+        runtime
+            .add_systems(
+                Update,
+                dispatch_query_snapshot_publication_system
+                    .on_invoker_thread()
+                    .in_set(QueryPublicationSet)
+                    .after(ProductPublicationSet),
+            )
+            .unwrap();
         runtime.run_schedule::<Update>(&mut world).unwrap();
 
         (products.take(), queries.take())

@@ -20,19 +20,19 @@ Commands are deferred structural mutations collected during system execution and
 
 ## Key Concepts
 
-- `Commands`: per-system deferred command queue.
-- `BatchCommands`: grouped command list applied in deterministic order.
+- `Commands`: ordinary transfer-safe per-system deferred command queue.
+- `BatchCommands`: ordinary transfer-safe grouped command list applied in deterministic order.
+- `LocalCommands` / `LocalBatchCommands`: explicit invoker-thread-only capabilities for local deferred effects.
 - **DeferredPublicationFrontier**: ECS-owned visibility point reported only after the corresponding queued commands have been applied successfully.
 
 ## API Notes
 
 - Helpers: `spawn`, `despawn`, `insert`, `remove`, `queue`, and `batch`.
 - `commands.apply(world)` applies queued commands immediately when using manual world commands outside runtime-managed system execution.
-- Runtime-managed `Commands` params are scope-bound to the system execution and collected by the runtime.
-- Ordinary runtime-managed `Commands` are invoker-thread-only. Register their system with
-  `.on_invoker_thread()` before applying set or ordering configuration. Use
-  `TransferableCommands` only when the command effects and system parameter proof support
-  transferable registration.
+- Runtime-managed command params are scope-bound to the system execution and collected by the runtime.
+- Ordinary `Commands` are transfer-safe when their effects and system parameter proof support
+  transferable registration. Use explicit `LocalCommands` with `.on_invoker_thread()` only for
+  genuinely local deferred effects.
 - Current planner stages may determine where the serial reference executor performs a flush, but planner-stage identity is not the public deferred-visibility contract.
 
 ## Invariants

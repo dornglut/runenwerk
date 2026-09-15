@@ -59,15 +59,17 @@ fn spawn_entity(mut commands: Commands) {
     commands.spawn(Position { x: 0.0, y: 0.0 });
 }
 
-runtime.add_systems::<Update, _, _>(&mut world, spawn_entity.on_invoker_thread());
+runtime.add_systems(Update, spawn_entity).unwrap();
 ```
 
 Raw systems are registered as `Transferable` only when their callable, cached
 parameter state, and system parameters prove that capability. `WorldMut`,
-ordinary `Commands`, non-Send closures, and other local-only parameters must be
+`LocalCommands`, non-Send closures, and other local-only parameters must be
 marked explicitly with `.on_invoker_thread()` before applying set or ordering
-configuration. This wrapper changes execution mobility only; it does not alter
-system ordering or deferred-publication semantics.
+configuration. Ordinary `Commands` and `BatchCommands` are transfer-safe by
+default when their queued effects satisfy the ECS proof. This wrapper changes
+execution mobility only; it does not alter system ordering or deferred-publication
+semantics.
 
 ### Set Ordering
 
@@ -88,14 +90,15 @@ impl SystemSet for Gameplay {}
 struct PostGameplay;
 impl SystemSet for PostGameplay {}
 
-runtime.add_systems::<Update, _, _>(&mut world, tick.in_set(Gameplay));
-runtime.add_systems::<Update, _, _>(
-    &mut world,
+runtime.add_systems(Update, tick.in_set(Gameplay)).unwrap();
+runtime.add_systems(
+    Update,
     spawn_entity
-        .on_invoker_thread()
         .in_set(PostGameplay)
         .after(Gameplay),
-);
+)
+.unwrap();
+runtime.validate().unwrap();
 ```
 
 The explicit `after(Gameplay)` edge establishes semantic precedence. Deferred commands produced by earlier ordered work are applied at an ECS deferred-publication frontier before dependent later work executes. Without such an ordering edge, systems remain semantically unordered even when their access facts conflict.

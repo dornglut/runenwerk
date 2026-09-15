@@ -78,7 +78,7 @@ composed parameter with `#[derive(SystemParam)]`. `WorldMut` is the supported
 exclusive whole-world parameter and cannot be combined with sibling world
 borrows in the same system. Raw registration proves `Transferable` from the
 callable, cached state, and parameter bounds. Mark systems using `WorldMut`,
-ordinary `Commands`, non-Send closures, or another local-only parameter with
+`LocalCommands`, non-Send closures, or another local-only parameter with
 `.on_invoker_thread()` before adding set or ordering configuration. The
 registration mobility is additive diagnostic information and does not create
 worker execution or change serial ordering.

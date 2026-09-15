@@ -15,7 +15,9 @@ use crate::runtime::system::IntoSystemConfigs;
 use crate::*;
 use anyhow::Result;
 use engine_sim::*;
-use runen_ecs::{Resource, Runtime, ScheduleLabel, World};
+use runen_ecs::{Resource, Runtime, RuntimeError, ScheduleLabel, World};
+use std::error::Error;
+use std::fmt;
 use winit::event_loop::ControlFlow;
 
 const DEFAULT_WINDOW_TITLE: &str = "Runenwerk - Engine";
@@ -28,6 +30,7 @@ pub struct App {
     pub(crate) mode: AppMode,
     pub(crate) title: String,
     pub(crate) control_flow: ControlFlow,
+    composition_errors: Vec<AppSystemRegistrationError>,
 }
 
 impl Default for App {
@@ -55,6 +58,7 @@ impl App {
             mode,
             title: title.clone(),
             control_flow: ControlFlow::Wait,
+            composition_errors: Vec::new(),
         };
         app.install_builtin_resources();
         app
@@ -86,8 +90,15 @@ impl App {
         L: ScheduleLabel,
         S: IntoSystemConfigs<Marker>,
     {
-        self.scheduler
-            .add_systems::<L, S, Marker>(&mut self.world, systems);
+        if let Err(source) = self
+            .scheduler
+            .add_systems::<L, S, Marker>(_schedule, systems)
+        {
+            self.composition_errors.push(AppSystemRegistrationError {
+                schedule: L::name(),
+                source,
+            });
+        }
         self
     }
 
@@ -343,6 +354,73 @@ impl App {
             startup_ran: self.startup_ran,
             title: self.title,
             control_flow: self.control_flow,
+        }
+    }
+
+    pub(crate) fn admit_composition(&mut self) -> Result<()> {
+        if !self.composition_errors.is_empty() {
+            let errors = std::mem::take(&mut self.composition_errors);
+            return Err(anyhow::Error::new(
+                AppCompositionAdmissionError::Registration(errors),
+            ));
+        }
+
+        self.scheduler
+            .validate()
+            .map_err(|source| anyhow::Error::new(AppCompositionAdmissionError::Topology(source)))
+    }
+}
+
+#[derive(Debug)]
+struct AppSystemRegistrationError {
+    schedule: &'static str,
+    source: RuntimeError,
+}
+
+impl fmt::Display for AppSystemRegistrationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "failed to register systems in schedule '{}': {}",
+            self.schedule, self.source
+        )
+    }
+}
+
+impl Error for AppSystemRegistrationError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(&self.source)
+    }
+}
+
+#[derive(Debug)]
+enum AppCompositionAdmissionError {
+    Registration(Vec<AppSystemRegistrationError>),
+    Topology(RuntimeError),
+}
+
+impl fmt::Display for AppCompositionAdmissionError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Registration(errors) => {
+                write!(formatter, "App composition admission rejected")?;
+                for (index, error) in errors.iter().enumerate() {
+                    write!(formatter, "; registration error {}: {error}", index + 1)?;
+                }
+                Ok(())
+            }
+            Self::Topology(source) => {
+                write!(formatter, "App topology admission rejected: {source}")
+            }
+        }
+    }
+}
+
+impl Error for AppCompositionAdmissionError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Registration(_) => None,
+            Self::Topology(source) => Some(source),
         }
     }
 }
