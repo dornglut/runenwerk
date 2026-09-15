@@ -391,7 +391,7 @@ impl AnalogMeasurement {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum InputToolKind {
     Mouse,
     Pen,
@@ -401,6 +401,19 @@ pub enum InputToolKind {
     Eraser,
     Finger,
     Unknown,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct TabletCapabilities {
+    pub pressure: bool,
+    pub tilt: bool,
+    pub twist: bool,
+    pub tangential_pressure: bool,
+    pub hover: bool,
+    pub eraser: bool,
+    pub barrel_controls: bool,
+    pub historical_samples: bool,
+    pub predicted_samples: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -446,6 +459,7 @@ pub struct TabletObservation {
     pub tilt: Option<StylusTilt>,
     pub twist: Option<AnalogMeasurement>,
     pub controls: PhysicalTabletControls,
+    pub capabilities: TabletCapabilities,
     pub source_time: Option<SourceTime>,
     pub evidence: EvidenceStatus,
     pub delivery: DeliveryRole,
@@ -681,7 +695,7 @@ impl NeutralInputAuthority {
                 }
             },
             InputObservation::Tablet(observation) => {
-                if observation.evidence == EvidenceStatus::PredictedProvisional {
+                if observation.evidence != EvidenceStatus::ObservedConfirmed {
                     return;
                 }
                 match observation.phase {
@@ -695,14 +709,16 @@ impl NeutralInputAuthority {
                             },
                         );
                     }
-                    ContactPhase::End | ContactPhase::Cancel => {
+                    ContactPhase::End
+                    | ContactPhase::Cancel
+                    | ContactPhase::Begin
+                    | ContactPhase::Update => {
                         self.state.contacts.remove(&(
                             context.source,
                             context.device,
                             observation.contact,
                         ));
                     }
-                    ContactPhase::Begin | ContactPhase::Update => {}
                 }
             }
         }
@@ -1032,6 +1048,7 @@ mod tests {
             tilt: None,
             twist: None,
             controls: PhysicalTabletControls::default(),
+            capabilities: TabletCapabilities::default(),
             source_time: Some(SourceTime::new(
                 CONTEXT_A,
                 100,
@@ -1085,6 +1102,129 @@ mod tests {
                 .position,
             position
         );
+    }
+
+    #[test]
+    fn estimated_tablet_observations_never_mutate_confirmed_contact_state() {
+        let mut authority = NeutralInputAuthority::default();
+        let position = Point2::new(10.0, 12.0, CoordinateSpace::WindowPhysicalPixels);
+        let contact = ContactId::new(44);
+
+        authority
+            .admit(ObservationGroup::single_in(
+                CONTEXT_A,
+                InputObservation::Tablet(tablet_observation(
+                    ContactPhase::Begin,
+                    EvidenceStatus::EstimatedRevisable,
+                    position,
+                    None,
+                )),
+            ))
+            .expect("estimated begin should remain deliverable");
+        assert!(authority.contact_state_in(CONTEXT_A, contact).is_none());
+
+        authority
+            .admit(ObservationGroup::single_in(
+                CONTEXT_A,
+                InputObservation::Tablet(tablet_observation(
+                    ContactPhase::Begin,
+                    EvidenceStatus::ObservedConfirmed,
+                    position,
+                    None,
+                )),
+            ))
+            .expect("confirmed begin should admit");
+        let revised_position = Point2::new(99.0, 101.0, CoordinateSpace::WindowPhysicalPixels);
+        authority
+            .admit(ObservationGroup::single_in(
+                CONTEXT_A,
+                InputObservation::Tablet(tablet_observation(
+                    ContactPhase::Update,
+                    EvidenceStatus::EstimatedRevisable,
+                    revised_position,
+                    None,
+                )),
+            ))
+            .expect("estimated update should remain deliverable");
+        assert_eq!(
+            authority
+                .contact_state_in(CONTEXT_A, contact)
+                .expect("confirmed contact should remain held")
+                .position,
+            position
+        );
+
+        authority
+            .admit(ObservationGroup::single_in(
+                CONTEXT_A,
+                InputObservation::Tablet(tablet_observation(
+                    ContactPhase::End,
+                    EvidenceStatus::EstimatedRevisable,
+                    revised_position,
+                    None,
+                )),
+            ))
+            .expect("estimated end should remain deliverable");
+        assert!(authority.contact_state_in(CONTEXT_A, contact).is_some());
+    }
+
+    #[test]
+    fn confirmed_hover_and_out_of_range_clear_stale_tablet_contact_state() {
+        let mut authority = NeutralInputAuthority::default();
+        let contact = ContactId::new(44);
+        let position = Point2::new(10.0, 12.0, CoordinateSpace::WindowPhysicalPixels);
+
+        authority
+            .admit(ObservationGroup::single_in(
+                CONTEXT_A,
+                InputObservation::Tablet(tablet_observation(
+                    ContactPhase::Begin,
+                    EvidenceStatus::ObservedConfirmed,
+                    position,
+                    None,
+                )),
+            ))
+            .expect("confirmed begin should admit");
+        let mut hover = tablet_observation(
+            ContactPhase::Update,
+            EvidenceStatus::ObservedConfirmed,
+            position,
+            None,
+        );
+        hover.presence = ContactPresence::Hover;
+        authority
+            .admit(ObservationGroup::single_in(
+                CONTEXT_A,
+                InputObservation::Tablet(hover),
+            ))
+            .expect("confirmed hover should admit");
+        assert!(authority.contact_state_in(CONTEXT_A, contact).is_none());
+
+        authority
+            .admit(ObservationGroup::single_in(
+                CONTEXT_A,
+                InputObservation::Tablet(tablet_observation(
+                    ContactPhase::Begin,
+                    EvidenceStatus::ObservedConfirmed,
+                    position,
+                    None,
+                )),
+            ))
+            .expect("second confirmed begin should admit");
+        let mut out_of_range = tablet_observation(
+            ContactPhase::Update,
+            EvidenceStatus::ObservedConfirmed,
+            position,
+            None,
+        );
+        out_of_range.presence = ContactPresence::OutOfRange;
+        authority
+            .admit(ObservationGroup::single_in(
+                CONTEXT_A,
+                InputObservation::Tablet(out_of_range),
+            ))
+            .expect("confirmed out-of-range should admit");
+        assert!(authority.contact_state_in(CONTEXT_A, contact).is_none());
     }
 
     #[test]

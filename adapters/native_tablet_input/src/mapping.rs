@@ -3,7 +3,7 @@
 use engine::plugins::{
     ContactPhase, ContactPresence, DeliveryRole, EvidenceStatus, InputObservation,
     InputObservationGroup, MeasurementDomain, ObservationOrigin, PhysicalTabletControls,
-    TabletObservation,
+    TabletCapabilities, TabletObservation,
 };
 
 use crate::model::{
@@ -21,7 +21,7 @@ pub struct NativeTabletMapping {
 pub fn map_native_tablet_packet(
     packet: &NativeTabletPacket,
 ) -> Result<NativeTabletMapping, NativeTabletDiagnostic> {
-    let context = input_context(packet.device_id);
+    let context = input_context(packet.backend, packet.device_id);
     let diagnostics = missing_capability_diagnostics(packet);
     let mut observations =
         Vec::with_capacity(packet.coalesced_samples.len() + packet.predicted_samples.len() + 1);
@@ -109,6 +109,17 @@ fn tablet_observation(
             eraser: packet.eraser && packet.capabilities.eraser,
             barrel_primary: packet.capabilities.barrel_buttons && packet.barrel_buttons.primary,
             barrel_secondary: packet.capabilities.barrel_buttons && packet.barrel_buttons.secondary,
+        },
+        capabilities: TabletCapabilities {
+            pressure: packet.capabilities.pressure,
+            tilt: packet.capabilities.tilt,
+            twist: packet.capabilities.twist,
+            tangential_pressure: packet.capabilities.tangential_pressure,
+            hover: packet.capabilities.hover,
+            eraser: packet.capabilities.eraser,
+            barrel_controls: packet.capabilities.barrel_buttons,
+            historical_samples: packet.capabilities.coalesced_samples,
+            predicted_samples: packet.capabilities.predicted_samples,
         },
         source_time: source_time(context, sample.timestamp_micros),
         evidence,
@@ -254,6 +265,46 @@ mod tests {
         assert_eq!(
             predicted.source_time.unwrap().unit,
             SourceTimeUnit::Microseconds
+        );
+    }
+
+    #[test]
+    fn native_backend_source_clocks_remain_distinct_for_equal_device_ids() {
+        let windows = map_native_tablet_packet(
+            &NativeTabletPacket::windows_pointer(
+                314,
+                NativeTabletEventKind::Move,
+                NativeTabletPosition::new(1.0, 2.0),
+                NativeTabletDelta::ZERO,
+            )
+            .with_timestamp_micros(10),
+        )
+        .expect("Windows Pointer packet should map");
+        let wintab = map_native_tablet_packet(
+            &NativeTabletPacket::windows_wintab(
+                314,
+                NativeTabletEventKind::Move,
+                NativeTabletPosition::new(1.0, 2.0),
+                NativeTabletDelta::ZERO,
+            )
+            .with_timestamp_micros(10),
+        )
+        .expect("Wintab packet should map");
+
+        assert_ne!(windows.group.context.source, wintab.group.context.source);
+        let InputObservation::Tablet(windows_observation) = &windows.group.observations[0] else {
+            panic!("Windows observation should be a tablet observation")
+        };
+        let InputObservation::Tablet(wintab_observation) = &wintab.group.observations[0] else {
+            panic!("Wintab observation should be a tablet observation")
+        };
+        assert_eq!(
+            windows_observation.source_time.unwrap().context,
+            windows.group.context
+        );
+        assert_eq!(
+            wintab_observation.source_time.unwrap().context,
+            wintab.group.context
         );
     }
 

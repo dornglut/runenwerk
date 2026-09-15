@@ -16,8 +16,8 @@ use engine::plugins::render::{
 };
 use engine::plugins::{
     ContactPhase, ContactPresence, DeliveryRole, EvidenceStatus, InputObservation,
-    InputObservationGroup, InputState, InputToolKind, MouseButtonTransitionSample,
-    MouseMotionSample, SourceTimeUnit, TabletObservation,
+    InputObservationGroup, InputState, InputToolKind, MeasurementDomain,
+    MouseButtonTransitionSample, MouseMotionSample, SourceTimeUnit, TabletObservation,
 };
 use engine::runtime::RuntimeJobExecutorResource;
 use engine::runtime::{Res, ResMut};
@@ -103,7 +103,10 @@ pub fn route_draw_input_system(
     for event in coalesce_pointer_move_events(native_events) {
         host.app.dispatch_input(&event);
     }
-    if native_claims.has_active_stream() || native_claims.suppresses_fallback_this_frame() {
+    if native_claims.has_active_stream()
+        || native_claims.suppresses_fallback_this_frame()
+        || native_claims.has_current_frame_activity()
+    {
         return;
     }
 
@@ -147,7 +150,7 @@ fn project_neutral_tablet_groups(
             .find_map(|observation| match observation {
                 InputObservation::Tablet(tablet)
                     if tablet.delivery == DeliveryRole::OrdinaryCurrent
-                        && tablet.evidence != EvidenceStatus::PredictedProvisional =>
+                        && tablet.evidence == EvidenceStatus::ObservedConfirmed =>
                 {
                     Some(tablet)
                 }
@@ -162,6 +165,9 @@ fn project_neutral_tablet_groups(
             tool: current.tool,
             contact: current.contact,
         };
+        if current.phase == ContactPhase::Begin {
+            claims.observe_current_frame_activity();
+        }
         match current.phase {
             ContactPhase::Begin | ContactPhase::Update
                 if current.presence == ContactPresence::Contact =>
@@ -208,6 +214,7 @@ fn pointer_packet_from_neutral(
     group: &InputObservationGroup,
     current: &TabletObservation,
 ) -> PointerPacket {
+    let capabilities = ui_capabilities_for_neutral_group(group, current);
     let mut packet = PointerPacket {
         source_kind: pointer_source_kind(current.tool_kind),
         tool_kind: pointer_tool_kind(current.tool_kind),
@@ -219,29 +226,16 @@ fn pointer_packet_from_neutral(
         contact_phase: Some(pointer_contact_phase(current.phase)),
         timestamp_micros: source_time_micros(current.source_time),
         contact: pointer_contact_state(current.presence),
-        pressure: current.pressure.map(|value| value.value),
-        tilt: current
-            .tilt
-            .map(|tilt| PointerTilt::new(tilt.x_degrees, tilt.y_degrees)),
-        twist_degrees: current.twist.map(|value| value.value),
-        tangential_pressure: current.tangential_pressure.map(|value| value.value),
+        pressure: project_pressure(current.pressure),
+        tilt: project_tilt(current.tilt),
+        twist_degrees: project_twist(current.twist),
+        tangential_pressure: project_tangential_pressure(current.tangential_pressure),
         eraser: current.controls.eraser,
         barrel_buttons: ui_input::PointerBarrelButtons {
             primary: current.controls.barrel_primary,
             secondary: current.controls.barrel_secondary,
         },
-        capabilities: PointerDeviceCapabilities {
-            pressure: current.pressure.is_some(),
-            tilt: current.tilt.is_some(),
-            twist: current.twist.is_some(),
-            tangential_pressure: current.tangential_pressure.is_some(),
-            hover: current.presence == ContactPresence::Hover,
-            eraser: current.controls.eraser,
-            barrel_buttons: current.controls.barrel_primary || current.controls.barrel_secondary,
-            coalesced_samples: false,
-            predicted_samples: false,
-            calibration: false,
-        },
+        capabilities,
         calibration: None,
         latency_class: PointerLatencyClass::LowLatencyPreview,
         coalesced_samples: Vec::new(),
@@ -252,15 +246,17 @@ fn pointer_packet_from_neutral(
         let InputObservation::Tablet(observation) = observation else {
             continue;
         };
-        if observation.delivery == DeliveryRole::HistoricalCoalesced {
-            packet.coalesced_samples.push(pointer_sample_from_neutral(
-                observation,
-                PointerSampleRole::Coalesced,
-            ));
-        } else if observation.evidence == EvidenceStatus::PredictedProvisional {
+        if observation.evidence == EvidenceStatus::PredictedProvisional {
             packet.predicted_samples.push(pointer_sample_from_neutral(
                 observation,
                 PointerSampleRole::Predicted,
+            ));
+        } else if observation.evidence == EvidenceStatus::ObservedConfirmed
+            && observation.delivery == DeliveryRole::HistoricalCoalesced
+        {
+            packet.coalesced_samples.push(pointer_sample_from_neutral(
+                observation,
+                PointerSampleRole::Coalesced,
             ));
         }
     }
@@ -278,14 +274,101 @@ fn pointer_sample_from_neutral(
         position: ui_math::UiPoint::new(observation.position.x, observation.position.y),
         delta: ui_math::UiVector::new(observation.delta.x, observation.delta.y),
         timestamp_micros: source_time_micros(observation.source_time),
-        pressure: observation.pressure.map(|value| value.value),
-        tilt: observation
-            .tilt
-            .map(|tilt| PointerTilt::new(tilt.x_degrees, tilt.y_degrees)),
-        twist_degrees: observation.twist.map(|value| value.value),
-        tangential_pressure: observation.tangential_pressure.map(|value| value.value),
+        pressure: project_pressure(observation.pressure),
+        tilt: project_tilt(observation.tilt),
+        twist_degrees: project_twist(observation.twist),
+        tangential_pressure: project_tangential_pressure(observation.tangential_pressure),
         contact: pointer_contact_state(observation.presence),
     }
+}
+
+fn ui_capabilities_for_neutral_group(
+    group: &InputObservationGroup,
+    current: &TabletObservation,
+) -> PointerDeviceCapabilities {
+    PointerDeviceCapabilities {
+        pressure: current.capabilities.pressure
+            && group_measurements_are_projectable(
+                group,
+                |observation| observation.pressure,
+                project_pressure,
+            ),
+        tilt: current.capabilities.tilt,
+        twist: current.capabilities.twist
+            && group_measurements_are_projectable(
+                group,
+                |observation| observation.twist,
+                project_twist,
+            ),
+        tangential_pressure: current.capabilities.tangential_pressure
+            && group_measurements_are_projectable(
+                group,
+                |observation| observation.tangential_pressure,
+                project_tangential_pressure,
+            ),
+        hover: current.capabilities.hover,
+        eraser: current.capabilities.eraser,
+        barrel_buttons: current.capabilities.barrel_controls,
+        coalesced_samples: current.capabilities.historical_samples,
+        predicted_samples: current.capabilities.predicted_samples,
+        calibration: false,
+    }
+}
+
+fn group_measurements_are_projectable(
+    group: &InputObservationGroup,
+    select: impl Fn(&TabletObservation) -> Option<engine::plugins::AnalogMeasurement>,
+    project: impl Fn(Option<engine::plugins::AnalogMeasurement>) -> Option<f32>,
+) -> bool {
+    group
+        .observations
+        .iter()
+        .filter_map(|observation| {
+            let InputObservation::Tablet(tablet) = observation else {
+                return None;
+            };
+            select(tablet)
+        })
+        .all(|measurement| project(Some(measurement)).is_some())
+}
+
+fn project_pressure(measurement: Option<engine::plugins::AnalogMeasurement>) -> Option<f32> {
+    measurement.and_then(|measurement| match measurement.domain {
+        MeasurementDomain::LegacyPressureScalar
+        | MeasurementDomain::NormalizedUnitInterval
+        | MeasurementDomain::Bounded { min: 0.0, max: 1.0 } => (0.0..=1.0)
+            .contains(&measurement.value)
+            .then_some(measurement.value),
+        _ => None,
+    })
+}
+
+fn project_tilt(tilt: Option<engine::plugins::StylusTilt>) -> Option<PointerTilt> {
+    tilt.map(|tilt| PointerTilt::new(tilt.x_degrees, tilt.y_degrees))
+}
+
+fn project_twist(measurement: Option<engine::plugins::AnalogMeasurement>) -> Option<f32> {
+    measurement.and_then(|measurement| match measurement.domain {
+        MeasurementDomain::Degrees {
+            min: 0.0,
+            max: 360.0,
+        } if (0.0..=360.0).contains(&measurement.value) => Some(measurement.value),
+        _ => None,
+    })
+}
+
+fn project_tangential_pressure(
+    measurement: Option<engine::plugins::AnalogMeasurement>,
+) -> Option<f32> {
+    measurement.and_then(|measurement| match measurement.domain {
+        MeasurementDomain::NormalizedUnitInterval
+        | MeasurementDomain::Bounded { min: 0.0, max: 1.0 }
+            if (0.0..=1.0).contains(&measurement.value) =>
+        {
+            Some(measurement.value)
+        }
+        _ => None,
+    })
 }
 
 fn source_time_micros(source_time: Option<engine::plugins::SourceTime>) -> Option<u64> {
@@ -1250,5 +1333,189 @@ mod tests {
             manifest.diagnostics().is_empty(),
             "GPU-promoted preview drawing surface should not require a CPU upload"
         );
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn tablet_observation(
+        phase: ContactPhase,
+        evidence: EvidenceStatus,
+        delivery: DeliveryRole,
+        position_x: f32,
+        pressure: Option<engine::plugins::AnalogMeasurement>,
+        tangential_pressure: Option<engine::plugins::AnalogMeasurement>,
+        twist: Option<engine::plugins::AnalogMeasurement>,
+        capabilities: engine::plugins::TabletCapabilities,
+    ) -> TabletObservation {
+        TabletObservation {
+            contact: engine::plugins::ContactId::new(44),
+            tool: Some(engine::plugins::ToolId::new(8)),
+            tool_kind: InputToolKind::Pen,
+            phase,
+            presence: ContactPresence::Contact,
+            position: engine::plugins::Point2::new(
+                position_x,
+                20.0,
+                engine::plugins::CoordinateSpace::WindowPhysicalPixels,
+            ),
+            delta: engine::plugins::Vector2::new(1.0, 0.0),
+            pressure,
+            tangential_pressure,
+            tilt: None,
+            twist,
+            controls: engine::plugins::PhysicalTabletControls::default(),
+            capabilities,
+            source_time: None,
+            evidence,
+            delivery,
+            origin: engine::plugins::ObservationOrigin::SourceReport,
+        }
+    }
+
+    fn tablet_group(observations: Vec<TabletObservation>) -> InputObservationGroup {
+        InputObservationGroup::new(
+            engine::plugins::InputContext::new(
+                engine::plugins::InputSourceId::new(31),
+                Some(engine::plugins::InputDeviceId::new(9)),
+            ),
+            observations
+                .into_iter()
+                .map(InputObservation::Tablet)
+                .collect(),
+        )
+    }
+
+    #[test]
+    fn draw_projects_capabilities_and_sample_evidence_without_relabeling() {
+        let capabilities = engine::plugins::TabletCapabilities {
+            pressure: true,
+            tangential_pressure: true,
+            twist: true,
+            historical_samples: true,
+            predicted_samples: true,
+            ..Default::default()
+        };
+        let historical = tablet_observation(
+            ContactPhase::Update,
+            EvidenceStatus::ObservedConfirmed,
+            DeliveryRole::HistoricalCoalesced,
+            10.0,
+            Some(engine::plugins::AnalogMeasurement::new(
+                0.7,
+                MeasurementDomain::NormalizedUnitInterval,
+            )),
+            None,
+            None,
+            capabilities,
+        );
+        let current = tablet_observation(
+            ContactPhase::Update,
+            EvidenceStatus::ObservedConfirmed,
+            DeliveryRole::OrdinaryCurrent,
+            20.0,
+            None,
+            Some(engine::plugins::AnalogMeasurement::new(
+                -0.4,
+                MeasurementDomain::SignedNormalizedUnitInterval,
+            )),
+            Some(engine::plugins::AnalogMeasurement::new(
+                45.0,
+                MeasurementDomain::Degrees {
+                    min: 0.0,
+                    max: 360.0,
+                },
+            )),
+            capabilities,
+        );
+        let predicted_historical = tablet_observation(
+            ContactPhase::Update,
+            EvidenceStatus::PredictedProvisional,
+            DeliveryRole::HistoricalCoalesced,
+            30.0,
+            Some(engine::plugins::AnalogMeasurement::new(
+                0.9,
+                MeasurementDomain::NormalizedUnitInterval,
+            )),
+            None,
+            None,
+            capabilities,
+        );
+        let estimated = tablet_observation(
+            ContactPhase::Update,
+            EvidenceStatus::EstimatedRevisable,
+            DeliveryRole::OrdinaryCurrent,
+            40.0,
+            Some(engine::plugins::AnalogMeasurement::new(
+                0.2,
+                MeasurementDomain::NormalizedUnitInterval,
+            )),
+            None,
+            None,
+            capabilities,
+        );
+        let group = tablet_group(vec![
+            historical,
+            current.clone(),
+            predicted_historical,
+            estimated,
+        ]);
+
+        let packet = pointer_packet_from_neutral(&group, &current);
+
+        assert_eq!(packet.pressure, None);
+        assert_eq!(packet.coalesced_samples.len(), 1);
+        assert_eq!(packet.coalesced_samples[0].pressure, Some(0.7));
+        assert_eq!(packet.predicted_samples.len(), 1);
+        assert_eq!(packet.predicted_samples[0].pressure, Some(0.9));
+        assert_eq!(packet.tangential_pressure, None);
+        assert!(packet.capabilities.pressure);
+        assert!(!packet.capabilities.tangential_pressure);
+        assert!(packet.capabilities.twist);
+        assert_eq!(packet.twist_degrees, Some(45.0));
+        assert!(packet.is_valid());
+
+        let mut claims = NativeClaimStateResource::default();
+        let events = project_neutral_tablet_groups(
+            vec![tablet_group(vec![tablet_observation(
+                ContactPhase::Update,
+                EvidenceStatus::EstimatedRevisable,
+                DeliveryRole::OrdinaryCurrent,
+                50.0,
+                None,
+                None,
+                None,
+                capabilities,
+            )])],
+            &mut claims,
+        );
+        assert!(events.is_empty());
+        assert!(!claims.has_current_frame_activity());
+    }
+
+    #[test]
+    fn draw_marks_native_down_as_current_frame_activity_without_claiming_stale_hover() {
+        let observation = tablet_observation(
+            ContactPhase::Begin,
+            EvidenceStatus::ObservedConfirmed,
+            DeliveryRole::OrdinaryCurrent,
+            10.0,
+            None,
+            None,
+            None,
+            engine::plugins::TabletCapabilities {
+                hover: true,
+                ..Default::default()
+            },
+        );
+        let mut group = tablet_group(vec![observation]);
+        if let InputObservation::Tablet(tablet) = &mut group.observations[0] {
+            tablet.presence = ContactPresence::Hover;
+        }
+        let mut claims = NativeClaimStateResource::default();
+
+        let events = project_neutral_tablet_groups(vec![group], &mut claims);
+
+        assert_eq!(events.len(), 1);
+        assert!(claims.has_current_frame_activity());
+        assert!(!claims.has_active_stream());
     }
 }
