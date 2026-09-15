@@ -7,7 +7,7 @@ use editor_scene::SceneEditorCommand;
 use super::ratification::ratify_scene_change;
 use crate::editor_runtime::parity::assert_scene_projection_parity;
 use crate::editor_runtime::{
-    RetainedSceneTransaction, RunenwerkEditorRuntime, sync_selection_after_scene_change,
+    RunenwerkEditorRuntime, SceneHistoryEntry, sync_selection_after_scene_change,
 };
 
 pub(crate) fn execute_scene_transaction_and_push_history_with_origin(
@@ -38,25 +38,20 @@ pub(crate) fn execute_scene_transaction_and_push_history_with_origin_and_causali
     let transaction_label = transaction_label.into();
     let before_snapshot = runtime.capture_scene_snapshot();
 
-    let metadata = TransactionMetadata::new(transaction_id, transaction_label.clone());
-    let executed =
-        runtime.with_scene_command_context(|ctx| -> Result<_, GoverningChangeError> {
-            editor_scene::execute_scene_transaction_and_push_history(ctx, metadata, commands).map(
-                |executed| {
-                    executed.map(|executed| (executed.transaction, executed.command_metadata))
-                },
-            )
-        })?;
+    let metadata = TransactionMetadata::new(transaction_id, transaction_label);
+    let executed = runtime.with_scene_command_context(|ctx| {
+        editor_scene::execute_scene_transaction(ctx, metadata, commands)
+    })?;
 
-    let Some((metadata, commands_metadata)) = executed else {
+    let Some(executed) = executed else {
         return Ok(None);
     };
 
     let ratified_change = ratify_scene_change(
         runtime,
         SceneChangeRatificationParams::new(
-            metadata,
-            commands_metadata,
+            executed.transaction,
+            executed.command_metadata,
             origin,
             vec![SemanticOperation::SceneTransactionApplied],
             causality_id,
@@ -65,9 +60,7 @@ pub(crate) fn execute_scene_transaction_and_push_history_with_origin_and_causali
     runtime.record_ratified_change(ratified_change.clone());
     let after_snapshot = runtime.capture_scene_snapshot();
 
-    runtime.clear_redo_retained_transactions();
-    runtime.store_applied_retained_transaction(RetainedSceneTransaction::new(
-        transaction_id,
+    runtime.record_scene_history_entry(SceneHistoryEntry::new(
         before_snapshot,
         after_snapshot,
         ratified_change.clone(),
@@ -118,7 +111,28 @@ mod tests {
         .expect("transaction should execute");
 
         assert!(executed.is_some());
-        assert_eq!(runtime.session().history().undo_len(), 1);
+        assert_eq!(runtime.scene_history().undo_len(), 1);
+        assert_eq!(runtime.scene_history().redo_len(), 0);
+    }
+
+    #[test]
+    fn empty_transaction_records_no_history_or_ratification() {
+        let mut runtime = RunenwerkEditorRuntime::new();
+        let mut commands = Vec::<SceneEditorCommand>::new();
+
+        let executed = execute_scene_transaction_and_push_history_with_origin(
+            &mut runtime,
+            TransactionId(3),
+            "No Effect",
+            &mut commands,
+            ChangeOrigin::Runtime,
+        )
+        .expect("empty transaction should fail closed without error");
+
+        assert!(executed.is_none());
+        assert_eq!(runtime.scene_history().undo_len(), 0);
+        assert_eq!(runtime.scene_history().redo_len(), 0);
+        assert_eq!(runtime.ratified_change_log().len(), 0);
     }
 
     #[test]

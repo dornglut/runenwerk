@@ -1,9 +1,7 @@
 //! File: domain/editor/editor_scene/src/operations/execute_scene_transaction.rs
-//! Purpose: Scene transaction execution and history orchestration.
+//! Purpose: Scene transaction execution.
 
-use editor_core::{
-    CommandExecutor, CommandMetadata, GoverningChangeError, HistoryEntry, TransactionMetadata,
-};
+use editor_core::{CommandExecutor, CommandMetadata, GoverningChangeError, TransactionMetadata};
 
 use crate::{SceneCommandContext, SceneEditorCommand};
 
@@ -13,7 +11,7 @@ pub struct ExecutedSceneTransaction {
     pub command_metadata: Vec<CommandMetadata>,
 }
 
-pub fn execute_scene_transaction_and_push_history(
+pub fn execute_scene_transaction(
     context: &mut SceneCommandContext<'_>,
     transaction: TransactionMetadata,
     commands: &mut [SceneEditorCommand],
@@ -30,14 +28,6 @@ pub fn execute_scene_transaction_and_push_history(
         .iter()
         .map(|command| command.metadata.clone())
         .collect::<Vec<_>>();
-
-    context
-        .session_mut()
-        .history_mut()
-        .push_applied(HistoryEntry::new(
-            transaction.clone(),
-            command_metadata.clone(),
-        ));
 
     Ok(Some(ExecutedSceneTransaction {
         transaction,

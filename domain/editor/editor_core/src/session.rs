@@ -3,9 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::{
-    DocumentDescriptor, DocumentId, DocumentKind, EditorMutationError, HistoryStack, ToolId,
-};
+use crate::{DocumentDescriptor, DocumentId, DocumentKind, EditorMutationError, ToolId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ModeId(pub u64);
@@ -234,7 +232,6 @@ pub struct EditorSession {
     active_document: Option<DocumentId>,
     active_tool: Option<ToolId>,
     active_mode: ModeId,
-    history: HistoryStack,
 }
 
 impl Default for ModeId {
@@ -411,14 +408,6 @@ impl EditorSession {
         }
 
         Ok(removed)
-    }
-
-    pub fn history(&self) -> &HistoryStack {
-        &self.history
-    }
-
-    pub fn history_mut(&mut self) -> &mut HistoryStack {
-        &mut self.history
     }
 
     pub fn set_document_dirty(

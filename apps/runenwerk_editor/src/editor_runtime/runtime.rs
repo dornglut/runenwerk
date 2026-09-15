@@ -15,9 +15,9 @@ use editor_scene::{
 use crate::editor_runtime::{
     AuthoredSceneReality, DocumentTabRuntimeRecord, DocumentTabRuntimeState,
     EditorRuntimeIdRegistry, HierarchySnapshot, InstantiatedSceneReality, OutlinerTree,
-    RatifiedChangeLog, RetainedSceneTransaction, RunenwerkEditorInspectorBridge,
-    RunenwerkEditorSceneRuntime, SceneComponentSnapshotRecord, SceneDocumentState, SceneEntityView,
-    SceneFieldSnapshot, SceneResourceSnapshotRecord, SceneRetentionStore, SceneRuntimeSnapshot,
+    RatifiedChangeLog, RunenwerkEditorInspectorBridge, RunenwerkEditorSceneRuntime,
+    SceneComponentSnapshotRecord, SceneDocumentState, SceneEntityView, SceneFieldSnapshot,
+    SceneHistoryContext, SceneHistoryEntry, SceneResourceSnapshotRecord, SceneRuntimeSnapshot,
     SessionReality, SimulatedSceneReality, all_entity_views, build_hierarchy_snapshot,
     outliner_tree_from_hierarchy_snapshot, primary_selected_entity,
     resolve_primary_inspect_target_from_runtime, validate_reparent,
@@ -47,7 +47,7 @@ pub struct RunenwerkEditorRuntime {
     scene_selection_changes: editor_scene::SceneSelectionChangeLog,
     document_tabs: DocumentTabRuntimeState,
     scene_realities: SceneRealityStore,
-    retention_store: SceneRetentionStore,
+    scene_history: SceneHistoryContext,
     ratified_changes: RatifiedChangeLog,
     session_changes: editor_core::SessionChangeLog,
     session_share_outbox: editor_core::SessionShareOutbox,
@@ -89,7 +89,7 @@ impl RunenwerkEditorRuntime {
             scene_selection_changes: editor_scene::SceneSelectionChangeLog::new(),
             document_tabs,
             scene_realities: SceneRealityStore::new(),
-            retention_store: SceneRetentionStore::new(),
+            scene_history: SceneHistoryContext::new(),
             ratified_changes: RatifiedChangeLog::new(),
             session_changes: editor_core::SessionChangeLog::new(),
             session_share_outbox: editor_core::SessionShareOutbox::new(),
@@ -124,6 +124,10 @@ impl RunenwerkEditorRuntime {
 
     pub fn scene_selection_changes(&self) -> &editor_scene::SceneSelectionChangeLog {
         &self.scene_selection_changes
+    }
+
+    pub(crate) fn scene_history(&self) -> &SceneHistoryContext {
+        &self.scene_history
     }
 
     pub fn document_tabs(&self) -> &DocumentTabRuntimeState {
@@ -254,20 +258,24 @@ impl RunenwerkEditorRuntime {
         Ok(())
     }
 
-    pub(crate) fn pop_undo_history_entry(&mut self) -> Option<editor_core::HistoryEntry> {
-        self.session.history_mut().pop_undo()
+    pub(crate) fn record_scene_history_entry(&mut self, entry: SceneHistoryEntry) {
+        self.scene_history.record_applied(entry);
     }
 
-    pub(crate) fn pop_redo_history_entry(&mut self) -> Option<editor_core::HistoryEntry> {
-        self.session.history_mut().pop_redo()
+    pub(crate) fn peek_scene_undo_history_entry(&self) -> Option<&SceneHistoryEntry> {
+        self.scene_history.peek_undo()
     }
 
-    pub(crate) fn push_applied_history_entry(&mut self, entry: editor_core::HistoryEntry) {
-        self.session.history_mut().push_applied(entry);
+    pub(crate) fn commit_scene_undo_history_entry(&mut self) -> bool {
+        self.scene_history.commit_undo()
     }
 
-    pub(crate) fn push_redo_history_entry(&mut self, entry: editor_core::HistoryEntry) {
-        self.session.history_mut().push_redo(entry);
+    pub(crate) fn peek_scene_redo_history_entry(&self) -> Option<&SceneHistoryEntry> {
+        self.scene_history.peek_redo()
+    }
+
+    pub(crate) fn commit_scene_redo_history_entry(&mut self) -> bool {
+        self.scene_history.commit_redo()
     }
 
     pub fn world(&self) -> &runen_ecs::World {
@@ -384,10 +392,6 @@ impl RunenwerkEditorRuntime {
 
     pub fn ids(&self) -> &EditorRuntimeIdRegistry {
         &self.scene_realities.identities
-    }
-
-    pub fn retention_store(&self) -> &SceneRetentionStore {
-        &self.retention_store
     }
 
     pub(crate) fn clear_scene_entities_only(&mut self) {
@@ -605,7 +609,7 @@ impl RunenwerkEditorRuntime {
             true,
         ));
         self.scene_realities.material_assignments = SceneMaterialAssignmentState::default();
-        self.retention_store = SceneRetentionStore::new();
+        self.scene_history = SceneHistoryContext::new();
         self.ratified_changes = RatifiedChangeLog::new();
         self.session_changes = editor_core::SessionChangeLog::new();
         self.session_share_outbox = editor_core::SessionShareOutbox::new();
@@ -620,38 +624,6 @@ impl RunenwerkEditorRuntime {
         self.next_shared_change_sequence = 1;
         self.next_workflow_event_id = 1;
         self.scene_reality_version = 0;
-    }
-
-    pub(crate) fn clear_redo_retained_transactions(&mut self) {
-        self.retention_store.clear_redo();
-    }
-
-    pub(crate) fn store_applied_retained_transaction(
-        &mut self,
-        transaction: RetainedSceneTransaction,
-    ) {
-        self.retention_store.store_applied(transaction);
-    }
-
-    pub(crate) fn take_applied_retained_transaction(
-        &mut self,
-        transaction_id: editor_core::TransactionId,
-    ) -> Option<RetainedSceneTransaction> {
-        self.retention_store.take_applied(transaction_id)
-    }
-
-    pub(crate) fn store_redo_retained_transaction(
-        &mut self,
-        transaction: RetainedSceneTransaction,
-    ) {
-        self.retention_store.store_redo(transaction);
-    }
-
-    pub(crate) fn take_redo_retained_transaction(
-        &mut self,
-        transaction_id: editor_core::TransactionId,
-    ) -> Option<RetainedSceneTransaction> {
-        self.retention_store.take_redo(transaction_id)
     }
 
     pub fn ratified_change_log(&self) -> &RatifiedChangeLog {

@@ -1,9 +1,7 @@
 //! File: domain/editor/editor_core/src/executor.rs
-//! Purpose: Command execution and history integration.
+//! Purpose: Generic command execution primitives.
 
-use crate::{
-    Command, CommandMetadata, CommandOutcome, HistoryEntry, HistoryStack, TransactionMetadata,
-};
+use crate::{Command, CommandMetadata, CommandOutcome, TransactionMetadata};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutedCommand {
@@ -14,15 +12,6 @@ pub struct ExecutedCommand {
 pub struct ExecutedTransaction {
     pub transaction: TransactionMetadata,
     pub commands: Vec<ExecutedCommand>,
-}
-
-impl ExecutedTransaction {
-    pub fn into_history_entry(self) -> HistoryEntry {
-        HistoryEntry::new(
-            self.transaction,
-            self.commands.into_iter().map(|cmd| cmd.metadata).collect(),
-        )
-    }
 }
 
 pub struct CommandExecutor;
@@ -63,13 +52,5 @@ impl CommandExecutor {
             transaction,
             commands: executed,
         })
-    }
-
-    pub fn push_history(history: &mut HistoryStack, transaction: ExecutedTransaction) {
-        if transaction.commands.is_empty() {
-            return;
-        }
-
-        history.push_applied(transaction.into_history_entry());
     }
 }

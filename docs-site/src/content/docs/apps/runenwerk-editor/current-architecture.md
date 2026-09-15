@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-09-14
+last_reviewed: 2026-09-15
 related_designs:
   - ../../design/accepted/app-neutral-ui-composition-design.md
   - ../../design/accepted/runenwerk-editor-coordination-semantic-model.md
@@ -49,9 +49,10 @@ Product-facing UI may still say “workspace” for a task-oriented editor profi
 `WorkspaceState` is not the live structural authority.
 
 The current editor implementation still contains predecessor-shaped generic
-`editor_core` document/session/mode/selection/history contracts. Those are
-current implementation facts. They are not the normalized long-term semantic
-ownership model accepted by ADR 0025.
+`editor_core` document/session/mode contracts. Scene selection and scene history
+have been removed from that generic session authority and now use explicit
+scene-owned/integration-owned contexts. Those current repairs do not mean the
+whole Rust implementation already conforms to ADR 0025.
 
 ## Structural Composition Runtime
 
@@ -91,6 +92,35 @@ Structural tab/stack/layout actions therefore use the composition gateway rather
 than a writable `WorkspaceState` reducer authority. This statement describes
 current tested behavior only; it does not claim the normalized ADR 0025 editor
 coordination model is implemented.
+
+## Scene Selection And History
+
+Scene selection is held in an explicit scene-scoped selection context rather
+than generic `EditorSession` state. Scope rollover on scene reset prevents stale
+selection addresses from silently retargeting reused editor entity ids.
+
+Scene undo/redo is coordinated by one app-owned scene history context. Each
+history item retains the originating ratified change together with the scene
+before/after snapshots needed to restore the admitted effect. New scene edits
+clear scene redo; undo/redo restore first and then move exactly one item, so a
+failed restore does not consume history and a successful redo preserves any
+remaining redo chain. Selection resynchronization, projection-parity checks, and
+undo/redo ratification remain part of the scene-history transition.
+
+The current E2 command admission rule is deliberately narrower than the future
+ADR-0025 activation model: scene history is the shell Undo/Redo target only when
+the active document kind is `Scene`. A non-scene or absent active document makes
+scene Undo/Redo unavailable and direct shell/shortcut dispatch fails closed
+without consuming the dormant scene stack. This is a bounded current-routing
+rule, not a claim that `DocumentKind` is the future universal history-context
+resolver.
+
+Toolbar and command-route availability are observed from that admitted scene
+history context, not from `SessionReality`. Material Lab, `ui_composition`, and
+self-authoring histories remain independent owner-specific histories. Later
+ActivationScope/InvocationContext work may replace the bounded document-kind
+admission with explicit context resolution; E2 does not invent that later
+coordination subsystem.
 
 ## Provider And Content Liveness
 
