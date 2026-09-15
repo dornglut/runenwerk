@@ -45,7 +45,7 @@ fn movement(mut query: Query<(&mut Position, &Velocity)>, mut frames: ResMut<Fra
 
 #[test]
 fn app_runs_startup_once_and_updates_each_frame() {
-    let mut app = App::new();
+    let mut app = App::headless();
     app.add_plugin(MinimalPlugin);
     let app = app.run_for_frames(3).expect("headless app should run");
 

@@ -20,12 +20,14 @@ impl App {
     }
 
     pub fn run_for_frames(mut self, frame_count: usize) -> Result<Self> {
+        self.require_headless_host("run_for_frames")?;
         self.set_runner(FixedFramesRunner::new(frame_count));
         self.run_headless()?;
         Ok(self)
     }
 
     pub fn run_for_fixed_steps(mut self, step_count: u64) -> Result<Self> {
+        self.require_headless_host("run_for_fixed_steps")?;
         if !fixed_step_is_active(&self.world) {
             return Err(anyhow!(
                 "run_for_fixed_steps requires FixedStepPlugin to select fixed cadence"
@@ -34,6 +36,15 @@ impl App {
         self.set_runner(FixedStepsRunner::new(step_count));
         self.run_headless()?;
         Ok(self)
+    }
+
+    pub(crate) fn require_headless_host(&self, operation: &str) -> Result<()> {
+        if matches!(self.mode, AppMode::Windowed) {
+            return Err(anyhow!(
+                "{operation} requires App::headless(); Host selection is stable and advancement does not change it"
+            ));
+        }
+        Ok(())
     }
 
     pub(crate) fn prepare_for_run(&mut self, headless: bool) -> Result<()> {
