@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-09-14
 ---
 
 # Engine Usage Guide
@@ -15,8 +15,11 @@ Practical guide for normal `engine` crate workflows.
 ## Typical Setup
 
 1. Import the prelude and create an app.
-2. Register plugins/resources/systems.
-3. Run in headless (`run_for_frames`, `run_for_ticks`) or windowed (`run`) mode.
+2. Register the capabilities/resources/systems the application needs.
+3. Run in headless (`run_for_frames`, or `run_for_fixed_steps` after selecting fixed cadence) or windowed (`run`) mode.
+
+A bare `App` does not imply fixed cadence or simulation identity. The ordinary default stack selects
+both `FixedStepPlugin` and `SimulationPlugin` explicitly.
 
 ## Headless Example
 
@@ -66,6 +69,30 @@ fn main() -> Result<()> {
 }
 ```
 
+## Fixed-Step Headless Example
+
+```rust
+use anyhow::Result;
+use engine::plugins::{FixedStepPlugin, SimulationPlugin};
+use engine::prelude::*;
+
+fn main() -> Result<()> {
+    let mut app = App::headless();
+    app.add_plugins((FixedStepPlugin, SimulationPlugin));
+    app.add_systems(FixedUpdate, simulate);
+
+    let app = app.run_for_fixed_steps(60)?;
+    assert_eq!(app.world().resource::<SimulationTick>()?.0, 60);
+    Ok(())
+}
+
+fn simulate() {}
+```
+
+`FixedStepPlugin` activates cadence. `SimulationPlugin` is separate: it supplies simulation owner
+state and advances `SimulationTick` during `FixedStepBegin`. `run_for_fixed_steps` stops on cadence
+progress, not on simulation tick identity.
+
 ## Windowed Example
 
 ```rust
@@ -113,8 +140,10 @@ animation and `Wait` for on-demand mode; systems publish redraw intent through
   - one-time setup for resources/entities
 - `PreUpdate`
   - input/time/net receive paths and frame-prep logic
+- `FixedStepBegin`
+  - owner integration adapters at the beginning of each admitted fixed step
 - `FixedUpdate`
-  - fixed-step simulation systems (0..N times per frame)
+  - fixed-step systems (0..N times per frame when `FixedStepPlugin` is selected)
 - `Update`
   - per-frame gameplay and state updates
 - `RenderPrepare`, `RenderSubmit`

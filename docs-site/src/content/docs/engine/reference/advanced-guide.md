@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-09-14
 ---
 
 # Engine Advanced Guide
@@ -35,12 +35,10 @@ fn replicate() {}
 
 ## Fixed-Step Tuning
 
-Control fixed-step cadence and catchup budget through built-in resources:
-
-- `FixedTimeConfig { step_seconds }`
-- `CatchupBudget { max_steps_per_frame }`
+Select fixed cadence explicitly before tuning it:
 
 ```rust
+use engine::plugins::FixedStepPlugin;
 use engine::prelude::*;
 
 fn configure_fixed_step(app: &mut App) {
@@ -50,20 +48,43 @@ fn configure_fixed_step(app: &mut App) {
     app.insert_resource(CatchupBudget {
         max_steps_per_frame: 8,
     });
+    app.add_plugin(FixedStepPlugin);
 }
 ```
+
+`FixedStepPlugin` preserves explicitly preinserted cadence resources. Resource presence alone does
+not activate fixed-step execution.
 
 Inspect runtime fixed-step status through `FixedTimeState`:
 
 - `accumulator_seconds`
 - `steps_ran_last_frame`
 - `saturated_frames`
+- `total_completed_steps`
+
+## Simulation Identity
+
+Simulation identity is separate from cadence. `SimulationPlugin` provides existing `engine_sim`
+owner state and advances `SimulationTick` during `FixedStepBegin` only when fixed cadence is also
+active:
+
+```rust
+use engine::plugins::{FixedStepPlugin, SimulationPlugin};
+
+app.add_plugins((FixedStepPlugin, SimulationPlugin));
+```
+
+Do not use `SimulationTick` as an App/cadence progress counter. Replay/network code may restore or
+otherwise reason about simulation identity independently of Runenwerk fixed-step progress.
 
 ## Headless Control Patterns
 
-- Use `run_for_frames(n)` for deterministic frame-count flows.
-- Use `run_for_ticks(n)` when fixed-step progression is your stop condition.
-- Set a custom `AppRunner` for test harnesses or simulation tools that need frame-gating logic.
+- Use `run_for_frames(n)` for frame-count flows.
+- Use `run_for_fixed_steps(n)` for exactly `n` additional completed fixed steps after selecting
+  `FixedStepPlugin`.
+- `run_for_fixed_steps` uses `FixedTimeState::total_completed_steps`, not `SimulationTick`, as its
+  stop condition.
+- Set a custom `AppRunner` for test harnesses or tools that need other frame-gating logic.
 
 Primary runner implementations:
 
@@ -85,6 +106,10 @@ Plugin map:
 - [`plugins/index.md`](plugins/index.md)
 
 ## Network and Replay Integration
+
+Network, replay, world, and scene integrations consume simulation/cadence state as required; they
+do not become duplicate default providers. The ordinary `default_plugins()` stack selects Time,
+FixedStep, Simulation, and Replay in dependency order.
 
 For network-heavy or replay-heavy stacks, use the dedicated docs:
 

@@ -1,4 +1,4 @@
-use crate::plugins::{InputFinalizePlugin, InputState, TimePlugin};
+use crate::plugins::{FixedStepPlugin, InputFinalizePlugin, InputState, TimePlugin};
 // Owner: Engine Scene Plugin - Tests
 use super::super::domain::{QuestState, WorldToOverlayMessage};
 use super::super::{
@@ -83,10 +83,12 @@ fn scene_helper_switches_world_scene_by_label() {
 #[test]
 fn scene_plugin_routes_world_tick_messages_into_overlay_log() {
     let mut app = App::headless();
-    app.add_plugin(TimePlugin);
+    app.add_plugins((TimePlugin, FixedStepPlugin));
     app.add_plugin(ScenePlugin);
 
-    let app = app.run_for_ticks(60).expect("scene plugin should run");
+    let app = app
+        .run_for_fixed_steps(60)
+        .expect("scene plugin should run");
     let scene = app
         .world()
         .resource::<SceneResource>()

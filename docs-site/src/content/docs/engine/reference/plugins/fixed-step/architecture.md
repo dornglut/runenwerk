@@ -5,24 +5,54 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-09-14
 ---
 
 # Fixed Step Plugin Architecture
 
 ## Ownership Boundary
 
-- Owns: Fixed-step resource installation contract.
-- Does not own: Fixed-step loop execution logic.
+`FixedStepPlugin` is the explicit capability selector for Runenwerk fixed cadence.
+
+It owns the integration contract for:
+
+- `FixedTimeConfig`
+- `CatchupBudget`
+- `FixedTimeState`
+- private fixed-cadence activation state
+
+It does **not** own simulation identity. In particular, it neither installs nor advances
+`SimulationTick`.
+
+## Runtime Contract
+
+When the plugin is selected, the shared App frame lifecycle admits fixed-step work. Each admitted
+step executes:
+
+```text
+FixedStepBegin
+FixedUpdate
+```
+
+`FixedStepBegin` is the narrow Runenwerk-owned lifecycle occurrence for owner adapters that must
+observe the beginning of a fixed step. `SimulationPlugin` uses it to advance simulation identity.
+
+Without `FixedStepPlugin`, an App still runs the ordinary frame schedules but does not execute
+`FixedStepBegin` or `FixedUpdate`. Merely inserting the public cadence resources does not activate
+the capability.
 
 ## Module Layout
 
-- Primary module: engine/src/plugins/fixed_step.rs
-- Entry surface: FixedStepPlugin
-- Runtime schedule touchpoints: Resource-only (no systems)
+- Capability selector: `engine/src/plugins/fixed_step.rs`
+- Cadence state: `engine/src/runtime/fixed_time.rs`
+- Executor: `engine/src/runtime/fixed_step_executor.rs`
+- Frame activation gate: `engine/src/runtime/frame_lifecycle.rs`
+- Lifecycle labels: `engine/src/runtime/schedules.rs`
 
-## Runtime Coupling
+## Ownership Rules
 
-- Depends on engine runtime schedules and resources through typed system params.
-- Should keep cross-plugin coupling data-oriented (resource/event/state boundaries).
-- Architecture changes should stay narrow and avoid broad app or plugin redesign.
+- Cadence occurrence and progress are Runenwerk runtime semantics.
+- `FixedTimeState::total_completed_steps` is cadence progress used by bounded App advancement.
+- Simulation/network/replay identity remains with the relevant domain integration.
+- Public resource presence is configuration/state, not capability authority.
+- No generic capability registry or second scheduler is involved.

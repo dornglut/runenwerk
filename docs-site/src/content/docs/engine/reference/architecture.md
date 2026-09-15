@@ -27,9 +27,13 @@ Builtin resource installation:
 
 - Installed during `App` construction via:
   - `App::install_builtin_resources` in `engine/src/app/runtime/bootstrap.rs`
-- Includes current bootstrap resources such as:
-  - `InputState`, `WindowState`
-  - `FixedTimeConfig`, `CatchupBudget`, `FixedTimeState`, `SimulationTick`
+- Bare App construction installs only universal App/runtime state. It does not imply fixed cadence or
+  simulation identity/configuration.
+- Fixed-cadence state is selected through `FixedStepPlugin`.
+- Simulation integration state is selected through `SimulationPlugin`.
+- Universal bootstrap state still includes current App/platform/publication resources such as:
+  - `InputState`, `ActionState`, `WindowState`
+  - frame-pacing/window platform state
   - `ProductPublicationRuntimeResource`
   - `QuerySnapshotRuntimeResource`
 
@@ -45,11 +49,16 @@ Startup contract:
 Per-frame schedule order:
 
 1. `PreUpdate`
-2. fixed-step loop (`FixedUpdate` zero or more times)
+2. when `FixedStepPlugin` is selected, zero or more fixed steps:
+   - `FixedStepBegin`
+   - `FixedUpdate`
 3. `Update`
 4. `RenderPrepare`
 5. `RenderSubmit`
 6. `FrameEnd`
+
+Without `FixedStepPlugin`, the frame lifecycle skips fixed-step execution entirely. Public cadence
+resource presence alone is not the activation signal.
 
 Shared implementation:
 
@@ -128,24 +137,64 @@ cache ids and diagnostics, never mutable backend handles or `wgpu` objects.
 
 ## Fixed-Step Contract
 
-Canonical implementation:
+`FixedStepPlugin` is the explicit cadence activator and non-overwriting provider of:
 
-- `run_fixed_update_frame` in `engine/src/runtime/fixed_step_executor.rs`
+```text
+FixedTimeConfig
+CatchupBudget
+FixedTimeState
+```
 
-Rules:
+Canonical execution lives in `run_fixed_update_frame` in
+`engine/src/runtime/fixed_step_executor.rs`.
 
-1. Read and clamp `FixedTimeConfig::step_seconds` and `CatchupBudget::max_steps_per_frame`; use frame `Time::delta_seconds` when `Time` is installed, otherwise use the fixed step as the frame delta fallback.
-2. Add frame delta to `FixedTimeState::accumulator_seconds`.
-3. Loop while accumulator has at least one fixed step and budget remains:
-   - increment `SimulationTick`
-   - run one `FixedUpdate`
-   - subtract one step from accumulator
+For an active cadence frame:
+
+1. Read and clamp `FixedTimeConfig::step_seconds` and `CatchupBudget::max_steps_per_frame`.
+2. Use the bounded-advancement one-frame cadence override when present; otherwise use frame
+   `Time::delta_seconds` when Time is installed, with the fixed step as the fallback.
+3. Add the selected frame delta to `FixedTimeState::accumulator_seconds`.
+4. While one fixed step is admitted and budget remains:
+   - run `FixedStepBegin`
+   - run `FixedUpdate`
+   - subtract one step from the accumulator
    - update `steps_ran_last_frame`
-4. If work remains after budget exhaustion:
-   - drop remaining accumulated time
-   - increment `saturated_frames`
+   - increment `total_completed_steps`
+5. If work remains after budget exhaustion, drop the remaining accumulated time and increment
+   `saturated_frames`.
 
-This contract is shared by headless and windowed runners.
+The cadence executor does not import, install, or mutate `SimulationTick`.
+
+## Simulation Integration Contract
+
+`SimulationPlugin` is Runenwerk's explicit integration provider for the existing `engine_sim`
+owner state:
+
+```text
+SimulationTick
+SimulationProfileConfig
+SimulationSessionId
+SimulationSeed
+SimulationRng
+```
+
+The plugin preserves explicitly supplied owner state. When the plugin is composed with
+`FixedStepPlugin`, it advances `SimulationTick` exactly once in `FixedStepBegin`, before
+`FixedUpdate`. Selecting Simulation alone does not activate cadence; selecting FixedStep alone does
+not manufacture simulation identity.
+
+`App::set_simulation_profile`, `App::set_authority_role`, and `App::set_simulation_seed` are explicit
+composition commands that may materialize the same owner configuration state before plugin
+installation. They do not create a parallel App-side simulation authority.
+
+## Bounded Advancement
+
+`App::run_for_fixed_steps(n)` advances by `n` additional completed Runenwerk fixed steps. Its stop
+condition is `FixedTimeState::total_completed_steps`, not `SimulationTick`.
+
+The API requires `FixedStepPlugin` to have been selected and returns an error otherwise. Repeated
+bounded calls are relative to current cadence progress, so simulation identity may be independently
+restored, replayed, or reassigned without changing the App advancement contract.
 
 ## Headless and Windowed Execution
 

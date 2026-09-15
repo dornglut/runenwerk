@@ -5,14 +5,14 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-14
 ---
 
 # Net Plugin Usage Guide
 
 ## Purpose
 
-Install the current Runenwerk engine integration for retained networking migration consumers without recreating lifecycle, delivery, or transport authority already owned by standalone RunenNet.
+Install the current Runenwerk engine integration for retained networking migration consumers without recreating lifecycle, delivery, transport, simulation, or cadence authority owned elsewhere.
 
 ## Entry Points
 
@@ -21,23 +21,44 @@ Install the current Runenwerk engine integration for retained networking migrati
 - Local README: [Net Plugin](../../../plugins/net/README.md)
 - Detailed retained low-level guide: [Networking Usage Guide](../../../plugins/net/networking-usage-guide.md)
 
-## Minimal Setup
+## Composition
+
+Net role configuration consumes Runenwerk simulation integration state. Compose `SimulationPlugin`
+before the Net plugin when not using the ordinary default stack:
 
 ```rust
 use engine::net::prelude::*;
+use engine::plugins::SimulationPlugin;
 
-app.add_plugins(NetPlugin::<MyDriver>::new(NetRole::Client));
+app.add_plugin(SimulationPlugin);
+app.add_plugin(NetPlugin::<MyDriver>::new(NetRole::Client));
 ```
 
 Use `NetRole::Server` or `NetRole::Host` for the corresponding retained integration role.
 
-There is no `NetworkRuntimeHandle` startup step. Application/host lifecycle code places and invokes the accepted RunenNet negotiation/session owners; the engine consumes already-authorized bindings through `RunenNetSessionProjection`.
+Networking systems that run in `FixedUpdate` also require explicit fixed cadence:
+
+```rust
+use engine::plugins::{FixedStepPlugin, SimulationPlugin};
+
+app.add_plugins((FixedStepPlugin, SimulationPlugin));
+app.add_plugin(NetPlugin::<MyDriver>::new(NetRole::Server));
+```
+
+`default_plugins()` already selects FixedStep and Simulation integration for the ordinary Engine
+stack. `NetPlugin` itself does not become a fallback provider for either capability.
+
+There is no `NetworkRuntimeHandle` startup step. Application/host lifecycle code places and invokes
+the accepted RunenNet negotiation/session owners; the engine consumes already-authorized bindings
+through `RunenNetSessionProjection`.
 
 ## Runtime Contract
 
 - Schedule placement: `PreUpdate`, `FixedUpdate`, `FrameEnd`.
 - Connection identity for retained routing/state: RunenNet `ConnectionHandle`.
 - Lifecycle authority: standalone RunenNet, not the Net plugin or `engine_net`.
+- Simulation identity/configuration: consumed from `SimulationPlugin` integration; not owned by Net.
+- Fixed cadence: consumed when fixed networking systems are intended to run; not activated by Net.
 - Engine inbox/outbox and `NetworkInboundQueue` / `NetworkOutboundQueue`: bounded staging/projection only.
 - Concrete transport realization: separate adapter/product concern; `engine_net` is not a transport runtime.
 
@@ -46,6 +67,8 @@ The current plugin remains transitional RN8 integration. It does not define the 
 ## Related
 
 - [Net Plugin Architecture](architecture.md)
+- [Simulation Plugin](../simulation/usage-guide.md)
+- [Fixed Step Plugin](../fixed-step/usage-guide.md)
 - [Plugin guides index](../index.md)
 - [Plugin source map](../../../plugins/README.md)
 - [Runenwerk Networking Architecture](../../../../net/net-architecture.md)

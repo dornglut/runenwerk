@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-09-14
 ---
 
 # Engine Crate
@@ -73,10 +73,14 @@ plugin wiring, and integrated engine-facing systems (scene, render, input, repla
   - `App::new()` for windowed mode
   - `App::headless()` for deterministic test/tooling runs
 - `App` owns `World`, scheduler runtime, and active runner.
+- Bare App construction does not imply fixed cadence or simulation identity/configuration.
 - Plugin build methods mutate app composition only (resources/systems/config).
 - Runtime frame flow is schedule-driven:
   - `Startup` once
-  - per-frame: `PreUpdate -> FixedUpdate -> Update -> RenderPrepare -> RenderSubmit -> FrameEnd`
+  - per-frame: `PreUpdate -> (FixedStepBegin -> FixedUpdate) 0..N -> Update -> RenderPrepare -> RenderSubmit -> FrameEnd`
+- `FixedStepPlugin` is the explicit fixed-cadence selector.
+- `SimulationPlugin` supplies Runenwerk's integration of existing `engine_sim` state and advances
+  `SimulationTick` at `FixedStepBegin`.
 - Windowed and headless modes share the same schedule model, with different platform runners.
 
 ## Plugin Entry Points
@@ -86,8 +90,10 @@ plugin wiring, and integrated engine-facing systems (scene, render, input, repla
 - Default stack: `engine::plugins::default_plugins()`
   - `TimePlugin`
   - `FixedStepPlugin`
+  - `SimulationPlugin`
   - `ReplayPlugin`
   - `InputFinalizePlugin`
+  - `DiagnosticsPlugin`
 
 ## Public API Ergonomics
 
@@ -95,6 +101,9 @@ plugin wiring, and integrated engine-facing systems (scene, render, input, repla
   - `engine::App`
   - `engine::Plugin`
   - `engine::prelude::*`
+- Use `App::run_for_frames(n)` for frame-count advancement.
+- Use `App::run_for_fixed_steps(n)` only after selecting `FixedStepPlugin`; the stop condition is
+  cadence progress, not simulation identity.
 - Net-specific integration:
   - `engine::net::prelude::*`
 - Schedule and system ordering helpers are re-exported through the prelude/runtime surface.
@@ -117,5 +126,5 @@ See `tests/README.md` for integration suite coverage.
 ## Ownership Boundaries
 
 - Owns runtime loop, plugin composition, replay/runtime integration, and engine-level feature wiring.
+- Owns fixed-cadence occurrence/progress but not simulation identity semantics.
 - Consumes `ecs`, `scheduler`, `engine_replay`, `engine_net`, and `engine_sim`.
-- Does not own internals of domain or net crates.

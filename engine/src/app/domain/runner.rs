@@ -1,6 +1,4 @@
-use crate::prelude::Time;
-use crate::runtime::fixed_time::FixedTimeConfig;
-use engine_sim::SimulationTick;
+use crate::runtime::fixed_time::{FixedStepFrameDeltaOverride, FixedTimeConfig, FixedTimeState};
 use runen_ecs::World;
 
 // Owner: Engine Runtime - App Runner
@@ -34,22 +32,28 @@ impl AppRunner for FixedFramesRunner {
 }
 
 #[derive(Debug, Clone)]
-pub struct FixedTicksRunner {
-    target_ticks: u64,
+pub struct FixedStepsRunner {
+    requested_steps: u64,
+    start_total_steps: Option<u64>,
 }
 
-impl FixedTicksRunner {
-    pub fn new(target_ticks: u64) -> Self {
-        Self { target_ticks }
+impl FixedStepsRunner {
+    pub fn new(step_count: u64) -> Self {
+        Self {
+            requested_steps: step_count,
+            start_total_steps: None,
+        }
     }
 }
 
-impl AppRunner for FixedTicksRunner {
+impl AppRunner for FixedStepsRunner {
     fn next_frame(&mut self, _completed_frames: usize, world: &World) -> bool {
-        world
-            .resource::<SimulationTick>()
-            .map(|tick| tick.0 < self.target_ticks)
-            .unwrap_or(false)
+        let current_steps = world
+            .resource::<FixedTimeState>()
+            .map(|state| state.total_completed_steps)
+            .unwrap_or(0);
+        let start_steps = *self.start_total_steps.get_or_insert(current_steps);
+        current_steps.saturating_sub(start_steps) < self.requested_steps
     }
 
     fn before_frame(&mut self, world: &mut World) {
@@ -57,8 +61,6 @@ impl AppRunner for FixedTicksRunner {
             .resource::<FixedTimeConfig>()
             .map(|config| config.step_seconds)
             .unwrap_or(1.0 / 60.0);
-        if let Ok(time) = world.resource_mut::<Time>() {
-            time.delta_seconds = fixed_step_seconds;
-        }
+        world.insert_resource(FixedStepFrameDeltaOverride(fixed_step_seconds));
     }
 }

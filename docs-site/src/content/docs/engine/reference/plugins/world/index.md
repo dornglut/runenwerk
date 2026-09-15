@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-09-14
 ---
 
 # World Plugin Docs
@@ -29,6 +29,31 @@ This section tracks the final world/runtime architecture migration for `engine/s
 - Multiplayer:
   - server-authoritative chunk revisions/op windows
   - per-connection streaming interest cursors
+
+## Composition Dependencies
+
+`WorldPlugin` owns world runtime state; it does not provide simulation identity or fixed cadence.
+
+World authority mode consumes `SimulationProfileConfig`, so compositions that use simulation
+role/authority policy should select `SimulationPlugin` before World:
+
+```rust
+use engine::plugins::{SimulationPlugin, WorldPlugin};
+
+app.add_plugins((SimulationPlugin, WorldPlugin));
+```
+
+World maintenance systems run in `FixedUpdate`. Select `FixedStepPlugin` as well when those systems
+must execute:
+
+```rust
+use engine::plugins::{FixedStepPlugin, SimulationPlugin, WorldPlugin};
+
+app.add_plugins((FixedStepPlugin, SimulationPlugin, WorldPlugin));
+```
+
+The ordinary default Engine stack already selects FixedStep and Simulation integration. World does
+not become a fallback provider for either capability.
 
 ## Key Source Modules
 
@@ -68,5 +93,7 @@ This section tracks the final world/runtime architecture migration for `engine/s
 
 ## Related Docs
 
+- [Simulation Plugin](../simulation/usage-guide.md)
+- [Fixed Step Plugin](../fixed-step/usage-guide.md)
 - Render plugin architecture: [`../render/architecture.md`](../render/architecture.md)
 - Migration roadmap: [`../../../roadmaps/world-runtime-final-architecture-migration.md`](../../../roadmaps/world-runtime-final-architecture-migration.md)

@@ -10,7 +10,7 @@ fn replay_plugin_records_scene_ticks_and_seeks_back_to_a_target_tick() {
         .expect("replay recording should start with ReplayPlugin installed");
 
     let mut app = app
-        .run_for_ticks(60)
+        .run_for_fixed_steps(60)
         .expect("scene and replay plugins should run");
     let archive = app.stop_recording().expect("recording should stop cleanly");
     assert!(archive.journal.len() >= 60);

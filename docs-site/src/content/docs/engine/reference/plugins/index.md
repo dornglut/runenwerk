@@ -51,6 +51,9 @@ Canonical guide map for engine plugin modules.
   - [Usage](scheduler-diagnostics/usage-guide.md)
   - [Advanced](scheduler-diagnostics/advanced-guide.md)
   - [Architecture](scheduler-diagnostics/architecture.md)
+- Simulation
+  - [Usage](simulation/usage-guide.md)
+  - [Architecture](simulation/architecture.md)
 - Time
   - [Usage](time/usage-guide.md)
   - [Advanced](time/advanced-guide.md)

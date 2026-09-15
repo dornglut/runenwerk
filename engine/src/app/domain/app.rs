@@ -210,6 +210,7 @@ impl App {
     }
 
     pub fn set_simulation_profile(&mut self, profile: SimulationProfile) -> &mut Self {
+        self.init_resource::<SimulationProfileConfig>();
         if let Ok(config) = self.world.resource_mut::<SimulationProfileConfig>() {
             config.profile = profile;
             config.determinism = match profile {
@@ -228,6 +229,7 @@ impl App {
     }
 
     pub fn set_authority_role(&mut self, authority: AuthorityRole) -> &mut Self {
+        self.init_resource::<SimulationProfileConfig>();
         if let Ok(config) = self.world.resource_mut::<SimulationProfileConfig>() {
             config.authority = authority;
         }
@@ -243,9 +245,7 @@ impl App {
 
     pub fn set_simulation_seed(&mut self, seed: SimulationSeed) -> &mut Self {
         self.world.insert_resource(seed);
-        if let Ok(rng) = self.world.resource_mut::<SimulationRng>() {
-            rng.reseed(seed);
-        }
+        self.world.insert_resource(SimulationRng::from_seed(seed));
         self
     }
 

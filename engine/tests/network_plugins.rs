@@ -9,7 +9,7 @@ use engine::plugins::net::{
     enqueue_server_outbox_broadcast, record_reconnect_attempt, server_inbox_is_empty,
     server_outbox_len, sync_runennet_session_projection,
 };
-use engine::plugins::{ScenePlugin, default_plugins};
+use engine::plugins::{ScenePlugin, SimulationPlugin, default_plugins};
 use engine::prelude::*;
 use runen_net::identity::{ConnectionHandle, ParticipantId, SessionId};
 use runen_net::protocol::{
@@ -181,6 +181,7 @@ struct NetworkClientPlugin;
 impl Plugin for NetworkClientPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PlayerCommandBuffer>();
+        app.add_plugin(SimulationPlugin);
         app.add_plugin(NetPlugin::<TestReplicationDriver>::new(NetRole::Client));
     }
 }
@@ -190,6 +191,7 @@ struct NetworkServerPlugin;
 impl Plugin for NetworkServerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PlayerCommandBuffer>();
+        app.add_plugin(SimulationPlugin);
         app.add_plugin(NetPlugin::<TestReplicationDriver>::new(NetRole::Server));
     }
 }
@@ -199,6 +201,7 @@ struct NetworkHostPlugin;
 impl Plugin for NetworkHostPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PlayerCommandBuffer>();
+        app.add_plugin(SimulationPlugin);
         app.add_plugin(NetPlugin::<TestReplicationDriver>::new(NetRole::Host));
     }
 }

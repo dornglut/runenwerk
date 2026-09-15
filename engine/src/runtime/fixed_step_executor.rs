@@ -1,6 +1,8 @@
 use crate::plugins::time::domain::Time;
-use crate::runtime::fixed_time::{CatchupBudget, FixedTimeConfig, FixedTimeState, SimulationTick};
-use crate::runtime::schedules::FixedUpdate;
+use crate::runtime::fixed_time::{
+    CatchupBudget, FixedStepFrameDeltaOverride, FixedTimeConfig, FixedTimeState,
+};
+use crate::runtime::schedules::{FixedStepBegin, FixedUpdate};
 use anyhow::Result;
 use runen_ecs::{Runtime, World};
 
@@ -18,15 +20,17 @@ struct FixedStepFrameConfig {
 }
 
 impl FixedStepFrameConfig {
-    fn from_world(world: &World) -> Self {
+    fn from_world(world: &mut World) -> Self {
         let step_seconds = world
             .resource::<FixedTimeConfig>()
             .map(|config| config.step_seconds)
             .unwrap_or(1.0 / 60.0)
             .clamp(MIN_FIXED_STEP_SECONDS, MAX_FIXED_STEP_SECONDS);
-        let delta_seconds = world
-            .resource::<Time>()
-            .map(|time| time.delta_seconds)
+        let bounded_delta = world
+            .remove_resource::<FixedStepFrameDeltaOverride>()
+            .map(|override_delta| override_delta.0);
+        let delta_seconds = bounded_delta
+            .or_else(|| world.resource::<Time>().ok().map(|time| time.delta_seconds))
             .unwrap_or(step_seconds)
             .clamp(0.0, MAX_FRAME_DELTA_SECONDS);
         let max_steps_per_frame = world
@@ -46,12 +50,17 @@ impl FixedStepFrameConfig {
 /// Runs the canonical fixed-step loop used by all runtime runners.
 ///
 /// Contract:
-/// - `Time::delta_seconds` is accumulated into `FixedTimeState::accumulator_seconds`.
-/// - Up to `CatchupBudget::max_steps_per_frame` `FixedUpdate` steps run in a frame.
-/// - `SimulationTick` advances immediately before each `FixedUpdate` step.
+/// - ordinary frames accumulate `Time::delta_seconds`;
+/// - bounded fixed-step advancement may provide one private frame-delta override, consumed here
+///   after `PreUpdate` without taking ownership of the public `Time` resource;
+/// - up to `CatchupBudget::max_steps_per_frame` fixed steps run in a frame;
+/// - each admitted step runs `FixedStepBegin` exactly once before `FixedUpdate`;
+/// - owner integrations may observe `FixedStepBegin`; the cadence executor does not own
+///   simulation identity or other domain state;
 /// - `FixedTimeState::steps_ran_last_frame` is reset to `0` each frame and updated
-///   after each completed fixed step.
-/// - If pending fixed-time work remains after consuming the per-frame catchup budget,
+///   after each completed fixed step;
+/// - `FixedTimeState::total_completed_steps` advances after each completed `FixedUpdate`;
+/// - if pending fixed-time work remains after consuming the per-frame catchup budget,
 ///   the remainder is dropped, `saturated_frames` is incremented, and a warning is logged.
 pub(crate) fn run_fixed_update_frame(world: &mut World, scheduler: &mut Runtime) -> Result<()> {
     let config = FixedStepFrameConfig::from_world(world);
@@ -59,7 +68,7 @@ pub(crate) fn run_fixed_update_frame(world: &mut World, scheduler: &mut Runtime)
     {
         let fixed_state = world
             .resource_mut::<FixedTimeState>()
-            .expect("FixedTimeState should be installed");
+            .expect("FixedTimeState should be installed by FixedStepPlugin");
         fixed_state.accumulator_seconds += config.delta_seconds;
         fixed_state.steps_ran_last_frame = 0;
     }
@@ -69,7 +78,7 @@ pub(crate) fn run_fixed_update_frame(world: &mut World, scheduler: &mut Runtime)
         let should_step = {
             let fixed_state = world
                 .resource::<FixedTimeState>()
-                .expect("FixedTimeState should be installed");
+                .expect("FixedTimeState should be installed by FixedStepPlugin");
             fixed_state.accumulator_seconds + f32::EPSILON >= config.step_seconds
                 && steps < config.max_steps_per_frame
         };
@@ -77,33 +86,28 @@ pub(crate) fn run_fixed_update_frame(world: &mut World, scheduler: &mut Runtime)
             break;
         }
 
-        {
-            let tick = world
-                .resource_mut::<SimulationTick>()
-                .expect("SimulationTick should be installed");
-            tick.0 = tick.0.saturating_add(1);
-        }
-
+        scheduler.run_schedule::<FixedStepBegin>(world)?;
         scheduler.run_schedule::<FixedUpdate>(world)?;
         steps = steps.saturating_add(1);
 
         let fixed_state = world
             .resource_mut::<FixedTimeState>()
-            .expect("FixedTimeState should be installed");
+            .expect("FixedTimeState should be installed by FixedStepPlugin");
         fixed_state.accumulator_seconds -= config.step_seconds;
         fixed_state.steps_ran_last_frame = steps;
+        fixed_state.total_completed_steps = fixed_state.total_completed_steps.saturating_add(1);
     }
 
     let saturated = {
         let fixed_state = world
             .resource::<FixedTimeState>()
-            .expect("FixedTimeState should be installed");
+            .expect("FixedTimeState should be installed by FixedStepPlugin");
         fixed_state.accumulator_seconds + f32::EPSILON >= config.step_seconds
     };
     if saturated {
         let fixed_state = world
             .resource_mut::<FixedTimeState>()
-            .expect("FixedTimeState should be installed");
+            .expect("FixedTimeState should be installed by FixedStepPlugin");
         fixed_state.accumulator_seconds = 0.0;
         fixed_state.saturated_frames = fixed_state.saturated_frames.saturating_add(1);
         tracing::warn!("fixed-step loop saturated, dropping accumulated time");

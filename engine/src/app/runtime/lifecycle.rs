@@ -1,10 +1,11 @@
 use crate::app::App;
 use crate::app::domain::mode::AppMode;
-use crate::app::domain::runner::{FixedFramesRunner, FixedTicksRunner};
+use crate::app::domain::runner::{FixedFramesRunner, FixedStepsRunner};
+use crate::plugins::fixed_step::fixed_step_is_active;
 use crate::runtime::frame_lifecycle::{
     prepare_world_for_run, run_frame as run_runtime_frame, run_startup_if_needed,
 };
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 
 impl App {
     pub fn run(self) -> Result<()> {
@@ -24,8 +25,13 @@ impl App {
         Ok(self)
     }
 
-    pub fn run_for_ticks(mut self, tick_count: u64) -> Result<Self> {
-        self.set_runner(FixedTicksRunner::new(tick_count));
+    pub fn run_for_fixed_steps(mut self, step_count: u64) -> Result<Self> {
+        if !fixed_step_is_active(&self.world) {
+            return Err(anyhow!(
+                "run_for_fixed_steps requires FixedStepPlugin to select fixed cadence"
+            ));
+        }
+        self.set_runner(FixedStepsRunner::new(step_count));
         self.run_headless()?;
         Ok(self)
     }

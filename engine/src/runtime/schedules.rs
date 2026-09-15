@@ -4,7 +4,7 @@ use runen_ecs::{ScheduleLabel, SystemSetKey};
 /// Core runtime schedules.
 ///
 /// Frame contract (see `runtime::frame_lifecycle::run_frame`):
-/// `PreUpdate` -> `FixedUpdate` (0..N) -> `Update` -> `RenderPrepare` -> `RenderSubmit` -> `FrameEnd`.
+/// `PreUpdate` -> (`FixedStepBegin` -> `FixedUpdate`) (0..N) -> `Update` -> `RenderPrepare` -> `RenderSubmit` -> `FrameEnd`.
 
 #[derive(Debug, Copy, Clone, Default)]
 pub struct Startup;
@@ -30,6 +30,15 @@ pub struct PreUpdate;
 impl ScheduleLabel for PreUpdate {
     fn name() -> &'static str {
         "PreUpdate"
+    }
+}
+
+#[derive(Debug, Copy, Clone, Default)]
+pub struct FixedStepBegin;
+
+impl ScheduleLabel for FixedStepBegin {
+    fn name() -> &'static str {
+        "FixedStepBegin"
     }
 }
 

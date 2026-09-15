@@ -26,7 +26,7 @@ fn run_network_protocol_frame(mut app: App, context: &str) -> App {
         .unwrap_or_else(|error| panic!("{context}: {error:#}"))
 }
 
-fn run_network_fixed_tick(mut app: App, context: &str) -> App {
+fn run_network_fixed_step(mut app: App, context: &str) -> App {
     let step_seconds = app
         .world()
         .resource::<FixedTimeConfig>()
@@ -49,8 +49,8 @@ fn server_delta_snapshot_applies_cleanly_on_client() {
     install_runennet_connections(&mut server, &[(connection, ParticipantId::new(1))]);
 
     let server = server
-        .run_for_ticks(1)
-        .expect("first server replication tick should run");
+        .run_for_fixed_steps(1)
+        .expect("first server replication fixed step should run");
     let full_snapshot = server
         .world()
         .resource::<NetworkOutboundQueue>()
@@ -85,8 +85,8 @@ fn server_delta_snapshot_applies_cleanly_on_client() {
     let server = server
         .run_for_frames(1)
         .expect("ack processing frame should run")
-        .run_for_ticks(2)
-        .expect("second server replication tick should run");
+        .run_for_fixed_steps(1)
+        .expect("second server replication fixed step should run");
     assert_eq!(
         server
             .world()
@@ -166,8 +166,8 @@ fn server_rejects_future_snapshot_ack_without_mutating_baseline() {
     install_runennet_connections(&mut server, &[(connection, ParticipantId::new(1))]);
 
     let mut server = server
-        .run_for_ticks(1)
-        .expect("first server replication tick should run");
+        .run_for_fixed_steps(1)
+        .expect("first server replication fixed step should run");
     enqueue_server_inbox_from(
         server.world_mut(),
         Some(connection),
@@ -193,8 +193,8 @@ fn server_rejects_future_snapshot_ack_without_mutating_baseline() {
     assert_eq!(checkpoint.last_ack_cursor, SnapshotCursor::default());
 
     let server = server
-        .run_for_ticks(2)
-        .expect("second server replication tick should run");
+        .run_for_fixed_steps(1)
+        .expect("second server replication fixed step should run");
     let outbound = server.world().resource::<NetworkOutboundQueue>().unwrap();
     assert!(outbound.server_messages().iter().any(|message| {
         matches!(
@@ -321,7 +321,7 @@ fn future_remote_input_precedes_local_input_for_same_fixed_tick() {
         .unwrap()
         .push(local.clone());
 
-    let app = run_network_fixed_tick(app, "same-tick remote/local input should run");
+    let app = run_network_fixed_step(app, "same-step remote/local input should run");
     assert_eq!(
         *app.world().resource::<SimulationTick>().unwrap(),
         SimulationTick(1)
@@ -361,7 +361,7 @@ fn server_tracks_per_connection_baselines_for_runennet_connections() {
         SimulationTick(0),
         "session projection frame must not advance fixed time"
     );
-    let mut app = run_network_fixed_tick(app, "first replication tick should run");
+    let mut app = run_network_fixed_step(app, "first replication fixed step should run");
     assert_eq!(
         *app.world().resource::<SimulationTick>().unwrap(),
         SimulationTick(1)
@@ -383,7 +383,7 @@ fn server_tracks_per_connection_baselines_for_runennet_connections() {
         "protocol-only ACK frame must not advance fixed time"
     );
 
-    let app = run_network_fixed_tick(app, "second replication tick should run");
+    let app = run_network_fixed_step(app, "second replication fixed step should run");
     assert_eq!(
         *app.world().resource::<SimulationTick>().unwrap(),
         SimulationTick(2)

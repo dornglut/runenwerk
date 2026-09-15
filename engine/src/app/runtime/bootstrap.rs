@@ -5,12 +5,10 @@ use crate::runtime::platform::PlatformWindowEventQueueResource;
 use crate::*;
 
 impl App {
-    /// Installs builtin runtime resources required by startup and frame execution.
+    /// Installs universal runtime resources required by App startup/frame execution.
     ///
-    /// Lifecycle contract:
-    /// - This runs during `App` construction before any plugin `Startup` systems can run.
-    /// - Runners only mutate these resources during run preparation and per-frame execution.
-    /// - Plugins may override defaults by inserting resources after app construction.
+    /// Capability state such as fixed cadence and simulation identity is installed by
+    /// its owning integration plugin rather than by bare App construction.
     pub(crate) fn install_builtin_resources(&mut self) {
         if self.world.resource::<InputState>().is_err() {
             self.world.insert_resource(InputState::new());
@@ -57,18 +55,6 @@ impl App {
             self.world
                 .insert_resource(NativeWindowHookRegistryResource::default());
         }
-        if !self.world.has_resource::<FixedTimeConfig>() {
-            self.world.insert_resource(FixedTimeConfig::default());
-        }
-        if !self.world.has_resource::<CatchupBudget>() {
-            self.world.insert_resource(CatchupBudget::default());
-        }
-        if !self.world.has_resource::<FixedTimeState>() {
-            self.world.insert_resource(FixedTimeState::default());
-        }
-        if !self.world.has_resource::<SimulationTick>() {
-            self.world.insert_resource(SimulationTick::default());
-        }
         if !self
             .world
             .has_resource::<ProductPublicationRuntimeResource>()
@@ -80,26 +66,7 @@ impl App {
             self.world
                 .insert_resource(QuerySnapshotRuntimeResource::default());
         }
-        if !self.world.has_resource::<SimulationProfileConfig>() {
-            self.world
-                .insert_resource(SimulationProfileConfig::default());
-        }
         self.add_product_publication_handler(publish_staged_product_outcomes);
         self.add_query_snapshot_publication_handler(publish_staged_query_snapshots);
-        if !self.world.has_resource::<SimulationSessionId>() {
-            self.world.insert_resource(SimulationSessionId::default());
-        }
-        if !self.world.has_resource::<SimulationSeed>() {
-            let seed = SimulationSeed::default();
-            self.world.insert_resource(seed);
-            self.world.insert_resource(SimulationRng::from_seed(seed));
-        } else if !self.world.has_resource::<SimulationRng>() {
-            let seed = self
-                .world
-                .resource::<SimulationSeed>()
-                .copied()
-                .unwrap_or_default();
-            self.world.insert_resource(SimulationRng::from_seed(seed));
-        }
     }
 }
