@@ -28,6 +28,7 @@ impl App {
 
     pub fn run_for_fixed_steps(mut self, step_count: u64) -> Result<Self> {
         self.require_headless_host("run_for_fixed_steps")?;
+        self.admit_composition()?;
         if !fixed_step_is_active(&self.world) {
             return Err(anyhow!(
                 "run_for_fixed_steps requires FixedStepPlugin to select fixed cadence"
@@ -49,11 +50,13 @@ impl App {
 
     pub(crate) fn prepare_for_run(&mut self, headless: bool) -> Result<()> {
         self.admit_composition()?;
+        self.prepare_lifecycle_for_execution()?;
         prepare_world_for_run(&mut self.world, &self.title, headless);
-        run_startup_if_needed(&mut self.world, &mut self.scheduler, &mut self.startup_ran)
+        run_startup_if_needed(&mut self.world, &mut self.scheduler, &mut self.lifecycle)
     }
 
     pub(crate) fn run_frame(&mut self) -> Result<()> {
+        self.lifecycle.require_running()?;
         run_runtime_frame(&mut self.world, &mut self.scheduler)
     }
 }

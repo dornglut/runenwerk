@@ -1,3 +1,4 @@
+use crate::app::domain::lifecycle::AppLifecycle;
 use crate::app::domain::mode::AppMode;
 use crate::app::domain::runner::{AppRunner, FixedFramesRunner};
 use crate::app::domain::state::WindowedAppState;
@@ -26,11 +27,11 @@ pub struct App {
     pub(crate) world: World,
     pub(crate) scheduler: Runtime,
     pub(crate) runner: Box<dyn AppRunner>,
-    pub(crate) startup_ran: bool,
+    pub(crate) lifecycle: AppLifecycle,
     pub(crate) mode: AppMode,
     pub(crate) title: String,
     pub(crate) control_flow: ControlFlow,
-    composition_errors: Vec<AppSystemRegistrationError>,
+    composition_errors: Vec<AppCompositionError>,
 }
 
 impl Default for App {
@@ -54,7 +55,7 @@ impl App {
             world: World::new(),
             scheduler: Runtime::new(),
             runner: Box::new(FixedFramesRunner::new(1)),
-            startup_ran: false,
+            lifecycle: AppLifecycle::default(),
             mode,
             title: title.clone(),
             control_flow: ControlFlow::Wait,
@@ -68,11 +69,17 @@ impl App {
     where
         P: Plugin + 'static,
     {
+        if !self.allow_topology_mutation("add_plugin", None) {
+            return self;
+        }
         plugin.build(self);
         self
     }
 
     pub fn add_boxed_plugin(&mut self, plugin: Box<dyn Plugin>) -> &mut Self {
+        if !self.allow_topology_mutation("add_boxed_plugin", None) {
+            return self;
+        }
         plugin.build(self);
         self
     }
@@ -81,6 +88,9 @@ impl App {
     where
         P: IntoPlugins,
     {
+        if !self.allow_topology_mutation("add_plugins", None) {
+            return self;
+        }
         plugins.add_to_app(self);
         self
     }
@@ -90,14 +100,18 @@ impl App {
         L: ScheduleLabel,
         S: IntoSystemConfigs<Marker>,
     {
+        if !self.allow_topology_mutation("add_systems", Some(L::name())) {
+            return self;
+        }
         if let Err(source) = self
             .scheduler
             .add_systems::<L, S, Marker>(_schedule, systems)
         {
-            self.composition_errors.push(AppSystemRegistrationError {
-                schedule: L::name(),
-                source,
-            });
+            self.composition_errors
+                .push(AppCompositionError::SystemRegistration {
+                    schedule: L::name(),
+                    source,
+                });
         }
         self
     }
@@ -106,6 +120,9 @@ impl App {
     where
         F: Fn(&ProductPublicationOccurrence, &mut World) -> Result<()> + 'static,
     {
+        if !self.allow_topology_mutation("add_product_publication_handler", None) {
+            return self;
+        }
         if !self.world.has_resource::<PublicationHandlers>() {
             self.world.insert_resource(PublicationHandlers::default());
         }
@@ -120,6 +137,9 @@ impl App {
     where
         F: Fn(&QuerySnapshotPublicationOccurrence, &mut World) -> Result<()> + 'static,
     {
+        if !self.allow_topology_mutation("add_query_snapshot_publication_handler", None) {
+            return self;
+        }
         if !self.world.has_resource::<PublicationHandlers>() {
             self.world.insert_resource(PublicationHandlers::default());
         }
@@ -347,11 +367,18 @@ impl App {
         &mut self.world
     }
 
-    pub(crate) fn into_windowed_state(self) -> WindowedAppState {
+    pub(crate) fn into_windowed_state(mut self) -> WindowedAppState {
+        if self.lifecycle.is_configuring() {
+            self.admit_composition()
+                .expect("windowed Host-state transfer requires admitted App composition");
+            self.lifecycle
+                .prepare_for_execution()
+                .expect("Configuring App lifecycle should prepare for windowed Host transfer");
+        }
         WindowedAppState {
             world: self.world,
             scheduler: self.scheduler,
-            startup_ran: self.startup_ran,
+            startup_ran: self.lifecycle,
             title: self.title,
             control_flow: self.control_flow,
         }
@@ -369,33 +396,82 @@ impl App {
             .validate()
             .map_err(|source| anyhow::Error::new(AppCompositionAdmissionError::Topology(source)))
     }
-}
 
-#[derive(Debug)]
-struct AppSystemRegistrationError {
-    schedule: &'static str,
-    source: RuntimeError,
-}
+    pub(crate) fn prepare_lifecycle_for_execution(&mut self) -> Result<()> {
+        self.lifecycle.prepare_for_execution()
+    }
 
-impl fmt::Display for AppSystemRegistrationError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            formatter,
-            "failed to register systems in schedule '{}': {}",
-            self.schedule, self.source
-        )
+    fn allow_topology_mutation(
+        &mut self,
+        operation: &'static str,
+        target: Option<&'static str>,
+    ) -> bool {
+        if self.lifecycle.is_configuring() {
+            return true;
+        }
+
+        self.composition_errors
+            .push(AppCompositionError::LateTopologyMutation {
+                operation,
+                target,
+                lifecycle: self.lifecycle,
+            });
+        false
     }
 }
 
-impl Error for AppSystemRegistrationError {
+#[derive(Debug)]
+enum AppCompositionError {
+    SystemRegistration {
+        schedule: &'static str,
+        source: RuntimeError,
+    },
+    LateTopologyMutation {
+        operation: &'static str,
+        target: Option<&'static str>,
+        lifecycle: AppLifecycle,
+    },
+}
+
+impl fmt::Display for AppCompositionError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::SystemRegistration { schedule, source } => write!(
+                formatter,
+                "failed to register systems in schedule '{}': {}",
+                schedule, source
+            ),
+            Self::LateTopologyMutation {
+                operation,
+                target,
+                lifecycle,
+            } => {
+                write!(
+                    formatter,
+                    "{operation} rejected after App composition was sealed (lifecycle: {})",
+                    lifecycle.name()
+                )?;
+                if let Some(target) = target {
+                    write!(formatter, "; target: {target}")?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+impl Error for AppCompositionError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        Some(&self.source)
+        match self {
+            Self::SystemRegistration { source, .. } => Some(source),
+            Self::LateTopologyMutation { .. } => None,
+        }
     }
 }
 
 #[derive(Debug)]
 enum AppCompositionAdmissionError {
-    Registration(Vec<AppSystemRegistrationError>),
+    Registration(Vec<AppCompositionError>),
     Topology(RuntimeError),
 }
 

@@ -1,10 +1,11 @@
+use crate::app::AppLifecycle;
 use crate::plugins::fixed_step::fixed_step_is_active;
 use crate::runtime::fixed_step_executor::run_fixed_update_frame;
 use crate::runtime::schedules::{
     FrameEnd, PreUpdate, RenderPrepare, RenderSubmit, Startup, Update,
 };
 use crate::runtime::window::WindowState;
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use runen_ecs::{Runtime, World};
 
 /// Applies builtin runtime run-state before startup/frame execution.
@@ -20,19 +21,43 @@ pub(crate) fn prepare_world_for_run(world: &mut World, title: &str, headless: bo
     }
 }
 
-/// Runs `Startup` at most once for a runtime state.
+/// Runs `Startup` as one non-retryable lifecycle attempt for a runtime instance.
 pub(crate) fn run_startup_if_needed(
     world: &mut World,
     scheduler: &mut Runtime,
-    startup_ran: &mut bool,
+    lifecycle: &mut AppLifecycle,
 ) -> Result<()> {
-    if *startup_ran {
-        return Ok(());
+    match *lifecycle {
+        AppLifecycle::Running => return Ok(()),
+        AppLifecycle::Prepared => {}
+        AppLifecycle::Configuring => {
+            return Err(anyhow!(
+                "Startup requires prepared App composition; lifecycle is Configuring"
+            ));
+        }
+        AppLifecycle::Starting => {
+            return Err(anyhow!(
+                "Startup was already attempted for this App; lifecycle is Starting"
+            ));
+        }
+        AppLifecycle::Failed => {
+            return Err(anyhow!(
+                "Startup previously failed for this App; the same runtime instance is non-runnable"
+            ));
+        }
     }
 
-    scheduler.run_schedule::<Startup>(world)?;
-    *startup_ran = true;
-    Ok(())
+    *lifecycle = AppLifecycle::Starting;
+    match scheduler.run_schedule::<Startup>(world) {
+        Ok(()) => {
+            *lifecycle = AppLifecycle::Running;
+            Ok(())
+        }
+        Err(error) => {
+            *lifecycle = AppLifecycle::Failed;
+            Err(error.into())
+        }
+    }
 }
 
 /// Runs one runtime frame using the canonical Engine-owned lifecycle order:
@@ -71,6 +96,7 @@ mod tests {
     use crate::runtime::system::{SystemConfigExt, SystemMobilityExt};
     use anyhow::anyhow;
     use runen_ecs::{Commands, Res, SystemSet};
+    use std::panic::{AssertUnwindSafe, catch_unwind};
 
     fn test_world() -> World {
         let mut world = World::new();
@@ -78,6 +104,51 @@ mod tests {
         time.delta_seconds = 0.0;
         world.insert_resource(time);
         world
+    }
+
+    #[test]
+    fn startup_error_marks_runtime_failed_and_rejects_retry() {
+        fn fail_startup() -> anyhow::Result<()> {
+            Err(anyhow!("startup failure"))
+        }
+
+        let mut world = test_world();
+        let mut runtime = Runtime::new();
+        runtime.add_systems(Startup, fail_startup).unwrap();
+        let mut lifecycle = AppLifecycle::Prepared;
+
+        let error = run_startup_if_needed(&mut world, &mut runtime, &mut lifecycle)
+            .expect_err("Startup should fail");
+        assert!(format!("{error:#}").contains("startup failure"));
+        assert_eq!(lifecycle, AppLifecycle::Failed);
+
+        let retry = run_startup_if_needed(&mut world, &mut runtime, &mut lifecycle)
+            .expect_err("failed Startup must not be retried");
+        assert!(format!("{retry:#}").contains("previously failed"));
+        assert_eq!(lifecycle, AppLifecycle::Failed);
+    }
+
+    #[test]
+    fn startup_unwind_leaves_attempted_state_and_rejects_retry() {
+        fn panic_startup() {
+            panic!("startup panic");
+        }
+
+        let mut world = test_world();
+        let mut runtime = Runtime::new();
+        runtime.add_systems(Startup, panic_startup).unwrap();
+        let mut lifecycle = AppLifecycle::Prepared;
+
+        let caught = catch_unwind(AssertUnwindSafe(|| {
+            let _ = run_startup_if_needed(&mut world, &mut runtime, &mut lifecycle);
+        }));
+        assert!(caught.is_err());
+        assert_eq!(lifecycle, AppLifecycle::Starting);
+
+        let retry = run_startup_if_needed(&mut world, &mut runtime, &mut lifecycle)
+            .expect_err("an interrupted Startup attempt must not be retried");
+        assert!(format!("{retry:#}").contains("already attempted"));
+        assert_eq!(lifecycle, AppLifecycle::Starting);
     }
 
     #[test]
@@ -118,10 +189,11 @@ mod tests {
             });
 
         let mut runtime = Runtime::new();
-        let mut startup_ran = false;
-        run_startup_if_needed(&mut world, &mut runtime, &mut startup_ran).unwrap();
+        let mut lifecycle = AppLifecycle::Prepared;
+        run_startup_if_needed(&mut world, &mut runtime, &mut lifecycle).unwrap();
         run_frame(&mut world, &mut runtime).unwrap();
 
+        assert_eq!(lifecycle, AppLifecycle::Running);
         assert_eq!(*product.borrow(), 0);
         assert_eq!(*query.borrow(), 0);
     }
