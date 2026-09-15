@@ -13,11 +13,8 @@ related_docs:
   - ../../architecture/repository-family-architecture.md
   - ../../guidelines/domain-program-architecture-pattern.md
   - ../../guidelines/runenwerk-architecture.md
-  - ../../design/active/runenwerk-domain-workbench-north-star.md
   - ../../design/active/semantic-graph-ir-and-compilation-design.md
-  - ../../design/active/runengpu-architecture-design.md
   - ../../design/accepted/runenrender-decomposition-design.md
-  - ../../design/active/runenecs-extraction-boundary-design.md
   - ../../design/accepted/sdf-first-field-world-platform-design.md
 ---
 

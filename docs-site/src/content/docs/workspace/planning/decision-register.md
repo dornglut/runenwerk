@@ -7,7 +7,6 @@ layer: workspace
 canonical: true
 last_reviewed: 2026-08-13
 related_docs:
-  - ../authority-model.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
   - ../../adr/accepted/0015-separate-gpu-execution-from-rendering.md
   - ./roadmap.md

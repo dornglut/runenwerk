@@ -10,7 +10,6 @@ related_docs:
   - ./architecture.md
   - ./code-patterns.md
   - ./dependency-rules.md
-  - ../workspace/engineering-workflow.md
 ---
 
 # Runenwerk Programming Principles

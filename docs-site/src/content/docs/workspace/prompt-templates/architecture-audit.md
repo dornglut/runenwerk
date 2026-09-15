@@ -7,7 +7,6 @@ layer: workspace
 canonical: true
 last_reviewed: 2026-04-28
 related_docs:
-  - ../agents.md
   - ../../guidelines/architecture.md
   - ../../guidelines/runenwerk-architecture.md
 ---

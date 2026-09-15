@@ -42,8 +42,6 @@ related:
   - ./mvp/implementation-sequence.md
   - ../../domain/world-sdf/README.md
   - ../../domain/world-ops/README.md
-  - ../../domain/spatial/README.md
-  - ../../domain/chunking/README.md
 ---
 
 # Runenwerk Editor Final Implementation Roadmap

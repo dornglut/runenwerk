@@ -13,10 +13,7 @@ related_adrs:
 related_docs:
   - ../../architecture/repository-family-architecture.md
   - ../../guidelines/domain-program-architecture-pattern.md
-  - ../../design/active/runenwerk-domain-workbench-north-star.md
-  - ../../design/active/runengpu-architecture-design.md
   - ../../design/accepted/runenrender-decomposition-design.md
-  - ../../design/active/runenecs-extraction-boundary-design.md
   - ../../reports/investigations/2026-08-12-semantic-federation-and-inspection-provenance.md
 ---
 

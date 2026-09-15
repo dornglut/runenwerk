@@ -8,7 +8,6 @@ canonical: true
 last_reviewed: 2026-09-11
 related:
   - ./planning-methods.md
-  - ./planning-and-implementation-workflow.md
   - ./diagrams/design-intake-roadmap-automation.puml
   - ./roadmap-decision-register.md
   - ./design-implementation-triage.md

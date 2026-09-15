@@ -16,7 +16,7 @@ related_designs:
   - ./ui-designer-visual-layout-and-interface-composition-design.md
   - ./ui-designer-theme-tokens-modes-skins-and-state-variants-design.md
   - ./ui-designer-interface-lab-platform-design.md
-  - ../active/editor-tool-suite-registry-and-workbench-host-design.md
+  - ../implemented/editor-tool-suite-registry-and-workbench-host-design.md
 related_roadmaps:
   - ../../domain/ui/roadmap.md
 ---

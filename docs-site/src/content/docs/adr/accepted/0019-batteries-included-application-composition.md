@@ -12,7 +12,6 @@ related_adrs:
   - ./0018-semantic-federation-and-physical-realization.md
 related_docs:
   - ../../architecture/repository-family-architecture.md
-  - ../../design/active/runenwerk-domain-workbench-north-star.md
   - ../../net/net-architecture.md
   - ../../design/active/net-plugin-runtime-bridge.md
   - ../../net/multiplayer-replication-implementation-roadmap.md

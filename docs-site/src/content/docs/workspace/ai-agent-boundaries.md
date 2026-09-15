@@ -7,7 +7,7 @@ layer: workspace
 canonical: true
 last_reviewed: 2026-09-11
 related_docs:
-  - ../../../AGENTS.md
+  - ../../../../../AGENTS.md
 ---
 
 # AI Agent Boundaries
