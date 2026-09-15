@@ -1,1 +1,1 @@
-pub use runen_ecs::{Commands, Query, Res, ResMut, WorldMut};
+pub use runen_ecs::{BatchCommands, Commands, Query, Res, ResMut, WorldMut};
