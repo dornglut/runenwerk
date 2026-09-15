@@ -66,9 +66,7 @@ fn bounded_headless_execution_does_not_require_frame_pacing_resources() {
         .expect("bounded headless execution should not require native pacing state");
 
     assert!(
-        app.world()
-            .resource::<FramePacingPolicyResource>()
-            .is_err(),
+        app.world().resource::<FramePacingPolicyResource>().is_err(),
         "headless execution should not synthesize native pacing policy"
     );
     assert!(

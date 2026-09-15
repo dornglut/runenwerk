@@ -1,7 +1,5 @@
 use crate::app::App;
-use crate::runtime::frame_pacing::{
-    FramePacingPolicyResource, FramePacingRuntimeStateResource,
-};
+use crate::runtime::frame_pacing::{FramePacingPolicyResource, FramePacingRuntimeStateResource};
 use crate::runtime::winit_runner;
 use anyhow::Result;
 
@@ -14,18 +12,12 @@ impl App {
             .copied()
             .unwrap_or_default();
 
-        if !self
-            .world
-            .has_resource::<FramePacingRuntimeStateResource>()
-        {
+        if !self.world.has_resource::<FramePacingRuntimeStateResource>() {
             self.world
                 .insert_resource(FramePacingRuntimeStateResource::default());
         }
 
-        if let Ok(runtime_state) = self
-            .world
-            .resource_mut::<FramePacingRuntimeStateResource>()
-        {
+        if let Ok(runtime_state) = self.world.resource_mut::<FramePacingRuntimeStateResource>() {
             runtime_state.observe_policy(policy);
         }
     }
@@ -46,11 +38,7 @@ mod tests {
     fn windowed_host_preparation_materializes_default_runtime_state_without_policy_resource() {
         let mut app = App::new();
 
-        assert!(
-            app.world()
-                .resource::<FramePacingPolicyResource>()
-                .is_err()
-        );
+        assert!(app.world().resource::<FramePacingPolicyResource>().is_err());
         assert!(
             app.world()
                 .resource::<FramePacingRuntimeStateResource>()
@@ -60,9 +48,7 @@ mod tests {
         app.prepare_windowed_frame_pacing();
 
         assert!(
-            app.world()
-                .resource::<FramePacingPolicyResource>()
-                .is_err(),
+            app.world().resource::<FramePacingPolicyResource>().is_err(),
             "implicit default pacing should not manufacture explicit policy state"
         );
         assert_eq!(
