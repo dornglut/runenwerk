@@ -185,12 +185,6 @@ pub enum ShellCommand {
     ActivateDocumentTab {
         document_id: DocumentId,
     },
-    CloseDocumentTab {
-        document_id: DocumentId,
-    },
-    SaveDocumentTab {
-        document_id: DocumentId,
-    },
     SelectEditorDefinitionDocument {
         document_id: String,
     },

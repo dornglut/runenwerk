@@ -201,12 +201,6 @@ pub fn default_mode_descriptors() -> Vec<ModeDescriptor> {
     ]
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum DirtyDocumentClosePolicy {
-    RejectDirty,
-    DiscardDirty,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DocumentCompatibilityContext {
     pub allowed_document_kinds: Vec<DocumentKind>,
@@ -374,16 +368,9 @@ impl EditorSession {
     pub fn close_document(
         &mut self,
         document_id: DocumentId,
-        policy: DirtyDocumentClosePolicy,
     ) -> Result<DocumentDescriptor, EditorMutationError> {
-        let document = self
-            .document(document_id)
-            .ok_or(EditorMutationError::session_rejected("document not found"))?;
-
-        if document.is_dirty && policy == DirtyDocumentClosePolicy::RejectDirty {
-            return Err(EditorMutationError::session_rejected(
-                "dirty document close rejected",
-            ));
+        if self.document(document_id).is_none() {
+            return Err(EditorMutationError::session_rejected("document not found"));
         }
 
         let removed_index = self
@@ -409,46 +396,10 @@ impl EditorSession {
 
         Ok(removed)
     }
-
-    pub fn set_document_dirty(
-        &mut self,
-        document_id: crate::DocumentId,
-        is_dirty: bool,
-    ) -> Result<(), EditorMutationError> {
-        let document = self
-            .documents
-            .get_mut(&document_id)
-            .ok_or(EditorMutationError::session_rejected("document not found"))?;
-
-        document.is_dirty = is_dirty;
-        Ok(())
-    }
-
-    pub fn mark_document_dirty(
-        &mut self,
-        document_id: crate::DocumentId,
-    ) -> Result<(), EditorMutationError> {
-        self.set_document_dirty(document_id, true)
-    }
-
-    pub fn mark_document_saved(
-        &mut self,
-        document_id: crate::DocumentId,
-    ) -> Result<(), EditorMutationError> {
-        self.set_document_dirty(document_id, false)
-    }
 }
 
 impl crate::CommandContext for EditorSession {
     type Error = EditorMutationError;
-
-    fn mark_document_dirty(
-        &mut self,
-        document_id: crate::DocumentId,
-        is_dirty: bool,
-    ) -> Result<(), Self::Error> {
-        self.set_document_dirty(document_id, is_dirty)
-    }
 }
 
 #[cfg(test)]
@@ -471,17 +422,6 @@ mod tests {
     }
 
     #[test]
-    fn close_document_rejects_dirty_document_without_discard_policy() {
-        let mut session = EditorSession::new();
-        session.upsert_document(descriptor(1, DocumentKind::Scene).with_dirty(true));
-
-        let result = session.close_document(DocumentId(1), DirtyDocumentClosePolicy::RejectDirty);
-
-        assert!(result.is_err());
-        assert_eq!(session.document_tabs(), &[DocumentId(1)]);
-    }
-
-    #[test]
     fn close_active_document_activates_neighbor_tab() {
         let mut session = EditorSession::new();
         session.upsert_document(descriptor(1, DocumentKind::Scene));
@@ -491,8 +431,8 @@ mod tests {
             .expect("document should exist");
 
         session
-            .close_document(DocumentId(2), DirtyDocumentClosePolicy::RejectDirty)
-            .expect("clean document should close");
+            .close_document(DocumentId(2))
+            .expect("document should close");
 
         assert_eq!(session.document_tabs(), &[DocumentId(1)]);
         assert_eq!(session.active_document(), Some(DocumentId(1)));

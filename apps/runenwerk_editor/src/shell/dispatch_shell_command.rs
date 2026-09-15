@@ -1,6 +1,6 @@
 use std::{path::PathBuf, time::Instant};
 
-use editor_core::{DirtyDocumentClosePolicy, EditorMutationError};
+use editor_core::EditorMutationError;
 use editor_definition::{
     EditorLabOperation, EditorLabOperationKind, EditorLabOperationReport, EditorLabOperationStatus,
     EditorWorkspaceSplitAxisDefinition,
@@ -18,12 +18,10 @@ use ui_composition::CompositionPolicies;
 
 use crate::editor_app::RunenwerkEditorApp;
 use crate::editor_features::{redo_last_scene_change, undo_last_scene_change};
-use crate::editor_runtime::{bootstrap_mvp_scene_if_empty, register_mvp_component_types};
 use crate::persistence::{
     default_composition_layout_root_for_profile, load_editor_composition_layout,
-    load_scene_file_into_runtime_classified, probe_legacy_layout_path, read_retained_change_log,
-    retained_change_log_path_for_scene, save_editor_composition_layout, write_retained_change_log,
-    write_scene_file,
+    probe_legacy_layout_path, read_retained_change_log, retained_change_log_path_for_scene,
+    save_editor_composition_layout, write_retained_change_log,
 };
 use crate::runtime::viewport::{
     ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
@@ -951,18 +949,6 @@ pub fn dispatch_shell_command_with_viewport_commands(
                 .activate_document(document_id)
                 .map_err(|_| EditorMutationError::runtime_rejected("activate document failed"))?;
         }
-        ShellCommand::CloseDocumentTab { document_id } => {
-            app.runtime_mut()
-                .session_mut()
-                .close_document(document_id, DirtyDocumentClosePolicy::RejectDirty)
-                .map_err(|_| EditorMutationError::runtime_rejected("close document failed"))?;
-        }
-        ShellCommand::SaveDocumentTab { document_id } => {
-            app.runtime_mut()
-                .session_mut()
-                .mark_document_saved(document_id)
-                .map_err(|_| EditorMutationError::runtime_rejected("save document failed"))?;
-        }
         ShellCommand::SelectEditorDefinitionDocument { document_id } => {
             let shell_state =
                 shell_state
@@ -1530,8 +1516,6 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
         ShellCommand::ResetTabStackAreaStableKey { .. } => "ResetTabStackAreaStableKey",
         ShellCommand::LockTabStackAreaStableKey { .. } => "LockTabStackAreaStableKey",
         ShellCommand::ActivateDocumentTab { .. } => "ActivateDocumentTab",
-        ShellCommand::CloseDocumentTab { .. } => "CloseDocumentTab",
-        ShellCommand::SaveDocumentTab { .. } => "SaveDocumentTab",
         ShellCommand::SelectEditorDefinitionDocument { .. } => "SelectEditorDefinitionDocument",
         ShellCommand::DuplicateSelectedEditorDefinition => "DuplicateSelectedEditorDefinition",
         ShellCommand::RenameSelectedEditorDefinition { .. } => "RenameSelectedEditorDefinition",
@@ -2053,14 +2037,7 @@ fn save_scene_to_default_path(
 ) -> Result<(), EditorMutationError> {
     ensure_composition_save_allowed(app, shell_state)?;
     let path = default_scene_file_path();
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|_| {
-            EditorMutationError::runtime_rejected("failed to create editor scene folder")
-        })?;
-    }
-
-    write_scene_file(&path, app.runtime())
-        .map_err(|_| EditorMutationError::runtime_rejected("failed to save editor scene"))?;
+    app.save_scene_persistence_to_path(&path)?;
     let retained_path = retained_change_log_path_for_scene(&path);
     let composition_root =
         default_composition_layout_root_for_profile(shell_state.active_workspace_profile_id());
@@ -2119,13 +2096,7 @@ fn load_scene_from_default_path(
         return Ok(());
     }
 
-    {
-        let runtime = app.runtime_mut();
-        runtime.prepare_for_scene_load();
-        register_mvp_component_types(runtime);
-    }
-
-    let migration = match load_scene_file_into_runtime_classified(&path, app.runtime_mut()) {
+    let migration = match app.load_scene_persistence_from_path(&path) {
         Ok(migration) => migration,
         Err(class) => {
             app.append_console_line(format!(
@@ -2148,7 +2119,6 @@ fn load_scene_from_default_path(
     } else {
         None
     };
-    bootstrap_mvp_scene_if_empty(app.runtime_mut())?;
     app.reset_transient_editor_ui_state();
     app.runtime_mut()
         .record_workflow_event(editor_core::WorkflowEventKind::SceneLoaded {

@@ -783,13 +783,12 @@ impl RunenwerkEditorRuntime {
         &mut self,
         run: impl FnOnce(&mut editor_scene::SceneCommandContext<'_>) -> R,
     ) -> R {
-        let session = &mut self.session;
         let mut scene_runtime = RunenwerkEditorSceneRuntime::new(
             &mut self.scene_realities.authored,
             &mut self.scene_realities.instantiated,
             &mut self.scene_realities.identities,
         );
-        let mut context = editor_scene::SceneCommandContext::new(session, &mut scene_runtime);
+        let mut context = editor_scene::SceneCommandContext::new(&mut scene_runtime);
         run(&mut context)
     }
 

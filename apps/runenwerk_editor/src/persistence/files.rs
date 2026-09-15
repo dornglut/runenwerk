@@ -11,16 +11,21 @@ use editor_persistence::{
 use crate::editor_runtime::RunenwerkEditorRuntime;
 use crate::persistence::{apply_formed_scene_to_runtime, scene_file_from_runtime};
 
-pub fn write_scene_file(path: &Path, runtime: &RunenwerkEditorRuntime) -> Result<()> {
-    let scene_file = scene_file_from_runtime(runtime);
-    let normalized = normalize_scene_file(scene_file)
+pub fn normalized_scene_file_from_runtime(
+    runtime: &RunenwerkEditorRuntime,
+) -> std::result::Result<SceneFileV2, editor_persistence::SceneNormalizationError> {
+    let normalized = normalize_scene_file(scene_file_from_runtime(runtime))?;
+    Ok(form_scene_for_runtime(normalized).into_scene_file())
+}
+
+pub fn write_scene_file(path: &Path, runtime: &RunenwerkEditorRuntime) -> Result<SceneFileV2> {
+    let scene_file = normalized_scene_file_from_runtime(runtime)
         .map_err(|error| anyhow::Error::msg(error.as_static_str()))
         .context("failed to normalize runtime scene before save")?;
-    let formed = form_scene_for_runtime(normalized);
-    let scene_file = formed.into_scene_file();
     let ron = encode_ron_pretty(&scene_file).context("failed to encode SceneFileV2 as RON")?;
     std::fs::write(path, ron)
-        .with_context(|| format!("failed to write scene file: {}", path.display()))
+        .with_context(|| format!("failed to write scene file: {}", path.display()))?;
+    Ok(scene_file)
 }
 
 pub fn read_scene_file(path: &Path) -> Result<SceneLoadResult> {
@@ -40,22 +45,27 @@ pub fn load_scene_file_into_runtime(
     runtime: &mut RunenwerkEditorRuntime,
 ) -> Result<Option<editor_core::MigrationPathId>> {
     load_scene_file_into_runtime_classified(path, runtime)
+        .map(|(migration, _)| migration)
         .map_err(|class| anyhow::Error::msg(classification_message(class)))
 }
 
 pub fn load_scene_file_into_runtime_classified(
     path: &Path,
     runtime: &mut RunenwerkEditorRuntime,
-) -> std::result::Result<Option<editor_core::MigrationPathId>, editor_core::MigrationFailureClass> {
+) -> std::result::Result<
+    (Option<editor_core::MigrationPathId>, SceneFileV2),
+    editor_core::MigrationFailureClass,
+> {
     let loaded =
         read_scene_file(path).map_err(|_| editor_core::MigrationFailureClass::DecodeFailure)?;
     let normalized = normalize_scene_file(loaded.scene)
         .map_err(|_| editor_core::MigrationFailureClass::NormalizationFailure)?;
     let formed = form_scene_for_runtime(normalized);
+    let persisted_scene = formed.clone().into_scene_file();
     let migration = scene_migration_path_id(loaded.migration);
     apply_formed_scene_to_runtime(runtime, &formed)
         .map_err(|_| editor_core::MigrationFailureClass::ApplyFailure)?;
-    Ok(migration)
+    Ok((migration, persisted_scene))
 }
 
 fn scene_migration_path_id(path: SceneMigrationPath) -> Option<editor_core::MigrationPathId> {

@@ -275,20 +275,23 @@ fn collect_editor_window_close_intents(
             .find(|entry| entry.binding.native_window_id == native_window_id)
             .map(|entry| entry.target_id);
         if native_window_id == NativeWindowId::primary() {
-            let has_dirty_documents = host
-                .app
-                .runtime()
-                .session()
-                .documents()
-                .any(|document| document.is_dirty);
+            let close_denial_message = match host.app.scene_persistence_is_dirty() {
+                Ok(false) => None,
+                Ok(true) => Some(
+                    "Save or explicitly discard scene changes before closing the primary window.",
+                ),
+                Err(_) => Some(
+                    "Resolve the scene persistence projection before closing the primary window.",
+                ),
+            };
             if let Some(record) = windows.record_mut(native_window_id) {
-                if has_dirty_documents {
+                if let Some(message) = close_denial_message {
                     record.veto_close();
                     transitions.diagnostics.push(Record::error(
                         Code::WindowDirtyQuitDenied,
                         Stage::Policy,
                         Subject::General("editor-quit".to_owned()),
-                        "Save or explicitly discard dirty documents before closing the primary window.",
+                        message,
                     ));
                 } else {
                     record.approve_close();
@@ -416,6 +419,8 @@ fn record_rejection(
 mod tests {
     use super::*;
     use engine::runtime::WindowState;
+
+    use crate::editor_runtime::{bootstrap_mvp_scene_if_empty, register_mvp_component_types};
 
     fn unit_from_multi_unit_stack(host: &EditorHostResource) -> ui_composition::MountedUnitId {
         host.shell_state
@@ -701,21 +706,16 @@ mod tests {
     }
 
     #[test]
-    fn primary_close_vetoes_while_any_document_is_dirty() {
+    fn primary_close_vetoes_while_scene_persistence_is_dirty() {
         let mut host = EditorHostResource::default();
-        let document_id = host
-            .app
-            .runtime()
-            .session()
-            .documents()
-            .next()
-            .expect("default editor session should contain a document")
-            .id;
-        host.app
-            .runtime_mut()
-            .session_mut()
-            .mark_document_dirty(document_id)
-            .unwrap();
+        register_mvp_component_types(host.app.runtime_mut());
+        bootstrap_mvp_scene_if_empty(host.app.runtime_mut())
+            .expect("MVP scene bootstrap should succeed");
+        assert!(
+            host.app
+                .scene_persistence_is_dirty()
+                .expect("scene persistence projection should normalize")
+        );
         let mut transitions = EditorCompositionTransitionRuntimeResource::default();
         let mut windows =
             WindowStateRegistryResource::from_legacy(&WindowState::windowed("Runenwerk"));
@@ -740,6 +740,45 @@ mod tests {
                 .diagnostics()
                 .iter()
                 .any(|diagnostic| diagnostic.code() == Code::WindowDirtyQuitDenied)
+        );
+    }
+
+    #[test]
+    fn primary_close_is_admitted_when_scene_persistence_is_clean() {
+        let mut host = EditorHostResource::default();
+        assert!(
+            !host
+                .app
+                .scene_persistence_is_dirty()
+                .expect("fresh scene persistence projection should normalize")
+        );
+        let mut transitions = EditorCompositionTransitionRuntimeResource::default();
+        let mut windows =
+            WindowStateRegistryResource::from_legacy(&WindowState::windowed("Runenwerk"));
+        let mut surfaces = RenderSurfaceRegistryResource::default();
+        windows
+            .record_mut(NativeWindowId::primary())
+            .unwrap()
+            .receive_close_intent();
+
+        sync_editor_composition_transitions(
+            &mut host,
+            &mut transitions,
+            &mut windows,
+            &mut surfaces,
+        );
+
+        let primary = windows.record(NativeWindowId::primary()).unwrap();
+        assert!(primary.close_requested);
+        assert_eq!(
+            primary.lifecycle_state,
+            NativeWindowLifecycleState::CloseApproved
+        );
+        assert!(
+            transitions
+                .diagnostics()
+                .iter()
+                .all(|diagnostic| diagnostic.code() != Code::WindowDirtyQuitDenied)
         );
     }
 }

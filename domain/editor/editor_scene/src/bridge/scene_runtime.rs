@@ -127,24 +127,12 @@ pub trait SceneRuntime {
 }
 
 pub struct SceneCommandContext<'a> {
-    session: &'a mut editor_core::EditorSession,
     runtime: &'a mut dyn SceneRuntime,
 }
 
 impl<'a> SceneCommandContext<'a> {
-    pub fn new(
-        session: &'a mut editor_core::EditorSession,
-        runtime: &'a mut dyn SceneRuntime,
-    ) -> Self {
-        Self { session, runtime }
-    }
-
-    pub fn session(&self) -> &editor_core::EditorSession {
-        self.session
-    }
-
-    pub fn session_mut(&mut self) -> &mut editor_core::EditorSession {
-        self.session
+    pub fn new(runtime: &'a mut dyn SceneRuntime) -> Self {
+        Self { runtime }
     }
 
     pub fn runtime(&self) -> &dyn SceneRuntime {
@@ -156,14 +144,6 @@ impl<'a> SceneCommandContext<'a> {
     }
 }
 
-impl<'a> editor_core::CommandContext for SceneCommandContext<'a> {
+impl editor_core::CommandContext for SceneCommandContext<'_> {
     type Error = editor_core::EditorMutationError;
-
-    fn mark_document_dirty(
-        &mut self,
-        document_id: editor_core::DocumentId,
-        is_dirty: bool,
-    ) -> Result<(), Self::Error> {
-        self.session.set_document_dirty(document_id, is_dirty)
-    }
 }
