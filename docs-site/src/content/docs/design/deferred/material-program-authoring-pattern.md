@@ -7,7 +7,7 @@ layer: design
 canonical: false
 last_reviewed: 2026-07-08
 related:
-  - ../active/domain-authoring-source-and-program-pattern.md
+  - ../superseded/domain-authoring-source-and-program-pattern.md
   - ../superseded/runenwerk-domain-workbench-north-star.md
   - ../../guidelines/domain-program-architecture-pattern.md
 ---

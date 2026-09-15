@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
 
+mod doc_relations;
+
 use std::{
     env,
     fmt::Write as _,
@@ -185,6 +187,8 @@ fn format_validation_timings(timings: &[ValidationTiming], total: Duration) -> S
 }
 
 fn validate_docs(root: &Path) -> Result<(), String> {
+    doc_relations::validate(root)?;
+
     let script = "tools/docs/validate_docs.py";
     let candidates: &[(&str, &[&str])] = &[
         ("python3", &[script]),
@@ -319,6 +323,7 @@ fn audit_repository(root: &Path) -> Result<(), String> {
 
     validate_sdf_retirement(root)?;
     validate_sdf_gitlinks(root)?;
+    doc_relations::validate(root)?;
 
     eprintln!("> repository audit passed");
     Ok(())

@@ -1,6 +1,7 @@
 # Runenwerk xtask
 
-This standalone, dependency-free Rust tool owns repository validation.
+This standalone Rust tool owns repository validation. Its validation dependencies
+remain local to this tooling workspace and do not affect the product workspace.
 
 It is intentionally outside the product workspace so adding or changing repository tooling cannot rewrite the product `Cargo.lock`.
 

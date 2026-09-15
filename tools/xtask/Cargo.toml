@@ -6,3 +6,6 @@ edition = "2024"
 license = "GPL-3.0-only"
 
 [workspace]
+
+[dependencies]
+yaml_serde = "0.10"

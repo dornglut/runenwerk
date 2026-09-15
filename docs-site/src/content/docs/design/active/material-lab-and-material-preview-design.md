@@ -11,7 +11,6 @@ related_designs:
   - ../implemented/render-product-surface-foundation-bundle-design.md
 related_roadmaps:
   - ../../apps/runenwerk-editor/roadmap.md
-  - ../../workspace/roadmap-items.yaml
 ---
 
 # Material Lab And Material Preview Design

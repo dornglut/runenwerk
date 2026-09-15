@@ -9,12 +9,8 @@ last_reviewed: 2026-09-12
 related:
   - ./architecture-governance-review.md
   - ./design-implementation-triage.md
-  - ./roadmap-items.yaml
-  - ./roadmap-archive.yaml
-  - ./roadmap-deferred.yaml
   - ./roadmap-decision-register.md
   - ./roadmap-index.md
-  - ./diagrams/value-weighted-dependency-roadmap.puml
 ---
 
 # Roadmap Planning Methods

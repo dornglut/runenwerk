@@ -8,8 +8,6 @@ canonical: true
 last_reviewed: 2026-09-11
 related_docs:
   - ./start-here.md
-  - ./engineering-workflow.md
-  - ./authority-model.md
 ---
 
 # Documentation Structure
@@ -25,6 +23,16 @@ docs-site/src/content/docs
 ```
 
 When they overlap, the docs-site document owns the detail. Root files summarize and link; they do not duplicate full policy or design.
+
+## Relation metadata
+
+Relations on maintained documents describe current repository navigation and must
+resolve. Historical report and archive relations preserve point-in-time provenance
+and may retain truthful paths that no longer resolve. Report `README.md` and other
+maintained index pages remain current navigation surfaces. `superseded_by` and
+`replaced_by` always point to a current successor, including when their source is
+historical. Nested closeout evidence is provenance rather than live navigation; do
+not add compatibility stubs solely to preserve stale historical paths.
 
 ## Root entrypoints
 

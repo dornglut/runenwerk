@@ -15,8 +15,6 @@ related_designs:
   - ../design/accepted/execution-fabric-and-product-jobs-design.md
   - ../design/accepted/sdf-product-renderer-and-gpu-residency-design.md
   - ../design/accepted/sdf-first-production-capability-map.md
-  - ../design/accepted/runenecs-extraction-boundary-design.md
-  - ../design/accepted/runenecs-boundary-repair-execution-plan.md
 related_roadmaps:
   - ./planning/roadmap.md
   - ../apps/runenwerk-editor/roadmap.md

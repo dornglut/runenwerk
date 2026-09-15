@@ -28,8 +28,6 @@ related_reports:
 related:
   - ../../domain/world-sdf/README.md
   - ../../domain/world-ops/README.md
-  - ../../domain/spatial/README.md
-  - ../../domain/chunking/README.md
 ---
 
 # Editor Asset Pipeline and Content Workflow Design
