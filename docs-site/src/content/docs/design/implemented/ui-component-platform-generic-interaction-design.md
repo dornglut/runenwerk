@@ -61,4 +61,4 @@ The runtime proof records no-bypass counters/evidence for these boundaries.
 
 ## Evidence
 
-Current `ui_controls` interaction declarations, `ui_input` normalized facts, `ui_runtime/src/input/generic_interaction/`, editor proof-host integration, focused interaction replay/parity tests, and static-mount tests establish implementation parity. Retained closeouts preserve delivery history.
+Current `ui_controls` interaction declarations, `ui_input` normalized facts, `ui_runtime/src/input/generic_interaction/`, editor proof-host integration, focused interaction replay/parity tests, and static-mount tests establish implementation parity. Delivery history remains available in Git history.
