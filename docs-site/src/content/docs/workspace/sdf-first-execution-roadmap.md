@@ -38,8 +38,7 @@ Current authority is intentionally split:
 - GitHub issues and the Engineering Portfolio own live work state, activation,
   priority, owners, and blockers;
 - accepted ADRs and designs own durable architecture and semantic contracts;
-- pull requests own delivery and validation evidence;
-- the closeouts linked below own detailed point-in-time completion evidence.
+- pull requests own delivery and validation evidence.
 
 The former detailed phase roadmap remains available in Git history. It must not be
 used as a current priority ledger or to reactivate retired scheduler or messaging
@@ -113,16 +112,11 @@ publication barriers, the former standalone scheduler package, or the former
 ECS/runtime convergence model describe what was implemented and validated then.
 They do **not** define current RunenECS architecture.
 
-Do not rewrite retained closeouts merely to make historical terminology look current.
-Do not infer from them that access conflicts create order, that application publication
-belongs to RunenECS, or that the retired generic scheduler/messaging surfaces should be
-restored.
+Do not infer from that historical evidence that access conflicts create order, that
+application publication belongs to RunenECS, or that the retired generic
+scheduler/messaging surfaces should be restored.
 
 ## Completion Evidence
 
-Detailed phase evidence remains in the retained closeouts:
-
-Detailed phase evidence remains in Git history.
-
-Those reports are historical evidence. Git history retains the original detailed phase
-roadmap and its exact contemporary wording.
+The original phase closeouts and detailed phase roadmap remain available in Git
+history, including their exact contemporary wording.
