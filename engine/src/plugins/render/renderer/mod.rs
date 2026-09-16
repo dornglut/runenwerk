@@ -913,7 +913,14 @@ impl Gfx {
         let mut timings = GfxFrameTimings::default();
         self.renderer
             .begin_frame_gpu_observation(self.ctx.context());
-        if !deterministic_contributions.is_empty()
+        let surface_contributions = deterministic_contributions
+            .iter()
+            .filter(|contribution| {
+                contribution.render_surface_id == prepared_frame.surface.render_surface_id
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        if !surface_contributions.is_empty()
             && self.ctx.context().execution_stats().in_flight_submissions() > 0
         {
             return Ok(timings);
@@ -928,7 +935,7 @@ impl Gfx {
                 .context()
                 .device_facts()
                 .is_enabled(runen_gpu::GpuCapabilityFeature::TimestampQuery),
-            !deterministic_contributions.is_empty(),
+            !surface_contributions.is_empty(),
         );
         let context = self.ctx.context();
         timings.renderer = self.renderer.render(
@@ -937,7 +944,7 @@ impl Gfx {
             acquired.default_view(),
             (acquired_extent.width(), acquired_extent.height()),
             prepared_frame,
-            deterministic_contributions,
+            &surface_contributions,
             shader_registry,
             compiled_flows,
             ui_rect_shader,

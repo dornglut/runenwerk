@@ -154,9 +154,16 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
         )
     };
 
-    let render_was_skipped = matches!(&render_result, Ok(timings) if !timings.submitted);
     let result = match render_result {
-        Ok(_) if render_was_skipped => Ok(()),
+        Ok(timings) if !timings.submitted => {
+            world.resource_mut::<DebugMetricsState>()?.last_timings = Some(timings);
+            tracing::debug!(
+                frame = prepared_frame.context.frame_index,
+                surface = render_surface_id.raw(),
+                "deterministic surface submission deferred while mutable intermediates are in flight"
+            );
+            Ok(())
+        }
         Ok(timings) => {
             world.resource_mut::<DebugMetricsState>()?.last_timings = Some(timings);
 
@@ -428,23 +435,19 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
         }
     };
 
-    let result = if render_was_skipped {
-        result
-    } else {
-        result.and_then(|_| {
-            render_additional_surfaces(
-                &mut world,
-                &additional_prepared_frames,
-                &deterministic_contributions,
-                &mut gfx,
-                &mut shader_registry,
-                &ui_font_atlas,
-                preflight_config,
-                &debug_control,
-                &debug_config,
-            )
-        })
-    };
+    let result = result.and_then(|_| {
+        render_additional_surfaces(
+            &mut world,
+            &additional_prepared_frames,
+            &deterministic_contributions,
+            &mut gfx,
+            &mut shader_registry,
+            &ui_font_atlas,
+            preflight_config,
+            &debug_control,
+            &debug_config,
+        )
+    });
 
     world.insert_resource(shader_registry);
     world.insert_resource(gfx);
@@ -512,19 +515,30 @@ fn render_additional_surfaces(
             debug_control,
             debug_config,
         );
-        if let Err(err) = render_result {
-            if let Some(surface_error) = err.downcast_ref::<RenderSurfaceAcquireError>() {
-                match surface_error {
-                    RenderSurfaceAcquireError::Lost | RenderSurfaceAcquireError::Outdated => {
-                        gfx.resize(render_surface_id, target_w, target_h);
+        match render_result {
+            Ok(timings) if !timings.submitted => {
+                tracing::debug!(
+                    frame = prepared_frame.context.frame_index,
+                    surface = render_surface_id.raw(),
+                    "surface submission deferred while its deterministic intermediates are in flight"
+                );
+            }
+            Ok(_) => {}
+            Err(err) => {
+                if let Some(surface_error) = err.downcast_ref::<RenderSurfaceAcquireError>() {
+                    match surface_error {
+                        RenderSurfaceAcquireError::Lost | RenderSurfaceAcquireError::Outdated => {
+                            gfx.resize(render_surface_id, target_w, target_h);
+                        }
+                        RenderSurfaceAcquireError::Timeout
+                        | RenderSurfaceAcquireError::Validation => {}
                     }
-                    RenderSurfaceAcquireError::Timeout | RenderSurfaceAcquireError::Validation => {}
+                } else {
+                    return Err(anyhow!(
+                        "render backend execution failed for surface {}: {err:#}",
+                        render_surface_id.raw()
+                    ));
                 }
-            } else {
-                return Err(anyhow!(
-                    "render backend execution failed for surface {}: {err:#}",
-                    render_surface_id.raw()
-                ));
             }
         }
     }

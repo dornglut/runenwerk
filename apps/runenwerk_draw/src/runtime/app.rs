@@ -14,7 +14,6 @@ const WINDOW_TITLE: &str = "Runenwerk Draw";
 const DRAW_MAIN_FLOW_ID: &str = "runenwerk.draw.main";
 const DRAW_SURFACE_CLEAR_PASS_ID: &str = "runenwerk.draw.surface.clear";
 const DRAW_MAIN_UI_PASS_ID: &str = "runenwerk.draw.main.ui";
-const DRAW_MAIN_PRESENT_PASS_ID: &str = "runenwerk.draw.main.present";
 
 fn configure_app(app: &mut App) -> Result<()> {
     app.set_title(WINDOW_TITLE);
@@ -38,10 +37,6 @@ fn register_draw_render_flow(app: &mut App) -> Result<()> {
         .finish()
         .builtin_ui_composite_pass(DRAW_MAIN_UI_PASS_ID)?
         .main_surface_only()
-        .finish()
-        .present_pass(DRAW_MAIN_PRESENT_PASS_ID)?
-        .main_surface_only()
-        .surface_color()?
         .finish()
         .validate()
         .expect("drawing render flow should validate");

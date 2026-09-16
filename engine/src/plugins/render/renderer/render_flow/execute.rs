@@ -740,10 +740,11 @@ impl Renderer {
                     anyhow::anyhow!("deterministic render admission failed: {error}")
                 })?;
             let prepared =
-                crate::plugins::render::deterministic_execution::prepare_deterministic_render_with_cache(
+                crate::plugins::render::deterministic_execution::prepare_deterministic_render_with_cache_in_scope(
                     admitted,
                     context,
                     &mut self.deterministic_resources,
+                    contribution.producer_id.raw(),
                 )
                 .map_err(|error| {
                     anyhow::anyhow!("deterministic render preparation failed: {error}")

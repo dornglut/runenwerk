@@ -67,22 +67,24 @@ enum DeterministicBufferKind {
 ///
 /// RunenGPU's bind-group realization retains the resource dependencies of each realized binding.
 /// Rebuilding these identities for every interactive frame would therefore grow the authoritative
-/// realization registry without bound. The cache is scoped to one renderer/context generation;
-/// a descriptor change, such as a resize, deliberately allocates a replacement identity.
+/// realization registry without bound. The cache is scoped to one renderer/context generation and
+/// one deterministic producer; a descriptor change, such as a resize, deliberately allocates a
+/// replacement identity.
 #[derive(Debug, Default)]
 pub(crate) struct DeterministicResourceCache {
     identities: GpuWorkResourceIdAllocator,
-    buffers: BTreeMap<(usize, DeterministicBufferKind), GpuBufferHandle>,
+    buffers: BTreeMap<(u64, usize, DeterministicBufferKind), GpuBufferHandle>,
 }
 
 impl DeterministicResourceCache {
     fn buffer(
         &mut self,
+        scope: u64,
         output_index: usize,
         kind: DeterministicBufferKind,
         descriptor: GpuBufferDescriptor,
     ) -> Result<GpuBufferHandle, RenderDeterministicLoweringError> {
-        let key = (output_index, kind);
+        let key = (scope, output_index, kind);
         if let Some(existing) = self.buffers.get(&key)
             && existing.descriptor() == &descriptor
         {
@@ -742,11 +744,22 @@ pub(crate) fn prepare_deterministic_render_with_cache(
     context: &GpuContext,
     resources: &mut DeterministicResourceCache,
 ) -> Result<PreparedDeterministicRender, RenderDeterministicExecutionError> {
+    prepare_deterministic_render_with_cache_in_scope(admitted, context, resources, 0)
+}
+
+/// Prepare one composition using a producer-scoped resource cache namespace.
+pub(crate) fn prepare_deterministic_render_with_cache_in_scope(
+    admitted: AdmittedDeterministicRender,
+    context: &GpuContext,
+    resources: &mut DeterministicResourceCache,
+    scope: u64,
+) -> Result<PreparedDeterministicRender, RenderDeterministicExecutionError> {
     let lowered = lower_deterministic_render(
         &admitted,
         context,
         DeterministicObservationIntent::Ordinary,
         resources,
+        scope,
     )?;
     debug_assert!(lowered.verification_readbacks.is_empty());
     Ok(PreparedDeterministicRender {
@@ -792,6 +805,7 @@ pub(super) async fn submit_deterministic_render_for_verification(
         context,
         DeterministicObservationIntent::Verify,
         &mut DeterministicResourceCache::default(),
+        0,
     )?;
     let verification_readbacks = lowered.verification_readbacks;
     let submitted = submit_lowered_deterministic_render(
@@ -851,6 +865,7 @@ fn lower_deterministic_render(
     context: &GpuContext,
     intent: DeterministicObservationIntent,
     resources: &mut DeterministicResourceCache,
+    scope: u64,
 ) -> Result<LoweredDeterministicRender, RenderDeterministicLoweringError> {
     let admitted = maintained.admitted();
     if admitted.environment().affinity() != context.affinity() {
@@ -899,6 +914,7 @@ fn lower_deterministic_render(
             context,
             resources,
             intent,
+            scope,
         )?;
         fragments.push(lowered.fragment);
         if let Some(readbacks) = lowered.verification_readbacks {
@@ -948,6 +964,7 @@ fn lower_output(
     context: &GpuContext,
     resources: &mut DeterministicResourceCache,
     intent: DeterministicObservationIntent,
+    scope: u64,
 ) -> Result<LoweredDeterministicOutput, RenderDeterministicLoweringError> {
     let admitted_output = admitted
         .outputs()
@@ -992,6 +1009,7 @@ fn lower_output(
     .map_err(|error| gpu_authoring("semantic-input preparation", error))?;
 
     let input = resources.buffer(
+        scope,
         output_index,
         DeterministicBufferKind::Input,
         GpuBufferDescriptor::ordinary_owned(
@@ -1005,6 +1023,7 @@ fn lower_output(
         .map_err(|error| gpu_authoring("input-buffer descriptor", error))?,
     )?;
     let canonical_output = resources.buffer(
+        scope,
         output_index,
         DeterministicBufferKind::CanonicalOutput,
         GpuBufferDescriptor::ordinary_owned(
@@ -1022,6 +1041,7 @@ fn lower_output(
         .map_err(|error| gpu_authoring("canonical-output descriptor", error))?,
     )?;
     let definedness = resources.buffer(
+        scope,
         output_index,
         DeterministicBufferKind::Definedness,
         GpuBufferDescriptor::ordinary_owned(
@@ -1039,6 +1059,7 @@ fn lower_output(
         .map_err(|error| gpu_authoring("definedness descriptor", error))?,
     )?;
     let status = resources.buffer(
+        scope,
         output_index,
         DeterministicBufferKind::Status,
         GpuBufferDescriptor::ordinary_owned(
@@ -1662,6 +1683,35 @@ fn gpu_authoring(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn cache_descriptor(byte_len: u64) -> GpuBufferDescriptor {
+        GpuBufferDescriptor::ordinary_owned(
+            "deterministic cache test buffer",
+            GpuResourceLifetime::Transient,
+            GpuReconstruction::SourceBacked,
+            byte_len,
+            [GpuBufferUsage::Storage],
+            GpuBufferInitialization::Uninitialized,
+        )
+        .expect("deterministic cache test descriptor should be valid")
+    }
+
+    #[test]
+    fn deterministic_cache_reuses_matching_descriptors_and_replaces_resizes() {
+        let mut cache = DeterministicResourceCache::default();
+        let first = cache
+            .buffer(0, 0, DeterministicBufferKind::Input, cache_descriptor(16))
+            .expect("first deterministic buffer should allocate");
+        let same = cache
+            .buffer(0, 0, DeterministicBufferKind::Input, cache_descriptor(16))
+            .expect("matching deterministic buffer should reuse");
+        assert_eq!(first.diagnostic_identity(), same.diagnostic_identity());
+
+        let resized = cache
+            .buffer(0, 0, DeterministicBufferKind::Input, cache_descriptor(32))
+            .expect("changed descriptor should allocate a replacement");
+        assert_ne!(first.diagnostic_identity(), resized.diagnostic_identity());
+    }
 
     #[test]
     fn maintained_wgsl_forms_a_canonical_compute_pipeline() {

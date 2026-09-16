@@ -41,6 +41,11 @@ pub struct RenderDeterministicFrameContribution {
     pub target_key: RenderDynamicTextureTargetKey,
 }
 
+/// Frame-scoped semantic contributions keyed by their owning producer.
+///
+/// Multiple surfaces/producers may be present in one frame. The deterministic lowerer gives each
+/// producer its own reusable physical-resource namespace, while repeated publication by the same
+/// producer replaces only that producer's contribution.
 #[derive(Debug, Default, runen_ecs::Component, runen_ecs::Resource)]
 pub struct RenderDeterministicFrameContributionResource {
     contributions: BTreeMap<RenderFrameProducerId, RenderDeterministicFrameContribution>,
@@ -63,6 +68,73 @@ impl RenderDeterministicFrameContributionResource {
         std::mem::take(&mut self.contributions)
             .into_values()
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod deterministic_contribution_tests {
+    use super::*;
+    use crate::plugins::render::request::{
+        RenderObservationSpec, RenderOutputSpec, RenderOutputValue, RenderProbeObservation,
+        RenderRadiometricRepresentation, RenderRequestedOutput, RenderResultTopology,
+        RenderSamplingSupport, RenderSemanticTolerance,
+    };
+    use crate::plugins::render::scene::RenderSceneStore;
+    use crate::plugins::render::space_time::{
+        RenderAffineTransform3, RenderTimeInterval, RenderTimePoint,
+    };
+
+    fn producer(raw: u64) -> RenderFrameProducerId {
+        RenderFrameProducerId::try_from_raw(raw).expect("test producer id should be nonzero")
+    }
+
+    fn contribution(producer_id: RenderFrameProducerId) -> RenderDeterministicFrameContribution {
+        let shutter = RenderTimeInterval::instant(
+            RenderTimePoint::from_seconds(0.0).expect("test time should be finite"),
+        );
+        let observation = RenderObservationSpec::Probe(
+            RenderProbeObservation::new(
+                RenderAffineTransform3::identity(),
+                shutter,
+                RenderSamplingSupport::ideal_ray(),
+            )
+            .expect("test observation should be valid"),
+        );
+        let output = RenderOutputSpec::new(
+            RenderOutputValue::Radiance {
+                representation: RenderRadiometricRepresentation::spectral_at_wavelength_meters(
+                    550.0e-9,
+                )
+                .expect("test radiance representation should be valid"),
+            },
+            RenderResultTopology::scalar(),
+            RenderSemanticTolerance::absolute(1.0e-4).expect("test tolerance should be valid"),
+        )
+        .expect("test output should be valid");
+        RenderDeterministicFrameContribution {
+            producer_id,
+            render_surface_id: RenderSurfaceId::primary(),
+            scene: RenderSceneStore::new().snapshot(),
+            request: RenderRequest::new(
+                shutter,
+                vec![observation],
+                vec![RenderRequestedOutput::new(0, output)],
+            )
+            .expect("test request should be valid"),
+            semantic_inputs: Vec::new(),
+            availability: Vec::new(),
+            output_index: 0,
+            target_key: RenderDynamicTextureTargetKey::new("test", "radiance"),
+        }
+    }
+
+    #[test]
+    fn deterministic_contributions_replace_by_producer_without_cross_surface_aliasing() {
+        let mut resource = RenderDeterministicFrameContributionResource::default();
+        resource.replace(contribution(producer(1)));
+        resource.replace(contribution(producer(2)));
+        resource.replace(contribution(producer(1)));
+        assert_eq!(resource.take_all().len(), 2);
     }
 }
 
