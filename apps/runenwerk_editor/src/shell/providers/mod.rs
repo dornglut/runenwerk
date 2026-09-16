@@ -1318,6 +1318,12 @@ fn workspace_allows_document(
     {
         return true;
     }
+    if request.matches_any_stable_key(&[
+        TEXTURE_VIEWER_2D_SURFACE_KEY,
+        TEXTURE_VIEWER_3D_SURFACE_KEY,
+    ]) {
+        return registry.profile(request.workspace_profile_id).is_some();
+    }
     let Some(document_kind) = request.document_context.resolved_document_kind() else {
         return false;
     };
