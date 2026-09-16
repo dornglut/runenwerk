@@ -12,9 +12,6 @@ related_designs:
   - ../../design/active/runenwerk-draw-pen-first-radial-tablet-ux-design.md
 related_roadmaps:
   - ./roadmap.md
-related_reports:
-  - ../../reports/closeouts/runtime-product-job-rpj4-rpj6/closeout.md
-  - ../../reports/closeouts/runtime-product-job-rpj7a-cache-policy/closeout.md
 ---
 
 # Runenwerk Draw

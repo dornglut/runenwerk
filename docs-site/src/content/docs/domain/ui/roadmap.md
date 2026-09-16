@@ -12,7 +12,6 @@ related:
   - ../../design/active/runenwerk-ui-story-driven-golden-workflow-design.md
   - ../../design/implemented/ui-program-architecture.md
   - ../../design/implemented/ui-definition-formation-foundation-design.md
-  - ../../reports/audits/editor-ui-priority-code-audit-2026-05-05.md
   - ../../design/implemented/editor-self-authoring-and-final-ui-design.md
   - ../../design/implemented/editor-ui-runtime-v2-and-interaction-formation-design.md
   - ../../design/accepted/runenwerk-editor-coordination-semantic-model.md

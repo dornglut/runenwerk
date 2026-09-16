@@ -14,7 +14,6 @@ related_docs:
   - ../design/archived/live-uiplugin-runtime-full-cutover-plan.md
   - ../domain/ui/roadmap.md
   - ../reports/investigations/live-uiplugin-runtime-current-state-investigation.md
-  - ../reports/closeouts/pt-ui-runtime-platform-011-closeout.md
 ---
 
 # Live UiPlugin Runtime Platform Architecture

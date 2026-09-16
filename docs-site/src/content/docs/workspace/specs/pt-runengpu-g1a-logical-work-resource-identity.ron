@@ -18,9 +18,6 @@ PhaseImplementationSpec(
         "docs-site/src/content/docs/design/active/runengpu-architecture-design.md",
         "docs-site/src/content/docs/design/active/runenrender-decomposition-design.md",
         "docs-site/src/content/docs/design/active/runenrender-internal-decomposition-execution-plan.md",
-        "docs-site/src/content/docs/reports/investigations/runengpu-render-s0-inventory.md",
-        "docs-site/src/content/docs/reports/investigations/runengpu-render-s0-file-disposition.md",
-        "docs-site/src/content/docs/reports/investigations/runengpu-render-s0-identity-consumer-lifecycle.md",
         "docs-site/src/content/docs/workspace/planning/roadmap.md",
     ],
 

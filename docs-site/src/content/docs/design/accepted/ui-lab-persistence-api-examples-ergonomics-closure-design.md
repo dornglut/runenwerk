@@ -19,10 +19,6 @@ related_designs:
   - ./ui-lab-runtime-evidence-platform-closure-design.md
   - ./ui-lab-command-surface-source-truth-closure-design.md
   - ./ui-lab-direct-manipulation-ux-closure-design.md
-related_reports:
-  - ../../reports/closeouts/pm-ui-lab-005-persistence-project-io-diff-apply-and-rollback/closeout.md
-  - ../../reports/closeouts/pm-ui-lab-007-api-docs-examples-and-runtime-proven-closeout/closeout.md
-  - ../../reports/closeouts/pm-ui-lab-perf-004-direct-manipulation-ux-closure/closeout.md
 related_roadmaps:
   - ../../domain/ui/roadmap.md
 ---

@@ -68,4 +68,4 @@ domain/ui/ui_controls/tests/control_accessibility_catalog_contract.rs
 
 ## Evidence
 
-Current source and focused contract/catalog tests exercise the implemented declaration vocabulary and its read-only inspection projection. Historical phase-planning and delivery evidence remains available in Git history and retained reports; it is not current implementation authority.
+Current source and focused contract/catalog tests exercise the implemented declaration vocabulary and its read-only inspection projection. Historical phase-planning and delivery evidence remains available in Git history; it is not current implementation authority.

@@ -213,8 +213,7 @@ The doctrine can move toward acceptance with these decisions:
 ## Acceptance Gate Notes
 
 `PM-RENDER-GPU-001` remains design-only. The design-first implementation
-contract for `WR-082` lives at
-`docs-site/src/content/docs/reports/implementation-plans/wr-082-renderer-gpu-evidence-and-procedural-visuals-doctrine-acceptance/plan.md`.
+contract for `WR-082` is retained in Git history.
 
 No ADR is required while this doctrine preserves the accepted renderer/product
 boundary: the renderer owns execution contracts, derived GPU resources,

@@ -19,9 +19,6 @@ related_designs:
   - ../implemented/ui-lab-productization-design.md
   - ../implemented/editor-tool-suite-registry-and-workbench-host-design.md
   - ./runenwerk-editor-coordination-semantic-model.md
-related_reports:
-  - ../../reports/closeouts/pm-ui-lab-perf-001-governance-audit-doctrine-and-code-truth-matrix/closeout.md
-  - ../../reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/closeout.md
 related_roadmaps:
   - ../../domain/ui/roadmap.md
 ---

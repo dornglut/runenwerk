@@ -13,8 +13,6 @@ related:
   - ../../adr/accepted/0009-ui-interaction-formation-v2.md
   - ../../domain/ui/roadmap.md
   - ../../apps/runenwerk-editor/roadmap.md
-related_reports:
-  - ../../reports/closeouts/wr-025-interaction-v2-doctrine-repair/closeout.md
 ---
 
 # Editor UI Runtime V2 And Interaction Formation Design
@@ -114,7 +112,7 @@ NormalizedUiTemplate
 
 ## Completion Evidence
 
-The behavior-level doctrine repair and completion evidence is recorded in [WR-025 Interaction V2 Doctrine Repair Closeout](../../reports/closeouts/wr-025-interaction-v2-doctrine-repair/closeout.md). Current source/tests remain the authority for exact behavior.
+The behavior-level doctrine repair and completion evidence is retained in Git history. Current source/tests remain the authority for exact behavior.
 
 <!-- BEGIN RUNENWERK:UI_COMPONENT_PLATFORM:interaction-consumption -->
 ## Component Platform interaction consumption

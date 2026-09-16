@@ -24,7 +24,6 @@ PhaseImplementationSpec(
         "docs-site/src/content/docs/design/active/runengpu-g4-context-program-realization-design.md",
         "docs-site/src/content/docs/design/active/runengpu-g4c2-presentation-surface-binding-boundary.md",
         "docs-site/src/content/docs/design/active/runengpu-g5-execution-lifecycle-design.md",
-        "docs-site/src/content/docs/reports/investigations/runengpu-g5-execution-lifecycle-investigation.md",
         "docs-site/src/content/docs/workspace/planning/roadmap.md",
     ],
 

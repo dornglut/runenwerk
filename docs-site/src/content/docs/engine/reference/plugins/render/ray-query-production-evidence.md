@@ -22,10 +22,8 @@ portable baseline.
 
 - Accepted doctrine:
   `docs-site/src/content/docs/design/accepted/renderer-hardware-ray-query-and-hybrid-tracing-design.md`.
-- Capability/resource inspection:
-  `docs-site/src/content/docs/reports/closeouts/wr-073-renderer-ray-query-capability-and-acceleration-resources/closeout.md`.
-- Hybrid proof and fallback:
-  `docs-site/src/content/docs/reports/closeouts/wr-074-renderer-hybrid-ray-sdf-raster-runtime-proof/closeout.md`.
+- Capability/resource inspection: historical evidence retained in Git history.
+- Hybrid proof and fallback: historical evidence retained in Git history.
 - Runtime proof command:
   `cargo run -p engine --example render_hybrid_ray_sdf_raster_runtime_proof`.
 

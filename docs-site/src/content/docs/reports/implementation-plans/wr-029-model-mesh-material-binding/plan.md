@@ -15,7 +15,6 @@ related_roadmaps:
   - ../../../workspace/production-tracks.yaml
 related_reports:
   - ../wr-030-model-mesh-renderable-scene-contract/plan.md
-  - ../../../reports/closeouts/wr-028-perfectionist-material-lab-texture-views-and-scene-material-binding/closeout.md
   - ../../../reports/closeouts/wr-028-perfectionist-material-lab-texture-views-and-scene-material-binding/proof-manifest.ron
 ---
 

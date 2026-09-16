@@ -11,8 +11,6 @@ related:
   - ./editor-definition/current-architecture.md
   - ../../design/accepted/ui-lab-api-docs-examples-runtime-closeout-design.md
   - ../../design/accepted/ui-lab-persistence-api-examples-ergonomics-closure-design.md
-  - ../../reports/closeouts/pm-ui-lab-007-api-docs-examples-and-runtime-proven-closeout/closeout.md
-  - ../../reports/closeouts/pm-ui-lab-perf-005-persistence-diff-apply-api-and-examples-ergonomics/closeout.md
 ---
 
 # Editor Definition Usage
