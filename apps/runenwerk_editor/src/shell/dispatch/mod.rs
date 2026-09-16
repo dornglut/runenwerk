@@ -28,6 +28,7 @@ pub(crate) fn dispatch_surface_session_mutation(
     app: &mut RunenwerkEditorApp,
     mut shell_state: Option<&mut RunenwerkEditorShellState>,
     target: StructuralCommandTarget,
+    projection_epoch: u64,
     mutation: SurfaceSessionMutation,
 ) -> Result<(), EditorMutationError> {
     match mutation {
@@ -37,9 +38,13 @@ pub(crate) fn dispatch_surface_session_mutation(
         SurfaceSessionMutation::Inspector(mutation) => {
             inspector::dispatch_session_mutation(app, shell_state.as_deref_mut(), target, mutation)
         }
-        SurfaceSessionMutation::Viewport(mutation) => {
-            viewport::dispatch_session_mutation(app, shell_state.as_deref(), target, mutation)
-        }
+        SurfaceSessionMutation::Viewport(mutation) => viewport::dispatch_session_mutation(
+            app,
+            shell_state.as_deref(),
+            target,
+            projection_epoch,
+            mutation,
+        ),
         SurfaceSessionMutation::SdfOperation(mutation) => {
             sdf_operations::dispatch_session_mutation(app, shell_state.as_deref(), target, mutation)
         }

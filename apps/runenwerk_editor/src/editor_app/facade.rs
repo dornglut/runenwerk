@@ -90,7 +90,8 @@ impl RunenwerkEditorApp {
         let mut state = self
             .surface_sessions_mut()
             .take_viewport_interaction_state(mounted_unit_id);
-        let result = ViewportInteractionController::dispatch(self, &mut state, command);
+        let result =
+            ViewportInteractionController::dispatch(self, mounted_unit_id, &mut state, command);
         self.surface_sessions_mut()
             .replace_viewport_interaction_state(mounted_unit_id, state);
         result

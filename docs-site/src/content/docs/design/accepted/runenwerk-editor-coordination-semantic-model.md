@@ -5,7 +5,7 @@ status: accepted
 owner: editor
 layer: domain/app
 canonical: true
-last_reviewed: 2026-09-14
+last_reviewed: 2026-09-16
 related_adrs:
   - ../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md
   - ../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
@@ -26,7 +26,7 @@ supersedes:
 
 This is the accepted target semantic model for Runenwerk editor coordination.
 
-It is documentation authority, not an implementation-completeness claim. Current Rust remains authoritative for current behavior. Existing predecessor-shaped `editor_core`, shell, app, provider, persistence, and product contracts remain current implementation until separately activated migration work changes them.
+It is documentation authority, not an implementation-completeness claim. Current Rust remains authoritative for current behavior. Some predecessor-shaped `editor_core`, shell, app, provider, persistence, and product contracts remain current implementation; E1–E4 have already made bounded scene-selection, scene-history, scene-persistence, and viewport-tool ownership repairs. The remaining predecessor contracts require separately activated migration work.
 
 This design does not authorize a standalone `dornglut/runen-editor` repository, a new framework crate, or Rust changes. It defines the semantic target against which later boundary repair can be evaluated.
 
@@ -38,7 +38,7 @@ The editor is therefore an orchestrator of explicit owner contracts rather than 
 
 ## Historical Pre-migration Source Census
 
-At accepted Runenwerk revision `95647afca71f5d590f1d9066358d19bfabf6dffb`, the source census recorded the predecessor shape that later work must migrate deliberately.
+At accepted Runenwerk revision `95647afca71f5d590f1d9066358d19bfabf6dffb`, the source census recorded the predecessor shape that subsequent bounded work began to migrate.
 
 ### `domain/editor/editor_core`
 
@@ -50,7 +50,7 @@ The predecessor implementation included:
 - `history.rs`: one generic undo/redo `HistoryStack`;
 - generic command/executor/transaction, ratification, sharing, reconciliation, workflow, migration, and capability contracts.
 
-These are current implementation facts, not the normalized target ownership model.
+These are facts about the cited historical revision, not claims about current Rust or the normalized target ownership model.
 
 ### Other editor implementation owners
 
@@ -586,22 +586,25 @@ No native-window or render-surface ownership is reopened.
 | panel/tool-surface stable host vocabulary | implemented Tool Suite/Workbench design where still current |
 | provider-family narrowing and provider-owned routing | implemented Tool Suite/Workbench design |
 | generic Document/DocumentKind ownership | predecessor target superseded; current Rust to migrate |
-| one global EditorSession active target/mode | predecessor target superseded; current Rust to migrate |
-| one generic selection enum/set | predecessor target superseded; current Rust to migrate |
-| one generic history stack | predecessor target superseded; current Rust to migrate |
-| generic dirty/save state | predecessor target superseded; owner `PersistenceContext` target |
+| one global EditorSession document/tool/mode aggregation | viewport tool migrated in E4; document/mode predecessor remains to migrate |
+| one generic selection enum/set | scene selection moved to its owner in E1; no generic replacement |
+| one generic history stack | scene history moved to app-owned scene context in E2; generic stack removed |
+| generic dirty/save state | generic session dirty/save/close removed in E3; scene persistence uses an explicit context |
 | native window / render surface | retained existing app/engine/render owners |
 | UI input/focus/interaction substrate | current UI authority and ADR 0009/0024 boundaries |
 | normalized editor coordination | ADR 0025 + this design |
 
 ## Source-Disposition Matrix
 
-| Current source area | Current role | Normalized target disposition |
+This matrix describes bounded current implementation state after E1–E4; it does not assert full ADR-0025 conformance. Removed predecessor files are explicitly marked as historical.
+
+| Current or former source area | Current role or removal | Normalized target disposition |
 | --- | --- | --- |
-| `editor_core/document.rs` | central document taxonomy/dirty metadata | current implementation to migrate; owner scopes exposed through bindings/persistence contracts |
-| `editor_core/session.rs` | predecessor global document/tool/mode/selection/history aggregation | current implementation to decompose into explicit coordination contexts; scene selection is now owner-local |
-| `editor_core/selection.rs` | predecessor cross-domain target enum | removed by the scene-owned selection boundary; no generic replacement |
-| `editor_core/history.rs` | generic history stack | current implementation to replace/narrow behind history contexts |
+| `editor_core/document.rs` | central `DocumentId`/`DocumentKind` taxonomy and `DocumentDescriptor` without generic dirty metadata | document taxonomy remains predecessor-shaped; owner scopes exposed through bindings/persistence contracts |
+| `editor_core/session.rs` | generic document map/tab ordering, active document and active mode; no active tool, scene selection, history, or dirty/save authority | remaining document/mode predecessor to decompose into explicit coordination contexts |
+| former `editor_core/selection.rs` | removed in E1; predecessor cross-domain target enum | scene-owned selection context; no generic replacement |
+| former `editor_core/history.rs` | removed in E2; predecessor generic history stack | app-owned scene history context; owner-specific histories remain independent |
+| `apps/runenwerk_editor/src/shell/surface_session.rs` | mounted-unit-scoped viewport tool activation and local viewport session state | retain local tool coordination; no universal active-tool authority |
 | `editor_core` command/executor/transaction | generic editor mutation machinery | review case-by-case; retain only true editor-local coordination, owner commands stay owner-defined |
 | `editor_definition` | editor-authored definition schemas/formation | retain owner-specific definition responsibility; do not generalize into universal edited-state authority |
 | `editor_inspector` | inspector-specific contracts | retain bounded owner/adapter semantics; integrate via bindings/sessions |

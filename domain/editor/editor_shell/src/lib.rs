@@ -60,7 +60,7 @@ pub use surfaces::{
     TextureViewerSurfaceKind, UiDesignerWorkbenchPaneKind, UiDesignerWorkbenchPaneViewModel,
     UiDesignerWorkbenchReadinessStatus, UiDesignerWorkbenchReadinessViewModel,
     UiDesignerWorkbenchViewModel, ViewportDomainMutation, ViewportSessionMutation,
-    ViewportSurfaceAction,
+    ViewportSurfaceAction, ViewportToolKind,
 };
 pub use tool_suite::{
     CommandCapabilityKey, EditorToolSuite, HostCapabilityPolicy, HostCapabilityRequirements,

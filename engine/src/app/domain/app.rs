@@ -375,6 +375,7 @@ impl App {
                 .prepare_for_execution()
                 .expect("Configuring App lifecycle should prepare for windowed Host transfer");
         }
+        self.prepare_windowed_frame_pacing();
         WindowedAppState {
             world: self.world,
             scheduler: self.scheduler,

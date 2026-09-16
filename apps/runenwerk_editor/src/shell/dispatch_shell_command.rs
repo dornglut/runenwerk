@@ -37,8 +37,7 @@ use crate::shell::providers::{
 };
 use crate::shell::self_authoring::EditorLabProductPathEvidenceCapture;
 use crate::shell::{
-    EditorCommandAvailabilityContext, EditorCompositionPolicy, ROTATE_TOOL_ID,
-    RunenwerkEditorShellState, SCALE_TOOL_ID, SELECT_TOOL_ID, TRANSLATE_TOOL_ID,
+    EditorCommandAvailabilityContext, EditorCompositionPolicy, RunenwerkEditorShellState,
     editor_command_catalog,
 };
 use ui_theme::ThemeTokens;
@@ -91,42 +90,6 @@ pub fn dispatch_shell_command_with_viewport_commands(
     );
 
     match command {
-        ShellCommand::ActivateSelectTool => {
-            app.runtime_mut().set_active_tool_with_origin(
-                Some(SELECT_TOOL_ID),
-                editor_core::ChangeOrigin::EditorShell,
-            );
-            app.surface_sessions_mut()
-                .close_all_viewport_tool_radial_menus();
-            app.surface_sessions_mut().close_all_viewport_tools_menus();
-        }
-        ShellCommand::ActivateTranslateTool => {
-            app.runtime_mut().set_active_tool_with_origin(
-                Some(TRANSLATE_TOOL_ID),
-                editor_core::ChangeOrigin::EditorShell,
-            );
-            app.surface_sessions_mut()
-                .close_all_viewport_tool_radial_menus();
-            app.surface_sessions_mut().close_all_viewport_tools_menus();
-        }
-        ShellCommand::ActivateRotateTool => {
-            app.runtime_mut().set_active_tool_with_origin(
-                Some(ROTATE_TOOL_ID),
-                editor_core::ChangeOrigin::EditorShell,
-            );
-            app.surface_sessions_mut()
-                .close_all_viewport_tool_radial_menus();
-            app.surface_sessions_mut().close_all_viewport_tools_menus();
-        }
-        ShellCommand::ActivateScaleTool => {
-            app.runtime_mut().set_active_tool_with_origin(
-                Some(SCALE_TOOL_ID),
-                editor_core::ChangeOrigin::EditorShell,
-            );
-            app.surface_sessions_mut()
-                .close_all_viewport_tool_radial_menus();
-            app.surface_sessions_mut().close_all_viewport_tools_menus();
-        }
         ShellCommand::ToggleToolbarMenu { menu } => {
             let shell_state =
                 shell_state
@@ -1301,12 +1264,13 @@ pub fn dispatch_shell_command_with_viewport_commands(
         ShellCommand::ApplySurfaceSessionMutation {
             target,
             mutation,
-            projection_epoch: _,
+            projection_epoch,
         } => {
             crate::shell::dispatch::dispatch_surface_session_mutation(
                 app,
                 shell_state.as_deref_mut(),
                 target,
+                projection_epoch,
                 mutation,
             )?;
         }
@@ -1473,10 +1437,6 @@ fn capture_ui_designer_product_path_evidence(
 
 fn shell_command_label(command: &ShellCommand) -> &'static str {
     match command {
-        ShellCommand::ActivateSelectTool => "ActivateSelectTool",
-        ShellCommand::ActivateTranslateTool => "ActivateTranslateTool",
-        ShellCommand::ActivateRotateTool => "ActivateRotateTool",
-        ShellCommand::ActivateScaleTool => "ActivateScaleTool",
         ShellCommand::ToggleToolbarMenu { .. } => "ToggleToolbarMenu",
         ShellCommand::ToggleTabStackActionMenu { .. } => "ToggleTabStackActionMenu",
         ShellCommand::ToggleTabStackSurfaceMenu { .. } => "ToggleTabStackSurfaceMenu",

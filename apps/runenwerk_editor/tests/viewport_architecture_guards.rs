@@ -1272,6 +1272,42 @@ fn surface_session_mutations_are_structurally_gated_before_session_state_access(
 }
 
 #[test]
+fn viewport_tool_authority_is_mounted_session_scoped() {
+    let editor_session = read_workspace_source("domain/editor/editor_core/src/session.rs");
+    let session_store = read_workspace_source("apps/runenwerk_editor/src/shell/surface_session.rs");
+    let dispatcher = read_workspace_source("apps/runenwerk_editor/src/shell/dispatch/viewport.rs");
+    let input_bridge =
+        read_workspace_source("apps/runenwerk_editor/src/runtime/systems/input_bridge.rs");
+    let picking = read_workspace_source("apps/runenwerk_editor/src/runtime/systems/picking.rs");
+    let catalog = read_workspace_source("apps/runenwerk_editor/src/shell/command_catalog/mod.rs");
+    let shell_command =
+        include_str!("../../../domain/editor/editor_shell/src/commands/shell_command.rs");
+    let routed_action =
+        include_str!("../../../domain/editor/editor_shell/src/composition/build_editor_shell.rs");
+
+    for forbidden in ["active_tool", "set_active_tool"] {
+        assert!(
+            !editor_session.contains(forbidden),
+            "editor session retains global tool authority: {forbidden}"
+        );
+    }
+    assert!(session_store.contains("active_viewport_tool: ViewportToolKind"));
+    assert!(session_store.contains("pub fn viewport_tool"));
+    assert!(dispatcher.contains("is_projection_epoch_current(projection_epoch)"));
+    assert!(dispatcher.contains("structural_command_target_for_mounted_unit"));
+    assert!(dispatcher.contains("ViewportSessionMutation::ActivateTool"));
+    assert!(input_bridge.contains("dispatch_viewport_tool_activation"));
+    assert!(input_bridge.contains("viewport_shortcuts_blocked"));
+    assert!(picking.contains("surface_sessions().viewport_tool(mounted_unit_id)"));
+    assert!(catalog.contains("pub fn viewport_tool"));
+    assert!(catalog.contains("return None"));
+    assert!(!shell_command.contains("ActivateSelectTool"));
+    assert!(!shell_command.contains("ActivateTranslateTool"));
+    assert!(!routed_action.contains("RoutedShellAction::ActivateSelectTool"));
+    assert!(!routed_action.contains("RoutedShellAction::ActivateTranslateTool"));
+}
+
+#[test]
 fn ui_definition_does_not_import_editor_provider_behavior() {
     let sources = read_workspace_source_tree("domain/ui/ui_definition/src");
     let forbidden_terms = [

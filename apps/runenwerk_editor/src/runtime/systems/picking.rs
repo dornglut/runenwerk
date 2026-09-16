@@ -1,4 +1,4 @@
-use editor_core::{EntityId, ToolId};
+use editor_core::EntityId;
 use engine::plugins::render::{EditorGizmoAxis, EditorPickingHit, EditorPickingTarget};
 use engine::runtime::{Res, ResMut};
 use glam::{Vec2, Vec3, vec2, vec3};
@@ -17,7 +17,7 @@ use crate::runtime::viewport::{
     ToolSurfaceRuntimeBindingRegistryResource, ViewportPickingResultsResource,
     ViewportRenderStateResource,
 };
-use crate::shell::TRANSLATE_TOOL_ID;
+use editor_shell::ViewportToolKind;
 
 const GRID_EPSILON: f32 = 1e-5;
 const GIZMO_AXIS_LENGTH: f32 = 1.25;
@@ -48,8 +48,10 @@ pub fn produce_editor_picking_system(
     viewport_render_states: Res<ViewportRenderStateResource>,
 ) {
     let cursor = UiPoint::new(input.mouse_position.0, input.mouse_position.1);
-    let routed_viewport = routed_viewport_bounds(&host, &tool_surface_bindings, cursor);
-    if let Some((viewport_id, viewport_bounds)) = routed_viewport {
+    let routed_viewport = routed_viewport_binding(&host, &tool_surface_bindings, cursor);
+    if let Some((mounted_unit_id, binding)) = routed_viewport {
+        let viewport_id = binding.viewport_id;
+        let viewport_bounds = binding.bounds;
         let previous_hit = viewport_picking_results
             .result_for(viewport_id)
             .map(|value| value.hit)
@@ -66,7 +68,7 @@ pub fn produce_editor_picking_system(
                 compose_picking_hit(
                     host.app.runtime(),
                     &scene_context.scene_packet,
-                    host.app.runtime().session().active_tool(),
+                    Some(host.app.surface_sessions().viewport_tool(mounted_unit_id)),
                     host.app.runtime().selected_entity(),
                     cursor,
                     viewport_bounds,
@@ -133,7 +135,7 @@ fn picking_scene_context_for_viewport(
 fn compose_picking_hit(
     runtime: &RunenwerkEditorRuntime,
     scene_packet: &EditorViewportSceneRenderPacket,
-    active_tool: Option<ToolId>,
+    active_tool: Option<ViewportToolKind>,
     selected_entity: Option<EntityId>,
     cursor: UiPoint,
     viewport_bounds: UiRect,
@@ -141,7 +143,7 @@ fn compose_picking_hit(
     camera_fov_y: f32,
     ray: PickingRay,
 ) -> EditorPickingHit {
-    if active_tool == Some(TRANSLATE_TOOL_ID)
+    if active_tool == Some(ViewportToolKind::Translate)
         && let Some(selected) = selected_entity
         && let Some(transform) = entity_transform(runtime, selected)
         && let Some(axis_hit) = pick_gizmo_axis(
@@ -465,6 +467,7 @@ fn hit_changed(previous: EditorPickingHit, next: EditorPickingHit) -> bool {
         || (previous.distance - next.distance).abs() > HIT_DISTANCE_EPSILON
 }
 
+#[cfg(test)]
 fn routed_viewport_bounds(
     host: &EditorHostResource,
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
@@ -482,6 +485,30 @@ fn routed_viewport_bounds(
 
     let cursor_binding = tool_surface_bindings.binding_containing_cursor(cursor)?;
     Some((cursor_binding.viewport_id, cursor_binding.bounds))
+}
+
+fn routed_viewport_binding(
+    host: &EditorHostResource,
+    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    cursor: UiPoint,
+) -> Option<(
+    ui_composition::MountedUnitId,
+    crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord,
+)> {
+    let binding = if let Some(captured_widget) = host.shell_state.runtime().state().captured_widget
+    {
+        viewport_scene_binding_for_widget(
+            &host.shell_state,
+            tool_surface_bindings,
+            captured_widget,
+        )?
+    } else {
+        tool_surface_bindings.binding_containing_cursor(cursor)?
+    };
+    let mounted_unit_id = host
+        .shell_state
+        .mounted_unit_id_for_tool_surface(binding.tool_surface_id)?;
+    Some((mounted_unit_id, binding))
 }
 
 fn viewport_scene_binding_for_widget(

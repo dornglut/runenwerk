@@ -62,9 +62,9 @@ use crate::shell::{
     EditorLabEvidenceManifest, EditorLabEvidenceRun, EditorLabPerformanceSnapshot,
     EditorLabUnsupportedCheckDiagnostic, EditorSurfaceProviderRegistry, KnownEditorCommand,
     PM_UI_LAB_PERF_002_EVIDENCE_CAPABILITIES, RunenwerkEditorShellController,
-    RunenwerkEditorShellState, RunenwerkWorkbenchHost, SELECT_TOOL_ID, TRANSLATE_TOOL_ID,
-    active_document_context, active_route_actions_by_target, build_editor_shell_frame_model,
-    dispatch_shell_command, dispatch_shell_command_with_viewport_commands, editor_command_catalog,
+    RunenwerkEditorShellState, RunenwerkWorkbenchHost, active_document_context,
+    active_route_actions_by_target, build_editor_shell_frame_model, dispatch_shell_command,
+    dispatch_shell_command_with_viewport_commands, editor_command_catalog,
     editor_lab_preview_scenarios, evidence_warning, mounted_surface_requests_with_registry,
 };
 
@@ -243,6 +243,9 @@ fn pm_ui_lab_002_runtime_evidence_reports_catalog_and_registry_chain() {
     let route_actions =
         active_route_actions_by_target(shell_state.active_editor_definitions(), false, false);
     for descriptor in editor_command_catalog().descriptors() {
+        if descriptor.command.viewport_tool().is_some() {
+            continue;
+        }
         for route_target in descriptor.route_targets() {
             assert!(
                 route_actions.contains_key(route_target),
@@ -290,7 +293,9 @@ fn pm_ui_lab_002_runtime_evidence_reports_catalog_and_registry_chain() {
         dispatch_shell_command(
             &mut app,
             Some(&mut shell_state),
-            descriptor.shell_command(),
+            descriptor
+                .shell_command()
+                .expect("menu command is target-independent"),
             None,
             None,
             None,
@@ -322,7 +327,9 @@ fn pm_ui_lab_002_runtime_evidence_reports_catalog_and_registry_chain() {
     dispatch_shell_command(
         &mut app,
         Some(&mut shell_state),
-        new_window_descriptor.shell_command(),
+        new_window_descriptor
+            .shell_command()
+            .expect("new window command is target-independent"),
         None,
         None,
         None,
@@ -346,7 +353,9 @@ fn pm_ui_lab_002_runtime_evidence_reports_catalog_and_registry_chain() {
     let save_as_result = dispatch_shell_command(
         &mut app,
         Some(&mut shell_state),
-        save_as_descriptor.shell_command(),
+        save_as_descriptor
+            .shell_command()
+            .expect("save-as command is target-independent"),
         None,
         None,
         None,
@@ -467,11 +476,18 @@ fn pm_ui_lab_perf_003_command_source_truth_closure() {
     };
     let mut audited_route_targets = 0usize;
     for descriptor in editor_command_catalog().descriptors() {
+        if descriptor.command.viewport_tool().is_some() {
+            continue;
+        }
         for route_target in descriptor.route_targets() {
             audited_route_targets += 1;
             assert_eq!(
                 route_actions.get(route_target),
-                Some(&descriptor.routed_shell_action(context)),
+                Some(
+                    &descriptor
+                        .routed_shell_action(context)
+                        .expect("non-viewport command is target-independent"),
+                ),
                 "route target '{route_target}' should project exactly from catalog descriptor '{}'",
                 descriptor.key
             );
@@ -1685,38 +1701,6 @@ fn pm_ui_lab_perf_004_direct_manipulation_product_surfaces_cover_normal_workflow
         )
         .expect("PM-UI-LAB-PERF-004 retained surface proof should be writable");
     }
-}
-
-#[test]
-fn dispatch_shell_command_updates_active_tool() {
-    let mut app = RunenwerkEditorApp::new();
-
-    dispatch_shell_command(
-        &mut app,
-        None,
-        ShellCommand::ActivateSelectTool,
-        None,
-        None,
-        None,
-        None,
-    )
-    .expect("select tool command should succeed");
-    assert_eq!(app.runtime().session().active_tool(), Some(SELECT_TOOL_ID));
-
-    dispatch_shell_command(
-        &mut app,
-        None,
-        ShellCommand::ActivateTranslateTool,
-        None,
-        None,
-        None,
-        None,
-    )
-    .expect("translate tool command should succeed");
-    assert_eq!(
-        app.runtime().session().active_tool(),
-        Some(TRANSLATE_TOOL_ID)
-    );
 }
 
 #[test]
@@ -6759,6 +6743,56 @@ fn dispatch_shell_command_toggles_viewport_details_visibility() {
 }
 
 #[test]
+fn viewport_tool_activation_is_targeted_and_stale_epoch_fails_closed() {
+    let mut app = RunenwerkEditorApp::new();
+    let mut shell_state = RunenwerkEditorShellState::new();
+    let target = composition_target_by_kind(&shell_state, ToolSurfaceKind::Viewport);
+    let mounted_unit_id = target.mounted_unit_id.unwrap();
+
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        surface_session_command(
+            target,
+            SurfaceSessionMutation::Viewport(ViewportSessionMutation::ActivateTool {
+                tool: editor_shell::ViewportToolKind::Rotate,
+            }),
+            0,
+        ),
+        None,
+        None,
+        None,
+        Some(0),
+    )
+    .expect("targeted viewport tool activation should dispatch");
+    assert_eq!(
+        app.surface_sessions().viewport_tool(mounted_unit_id),
+        editor_shell::ViewportToolKind::Rotate
+    );
+
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        surface_session_command(
+            target,
+            SurfaceSessionMutation::Viewport(ViewportSessionMutation::ActivateTool {
+                tool: editor_shell::ViewportToolKind::Scale,
+            }),
+            1,
+        ),
+        None,
+        None,
+        None,
+        Some(0),
+    )
+    .expect("stale viewport tool activation should fail closed");
+    assert_eq!(
+        app.surface_sessions().viewport_tool(mounted_unit_id),
+        editor_shell::ViewportToolKind::Rotate
+    );
+}
+
+#[test]
 fn dispatch_shell_command_separates_viewport_tools_menu_and_radial_session() {
     let mut app = RunenwerkEditorApp::new();
     let mut shell_state = RunenwerkEditorShellState::new();
@@ -7028,28 +7062,23 @@ fn provider_id_mismatch_on_viewport_details_toggle_is_rejected_without_mutation(
 #[test]
 fn two_viewport_surfaces_keep_independent_details_state() {
     let mut app = RunenwerkEditorApp::new();
-    let surface_a = editor_shell::ToolSurfaceInstanceId::try_from_raw(101).unwrap();
-    let unit_a = ui_composition::MountedUnitId::new(1001);
+    let mut shell_state = RunenwerkEditorShellState::new();
+    let target_a = composition_target_by_kind(&shell_state, ToolSurfaceKind::Viewport);
+    let unit_a = target_a.mounted_unit_id.unwrap();
     let unit_b = ui_composition::MountedUnitId::new(1002);
-    let target_a = StructuralCommandTarget {
-        mounted_unit_id: Some(unit_a),
-        panel_instance_id: editor_shell::PanelInstanceId::try_from_raw(201).unwrap(),
-        active_tool_surface: Some(surface_a),
-        tab_stack_id: editor_shell::TabStackId::try_from_raw(301).unwrap(),
-    };
 
     dispatch_shell_command(
         &mut app,
-        None,
+        Some(&mut shell_state),
         surface_session_command(
             target_a,
             SurfaceSessionMutation::Viewport(ViewportSessionMutation::ToggleDetails),
-            7,
+            0,
         ),
         None,
         None,
         None,
-        Some(7),
+        Some(0),
     )
     .expect("targeted viewport details toggle should dispatch");
 
@@ -7221,6 +7250,9 @@ fn two_viewport_surfaces_keep_independent_interaction_state() {
         entity: EntityId(1),
     })
     .expect("entity selection should succeed");
+    app.surface_sessions_mut()
+        .session_mut(surface_a)
+        .active_viewport_tool = editor_shell::ViewportToolKind::Translate;
 
     app.dispatch_viewport_interaction_for_surface(
         surface_a,
