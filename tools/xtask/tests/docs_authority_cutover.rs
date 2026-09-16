@@ -72,20 +72,25 @@ fn crate_inventory_validator_accepts_exact_workspace_membership() {
         &["foundation/id", "domain/geometry"],
         &["foundation/id", "domain/geometry"],
     );
-    assert!(result.success, "validator should accept exact inventory:\n{}", result.output);
+    assert!(
+        result.success,
+        "validator should accept exact inventory:\n{}",
+        result.output
+    );
 }
 
 #[test]
 fn crate_inventory_validator_rejects_missing_workspace_member() {
-    let result = run_docs_validator_fixture(
-        &["foundation/id", "domain/geometry"],
-        &["foundation/id"],
-    );
-    assert!(!result.success, "validator should reject an omitted workspace member");
+    let result =
+        run_docs_validator_fixture(&["foundation/id", "domain/geometry"], &["foundation/id"]);
     assert!(
-        result
-            .output
-            .contains("canonical crate inventory missing current workspace member: domain/geometry"),
+        !result.success,
+        "validator should reject an omitted workspace member"
+    );
+    assert!(
+        result.output.contains(
+            "canonical crate inventory missing current workspace member: domain/geometry"
+        ),
         "validator should report the missing workspace member:\n{}",
         result.output
     );
@@ -97,11 +102,14 @@ fn crate_inventory_validator_rejects_duplicate_inventory_member() {
         &["foundation/id", "domain/geometry"],
         &["foundation/id", "domain/geometry", "domain/geometry"],
     );
-    assert!(!result.success, "validator should reject duplicate inventory rows");
     assert!(
-        result
-            .output
-            .contains("canonical crate inventory lists workspace member more than once: domain/geometry"),
+        !result.success,
+        "validator should reject duplicate inventory rows"
+    );
+    assert!(
+        result.output.contains(
+            "canonical crate inventory lists workspace member more than once: domain/geometry"
+        ),
         "validator should report the duplicate inventory member:\n{}",
         result.output
     );
@@ -113,11 +121,14 @@ fn crate_inventory_validator_rejects_non_workspace_inventory_member() {
         &["foundation/id", "domain/geometry"],
         &["foundation/id", "domain/geometry", "apps/stale_tool"],
     );
-    assert!(!result.success, "validator should reject stale/non-member inventory rows");
     assert!(
-        result
-            .output
-            .contains("canonical crate inventory lists non-workspace path as active member: apps/stale_tool"),
+        !result.success,
+        "validator should reject stale/non-member inventory rows"
+    );
+    assert!(
+        result.output.contains(
+            "canonical crate inventory lists non-workspace path as active member: apps/stale_tool"
+        ),
         "validator should report the stale/non-member inventory path:\n{}",
         result.output
     );
@@ -128,7 +139,10 @@ struct ValidatorResult {
     output: String,
 }
 
-fn run_docs_validator_fixture(workspace_members: &[&str], inventory_paths: &[&str]) -> ValidatorResult {
+fn run_docs_validator_fixture(
+    workspace_members: &[&str],
+    inventory_paths: &[&str],
+) -> ValidatorResult {
     let repository_root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(Path::parent)
@@ -139,8 +153,11 @@ fn run_docs_validator_fixture(workspace_members: &[&str], inventory_paths: &[&st
     fs::create_dir_all(&docs_workspace)
         .unwrap_or_else(|error| panic!("could not create validator fixture: {error}"));
 
-    fs::write(fixture.join("Cargo.toml"), cargo_workspace(workspace_members))
-        .unwrap_or_else(|error| panic!("could not write validator fixture Cargo.toml: {error}"));
+    fs::write(
+        fixture.join("Cargo.toml"),
+        cargo_workspace(workspace_members),
+    )
+    .unwrap_or_else(|error| panic!("could not write validator fixture Cargo.toml: {error}"));
     fs::write(
         docs_workspace.join("crate-inventory.md"),
         crate_inventory_document(inventory_paths),
@@ -153,16 +170,15 @@ fn run_docs_validator_fixture(workspace_members: &[&str], inventory_paths: &[&st
 }
 
 fn run_python_validator(fixture: &Path, validator: &Path) -> ValidatorResult {
-    let candidates: &[(&str, &[&str])] = &[
-        ("python3", &[]),
-        ("python", &[]),
-        ("py", &["-3"]),
-    ];
+    let candidates: &[(&str, &[&str])] = &[("python3", &[]), ("python", &[]), ("py", &["-3"])];
     let mut unavailable = Vec::new();
 
     for (program, prefix_args) in candidates {
         let mut command = Command::new(program);
-        command.args(*prefix_args).arg(validator).current_dir(fixture);
+        command
+            .args(*prefix_args)
+            .arg(validator)
+            .current_dir(fixture);
         match command.output() {
             Ok(output) => {
                 let combined = format!(
