@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: domain
 canonical: true
-last_reviewed: 2026-09-15
+last_reviewed: 2026-09-16
 related_designs:
   - ../../design/accepted/runenwerk-editor-coordination-semantic-model.md
   - ../../design/implemented/editor-tool-suite-registry-and-workbench-host-design.md
@@ -27,7 +27,7 @@ not claim current Rust already conforms.
 ## Current Crates
 
 - `editor_core`: current shared editor session, document, command, transaction,
-  ratification, sharing, reconciliation, and coordination-era contracts. Several
+  ratification, shared-change, reconciliation, and coordination-era contracts. Several
   of these are predecessor-shaped implementation to migrate rather than durable
   universal editor ownership.
 - `editor_definition`: durable editor-definition schemas, validation, and pure
@@ -76,11 +76,13 @@ IO/runtime wiring.
 ## Current Migration Pressure
 
 Current `editor_core` still centralizes a broad `DocumentKind` and one
-`EditorSession` for active document/tool/mode plus generic document-tab
-activation and ordering. It no longer owns universal document dirty/save/close
-persistence authority. Scene selection is owned by `editor_scene` and the
-Runenwerk runtime through a scene-scoped selection context; it is no longer
-generic `editor_core` session state.
+`EditorSession` for active document/mode plus generic document-tab activation
+and ordering. Viewport tool activation instead belongs to mounted-unit-scoped
+`SurfaceSessionStore` state; it is not generic `EditorSession` authority. The
+generic session no longer owns universal document dirty/save/close persistence
+authority. Scene selection is owned by `editor_scene` and the Runenwerk runtime
+through a scene-scoped selection context; it is no longer generic `editor_core`
+session state.
 
 Scene undo/redo is likewise no longer a universal `editor_core` session stack.
 The Runenwerk editor integration owns one explicit scene history context that
@@ -107,11 +109,12 @@ state; it does not scan generic document descriptors. Generic
 fake authority. Asset/project, Material Lab, editor-definition, and structural
 composition persistence remain independent owners.
 
-The remaining `EditorSession` document/tool/mode aggregation is current
+The remaining `EditorSession` document/mode aggregation is current
 implementation truth and must not be hidden. It remains predecessor shape for
 later ADR-0025 implementation work to decompose without compatibility aliases or
-duplicate authority. E1 selection, E2 scene-history, and E3 scene-persistence
-migration do not claim full conformance with ADR 0025.
+duplicate authority. E1 scene selection, E2 scene history, E3 scene persistence,
+and E4 viewport tool sessions are bounded ownership repairs, not a claim of full
+conformance with ADR 0025.
 
 Likewise, existing product docs may still use “document”, “workspace”, “mode”,
 “dirty”, and similar user-facing/current-implementation vocabulary. Those terms
