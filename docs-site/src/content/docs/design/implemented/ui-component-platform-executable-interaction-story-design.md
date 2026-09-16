@@ -19,7 +19,7 @@ related_docs:
 
 ## Status
 
-Implemented through the Phase 12/12A interaction delivery. This is the current proof-design reference; historical branch/phase acceptance details remain in the retained closeout.
+Implemented through the Phase 12/12A interaction delivery. This is the current proof-design reference; historical branch/phase acceptance details remain available in Git history.
 
 ## Implemented proof standard
 
