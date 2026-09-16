@@ -957,6 +957,18 @@ impl Gfx {
             debug_config,
             gpu_timing_capability,
         )?;
+        if std::env::var("GROTTO_RENDER_REALIZATION_LOG").is_ok() {
+            let stats = context.program_binding_realization_stats();
+            eprintln!(
+                "runenwerk_render_lab_realization frame={} retained={} programs={} layouts={} pipelines={} bind_groups={}",
+                prepared_frame.context.frame_index,
+                stats.retained_records(),
+                stats.programs(),
+                stats.bind_group_layouts(),
+                stats.pipeline_layouts(),
+                stats.bind_groups()
+            );
+        }
         self.renderer.publish_progressed_gpu_observations();
 
         // The one terminal Present is part of the accepted RunenGPU submission above.

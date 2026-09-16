@@ -26,11 +26,11 @@ use super::request::{RenderDistanceConvention, RenderObservationSpec, RenderOutp
 use super::scene::RenderObjectId;
 use super::surface_input::RenderSurfaceSemanticInputView;
 use runen_gpu::{
-    GpuBufferDescriptor, GpuBufferHandle, GpuBufferInitialization, GpuBufferRegion,
-    GpuBufferTextureLayout, GpuBufferUsage, GpuClearOperation, GpuComputeOperation,
-    GpuComputePipelineDescriptor, GpuContext, GpuContextAffinity, GpuCopyOperation,
-    GpuDispatchIntent, GpuDispatchSize, GpuExportKey, GpuExportRelationship, GpuInitialCoverage,
-    GpuReadbackId, GpuReadbackOperation, GpuReadbackStatus, GpuReconstruction,
+    GpuAdmittedProgramSource, GpuBufferDescriptor, GpuBufferHandle, GpuBufferInitialization,
+    GpuBufferRegion, GpuBufferTextureLayout, GpuBufferUsage, GpuClearOperation,
+    GpuComputeOperation, GpuComputePipelineDescriptor, GpuContext, GpuContextAffinity,
+    GpuCopyOperation, GpuDispatchIntent, GpuDispatchSize, GpuExportKey, GpuExportRelationship,
+    GpuInitialCoverage, GpuReadbackId, GpuReadbackOperation, GpuReadbackStatus, GpuReconstruction,
     GpuResourceAccessIntent, GpuResourceLifetime, GpuResourceProvenance, GpuResourceRef,
     GpuRuntimeBindingValue, GpuSubmission, GpuSubmissionFailureKind, GpuSubmissionStatus,
     GpuTextureAccessResource, GpuTextureCopyRegion, GpuTextureFormat, GpuTextureHandle,
@@ -74,9 +74,26 @@ enum DeterministicBufferKind {
 pub(crate) struct DeterministicResourceCache {
     identities: GpuWorkResourceIdAllocator,
     buffers: BTreeMap<(u64, usize, DeterministicBufferKind), GpuBufferHandle>,
+    maintained_source: Option<GpuAdmittedProgramSource>,
 }
 
 impl DeterministicResourceCache {
+    fn maintained_source(
+        &mut self,
+    ) -> Result<GpuAdmittedProgramSource, RenderDeterministicLoweringError> {
+        if let Some(source) = self.maintained_source.as_ref() {
+            return Ok(source.clone());
+        }
+        let [source] = admit_static_wgsl_sources([(
+            "runenrender.maintained.deterministic",
+            1,
+            MAINTAINED_WGSL,
+        )])
+        .map_err(|error| gpu_authoring("maintained WGSL admission", error))?;
+        self.maintained_source = Some(source.clone());
+        Ok(source)
+    }
+
     fn buffer(
         &mut self,
         scope: u64,
@@ -1095,9 +1112,7 @@ fn lower_output(
     )
     .map_err(|error| gpu_authoring("status clear", error))?;
 
-    let [source] =
-        admit_static_wgsl_sources([("runenrender.maintained.deterministic", 1, MAINTAINED_WGSL)])
-            .map_err(|error| gpu_authoring("maintained WGSL admission", error))?;
+    let source = resources.maintained_source()?;
     let pipeline = GpuComputePipelineDescriptor::ordinary(source, "main")
         .map_err(|error| gpu_authoring("compute-pipeline descriptor", error))?;
     let runtime_bindings = pipeline
@@ -1759,6 +1774,20 @@ mod tests {
             "one replacement is expected for the resize"
         );
         assert_eq!(cache.buffers.len(), 1, "the cache retains one live slot");
+    }
+
+    #[test]
+    fn maintained_source_is_admitted_once_for_sustained_frames() {
+        let mut cache = DeterministicResourceCache::default();
+        let first = cache
+            .maintained_source()
+            .expect("maintained source should admit");
+        for _ in 0..120 {
+            let next = cache
+                .maintained_source()
+                .expect("maintained source should remain available");
+            assert!(first.is_same_record(&next));
+        }
     }
 
     #[test]
