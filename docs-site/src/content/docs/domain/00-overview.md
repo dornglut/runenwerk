@@ -103,8 +103,7 @@ For workspace-wide placement, membership, and dependency ownership, see:
 
 - [`../guidelines/architecture.md`](../guidelines/architecture.md) for Runenwerk placement and boundary guidance;
 - [`../workspace/crate-inventory.md`](../workspace/crate-inventory.md) for current local workspace members;
-- [`../guidelines/dependency-rules.md`](../guidelines/dependency-rules.md) for dependency direction and peer-framework ownership;
-- [`../workspace/crate-docs-status.md`](../workspace/crate-docs-status.md) for documentation coverage.
+- [`../guidelines/dependency-rules.md`](../guidelines/dependency-rules.md) for dependency direction and peer-framework ownership.
 
 ## Known Gaps
 

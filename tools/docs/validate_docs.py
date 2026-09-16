@@ -210,30 +210,6 @@ def load_workspace_members(errors: list[str]) -> list[str]:
         return []
     return [member for member in members if isinstance(member, str)]
 
-def validate_crate_docs_coverage(errors: list[str]) -> None:
-    members = load_workspace_members(errors)
-    status_path = DOCS_ROOT / "workspace" / "crate-docs-status.md"
-    try:
-        status_text = status_path.read_text(encoding="utf-8")
-    except OSError as error:
-        errors.append(f"could not read crate docs status: {error}")
-        return
-    grouped_prefixes = {
-        "domain/ui/": "`domain/ui/*`",
-        "domain/editor/": "`domain/editor/*`",
-    }
-    for member in members:
-        grouped_marker = next(
-            (marker for prefix, marker in grouped_prefixes.items() if member.startswith(prefix)),
-            None,
-        )
-        if grouped_marker is not None:
-            if grouped_marker not in status_text:
-                errors.append(f"missing grouped crate-doc coverage marker {grouped_marker} for {member}")
-            continue
-        if f"`{member}`" not in status_text:
-            errors.append(f"missing crate-doc coverage for workspace member: {member}")
-
 def validate_crate_inventory_alignment(errors: list[str]) -> None:
     members = load_workspace_members(errors)
     inventory_path = DOCS_ROOT / "workspace" / "crate-inventory.md"
@@ -263,7 +239,6 @@ def main() -> int:
         return report(errors)
 
     validate_design_lifecycle_indexes(errors)
-    validate_crate_docs_coverage(errors)
     validate_crate_inventory_alignment(errors)
 
     reports_root = DOCS_ROOT / "reports"
