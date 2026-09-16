@@ -13,8 +13,6 @@ related_designs:
   - ../design/active/net-reconnect-history-recovery.md
   - ../design/active/net-transport-lanes-delivery.md
   - ../design/active/net-diagnostics-inspection.md
-related_reports:
-  - ../reports/closeouts/wr-007-multiplayer-replication-phase-1-3/closeout.md
 ---
 
 # Multiplayer Replication Implementation Roadmap
@@ -56,7 +54,7 @@ Retained live replication substrate includes:
 
 ## Completed Pre-RN8 Replication Hardening
 
-The WR-007 Phase 1-3 work remains accepted historical implementation evidence. See the [WR-007 closeout](../reports/closeouts/wr-007-multiplayer-replication-phase-1-3/closeout.md).
+The WR-007 Phase 1-3 work remains accepted historical implementation evidence in Git history.
 
 It established retained replication invariants that RN8 lifecycle cuts must preserve:
 

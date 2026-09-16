@@ -33,8 +33,7 @@ benchmarks changed in this slice.
 
 - Added active design:
   `docs-site/src/content/docs/design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md`.
-- Added implementation contract:
-  `docs-site/src/content/docs/reports/implementation-plans/wr-111-editor-product-ux-governance-and-track-activation/plan.md`.
+- Added implementation contract; its detailed historical record remains in Git history.
 - Added `PT-EDITOR-UX` and milestone sequence in
   `docs-site/src/content/docs/workspace/production-tracks.yaml`.
 - Archived `WR-111` as completed bounded governance evidence.

@@ -12,9 +12,6 @@ related_designs:
   - ../../design/accepted/field-product-contracts-diagnostics-and-residency-design.md
 related_roadmaps:
   - ../../workspace/sdf-first-execution-roadmap.md
-related_reports:
-  - ../../reports/closeouts/runtime-product-job-rpj4-rpj6/closeout.md
-  - ../../reports/closeouts/runtime-product-job-rpj7a-cache-policy/closeout.md
 ---
 
 # Runtime Product Job Executor Roadmap
@@ -181,7 +178,7 @@ cargo test -p runenwerk_draw --test app_shell
 
 Closeout:
 
-- [Runtime Product Job RPJ4-RPJ6 Closeout](../../reports/closeouts/runtime-product-job-rpj4-rpj6/closeout.md)
+Detailed RPJ4-RPJ6 evidence remains in Git history.
 
 ## Phase RPJ5 - Cache Identity Before Persistence
 
@@ -263,7 +260,7 @@ cargo test -p runenwerk_draw --test app_shell committed_ink_cache_hit
 
 Closeout:
 
-- [Runtime Product Job RPJ7A Cache Policy Closeout](../../reports/closeouts/runtime-product-job-rpj7a-cache-policy/closeout.md)
+Detailed RPJ7A evidence remains in Git history.
 
 ## Phase RPJ7B - Persistent Product Caches And Package Sidecars
 

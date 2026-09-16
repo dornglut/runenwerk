@@ -9,7 +9,6 @@ last_reviewed: 2026-05-14
 related:
   - ../../domain/ui/roadmap.md
   - ../../apps/runenwerk-editor/roadmap.md
-  - ../../reports/closeouts/surface-workflow-contract-redesign/closeout.md
   - ../implemented/ui-definition-formation-foundation-design.md
 ---
 

@@ -23,8 +23,6 @@ related_adrs:
   - ../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md
 related_roadmaps:
   - ../../apps/runenwerk-editor/roadmap.md
-related_reports:
-  - ../../reports/audits/editor-ui-priority-code-audit-2026-05-05.md
 related:
   - ../../domain/world-sdf/README.md
   - ../../domain/world-ops/README.md

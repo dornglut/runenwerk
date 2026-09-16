@@ -19,10 +19,6 @@ related_designs:
   - ../accepted/runenwerk-editor-coordination-semantic-model.md
   - ../active/material-lab-and-material-preview-design.md
   - ../superseded/runenwerk-capability-workbench-target-architecture.md
-related_reports:
-  - ../../reports/closeouts/tool-suite-registry-inspector/closeout.md
-  - ../../reports/closeouts/wr-037-host-capability-policy/closeout.md
-  - ../../reports/closeouts/wr-038-product-and-service-capability-declarations/closeout.md
 ---
 
 # Editor Tool Suite Registry And Workbench Host Design
@@ -163,4 +159,4 @@ They document the implemented editor-local Tool Suite/Workbench boundary. Where 
 
 ## Completion Evidence
 
-Code and tests own current behavior. Key implementation anchors are `domain/editor/editor_shell/src/tool_suite/`, `domain/editor/editor_shell/src/workbench/compiler.rs`, and `apps/runenwerk_editor/src/shell/workbench_host.rs`. Delivery evidence is retained in the completed Workbench/Tool Suite closeouts, especially [Tool Suite Registry Inspector Closeout](../../reports/closeouts/tool-suite-registry-inspector/closeout.md), [WR-037 Host Capability Policy Closeout](../../reports/closeouts/wr-037-host-capability-policy/closeout.md), and [WR-038 Product And Service Capability Declarations Closeout](../../reports/closeouts/wr-038-product-and-service-capability-declarations/closeout.md).
+Code and tests own current behavior. Key implementation anchors are `domain/editor/editor_shell/src/tool_suite/`, `domain/editor/editor_shell/src/workbench/compiler.rs`, and `apps/runenwerk_editor/src/shell/workbench_host.rs`. Delivery evidence is retained in Git history.

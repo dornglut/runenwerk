@@ -11,7 +11,6 @@ related_docs:
   - ../../domain/ui/roadmap.md
   - ./ui-component-platform-generic-interaction-design.md
   - ./ui-component-platform-executable-interaction-story-design.md
-  - ../../reports/closeouts/pt-ui-component-platform-012a-executable-interaction-story-implementation-scope-closeout.md
   - ./ui-component-platform-text-editing-design.md
 ---
 

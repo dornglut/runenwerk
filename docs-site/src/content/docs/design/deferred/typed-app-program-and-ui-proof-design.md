@@ -10,7 +10,6 @@ related_docs:
   - ../../adr/accepted/0019-batteries-included-application-composition.md
   - ../../adr/accepted/0020-adopt-federated-semantic-composition.md
   - ../../architecture/runenwerk-platform-architecture.md
-  - ../../reports/investigations/typed-app-program-current-state-investigation.md
   - ../implemented/ui-program-architecture.md
   - ../implemented/ui-program-architecture-owner-map.md
   - ../archived/ui-framework-app-integration-direction-review.md

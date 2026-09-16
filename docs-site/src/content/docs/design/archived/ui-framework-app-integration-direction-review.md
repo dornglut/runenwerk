@@ -10,7 +10,6 @@ related_docs:
   - ../../architecture/ui-framework-architecture.md
   - ../../architecture/live-uiplugin-runtime-platform-architecture.md
   - ../deferred/live-uiplugin-runtime-and-surface-frame-rendering-design.md
-  - ../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md
   - ../../workspace/planning/decision-register.md
 ---
 
@@ -90,7 +89,7 @@ docs-site/src/content/docs/design/active/ui-component-platform-generic-text-desi
 docs-site/src/content/docs/design/active/ui-component-platform-surface2d-design.md
 docs-site/src/content/docs/design/active/runenwerk-typed-app-composition-plugin-framework-design.md
 docs-site/src/content/docs/design/active/runenwerk-typed-app-composition-plugin-framework-implementation-roadmap.md
-docs-site/src/content/docs/reports/investigations/typed-app-program-current-state-investigation.md
+Git history (former typed-app-program current-state investigation)
 docs-site/src/content/docs/design/active/typed-app-program-and-ui-proof-design.md
 docs-site/src/content/docs/workspace/planning/typed-app-program-ui-proof-001-planning.md
 PR #69 App: implement Typed App Program headless counter proof

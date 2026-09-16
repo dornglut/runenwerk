@@ -9,7 +9,6 @@ last_reviewed: 2026-09-13
 related_docs:
   - ../../domain/ui/architecture.md
   - ../../domain/ui/roadmap.md
-  - ../../reports/closeouts/pt-ui-component-platform-012-generic-interaction-closeout.md
   - ./ui-component-platform-input-gesture-device-design.md
   - ./ui-component-platform-executable-interaction-story-design.md
   - ./ui-component-platform-overlay-popup-layering-design.md
@@ -62,4 +61,4 @@ The runtime proof records no-bypass counters/evidence for these boundaries.
 
 ## Evidence
 
-Current `ui_controls` interaction declarations, `ui_input` normalized facts, `ui_runtime/src/input/generic_interaction/`, editor proof-host integration, focused interaction replay/parity tests, and static-mount tests establish implementation parity. Retained closeouts preserve delivery history.
+Current `ui_controls` interaction declarations, `ui_input` normalized facts, `ui_runtime/src/input/generic_interaction/`, editor proof-host integration, focused interaction replay/parity tests, and static-mount tests establish implementation parity. Delivery history remains available in Git history.

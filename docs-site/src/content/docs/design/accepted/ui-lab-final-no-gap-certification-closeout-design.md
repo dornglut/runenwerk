@@ -19,12 +19,6 @@ related_designs:
   - ./ui-lab-command-surface-source-truth-closure-design.md
   - ./ui-lab-direct-manipulation-ux-closure-design.md
   - ./ui-lab-persistence-api-examples-ergonomics-closure-design.md
-related_reports:
-  - ../../reports/closeouts/pm-ui-lab-perf-001-governance-audit-doctrine-and-code-truth-matrix/closeout.md
-  - ../../reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/closeout.md
-  - ../../reports/closeouts/pm-ui-lab-perf-003-command-and-surface-source-truth-closure/closeout.md
-  - ../../reports/closeouts/pm-ui-lab-perf-004-direct-manipulation-ux-closure/closeout.md
-  - ../../reports/closeouts/pm-ui-lab-perf-005-persistence-diff-apply-api-and-examples-ergonomics/closeout.md
 related_roadmaps:
   - ../../domain/ui/roadmap.md
 ---
@@ -67,15 +61,15 @@ justify stronger claims and must not expand into game-runtime UI projection.
 ## Current Evidence Inputs
 
 PM006 may rely on earlier milestones only after directly verifying their
-completed closeouts and quality claims:
+historical milestone records and quality claims:
 
 | Milestone | Closeout | Quality input | PM006 verification duty |
 |---|---|---|---|
-| `PM-UI-LAB-PERF-001` | `docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-001-governance-audit-doctrine-and-code-truth-matrix/closeout.md` | `bounded_contract` | Confirm governance doctrine, code-truth matrix, follow-on scope, and explicit non-claim of runtime or no-gap quality. |
-| `PM-UI-LAB-PERF-002` | `docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/closeout.md` | `runtime_proven` | Confirm native or typed platform-impossible evidence artifacts cover screenshots, visual diffs, focus, contrast, timing, diagnostics, reload, apply, rollback, and degraded-provider states. |
-| `PM-UI-LAB-PERF-003` | `docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-003-command-and-surface-source-truth-closure/closeout.md` | `runtime_proven` | Confirm command catalog, toolbar/menu/keybinding, disabled reason, surface registry, routing, and compatibility edges have one normal authority. |
-| `PM-UI-LAB-PERF-004` | `docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-004-direct-manipulation-ux-closure/closeout.md` | `runtime_proven` | Confirm hierarchy, palette, canvas, inspector, diagnostics, operation diff, preview, undo, and redo evidence proves direct-manipulation workflows. |
-| `PM-UI-LAB-PERF-005` | `docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-005-persistence-diff-apply-api-and-examples-ergonomics/closeout.md` | `runtime_proven` | Confirm persistence, structural diff/apply, activation, rollback, public API, guides, examples, and product-surface evidence agree. |
+| `PM-UI-LAB-PERF-001` | Git history (former closeout) | `bounded_contract` | Confirm governance doctrine, code-truth matrix, follow-on scope, and explicit non-claim of runtime or no-gap quality. |
+| `PM-UI-LAB-PERF-002` | Git history (former closeout) | `runtime_proven` | Confirm native or typed platform-impossible evidence artifacts cover screenshots, visual diffs, focus, contrast, timing, diagnostics, reload, apply, rollback, and degraded-provider states. |
+| `PM-UI-LAB-PERF-003` | Git history (former closeout) | `runtime_proven` | Confirm command catalog, toolbar/menu/keybinding, disabled reason, surface registry, routing, and compatibility edges have one normal authority. |
+| `PM-UI-LAB-PERF-004` | Git history (former closeout) | `runtime_proven` | Confirm hierarchy, palette, canvas, inspector, diagnostics, operation diff, preview, undo, and redo evidence proves direct-manipulation workflows. |
+| `PM-UI-LAB-PERF-005` | Git history (former closeout) | `runtime_proven` | Confirm persistence, structural diff/apply, activation, rollback, public API, guides, examples, and product-surface evidence agree. |
 
 Any missing artifact, stale validation, ambiguous quality tier, or unclosed
 known gap blocks PM006 completion.

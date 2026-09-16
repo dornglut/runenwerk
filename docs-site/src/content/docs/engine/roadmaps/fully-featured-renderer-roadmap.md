@@ -23,9 +23,6 @@ related_roadmaps:
   - ./render-final-architecture-migration.md
   - ../plugins/render/docs/roadmap.md
   - ../../apps/runenwerk-editor/viewport-expression-implementation-roadmap.md
-related_reports:
-  - ../../reports/closeouts/wr-018-rendered-world-v1/closeout.md
-  - ../../reports/closeouts/wr-020-source-backed-asset-core-contracts/closeout.md
 ---
 
 # Fully Featured Renderer Roadmap

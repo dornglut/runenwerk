@@ -21,9 +21,6 @@ related_designs:
   - ./ui-lab-app-hosted-editor-lab-surface-shell-design.md
   - ./ui-designer-visual-layout-and-interface-composition-design.md
   - ./ui-designer-view-model-capability-and-intent-binding-design.md
-related_reports:
-  - ../../reports/closeouts/pm-ui-lab-perf-003-command-and-surface-source-truth-closure/closeout.md
-  - ../../reports/closeouts/pm-ui-lab-004-operation-driven-visual-authoring/closeout.md
 related_roadmaps:
   - ../../domain/ui/roadmap.md
 ---

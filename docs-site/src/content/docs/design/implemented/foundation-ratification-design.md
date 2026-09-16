@@ -697,7 +697,7 @@ Evaluate whether editor_core governance wants optional precondition reports, wit
 
 ## Phase 5 Evaluation Outcome
 
-Phase 5 is closed by [Foundation Ratification Phase 5 Evaluation](../../reports/closeouts/foundation-ratification-phase5-evaluation.md).
+Phase 5 completion evidence is retained in Git history.
 
 Outcome:
 

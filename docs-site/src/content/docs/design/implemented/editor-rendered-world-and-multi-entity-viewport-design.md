@@ -15,8 +15,6 @@ related_roadmaps:
   - ../../apps/runenwerk-editor/roadmap.md
   - ../../apps/runenwerk-editor/viewport-expression-implementation-roadmap.md
   - ../../engine/plugins/render/docs/roadmap.md
-related_reports:
-  - ../../reports/closeouts/wr-018-rendered-world-v1/closeout.md
 ---
 
 # Editor Rendered World And Multi Entity Viewport Design
@@ -79,4 +77,4 @@ Future terrain, field, prefab, mesh, storage-buffer, or world-scale rendering wo
 
 ## Completion Evidence
 
-The canonical delivery evidence is [WR-018 Rendered World V1 Closeout](../../reports/closeouts/wr-018-rendered-world-v1/closeout.md). Code and tests own current behavior; this implemented design owns the durable bounded architecture described above.
+The canonical delivery evidence remains in Git history. Code and tests own current behavior; this implemented design owns the durable bounded architecture described above.

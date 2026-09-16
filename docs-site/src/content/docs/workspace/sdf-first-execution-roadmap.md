@@ -20,16 +20,6 @@ related_roadmaps:
   - ../apps/runenwerk-editor/roadmap.md
   - ../net/multiplayer-replication-implementation-roadmap.md
   - ../engine/plugins/render/docs/roadmap.md
-related_reports:
-  - ../reports/closeouts/sdf-first-execution-phase-1/closeout.md
-  - ../reports/closeouts/sdf-first-execution-phase-2/closeout.md
-  - ../reports/closeouts/sdf-first-execution-phase-3/closeout.md
-  - ../reports/closeouts/sdf-first-execution-phase-4/closeout.md
-  - ../reports/closeouts/sdf-first-execution-phase-5/closeout.md
-  - ../reports/closeouts/sdf-first-execution-phase-6a/closeout.md
-  - ../reports/closeouts/sdf-first-execution-phase-6b/closeout.md
-  - ../reports/closeouts/sdf-first-execution-phase-6c/closeout.md
-  - ../reports/closeouts/sdf-first-execution-phase-6d/closeout.md
 ---
 
 # SDF-First Execution Roadmap (Completed)
@@ -48,8 +38,7 @@ Current authority is intentionally split:
 - GitHub issues and the Engineering Portfolio own live work state, activation,
   priority, owners, and blockers;
 - accepted ADRs and designs own durable architecture and semantic contracts;
-- pull requests own delivery and validation evidence;
-- the closeouts linked below own detailed point-in-time completion evidence.
+- pull requests own delivery and validation evidence.
 
 The former detailed phase roadmap remains available in Git history. It must not be
 used as a current priority ledger or to reactivate retired scheduler or messaging
@@ -123,24 +112,11 @@ publication barriers, the former standalone scheduler package, or the former
 ECS/runtime convergence model describe what was implemented and validated then.
 They do **not** define current RunenECS architecture.
 
-Do not rewrite retained closeouts merely to make historical terminology look current.
-Do not infer from them that access conflicts create order, that application publication
-belongs to RunenECS, or that the retired generic scheduler/messaging surfaces should be
-restored.
+Do not infer from that historical evidence that access conflicts create order, that
+application publication belongs to RunenECS, or that the retired generic
+scheduler/messaging surfaces should be restored.
 
 ## Completion Evidence
 
-Detailed phase evidence remains in the retained closeouts:
-
-- [Phase 1 — serial product jobs and publication barriers](../reports/closeouts/sdf-first-execution-phase-1/closeout.md)
-- [Phase 2 — query snapshots and strict consumer policy](../reports/closeouts/sdf-first-execution-phase-2/closeout.md)
-- [Phase 3 — render product selection producers](../reports/closeouts/sdf-first-execution-phase-3/closeout.md)
-- [Phase 4 — derived GPU residency](../reports/closeouts/sdf-first-execution-phase-4/closeout.md)
-- [Phase 5 — procgen readiness](../reports/closeouts/sdf-first-execution-phase-5/closeout.md)
-- [Phase 6A — procgen domain product track](../reports/closeouts/sdf-first-execution-phase-6a/closeout.md)
-- [Phase 6B — visible procgen overlay proof](../reports/closeouts/sdf-first-execution-phase-6b/closeout.md)
-- [Phase 6C — concrete terrain/material CPU preview proof](../reports/closeouts/sdf-first-execution-phase-6c/closeout.md)
-- [Phase 6D — bake, rollback, persistence, and reload proof](../reports/closeouts/sdf-first-execution-phase-6d/closeout.md)
-
-Those reports are historical evidence. Git history retains the original detailed phase
-roadmap and its exact contemporary wording.
+The original phase closeouts and detailed phase roadmap remain available in Git
+history, including their exact contemporary wording.

@@ -7,7 +7,6 @@ layer: app
 canonical: true
 last_reviewed: 2026-09-10
 related_docs:
-  - ../../reports/closeouts/runenwerk-draw-stroke-fidelity-phase-0-1.md
   - ../../apps/runenwerk-draw/README.md
   - ../../apps/runenwerk-draw/roadmap.md
   - ../../domain/drawing/README.md
