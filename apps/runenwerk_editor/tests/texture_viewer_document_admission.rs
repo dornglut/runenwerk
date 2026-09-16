@@ -245,7 +245,10 @@ fn material_workspace_scene_document_behavior_remains_available() {
         None,
         None,
     );
-    for key in ["runenwerk.texture.viewer_2d", "runenwerk.material_lab.preview"] {
+    for key in [
+        "runenwerk.texture.viewer_2d",
+        "runenwerk.material_lab.preview",
+    ] {
         let surface = frame
             .surfaces
             .values()
