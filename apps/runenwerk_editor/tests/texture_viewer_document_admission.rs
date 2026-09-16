@@ -111,6 +111,7 @@ fn scene_to_textures_command_admits_both_asset_viewers_without_switching_documen
 #[test]
 fn texture_viewers_allow_no_active_document_but_preserve_provider_family_guard() {
     let app = RunenwerkEditorApp::new();
+    assert_eq!(app.asset_catalog_runtime().selected_asset_id(), None);
     let shell = texture_shell(&app);
     let host = app.workbench_host();
     let registry = EditorSurfaceProviderRegistry::runenwerk_default();
