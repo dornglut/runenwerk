@@ -34,8 +34,8 @@ fn render_timing_logging_enabled() -> bool {
         .unwrap_or(false)
 }
 
-fn presented_interval_logging_enabled() -> bool {
-    std::env::var("GROTTO_RENDER_PRESENT_INTERVAL_LOG")
+fn primary_redraw_interval_logging_enabled() -> bool {
+    std::env::var("GROTTO_RENDER_PRIMARY_REDRAW_INTERVAL_LOG")
         .map(|value| {
             matches!(
                 value.trim().to_ascii_lowercase().as_str(),
@@ -330,16 +330,16 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                 .ok()
                 .cloned();
             if timings.submitted
-                && presented_interval_logging_enabled()
+                && primary_redraw_interval_logging_enabled()
                 && let Some(pacing_state) = pacing_state.as_ref()
             {
                 tracing::info!(
                     frame = semantic_frame_index,
-                    presented_frame_interval_ms = pacing_state.last_frame_interval_ms,
-                    "submitted Render Lab frame interval"
+                    primary_redraw_start_interval_ms = pacing_state.last_frame_interval_ms,
+                    "submitted Render Lab frame primary-redraw-start interval"
                 );
                 eprintln!(
-                    "runenwerk_render_lab_presented_frame frame={} interval_ms={:.3}",
+                    "runenwerk_render_lab_primary_redraw_start_interval frame={} interval_ms={:.3}",
                     semantic_frame_index, pacing_state.last_frame_interval_ms
                 );
             }

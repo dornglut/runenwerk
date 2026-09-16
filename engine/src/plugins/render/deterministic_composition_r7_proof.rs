@@ -3,6 +3,10 @@
 //! This stays at RunenGPU graph preparation: the renderer owns the prepared producer fragment and
 //! typed output correlation, while the consumer owns its import and operation.
 
+use super::adapters::{
+    RenderGpuWorkOccurrenceId, ResolvedRenderGpuWorkNode,
+    prepare_render_gpu_frame_work_with_composition_for_test,
+};
 use super::admission::{RenderOutputBinding, RenderOutputDestination};
 use super::deterministic_admission::admit_deterministic_render;
 use super::deterministic_execution::prepare_deterministic_render;
@@ -10,12 +14,20 @@ use super::deterministic_execution_r7_proof::{
     MaintainedExecutionFixture, admit_with_retained_radiance_destination, maintained_fixture,
 };
 use runen_gpu::{
-    GpuBufferDescriptor, GpuBufferInitialization, GpuBufferTextureLayout, GpuBufferUsage,
-    GpuCapabilityProfile, GpuContext, GpuContextDescriptor, GpuContextRequestErrorCategory,
-    GpuCopyOperation, GpuDependencyReason, GpuDependencyRegion, GpuFormatRole,
-    GpuPreparedWorkGraph, GpuReconstruction, GpuResourceLabel, GpuResourceLifetime,
-    GpuResourceProvenance, GpuTextureDescriptor, GpuTextureFormat, GpuTextureInitialization,
-    GpuTextureUsage, GpuWorkFragment, GpuWorkNodeKind, GpuWorkResourceIdAllocator,
+    GpuAttachmentStore, GpuBindingKey, GpuBindingLayoutRefinement, GpuBufferDescriptor,
+    GpuBufferInitialization, GpuBufferTextureLayout, GpuBufferUsage, GpuCapabilityProfile,
+    GpuColorAttachmentLoad, GpuColorClearValue, GpuColorTargetStateDescriptor, GpuContext,
+    GpuContextDescriptor, GpuContextRequestErrorCategory, GpuCopyOperation, GpuDependencyReason,
+    GpuDependencyRegion, GpuDrawRange, GpuExecutionPreference, GpuFormatRole,
+    GpuFragmentOutputStateDescriptor, GpuMultisampleStateDescriptor, GpuPipelineConfiguration,
+    GpuPreparedWorkGraph, GpuPresentOperation, GpuPrimitiveStateDescriptor, GpuProgramDescriptor,
+    GpuReconstruction, GpuRenderEntryPoints, GpuRenderOperation, GpuRenderPipelineDescriptor,
+    GpuRenderPipelineStateDescriptor, GpuResourceLabel, GpuResourceLifetime, GpuResourceProvenance,
+    GpuRuntimeBindingResource, GpuRuntimeBindingValue, GpuRuntimeTextureViewBinding,
+    GpuTextureDescriptor, GpuTextureFormat, GpuTextureInitialization, GpuTextureSampleClass,
+    GpuTextureUsage, GpuTextureViewDescriptor, GpuTextureViewDimension,
+    GpuVertexInputStateDescriptor, GpuWorkFragment, GpuWorkNodeKind, GpuWorkOperation,
+    GpuWorkResourceIdAllocator,
 };
 
 fn request_composition_context() -> Option<GpuContext> {
@@ -23,6 +35,7 @@ fn request_composition_context() -> Option<GpuContext> {
         GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements())
             .require_format_role(GpuTextureFormat::R32Float, GpuFormatRole::CopyDestination)
             .require_format_role(GpuTextureFormat::R32Float, GpuFormatRole::CopySource)
+            .require_format_role(GpuTextureFormat::R32Float, GpuFormatRole::Sampled)
             .with_label("RunenRender R7 composition proof");
     match pollster::block_on(GpuContext::request(descriptor)) {
         Ok(context) => Some(context),
@@ -80,8 +93,9 @@ fn admit_r32float_radiance(
                 [
                     GpuTextureUsage::CopyDestination,
                     GpuTextureUsage::CopySource,
+                    GpuTextureUsage::Sampled,
                 ],
-                GpuTextureInitialization::Uninitialized,
+                GpuTextureInitialization::Zeroed,
             )
             .expect("R7 composition R32Float destination descriptor"),
         )
@@ -99,6 +113,32 @@ fn admit_r32float_radiance(
         context,
     )
     .expect("R7 composition R32Float radiance must be admitted")
+}
+
+fn surface_color_view(
+    allocator: &mut GpuWorkResourceIdAllocator,
+) -> runen_gpu::GpuTextureViewHandle {
+    let texture = allocator
+        .allocate_texture_handle(
+            GpuTextureDescriptor::ordinary_owned_2d(
+                "RL2 proof surface color",
+                GpuResourceLifetime::Transient,
+                GpuReconstruction::SourceBacked,
+                2,
+                2,
+                GpuTextureFormat::Rgba8Unorm,
+                [GpuTextureUsage::ColorAttachment],
+                GpuTextureInitialization::Zeroed,
+            )
+            .expect("RL2 proof surface descriptor"),
+        )
+        .expect("RL2 proof surface texture");
+    allocator
+        .allocate_texture_view_handle(
+            GpuTextureViewDescriptor::ordinary_full_owned("RL2 proof surface view", &texture)
+                .expect("RL2 proof surface view descriptor"),
+        )
+        .expect("RL2 proof surface view")
 }
 
 #[test]
@@ -225,5 +265,163 @@ fn maintained_r32float_radiance_is_a_typed_producer_for_consumer_first_graphs() 
             .fragment_ordinal(),
         1,
         "consumer-first authoring must still prepare the producer before the consumer"
+    );
+}
+
+#[test]
+fn rl2_canonical_composition_uses_real_radiance_import_and_visualizer() {
+    let Some(context) = request_composition_context() else {
+        return;
+    };
+    let fixture = radiance_fixture();
+    let prepared =
+        prepare_deterministic_render(admit_r32float_radiance(&fixture, &context), &context)
+            .expect("RL2 maintained preparation must succeed");
+    let output = prepared
+        .radiance_output(0)
+        .expect("RL2 maintained radiance output");
+    let texture = output
+        .texture()
+        .expect("RL2 output must be a texture")
+        .clone();
+    let producer = prepared.work_set().fragments()[0].clone();
+
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let surface = surface_color_view(&mut allocator);
+    let [source] = runen_gpu::admit_static_wgsl_sources([(
+        "runenwerk.render_lab.rl2.visualizer",
+        1,
+        include_str!("../../../../assets/shaders/runenwerk_render_lab_radiance.wgsl"),
+    )])
+    .expect("actual Render Lab WGSL should be admitted");
+    let binding_key = GpuBindingKey::try_new(0, 0).expect("RL2 radiance binding key");
+    let program = GpuProgramDescriptor::new(
+        source,
+        [
+            runen_gpu::GpuEntryPointName::new("vs_main").expect("RL2 vertex entry point"),
+            runen_gpu::GpuEntryPointName::new("fs_main").expect("RL2 fragment entry point"),
+        ],
+        [GpuBindingLayoutRefinement::new(binding_key)
+            .with_texture_sample_class(GpuTextureSampleClass::FloatUnfilterable)],
+    )
+    .expect("actual Render Lab WGSL program");
+    let pipeline_state = GpuRenderPipelineStateDescriptor::new(
+        GpuVertexInputStateDescriptor::new([]).expect("RL2 vertex input state"),
+        Some(GpuFragmentOutputStateDescriptor::new([
+            GpuColorTargetStateDescriptor::new(
+                GpuTextureFormat::Rgba8Unorm,
+                runen_gpu::GpuBlendMode::Replace,
+                runen_gpu::GpuColorWriteMask::ALL,
+            )
+            .expect("RL2 color target state"),
+        ])),
+        GpuPrimitiveStateDescriptor::default(),
+        None,
+        GpuMultisampleStateDescriptor::default(),
+    )
+    .expect("actual Render Lab WGSL render state");
+    let pipeline = GpuRenderPipelineDescriptor::new(
+        program,
+        GpuRenderEntryPoints::new(
+            runen_gpu::GpuEntryPointName::new("vs_main").expect("RL2 vertex entry point"),
+            Some(runen_gpu::GpuEntryPointName::new("fs_main").expect("RL2 fragment entry point")),
+        ),
+        pipeline_state,
+        GpuPipelineConfiguration::default(),
+    )
+    .expect("actual Render Lab WGSL render pipeline");
+    let radiance_view = allocator
+        .allocate_texture_view_handle(
+            GpuTextureViewDescriptor::ordinary_full_owned("RL2 proof radiance view", &texture)
+                .expect("RL2 radiance view descriptor"),
+        )
+        .expect("RL2 radiance view");
+    let bindings = pipeline
+        .runtime_bindings([GpuRuntimeBindingValue::new(
+            binding_key,
+            [GpuRuntimeBindingResource::TextureView(
+                GpuRuntimeTextureViewBinding::new(radiance_view, GpuTextureViewDimension::D2),
+            )],
+        )
+        .expect("RL2 visualizer binding value")])
+        .expect("RL2 visualizer runtime bindings");
+    let visualizer = GpuRenderOperation::ordinary_color_full_target_direct(
+        &pipeline,
+        bindings,
+        &surface,
+        GpuColorAttachmentLoad::Clear(
+            GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).expect("RL2 clear color"),
+        ),
+        GpuAttachmentStore::Store,
+        GpuDrawRange::new(0, 3).expect("RL2 fullscreen vertices"),
+        GpuDrawRange::new(0, 1).expect("RL2 fullscreen instance"),
+    )
+    .expect("actual Render Lab visualizer operation");
+    let visualizer_occurrence = RenderGpuWorkOccurrenceId::new(20);
+    let present_occurrence = RenderGpuWorkOccurrenceId::new(21);
+    let present = GpuPresentOperation::whole_view(&surface).expect("RL2 terminal Present");
+    let visualizer = ResolvedRenderGpuWorkNode::pass(
+        visualizer_occurrence,
+        GpuResourceLabel::new("RL2 actual Render Lab visualizer").expect("RL2 visualizer label"),
+        GpuWorkOperation::Render(visualizer),
+        GpuExecutionPreference::GraphicsRequired,
+        [],
+    );
+    let present = ResolvedRenderGpuWorkNode::present(
+        present_occurrence,
+        GpuResourceLabel::new("RL2 actual terminal Present").expect("RL2 Present label"),
+        present,
+        [],
+    );
+    let consumer_provenance = GpuResourceProvenance::new(
+        GpuResourceLabel::new("RL2 actual Render Lab visualizer import").expect("RL2 import label"),
+        None,
+        None,
+    );
+    let graph = prepare_render_gpu_frame_work_with_composition_for_test(
+        GpuResourceLabel::new("RL2 actual canonical composition").expect("RL2 graph label"),
+        [visualizer, present],
+        &[producer],
+        &[output.import(consumer_provenance)],
+    )
+    .expect("RL2 actual producer/visualizer composition should prepare");
+    let node_by_label = |label: &str| {
+        graph
+            .nodes()
+            .iter()
+            .find(|node| node.node().label().as_str() == label)
+            .expect("RL2 composed node")
+    };
+    let visualizer_node = node_by_label("RL2 actual Render Lab visualizer").id();
+    let present_node = node_by_label("RL2 actual terminal Present").id();
+    let radiance_dependency = graph
+        .dependencies()
+        .iter()
+        .find(|dependency| {
+            dependency.after() == visualizer_node
+                && dependency.reasons().iter().any(|reason| {
+                    matches!(
+                        reason,
+                        GpuDependencyReason::ReadAfterWrite { resource, .. }
+                            if *resource == output.resource().diagnostic_identity()
+                    )
+                })
+        })
+        .expect("typed maintained radiance must order the producer before the visualizer");
+    assert_eq!(radiance_dependency.before().fragment_ordinal(), 0);
+    assert_eq!(graph.topological_order().last(), Some(&present_node));
+    assert_eq!(
+        graph
+            .nodes()
+            .iter()
+            .filter(|node| node.node().kind() == GpuWorkNodeKind::Present)
+            .count(),
+        1
+    );
+    assert!(
+        graph
+            .nodes()
+            .iter()
+            .all(|node| node.node().kind() != GpuWorkNodeKind::Readback)
     );
 }

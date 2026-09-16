@@ -229,7 +229,7 @@ fn prepare_render_gpu_frame_work_for_test(
 }
 
 #[cfg(test)]
-fn prepare_render_gpu_frame_work_with_composition_for_test(
+pub(crate) fn prepare_render_gpu_frame_work_with_composition_for_test(
     graph_label: GpuResourceLabel,
     nodes: impl IntoIterator<Item = ResolvedRenderGpuWorkNode>,
     producer_fragments: &[GpuWorkFragment],
