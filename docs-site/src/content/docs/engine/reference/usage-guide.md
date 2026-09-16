@@ -62,7 +62,7 @@ fn main() -> Result<()> {
     let app = app.run_for_frames(3)?;
 
     let world = app.world();
-    let query = world.query_state::<&Position, ()>();
+    let query = world.query::<&Position>();
     let positions: Vec<_> = query.iter(world).map(|position| position.x).collect();
     println!("{positions:?}");
     Ok(())

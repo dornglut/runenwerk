@@ -273,6 +273,6 @@ fn ordinary_commands_use_the_transfer_safe_default() {
         .run_for_frames(0)
         .expect("ordinary Commands should not require a local wrapper");
 
-    let query = app.world().query_state::<&SpawnedByDefaultCommands, ()>();
+    let query = app.world().query::<&SpawnedByDefaultCommands>();
     assert_eq!(query.iter(app.world()).count(), 1);
 }
