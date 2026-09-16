@@ -1,5 +1,9 @@
-use std::fs;
-use std::path::Path;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    process::Command,
+    sync::atomic::{AtomicU64, Ordering},
+};
 
 const RETIRED_AUTHORITY_MARKERS: &[&str] = &[
     "workflow-lifecycle.md",
@@ -33,12 +37,15 @@ const RETIRED_AUTHORITY_MARKERS: &[&str] = &[
     "prompt-templates/implementation-batch.md",
     "authority-model.md",
     "engineering-workflow.md",
+    "crate-docs-status.md",
 ];
 
 const TEXT_EXTENSIONS: &[&str] = &[
     "md", "mdx", "ron", "rs", "py", "toml", "yaml", "yml", "json", "ts", "tsx", "js", "mjs", "cjs",
     "sh", "ps1",
 ];
+
+static FIXTURE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[test]
 fn current_repository_authority_does_not_reference_retired_workflow_pages() {
@@ -57,6 +64,173 @@ fn current_repository_authority_does_not_reference_retired_workflow_pages() {
         "current repository authority still references retired workflow artifacts:\n{}",
         violations.join("\n")
     );
+}
+
+#[test]
+fn crate_inventory_validator_accepts_exact_workspace_membership() {
+    let result = run_docs_validator_fixture(
+        &["foundation/id", "domain/geometry"],
+        &["foundation/id", "domain/geometry"],
+    );
+    assert!(
+        result.success,
+        "validator should accept exact inventory:\n{}",
+        result.output
+    );
+}
+
+#[test]
+fn crate_inventory_validator_rejects_missing_workspace_member() {
+    let result =
+        run_docs_validator_fixture(&["foundation/id", "domain/geometry"], &["foundation/id"]);
+    assert!(
+        !result.success,
+        "validator should reject an omitted workspace member"
+    );
+    assert!(
+        result.output.contains(
+            "canonical crate inventory missing current workspace member: domain/geometry"
+        ),
+        "validator should report the missing workspace member:\n{}",
+        result.output
+    );
+}
+
+#[test]
+fn crate_inventory_validator_rejects_duplicate_inventory_member() {
+    let result = run_docs_validator_fixture(
+        &["foundation/id", "domain/geometry"],
+        &["foundation/id", "domain/geometry", "domain/geometry"],
+    );
+    assert!(
+        !result.success,
+        "validator should reject duplicate inventory rows"
+    );
+    assert!(
+        result.output.contains(
+            "canonical crate inventory lists workspace member more than once: domain/geometry"
+        ),
+        "validator should report the duplicate inventory member:\n{}",
+        result.output
+    );
+}
+
+#[test]
+fn crate_inventory_validator_rejects_non_workspace_inventory_member() {
+    let result = run_docs_validator_fixture(
+        &["foundation/id", "domain/geometry"],
+        &["foundation/id", "domain/geometry", "apps/stale_tool"],
+    );
+    assert!(
+        !result.success,
+        "validator should reject stale/non-member inventory rows"
+    );
+    assert!(
+        result.output.contains(
+            "canonical crate inventory lists non-workspace path as active member: apps/stale_tool"
+        ),
+        "validator should report the stale/non-member inventory path:\n{}",
+        result.output
+    );
+}
+
+struct ValidatorResult {
+    success: bool,
+    output: String,
+}
+
+fn run_docs_validator_fixture(
+    workspace_members: &[&str],
+    inventory_paths: &[&str],
+) -> ValidatorResult {
+    let repository_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .expect("xtask must remain under <repository>/tools/xtask");
+    let validator = repository_root.join("tools/docs/validate_docs.py");
+    let fixture = fixture_root();
+    let docs_workspace = fixture.join("docs-site/src/content/docs/workspace");
+    fs::create_dir_all(&docs_workspace)
+        .unwrap_or_else(|error| panic!("could not create validator fixture: {error}"));
+
+    fs::write(
+        fixture.join("Cargo.toml"),
+        cargo_workspace(workspace_members),
+    )
+    .unwrap_or_else(|error| panic!("could not write validator fixture Cargo.toml: {error}"));
+    fs::write(
+        docs_workspace.join("crate-inventory.md"),
+        crate_inventory_document(inventory_paths),
+    )
+    .unwrap_or_else(|error| panic!("could not write validator fixture inventory: {error}"));
+
+    let output = run_python_validator(&fixture, &validator);
+    let _ = fs::remove_dir_all(&fixture);
+    output
+}
+
+fn run_python_validator(fixture: &Path, validator: &Path) -> ValidatorResult {
+    let candidates: &[(&str, &[&str])] = &[("python3", &[]), ("python", &[]), ("py", &["-3"])];
+    let mut unavailable = Vec::new();
+
+    for (program, prefix_args) in candidates {
+        let mut command = Command::new(program);
+        command
+            .args(*prefix_args)
+            .arg(validator)
+            .current_dir(fixture);
+        match command.output() {
+            Ok(output) => {
+                let combined = format!(
+                    "{}{}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                return ValidatorResult {
+                    success: output.status.success(),
+                    output: combined,
+                };
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                unavailable.push(*program)
+            }
+            Err(error) => panic!("failed to run {program} for docs validator fixture: {error}"),
+        }
+    }
+
+    panic!(
+        "documentation validator regression tests require Python 3; unavailable commands: {}",
+        unavailable.join(", ")
+    );
+}
+
+fn fixture_root() -> PathBuf {
+    let serial = FIXTURE_COUNTER.fetch_add(1, Ordering::Relaxed);
+    std::env::temp_dir().join(format!(
+        "runenwerk-docs-validator-{}-{serial}",
+        std::process::id()
+    ))
+}
+
+fn cargo_workspace(members: &[&str]) -> String {
+    let rows = members
+        .iter()
+        .map(|member| format!("    \"{member}\","))
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!("[workspace]\nmembers = [\n{rows}\n]\n")
+}
+
+fn crate_inventory_document(paths: &[&str]) -> String {
+    let rows = paths
+        .iter()
+        .enumerate()
+        .map(|(index, path)| format!("| `fixture_{index}` | `{path}` | domain | fixture |"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "---\ntitle: Crate Inventory\ndescription: Validator fixture.\nstatus: active\nowner: workspace\nlayer: workspace\ncanonical: true\n---\n\n# Crate Inventory\n\n| Crate | Path | Layer | Purpose |\n| --- | --- | --- | --- |\n{rows}\n"
+    )
 }
 
 fn inspect_tree(

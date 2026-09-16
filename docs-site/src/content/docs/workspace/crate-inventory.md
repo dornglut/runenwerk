@@ -7,7 +7,6 @@ layer: workspace
 canonical: true
 last_reviewed: 2026-09-11
 related_docs:
-  - ./crate-docs-status.md
   - ../guidelines/architecture.md
   - ../guidelines/dependency-rules.md
 ---
@@ -146,7 +145,3 @@ Exact dependency revisions are executable truth in root `Cargo.toml` / `Cargo.lo
 RunenECS is no longer a local workspace member. Runenwerk retains only
 integration/public-API guidance; the standalone repository is the sole ECS
 implementation and conformance authority.
-
-## Documentation status
-
-Documentation coverage is tracked separately in [`crate-docs-status.md`](./crate-docs-status.md). Do not duplicate live crate membership there beyond the coverage rows needed for documentation status.
