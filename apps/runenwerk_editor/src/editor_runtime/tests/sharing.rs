@@ -1,7 +1,6 @@
 use editor_core::{
-    ChangeOrigin, ReconciliationRejectReason, ReconciliationResult, SessionShareKind,
-    SessionSharePolicy, SharedChangeEnvelope, SharedChangePropagationSink, SharedChangeSequence,
-    SharingPolicy, ToolId, WorkflowEventKind,
+    ChangeOrigin, ReconciliationRejectReason, ReconciliationResult, SharedChangeEnvelope,
+    SharedChangePropagationSink, SharedChangeSequence, SharingPolicy, WorkflowEventKind,
 };
 use editor_scene::{SceneCommandIntent, scene_intent_to_command};
 
@@ -88,24 +87,6 @@ fn reconcile_shared_change_rejects_base_version_mismatch() {
         local_change.result_version
     );
     assert_eq!(local_runtime.ratified_change_log().len(), 1);
-}
-
-#[test]
-fn observation_safe_session_share_policy_enqueues_session_changes() {
-    let mut runtime = RunenwerkEditorRuntime::new();
-    runtime.set_session_share_policy(SessionSharePolicy::ObservationSafe);
-
-    runtime.set_active_tool_with_origin(Some(ToolId(9)), ChangeOrigin::EditorShell);
-
-    assert_eq!(runtime.queued_session_share_count(), 1);
-    let queued = runtime.drain_session_share_changes();
-    assert_eq!(queued.len(), 1);
-    assert!(matches!(
-        queued[0].entry.kind,
-        SessionShareKind::ActiveToolSet {
-            tool_id: Some(ToolId(9))
-        }
-    ));
 }
 
 fn create_entity_change(

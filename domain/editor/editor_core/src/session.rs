@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::{DocumentDescriptor, DocumentId, DocumentKind, EditorMutationError, ToolId};
+use crate::{DocumentDescriptor, DocumentId, DocumentKind, EditorMutationError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ModeId(pub u64);
@@ -224,7 +224,6 @@ pub struct EditorSession {
     documents: BTreeMap<DocumentId, DocumentDescriptor>,
     document_tabs: Vec<DocumentId>,
     active_document: Option<DocumentId>,
-    active_tool: Option<ToolId>,
     active_mode: ModeId,
 }
 
@@ -309,14 +308,6 @@ impl EditorSession {
     pub fn active_document_descriptor(&self) -> Option<&DocumentDescriptor> {
         self.active_document
             .and_then(|document_id| self.document(document_id))
-    }
-
-    pub fn active_tool(&self) -> Option<ToolId> {
-        self.active_tool
-    }
-
-    pub fn set_active_tool(&mut self, tool_id: Option<ToolId>) {
-        self.active_tool = tool_id;
     }
 
     pub fn documents(&self) -> impl Iterator<Item = &DocumentDescriptor> {

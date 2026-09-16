@@ -42,10 +42,6 @@ pub enum TabDropDestination {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ShellCommand {
-    ActivateSelectTool,
-    ActivateTranslateTool,
-    ActivateRotateTool,
-    ActivateScaleTool,
     ToggleToolbarMenu {
         menu: ToolbarMenuKind,
     },

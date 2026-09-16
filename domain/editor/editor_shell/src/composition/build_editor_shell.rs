@@ -67,10 +67,6 @@ use super::surface_definition_context::contrast_popup_theme;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RoutedShellAction {
-    ActivateSelectTool,
-    ActivateTranslateTool,
-    ActivateRotateTool,
-    ActivateScaleTool,
     ToggleToolbarMenu {
         menu: ToolbarMenuKind,
     },
@@ -1933,10 +1929,10 @@ fn legacy_toolbar_action_for_route_slot(route: &str) -> Option<RoutedShellAction
             command: ToolbarCommandKind::AddWorkspace,
             enabled: true,
         }),
-        "editor.tool.select" => Some(RoutedShellAction::ActivateSelectTool),
-        "editor.tool.translate" => Some(RoutedShellAction::ActivateTranslateTool),
-        "editor.tool.rotate" => Some(RoutedShellAction::ActivateRotateTool),
-        "editor.tool.scale" => Some(RoutedShellAction::ActivateScaleTool),
+        "editor.tool.select"
+        | "editor.tool.translate"
+        | "editor.tool.rotate"
+        | "editor.tool.scale" => None,
         "editor.toolbar.file.save" => Some(toolbar_command_action(ToolbarCommandKind::SaveScene)),
         "editor.toolbar.file.save_as" => {
             Some(toolbar_command_action(ToolbarCommandKind::SaveSceneAs))

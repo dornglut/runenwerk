@@ -1,17 +1,16 @@
 use editor_core::{ChangeOrigin, ComponentTypeId, EntityId};
 use editor_inspector::{InspectorEditValue, InspectorPath};
 use editor_scene::SceneCommandIntent;
-use editor_shell::ShellCommand;
 use editor_viewport::ViewportHitResult;
 use scene::{LocalTransform, Vec3Value};
 
+use editor_shell::ViewportToolKind;
 use runenwerk_editor::editor_app::RunenwerkEditorApp;
 use runenwerk_editor::editor_features::viewport::ViewportInteractionCommand;
 use runenwerk_editor::editor_features::{
     execute_intent_with_history, redo_last_scene_change, undo_last_scene_change,
 };
 use runenwerk_editor::editor_panels::OutlinerPanelCommand;
-use runenwerk_editor::shell::dispatch_shell_command;
 
 #[derive(Debug, Clone, Default, runen_ecs::Reflect)]
 struct Vec2 {
@@ -87,6 +86,9 @@ fn scene_authoring_workflow_smoke_select_edit_translate_undo_redo() {
     let viewport_surface = default_surface_by_kind(&workspace, editor_shell::PanelKind::Viewport);
     let viewport_mounted_unit =
         ui_composition::MountedUnitId::try_from_raw(viewport_surface.raw()).unwrap();
+    app.surface_sessions_mut()
+        .session_mut(viewport_mounted_unit)
+        .active_viewport_tool = ViewportToolKind::Translate;
     app.dispatch_viewport_interaction_for_mounted_unit(
         viewport_mounted_unit,
         ViewportInteractionCommand::PointerDown {
@@ -118,16 +120,9 @@ fn scene_authoring_workflow_smoke_select_edit_translate_undo_redo() {
         .expect("local transform should exist");
     assert_eq!(transform.translation, Vec3Value::new(6.0, 0.0, 0.0));
 
-    dispatch_shell_command(
-        &mut app,
-        None,
-        ShellCommand::ActivateRotateTool,
-        None,
-        None,
-        None,
-        None,
-    )
-    .expect("rotate tool activation should succeed");
+    app.surface_sessions_mut()
+        .session_mut(viewport_mounted_unit)
+        .active_viewport_tool = ViewportToolKind::Rotate;
     app.dispatch_viewport_interaction_for_mounted_unit(
         viewport_mounted_unit,
         ViewportInteractionCommand::PointerDown {
@@ -148,16 +143,9 @@ fn scene_authoring_workflow_smoke_select_edit_translate_undo_redo() {
     )
     .expect("viewport rotate up should succeed");
 
-    dispatch_shell_command(
-        &mut app,
-        None,
-        ShellCommand::ActivateScaleTool,
-        None,
-        None,
-        None,
-        None,
-    )
-    .expect("scale tool activation should succeed");
+    app.surface_sessions_mut()
+        .session_mut(viewport_mounted_unit)
+        .active_viewport_tool = ViewportToolKind::Scale;
     app.dispatch_viewport_interaction_for_mounted_unit(
         viewport_mounted_unit,
         ViewportInteractionCommand::PointerDown {
@@ -175,16 +163,9 @@ fn scene_authoring_workflow_smoke_select_edit_translate_undo_redo() {
         ViewportInteractionCommand::PointerUp,
     )
     .expect("viewport scale up should succeed");
-    dispatch_shell_command(
-        &mut app,
-        None,
-        ShellCommand::ActivateTranslateTool,
-        None,
-        None,
-        None,
-        None,
-    )
-    .expect("translate tool activation should succeed");
+    app.surface_sessions_mut()
+        .session_mut(viewport_mounted_unit)
+        .active_viewport_tool = ViewportToolKind::Translate;
 
     let transform = app
         .runtime()

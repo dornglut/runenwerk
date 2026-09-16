@@ -185,10 +185,6 @@ fn command_for_activation(
     }
 
     match action {
-        RoutedShellAction::ActivateSelectTool => ShellCommand::ActivateSelectTool,
-        RoutedShellAction::ActivateTranslateTool => ShellCommand::ActivateTranslateTool,
-        RoutedShellAction::ActivateRotateTool => ShellCommand::ActivateRotateTool,
-        RoutedShellAction::ActivateScaleTool => ShellCommand::ActivateScaleTool,
         RoutedShellAction::ToggleToolbarMenu { menu } => {
             ShellCommand::ToggleToolbarMenu { menu: *menu }
         }

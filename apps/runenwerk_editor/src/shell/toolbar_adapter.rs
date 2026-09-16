@@ -15,10 +15,6 @@ use ui_definition::{UiAvailabilityBinding, UiAvailabilityId, UiRouteSlotId};
 
 use crate::shell::{EditorCommandAvailabilityContext, editor_command_catalog};
 
-pub const SELECT_TOOL_ID: ToolId = ToolId(1);
-pub const TRANSLATE_TOOL_ID: ToolId = ToolId(2);
-pub const ROTATE_TOOL_ID: ToolId = ToolId(3);
-pub const SCALE_TOOL_ID: ToolId = ToolId(4);
 pub const TOOLBAR_UNDO_ID: ToolId = ToolId(1001);
 pub const TOOLBAR_REDO_ID: ToolId = ToolId(1002);
 pub const TOOLBAR_SAVE_ID: ToolId = ToolId(1003);
@@ -34,7 +30,6 @@ const WORKSPACE_PLUS_ID: ToolId = ToolId(3_003);
     reason = "toolbar observation projection takes explicit shell state inputs"
 )]
 pub fn build_toolbar_observation_frame(
-    _active_tool: Option<ToolId>,
     can_undo: bool,
     can_redo: bool,
     _debug_logs_enabled: bool,
@@ -357,7 +352,6 @@ mod tests {
     #[test]
     fn material_profile_projects_as_workspace_button_and_menu_item() {
         let frame = build_toolbar_observation_frame(
-            None,
             false,
             false,
             false,
@@ -388,7 +382,6 @@ mod tests {
     #[test]
     fn default_menu_buttons_use_catalog_labels() {
         let frame = build_toolbar_observation_frame(
-            None,
             false,
             false,
             false,

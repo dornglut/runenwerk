@@ -219,6 +219,12 @@ Viewport product targets, render jobs, picking, and retained
 `ViewportSurfaceEmbed` projection remain app/runtime concerns. They do not write
 composition structure during ordinary frame updates.
 
+Viewport tool activation is session-local state owned by the mounted-unit
+`SurfaceSessionStore`. Provider actions and shortcuts carry the exact mounted
+viewport target and projection epoch; stale or structurally mismatched requests
+fail closed. Picking and direct manipulation resolve the tool from that same
+viewport session, so mounted viewports do not share an active-tool authority.
+
 ## Self-Authoring State
 
 The app-owned self-authoring document lifecycle remains in
