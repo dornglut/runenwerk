@@ -6,8 +6,9 @@ use crate::editor_features::{ViewportToolCommand, ViewportToolController};
 use crate::editor_panels::ViewportPanelCommand;
 use crate::editor_runtime::TransformToolKind;
 use crate::editor_tools_state::TranslateAxis;
-use crate::shell::{ROTATE_TOOL_ID, SCALE_TOOL_ID};
 use editor_core::EditorMutationError;
+use editor_shell::ViewportToolKind;
+use ui_composition::MountedUnitId;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ViewportInteractionCommand {
@@ -55,6 +56,7 @@ pub struct ViewportInteractionController;
 impl ViewportInteractionController {
     pub fn dispatch(
         app: &mut RunenwerkEditorApp,
+        mounted_unit_id: MountedUnitId,
         state: &mut ViewportInteractionState,
         command: ViewportInteractionCommand,
     ) -> Result<(), EditorMutationError> {
@@ -76,7 +78,7 @@ impl ViewportInteractionController {
                     )?;
 
                     let translate_axis = map_gizmo_axis(axis)?;
-                    let tool = active_transform_tool(app);
+                    let tool = active_transform_tool(app, mounted_unit_id)?;
                     let begin = match tool {
                         TransformToolKind::Translate => {
                             ViewportToolCommand::BeginTranslateAxisDrag {
@@ -112,7 +114,11 @@ impl ViewportInteractionController {
                     ));
                 }
 
-                let tool = state.active_tool.unwrap_or(TransformToolKind::Translate);
+                let tool = state
+                    .active_tool
+                    .ok_or(EditorMutationError::session_rejected(
+                        "viewport drag has no captured tool",
+                    ))?;
                 let update = match tool {
                     TransformToolKind::Translate => {
                         ViewportToolCommand::UpdateTranslateAxisDrag { amount }
@@ -147,11 +153,17 @@ impl ViewportInteractionController {
     }
 }
 
-fn active_transform_tool(app: &RunenwerkEditorApp) -> TransformToolKind {
-    match app.runtime().session().active_tool() {
-        Some(ROTATE_TOOL_ID) => TransformToolKind::Rotate,
-        Some(SCALE_TOOL_ID) => TransformToolKind::Scale,
-        _ => TransformToolKind::Translate,
+fn active_transform_tool(
+    app: &RunenwerkEditorApp,
+    mounted_unit_id: MountedUnitId,
+) -> Result<TransformToolKind, EditorMutationError> {
+    match app.surface_sessions().viewport_tool(mounted_unit_id) {
+        ViewportToolKind::Translate => Ok(TransformToolKind::Translate),
+        ViewportToolKind::Rotate => Ok(TransformToolKind::Rotate),
+        ViewportToolKind::Scale => Ok(TransformToolKind::Scale),
+        ViewportToolKind::Select => Err(EditorMutationError::session_rejected(
+            "gizmo axis interaction requires translate, rotate, or scale tool",
+        )),
     }
 }
 

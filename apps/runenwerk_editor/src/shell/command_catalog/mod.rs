@@ -4,7 +4,7 @@
 use editor_shell::{
     EDITOR_DESIGN_WORKSPACE_PROFILE_ID, MATERIAL_WORKSPACE_PROFILE_ID,
     MODELLING_WORKSPACE_PROFILE_ID, RoutedShellAction, SCENE_WORKSPACE_PROFILE_ID, ShellCommand,
-    ToolbarCommandKind, ToolbarMenuKind,
+    ToolbarCommandKind, ToolbarMenuKind, ViewportToolKind,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -61,14 +61,34 @@ impl KnownEditorCommand {
         EDITOR_COMMAND_ORDER
     }
 
-    pub fn to_routed_shell_action(self, can_undo: bool, can_redo: bool) -> RoutedShellAction {
+    pub fn viewport_tool(self) -> Option<ViewportToolKind> {
+        match self {
+            Self::ActivateSelectTool => Some(ViewportToolKind::Select),
+            Self::ActivateTranslateTool => Some(ViewportToolKind::Translate),
+            Self::ActivateRotateTool => Some(ViewportToolKind::Rotate),
+            Self::ActivateScaleTool => Some(ViewportToolKind::Scale),
+            _ => None,
+        }
+    }
+
+    pub fn to_routed_shell_action(
+        self,
+        can_undo: bool,
+        can_redo: bool,
+    ) -> Option<RoutedShellAction> {
+        if self.viewport_tool().is_some() {
+            return None;
+        }
         editor_command_catalog()
             .descriptor(self)
             .expect("known command should have a catalog descriptor")
             .routed_shell_action(EditorCommandAvailabilityContext { can_undo, can_redo })
     }
 
-    pub fn to_shell_command(self) -> ShellCommand {
+    pub fn to_shell_command(self) -> Option<ShellCommand> {
+        if self.viewport_tool().is_some() {
+            return None;
+        }
         editor_command_catalog()
             .descriptor(self)
             .expect("known command should have a catalog descriptor")
@@ -187,13 +207,12 @@ impl EditorCommandDescriptor {
     pub fn routed_shell_action(
         &self,
         context: EditorCommandAvailabilityContext,
-    ) -> RoutedShellAction {
+    ) -> Option<RoutedShellAction> {
         let enabled = self.availability(context).is_enabled();
-        match self.command {
-            KnownEditorCommand::ActivateSelectTool => RoutedShellAction::ActivateSelectTool,
-            KnownEditorCommand::ActivateTranslateTool => RoutedShellAction::ActivateTranslateTool,
-            KnownEditorCommand::ActivateRotateTool => RoutedShellAction::ActivateRotateTool,
-            KnownEditorCommand::ActivateScaleTool => RoutedShellAction::ActivateScaleTool,
+        if self.command.viewport_tool().is_some() {
+            return None;
+        }
+        Some(match self.command {
             KnownEditorCommand::ToggleFileMenu => RoutedShellAction::ToggleToolbarMenu {
                 menu: ToolbarMenuKind::File,
             },
@@ -275,15 +294,20 @@ impl EditorCommandDescriptor {
                     .expect("toolbar command descriptor should have toolbar command"),
                 enabled,
             },
-        }
+            KnownEditorCommand::ActivateSelectTool
+            | KnownEditorCommand::ActivateTranslateTool
+            | KnownEditorCommand::ActivateRotateTool
+            | KnownEditorCommand::ActivateScaleTool => unreachable!(
+                "viewport tool commands are contextual and do not have routed shell actions"
+            ),
+        })
     }
 
-    pub fn shell_command(&self) -> ShellCommand {
-        match self.command {
-            KnownEditorCommand::ActivateSelectTool => ShellCommand::ActivateSelectTool,
-            KnownEditorCommand::ActivateTranslateTool => ShellCommand::ActivateTranslateTool,
-            KnownEditorCommand::ActivateRotateTool => ShellCommand::ActivateRotateTool,
-            KnownEditorCommand::ActivateScaleTool => ShellCommand::ActivateScaleTool,
+    pub fn shell_command(&self) -> Option<ShellCommand> {
+        if self.command.viewport_tool().is_some() {
+            return None;
+        }
+        Some(match self.command {
             KnownEditorCommand::ToggleFileMenu => ShellCommand::ToggleToolbarMenu {
                 menu: ToolbarMenuKind::File,
             },
@@ -346,7 +370,13 @@ impl EditorCommandDescriptor {
                     .toolbar_command()
                     .expect("toolbar command descriptor should have toolbar command"),
             },
-        }
+            KnownEditorCommand::ActivateSelectTool
+            | KnownEditorCommand::ActivateTranslateTool
+            | KnownEditorCommand::ActivateRotateTool
+            | KnownEditorCommand::ActivateScaleTool => {
+                unreachable!("viewport tool commands are contextual and do not have shell commands")
+            }
+        })
     }
 
     pub fn toolbar_command(&self) -> Option<ToolbarCommandKind> {

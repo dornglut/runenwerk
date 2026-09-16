@@ -116,6 +116,8 @@ pub fn dispatch_editor_input_system(
         bridge.last_target_viewport = Some(binding.viewport_id);
     }
     let preferred_viewport_id = bridge.last_target_viewport;
+    let authored_viewport_shortcuts_blocked =
+        shell_focus_captures_viewport_shortcuts(&host.shell_state);
 
     dispatch_global_shortcuts(
         &actions,
@@ -124,6 +126,9 @@ pub fn dispatch_editor_input_system(
         &mut viewport_presentations,
         &viewport_observations,
         &tool_surface_bindings,
+        position,
+        preferred_viewport_id,
+        authored_viewport_shortcuts_blocked,
     );
 
     if picking_results.global_revision() != bridge.last_logged_picking_revision {
@@ -384,7 +389,6 @@ pub fn dispatch_editor_input_system(
             &actions,
             &mut host,
             &bridge,
-            &mut viewport_presentations,
             &viewport_observations,
             &tool_surface_bindings,
             &mut viewport_render_commands,
@@ -477,6 +481,9 @@ fn dispatch_global_shortcuts(
     viewport_presentations: &mut ViewportPresentationStateResource,
     viewport_observations: &ViewportArtifactObservationResource,
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    cursor: UiPoint,
+    preferred_viewport_id: Option<ViewportId>,
+    viewport_shortcuts_blocked: bool,
 ) {
     dispatch_active_editor_shortcuts(
         actions,
@@ -485,6 +492,9 @@ fn dispatch_global_shortcuts(
         viewport_presentations,
         viewport_observations,
         tool_surface_bindings,
+        cursor,
+        preferred_viewport_id,
+        viewport_shortcuts_blocked,
     );
     if bridge.active_shortcut_catalog_active {
         return;
@@ -541,6 +551,9 @@ fn dispatch_active_editor_shortcuts(
     viewport_presentations: &mut ViewportPresentationStateResource,
     viewport_observations: &ViewportArtifactObservationResource,
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    cursor: UiPoint,
+    preferred_viewport_id: Option<ViewportId>,
+    viewport_shortcuts_blocked: bool,
 ) {
     let pressed = bridge
         .active_shortcut_commands
@@ -554,23 +567,46 @@ fn dispatch_active_editor_shortcuts(
             viewport_presentations,
             viewport_observations,
             tool_surface_bindings,
+            cursor,
+            preferred_viewport_id,
+            viewport_shortcuts_blocked,
         ) {
             eprintln!("active editor shortcut failed: {error}");
         }
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn dispatch_known_editor_command(
     command: KnownEditorCommand,
     host: &mut EditorHostResource,
     viewport_presentations: &mut ViewportPresentationStateResource,
     viewport_observations: &ViewportArtifactObservationResource,
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    cursor: UiPoint,
+    preferred_viewport_id: Option<ViewportId>,
+    viewport_shortcuts_blocked: bool,
 ) -> Result<(), editor_core::EditorMutationError> {
+    if let Some(tool) = command.viewport_tool() {
+        if viewport_shortcuts_blocked {
+            return Ok(());
+        }
+        return dispatch_viewport_tool_activation(
+            tool,
+            host,
+            viewport_observations,
+            tool_surface_bindings,
+            cursor,
+            preferred_viewport_id,
+        );
+    }
+    let Some(shell_command) = command.to_shell_command() else {
+        return Ok(());
+    };
     dispatch_shell_command(
         &mut host.app,
         Some(&mut host.shell_state),
-        command.to_shell_command(),
+        shell_command,
         Some(&mut *viewport_presentations),
         Some(viewport_observations),
         Some(tool_surface_bindings),
@@ -579,11 +615,61 @@ fn dispatch_known_editor_command(
 }
 
 #[allow(clippy::too_many_arguments)]
+fn dispatch_viewport_tool_activation(
+    tool: editor_shell::ViewportToolKind,
+    host: &mut EditorHostResource,
+    viewport_observations: &ViewportArtifactObservationResource,
+    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    cursor: UiPoint,
+    preferred_viewport_id: Option<ViewportId>,
+) -> Result<(), editor_core::EditorMutationError> {
+    let Some(binding) = fallback_viewport_binding(tool_surface_bindings, cursor).or_else(|| {
+        preferred_viewport_id
+            .and_then(|viewport_id| viewport_binding_by_id(tool_surface_bindings, viewport_id))
+    }) else {
+        return Ok(());
+    };
+    let Some(mounted_unit_id) = host
+        .shell_state
+        .mounted_unit_id_for_tool_surface(binding.tool_surface_id)
+    else {
+        return Ok(());
+    };
+    let Some(target) = host
+        .shell_state
+        .structural_command_target_for_mounted_unit(mounted_unit_id)
+    else {
+        return Ok(());
+    };
+    if target.active_tool_surface != Some(binding.tool_surface_id)
+        || target.panel_instance_id != binding.panel_instance_id
+        || target.tab_stack_id != binding.tab_stack_id
+    {
+        return Ok(());
+    }
+    let projection_epoch = host.shell_state.current_projection_epoch();
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::ApplySurfaceSessionMutation {
+            target,
+            mutation: editor_shell::SurfaceSessionMutation::Viewport(
+                editor_shell::ViewportSessionMutation::ActivateTool { tool },
+            ),
+            projection_epoch,
+        },
+        None,
+        Some(viewport_observations),
+        Some(tool_surface_bindings),
+        Some(projection_epoch),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
 fn dispatch_viewport_shortcuts(
     actions: &engine::plugins::ActionState,
     host: &mut EditorHostResource,
     bridge: &EditorInputBridgeState,
-    viewport_presentations: &mut ViewportPresentationStateResource,
     viewport_observations: &ViewportArtifactObservationResource,
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
     viewport_render_commands: &mut ViewportRenderStateCommandQueueResource,
@@ -593,14 +679,13 @@ fn dispatch_viewport_shortcuts(
     if !bridge.active_shortcut_catalog_active
         && (actions.action_pressed(ACTION_EDITOR_TOOL_SELECT)
             || actions.action_pressed(action::UI_EDITOR_RESTORE_ALL))
-        && let Err(error) = dispatch_shell_command(
-            &mut host.app,
-            Some(&mut host.shell_state),
-            ShellCommand::ActivateSelectTool,
-            Some(&mut *viewport_presentations),
-            Some(viewport_observations),
-            Some(tool_surface_bindings),
-            None,
+        && let Err(error) = dispatch_viewport_tool_activation(
+            editor_shell::ViewportToolKind::Select,
+            host,
+            viewport_observations,
+            tool_surface_bindings,
+            cursor,
+            preferred_viewport_id,
         )
     {
         eprintln!("select-tool shortcut failed: {error}");
@@ -609,14 +694,13 @@ fn dispatch_viewport_shortcuts(
     if !bridge.active_shortcut_catalog_active
         && (actions.action_pressed(ACTION_EDITOR_TOOL_TRANSLATE)
             || actions.action_pressed(action::UI_EDITOR_HIDE_SELECTED))
-        && let Err(error) = dispatch_shell_command(
-            &mut host.app,
-            Some(&mut host.shell_state),
-            ShellCommand::ActivateTranslateTool,
-            Some(&mut *viewport_presentations),
-            Some(viewport_observations),
-            Some(tool_surface_bindings),
-            None,
+        && let Err(error) = dispatch_viewport_tool_activation(
+            editor_shell::ViewportToolKind::Translate,
+            host,
+            viewport_observations,
+            tool_surface_bindings,
+            cursor,
+            preferred_viewport_id,
         )
     {
         eprintln!("translate-tool shortcut failed: {error}");
@@ -624,14 +708,13 @@ fn dispatch_viewport_shortcuts(
 
     if !bridge.active_shortcut_catalog_active
         && actions.action_pressed(ACTION_EDITOR_TOOL_ROTATE)
-        && let Err(error) = dispatch_shell_command(
-            &mut host.app,
-            Some(&mut host.shell_state),
-            ShellCommand::ActivateRotateTool,
-            Some(&mut *viewport_presentations),
-            Some(viewport_observations),
-            Some(tool_surface_bindings),
-            None,
+        && let Err(error) = dispatch_viewport_tool_activation(
+            editor_shell::ViewportToolKind::Rotate,
+            host,
+            viewport_observations,
+            tool_surface_bindings,
+            cursor,
+            preferred_viewport_id,
         )
     {
         eprintln!("rotate-tool shortcut failed: {error}");
@@ -639,14 +722,13 @@ fn dispatch_viewport_shortcuts(
 
     if !bridge.active_shortcut_catalog_active
         && actions.action_pressed(ACTION_EDITOR_TOOL_SCALE)
-        && let Err(error) = dispatch_shell_command(
-            &mut host.app,
-            Some(&mut host.shell_state),
-            ShellCommand::ActivateScaleTool,
-            Some(&mut *viewport_presentations),
-            Some(viewport_observations),
-            Some(tool_surface_bindings),
-            None,
+        && let Err(error) = dispatch_viewport_tool_activation(
+            editor_shell::ViewportToolKind::Scale,
+            host,
+            viewport_observations,
+            tool_surface_bindings,
+            cursor,
+            preferred_viewport_id,
         )
     {
         eprintln!("scale-tool shortcut failed: {error}");
@@ -990,7 +1072,7 @@ mod tests {
     use super::*;
     use crate::editor_app::RunenwerkEditorApp;
     use crate::runtime::viewport::{ViewportLayoutEntry, ViewportLayoutMapResource};
-    use crate::shell::{RunenwerkEditorShellController, SELECT_TOOL_ID, validate_editor_shortcuts};
+    use crate::shell::{RunenwerkEditorShellController, validate_editor_shortcuts};
     use editor_definition::{EditorShortcutDefinition, EditorShortcutSetDefinition};
     use editor_viewport::ViewportId;
     use engine::plugins::render::UiFontAtlasResource;
@@ -1002,7 +1084,10 @@ mod tests {
 
     #[test]
     fn active_shortcuts_dispatch_known_tool_and_definition_commands() {
-        let mut host = EditorHostResource::default();
+        let mut host = EditorHostResource {
+            shell_state: seeded_shell_state_with_projection(),
+            ..Default::default()
+        };
         host.shell_state
             .active_editor_definitions_mut()
             .install_shortcuts(
@@ -1032,7 +1117,21 @@ mod tests {
         let mut bridge = EditorInputBridgeState::default();
         let mut viewport_presentations = ViewportPresentationStateResource::default();
         let viewport_observations = ViewportArtifactObservationResource::default();
-        let tool_surface_bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
+        let tool_surface_bindings = seeded_bindings(
+            &host.shell_state,
+            ViewportId(5),
+            UiRect::new(100.0, 80.0, 900.0, 560.0),
+        );
+        let mounted_unit_id = host
+            .shell_state
+            .mounted_unit_id_for_tool_surface(
+                tool_surface_bindings
+                    .bindings()
+                    .next()
+                    .expect("seeded viewport binding should exist")
+                    .tool_surface_id,
+            )
+            .expect("seeded viewport should have a mounted unit");
 
         sync_active_editor_shortcut_bindings(&input, &mut actions, &host, &mut bridge);
         input.handle_keyboard_input(KeyCode::SuperLeft, ElementState::Pressed, None);
@@ -1045,10 +1144,13 @@ mod tests {
             &mut viewport_presentations,
             &viewport_observations,
             &tool_surface_bindings,
+            UiPoint::new(220.0, 300.0),
+            Some(ViewportId(5)),
+            false,
         );
         assert_eq!(
-            host.app.runtime().session().active_tool(),
-            Some(SELECT_TOOL_ID)
+            host.app.surface_sessions().viewport_tool(mounted_unit_id),
+            editor_shell::ViewportToolKind::Select
         );
 
         let mut input = InputState::default();
@@ -1066,6 +1168,9 @@ mod tests {
             &mut viewport_presentations,
             &viewport_observations,
             &tool_surface_bindings,
+            UiPoint::new(220.0, 300.0),
+            Some(ViewportId(5)),
+            false,
         );
         assert_eq!(
             host.app.pending_editor_definition_activation_count(),

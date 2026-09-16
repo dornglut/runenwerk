@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 #[cfg(test)]
 use editor_shell::ToolSurfaceStableKey;
-use editor_shell::{EditorCompositionRuntime, ToolSurfaceInstanceId};
+use editor_shell::{EditorCompositionRuntime, ToolSurfaceInstanceId, ViewportToolKind};
 use editor_viewport::ViewportId;
 use ui_composition::MountedUnitId;
 use ui_math::UiPoint;
@@ -22,6 +22,7 @@ pub struct SurfaceSessionState {
     pub entity_table_ui_state: EntityTablePanelUiState,
     pub inspector_ui_state: EditorInspectorUiState,
     pub viewport_interaction_state: ViewportInteractionState,
+    pub active_viewport_tool: ViewportToolKind,
     pub viewport_details_visible: bool,
     pub viewport_statistics_visible: bool,
     pub viewport_options_menu_open: bool,
@@ -45,6 +46,7 @@ impl Default for SurfaceSessionState {
             entity_table_ui_state: EntityTablePanelUiState::new(),
             inspector_ui_state: EditorInspectorUiState::new(),
             viewport_interaction_state: ViewportInteractionState::new(),
+            active_viewport_tool: ViewportToolKind::Select,
             viewport_details_visible: false,
             viewport_statistics_visible: false,
             viewport_options_menu_open: false,
@@ -80,6 +82,18 @@ impl SurfaceSessionTestKey for ToolSurfaceInstanceId {
 }
 
 impl SurfaceSessionStore {
+    pub fn viewport_tool(&self, mounted_unit_id: MountedUnitId) -> ViewportToolKind {
+        self.session(mounted_unit_id)
+            .map(|session| session.active_viewport_tool)
+            .unwrap_or_default()
+    }
+
+    pub fn close_viewport_tool_menus(&mut self, mounted_unit_id: MountedUnitId) {
+        let session = self.session_mut(mounted_unit_id);
+        session.viewport_tools_menu_open = false;
+        session.viewport_tool_radial_session = None;
+    }
+
     #[cfg(not(test))]
     pub fn session(&self, mounted_unit_id: MountedUnitId) -> Option<&SurfaceSessionState> {
         self.sessions_by_mounted_unit.get(&mounted_unit_id)
@@ -382,5 +396,47 @@ mod tests {
         store.clear_transient();
 
         assert!(store.is_empty());
+    }
+
+    #[test]
+    fn viewport_tool_defaults_to_select_and_prunes_with_mounted_unit() {
+        let mut allocator = WorkspaceIdentityAllocator::new();
+        let workspace_id = WorkspaceId::try_from_raw(1).unwrap();
+        let workspace = WorkspaceState::bootstrap_current_layout(workspace_id, &mut allocator);
+        let surface_id = workspace
+            .tool_surfaces()
+            .find(|surface| surface.stable_surface_key().as_str() == SCENE_VIEWPORT_SURFACE_KEY)
+            .expect("viewport surface should exist")
+            .id;
+        let mounted_unit_id = MountedUnitId::try_from_raw(surface_id.raw()).unwrap();
+        let mut store = SurfaceSessionStore::default();
+
+        assert_eq!(
+            store.viewport_tool(mounted_unit_id),
+            ViewportToolKind::Select
+        );
+        store.session_mut(surface_id).active_viewport_tool = ViewportToolKind::Rotate;
+        assert_eq!(
+            store.viewport_tool(mounted_unit_id),
+            ViewportToolKind::Rotate
+        );
+
+        let panel_id = workspace
+            .panels()
+            .find(|panel| panel.active_tool_surface == Some(surface_id))
+            .expect("viewport surface should be mounted")
+            .id;
+        let workspace = editor_shell::reduce_workspace(
+            &workspace,
+            WorkspaceMutation::DetachToolSurfaceFromPanel { panel_id },
+        )
+        .expect("viewport surface should unmount");
+        store.prune_for_workspace(&workspace);
+
+        assert!(store.session(surface_id).is_none());
+        assert_eq!(
+            store.viewport_tool(mounted_unit_id),
+            ViewportToolKind::Select
+        );
     }
 }

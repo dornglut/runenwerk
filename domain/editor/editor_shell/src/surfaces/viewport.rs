@@ -6,6 +6,15 @@ use editor_viewport::{
 };
 use ui_math::UiPoint;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ViewportToolKind {
+    #[default]
+    Select,
+    Translate,
+    Rotate,
+    Scale,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ViewportSurfaceAction {
     SelectProduct {
@@ -40,6 +49,9 @@ pub enum ViewportSurfaceAction {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ViewportSessionMutation {
+    ActivateTool {
+        tool: ViewportToolKind,
+    },
     ToggleDetails,
     ToggleStatistics,
     ToggleOptionsMenu,

@@ -31,6 +31,7 @@ pub(crate) fn dispatch_session_mutation(
     app: &mut RunenwerkEditorApp,
     shell_state: Option<&RunenwerkEditorShellState>,
     target: StructuralCommandTarget,
+    projection_epoch: u64,
     mutation: ViewportSessionMutation,
 ) -> Result<(), EditorMutationError> {
     let Some(surface_contract) =
@@ -49,6 +50,12 @@ pub(crate) fn dispatch_session_mutation(
         ));
         return Ok(());
     }
+    let Some(shell_state) = shell_state else {
+        return Ok(());
+    };
+    if !shell_state.is_projection_epoch_current(projection_epoch) {
+        return Ok(());
+    }
     let Some(mounted_unit_id) = target.mounted_unit_id else {
         app.append_console_line(
             "[viewport] session mutation ignored (missing tool-surface session target)".to_string(),
@@ -58,8 +65,16 @@ pub(crate) fn dispatch_session_mutation(
     let Some(surface_id) = target.active_tool_surface else {
         return Ok(());
     };
+    if shell_state.structural_command_target_for_mounted_unit(mounted_unit_id) != Some(target) {
+        return Ok(());
+    }
     let session = app.surface_sessions_mut().session_mut(mounted_unit_id);
     match mutation {
+        ViewportSessionMutation::ActivateTool { tool } => {
+            session.active_viewport_tool = tool;
+            session.viewport_tools_menu_open = false;
+            session.viewport_tool_radial_session = None;
+        }
         ViewportSessionMutation::ToggleDetails => {
             session.viewport_details_visible = !session.viewport_details_visible;
         }

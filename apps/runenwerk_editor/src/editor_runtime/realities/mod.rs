@@ -3,10 +3,8 @@
 
 mod authored;
 mod instantiated;
-mod session;
 mod simulated;
 
 pub use authored::*;
 pub use instantiated::*;
-pub use session::*;
 pub use simulated::*;

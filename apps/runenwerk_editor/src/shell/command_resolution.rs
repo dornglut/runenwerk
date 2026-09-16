@@ -25,11 +25,13 @@ pub fn active_route_actions_by_target(
     let mut routes = BTreeMap::new();
 
     for descriptor in catalog.descriptors() {
+        if descriptor.command.viewport_tool().is_some() {
+            continue;
+        }
         for route_target in descriptor.route_targets() {
-            routes.insert(
-                route_target.to_string(),
-                descriptor.routed_shell_action(context),
-            );
+            if let Some(action) = descriptor.routed_shell_action(context) {
+                routes.insert(route_target.to_string(), action);
+            }
         }
     }
 
@@ -39,7 +41,9 @@ pub fn active_route_actions_by_target(
         .flat_map(|set| set.bindings.iter())
     {
         if let Some(command) = catalog.command_for_key(&binding.command) {
-            let action = command.to_routed_shell_action(can_undo, can_redo);
+            let Some(action) = command.to_routed_shell_action(can_undo, can_redo) else {
+                continue;
+            };
             routes.insert(binding.route_target.clone(), action.clone());
             routes.insert(binding.command.clone(), action);
         }
@@ -50,11 +54,10 @@ pub fn active_route_actions_by_target(
         collect_menu_commands(&menu.items, &mut menu_commands);
     }
     for command in menu_commands {
-        if let Some(command_key) = KnownEditorCommand::from_key(command) {
-            routes.insert(
-                command.to_string(),
-                command_key.to_routed_shell_action(can_undo, can_redo),
-            );
+        if let Some(command_key) = KnownEditorCommand::from_key(command)
+            && let Some(action) = command_key.to_routed_shell_action(can_undo, can_redo)
+        {
+            routes.insert(command.to_string(), action);
         }
     }
 
@@ -83,6 +86,9 @@ mod tests {
         );
 
         for descriptor in editor_command_catalog().descriptors() {
+            if descriptor.command.viewport_tool().is_some() {
+                continue;
+            }
             for route_target in descriptor.route_targets() {
                 assert!(
                     routes.contains_key(route_target),

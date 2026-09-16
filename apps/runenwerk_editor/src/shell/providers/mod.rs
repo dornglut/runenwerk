@@ -41,13 +41,13 @@ use editor_shell::{
     VIEWPORT_RESET_CAMERA_WIDGET_ID, VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID,
     VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID, VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID,
     ViewportDomainMutation, ViewportObservationFrame, ViewportProductChoiceViewModel,
-    ViewportProductObservation, ViewportSessionMutation, ViewportSurfaceAction, ViewportViewModel,
-    WidgetId, WorkspaceProfileRegistry, build_console_panel, build_editor_lab_surface,
-    build_entity_table_panel, build_inspector_panel, build_material_graph_surface,
-    build_outliner_panel, build_self_authoring_control_panel, build_viewport_panel,
-    editor_domain_proposal, entity_table_sort_button_widget_id, inspector_field_focus_widget_id,
-    inspector_field_widget_id, surface_session_proposal, surface_widget_id,
-    tool_surface_kind_for_stable_key, viewport_debug_stage_button_widget_id,
+    ViewportProductObservation, ViewportSessionMutation, ViewportSurfaceAction, ViewportToolKind,
+    ViewportViewModel, WidgetId, WorkspaceProfileRegistry, build_console_panel,
+    build_editor_lab_surface, build_entity_table_panel, build_inspector_panel,
+    build_material_graph_surface, build_outliner_panel, build_self_authoring_control_panel,
+    build_viewport_panel, editor_domain_proposal, entity_table_sort_button_widget_id,
+    inspector_field_focus_widget_id, inspector_field_widget_id, surface_session_proposal,
+    surface_widget_id, tool_surface_kind_for_stable_key, viewport_debug_stage_button_widget_id,
     viewport_field_color_ramp_button_widget_id, viewport_field_component_button_widget_id,
     viewport_field_debug_mode_button_widget_id, viewport_product_button_widget_id,
     viewport_tool_radial_item_widget_id,
@@ -708,7 +708,6 @@ pub fn build_editor_shell_frame_model_with_frame_metrics(
     viewport_instances: Option<&ViewportInstanceRegistryResource>,
 ) -> EditorShellFrameModel {
     let scene_version = app.runtime().current_scene_reality_version();
-    let session = app.runtime().session_reality();
     let scene_history_active = app
         .runtime()
         .session()
@@ -719,7 +718,6 @@ pub fn build_editor_shell_frame_model_with_frame_metrics(
     let can_redo = history.is_some_and(|history| history.can_redo());
     let active_definitions = shell_state.active_editor_definitions();
     let toolbar_frame = build_toolbar_observation_frame(
-        session.active_tool(),
         can_undo,
         can_redo,
         app.debug_logs_enabled(),

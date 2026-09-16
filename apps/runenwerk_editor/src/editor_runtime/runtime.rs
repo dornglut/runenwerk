@@ -18,7 +18,7 @@ use crate::editor_runtime::{
     RatifiedChangeLog, RunenwerkEditorInspectorBridge, RunenwerkEditorSceneRuntime,
     SceneComponentSnapshotRecord, SceneDocumentState, SceneEntityView, SceneFieldSnapshot,
     SceneHistoryContext, SceneHistoryEntry, SceneResourceSnapshotRecord, SceneRuntimeSnapshot,
-    SessionReality, SimulatedSceneReality, all_entity_views, build_hierarchy_snapshot,
+    SimulatedSceneReality, all_entity_views, build_hierarchy_snapshot,
     outliner_tree_from_hierarchy_snapshot, primary_selected_entity,
     resolve_primary_inspect_target_from_runtime, validate_reparent,
 };
@@ -49,9 +49,6 @@ pub struct RunenwerkEditorRuntime {
     scene_realities: SceneRealityStore,
     scene_history: SceneHistoryContext,
     ratified_changes: RatifiedChangeLog,
-    session_changes: editor_core::SessionChangeLog,
-    session_share_outbox: editor_core::SessionShareOutbox,
-    session_share_policy: editor_core::SessionSharePolicy,
     shared_changes: editor_core::SharedChangeOutbox,
     sharing_policy: editor_core::SharingPolicy,
     workflow: editor_core::WorkflowLog,
@@ -59,8 +56,6 @@ pub struct RunenwerkEditorRuntime {
     next_transaction_id: u64,
     next_ratification_id: u64,
     next_causality_id: u64,
-    next_session_change_id: u64,
-    next_session_share_sequence: u64,
     next_shared_change_sequence: u64,
     next_workflow_event_id: u64,
     scene_reality_version: u64,
@@ -91,9 +86,6 @@ impl RunenwerkEditorRuntime {
             scene_realities: SceneRealityStore::new(),
             scene_history: SceneHistoryContext::new(),
             ratified_changes: RatifiedChangeLog::new(),
-            session_changes: editor_core::SessionChangeLog::new(),
-            session_share_outbox: editor_core::SessionShareOutbox::new(),
-            session_share_policy: editor_core::SessionSharePolicy::Disabled,
             shared_changes: editor_core::SharedChangeOutbox::new(),
             sharing_policy: editor_core::SharingPolicy::LocalOnly,
             workflow: editor_core::WorkflowLog::new(),
@@ -101,8 +93,6 @@ impl RunenwerkEditorRuntime {
             next_transaction_id: 1,
             next_ratification_id: 1,
             next_causality_id: 1,
-            next_session_change_id: 1,
-            next_session_share_sequence: 1,
             next_shared_change_sequence: 1,
             next_workflow_event_id: 1,
             scene_reality_version: 0,
@@ -162,10 +152,6 @@ impl RunenwerkEditorRuntime {
         Ok(())
     }
 
-    pub fn session_reality(&self) -> SessionReality<'_> {
-        SessionReality::new(&self.session)
-    }
-
     pub fn authored_reality(&self) -> AuthoredSceneReality<'_> {
         AuthoredSceneReality::new(&self.scene_realities.authored)
     }
@@ -179,18 +165,6 @@ impl RunenwerkEditorRuntime {
 
     pub fn simulated_reality(&self) -> SimulatedSceneReality<'_> {
         SimulatedSceneReality::new(&self.scene_realities.instantiated)
-    }
-
-    pub(crate) fn set_active_tool_with_origin(
-        &mut self,
-        tool_id: Option<editor_core::ToolId>,
-        origin: editor_core::ChangeOrigin,
-    ) {
-        self.session.set_active_tool(tool_id);
-        self.record_session_change(
-            origin,
-            editor_core::SessionChangeKind::ActiveToolSet { tool_id },
-        );
     }
 
     pub(crate) fn set_selection_single_with_origin(
@@ -611,16 +585,12 @@ impl RunenwerkEditorRuntime {
         self.scene_realities.material_assignments = SceneMaterialAssignmentState::default();
         self.scene_history = SceneHistoryContext::new();
         self.ratified_changes = RatifiedChangeLog::new();
-        self.session_changes = editor_core::SessionChangeLog::new();
-        self.session_share_outbox = editor_core::SessionShareOutbox::new();
         self.shared_changes = editor_core::SharedChangeOutbox::new();
         self.workflow = editor_core::WorkflowLog::new();
         self.next_command_id = 1;
         self.next_transaction_id = 1;
         self.next_ratification_id = 1;
         self.next_causality_id = 1;
-        self.next_session_change_id = 1;
-        self.next_session_share_sequence = 1;
         self.next_shared_change_sequence = 1;
         self.next_workflow_event_id = 1;
         self.scene_reality_version = 0;
@@ -630,28 +600,8 @@ impl RunenwerkEditorRuntime {
         &self.ratified_changes
     }
 
-    pub fn session_change_log(&self) -> &editor_core::SessionChangeLog {
-        &self.session_changes
-    }
-
     pub fn workflow_log(&self) -> &editor_core::WorkflowLog {
         &self.workflow
-    }
-
-    pub fn session_share_policy(&self) -> editor_core::SessionSharePolicy {
-        self.session_share_policy
-    }
-
-    pub fn set_session_share_policy(&mut self, policy: editor_core::SessionSharePolicy) {
-        self.session_share_policy = policy;
-    }
-
-    pub fn queued_session_share_count(&self) -> usize {
-        self.session_share_outbox.len()
-    }
-
-    pub fn drain_session_share_changes(&mut self) -> Vec<editor_core::SessionShareEnvelope> {
-        self.session_share_outbox.drain()
     }
 
     pub fn sharing_policy(&self) -> editor_core::SharingPolicy {
@@ -735,29 +685,6 @@ impl RunenwerkEditorRuntime {
         self.record_workflow_event(editor_core::WorkflowEventKind::RatifiedChangeRecorded {
             ratification_id: change.ratification_id,
         });
-    }
-
-    pub(crate) fn record_session_change(
-        &mut self,
-        origin: editor_core::ChangeOrigin,
-        kind: editor_core::SessionChangeKind,
-    ) {
-        let id = editor_core::SessionChangeId(self.next_session_change_id);
-        self.next_session_change_id += 1;
-        self.session_changes
-            .push(editor_core::SessionChange::new(id, origin, kind.clone()));
-
-        if self.session_share_policy == editor_core::SessionSharePolicy::ObservationSafe
-            && let Some(shared_kind) = map_session_change_to_share(&kind)
-        {
-            let sequence = editor_core::SessionShareSequence(self.next_session_share_sequence);
-            self.next_session_share_sequence += 1;
-            self.session_share_outbox
-                .enqueue(editor_core::SessionShareEnvelope::new(
-                    sequence,
-                    editor_core::SessionShareEntry::new(origin, shared_kind),
-                ));
-        }
     }
 
     pub(crate) fn record_workflow_event(&mut self, kind: editor_core::WorkflowEventKind) {
@@ -981,19 +908,6 @@ fn ensure_default_scene_document(session: &mut EditorSession) -> DocumentId {
 }
 
 const DEFAULT_MATERIAL_GRAPH_DOCUMENT_ID: DocumentId = DocumentId(2);
-
-fn map_session_change_to_share(
-    kind: &editor_core::SessionChangeKind,
-) -> Option<editor_core::SessionShareKind> {
-    match kind {
-        editor_core::SessionChangeKind::ActiveToolSet { tool_id } => {
-            Some(editor_core::SessionShareKind::ActiveToolSet { tool_id: *tool_id })
-        }
-        editor_core::SessionChangeKind::ModeSet { mode } => {
-            Some(editor_core::SessionShareKind::ModeSet { mode: *mode })
-        }
-    }
-}
 
 fn map_inspector_edit_error(error: InspectorEditError) -> EditorMutationError {
     match error {

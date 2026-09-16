@@ -354,18 +354,42 @@ impl EditorSurfaceProvider for SceneViewportProvider {
                     SurfaceSessionMutation::Viewport(ViewportSessionMutation::ToggleToolsMenu),
                 )))
             }
-            SurfaceLocalAction::Viewport(ViewportSurfaceAction::ActivateSelectTool) => Ok(Some(
-                SurfaceCommandProposal::Shell(ShellCommand::ActivateSelectTool),
-            )),
-            SurfaceLocalAction::Viewport(ViewportSurfaceAction::ActivateTranslateTool) => Ok(Some(
-                SurfaceCommandProposal::Shell(ShellCommand::ActivateTranslateTool),
-            )),
-            SurfaceLocalAction::Viewport(ViewportSurfaceAction::ActivateRotateTool) => Ok(Some(
-                SurfaceCommandProposal::Shell(ShellCommand::ActivateRotateTool),
-            )),
-            SurfaceLocalAction::Viewport(ViewportSurfaceAction::ActivateScaleTool) => Ok(Some(
-                SurfaceCommandProposal::Shell(ShellCommand::ActivateScaleTool),
-            )),
+            SurfaceLocalAction::Viewport(ViewportSurfaceAction::ActivateSelectTool) => {
+                Ok(Some(surface_session_proposal(
+                    request,
+                    context.projection_epoch,
+                    SurfaceSessionMutation::Viewport(ViewportSessionMutation::ActivateTool {
+                        tool: ViewportToolKind::Select,
+                    }),
+                )))
+            }
+            SurfaceLocalAction::Viewport(ViewportSurfaceAction::ActivateTranslateTool) => {
+                Ok(Some(surface_session_proposal(
+                    request,
+                    context.projection_epoch,
+                    SurfaceSessionMutation::Viewport(ViewportSessionMutation::ActivateTool {
+                        tool: ViewportToolKind::Translate,
+                    }),
+                )))
+            }
+            SurfaceLocalAction::Viewport(ViewportSurfaceAction::ActivateRotateTool) => {
+                Ok(Some(surface_session_proposal(
+                    request,
+                    context.projection_epoch,
+                    SurfaceSessionMutation::Viewport(ViewportSessionMutation::ActivateTool {
+                        tool: ViewportToolKind::Rotate,
+                    }),
+                )))
+            }
+            SurfaceLocalAction::Viewport(ViewportSurfaceAction::ActivateScaleTool) => {
+                Ok(Some(surface_session_proposal(
+                    request,
+                    context.projection_epoch,
+                    SurfaceSessionMutation::Viewport(ViewportSessionMutation::ActivateTool {
+                        tool: ViewportToolKind::Scale,
+                    }),
+                )))
+            }
             SurfaceLocalAction::Viewport(ViewportSurfaceAction::ResetCamera { viewport_id }) => {
                 Ok(Some(editor_domain_proposal(
                     request,
