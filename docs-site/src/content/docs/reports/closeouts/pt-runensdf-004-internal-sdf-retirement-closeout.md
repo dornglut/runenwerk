@@ -10,7 +10,6 @@ related_docs:
   - ../../workspace/planning/completed-work.md
   - ../../workspace/planning/roadmap.md
   - ../../architecture/repository-family-architecture.md
-  - ../../reports/investigations/repository-family-current-state-investigation.md
 ---
 
 # PT-RUNENSDF-004 Internal SDF Retirement Closeout

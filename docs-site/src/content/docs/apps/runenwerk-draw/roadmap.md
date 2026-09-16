@@ -13,11 +13,6 @@ related_designs:
 related_roadmaps:
   - ../../engine/plugins/render/docs/roadmap.md
   - ../../workspace/roadmap-index.md
-related_reports:
-  - ../../reports/closeouts/drawing-phase-5/closeout.md
-  - ../../reports/closeouts/runtime-product-job-rpj4-rpj6/closeout.md
-  - ../../reports/closeouts/runtime-product-job-rpj7a-cache-policy/closeout.md
-  - ../../reports/batches/2026-05-15-next-current-candidate-roadmap-batch-wr-/batch.md
 ---
 
 # Runenwerk Draw Rendering Foundation Roadmap

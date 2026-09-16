@@ -13,8 +13,6 @@ related_docs:
   - ../deferred/live-uiplugin-runtime-and-surface-frame-rendering-design.md
   - ./ui-framework-app-integration-direction-review.md
   - ../../architecture/ui-framework-architecture.md
-  - ../../reports/investigations/live-uiplugin-runtime-current-state-investigation.md
-  - ../../reports/closeouts/pt-ui-runtime-platform-011-closeout.md
   - ../../workspace/planning/roadmap.md
   - ../../workspace/planning/decision-register.md
 ---
@@ -86,8 +84,8 @@ This planning file owns phase sequencing and activation conditions. The architec
 | `architecture/ui-framework-architecture.md` | Keeps source/program/runtime/render ownership separated. |
 | `architecture/live-uiplugin-runtime-platform-architecture.md` | Owns runtime-specific architecture, render-boundary ordering, SDF-backend deferral, diagrams, agent/trace model, Counter contract, reload, persistence, and phase-spec decisions. |
 | `design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md` | Supplies the accepted target API and runtime/render boundary. |
-| `reports/investigations/live-uiplugin-runtime-current-state-investigation.md` | Supplies current-state source facts and gaps. |
-| `reports/closeouts/pt-ui-framework-app-integration-002-closeout.md` | Keeps `ui_app_integration` proof-local, not the final framework owner. |
+| Git history (former investigation) | Supplies historical current-state source facts and gaps. |
+| Git history (former closeout) | Keeps `ui_app_integration` proof-local, not the final framework owner. |
 
 Local command validation was not run in this connector-only planning session. Do not claim local validation until an agent runs it.
 

@@ -13,7 +13,6 @@ related:
   - ./workspace-identity-contract-and-migration-map.md
   - ../../apps/runenwerk-editor/execution-priority-checklist.md
   - ../../domain/ui/roadmap.md
-  - ../../reports/audits/editor-ui-priority-code-audit-2026-05-05.md
 related_adrs:
   - ../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
   - ../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md

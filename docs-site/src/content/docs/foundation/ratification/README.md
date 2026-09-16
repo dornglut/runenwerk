@@ -8,7 +8,6 @@ canonical: true
 last_reviewed: 2026-09-09
 related:
   - ../../design/implemented/foundation-ratification-design.md
-  - ../../reports/closeouts/foundation-ratification-phase5-evaluation.md
 ---
 
 # Ratification

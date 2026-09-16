@@ -20,7 +20,6 @@ PhaseImplementationSpec(
         "docs-site/src/content/docs/workspace/planning/roadmap.md",
         "docs-site/src/content/docs/workspace/planning/production-tracks.md",
         "docs-site/src/content/docs/workspace/planning/decision-register.md",
-        "docs-site/src/content/docs/reports/closeouts/pt-ui-runtime-platform-011-closeout.md",
         "docs-site/src/content/docs/design/active/live-uiplugin-runtime-full-cutover-plan.md",
         "docs-site/src/content/docs/architecture/live-uiplugin-runtime-platform-architecture.md",
         "docs-site/src/content/docs/architecture/ui-framework-architecture.md",

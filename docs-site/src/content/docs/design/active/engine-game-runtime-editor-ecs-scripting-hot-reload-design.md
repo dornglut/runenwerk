@@ -16,8 +16,6 @@ related_adrs:
   - ../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md
 related_roadmaps:
   - ../../apps/runenwerk-editor/roadmap.md
-related_reports:
-  - ../../reports/closeouts/m5-runtime-preview/closeout.md
 ---
 
 # Game Runtime, Editor, ECS, Scripting, and Hot Reload Design
@@ -115,7 +113,7 @@ M5 closeout validation covers:
 - ratified `world_sdf` payload packages reach runtime stores through an engine-owned intake path, not direct editor mutation;
 - shader registry reload status reaches existing editor console, asset/import, and viewport/product diagnostics surfaces through app-boundary mapping.
 
-Closeout evidence is recorded in [`../../reports/closeouts/m5-runtime-preview/closeout.md`](../../reports/closeouts/m5-runtime-preview/closeout.md).
+M5 completion evidence is retained in Git history; the accepted external-runtime boundary is owned by ADR 0007 above.
 
 ## Deferred Detailed Draft
 

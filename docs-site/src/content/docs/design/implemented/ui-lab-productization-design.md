@@ -37,8 +37,6 @@ related_designs:
   - ../accepted/ui-lab-api-docs-examples-runtime-closeout-design.md
 related_roadmaps:
   - ../../domain/ui/roadmap.md
-related_reports:
-  - ../../reports/closeouts/pm-ui-lab-perf-006-final-no-gap-certification-closeout/closeout.md
 ---
 
 # UI Lab Productization Design

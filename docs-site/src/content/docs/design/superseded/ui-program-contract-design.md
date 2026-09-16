@@ -10,7 +10,6 @@ related:
   - ../implemented/ui-program-architecture.md
   - ../implemented/ui-program-architecture-owner-map.md
   - ../archived/ui-program-proof-slice-plan.md
-  - ../../reports/audits/pt-ui-program-truth-claim-correction.md
 ---
 
 # UI Program Contract Design
