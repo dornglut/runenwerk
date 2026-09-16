@@ -23,9 +23,8 @@ binding visual-direction contract for downstream implementation.
 
 ## Grounding
 
-All options used the checked-in full editor capture at:
-
-`docs-site/src/content/docs/reports/closeouts/wr-028-perfectionist-material-lab-texture-views-and-scene-material-binding/artifacts/captures/frame_5__flow_1__pass_5__stage_after__resource_surface_color.png`
+All options used the checked-in full editor capture from the WR-028 evidence
+record; that capture remains available in Git history.
 
 They preserve the current `ThemeTokens::default` language from
 `domain/ui/ui_theme/src/theme.rs`: black and near-black surfaces, light and

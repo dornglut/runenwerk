@@ -44,8 +44,8 @@ with no known quality gaps.
 
 ## Historical WR-100 Governance Contract
 
-The detailed `PM-UI-LAB-PERF-001` execution contract is retained at
-`docs-site/src/content/docs/reports/implementation-plans/wr-100-ui-lab-perfectionist-governance-and-no-gap-audit-doctrine/plan.md`.
+The detailed `PM-UI-LAB-PERF-001` execution contract is retained in Git
+history.
 
 That contract records the historical code-truth reconciliation, evidence
 matrix, hard blockers, and follow-on decomposition for the audit sequence. This
