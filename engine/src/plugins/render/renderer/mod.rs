@@ -913,16 +913,14 @@ impl Gfx {
         let mut timings = GfxFrameTimings::default();
         self.renderer
             .begin_frame_gpu_observation(self.ctx.context());
-        let surface_contributions = deterministic_contributions
-            .iter()
-            .filter(|contribution| {
-                contribution.render_surface_id == prepared_frame.surface.render_surface_id
-            })
-            .cloned()
-            .collect::<Vec<_>>();
-        if !surface_contributions.is_empty()
-            && self.ctx.context().execution_stats().in_flight_submissions() > 0
-        {
+        let surface_contributions = deterministic_contributions_for_surface(
+            deterministic_contributions,
+            prepared_frame.surface.render_surface_id,
+        );
+        if should_defer_deterministic_surface(
+            !surface_contributions.is_empty(),
+            self.ctx.context().execution_stats().in_flight_submissions(),
+        ) {
             return Ok(timings);
         }
         let render_surface_id = prepared_frame.surface.render_surface_id;
@@ -968,6 +966,24 @@ impl Gfx {
     }
 }
 
+pub(crate) fn deterministic_contributions_for_surface(
+    contributions: &[crate::plugins::render::RenderDeterministicFrameContribution],
+    surface: crate::plugins::render::backend::RenderSurfaceId,
+) -> Vec<crate::plugins::render::RenderDeterministicFrameContribution> {
+    contributions
+        .iter()
+        .filter(|contribution| contribution.render_surface_id == surface)
+        .cloned()
+        .collect()
+}
+
+fn should_defer_deterministic_surface(
+    has_deterministic_contribution: bool,
+    in_flight_submissions: usize,
+) -> bool {
+    has_deterministic_contribution && in_flight_submissions > 0
+}
+
 fn frame_gpu_timing_capability(
     timestamp_queries_enabled: bool,
     has_deterministic_composition: bool,
@@ -998,7 +1014,7 @@ pub use frame_bindings::RenderFrameDataRegistry;
 
 #[cfg(test)]
 mod tests {
-    use super::{Renderer, frame_gpu_timing_capability};
+    use super::{Renderer, frame_gpu_timing_capability, should_defer_deterministic_surface};
     use crate::plugins::render::inspect::{RenderGpuTimingCapability, RenderPassTimingEvidence};
 
     #[test]
@@ -1009,6 +1025,13 @@ mod tests {
 
         let none = Renderer::clip_to_scissor([200.0, 200.0, 10.0, 10.0], 100, 80);
         assert!(none.is_none());
+    }
+
+    #[test]
+    fn in_flight_gate_is_local_to_deterministic_surface_participation() {
+        assert!(should_defer_deterministic_surface(true, 1));
+        assert!(!should_defer_deterministic_surface(false, 1));
+        assert!(!should_defer_deterministic_surface(true, 0));
     }
 
     #[test]

@@ -46,7 +46,7 @@ pub struct RenderDeterministicFrameContribution {
 /// Multiple surfaces/producers may be present in one frame. The deterministic lowerer gives each
 /// producer its own reusable physical-resource namespace, while repeated publication by the same
 /// producer replaces only that producer's contribution.
-#[derive(Debug, Default, runen_ecs::Component, runen_ecs::Resource)]
+#[derive(Debug, Clone, Default, runen_ecs::Component, runen_ecs::Resource)]
 pub struct RenderDeterministicFrameContributionResource {
     contributions: BTreeMap<RenderFrameProducerId, RenderDeterministicFrameContribution>,
 }

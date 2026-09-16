@@ -228,6 +228,24 @@ fn prepare_render_gpu_frame_work_for_test(
     })
 }
 
+#[cfg(test)]
+fn prepare_render_gpu_frame_work_with_composition_for_test(
+    graph_label: GpuResourceLabel,
+    nodes: impl IntoIterator<Item = ResolvedRenderGpuWorkNode>,
+    producer_fragments: &[GpuWorkFragment],
+    imports: &[GpuWorkImport],
+) -> Result<GpuPreparedWorkGraph, RenderGpuWorkAdapterError> {
+    prepare_resolved_render_gpu_work(
+        graph_label,
+        nodes,
+        producer_fragments,
+        imports,
+        |label, fragments| {
+            GpuPreparedWorkGraph::prepare(label, fragments).map_err(RenderGpuWorkAdapterError::from)
+        },
+    )
+}
+
 /// Prepares one bounded render work set from execution-complete logical GPU occurrences.
 ///
 /// All kind-preserving resources are discovered from operation-derived accesses. Every non-query
@@ -587,6 +605,29 @@ mod tests {
             .expect("test buffer handle should allocate")
     }
 
+    fn zeroed_buffer(
+        allocator: &mut GpuWorkResourceIdAllocator,
+        name: &str,
+        byte_len: u64,
+    ) -> GpuBufferHandle {
+        let resource_label = label(name);
+        allocator
+            .allocate_buffer_handle(
+                GpuBufferDescriptor::new(
+                    common(name),
+                    byte_len,
+                    GpuBufferUsages::new(
+                        &resource_label,
+                        [GpuBufferUsage::CopySource, GpuBufferUsage::CopyDestination],
+                    )
+                    .expect("test buffer usage should be valid"),
+                    GpuBufferInitialization::Zeroed,
+                )
+                .expect("test zeroed buffer descriptor should be valid"),
+            )
+            .expect("test zeroed buffer handle should allocate")
+    }
+
     fn whole_region(buffer: &GpuBufferHandle, byte_len: u64) -> GpuBufferRegion {
         GpuBufferRegion::new(
             buffer,
@@ -609,7 +650,7 @@ mod tests {
                     GpuTextureFormat::Rgba8Unorm,
                     GpuTextureUsages::new(&texture_label, [GpuTextureUsage::ColorAttachment])
                         .expect("test surface usage should be valid"),
-                    GpuTextureInitialization::Uninitialized,
+                    GpuTextureInitialization::Zeroed,
                 )
                 .expect("test surface texture descriptor should be valid"),
             )
@@ -914,6 +955,189 @@ mod tests {
                 .reasons()
                 .iter()
                 .all(|reason| !matches!(reason, GpuDependencyReason::ExplicitNonData { .. }))
+        );
+    }
+
+    #[test]
+    fn composed_r32float_producer_and_visualizer_are_one_graph_with_one_present() {
+        let mut allocator = GpuWorkResourceIdAllocator::new();
+        let source = zeroed_buffer(&mut allocator, "typed radiance source", 16);
+        let destination = buffer(&mut allocator, "visualizer copy destination", 16);
+        let texture_label = label("typed R32Float radiance");
+        let radiance = allocator
+            .allocate_texture_handle(
+                GpuTextureDescriptor::new(
+                    common("typed R32Float radiance"),
+                    GpuTextureDimension::D2,
+                    GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, 2, 2, 1)
+                        .expect("radiance extent should be valid"),
+                    1,
+                    1,
+                    GpuTextureFormat::R32Float,
+                    GpuTextureUsages::new(
+                        &texture_label,
+                        [
+                            GpuTextureUsage::CopyDestination,
+                            GpuTextureUsage::CopySource,
+                        ],
+                    )
+                    .expect("radiance usage should be valid"),
+                    GpuTextureInitialization::Uninitialized,
+                )
+                .expect("radiance texture descriptor should be valid"),
+            )
+            .expect("radiance texture handle should allocate");
+        let region = GpuTextureCopyRegion::whole_base_mip(&radiance)
+            .expect("radiance region should be valid");
+        let producer_copy = GpuCopyOperation::buffer_to_texture(
+            GpuBufferTextureLayout::new(&source, 0, 8, 2)
+                .expect("radiance source layout should be valid"),
+            region.clone(),
+        )
+        .expect("radiance producer copy should be valid");
+        let export_key = GpuExportKey::new("runenrender.maintained.radiance.output.0")
+            .expect("typed radiance export key should be valid");
+        let producer_provenance =
+            GpuResourceProvenance::new(label("typed radiance producer"), None, None);
+        let mut producer_builder = GpuWorkFragmentBuilder::new(
+            label("maintained R32Float producer"),
+            producer_provenance.clone(),
+        );
+        producer_builder
+            .declare_resource(GpuResourceRef::Buffer(source.clone()))
+            .expect("producer source declaration should succeed");
+        producer_builder
+            .declare_resource(GpuResourceRef::Texture(radiance.clone()))
+            .expect("producer radiance declaration should succeed");
+        producer_builder
+            .add_input(
+                GpuWorkResourceInput::new(
+                    GpuResourceRef::Buffer(source.clone()),
+                    GpuInitialCoverage::descriptor_initialization(GpuResourceRef::Buffer(
+                        source.clone(),
+                    ))
+                    .expect("producer source initialization should be valid"),
+                    source.descriptor().common().provenance().clone(),
+                )
+                .expect("producer input should be constructible"),
+            )
+            .expect("producer input should be valid");
+        producer_builder
+            .operation("write maintained R32Float radiance", producer_copy)
+            .expect("producer operation should succeed");
+        producer_builder
+            .add_output(
+                GpuWorkOutput::new(
+                    GpuExportRelationship::new(
+                        GpuResourceRef::Texture(radiance.clone()),
+                        export_key.clone(),
+                        GpuResourceAccessIntent::Write,
+                        producer_provenance.clone(),
+                    ),
+                    GpuInitialCoverage::texture_subresources(
+                        &GpuTextureAccessResource::Texture(radiance.clone()),
+                        [region.subresources()],
+                    )
+                    .expect("producer radiance coverage should be valid"),
+                )
+                .expect("producer output should be valid"),
+            )
+            .expect("producer output should be added");
+        let producer = producer_builder
+            .finish()
+            .expect("producer fragment should finish");
+
+        let consumer_occurrence = RenderGpuWorkOccurrenceId::new(10);
+        let consumer_copy = GpuCopyOperation::texture_to_buffer(
+            region,
+            GpuBufferTextureLayout::new(&destination, 0, 8, 2)
+                .expect("visualizer destination layout should be valid"),
+        )
+        .expect("visualizer copy should be valid");
+        let consumer_provenance =
+            GpuResourceProvenance::new(label("Render Lab visualizer"), None, None);
+        let consumer = ResolvedRenderGpuWorkNode::pass(
+            consumer_occurrence,
+            label("Render Lab visualizer consumes typed radiance"),
+            GpuWorkOperation::Copy(consumer_copy),
+            GpuExecutionPreference::TransferPreferred,
+            [],
+        );
+        let surface_view = color_target_view(&mut allocator);
+        let present_occurrence = RenderGpuWorkOccurrenceId::new(11);
+        let present = ResolvedRenderGpuWorkNode::present(
+            present_occurrence,
+            label("exactly one terminal Present"),
+            GpuPresentOperation::new(
+                surface_view.clone().into(),
+                surface_view.descriptor().subresources(),
+            )
+            .expect("Present should be valid"),
+            [consumer_occurrence],
+        );
+        let consumer_import = GpuWorkImport::new(
+            GpuResourceRef::Texture(radiance.clone()),
+            export_key,
+            GpuResourceAccessIntent::Read,
+            consumer_provenance,
+        );
+        let graph = prepare_render_gpu_frame_work_with_composition_for_test(
+            label("RL2 composed R32Float frame"),
+            [present, consumer],
+            &[producer],
+            &[consumer_import],
+        )
+        .expect("composed frame should prepare as one graph");
+
+        let node_by_label = |expected: &str| {
+            graph
+                .nodes()
+                .iter()
+                .find(|node| node.node().label().as_str() == expected)
+                .expect("composed node should exist")
+        };
+        let producer_node = node_by_label("write maintained R32Float radiance").id();
+        let consumer_node = node_by_label("Render Lab visualizer consumes typed radiance").id();
+        let present_node = node_by_label("exactly one terminal Present").id();
+        let dependency = graph
+            .dependencies()
+            .iter()
+            .find(|dependency| {
+                dependency.before() == producer_node && dependency.after() == consumer_node
+            })
+            .expect("typed producer export/import must create producer-before-consumer dependency");
+        assert!(dependency.reasons().iter().any(|reason| {
+            matches!(reason, GpuDependencyReason::ReadAfterWrite { resource, .. }
+                if *resource == radiance.diagnostic_identity())
+        }));
+        assert_eq!(
+            graph
+                .topological_order()
+                .iter()
+                .position(|node| *node == producer_node),
+            Some(0)
+        );
+        assert_eq!(
+            graph
+                .topological_order()
+                .iter()
+                .position(|node| *node == consumer_node),
+            Some(1)
+        );
+        assert_eq!(graph.topological_order().last(), Some(&present_node));
+        assert_eq!(
+            graph
+                .nodes()
+                .iter()
+                .filter(|node| node.node().kind() == GpuWorkNodeKind::Present)
+                .count(),
+            1
+        );
+        assert!(
+            graph
+                .nodes()
+                .iter()
+                .all(|node| node.node().kind() != GpuWorkNodeKind::Readback)
         );
     }
 }

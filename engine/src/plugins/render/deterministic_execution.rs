@@ -1714,6 +1714,54 @@ mod tests {
     }
 
     #[test]
+    fn deterministic_cache_scopes_equal_descriptors_by_producer() {
+        let mut cache = DeterministicResourceCache::default();
+        let first = cache
+            .buffer(11, 0, DeterministicBufferKind::Input, cache_descriptor(16))
+            .expect("first producer buffer should allocate");
+        let same_producer = cache
+            .buffer(11, 0, DeterministicBufferKind::Input, cache_descriptor(16))
+            .expect("same producer should reuse its buffer");
+        let other_producer = cache
+            .buffer(12, 0, DeterministicBufferKind::Input, cache_descriptor(16))
+            .expect("other producer should allocate an independent buffer");
+
+        assert_eq!(
+            first.diagnostic_identity(),
+            same_producer.diagnostic_identity()
+        );
+        assert_ne!(
+            first.diagnostic_identity(),
+            other_producer.diagnostic_identity()
+        );
+    }
+
+    #[test]
+    fn deterministic_cache_stays_bounded_across_frames_and_resize() {
+        let mut cache = DeterministicResourceCache::default();
+        let mut identities = BTreeSet::new();
+        for frame in 0..120 {
+            let byte_len = if frame < 60 { 16 } else { 32 };
+            let handle = cache
+                .buffer(
+                    11,
+                    0,
+                    DeterministicBufferKind::Input,
+                    cache_descriptor(byte_len),
+                )
+                .expect("sustained deterministic frame should prepare");
+            identities.insert(handle.diagnostic_identity());
+        }
+
+        assert_eq!(
+            identities.len(),
+            2,
+            "one replacement is expected for the resize"
+        );
+        assert_eq!(cache.buffers.len(), 1, "the cache retains one live slot");
+    }
+
+    #[test]
     fn maintained_wgsl_forms_a_canonical_compute_pipeline() {
         let [source] = admit_static_wgsl_sources([(
             "runenrender.maintained.deterministic.test",

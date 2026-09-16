@@ -34,6 +34,17 @@ fn render_timing_logging_enabled() -> bool {
         .unwrap_or(false)
 }
 
+fn presented_interval_logging_enabled() -> bool {
+    std::env::var("GROTTO_RENDER_PRESENT_INTERVAL_LOG")
+        .map(|value| {
+            matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
+        .unwrap_or(false)
+}
+
 pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<()> {
     if world.resource::<SceneResource>()?.manager.is_none() {
         return Ok(());
@@ -75,6 +86,12 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
         .resource_mut::<RenderDeterministicFrameContributionResource>()
         .map(|resource| resource.take_all())
         .unwrap_or_default();
+    let primary_deterministic_contributions =
+        crate::plugins::render::renderer::deterministic_contributions_for_surface(
+            &deterministic_contributions,
+            prepared_frame.surface.render_surface_id,
+        );
+    let mut deferred_deterministic_contributions = Vec::new();
 
     let (target_w, target_h) = prepared_frame
         .views
@@ -123,12 +140,14 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
         let flow_registry = match world.resource::<RenderFlowRegistryResource>() {
             Ok(registry) => registry,
             Err(_) => {
+                restore_deterministic_contributions(&mut world, deterministic_contributions);
                 world.insert_resource(shader_registry);
                 world.insert_resource(gfx);
                 return Ok(());
             }
         };
         if flow_registry.revision() != prepared_frame.context.flow_registry_revision {
+            restore_deterministic_contributions(&mut world, deterministic_contributions);
             world.insert_resource(shader_registry);
             world.insert_resource(gfx);
             return Ok(());
@@ -156,6 +175,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
 
     let result = match render_result {
         Ok(timings) if !timings.submitted => {
+            deferred_deterministic_contributions.extend(primary_deterministic_contributions);
             world.resource_mut::<DebugMetricsState>()?.last_timings = Some(timings);
             tracing::debug!(
                 frame = prepared_frame.context.frame_index,
@@ -309,6 +329,20 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                 .resource::<FramePacingRuntimeStateResource>()
                 .ok()
                 .cloned();
+            if timings.submitted
+                && presented_interval_logging_enabled()
+                && let Some(pacing_state) = pacing_state.as_ref()
+            {
+                tracing::info!(
+                    frame = semantic_frame_index,
+                    presented_frame_interval_ms = pacing_state.last_frame_interval_ms,
+                    "submitted Render Lab frame interval"
+                );
+                eprintln!(
+                    "runenwerk_render_lab_presented_frame frame={} interval_ms={:.3}",
+                    semantic_frame_index, pacing_state.last_frame_interval_ms
+                );
+            }
             if let Ok(render_debug_timings) = world.resource_mut::<RenderDebugTimingsState>() {
                 render_debug_timings
                     .observe_preflight_cache_state(gfx.renderer.last_preflight_cache_state());
@@ -422,10 +456,14 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
             if let Some(surface_error) = err.downcast_ref::<RenderSurfaceAcquireError>() {
                 match surface_error {
                     RenderSurfaceAcquireError::Lost | RenderSurfaceAcquireError::Outdated => {
+                        deferred_deterministic_contributions
+                            .extend(primary_deterministic_contributions);
                         gfx.resize(render_surface_id, target_w, target_h);
                         Ok(())
                     }
                     RenderSurfaceAcquireError::Timeout | RenderSurfaceAcquireError::Validation => {
+                        deferred_deterministic_contributions
+                            .extend(primary_deterministic_contributions);
                         Ok(())
                     }
                 }
@@ -436,7 +474,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
     };
 
     let result = result.and_then(|_| {
-        render_additional_surfaces(
+        let additional_deferred = render_additional_surfaces(
             &mut world,
             &additional_prepared_frames,
             &deterministic_contributions,
@@ -446,12 +484,27 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
             preflight_config,
             &debug_control,
             &debug_config,
-        )
+        )?;
+        deferred_deterministic_contributions.extend(additional_deferred);
+        Ok(())
     });
+
+    restore_deterministic_contributions(&mut world, deferred_deterministic_contributions);
 
     world.insert_resource(shader_registry);
     world.insert_resource(gfx);
     result
+}
+
+fn restore_deterministic_contributions(
+    world: &mut WorldMut,
+    contributions: impl IntoIterator<Item = RenderDeterministicFrameContribution>,
+) {
+    if let Ok(resource) = world.resource_mut::<RenderDeterministicFrameContributionResource>() {
+        for contribution in contributions {
+            resource.replace(contribution);
+        }
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -465,10 +518,19 @@ fn render_additional_surfaces(
     preflight_config: RenderPreflightValidationConfigResource,
     debug_control: &RenderDebugControlResource,
     debug_config: &RenderDebugConfigResource,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Vec<RenderDeterministicFrameContribution>> {
+    let mut deferred = Vec::new();
     for prepared_frame in prepared_frames {
-        validate_prepared_frame_surface_scope(world, prepared_frame)?;
         let render_surface_id = prepared_frame.surface.render_surface_id;
+        if let Err(err) = validate_prepared_frame_surface_scope(world, prepared_frame) {
+            deferred.extend(
+                crate::plugins::render::renderer::deterministic_contributions_for_surface(
+                    deterministic_contributions,
+                    render_surface_id,
+                ),
+            );
+            return Err(err);
+        }
         if !gfx.has_surface(render_surface_id) {
             if let Ok(registry) = world.resource_mut::<RenderSurfaceRegistryResource>() {
                 registry.record_diagnostic(RenderSurfaceDiagnostic {
@@ -481,13 +543,27 @@ fn render_additional_surfaces(
                     ),
                 });
             }
+            deferred.extend(
+                crate::plugins::render::renderer::deterministic_contributions_for_surface(
+                    deterministic_contributions,
+                    render_surface_id,
+                ),
+            );
             continue;
         }
 
-        let (target_w, target_h) = prepared_frame
-            .main_view()
-            .ok_or_else(|| anyhow!("prepared render frame is missing a main surface view"))?
-            .target_size_px;
+        let Some((target_w, target_h)) = prepared_frame.main_view().map(|view| view.target_size_px)
+        else {
+            deferred.extend(
+                crate::plugins::render::renderer::deterministic_contributions_for_surface(
+                    deterministic_contributions,
+                    render_surface_id,
+                ),
+            );
+            return Err(anyhow!(
+                "prepared render frame is missing a main surface view"
+            ));
+        };
         let surface_size = gfx.surface_size(render_surface_id);
         if surface_size != Some((target_w, target_h)) {
             gfx.resize(render_surface_id, target_w, target_h);
@@ -497,6 +573,12 @@ fn render_additional_surfaces(
             .resource::<RenderFlowRegistryResource>()
             .map_err(|_| anyhow!("render flow registry is unavailable"))?;
         if flow_registry.revision() != prepared_frame.context.flow_registry_revision {
+            deferred.extend(
+                crate::plugins::render::renderer::deterministic_contributions_for_surface(
+                    deterministic_contributions,
+                    render_surface_id,
+                ),
+            );
             continue;
         }
         let ui_rect_shader = prepared_frame
@@ -517,6 +599,12 @@ fn render_additional_surfaces(
         );
         match render_result {
             Ok(timings) if !timings.submitted => {
+                deferred.extend(
+                    crate::plugins::render::renderer::deterministic_contributions_for_surface(
+                        deterministic_contributions,
+                        render_surface_id,
+                    ),
+                );
                 tracing::debug!(
                     frame = prepared_frame.context.frame_index,
                     surface = render_surface_id.raw(),
@@ -528,10 +616,23 @@ fn render_additional_surfaces(
                 if let Some(surface_error) = err.downcast_ref::<RenderSurfaceAcquireError>() {
                     match surface_error {
                         RenderSurfaceAcquireError::Lost | RenderSurfaceAcquireError::Outdated => {
+                            deferred.extend(
+                                crate::plugins::render::renderer::deterministic_contributions_for_surface(
+                                    deterministic_contributions,
+                                    render_surface_id,
+                                ),
+                            );
                             gfx.resize(render_surface_id, target_w, target_h);
                         }
                         RenderSurfaceAcquireError::Timeout
-                        | RenderSurfaceAcquireError::Validation => {}
+                        | RenderSurfaceAcquireError::Validation => {
+                            deferred.extend(
+                                crate::plugins::render::renderer::deterministic_contributions_for_surface(
+                                    deterministic_contributions,
+                                    render_surface_id,
+                                ),
+                            );
+                        }
                     }
                 } else {
                     return Err(anyhow!(
@@ -542,7 +643,7 @@ fn render_additional_surfaces(
             }
         }
     }
-    Ok(())
+    Ok(deferred)
 }
 
 fn should_build_full_render_diagnostics(
