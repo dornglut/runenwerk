@@ -13,194 +13,6 @@ pub const PLAY_MODE_ID: ModeId = ModeId(2);
 pub const SIMULATE_MODE_ID: ModeId = ModeId(3);
 pub const PREVIEW_MODE_ID: ModeId = ModeId(4);
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ModeDescriptor {
-    pub id: ModeId,
-    pub stable_name: &'static str,
-    pub display_name: String,
-    compatible_document_kinds: Vec<DocumentKind>,
-}
-
-impl ModeDescriptor {
-    pub fn new(
-        id: ModeId,
-        stable_name: &'static str,
-        display_name: impl Into<String>,
-        compatible_document_kinds: Vec<DocumentKind>,
-    ) -> Self {
-        Self {
-            id,
-            stable_name,
-            display_name: display_name.into(),
-            compatible_document_kinds,
-        }
-    }
-
-    pub fn compatible_document_kinds(&self) -> &[DocumentKind] {
-        &self.compatible_document_kinds
-    }
-
-    pub fn supports_document_kind(&self, document_kind: &DocumentKind) -> bool {
-        self.compatible_document_kinds.is_empty()
-            || self.compatible_document_kinds.contains(document_kind)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ModeRegistry {
-    modes: BTreeMap<ModeId, ModeDescriptor>,
-}
-
-impl Default for ModeRegistry {
-    fn default() -> Self {
-        Self::new(default_mode_descriptors())
-    }
-}
-
-impl ModeRegistry {
-    pub fn new(modes: impl IntoIterator<Item = ModeDescriptor>) -> Self {
-        Self {
-            modes: modes.into_iter().map(|mode| (mode.id, mode)).collect(),
-        }
-    }
-
-    pub fn default_registry() -> Self {
-        Self::default()
-    }
-
-    pub fn mode(&self, mode_id: ModeId) -> Option<&ModeDescriptor> {
-        self.modes.get(&mode_id)
-    }
-
-    pub fn modes(&self) -> impl Iterator<Item = &ModeDescriptor> {
-        self.modes.values()
-    }
-
-    pub fn validate_activation(
-        &self,
-        mode_id: ModeId,
-        context: &ModeActivationContext,
-    ) -> Result<(), EditorMutationError> {
-        if !context.workspace_mode_ids.contains(&mode_id) {
-            return Err(EditorMutationError::session_rejected(
-                "mode is not enabled for the active workspace",
-            ));
-        }
-
-        let mode = self
-            .mode(mode_id)
-            .ok_or(EditorMutationError::session_rejected(
-                "mode is not registered",
-            ))?;
-
-        let document_kind =
-            context
-                .document_kind
-                .as_ref()
-                .ok_or(EditorMutationError::session_rejected(
-                    "mode activation requires an active document",
-                ))?;
-
-        if !mode.supports_document_kind(document_kind) {
-            return Err(EditorMutationError::session_rejected(
-                "mode is not compatible with the active document kind",
-            ));
-        }
-
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ModeActivationContext {
-    pub workspace_mode_ids: Vec<ModeId>,
-    pub document_kind: Option<DocumentKind>,
-}
-
-impl ModeActivationContext {
-    pub fn new(
-        workspace_mode_ids: impl IntoIterator<Item = ModeId>,
-        document_kind: Option<DocumentKind>,
-    ) -> Self {
-        Self {
-            workspace_mode_ids: workspace_mode_ids.into_iter().collect(),
-            document_kind,
-        }
-    }
-}
-
-pub fn default_mode_descriptors() -> Vec<ModeDescriptor> {
-    vec![
-        ModeDescriptor::new(
-            EDIT_MODE_ID,
-            "edit",
-            "Edit",
-            vec![
-                DocumentKind::Scene,
-                DocumentKind::Prefab,
-                DocumentKind::SdfGraph,
-                DocumentKind::SdfBrushLayer,
-                DocumentKind::FieldWorldDefinition,
-                DocumentKind::MaterialGraph,
-                DocumentKind::Material,
-                DocumentKind::ProceduralTexture,
-                DocumentKind::VolumeTexture,
-                DocumentKind::ProceduralGenerationGraph,
-                DocumentKind::GameplayGraph,
-                DocumentKind::GameplayRuleTrigger,
-                DocumentKind::Ability,
-                DocumentKind::Quest,
-                DocumentKind::ParticleGraph,
-                DocumentKind::ParticleEmitter,
-                DocumentKind::PhysicsScene,
-                DocumentKind::PhysicsConfig,
-                DocumentKind::AnimationClip,
-                DocumentKind::AnimationGraph,
-                DocumentKind::Timeline,
-                DocumentKind::UiLayout,
-                DocumentKind::Graph,
-                DocumentKind::Script,
-                DocumentKind::ForeignMeshReferenceImport,
-                DocumentKind::AssetCatalog,
-                DocumentKind::WorkspaceDefinition,
-                DocumentKind::Theme,
-                DocumentKind::Shortcut,
-                DocumentKind::Menu,
-                DocumentKind::CommandBinding,
-                DocumentKind::PanelRegistry,
-                DocumentKind::ToolSurfaceDefinition,
-            ],
-        ),
-        ModeDescriptor::new(
-            PREVIEW_MODE_ID,
-            "preview",
-            "Preview",
-            vec![
-                DocumentKind::Scene,
-                DocumentKind::FieldProductPreview,
-                DocumentKind::RuntimeDebug,
-                DocumentKind::UiLayout,
-            ],
-        ),
-        ModeDescriptor::new(
-            PLAY_MODE_ID,
-            "play",
-            "Play",
-            vec![DocumentKind::Scene, DocumentKind::RuntimeDebug],
-        ),
-        ModeDescriptor::new(
-            SIMULATE_MODE_ID,
-            "simulate",
-            "Simulate",
-            vec![
-                DocumentKind::Scene,
-                DocumentKind::PhysicsScene,
-                DocumentKind::RuntimeDebug,
-            ],
-        ),
-    ]
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DocumentCompatibilityContext {
     pub allowed_document_kinds: Vec<DocumentKind>,
@@ -224,7 +36,6 @@ pub struct EditorSession {
     documents: BTreeMap<DocumentId, DocumentDescriptor>,
     document_tabs: Vec<DocumentId>,
     active_document: Option<DocumentId>,
-    active_mode: ModeId,
 }
 
 impl Default for ModeId {
@@ -236,29 +47,6 @@ impl Default for ModeId {
 impl EditorSession {
     pub fn new() -> Self {
         Self::default()
-    }
-
-    pub fn mode(&self) -> ModeId {
-        self.active_mode
-    }
-
-    pub fn active_mode(&self) -> ModeId {
-        self.active_mode
-    }
-
-    pub fn set_mode(&mut self, mode: ModeId) {
-        self.active_mode = mode;
-    }
-
-    pub fn activate_mode(
-        &mut self,
-        mode_id: ModeId,
-        registry: &ModeRegistry,
-        context: &ModeActivationContext,
-    ) -> Result<(), EditorMutationError> {
-        registry.validate_activation(mode_id, context)?;
-        self.active_mode = mode_id;
-        Ok(())
     }
 
     pub fn active_document(&self) -> Option<DocumentId> {
@@ -427,42 +215,6 @@ mod tests {
 
         assert_eq!(session.document_tabs(), &[DocumentId(1)]);
         assert_eq!(session.active_document(), Some(DocumentId(1)));
-    }
-
-    #[test]
-    fn mode_activation_validates_workspace_and_document_compatibility() {
-        let registry = ModeRegistry::default_registry();
-        let context = ModeActivationContext::new([EDIT_MODE_ID], Some(DocumentKind::MaterialGraph));
-        let mut session = EditorSession::new();
-
-        session
-            .activate_mode(EDIT_MODE_ID, &registry, &context)
-            .expect("edit mode should support material graphs in an edit workspace");
-
-        let rejected = session.activate_mode(PLAY_MODE_ID, &registry, &context);
-        assert!(rejected.is_err());
-    }
-
-    #[test]
-    fn preview_mode_fails_closed_for_non_preview_document_kinds() {
-        let registry = ModeRegistry::default_registry();
-        let mut session = EditorSession::new();
-
-        session
-            .activate_mode(
-                PREVIEW_MODE_ID,
-                &registry,
-                &ModeActivationContext::new([PREVIEW_MODE_ID], Some(DocumentKind::Scene)),
-            )
-            .expect("scene preview should be compatible");
-
-        let rejected = session.activate_mode(
-            PREVIEW_MODE_ID,
-            &registry,
-            &ModeActivationContext::new([PREVIEW_MODE_ID], Some(DocumentKind::Theme)),
-        );
-
-        assert!(rejected.is_err());
     }
 
     #[test]
