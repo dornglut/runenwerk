@@ -64,6 +64,16 @@ pub(super) struct RendererPreparedDynamicTextureUploadBatch {
 }
 
 impl RendererDynamicTextureTargetCache {
+    pub(super) fn texture_handle(
+        &self,
+        key: &RenderDynamicTextureTargetKey,
+    ) -> Result<GpuTextureHandle> {
+        self.targets
+            .get(key)
+            .map(|target| target._handle.clone())
+            .ok_or_else(|| anyhow::anyhow!("dynamic texture target '{key}' was not realized"))
+    }
+
     pub fn realize_for_frame(
         &mut self,
         _context: &GpuContext,
@@ -499,6 +509,7 @@ pub fn dynamic_format_to_gpu(format: RenderTextureTargetFormat) -> GpuTextureFor
         RenderTextureTargetFormat::Rgba8Unorm => GpuTextureFormat::Rgba8Unorm,
         RenderTextureTargetFormat::Rgba8UnormSrgb => GpuTextureFormat::Rgba8UnormSrgb,
         RenderTextureTargetFormat::R32Uint => GpuTextureFormat::R32Uint,
+        RenderTextureTargetFormat::R32Float => GpuTextureFormat::R32Float,
         RenderTextureTargetFormat::Depth32Float => GpuTextureFormat::Depth32Float,
     }
 }

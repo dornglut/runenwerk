@@ -11,10 +11,15 @@ use engine::plugins::render::admission::{
     RenderRepresentationAvailabilityState,
 };
 use engine::plugins::render::appearance::{RenderDiffuseMaterial, RenderDirectionalEmitter};
+use engine::plugins::render::backend::RenderSurfaceId;
 use engine::plugins::render::deterministic_admission::admit_deterministic_render;
 use engine::plugins::render::deterministic_execution::{
     RenderCapturedDeterministicRadiance, SubmittedDeterministicRender,
     submit_deterministic_render_for_verified_result,
+};
+use engine::plugins::render::frame::{
+    PreparedFlowInvocationRequest, PreparedRenderFrameRequestResource,
+    RenderDeterministicFrameContribution, RenderDeterministicFrameContributionResource,
 };
 use engine::plugins::render::participation::{RenderMaterialAssignment, RenderObjectParticipation};
 use engine::plugins::render::representation::{
@@ -28,6 +33,8 @@ use engine::plugins::render::request::{
     RenderRadiometricRepresentation, RenderRequest, RenderRequestedOutput, RenderResultTopology,
     RenderSamplingSupport, RenderSemanticTolerance,
 };
+use engine::plugins::render::runtime::RenderDynamicTextureTargetRequestRegistryResource;
+use engine::plugins::render::runtime::RenderRuntimeSet;
 use engine::plugins::render::scene::{
     RenderObjectState, RenderSceneSnapshot, RenderSceneStore, RenderSceneUpdate,
 };
@@ -40,6 +47,17 @@ use engine::plugins::render::surface_input::{
     RenderSurfaceSemanticInput, RenderSurfaceSemanticInputBinding,
     RenderSurfaceSemanticInputRequirement,
 };
+use engine::plugins::render::{
+    RenderDynamicTextureRetention, RenderDynamicTextureTargetDescriptor,
+    RenderDynamicTextureTargetKey, RenderFlow, RenderPlugin, RenderTargetAliasKind,
+    RenderTextureSampleMode, RenderTextureTargetFormat, RenderTextureTargetUsage,
+};
+use engine::plugins::{ScenePlugin, default_plugins};
+use engine::prelude::{
+    App, FramePacingPolicyResource, InputState, Plugin, RenderPrepare, Res, ResMut, Update,
+    WindowState, WindowStateRegistryResource,
+};
+use engine::runtime::SystemConfigExt;
 use image::{GrayImage, ImageFormat};
 use runen_gpu::{
     GpuCapabilityProfile, GpuContext, GpuContextDescriptor, GpuContextRequestErrorCategory,
@@ -51,6 +69,12 @@ use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
+
+mod camera;
+mod native;
+
+use camera::RenderLabCamera;
+pub use native::run_native;
 
 pub const SCENARIO_ID: &str = "founding-direct";
 pub const SCENARIO_REVISION: u32 = 1;
@@ -67,6 +91,13 @@ const SPHERE_CENTER: [f64; 3] = [0.0, 0.0, -3.0];
 const SPHERE_RADIUS: f64 = 1.0;
 const PLANE_POINT: [f64; 3] = [0.0, -1.0, 0.0];
 const PLANE_NORMAL: [f64; 3] = [0.0, 1.0, 0.0];
+const RL2_FLOW_ID: &str = "runenwerk.render_lab.rl2";
+const RL2_PASS_ID: &str = "runenwerk.render_lab.rl2.visualize";
+const RL2_PRESENT_ID: &str = "runenwerk.render_lab.rl2.present";
+const RL2_RADIANCE_ALIAS: &str = "rl2.radiance";
+const RL2_TARGET_NAMESPACE: &str = "runenwerk.render_lab.rl2";
+const RL2_TARGET_ID: &str = "radiance";
+const RL2_PRODUCER_ID: u64 = 6892;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Classification {
@@ -364,6 +395,20 @@ fn output_destination() -> Result<runen_gpu::GpuTextureHandle> {
 }
 
 fn founding_fixture() -> Result<FoundingFixture> {
+    founding_fixture_with_observation(RenderAffineTransform3::identity())
+}
+
+fn founding_fixture_with_observation(
+    observation_to_scene: RenderAffineTransform3,
+) -> Result<FoundingFixture> {
+    founding_fixture_with_observation_and_extent(observation_to_scene, WIDTH, HEIGHT)
+}
+
+fn founding_fixture_with_observation_and_extent(
+    observation_to_scene: RenderAffineTransform3,
+    width: u32,
+    height: u32,
+) -> Result<FoundingFixture> {
     let mut store = RenderSceneStore::new();
     let sphere_id = store.allocate_object_id()?;
     let plane_id = store.allocate_object_id()?;
@@ -458,9 +503,9 @@ fn founding_fixture() -> Result<FoundingFixture> {
 
     let shutter = RenderTimeInterval::instant(RenderTimePoint::from_seconds(0.0)?);
     let observation = RenderObservationSpec::Perspective(RenderPerspectiveObservation::new(
-        RenderAffineTransform3::identity(),
+        observation_to_scene,
         std::f64::consts::FRAC_PI_3,
-        1.0,
+        f64::from(width) / f64::from(height.max(1)),
         shutter,
         RenderSamplingSupport::ideal_ray(),
     )?);
@@ -468,7 +513,7 @@ fn founding_fixture() -> Result<FoundingFixture> {
         RenderRadiometricRepresentation::spectral_at_wavelength_meters(WAVELENGTH_METERS)?;
     let output = RenderOutputSpec::new(
         RenderOutputValue::Radiance { representation },
-        RenderResultTopology::sample_lattice_2d(WIDTH, HEIGHT)?,
+        RenderResultTopology::sample_lattice_2d(width, height)?,
         RenderSemanticTolerance::absolute(ORACLE_TOLERANCE)?,
     )?;
     let request = RenderRequest::new(
@@ -794,6 +839,90 @@ mod tests {
                     .collect::<Vec<_>>()
             )
             .is_ok()
+        );
+    }
+
+    #[test]
+    fn rl2_camera_starts_at_the_rl1_observation_frame() {
+        let camera = RenderLabCamera::default();
+        assert_eq!(
+            camera.observation_to_scene().row_major_3x4(),
+            RenderAffineTransform3::identity().row_major_3x4()
+        );
+    }
+
+    #[test]
+    fn rl2_camera_orbit_is_right_handed_and_changes_semantic_request() {
+        let camera = RenderLabCamera {
+            yaw_radians: 0.25,
+            pitch_radians: -0.15,
+            ..RenderLabCamera::default()
+        };
+        let transform = camera.observation_to_scene();
+        let matrix = transform.row_major_3x4();
+        assert_ne!(matrix, RenderAffineTransform3::identity().row_major_3x4());
+        assert!((matrix[0] * matrix[5] * matrix[10]).abs() > 0.5);
+
+        let baseline = founding_fixture().expect("baseline fixture");
+        let moved = founding_fixture_with_observation(transform).expect("moved fixture");
+        assert_ne!(
+            baseline.request.observations(),
+            moved.request.observations()
+        );
+    }
+
+    #[test]
+    fn rl2_flow_has_one_sampler_free_radiance_input_and_present() {
+        let flow = native::render_lab_flow().expect("RL2 flow should author");
+        let lexical = flow.lexical_pass_order().expect("RL2 flow should compile");
+        assert_eq!(lexical.len(), 2);
+        let compiled = engine::plugins::render::compile_flow_plan(&flow)
+            .expect("RL2 flow should compile into the canonical execution plan");
+        assert_eq!(
+            compiled
+                .execution
+                .passes
+                .iter()
+                .filter(|pass| {
+                    matches!(
+                        pass,
+                        engine::plugins::render::CompiledPassExecutionPlan::Present(_)
+                    )
+                })
+                .count(),
+            1,
+            "RL2 must have exactly one terminal presentation pass"
+        );
+        let [visualizer, present] = compiled.execution.passes.as_slice() else {
+            panic!("RL2 founding flow must contain exactly visualizer then Present");
+        };
+        let engine::plugins::render::CompiledPassExecutionPlan::Fullscreen(visualizer) = visualizer
+        else {
+            panic!("RL2 first pass must be the fullscreen visualizer");
+        };
+        assert!(visualizer.bindings.bind_group.entries.iter().any(|entry| {
+            matches!(
+                entry,
+                engine::plugins::render::CompiledBindingEntry::SampledTexture {
+                    sample_class: runen_gpu::GpuTextureSampleClass::FloatUnfilterable,
+                    ..
+                }
+            )
+        }));
+        assert!(matches!(
+            present,
+            engine::plugins::render::CompiledPassExecutionPlan::Present(_)
+        ));
+        assert_eq!(
+            lexical,
+            vec![
+                visualizer.pass_id,
+                match present {
+                    engine::plugins::render::CompiledPassExecutionPlan::Present(pass) =>
+                        pass.pass_id,
+                    _ => unreachable!(),
+                }
+            ]
         );
     }
 }

@@ -219,6 +219,7 @@ fn render_runtime_inspect_debug_timing_state_includes_preflight_and_flow_encode(
     let mut state = RenderDebugTimingsState::default();
 
     state.observe_frame_timings(GfxFrameTimings {
+        submitted: true,
         acquire_ms: 0.5,
         renderer: RendererFrameTimings {
             prepare_ui_ms: 1.0,

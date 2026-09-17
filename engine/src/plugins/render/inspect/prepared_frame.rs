@@ -613,6 +613,7 @@ fn dynamic_texture_format_name(format: RenderTextureTargetFormat) -> &'static st
         RenderTextureTargetFormat::Rgba8Unorm => "rgba8_unorm",
         RenderTextureTargetFormat::Rgba8UnormSrgb => "rgba8_unorm_srgb",
         RenderTextureTargetFormat::R32Uint => "r32_uint",
+        RenderTextureTargetFormat::R32Float => "r32_float",
         RenderTextureTargetFormat::Depth32Float => "depth32_float",
     }
 }
