@@ -5,7 +5,7 @@ status: active
 owner: domain/material_graph
 layer: domain / app-runtime / engine-render
 canonical: true
-last_reviewed: 2026-09-10
+last_reviewed: 2026-09-17
 related_designs:
   - ../implemented/editor-rendered-world-and-multi-entity-viewport-design.md
   - ../implemented/render-product-surface-foundation-bundle-design.md
@@ -188,6 +188,14 @@ preview surface must consume the same scene-owned model/mesh material
 assignments and generated material table as the SDF scene path, while preserving
 Material Lab source documents and scene material assignment state as separate
 truth.
+
+Descriptor or status output, prepared material-selection transport, and synthetic
+SDF-region drawing are preflight evidence only; they do not prove visible pixels
+from a real model/mesh surface. WR-029 Phase 4 and WR-030 pixel completion remain
+pending until a source-backed model/mesh surface renders the selected material
+table entry, with pass provenance identifying the source-backed region, material
+table identity, shader bundle, and consuming pass. The WR-028 two-SDF
+material-slot pixel behavior remains a required non-regression proof.
 
 ## Non Goals
 
