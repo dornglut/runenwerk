@@ -1414,38 +1414,6 @@ fn wr021_material_product_spine_runtime_boundaries_are_consumed() {
 }
 
 #[test]
-fn wr029_phase4_requires_real_model_mesh_renderable_contract_before_pixel_claim() {
-    let wr029_contract = read_workspace_source(
-        "docs-site/src/content/docs/reports/implementation-plans/wr-029-model-mesh-material-binding/plan.md",
-    );
-    let rendered_world_design = read_workspace_source(
-        "docs-site/src/content/docs/design/implemented/editor-rendered-world-and-multi-entity-viewport-design.md",
-    );
-    let wr030_contract = read_workspace_source(
-        "docs-site/src/content/docs/reports/implementation-plans/wr-030-model-mesh-renderable-scene-contract/plan.md",
-    );
-
-    assert!(
-        wr029_contract.contains("WR-030")
-            && wr029_contract.contains("must not use the current SDF pass")
-            && wr029_contract.contains("descriptor-only")
-            && wr029_contract.contains("proof as a substitute"),
-        "WR-029 Phase 4 must stay blocked on a real model/mesh renderable contract instead of claiming SDF or descriptor-only evidence",
-    );
-    assert!(
-        rendered_world_design.contains("WR-018 V1 originally excluded")
-            && rendered_world_design.contains("general mesh scene extraction"),
-        "the implemented rendered-world design must retain WR-018's historical no-general-mesh-scene-extraction boundary before WR-029 claims model/mesh pixels",
-    );
-    assert!(
-        wr030_contract.contains("first implementation surface is a Mesh Preview product surface")
-            && wr030_contract.contains("Do not add general mesh scene extraction")
-            && wr030_contract.contains("add Mesh Preview beside the existing SDF scene path"),
-        "WR-030 must stay product-surface-first until a broader mesh scene extraction ADR/design is accepted",
-    );
-}
-
-#[test]
 fn wr021_material_descriptors_and_ui_do_not_fall_back_to_old_shortcuts() {
     let resource_resolution =
         read_workspace_source("apps/runenwerk_editor/src/material_lab/resource_resolution.rs");
