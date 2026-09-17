@@ -13,12 +13,11 @@ use editor_scene::{
 };
 
 use crate::editor_runtime::{
-    AuthoredSceneReality, DocumentTabRuntimeRecord, DocumentTabRuntimeState,
-    EditorRuntimeIdRegistry, HierarchySnapshot, InstantiatedSceneReality, OutlinerTree,
-    RatifiedChangeLog, RunenwerkEditorInspectorBridge, RunenwerkEditorSceneRuntime,
-    SceneComponentSnapshotRecord, SceneDocumentState, SceneEntityView, SceneFieldSnapshot,
-    SceneHistoryContext, SceneHistoryEntry, SceneResourceSnapshotRecord, SceneRuntimeSnapshot,
-    SimulatedSceneReality, all_entity_views, build_hierarchy_snapshot,
+    AuthoredSceneReality, EditorRuntimeIdRegistry, HierarchySnapshot, InstantiatedSceneReality,
+    OutlinerTree, RatifiedChangeLog, RunenwerkEditorInspectorBridge,
+    RunenwerkEditorSceneRuntime, SceneComponentSnapshotRecord, SceneDocumentState, SceneEntityView,
+    SceneFieldSnapshot, SceneHistoryContext, SceneHistoryEntry, SceneResourceSnapshotRecord,
+    SceneRuntimeSnapshot, SimulatedSceneReality, all_entity_views, build_hierarchy_snapshot,
     outliner_tree_from_hierarchy_snapshot, primary_selected_entity,
     resolve_primary_inspect_target_from_runtime, validate_reparent,
 };
@@ -45,7 +44,6 @@ pub struct RunenwerkEditorRuntime {
     session: EditorSession,
     scene_selection: SceneSelectionContext,
     scene_selection_changes: editor_scene::SceneSelectionChangeLog,
-    document_tabs: DocumentTabRuntimeState,
     scene_realities: SceneRealityStore,
     scene_history: SceneHistoryContext,
     ratified_changes: RatifiedChangeLog,
@@ -72,17 +70,10 @@ impl RunenwerkEditorRuntime {
     pub fn new() -> Self {
         let mut session = EditorSession::new();
         ensure_default_scene_document(&mut session);
-        let mut document_tabs = DocumentTabRuntimeState::new();
-        document_tabs.upsert(DocumentTabRuntimeRecord::new(
-            DocumentId(1),
-            DocumentKind::Scene,
-            true,
-        ));
         Self {
             session,
             scene_selection: SceneSelectionContext::new(SceneSelectionScope(1)),
             scene_selection_changes: editor_scene::SceneSelectionChangeLog::new(),
-            document_tabs,
             scene_realities: SceneRealityStore::new(),
             scene_history: SceneHistoryContext::new(),
             ratified_changes: RatifiedChangeLog::new(),
@@ -120,35 +111,21 @@ impl RunenwerkEditorRuntime {
         &self.scene_history
     }
 
-    pub fn document_tabs(&self) -> &DocumentTabRuntimeState {
-        &self.document_tabs
-    }
-
     pub fn activate_default_material_graph_document(&mut self) -> Result<(), EditorMutationError> {
-        self.activate_or_open_document(
-            DocumentDescriptor::new(
-                DEFAULT_MATERIAL_GRAPH_DOCUMENT_ID,
-                DocumentKind::MaterialGraph,
-                "Material Graph",
-            ),
-            true,
-        )
+        self.activate_or_open_document(DocumentDescriptor::new(
+            DEFAULT_MATERIAL_GRAPH_DOCUMENT_ID,
+            DocumentKind::MaterialGraph,
+            "Material Graph",
+        ))
     }
 
     pub fn activate_or_open_document(
         &mut self,
         descriptor: DocumentDescriptor,
-        provider_compatible: bool,
     ) -> Result<(), EditorMutationError> {
         let document_id = descriptor.id;
-        let document_kind = descriptor.kind.clone();
         self.session.upsert_document(descriptor);
         self.session.activate_document(document_id)?;
-        self.document_tabs.upsert(DocumentTabRuntimeRecord::new(
-            document_id,
-            document_kind,
-            provider_compatible,
-        ));
         Ok(())
     }
 
@@ -576,12 +553,6 @@ impl RunenwerkEditorRuntime {
         self.scene_selection = SceneSelectionContext::new(scene_selection_scope);
         self.scene_selection_changes = editor_scene::SceneSelectionChangeLog::new();
         ensure_default_scene_document(&mut self.session);
-        self.document_tabs = DocumentTabRuntimeState::new();
-        self.document_tabs.upsert(DocumentTabRuntimeRecord::new(
-            DocumentId(1),
-            DocumentKind::Scene,
-            true,
-        ));
         self.scene_realities.material_assignments = SceneMaterialAssignmentState::default();
         self.scene_history = SceneHistoryContext::new();
         self.ratified_changes = RatifiedChangeLog::new();

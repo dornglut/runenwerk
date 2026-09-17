@@ -283,10 +283,11 @@ mod tests {
         assert_eq!(runtime.scene_history().undo_len(), 1);
 
         runtime
-            .activate_or_open_document(
-                DocumentDescriptor::new(DocumentId(2), DocumentKind::MaterialGraph, "Material"),
-                true,
-            )
+            .activate_or_open_document(DocumentDescriptor::new(
+                DocumentId(2),
+                DocumentKind::MaterialGraph,
+                "Material",
+            ))
             .expect("material document should activate");
 
         let undo = undo_last_scene_change(&mut runtime, ChangeOrigin::Shortcut)
