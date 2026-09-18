@@ -423,7 +423,7 @@ impl EditorSurfaceProviderRegistry {
                 diagnostic: Some(
                     SurfaceProviderDiagnostic::new(
                         "editor_composition.provider.unsupported_profile",
-                        "no provider supports this surface request",
+                    "no provider supports this surface request",
                     )
                     .for_mounted_unit(request.mounted_unit_id),
                 ),
@@ -1322,6 +1322,16 @@ fn workspace_allows_document(
         .matches_any_stable_key(&[TEXTURE_VIEWER_2D_SURFACE_KEY, TEXTURE_VIEWER_3D_SURFACE_KEY])
     {
         return registry.profile(request.workspace_profile_id).is_some();
+    }
+    if request.matches_any_stable_key(&[PROCGEN_GRAPH_CANVAS_SURFACE_KEY, PROCGEN_PREVIEW_SURFACE_KEY])
+        && registry.profile(request.workspace_profile_id).is_some_and(|profile| {
+            profile
+                .default_surfaces
+                .iter()
+                .any(|surface| surface.stable_surface_key() == &request.stable_surface_key)
+        })
+    {
+        return true;
     }
     let Some(document_kind) = request.document_context.resolved_document_kind() else {
         return false;
