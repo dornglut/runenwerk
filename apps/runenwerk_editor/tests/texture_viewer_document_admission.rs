@@ -1,8 +1,9 @@
-// #720: texture product viewers must not borrow active-document authority.
+// Owner-backed surface admission: texture viewers (#720) and Procgen (#739).
 use editor_core::DocumentKind;
 use editor_shell::{
-    MATERIAL_WORKSPACE_PROFILE_ID, ProviderFamilyId, SCENE_WORKSPACE_PROFILE_ID, ShellCommand,
-    SurfaceDocumentContext, SurfaceProviderAvailability, TEXTURE_WORKSPACE_PROFILE_ID,
+    MATERIAL_WORKSPACE_PROFILE_ID, PROCGEN_WORKSPACE_PROFILE_ID, ProviderFamilyId,
+    SCENE_WORKSPACE_PROFILE_ID, ShellCommand, SurfaceDocumentContext, SurfaceProviderAvailability,
+    TEXTURE_WORKSPACE_PROFILE_ID, ToolSurfaceStableKey,
 };
 use runenwerk_editor::editor_app::RunenwerkEditorApp;
 use runenwerk_editor::shell::{
@@ -259,5 +260,207 @@ fn material_workspace_scene_document_behavior_remains_available() {
             SurfaceProviderAvailability::Available,
             "{key}"
         );
+    }
+}
+
+const PROCGEN_KEYS: [&str; 2] = [
+    "runenwerk.procgen.graph_canvas",
+    "runenwerk.procgen.preview",
+];
+
+fn procgen_shell(app: &RunenwerkEditorApp) -> RunenwerkEditorShellState {
+    let host = app.workbench_host();
+    let mut shell = default_shell(app);
+    let profile = host
+        .workspace_profile(PROCGEN_WORKSPACE_PROFILE_ID)
+        .expect("full editor should install Procedural Generation workspace");
+    shell
+        .activate_workspace_profile_ref_with_registry(
+            &profile.profile_ref,
+            host.workspace_profile_registry(),
+            host.tool_surface_registry(),
+        )
+        .expect("Procedural Generation workspace should activate");
+    shell
+}
+
+#[test]
+fn scene_to_procgen_command_admits_both_owner_backed_surfaces_without_switching_document() {
+    let mut app = RunenwerkEditorApp::new();
+    let scene_document = active_document_context(&app);
+    assert!(matches!(
+        &scene_document,
+        SurfaceDocumentContext::Resolved {
+            document_kind: DocumentKind::Scene,
+            ..
+        }
+    ));
+    let mut shell = default_shell(&app);
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell),
+        ShellCommand::SwitchWorkspaceProfile {
+            profile_id: PROCGEN_WORKSPACE_PROFILE_ID,
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("live workspace switch should activate Procedural Generation");
+    assert_eq!(
+        shell.active_workspace_profile_id(),
+        PROCGEN_WORKSPACE_PROFILE_ID
+    );
+
+    let frame = build_editor_shell_frame_model(
+        &app,
+        &shell,
+        &EditorSurfaceProviderRegistry::runenwerk_default(),
+        &ThemeTokens::default(),
+        None,
+        None,
+        None,
+    );
+    for key in PROCGEN_KEYS {
+        let surface = frame
+            .surfaces
+            .values()
+            .find(|surface| surface.stable_surface_key.as_str() == key)
+            .unwrap_or_else(|| panic!("Procedural Generation should mount {key}"));
+        assert_eq!(
+            surface.availability,
+            SurfaceProviderAvailability::Available,
+            "{key}"
+        );
+    }
+    assert_eq!(active_document_context(&app), scene_document);
+}
+
+#[test]
+fn procgen_surfaces_admit_no_active_document_without_bypassing_provider_routing() {
+    let app = RunenwerkEditorApp::new();
+    let host = app.workbench_host();
+    let shell = procgen_shell(&app);
+    let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+    let theme = ThemeTokens::default();
+    let context = SurfaceProviderBuildContext {
+        app: &app,
+        shell_state: &shell,
+        theme: &theme,
+        frame_metrics: None,
+        viewport_observations: None,
+        tool_surface_bindings: None,
+        viewport_instances: None,
+    };
+    let requests = mounted_surface_requests_with_registry(
+        &shell,
+        SurfaceDocumentContext::NoActiveDocument,
+        Some(host.tool_surface_registry()),
+    );
+    for key in PROCGEN_KEYS {
+        let request = requests
+            .iter()
+            .find(|request| request.matches_stable_key(key))
+            .unwrap_or_else(|| panic!("missing mounted Procedural Generation surface {key}"));
+        let frame = registry.resolve_frame_with_provider_family_map(
+            &context,
+            request,
+            &SurfaceSessionState::default(),
+            Some(host.provider_family_provider_map()),
+        );
+        assert_eq!(
+            frame.availability,
+            SurfaceProviderAvailability::Available,
+            "{key}"
+        );
+
+        let mut denied_session = SurfaceSessionState::default();
+        denied_session.content_liveness = ui_composition::ContentLiveness::Denied;
+        let denied_frame = registry.resolve_frame_with_provider_family_map(
+            &context,
+            request,
+            &denied_session,
+            Some(host.provider_family_provider_map()),
+        );
+        assert_eq!(
+            denied_frame.content_liveness,
+            ui_composition::ContentLiveness::Denied,
+            "{key}"
+        );
+
+        let mut unassigned = request.clone();
+        unassigned.provider_family_id =
+            Some(ProviderFamilyId::new("runenwerk.test.unassigned").unwrap());
+        let frame = registry.resolve_frame_with_provider_family_map(
+            &context,
+            &unassigned,
+            &SurfaceSessionState::default(),
+            Some(host.provider_family_provider_map()),
+        );
+        assert_eq!(
+            frame.availability,
+            SurfaceProviderAvailability::Unsupported,
+            "{key}"
+        );
+
+        let mut wrong_key = request.clone();
+        wrong_key.stable_surface_key =
+            ToolSurfaceStableKey::new("runenwerk.test.not_procgen").unwrap();
+        let frame = registry.resolve_frame_with_provider_family_map(
+            &context,
+            &wrong_key,
+            &SurfaceSessionState::default(),
+            Some(host.provider_family_provider_map()),
+        );
+        assert_eq!(
+            frame.availability,
+            SurfaceProviderAvailability::Unsupported,
+            "{key}"
+        );
+    }
+}
+
+#[test]
+fn procgen_admission_denies_undeclared_profiles_without_an_active_document() {
+    let app = RunenwerkEditorApp::new();
+    let host = app.workbench_host();
+    let shell = procgen_shell(&app);
+    let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+    let theme = ThemeTokens::default();
+    let context = SurfaceProviderBuildContext {
+        app: &app,
+        shell_state: &shell,
+        theme: &theme,
+        frame_metrics: None,
+        viewport_observations: None,
+        tool_surface_bindings: None,
+        viewport_instances: None,
+    };
+    let requests = mounted_surface_requests_with_registry(
+        &shell,
+        SurfaceDocumentContext::NoActiveDocument,
+        Some(host.tool_surface_registry()),
+    );
+    for key in PROCGEN_KEYS {
+        let request = requests
+            .iter()
+            .find(|request| request.matches_stable_key(key))
+            .unwrap_or_else(|| panic!("missing mounted Procedural Generation surface {key}"));
+        for unrelated_profile in [SCENE_WORKSPACE_PROFILE_ID, TEXTURE_WORKSPACE_PROFILE_ID] {
+            let mut undeclared = request.clone();
+            undeclared.workspace_profile_id = unrelated_profile;
+            let frame = registry.resolve_frame_with_provider_family_map(
+                &context,
+                &undeclared,
+                &SurfaceSessionState::default(),
+                Some(host.provider_family_provider_map()),
+            );
+            assert_eq!(
+                frame.availability,
+                SurfaceProviderAvailability::Unsupported,
+                "{key} must not be admitted by profile {unrelated_profile:?}"
+            );
+        }
     }
 }
