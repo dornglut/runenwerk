@@ -423,7 +423,7 @@ impl EditorSurfaceProviderRegistry {
                 diagnostic: Some(
                     SurfaceProviderDiagnostic::new(
                         "editor_composition.provider.unsupported_profile",
-                    "no provider supports this surface request",
+                        "no provider supports this surface request",
                     )
                     .for_mounted_unit(request.mounted_unit_id),
                 ),
@@ -1323,8 +1323,12 @@ fn workspace_allows_document(
     {
         return registry.profile(request.workspace_profile_id).is_some();
     }
-    if request.matches_any_stable_key(&[PROCGEN_GRAPH_CANVAS_SURFACE_KEY, PROCGEN_PREVIEW_SURFACE_KEY])
-        && registry.profile(request.workspace_profile_id).is_some_and(|profile| {
+    if request.matches_any_stable_key(&[
+        PROCGEN_GRAPH_CANVAS_SURFACE_KEY,
+        PROCGEN_PREVIEW_SURFACE_KEY,
+    ]) && registry
+        .profile(request.workspace_profile_id)
+        .is_some_and(|profile| {
             profile
                 .default_surfaces
                 .iter()

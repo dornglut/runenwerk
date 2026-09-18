@@ -263,7 +263,10 @@ fn material_workspace_scene_document_behavior_remains_available() {
     }
 }
 
-const PROCGEN_KEYS: [&str; 2] = ["runenwerk.procgen.graph_canvas", "runenwerk.procgen.preview"];
+const PROCGEN_KEYS: [&str; 2] = [
+    "runenwerk.procgen.graph_canvas",
+    "runenwerk.procgen.preview",
+];
 
 fn procgen_shell(app: &RunenwerkEditorApp) -> RunenwerkEditorShellState {
     let host = app.workbench_host();
