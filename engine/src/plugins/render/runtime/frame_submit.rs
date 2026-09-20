@@ -180,7 +180,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
             tracing::debug!(
                 frame = prepared_frame.context.frame_index,
                 surface = render_surface_id.raw(),
-                "deterministic surface submission deferred while mutable intermediates are in flight"
+                "deterministic surface submission deferred while its producer-scoped intermediates are in flight"
             );
             Ok(())
         }
@@ -608,7 +608,7 @@ fn render_additional_surfaces(
                 tracing::debug!(
                     frame = prepared_frame.context.frame_index,
                     surface = render_surface_id.raw(),
-                    "surface submission deferred while its deterministic intermediates are in flight"
+                    "surface submission deferred while its producer-scoped deterministic intermediates are in flight"
                 );
             }
             Ok(_) => {}

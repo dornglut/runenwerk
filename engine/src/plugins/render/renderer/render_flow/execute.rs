@@ -219,6 +219,10 @@ impl Renderer {
                 rejection.reason().detail()
             )
         })?;
+        for contribution in deterministic_contributions {
+            self.deterministic_resources
+                .record_producer_submission(contribution.producer_id.raw(), &submission);
+        }
         // Once G5 accepts the submission, retain every renderer-observed readback before any
         // fallible product evidence work. An accepted lifecycle handle must never be dropped merely
         // because later provenance publication fails for this frame.

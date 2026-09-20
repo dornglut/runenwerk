@@ -919,7 +919,8 @@ impl Gfx {
         );
         if should_defer_deterministic_surface(
             !surface_contributions.is_empty(),
-            self.ctx.context().execution_stats().in_flight_submissions(),
+            self.renderer
+                .has_in_flight_deterministic_producer(&surface_contributions),
         ) {
             return Ok(timings);
         }
@@ -991,9 +992,9 @@ pub(crate) fn deterministic_contributions_for_surface(
 
 fn should_defer_deterministic_surface(
     has_deterministic_contribution: bool,
-    in_flight_submissions: usize,
+    has_in_flight_producer_submission: bool,
 ) -> bool {
-    has_deterministic_contribution && in_flight_submissions > 0
+    has_deterministic_contribution && has_in_flight_producer_submission
 }
 
 fn frame_gpu_timing_capability(
@@ -1040,10 +1041,10 @@ mod tests {
     }
 
     #[test]
-    fn in_flight_gate_is_local_to_deterministic_surface_participation() {
-        assert!(should_defer_deterministic_surface(true, 1));
-        assert!(!should_defer_deterministic_surface(false, 1));
-        assert!(!should_defer_deterministic_surface(true, 0));
+    fn deterministic_surface_deferral_is_scoped_to_its_producer_submission() {
+        assert!(should_defer_deterministic_surface(true, true));
+        assert!(!should_defer_deterministic_surface(false, true));
+        assert!(!should_defer_deterministic_surface(true, false));
     }
 
     #[test]

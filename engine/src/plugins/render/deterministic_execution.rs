@@ -75,9 +75,41 @@ pub(crate) struct DeterministicResourceCache {
     identities: GpuWorkResourceIdAllocator,
     buffers: BTreeMap<(u64, usize, DeterministicBufferKind), GpuBufferHandle>,
     maintained_source: Option<GpuAdmittedProgramSource>,
+    // Keep the latest accepted graph correlated with every producer namespace whose mutable
+    // intermediates it used. A peer surface's submission must not stall this producer's cache.
+    producer_submissions: BTreeMap<u64, GpuSubmission>,
 }
 
 impl DeterministicResourceCache {
+    pub(crate) fn any_producer_submission_in_flight(
+        &self,
+        producer_scopes: impl IntoIterator<Item = u64>,
+    ) -> bool {
+        any_producer_scope_in_flight(producer_scopes, |producer_scope| {
+            self.producer_submissions
+                .get(&producer_scope)
+                .is_some_and(|submission| {
+                    matches!(submission.status(), GpuSubmissionStatus::Accepted)
+                })
+        })
+    }
+
+    pub(crate) fn record_producer_submission(
+        &mut self,
+        producer_scope: u64,
+        submission: &GpuSubmission,
+    ) {
+        self.producer_submissions
+            .insert(producer_scope, submission.clone());
+    }
+
+    pub(crate) fn retain_in_flight_submissions(&mut self) {
+        // Completed and failed submissions are terminal; only an Accepted handle can still be
+        // using a producer's reusable intermediates.
+        self.producer_submissions
+            .retain(|_, submission| matches!(submission.status(), GpuSubmissionStatus::Accepted));
+    }
+
     fn maintained_source(
         &mut self,
     ) -> Result<GpuAdmittedProgramSource, RenderDeterministicLoweringError> {
@@ -114,6 +146,13 @@ impl DeterministicResourceCache {
         self.buffers.insert(key, handle.clone());
         Ok(handle)
     }
+}
+
+fn any_producer_scope_in_flight(
+    producer_scopes: impl IntoIterator<Item = u64>,
+    mut producer_is_in_flight: impl FnMut(u64) -> bool,
+) -> bool {
+    producer_scopes.into_iter().any(&mut producer_is_in_flight)
 }
 
 /// Physical object-identity decoder owned by one exact maintained execution.
@@ -1748,6 +1787,31 @@ mod tests {
         assert_ne!(
             first.diagnostic_identity(),
             other_producer.diagnostic_identity()
+        );
+    }
+
+    #[test]
+    fn an_in_flight_submission_blocks_only_its_producer_scope() {
+        let statuses = BTreeMap::from([
+            (11_u64, GpuSubmissionStatus::Accepted),
+            (12_u64, GpuSubmissionStatus::Completed),
+        ]);
+        let blocks = |scopes: &[u64]| {
+            any_producer_scope_in_flight(scopes.iter().copied(), |scope| {
+                statuses
+                    .get(&scope)
+                    .is_some_and(|status| matches!(status, GpuSubmissionStatus::Accepted))
+            })
+        };
+
+        assert!(blocks(&[11]));
+        assert!(
+            !blocks(&[12]),
+            "a completed peer must not block this producer"
+        );
+        assert!(
+            !blocks(&[12, 13]),
+            "another surface's producer remains eligible"
         );
     }
 
