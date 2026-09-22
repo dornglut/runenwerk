@@ -910,6 +910,14 @@ impl Gfx {
         debug_control: &RenderDebugControlResource,
         debug_config: &RenderDebugConfigResource,
     ) -> Result<GfxFrameTimings> {
+        validate_deterministic_surface_scope(deterministic_contributions.iter().map(
+            |contribution| {
+                (
+                    contribution.producer_id.raw(),
+                    contribution.render_surface_id,
+                )
+            },
+        ))?;
         let mut timings = GfxFrameTimings::default();
         self.renderer
             .begin_frame_gpu_observation(self.ctx.context());
@@ -990,6 +998,28 @@ pub(crate) fn deterministic_contributions_for_surface(
         .collect()
 }
 
+/// The deterministic cache is scoped by producer, so one producer may not publish mutable
+/// intermediate work for more than one surface in the same frame. Independent producers may still
+/// render on independent surfaces, and a surface without deterministic work remains unaffected by
+/// another surface's in-flight submission.
+fn validate_deterministic_surface_scope(
+    contributions: impl IntoIterator<Item = (u64, crate::plugins::render::backend::RenderSurfaceId)>,
+) -> Result<()> {
+    let mut surfaces_by_producer = BTreeMap::new();
+    for (producer, surface) in contributions {
+        if let Some(previous_surface) = surfaces_by_producer.insert(producer, surface)
+            && previous_surface != surface
+        {
+            anyhow::bail!(
+                "deterministic producer {producer} published work for surfaces {} and {} in one frame",
+                previous_surface.raw(),
+                surface.raw()
+            );
+        }
+    }
+    Ok(())
+}
+
 fn should_defer_deterministic_surface(
     has_deterministic_contribution: bool,
     has_in_flight_producer_submission: bool,
@@ -1027,7 +1057,11 @@ pub use frame_bindings::RenderFrameDataRegistry;
 
 #[cfg(test)]
 mod tests {
-    use super::{Renderer, frame_gpu_timing_capability, should_defer_deterministic_surface};
+    use super::{
+        Renderer, frame_gpu_timing_capability, should_defer_deterministic_surface,
+        validate_deterministic_surface_scope,
+    };
+    use crate::plugins::render::backend::RenderSurfaceId;
     use crate::plugins::render::inspect::{RenderGpuTimingCapability, RenderPassTimingEvidence};
 
     #[test]
@@ -1045,6 +1079,26 @@ mod tests {
         assert!(should_defer_deterministic_surface(true, true));
         assert!(!should_defer_deterministic_surface(false, true));
         assert!(!should_defer_deterministic_surface(true, false));
+    }
+
+    #[test]
+    fn deterministic_surface_scope_allows_independent_producers() {
+        let secondary = RenderSurfaceId::try_from_raw(2).expect("secondary surface id");
+        validate_deterministic_surface_scope([(11, RenderSurfaceId::primary()), (12, secondary)])
+            .expect("independent producers may render on independent surfaces");
+    }
+
+    #[test]
+    fn deterministic_surface_scope_rejects_one_producer_on_two_surfaces() {
+        let secondary = RenderSurfaceId::try_from_raw(2).expect("secondary surface id");
+        let result = validate_deterministic_surface_scope([
+            (11, RenderSurfaceId::primary()),
+            (11, secondary),
+        ]);
+        assert!(
+            result.is_err(),
+            "one producer must not alias mutable intermediates across surfaces"
+        );
     }
 
     #[test]
