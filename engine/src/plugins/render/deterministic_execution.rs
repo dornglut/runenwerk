@@ -1791,12 +1791,9 @@ mod tests {
     }
 
     #[test]
-    fn an_in_flight_submission_blocks_only_its_producer_scope() {
-        let statuses = BTreeMap::from([
-            (11_u64, GpuSubmissionStatus::Accepted),
-            (12_u64, GpuSubmissionStatus::Completed),
-        ]);
-        let blocks = |scopes: &[u64]| {
+    fn independent_producer_submissions_progress_across_successive_frames() {
+        let mut statuses = BTreeMap::new();
+        let blocks = |statuses: &BTreeMap<u64, GpuSubmissionStatus>, scopes: &[u64]| {
             any_producer_scope_in_flight(scopes.iter().copied(), |scope| {
                 statuses
                     .get(&scope)
@@ -1804,15 +1801,28 @@ mod tests {
             })
         };
 
-        assert!(blocks(&[11]));
+        // Frame N admits the primary producer. The secondary producer is still eligible even
+        // though the context already has one accepted submission.
+        assert!(!blocks(&statuses, &[11]));
+        assert!(!blocks(&statuses, &[12]));
+        statuses.insert(11, GpuSubmissionStatus::Accepted);
+        assert!(blocks(&statuses, &[11]));
         assert!(
-            !blocks(&[12]),
-            "a completed peer must not block this producer"
+            !blocks(&statuses, &[12]),
+            "a primary submission must not block an independent secondary producer"
         );
-        assert!(
-            !blocks(&[12, 13]),
-            "another surface's producer remains eligible"
-        );
+
+        // The secondary is admitted in the same frame. On the next frame both surfaces defer
+        // only while their own accepted submissions retain their producer-scoped intermediates.
+        statuses.insert(12, GpuSubmissionStatus::Accepted);
+        assert!(blocks(&statuses, &[11]));
+        assert!(blocks(&statuses, &[12]));
+
+        // Once both exact submissions complete, both producers can be admitted again.
+        statuses.insert(11, GpuSubmissionStatus::Completed);
+        statuses.insert(12, GpuSubmissionStatus::Completed);
+        assert!(!blocks(&statuses, &[11]));
+        assert!(!blocks(&statuses, &[12]));
     }
 
     #[test]
