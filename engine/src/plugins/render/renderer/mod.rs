@@ -1002,7 +1002,7 @@ pub(crate) fn deterministic_contributions_for_surface(
 /// intermediate work for more than one surface in the same frame. Independent producers may still
 /// render on independent surfaces, and a surface without deterministic work remains unaffected by
 /// another surface's in-flight submission.
-fn validate_deterministic_surface_scope(
+pub(crate) fn validate_deterministic_surface_scope(
     contributions: impl IntoIterator<Item = (u64, crate::plugins::render::backend::RenderSurfaceId)>,
 ) -> Result<()> {
     let mut surfaces_by_producer = BTreeMap::new();

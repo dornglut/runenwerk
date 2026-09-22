@@ -34,6 +34,135 @@ fn render_timing_logging_enabled() -> bool {
         .unwrap_or(false)
 }
 
+#[cfg(test)]
+mod contribution_deferral_tests {
+    use super::defer_contributions_for_remaining_surfaces;
+    use crate::plugins::render::backend::RenderSurfaceId;
+    use crate::plugins::render::request::{
+        RenderObservationSpec, RenderOutputSpec, RenderOutputValue, RenderProbeObservation,
+        RenderRadiometricRepresentation, RenderRequest, RenderRequestedOutput,
+        RenderResultTopology, RenderSamplingSupport, RenderSemanticTolerance,
+    };
+    use crate::plugins::render::scene::RenderSceneStore;
+    use crate::plugins::render::space_time::{
+        RenderAffineTransform3, RenderTimeInterval, RenderTimePoint,
+    };
+    use crate::plugins::render::{
+        PreparedFrameContext, PreparedFrameContributions, PreparedRenderFrame,
+        PreparedShaderSnapshot, PreparedSurfaceInfo, PreparedViewFrame,
+        RenderDeterministicFrameContribution, RenderDynamicTextureTargetKey, RenderFrameProducerId,
+    };
+    use crate::runtime::NativeWindowId;
+    use std::collections::BTreeMap;
+    use ui_render_data::ViewportSurfaceBindingRegistry;
+
+    fn contribution(
+        producer: u64,
+        surface: RenderSurfaceId,
+    ) -> RenderDeterministicFrameContribution {
+        let shutter = RenderTimeInterval::instant(
+            RenderTimePoint::from_seconds(0.0).expect("test time should be finite"),
+        );
+        let observation = RenderObservationSpec::Probe(
+            RenderProbeObservation::new(
+                RenderAffineTransform3::identity(),
+                shutter,
+                RenderSamplingSupport::ideal_ray(),
+            )
+            .expect("test observation should be valid"),
+        );
+        let output = RenderOutputSpec::new(
+            RenderOutputValue::Radiance {
+                representation: RenderRadiometricRepresentation::spectral_at_wavelength_meters(
+                    550.0e-9,
+                )
+                .expect("test radiance representation should be valid"),
+            },
+            RenderResultTopology::scalar(),
+            RenderSemanticTolerance::absolute(1.0e-4).expect("test tolerance should be valid"),
+        )
+        .expect("test output should be valid");
+        RenderDeterministicFrameContribution {
+            producer_id: RenderFrameProducerId::try_from_raw(producer)
+                .expect("test producer id should be nonzero"),
+            render_surface_id: surface,
+            scene: RenderSceneStore::new().snapshot(),
+            request: RenderRequest::new(
+                shutter,
+                vec![observation],
+                vec![RenderRequestedOutput::new(0, output)],
+            )
+            .expect("test request should be valid"),
+            semantic_inputs: Vec::new(),
+            availability: Vec::new(),
+            output_index: 0,
+            target_key: RenderDynamicTextureTargetKey::new("test", "radiance"),
+        }
+    }
+
+    fn prepared_frame(surface: RenderSurfaceId, frame_index: u64) -> PreparedRenderFrame {
+        let native_window_id = if surface == RenderSurfaceId::primary() {
+            NativeWindowId::primary()
+        } else {
+            NativeWindowId::try_from_raw(surface.raw()).expect("test window id should be valid")
+        };
+        PreparedRenderFrame {
+            context: PreparedFrameContext {
+                frame_index,
+                flow_registry_revision: 7,
+                shader_registry_revision: 11,
+                prepare_epoch: 3,
+            },
+            surface: PreparedSurfaceInfo::for_surface(surface, native_window_id, (1280, 720)),
+            views: vec![PreparedViewFrame::main((1280, 720))],
+            flows: BTreeMap::new(),
+            flow_invocations: Vec::new(),
+            dynamic_texture_targets: Vec::new(),
+            dynamic_texture_uploads: Vec::new(),
+            product_selections: Vec::new(),
+            viewport_surface_bindings: ViewportSurfaceBindingRegistry::default(),
+            contributions: PreparedFrameContributions::default(),
+            shader: PreparedShaderSnapshot {
+                registry_revision: 11,
+            },
+        }
+    }
+
+    #[test]
+    fn fatal_additional_surface_defers_current_and_later_contributions_only() {
+        let primary = RenderSurfaceId::primary();
+        let secondary = RenderSurfaceId::try_from_raw(2).expect("secondary surface id");
+        let tertiary = RenderSurfaceId::try_from_raw(3).expect("tertiary surface id");
+        let prepared_frames = vec![
+            prepared_frame(primary, 0),
+            prepared_frame(secondary, 1),
+            prepared_frame(tertiary, 2),
+        ];
+        let contributions = vec![
+            contribution(11, primary),
+            contribution(12, secondary),
+            contribution(13, tertiary),
+        ];
+        let mut deferred = Vec::new();
+
+        defer_contributions_for_remaining_surfaces(
+            &mut deferred,
+            &contributions,
+            &prepared_frames,
+            1,
+        );
+
+        assert_eq!(
+            deferred
+                .iter()
+                .map(|contribution| contribution.producer_id.raw())
+                .collect::<Vec<_>>(),
+            vec![12, 13],
+            "a successful primary surface must not be republished after a later surface fails"
+        );
+    }
+}
+
 fn primary_redraw_interval_logging_enabled() -> bool {
     std::env::var("GROTTO_RENDER_PRIMARY_REDRAW_INTERVAL_LOG")
         .map(|value| {
@@ -92,6 +221,22 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
             prepared_frame.surface.render_surface_id,
         );
     let mut deferred_deterministic_contributions = Vec::new();
+
+    // A producer publishing to two surfaces is an invalid frame contribution, not deferred work.
+    // Reject it before the primary surface can submit and intentionally consume the rejected
+    // frame contribution instead of restoring it as stale work for the next frame.
+    if let Err(error) = crate::plugins::render::renderer::validate_deterministic_surface_scope(
+        deterministic_contributions.iter().map(|contribution| {
+            (
+                contribution.producer_id.raw(),
+                contribution.render_surface_id,
+            )
+        }),
+    ) {
+        world.insert_resource(shader_registry);
+        world.insert_resource(gfx);
+        return Err(error);
+    }
 
     let (target_w, target_h) = prepared_frame
         .views
@@ -468,6 +613,11 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                     }
                 }
             } else {
+                // The renderer can fail before an additional surface is visited. Preserve every
+                // still-needed contribution on that path; producer-scoped in-flight protection
+                // handles the rare case where a backend error follows an accepted submission.
+                deferred_deterministic_contributions
+                    .extend(deterministic_contributions.iter().cloned());
                 Err(anyhow!("render backend execution failed: {err:#}"))
             }
         }
@@ -507,6 +657,24 @@ fn restore_deterministic_contributions(
     }
 }
 
+fn defer_contributions_for_remaining_surfaces(
+    deferred: &mut Vec<RenderDeterministicFrameContribution>,
+    deterministic_contributions: &[RenderDeterministicFrameContribution],
+    prepared_frames: &[PreparedRenderFrame],
+    first_remaining_index: usize,
+) {
+    deferred.extend(
+        prepared_frames[first_remaining_index..]
+            .iter()
+            .flat_map(|prepared_frame| {
+                crate::plugins::render::renderer::deterministic_contributions_for_surface(
+                    deterministic_contributions,
+                    prepared_frame.surface.render_surface_id,
+                )
+            }),
+    );
+}
+
 #[allow(clippy::too_many_arguments)]
 fn render_additional_surfaces(
     world: &mut WorldMut,
@@ -520,14 +688,14 @@ fn render_additional_surfaces(
     debug_config: &RenderDebugConfigResource,
 ) -> anyhow::Result<Vec<RenderDeterministicFrameContribution>> {
     let mut deferred = Vec::new();
-    for prepared_frame in prepared_frames {
+    for (prepared_frame_index, prepared_frame) in prepared_frames.iter().enumerate() {
         let render_surface_id = prepared_frame.surface.render_surface_id;
         if let Err(err) = validate_prepared_frame_surface_scope(world, prepared_frame) {
-            deferred.extend(
-                crate::plugins::render::renderer::deterministic_contributions_for_surface(
-                    deterministic_contributions,
-                    render_surface_id,
-                ),
+            defer_contributions_for_remaining_surfaces(
+                &mut deferred,
+                deterministic_contributions,
+                prepared_frames,
+                prepared_frame_index,
             );
             return Err(err);
         }
@@ -543,22 +711,22 @@ fn render_additional_surfaces(
                     ),
                 });
             }
-            deferred.extend(
-                crate::plugins::render::renderer::deterministic_contributions_for_surface(
-                    deterministic_contributions,
-                    render_surface_id,
-                ),
+            defer_contributions_for_remaining_surfaces(
+                &mut deferred,
+                deterministic_contributions,
+                prepared_frames,
+                prepared_frame_index,
             );
             continue;
         }
 
         let Some((target_w, target_h)) = prepared_frame.main_view().map(|view| view.target_size_px)
         else {
-            deferred.extend(
-                crate::plugins::render::renderer::deterministic_contributions_for_surface(
-                    deterministic_contributions,
-                    render_surface_id,
-                ),
+            defer_contributions_for_remaining_surfaces(
+                &mut deferred,
+                deterministic_contributions,
+                prepared_frames,
+                prepared_frame_index,
             );
             return Err(anyhow!(
                 "prepared render frame is missing a main surface view"
@@ -569,15 +737,24 @@ fn render_additional_surfaces(
             gfx.resize(render_surface_id, target_w, target_h);
         }
 
-        let flow_registry = world
-            .resource::<RenderFlowRegistryResource>()
-            .map_err(|_| anyhow!("render flow registry is unavailable"))?;
-        if flow_registry.revision() != prepared_frame.context.flow_registry_revision {
-            deferred.extend(
-                crate::plugins::render::renderer::deterministic_contributions_for_surface(
+        let flow_registry = match world.resource::<RenderFlowRegistryResource>() {
+            Ok(flow_registry) => flow_registry,
+            Err(_) => {
+                defer_contributions_for_remaining_surfaces(
+                    &mut deferred,
                     deterministic_contributions,
-                    render_surface_id,
-                ),
+                    prepared_frames,
+                    prepared_frame_index,
+                );
+                return Err(anyhow!("render flow registry is unavailable"));
+            }
+        };
+        if flow_registry.revision() != prepared_frame.context.flow_registry_revision {
+            defer_contributions_for_remaining_surfaces(
+                &mut deferred,
+                deterministic_contributions,
+                prepared_frames,
+                prepared_frame_index,
             );
             continue;
         }
@@ -635,6 +812,12 @@ fn render_additional_surfaces(
                         }
                     }
                 } else {
+                    defer_contributions_for_remaining_surfaces(
+                        &mut deferred,
+                        deterministic_contributions,
+                        prepared_frames,
+                        prepared_frame_index,
+                    );
                     return Err(anyhow!(
                         "render backend execution failed for surface {}: {err:#}",
                         render_surface_id.raw()

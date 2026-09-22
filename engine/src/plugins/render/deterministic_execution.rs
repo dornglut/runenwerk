@@ -1791,41 +1791,6 @@ mod tests {
     }
 
     #[test]
-    fn independent_producer_submissions_progress_across_successive_frames() {
-        let mut statuses = BTreeMap::new();
-        let blocks = |statuses: &BTreeMap<u64, GpuSubmissionStatus>, scopes: &[u64]| {
-            any_producer_scope_in_flight(scopes.iter().copied(), |scope| {
-                statuses
-                    .get(&scope)
-                    .is_some_and(|status| matches!(status, GpuSubmissionStatus::Accepted))
-            })
-        };
-
-        // Frame N admits the primary producer. The secondary producer is still eligible even
-        // though the context already has one accepted submission.
-        assert!(!blocks(&statuses, &[11]));
-        assert!(!blocks(&statuses, &[12]));
-        statuses.insert(11, GpuSubmissionStatus::Accepted);
-        assert!(blocks(&statuses, &[11]));
-        assert!(
-            !blocks(&statuses, &[12]),
-            "a primary submission must not block an independent secondary producer"
-        );
-
-        // The secondary is admitted in the same frame. On the next frame both surfaces defer
-        // only while their own accepted submissions retain their producer-scoped intermediates.
-        statuses.insert(12, GpuSubmissionStatus::Accepted);
-        assert!(blocks(&statuses, &[11]));
-        assert!(blocks(&statuses, &[12]));
-
-        // Once both exact submissions complete, both producers can be admitted again.
-        statuses.insert(11, GpuSubmissionStatus::Completed);
-        statuses.insert(12, GpuSubmissionStatus::Completed);
-        assert!(!blocks(&statuses, &[11]));
-        assert!(!blocks(&statuses, &[12]));
-    }
-
-    #[test]
     fn deterministic_cache_stays_bounded_across_frames_and_resize() {
         let mut cache = DeterministicResourceCache::default();
         let mut identities = BTreeSet::new();

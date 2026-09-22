@@ -9,26 +9,32 @@ use super::adapters::{
 };
 use super::admission::{RenderOutputBinding, RenderOutputDestination};
 use super::deterministic_admission::admit_deterministic_render;
-use super::deterministic_execution::prepare_deterministic_render;
+use super::deterministic_execution::{
+    DeterministicResourceCache, prepare_deterministic_render,
+    prepare_deterministic_render_with_cache_in_scope,
+};
 use super::deterministic_execution_r7_proof::{
     MaintainedExecutionFixture, admit_with_retained_radiance_destination, maintained_fixture,
 };
+use super::renderer::validate_deterministic_surface_scope;
 use runen_gpu::{
     GpuAttachmentStore, GpuBindingKey, GpuBindingLayoutRefinement, GpuBufferDescriptor,
-    GpuBufferInitialization, GpuBufferTextureLayout, GpuBufferUsage, GpuCapabilityProfile,
-    GpuColorAttachmentLoad, GpuColorClearValue, GpuColorTargetStateDescriptor, GpuContext,
-    GpuContextDescriptor, GpuContextRequestErrorCategory, GpuCopyOperation, GpuDependencyReason,
-    GpuDependencyRegion, GpuDrawRange, GpuExecutionPreference, GpuFormatRole,
-    GpuFragmentOutputStateDescriptor, GpuMultisampleStateDescriptor, GpuPipelineConfiguration,
-    GpuPreparedWorkGraph, GpuPresentOperation, GpuPrimitiveStateDescriptor, GpuProgramDescriptor,
-    GpuReconstruction, GpuRenderEntryPoints, GpuRenderOperation, GpuRenderPipelineDescriptor,
+    GpuBufferInitialization, GpuBufferRegion, GpuBufferTextureLayout, GpuBufferUsage,
+    GpuCapabilityProfile, GpuClearOperation, GpuColorAttachmentLoad, GpuColorClearValue,
+    GpuColorTargetStateDescriptor, GpuContext, GpuContextDescriptor,
+    GpuContextRequestErrorCategory, GpuCopyOperation, GpuDependencyReason, GpuDependencyRegion,
+    GpuDrawRange, GpuExecutionPreference, GpuFormatRole, GpuFragmentOutputStateDescriptor,
+    GpuMultisampleStateDescriptor, GpuPipelineConfiguration, GpuPreparedWorkGraph,
+    GpuPresentOperation, GpuPrimitiveStateDescriptor, GpuProgramDescriptor, GpuReconstruction,
+    GpuRenderEntryPoints, GpuRenderOperation, GpuRenderPipelineDescriptor,
     GpuRenderPipelineStateDescriptor, GpuResourceLabel, GpuResourceLifetime, GpuResourceProvenance,
-    GpuRuntimeBindingResource, GpuRuntimeBindingValue, GpuRuntimeTextureViewBinding,
-    GpuTextureDescriptor, GpuTextureFormat, GpuTextureInitialization, GpuTextureSampleClass,
-    GpuTextureUsage, GpuTextureViewDescriptor, GpuTextureViewDimension,
+    GpuRuntimeBindingResource, GpuRuntimeBindingValue, GpuRuntimeTextureViewBinding, GpuSubmission,
+    GpuSubmissionStatus, GpuTextureDescriptor, GpuTextureFormat, GpuTextureInitialization,
+    GpuTextureSampleClass, GpuTextureUsage, GpuTextureViewDescriptor, GpuTextureViewDimension,
     GpuVertexInputStateDescriptor, GpuWorkFragment, GpuWorkNodeKind, GpuWorkOperation,
     GpuWorkResourceIdAllocator,
 };
+use std::time::{Duration, Instant};
 
 fn request_composition_context() -> Option<GpuContext> {
     let descriptor =
@@ -424,4 +430,211 @@ fn rl2_canonical_composition_uses_real_radiance_import_and_visualizer() {
             .iter()
             .all(|node| node.node().kind() != GpuWorkNodeKind::Readback)
     );
+}
+
+fn wait_for_gpu_submission(context: &GpuContext, submission: &GpuSubmission) {
+    let deadline = Instant::now() + Duration::from_secs(15);
+    loop {
+        context.progress();
+        match submission.status() {
+            GpuSubmissionStatus::Completed => return,
+            GpuSubmissionStatus::Failed(failure) => {
+                panic!("RL2 multi-surface submission failed: {failure:?}")
+            }
+            GpuSubmissionStatus::Accepted => {}
+        }
+        assert!(
+            Instant::now() < deadline,
+            "RL2 multi-surface submission did not complete before timeout"
+        );
+        std::thread::yield_now();
+    }
+}
+
+fn prepared_resource_identities(
+    prepared: &super::deterministic_execution::PreparedDeterministicRender,
+) -> Vec<runen_gpu::GpuWorkResourceId> {
+    prepared
+        .work_set()
+        .fragments()
+        .iter()
+        .flat_map(|fragment| fragment.resources())
+        // Each frame intentionally admits a fresh independent output target. The maintained
+        // cache identities are the buffer resources; compare those rather than the target handle
+        // owned by the surface contribution.
+        .filter(|resource| {
+            !resource
+                .common()
+                .label()
+                .as_str()
+                .contains("radiance destination")
+        })
+        .map(|resource| resource.diagnostic_identity())
+        .collect()
+}
+
+fn ordinary_surface_work(allocator: &mut GpuWorkResourceIdAllocator) -> GpuWorkFragment {
+    let buffer = allocator
+        .allocate_buffer_handle(
+            GpuBufferDescriptor::ordinary_owned(
+                "RL2 ordinary surface buffer",
+                GpuResourceLifetime::Transient,
+                GpuReconstruction::SourceBacked,
+                4,
+                [GpuBufferUsage::CopyDestination],
+                GpuBufferInitialization::Uninitialized,
+            )
+            .expect("ordinary surface buffer descriptor"),
+        )
+        .expect("ordinary surface buffer handle");
+    let clear = GpuClearOperation::buffer_zero(
+        GpuBufferRegion::whole(&buffer).expect("ordinary surface buffer region"),
+    )
+    .expect("ordinary surface clear operation");
+    GpuWorkFragment::build("RL2 ordinary surface", |work| {
+        work.operation("clear ordinary surface target", clear)?;
+        Ok(())
+    })
+    .expect("ordinary surface work fragment")
+}
+
+#[test]
+fn independent_producer_submissions_progress_through_real_preparation_and_submission() {
+    let Some(context) = request_composition_context() else {
+        return;
+    };
+    let fixture = radiance_fixture();
+    let mut resources = DeterministicResourceCache::default();
+
+    // The two producers use the maintained production lowerer with different cache scopes and
+    // independent R32Float targets. Submission A is intentionally left accepted/in flight.
+    let prepared_a = prepare_deterministic_render_with_cache_in_scope(
+        admit_r32float_radiance(&fixture, &context),
+        &context,
+        &mut resources,
+        11,
+    )
+    .expect("producer A should prepare through the maintained lowerer");
+    let a_resource_ids = prepared_resource_identities(&prepared_a);
+    let submission_a = pollster::block_on(context.submit_work(
+        "RL2 multi-surface producer A",
+        prepared_a.work_set().fragments().iter().cloned(),
+    ))
+    .expect("producer A should submit through RunenGPU");
+    assert!(matches!(
+        submission_a.status(),
+        GpuSubmissionStatus::Accepted
+    ));
+    resources.record_producer_submission(11, &submission_a);
+    assert_eq!(context.execution_stats().in_flight_submissions(), 1);
+    assert!(resources.any_producer_submission_in_flight([11]));
+
+    assert!(
+        !resources.any_producer_submission_in_flight([12]),
+        "producer B must remain eligible while producer A is in flight"
+    );
+    let prepared_b = prepare_deterministic_render_with_cache_in_scope(
+        admit_r32float_radiance(&fixture, &context),
+        &context,
+        &mut resources,
+        12,
+    )
+    .expect("producer B should prepare while producer A is in flight");
+    let b_resource_ids = prepared_resource_identities(&prepared_b);
+    assert_ne!(
+        a_resource_ids, b_resource_ids,
+        "producer-scoped mutable intermediates must not alias across surfaces"
+    );
+    let submission_b = pollster::block_on(context.submit_work(
+        "RL2 multi-surface producer B",
+        prepared_b.work_set().fragments().iter().cloned(),
+    ))
+    .expect("producer B should submit despite producer A in flight");
+    assert!(matches!(
+        submission_b.status(),
+        GpuSubmissionStatus::Accepted
+    ));
+    resources.record_producer_submission(12, &submission_b);
+    assert_eq!(context.execution_stats().in_flight_submissions(), 2);
+    assert!(resources.any_producer_submission_in_flight([11]));
+    assert!(resources.any_producer_submission_in_flight([12]));
+    assert!(
+        !resources.any_producer_submission_in_flight([]),
+        "a surface without deterministic work must not be deferred by unrelated producers"
+    );
+
+    // The renderer's owner boundary rejects one producer routed to two surfaces before a frame
+    // can submit either route. The already accepted A/B submissions prove this check is not a
+    // status-map-only predicate; the validation itself must not add another submission.
+    let before_rejected_submission_count = context.execution_stats().in_flight_submissions();
+    let secondary = super::backend::RenderSurfaceId::try_from_raw(2).expect("secondary surface id");
+    assert!(
+        validate_deterministic_surface_scope([
+            (11, super::backend::RenderSurfaceId::primary()),
+            (11, secondary),
+        ])
+        .is_err(),
+        "one producer publishing to two surfaces must be rejected before submission"
+    );
+    assert_eq!(
+        context.execution_stats().in_flight_submissions(),
+        before_rejected_submission_count
+    );
+
+    let mut ordinary_allocator = GpuWorkResourceIdAllocator::new();
+    let ordinary_submission = pollster::block_on(context.submit_work(
+        "RL2 ordinary surface while deterministic work is in flight",
+        [ordinary_surface_work(&mut ordinary_allocator)],
+    ))
+    .expect("ordinary surface work should submit while deterministic producers are in flight");
+    assert!(matches!(
+        ordinary_submission.status(),
+        GpuSubmissionStatus::Accepted
+    ));
+
+    wait_for_gpu_submission(&context, &submission_a);
+    wait_for_gpu_submission(&context, &submission_b);
+    wait_for_gpu_submission(&context, &ordinary_submission);
+    resources.retain_in_flight_submissions();
+    assert!(!resources.any_producer_submission_in_flight([11, 12]));
+
+    // After both submissions complete, successive frames may reuse each producer's own stable
+    // intermediates. They are never reused during the accepted lifetime above.
+    let prepared_a_next = prepare_deterministic_render_with_cache_in_scope(
+        admit_r32float_radiance(&fixture, &context),
+        &context,
+        &mut resources,
+        11,
+    )
+    .expect("producer A should progress on a successive frame");
+    assert_eq!(
+        a_resource_ids,
+        prepared_resource_identities(&prepared_a_next)
+    );
+    let submission_a_next = pollster::block_on(context.submit_work(
+        "RL2 multi-surface producer A next frame",
+        prepared_a_next.work_set().fragments().iter().cloned(),
+    ))
+    .expect("producer A successive frame should submit");
+    resources.record_producer_submission(11, &submission_a_next);
+
+    let prepared_b_next = prepare_deterministic_render_with_cache_in_scope(
+        admit_r32float_radiance(&fixture, &context),
+        &context,
+        &mut resources,
+        12,
+    )
+    .expect("producer B should progress on a successive frame");
+    assert_eq!(
+        b_resource_ids,
+        prepared_resource_identities(&prepared_b_next)
+    );
+    let submission_b_next = pollster::block_on(context.submit_work(
+        "RL2 multi-surface producer B next frame",
+        prepared_b_next.work_set().fragments().iter().cloned(),
+    ))
+    .expect("producer B successive frame should submit");
+    resources.record_producer_submission(12, &submission_b_next);
+    wait_for_gpu_submission(&context, &submission_a_next);
+    wait_for_gpu_submission(&context, &submission_b_next);
 }
