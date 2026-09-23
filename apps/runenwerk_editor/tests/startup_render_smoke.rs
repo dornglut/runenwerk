@@ -11,6 +11,7 @@ use runenwerk_editor::runtime::viewport::{
     VIEWPORT_DYNAMIC_TARGET_NAMESPACE, ViewportProductTargetRegistryResource,
     ViewportRenderJobResource, ViewportRenderStateResource,
 };
+use engine::runtime::{PlatformWindowEventQueueResource, WindowStateRegistryResource};
 use ui_render_data::{UiPrimitive, ViewportSurfaceBindingSource, ViewportSurfaceEmbedPrimitive};
 
 const LEGACY_FULLSCREEN_MASK_PASS_ID: &str = "runenwerk.editor.viewport.sdf";
@@ -35,6 +36,17 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
         .expect("headless app construction should succeed")
         .run_for_frames(2)
         .expect("headless editor app should run");
+
+    assert!(
+        app.world().resource::<WindowStateRegistryResource>().is_err(),
+        "headless editor must not provision native window registry state"
+    );
+    assert!(
+        app.world()
+            .resource::<PlatformWindowEventQueueResource>()
+            .is_err(),
+        "headless editor must not provision native platform-window event state"
+    );
 
     let surfaces = app
         .world()
