@@ -233,7 +233,9 @@ mod tests {
 
         assert_eq!(surface_id, RenderSurfaceId::primary());
         assert_eq!(
-            registry.record(surface_id).map(|record| record.lifecycle_state),
+            registry
+                .record(surface_id)
+                .map(|record| record.lifecycle_state),
             Some(RenderSurfaceLifecycleState::PendingAttachment)
         );
         assert_eq!(
@@ -262,7 +264,9 @@ mod tests {
 
         let secondary = registry.reserve_surface_for_native_window(secondary_window, (640, 480));
         assert_eq!(
-            registry.record(secondary).map(|record| record.lifecycle_state),
+            registry
+                .record(secondary)
+                .map(|record| record.lifecycle_state),
             Some(RenderSurfaceLifecycleState::PendingAttachment)
         );
         registry
