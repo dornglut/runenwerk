@@ -3,7 +3,8 @@ use engine::plugins::{
     ActionState, FixedStepPlugin, SimulationPlugin, TimePlugin, default_plugins,
 };
 use engine::prelude::*;
-use engine::runtime::{PlatformWindowEventQueueResource, WindowStateRegistryResource};
+use engine::runtime::WindowStateRegistryResource;
+use engine::runtime::platform::PlatformWindowEventQueueResource;
 use winit::event::ElementState;
 use winit::keyboard::KeyCode;
 
