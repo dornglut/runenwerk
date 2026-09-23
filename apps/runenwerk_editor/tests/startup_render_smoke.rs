@@ -40,7 +40,11 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
         .world()
         .resource::<RenderSurfaceRegistryResource>()
         .expect("render surface registry should exist");
-    assert_eq!(surfaces.records().count(), 0, "headless editor must not manufacture a native-backed render surface");
+    assert_eq!(
+        surfaces.records().count(),
+        0,
+        "headless editor must not manufacture a native-backed render surface"
+    );
 
     let submissions = app
         .world()
