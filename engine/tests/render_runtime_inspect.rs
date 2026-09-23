@@ -560,7 +560,7 @@ fn render_runtime_inspect_readiness_report_aggregates_existing_source_reports() 
 
     assert_eq!(report.frame_index, Some(12));
     assert_eq!(report.render_surface_id, Some(1));
-    assert_eq!(report.native_window_id, None);
+    assert_eq!(report.native_window_id, Some(1));
     assert_eq!(report.source_reports.product_surface_diagnostic_count, 1);
     assert_eq!(report.source_reports.preflight_error_count, 1);
     assert_eq!(report.source_reports.fragment_error_count, 1);
