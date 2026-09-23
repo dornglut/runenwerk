@@ -193,15 +193,6 @@ fn prepared_surface_infos(
     world: &mut WorldMut,
     primary_target_size: (u32, u32),
 ) -> Vec<PreparedSurfaceInfo> {
-    let primary_native_window_id = world
-        .resource::<crate::runtime::WindowStateRegistryResource>()
-        .ok()
-        .and_then(|registry| registry.primary_window_id())
-        .unwrap_or_else(crate::runtime::NativeWindowId::primary);
-    if let Ok(registry) = world.resource_mut::<RenderSurfaceRegistryResource>() {
-        registry.ensure_surface_for_native_window(primary_native_window_id, primary_target_size);
-    }
-
     let created_windows = world
         .resource::<crate::runtime::WindowStateRegistryResource>()
         .ok()
@@ -212,7 +203,7 @@ fn prepared_surface_infos(
                 .map(|record| record.native_window_id)
                 .collect::<BTreeSet<_>>()
         })
-        .unwrap_or_else(|| BTreeSet::from([primary_native_window_id]));
+        .unwrap_or_default();
 
     world
         .resource::<RenderSurfaceRegistryResource>()
@@ -234,7 +225,7 @@ fn prepared_surface_infos(
                 .collect::<Vec<_>>()
         })
         .filter(|surfaces| !surfaces.is_empty())
-        .unwrap_or_else(|| vec![PreparedSurfaceInfo::primary(primary_target_size)])
+        .unwrap_or_else(|| vec![PreparedSurfaceInfo::unbound_primary(primary_target_size)])
 }
 
 fn build_prepared_views(
