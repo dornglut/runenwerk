@@ -132,7 +132,7 @@ fn prepared_frame_for_flow(flow_id: engine::plugins::render::RenderFlowId) -> Pr
             shader_registry_revision: 1,
             prepare_epoch: 1,
         },
-        surface: PreparedSurfaceInfo::primary((800, 600)),
+        surface: PreparedSurfaceInfo::unbound_primary((800, 600)),
         views: vec![PreparedViewFrame::main((800, 600))],
         flows: BTreeMap::new(),
         flow_invocations: vec![PreparedFlowInvocation::main(
