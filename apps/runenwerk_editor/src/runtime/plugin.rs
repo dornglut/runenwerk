@@ -49,6 +49,7 @@ use crate::runtime::viewport::{
 use crate::shell::EditorWindowPresentationBinding;
 
 pub struct EditorAppPlugin;
+pub struct EditorNativeWindowIntegrationPlugin;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, SystemSet)]
 pub enum EditorRuntimeSet {
@@ -118,44 +119,16 @@ impl Plugin for EditorAppPlugin {
         );
         app.add_systems(
             Update,
-            dispatch_editor_input_system
-                .on_invoker_thread()
-                .in_set(EditorRuntimeSet::InputBridge)
-                .after(EditorRuntimeSet::Picking),
-        );
-        app.add_systems(
-            Update,
             apply_viewport_render_state_commands_system
                 .in_set(EditorRuntimeSet::ViewportRenderStateCommands)
-                .after(EditorRuntimeSet::InputBridge),
-        );
-        app.add_systems(
-            Update,
-            sync_editor_composition_transitions_system
-                .on_invoker_thread()
-                .in_set(EditorRuntimeSet::CompositionTransitions)
-                .after(EditorRuntimeSet::InputBridge),
-        );
-        app.add_systems(
-            Update,
-            dispatch_editor_target_input_system
-                .on_invoker_thread()
-                .in_set(EditorRuntimeSet::TargetInput)
-                .after(EditorRuntimeSet::CompositionTransitions),
+                .after_if_present(EditorRuntimeSet::InputBridge),
         );
         app.add_systems(
             Update,
             dispatch_product_publication_system
                 .on_invoker_thread()
                 .in_set(EditorRuntimeSet::ProductPublication)
-                .after(EditorRuntimeSet::TargetInput),
-        );
-        app.add_systems(
-            Update,
-            sync_editor_window_presentation_requests_system
-                .on_invoker_thread()
-                .in_set(EditorRuntimeSet::WindowPresentationRequests)
-                .after(EditorRuntimeSet::TargetInput),
+                .after_if_present(EditorRuntimeSet::TargetInput),
         );
         app.add_systems(
             Update,
@@ -163,7 +136,7 @@ impl Plugin for EditorAppPlugin {
                 .on_invoker_thread()
                 .in_set(EditorRuntimeSet::ViewportLifecycle)
                 .after(EditorRuntimeSet::ViewportRenderStateCommands)
-                .after(EditorRuntimeSet::WindowPresentationRequests),
+                .after_if_present(EditorRuntimeSet::WindowPresentationRequests),
         );
         app.add_systems(
             Update,
@@ -244,6 +217,39 @@ impl Plugin for EditorAppPlugin {
                 .in_set(EditorRuntimeSet::ViewportGpuResidencySummary)
                 .after(RenderRuntimeSet::GpuResidency)
                 .before(RenderRuntimeSet::FramePrepare),
+        );
+    }
+}
+
+impl Plugin for EditorNativeWindowIntegrationPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(
+            Update,
+            dispatch_editor_input_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::InputBridge)
+                .after(EditorRuntimeSet::Picking),
+        );
+        app.add_systems(
+            Update,
+            sync_editor_composition_transitions_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::CompositionTransitions)
+                .after(EditorRuntimeSet::InputBridge),
+        );
+        app.add_systems(
+            Update,
+            dispatch_editor_target_input_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::TargetInput)
+                .after(EditorRuntimeSet::CompositionTransitions),
+        );
+        app.add_systems(
+            Update,
+            sync_editor_window_presentation_requests_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::WindowPresentationRequests)
+                .after(EditorRuntimeSet::TargetInput),
         );
     }
 }
