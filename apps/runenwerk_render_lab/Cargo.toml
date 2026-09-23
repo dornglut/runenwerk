@@ -12,8 +12,10 @@ engine = { path = "../../engine" }
 image = { version = "0.25.8", default-features = false, features = ["png"] }
 pollster = "0.4.0"
 runen-gpu.workspace = true
+runen_ecs.workspace = true
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
+winit = "0.30.9"
 
 [[bin]]
 name = "runenwerk-render-lab"

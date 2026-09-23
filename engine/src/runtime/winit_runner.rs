@@ -6,7 +6,7 @@ use crate::runtime::frame_lifecycle::{
     prepare_world_for_run, run_frame as run_runtime_frame, run_startup_if_needed,
 };
 use crate::runtime::frame_pacing::{
-    FramePacingPolicyResource, FramePacingRuntimeStateResource, decide_frame_pacing,
+    FramePacingPolicyResource, FramePacingRuntimeStateResource, FramePacingSchedule,
 };
 use crate::runtime::native_window_hooks::with_native_window_hooks;
 use crate::runtime::platform::{
@@ -43,6 +43,7 @@ pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
         native_windows_by_winit: BTreeMap::new(),
         input_adapter: WinitInputAdapter::default(),
         last_primary_redraw_at: None,
+        frame_pacing_schedule: FramePacingSchedule::default(),
         fatal_error: None,
     };
     event_loop
@@ -62,6 +63,7 @@ struct WinitRunner {
     native_windows_by_winit: BTreeMap<WindowId, NativeWindowId>,
     input_adapter: WinitInputAdapter,
     last_primary_redraw_at: Option<Instant>,
+    frame_pacing_schedule: FramePacingSchedule,
     fatal_error: Option<anyhow::Error>,
 }
 
@@ -453,19 +455,29 @@ impl WinitRunner {
             }
 
             if record.redraw_requested {
-                window.request_redraw();
-                if let Ok(registry) = self
-                    .state
-                    .world
-                    .resource_mut::<WindowStateRegistryResource>()
-                    && let Some(record) = registry.record_mut(native_window_id)
-                {
-                    record.redraw_requested = false;
+                let request_now = native_window_id != NativeWindowId::primary()
+                    || self.should_request_primary_redraw_now(Instant::now());
+                if request_now {
+                    window.request_redraw();
+                    if let Ok(registry) = self
+                        .state
+                        .world
+                        .resource_mut::<WindowStateRegistryResource>()
+                        && let Some(record) = registry.record_mut(native_window_id)
+                    {
+                        record.redraw_requested = false;
+                    }
                 }
             }
         }
 
         Ok(())
+    }
+
+    fn should_request_primary_redraw_now(&mut self, now: Instant) -> bool {
+        let policy = self.frame_pacing_policy();
+        let decision = self.frame_pacing_schedule.decide(policy, now);
+        policy.target_frame_interval().is_none() || decision.request_redraw
     }
 
     fn frame_pacing_policy(&self) -> FramePacingPolicyResource {
@@ -534,7 +546,7 @@ impl WinitRunner {
     fn apply_frame_pacing(&mut self, event_loop: &ActiveEventLoop) {
         let now = Instant::now();
         let policy = self.frame_pacing_policy();
-        let decision = decide_frame_pacing(policy, self.last_primary_redraw_at, now);
+        let decision = self.frame_pacing_schedule.decide(policy, now);
         if decision.request_redraw
             && let Some(window) = self.window.as_ref()
         {
@@ -892,6 +904,21 @@ mod tests {
         app.add_systems(FixedUpdate, log_tick);
     }
 
+    fn runner_with_frame_pacing(policy: FramePacingPolicyResource) -> WinitRunner {
+        let mut app = App::new();
+        app.with_frame_pacing(policy);
+        WinitRunner {
+            state: app.into_windowed_state(),
+            window: None,
+            windows: BTreeMap::new(),
+            native_windows_by_winit: BTreeMap::new(),
+            input_adapter: WinitInputAdapter::default(),
+            last_primary_redraw_at: None,
+            frame_pacing_schedule: FramePacingSchedule::default(),
+            fatal_error: None,
+        }
+    }
+
     fn set_frame_delta(mut time: ResMut<crate::plugins::time::domain::Time>) {
         time.delta_seconds = 0.05;
     }
@@ -934,6 +961,7 @@ mod tests {
             native_windows_by_winit: BTreeMap::new(),
             input_adapter: WinitInputAdapter::default(),
             last_primary_redraw_at: None,
+            frame_pacing_schedule: FramePacingSchedule::default(),
             fatal_error: None,
         };
         runner
@@ -1016,17 +1044,7 @@ mod tests {
 
     #[test]
     fn explicit_primary_redraw_request_wakes_on_demand_pacing() {
-        let mut app = App::new();
-        app.with_frame_pacing(FramePacingPolicyResource::on_demand());
-        let mut runner = WinitRunner {
-            state: app.into_windowed_state(),
-            window: None,
-            windows: BTreeMap::new(),
-            native_windows_by_winit: BTreeMap::new(),
-            input_adapter: WinitInputAdapter::default(),
-            last_primary_redraw_at: None,
-            fatal_error: None,
-        };
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
 
         runner.request_redraw_for_native_window(NativeWindowId::primary());
 
@@ -1047,5 +1065,26 @@ mod tests {
             .resource::<FramePacingRuntimeStateResource>()
             .expect("pacing state should exist");
         assert!(pacing.redraw_requested);
+    }
+
+    #[test]
+    fn primary_input_redraws_wait_for_the_continuous_deadline() {
+        let policy = FramePacingPolicyResource::continuous_capped(60);
+        let interval = policy.target_frame_interval().expect("frame interval");
+        let mut runner = runner_with_frame_pacing(policy);
+        let start = Instant::now();
+
+        assert!(runner.should_request_primary_redraw_now(start));
+        assert!(!runner.should_request_primary_redraw_now(start + interval / 2));
+        assert!(runner.should_request_primary_redraw_now(start + interval));
+    }
+
+    #[test]
+    fn primary_input_redraws_stay_immediate_on_demand() {
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        let now = Instant::now();
+
+        assert!(runner.should_request_primary_redraw_now(now));
+        assert!(runner.should_request_primary_redraw_now(now + std::time::Duration::from_secs(1)));
     }
 }

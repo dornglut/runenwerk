@@ -253,6 +253,7 @@ fn render_target_format_label(format: RenderTextureTargetFormat) -> String {
         RenderTextureTargetFormat::Rgba8Unorm => "rgba8_unorm".to_string(),
         RenderTextureTargetFormat::Rgba8UnormSrgb => "rgba8_unorm_srgb".to_string(),
         RenderTextureTargetFormat::R32Uint => "r32_uint".to_string(),
+        RenderTextureTargetFormat::R32Float => "r32_float".to_string(),
         RenderTextureTargetFormat::Depth32Float => "depth32_float".to_string(),
     }
 }

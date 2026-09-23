@@ -19,7 +19,8 @@ use super::features::{
 };
 use super::frame::{
     PreparedRenderFrameRequestResource, PreparedRenderFrameResource,
-    PreparedRenderProductSelectionResource, RenderFeatureContributionCollectorRegistryResource,
+    PreparedRenderProductSelectionResource, RenderDeterministicFrameContributionResource,
+    RenderFeatureContributionCollectorRegistryResource,
 };
 use super::inspect::{
     RenderCapturedTextureState, RenderDebugConfigResource, RenderDebugControlResource,
@@ -92,6 +93,7 @@ impl Plugin for RenderPlugin {
         app.init_resource::<WorldLodPolicyResource>();
         app.init_resource::<WorldLodSelectionResource>();
         app.init_resource::<PreparedRenderFrameResource>();
+        app.init_resource::<RenderDeterministicFrameContributionResource>();
         app.init_resource::<PreparedRenderFrameRequestResource>();
         app.init_resource::<PreparedRenderProductSelectionResource>();
         app.init_resource::<RenderGpuResidencyResource>();
@@ -117,7 +119,10 @@ impl Plugin for RenderPlugin {
         app.init_resource::<RenderReadinessState>();
         app.init_resource::<DebugMetricsState>();
 
-        app.add_systems(RenderPrepare, sync_render_flow_registry_system);
+        app.add_systems(
+            RenderPrepare,
+            sync_render_flow_registry_system.before(RenderRuntimeSet::FramePrepare),
+        );
         app.add_systems(RenderPrepare, sync_render_feature_registry_system);
         app.add_systems(
             RenderPrepare,

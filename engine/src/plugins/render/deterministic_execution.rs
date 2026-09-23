@@ -26,16 +26,16 @@ use super::request::{RenderDistanceConvention, RenderObservationSpec, RenderOutp
 use super::scene::RenderObjectId;
 use super::surface_input::RenderSurfaceSemanticInputView;
 use runen_gpu::{
-    GpuBufferDescriptor, GpuBufferInitialization, GpuBufferRegion, GpuBufferTextureLayout,
-    GpuBufferUsage, GpuClearOperation, GpuComputeOperation, GpuComputePipelineDescriptor,
-    GpuContext, GpuContextAffinity, GpuCopyOperation, GpuDispatchIntent, GpuDispatchSize,
-    GpuExportKey, GpuExportRelationship, GpuInitialCoverage, GpuReadbackId, GpuReadbackOperation,
-    GpuReadbackStatus, GpuReconstruction, GpuResourceAccessIntent, GpuResourceLifetime,
-    GpuResourceProvenance, GpuResourceRef, GpuResourceScope, GpuRuntimeBindingValue, GpuSubmission,
-    GpuSubmissionFailureKind, GpuSubmissionStatus, GpuTextureAccessResource, GpuTextureCopyRegion,
-    GpuTextureFormat, GpuTextureHandle, GpuUploadOperation, GpuWorkFragment, GpuWorkImport,
-    GpuWorkOutput, GpuWorkSubmissionError, PreparedGpuData, TransferData,
-    admit_static_wgsl_sources,
+    GpuAdmittedProgramSource, GpuBufferDescriptor, GpuBufferHandle, GpuBufferInitialization,
+    GpuBufferRegion, GpuBufferTextureLayout, GpuBufferUsage, GpuClearOperation,
+    GpuComputeOperation, GpuComputePipelineDescriptor, GpuContext, GpuContextAffinity,
+    GpuCopyOperation, GpuDispatchIntent, GpuDispatchSize, GpuExportKey, GpuExportRelationship,
+    GpuInitialCoverage, GpuReadbackId, GpuReadbackOperation, GpuReadbackStatus, GpuReconstruction,
+    GpuResourceAccessIntent, GpuResourceLifetime, GpuResourceProvenance, GpuResourceRef,
+    GpuRuntimeBindingValue, GpuSubmission, GpuSubmissionFailureKind, GpuSubmissionStatus,
+    GpuTextureAccessResource, GpuTextureCopyRegion, GpuTextureFormat, GpuTextureHandle,
+    GpuUploadOperation, GpuWorkFragment, GpuWorkImport, GpuWorkOutput, GpuWorkResourceIdAllocator,
+    GpuWorkSubmissionError, PreparedGpuData, TransferData, admit_static_wgsl_sources,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
@@ -54,6 +54,106 @@ const OBSERVATION_PROBE: u32 = 2;
 const SHAPE_SPHERE: u32 = 1;
 const SHAPE_PLANE: u32 = 2;
 const MAINTAINED_WGSL: &str = include_str!("deterministic_execution.wgsl");
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum DeterministicBufferKind {
+    Input,
+    CanonicalOutput,
+    Definedness,
+    Status,
+}
+
+/// Renderer-owned logical buffer identities reused by ordinary composed frames.
+///
+/// RunenGPU's bind-group realization retains the resource dependencies of each realized binding.
+/// Rebuilding these identities for every interactive frame would therefore grow the authoritative
+/// realization registry without bound. The cache is scoped to one renderer/context generation and
+/// one deterministic producer; a descriptor change, such as a resize, deliberately allocates a
+/// replacement identity.
+#[derive(Debug, Default)]
+pub(crate) struct DeterministicResourceCache {
+    identities: GpuWorkResourceIdAllocator,
+    buffers: BTreeMap<(u64, usize, DeterministicBufferKind), GpuBufferHandle>,
+    maintained_source: Option<GpuAdmittedProgramSource>,
+    // Keep the latest accepted graph correlated with every producer namespace whose mutable
+    // intermediates it used. A peer surface's submission must not stall this producer's cache.
+    producer_submissions: BTreeMap<u64, GpuSubmission>,
+}
+
+impl DeterministicResourceCache {
+    pub(crate) fn any_producer_submission_in_flight(
+        &self,
+        producer_scopes: impl IntoIterator<Item = u64>,
+    ) -> bool {
+        any_producer_scope_in_flight(producer_scopes, |producer_scope| {
+            self.producer_submissions
+                .get(&producer_scope)
+                .is_some_and(|submission| {
+                    matches!(submission.status(), GpuSubmissionStatus::Accepted)
+                })
+        })
+    }
+
+    pub(crate) fn record_producer_submission(
+        &mut self,
+        producer_scope: u64,
+        submission: &GpuSubmission,
+    ) {
+        self.producer_submissions
+            .insert(producer_scope, submission.clone());
+    }
+
+    pub(crate) fn retain_in_flight_submissions(&mut self) {
+        // Completed and failed submissions are terminal; only an Accepted handle can still be
+        // using a producer's reusable intermediates.
+        self.producer_submissions
+            .retain(|_, submission| matches!(submission.status(), GpuSubmissionStatus::Accepted));
+    }
+
+    fn maintained_source(
+        &mut self,
+    ) -> Result<GpuAdmittedProgramSource, RenderDeterministicLoweringError> {
+        if let Some(source) = self.maintained_source.as_ref() {
+            return Ok(source.clone());
+        }
+        let [source] = admit_static_wgsl_sources([(
+            "runenrender.maintained.deterministic",
+            1,
+            MAINTAINED_WGSL,
+        )])
+        .map_err(|error| gpu_authoring("maintained WGSL admission", error))?;
+        self.maintained_source = Some(source.clone());
+        Ok(source)
+    }
+
+    fn buffer(
+        &mut self,
+        scope: u64,
+        output_index: usize,
+        kind: DeterministicBufferKind,
+        descriptor: GpuBufferDescriptor,
+    ) -> Result<GpuBufferHandle, RenderDeterministicLoweringError> {
+        let key = (scope, output_index, kind);
+        if let Some(existing) = self.buffers.get(&key)
+            && existing.descriptor() == &descriptor
+        {
+            return Ok(existing.clone());
+        }
+        let handle = self
+            .identities
+            .allocate_buffer_handle(descriptor)
+            .map_err(|error| gpu_authoring("deterministic buffer allocation", error))?;
+        self.buffers.insert(key, handle.clone());
+        Ok(handle)
+    }
+}
+
+fn any_producer_scope_in_flight(
+    producer_scopes: impl IntoIterator<Item = u64>,
+    mut producer_is_in_flight: impl FnMut(u64) -> bool,
+) -> bool {
+    producer_scopes.into_iter().any(&mut producer_is_in_flight)
+}
 
 /// Physical object-identity decoder owned by one exact maintained execution.
 ///
@@ -690,8 +790,33 @@ pub fn prepare_deterministic_render(
     admitted: AdmittedDeterministicRender,
     context: &GpuContext,
 ) -> Result<PreparedDeterministicRender, RenderDeterministicExecutionError> {
-    let lowered =
-        lower_deterministic_render(&admitted, context, DeterministicObservationIntent::Ordinary)?;
+    let mut resources = DeterministicResourceCache::default();
+    prepare_deterministic_render_with_cache(admitted, context, &mut resources)
+}
+
+/// Prepare one ordinary maintained deterministic render using renderer-owned reusable resources.
+pub(crate) fn prepare_deterministic_render_with_cache(
+    admitted: AdmittedDeterministicRender,
+    context: &GpuContext,
+    resources: &mut DeterministicResourceCache,
+) -> Result<PreparedDeterministicRender, RenderDeterministicExecutionError> {
+    prepare_deterministic_render_with_cache_in_scope(admitted, context, resources, 0)
+}
+
+/// Prepare one composition using a producer-scoped resource cache namespace.
+pub(crate) fn prepare_deterministic_render_with_cache_in_scope(
+    admitted: AdmittedDeterministicRender,
+    context: &GpuContext,
+    resources: &mut DeterministicResourceCache,
+    scope: u64,
+) -> Result<PreparedDeterministicRender, RenderDeterministicExecutionError> {
+    let lowered = lower_deterministic_render(
+        &admitted,
+        context,
+        DeterministicObservationIntent::Ordinary,
+        resources,
+        scope,
+    )?;
     debug_assert!(lowered.verification_readbacks.is_empty());
     Ok(PreparedDeterministicRender {
         admitted,
@@ -731,8 +856,13 @@ pub(super) async fn submit_deterministic_render_for_verification(
     admitted: AdmittedDeterministicRender,
     context: &GpuContext,
 ) -> Result<DeterministicVerificationSubmission, RenderDeterministicExecutionError> {
-    let lowered =
-        lower_deterministic_render(&admitted, context, DeterministicObservationIntent::Verify)?;
+    let lowered = lower_deterministic_render(
+        &admitted,
+        context,
+        DeterministicObservationIntent::Verify,
+        &mut DeterministicResourceCache::default(),
+        0,
+    )?;
     let verification_readbacks = lowered.verification_readbacks;
     let submitted = submit_lowered_deterministic_render(
         admitted,
@@ -790,6 +920,8 @@ fn lower_deterministic_render(
     maintained: &AdmittedDeterministicRender,
     context: &GpuContext,
     intent: DeterministicObservationIntent,
+    resources: &mut DeterministicResourceCache,
+    scope: u64,
 ) -> Result<LoweredDeterministicRender, RenderDeterministicLoweringError> {
     let admitted = maintained.admitted();
     if admitted.environment().affinity() != context.affinity() {
@@ -815,7 +947,6 @@ fn lower_deterministic_render(
         })
         .collect::<Result<BTreeMap<_, _>, _>>()?;
 
-    let mut resources = GpuResourceScope::new();
     let mut fragments = Vec::new();
     fragments
         .try_reserve_exact(admitted.outputs().len())
@@ -837,8 +968,9 @@ fn lower_deterministic_render(
             output.output_index(),
             &object_codes,
             context,
-            &mut resources,
+            resources,
             intent,
+            scope,
         )?;
         fragments.push(lowered.fragment);
         if let Some(readbacks) = lowered.verification_readbacks {
@@ -886,8 +1018,9 @@ fn lower_output(
     output_index: usize,
     object_codes: &BTreeMap<RenderObjectId, u32>,
     context: &GpuContext,
-    resources: &mut GpuResourceScope,
+    resources: &mut DeterministicResourceCache,
     intent: DeterministicObservationIntent,
+    scope: u64,
 ) -> Result<LoweredDeterministicOutput, RenderDeterministicLoweringError> {
     let admitted_output = admitted
         .outputs()
@@ -931,70 +1064,74 @@ fn lower_output(
     )
     .map_err(|error| gpu_authoring("semantic-input preparation", error))?;
 
-    let input = resources
-        .buffer(
-            GpuBufferDescriptor::ordinary_owned(
-                format!("RunenRender output {output_index} packed input"),
-                GpuResourceLifetime::Transient,
-                GpuReconstruction::SourceBacked,
-                input_payload.layout().byte_len(),
-                [GpuBufferUsage::Storage, GpuBufferUsage::CopyDestination],
-                GpuBufferInitialization::Uninitialized,
-            )
-            .map_err(|error| gpu_authoring("input-buffer descriptor", error))?,
+    let input = resources.buffer(
+        scope,
+        output_index,
+        DeterministicBufferKind::Input,
+        GpuBufferDescriptor::ordinary_owned(
+            format!("RunenRender output {output_index} packed input"),
+            GpuResourceLifetime::Transient,
+            GpuReconstruction::SourceBacked,
+            input_payload.layout().byte_len(),
+            [GpuBufferUsage::Storage, GpuBufferUsage::CopyDestination],
+            GpuBufferInitialization::Uninitialized,
         )
-        .map_err(|error| gpu_authoring("input-buffer allocation", error))?;
-    let canonical_output = resources
-        .buffer(
-            GpuBufferDescriptor::ordinary_owned(
-                format!("RunenRender output {output_index} canonical words"),
-                GpuResourceLifetime::Transient,
-                GpuReconstruction::SourceBacked,
-                packed.output_byte_len,
-                [
-                    GpuBufferUsage::Storage,
-                    GpuBufferUsage::CopySource,
-                    GpuBufferUsage::CopyDestination,
-                ],
-                GpuBufferInitialization::Uninitialized,
-            )
-            .map_err(|error| gpu_authoring("canonical-output descriptor", error))?,
+        .map_err(|error| gpu_authoring("input-buffer descriptor", error))?,
+    )?;
+    let canonical_output = resources.buffer(
+        scope,
+        output_index,
+        DeterministicBufferKind::CanonicalOutput,
+        GpuBufferDescriptor::ordinary_owned(
+            format!("RunenRender output {output_index} canonical words"),
+            GpuResourceLifetime::Transient,
+            GpuReconstruction::SourceBacked,
+            packed.output_byte_len,
+            [
+                GpuBufferUsage::Storage,
+                GpuBufferUsage::CopySource,
+                GpuBufferUsage::CopyDestination,
+            ],
+            GpuBufferInitialization::Uninitialized,
         )
-        .map_err(|error| gpu_authoring("canonical-output allocation", error))?;
-    let definedness = resources
-        .buffer(
-            GpuBufferDescriptor::ordinary_owned(
-                format!("RunenRender output {output_index} definedness"),
-                GpuResourceLifetime::Transient,
-                GpuReconstruction::SourceBacked,
-                sample_byte_len,
-                [
-                    GpuBufferUsage::Storage,
-                    GpuBufferUsage::CopySource,
-                    GpuBufferUsage::CopyDestination,
-                ],
-                GpuBufferInitialization::Uninitialized,
-            )
-            .map_err(|error| gpu_authoring("definedness descriptor", error))?,
+        .map_err(|error| gpu_authoring("canonical-output descriptor", error))?,
+    )?;
+    let definedness = resources.buffer(
+        scope,
+        output_index,
+        DeterministicBufferKind::Definedness,
+        GpuBufferDescriptor::ordinary_owned(
+            format!("RunenRender output {output_index} definedness"),
+            GpuResourceLifetime::Transient,
+            GpuReconstruction::SourceBacked,
+            sample_byte_len,
+            [
+                GpuBufferUsage::Storage,
+                GpuBufferUsage::CopySource,
+                GpuBufferUsage::CopyDestination,
+            ],
+            GpuBufferInitialization::Uninitialized,
         )
-        .map_err(|error| gpu_authoring("definedness allocation", error))?;
-    let status = resources
-        .buffer(
-            GpuBufferDescriptor::ordinary_owned(
-                format!("RunenRender output {output_index} evaluator status"),
-                GpuResourceLifetime::Transient,
-                GpuReconstruction::SourceBacked,
-                sample_byte_len,
-                [
-                    GpuBufferUsage::Storage,
-                    GpuBufferUsage::CopySource,
-                    GpuBufferUsage::CopyDestination,
-                ],
-                GpuBufferInitialization::Uninitialized,
-            )
-            .map_err(|error| gpu_authoring("status descriptor", error))?,
+        .map_err(|error| gpu_authoring("definedness descriptor", error))?,
+    )?;
+    let status = resources.buffer(
+        scope,
+        output_index,
+        DeterministicBufferKind::Status,
+        GpuBufferDescriptor::ordinary_owned(
+            format!("RunenRender output {output_index} evaluator status"),
+            GpuResourceLifetime::Transient,
+            GpuReconstruction::SourceBacked,
+            sample_byte_len,
+            [
+                GpuBufferUsage::Storage,
+                GpuBufferUsage::CopySource,
+                GpuBufferUsage::CopyDestination,
+            ],
+            GpuBufferInitialization::Uninitialized,
         )
-        .map_err(|error| gpu_authoring("status allocation", error))?;
+        .map_err(|error| gpu_authoring("status descriptor", error))?,
+    )?;
 
     let input_upload = GpuUploadOperation::whole_buffer(&input, input_payload)
         .map_err(|error| gpu_authoring("input upload", error))?;
@@ -1014,9 +1151,7 @@ fn lower_output(
     )
     .map_err(|error| gpu_authoring("status clear", error))?;
 
-    let [source] =
-        admit_static_wgsl_sources([("runenrender.maintained.deterministic", 1, MAINTAINED_WGSL)])
-            .map_err(|error| gpu_authoring("maintained WGSL admission", error))?;
+    let source = resources.maintained_source()?;
     let pipeline = GpuComputePipelineDescriptor::ordinary(source, "main")
         .map_err(|error| gpu_authoring("compute-pipeline descriptor", error))?;
     let runtime_bindings = pipeline
@@ -1027,14 +1162,18 @@ fn lower_output(
             GpuRuntimeBindingValue::whole_buffer(0, 3, &status),
         ])
         .map_err(|error| gpu_authoring("compute runtime bindings", error))?;
+    let dispatch_size = deterministic_dispatch_size(
+        packed.sample_count,
+        context
+            .device_facts()
+            .workload_budget()
+            .limits()
+            .max_compute_workgroups_per_dimension(),
+    )?;
     let compute = GpuComputeOperation::new(
         pipeline,
         runtime_bindings,
-        GpuDispatchIntent::direct(GpuDispatchSize::new(
-            packed.sample_count.div_ceil(WORKGROUP_SIZE),
-            1,
-            1,
-        )),
+        GpuDispatchIntent::direct(dispatch_size),
     )
     .map_err(|error| gpu_authoring("compute operation", error))?;
 
@@ -1589,6 +1728,60 @@ fn align_up(value: u64, alignment: u64) -> Result<u64, RenderDeterministicLoweri
     }
 }
 
+fn deterministic_dispatch_size(
+    sample_count: u32,
+    max_workgroups_per_dimension: u32,
+) -> Result<GpuDispatchSize, RenderDeterministicLoweringError> {
+    let sample_count = u64::from(sample_count);
+    let workgroup_size = u64::from(WORKGROUP_SIZE);
+    let admitted_max = u64::from(max_workgroups_per_dimension);
+    let required_groups = sample_count.div_ceil(workgroup_size);
+
+    if admitted_max == 0 {
+        return Err(gpu_authoring(
+            "deterministic dispatch planning",
+            format!(
+                "sample count {sample_count} with workgroup size {WORKGROUP_SIZE} requires {required_groups} total workgroups, but admitted maximum per dimension is 0; 2D dispatch capacity is 0 workgroups",
+            ),
+        ));
+    }
+
+    let capacity = admitted_max.checked_mul(admitted_max).ok_or_else(|| {
+        gpu_authoring(
+            "deterministic dispatch planning",
+            format!(
+                "sample count {sample_count} with workgroup size {WORKGROUP_SIZE} requires {required_groups} total workgroups, but admitted maximum per dimension is {max_workgroups_per_dimension}; 2D dispatch capacity overflows u64",
+            ),
+        )
+    })?;
+    if required_groups == 0 || required_groups > capacity {
+        return Err(gpu_authoring(
+            "deterministic dispatch planning",
+            format!(
+                "sample count {sample_count} with workgroup size {WORKGROUP_SIZE} requires {required_groups} total workgroups, but admitted maximum per dimension is {max_workgroups_per_dimension}; 2D dispatch capacity is {capacity} workgroups",
+            ),
+        ));
+    }
+
+    let groups_x = required_groups.min(admitted_max);
+    let groups_y = required_groups.div_ceil(groups_x);
+    let dimensions = [groups_x, groups_y, 1];
+    if dimensions.iter().any(|dimension| *dimension > admitted_max) {
+        return Err(gpu_authoring(
+            "deterministic dispatch planning",
+            format!(
+                "sample count {sample_count} with workgroup size {WORKGROUP_SIZE} requires {required_groups} total workgroups, but admitted maximum per dimension is {max_workgroups_per_dimension}; planned 2D dispatch capacity is {capacity} workgroups but dimensions exceeded the admitted limit",
+            ),
+        ));
+    }
+
+    Ok(GpuDispatchSize::new(
+        u32::try_from(groups_x).expect("admitted dispatch x dimension must fit u32"),
+        u32::try_from(groups_y).expect("admitted dispatch y dimension must fit u32"),
+        1,
+    ))
+}
+
 fn gpu_authoring(
     stage: &'static str,
     error: impl fmt::Display,
@@ -1602,6 +1795,106 @@ fn gpu_authoring(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn assert_dispatch(sample_count: u32, maximum: u32, expected: [u32; 3]) {
+        assert_eq!(
+            deterministic_dispatch_size(sample_count, maximum)
+                .expect("dispatch should fit the admitted 2D capacity")
+                .as_array(),
+            expected
+        );
+    }
+
+    fn cache_descriptor(byte_len: u64) -> GpuBufferDescriptor {
+        GpuBufferDescriptor::ordinary_owned(
+            "deterministic cache test buffer",
+            GpuResourceLifetime::Transient,
+            GpuReconstruction::SourceBacked,
+            byte_len,
+            [GpuBufferUsage::Storage],
+            GpuBufferInitialization::Uninitialized,
+        )
+        .expect("deterministic cache test descriptor should be valid")
+    }
+
+    #[test]
+    fn deterministic_cache_reuses_matching_descriptors_and_replaces_resizes() {
+        let mut cache = DeterministicResourceCache::default();
+        let first = cache
+            .buffer(0, 0, DeterministicBufferKind::Input, cache_descriptor(16))
+            .expect("first deterministic buffer should allocate");
+        let same = cache
+            .buffer(0, 0, DeterministicBufferKind::Input, cache_descriptor(16))
+            .expect("matching deterministic buffer should reuse");
+        assert_eq!(first.diagnostic_identity(), same.diagnostic_identity());
+
+        let resized = cache
+            .buffer(0, 0, DeterministicBufferKind::Input, cache_descriptor(32))
+            .expect("changed descriptor should allocate a replacement");
+        assert_ne!(first.diagnostic_identity(), resized.diagnostic_identity());
+    }
+
+    #[test]
+    fn deterministic_cache_scopes_equal_descriptors_by_producer() {
+        let mut cache = DeterministicResourceCache::default();
+        let first = cache
+            .buffer(11, 0, DeterministicBufferKind::Input, cache_descriptor(16))
+            .expect("first producer buffer should allocate");
+        let same_producer = cache
+            .buffer(11, 0, DeterministicBufferKind::Input, cache_descriptor(16))
+            .expect("same producer should reuse its buffer");
+        let other_producer = cache
+            .buffer(12, 0, DeterministicBufferKind::Input, cache_descriptor(16))
+            .expect("other producer should allocate an independent buffer");
+
+        assert_eq!(
+            first.diagnostic_identity(),
+            same_producer.diagnostic_identity()
+        );
+        assert_ne!(
+            first.diagnostic_identity(),
+            other_producer.diagnostic_identity()
+        );
+    }
+
+    #[test]
+    fn deterministic_cache_stays_bounded_across_frames_and_resize() {
+        let mut cache = DeterministicResourceCache::default();
+        let mut identities = BTreeSet::new();
+        for frame in 0..120 {
+            let byte_len = if frame < 60 { 16 } else { 32 };
+            let handle = cache
+                .buffer(
+                    11,
+                    0,
+                    DeterministicBufferKind::Input,
+                    cache_descriptor(byte_len),
+                )
+                .expect("sustained deterministic frame should prepare");
+            identities.insert(handle.diagnostic_identity());
+        }
+
+        assert_eq!(
+            identities.len(),
+            2,
+            "one replacement is expected for the resize"
+        );
+        assert_eq!(cache.buffers.len(), 1, "the cache retains one live slot");
+    }
+
+    #[test]
+    fn maintained_source_is_admitted_once_for_sustained_frames() {
+        let mut cache = DeterministicResourceCache::default();
+        let first = cache
+            .maintained_source()
+            .expect("maintained source should admit");
+        for _ in 0..120 {
+            let next = cache
+                .maintained_source()
+                .expect("maintained source should remain available");
+            assert!(first.is_same_record(&next));
+        }
+    }
 
     #[test]
     fn maintained_wgsl_forms_a_canonical_compute_pipeline() {
@@ -1640,5 +1933,29 @@ mod tests {
             align_up(12, 0),
             Err(RenderDeterministicLoweringError::InvalidBytesPerRowAlignment { alignment: 0 })
         );
+    }
+
+    #[test]
+    fn deterministic_dispatch_tiles_samples_within_the_admitted_dimension_limit() {
+        assert_dispatch(512, 8, [8, 1, 1]);
+        assert_dispatch(513, 8, [8, 2, 1]);
+        assert_dispatch(4096, 8, [8, 8, 1]);
+        assert_dispatch(65_535 * 64, 65_535, [65_535, 1, 1]);
+        assert_dispatch(65_535 * 64 + 1, 65_535, [65_535, 2, 1]);
+    }
+
+    #[test]
+    fn deterministic_dispatch_rejects_work_beyond_two_dimensional_capacity() {
+        let error = deterministic_dispatch_size(4097, 8).expect_err("dispatch must reject");
+        assert!(matches!(
+            error,
+            RenderDeterministicLoweringError::RunenGpuAuthoring { stage, detail }
+                if stage == "deterministic dispatch planning"
+                    && detail.contains("sample count 4097")
+                    && detail.contains("workgroup size 64")
+                    && detail.contains("admitted maximum per dimension is 8")
+                    && detail.contains("requires 65 total workgroups")
+                    && detail.contains("2D dispatch capacity is 64 workgroups")
+        ));
     }
 }

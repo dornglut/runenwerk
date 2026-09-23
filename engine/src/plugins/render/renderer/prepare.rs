@@ -368,7 +368,9 @@ impl Renderer {
         .flatten()
         .collect::<Vec<_>>();
 
-        if let Some(rect_pass) = self.rect_pass.as_ref() {
+        if !rect_batches.is_empty()
+            && let Some(rect_pass) = self.rect_pass.as_ref()
+        {
             let screen = ScreenUniformRaw {
                 size: [surface_width.max(1.0), surface_height.max(1.0)],
                 _pad: [0.0; 2],
@@ -376,7 +378,9 @@ impl Renderer {
             pending_operations
                 .queue_buffer(&rect_pass.screen_buffer, bytemuck::bytes_of(&screen))?;
         }
-        if let Some(stroke_pass) = self.stroke_pass.as_ref() {
+        if !stroke_batches.is_empty()
+            && let Some(stroke_pass) = self.stroke_pass.as_ref()
+        {
             let screen = ScreenUniformRaw {
                 size: [surface_width.max(1.0), surface_height.max(1.0)],
                 _pad: [0.0; 2],
@@ -384,7 +388,9 @@ impl Renderer {
             pending_operations
                 .queue_buffer(&stroke_pass.screen_buffer, bytemuck::bytes_of(&screen))?;
         }
-        if let Some(glyph_pass) = self.glyph_pass.as_ref() {
+        if !glyph_batches.is_empty()
+            && let Some(glyph_pass) = self.glyph_pass.as_ref()
+        {
             let screen = ScreenUniformRaw {
                 size: [surface_width.max(1.0), surface_height.max(1.0)],
                 _pad: [0.0; 2],
@@ -392,7 +398,9 @@ impl Renderer {
             pending_operations
                 .queue_buffer(&glyph_pass.screen_buffer, bytemuck::bytes_of(&screen))?;
         }
-        if let Some(viewport_embed_pass) = self.viewport_embed_pass.as_ref() {
+        if !viewport_embed_batches.is_empty()
+            && let Some(viewport_embed_pass) = self.viewport_embed_pass.as_ref()
+        {
             let screen = ScreenUniformRaw {
                 size: [surface_width.max(1.0), surface_height.max(1.0)],
                 _pad: [0.0; 2],
@@ -402,7 +410,9 @@ impl Renderer {
                 bytemuck::bytes_of(&screen),
             )?;
         }
-        if let Some(product_surface_pass) = self.product_surface_pass.as_ref() {
+        if !product_surface_batches.is_empty()
+            && let Some(product_surface_pass) = self.product_surface_pass.as_ref()
+        {
             let screen = ScreenUniformRaw {
                 size: [surface_width.max(1.0), surface_height.max(1.0)],
                 _pad: [0.0; 2],

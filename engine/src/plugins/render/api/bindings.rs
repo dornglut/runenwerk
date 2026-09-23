@@ -3,7 +3,8 @@ use crate::plugins::render::renderer::frame_bindings::RenderFrameDataRegistry;
 use crate::plugins::render::{GpuParams, GpuUniform, RenderPassId};
 use bytemuck::{Pod, Zeroable};
 use runen_gpu::{
-    GpuBindingKey, GpuStorageBufferAccess, GpuStorageTextureAccess, GpuWorkResourceId,
+    GpuBindingKey, GpuStorageBufferAccess, GpuStorageTextureAccess, GpuTextureSampleClass,
+    GpuWorkResourceId,
 };
 use std::any::{Any, TypeId, type_name};
 use std::collections::BTreeMap;
@@ -38,7 +39,10 @@ impl RenderShaderBinding {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RenderShaderBindingResource {
-    SampledTexture(GpuWorkResourceId),
+    SampledTexture {
+        resource: GpuWorkResourceId,
+        sample_class: GpuTextureSampleClass,
+    },
     Sampler,
     StorageTexture {
         resource: GpuWorkResourceId,
@@ -54,7 +58,7 @@ pub enum RenderShaderBindingResource {
 impl RenderShaderBindingResource {
     pub const fn resource_id(&self) -> Option<GpuWorkResourceId> {
         match self {
-            Self::SampledTexture(resource)
+            Self::SampledTexture { resource, .. }
             | Self::StorageTexture { resource, .. }
             | Self::UniformBuffer(resource)
             | Self::StorageBuffer { resource, .. } => Some(*resource),

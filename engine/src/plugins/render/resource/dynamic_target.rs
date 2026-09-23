@@ -38,6 +38,7 @@ pub enum RenderTextureTargetFormat {
     Rgba8Unorm,
     Rgba8UnormSrgb,
     R32Uint,
+    R32Float,
     Depth32Float,
 }
 
@@ -48,6 +49,13 @@ impl RenderTextureTargetFormat {
 
     pub const fn is_uint(self) -> bool {
         matches!(self, Self::R32Uint)
+    }
+
+    pub const fn is_float(self) -> bool {
+        matches!(
+            self,
+            Self::Rgba8Unorm | Self::Rgba8UnormSrgb | Self::R32Float
+        )
     }
 
     pub const fn is_displayable(self) -> bool {
@@ -283,6 +291,16 @@ impl RenderDynamicTextureTargetDescriptor {
         if self.format.is_uint()
             && self.sample_mode.is_sampled()
             && self.sample_mode != RenderTextureSampleMode::Uint
+        {
+            return Err(RenderDynamicTextureTargetDescriptorError::InvalidSampleModeForFormat);
+        }
+        if matches!(self.format, RenderTextureTargetFormat::R32Float)
+            && self.sample_mode.is_sampled()
+            && !matches!(
+                self.sample_mode,
+                RenderTextureSampleMode::FilterableFloat
+                    | RenderTextureSampleMode::NonFilterableFloat
+            )
         {
             return Err(RenderDynamicTextureTargetDescriptorError::InvalidSampleModeForFormat);
         }

@@ -553,6 +553,7 @@ pub const fn normalized_render_format(format: RenderTextureTargetFormat) -> GpuT
         RenderTextureTargetFormat::Rgba8Unorm => GpuTextureFormat::Rgba8Unorm,
         RenderTextureTargetFormat::Rgba8UnormSrgb => GpuTextureFormat::Rgba8UnormSrgb,
         RenderTextureTargetFormat::R32Uint => GpuTextureFormat::R32Uint,
+        RenderTextureTargetFormat::R32Float => GpuTextureFormat::R32Float,
         RenderTextureTargetFormat::Depth32Float => GpuTextureFormat::Depth32Float,
     }
 }

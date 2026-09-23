@@ -334,7 +334,12 @@ fn build_prepared_flow_invocations(
             .ok_or_else(|| {
                 anyhow::anyhow!("missing main prepared inputs for flow '{:?}'", flow.flow_id)
             })?;
-        invocations.push(PreparedFlowInvocation::main(flow.flow_id, inputs));
+        let has_requested_main = requested_flow_invocations
+            .iter()
+            .any(|request| request.flow_id == flow.flow_id && request.view_id == "main");
+        if !has_requested_main {
+            invocations.push(PreparedFlowInvocation::main(flow.flow_id, inputs));
+        }
     }
 
     Ok(invocations)

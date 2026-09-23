@@ -72,6 +72,7 @@ impl Renderer {
             product_surface_pass: None,
             product_surface_pass_format: None,
             glyph_atlas_gpu: std::collections::BTreeMap::new(),
+            deterministic_resources: Default::default(),
             dynamic_texture_targets:
                 super::dynamic_targets::RendererDynamicTextureTargetCache::default(),
             flow_runtime_cache: std::collections::BTreeMap::new(),
@@ -101,6 +102,7 @@ impl Renderer {
         // capture consume the resulting public lifecycle facts; neither feature creates a poll
         // loop or reaches into the backend.
         context.progress();
+        self.deterministic_resources.retain_in_flight_submissions();
         let super::render_flow::RendererGpuObservationOutput {
             timing_evidence,
             captured_textures,
@@ -115,6 +117,18 @@ impl Renderer {
         self.pending_gpu_observation_output
             .capture_results
             .extend(capture_results);
+    }
+
+    pub(super) fn has_in_flight_deterministic_producer(
+        &self,
+        contributions: &[crate::plugins::render::RenderDeterministicFrameContribution],
+    ) -> bool {
+        self.deterministic_resources
+            .any_producer_submission_in_flight(
+                contributions
+                    .iter()
+                    .map(|contribution| contribution.producer_id.raw()),
+            )
     }
 
     pub(super) fn publish_progressed_gpu_observations(&mut self) {
