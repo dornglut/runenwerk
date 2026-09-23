@@ -92,11 +92,26 @@ fn viewport_gpu_truth_smoke() {
     }
 
     let window = create_hidden_window();
+    let size = window.inner_size();
     let gfx = Gfx::new(window).expect("gfx should initialize for smoke test");
 
     let mut app = runenwerk_editor::runtime::build_headless_app()
         .expect("headless app construction should succeed");
     configure_wr028_sdf_two_slot_scene(&mut app);
+    {
+        let surfaces = app
+            .world_mut()
+            .resource_mut::<RenderSurfaceRegistryResource>()
+            .expect("render surface registry should exist");
+        let surface = surfaces.reserve_surface_for_native_window(
+            NativeWindowId::primary(),
+            (size.width, size.height),
+        );
+        assert_eq!(surface, RenderSurfaceId::primary());
+        surfaces
+            .confirm_surface_attachment(NativeWindowId::primary(), (size.width, size.height))
+            .expect("external primary surface reservation should confirm");
+    }
     app.world_mut().insert_resource(gfx);
 
     app.update_render_debug_control(|debug_control| {
