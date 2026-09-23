@@ -292,10 +292,10 @@ pub struct PreparedSurfaceInfo {
 }
 
 impl PreparedSurfaceInfo {
-    pub fn primary(target_size_px: (u32, u32)) -> Self {
+    pub fn unbound_primary(target_size_px: (u32, u32)) -> Self {
         Self {
             render_surface_id: RenderSurfaceId::primary(),
-            native_window_id: Some(NativeWindowId::primary()),
+            native_window_id: None,
             target_size_px,
         }
     }
@@ -759,7 +759,7 @@ mod tests {
                 shader_registry_revision: 11,
                 prepare_epoch: 3,
             },
-            surface: PreparedSurfaceInfo::primary((1280, 720)),
+            surface: PreparedSurfaceInfo::unbound_primary((1280, 720)),
             views: vec![PreparedViewFrame::main((1280, 720))],
             flows: BTreeMap::new(),
             flow_invocations: Vec::new(),
