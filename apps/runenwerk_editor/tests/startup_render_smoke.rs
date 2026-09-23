@@ -1,6 +1,7 @@
 use editor_shell::viewport_embed_slot_for;
 use editor_viewport::{ViewportId, ViewportSurfacePresentationSlot};
-use engine::plugins::render::backend::RenderSurfaceId;
+use engine::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryResource};
+use engine::runtime::NativeWindowId;
 use engine::plugins::render::{
     CompiledPassExecutionPlan, RenderFlowRegistryResource, RenderFrameProducerId,
     SurfaceFrameSubmissionRegistryResource, ViewportSurfaceBindingRegistryResource,
@@ -35,6 +36,16 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
         .expect("headless app construction should succeed")
         .run_for_frames(2)
         .expect("headless editor app should run");
+
+    let surfaces = app
+        .world()
+        .resource::<RenderSurfaceRegistryResource>()
+        .expect("render surface registry should exist");
+    assert_eq!(
+        surfaces.surface_for_native_window(NativeWindowId::primary()),
+        None,
+        "pure headless editor execution must not fabricate a native-backed primary Render surface"
+    );
 
     let submissions = app
         .world()
