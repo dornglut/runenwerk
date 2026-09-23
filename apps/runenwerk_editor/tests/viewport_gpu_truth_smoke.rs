@@ -118,7 +118,6 @@ fn viewport_gpu_truth_smoke() {
     let mut native_state = WindowState::windowed(window.title());
     native_state.size_px = (size.width, size.height);
     native_state.scale_factor = window.scale_factor();
-    native_state.set_headless(false);
     app.world_mut()
         .resource_mut::<WindowStateRegistryResource>()
         .expect("window registry should exist")
