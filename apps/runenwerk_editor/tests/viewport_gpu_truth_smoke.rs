@@ -10,6 +10,7 @@ use editor_persistence::{
 };
 use editor_viewport::ViewportPresentationState;
 use engine::App;
+use engine::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryResource};
 use engine::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, RenderCaptureSelector, RenderCaptureTerminalCode,
     RenderCapturedTextureState, RenderDebugFrameReportState, RenderPassProvenanceRecord,
@@ -18,6 +19,7 @@ use engine::plugins::render::inspect::{
 use engine::plugins::render::{
     Gfx, MaterialPreviewFixture, MaterialShaderCompileRequest, compile_material_shader,
 };
+use engine::runtime::{NativeWindowId, WindowState, WindowStateRegistryResource};
 use graph::{
     CyclePolicy, GraphDefinition, GraphId, GraphMetadataEntry, GraphValue, NodeDefinition, NodeId,
     PortDefinition, PortDirection, PortId, PortTypeId,
@@ -92,12 +94,43 @@ fn viewport_gpu_truth_smoke() {
     }
 
     let window = create_hidden_window();
-    let gfx = Gfx::new(window).expect("gfx should initialize for smoke test");
+    let gfx = Gfx::new(Arc::clone(&window)).expect("gfx should initialize for smoke test");
 
     let mut app = runenwerk_editor::runtime::build_headless_app()
         .expect("headless app construction should succeed");
     configure_wr028_sdf_two_slot_scene(&mut app);
     app.world_mut().insert_resource(gfx);
+
+    let mut app = app
+        .run_for_frames(1)
+        .expect("unbound headless frame must ignore stray Gfx presentation authority");
+    assert_eq!(
+        app.world()
+            .resource::<RenderSurfaceRegistryResource>()
+            .expect("render surface registry should exist")
+            .records()
+            .count(),
+        0,
+        "stray Gfx must not manufacture or present a native Render surface"
+    );
+
+    let size = window.inner_size();
+    let mut native_state = WindowState::windowed(window.title());
+    native_state.size_px = (size.width, size.height);
+    native_state.scale_factor = window.scale_factor();
+    app.world_mut()
+        .resource_mut::<WindowStateRegistryResource>()
+        .expect("window registry should exist")
+        .register_created_window(NativeWindowId::primary(), &native_state);
+    app.world_mut()
+        .resource_mut::<RenderSurfaceRegistryResource>()
+        .expect("render surface registry should exist")
+        .confirm_surface_attachment(
+            RenderSurfaceId::primary(),
+            NativeWindowId::primary(),
+            native_state.size_px,
+        )
+        .expect("real GPU harness must explicitly correlate its primary surface");
 
     app.update_render_debug_control(|debug_control| {
         debug_control.provenance_enabled = true;

@@ -449,7 +449,7 @@ mod tests {
         let pending = transitions.pending.as_ref().expect("pending transition");
         let request = windows.request_window("Secondary", (900, 600));
         let render_surface_id =
-            surfaces.ensure_surface_for_native_window(request.native_window_id, request.size_px);
+            surfaces.reserve_surface_for_native_window(request.native_window_id, request.size_px);
         let binding = EditorWindowPresentationBinding {
             native_window_id: request.native_window_id,
             render_surface_id,
@@ -499,6 +499,13 @@ mod tests {
             bind_pending_native_window(&mut host, &transitions, &mut windows, &mut surfaces);
         let mut created = WindowState::windowed("Secondary");
         created.size_px = (900, 600);
+        surfaces
+            .confirm_surface_attachment(
+                binding.render_surface_id,
+                native_window_id,
+                created.size_px,
+            )
+            .expect("test native surface should attach before Created publication");
         windows.register_created_window(native_window_id, &created);
         sync_editor_composition_transitions(
             &mut host,

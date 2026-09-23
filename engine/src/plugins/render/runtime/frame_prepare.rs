@@ -193,15 +193,6 @@ fn prepared_surface_infos(
     world: &mut WorldMut,
     primary_target_size: (u32, u32),
 ) -> Vec<PreparedSurfaceInfo> {
-    let primary_native_window_id = world
-        .resource::<crate::runtime::WindowStateRegistryResource>()
-        .ok()
-        .and_then(|registry| registry.primary_window_id())
-        .unwrap_or_else(crate::runtime::NativeWindowId::primary);
-    if let Ok(registry) = world.resource_mut::<RenderSurfaceRegistryResource>() {
-        registry.ensure_surface_for_native_window(primary_native_window_id, primary_target_size);
-    }
-
     let created_windows = world
         .resource::<crate::runtime::WindowStateRegistryResource>()
         .ok()
@@ -212,29 +203,36 @@ fn prepared_surface_infos(
                 .map(|record| record.native_window_id)
                 .collect::<BTreeSet<_>>()
         })
-        .unwrap_or_else(|| BTreeSet::from([primary_native_window_id]));
+        .unwrap_or_default();
+    let registry = world.resource::<RenderSurfaceRegistryResource>().ok();
+    prepared_surface_infos_from_registry(registry, &created_windows, primary_target_size)
+}
 
-    world
-        .resource::<RenderSurfaceRegistryResource>()
-        .ok()
-        .map(|registry| {
-            registry
-                .records()
-                .filter(|record| {
-                    record.lifecycle_state == RenderSurfaceLifecycleState::Registered
-                        && created_windows.contains(&record.native_window_id)
-                })
-                .map(|record| {
-                    PreparedSurfaceInfo::for_surface(
-                        record.render_surface_id,
-                        record.native_window_id,
-                        record.target_size_px,
-                    )
-                })
-                .collect::<Vec<_>>()
+fn prepared_surface_infos_from_registry(
+    registry: Option<&RenderSurfaceRegistryResource>,
+    created_windows: &BTreeSet<crate::runtime::NativeWindowId>,
+    primary_target_size: (u32, u32),
+) -> Vec<PreparedSurfaceInfo> {
+    let surfaces = registry
+        .into_iter()
+        .flat_map(|registry| registry.records())
+        .filter(|record| {
+            record.lifecycle_state == RenderSurfaceLifecycleState::Attached
+                && created_windows.contains(&record.native_window_id)
         })
-        .filter(|surfaces| !surfaces.is_empty())
-        .unwrap_or_else(|| vec![PreparedSurfaceInfo::primary(primary_target_size)])
+        .map(|record| {
+            PreparedSurfaceInfo::for_surface(
+                record.render_surface_id,
+                record.native_window_id,
+                record.target_size_px,
+            )
+        })
+        .collect::<Vec<_>>();
+    if surfaces.is_empty() {
+        vec![PreparedSurfaceInfo::unbound_primary(primary_target_size)]
+    } else {
+        surfaces
+    }
 }
 
 fn build_prepared_views(
@@ -876,6 +874,7 @@ fn project_dispatch_for_pass(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::render::backend::RenderSurfaceId;
 
     #[derive(Debug, Clone, runen_ecs::Component, runen_ecs::Resource)]
     struct TestContributionResource {
@@ -928,6 +927,34 @@ mod tests {
         ));
         world.insert_resource(feature_registry);
         world
+    }
+
+    #[test]
+    fn surface_preparation_keeps_headless_primary_unbound() {
+        let registry = RenderSurfaceRegistryResource::default();
+        let prepared =
+            prepared_surface_infos_from_registry(Some(&registry), &BTreeSet::new(), (800, 600));
+        assert_eq!(prepared.len(), 1);
+        assert_eq!(prepared[0].render_surface_id, RenderSurfaceId::primary());
+        assert_eq!(prepared[0].native_window_id, None);
+        assert_eq!(registry.records().count(), 0);
+    }
+
+    #[test]
+    fn surface_preparation_excludes_requested_until_attachment_is_confirmed() {
+        let mut registry = RenderSurfaceRegistryResource::default();
+        let native = crate::runtime::NativeWindowId::try_from_raw(2).unwrap();
+        let surface = registry.reserve_surface_for_native_window(native, (900, 600));
+        let created = BTreeSet::from([native]);
+        let requested =
+            prepared_surface_infos_from_registry(Some(&registry), &created, (1280, 720));
+        assert_eq!(requested[0].native_window_id, None);
+        registry
+            .confirm_surface_attachment(surface, native, (900, 600))
+            .unwrap();
+        let attached = prepared_surface_infos_from_registry(Some(&registry), &created, (1280, 720));
+        assert_eq!(attached[0].render_surface_id, surface);
+        assert_eq!(attached[0].native_window_id, Some(native));
     }
 
     #[test]

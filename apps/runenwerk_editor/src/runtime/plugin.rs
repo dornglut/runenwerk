@@ -271,7 +271,7 @@ fn sync_editor_window_presentation_requests(
         let request = window_registry
             .request_window(format!("Runenwerk {}", editor_window_id.raw()), (1280, 720));
         let render_surface_id = surface_registry
-            .ensure_surface_for_native_window(request.native_window_id, request.size_px);
+            .reserve_surface_for_native_window(request.native_window_id, request.size_px);
         let binding = EditorWindowPresentationBinding {
             native_window_id: request.native_window_id,
             render_surface_id,
@@ -352,6 +352,12 @@ mod tests {
         assert_eq!(
             surface_registry.surface_for_native_window(binding.native_window_id),
             Some(binding.render_surface_id)
+        );
+        assert_eq!(
+            surface_registry
+                .record(binding.render_surface_id)
+                .map(|record| record.lifecycle_state),
+            Some(engine::plugins::render::backend::RenderSurfaceLifecycleState::Requested)
         );
         assert_eq!(window_registry.pending_creation_requests().len(), 1);
     }

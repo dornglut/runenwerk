@@ -1,6 +1,6 @@
 use crate::app::WindowedAppState;
 use crate::plugins::InputState;
-use crate::plugins::render::backend::RenderSurfaceRegistryResource;
+use crate::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryResource};
 use crate::plugins::render::renderer::Gfx;
 use crate::runtime::frame_lifecycle::{
     prepare_world_for_run, run_frame as run_runtime_frame, run_startup_if_needed,
@@ -82,7 +82,7 @@ impl WinitRunner {
             window_state.title = window.title().to_string();
             window_state.clone()
         };
-        self.sync_primary_window_registries(&window_state);
+        self.sync_primary_window_state_and_surface_extent(&window_state);
         Ok(())
     }
 
@@ -123,7 +123,7 @@ impl WinitRunner {
                     apply_platform_event(window_state, &mut input, &event);
                     window_state.clone()
                 };
-                self.sync_primary_window_registries(&window_state);
+                self.sync_primary_window_state_and_surface_extent(&window_state);
             }
             PlatformEvent::KeyboardInput { .. }
             | PlatformEvent::TextInput { .. }
@@ -223,7 +223,7 @@ impl WinitRunner {
         Ok(())
     }
 
-    fn sync_primary_window_registries(&mut self, window_state: &WindowState) {
+    fn sync_primary_window_state_and_surface_extent(&mut self, window_state: &WindowState) {
         if let Ok(registry) = self
             .state
             .world
@@ -236,9 +236,34 @@ impl WinitRunner {
             .world
             .resource_mut::<RenderSurfaceRegistryResource>()
         {
-            surface_registry
-                .ensure_surface_for_native_window(NativeWindowId::primary(), window_state.size_px);
+            surface_registry.update_surface_extent_for_native_window(
+                NativeWindowId::primary(),
+                window_state.size_px,
+            );
         }
+    }
+
+    fn confirm_primary_render_surface_attachment(
+        &mut self,
+        target_size_px: (u32, u32),
+    ) -> Result<()> {
+        let surface = RenderSurfaceId::primary();
+        if !self
+            .state
+            .world
+            .resource::<Gfx>()
+            .context("runtime gfx is unavailable")?
+            .has_surface(surface)
+        {
+            return Err(anyhow!(
+                "runtime gfx does not own the primary render surface after initialization"
+            ));
+        }
+        self.state
+            .world
+            .resource_mut::<RenderSurfaceRegistryResource>()
+            .context("render surface registry is unavailable")?
+            .confirm_surface_attachment(surface, NativeWindowId::primary(), target_size_px)
     }
 
     fn run_startup_if_needed(&mut self) -> Result<()> {
@@ -317,7 +342,14 @@ impl WinitRunner {
             .resource_mut::<RenderSurfaceRegistryResource>()
             .ok()
             .map(|registry| {
-                registry.ensure_surface_for_native_window(request.native_window_id, request.size_px)
+                registry
+                    .surface_for_native_window(request.native_window_id)
+                    .unwrap_or_else(|| {
+                        registry.reserve_surface_for_native_window(
+                            request.native_window_id,
+                            request.size_px,
+                        )
+                    })
             });
         let Some(render_surface_id) = render_surface_id else {
             self.mark_window_creation_failed(
@@ -335,16 +367,31 @@ impl WinitRunner {
                 gfx.attach_surface(render_surface_id, Arc::clone(&window), request.size_px)
             });
         if let Err(err) = attach_result {
-            if let Ok(surface_registry) = self
-                .state
-                .world
-                .resource_mut::<RenderSurfaceRegistryResource>()
-            {
-                surface_registry.retire_surface_for_native_window(request.native_window_id);
-            }
             self.mark_window_creation_failed(
                 request.native_window_id,
                 format!("GPU surface attachment failed: {err:#}"),
+            );
+            return Ok(());
+        }
+        let confirm_result = self
+            .state
+            .world
+            .resource_mut::<RenderSurfaceRegistryResource>()
+            .context("render surface registry is unavailable")
+            .and_then(|registry| {
+                registry.confirm_surface_attachment(
+                    render_surface_id,
+                    request.native_window_id,
+                    request.size_px,
+                )
+            });
+        if let Err(err) = confirm_result {
+            if let Ok(gfx) = self.state.world.resource_mut::<Gfx>() {
+                gfx.detach_surface(render_surface_id);
+            }
+            self.mark_window_creation_failed(
+                request.native_window_id,
+                format!("render surface correlation failed: {err:#}"),
             );
             return Ok(());
         }
@@ -367,6 +414,13 @@ impl WinitRunner {
         native_window_id: NativeWindowId,
         reason: impl Into<String>,
     ) {
+        if let Ok(surface_registry) = self
+            .state
+            .world
+            .resource_mut::<RenderSurfaceRegistryResource>()
+        {
+            surface_registry.retire_surface_for_native_window(native_window_id);
+        }
         if let Ok(registry) = self
             .state
             .world
@@ -621,8 +675,8 @@ impl ApplicationHandler for WinitRunner {
         }
 
         if self.state.world.resource::<Gfx>().is_err() {
-            match Gfx::new(window.clone()) {
-                Ok(gfx) => self.state.world.insert_resource(gfx),
+            let gfx = match Gfx::new(window.clone()) {
+                Ok(gfx) => gfx,
                 Err(err) => {
                     self.exit_with_error(
                         event_loop,
@@ -630,7 +684,26 @@ impl ApplicationHandler for WinitRunner {
                     );
                     return;
                 }
+            };
+            self.state.world.insert_resource(gfx);
+            let size = window.inner_size();
+            if let Err(err) =
+                self.confirm_primary_render_surface_attachment((size.width, size.height))
+            {
+                self.exit_with_error(
+                    event_loop,
+                    anyhow!("failed to confirm primary render surface attachment: {err:#}"),
+                );
+                return;
             }
+        } else {
+            self.exit_with_error(
+                event_loop,
+                anyhow!(
+                    "preexisting runtime gfx cannot be proven attached to the newly created primary window"
+                ),
+            );
+            return;
         }
 
         if let Err(err) = self.apply_event(PlatformEvent::Resumed) {
@@ -881,6 +954,7 @@ fn native_window_id_for_winit_event(
 mod tests {
     use super::*;
     use crate::app::App;
+    use crate::plugins::render::backend::RenderSurfaceLifecycleState;
     use crate::plugins::{FixedStepPlugin, SimulationPlugin, TimePlugin};
     use crate::runtime::fixed_time::{
         CatchupBudget, FixedTimeConfig, FixedTimeState, SimulationTick,
@@ -1039,6 +1113,77 @@ mod tests {
         assert_eq!(
             native_window_id_for_winit_event(&native_windows_by_winit, WindowId::dummy()),
             None
+        );
+    }
+
+    #[test]
+    fn primary_window_state_sync_does_not_manufacture_render_attachment() {
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        runner
+            .state
+            .world
+            .insert_resource(RenderSurfaceRegistryResource::default());
+        let mut state = WindowState::windowed("primary");
+        state.size_px = (1440, 900);
+        runner.sync_primary_window_state_and_surface_extent(&state);
+        let surfaces = runner
+            .state
+            .world
+            .resource::<RenderSurfaceRegistryResource>()
+            .unwrap();
+        assert_eq!(surfaces.records().count(), 0);
+        assert_eq!(surfaces.primary_surface_id(), None);
+    }
+
+    #[test]
+    fn secondary_creation_failure_retires_reserved_render_surface() {
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        runner
+            .state
+            .world
+            .insert_resource(RenderSurfaceRegistryResource::default());
+
+        let request = runner
+            .state
+            .world
+            .resource_mut::<WindowStateRegistryResource>()
+            .expect("window registry should exist")
+            .request_window("Secondary", (900, 600));
+        let render_surface_id = runner
+            .state
+            .world
+            .resource_mut::<RenderSurfaceRegistryResource>()
+            .expect("render surface registry should exist")
+            .reserve_surface_for_native_window(request.native_window_id, request.size_px);
+
+        runner.mark_window_creation_failed(request.native_window_id, "test attachment failure");
+
+        let windows = runner
+            .state
+            .world
+            .resource::<WindowStateRegistryResource>()
+            .expect("window registry should exist");
+        assert_eq!(
+            windows
+                .record(request.native_window_id)
+                .map(|record| record.lifecycle_state),
+            Some(crate::runtime::NativeWindowLifecycleState::CreationFailed)
+        );
+
+        let surfaces = runner
+            .state
+            .world
+            .resource::<RenderSurfaceRegistryResource>()
+            .expect("render surface registry should exist");
+        assert_eq!(
+            surfaces.surface_for_native_window(request.native_window_id),
+            None
+        );
+        assert_eq!(
+            surfaces
+                .record(render_surface_id)
+                .map(|record| record.lifecycle_state),
+            Some(RenderSurfaceLifecycleState::Retired)
         );
     }
 
