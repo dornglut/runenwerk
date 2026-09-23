@@ -69,7 +69,11 @@ impl RenderSurfaceRegistryResource {
         native_window_id: NativeWindowId,
         target_size_px: (u32, u32),
     ) -> RenderSurfaceId {
-        if let Some(surface_id) = self.surfaces_by_native_window.get(&native_window_id).copied() {
+        if let Some(surface_id) = self
+            .surfaces_by_native_window
+            .get(&native_window_id)
+            .copied()
+        {
             if let Some(record) = self.records.get_mut(&surface_id) {
                 record.target_size_px = normalized_surface_extent(target_size_px);
             }
@@ -80,7 +84,9 @@ impl RenderSurfaceRegistryResource {
         } else {
             self.allocate_secondary_surface_id()
         };
-        self.next_surface_raw = self.next_surface_raw.max(render_surface_id.raw().saturating_add(1));
+        self.next_surface_raw = self
+            .next_surface_raw
+            .max(render_surface_id.raw().saturating_add(1));
         self.records.insert(
             render_surface_id,
             RenderSurfaceRecord::new(
@@ -90,7 +96,8 @@ impl RenderSurfaceRegistryResource {
                 RenderSurfaceLifecycleState::Requested,
             ),
         );
-        self.surfaces_by_native_window.insert(native_window_id, render_surface_id);
+        self.surfaces_by_native_window
+            .insert(native_window_id, render_surface_id);
         if native_window_id == NativeWindowId::primary() {
             self.primary_surface_id = Some(render_surface_id);
         }
@@ -152,8 +159,11 @@ impl RenderSurfaceRegistryResource {
                 );
             }
         }
-        self.next_surface_raw = self.next_surface_raw.max(render_surface_id.raw().saturating_add(1));
-        self.surfaces_by_native_window.insert(native_window_id, render_surface_id);
+        self.next_surface_raw = self
+            .next_surface_raw
+            .max(render_surface_id.raw().saturating_add(1));
+        self.surfaces_by_native_window
+            .insert(native_window_id, render_surface_id);
         if native_is_primary {
             self.primary_surface_id = Some(render_surface_id);
         }
@@ -165,7 +175,11 @@ impl RenderSurfaceRegistryResource {
         native_window_id: NativeWindowId,
         target_size_px: (u32, u32),
     ) -> bool {
-        let Some(render_surface_id) = self.surfaces_by_native_window.get(&native_window_id).copied() else {
+        let Some(render_surface_id) = self
+            .surfaces_by_native_window
+            .get(&native_window_id)
+            .copied()
+        else {
             return false;
         };
         let Some(record) = self.records.get_mut(&render_surface_id) else {
@@ -178,32 +192,56 @@ impl RenderSurfaceRegistryResource {
         true
     }
 
-    pub fn primary_surface_id(&self) -> Option<RenderSurfaceId> { self.primary_surface_id }
+    pub fn primary_surface_id(&self) -> Option<RenderSurfaceId> {
+        self.primary_surface_id
+    }
     pub fn record(&self, render_surface_id: RenderSurfaceId) -> Option<&RenderSurfaceRecord> {
         self.records.get(&render_surface_id)
     }
-    pub fn surface_for_native_window(&self, native_window_id: NativeWindowId) -> Option<RenderSurfaceId> {
-        self.surfaces_by_native_window.get(&native_window_id).copied()
+    pub fn surface_for_native_window(
+        &self,
+        native_window_id: NativeWindowId,
+    ) -> Option<RenderSurfaceId> {
+        self.surfaces_by_native_window
+            .get(&native_window_id)
+            .copied()
     }
-    pub fn records(&self) -> impl Iterator<Item = &RenderSurfaceRecord> { self.records.values() }
+    pub fn records(&self) -> impl Iterator<Item = &RenderSurfaceRecord> {
+        self.records.values()
+    }
 
-    pub fn retire_surface_for_native_window(&mut self, native_window_id: NativeWindowId) -> Option<RenderSurfaceId> {
+    pub fn retire_surface_for_native_window(
+        &mut self,
+        native_window_id: NativeWindowId,
+    ) -> Option<RenderSurfaceId> {
         let render_surface_id = self.surfaces_by_native_window.remove(&native_window_id)?;
         if let Some(record) = self.records.get_mut(&render_surface_id) {
             record.lifecycle_state = RenderSurfaceLifecycleState::Retired;
         }
-        if self.primary_surface_id == Some(render_surface_id) { self.primary_surface_id = None; }
+        if self.primary_surface_id == Some(render_surface_id) {
+            self.primary_surface_id = None;
+        }
         Some(render_surface_id)
     }
-    pub fn diagnostics(&self) -> &[RenderSurfaceDiagnostic] { &self.diagnostics }
-    pub fn record_diagnostic(&mut self, diagnostic: RenderSurfaceDiagnostic) { self.diagnostics.push(diagnostic); }
-    pub fn clear_diagnostics(&mut self) { self.diagnostics.clear(); }
+    pub fn diagnostics(&self) -> &[RenderSurfaceDiagnostic] {
+        &self.diagnostics
+    }
+    pub fn record_diagnostic(&mut self, diagnostic: RenderSurfaceDiagnostic) {
+        self.diagnostics.push(diagnostic);
+    }
+    pub fn clear_diagnostics(&mut self) {
+        self.diagnostics.clear();
+    }
 
     fn allocate_secondary_surface_id(&mut self) -> RenderSurfaceId {
         loop {
-            let raw = self.next_surface_raw.max(RenderSurfaceId::primary().raw().saturating_add(1));
+            let raw = self
+                .next_surface_raw
+                .max(RenderSurfaceId::primary().raw().saturating_add(1));
             self.next_surface_raw = raw.saturating_add(1);
-            if let Ok(id) = RenderSurfaceId::try_from_raw(raw) && !self.records.contains_key(&id) {
+            if let Ok(id) = RenderSurfaceId::try_from_raw(raw)
+                && !self.records.contains_key(&id)
+            {
                 return id;
             }
         }
@@ -261,10 +299,14 @@ mod tests {
     #[test]
     fn reservation_allocates_stable_identity_without_claiming_attachment() {
         let mut registry = RenderSurfaceRegistryResource::default();
-        let surface = registry.reserve_surface_for_native_window(NativeWindowId::primary(), (1280, 720));
+        let surface =
+            registry.reserve_surface_for_native_window(NativeWindowId::primary(), (1280, 720));
         assert_eq!(surface, RenderSurfaceId::primary());
         assert_eq!(registry.primary_surface_id(), Some(surface));
-        assert_eq!(registry.record(surface).map(|r| r.lifecycle_state), Some(RenderSurfaceLifecycleState::Requested));
+        assert_eq!(
+            registry.record(surface).map(|r| r.lifecycle_state),
+            Some(RenderSurfaceLifecycleState::Requested)
+        );
     }
 
     #[test]
@@ -272,10 +314,14 @@ mod tests {
         let mut registry = RenderSurfaceRegistryResource::default();
         let window = NativeWindowId::try_from_raw(2).unwrap();
         let surface = registry.reserve_surface_for_native_window(window, (640, 480));
-        registry.confirm_surface_attachment(surface, window, (800, 600)).unwrap();
+        registry
+            .confirm_surface_attachment(surface, window, (800, 600))
+            .unwrap();
         assert_eq!(registry.surface_for_native_window(window), Some(surface));
         assert_eq!(
-            registry.record(surface).map(|r| (r.lifecycle_state, r.target_size_px)),
+            registry
+                .record(surface)
+                .map(|r| (r.lifecycle_state, r.target_size_px)),
             Some((RenderSurfaceLifecycleState::Attached, (800, 600)))
         );
     }
@@ -285,7 +331,8 @@ mod tests {
         let mut registry = RenderSurfaceRegistryResource::default();
         let window = NativeWindowId::try_from_raw(2).unwrap();
         let secondary = registry.reserve_surface_for_native_window(window, (640, 480));
-        let primary = registry.reserve_surface_for_native_window(NativeWindowId::primary(), (1280, 720));
+        let primary =
+            registry.reserve_surface_for_native_window(NativeWindowId::primary(), (1280, 720));
         assert_ne!(secondary, RenderSurfaceId::primary());
         assert_eq!(primary, RenderSurfaceId::primary());
     }
@@ -295,8 +342,15 @@ mod tests {
         let mut registry = RenderSurfaceRegistryResource::default();
         let window = NativeWindowId::try_from_raw(2).unwrap();
         let secondary = registry.reserve_surface_for_native_window(window, (640, 480));
-        assert!(registry.confirm_surface_attachment(RenderSurfaceId::primary(), window, (640, 480)).is_err());
-        assert_eq!(registry.record(secondary).map(|r| r.lifecycle_state), Some(RenderSurfaceLifecycleState::Requested));
+        assert!(
+            registry
+                .confirm_surface_attachment(RenderSurfaceId::primary(), window, (640, 480))
+                .is_err()
+        );
+        assert_eq!(
+            registry.record(secondary).map(|r| r.lifecycle_state),
+            Some(RenderSurfaceLifecycleState::Requested)
+        );
     }
 
     #[test]
@@ -306,7 +360,9 @@ mod tests {
         let surface = registry.reserve_surface_for_native_window(window, (640, 480));
         assert!(registry.update_surface_extent_for_native_window(window, (900, 600)));
         assert_eq!(
-            registry.record(surface).map(|r| (r.lifecycle_state, r.target_size_px)),
+            registry
+                .record(surface)
+                .map(|r| (r.lifecycle_state, r.target_size_px)),
             Some((RenderSurfaceLifecycleState::Requested, (900, 600)))
         );
     }
@@ -316,8 +372,14 @@ mod tests {
         let mut registry = RenderSurfaceRegistryResource::default();
         let window = NativeWindowId::try_from_raw(2).unwrap();
         let surface = registry.reserve_surface_for_native_window(window, (640, 480));
-        assert_eq!(registry.retire_surface_for_native_window(window), Some(surface));
+        assert_eq!(
+            registry.retire_surface_for_native_window(window),
+            Some(surface)
+        );
         assert_eq!(registry.surface_for_native_window(window), None);
-        assert_eq!(registry.record(surface).map(|r| r.lifecycle_state), Some(RenderSurfaceLifecycleState::Retired));
+        assert_eq!(
+            registry.record(surface).map(|r| r.lifecycle_state),
+            Some(RenderSurfaceLifecycleState::Retired)
+        );
     }
 }
