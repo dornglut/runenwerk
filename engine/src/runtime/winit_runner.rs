@@ -1196,7 +1196,7 @@ mod tests {
             windows
                 .record(request.native_window_id)
                 .map(|record| record.lifecycle_state),
-            Some(NativeWindowLifecycleState::CreationFailed)
+            Some(crate::runtime::NativeWindowLifecycleState::CreationFailed)
         );
 
         let surfaces = runner
