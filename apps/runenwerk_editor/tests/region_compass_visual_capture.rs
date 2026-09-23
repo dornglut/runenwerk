@@ -5,7 +5,8 @@ use editor_shell::{
     RegionCompassAccessibility, RegionCompassViewModel, projected_host_tab_stacks,
     tab_stack_container_widget_id,
 };
-use engine::plugins::render::{Gfx, RenderSurfaceId, RenderSurfaceRegistryResource};
+use engine::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryResource};
+use engine::plugins::render::Gfx;
 use engine::runtime::NativeWindowId;
 use engine::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, RenderCaptureSelector, RenderCaptureTerminalCode,
