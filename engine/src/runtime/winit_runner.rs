@@ -30,6 +30,20 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{CursorIcon, Window, WindowAttributes, WindowId};
 
 pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
+    if !state.world.has_resource::<WindowStateRegistryResource>() {
+        state
+            .world
+            .insert_resource(WindowStateRegistryResource::default());
+    }
+    if !state
+        .world
+        .has_resource::<PlatformWindowEventQueueResource>()
+    {
+        state
+            .world
+            .insert_resource(PlatformWindowEventQueueResource::default());
+    }
+
     let mut event_loop_builder = EventLoop::builder();
     with_native_window_hooks(&mut state.world, |registry, _world| {
         registry.configure_event_loop(&mut event_loop_builder);
