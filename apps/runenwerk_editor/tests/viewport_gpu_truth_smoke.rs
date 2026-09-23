@@ -99,6 +99,21 @@ fn viewport_gpu_truth_smoke() {
     let mut app = runenwerk_editor::runtime::build_headless_app()
         .expect("headless app construction should succeed");
     configure_wr028_sdf_two_slot_scene(&mut app);
+    app.world_mut().insert_resource(gfx);
+
+    let mut app = app
+        .run_for_frames(1)
+        .expect("unbound headless frame must ignore stray Gfx presentation authority");
+    assert_eq!(
+        app.world()
+            .resource::<RenderSurfaceRegistryResource>()
+            .expect("render surface registry should exist")
+            .records()
+            .count(),
+        0,
+        "stray Gfx must not manufacture or present a native Render surface"
+    );
+
     let size = window.inner_size();
     let mut native_state = WindowState::windowed(window.title());
     native_state.size_px = (size.width, size.height);
@@ -117,7 +132,6 @@ fn viewport_gpu_truth_smoke() {
             native_state.size_px,
         )
         .expect("real GPU harness must explicitly correlate its primary surface");
-    app.world_mut().insert_resource(gfx);
 
     app.update_render_debug_control(|debug_control| {
         debug_control.provenance_enabled = true;
