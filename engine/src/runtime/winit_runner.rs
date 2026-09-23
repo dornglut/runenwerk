@@ -990,6 +990,12 @@ mod tests {
     fn runner_with_frame_pacing(policy: FramePacingPolicyResource) -> WinitRunner {
         let mut app = App::new();
         app.with_frame_pacing(policy);
+        install_native_window_provider_resources(app.world_mut());
+        let primary = WindowState::windowed("test primary");
+        app.world_mut()
+            .resource_mut::<WindowStateRegistryResource>()
+            .expect("native Host test fixture should install window registry")
+            .register_created_window(NativeWindowId::primary(), &primary);
         WinitRunner {
             state: app.into_windowed_state(),
             window: None,
