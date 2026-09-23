@@ -1127,9 +1127,14 @@ fn validate_prepared_frame_surface_scope(
         }
     }
 
-    if let Ok(gfx) = world.resource::<Gfx>()
-        && !gfx.has_surface(prepared_frame.surface.render_surface_id)
-    {
+    let gfx = world.resource::<Gfx>().map_err(|_| {
+        anyhow!(
+            "prepared frame {} targets native-bound render surface {} without a Gfx resource",
+            prepared_frame.context.frame_index,
+            prepared_frame.surface.render_surface_id.raw()
+        )
+    })?;
+    if !gfx.has_surface(prepared_frame.surface.render_surface_id) {
         anyhow::bail!(
             "prepared frame {} targets render surface {} without an attached Gfx surface",
             prepared_frame.context.frame_index,
