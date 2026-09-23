@@ -449,7 +449,7 @@ mod tests {
         let pending = transitions.pending.as_ref().expect("pending transition");
         let request = windows.request_window("Secondary", (900, 600));
         let render_surface_id =
-            surfaces.ensure_surface_for_native_window(request.native_window_id, request.size_px);
+            surfaces.reserve_surface_for_native_window(request.native_window_id, request.size_px);
         let binding = EditorWindowPresentationBinding {
             native_window_id: request.native_window_id,
             render_surface_id,
