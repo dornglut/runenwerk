@@ -354,7 +354,9 @@ mod tests {
             Some(binding.render_surface_id)
         );
         assert_eq!(
-            surface_registry.record(binding.render_surface_id).map(|record| record.lifecycle_state),
+            surface_registry
+                .record(binding.render_surface_id)
+                .map(|record| record.lifecycle_state),
             Some(engine::plugins::render::backend::RenderSurfaceLifecycleState::Requested)
         );
         assert_eq!(window_registry.pending_creation_requests().len(), 1);
