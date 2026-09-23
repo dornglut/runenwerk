@@ -1128,7 +1128,11 @@ mod tests {
     #[test]
     fn native_host_provider_setup_installs_empty_window_registry_and_event_queue() {
         let mut app = App::new();
-        assert!(app.world().resource::<WindowStateRegistryResource>().is_err());
+        assert!(
+            app.world()
+                .resource::<WindowStateRegistryResource>()
+                .is_err()
+        );
         assert!(
             app.world()
                 .resource::<PlatformWindowEventQueueResource>()
