@@ -5,7 +5,8 @@ use editor_shell::{
     RegionCompassAccessibility, RegionCompassViewModel, projected_host_tab_stacks,
     tab_stack_container_widget_id,
 };
-use engine::plugins::render::Gfx;
+use engine::plugins::render::{Gfx, RenderSurfaceId, RenderSurfaceRegistryResource};
+use engine::runtime::NativeWindowId;
 use engine::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, RenderCaptureSelector, RenderCaptureTerminalCode,
     RenderCapturedTextureState, RenderPassProvenanceState, deterministic_capture_filename,
@@ -32,12 +33,29 @@ fn main() {
 fn capture() -> anyhow::Result<()> {
     eprintln!("region-compass-capture: create-window");
     let window = create_hidden_window()?;
+    let size = window.inner_size();
     eprintln!("region-compass-capture: create-gfx");
     let gfx = Gfx::new(window)?;
     eprintln!("region-compass-capture: build-app");
     let mut app = runenwerk_editor::runtime::build_headless_app()
         .expect("headless app construction should succeed");
     activate_region_compass(&mut app)?;
+    {
+        let surfaces = app
+            .world_mut()
+            .resource_mut::<RenderSurfaceRegistryResource>()?;
+        let surface = surfaces.reserve_surface_for_native_window(
+            NativeWindowId::primary(),
+            (size.width, size.height),
+        );
+        anyhow::ensure!(
+            surface == RenderSurfaceId::primary(),
+            "external primary window must correlate with primary Render surface"
+        );
+        surfaces
+            .confirm_surface_attachment(NativeWindowId::primary(), (size.width, size.height))
+            .ok_or_else(|| anyhow::anyhow!("external primary surface reservation disappeared"))?;
+    }
     app.world_mut().insert_resource(gfx);
     app.update_render_debug_control(|control| {
         control.provenance_enabled = true;
