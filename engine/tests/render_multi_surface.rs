@@ -38,7 +38,8 @@ fn frame(surface: PreparedSurfaceInfo) -> PreparedRenderFrame {
 #[test]
 fn render_multi_surface_registry_scopes_surfaces_to_native_windows() {
     let mut registry = RenderSurfaceRegistryResource::default();
-    let primary = registry.reserve_surface_for_native_window(NativeWindowId::primary(), (1280, 720));
+    let primary =
+        registry.reserve_surface_for_native_window(NativeWindowId::primary(), (1280, 720));
     let secondary_window = native_window(2);
     let secondary = registry.reserve_surface_for_native_window(secondary_window, (900, 600));
 
