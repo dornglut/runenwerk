@@ -268,7 +268,6 @@ impl WinitRunner {
             .confirm_surface_attachment(surface, NativeWindowId::primary(), target_size_px)
     }
 
-
     fn run_startup_if_needed(&mut self) -> Result<()> {
         prepare_world_for_run(&mut self.state.world, &self.state.title, false);
         run_startup_if_needed(
