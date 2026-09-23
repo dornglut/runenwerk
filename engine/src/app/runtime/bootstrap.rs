@@ -1,7 +1,6 @@
 use crate::app::App;
 use crate::app::domain::mode::AppMode;
 use crate::plugins::{ActionState, InputState};
-use crate::runtime::platform::PlatformWindowEventQueueResource;
 use crate::*;
 
 impl App {
@@ -22,23 +21,6 @@ impl App {
                 AppMode::Headless => WindowState::headless(self.title.clone()),
             };
             self.world.insert_resource(state);
-        }
-        if !self.world.has_resource::<WindowStateRegistryResource>() {
-            let registry = self
-                .world
-                .resource::<WindowState>()
-                .ok()
-                .map(WindowStateRegistryResource::from_legacy);
-            if let Some(registry) = registry {
-                self.world.insert_resource(registry);
-            }
-        }
-        if !self
-            .world
-            .has_resource::<PlatformWindowEventQueueResource>()
-        {
-            self.world
-                .insert_resource(PlatformWindowEventQueueResource::default());
         }
         if !self
             .world
