@@ -1,8 +1,6 @@
 use crate::app::WindowedAppState;
 use crate::plugins::InputState;
-use crate::plugins::render::backend::{
-    RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
-};
+use crate::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryResource};
 use crate::plugins::render::renderer::Gfx;
 use crate::runtime::frame_lifecycle::{
     prepare_world_for_run, run_frame as run_runtime_frame, run_startup_if_needed,
@@ -956,6 +954,7 @@ fn native_window_id_for_winit_event(
 mod tests {
     use super::*;
     use crate::app::App;
+    use crate::plugins::render::backend::RenderSurfaceLifecycleState;
     use crate::plugins::{FixedStepPlugin, SimulationPlugin, TimePlugin};
     use crate::runtime::fixed_time::{
         CatchupBudget, FixedTimeConfig, FixedTimeState, SimulationTick,
