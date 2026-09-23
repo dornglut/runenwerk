@@ -48,7 +48,9 @@ fn movement(mut query: Query<(&mut Position, &Velocity)>, mut frames: ResMut<Fra
 fn bare_apps_do_not_provision_native_window_provider_state() {
     for app in [App::new(), App::headless()] {
         assert!(
-            app.world().resource::<WindowStateRegistryResource>().is_err(),
+            app.world()
+                .resource::<WindowStateRegistryResource>()
+                .is_err(),
             "bare App must not provision native window lifecycle state"
         );
         assert!(
