@@ -30,19 +30,7 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{CursorIcon, Window, WindowAttributes, WindowId};
 
 pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
-    if !state.world.has_resource::<WindowStateRegistryResource>() {
-        state
-            .world
-            .insert_resource(WindowStateRegistryResource::default());
-    }
-    if !state
-        .world
-        .has_resource::<PlatformWindowEventQueueResource>()
-    {
-        state
-            .world
-            .insert_resource(PlatformWindowEventQueueResource::default());
-    }
+    install_native_window_provider_resources(&mut state.world);
 
     let mut event_loop_builder = EventLoop::builder();
     with_native_window_hooks(&mut state.world, |registry, _world| {
@@ -67,6 +55,15 @@ pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
         Err(err)
     } else {
         Ok(())
+    }
+}
+
+fn install_native_window_provider_resources(world: &mut runen_ecs::World) {
+    if !world.has_resource::<WindowStateRegistryResource>() {
+        world.insert_resource(WindowStateRegistryResource::default());
+    }
+    if !world.has_resource::<PlatformWindowEventQueueResource>() {
+        world.insert_resource(PlatformWindowEventQueueResource::default());
     }
 }
 
@@ -109,13 +106,11 @@ impl WinitRunner {
         native_window_id: NativeWindowId,
         event: PlatformEvent,
     ) -> Result<()> {
-        if let Ok(queue) = self
-            .state
+        self.state
             .world
             .resource_mut::<PlatformWindowEventQueueResource>()
-        {
-            queue.publish(PlatformWindowEvent::new(native_window_id, event.clone()));
-        }
+            .context("native Host platform-window event queue is unavailable")?
+            .publish(PlatformWindowEvent::new(native_window_id, event.clone()));
         if native_window_id != NativeWindowId::primary() {
             self.apply_secondary_window_event(native_window_id, event);
             return Ok(());
@@ -1127,6 +1122,30 @@ mod tests {
         assert_eq!(
             native_window_id_for_winit_event(&native_windows_by_winit, WindowId::dummy()),
             None
+        );
+    }
+
+    #[test]
+    fn native_host_provider_setup_installs_empty_window_registry_and_event_queue() {
+        let mut app = App::new();
+        assert!(app.world().resource::<WindowStateRegistryResource>().is_err());
+        assert!(
+            app.world()
+                .resource::<PlatformWindowEventQueueResource>()
+                .is_err()
+        );
+
+        install_native_window_provider_resources(app.world_mut());
+
+        let windows = app
+            .world()
+            .resource::<WindowStateRegistryResource>()
+            .expect("native Host should install the native window registry");
+        assert_eq!(windows.records().count(), 0);
+        assert!(
+            app.world()
+                .resource::<PlatformWindowEventQueueResource>()
+                .is_ok()
         );
     }
 
