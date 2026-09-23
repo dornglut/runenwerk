@@ -34,7 +34,7 @@ Any future Runenwerk consumer integration with standalone RunenUI must be re-der
 
 | Area | Current fact | Source path |
 |---|---|---|
-| App composition | `App` owns a `World`, scheduler, runner, mode, title, and control flow; `add_plugin`, `add_plugins`, resource insertion, render-flow registration, and `world()/world_mut()` are already public. | `engine/src/app/domain/app.rs` |
+| App composition | `App` owns a `World`, scheduler, runner, mode, and title; raw Winit control-flow policy is native-Host-owned. `add_plugin`, `add_plugins`, resource insertion, render-flow registration, and `world()/world_mut()` are already public. | `engine/src/app/domain/app.rs`, `engine/src/runtime/winit_runner.rs` |
 | Running apps | `App::run()` dispatches to windowed or headless mode; `run_for_frames` and `run_for_ticks` are headless helpers. | `engine/src/app/runtime/lifecycle.rs` |
 | Windowed runtime | Windowed mode uses `winit_runner::run(self.into_windowed_state())`. | `engine/src/app/platform/windowed.rs` |
 | Input/redraw loop | Winit keyboard, mouse, cursor, wheel, and touch events become platform/input events and request redraw on success. `RedrawRequested` runs the engine frame. | `engine/src/runtime/winit_runner.rs` |

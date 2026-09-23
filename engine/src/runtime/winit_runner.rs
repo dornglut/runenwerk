@@ -35,7 +35,7 @@ pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
         registry.configure_event_loop(&mut event_loop_builder);
     });
     let event_loop = event_loop_builder.build()?;
-    event_loop.set_control_flow(state.control_flow);
+    event_loop.set_control_flow(ControlFlow::Wait);
     let mut runner = WinitRunner {
         state,
         window: None,
