@@ -45,10 +45,16 @@ fn capture() -> anyhow::Result<()> {
     native_state.size_px = (size.width, size.height);
     native_state.scale_factor = window.scale_factor();
     native_state.set_headless(false);
-    app.world_mut().resource_mut::<WindowStateRegistryResource>()?
+    app.world_mut()
+        .resource_mut::<WindowStateRegistryResource>()?
         .register_created_window(NativeWindowId::primary(), &native_state);
-    app.world_mut().resource_mut::<RenderSurfaceRegistryResource>()?
-        .confirm_surface_attachment(RenderSurfaceId::primary(), NativeWindowId::primary(), native_state.size_px)?;
+    app.world_mut()
+        .resource_mut::<RenderSurfaceRegistryResource>()?
+        .confirm_surface_attachment(
+            RenderSurfaceId::primary(),
+            NativeWindowId::primary(),
+            native_state.size_px,
+        )?;
     app.world_mut().insert_resource(gfx);
     app.update_render_debug_control(|control| {
         control.provenance_enabled = true;
