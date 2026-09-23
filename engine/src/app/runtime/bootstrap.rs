@@ -37,3 +37,28 @@ impl App {
         self.add_query_snapshot_publication_handler(publish_staged_query_snapshots);
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::runtime::platform::PlatformWindowEventQueueResource;
+
+    #[test]
+    fn bare_apps_do_not_provision_native_window_provider_state() {
+        for app in [App::new(), App::headless()] {
+            assert!(
+                app.world()
+                    .resource::<WindowStateRegistryResource>()
+                    .is_err(),
+                "bare App must not provision native window lifecycle state"
+            );
+            assert!(
+                app.world()
+                    .resource::<PlatformWindowEventQueueResource>()
+                    .is_err(),
+                "bare App must not provision native platform-window event state"
+            );
+        }
+    }
+}
