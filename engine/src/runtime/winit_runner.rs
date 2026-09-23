@@ -650,7 +650,10 @@ impl ApplicationHandler for WinitRunner {
                 return;
             }
         } else if let Err(err) = self.validate_preexisting_primary_render_surface_attachment() {
-            self.exit_with_error(event_loop, anyhow!("preexisting runtime gfx attachment is not trustworthy: {err:#}"));
+            self.exit_with_error(
+                event_loop,
+                anyhow!("preexisting runtime gfx attachment is not trustworthy: {err:#}"),
+            );
             return;
         }
 
@@ -1066,11 +1069,18 @@ mod tests {
     #[test]
     fn primary_window_state_sync_does_not_manufacture_render_attachment() {
         let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
-        runner.state.world.insert_resource(RenderSurfaceRegistryResource::default());
+        runner
+            .state
+            .world
+            .insert_resource(RenderSurfaceRegistryResource::default());
         let mut state = WindowState::windowed("primary");
         state.size_px = (1440, 900);
         runner.sync_primary_window_state_and_surface_extent(&state);
-        let surfaces = runner.state.world.resource::<RenderSurfaceRegistryResource>().unwrap();
+        let surfaces = runner
+            .state
+            .world
+            .resource::<RenderSurfaceRegistryResource>()
+            .unwrap();
         assert_eq!(surfaces.records().count(), 0);
         assert_eq!(surfaces.primary_surface_id(), None);
     }
