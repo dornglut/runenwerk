@@ -872,6 +872,7 @@ fn project_dispatch_for_pass(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::render::backend::RenderSurfaceId;
 
     #[derive(Debug, Clone, runen_ecs::Component, runen_ecs::Resource)]
     struct TestContributionResource {
