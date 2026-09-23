@@ -1066,38 +1066,75 @@ fn validate_prepared_frame_surface_scope(
     world: &mut WorldMut,
     prepared_frame: &PreparedRenderFrame,
 ) -> anyhow::Result<()> {
-    let Ok(registry) = world.resource_mut::<RenderSurfaceRegistryResource>() else {
+    let Some(native_window_id) = prepared_frame.surface.native_window_id else {
+        if world.resource::<Gfx>().is_ok() {
+            anyhow::bail!(
+                "prepared frame {} targets unbound render surface {} while native Gfx execution is active",
+                prepared_frame.context.frame_index,
+                prepared_frame.surface.render_surface_id.raw()
+            );
+        }
         return Ok(());
     };
-    let Some(record) = registry.record(prepared_frame.surface.render_surface_id) else {
-        let message = format!(
-            "prepared frame {} targets unknown render surface {}",
+
+    {
+        let registry = world
+            .resource_mut::<RenderSurfaceRegistryResource>()
+            .map_err(|_| anyhow!("native-bound prepared frame requires render surface registry"))?;
+        let Some(record) = registry.record(prepared_frame.surface.render_surface_id) else {
+            let message = format!(
+                "prepared frame {} targets unknown render surface {}",
+                prepared_frame.context.frame_index,
+                prepared_frame.surface.render_surface_id.raw()
+            );
+            registry.record_diagnostic(RenderSurfaceDiagnostic {
+                render_surface_id: Some(prepared_frame.surface.render_surface_id),
+                native_window_id: Some(native_window_id),
+                message: message.clone(),
+            });
+            anyhow::bail!(message);
+        };
+        if record.lifecycle_state != RenderSurfaceLifecycleState::Registered {
+            let message = format!(
+                "prepared frame {} targets render surface {} that is not attached for presentation ({:?})",
+                prepared_frame.context.frame_index,
+                prepared_frame.surface.render_surface_id.raw(),
+                record.lifecycle_state
+            );
+            registry.record_diagnostic(RenderSurfaceDiagnostic {
+                render_surface_id: Some(prepared_frame.surface.render_surface_id),
+                native_window_id: Some(native_window_id),
+                message: message.clone(),
+            });
+            anyhow::bail!(message);
+        }
+        if record.native_window_id != native_window_id {
+            let message = format!(
+                "prepared frame {} targets render surface {} for native window {:?}, but the registry owns native window {:?}",
+                prepared_frame.context.frame_index,
+                prepared_frame.surface.render_surface_id.raw(),
+                native_window_id,
+                record.native_window_id
+            );
+            registry.record_diagnostic(RenderSurfaceDiagnostic {
+                render_surface_id: Some(prepared_frame.surface.render_surface_id),
+                native_window_id: Some(native_window_id),
+                message: message.clone(),
+            });
+            anyhow::bail!(message);
+        }
+    }
+
+    if let Ok(gfx) = world.resource::<Gfx>()
+        && !gfx.has_surface(prepared_frame.surface.render_surface_id)
+    {
+        anyhow::bail!(
+            "prepared frame {} targets render surface {} without an attached Gfx surface",
             prepared_frame.context.frame_index,
             prepared_frame.surface.render_surface_id.raw()
         );
-        registry.record_diagnostic(RenderSurfaceDiagnostic {
-            render_surface_id: Some(prepared_frame.surface.render_surface_id),
-            native_window_id: prepared_frame.surface.native_window_id,
-            message: message.clone(),
-        });
-        anyhow::bail!(message);
-    };
-    let registered_native_window_id = record.native_window_id;
-    if prepared_frame.surface.native_window_id != Some(registered_native_window_id) {
-        let message = format!(
-            "prepared frame {} targets render surface {} for native window {:?}, but the registry owns native window {:?}",
-            prepared_frame.context.frame_index,
-            prepared_frame.surface.render_surface_id.raw(),
-            prepared_frame.surface.native_window_id,
-            registered_native_window_id
-        );
-        registry.record_diagnostic(RenderSurfaceDiagnostic {
-            render_surface_id: Some(prepared_frame.surface.render_surface_id),
-            native_window_id: prepared_frame.surface.native_window_id,
-            message: message.clone(),
-        });
-        anyhow::bail!(message);
     }
+
     Ok(())
 }
 
