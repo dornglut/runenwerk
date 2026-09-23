@@ -1141,6 +1141,7 @@ fn validate_prepared_frame_gfx_attachment(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::render::backend::RenderSurfaceId;
     use crate::plugins::render::inspect::{RenderCaptureSelector, RenderPixelProbeRequest};
 
     #[test]
