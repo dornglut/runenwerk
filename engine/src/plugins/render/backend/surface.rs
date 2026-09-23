@@ -368,6 +368,43 @@ mod tests {
     }
 
     #[test]
+    fn retiring_secondary_surface_preserves_attached_primary() {
+        let mut registry = RenderSurfaceRegistryResource::default();
+        let primary =
+            registry.reserve_surface_for_native_window(NativeWindowId::primary(), (1280, 720));
+        registry
+            .confirm_surface_attachment(primary, NativeWindowId::primary(), (1280, 720))
+            .expect("primary surface should attach");
+
+        let secondary_window = NativeWindowId::try_from_raw(2).expect("secondary window id");
+        let secondary =
+            registry.reserve_surface_for_native_window(secondary_window, (900, 600));
+        registry
+            .confirm_surface_attachment(secondary, secondary_window, (900, 600))
+            .expect("secondary surface should attach");
+
+        assert_eq!(
+            registry.retire_surface_for_native_window(secondary_window),
+            Some(secondary)
+        );
+        assert_eq!(
+            registry.surface_for_native_window(NativeWindowId::primary()),
+            Some(primary)
+        );
+        assert_eq!(registry.primary_surface_id(), Some(primary));
+        assert_eq!(
+            registry.record(primary).map(|record| record.lifecycle_state),
+            Some(RenderSurfaceLifecycleState::Attached)
+        );
+        assert_eq!(
+            registry
+                .record(secondary)
+                .map(|record| record.lifecycle_state),
+            Some(RenderSurfaceLifecycleState::Retired)
+        );
+    }
+
+    #[test]
     fn retiring_surface_removes_window_lookup_and_preserves_auditable_record() {
         let mut registry = RenderSurfaceRegistryResource::default();
         let window = NativeWindowId::try_from_raw(2).unwrap();
