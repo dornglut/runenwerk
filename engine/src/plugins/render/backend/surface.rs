@@ -97,9 +97,6 @@ impl RenderSurfaceRegistryResource {
         );
         self.surfaces_by_native_window
             .insert(native_window_id, render_surface_id);
-        if native_window_id == NativeWindowId::primary() {
-            self.primary_surface_id = Some(render_surface_id);
-        }
         render_surface_id
     }
 
@@ -115,6 +112,9 @@ impl RenderSurfaceRegistryResource {
         let record = self.records.get_mut(&render_surface_id)?;
         record.target_size_px = (target_size_px.0.max(1), target_size_px.1.max(1));
         record.lifecycle_state = RenderSurfaceLifecycleState::Registered;
+        if native_window_id == NativeWindowId::primary() {
+            self.primary_surface_id = Some(render_surface_id);
+        }
         Some(render_surface_id)
     }
 
@@ -232,6 +232,7 @@ mod tests {
             registry.reserve_surface_for_native_window(NativeWindowId::primary(), (1280, 720));
 
         assert_eq!(surface_id, RenderSurfaceId::primary());
+        assert_eq!(registry.primary_surface_id(), None);
         assert_eq!(
             registry
                 .record(surface_id)
