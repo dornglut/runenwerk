@@ -83,7 +83,8 @@ fn render_multi_surface_registry_reserves_primary_surface_for_primary_native_win
     let secondary_window = native_window(3);
 
     let secondary = registry.reserve_surface_for_native_window(secondary_window, (900, 600));
-    let primary = registry.reserve_surface_for_native_window(NativeWindowId::primary(), (1280, 720));
+    let primary =
+        registry.reserve_surface_for_native_window(NativeWindowId::primary(), (1280, 720));
 
     assert_ne!(secondary, RenderSurfaceId::primary());
     assert_eq!(primary, RenderSurfaceId::primary());
