@@ -19,7 +19,6 @@ use engine_sim::*;
 use runen_ecs::{Resource, Runtime, RuntimeError, ScheduleLabel, World};
 use std::error::Error;
 use std::fmt;
-use winit::event_loop::ControlFlow;
 
 const DEFAULT_WINDOW_TITLE: &str = "Runenwerk - Engine";
 
@@ -30,7 +29,6 @@ pub struct App {
     pub(crate) lifecycle: AppLifecycle,
     pub(crate) mode: AppMode,
     pub(crate) title: String,
-    pub(crate) control_flow: ControlFlow,
     composition_errors: Vec<AppCompositionError>,
 }
 
@@ -58,7 +56,6 @@ impl App {
             lifecycle: AppLifecycle::default(),
             mode,
             title: title.clone(),
-            control_flow: ControlFlow::Wait,
             composition_errors: Vec::new(),
         };
         app.install_builtin_resources();
@@ -346,11 +343,6 @@ impl App {
             .unwrap_or(0)
     }
 
-    pub fn with_control_flow(&mut self, control_flow: ControlFlow) -> &mut Self {
-        self.control_flow = control_flow;
-        self
-    }
-
     pub fn with_frame_pacing(&mut self, policy: FramePacingPolicyResource) -> &mut Self {
         self.world.insert_resource(policy);
         if let Ok(runtime_state) = self.world.resource_mut::<FramePacingRuntimeStateResource>() {
@@ -381,7 +373,6 @@ impl App {
             scheduler: self.scheduler,
             startup_ran: self.lifecycle,
             title: self.title,
-            control_flow: self.control_flow,
         }
     }
 
