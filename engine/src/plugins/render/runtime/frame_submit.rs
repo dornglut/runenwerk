@@ -1084,10 +1084,15 @@ fn validate_prepared_surface_binding(
     frame_index: u64,
 ) -> anyhow::Result<()> {
     let Some(native_window_id) = surface.native_window_id else {
-        anyhow::bail!("unbound prepared frame {frame_index} is not eligible for native surface submission");
+        anyhow::bail!(
+            "unbound prepared frame {frame_index} is not eligible for native surface submission"
+        );
     };
     let Some(record) = registry.record(surface.render_surface_id) else {
-        let message = format!("prepared frame {frame_index} targets unknown render surface {}", surface.render_surface_id.raw());
+        let message = format!(
+            "prepared frame {frame_index} targets unknown render surface {}",
+            surface.render_surface_id.raw()
+        );
         registry.record_diagnostic(RenderSurfaceDiagnostic {
             render_surface_id: Some(surface.render_surface_id),
             native_window_id: Some(native_window_id),
@@ -1097,7 +1102,11 @@ fn validate_prepared_surface_binding(
     };
     if record.lifecycle_state != RenderSurfaceLifecycleState::Attached {
         let state = record.lifecycle_state;
-        let message = format!("prepared frame {frame_index} targets render surface {} in {:?} state; native submission requires Attached", surface.render_surface_id.raw(), state);
+        let message = format!(
+            "prepared frame {frame_index} targets render surface {} in {:?} state; native submission requires Attached",
+            surface.render_surface_id.raw(),
+            state
+        );
         registry.record_diagnostic(RenderSurfaceDiagnostic {
             render_surface_id: Some(surface.render_surface_id),
             native_window_id: Some(native_window_id),
@@ -1107,7 +1116,12 @@ fn validate_prepared_surface_binding(
     }
     if record.native_window_id != native_window_id {
         let registered = record.native_window_id;
-        let message = format!("prepared frame {frame_index} targets render surface {} for native window {}, but the attached registry owns native window {}", surface.render_surface_id.raw(), native_window_id.raw(), registered.raw());
+        let message = format!(
+            "prepared frame {frame_index} targets render surface {} for native window {}, but the attached registry owns native window {}",
+            surface.render_surface_id.raw(),
+            native_window_id.raw(),
+            registered.raw()
+        );
         registry.record_diagnostic(RenderSurfaceDiagnostic {
             render_surface_id: Some(surface.render_surface_id),
             native_window_id: Some(native_window_id),
@@ -1127,7 +1141,11 @@ fn validate_prepared_frame_gfx_attachment(
     if gfx.has_surface(surface) {
         return Ok(());
     }
-    let message = format!("prepared frame {} targets attached render surface {}, but runtime Gfx has no matching surface", prepared_frame.context.frame_index, surface.raw());
+    let message = format!(
+        "prepared frame {} targets attached render surface {}, but runtime Gfx has no matching surface",
+        prepared_frame.context.frame_index,
+        surface.raw()
+    );
     if let Ok(registry) = world.resource_mut::<RenderSurfaceRegistryResource>() {
         registry.record_diagnostic(RenderSurfaceDiagnostic {
             render_surface_id: Some(surface),
@@ -1151,7 +1169,9 @@ mod tests {
         let surface = registry.reserve_surface_for_native_window(native, (800, 600));
         let bound = PreparedSurfaceInfo::for_surface(surface, native, (800, 600));
         assert!(validate_prepared_surface_binding(&mut registry, &bound, 7).is_err());
-        registry.confirm_surface_attachment(surface, native, (800, 600)).unwrap();
+        registry
+            .confirm_surface_attachment(surface, native, (800, 600))
+            .unwrap();
         assert!(validate_prepared_surface_binding(&mut registry, &bound, 7).is_ok());
         registry.retire_surface_for_native_window(native);
         assert!(validate_prepared_surface_binding(&mut registry, &bound, 7).is_err());
@@ -1161,11 +1181,18 @@ mod tests {
     fn native_surface_binding_rejects_unknown_and_mismatched_identity() {
         let mut registry = RenderSurfaceRegistryResource::default();
         let primary = crate::runtime::NativeWindowId::primary();
-        registry.confirm_surface_attachment(RenderSurfaceId::primary(), primary, (800, 600)).unwrap();
+        registry
+            .confirm_surface_attachment(RenderSurfaceId::primary(), primary, (800, 600))
+            .unwrap();
         let secondary = crate::runtime::NativeWindowId::try_from_raw(2).unwrap();
-        let mismatch = PreparedSurfaceInfo::for_surface(RenderSurfaceId::primary(), secondary, (800, 600));
+        let mismatch =
+            PreparedSurfaceInfo::for_surface(RenderSurfaceId::primary(), secondary, (800, 600));
         assert!(validate_prepared_surface_binding(&mut registry, &mismatch, 8).is_err());
-        let unknown = PreparedSurfaceInfo::for_surface(RenderSurfaceId::try_from_raw(99).unwrap(), secondary, (800, 600));
+        let unknown = PreparedSurfaceInfo::for_surface(
+            RenderSurfaceId::try_from_raw(99).unwrap(),
+            secondary,
+            (800, 600),
+        );
         assert!(validate_prepared_surface_binding(&mut registry, &unknown, 9).is_err());
     }
 
