@@ -10,12 +10,12 @@ use editor_persistence::{
 };
 use editor_viewport::ViewportPresentationState;
 use engine::App;
+use engine::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryResource};
 use engine::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, RenderCaptureSelector, RenderCaptureTerminalCode,
     RenderCapturedTextureState, RenderDebugFrameReportState, RenderPassProvenanceRecord,
     RenderPassProvenanceState, RenderPixelCoordinate, deterministic_capture_filename,
 };
-use engine::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryResource};
 use engine::plugins::render::{
     Gfx, MaterialPreviewFixture, MaterialShaderCompileRequest, compile_material_shader,
 };
