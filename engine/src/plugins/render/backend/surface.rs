@@ -18,6 +18,7 @@ impl RenderSurfaceId {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RenderSurfaceLifecycleState {
+    PendingAttachment,
     Registered,
     MissingNativeWindow,
     Retired,
@@ -41,7 +42,7 @@ impl RenderSurfaceRecord {
             render_surface_id,
             native_window_id,
             target_size_px: (target_size_px.0.max(1), target_size_px.1.max(1)),
-            lifecycle_state: RenderSurfaceLifecycleState::Registered,
+            lifecycle_state: RenderSurfaceLifecycleState::PendingAttachment,
         }
     }
 }
@@ -63,7 +64,7 @@ pub struct RenderSurfaceRegistryResource {
 }
 
 impl RenderSurfaceRegistryResource {
-    pub fn ensure_surface_for_native_window(
+    pub fn reserve_surface_for_native_window(
         &mut self,
         native_window_id: NativeWindowId,
         target_size_px: (u32, u32),
@@ -75,7 +76,9 @@ impl RenderSurfaceRegistryResource {
         {
             if let Some(record) = self.records.get_mut(&surface_id) {
                 record.target_size_px = (target_size_px.0.max(1), target_size_px.1.max(1));
-                record.lifecycle_state = RenderSurfaceLifecycleState::Registered;
+                if record.lifecycle_state != RenderSurfaceLifecycleState::Registered {
+                    record.lifecycle_state = RenderSurfaceLifecycleState::PendingAttachment;
+                }
             }
             return surface_id;
         }
@@ -98,6 +101,21 @@ impl RenderSurfaceRegistryResource {
             self.primary_surface_id = Some(render_surface_id);
         }
         render_surface_id
+    }
+
+    pub fn confirm_surface_attachment(
+        &mut self,
+        native_window_id: NativeWindowId,
+        target_size_px: (u32, u32),
+    ) -> Option<RenderSurfaceId> {
+        let render_surface_id = self
+            .surfaces_by_native_window
+            .get(&native_window_id)
+            .copied()?;
+        let record = self.records.get_mut(&render_surface_id)?;
+        record.target_size_px = (target_size_px.0.max(1), target_size_px.1.max(1));
+        record.lifecycle_state = RenderSurfaceLifecycleState::Registered;
+        Some(render_surface_id)
     }
 
     pub fn primary_surface_id(&self) -> Option<RenderSurfaceId> {
@@ -211,9 +229,17 @@ mod tests {
         let mut registry = RenderSurfaceRegistryResource::default();
 
         let surface_id =
-            registry.ensure_surface_for_native_window(NativeWindowId::primary(), (1280, 720));
+            registry.reserve_surface_for_native_window(NativeWindowId::primary(), (1280, 720));
 
         assert_eq!(surface_id, RenderSurfaceId::primary());
+        assert_eq!(
+            registry.record(surface_id).map(|record| record.lifecycle_state),
+            Some(RenderSurfaceLifecycleState::PendingAttachment)
+        );
+        assert_eq!(
+            registry.confirm_surface_attachment(NativeWindowId::primary(), (1280, 720)),
+            Some(surface_id)
+        );
         assert_eq!(
             registry.primary_surface_id(),
             Some(RenderSurfaceId::primary())
@@ -230,11 +256,18 @@ mod tests {
     fn render_surface_registry_allocates_distinct_surfaces_per_native_window() {
         let mut registry = RenderSurfaceRegistryResource::default();
         let primary =
-            registry.ensure_surface_for_native_window(NativeWindowId::primary(), (1280, 720));
+            registry.reserve_surface_for_native_window(NativeWindowId::primary(), (1280, 720));
         let secondary_window =
             NativeWindowId::try_from_raw(2).expect("test native window id should be non-zero");
 
-        let secondary = registry.ensure_surface_for_native_window(secondary_window, (640, 480));
+        let secondary = registry.reserve_surface_for_native_window(secondary_window, (640, 480));
+        assert_eq!(
+            registry.record(secondary).map(|record| record.lifecycle_state),
+            Some(RenderSurfaceLifecycleState::PendingAttachment)
+        );
+        registry
+            .confirm_surface_attachment(secondary_window, (640, 480))
+            .expect("secondary reservation should confirm");
 
         assert_ne!(primary, secondary);
         assert_eq!(
@@ -255,7 +288,7 @@ mod tests {
         let secondary_window =
             NativeWindowId::try_from_raw(2).expect("test native window id should be non-zero");
 
-        let secondary = registry.ensure_surface_for_native_window(secondary_window, (640, 480));
+        let secondary = registry.reserve_surface_for_native_window(secondary_window, (640, 480));
 
         assert_ne!(secondary, RenderSurfaceId::primary());
         assert_eq!(registry.primary_surface_id(), None);
@@ -265,7 +298,10 @@ mod tests {
         );
 
         let primary =
-            registry.ensure_surface_for_native_window(NativeWindowId::primary(), (1280, 720));
+            registry.reserve_surface_for_native_window(NativeWindowId::primary(), (1280, 720));
+        registry
+            .confirm_surface_attachment(NativeWindowId::primary(), (1280, 720))
+            .expect("primary reservation should confirm");
 
         assert_eq!(primary, RenderSurfaceId::primary());
         assert_eq!(
@@ -288,7 +324,10 @@ mod tests {
     fn retiring_surface_removes_window_lookup_and_preserves_auditable_record() {
         let mut registry = RenderSurfaceRegistryResource::default();
         let secondary_window = NativeWindowId::try_from_raw(2).expect("secondary window id");
-        let surface = registry.ensure_surface_for_native_window(secondary_window, (640, 480));
+        let surface = registry.reserve_surface_for_native_window(secondary_window, (640, 480));
+        registry
+            .confirm_surface_attachment(secondary_window, (640, 480))
+            .expect("secondary reservation should confirm");
 
         assert_eq!(
             registry.retire_surface_for_native_window(secondary_window),
