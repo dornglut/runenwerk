@@ -45,11 +45,11 @@ use super::surface_input::{
 };
 use runen_gpu::{
     GpuCapabilityProfile, GpuContext, GpuContextDescriptor, GpuContextRequestErrorCategory,
-    GpuCopyExtent, GpuCopyOperation, GpuFormatRole, GpuReadbackId, GpuReadbackOperation,
-    GpuReadbackStatus, GpuReconstruction, GpuResourceLifetime, GpuSubmission, GpuSubmissionStatus,
-    GpuTextureCopyRegion, GpuTextureDescriptor, GpuTextureFormat, GpuTextureInitialization,
-    GpuTextureOrigin, GpuTextureUsage, GpuTransferRegion, GpuWorkFragment,
-    GpuWorkResourceIdAllocator,
+    GpuCopyExtent, GpuCopyOperation, GpuFormatRole, GpuLimitKind, GpuReadbackId,
+    GpuReadbackOperation, GpuReadbackStatus, GpuReconstruction, GpuResourceLifetime, GpuSubmission,
+    GpuSubmissionStatus, GpuTextureCopyRegion, GpuTextureDescriptor, GpuTextureFormat,
+    GpuTextureInitialization, GpuTextureOrigin, GpuTextureUsage, GpuTransferRegion,
+    GpuWorkFragment, GpuWorkResourceIdAllocator,
 };
 use std::time::{Duration, Instant};
 
@@ -58,6 +58,35 @@ pub(super) struct MaintainedExecutionFixture {
     pub(super) request: RenderRequest,
     pub(super) semantic_inputs: Vec<RenderSurfaceSemanticInputBinding>,
     pub(super) availability: Vec<RenderRepresentationAvailabilityFact>,
+}
+
+fn object_identity_lattice_request(width: u32, height: u32) -> RenderRequest {
+    let shutter = instant();
+    let observation = RenderObservationSpec::Perspective(
+        RenderPerspectiveObservation::new(
+            RenderAffineTransform3::identity(),
+            std::f64::consts::FRAC_PI_3,
+            1.0,
+            shutter,
+            RenderSamplingSupport::ideal_ray(),
+        )
+        .expect("R7 maintained perspective observation"),
+    );
+    RenderRequest::new(
+        shutter,
+        vec![observation],
+        vec![RenderRequestedOutput::new(
+            0,
+            RenderOutputSpec::new(
+                RenderOutputValue::ObjectIdentity,
+                RenderResultTopology::sample_lattice_2d(width, height)
+                    .expect("R7 maintained object-identity lattice topology"),
+                RenderSemanticTolerance::exact(),
+            )
+            .expect("R7 maintained object-identity output"),
+        )],
+    )
+    .expect("R7 maintained proof request")
 }
 
 fn instant() -> RenderTimeInterval {
@@ -127,32 +156,7 @@ pub(super) fn maintained_fixture() -> MaintainedExecutionFixture {
         .commit(attach)
         .expect("attach R7 maintained proof participation");
 
-    let shutter = instant();
-    let observation = RenderObservationSpec::Perspective(
-        RenderPerspectiveObservation::new(
-            RenderAffineTransform3::identity(),
-            std::f64::consts::FRAC_PI_3,
-            1.0,
-            shutter,
-            RenderSamplingSupport::ideal_ray(),
-        )
-        .expect("R7 maintained perspective observation"),
-    );
-    let request = RenderRequest::new(
-        shutter,
-        vec![observation],
-        vec![RenderRequestedOutput::new(
-            0,
-            RenderOutputSpec::new(
-                RenderOutputValue::ObjectIdentity,
-                RenderResultTopology::sample_lattice_2d(2, 2)
-                    .expect("R7 maintained 2x2 lattice topology"),
-                RenderSemanticTolerance::exact(),
-            )
-            .expect("R7 maintained object-identity output"),
-        )],
-    )
-    .expect("R7 maintained proof request");
+    let request = object_identity_lattice_request(2, 2);
     let semantic_input = RenderSurfaceSemanticInput::sphere(
         [0.0, 0.0, 0.0],
         2.0,
@@ -253,11 +257,21 @@ fn radiance_lattice_request() -> RenderRequest {
 }
 
 fn request_execution_context() -> Option<GpuContext> {
-    let descriptor =
+    request_execution_context_with_dispatch_limit(None)
+}
+
+fn request_execution_context_with_dispatch_limit(
+    max_workgroups_per_dimension: Option<u64>,
+) -> Option<GpuContext> {
+    let mut descriptor =
         GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements())
             .require_format_role(GpuTextureFormat::R32Uint, GpuFormatRole::CopyDestination)
             .require_format_role(GpuTextureFormat::R32Uint, GpuFormatRole::CopySource)
             .with_label("RunenRender R7 maintained execution proof");
+    if let Some(maximum) = max_workgroups_per_dimension {
+        descriptor =
+            descriptor.permit_limit(GpuLimitKind::MaxComputeWorkgroupsPerDimension, maximum);
+    }
     match pollster::block_on(GpuContext::request(descriptor)) {
         Ok(context) => Some(context),
         Err(error) if error.category() == GpuContextRequestErrorCategory::NoAdapterAvailable => {
@@ -277,6 +291,16 @@ fn admit_with_writable_only_destination(
     context: &GpuContext,
     label: &str,
 ) -> AdmittedDeterministicRender {
+    admit_with_writable_only_lattice(fixture, context, label, 2, 2)
+}
+
+fn admit_with_writable_only_lattice(
+    fixture: &MaintainedExecutionFixture,
+    context: &GpuContext,
+    label: &str,
+    width: u32,
+    height: u32,
+) -> AdmittedDeterministicRender {
     let mut allocator = GpuWorkResourceIdAllocator::new();
     let destination = allocator
         .allocate_texture_handle(
@@ -284,8 +308,8 @@ fn admit_with_writable_only_destination(
                 label,
                 GpuResourceLifetime::Transient,
                 GpuReconstruction::SourceBacked,
-                2,
-                2,
+                width,
+                height,
                 GpuTextureFormat::R32Uint,
                 [GpuTextureUsage::CopyDestination],
                 GpuTextureInitialization::Uninitialized,
@@ -875,6 +899,69 @@ fn radiance_capture_rejects_correlation_affinity_and_replaced_writer_evidence() 
         ),
         Err(super::deterministic_execution::RenderDeterministicRadianceCaptureError::RendererWriteNoLongerCurrent)
     );
+}
+
+#[test]
+fn admitted_dispatch_budget_tiles_large_lattice_through_verified_execution() {
+    let Some(context) = request_execution_context_with_dispatch_limit(Some(8)) else {
+        return;
+    };
+    assert_eq!(
+        context
+            .device_facts()
+            .workload_budget()
+            .limits()
+            .max_compute_workgroups_per_dimension(),
+        8,
+        "the proof must execute under the explicitly admitted dispatch budget"
+    );
+
+    let mut fixture = maintained_fixture();
+    fixture.request = object_identity_lattice_request(27, 19);
+    let admitted = admit_deterministic_render(
+        &fixture.scene,
+        &fixture.request,
+        &fixture.semantic_inputs,
+        &fixture.availability,
+        &lattice_bindings(27, 19, fixture.request.outputs().len()),
+        &context,
+    )
+    .expect("27x19 maintained lattice must be admitted under the capped context");
+    let mut submitted = pollster::block_on(submit_deterministic_render_for_verified_result(
+        admitted, &context,
+    ))
+    .expect("the tiled dispatch must be accepted by the real RunenGPU submission boundary");
+    assert!(matches!(
+        submitted.submission().status(),
+        GpuSubmissionStatus::Accepted | GpuSubmissionStatus::Completed
+    ));
+
+    let deadline = Instant::now() + Duration::from_secs(15);
+    let result = loop {
+        context.progress();
+        match submitted.try_form_verified_result() {
+            Ok(Some(result)) => break result,
+            Ok(None) => {}
+            Err(error) => panic!("capped tiled verified execution failed: {error}"),
+        }
+        assert!(
+            Instant::now() < deadline,
+            "capped tiled verified execution did not complete before timeout"
+        );
+        std::thread::yield_now();
+    };
+
+    assert_eq!(
+        result.request().outputs()[0]
+            .spec()
+            .topology()
+            .sample_lattice_dimensions(),
+        Some((27, 19))
+    );
+    assert!(matches!(
+        submitted.submission().status(),
+        GpuSubmissionStatus::Completed
+    ));
 }
 
 #[test]

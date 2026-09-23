@@ -1162,14 +1162,18 @@ fn lower_output(
             GpuRuntimeBindingValue::whole_buffer(0, 3, &status),
         ])
         .map_err(|error| gpu_authoring("compute runtime bindings", error))?;
+    let dispatch_size = deterministic_dispatch_size(
+        packed.sample_count,
+        context
+            .device_facts()
+            .workload_budget()
+            .limits()
+            .max_compute_workgroups_per_dimension(),
+    )?;
     let compute = GpuComputeOperation::new(
         pipeline,
         runtime_bindings,
-        GpuDispatchIntent::direct(GpuDispatchSize::new(
-            packed.sample_count.div_ceil(WORKGROUP_SIZE),
-            1,
-            1,
-        )),
+        GpuDispatchIntent::direct(dispatch_size),
     )
     .map_err(|error| gpu_authoring("compute operation", error))?;
 
@@ -1724,6 +1728,60 @@ fn align_up(value: u64, alignment: u64) -> Result<u64, RenderDeterministicLoweri
     }
 }
 
+fn deterministic_dispatch_size(
+    sample_count: u32,
+    max_workgroups_per_dimension: u32,
+) -> Result<GpuDispatchSize, RenderDeterministicLoweringError> {
+    let sample_count = u64::from(sample_count);
+    let workgroup_size = u64::from(WORKGROUP_SIZE);
+    let admitted_max = u64::from(max_workgroups_per_dimension);
+    let required_groups = sample_count.div_ceil(workgroup_size);
+
+    if admitted_max == 0 {
+        return Err(gpu_authoring(
+            "deterministic dispatch planning",
+            format!(
+                "sample count {sample_count} with workgroup size {WORKGROUP_SIZE} requires {required_groups} total workgroups, but admitted maximum per dimension is 0; 2D dispatch capacity is 0 workgroups",
+            ),
+        ));
+    }
+
+    let capacity = admitted_max.checked_mul(admitted_max).ok_or_else(|| {
+        gpu_authoring(
+            "deterministic dispatch planning",
+            format!(
+                "sample count {sample_count} with workgroup size {WORKGROUP_SIZE} requires {required_groups} total workgroups, but admitted maximum per dimension is {max_workgroups_per_dimension}; 2D dispatch capacity overflows u64",
+            ),
+        )
+    })?;
+    if required_groups == 0 || required_groups > capacity {
+        return Err(gpu_authoring(
+            "deterministic dispatch planning",
+            format!(
+                "sample count {sample_count} with workgroup size {WORKGROUP_SIZE} requires {required_groups} total workgroups, but admitted maximum per dimension is {max_workgroups_per_dimension}; 2D dispatch capacity is {capacity} workgroups",
+            ),
+        ));
+    }
+
+    let groups_x = required_groups.min(admitted_max);
+    let groups_y = required_groups.div_ceil(groups_x);
+    let dimensions = [groups_x, groups_y, 1];
+    if dimensions.iter().any(|dimension| *dimension > admitted_max) {
+        return Err(gpu_authoring(
+            "deterministic dispatch planning",
+            format!(
+                "sample count {sample_count} with workgroup size {WORKGROUP_SIZE} requires {required_groups} total workgroups, but admitted maximum per dimension is {max_workgroups_per_dimension}; planned 2D dispatch capacity is {capacity} workgroups but dimensions exceeded the admitted limit",
+            ),
+        ));
+    }
+
+    Ok(GpuDispatchSize::new(
+        u32::try_from(groups_x).expect("admitted dispatch x dimension must fit u32"),
+        u32::try_from(groups_y).expect("admitted dispatch y dimension must fit u32"),
+        1,
+    ))
+}
+
 fn gpu_authoring(
     stage: &'static str,
     error: impl fmt::Display,
@@ -1737,6 +1795,15 @@ fn gpu_authoring(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn assert_dispatch(sample_count: u32, maximum: u32, expected: [u32; 3]) {
+        assert_eq!(
+            deterministic_dispatch_size(sample_count, maximum)
+                .expect("dispatch should fit the admitted 2D capacity")
+                .as_array(),
+            expected
+        );
+    }
 
     fn cache_descriptor(byte_len: u64) -> GpuBufferDescriptor {
         GpuBufferDescriptor::ordinary_owned(
@@ -1866,5 +1933,29 @@ mod tests {
             align_up(12, 0),
             Err(RenderDeterministicLoweringError::InvalidBytesPerRowAlignment { alignment: 0 })
         );
+    }
+
+    #[test]
+    fn deterministic_dispatch_tiles_samples_within_the_admitted_dimension_limit() {
+        assert_dispatch(512, 8, [8, 1, 1]);
+        assert_dispatch(513, 8, [8, 2, 1]);
+        assert_dispatch(4096, 8, [8, 8, 1]);
+        assert_dispatch(65_535 * 64, 65_535, [65_535, 1, 1]);
+        assert_dispatch(65_535 * 64 + 1, 65_535, [65_535, 2, 1]);
+    }
+
+    #[test]
+    fn deterministic_dispatch_rejects_work_beyond_two_dimensional_capacity() {
+        let error = deterministic_dispatch_size(4097, 8).expect_err("dispatch must reject");
+        assert!(matches!(
+            error,
+            RenderDeterministicLoweringError::RunenGpuAuthoring { stage, detail }
+                if stage == "deterministic dispatch planning"
+                    && detail.contains("sample count 4097")
+                    && detail.contains("workgroup size 64")
+                    && detail.contains("admitted maximum per dimension is 8")
+                    && detail.contains("requires 65 total workgroups")
+                    && detail.contains("2D dispatch capacity is 64 workgroups")
+        ));
     }
 }
