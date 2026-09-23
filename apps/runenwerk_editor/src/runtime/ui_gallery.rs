@@ -37,12 +37,18 @@ const fn ui_frame_producer_id(raw: u64) -> RenderFrameProducerId {
 }
 
 pub struct UiGalleryPlugin;
+pub struct UiGalleryNativeWindowIntegrationPlugin;
 
 impl Plugin for UiGalleryPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<UiGalleryResource>();
-        app.add_systems(Update, approve_primary_window_close_intent_system);
         app.add_systems(Update, submit_ui_gallery_frame_system);
+    }
+}
+
+impl Plugin for UiGalleryNativeWindowIntegrationPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Update, approve_primary_window_close_intent_system);
     }
 }
 
