@@ -377,8 +377,7 @@ mod tests {
             .expect("primary surface should attach");
 
         let secondary_window = NativeWindowId::try_from_raw(2).expect("secondary window id");
-        let secondary =
-            registry.reserve_surface_for_native_window(secondary_window, (900, 600));
+        let secondary = registry.reserve_surface_for_native_window(secondary_window, (900, 600));
         registry
             .confirm_surface_attachment(secondary, secondary_window, (900, 600))
             .expect("secondary surface should attach");
@@ -393,7 +392,9 @@ mod tests {
         );
         assert_eq!(registry.primary_surface_id(), Some(primary));
         assert_eq!(
-            registry.record(primary).map(|record| record.lifecycle_state),
+            registry
+                .record(primary)
+                .map(|record| record.lifecycle_state),
             Some(RenderSurfaceLifecycleState::Attached)
         );
         assert_eq!(
