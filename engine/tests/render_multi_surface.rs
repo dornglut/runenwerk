@@ -38,9 +38,9 @@ fn frame(surface: PreparedSurfaceInfo) -> PreparedRenderFrame {
 #[test]
 fn render_multi_surface_registry_scopes_surfaces_to_native_windows() {
     let mut registry = RenderSurfaceRegistryResource::default();
-    let primary = registry.ensure_surface_for_native_window(NativeWindowId::primary(), (1280, 720));
+    let primary = registry.reserve_surface_for_native_window(NativeWindowId::primary(), (1280, 720));
     let secondary_window = native_window(2);
-    let secondary = registry.ensure_surface_for_native_window(secondary_window, (900, 600));
+    let secondary = registry.reserve_surface_for_native_window(secondary_window, (900, 600));
 
     assert_eq!(primary, RenderSurfaceId::primary());
     assert_ne!(primary, secondary);
@@ -60,7 +60,7 @@ fn render_multi_surface_registry_scopes_surfaces_to_native_windows() {
 fn render_multi_surface_prepared_frame_inspection_reports_surface_identity() {
     let mut registry = RenderSurfaceRegistryResource::default();
     let secondary_window = native_window(2);
-    let secondary = registry.ensure_surface_for_native_window(secondary_window, (900, 600));
+    let secondary = registry.reserve_surface_for_native_window(secondary_window, (900, 600));
     assert_ne!(secondary, RenderSurfaceId::primary());
     assert_eq!(registry.primary_surface_id(), None);
     let prepared = frame(PreparedSurfaceInfo::for_surface(
@@ -81,8 +81,8 @@ fn render_multi_surface_registry_reserves_primary_surface_for_primary_native_win
     let mut registry = RenderSurfaceRegistryResource::default();
     let secondary_window = native_window(3);
 
-    let secondary = registry.ensure_surface_for_native_window(secondary_window, (900, 600));
-    let primary = registry.ensure_surface_for_native_window(NativeWindowId::primary(), (1280, 720));
+    let secondary = registry.reserve_surface_for_native_window(secondary_window, (900, 600));
+    let primary = registry.reserve_surface_for_native_window(NativeWindowId::primary(), (1280, 720));
 
     assert_ne!(secondary, RenderSurfaceId::primary());
     assert_eq!(primary, RenderSurfaceId::primary());
@@ -98,7 +98,7 @@ fn render_multi_surface_registry_reserves_primary_surface_for_primary_native_win
 
 #[test]
 fn render_multi_surface_prepared_frame_set_is_surface_keyed_and_deterministic() {
-    let primary = frame(PreparedSurfaceInfo::primary((1280, 720)));
+    let primary = frame(PreparedSurfaceInfo::unbound_primary((1280, 720)));
     let secondary_window = native_window(2);
     let secondary_surface = RenderSurfaceId::try_from_raw(2).expect("secondary surface id");
     let secondary = frame(PreparedSurfaceInfo::for_surface(
