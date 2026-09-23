@@ -5,13 +5,13 @@ use editor_shell::{
     RegionCompassAccessibility, RegionCompassViewModel, projected_host_tab_stacks,
     tab_stack_container_widget_id,
 };
-use engine::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryResource};
 use engine::plugins::render::Gfx;
-use engine::runtime::{NativeWindowId, WindowState, WindowStateRegistryResource};
+use engine::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryResource};
 use engine::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, RenderCaptureSelector, RenderCaptureTerminalCode,
     RenderCapturedTextureState, RenderPassProvenanceState, deterministic_capture_filename,
 };
+use engine::runtime::{NativeWindowId, WindowState, WindowStateRegistryResource};
 use runenwerk_editor::runtime::resources::EditorHostResource;
 use ui_adaptive_composition::DockZone;
 use ui_math::UiPoint;
