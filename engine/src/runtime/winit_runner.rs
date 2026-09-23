@@ -226,33 +226,67 @@ impl WinitRunner {
     }
 
     fn sync_primary_window_state_and_surface_extent(&mut self, window_state: &WindowState) {
-        if let Ok(registry) = self.state.world.resource_mut::<WindowStateRegistryResource>() {
+        if let Ok(registry) = self
+            .state
+            .world
+            .resource_mut::<WindowStateRegistryResource>()
+        {
             registry.ensure_primary_from_legacy(window_state);
         }
-        if let Ok(surface_registry) = self.state.world.resource_mut::<RenderSurfaceRegistryResource>() {
-            surface_registry.update_surface_extent_for_native_window(NativeWindowId::primary(), window_state.size_px);
+        if let Ok(surface_registry) = self
+            .state
+            .world
+            .resource_mut::<RenderSurfaceRegistryResource>()
+        {
+            surface_registry.update_surface_extent_for_native_window(
+                NativeWindowId::primary(),
+                window_state.size_px,
+            );
         }
     }
 
-    fn confirm_primary_render_surface_attachment(&mut self, target_size_px: (u32, u32)) -> Result<()> {
+    fn confirm_primary_render_surface_attachment(
+        &mut self,
+        target_size_px: (u32, u32),
+    ) -> Result<()> {
         let surface = RenderSurfaceId::primary();
-        if !self.state.world.resource::<Gfx>().context("runtime gfx is unavailable")?.has_surface(surface) {
-            return Err(anyhow!("runtime gfx does not own the primary render surface after initialization"));
+        if !self
+            .state
+            .world
+            .resource::<Gfx>()
+            .context("runtime gfx is unavailable")?
+            .has_surface(surface)
+        {
+            return Err(anyhow!(
+                "runtime gfx does not own the primary render surface after initialization"
+            ));
         }
-        self.state.world.resource_mut::<RenderSurfaceRegistryResource>()
+        self.state
+            .world
+            .resource_mut::<RenderSurfaceRegistryResource>()
             .context("render surface registry is unavailable")?
             .confirm_surface_attachment(surface, NativeWindowId::primary(), target_size_px)
     }
 
     fn validate_preexisting_primary_render_surface_attachment(&self) -> Result<()> {
         let surface = RenderSurfaceId::primary();
-        let gfx = self.state.world.resource::<Gfx>().context("runtime gfx is unavailable")?;
+        let gfx = self
+            .state
+            .world
+            .resource::<Gfx>()
+            .context("runtime gfx is unavailable")?;
         if !gfx.has_surface(surface) {
-            return Err(anyhow!("preexisting runtime gfx has no attached primary render surface"));
+            return Err(anyhow!(
+                "preexisting runtime gfx has no attached primary render surface"
+            ));
         }
-        let registry = self.state.world.resource::<RenderSurfaceRegistryResource>()
+        let registry = self
+            .state
+            .world
+            .resource::<RenderSurfaceRegistryResource>()
             .context("render surface registry is unavailable")?;
-        let record = registry.record(surface)
+        let record = registry
+            .record(surface)
             .context("preexisting runtime gfx lacks explicit primary Render/native correlation")?;
         if record.lifecycle_state != RenderSurfaceLifecycleState::Attached
             || record.native_window_id != NativeWindowId::primary()
