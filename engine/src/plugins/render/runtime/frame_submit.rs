@@ -8,7 +8,9 @@ use crate::plugins::inspect::{
 };
 use crate::plugins::pipelines::{PipelineCacheResource, PipelineCacheStats};
 use crate::plugins::render::backend::RenderSurfaceAcquireError;
-use crate::plugins::render::backend::{RenderSurfaceDiagnostic, RenderSurfaceRegistryResource};
+use crate::plugins::render::backend::{
+    RenderSurfaceDiagnostic, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
+};
 use crate::plugins::render::runtime::{
     CompletedRenderFrameDiagnostics, RenderFrameDiagnosticsSnapshot,
     RenderFrameDiagnosticsTransactionState,
@@ -330,6 +332,16 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
         (prepared_frame, additional_prepared_frames)
     };
 
+    if prepared_frame.surface.native_window_id.is_none() {
+        if !additional_prepared_frames.is_empty() {
+            anyhow::bail!("unbound headless render frame {} cannot be mixed with additional native surfaces", prepared_frame.context.frame_index);
+        }
+        if let Ok(contributions) = world.resource_mut::<RenderDeterministicFrameContributionResource>() {
+            let _ = contributions.take_all();
+        }
+        return Ok(());
+    }
+
     validate_prepared_frame_surface_scope(&mut world, &prepared_frame)?;
 
     let Some(mut shader_registry) = world.remove_resource::<ShaderRegistryResource>() else {
@@ -338,8 +350,13 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
 
     let Some(mut gfx) = world.remove_resource::<Gfx>() else {
         world.insert_resource(shader_registry);
-        return Ok(());
+        anyhow::bail!("bound prepared frame {} has no runtime Gfx attachment authority", prepared_frame.context.frame_index);
     };
+    if let Err(error) = validate_prepared_frame_gfx_attachment(&mut world, &gfx, &prepared_frame) {
+        world.insert_resource(gfx);
+        world.insert_resource(shader_registry);
+        return Err(error);
+    }
 
     // Contributions are frame-scoped: product code must republish semantic work every frame.
     let deterministic_contributions = world
@@ -919,24 +936,14 @@ fn render_additional_surfaces(
                 error: err,
             });
         }
-        if !gfx.has_surface(render_surface_id) {
-            if let Ok(registry) = world.resource_mut::<RenderSurfaceRegistryResource>() {
-                registry.record_diagnostic(RenderSurfaceDiagnostic {
-                    render_surface_id: Some(render_surface_id),
-                    native_window_id: prepared_frame.surface.native_window_id,
-                    message: format!(
-                        "prepared frame {} skipped because render surface {} is not attached",
-                        prepared_frame.context.frame_index,
-                        render_surface_id.raw()
-                    ),
-                });
-            }
-            defer_contributions_for_surface(
+        if let Err(error) = validate_prepared_frame_gfx_attachment(world, gfx, prepared_frame) {
+            defer_contributions_for_remaining_surfaces(
                 &mut deferred,
                 deterministic_contributions,
-                render_surface_id,
+                prepared_frames,
+                prepared_frame_index,
             );
-            continue;
+            return Err(AdditionalSurfaceRenderFailure { deferred, error });
         }
 
         let Some((target_w, target_h)) = prepared_frame.main_view().map(|view| view.target_size_px)
@@ -1066,34 +1073,44 @@ fn validate_prepared_frame_surface_scope(
     world: &mut WorldMut,
     prepared_frame: &PreparedRenderFrame,
 ) -> anyhow::Result<()> {
-    let Ok(registry) = world.resource_mut::<RenderSurfaceRegistryResource>() else {
-        return Ok(());
+    let registry = world.resource_mut::<RenderSurfaceRegistryResource>()
+        .map_err(|_| anyhow!("bound prepared frame has no render surface registry"))?;
+    validate_prepared_surface_binding(registry, &prepared_frame.surface, prepared_frame.context.frame_index)
+}
+
+fn validate_prepared_surface_binding(
+    registry: &mut RenderSurfaceRegistryResource,
+    surface: &PreparedSurfaceInfo,
+    frame_index: u64,
+) -> anyhow::Result<()> {
+    let Some(native_window_id) = surface.native_window_id else {
+        anyhow::bail!("unbound prepared frame {frame_index} is not eligible for native surface submission");
     };
-    let Some(record) = registry.record(prepared_frame.surface.render_surface_id) else {
-        let message = format!(
-            "prepared frame {} targets unknown render surface {}",
-            prepared_frame.context.frame_index,
-            prepared_frame.surface.render_surface_id.raw()
-        );
+    let Some(record) = registry.record(surface.render_surface_id) else {
+        let message = format!("prepared frame {frame_index} targets unknown render surface {}", surface.render_surface_id.raw());
         registry.record_diagnostic(RenderSurfaceDiagnostic {
-            render_surface_id: Some(prepared_frame.surface.render_surface_id),
-            native_window_id: prepared_frame.surface.native_window_id,
+            render_surface_id: Some(surface.render_surface_id),
+            native_window_id: Some(native_window_id),
             message: message.clone(),
         });
         anyhow::bail!(message);
     };
-    let registered_native_window_id = record.native_window_id;
-    if prepared_frame.surface.native_window_id != Some(registered_native_window_id) {
-        let message = format!(
-            "prepared frame {} targets render surface {} for native window {:?}, but the registry owns native window {:?}",
-            prepared_frame.context.frame_index,
-            prepared_frame.surface.render_surface_id.raw(),
-            prepared_frame.surface.native_window_id,
-            registered_native_window_id
-        );
+    if record.lifecycle_state != RenderSurfaceLifecycleState::Attached {
+        let state = record.lifecycle_state;
+        let message = format!("prepared frame {frame_index} targets render surface {} in {:?} state; native submission requires Attached", surface.render_surface_id.raw(), state);
         registry.record_diagnostic(RenderSurfaceDiagnostic {
-            render_surface_id: Some(prepared_frame.surface.render_surface_id),
-            native_window_id: prepared_frame.surface.native_window_id,
+            render_surface_id: Some(surface.render_surface_id),
+            native_window_id: Some(native_window_id),
+            message: message.clone(),
+        });
+        anyhow::bail!(message);
+    }
+    if record.native_window_id != native_window_id {
+        let registered = record.native_window_id;
+        let message = format!("prepared frame {frame_index} targets render surface {} for native window {}, but the attached registry owns native window {}", surface.render_surface_id.raw(), native_window_id.raw(), registered.raw());
+        registry.record_diagnostic(RenderSurfaceDiagnostic {
+            render_surface_id: Some(surface.render_surface_id),
+            native_window_id: Some(native_window_id),
             message: message.clone(),
         });
         anyhow::bail!(message);
@@ -1101,10 +1118,55 @@ fn validate_prepared_frame_surface_scope(
     Ok(())
 }
 
+fn validate_prepared_frame_gfx_attachment(
+    world: &mut WorldMut,
+    gfx: &Gfx,
+    prepared_frame: &PreparedRenderFrame,
+) -> anyhow::Result<()> {
+    let surface = prepared_frame.surface.render_surface_id;
+    if gfx.has_surface(surface) {
+        return Ok(());
+    }
+    let message = format!("prepared frame {} targets attached render surface {}, but runtime Gfx has no matching surface", prepared_frame.context.frame_index, surface.raw());
+    if let Ok(registry) = world.resource_mut::<RenderSurfaceRegistryResource>() {
+        registry.record_diagnostic(RenderSurfaceDiagnostic {
+            render_surface_id: Some(surface),
+            native_window_id: prepared_frame.surface.native_window_id,
+            message: message.clone(),
+        });
+    }
+    anyhow::bail!(message)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::plugins::render::inspect::{RenderCaptureSelector, RenderPixelProbeRequest};
+
+    #[test]
+    fn native_surface_binding_requires_attached_exact_correlation() {
+        let mut registry = RenderSurfaceRegistryResource::default();
+        let native = crate::runtime::NativeWindowId::primary();
+        let surface = registry.reserve_surface_for_native_window(native, (800, 600));
+        let bound = PreparedSurfaceInfo::for_surface(surface, native, (800, 600));
+        assert!(validate_prepared_surface_binding(&mut registry, &bound, 7).is_err());
+        registry.confirm_surface_attachment(surface, native, (800, 600)).unwrap();
+        assert!(validate_prepared_surface_binding(&mut registry, &bound, 7).is_ok());
+        registry.retire_surface_for_native_window(native);
+        assert!(validate_prepared_surface_binding(&mut registry, &bound, 7).is_err());
+    }
+
+    #[test]
+    fn native_surface_binding_rejects_unknown_and_mismatched_identity() {
+        let mut registry = RenderSurfaceRegistryResource::default();
+        let primary = crate::runtime::NativeWindowId::primary();
+        registry.confirm_surface_attachment(RenderSurfaceId::primary(), primary, (800, 600)).unwrap();
+        let secondary = crate::runtime::NativeWindowId::try_from_raw(2).unwrap();
+        let mismatch = PreparedSurfaceInfo::for_surface(RenderSurfaceId::primary(), secondary, (800, 600));
+        assert!(validate_prepared_surface_binding(&mut registry, &mismatch, 8).is_err());
+        let unknown = PreparedSurfaceInfo::for_surface(RenderSurfaceId::try_from_raw(99).unwrap(), secondary, (800, 600));
+        assert!(validate_prepared_surface_binding(&mut registry, &unknown, 9).is_err());
+    }
 
     #[test]
     fn render_diagnostics_tier_skips_full_report_in_healthy_steady_state() {

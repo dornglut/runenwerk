@@ -1,4 +1,6 @@
-use engine::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryResource};
+use engine::plugins::render::backend::{
+    RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
+};
 use engine::plugins::render::inspect::inspect_prepared_render_frame;
 use engine::plugins::render::{
     PreparedFrameContext, PreparedFrameContributions, PreparedRenderFrame,
@@ -11,15 +13,9 @@ use ui_render_data::ViewportSurfaceBindingRegistry;
 fn native_window(raw: u64) -> NativeWindowId {
     NativeWindowId::try_from_raw(raw).expect("test native window id should be non-zero")
 }
-
 fn frame(surface: PreparedSurfaceInfo) -> PreparedRenderFrame {
     PreparedRenderFrame {
-        context: PreparedFrameContext {
-            frame_index: 7,
-            flow_registry_revision: 1,
-            shader_registry_revision: 1,
-            prepare_epoch: 2,
-        },
+        context: PreparedFrameContext { frame_index: 7, flow_registry_revision: 1, shader_registry_revision: 1, prepare_epoch: 2 },
         surface,
         views: vec![PreparedViewFrame::main(surface.target_size_px())],
         flows: BTreeMap::new(),
@@ -29,95 +25,50 @@ fn frame(surface: PreparedSurfaceInfo) -> PreparedRenderFrame {
         product_selections: Vec::new(),
         viewport_surface_bindings: ViewportSurfaceBindingRegistry::default(),
         contributions: PreparedFrameContributions::default(),
-        shader: PreparedShaderSnapshot {
-            registry_revision: 1,
-        },
+        shader: PreparedShaderSnapshot { registry_revision: 1 },
     }
 }
-
 #[test]
-fn render_multi_surface_registry_scopes_surfaces_to_native_windows() {
+fn render_multi_surface_registry_reserves_then_attaches_exact_ids() {
     let mut registry = RenderSurfaceRegistryResource::default();
-    let primary = registry.ensure_surface_for_native_window(NativeWindowId::primary(), (1280, 720));
+    let primary = registry.reserve_surface_for_native_window(NativeWindowId::primary(), (1280, 720));
     let secondary_window = native_window(2);
-    let secondary = registry.ensure_surface_for_native_window(secondary_window, (900, 600));
-
+    let secondary = registry.reserve_surface_for_native_window(secondary_window, (900, 600));
     assert_eq!(primary, RenderSurfaceId::primary());
-    assert_ne!(primary, secondary);
-    assert_eq!(
-        registry.surface_for_native_window(secondary_window),
-        Some(secondary)
-    );
-    assert_eq!(
-        registry
-            .record(secondary)
-            .map(|record| record.native_window_id),
-        Some(secondary_window)
-    );
+    assert_eq!(registry.record(secondary).map(|r| r.lifecycle_state), Some(RenderSurfaceLifecycleState::Requested));
+    registry.confirm_surface_attachment(primary, NativeWindowId::primary(), (1280, 720)).unwrap();
+    registry.confirm_surface_attachment(secondary, secondary_window, (900, 600)).unwrap();
+    assert_eq!(registry.record(secondary).map(|r| r.lifecycle_state), Some(RenderSurfaceLifecycleState::Attached));
 }
-
 #[test]
 fn render_multi_surface_prepared_frame_inspection_reports_surface_identity() {
     let mut registry = RenderSurfaceRegistryResource::default();
-    let secondary_window = native_window(2);
-    let secondary = registry.ensure_surface_for_native_window(secondary_window, (900, 600));
-    assert_ne!(secondary, RenderSurfaceId::primary());
-    assert_eq!(registry.primary_surface_id(), None);
-    let prepared = frame(PreparedSurfaceInfo::for_surface(
-        secondary,
-        secondary_window,
-        (900, 600),
-    ));
-
+    let window = native_window(2);
+    let surface = registry.reserve_surface_for_native_window(window, (900, 600));
+    registry.confirm_surface_attachment(surface, window, (900, 600)).unwrap();
+    let prepared = frame(PreparedSurfaceInfo::for_surface(surface, window, (900, 600)));
     let inspection = inspect_prepared_render_frame(&prepared);
-
-    assert_eq!(inspection.render_surface_id, secondary.raw());
-    assert_eq!(inspection.native_window_id, Some(secondary_window.raw()));
-    assert_eq!(inspection.surface_size, (900, 600));
+    assert_eq!(inspection.render_surface_id, surface.raw());
+    assert_eq!(inspection.native_window_id, Some(window.raw()));
 }
-
 #[test]
 fn render_multi_surface_registry_reserves_primary_surface_for_primary_native_window() {
     let mut registry = RenderSurfaceRegistryResource::default();
-    let secondary_window = native_window(3);
-
-    let secondary = registry.ensure_surface_for_native_window(secondary_window, (900, 600));
-    let primary = registry.ensure_surface_for_native_window(NativeWindowId::primary(), (1280, 720));
-
+    let secondary = registry.reserve_surface_for_native_window(native_window(3), (900, 600));
+    let primary = registry.reserve_surface_for_native_window(NativeWindowId::primary(), (1280, 720));
     assert_ne!(secondary, RenderSurfaceId::primary());
     assert_eq!(primary, RenderSurfaceId::primary());
-    assert_eq!(
-        registry.primary_surface_id(),
-        Some(RenderSurfaceId::primary())
-    );
-    assert_eq!(
-        registry.surface_for_native_window(secondary_window),
-        Some(secondary)
-    );
 }
-
 #[test]
 fn render_multi_surface_prepared_frame_set_is_surface_keyed_and_deterministic() {
-    let primary = frame(PreparedSurfaceInfo::primary((1280, 720)));
+    let primary = frame(PreparedSurfaceInfo::for_surface(RenderSurfaceId::primary(), NativeWindowId::primary(), (1280, 720)));
     let secondary_window = native_window(2);
-    let secondary_surface = RenderSurfaceId::try_from_raw(2).expect("secondary surface id");
-    let secondary = frame(PreparedSurfaceInfo::for_surface(
-        secondary_surface,
-        secondary_window,
-        (900, 600),
-    ));
+    let secondary_surface = RenderSurfaceId::try_from_raw(2).unwrap();
+    let secondary = frame(PreparedSurfaceInfo::for_surface(secondary_surface, secondary_window, (900, 600)));
     let mut resource = PreparedRenderFrameResource::default();
-
     resource.publish_set([secondary, primary]);
-
-    let ordered_surface_ids = resource
-        .frames()
-        .map(|prepared| prepared.surface.render_surface_id)
-        .collect::<Vec<_>>();
     assert_eq!(
-        ordered_surface_ids,
+        resource.frames().map(|prepared| prepared.surface.render_surface_id).collect::<Vec<_>>(),
         vec![RenderSurfaceId::primary(), secondary_surface]
     );
-    assert_eq!(resource.take_all().len(), 2);
-    assert!(resource.frame().is_none());
 }

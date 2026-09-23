@@ -5,7 +5,9 @@ use editor_shell::{
     RegionCompassAccessibility, RegionCompassViewModel, projected_host_tab_stacks,
     tab_stack_container_widget_id,
 };
+use engine::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryResource};
 use engine::plugins::render::Gfx;
+use engine::runtime::{NativeWindowId, WindowState, WindowStateRegistryResource};
 use engine::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, RenderCaptureSelector, RenderCaptureTerminalCode,
     RenderCapturedTextureState, RenderPassProvenanceState, deterministic_capture_filename,
@@ -33,11 +35,20 @@ fn capture() -> anyhow::Result<()> {
     eprintln!("region-compass-capture: create-window");
     let window = create_hidden_window()?;
     eprintln!("region-compass-capture: create-gfx");
-    let gfx = Gfx::new(window)?;
+    let gfx = Gfx::new(Arc::clone(&window))?;
     eprintln!("region-compass-capture: build-app");
     let mut app = runenwerk_editor::runtime::build_headless_app()
         .expect("headless app construction should succeed");
     activate_region_compass(&mut app)?;
+    let size = window.inner_size();
+    let mut native_state = WindowState::windowed(window.title());
+    native_state.size_px = (size.width, size.height);
+    native_state.scale_factor = window.scale_factor();
+    native_state.set_headless(false);
+    app.world_mut().resource_mut::<WindowStateRegistryResource>()?
+        .register_created_window(NativeWindowId::primary(), &native_state);
+    app.world_mut().resource_mut::<RenderSurfaceRegistryResource>()?
+        .confirm_surface_attachment(RenderSurfaceId::primary(), NativeWindowId::primary(), native_state.size_px)?;
     app.world_mut().insert_resource(gfx);
     app.update_render_debug_control(|control| {
         control.provenance_enabled = true;

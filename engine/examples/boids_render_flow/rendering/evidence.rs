@@ -357,7 +357,7 @@ fn prepared_frame_for_flow(compiled: &CompiledRenderFlowPlan) -> PreparedRenderF
             shader_registry_revision: 1,
             prepare_epoch: 1,
         },
-        surface: PreparedSurfaceInfo::primary(BOIDS_EVIDENCE_SCENE_SIZE),
+        surface: PreparedSurfaceInfo::unbound_primary(BOIDS_EVIDENCE_SCENE_SIZE),
         views: vec![PreparedViewFrame::main(BOIDS_EVIDENCE_SCENE_SIZE)],
         flows: Default::default(),
         flow_invocations: vec![PreparedFlowInvocation::main(
