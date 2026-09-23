@@ -8,7 +8,9 @@ use crate::plugins::inspect::{
 };
 use crate::plugins::pipelines::{PipelineCacheResource, PipelineCacheStats};
 use crate::plugins::render::backend::RenderSurfaceAcquireError;
-use crate::plugins::render::backend::{RenderSurfaceDiagnostic, RenderSurfaceRegistryResource};
+use crate::plugins::render::backend::{
+    RenderSurfaceDiagnostic, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
+};
 use crate::plugins::render::runtime::{
     CompletedRenderFrameDiagnostics, RenderFrameDiagnosticsSnapshot,
     RenderFrameDiagnosticsTransactionState,
