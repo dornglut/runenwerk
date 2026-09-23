@@ -334,9 +334,14 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
 
     if prepared_frame.surface.native_window_id.is_none() {
         if !additional_prepared_frames.is_empty() {
-            anyhow::bail!("unbound headless render frame {} cannot be mixed with additional native surfaces", prepared_frame.context.frame_index);
+            anyhow::bail!(
+                "unbound headless render frame {} cannot be mixed with additional native surfaces",
+                prepared_frame.context.frame_index
+            );
         }
-        if let Ok(contributions) = world.resource_mut::<RenderDeterministicFrameContributionResource>() {
+        if let Ok(contributions) =
+            world.resource_mut::<RenderDeterministicFrameContributionResource>()
+        {
             let _ = contributions.take_all();
         }
         return Ok(());
@@ -350,7 +355,10 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
 
     let Some(mut gfx) = world.remove_resource::<Gfx>() else {
         world.insert_resource(shader_registry);
-        anyhow::bail!("bound prepared frame {} has no runtime Gfx attachment authority", prepared_frame.context.frame_index);
+        anyhow::bail!(
+            "bound prepared frame {} has no runtime Gfx attachment authority",
+            prepared_frame.context.frame_index
+        );
     };
     if let Err(error) = validate_prepared_frame_gfx_attachment(&mut world, &gfx, &prepared_frame) {
         world.insert_resource(gfx);
@@ -1073,9 +1081,14 @@ fn validate_prepared_frame_surface_scope(
     world: &mut WorldMut,
     prepared_frame: &PreparedRenderFrame,
 ) -> anyhow::Result<()> {
-    let registry = world.resource_mut::<RenderSurfaceRegistryResource>()
+    let registry = world
+        .resource_mut::<RenderSurfaceRegistryResource>()
         .map_err(|_| anyhow!("bound prepared frame has no render surface registry"))?;
-    validate_prepared_surface_binding(registry, &prepared_frame.surface, prepared_frame.context.frame_index)
+    validate_prepared_surface_binding(
+        registry,
+        &prepared_frame.surface,
+        prepared_frame.context.frame_index,
+    )
 }
 
 fn validate_prepared_surface_binding(
