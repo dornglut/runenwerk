@@ -5,13 +5,13 @@ use engine::plugins::render::{
     CompiledPassExecutionPlan, RenderFlowRegistryResource, RenderFrameProducerId,
     SurfaceFrameSubmissionRegistryResource, ViewportSurfaceBindingRegistryResource,
 };
+use engine::runtime::{PlatformWindowEventQueueResource, WindowStateRegistryResource};
 use runenwerk_editor::runtime::resources::{EditorHostResource, EditorViewportDebugStage};
 use runenwerk_editor::runtime::viewport::{
     EDITOR_MAIN_FLOW_ID, EDITOR_VIEWPORT_SCENE_PRODUCT_UNIFORM_ID, SCENE_COLOR_PRODUCT_ID,
     VIEWPORT_DYNAMIC_TARGET_NAMESPACE, ViewportProductTargetRegistryResource,
     ViewportRenderJobResource, ViewportRenderStateResource,
 };
-use engine::runtime::{PlatformWindowEventQueueResource, WindowStateRegistryResource};
 use ui_render_data::{UiPrimitive, ViewportSurfaceBindingSource, ViewportSurfaceEmbedPrimitive};
 
 const LEGACY_FULLSCREEN_MASK_PASS_ID: &str = "runenwerk.editor.viewport.sdf";
@@ -38,7 +38,9 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
         .expect("headless editor app should run");
 
     assert!(
-        app.world().resource::<WindowStateRegistryResource>().is_err(),
+        app.world()
+            .resource::<WindowStateRegistryResource>()
+            .is_err(),
         "headless editor must not provision native window registry state"
     );
     assert!(
