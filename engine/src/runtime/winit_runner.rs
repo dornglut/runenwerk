@@ -231,14 +231,6 @@ impl WinitRunner {
         {
             registry.ensure_primary_from_legacy(window_state);
         }
-        if let Ok(surface_registry) = self
-            .state
-            .world
-            .resource_mut::<RenderSurfaceRegistryResource>()
-        {
-            surface_registry
-                .ensure_surface_for_native_window(NativeWindowId::primary(), window_state.size_px);
-        }
     }
 
     fn run_startup_if_needed(&mut self) -> Result<()> {
@@ -317,7 +309,7 @@ impl WinitRunner {
             .resource_mut::<RenderSurfaceRegistryResource>()
             .ok()
             .map(|registry| {
-                registry.ensure_surface_for_native_window(request.native_window_id, request.size_px)
+                registry.reserve_surface_for_native_window(request.native_window_id, request.size_px)
             });
         let Some(render_surface_id) = render_surface_id else {
             self.mark_window_creation_failed(
@@ -347,6 +339,16 @@ impl WinitRunner {
                 format!("GPU surface attachment failed: {err:#}"),
             );
             return Ok(());
+        }
+        if let Ok(surface_registry) = self
+            .state
+            .world
+            .resource_mut::<RenderSurfaceRegistryResource>()
+        {
+            surface_registry.confirm_surface_attachment(
+                request.native_window_id,
+                request.size_px,
+            );
         }
         if let Ok(registry) = self
             .state
@@ -631,6 +633,21 @@ impl ApplicationHandler for WinitRunner {
                     return;
                 }
             }
+        }
+
+        if let Ok(surface_registry) = self
+            .state
+            .world
+            .resource_mut::<RenderSurfaceRegistryResource>()
+        {
+            surface_registry.reserve_surface_for_native_window(
+                NativeWindowId::primary(),
+                (window.inner_size().width, window.inner_size().height),
+            );
+            surface_registry.confirm_surface_attachment(
+                NativeWindowId::primary(),
+                (window.inner_size().width, window.inner_size().height),
+            );
         }
 
         if let Err(err) = self.apply_event(PlatformEvent::Resumed) {
