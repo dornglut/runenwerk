@@ -1165,6 +1165,58 @@ mod tests {
     }
 
     #[test]
+    fn secondary_creation_failure_retires_reserved_render_surface() {
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        runner
+            .state
+            .world
+            .insert_resource(RenderSurfaceRegistryResource::default());
+
+        let request = runner
+            .state
+            .world
+            .resource_mut::<WindowStateRegistryResource>()
+            .expect("window registry should exist")
+            .request_window("Secondary", (900, 600));
+        let render_surface_id = runner
+            .state
+            .world
+            .resource_mut::<RenderSurfaceRegistryResource>()
+            .expect("render surface registry should exist")
+            .reserve_surface_for_native_window(request.native_window_id, request.size_px);
+
+        runner.mark_window_creation_failed(request.native_window_id, "test attachment failure");
+
+        let windows = runner
+            .state
+            .world
+            .resource::<WindowStateRegistryResource>()
+            .expect("window registry should exist");
+        assert_eq!(
+            windows
+                .record(request.native_window_id)
+                .map(|record| record.lifecycle_state),
+            Some(NativeWindowLifecycleState::CreationFailed)
+        );
+
+        let surfaces = runner
+            .state
+            .world
+            .resource::<RenderSurfaceRegistryResource>()
+            .expect("render surface registry should exist");
+        assert_eq!(
+            surfaces.surface_for_native_window(request.native_window_id),
+            None
+        );
+        assert_eq!(
+            surfaces
+                .record(render_surface_id)
+                .map(|record| record.lifecycle_state),
+            Some(RenderSurfaceLifecycleState::Retired)
+        );
+    }
+
+    #[test]
     fn explicit_primary_redraw_request_wakes_on_demand_pacing() {
         let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
 
