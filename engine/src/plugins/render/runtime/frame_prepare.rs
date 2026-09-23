@@ -220,11 +220,13 @@ fn prepared_surface_infos_from_registry(
             record.lifecycle_state == RenderSurfaceLifecycleState::Attached
                 && created_windows.contains(&record.native_window_id)
         })
-        .map(|record| PreparedSurfaceInfo::for_surface(
-            record.render_surface_id,
-            record.native_window_id,
-            record.target_size_px,
-        ))
+        .map(|record| {
+            PreparedSurfaceInfo::for_surface(
+                record.render_surface_id,
+                record.native_window_id,
+                record.target_size_px,
+            )
+        })
         .collect::<Vec<_>>();
     if surfaces.is_empty() {
         vec![PreparedSurfaceInfo::unbound_primary(primary_target_size)]
@@ -930,7 +932,8 @@ mod tests {
     #[test]
     fn surface_preparation_keeps_headless_primary_unbound() {
         let registry = RenderSurfaceRegistryResource::default();
-        let prepared = prepared_surface_infos_from_registry(Some(&registry), &BTreeSet::new(), (800, 600));
+        let prepared =
+            prepared_surface_infos_from_registry(Some(&registry), &BTreeSet::new(), (800, 600));
         assert_eq!(prepared.len(), 1);
         assert_eq!(prepared[0].render_surface_id, RenderSurfaceId::primary());
         assert_eq!(prepared[0].native_window_id, None);
@@ -943,9 +946,12 @@ mod tests {
         let native = crate::runtime::NativeWindowId::try_from_raw(2).unwrap();
         let surface = registry.reserve_surface_for_native_window(native, (900, 600));
         let created = BTreeSet::from([native]);
-        let requested = prepared_surface_infos_from_registry(Some(&registry), &created, (1280, 720));
+        let requested =
+            prepared_surface_infos_from_registry(Some(&registry), &created, (1280, 720));
         assert_eq!(requested[0].native_window_id, None);
-        registry.confirm_surface_attachment(surface, native, (900, 600)).unwrap();
+        registry
+            .confirm_surface_attachment(surface, native, (900, 600))
+            .unwrap();
         let attached = prepared_surface_infos_from_registry(Some(&registry), &created, (1280, 720));
         assert_eq!(attached[0].render_surface_id, surface);
         assert_eq!(attached[0].native_window_id, Some(native));
