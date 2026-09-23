@@ -500,7 +500,11 @@ mod tests {
         let mut created = WindowState::windowed("Secondary");
         created.size_px = (900, 600);
         surfaces
-            .confirm_surface_attachment(binding.render_surface_id, native_window_id, created.size_px)
+            .confirm_surface_attachment(
+                binding.render_surface_id,
+                native_window_id,
+                created.size_px,
+            )
             .expect("test native surface should attach before Created publication");
         windows.register_created_window(native_window_id, &created);
         sync_editor_composition_transitions(
