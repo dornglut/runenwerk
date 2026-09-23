@@ -268,35 +268,6 @@ impl WinitRunner {
             .confirm_surface_attachment(surface, NativeWindowId::primary(), target_size_px)
     }
 
-    fn validate_preexisting_primary_render_surface_attachment(&self) -> Result<()> {
-        let surface = RenderSurfaceId::primary();
-        let gfx = self
-            .state
-            .world
-            .resource::<Gfx>()
-            .context("runtime gfx is unavailable")?;
-        if !gfx.has_surface(surface) {
-            return Err(anyhow!(
-                "preexisting runtime gfx has no attached primary render surface"
-            ));
-        }
-        let registry = self
-            .state
-            .world
-            .resource::<RenderSurfaceRegistryResource>()
-            .context("render surface registry is unavailable")?;
-        let record = registry
-            .record(surface)
-            .context("preexisting runtime gfx lacks explicit primary Render/native correlation")?;
-        if record.lifecycle_state != RenderSurfaceLifecycleState::Attached
-            || record.native_window_id != NativeWindowId::primary()
-        {
-            return Err(anyhow!(
-                "preexisting runtime gfx primary surface is not explicitly attached to the primary native window"
-            ));
-        }
-        Ok(())
-    }
 
     fn run_startup_if_needed(&mut self) -> Result<()> {
         prepare_world_for_run(&mut self.state.world, &self.state.title, false);
@@ -728,10 +699,12 @@ impl ApplicationHandler for WinitRunner {
                 );
                 return;
             }
-        } else if let Err(err) = self.validate_preexisting_primary_render_surface_attachment() {
+        } else {
             self.exit_with_error(
                 event_loop,
-                anyhow!("preexisting runtime gfx attachment is not trustworthy: {err:#}"),
+                anyhow!(
+                    "preexisting runtime gfx cannot be proven attached to the newly created primary window"
+                ),
             );
             return;
         }
