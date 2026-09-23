@@ -257,7 +257,9 @@ impl WinitRunner {
         if record.lifecycle_state != RenderSurfaceLifecycleState::Attached
             || record.native_window_id != NativeWindowId::primary()
         {
-            return Err(anyhow!("preexisting runtime gfx primary surface is not explicitly attached to the primary native window"));
+            return Err(anyhow!(
+                "preexisting runtime gfx primary surface is not explicitly attached to the primary native window"
+            ));
         }
         Ok(())
     }
@@ -338,36 +340,64 @@ impl WinitRunner {
             .resource_mut::<RenderSurfaceRegistryResource>()
             .ok()
             .map(|registry| {
-                registry.surface_for_native_window(request.native_window_id).unwrap_or_else(|| {
-                    registry.reserve_surface_for_native_window(request.native_window_id, request.size_px)
-                })
+                registry
+                    .surface_for_native_window(request.native_window_id)
+                    .unwrap_or_else(|| {
+                        registry.reserve_surface_for_native_window(
+                            request.native_window_id,
+                            request.size_px,
+                        )
+                    })
             });
         let Some(render_surface_id) = render_surface_id else {
-            self.mark_window_creation_failed(request.native_window_id, "render surface registry is unavailable");
+            self.mark_window_creation_failed(
+                request.native_window_id,
+                "render surface registry is unavailable",
+            );
             return Ok(());
         };
-        let attach_result = self.state.world.resource_mut::<Gfx>()
+        let attach_result = self
+            .state
+            .world
+            .resource_mut::<Gfx>()
             .context("runtime gfx is unavailable")
-            .and_then(|gfx| gfx.attach_surface(render_surface_id, Arc::clone(&window), request.size_px));
+            .and_then(|gfx| {
+                gfx.attach_surface(render_surface_id, Arc::clone(&window), request.size_px)
+            });
         if let Err(err) = attach_result {
-            self.mark_window_creation_failed(request.native_window_id, format!("GPU surface attachment failed: {err:#}"));
+            self.mark_window_creation_failed(
+                request.native_window_id,
+                format!("GPU surface attachment failed: {err:#}"),
+            );
             return Ok(());
         }
-        let confirm_result = self.state.world.resource_mut::<RenderSurfaceRegistryResource>()
+        let confirm_result = self
+            .state
+            .world
+            .resource_mut::<RenderSurfaceRegistryResource>()
             .context("render surface registry is unavailable")
-            .and_then(|registry| registry.confirm_surface_attachment(
-                render_surface_id,
-                request.native_window_id,
-                request.size_px,
-            ));
+            .and_then(|registry| {
+                registry.confirm_surface_attachment(
+                    render_surface_id,
+                    request.native_window_id,
+                    request.size_px,
+                )
+            });
         if let Err(err) = confirm_result {
             if let Ok(gfx) = self.state.world.resource_mut::<Gfx>() {
                 gfx.detach_surface(render_surface_id);
             }
-            self.mark_window_creation_failed(request.native_window_id, format!("render surface correlation failed: {err:#}"));
+            self.mark_window_creation_failed(
+                request.native_window_id,
+                format!("render surface correlation failed: {err:#}"),
+            );
             return Ok(());
         }
-        if let Ok(registry) = self.state.world.resource_mut::<WindowStateRegistryResource>() {
+        if let Ok(registry) = self
+            .state
+            .world
+            .resource_mut::<WindowStateRegistryResource>()
+        {
             registry.register_created_window(request.native_window_id, &snapshot);
         }
 
@@ -382,10 +412,17 @@ impl WinitRunner {
         native_window_id: NativeWindowId,
         reason: impl Into<String>,
     ) {
-        if let Ok(surface_registry) = self.state.world.resource_mut::<RenderSurfaceRegistryResource>() {
+        if let Ok(surface_registry) = self
+            .state
+            .world
+            .resource_mut::<RenderSurfaceRegistryResource>()
+        {
             surface_registry.retire_surface_for_native_window(native_window_id);
         }
-        if let Ok(registry) = self.state.world.resource_mut::<WindowStateRegistryResource>()
+        if let Ok(registry) = self
+            .state
+            .world
+            .resource_mut::<WindowStateRegistryResource>()
             && let Some(record) = registry.record_mut(native_window_id)
         {
             record.mark_creation_failed(reason);
@@ -639,14 +676,22 @@ impl ApplicationHandler for WinitRunner {
             let gfx = match Gfx::new(window.clone()) {
                 Ok(gfx) => gfx,
                 Err(err) => {
-                    self.exit_with_error(event_loop, anyhow!("failed to initialize runtime gfx: {err:#}"));
+                    self.exit_with_error(
+                        event_loop,
+                        anyhow!("failed to initialize runtime gfx: {err:#}"),
+                    );
                     return;
                 }
             };
             self.state.world.insert_resource(gfx);
             let size = window.inner_size();
-            if let Err(err) = self.confirm_primary_render_surface_attachment((size.width, size.height)) {
-                self.exit_with_error(event_loop, anyhow!("failed to confirm primary render surface attachment: {err:#}"));
+            if let Err(err) =
+                self.confirm_primary_render_surface_attachment((size.width, size.height))
+            {
+                self.exit_with_error(
+                    event_loop,
+                    anyhow!("failed to confirm primary render surface attachment: {err:#}"),
+                );
                 return;
             }
         } else if let Err(err) = self.validate_preexisting_primary_render_surface_attachment() {
