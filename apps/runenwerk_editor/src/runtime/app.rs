@@ -10,7 +10,7 @@ use runen_gpu::GpuWorkResourceId;
 
 use crate::runtime::plugin::{EditorAppPlugin, EditorNativeWindowIntegrationPlugin};
 use crate::runtime::resources::{EditorHostResource, EditorViewportRenderState};
-use crate::runtime::ui_gallery::UiGalleryPlugin;
+use crate::runtime::ui_gallery::{UiGalleryNativeWindowIntegrationPlugin, UiGalleryPlugin};
 use crate::runtime::viewport::{
     EDITOR_MAIN_FLOW_ID, EDITOR_VIEWPORT_SCENE_PRODUCT_UNIFORM_ID,
     VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW, VIEWPORT_TARGET_ALIAS_OVERLAY,
@@ -90,7 +90,9 @@ fn configure_native_app_for_workbench(
     workbench: RunenwerkRuntimeWorkbench,
 ) -> Result<()> {
     configure_app_for_workbench(app, workbench)?;
-    if workbench != RunenwerkRuntimeWorkbench::UiGallery {
+    if workbench == RunenwerkRuntimeWorkbench::UiGallery {
+        app.add_plugin(UiGalleryNativeWindowIntegrationPlugin);
+    } else {
         app.add_plugin(EditorNativeWindowIntegrationPlugin);
     }
     Ok(())
