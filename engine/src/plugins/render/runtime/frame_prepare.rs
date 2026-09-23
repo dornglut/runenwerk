@@ -2,9 +2,7 @@ use crate::plugins::render::backend::{RenderSurfaceLifecycleState, RenderSurface
 use crate::plugins::render::inspect::RenderDebugTimingsState;
 use crate::plugins::render::*;
 use crate::plugins::scene::SceneResource;
-use crate::runtime::{
-    CatchupBudget, FixedTimeConfig, FixedTimeState, NativeWindowLifecycleState, WorldMut,
-};
+use crate::runtime::{CatchupBudget, FixedTimeConfig, FixedTimeState, WorldMut};
 use runen_gpu::GpuWorkResourceId;
 use std::any::{Any, TypeId};
 use std::collections::{BTreeMap, BTreeSet};
@@ -193,18 +191,6 @@ fn prepared_surface_infos(
     world: &mut WorldMut,
     primary_target_size: (u32, u32),
 ) -> Vec<PreparedSurfaceInfo> {
-    let created_windows = world
-        .resource::<crate::runtime::WindowStateRegistryResource>()
-        .ok()
-        .map(|registry| {
-            registry
-                .records()
-                .filter(|record| record.lifecycle_state == NativeWindowLifecycleState::Created)
-                .map(|record| record.native_window_id)
-                .collect::<BTreeSet<_>>()
-        })
-        .unwrap_or_default();
-
     world
         .resource::<RenderSurfaceRegistryResource>()
         .ok()
@@ -213,7 +199,6 @@ fn prepared_surface_infos(
                 .records()
                 .filter(|record| {
                     record.lifecycle_state == RenderSurfaceLifecycleState::Registered
-                        && created_windows.contains(&record.native_window_id)
                 })
                 .map(|record| {
                     PreparedSurfaceInfo::for_surface(
