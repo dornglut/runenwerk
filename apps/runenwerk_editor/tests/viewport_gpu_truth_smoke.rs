@@ -119,6 +119,8 @@ fn viewport_gpu_truth_smoke() {
     native_state.size_px = (size.width, size.height);
     native_state.scale_factor = window.scale_factor();
     app.world_mut()
+        .insert_resource(WindowStateRegistryResource::default());
+    app.world_mut()
         .resource_mut::<WindowStateRegistryResource>()
         .expect("window registry should exist")
         .register_created_window(NativeWindowId::primary(), &native_state);
