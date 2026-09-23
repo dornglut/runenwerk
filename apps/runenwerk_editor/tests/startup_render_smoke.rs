@@ -1,11 +1,11 @@
 use editor_shell::viewport_embed_slot_for;
 use editor_viewport::{ViewportId, ViewportSurfacePresentationSlot};
 use engine::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryResource};
-use engine::runtime::NativeWindowId;
 use engine::plugins::render::{
     CompiledPassExecutionPlan, RenderFlowRegistryResource, RenderFrameProducerId,
     SurfaceFrameSubmissionRegistryResource, ViewportSurfaceBindingRegistryResource,
 };
+use engine::runtime::NativeWindowId;
 use runenwerk_editor::runtime::resources::{EditorHostResource, EditorViewportDebugStage};
 use runenwerk_editor::runtime::viewport::{
     EDITOR_MAIN_FLOW_ID, EDITOR_VIEWPORT_SCENE_PRODUCT_UNIFORM_ID, SCENE_COLOR_PRODUCT_ID,
