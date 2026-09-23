@@ -300,8 +300,14 @@ fn create_hidden_surface_identity_windows() -> anyhow::Result<(Arc<Window>, Arc<
     impl ApplicationHandler for Bootstrap {
         fn resumed(&mut self, event_loop: &ActiveEventLoop) {
             for (title, size) in [
-                ("Runenwerk surface identity primary", PhysicalSize::new(1280, 720)),
-                ("Runenwerk surface identity secondary", PhysicalSize::new(800, 600)),
+                (
+                    "Runenwerk surface identity primary",
+                    PhysicalSize::new(1280, 720),
+                ),
+                (
+                    "Runenwerk surface identity secondary",
+                    PhysicalSize::new(800, 600),
+                ),
             ] {
                 let attributes = Window::default_attributes()
                     .with_title(title)
