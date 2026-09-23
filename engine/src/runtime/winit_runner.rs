@@ -309,7 +309,8 @@ impl WinitRunner {
             .resource_mut::<RenderSurfaceRegistryResource>()
             .ok()
             .map(|registry| {
-                registry.reserve_surface_for_native_window(request.native_window_id, request.size_px)
+                registry
+                    .reserve_surface_for_native_window(request.native_window_id, request.size_px)
             });
         let Some(render_surface_id) = render_surface_id else {
             self.mark_window_creation_failed(
@@ -345,10 +346,7 @@ impl WinitRunner {
             .world
             .resource_mut::<RenderSurfaceRegistryResource>()
         {
-            surface_registry.confirm_surface_attachment(
-                request.native_window_id,
-                request.size_px,
-            );
+            surface_registry.confirm_surface_attachment(request.native_window_id, request.size_px);
         }
         if let Ok(registry) = self
             .state
