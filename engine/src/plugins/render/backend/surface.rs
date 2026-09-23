@@ -148,6 +148,13 @@ impl RenderSurfaceRegistryResource {
                 record.lifecycle_state = RenderSurfaceLifecycleState::Attached;
             }
             None => {
+                if !native_is_primary {
+                    return Err(anyhow!(
+                        "secondary render surface {} must be reserved for native window {} before attachment",
+                        render_surface_id.raw(),
+                        native_window_id.raw()
+                    ));
+                }
                 self.records.insert(
                     render_surface_id,
                     RenderSurfaceRecord::new(
@@ -335,6 +342,21 @@ mod tests {
             registry.reserve_surface_for_native_window(NativeWindowId::primary(), (1280, 720));
         assert_ne!(secondary, RenderSurfaceId::primary());
         assert_eq!(primary, RenderSurfaceId::primary());
+    }
+
+    #[test]
+    fn secondary_attachment_requires_the_previously_reserved_identity() {
+        let mut registry = RenderSurfaceRegistryResource::default();
+        let window = NativeWindowId::try_from_raw(2).unwrap();
+        let unreserved = RenderSurfaceId::try_from_raw(9).unwrap();
+
+        assert!(
+            registry
+                .confirm_surface_attachment(unreserved, window, (640, 480))
+                .is_err()
+        );
+        assert_eq!(registry.surface_for_native_window(window), None);
+        assert_eq!(registry.record(unreserved), None);
     }
 
     #[test]
