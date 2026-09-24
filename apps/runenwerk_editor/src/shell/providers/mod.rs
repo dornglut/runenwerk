@@ -1323,6 +1323,20 @@ fn workspace_allows_document(
     {
         return registry.profile(request.workspace_profile_id).is_some();
     }
+    if request.matches_any_stable_key(&[
+        PROCGEN_GRAPH_CANVAS_SURFACE_KEY,
+        PROCGEN_PREVIEW_SURFACE_KEY,
+    ]) && registry
+        .profile(request.workspace_profile_id)
+        .is_some_and(|profile| {
+            profile
+                .default_surfaces
+                .iter()
+                .any(|surface| surface.stable_surface_key() == &request.stable_surface_key)
+        })
+    {
+        return true;
+    }
     let Some(document_kind) = request.document_context.resolved_document_kind() else {
         return false;
     };
