@@ -504,13 +504,7 @@ mod tests {
                 created_size_px,
             )
             .expect("test native surface should attach before Created publication");
-        windows.register_created_window(
-            native_window_id,
-            "Secondary",
-            created_size_px,
-            1.0,
-            false,
-        );
+        windows.register_created_window(native_window_id, "Secondary", created_size_px, 1.0, false);
         sync_editor_composition_transitions(
             &mut host,
             &mut transitions,
@@ -614,13 +608,7 @@ mod tests {
         );
         let (native_window_id, binding) =
             bind_pending_native_window(&mut host, &transitions, &mut windows, &mut surfaces);
-        windows.register_created_window(
-            native_window_id,
-            "Secondary",
-            (1280, 720),
-            1.0,
-            false,
-        );
+        windows.register_created_window(native_window_id, "Secondary", (1280, 720), 1.0, false);
         sync_editor_composition_transitions(
             &mut host,
             &mut transitions,
