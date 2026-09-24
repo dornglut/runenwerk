@@ -627,8 +627,8 @@ mod tests {
     };
 
     use crate::{
-        EditorToolSuite, ProviderFamilyDefinition, ProviderFamilyId, SuiteRef, SurfaceRef,
-        ToolSuiteRegistry, ToolSurfaceCreationPolicy, ToolSurfaceRole, ToolSurfaceRoute,
+        EditorToolSuite, PanelKind, ProviderFamilyDefinition, ProviderFamilyId, SuiteRef,
+        SurfaceRef, ToolSuiteRegistry, ToolSurfaceCreationPolicy, ToolSurfaceRole, ToolSurfaceRoute,
         WorkspaceIdentityAllocator, default_workspace_profile_registry, import_legacy_workspace,
         panel_kind_for_tool_surface_kind, tool_surface_kind_from_definition_key,
     };
@@ -805,7 +805,7 @@ mod tests {
             plan_editor_create_unit(&runtime, stack, registry.surfaces(), unknown, identities)
                 .expect_err("uninstalled stable surface identity must fail closed");
 
-        assert!(rejection.records().iter().any(|record| {
+        assert!(rejection.diagnostics().iter().any(|record| {
             record
                 .message
                 .contains("Register the requested editor tool surface")
