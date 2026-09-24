@@ -455,7 +455,7 @@ mod tests {
                 .observation(RenderFrameObservationKey::new(3, 1))
                 .unwrap()
                 .gpu
-                .capability,
+                .pass_timing_capability,
             RenderGpuTimingCapability::ReadbackPending
         );
 

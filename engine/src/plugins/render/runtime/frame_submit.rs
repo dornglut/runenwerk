@@ -231,8 +231,7 @@ mod contribution_deferral_tests {
     fn unsubmitted_surface_never_publishes_frame_history() {
         let policy = RenderFrameObservationPolicyResource::enabled(8);
         let mut history = RenderFrameHistoryState::default();
-        let secondary_surface =
-            RenderSurfaceId::try_from_raw(2).expect("secondary surface id");
+        let secondary_surface = RenderSurfaceId::try_from_raw(2).expect("secondary surface id");
         let secondary = prepared_frame(secondary_surface, 12);
 
         assert!(!publish_submitted_frame_history(
