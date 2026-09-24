@@ -8100,7 +8100,6 @@ fn inspector_tab_stack_split_or_reset_fails_closed_if_legacy_only_path_required(
         split_action,
         editor_shell::RoutedShellAction::SplitTabStackAreaStableKey {
             stable_surface_key,
-            panel_kind: PanelKind::Diagnostics,
             ..
         } if stable_surface_key.as_str()
             == crate::shell::tool_suites::TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY
@@ -8109,7 +8108,6 @@ fn inspector_tab_stack_split_or_reset_fails_closed_if_legacy_only_path_required(
         reset_action,
         editor_shell::RoutedShellAction::ResetTabStackAreaStableKey {
             stable_surface_key,
-            panel_kind: PanelKind::Diagnostics,
             ..
         } if stable_surface_key.as_str()
             == crate::shell::tool_suites::TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY
@@ -8158,7 +8156,6 @@ fn locked_inspector_tab_stack_create_menu_routes_only_stable_key_surface() {
         create_actions[0],
         editor_shell::RoutedShellAction::CreatePanelTabStableKey {
             tab_stack_id,
-            panel_kind: PanelKind::Diagnostics,
             stable_surface_key,
         } if *tab_stack_id == inspector_stack && stable_surface_key == &key
     ));
