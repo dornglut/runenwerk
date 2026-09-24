@@ -12,9 +12,9 @@ use runen_gpu::{
     GpuRenderPipelineStateDescriptor, GpuResourceLifetime, GpuRuntimeBindingResource,
     GpuRuntimeBindingSet, GpuRuntimeBindingValue, GpuRuntimeBufferBinding,
     GpuRuntimeTextureViewBinding, GpuSamplerClass, GpuScissorRect, GpuTextureFormat,
-    GpuTextureSampleClass, GpuTextureUsage, GpuVertexAttribute,
-    GpuVertexBufferBinding, GpuVertexBufferLayoutDescriptor, GpuVertexFormat,
-    GpuVertexInputStateDescriptor, GpuVertexStepMode, GpuViewport,
+    GpuTextureSampleClass, GpuTextureUsage, GpuVertexAttribute, GpuVertexBufferBinding,
+    GpuVertexBufferLayoutDescriptor, GpuVertexFormat, GpuVertexInputStateDescriptor,
+    GpuVertexStepMode, GpuViewport,
 };
 use std::num::NonZeroU64;
 
