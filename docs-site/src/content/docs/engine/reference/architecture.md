@@ -31,11 +31,12 @@ Builtin resource installation:
   simulation identity/configuration.
 - Fixed-cadence state is selected through `FixedStepPlugin`.
 - Simulation integration state is selected through `SimulationPlugin`.
-- Universal bootstrap state still includes current App/platform/publication resources such as:
-  - `InputState`, `ActionState`, `WindowState`
-  - frame-pacing/window platform state
+- Bare App bootstrap retains only current universal App/runtime state such as:
+  - `WindowState`
   - `ProductPublicationRuntimeResource`
   - `QuerySnapshotRuntimeResource`
+- Input capability state is selected through `InputFinalizePlugin`, which installs `InputState` and `ActionState`.
+- Native window/event providers and frame-pacing state are realized by the selected native Host rather than by bare App construction.
 
 `Time` is not a bare App builtin. `TimePlugin` owns default `Time` installation and frame-time
 progression; `default_plugins()` includes `TimePlugin` for the ordinary engine stack.
