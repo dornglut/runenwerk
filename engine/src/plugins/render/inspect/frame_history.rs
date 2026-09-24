@@ -39,7 +39,7 @@ impl RenderFrameObservationPolicyResource {
     }
 
     pub fn retains_frame(self, frame_index: u64) -> bool {
-        self.enabled && frame_index % self.sample_every_nth_frame.max(1) == 0
+        self.enabled && frame_index.is_multiple_of(self.sample_every_nth_frame.max(1))
     }
 
     fn bounded_capacity(self) -> usize {
