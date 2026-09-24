@@ -260,8 +260,6 @@ pub fn submit_editor_frame_system(
     );
 }
 
-}
-
 pub fn submit_editor_secondary_native_frames_system(
     window_registry: Res<WindowStateRegistryResource>,
     debug_metrics: Res<engine::DebugMetricsState>,
