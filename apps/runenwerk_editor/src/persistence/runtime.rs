@@ -447,6 +447,55 @@ mod tests {
         SceneModelMeshMaterialRegionSourceId, SceneModelMeshMaterialSlotAssignment,
         SceneModelMeshSourceId, SdfPrimitiveMaterialSlotAssignment, SdfPrimitiveSourceId,
     };
+    use scene::SceneChildOf;
+
+    #[test]
+    fn scene_file_roundtrip_rebuilds_runtime_hierarchy_projection_without_runtime_identity_persistence()
+     {
+        let scene_file = SceneFileV2::new(vec![
+            SceneEntityRecordV2::new(
+                1,
+                "Root",
+                None,
+                SceneTransformRecord::default(),
+                ScenePrimitiveRecord::default(),
+            ),
+            SceneEntityRecordV2::new(
+                2,
+                "Child",
+                Some(1),
+                SceneTransformRecord::default(),
+                ScenePrimitiveRecord::default(),
+            ),
+        ]);
+
+        let mut runtime = RunenwerkEditorRuntime::new();
+        register_mvp_component_types(&mut runtime);
+        apply_scene_file_to_runtime(&mut runtime, &scene_file)
+            .expect("scene hierarchy should restore");
+
+        let root = runtime.ids().resolve_entity(EntityId(1)).unwrap();
+        let child = runtime.ids().resolve_entity(EntityId(2)).unwrap();
+        assert_eq!(
+            runtime
+                .world()
+                .relations::<SceneChildOf>()
+                .targets(child)
+                .unwrap()
+                .iter()
+                .collect::<Vec<_>>(),
+            vec![root]
+        );
+
+        let persisted = scene_file_from_runtime(&runtime);
+        assert_eq!(persisted.entities.len(), 2);
+        let child_record = persisted
+            .entities
+            .iter()
+            .find(|entity| entity.id == 2)
+            .expect("child should persist");
+        assert_eq!(child_record.parent, Some(1));
+    }
 
     #[test]
     fn scene_file_roundtrip_preserves_transform_and_primitive_payload() {
