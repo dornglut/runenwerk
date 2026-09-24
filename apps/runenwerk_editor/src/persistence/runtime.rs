@@ -438,7 +438,6 @@ fn scene_kind_to_editor(kind: ScenePrimitiveKind) -> EditorPrimitiveKind {
 
 #[cfg(test)]
 mod tests {
-    use scene::SceneChildOf;
     use super::*;
     use crate::editor_app::RunenwerkEditorApp;
     use crate::editor_runtime::{bootstrap_mvp_scene_if_empty, register_mvp_component_types};
@@ -448,6 +447,7 @@ mod tests {
         SceneModelMeshMaterialRegionSourceId, SceneModelMeshMaterialSlotAssignment,
         SceneModelMeshSourceId, SdfPrimitiveMaterialSlotAssignment, SdfPrimitiveSourceId,
     };
+    use scene::SceneChildOf;
 
     #[test]
     fn scene_file_roundtrip_rebuilds_runtime_hierarchy_projection_without_runtime_identity_persistence()
