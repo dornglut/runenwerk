@@ -5,6 +5,8 @@ use engine::plugins::render::{
     CompiledPassExecutionPlan, RenderFlowRegistryResource, RenderFrameProducerId,
     SurfaceFrameSubmissionRegistryResource, ViewportSurfaceBindingRegistryResource,
 };
+use engine::runtime::WindowStateRegistryResource;
+use engine::runtime::platform::PlatformWindowEventQueueResource;
 use runenwerk_editor::runtime::resources::{EditorHostResource, EditorViewportDebugStage};
 use runenwerk_editor::runtime::viewport::{
     EDITOR_MAIN_FLOW_ID, EDITOR_VIEWPORT_SCENE_PRODUCT_UNIFORM_ID, SCENE_COLOR_PRODUCT_ID,
@@ -35,6 +37,19 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
         .expect("headless app construction should succeed")
         .run_for_frames(2)
         .expect("headless editor app should run");
+
+    assert!(
+        app.world()
+            .resource::<WindowStateRegistryResource>()
+            .is_err(),
+        "headless editor must not provision native window registry state"
+    );
+    assert!(
+        app.world()
+            .resource::<PlatformWindowEventQueueResource>()
+            .is_err(),
+        "headless editor must not provision native platform-window event state"
+    );
 
     let surfaces = app
         .world()

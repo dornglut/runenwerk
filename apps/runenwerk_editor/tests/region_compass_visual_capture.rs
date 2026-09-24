@@ -165,6 +165,8 @@ fn capture() -> anyhow::Result<()> {
     native_state.size_px = (size.width, size.height);
     native_state.scale_factor = window.scale_factor();
     app.world_mut()
+        .insert_resource(WindowStateRegistryResource::default());
+    app.world_mut()
         .resource_mut::<WindowStateRegistryResource>()?
         .register_created_window(NativeWindowId::primary(), &native_state);
     app.world_mut()

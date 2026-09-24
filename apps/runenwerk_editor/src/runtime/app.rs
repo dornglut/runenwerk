@@ -8,9 +8,9 @@ use runen_gpu::GpuBindingKey;
 #[cfg(test)]
 use runen_gpu::GpuWorkResourceId;
 
-use crate::runtime::plugin::EditorAppPlugin;
+use crate::runtime::plugin::{EditorAppPlugin, EditorNativeWindowIntegrationPlugin};
 use crate::runtime::resources::{EditorHostResource, EditorViewportRenderState};
-use crate::runtime::ui_gallery::UiGalleryPlugin;
+use crate::runtime::ui_gallery::{UiGalleryNativeWindowIntegrationPlugin, UiGalleryPlugin};
 use crate::runtime::viewport::{
     EDITOR_MAIN_FLOW_ID, EDITOR_VIEWPORT_SCENE_PRODUCT_UNIFORM_ID,
     VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW, VIEWPORT_TARGET_ALIAS_OVERLAY,
@@ -82,7 +82,20 @@ pub(crate) fn test_gpu_work_resource_id(label: &str) -> GpuWorkResourceId {
 }
 
 fn configure_app(app: &mut App) -> Result<()> {
-    configure_app_for_workbench(app, RunenwerkRuntimeWorkbench::FullEditor)
+    configure_native_app_for_workbench(app, RunenwerkRuntimeWorkbench::FullEditor)
+}
+
+fn configure_native_app_for_workbench(
+    app: &mut App,
+    workbench: RunenwerkRuntimeWorkbench,
+) -> Result<()> {
+    configure_app_for_workbench(app, workbench)?;
+    if workbench == RunenwerkRuntimeWorkbench::UiGallery {
+        app.add_plugin(UiGalleryNativeWindowIntegrationPlugin);
+    } else {
+        app.add_plugin(EditorNativeWindowIntegrationPlugin);
+    }
+    Ok(())
 }
 
 fn configure_app_for_workbench(app: &mut App, workbench: RunenwerkRuntimeWorkbench) -> Result<()> {
@@ -255,19 +268,19 @@ pub fn run() -> Result<()> {
 
 pub fn run_material_lab_workbench() -> Result<()> {
     let mut app = App::new();
-    configure_app_for_workbench(&mut app, RunenwerkRuntimeWorkbench::MaterialLab)?;
+    configure_native_app_for_workbench(&mut app, RunenwerkRuntimeWorkbench::MaterialLab)?;
     app.run()
 }
 
 pub fn run_ui_designer_workbench() -> Result<()> {
     let mut app = App::new();
-    configure_app_for_workbench(&mut app, RunenwerkRuntimeWorkbench::UiDesigner)?;
+    configure_native_app_for_workbench(&mut app, RunenwerkRuntimeWorkbench::UiDesigner)?;
     app.run()
 }
 
 pub fn run_ui_gallery_workbench() -> Result<()> {
     let mut app = App::new();
-    configure_app_for_workbench(&mut app, RunenwerkRuntimeWorkbench::UiGallery)?;
+    configure_native_app_for_workbench(&mut app, RunenwerkRuntimeWorkbench::UiGallery)?;
     app.run()
 }
 

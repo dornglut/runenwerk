@@ -5,7 +5,7 @@ use engine::plugins::render::{
     EditorPickingTarget, RenderFrameProducerId, SurfaceFrameRoute, SurfaceFrameSubmission,
     SurfaceFrameSubmissionOrder, SurfaceFrameSubmissionRegistryResource, UiFontAtlasResource,
 };
-use engine::runtime::{Res, ResMut, WindowStateRegistryResource};
+use engine::runtime::{NativeWindowLifecycleState, Res, ResMut, WindowStateRegistryResource};
 use scene::LocalTransform;
 use ui_math::UiRect;
 use ui_render_data::{
@@ -53,7 +53,6 @@ pub fn submit_editor_frame_system(
     mut mounted_surfaces: ResMut<MountedSurfaceRegistryResource>,
     atlas: Res<UiFontAtlasResource>,
     viewport_picking_results: Res<ViewportPickingResultsResource>,
-    window_registry: Res<WindowStateRegistryResource>,
     mut submissions: ResMut<SurfaceFrameSubmissionRegistryResource>,
 ) {
     let bounds = window_bounds(&window);
@@ -65,9 +64,6 @@ pub fn submit_editor_frame_system(
         theme,
     } = &mut *host;
     let shell_theme = scaled_shell_theme(theme, window.scale_factor);
-    let target_presentations = shell_state
-        .composition_target_bindings()
-        .collect::<Vec<_>>();
     let primary_target_id = shell_state
         .composition_runtime()
         .composition()
@@ -128,34 +124,6 @@ pub fn submit_editor_frame_system(
             expression.into_ui_frame(),
         )
     };
-    let secondary_frames = target_presentations
-        .iter()
-        .filter(|entry| Some(entry.target_id) != primary_target_id)
-        .filter_map(|entry| {
-            let record = window_registry.record(entry.binding.native_window_id)?;
-            let target_bounds = UiRect::new(
-                0.0,
-                0.0,
-                record.size_px.0.max(1) as f32,
-                record.size_px.1.max(1) as f32,
-            );
-            app.build_shell_expression_frame_for_target_with_surface_resources(
-                shell_state,
-                entry.target_id,
-                target_bounds,
-                &shell_theme,
-                &*atlas,
-                Some(&viewport_observations),
-                Some(&tool_surface_bindings),
-                Some(&viewport_instances),
-                Some(crate::shell::EditorShellFrameMetrics {
-                    fps_ema: debug_metrics.fps_ema,
-                    frame_ms_ema: debug_metrics.frame_ms_ema,
-                }),
-            )
-            .map(|expression| (entry.binding.render_surface_id, expression.into_ui_frame()))
-        })
-        .collect::<Vec<_>>();
     let rendered_viewport_embeds = primary_viewport_embeds_from_frame(&frame);
     let viewport_bounds = active_viewport_id
         .and_then(|viewport_id| viewport_bounds_from_frame(&frame, viewport_id.0))
@@ -290,15 +258,75 @@ pub fn submit_editor_frame_system(
                 .with_frame(frame)
         },
     );
-    for (render_surface_id, frame) in secondary_frames {
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn submit_editor_secondary_native_frames_system(
+    window_registry: Res<WindowStateRegistryResource>,
+    debug_metrics: Res<engine::DebugMetricsState>,
+    mut host: ResMut<EditorHostResource>,
+    viewport_observations: Res<ViewportArtifactObservationResource>,
+    viewport_instances: Res<ViewportInstanceRegistryResource>,
+    tool_surface_bindings: Res<ToolSurfaceRuntimeBindingRegistryResource>,
+    atlas: Res<UiFontAtlasResource>,
+    mut submissions: ResMut<SurfaceFrameSubmissionRegistryResource>,
+) {
+    let EditorHostResource {
+        app,
+        shell_state,
+        theme,
+    } = &mut *host;
+    let primary_target_id = shell_state
+        .composition_runtime()
+        .composition()
+        .definition()
+        .targets()
+        .first()
+        .map(|target| target.id);
+
+    let secondary_targets = shell_state
+        .composition_target_bindings()
+        .filter(|entry| Some(entry.target_id) != primary_target_id)
+        .collect::<Vec<_>>();
+
+    for entry in secondary_targets {
+        let Some(record) = window_registry.record(entry.binding.native_window_id) else {
+            continue;
+        };
+        if record.lifecycle_state != NativeWindowLifecycleState::Created {
+            continue;
+        }
+        let target_bounds = UiRect::new(
+            0.0,
+            0.0,
+            record.size_px.0.max(1) as f32,
+            record.size_px.1.max(1) as f32,
+        );
+        let shell_theme = scaled_shell_theme(theme, record.scale_factor);
+        let Some(expression) = app.build_shell_expression_frame_for_target_with_surface_resources(
+            shell_state,
+            entry.target_id,
+            target_bounds,
+            &shell_theme,
+            &*atlas,
+            Some(&viewport_observations),
+            Some(&tool_surface_bindings),
+            Some(&viewport_instances),
+            Some(crate::shell::EditorShellFrameMetrics {
+                fps_ema: debug_metrics.fps_ema,
+                frame_ms_ema: debug_metrics.frame_ms_ema,
+            }),
+        ) else {
+            continue;
+        };
         submissions.replace_for_surface(
             EDITOR_SHELL_UI_PRODUCER_ID,
-            render_surface_id,
+            entry.binding.render_surface_id,
             |producer_id| {
                 SurfaceFrameSubmission::new(producer_id)
                     .with_route(SurfaceFrameRoute::Screen)
                     .with_order(SurfaceFrameSubmissionOrder::new(10, 0))
-                    .with_frame(frame)
+                    .with_frame(expression.into_ui_frame())
             },
         );
     }
