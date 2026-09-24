@@ -108,7 +108,9 @@ impl RenderFrameGpuObservation {
                 evidence.pass_id.clone(),
                 evidence.pass_kind.clone(),
             );
-            let ordinal = occurrence_by_signature.entry(signature.clone()).or_default();
+            let ordinal = occurrence_by_signature
+                .entry(signature.clone())
+                .or_default();
             let wanted_ordinal = *ordinal;
             *ordinal = ordinal.saturating_add(1);
 
@@ -239,7 +241,10 @@ impl RenderFrameHistoryState {
                 continue;
             };
             correlated
-                .entry(RenderFrameObservationKey::new(frame_index, render_surface_id))
+                .entry(RenderFrameObservationKey::new(
+                    frame_index,
+                    render_surface_id,
+                ))
                 .or_default()
                 .push(sample.clone());
         }
