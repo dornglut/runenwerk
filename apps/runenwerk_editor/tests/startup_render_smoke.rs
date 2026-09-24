@@ -98,9 +98,9 @@ fn viewport_scene_submission_waits_for_generated_material_scene_bundle() {
         .expect("render plugin should install material feature state") =
         PreparedMaterialFeatureResource::default();
 
-    app = app
-        .run_for_frames(1)
-        .expect("editor frame must remain valid while generated material scene shader is unavailable");
+    app = app.run_for_frames(1).expect(
+        "editor frame must remain valid while generated material scene shader is unavailable",
+    );
 
     let material = app
         .world()
