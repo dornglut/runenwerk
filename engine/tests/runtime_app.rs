@@ -1,7 +1,7 @@
 use engine::plugins::input::domain::action;
 use engine::plugins::{
-    ActionState, FixedStepPlugin, InputFinalizePlugin, SimulationPlugin, TimePlugin,
-    default_plugins,
+    ActionState, FixedStepPlugin, InputFinalizePlugin, PhysicalKeyIdentity, SimulationPlugin,
+    TimePlugin, default_plugins,
 };
 use engine::prelude::*;
 use winit::event::ElementState;
@@ -114,9 +114,10 @@ fn input_bindings_require_selected_input_capability() {
     let mut app = App::headless();
     app.add_input_bindings([("test.action", PhysicalKeyIdentity::code("KeyA"))]);
 
-    let error = app
-        .run_for_frames(0)
-        .expect_err("bindings without input capability should reject App composition");
+    let error = match app.run_for_frames(0) {
+        Ok(_) => panic!("bindings without input capability should reject App composition"),
+        Err(error) => error,
+    };
     assert!(
         format!("{error:#}").contains("InputFinalizePlugin"),
         "composition error should identify the missing input capability: {error:#}"
