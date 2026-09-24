@@ -346,7 +346,7 @@ fn rl2_canonical_composition_uses_real_radiance_import_and_visualizer() {
         .runtime_bindings([GpuRuntimeBindingValue::new(
             binding_key,
             [GpuRuntimeBindingResource::TextureView(
-                GpuRuntimeTextureViewBinding::new(radiance_view, GpuTextureViewDimension::D2),
+                GpuRuntimeTextureViewBinding::new(radiance_view),
             )],
         )
         .expect("RL2 visualizer binding value")])
