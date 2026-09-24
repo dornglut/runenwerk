@@ -82,6 +82,7 @@ impl Renderer {
             last_pass_timings: Vec::new(),
             last_gpu_timing_capability: RenderGpuTimingCapability::UnavailableThisFrame,
             last_gpu_pass_timing_evidence: Vec::new(),
+            last_composed_gpu_timing_evidence: Vec::new(),
             last_runtime_resources: Vec::new(),
             last_pass_provenance: Vec::new(),
             last_preflight_report:
@@ -106,12 +107,16 @@ impl Renderer {
         self.deterministic_resources.retain_in_flight_submissions();
         let super::render_flow::RendererGpuObservationOutput {
             timing_evidence,
+            composed_timing_evidence,
             captured_textures,
             capture_results,
         } = self.gpu_observations.progress(context);
         self.pending_gpu_observation_output
             .timing_evidence
             .extend(timing_evidence);
+        self.pending_gpu_observation_output
+            .composed_timing_evidence
+            .extend(composed_timing_evidence);
         self.pending_gpu_observation_output
             .captured_textures
             .extend(captured_textures);
@@ -138,18 +143,23 @@ impl Renderer {
             .timing_evidence
             .append(&mut self.last_gpu_pass_timing_evidence);
         progressed
+            .composed_timing_evidence
+            .append(&mut self.last_composed_gpu_timing_evidence);
+        progressed
             .captured_textures
             .append(&mut self.last_captured_textures);
         progressed
             .capture_results
             .append(&mut self.last_capture_selector_results);
         self.last_gpu_pass_timing_evidence = progressed.timing_evidence;
+        self.last_composed_gpu_timing_evidence = progressed.composed_timing_evidence;
         self.last_captured_textures = progressed.captured_textures;
         self.last_capture_selector_results = progressed.capture_results;
     }
 
     pub(in crate::plugins::render) fn clear_published_gpu_observations(&mut self) {
         self.last_gpu_pass_timing_evidence.clear();
+        self.last_composed_gpu_timing_evidence.clear();
         self.last_capture_plan = ResolvedRenderCapturePlan::default();
         self.last_capture_selector_results.clear();
         self.last_captured_textures.clear();
@@ -173,6 +183,16 @@ impl Renderer {
 
     pub(in crate::plugins::render) fn clear_published_gpu_pass_timing_evidence(&mut self) {
         self.last_gpu_pass_timing_evidence.clear();
+    }
+
+    pub fn last_composed_gpu_timing_evidence(
+        &self,
+    ) -> &[crate::plugins::render::inspect::RenderComposedFrameGpuTimingEvidence] {
+        &self.last_composed_gpu_timing_evidence
+    }
+
+    pub(in crate::plugins::render) fn clear_published_composed_gpu_timing_evidence(&mut self) {
+        self.last_composed_gpu_timing_evidence.clear();
     }
 
     pub fn last_runtime_resources(
