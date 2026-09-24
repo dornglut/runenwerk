@@ -12,14 +12,15 @@ use engine::plugins::net::{
 use engine::plugins::{ScenePlugin, SimulationPlugin, default_plugins};
 use engine::prelude::*;
 use runen_net::identity::{ConnectionHandle, ParticipantId, SessionId};
+use runen_net::input::{AuthorityInputAggregateLimits, AuthorityInputLimits};
 use runen_net::protocol::{
     CompatibilityOffer, NegotiatedContract, NegotiationManager, NegotiationManagerLimits,
     NegotiationRequirements, OfferLimits, ProtocolContract, ProtocolId, ProtocolRevision,
 };
-use runen_net::session::{Session, SessionLimits};
+use runen_net::session::{RecoveryDuration, RetentionPolicy, Session, SessionLimits};
 use serde::{Deserialize, Serialize};
 use std::io;
-use std::num::NonZeroUsize;
+use std::num::{NonZeroU64, NonZeroUsize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 struct MoveCommand {
@@ -176,6 +177,21 @@ type PredictionState = NetPredictionState<ClientCommandEnvelope>;
 type ClientSnapshotState = ClientSnapshotReplicationState<TestSnapshot>;
 type ServerSnapshotState = ServerSnapshotReplicationState<TestSnapshot>;
 
+fn test_authority_input_policy() -> AuthorityInputPolicy {
+    let participant_limits = AuthorityInputLimits::new(
+        NonZeroUsize::new(64 * 1024).expect("test batch limit must be non-zero"),
+        NonZeroUsize::new(64).expect("test participant key limit must be non-zero"),
+        NonZeroUsize::new(512 * 1024).expect("test participant byte limit must be non-zero"),
+        8,
+    )
+    .expect("test participant input limits must be valid");
+    let aggregate_limits = AuthorityInputAggregateLimits::new(
+        NonZeroUsize::new(1_024).expect("test aggregate key limit must be non-zero"),
+        NonZeroUsize::new(8 * 1024 * 1024).expect("test aggregate byte limit must be non-zero"),
+    );
+    AuthorityInputPolicy::new(participant_limits, aggregate_limits)
+}
+
 struct NetworkClientPlugin;
 
 impl Plugin for NetworkClientPlugin {
@@ -214,7 +230,7 @@ fn test_compatibility_offer() -> CompatibilityOffer {
     CompatibilityOffer::new(vec![test_protocol_contract()], vec![], vec![], None)
 }
 
-fn test_runennet_session_core() -> RunenNetSessionCore {
+fn test_runennet_session_core_without_authority_input() -> RunenNetSessionCore {
     let negotiation =
         NegotiationManager::new(OfferLimits::default(), NegotiationManagerLimits::default())
             .expect("test negotiation limits must be valid");
@@ -224,10 +240,13 @@ fn test_runennet_session_core() -> RunenNetSessionCore {
     RunenNetSessionCore::new(negotiation, session)
 }
 
-fn establish_runennet_connection(
+fn test_runennet_session_core() -> RunenNetSessionCore {
+    test_runennet_session_core_without_authority_input()
+        .with_authority_input_policy(test_authority_input_policy())
+}
+
+fn establish_runennet_negotiation(
     core: &mut RunenNetSessionCore,
-    projection: &mut RunenNetSessionProjection,
-    participant: ParticipantId,
     connection: ConnectionHandle,
 ) {
     core.negotiation_mut()
@@ -250,6 +269,15 @@ fn establish_runennet_connection(
     core.negotiation_mut()
         .validate_peer(connection)
         .expect("peer validation must establish compatibility");
+}
+
+fn establish_runennet_connection(
+    core: &mut RunenNetSessionCore,
+    projection: &mut RunenNetSessionProjection,
+    participant: ParticipantId,
+    connection: ConnectionHandle,
+) {
+    establish_runennet_negotiation(core, connection);
     core.admit_established(projection, participant, connection)
         .expect("established RunenNet connection must be admitted");
 }

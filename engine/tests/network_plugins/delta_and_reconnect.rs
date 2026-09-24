@@ -422,3 +422,358 @@ fn server_tracks_per_connection_baselines_for_runennet_connections() {
     assert_eq!(checkpoint_a.last_ack_cursor, SnapshotCursor(1));
     assert_eq!(checkpoint_b.last_full_snapshot_cursor, SnapshotCursor(2));
 }
+
+
+#[test]
+fn authority_input_rejects_future_tick_outside_explicit_window() {
+    let mut app = App::headless();
+    app.add_plugins(default_plugins());
+    app.add_plugins((ScenePlugin, NetworkServerPlugin));
+    install_network_test_clock(&mut app);
+    let connection = ConnectionHandle::new(1);
+    install_runennet_connections(&mut app, &[(connection, ParticipantId::new(1))]);
+
+    let payload = TestReplicationDriver::encode_input(&[ClientCommandEnvelope::Ability(
+        AbilityCommand { slot: 9 },
+    )])
+    .expect("input payload should encode");
+    enqueue_server_inbox_from(
+        app.world_mut(),
+        Some(connection),
+        ClientMessage::InputFrame(InputFrame {
+            tick: SimulationTick(10),
+            payload,
+        }),
+    )
+    .expect("future input should enqueue");
+
+    let app = run_network_protocol_frame(app, "future-window rejection should run");
+    let diagnostics = app.world().resource::<ReplicationDiagnostics>().unwrap();
+    assert_eq!(diagnostics.future_inputs, 1);
+    assert!(app.world().resource::<AppliedInputLog>().is_err());
+}
+
+#[test]
+fn authority_input_duplicate_and_conflict_do_not_execute_twice() {
+    let mut app = App::headless();
+    app.add_plugins(default_plugins());
+    app.add_plugins((ScenePlugin, NetworkServerPlugin));
+    install_network_test_clock(&mut app);
+    let connection = ConnectionHandle::new(1);
+    install_runennet_connections(&mut app, &[(connection, ParticipantId::new(1))]);
+
+    let accepted = ClientCommandEnvelope::Ability(AbilityCommand { slot: 21 });
+    let accepted_payload =
+        TestReplicationDriver::encode_input(std::slice::from_ref(&accepted))
+            .expect("accepted input payload should encode");
+    let conflicting_payload = TestReplicationDriver::encode_input(&[
+        ClientCommandEnvelope::Ability(AbilityCommand { slot: 22 }),
+    ])
+    .expect("conflicting input payload should encode");
+
+    for payload in [
+        accepted_payload.clone(),
+        accepted_payload,
+        conflicting_payload,
+    ] {
+        enqueue_server_inbox_from(
+            app.world_mut(),
+            Some(connection),
+            ClientMessage::InputFrame(InputFrame {
+                tick: SimulationTick(1),
+                payload,
+            }),
+        )
+        .expect("authority input should enqueue");
+        app = run_network_protocol_frame(app, "authority-input classification frame should run");
+    }
+
+    let diagnostics = app.world().resource::<ReplicationDiagnostics>().unwrap();
+    assert_eq!(diagnostics.duplicate_inputs, 1);
+    assert_eq!(diagnostics.conflicting_inputs, 1);
+
+    let app = run_network_fixed_step(app, "accepted authority input should execute once");
+    assert_eq!(
+        app.world().resource::<AppliedInputLog>().unwrap().inputs,
+        vec![accepted]
+    );
+}
+
+#[test]
+fn authority_input_rejects_unbound_connection() {
+    let mut app = App::headless();
+    app.add_plugins(default_plugins());
+    app.add_plugins((ScenePlugin, NetworkServerPlugin));
+    install_network_test_clock(&mut app);
+    let admitted = ConnectionHandle::new(1);
+    let unbound = ConnectionHandle::new(2);
+    install_runennet_connections(&mut app, &[(admitted, ParticipantId::new(1))]);
+
+    let payload = TestReplicationDriver::encode_input(&[
+        ClientCommandEnvelope::Ability(AbilityCommand { slot: 22 }),
+    ])
+    .expect("input payload should encode");
+    enqueue_server_inbox_from(
+        app.world_mut(),
+        Some(unbound),
+        ClientMessage::InputFrame(InputFrame {
+            tick: SimulationTick(1),
+            payload,
+        }),
+    )
+    .expect("unbound input should enter bounded inbox");
+
+    let app = run_network_protocol_frame(app, "unauthorized authority input should run");
+    let diagnostics = app.world().resource::<ReplicationDiagnostics>().unwrap();
+    assert_eq!(diagnostics.unauthorized_inputs, 1);
+    assert!(app.world().resource::<AppliedInputLog>().is_err());
+}
+
+#[test]
+fn authority_input_requires_explicit_session_policy() {
+    let mut app = App::headless();
+    app.add_plugins(default_plugins());
+    app.add_plugins((ScenePlugin, NetworkServerPlugin));
+    install_network_test_clock(&mut app);
+
+    let connection = ConnectionHandle::new(1);
+    let participant = ParticipantId::new(1);
+    let mut core = test_runennet_session_core_without_authority_input();
+    let mut projection = RunenNetSessionProjection::default();
+    establish_runennet_connection(&mut core, &mut projection, participant, connection);
+    app.world_mut().insert_resource(core);
+    app.world_mut().insert_resource(projection);
+    sync_runennet_session_projection(app.world_mut());
+
+    let payload = TestReplicationDriver::encode_input(&[
+        ClientCommandEnvelope::Ability(AbilityCommand { slot: 23 }),
+    ])
+    .expect("input payload should encode");
+    enqueue_server_inbox_from(
+        app.world_mut(),
+        Some(connection),
+        ClientMessage::InputFrame(InputFrame {
+            tick: SimulationTick(1),
+            payload,
+        }),
+    )
+    .expect("input should enter bounded server inbox");
+
+    let error = app
+        .run_for_frames(1)
+        .expect_err("remote authority input without explicit policy must fail closed");
+    assert!(
+        format!("{error:#}").contains("with_authority_input_policy"),
+        "configuration failure should name the required explicit session policy: {error:#}"
+    );
+}
+
+#[test]
+fn authority_input_resource_limits_reject_without_execution() {
+    let mut app = App::headless();
+    app.add_plugins(default_plugins());
+    app.add_plugins((ScenePlugin, NetworkServerPlugin));
+    install_network_test_clock(&mut app);
+
+    let participant_limits = AuthorityInputLimits::new(
+        NonZeroUsize::new(1).unwrap(),
+        NonZeroUsize::new(1).unwrap(),
+        NonZeroUsize::new(1).unwrap(),
+        8,
+    )
+    .unwrap();
+    let aggregate_limits = AuthorityInputAggregateLimits::new(
+        NonZeroUsize::new(1).unwrap(),
+        NonZeroUsize::new(1).unwrap(),
+    );
+    let policy = AuthorityInputPolicy::new(participant_limits, aggregate_limits);
+
+    let connection = ConnectionHandle::new(1);
+    let participant = ParticipantId::new(1);
+    let mut core =
+        test_runennet_session_core_without_authority_input().with_authority_input_policy(policy);
+    let mut projection = RunenNetSessionProjection::default();
+    establish_runennet_connection(&mut core, &mut projection, participant, connection);
+    app.world_mut().insert_resource(core);
+    app.world_mut().insert_resource(projection);
+    sync_runennet_session_projection(app.world_mut());
+
+    let payload = TestReplicationDriver::encode_input(&[
+        ClientCommandEnvelope::Ability(AbilityCommand { slot: 24 }),
+    ])
+    .expect("input payload should encode");
+    assert!(payload.len() > 1);
+    enqueue_server_inbox_from(
+        app.world_mut(),
+        Some(connection),
+        ClientMessage::InputFrame(InputFrame {
+            tick: SimulationTick(1),
+            payload,
+        }),
+    )
+    .expect("resource-rejected input should enter bounded inbox");
+
+    let app = run_network_protocol_frame(app, "authority-input resource rejection should run");
+    assert_eq!(
+        app.world()
+            .resource::<ReplicationDiagnostics>()
+            .unwrap()
+            .input_resource_rejections,
+        1
+    );
+    let app = run_network_fixed_step(app, "resource-rejected input must not execute");
+    assert!(app.world().resource::<AppliedInputLog>().is_err());
+}
+
+#[test]
+fn retained_replacement_preserves_authority_input_evidence_and_execution() {
+    let mut app = App::headless();
+    app.add_plugins(default_plugins());
+    app.add_plugins((ScenePlugin, NetworkServerPlugin));
+    install_network_test_clock(&mut app);
+    let old_connection = ConnectionHandle::new(1);
+    let new_connection = ConnectionHandle::new(2);
+    let participant = ParticipantId::new(1);
+    install_runennet_connections(&mut app, &[(old_connection, participant)]);
+
+    let accepted = ClientCommandEnvelope::Ability(AbilityCommand { slot: 31 });
+    let payload = TestReplicationDriver::encode_input(std::slice::from_ref(&accepted))
+        .expect("input payload should encode");
+    enqueue_server_inbox_from(
+        app.world_mut(),
+        Some(old_connection),
+        ClientMessage::InputFrame(InputFrame {
+            tick: SimulationTick(2),
+            payload: payload.clone(),
+        }),
+    )
+    .unwrap();
+    app = run_network_protocol_frame(app, "initial authority input should be accepted");
+
+    let mut core = app
+        .world_mut()
+        .remove_resource::<RunenNetSessionCore>()
+        .unwrap();
+    let mut projection = app
+        .world_mut()
+        .remove_resource::<RunenNetSessionProjection>()
+        .unwrap();
+    let duration = RecoveryDuration::new(NonZeroU64::new(4).unwrap());
+    core.connection_lost(
+        &mut projection,
+        participant,
+        old_connection,
+        RetentionPolicy::RetainForRecovery { duration },
+    )
+    .unwrap();
+    establish_runennet_negotiation(&mut core, new_connection);
+    core.bind_replacement(&mut projection, participant, new_connection)
+        .unwrap();
+    app.world_mut().insert_resource(core);
+    app.world_mut().insert_resource(projection);
+    sync_runennet_session_projection(app.world_mut());
+
+    enqueue_server_inbox_from(
+        app.world_mut(),
+        Some(new_connection),
+        ClientMessage::InputFrame(InputFrame {
+            tick: SimulationTick(2),
+            payload,
+        }),
+    )
+    .unwrap();
+    app = run_network_protocol_frame(app, "replacement duplicate should be classified");
+
+    assert_eq!(
+        app.world()
+            .resource::<ReplicationDiagnostics>()
+            .unwrap()
+            .duplicate_inputs,
+        1
+    );
+
+    app = run_network_fixed_step(app, "tick one should run");
+    app = run_network_fixed_step(app, "tick two should execute retained authority input");
+    assert_eq!(
+        app.world().resource::<AppliedInputLog>().unwrap().inputs,
+        vec![accepted]
+    );
+}
+
+#[test]
+fn participant_removal_purges_pending_authority_input_before_readmission() {
+    let mut app = App::headless();
+    app.add_plugins(default_plugins());
+    app.add_plugins((ScenePlugin, NetworkServerPlugin));
+    install_network_test_clock(&mut app);
+    let connection = ConnectionHandle::new(1);
+    let participant = ParticipantId::new(1);
+    install_runennet_connections(&mut app, &[(connection, participant)]);
+
+    let first = ClientCommandEnvelope::Ability(AbilityCommand { slot: 41 });
+    let payload = TestReplicationDriver::encode_input(std::slice::from_ref(&first)).unwrap();
+    enqueue_server_inbox_from(
+        app.world_mut(),
+        Some(connection),
+        ClientMessage::InputFrame(InputFrame {
+            tick: SimulationTick(2),
+            payload,
+        }),
+    )
+    .unwrap();
+    app = run_network_protocol_frame(app, "first participant lifetime input should be accepted");
+
+    let mut core = app
+        .world_mut()
+        .remove_resource::<RunenNetSessionCore>()
+        .unwrap();
+    let mut projection = app
+        .world_mut()
+        .remove_resource::<RunenNetSessionProjection>()
+        .unwrap();
+    core.remove_participant(&mut projection, participant).unwrap();
+    core.admit_established(&mut projection, participant, connection)
+        .expect("participant should be able to begin a fresh membership lifetime");
+    app.world_mut().insert_resource(core);
+    app.world_mut().insert_resource(projection);
+    sync_runennet_session_projection(app.world_mut());
+
+    let replacement = ClientCommandEnvelope::Ability(AbilityCommand { slot: 42 });
+    let replacement_payload =
+        TestReplicationDriver::encode_input(std::slice::from_ref(&replacement)).unwrap();
+    enqueue_server_inbox_from(
+        app.world_mut(),
+        Some(connection),
+        ClientMessage::InputFrame(InputFrame {
+            tick: SimulationTick(2),
+            payload: replacement_payload,
+        }),
+    )
+    .unwrap();
+    app = run_network_protocol_frame(
+        app,
+        "fresh membership input should not conflict with old lifetime",
+    );
+
+    assert_eq!(
+        app.world()
+            .resource::<ReplicationDiagnostics>()
+            .unwrap()
+            .duplicate_inputs,
+        0
+    );
+    assert_eq!(
+        app.world()
+            .resource::<ReplicationDiagnostics>()
+            .unwrap()
+            .conflicting_inputs,
+        0
+    );
+
+    app = run_network_fixed_step(app, "tick one should run");
+    app = run_network_fixed_step(app, "tick two should execute only fresh-lifetime input");
+    assert_eq!(
+        app.world().resource::<AppliedInputLog>().unwrap().inputs,
+        vec![replacement]
+    );
+}

@@ -199,18 +199,15 @@ where
         let connection = incoming.connection;
         let message = incoming.message;
 
-        if matches!(
-            message,
-            ClientMessage::Ack(_) | ClientMessage::InputFrame(_)
-        ) {
+        if matches!(message, ClientMessage::Ack(_)) {
             let Some(connection) = connection else {
-                tracing::warn!("ignoring replication input without a RunenNet connection handle");
+                tracing::warn!("ignoring replication ACK without a RunenNet connection handle");
                 continue;
             };
             if !connection_is_admitted(&world, connection) {
                 tracing::warn!(
                     connection = connection.get(),
-                    "ignoring replication input from a connection not admitted by RunenNet session"
+                    "ignoring replication ACK from a connection not admitted by RunenNet session"
                 );
                 continue;
             }
@@ -254,40 +251,15 @@ where
         }
 
         if let ClientMessage::InputFrame(frame) = &message {
-            let decoded = TDriver::decode_input(&frame.payload)
-                .map_err(|error| map_driver_error::<TDriver>(error, "decode remote input"))?;
-
-            let current_tick = world
-                .resource::<SimulationTick>()
-                .copied()
-                .unwrap_or_default();
-            let mut lagged = 0u64;
-            {
-                let staging = world
-                    .resource_mut::<NetworkInputStaging<TDriver::Input>>()
-                    .context("NetworkInputStaging should be installed by NetPlugin")?;
-                for command in decoded {
-                    if frame.tick <= current_tick {
-                        lagged = lagged.saturating_add(1);
-                        continue;
-                    }
-
-                    if let Err(NetworkInputStageError::Backpressure { capacity, .. }) =
-                        staging.stage(frame.tick, command)
-                    {
-                        tracing::warn!(
-                            capacity,
-                            tick = frame.tick.0,
-                            "network input staging backpressure; rejecting remote input"
-                        );
-                    }
+            let Some(connection) = connection else {
+                if let Ok(diagnostics) = world.resource_mut::<ReplicationDiagnostics>() {
+                    diagnostics.unauthorized_inputs =
+                        diagnostics.unauthorized_inputs.saturating_add(1);
                 }
-            }
-            if lagged > 0
-                && let Ok(diagnostics) = world.resource_mut::<ReplicationDiagnostics>()
-            {
-                diagnostics.lagged = diagnostics.lagged.saturating_add(lagged);
-            }
+                tracing::warn!("ignoring authority input without a RunenNet connection handle");
+                continue;
+            };
+            process_authority_input_frame::<TDriver>(&mut world, connection, frame)?;
         }
     }
 

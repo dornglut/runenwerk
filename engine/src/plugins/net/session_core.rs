@@ -1,9 +1,12 @@
 use runen_net::identity::{ConnectionHandle, ParticipantId};
+use runen_net::input::AuthorityInputError;
 use runen_net::protocol::{NegotiationManager, NegotiationManagerError};
 use runen_net::session::{
     ConnectionLossOutcome, MembershipState, RecoveryTime, RetentionPolicy, Session, SessionError,
 };
 use std::collections::HashMap;
+
+use super::authority_input::AuthorityInputIntegration;
 
 /// Read-only engine projection of bindings already accepted by RunenNet [`Session`].
 ///
@@ -54,7 +57,8 @@ impl RunenNetSessionProjection {
 #[derive(Debug, runen_ecs::Component, runen_ecs::Resource)]
 pub struct RunenNetSessionCore {
     negotiation: NegotiationManager,
-    session: Session,
+    pub(crate) session: Session,
+    pub(crate) authority_input: Option<AuthorityInputIntegration>,
 }
 
 impl RunenNetSessionCore {
@@ -62,6 +66,7 @@ impl RunenNetSessionCore {
         Self {
             negotiation,
             session,
+            authority_input: None,
         }
     }
 
@@ -131,7 +136,10 @@ impl RunenNetSessionCore {
             .map_err(RunenNetSessionCoreError::Session)?;
 
         projection.remove_binding(connection);
-        match self.negotiation.terminate(connection) {
+        let negotiation_cleanup = self.negotiation.terminate(connection);
+        self.reconcile_authority_input_memberships()
+            .map_err(RunenNetSessionCoreError::AuthorityInput)?;
+        match negotiation_cleanup {
             Ok(_) | Err(NegotiationManagerError::UnknownConnection) => Ok(outcome),
             Err(error) => Err(RunenNetSessionCoreError::NegotiationCleanup(error)),
         }
@@ -150,6 +158,8 @@ impl RunenNetSessionCore {
         if let MembershipState::Bound(connection) = previous_state {
             projection.remove_binding(connection);
         }
+        self.reconcile_authority_input_memberships()
+            .map_err(RunenNetSessionCoreError::AuthorityInput)?;
         Ok(previous_state)
     }
 
@@ -158,9 +168,13 @@ impl RunenNetSessionCore {
         &mut self,
         new_value: RecoveryTime,
     ) -> Result<Vec<ParticipantId>, RunenNetSessionCoreError> {
-        self.session
+        let expired = self
+            .session
             .advance_recovery_clock(new_value)
-            .map_err(RunenNetSessionCoreError::Session)
+            .map_err(RunenNetSessionCoreError::Session)?;
+        self.reconcile_authority_input_memberships()
+            .map_err(RunenNetSessionCoreError::AuthorityInput)?;
+        Ok(expired)
     }
 
     /// Close session membership only.
@@ -171,6 +185,7 @@ impl RunenNetSessionCore {
     pub fn close(&mut self, projection: &mut RunenNetSessionProjection) {
         self.session.close();
         projection.clear();
+        self.clear_authority_input();
     }
 
     pub fn participant_for_connection(
@@ -190,6 +205,7 @@ pub enum RunenNetSessionCoreError {
     Negotiation(NegotiationManagerError),
     Session(SessionError),
     NegotiationCleanup(NegotiationManagerError),
+    AuthorityInput(AuthorityInputError),
 }
 
 #[cfg(test)]
