@@ -39,6 +39,12 @@ pub fn current_runtime_gpu_capabilities() -> GpuCapabilities {
         8,
         4,
         65_535,
+        256 * 1024 * 1024,
+        8192,
+        2048,
+        256,
+        16,
+        2048,
     )
     .expect("fixed renderer capability limits are internally consistent");
     GpuCapabilities::from_normalized_facts(features, limits, current_format_facts())

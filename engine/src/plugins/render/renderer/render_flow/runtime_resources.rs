@@ -213,7 +213,7 @@ mod tests {
         GpuResourceLabel, GpuResourceLifetime, GpuResourceProvenance, GpuSamplerDescriptor,
         GpuTextureAspect, GpuTextureDescriptor, GpuTextureExtent, GpuTextureFormat,
         GpuTextureInitialization, GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureUsages,
-        GpuTextureViewDescriptor, GpuWorkResourceIdAllocator,
+        GpuTextureViewDescriptor, GpuTextureViewDimension, GpuWorkResourceIdAllocator,
     };
 
     struct RuntimeTestUniform(u32);
@@ -277,7 +277,7 @@ mod tests {
             gpu_common("runtime test texture view"),
             &handle,
             None,
-            GpuTextureDimension::D2,
+            GpuTextureViewDimension::D2,
             subresources,
         )
         .unwrap()

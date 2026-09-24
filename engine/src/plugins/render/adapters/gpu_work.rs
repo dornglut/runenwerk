@@ -195,6 +195,46 @@ struct AuthoredRenderFragment {
     occurrence_nodes: BTreeMap<RenderGpuWorkOccurrenceId, GpuWorkNodeId>,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct RenderGpuFrameTimingBracket {
+    fragment: GpuWorkFragment,
+    start: GpuWorkNodeId,
+    end: GpuWorkNodeId,
+    observation_tail: GpuWorkNodeId,
+}
+
+impl RenderGpuFrameTimingBracket {
+    pub(crate) fn new(
+        fragment: GpuWorkFragment,
+        start: GpuWorkNodeId,
+        end: GpuWorkNodeId,
+        observation_tail: GpuWorkNodeId,
+    ) -> Self {
+        Self {
+            fragment,
+            start,
+            end,
+            observation_tail,
+        }
+    }
+
+    fn fragment(&self) -> &GpuWorkFragment {
+        &self.fragment
+    }
+
+    fn start(&self) -> &GpuWorkNodeId {
+        &self.start
+    }
+
+    fn end(&self) -> &GpuWorkNodeId {
+        &self.end
+    }
+
+    fn observation_tail(&self) -> &GpuWorkNodeId {
+        &self.observation_tail
+    }
+}
+
 /// Prepares the canonical frame together with renderer-owned composable work. Imports are added
 /// only to the canonical consumer fragment; G3 therefore derives producer-to-visualizer ordering
 /// from the typed export relationship rather than from fragment order or a product-authored edge.
@@ -204,15 +244,17 @@ pub(crate) fn prepare_render_gpu_frame_work(
     nodes: impl IntoIterator<Item = ResolvedRenderGpuWorkNode>,
     producer_fragments: &[GpuWorkFragment],
     imports: &[GpuWorkImport],
+    timing_bracket: Option<&RenderGpuFrameTimingBracket>,
 ) -> Result<GpuPreparedWorkGraph, RenderGpuWorkAdapterError> {
     prepare_resolved_render_gpu_work(
         graph_label,
         nodes,
         producer_fragments,
         imports,
-        |label, fragments| {
+        timing_bracket,
+        |label, fragments, graph_orders| {
             context
-                .prepare_work_graph(label, fragments)
+                .prepare_work_graph_with_orders(label, fragments, graph_orders)
                 .map_err(RenderGpuWorkAdapterError::from)
         },
     )
@@ -223,9 +265,17 @@ fn prepare_render_gpu_frame_work_for_test(
     graph_label: GpuResourceLabel,
     nodes: impl IntoIterator<Item = ResolvedRenderGpuWorkNode>,
 ) -> Result<GpuPreparedWorkGraph, RenderGpuWorkAdapterError> {
-    prepare_resolved_render_gpu_work(graph_label, nodes, &[], &[], |label, fragments| {
-        GpuPreparedWorkGraph::prepare(label, fragments).map_err(RenderGpuWorkAdapterError::from)
-    })
+    prepare_resolved_render_gpu_work(
+        graph_label,
+        nodes,
+        &[],
+        &[],
+        None,
+        |label, fragments, graph_orders| {
+            GpuPreparedWorkGraph::prepare_with_orders(label, fragments, graph_orders)
+                .map_err(RenderGpuWorkAdapterError::from)
+        },
+    )
 }
 
 #[cfg(test)]
@@ -240,8 +290,30 @@ pub(crate) fn prepare_render_gpu_frame_work_with_composition_for_test(
         nodes,
         producer_fragments,
         imports,
-        |label, fragments| {
-            GpuPreparedWorkGraph::prepare(label, fragments).map_err(RenderGpuWorkAdapterError::from)
+        None,
+        |label, fragments, graph_orders| {
+            GpuPreparedWorkGraph::prepare_with_orders(label, fragments, graph_orders)
+                .map_err(RenderGpuWorkAdapterError::from)
+        },
+    )
+}
+
+#[cfg(test)]
+fn prepare_render_gpu_frame_work_with_timing_for_test(
+    graph_label: GpuResourceLabel,
+    nodes: impl IntoIterator<Item = ResolvedRenderGpuWorkNode>,
+    producer_fragments: &[GpuWorkFragment],
+    timing_bracket: &RenderGpuFrameTimingBracket,
+) -> Result<GpuPreparedWorkGraph, RenderGpuWorkAdapterError> {
+    prepare_resolved_render_gpu_work(
+        graph_label,
+        nodes,
+        producer_fragments,
+        &[],
+        Some(timing_bracket),
+        |label, fragments, graph_orders| {
+            GpuPreparedWorkGraph::prepare_with_orders(label, fragments, graph_orders)
+                .map_err(RenderGpuWorkAdapterError::from)
         },
     )
 }
@@ -263,9 +335,11 @@ fn prepare_resolved_render_gpu_work(
     nodes: impl IntoIterator<Item = ResolvedRenderGpuWorkNode>,
     producer_fragments: &[GpuWorkFragment],
     imports: &[GpuWorkImport],
+    timing_bracket: Option<&RenderGpuFrameTimingBracket>,
     mut prepare_graph: impl FnMut(
         GpuResourceLabel,
         Vec<GpuWorkFragment>,
+        Vec<GpuGraphExplicitOrder>,
     ) -> Result<GpuPreparedWorkGraph, RenderGpuWorkAdapterError>,
 ) -> Result<GpuPreparedWorkGraph, RenderGpuWorkAdapterError> {
     let nodes = nodes.into_iter().collect::<Vec<_>>();
@@ -305,9 +379,13 @@ fn prepare_resolved_render_gpu_work(
         &BTreeSet::new(),
         imports,
     )?;
-    let mut provisional_fragments = producer_fragments.to_vec();
-    provisional_fragments.push(provisional.fragment);
-    let provisional_graph = prepare_graph(graph_label.clone(), provisional_fragments)?;
+    let (provisional_fragments, provisional_graph_orders) =
+        compose_frame_graph_inputs(producer_fragments, &provisional.fragment, timing_bracket)?;
+    let provisional_graph = prepare_graph(
+        graph_label.clone(),
+        provisional_fragments,
+        provisional_graph_orders,
+    )?;
     let provisional_occurrences =
         map_prepared_occurrences(&provisional_graph, &provisional.occurrence_nodes)?;
     let required_explicit_orders = normalize_control_orders(
@@ -328,12 +406,69 @@ fn prepare_resolved_render_gpu_work(
             &required_explicit_orders,
             imports,
         )?;
-        let mut final_fragments = producer_fragments.to_vec();
-        final_fragments.push(final_fragment.fragment);
-        prepare_graph(graph_label, final_fragments)?
+        let (final_fragments, final_graph_orders) = compose_frame_graph_inputs(
+            producer_fragments,
+            &final_fragment.fragment,
+            timing_bracket,
+        )?;
+        prepare_graph(graph_label, final_fragments, final_graph_orders)?
     };
 
     Ok(graph)
+}
+
+fn compose_frame_graph_inputs(
+    producer_fragments: &[GpuWorkFragment],
+    renderer_fragment: &GpuWorkFragment,
+    timing_bracket: Option<&RenderGpuFrameTimingBracket>,
+) -> Result<(Vec<GpuWorkFragment>, Vec<GpuGraphExplicitOrder>), RenderGpuWorkAdapterError> {
+    let mut fragments = producer_fragments.to_vec();
+    fragments.push(renderer_fragment.clone());
+    let mut graph_orders = Vec::new();
+    if let Some(bracket) = timing_bracket {
+        for fragment in producer_fragments
+            .iter()
+            .chain(std::iter::once(renderer_fragment))
+        {
+            for node in fragment.nodes() {
+                match node.kind() {
+                    GpuWorkNodeKind::Present => {
+                        graph_orders.push(GpuGraphExplicitOrder::new(
+                            bracket.end(),
+                            node.id(),
+                            "renderer composed timing ends before terminal presentation",
+                        )?);
+                        graph_orders.push(GpuGraphExplicitOrder::new(
+                            bracket.observation_tail(),
+                            node.id(),
+                            "renderer composed timing observation completes before terminal presentation",
+                        )?);
+                    }
+                    GpuWorkNodeKind::Resolve | GpuWorkNodeKind::Readback => {
+                        graph_orders.push(GpuGraphExplicitOrder::new(
+                            bracket.end(),
+                            node.id(),
+                            "renderer composed timing ends before observation tail",
+                        )?);
+                    }
+                    _ => {
+                        graph_orders.push(GpuGraphExplicitOrder::new(
+                            bracket.start(),
+                            node.id(),
+                            "renderer composed timing starts before authored GPU work",
+                        )?);
+                        graph_orders.push(GpuGraphExplicitOrder::new(
+                            node.id(),
+                            bracket.end(),
+                            "renderer composed timing ends after authored GPU work",
+                        )?);
+                    }
+                }
+            }
+        }
+        fragments.push(bracket.fragment().clone());
+    }
+    Ok((fragments, graph_orders))
 }
 
 fn validate_occurrences(
@@ -447,18 +582,18 @@ fn map_prepared_occurrences(
     graph: &GpuPreparedWorkGraph,
     occurrence_nodes: &BTreeMap<RenderGpuWorkOccurrenceId, GpuWorkNodeId>,
 ) -> Result<BTreeMap<RenderGpuWorkOccurrenceId, GpuPreparedWorkNodeId>, RenderGpuWorkAdapterError> {
-    let prepared_by_local = graph
-        .nodes()
-        .iter()
-        .map(|node| (node.id().local_node(), node.id()))
-        .collect::<BTreeMap<_, _>>();
     occurrence_nodes
         .iter()
         .map(|(occurrence, node_id)| {
             let local = node_id.diagnostic_local();
-            let prepared = prepared_by_local.get(&local).copied().ok_or(
-                RenderGpuWorkAdapterError::MissingPreparedNodeMapping { local_node: local },
-            )?;
+            let prepared = graph
+                .nodes()
+                .iter()
+                .find(|prepared| prepared.node().id() == node_id)
+                .map(|prepared| prepared.id())
+                .ok_or(RenderGpuWorkAdapterError::MissingPreparedNodeMapping {
+                    local_node: local,
+                })?;
             Ok((*occurrence, prepared))
         })
         .collect()
@@ -469,11 +604,18 @@ fn normalize_control_orders(
     occurrence_nodes: &BTreeMap<RenderGpuWorkOccurrenceId, GpuPreparedWorkNodeId>,
     desired: &[(RenderGpuWorkOccurrenceId, RenderGpuWorkOccurrenceId)],
 ) -> BTreeSet<(RenderGpuWorkOccurrenceId, RenderGpuWorkOccurrenceId)> {
-    // This graph comes only from a G3 preparation with zero explicit orders. These edges are
-    // therefore G3-derived data dependencies, not renderer-reconstructed access semantics.
+    // Only typed G3 data dependencies may suppress a renderer-owned control order. The
+    // provisional graph can also contain composed-timing graph orders; those are instrumentation
+    // constraints and must never become authority for renderer control semantics.
     let mut satisfied_edges = provisional_graph
         .dependencies()
         .iter()
+        .filter(|dependency| {
+            dependency
+                .reasons()
+                .iter()
+                .any(|reason| reason.resource().is_some())
+        })
         .map(|dependency| (dependency.before(), dependency.after()))
         .collect::<BTreeSet<_>>();
     let mut retained = BTreeSet::new();
@@ -662,7 +804,7 @@ mod tests {
                     common("frame surface color view"),
                     &texture,
                     None,
-                    GpuTextureDimension::D2,
+                    GpuTextureViewDimension::D2,
                     GpuTextureSubresourceRange::new(
                         &view_label,
                         0,
@@ -1138,6 +1280,200 @@ mod tests {
                 .nodes()
                 .iter()
                 .all(|node| node.node().kind() != GpuWorkNodeKind::Readback)
+        );
+    }
+    #[test]
+    fn composed_timing_brackets_immutable_producer_and_renderer_work_before_present() {
+        let mut allocator = GpuWorkResourceIdAllocator::new();
+        let producer_buffer = zeroed_buffer(&mut allocator, "timed immutable producer", 16);
+        let producer = GpuWorkFragment::build("timed immutable producer fragment", |work| {
+            work.operation(
+                "timed producer clear",
+                GpuClearOperation::buffer_zero(whole_region(&producer_buffer, 16)).unwrap(),
+            )?;
+            Ok(())
+        })
+        .unwrap();
+
+        let surface_view = color_target_view(&mut allocator);
+        let render = GpuRenderOperation::new(
+            [GpuRenderColorAttachment::new(
+                surface_view.clone(),
+                GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap()),
+                GpuAttachmentStore::Store,
+                None,
+            )
+            .unwrap()],
+            None,
+            std::iter::empty::<GpuRenderDraw>(),
+            None,
+        )
+        .unwrap();
+        let independent_buffer = buffer(&mut allocator, "timed independent control", 16);
+        let render_occurrence = RenderGpuWorkOccurrenceId::new(1);
+        let independent_occurrence = RenderGpuWorkOccurrenceId::new(2);
+        let present_occurrence = RenderGpuWorkOccurrenceId::new(3);
+        let nodes = [
+            ResolvedRenderGpuWorkNode::pass(
+                render_occurrence,
+                label("timed renderer work"),
+                GpuWorkOperation::Render(render),
+                GpuExecutionPreference::GraphicsRequired,
+                [],
+            ),
+            ResolvedRenderGpuWorkNode::upload(
+                independent_occurrence,
+                label("timed independent control work"),
+                GpuUploadOperation::new(
+                    whole_region(&independent_buffer, 16).into(),
+                    transfer_payload("timed independent control payload", 16),
+                )
+                .unwrap(),
+                [],
+            ),
+            ResolvedRenderGpuWorkNode::present(
+                present_occurrence,
+                label("timed terminal Present"),
+                GpuPresentOperation::new(
+                    surface_view.clone().into(),
+                    surface_view.descriptor().subresources(),
+                )
+                .unwrap(),
+                [independent_occurrence],
+            ),
+        ];
+
+        let query_label = label("timed frame markers");
+        let query_common = GpuResourceCommon::owned(
+            query_label.clone(),
+            GpuResourceLifetime::Transient,
+            GpuMemoryIntent::Device,
+            GpuReconstruction::SourceBacked,
+            GpuResourceProvenance::new(query_label, None, None),
+        )
+        .unwrap();
+        let query_set = allocator
+            .allocate_query_set_handle(
+                GpuQuerySetDescriptor::new(query_common, GpuQueryKind::Timestamp, 2).unwrap(),
+            )
+            .unwrap();
+        let resolve_label = label("timed frame timestamp resolve buffer");
+        let resolve_buffer = allocator
+            .allocate_buffer_handle(
+                GpuBufferDescriptor::new(
+                    common("timed frame timestamp resolve buffer"),
+                    16,
+                    GpuBufferUsages::new(
+                        &resolve_label,
+                        [GpuBufferUsage::QueryResolve, GpuBufferUsage::CopySource],
+                    )
+                    .unwrap(),
+                    GpuBufferInitialization::Uninitialized,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let resolve = GpuQueryResolveOperation::new(
+            &query_set,
+            GpuQueryRange::new(&query_set, 0, 2).unwrap(),
+            &resolve_buffer,
+            0,
+        )
+        .unwrap();
+        let readback = GpuReadbackOperation::new(
+            whole_region(&resolve_buffer, 16).into(),
+            GpuReadbackId::allocate().unwrap(),
+        )
+        .unwrap();
+        let mut start = None;
+        let mut end = None;
+        let mut readback_node = None;
+        let marker_fragment = GpuWorkFragment::build("timed frame marker fragment", |work| {
+            start = Some(
+                work.operation(
+                    "timed frame start",
+                    GpuTimestampMarkerOperation::new(&query_set, 0).unwrap(),
+                )
+                .unwrap(),
+            );
+            end = Some(
+                work.operation(
+                    "timed frame end",
+                    GpuTimestampMarkerOperation::new(&query_set, 1).unwrap(),
+                )
+                .unwrap(),
+            );
+            work.operation("timed frame timestamp resolve", resolve)?;
+            readback_node = Some(work.operation("timed frame timestamp readback", readback)?);
+            Ok(())
+        })
+        .unwrap();
+        let bracket = RenderGpuFrameTimingBracket::new(
+            marker_fragment,
+            start.unwrap(),
+            end.unwrap(),
+            readback_node.unwrap(),
+        );
+        let graph = prepare_render_gpu_frame_work_with_timing_for_test(
+            label("timed composed frame"),
+            nodes,
+            &[producer],
+            &bracket,
+        )
+        .unwrap();
+
+        let node = |name: &str| {
+            graph
+                .nodes()
+                .iter()
+                .find(|node| node.node().label().as_str() == name)
+                .unwrap()
+                .id()
+        };
+        let start = node("timed frame start");
+        let producer = node("timed producer clear");
+        let renderer = node("timed renderer work");
+        let independent = node("timed independent control work");
+        let end = node("timed frame end");
+        let resolve = node("timed frame timestamp resolve");
+        let readback = node("timed frame timestamp readback");
+        let present = node("timed terminal Present");
+        let pos = |wanted| {
+            graph
+                .topological_order()
+                .iter()
+                .position(|node| *node == wanted)
+                .unwrap()
+        };
+        assert!(pos(start) < pos(producer));
+        assert!(pos(start) < pos(renderer));
+        assert!(pos(start) < pos(independent));
+        assert!(pos(producer) < pos(end));
+        assert!(pos(renderer) < pos(end));
+        assert!(pos(independent) < pos(end));
+        assert!(pos(end) < pos(resolve));
+        assert!(pos(resolve) < pos(readback));
+        assert!(pos(readback) < pos(present));
+        assert_eq!(graph.topological_order().last(), Some(&present));
+        let independent_control = graph
+            .dependencies()
+            .iter()
+            .find(|dependency| dependency.before() == independent && dependency.after() == present)
+            .expect("timing must not suppress the renderer-owned independent control into Present");
+        assert!(independent_control.reasons().iter().any(|reason| {
+            matches!(
+                reason,
+                GpuDependencyReason::ExplicitNonData { reason }
+                    if reason == "render-owned occurrence control order"
+            )
+        }));
+        assert_eq!(
+            graph
+                .nodes()
+                .iter()
+                .filter(|node| node.node().kind() == GpuWorkNodeKind::Present)
+                .count(),
+            1
         );
     }
 }

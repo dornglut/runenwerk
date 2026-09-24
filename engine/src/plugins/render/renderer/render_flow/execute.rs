@@ -81,6 +81,7 @@ impl Renderer {
         debug_control: &RenderDebugControlResource,
         debug_config: &RenderDebugConfigResource,
         gpu_timing_capability: RenderGpuTimingCapability,
+        composed_gpu_timing_capability: Option<RenderGpuTimingCapability>,
     ) -> Result<RendererFrameTimings> {
         let mut timings = packet.prepare_timings;
         self.last_pass_timings.clear();
@@ -198,6 +199,45 @@ impl Renderer {
             terminal_controls,
         ));
 
+        let has_capture_observation_tails = !batch.final_captures.is_empty()
+            || batch.invocations.iter().any(|invocation| {
+                invocation.scheduled_passes.iter().any(|pass| {
+                    !pass.execution.before_captures.is_empty()
+                        || !pass.execution.after_captures.is_empty()
+                })
+            });
+        let composed_gpu_timing = match composed_gpu_timing_capability {
+            Some(RenderGpuTimingCapability::Supported) if !has_capture_observation_tails => {
+                Some(prepare_composed_gpu_timing(
+                    context,
+                    prepared_frame.context.frame_index,
+                    prepared_frame.surface.render_surface_id.raw(),
+                )?)
+            }
+            _ => None,
+        };
+        let composed_terminal_evidence = match composed_gpu_timing_capability {
+            Some(RenderGpuTimingCapability::Unsupported) => {
+                Some(RenderComposedFrameGpuTimingEvidence::gpu_diagnostic(
+                    prepared_frame.context.frame_index,
+                    prepared_frame.surface.render_surface_id.raw(),
+                    RenderGpuTimingDiagnostic::unsupported(
+                        "GPU timestamp queries are unavailable for composed renderer timing",
+                    ),
+                ))
+            }
+            Some(RenderGpuTimingCapability::Supported) if has_capture_observation_tails => {
+                Some(RenderComposedFrameGpuTimingEvidence::gpu_diagnostic(
+                    prepared_frame.context.frame_index,
+                    prepared_frame.surface.render_surface_id.raw(),
+                    RenderGpuTimingDiagnostic::unavailable_this_frame(
+                        "composed renderer timing is unavailable while capture/readback instrumentation is active",
+                    ),
+                ))
+            }
+            _ => None,
+        };
+
         let encode_submit_start = Instant::now();
         let _span = tracing::info_span!("renderer.prepare_submit").entered();
         let graph = prepare_render_gpu_frame_work(
@@ -210,6 +250,9 @@ impl Renderer {
             nodes,
             &producer_fragments,
             &radiance_imports,
+            composed_gpu_timing
+                .as_ref()
+                .map(PreparedComposedGpuTiming::bracket),
         )?;
         let prepared = pollster::block_on(context.prepare_submission(graph))?;
         let submission = context.submit_prepared(prepared).map_err(|rejection| {
@@ -245,20 +288,29 @@ impl Renderer {
             })
             .collect::<Vec<_>>();
         capture_readbacks.append(&mut batch.final_captures);
-        let RendererGpuObservationOutput {
-            timing_evidence,
-            captured_textures,
-            capture_results,
-        } = self.gpu_observations.accept(
+        let mut observation_output = self.gpu_observations.accept(
             context,
             submission,
             timing_frames,
+            composed_gpu_timing.map(PreparedComposedGpuTiming::into_frame),
             capture_readbacks,
             &mut batch.capture_runtime,
         );
+        if let Some(evidence) = composed_terminal_evidence {
+            observation_output.composed_timing_evidence.push(evidence);
+        }
+        let RendererGpuObservationOutput {
+            timing_evidence,
+            composed_timing_evidence,
+            captured_textures,
+            capture_results,
+        } = observation_output;
         self.pending_gpu_observation_output
             .timing_evidence
             .extend(timing_evidence);
+        self.pending_gpu_observation_output
+            .composed_timing_evidence
+            .extend(composed_timing_evidence);
         self.pending_gpu_observation_output
             .captured_textures
             .extend(captured_textures);
@@ -793,6 +845,7 @@ impl Renderer {
         debug_control: &RenderDebugControlResource,
         debug_config: &RenderDebugConfigResource,
         gpu_timing_capability: RenderGpuTimingCapability,
+        composed_gpu_timing_capability: Option<RenderGpuTimingCapability>,
     ) -> Result<RendererFrameTimings> {
         let packet = self.prepare_packet(
             context,
@@ -817,6 +870,7 @@ impl Renderer {
             debug_control,
             debug_config,
             gpu_timing_capability,
+            composed_gpu_timing_capability,
         )
     }
 

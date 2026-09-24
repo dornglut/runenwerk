@@ -15,11 +15,11 @@ use crate::plugins::render::graph::{
 use crate::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, RenderCaptureIdentity, RenderCapturePointIdentity,
     RenderCaptureSelector, RenderCaptureSelectorResult, RenderCaptureTerminal,
-    RenderCaptureTerminalCode, RenderDebugConfigResource, RenderDebugControlResource,
-    RenderGpuTimingCapability, RenderGpuTimingDiagnostic, RenderPassMaterialBindingEvidence,
-    RenderPassModelMeshMaterialSelectionEvidence, RenderPassTimingEvidence,
-    RenderSelectorResolution, ResolvedRenderCapturePlan, RuntimeResourceInspectionEntry,
-    RuntimeResourceReuse, resource_kind_name,
+    RenderCaptureTerminalCode, RenderComposedFrameGpuTimingEvidence, RenderDebugConfigResource,
+    RenderDebugControlResource, RenderGpuTimingCapability, RenderGpuTimingDiagnostic,
+    RenderPassMaterialBindingEvidence, RenderPassModelMeshMaterialSelectionEvidence,
+    RenderPassTimingEvidence, RenderSelectorResolution, ResolvedRenderCapturePlan,
+    RuntimeResourceInspectionEntry, RuntimeResourceReuse, resource_kind_name,
 };
 use crate::plugins::render::pipelines::{FlowPassKind, FlowPassPipelineKey};
 use crate::plugins::render::{RenderResourceDeclaration, current_runtime_gpu_capabilities};
@@ -66,7 +66,10 @@ pub(super) use capture::{
 };
 #[cfg(test)]
 pub(super) use execute::FeaturePassAction;
-pub(super) use gpu_timing::{GpuPassTimestampIndices, GpuPassTimingFrame};
+pub(super) use gpu_timing::{
+    GpuComposedFrameTimingFrame, GpuPassTimestampIndices, GpuPassTimingFrame,
+    PreparedComposedGpuTiming, prepare_composed_gpu_timing,
+};
 pub(super) use observation::{RendererGpuObservationOutput, RendererGpuObservationState};
 pub(crate) use preflight_cache::RendererPreparedFramePreflightCacheEntry;
 pub(crate) use program_sources::RendererProgramSourceAuthority;

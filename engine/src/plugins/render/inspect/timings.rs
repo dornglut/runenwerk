@@ -205,6 +205,56 @@ impl RenderPassTimingEvidence {
     }
 }
 
+/// One complete renderer-owned composed GPU interval for an exact semantic frame and surface.
+///
+/// `gpu_composed_frame_ms` is derived from one start/end timestamp pair. It is independent of
+/// per-pass timing evidence and is never computed by summing pass durations. RunenGPU-owned
+/// initial-content realization, this observation's resolve/readback tail, terminal Present,
+/// compositor/scanout, and Host pacing remain outside the interval.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RenderComposedFrameGpuTimingEvidence {
+    pub frame_index: u64,
+    pub render_surface_id: u64,
+    pub source: RenderTimingSource,
+    pub gpu_capability: RenderGpuTimingCapability,
+    pub gpu_composed_frame_ms: Option<f32>,
+    pub diagnostics: Vec<RenderGpuTimingDiagnostic>,
+}
+
+impl RenderComposedFrameGpuTimingEvidence {
+    pub fn gpu_sample(frame_index: u64, render_surface_id: u64, millis: f32) -> Self {
+        Self {
+            frame_index,
+            render_surface_id,
+            source: RenderTimingSource::GpuTimestampQuery,
+            gpu_capability: RenderGpuTimingCapability::Supported,
+            gpu_composed_frame_ms: Some(millis.max(0.0)),
+            diagnostics: Vec::new(),
+        }
+    }
+
+    pub fn gpu_diagnostic(
+        frame_index: u64,
+        render_surface_id: u64,
+        diagnostic: RenderGpuTimingDiagnostic,
+    ) -> Self {
+        Self {
+            frame_index,
+            render_surface_id,
+            source: RenderTimingSource::GpuTimestampQuery,
+            gpu_capability: diagnostic.capability,
+            gpu_composed_frame_ms: None,
+            diagnostics: vec![RenderGpuTimingDiagnostic {
+                frame_index: Some(frame_index),
+                render_surface_id: Some(render_surface_id),
+                flow_id: None,
+                pass_id: None,
+                ..diagnostic
+            }],
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, runen_ecs::Component, runen_ecs::Resource)]
 pub struct RenderDebugTimingsState {
     pub workload_ms: f32,
