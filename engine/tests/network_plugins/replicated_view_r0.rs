@@ -59,7 +59,7 @@ impl R0ActiveReplicatedStateProduct {
     }
 
     fn activate(&mut self, candidate: R0ReplicatedStateProduct) {
-        let _previous = std::mem::replace(&mut self.active, Some(candidate));
+        let _previous = self.active.replace(candidate);
     }
 }
 
