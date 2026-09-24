@@ -631,11 +631,7 @@ impl NeutralInputAuthority {
     }
 
     #[cfg(test)]
-    pub(crate) fn key_down_in(
-        &self,
-        context: InputContext,
-        key: &PhysicalKeyIdentity,
-    ) -> bool {
+    pub(crate) fn key_down_in(&self, context: InputContext, key: &PhysicalKeyIdentity) -> bool {
         self.controls
             .key(key)
             .is_some_and(|control| self.control_down_in(context, control))
@@ -914,8 +910,9 @@ fn measurement_is_finite(measurement: AnalogMeasurement) -> bool {
 
 fn has_valid_measurements(observation: &InputObservation) -> bool {
     match observation {
-        InputObservation::Contact { pressure, .. } => pressure
-            .is_none_or(|measurement| measurement.domain.accepts(measurement.value)),
+        InputObservation::Contact { pressure, .. } => {
+            pressure.is_none_or(|measurement| measurement.domain.accepts(measurement.value))
+        }
         InputObservation::Tablet(observation) => {
             observation
                 .pressure
@@ -1040,10 +1037,8 @@ mod tests {
         let mut authority = NeutralInputAuthority::default();
         let key_a = PhysicalKeyIdentity::code("KeyA");
         let key_b = PhysicalKeyIdentity::code("KeyB");
-        let context_a =
-            InputContext::new(SOURCE_A, Some(InputDeviceId::new(1)));
-        let context_b =
-            InputContext::new(SOURCE_A, Some(InputDeviceId::new(2)));
+        let context_a = InputContext::new(SOURCE_A, Some(InputDeviceId::new(1)));
+        let context_b = InputContext::new(SOURCE_A, Some(InputDeviceId::new(2)));
 
         let first = authority
             .admit_keyboard(
@@ -1174,10 +1169,8 @@ mod tests {
     #[test]
     fn pointer_button_identity_and_aggregate_state_are_neutral_owned() {
         let mut authority = NeutralInputAuthority::default();
-        let context_a =
-            InputContext::new(SOURCE_A, Some(InputDeviceId::new(1)));
-        let context_b =
-            InputContext::new(SOURCE_B, Some(InputDeviceId::new(2)));
+        let context_a = InputContext::new(SOURCE_A, Some(InputDeviceId::new(1)));
+        let context_b = InputContext::new(SOURCE_B, Some(InputDeviceId::new(2)));
         let pressed = PointerButtonInput {
             button: PointerButton::Left,
             state: DigitalState::Pressed,
