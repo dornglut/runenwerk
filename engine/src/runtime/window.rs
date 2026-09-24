@@ -291,6 +291,15 @@ mod tests {
     }
 
     #[test]
+    fn primary_registration_preserves_realized_focus_state() {
+        let mut registry = WindowStateRegistryResource::default();
+
+        let primary = registry.register_primary_window("Runtime", (1280, 720), 1.0, false);
+
+        assert!(!registry.record(primary).unwrap().focused);
+    }
+
+    #[test]
     fn window_registry_tracks_pending_secondary_window_requests() {
         let mut registry = WindowStateRegistryResource::default();
         registry.register_primary_window("Runtime", (1280, 720), 1.0, true);
