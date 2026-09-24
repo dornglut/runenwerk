@@ -321,8 +321,8 @@ impl RendererGpuObservationState {
                         output
                             .composed_timing_evidence
                             .push(timing.diagnostic_evidence(invalid_context.unwrap_or(
-                                "GPU context closed before composed timing readback became terminal",
-                            )));
+                            "GPU context closed before composed timing readback became terminal",
+                        )));
                     }
                 }
             }
