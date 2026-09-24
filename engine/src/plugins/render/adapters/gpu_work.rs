@@ -200,14 +200,21 @@ pub(crate) struct RenderGpuFrameTimingBracket {
     fragment: GpuWorkFragment,
     start: GpuWorkNodeId,
     end: GpuWorkNodeId,
+    observation_tail: GpuWorkNodeId,
 }
 
 impl RenderGpuFrameTimingBracket {
-    pub(crate) fn new(fragment: GpuWorkFragment, start: GpuWorkNodeId, end: GpuWorkNodeId) -> Self {
+    pub(crate) fn new(
+        fragment: GpuWorkFragment,
+        start: GpuWorkNodeId,
+        end: GpuWorkNodeId,
+        observation_tail: GpuWorkNodeId,
+    ) -> Self {
         Self {
             fragment,
             start,
             end,
+            observation_tail,
         }
     }
 
@@ -221,6 +228,10 @@ impl RenderGpuFrameTimingBracket {
 
     fn end(&self) -> &GpuWorkNodeId {
         &self.end
+    }
+
+    fn observation_tail(&self) -> &GpuWorkNodeId {
+        &self.observation_tail
     }
 }
 
@@ -421,13 +432,23 @@ fn compose_frame_graph_inputs(
         {
             for node in fragment.nodes() {
                 match node.kind() {
-                    GpuWorkNodeKind::Present
-                    | GpuWorkNodeKind::Resolve
-                    | GpuWorkNodeKind::Readback => {
+                    GpuWorkNodeKind::Present => {
                         graph_orders.push(GpuGraphExplicitOrder::new(
                             bracket.end(),
                             node.id(),
-                            "renderer composed timing ends before observation/presentation tail",
+                            "renderer composed timing ends before terminal presentation",
+                        )?);
+                        graph_orders.push(GpuGraphExplicitOrder::new(
+                            bracket.observation_tail(),
+                            node.id(),
+                            "renderer composed timing observation completes before terminal presentation",
+                        )?);
+                    }
+                    GpuWorkNodeKind::Resolve | GpuWorkNodeKind::Readback => {
+                        graph_orders.push(GpuGraphExplicitOrder::new(
+                            bracket.end(),
+                            node.id(),
+                            "renderer composed timing ends before observation tail",
                         )?);
                     }
                     _ => {
