@@ -375,8 +375,10 @@ fn procgen_surfaces_admit_no_active_document_without_bypassing_provider_routing(
             "{key}"
         );
 
-        let mut denied_session = SurfaceSessionState::default();
-        denied_session.content_liveness = ui_composition::ContentLiveness::Denied;
+        let denied_session = SurfaceSessionState {
+            content_liveness: ui_composition::ContentLiveness::Denied,
+            ..Default::default()
+        };
         let denied_frame = registry.resolve_frame_with_provider_family_map(
             &context,
             request,
