@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-01
+last_reviewed: 2026-09-24
 related_roadmaps:
   - ../../net/multiplayer-replication-implementation-roadmap.md
 ---
@@ -35,7 +35,8 @@ Runenwerk engine integration owns:
 - product/session metadata;
 - reconnect attempt/timing/deployment policy;
 - schedule placement, work queues, diagnostics, and presentation views;
-- retained replication/prediction integration pending later RN8 cuts.
+- retained replication and client-prediction integration pending later RN8 cuts;
+- explicit authority-input policy selection for the host integration, while RunenNet owns remote participant/tick admission.
 
 ## Implemented Substrate
 
@@ -45,10 +46,10 @@ Runenwerk engine integration owns:
 - Engine owner routing and connection/diagnostic views are reconciled from that projection.
 - `NetworkClientInbox`, `NetworkServerInbox`, `NetworkClientOutbox`, and `NetworkServerOutbox` use ECS work queues for retained replication/application payloads.
 - `client_receive_system` applies retained snapshots/deltas through `SnapshotApplyDriver`.
-- `server_receive_system` accepts ACK/input processing only from projected RunenNet-authorized connections.
+- `server_receive_system` keeps retained ACK handling on projected active connections, while remote input resolves the actual participant/connection through `RunenNetSessionCore` and submits the opaque batch to RunenNet `AuthorityInputSession`.
 - `sync_connection_streaming_state_system` reconciles per-connection streaming state from the RunenNet projection.
 - `replication_step_system` emits retained per-connection snapshots/deltas.
-- `prediction_step_system` preserves the existing prediction/input integration.
+- `prediction_step_system` executes already-accepted remote authority-input batches at their target tick before local input, while preserving the remaining local prediction integration.
 - frame-end flush stages retained outbound messages in engine-visible outbound queues; it is not a transport runtime.
 - diagnostics expose engine-owned status/health/replication/prediction projections.
 

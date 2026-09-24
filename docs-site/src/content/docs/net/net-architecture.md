@@ -5,14 +5,14 @@ status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-24
 ---
 
 # Runenwerk Networking Architecture
 
 Runenwerk consumes standalone RunenNet for reusable realtime networking semantics. Runenwerk owns engine scheduling, ECS/game/world integration, product metadata, host policy, presentation, diagnostics, and the remaining migration consumers that have not yet been cut over.
 
-The current RN8 architecture is intentionally transitional through N4: connection/session authority is already in RunenNet, dead post-N2 runtime/delivery scaffolding has been removed, and some retained replication/input/authoring integration still remains in `engine_net` until later dependency-ordered cuts.
+The current RN8 architecture is intentionally transitional through N5: connection/session and remote authority-input admission are in RunenNet, dead post-N2 runtime/delivery scaffolding has been removed, and retained replication, client-prediction, envelope, and authoring integration still remains in `engine_net` until later dependency-ordered cuts.
 
 ## Ownership
 
@@ -26,7 +26,7 @@ Owns reusable networking semantics, including:
 - connection loss, retention, replacement, expiry, removal, and closure;
 - delivery flows, resource pressure, custody/exposure, and recovery semantics;
 - authoritative replication consistency and full-snapshot recovery;
-- participant-input prediction and authoritative reconciliation.
+- participant-input admission, bounded input policy semantics, prediction, and authoritative reconciliation.
 
 Runenwerk does not mirror these semantics in another session, delivery, replication-consistency, or prediction authority.
 
@@ -41,13 +41,14 @@ Runenwerk does not mirror these semantics in another session, delivery, replicat
 - bounded inbox/outbox and engine-visible staging for retained replication/application payloads;
 - product/session metadata;
 - reconnect attempt/timing/deployment policy;
-- diagnostics and presentation views.
+- diagnostics and presentation views;
+- explicit finite authority-input policy selection and host execution staging for batches already accepted by RunenNet.
 
 The projection is derived state. It never authorizes admission, loss, retention, replacement, expiry, removal, or closure.
 
 ### Retained `engine_net`
 
-Through RN8 N4, `engine_net` is only migration evidence for maintained replication/input/authoring consumers:
+After RN8 N5, `engine_net` is only migration evidence for maintained replication/envelope/local-prediction/authoring consumers:
 
 - snapshot/delta/ACK/input-frame and typed-payload envelopes;
 - replication drivers, models, profiles, interest/mapping/timeline/diagnostics contracts;
@@ -92,7 +93,7 @@ owner/routing state   status/diagnostics
 retained replication/input integration
 ```
 
-A connection becomes eligible for retained engine replication/input routing only after RunenNet session admission has produced an active projected binding.
+A connection becomes eligible for retained engine replication routing only after RunenNet session admission has produced an active projected binding. Remote input admission does not use the projection as authority: it resolves the current participant through the actual RunenNet `Session` and is classified by RunenNet `AuthorityInputSession`.
 
 On connection loss, RunenNet decides session membership behavior. The engine projection then removes the lost binding; owner routing and connection-scoped streaming/diagnostic state are reconciled from that projection.
 
@@ -104,16 +105,17 @@ For each fixed server tick:
 2. Capture/select retained authoritative snapshot state per connection.
 3. Select full or delta payload using retained per-connection baseline checkpoints.
 4. Stage `ServerMessage::Snapshot` / `DeltaSnapshot` through `OutboundServerMessage::ToConnection` for the corresponding connection.
-5. Process ACKs and input only when the source connection remains authorized by the RunenNet projection.
-6. Update retained replication/streaming diagnostics.
+5. Process retained ACKs only for projected active connections.
+6. Submit remote input against actual RunenNet session authorization and `AuthorityInputSession`; only accepted batches enter host execution staging.
+7. Update retained replication/streaming/input diagnostics.
 
 This preserves existing integration behavior without making the retained pipeline responsible for connection/session, transport/delivery, or reusable replication semantics.
 
 ## Retained Prediction/Input Integration
 
-Current engine prediction/input scheduling remains a retained migration consumer. Reusable participant-input prediction and authoritative reconciliation semantics belong to standalone RunenNet.
+Remote authority-input admission is now RunenNet-owned. Runenwerk retains only explicit policy selection, encoded host execution staging, decoding/application at the target fixed tick, and the still-local client prediction/replay integration.
 
-RN8 N4 removed the unconsumed standalone snapshot-payload prediction helper. This cut does not redesign the remaining engine driver/input path or define future ordinary replicated-view authoring syntax.
+Reusable participant-input prediction and authoritative reconciliation semantics also belong to standalone RunenNet, but the live client prediction path remains a later cut that depends on `ClientReplicationSet`. This boundary does not define future ordinary replicated-view authoring syntax.
 
 ## Interest and World Policy
 
@@ -144,7 +146,7 @@ No lower reusable networking layer may depend on Runenwerk ECS/game/world policy
 
 RN8 removes duplicate authority one owner at a time. A migrated semantic is deleted from `engine_net`; it is not retained through aliases, forwarding modules, compatibility runtimes, or parallel state machines.
 
-RN8 is currently parked after N4. This architecture does not authorize N5 or select a future common-path authoring API.
+This architecture records the N5 authority boundary. It does not pre-authorize the next RN8 implementation child or select a future common-path authoring API.
 
 See also:
 
