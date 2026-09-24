@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-09-24
 ---
 
 # Scheduler Diagnostics Plugin
@@ -27,7 +27,7 @@ By default logs every `120` frames.
 - Consumes runtime state for logging only.
 - Does not own scheduler execution or render submission.
 
-The runtime diagnostics currently log `Time` and `WindowState`. Scene-specific diagnostics can be extended from the scene plugin state as needed.
+The runtime diagnostics consume `Time`, optional simulation tick state, and host-neutral `PrimaryPresentationMetricsResource`. The scheduler payload does not infer native title or headless identity.
 
 ## Extension Points
 

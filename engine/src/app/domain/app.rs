@@ -175,9 +175,6 @@ impl App {
 
     pub fn set_title(&mut self, title: impl Into<String>) -> &mut Self {
         self.title = title.into();
-        if let Ok(window) = self.world.resource_mut::<WindowState>() {
-            window.set_title(self.title.clone());
-        }
         self
     }
 

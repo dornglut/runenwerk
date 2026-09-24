@@ -56,18 +56,12 @@ pub(super) fn render_lab_flow() -> Result<RenderFlow> {
         .validate()
 }
 
-fn approve_render_lab_close_system(
-    mut window: ResMut<WindowState>,
-    mut windows: ResMut<WindowStateRegistryResource>,
-) {
-    if window.close_intent_pending {
-        window.request_close();
-    }
+fn approve_render_lab_close_system(mut windows: ResMut<WindowStateRegistryResource>) {
     if let Some(primary_window_id) = windows.primary_window_id()
         && let Some(primary_window) = windows.record_mut(primary_window_id)
         && primary_window.close_intent_pending
     {
-        primary_window.request_close();
+        primary_window.approve_close();
     }
 }
 

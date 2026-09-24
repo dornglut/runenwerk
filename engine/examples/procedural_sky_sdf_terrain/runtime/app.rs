@@ -6,7 +6,9 @@ use engine::plugins::input::domain::action;
 use engine::plugins::{
     ActionState, PhysicalKeyIdentity, RenderPlugin, ScenePlugin, default_plugins,
 };
-use engine::prelude::{App, InputState, Res, ResMut, Startup, Time, Update, WindowState};
+use engine::prelude::{
+    App, InputState, Res, ResMut, Startup, Time, Update, WindowStateRegistryResource,
+};
 
 const ACTION_CYCLE_VIEW_MODE: &str = "terrain.view.cycle";
 const ACTION_MOVE_UP: &str = "terrain.move_up";
@@ -86,7 +88,7 @@ fn update_terrain_view_and_animation_system(
     time: Res<Time>,
     mut state: ResMut<ProceduralSkyTerrainState>,
     mut fps: ResMut<FpsTracker>,
-    mut window: ResMut<WindowState>,
+    mut windows: ResMut<WindowStateRegistryResource>,
 ) {
     let forward_axis = (if actions.action_down(action::WORLD_MOVE_UP) {
         1.0
@@ -134,10 +136,14 @@ fn update_terrain_view_and_animation_system(
         state.cycle_view_mode();
     }
     fps.observe_frame_delta(time.delta_seconds);
-    window.set_title(format!(
-        "Procedural Sky + SDF Terrain | {:.1} fps ({:.2} ms) | WASD/Space/Ctrl + Mouse | Shift sprint | View: {} (Tab)",
-        fps.fps_ema,
-        fps.frame_ms_ema,
-        state.view_mode_label(),
-    ));
+    if let Some(primary_window_id) = windows.primary_window_id()
+        && let Some(primary_window) = windows.record_mut(primary_window_id)
+    {
+        primary_window.set_title(format!(
+            "Procedural Sky + SDF Terrain | {:.1} fps ({:.2} ms) | WASD/Space/Ctrl + Mouse | Shift sprint | View: {} (Tab)",
+            fps.fps_ema,
+            fps.frame_ms_ema,
+            state.view_mode_label(),
+        ));
+    }
 }

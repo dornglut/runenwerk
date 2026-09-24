@@ -55,7 +55,7 @@ use engine::plugins::render::{
 use engine::plugins::{ScenePlugin, default_plugins};
 use engine::prelude::{
     App, FramePacingPolicyResource, InputState, Plugin, RenderPrepare, Res, ResMut, Update,
-    WindowState, WindowStateRegistryResource,
+    WindowStateRegistryResource,
 };
 use engine::runtime::SystemConfigExt;
 use image::{GrayImage, ImageFormat};

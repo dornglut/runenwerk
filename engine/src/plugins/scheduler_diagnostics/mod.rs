@@ -8,8 +8,7 @@ use crate::plugins::diagnostics::core::model::{
 };
 use crate::plugins::time::domain::Time;
 use crate::runtime::{
-    PrimaryPresentationMetricsResource, RenderSubmit, SimulationTick, SystemMobilityExt,
-    WindowState, WorldMut,
+    PrimaryPresentationMetricsResource, RenderSubmit, SimulationTick, SystemMobilityExt, WorldMut,
 };
 use serde::Serialize;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -30,15 +29,13 @@ const LOG_INTERVAL_FRAMES: u64 = 120;
 const SCHEDULER_PRODUCER_ID: &str = "scheduler.runtime";
 const SCHEDULER_DOMAIN_ID: &str = "scheduler";
 const SCHEDULER_SCHEMA_ID: &str = "runenwerk.scheduler.frame_snapshot";
-const SCHEDULER_SCHEMA_VERSION: u32 = 1;
+const SCHEDULER_SCHEMA_VERSION: u32 = 2;
 
 #[derive(Debug, Clone)]
 struct SchedulerDiagnosticsSnapshot {
     simulation_tick: u64,
     dt_seconds: f32,
-    window_title: String,
-    window_size_px: (u32, u32),
-    headless: bool,
+    presentation_size_px: (u32, u32),
 }
 
 #[derive(Debug, Serialize)]
@@ -46,9 +43,7 @@ struct SchedulerDiagnosticsEntryDto {
     frame: u64,
     simulation_tick: u64,
     dt_seconds: f32,
-    window_title: String,
-    window_size_px: [u32; 2],
-    headless: bool,
+    presentation_size_px: [u32; 2],
 }
 
 fn scheduler_diagnostics_system(mut world: WorldMut) {
@@ -59,9 +54,6 @@ fn scheduler_diagnostics_system(mut world: WorldMut) {
 
     let snapshot = {
         let Ok(time) = world.resource::<Time>() else {
-            return;
-        };
-        let Ok(window) = world.resource::<WindowState>() else {
             return;
         };
         let Ok(presentation) = world.resource::<PrimaryPresentationMetricsResource>() else {
@@ -75,9 +67,7 @@ fn scheduler_diagnostics_system(mut world: WorldMut) {
         SchedulerDiagnosticsSnapshot {
             simulation_tick,
             dt_seconds: time.delta_seconds,
-            window_title: window.title.clone(),
-            window_size_px: presentation.size_px(),
-            headless: window.is_headless(),
+            presentation_size_px: presentation.size_px(),
         }
     };
 
@@ -110,9 +100,10 @@ fn map_scheduler_snapshot_to_entry(
         frame,
         simulation_tick: snapshot.simulation_tick,
         dt_seconds: snapshot.dt_seconds,
-        window_title: snapshot.window_title.clone(),
-        window_size_px: [snapshot.window_size_px.0, snapshot.window_size_px.1],
-        headless: snapshot.headless,
+        presentation_size_px: [
+            snapshot.presentation_size_px.0,
+            snapshot.presentation_size_px.1,
+        ],
     })?;
 
     Ok(DiagnosticsEntrySubmission {
@@ -142,9 +133,7 @@ mod tests {
         let snapshot = SchedulerDiagnosticsSnapshot {
             simulation_tick: 42,
             dt_seconds: 1.0 / 60.0,
-            window_title: "Runenwerk".to_string(),
-            window_size_px: (1280, 720),
-            headless: false,
+            presentation_size_px: (1280, 720),
         };
 
         let submission = map_scheduler_snapshot_to_entry(120, &snapshot)
@@ -156,6 +145,6 @@ mod tests {
             submission.entry.schema_id,
             "runenwerk.scheduler.frame_snapshot"
         );
-        assert_eq!(submission.entry.schema_version, 1);
+        assert_eq!(submission.entry.schema_version, 2);
     }
 }

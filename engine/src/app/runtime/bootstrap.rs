@@ -1,5 +1,4 @@
 use crate::app::App;
-use crate::app::domain::mode::AppMode;
 use crate::*;
 
 impl App {
@@ -14,13 +13,6 @@ impl App {
         {
             self.world
                 .insert_resource(PrimaryPresentationMetricsResource::default());
-        }
-        if self.world.resource::<WindowState>().is_err() {
-            let state = match self.mode {
-                AppMode::Windowed => WindowState::windowed(self.title.clone()),
-                AppMode::Headless => WindowState::headless(self.title.clone()),
-            };
-            self.world.insert_resource(state);
         }
         if !self
             .world

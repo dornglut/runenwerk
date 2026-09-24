@@ -32,13 +32,9 @@ Current code/tests remain the authority for current behavior. Where this design 
 from current behavior, the difference is an implementation gap requiring a separately
 accepted delivery issue.
 
-The current-source census below was revalidated against accepted `main`:
+The source census in section 1 is the historical activation-era evidence used to derive ADR 0023. Subsequent #708 deliveries progressively removed those predecessor shapes. Current maintained engine reference documentation and accepted source are authoritative for present implementation state.
 
-```text
-423eb85dbd46ce1106c725784775183c1663f02f
-```
-
-## 1. Exact current-source findings
+## 1. Activation-era source findings (historical evidence)
 
 The normalized design is driven by concrete current behavior rather than directory names.
 

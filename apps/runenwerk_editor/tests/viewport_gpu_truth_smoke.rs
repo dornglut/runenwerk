@@ -20,7 +20,7 @@ use engine::plugins::render::{
     Gfx, MaterialPreviewFixture, MaterialShaderCompileRequest, compile_material_shader,
 };
 use engine::runtime::{
-    NativeWindowId, PrimaryPresentationMetricsResource, WindowState, WindowStateRegistryResource,
+    NativeWindowId, PrimaryPresentationMetricsResource, WindowStateRegistryResource,
 };
 use graph::{
     CyclePolicy, GraphDefinition, GraphId, GraphMetadataEntry, GraphValue, NodeDefinition, NodeId,
@@ -117,27 +117,26 @@ fn viewport_gpu_truth_smoke() {
     );
 
     let size = window.inner_size();
-    let mut native_state = WindowState::windowed(window.title());
-    native_state.size_px = (size.width, size.height);
-    native_state.scale_factor = window.scale_factor();
+    let size_px = (size.width.max(1), size.height.max(1));
+    let scale_factor = window.scale_factor();
     app.world_mut()
         .insert_resource(PrimaryPresentationMetricsResource::new(
-            native_state.size_px,
-            native_state.scale_factor,
+            size_px,
+            scale_factor,
         ));
     app.world_mut()
         .insert_resource(WindowStateRegistryResource::default());
     app.world_mut()
         .resource_mut::<WindowStateRegistryResource>()
         .expect("window registry should exist")
-        .register_created_window(NativeWindowId::primary(), &native_state);
+        .register_primary_window(window.title(), size_px, scale_factor, window.has_focus());
     app.world_mut()
         .resource_mut::<RenderSurfaceRegistryResource>()
         .expect("render surface registry should exist")
         .confirm_surface_attachment(
             RenderSurfaceId::primary(),
             NativeWindowId::primary(),
-            native_state.size_px,
+            size_px,
         )
         .expect("real GPU harness must explicitly correlate its primary surface");
 

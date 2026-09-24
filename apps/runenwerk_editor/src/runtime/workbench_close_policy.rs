@@ -1,55 +1,42 @@
-use engine::runtime::{NativeWindowId, ResMut, WindowState, WindowStateRegistryResource};
+use engine::runtime::{ResMut, WindowStateRegistryResource};
 
 /// Approves primary-window close intents for standalone workbenches that do not own
 /// editor document state or unsaved-work confirmation.
 pub(super) fn approve_primary_window_close_intent_system(
-    mut window: ResMut<WindowState>,
     mut windows: ResMut<WindowStateRegistryResource>,
 ) {
-    approve_primary_window_close_intent(&mut window, &mut windows);
+    approve_primary_window_close_intent(&mut windows);
 }
 
-fn approve_primary_window_close_intent(
-    window: &mut WindowState,
-    windows: &mut WindowStateRegistryResource,
-) {
-    let primary_window_id = windows
-        .primary_window_id()
-        .unwrap_or_else(NativeWindowId::primary);
-    let registry_close_intent = windows
-        .record(primary_window_id)
-        .is_some_and(|record| record.close_intent_pending);
-
-    if !window.close_intent_pending && !registry_close_intent {
+fn approve_primary_window_close_intent(windows: &mut WindowStateRegistryResource) {
+    let Some(primary_window_id) = windows.primary_window_id() else {
         return;
-    }
-
-    window.request_close();
-    let primary_window_id = windows.ensure_primary_from_legacy(window);
-    if let Some(record) = windows.record_mut(primary_window_id) {
+    };
+    let Some(record) = windows.record_mut(primary_window_id) else {
+        return;
+    };
+    if record.close_intent_pending {
         record.approve_close();
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use engine::runtime::NativeWindowLifecycleState;
+    use engine::runtime::{NativeWindowId, NativeWindowLifecycleState};
 
     use super::*;
 
     #[test]
     fn standalone_workbench_close_policy_approves_primary_close_intent() {
-        let mut window = WindowState::windowed("UI Gallery");
-        let mut windows = WindowStateRegistryResource::from_legacy(&window);
+        let mut windows = WindowStateRegistryResource::default();
+        windows.register_primary_window("UI Gallery", (1280, 720), 1.0, true);
         windows
             .record_mut(NativeWindowId::primary())
             .expect("primary window record")
             .receive_close_intent();
 
-        approve_primary_window_close_intent(&mut window, &mut windows);
+        approve_primary_window_close_intent(&mut windows);
 
-        assert!(window.close_requested);
-        assert!(!window.close_intent_pending);
         let primary = windows.primary_window_id().expect("primary window id");
         let record = windows.record(primary).expect("primary window record");
         assert!(record.close_requested);

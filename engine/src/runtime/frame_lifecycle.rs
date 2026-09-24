@@ -4,22 +4,8 @@ use crate::runtime::fixed_step_executor::run_fixed_update_frame;
 use crate::runtime::schedules::{
     FrameEnd, PreUpdate, RenderPrepare, RenderSubmit, Startup, Update,
 };
-use crate::runtime::window::WindowState;
 use anyhow::{Result, anyhow};
 use runen_ecs::{Runtime, World};
-
-/// Applies builtin runtime run-state before startup/frame execution.
-///
-/// This does not install resources. Builtin resources are installed by
-/// `App::install_builtin_resources` during app construction.
-pub(crate) fn prepare_world_for_run(world: &mut World, title: &str, headless: bool) {
-    if let Ok(window) = world.resource_mut::<WindowState>() {
-        window.set_headless(headless);
-        window.redraw_requested = false;
-        window.close_requested = false;
-        window.title = title.to_string();
-    }
-}
 
 /// Runs `Startup` as one non-retryable lifecycle attempt for a runtime instance.
 pub(crate) fn run_startup_if_needed(

@@ -29,7 +29,7 @@ fn setup(mut commands: Commands) {
 fn update_demo(
     actions: Res<ActionState>,
     time: Res<Time>,
-    mut window: ResMut<WindowState>,
+    mut windows: ResMut<WindowStateRegistryResource>,
     mut query: Query<&mut Position>,
 ) {
     let position = query.single().expect("demo should have one player");
@@ -46,14 +46,17 @@ fn update_demo(
         position.y += 1;
     }
 
-    if actions.action_pressed(action::SYSTEM_TOGGLE_PAUSE_MENU) {
-        window.request_close();
+    if let Some(primary_window_id) = windows.primary_window_id()
+        && let Some(primary_window) = windows.record_mut(primary_window_id)
+    {
+        if actions.action_pressed(action::SYSTEM_TOGGLE_PAUSE_MENU) {
+            primary_window.approve_close();
+        }
+        primary_window.set_title(format!(
+            "Window Input Demo | pos=({}, {}) dt={:.4}",
+            position.x, position.y, time.delta_seconds
+        ));
     }
-
-    window.set_title(format!(
-        "Window Input Demo | pos=({}, {}) dt={:.4}",
-        position.x, position.y, time.delta_seconds
-    ));
 }
 
 fn main() -> Result<()> {

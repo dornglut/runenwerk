@@ -3,7 +3,9 @@ use anyhow::Result;
 use engine::plugins::{
     ActionState, PhysicalKeyIdentity, RenderPlugin, ScenePlugin, default_plugins,
 };
-use engine::prelude::{App, InputState, Res, ResMut, Startup, Time, Update, WindowState};
+use engine::prelude::{
+    App, InputState, Res, ResMut, Startup, Time, Update, WindowStateRegistryResource,
+};
 
 const ACTION_CYCLE_VIEW_MODE: &str = "sdf.view.cycle";
 
@@ -32,14 +34,18 @@ fn update_sdf_view_and_animation_system(
     actions: Res<ActionState>,
     time: Res<Time>,
     mut state: ResMut<Sdf3dRenderState>,
-    mut window: ResMut<WindowState>,
+    mut windows: ResMut<WindowStateRegistryResource>,
 ) {
     state.advance_by_frame_delta(time.delta_seconds);
     if actions.action_pressed(ACTION_CYCLE_VIEW_MODE) {
         state.cycle_view_mode();
     }
-    window.set_title(format!(
-        "3D SDF Render Flow - Public API Example | View: {} (Tab)",
-        state.view_mode_label()
-    ));
+    if let Some(primary_window_id) = windows.primary_window_id()
+        && let Some(primary_window) = windows.record_mut(primary_window_id)
+    {
+        primary_window.set_title(format!(
+            "3D SDF Render Flow - Public API Example | View: {} (Tab)",
+            state.view_mode_label()
+        ));
+    }
 }
