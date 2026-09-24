@@ -383,7 +383,6 @@ fn timing_diagnostic(
     )
 }
 
-
 #[cfg(test)]
 mod composed_native_proof {
     use super::*;
@@ -410,7 +409,9 @@ mod composed_native_proof {
             GpuContextDescriptor::new(requirements).with_label("RunenRender composed timing proof");
         match pollster::block_on(GpuContext::request(descriptor)) {
             Ok(context) => Some(context),
-            Err(error) if error.category() == GpuContextRequestErrorCategory::NoAdapterAvailable => {
+            Err(error)
+                if error.category() == GpuContextRequestErrorCategory::NoAdapterAvailable =>
+            {
                 assert_ne!(
                     std::env::var("RUNENRENDER_R7_REQUIRE_GPU").ok().as_deref(),
                     Some("1"),
