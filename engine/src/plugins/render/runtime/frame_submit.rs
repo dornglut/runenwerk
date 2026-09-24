@@ -179,10 +179,12 @@ mod contribution_deferral_tests {
                 acquire_ms: 1.0,
                 ..GfxFrameTimings::default()
             },
-            RenderGpuTimingCapability::Supported,
-            &[],
-            &[],
-            &[],
+            SubmittedFrameGpuObservations::new(
+                RenderGpuTimingCapability::Supported,
+                &[],
+                &[],
+                &[],
+            ),
         ));
 
         let delayed_primary_gpu = RenderPassTimingEvidence::gpu_sample(
@@ -202,10 +204,12 @@ mod contribution_deferral_tests {
                 acquire_ms: 2.0,
                 ..GfxFrameTimings::default()
             },
-            RenderGpuTimingCapability::Supported,
-            &[],
-            &[delayed_primary_gpu],
-            &[],
+            SubmittedFrameGpuObservations::new(
+                RenderGpuTimingCapability::Supported,
+                &[],
+                &[delayed_primary_gpu],
+                &[],
+            ),
         ));
 
         let primary_observation = history
@@ -246,10 +250,12 @@ mod contribution_deferral_tests {
             policy,
             &secondary,
             GfxFrameTimings::default(),
-            RenderGpuTimingCapability::Supported,
-            &[],
-            &[],
-            &[composed],
+            SubmittedFrameGpuObservations::new(
+                RenderGpuTimingCapability::Supported,
+                &[],
+                &[],
+                &[composed],
+            ),
         ));
         assert!(history.is_empty());
     }
@@ -408,15 +414,36 @@ fn primary_redraw_interval_logging_enabled() -> bool {
         .unwrap_or(false)
 }
 
+#[derive(Clone, Copy)]
+struct SubmittedFrameGpuObservations<'a> {
+    pass_capability: RenderGpuTimingCapability,
+    pass_timings: &'a [PassTimingSample],
+    pass_evidence: &'a [RenderPassTimingEvidence],
+    composed_evidence: &'a [RenderComposedFrameGpuTimingEvidence],
+}
+
+impl<'a> SubmittedFrameGpuObservations<'a> {
+    const fn new(
+        pass_capability: RenderGpuTimingCapability,
+        pass_timings: &'a [PassTimingSample],
+        pass_evidence: &'a [RenderPassTimingEvidence],
+        composed_evidence: &'a [RenderComposedFrameGpuTimingEvidence],
+    ) -> Self {
+        Self {
+            pass_capability,
+            pass_timings,
+            pass_evidence,
+            composed_evidence,
+        }
+    }
+}
+
 fn publish_submitted_frame_history(
     history: &mut RenderFrameHistoryState,
     policy: RenderFrameObservationPolicyResource,
     prepared_frame: &PreparedRenderFrame,
     timings: GfxFrameTimings,
-    gpu_capability: RenderGpuTimingCapability,
-    pass_timings: &[PassTimingSample],
-    gpu_evidence: &[RenderPassTimingEvidence],
-    composed_gpu_evidence: &[RenderComposedFrameGpuTimingEvidence],
+    gpu: SubmittedFrameGpuObservations<'_>,
 ) -> bool {
     history.apply_policy(policy);
     if !policy.enabled || !timings.submitted {
@@ -429,11 +456,11 @@ fn publish_submitted_frame_history(
         prepared_frame.context.prepare_epoch,
         timings.acquire_ms,
         timings.renderer,
-        pass_timings,
-        gpu_capability,
+        gpu.pass_timings,
+        gpu.pass_capability,
     );
-    history.observe_gpu_pass_timing_evidence(policy, gpu_evidence);
-    history.observe_composed_gpu_timing_evidence(policy, composed_gpu_evidence);
+    history.observe_gpu_pass_timing_evidence(policy, gpu.pass_evidence);
+    history.observe_composed_gpu_timing_evidence(policy, gpu.composed_evidence);
     true
 }
 
@@ -441,10 +468,7 @@ fn observe_submitted_frame_history(
     world: &mut WorldMut,
     prepared_frame: &PreparedRenderFrame,
     timings: GfxFrameTimings,
-    gpu_capability: RenderGpuTimingCapability,
-    pass_timings: &[PassTimingSample],
-    gpu_evidence: &[RenderPassTimingEvidence],
-    composed_gpu_evidence: &[RenderComposedFrameGpuTimingEvidence],
+    gpu: SubmittedFrameGpuObservations<'_>,
 ) -> bool {
     let policy = world
         .resource::<RenderFrameObservationPolicyResource>()
@@ -459,10 +483,7 @@ fn observe_submitted_frame_history(
         policy,
         prepared_frame,
         timings,
-        gpu_capability,
-        pass_timings,
-        gpu_evidence,
-        composed_gpu_evidence,
+        gpu,
     )
 }
 
@@ -682,10 +703,12 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                     &mut world,
                     &prepared_frame,
                     timings,
-                    gfx.renderer.last_gpu_timing_capability(),
-                    gfx.renderer.last_pass_timings(),
-                    gfx.renderer.last_gpu_pass_timing_evidence(),
-                    gfx.renderer.last_composed_gpu_timing_evidence(),
+                    SubmittedFrameGpuObservations::new(
+                        gfx.renderer.last_gpu_timing_capability(),
+                        gfx.renderer.last_pass_timings(),
+                        gfx.renderer.last_gpu_pass_timing_evidence(),
+                        gfx.renderer.last_composed_gpu_timing_evidence(),
+                    ),
                 );
 
                 let cache_stats = gfx.renderer.flow_pipeline_cache_stats();
@@ -1220,10 +1243,12 @@ fn render_additional_surfaces(
                     world,
                     prepared_frame,
                     timings,
-                    gfx.renderer.last_gpu_timing_capability(),
-                    gfx.renderer.last_pass_timings(),
-                    gfx.renderer.last_gpu_pass_timing_evidence(),
-                    gfx.renderer.last_composed_gpu_timing_evidence(),
+                    SubmittedFrameGpuObservations::new(
+                        gfx.renderer.last_gpu_timing_capability(),
+                        gfx.renderer.last_pass_timings(),
+                        gfx.renderer.last_gpu_pass_timing_evidence(),
+                        gfx.renderer.last_composed_gpu_timing_evidence(),
+                    ),
                 );
                 if history_enabled {
                     gfx.renderer.clear_published_gpu_pass_timing_evidence();
