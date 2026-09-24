@@ -128,7 +128,9 @@ fn native_no_render_host_smoke() -> anyhow::Result<()> {
         "no-Render composition must not contain Gfx before native Host realization"
     );
     anyhow::ensure!(
-        app.world().resource::<RenderSurfaceRegistryResource>().is_err(),
+        app.world()
+            .resource::<RenderSurfaceRegistryResource>()
+            .is_err(),
         "no-Render composition must not contain a Render surface registry before native Host realization"
     );
 
@@ -137,7 +139,10 @@ fn native_no_render_host_smoke() -> anyhow::Result<()> {
 
     anyhow::ensure!(startup_ran.load(Ordering::SeqCst), "Startup did not run");
     anyhow::ensure!(update_ran.load(Ordering::SeqCst), "Update did not run");
-    anyhow::ensure!(frame_seen.load(Ordering::SeqCst), "native frame hook did not run");
+    anyhow::ensure!(
+        frame_seen.load(Ordering::SeqCst),
+        "native frame hook did not run"
+    );
     anyhow::ensure!(
         !unexpected_render_state.load(Ordering::SeqCst),
         "native Host materialized Gfx or Render surface state without RenderPlugin"
