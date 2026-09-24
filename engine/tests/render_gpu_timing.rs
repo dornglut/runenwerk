@@ -1,9 +1,9 @@
 use engine::plugins::render::inspect::{
     PassTimingSample, RenderComposedFrameGpuTimingEvidence, RenderDebugTimingsState,
-    RenderGpuTimingCapability,
-    RenderGpuTimingDiagnostic, RenderPassTimingEvidence, RenderReadinessBudgetKind,
-    RenderReadinessBudgetMeasurements, RenderReadinessBudgetThreshold, RenderTimingSource,
-    evaluate_render_readiness_budgets, summarize_gpu_pass_timing_evidence, summarize_pass_timings,
+    RenderGpuTimingCapability, RenderGpuTimingDiagnostic, RenderPassTimingEvidence,
+    RenderReadinessBudgetKind, RenderReadinessBudgetMeasurements, RenderReadinessBudgetThreshold,
+    RenderTimingSource, evaluate_render_readiness_budgets, summarize_gpu_pass_timing_evidence,
+    summarize_pass_timings,
 };
 use runen_gpu::{
     GpuCapabilities, GpuCapabilityAdmission, GpuCapabilityFeature, GpuCapabilityRequirement,
@@ -92,7 +92,10 @@ fn composed_frame_timing_remains_one_independent_interval_not_a_pass_sum() {
 
     assert_eq!(pass_snapshot.total_millis, 5.0);
     assert_eq!(composed.gpu_composed_frame_ms, Some(7.5));
-    assert_ne!(composed.gpu_composed_frame_ms, Some(pass_snapshot.total_millis));
+    assert_ne!(
+        composed.gpu_composed_frame_ms,
+        Some(pass_snapshot.total_millis)
+    );
 }
 
 #[test]
