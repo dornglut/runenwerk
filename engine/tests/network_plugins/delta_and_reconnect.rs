@@ -778,3 +778,308 @@ fn participant_removal_purges_pending_authority_input_before_readmission() {
         vec![replacement]
     );
 }
+
+#[test]
+fn authority_input_participant_retained_key_limit_rejects_second_pending_tick() {
+    let mut app = App::headless();
+    app.add_plugins(default_plugins());
+    app.add_plugins((ScenePlugin, NetworkServerPlugin));
+    install_network_test_clock(&mut app);
+
+    let participant_limits = AuthorityInputLimits::new(
+        NonZeroUsize::new(64 * 1024).unwrap(),
+        NonZeroUsize::new(1).unwrap(),
+        NonZeroUsize::new(512 * 1024).unwrap(),
+        8,
+    )
+    .unwrap();
+    let aggregate_limits = AuthorityInputAggregateLimits::new(
+        NonZeroUsize::new(16).unwrap(),
+        NonZeroUsize::new(8 * 1024 * 1024).unwrap(),
+    );
+    let policy = AuthorityInputPolicy::new(participant_limits, aggregate_limits);
+
+    let connection = ConnectionHandle::new(1);
+    let participant = ParticipantId::new(1);
+    let mut core =
+        test_runennet_session_core_without_authority_input().with_authority_input_policy(policy);
+    let mut projection = RunenNetSessionProjection::default();
+    establish_runennet_connection(&mut core, &mut projection, participant, connection);
+    app.world_mut().insert_resource(core);
+    app.world_mut().insert_resource(projection);
+    sync_runennet_session_projection(app.world_mut());
+
+    let first = ClientCommandEnvelope::Ability(AbilityCommand { slot: 51 });
+    let second = ClientCommandEnvelope::Ability(AbilityCommand { slot: 52 });
+    for (tick, command) in [(1, first.clone()), (2, second)] {
+        let payload = TestReplicationDriver::encode_input(std::slice::from_ref(&command)).unwrap();
+        enqueue_server_inbox_from(
+            app.world_mut(),
+            Some(connection),
+            ClientMessage::InputFrame(InputFrame {
+                tick: SimulationTick(tick),
+                payload,
+            }),
+        )
+        .unwrap();
+        app = run_network_protocol_frame(app, "participant input limit frame should run");
+    }
+
+    assert_eq!(
+        app.world()
+            .resource::<ReplicationDiagnostics>()
+            .unwrap()
+            .input_resource_rejections,
+        1
+    );
+
+    app = run_network_fixed_step(app, "first accepted authority input should execute");
+    app = run_network_fixed_step(app, "rejected second authority input must not execute");
+    assert_eq!(
+        app.world().resource::<AppliedInputLog>().unwrap().inputs,
+        vec![first]
+    );
+}
+
+#[test]
+fn authority_input_aggregate_retained_key_limit_is_shared_across_participants() {
+    let mut app = App::headless();
+    app.add_plugins(default_plugins());
+    app.add_plugins((ScenePlugin, NetworkServerPlugin));
+    install_network_test_clock(&mut app);
+
+    let participant_limits = AuthorityInputLimits::new(
+        NonZeroUsize::new(64 * 1024).unwrap(),
+        NonZeroUsize::new(4).unwrap(),
+        NonZeroUsize::new(512 * 1024).unwrap(),
+        8,
+    )
+    .unwrap();
+    let aggregate_limits = AuthorityInputAggregateLimits::new(
+        NonZeroUsize::new(1).unwrap(),
+        NonZeroUsize::new(8 * 1024 * 1024).unwrap(),
+    );
+    let policy = AuthorityInputPolicy::new(participant_limits, aggregate_limits);
+
+    let first_connection = ConnectionHandle::new(1);
+    let second_connection = ConnectionHandle::new(2);
+    let first_participant = ParticipantId::new(1);
+    let second_participant = ParticipantId::new(2);
+    let mut core =
+        test_runennet_session_core_without_authority_input().with_authority_input_policy(policy);
+    let mut projection = RunenNetSessionProjection::default();
+    establish_runennet_connection(
+        &mut core,
+        &mut projection,
+        first_participant,
+        first_connection,
+    );
+    establish_runennet_connection(
+        &mut core,
+        &mut projection,
+        second_participant,
+        second_connection,
+    );
+    app.world_mut().insert_resource(core);
+    app.world_mut().insert_resource(projection);
+    sync_runennet_session_projection(app.world_mut());
+
+    let accepted = ClientCommandEnvelope::Ability(AbilityCommand { slot: 61 });
+    let rejected = ClientCommandEnvelope::Ability(AbilityCommand { slot: 62 });
+    for (connection, command) in [
+        (first_connection, accepted.clone()),
+        (second_connection, rejected),
+    ] {
+        let payload = TestReplicationDriver::encode_input(std::slice::from_ref(&command)).unwrap();
+        enqueue_server_inbox_from(
+            app.world_mut(),
+            Some(connection),
+            ClientMessage::InputFrame(InputFrame {
+                tick: SimulationTick(1),
+                payload,
+            }),
+        )
+        .unwrap();
+    }
+
+    app = run_network_protocol_frame(app, "aggregate input limit frame should run");
+    assert_eq!(
+        app.world()
+            .resource::<ReplicationDiagnostics>()
+            .unwrap()
+            .input_resource_rejections,
+        1
+    );
+
+    app = run_network_fixed_step(app, "only aggregate-admitted input should execute");
+    assert_eq!(
+        app.world().resource::<AppliedInputLog>().unwrap().inputs,
+        vec![accepted]
+    );
+}
+
+#[test]
+fn recovery_expiry_purges_pending_authority_input_before_new_membership() {
+    let mut app = App::headless();
+    app.add_plugins(default_plugins());
+    app.add_plugins((ScenePlugin, NetworkServerPlugin));
+    install_network_test_clock(&mut app);
+
+    let old_connection = ConnectionHandle::new(1);
+    let new_connection = ConnectionHandle::new(2);
+    let participant = ParticipantId::new(1);
+    install_runennet_connections(&mut app, &[(old_connection, participant)]);
+
+    let stale_lifetime = ClientCommandEnvelope::Ability(AbilityCommand { slot: 71 });
+    let payload =
+        TestReplicationDriver::encode_input(std::slice::from_ref(&stale_lifetime)).unwrap();
+    enqueue_server_inbox_from(
+        app.world_mut(),
+        Some(old_connection),
+        ClientMessage::InputFrame(InputFrame {
+            tick: SimulationTick(2),
+            payload,
+        }),
+    )
+    .unwrap();
+    app = run_network_protocol_frame(app, "pre-expiry authority input should be accepted");
+
+    let mut core = app
+        .world_mut()
+        .remove_resource::<RunenNetSessionCore>()
+        .unwrap();
+    let mut projection = app
+        .world_mut()
+        .remove_resource::<RunenNetSessionProjection>()
+        .unwrap();
+    let duration = RecoveryDuration::new(NonZeroU64::new(1).unwrap());
+    core.connection_lost(
+        &mut projection,
+        participant,
+        old_connection,
+        RetentionPolicy::RetainForRecovery { duration },
+    )
+    .unwrap();
+    core.advance_recovery_clock(runen_net::session::RecoveryTime::new(1))
+        .unwrap();
+    establish_runennet_negotiation(&mut core, new_connection);
+    core.admit_established(&mut projection, participant, new_connection)
+        .unwrap();
+    app.world_mut().insert_resource(core);
+    app.world_mut().insert_resource(projection);
+    sync_runennet_session_projection(app.world_mut());
+
+    let fresh_lifetime = ClientCommandEnvelope::Ability(AbilityCommand { slot: 72 });
+    let payload = TestReplicationDriver::encode_input(std::slice::from_ref(&fresh_lifetime)).unwrap();
+    enqueue_server_inbox_from(
+        app.world_mut(),
+        Some(new_connection),
+        ClientMessage::InputFrame(InputFrame {
+            tick: SimulationTick(2),
+            payload,
+        }),
+    )
+    .unwrap();
+    app = run_network_protocol_frame(app, "post-expiry authority input should be fresh");
+
+    assert_eq!(
+        app.world()
+            .resource::<ReplicationDiagnostics>()
+            .unwrap()
+            .conflicting_inputs,
+        0
+    );
+    app = run_network_fixed_step(app, "tick one should run after recovery expiry");
+    app = run_network_fixed_step(app, "tick two should execute only new-lifetime input");
+    assert_eq!(
+        app.world().resource::<AppliedInputLog>().unwrap().inputs,
+        vec![fresh_lifetime]
+    );
+}
+
+#[test]
+fn session_close_purges_pending_authority_input_execution() {
+    let mut app = App::headless();
+    app.add_plugins(default_plugins());
+    app.add_plugins((ScenePlugin, NetworkServerPlugin));
+    install_network_test_clock(&mut app);
+
+    let connection = ConnectionHandle::new(1);
+    let participant = ParticipantId::new(1);
+    install_runennet_connections(&mut app, &[(connection, participant)]);
+
+    let pending = ClientCommandEnvelope::Ability(AbilityCommand { slot: 81 });
+    let payload = TestReplicationDriver::encode_input(std::slice::from_ref(&pending)).unwrap();
+    enqueue_server_inbox_from(
+        app.world_mut(),
+        Some(connection),
+        ClientMessage::InputFrame(InputFrame {
+            tick: SimulationTick(2),
+            payload,
+        }),
+    )
+    .unwrap();
+    app = run_network_protocol_frame(app, "pre-close authority input should be accepted");
+
+    let mut core = app
+        .world_mut()
+        .remove_resource::<RunenNetSessionCore>()
+        .unwrap();
+    let mut projection = app
+        .world_mut()
+        .remove_resource::<RunenNetSessionProjection>()
+        .unwrap();
+    core.close(&mut projection);
+    app.world_mut().insert_resource(core);
+    app.world_mut().insert_resource(projection);
+    sync_runennet_session_projection(app.world_mut());
+
+    app = run_network_fixed_step(app, "tick one should run after session close");
+    app = run_network_fixed_step(app, "tick two must not execute closed-session input");
+    assert!(app.world().resource::<AppliedInputLog>().is_err());
+}
+
+#[test]
+fn authority_input_keeps_same_tick_participants_independent() {
+    let mut app = App::headless();
+    app.add_plugins(default_plugins());
+    app.add_plugins((ScenePlugin, NetworkServerPlugin));
+    install_network_test_clock(&mut app);
+
+    let first_connection = ConnectionHandle::new(1);
+    let second_connection = ConnectionHandle::new(2);
+    install_runennet_connections(
+        &mut app,
+        &[
+            (first_connection, ParticipantId::new(1)),
+            (second_connection, ParticipantId::new(2)),
+        ],
+    );
+
+    let first = ClientCommandEnvelope::Ability(AbilityCommand { slot: 91 });
+    let second = ClientCommandEnvelope::Ability(AbilityCommand { slot: 92 });
+    for (connection, command) in [
+        (first_connection, first.clone()),
+        (second_connection, second.clone()),
+    ] {
+        let payload = TestReplicationDriver::encode_input(std::slice::from_ref(&command)).unwrap();
+        enqueue_server_inbox_from(
+            app.world_mut(),
+            Some(connection),
+            ClientMessage::InputFrame(InputFrame {
+                tick: SimulationTick(1),
+                payload,
+            }),
+        )
+        .unwrap();
+    }
+
+    app = run_network_protocol_frame(app, "same-tick participant inputs should both be admitted");
+    app = run_network_fixed_step(app, "same-tick participant inputs should both execute");
+
+    let applied = &app.world().resource::<AppliedInputLog>().unwrap().inputs;
+    assert_eq!(applied.len(), 2);
+    assert!(applied.contains(&first));
+    assert!(applied.contains(&second));
+}
+
