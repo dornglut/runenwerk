@@ -43,7 +43,8 @@ use crate::runtime::viewport::{
     ViewportRenderStateCommandQueueResource, ViewportRenderStateResource,
     ViewportRuntimeSettingsHydrationResource, ViewportSurfaceSetResource,
     apply_viewport_render_state_commands_system, dispatch_viewport_query_publication,
-    prepare_viewport_render_product_selections_system, summarize_viewport_gpu_residency_system,
+    prepare_viewport_render_product_selections_system,
+    publish_viewport_render_frame_requests_system, summarize_viewport_gpu_residency_system,
     sync_viewport_presentation_products_system, sync_viewport_product_targets_system,
     sync_viewport_render_jobs_system,
 };
@@ -69,8 +70,9 @@ pub enum EditorRuntimeSet {
     ProcgenViewportOverlay,
     ViewportProductTargets,
     ViewportRenderJobs,
-    ViewportRenderProductSelection,
     MaterialPreviewRenderHandoff,
+    ViewportRenderFrameRequestPublication,
+    ViewportRenderProductSelection,
     MaterialPreviewProductUpload,
     TexturePreviewProductUpload,
     ViewportGpuResidencySummary,
@@ -195,6 +197,14 @@ impl Plugin for EditorAppPlugin {
                 .on_invoker_thread()
                 .in_set(EditorRuntimeSet::MaterialPreviewRenderHandoff)
                 .after(EditorRuntimeSet::ViewportRenderProductSelection)
+                .before(EditorRuntimeSet::ViewportRenderFrameRequestPublication)
+                .before(RenderRuntimeSet::FramePrepare),
+        );
+        app.add_systems(
+            RenderPrepare,
+            publish_viewport_render_frame_requests_system
+                .in_set(EditorRuntimeSet::ViewportRenderFrameRequestPublication)
+                .after(EditorRuntimeSet::MaterialPreviewRenderHandoff)
                 .before(RenderRuntimeSet::FramePrepare),
         );
         app.add_systems(

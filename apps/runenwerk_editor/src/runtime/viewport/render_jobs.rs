@@ -7,9 +7,10 @@ use editor_viewport::{ExpressionDimensions, ViewportId, ViewportSurfacePresentat
 #[cfg(test)]
 use engine::plugins::render::RenderTargetAliasKey;
 use engine::plugins::render::{
-    PreparedFlowInvocationRequest, PreparedRenderFrameRequestResource, PreparedViewFrame,
-    RenderDynamicTextureTargetKey, RenderFlowId, RenderFlowRegistryResource,
-    RenderProductSurfaceManifest, RenderProductSurfaceRequest, RenderProductSurfaceRequestBatch,
+    PreparedFlowInvocationRequest, PreparedMaterialFeatureResource,
+    PreparedRenderFrameRequestResource, PreparedViewFrame, RenderDynamicTextureTargetKey,
+    RenderFlowId, RenderFlowRegistryResource, RenderProductSurfaceManifest,
+    RenderProductSurfaceRequest, RenderProductSurfaceRequestBatch,
 };
 use engine::runtime::{Res, ResMut};
 use runen_gpu::GpuWorkResourceId;
@@ -76,12 +77,9 @@ pub fn sync_viewport_render_jobs_system(
     viewport_render_states: Res<ViewportRenderStateResource>,
     viewport_product_targets: Res<ViewportProductTargetRegistryResource>,
     mut viewport_render_jobs: ResMut<ViewportRenderJobResource>,
-    mut prepared_frame_requests: ResMut<PreparedRenderFrameRequestResource>,
 ) {
     let Some((flow_id, scene_uniform_id)) = editor_main_flow_ids(&flow_registry) else {
         viewport_render_jobs.replace_jobs(Vec::new());
-        let _ =
-            prepared_frame_requests.remove_contribution(EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID);
         return;
     };
 
@@ -98,8 +96,36 @@ pub fn sync_viewport_render_jobs_system(
             )
         })
         .collect::<Vec<_>>();
+    viewport_render_jobs.replace_jobs(jobs);
+}
+
+pub fn publish_viewport_render_frame_requests_system(
+    material_feature: Res<PreparedMaterialFeatureResource>,
+    viewport_render_jobs: Res<ViewportRenderJobResource>,
+    mut prepared_frame_requests: ResMut<PreparedRenderFrameRequestResource>,
+) {
+    publish_viewport_render_frame_requests(
+        &material_feature,
+        &viewport_render_jobs,
+        &mut prepared_frame_requests,
+    );
+}
+
+fn publish_viewport_render_frame_requests(
+    material_feature: &PreparedMaterialFeatureResource,
+    viewport_render_jobs: &ViewportRenderJobResource,
+    prepared_frame_requests: &mut PreparedRenderFrameRequestResource,
+) -> bool {
+    if material_feature.payload.scene_bundle.is_none() || viewport_render_jobs.is_empty() {
+        let _ =
+            prepared_frame_requests.remove_contribution(EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID);
+        return false;
+    }
+
     let batch = RenderProductSurfaceRequestBatch::from_requests(
-        jobs.iter().map(|job| job.product_surface_request.clone()),
+        viewport_render_jobs
+            .jobs()
+            .map(|job| job.product_surface_request.clone()),
     );
     let manifest = RenderProductSurfaceManifest::from_request_batch(
         EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID,
@@ -118,7 +144,7 @@ pub fn sync_viewport_render_jobs_system(
             invocations,
         )
         .expect("editor viewport prepared frame contribution must be unique");
-    viewport_render_jobs.replace_jobs(jobs);
+    true
 }
 
 fn build_viewport_render_job(
@@ -327,6 +353,78 @@ mod tests {
             Some(&viewport_render.compose_scene_product_uniform_bytes((320, 200))),
             "viewport render jobs must carry target-local scene uniforms in the prepared invocation"
         );
+    }
+
+    #[test]
+    fn viewport_frame_requests_wait_for_exact_material_scene_bundle() {
+        let viewport_id = ViewportId(9);
+        let mut product_registry = ViewportProductRegistryResource::default();
+        product_registry.update_viewport_descriptors(
+            viewport_id,
+            vec![
+                descriptor(
+                    SCENE_COLOR_PRODUCT_ID,
+                    ExpressionProductKind::SceneColor2D,
+                    ExpressionFormat::Rgba8Unorm,
+                ),
+                descriptor(
+                    PICKING_IDS_PRODUCT_ID,
+                    ExpressionProductKind::PickingIds2D,
+                    ExpressionFormat::R32Uint,
+                ),
+                descriptor(
+                    OVERLAY_PRODUCT_ID,
+                    ExpressionProductKind::Overlay2D,
+                    ExpressionFormat::Rgba8Unorm,
+                ),
+            ],
+        );
+        let targets = ViewportProductTargetRegistryResource::from_descriptors_for_viewport(
+            viewport_id,
+            product_registry
+                .descriptors_for(viewport_id)
+                .expect("descriptors should exist"),
+        );
+        let job = build_viewport_render_job(
+            RenderFlowId::try_from_raw(1).expect("test flow id should be valid"),
+            test_gpu_work_resource_id("scene_uniform"),
+            &EditorViewportRenderState::default(),
+            viewport_id,
+            UiRect::new(0.0, 0.0, 320.0, 200.0),
+            &targets,
+        )
+        .expect("viewport job should form");
+        let mut jobs = ViewportRenderJobResource::default();
+        jobs.replace_jobs([job]);
+        let mut requests = PreparedRenderFrameRequestResource::default();
+
+        assert!(
+            !publish_viewport_render_frame_requests(
+                &PreparedMaterialFeatureResource::default(),
+                &jobs,
+                &mut requests,
+            ),
+            "viewport frame requests must remain unpublished while the exact generated material scene bundle is absent"
+        );
+        assert!(
+            requests.requested_flow_invocations().is_empty(),
+            "missing material readiness must not leak an offscreen viewport invocation into frame preparation"
+        );
+
+        let mut ready_material = PreparedMaterialFeatureResource::default();
+        ready_material.payload.scene_bundle =
+            Some(engine::plugins::render::PreparedSceneMaterialBundle::new(
+                "scene-artifact",
+                "scene-cache",
+                "generated-scene.wgsl",
+                "scene-identity",
+                "material-table",
+            ));
+        assert!(
+            publish_viewport_render_frame_requests(&ready_material, &jobs, &mut requests),
+            "viewport frame requests should publish once an exact generated material scene bundle exists"
+        );
+        assert_eq!(requests.requested_flow_invocations().len(), 1);
     }
 
     #[test]
