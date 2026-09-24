@@ -1,12 +1,11 @@
 use crate::plugins::SceneResource;
 use crate::plugins::inspect::{
     PassTimingSample, RenderCapturedTextureState, RenderComposedFrameGpuTimingEvidence,
-    RenderDebugConfigResource,
-    RenderDebugControlResource, RenderDebugFrameReportState, RenderDebugTimingsState,
-    RenderFrameDiagnosticsMode, RenderFrameDiagnosticsPolicyResource, RenderFrameHistoryState,
-    RenderFrameObservationPolicyResource, RenderGpuTimingCapability, RenderPassProvenanceState,
-    RenderPassTimingEvidence, RenderRuntimeResourceInspectorState, RenderTextureInspectorState,
-    submit_render_frame_report_to_diagnostics,
+    RenderDebugConfigResource, RenderDebugControlResource, RenderDebugFrameReportState,
+    RenderDebugTimingsState, RenderFrameDiagnosticsMode, RenderFrameDiagnosticsPolicyResource,
+    RenderFrameHistoryState, RenderFrameObservationPolicyResource, RenderGpuTimingCapability,
+    RenderPassProvenanceState, RenderPassTimingEvidence, RenderRuntimeResourceInspectorState,
+    RenderTextureInspectorState, submit_render_frame_report_to_diagnostics,
 };
 use crate::plugins::pipelines::{PipelineCacheResource, PipelineCacheStats};
 use crate::plugins::render::backend::RenderSurfaceAcquireError;
