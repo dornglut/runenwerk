@@ -1,10 +1,160 @@
 use super::*;
+use super::super::resource_descriptors::{buffer_descriptor, owned_common};
+use crate::plugins::render::adapters::RenderGpuFrameTimingBracket;
 use runen_gpu::{
-    GpuBufferHandle, GpuContext, GpuQuerySetHandle, GpuReadbackBytes, GpuReadbackId,
-    GpuSubmissionFailure,
+    GpuBufferHandle, GpuBufferRange, GpuBufferRegion, GpuBufferUsage, GpuContext, GpuMemoryIntent,
+    GpuQueryKind, GpuQueryRange, GpuQueryResolveOperation, GpuQuerySetDescriptor,
+    GpuQuerySetHandle, GpuReadbackBytes, GpuReadbackId, GpuReadbackOperation,
+    GpuResourceLifetime, GpuSubmissionFailure, GpuTimestampMarkerOperation, GpuWorkFragment,
+    GpuWorkResourceIdAllocator,
 };
 
 const TIMESTAMP_SIZE_BYTES: usize = 8;
+
+pub(in crate::plugins::render::renderer) struct PreparedComposedGpuTiming {
+    bracket: RenderGpuFrameTimingBracket,
+    frame: GpuComposedFrameTimingFrame,
+}
+
+impl PreparedComposedGpuTiming {
+    pub fn bracket(&self) -> &RenderGpuFrameTimingBracket { &self.bracket }
+    pub fn into_frame(self) -> GpuComposedFrameTimingFrame { self.frame }
+}
+
+#[derive(Debug)]
+pub(in crate::plugins::render::renderer) struct GpuComposedFrameTimingFrame {
+    readback_id: GpuReadbackId,
+    timestamp_period_ns: f32,
+    frame_index: u64,
+    render_surface_id: u64,
+}
+
+impl GpuComposedFrameTimingFrame {
+    pub const fn readback_id(&self) -> GpuReadbackId { self.readback_id }
+
+    pub fn pending_evidence(&self) -> RenderComposedFrameGpuTimingEvidence {
+        RenderComposedFrameGpuTimingEvidence::gpu_diagnostic(
+            self.frame_index,
+            self.render_surface_id,
+            RenderGpuTimingDiagnostic::readback_pending(
+                "composed renderer GPU timestamp submission was accepted; readback is pending",
+            ),
+        )
+    }
+
+    pub fn ready_evidence(&self, readback: &GpuReadbackBytes) -> RenderComposedFrameGpuTimingEvidence {
+        if readback.texture_format().is_some() {
+            return self.diagnostic_evidence(
+                "composed renderer GPU timestamp readback unexpectedly carried texture metadata",
+            );
+        }
+        let bytes=readback.as_bytes();
+        if bytes.len()!=2*TIMESTAMP_SIZE_BYTES {
+            return self.diagnostic_evidence(format!(
+                "composed renderer GPU timestamp readback byte length mismatch: expected {}, got {}",
+                2*TIMESTAMP_SIZE_BYTES, bytes.len()
+            ));
+        }
+        let Some(begin)=decode_timestamp(bytes,0) else {
+            return self.diagnostic_evidence("composed renderer GPU start timestamp is missing");
+        };
+        let Some(end)=decode_timestamp(bytes,1) else {
+            return self.diagnostic_evidence("composed renderer GPU end timestamp is missing");
+        };
+        let Some(delta_ticks)=end.checked_sub(begin) else {
+            return self.diagnostic_evidence(format!(
+                "composed renderer GPU end timestamp {end} precedes start timestamp {begin}"
+            ));
+        };
+        let millis=(delta_ticks as f64)*f64::from(self.timestamp_period_ns)/1_000_000.0;
+        if !millis.is_finite() || millis>f64::from(f32::MAX) {
+            return self.diagnostic_evidence(
+                "composed renderer GPU timestamp conversion exceeded the timing domain",
+            );
+        }
+        RenderComposedFrameGpuTimingEvidence::gpu_sample(
+            self.frame_index,self.render_surface_id,millis as f32,
+        )
+    }
+
+    pub fn failed_evidence(&self,failure:&GpuSubmissionFailure)->RenderComposedFrameGpuTimingEvidence {
+        self.diagnostic_evidence(format!(
+            "composed renderer GPU timestamp readback failed ({:?}): {}",
+            failure.kind(),failure.detail()
+        ))
+    }
+
+    pub fn diagnostic_evidence(&self,message:impl Into<String>)->RenderComposedFrameGpuTimingEvidence {
+        RenderComposedFrameGpuTimingEvidence::gpu_diagnostic(
+            self.frame_index,
+            self.render_surface_id,
+            RenderGpuTimingDiagnostic::unavailable_this_frame(message),
+        )
+    }
+}
+
+pub(in crate::plugins::render::renderer) fn prepare_composed_gpu_timing(
+    context:&GpuContext,
+    frame_index:u64,
+    render_surface_id:u64,
+)->Result<PreparedComposedGpuTiming>{
+    let mut allocator=GpuWorkResourceIdAllocator::new();
+    let query_set=allocator.allocate_query_set_handle(GpuQuerySetDescriptor::new(
+        owned_common(
+            "render.frame.composed.timestamps",
+            GpuResourceLifetime::Transient,
+            GpuMemoryIntent::Device,
+        )?,
+        GpuQueryKind::Timestamp,
+        2,
+    )?)?;
+    let resolve_buffer=allocator.allocate_buffer_handle(buffer_descriptor(
+        "render.frame.composed.timestamp-resolve",
+        (2*TIMESTAMP_SIZE_BYTES) as u64,
+        [GpuBufferUsage::QueryResolve,GpuBufferUsage::CopySource],
+        GpuResourceLifetime::Transient,
+        GpuMemoryIntent::Device,
+    )?)?;
+    let readback_id=GpuReadbackId::allocate()?;
+    let resolve=GpuQueryResolveOperation::new(
+        &query_set,GpuQueryRange::new(&query_set,0,2)?,&resolve_buffer,0,
+    )?;
+    let readback=GpuReadbackOperation::new(
+        GpuBufferRegion::new(
+            &resolve_buffer,
+            GpuBufferRange::new(&resolve_buffer,0,(2*TIMESTAMP_SIZE_BYTES) as u64)?,
+        )?.into(),
+        readback_id,
+    )?;
+    let mut start_node=None;
+    let mut end_node=None;
+    let fragment=GpuWorkFragment::build("render.frame.composed-timing",|work|{
+        start_node=Some(work.operation(
+            "composed renderer GPU timing start",
+            GpuTimestampMarkerOperation::new(&query_set,0)?,
+        )?);
+        end_node=Some(work.operation(
+            "composed renderer GPU timing end",
+            GpuTimestampMarkerOperation::new(&query_set,1)?,
+        )?);
+        work.operation("resolve composed renderer GPU timestamps",resolve)?;
+        work.operation("read back composed renderer GPU timestamps",readback)?;
+        Ok(())
+    })?;
+    let timestamp_period_ns=context.timestamp_period_ns().ok_or_else(||{
+        anyhow::anyhow!("composed renderer GPU timing was admitted without a timestamp period")
+    })?;
+    Ok(PreparedComposedGpuTiming{
+        bracket:RenderGpuFrameTimingBracket::new(
+            fragment,
+            start_node.expect("composed timing start marker must be authored"),
+            end_node.expect("composed timing end marker must be authored"),
+        ),
+        frame:GpuComposedFrameTimingFrame{
+            readback_id,timestamp_period_ns,frame_index,render_surface_id,
+        },
+    })
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::plugins::render::renderer) struct GpuPassTimestampIndices {
