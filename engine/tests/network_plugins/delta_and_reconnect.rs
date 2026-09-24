@@ -142,13 +142,18 @@ fn server_delta_snapshot_applies_cleanly_on_client() {
         .run_for_frames(1)
         .expect("client should apply the delta snapshot");
 
-    let replication = client.world().resource::<ClientSnapshotState>().unwrap();
-    assert_eq!(replication.last_acknowledged_cursor, SnapshotCursor(2));
-    assert_eq!(replication.last_received_tick, delta_tick);
-    let last_snapshot = replication
-        .last_received_snapshot
-        .clone()
-        .expect("client should retain the latest applied snapshot");
+    assert_eq!(
+        client_replication_acknowledgement(client.world()),
+        Some((SnapshotCursor(2), delta_tick))
+    );
+    let active = client
+        .world()
+        .resource::<ActiveClientReplicatedStateProduct>()
+        .expect("client should own an active replicated-state product")
+        .active()
+        .expect("client should retain the latest committed product");
+    let last_snapshot = TestReplicationDriver::decode_snapshot(active.bytes())
+        .expect("active replicated-state product should decode");
     assert_eq!(last_snapshot, authoritative_second_snapshot);
 
     let outbound = client.world().resource::<NetworkOutboundQueue>().unwrap();

@@ -190,13 +190,6 @@ impl SnapshotApplyDriver for ReplicationProbeDriver {
         Ok(true)
     }
 
-    fn apply_delta(
-        _world: &mut runen_ecs::World,
-        _tick: SimulationTick,
-        _delta: Self::Delta,
-    ) -> Result<bool, Self::Error> {
-        Ok(true)
-    }
 }
 
 impl InputDriver for ReplicationProbeDriver {

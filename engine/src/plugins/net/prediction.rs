@@ -1,7 +1,7 @@
 use super::*;
 use crate::WorldMut;
 use anyhow::Context;
-use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
+use engine_net::replication::{InputDriver, ReplicationDriver};
 use engine_net::*;
 use engine_sim::{AuthorityRole, SimulationProfileConfig, SimulationTick};
 use runen_ecs::World;
@@ -12,7 +12,6 @@ use world_ops::SyncCursor;
 
 const FULL_SNAPSHOT_INTERVAL_TICKS: u64 = 30;
 const MAX_SERVER_SNAPSHOT_HISTORY: usize = 256;
-const MAX_CLIENT_SNAPSHOT_HISTORY: usize = 256;
 
 fn active_connections(world: &World) -> Vec<ConnectionHandle> {
     let mut connections = world
@@ -322,125 +321,7 @@ where
     Ok(())
 }
 
-pub fn apply_authoritative_snapshot<TDriver>(
-    world: &mut World,
-    tick: SimulationTick,
-    cursor: SnapshotCursor,
-    snapshot: Option<TDriver::Snapshot>,
-    payload: &[u8],
-) -> anyhow::Result<bool>
-where
-    TDriver: ReplicationDriver + SnapshotApplyDriver + InputDriver + Send + Sync + 'static,
-    TDriver::Snapshot: Clone + PartialEq,
-    TDriver::Input: Clone + PartialEq,
-{
-    let snapshot = match snapshot {
-        Some(snapshot) => snapshot,
-        None => TDriver::decode_snapshot(payload)
-            .map_err(|error| map_driver_error::<TDriver>(error, "decode snapshot"))?,
-    };
-
-    let corrected = TDriver::apply_snapshot(world, tick, snapshot.clone())
-        .map_err(|error| map_driver_error::<TDriver>(error, "apply snapshot"))?;
-
-    if let Ok(tick_resource) = world.resource_mut::<SimulationTick>() {
-        *tick_resource = tick;
-    }
-
-    if let Ok(state) = world.resource_mut::<ClientSnapshotReplicationState<TDriver::Snapshot>>() {
-        state.last_acknowledged_cursor = cursor;
-        state.last_received_tick = tick;
-        state.applied_snapshots = state.applied_snapshots.saturating_add(1);
-        state.last_received_snapshot = Some(snapshot.clone());
-        state.snapshot_history.insert(cursor, snapshot);
-        prune_client_snapshot_history(state);
-    }
-
-    if let Ok(diagnostics) = world.resource_mut::<ReplicationDiagnostics>() {
-        diagnostics.applied_snapshots = diagnostics.applied_snapshots.saturating_add(1);
-    }
-
-    replay_pending_prediction::<TDriver>(world, tick, "replay predicted input")?;
-    Ok(corrected)
-}
-
-pub fn apply_authoritative_delta<TDriver>(
-    world: &mut World,
-    tick: SimulationTick,
-    base: SnapshotCursor,
-    cursor: SnapshotCursor,
-    payload: &[u8],
-) -> anyhow::Result<bool>
-where
-    TDriver: ReplicationDriver + SnapshotApplyDriver + InputDriver + Send + Sync + 'static,
-    TDriver::Snapshot: Clone + PartialEq,
-    TDriver::Input: Clone + PartialEq,
-{
-    let delta = TDriver::decode_delta(payload)
-        .map_err(|error| map_driver_error::<TDriver>(error, "decode delta"))?;
-
-    let (expected_base, base_snapshot) = {
-        let state = world.resource::<ClientSnapshotReplicationState<TDriver::Snapshot>>()?;
-        let base_snapshot = state
-            .snapshot_history
-            .get(&base)
-            .cloned()
-            .or_else(|| {
-                if state.last_acknowledged_cursor == base {
-                    state.last_received_snapshot.clone()
-                } else {
-                    None
-                }
-            })
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "received delta snapshot with unknown baseline cursor={}",
-                    base.0
-                )
-            })?;
-        (state.last_acknowledged_cursor, base_snapshot)
-    };
-
-    if base.0 > expected_base.0 {
-        anyhow::bail!(
-            "delta base cursor mismatch: expected {} got {}",
-            expected_base.0,
-            base.0
-        );
-    }
-
-    let rebuilt_snapshot = TDriver::apply_delta_to_snapshot(&base_snapshot, &delta);
-    let corrected = if base == expected_base {
-        TDriver::apply_delta(world, tick, delta.clone())
-            .map_err(|error| map_driver_error::<TDriver>(error, "apply authoritative delta"))?
-    } else {
-        TDriver::apply_snapshot(world, tick, rebuilt_snapshot.clone()).map_err(|error| {
-            map_driver_error::<TDriver>(error, "apply delta via snapshot fallback")
-        })?
-    };
-
-    if let Ok(tick_resource) = world.resource_mut::<SimulationTick>() {
-        *tick_resource = tick;
-    }
-
-    if let Ok(state) = world.resource_mut::<ClientSnapshotReplicationState<TDriver::Snapshot>>() {
-        state.last_acknowledged_cursor = cursor;
-        state.last_received_tick = tick;
-        state.applied_snapshots = state.applied_snapshots.saturating_add(1);
-        state.last_received_snapshot = Some(rebuilt_snapshot.clone());
-        state.snapshot_history.insert(cursor, rebuilt_snapshot);
-        prune_client_snapshot_history(state);
-    }
-
-    if let Ok(diagnostics) = world.resource_mut::<ReplicationDiagnostics>() {
-        diagnostics.applied_snapshots = diagnostics.applied_snapshots.saturating_add(1);
-    }
-
-    replay_pending_prediction::<TDriver>(world, tick, "replay predicted input after delta")?;
-    Ok(corrected)
-}
-
-fn replay_pending_prediction<TDriver>(
+pub(crate) fn replay_pending_prediction<TDriver>(
     world: &mut World,
     tick: SimulationTick,
     error_context: &'static str,
@@ -498,17 +379,5 @@ fn prune_snapshot_history_for_connection<TSnapshot>(
             break;
         };
         history.remove(&oldest_cursor);
-    }
-}
-
-fn prune_client_snapshot_history<TSnapshot>(state: &mut ClientSnapshotReplicationState<TSnapshot>)
-where
-    TSnapshot: Clone + PartialEq,
-{
-    while state.snapshot_history.len() > MAX_CLIENT_SNAPSHOT_HISTORY {
-        let Some(oldest_cursor) = state.snapshot_history.keys().next().copied() else {
-            break;
-        };
-        state.snapshot_history.remove(&oldest_cursor);
     }
 }

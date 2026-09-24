@@ -1,10 +1,11 @@
 use engine::net::prelude::*;
 use engine::plugins::net::{
-    ClientSnapshotReplicationState, NetworkClientInbox, NetworkClientOutbox, NetworkDiagnostics,
+    ActiveClientReplicatedStateProduct, NetworkClientInbox, NetworkClientOutbox, NetworkDiagnostics,
     NetworkOutboundQueue, NetworkServerInbox, NetworkServerOutbox, NetworkSessionStatus,
     OutboundServerMessage, PredictionDiagnostics, PredictionState as NetPredictionState,
     ReplicationDiagnostics, RunenNetSessionCore, RunenNetSessionProjection,
-    ServerSnapshotReplicationState, client_inbox_is_empty, client_outbox_len, enqueue_client_inbox,
+    ServerSnapshotReplicationState, client_inbox_is_empty, client_outbox_len,
+    client_replication_acknowledgement, enqueue_client_inbox,
     enqueue_client_outbox, enqueue_server_inbox, enqueue_server_inbox_from,
     enqueue_server_outbox_broadcast, record_reconnect_attempt, server_inbox_is_empty,
     server_outbox_len, sync_runennet_session_projection,
@@ -13,6 +14,9 @@ use engine::plugins::{ScenePlugin, SimulationPlugin, default_plugins};
 use engine::prelude::*;
 use runen_net::identity::{ConnectionHandle, ParticipantId, SessionId};
 use runen_net::input::{AuthorityInputAggregateLimits, AuthorityInputLimits};
+use runen_net::replication::{
+    ClientAggregateLimits, ReplicationLineageKey, ReplicationRetentionLimits,
+};
 use runen_net::protocol::{
     CompatibilityOffer, NegotiatedContract, NegotiationManager, NegotiationManagerLimits,
     NegotiationRequirements, OfferLimits, ProtocolContract, ProtocolId, ProtocolRevision,
@@ -134,13 +138,6 @@ impl SnapshotApplyDriver for TestReplicationDriver {
         Ok(true)
     }
 
-    fn apply_delta(
-        _world: &mut World,
-        _tick: engine_sim::SimulationTick,
-        _delta: Self::Delta,
-    ) -> Result<bool, Self::Error> {
-        Ok(true)
-    }
 }
 
 impl InputDriver for TestReplicationDriver {
@@ -174,8 +171,29 @@ impl InputDriver for TestReplicationDriver {
 }
 
 type PredictionState = NetPredictionState<ClientCommandEnvelope>;
-type ClientSnapshotState = ClientSnapshotReplicationState<TestSnapshot>;
 type ServerSnapshotState = ServerSnapshotReplicationState<TestSnapshot>;
+
+fn test_client_replication_policy() -> ClientReplicationPolicy {
+    let retention = ReplicationRetentionLimits::new(
+        NonZeroUsize::new(64 * 1024).expect("test state-image limit must be non-zero"),
+        NonZeroUsize::new(256).expect("test retained-image limit must be non-zero"),
+        NonZeroUsize::new(16 * 1024 * 1024).expect("test retained-byte limit must be non-zero"),
+        NonZeroUsize::new(64 * 1024).expect("test candidate limit must be non-zero"),
+        NonZeroUsize::new(256).expect("test emission-evidence limit must be non-zero"),
+    )
+    .expect("test client retention limits must be valid");
+    let aggregate = ClientAggregateLimits::new(
+        NonZeroUsize::new(1).expect("test lineage limit must be non-zero"),
+        NonZeroUsize::new(256).expect("test aggregate retained-image limit must be non-zero"),
+        NonZeroUsize::new(16 * 1024 * 1024)
+            .expect("test aggregate retained-byte limit must be non-zero"),
+    );
+    ClientReplicationPolicy::new(
+        ReplicationLineageKey::new(SessionId::new(1), ParticipantId::new(1)),
+        aggregate,
+        retention,
+    )
+}
 
 fn test_authority_input_policy() -> AuthorityInputPolicy {
     let participant_limits = AuthorityInputLimits::new(
@@ -198,7 +216,12 @@ impl Plugin for NetworkClientPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PlayerCommandBuffer>();
         app.add_plugin(SimulationPlugin);
-        app.add_plugin(NetPlugin::<TestReplicationDriver>::new(NetRole::Client));
+        app.add_plugin(
+            NetPlugin::<TestReplicationDriver>::new(NetRole::Client).with_config(
+                NetPluginConfig::default()
+                    .with_client_replication_policy(test_client_replication_policy()),
+            ),
+        );
     }
 }
 
@@ -218,7 +241,12 @@ impl Plugin for NetworkHostPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PlayerCommandBuffer>();
         app.add_plugin(SimulationPlugin);
-        app.add_plugin(NetPlugin::<TestReplicationDriver>::new(NetRole::Host));
+        app.add_plugin(
+            NetPlugin::<TestReplicationDriver>::new(NetRole::Host).with_config(
+                NetPluginConfig::default()
+                    .with_client_replication_policy(test_client_replication_policy()),
+            ),
+        );
     }
 }
 
