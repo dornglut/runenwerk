@@ -630,4 +630,3 @@ pub struct ModifiersSnapshot {
     pub(crate) alt: bool,
     pub(crate) super_key: bool,
 }
-
