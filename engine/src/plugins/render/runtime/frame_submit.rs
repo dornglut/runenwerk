@@ -236,6 +236,11 @@ mod contribution_deferral_tests {
         let secondary_surface = RenderSurfaceId::try_from_raw(2).expect("secondary surface id");
         let secondary = prepared_frame(secondary_surface, 12);
 
+        let composed = RenderComposedFrameGpuTimingEvidence::gpu_sample(
+            secondary.context.frame_index,
+            secondary_surface.raw(),
+            4.0,
+        );
         assert!(!publish_submitted_frame_history(
             &mut history,
             policy,
@@ -244,7 +249,7 @@ mod contribution_deferral_tests {
             RenderGpuTimingCapability::Supported,
             &[],
             &[],
-            &[],
+            &[composed],
         ));
         assert!(history.is_empty());
     }
