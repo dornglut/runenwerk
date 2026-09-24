@@ -887,7 +887,7 @@ fn ui_texture_bind_group_values(
         GpuRuntimeBindingValue::new(
             GpuBindingKey::try_new(1, 0)?,
             [GpuRuntimeBindingResource::TextureView(
-                GpuRuntimeTextureViewBinding::new(view, GpuTextureViewDimension::D2),
+                GpuRuntimeTextureViewBinding::new(view),
             )],
         )?,
         GpuRuntimeBindingValue::new(
