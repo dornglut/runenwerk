@@ -15,7 +15,7 @@ use editor_scene::{
     SceneModelMeshMaterialSlotAssignment, SceneModelMeshSourceId, SceneRuntime,
     SdfPrimitiveMaterialSlotAssignment, SdfPrimitiveSourceId,
 };
-use scene::{LocalTransform, QuatValue, SceneChildOf, Vec3Value};
+use scene::{LocalTransform, QuatValue, Vec3Value};
 
 use crate::editor_runtime::{
     EDITOR_PRIMITIVE_COMPONENT_TYPE_ID, EditorPrimitive, EditorPrimitiveKind,
@@ -438,6 +438,7 @@ fn scene_kind_to_editor(kind: ScenePrimitiveKind) -> EditorPrimitiveKind {
 
 #[cfg(test)]
 mod tests {
+    use scene::SceneChildOf;
     use super::*;
     use crate::editor_app::RunenwerkEditorApp;
     use crate::editor_runtime::{bootstrap_mvp_scene_if_empty, register_mvp_component_types};
