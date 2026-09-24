@@ -306,12 +306,16 @@ impl RenderFrameHistoryState {
                 .iter_mut()
                 .find(|observation| observation.key == key)
             {
-                observation.gpu.merge_composed_timing_evidence(sample.clone());
+                observation
+                    .gpu
+                    .merge_composed_timing_evidence(sample.clone());
                 continue;
             }
             if policy.enabled {
-                self.drop_stats.dropped_correlated_evidence =
-                    self.drop_stats.dropped_correlated_evidence.saturating_add(1);
+                self.drop_stats.dropped_correlated_evidence = self
+                    .drop_stats
+                    .dropped_correlated_evidence
+                    .saturating_add(1);
             }
         }
     }
