@@ -8,7 +8,7 @@ use crate::plugins::render::{
 use runen_gpu::{
     GpuBufferDescriptor, GpuBufferHandle, GpuBufferUsages, GpuTextureDescriptor,
     GpuTextureDimension, GpuTextureFormat, GpuTextureHandle, GpuTextureUsages,
-    GpuTextureViewDimension, GpuTextureViewHandle, GpuWorkResourceId, GpuWorkResourceIdAllocator,
+    GpuTextureViewHandle, GpuWorkResourceId, GpuWorkResourceIdAllocator,
     PreparedGpuData, UniformData,
 };
 use std::fmt;
@@ -213,7 +213,7 @@ mod tests {
         GpuResourceLabel, GpuResourceLifetime, GpuResourceProvenance, GpuSamplerDescriptor,
         GpuTextureAspect, GpuTextureDescriptor, GpuTextureExtent, GpuTextureFormat,
         GpuTextureInitialization, GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureUsages,
-        GpuTextureViewDescriptor, GpuWorkResourceIdAllocator,
+        GpuTextureViewDescriptor, GpuTextureViewDimension, GpuWorkResourceIdAllocator,
     };
 
     struct RuntimeTestUniform(u32);
