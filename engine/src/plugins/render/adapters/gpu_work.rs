@@ -1341,23 +1341,37 @@ mod tests {
         .unwrap();
 
         let node = |name: &str| {
-            graph.nodes().iter().find(|node| node.node().label().as_str() == name).unwrap().id()
+            graph
+                .nodes()
+                .iter()
+                .find(|node| node.node().label().as_str() == name)
+                .unwrap()
+                .id()
         };
         let start = node("timed frame start");
         let producer = node("timed producer clear");
         let renderer = node("timed renderer work");
         let end = node("timed frame end");
         let present = node("timed terminal Present");
-        let pos = |wanted| graph.topological_order().iter().position(|node| *node == wanted).unwrap();
+        let pos = |wanted| {
+            graph
+                .topological_order()
+                .iter()
+                .position(|node| *node == wanted)
+                .unwrap()
+        };
         assert!(pos(start) < pos(producer));
         assert!(pos(start) < pos(renderer));
         assert!(pos(producer) < pos(end));
         assert!(pos(renderer) < pos(end));
         assert!(pos(end) < pos(present));
         assert_eq!(
-            graph.nodes().iter().filter(|node| node.node().kind() == GpuWorkNodeKind::Present).count(),
+            graph
+                .nodes()
+                .iter()
+                .filter(|node| node.node().kind() == GpuWorkNodeKind::Present)
+                .count(),
             1
         );
     }
-
 }
