@@ -118,7 +118,17 @@ pub(super) fn whole_texture_view_descriptor(
         common,
         texture,
         None,
-        descriptor.dimension(),
+        match descriptor.dimension() {
+            GpuTextureDimension::D1 => GpuTextureViewDimension::D1,
+            GpuTextureDimension::D2 => {
+                if array_layer_count == 1 {
+                    GpuTextureViewDimension::D2
+                } else {
+                    GpuTextureViewDimension::D2Array
+                }
+            }
+            GpuTextureDimension::D3 => GpuTextureViewDimension::D3,
+        },
         subresources,
     )?)
 }
