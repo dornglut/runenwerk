@@ -6,7 +6,10 @@ use std::collections::BTreeSet;
 use editor_viewport::{
     ExpressionFormat, ExpressionProductId, ViewportId, ViewportPresentationState,
 };
-use engine::plugins::render::{PreparedRenderProductSelectionResource, RenderTextureTargetFormat};
+use engine::plugins::render::{
+    PreparedMaterialFeatureResource, PreparedRenderProductSelectionResource,
+    RenderTextureTargetFormat,
+};
 use engine::runtime::{QuerySnapshotRuntimeResource, Res, ResMut};
 use product::{
     FieldProductDiagnostic, FieldProductDiagnosticCode, ProductConsumerClass,
@@ -48,8 +51,17 @@ pub fn prepare_viewport_render_product_selections_system(
     presentations: Res<ViewportPresentationStateResource>,
     product_targets: Res<ViewportProductTargetRegistryResource>,
     render_jobs: Res<ViewportRenderJobResource>,
+    material_feature: Res<PreparedMaterialFeatureResource>,
     mut prepared_selections: ResMut<PreparedRenderProductSelectionResource>,
 ) {
+    if !admit_viewport_render_product_selections(
+        &material_feature,
+        &mut host.app,
+        &mut prepared_selections,
+    ) {
+        return;
+    }
+
     prepare_viewport_render_product_selections(
         &mut host.app,
         &snapshots,
@@ -138,6 +150,28 @@ pub fn prepare_viewport_render_product_selections(
         app.append_console_warning(format!("[render_selection] {err}"));
     }
 
+    publish_viewport_render_selection_summary(app, summary);
+    summary
+}
+
+fn admit_viewport_render_product_selections(
+    material_feature: &PreparedMaterialFeatureResource,
+    app: &mut RunenwerkEditorApp,
+    prepared_selections: &mut PreparedRenderProductSelectionResource,
+) -> bool {
+    if material_feature.payload.scene_bundle.is_some() {
+        return true;
+    }
+
+    let _ = prepared_selections.remove_contribution(EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID);
+    publish_viewport_render_selection_summary(app, EditorViewportRenderSelectionSummary::default());
+    false
+}
+
+fn publish_viewport_render_selection_summary(
+    app: &mut RunenwerkEditorApp,
+    summary: EditorViewportRenderSelectionSummary,
+) {
     if app.update_viewport_render_selection_summary(summary) {
         app.append_console_line(format!(
             "[render_selection] selections={} selected={} rejected={} diagnostics={}",
@@ -147,8 +181,6 @@ pub fn prepare_viewport_render_product_selections(
             summary.diagnostic_count
         ));
     }
-
-    summary
 }
 
 fn add_required_viewport_targets(
@@ -433,6 +465,50 @@ mod tests {
                 ),
             ),
         }
+    }
+
+    #[test]
+    fn viewport_product_selection_waits_for_exact_material_scene_bundle() {
+        let mut app = RunenwerkEditorApp::new();
+        let mut prepared = PreparedRenderProductSelectionResource::default();
+        prepared
+            .replace_contribution(
+                EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID,
+                [RenderProductSelection::new("stale.viewport")],
+            )
+            .expect("test selection contribution should be valid");
+
+        assert!(
+            !admit_viewport_render_product_selections(
+                &PreparedMaterialFeatureResource::default(),
+                &mut app,
+                &mut prepared,
+            ),
+            "viewport product selection must remain ineligible without an exact generated material scene bundle"
+        );
+        assert!(
+            prepared.snapshot().is_empty(),
+            "an ineligible viewport must not retain a stale GPU-residency selection"
+        );
+
+        let mut ready_material = PreparedMaterialFeatureResource::default();
+        ready_material.payload.scene_bundle = Some(
+            engine::plugins::render::PreparedSceneMaterialBundle::new(
+                "scene-artifact",
+                "scene-cache",
+                "generated-scene.wgsl",
+                "scene-identity",
+                "material-table",
+            ),
+        );
+        assert!(
+            admit_viewport_render_product_selections(
+                &ready_material,
+                &mut app,
+                &mut prepared,
+            ),
+            "viewport product selection should become eligible once the exact generated material scene bundle exists"
+        );
     }
 
     #[test]
