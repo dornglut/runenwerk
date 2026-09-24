@@ -824,14 +824,9 @@ mod tests {
             .map(|unit| unit.id)
             .collect::<std::collections::BTreeSet<_>>();
 
-        let plan = plan_editor_create_unit(
-            &runtime,
-            stack,
-            registry.surfaces(),
-            stable_key,
-            identities,
-        )
-        .unwrap();
+        let plan =
+            plan_editor_create_unit(&runtime, stack, registry.surfaces(), stable_key, identities)
+                .unwrap();
         apply(&mut runtime, &mut identities, plan);
 
         let created = runtime
