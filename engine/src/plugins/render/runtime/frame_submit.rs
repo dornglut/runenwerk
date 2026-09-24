@@ -206,6 +206,7 @@ mod contribution_deferral_tests {
             RenderGpuTimingCapability::Supported,
             &[],
             &[delayed_primary_gpu],
+            &[],
         ));
 
         let primary_observation = history
