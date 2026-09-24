@@ -716,6 +716,18 @@ mod tests {
         panel_kind: crate::PanelKind,
         stable_key: &ToolSurfaceStableKey,
     ) -> ToolSuiteRegistry {
+        registry_for_surface_with_capabilities(
+            panel_kind,
+            stable_key,
+            ui_surface::SurfaceCapabilitySet::new(true, true, true, false),
+        )
+    }
+
+    fn registry_for_surface_with_capabilities(
+        panel_kind: crate::PanelKind,
+        stable_key: &ToolSurfaceStableKey,
+        capabilities: ui_surface::SurfaceCapabilitySet,
+    ) -> ToolSuiteRegistry {
         let provider_family = ProviderFamilyId::new("runenwerk.test").unwrap();
         ToolSuiteRegistry::new(vec![EditorToolSuite::new(
             SuiteRef::from_stable_key("runenwerk.test").unwrap(),
@@ -731,7 +743,7 @@ mod tests {
                 panel_kind,
                 provider_family,
                 ToolSurfaceRoute::ProviderOwnedLocal,
-                ui_surface::SurfaceCapabilitySet::new(true, true, true, false),
+                capabilities,
                 ui_surface::SessionRetentionClass::Restorable,
                 ToolSurfaceCreationPolicy::MultipleInstances,
             )],
@@ -790,6 +802,50 @@ mod tests {
         assert_eq!(
             runtime.composition().definition().mounted_units().len(),
             before_count
+        );
+    }
+
+    #[test]
+    fn stable_key_creation_uses_installed_definition_capabilities() {
+        let mut runtime = runtime();
+        let mut identities = EditorCompositionIdentityAllocator::from_runtime(&runtime);
+        let stack = first_stack(&runtime);
+        let stable_key = ToolSurfaceStableKey::new("runenwerk.test.registry-native").unwrap();
+        let registry = registry_for_surface_with_capabilities(
+            PanelKind::Diagnostics,
+            &stable_key,
+            ui_surface::SurfaceCapabilitySet::new(true, false, false, false),
+        );
+        let before_ids = runtime
+            .composition()
+            .definition()
+            .mounted_units()
+            .iter()
+            .map(|unit| unit.id)
+            .collect::<std::collections::BTreeSet<_>>();
+
+        let plan = plan_editor_create_unit(
+            &runtime,
+            stack,
+            registry.surfaces(),
+            stable_key,
+            identities,
+        )
+        .unwrap();
+        apply(&mut runtime, &mut identities, plan);
+
+        let created = runtime
+            .composition()
+            .definition()
+            .mounted_units()
+            .iter()
+            .find(|unit| !before_ids.contains(&unit.id))
+            .expect("one registry-native unit should be created");
+
+        assert_eq!(created.capabilities().len(), 1);
+        assert_eq!(
+            created.capabilities()[0].as_str(),
+            "runenwerk.surface.observe"
         );
     }
 
