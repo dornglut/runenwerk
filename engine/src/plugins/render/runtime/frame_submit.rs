@@ -179,12 +179,7 @@ mod contribution_deferral_tests {
                 acquire_ms: 1.0,
                 ..GfxFrameTimings::default()
             },
-            SubmittedFrameGpuObservations::new(
-                RenderGpuTimingCapability::Supported,
-                &[],
-                &[],
-                &[],
-            ),
+            SubmittedFrameGpuObservations::new(RenderGpuTimingCapability::Supported, &[], &[], &[],),
         ));
 
         let delayed_primary_gpu = RenderPassTimingEvidence::gpu_sample(
