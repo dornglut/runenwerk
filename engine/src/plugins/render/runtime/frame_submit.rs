@@ -63,8 +63,8 @@ fn render_timing_logging_enabled() -> bool {
 #[cfg(test)]
 mod contribution_deferral_tests {
     use super::{
-        AdditionalSurfaceRenderOutcome, apply_additional_surface_render_outcome,
-        publish_submitted_frame_history,
+        AdditionalSurfaceRenderOutcome, SubmittedFrameGpuObservations,
+        apply_additional_surface_render_outcome, publish_submitted_frame_history,
     };
     use crate::plugins::render::backend::RenderSurfaceId;
     use crate::plugins::render::inspect::{
