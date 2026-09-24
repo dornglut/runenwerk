@@ -282,7 +282,7 @@ fn named_key(value: &str) -> Option<Key> {
 
 fn scroll_delta(horizontal: Option<f32>, vertical: Option<f32>, domain: ScrollDomain) -> UiVector {
     let scale = match domain {
-        ScrollDomain::LegacyVerticalScalarUnknown | ScrollDomain::Lines => 1.0,
+        ScrollDomain::Unspecified | ScrollDomain::Lines => 1.0,
         ScrollDomain::WindowPhysicalPixels => 1.0 / UI_WHEEL_STEP_PX,
     };
     UiVector::new(
