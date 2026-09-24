@@ -141,9 +141,9 @@ impl NativeWindowHook for NativeRenderHostSmokeHook {
     fn attach(&mut self, _window: &Window, world: &mut runen_ecs::World) -> anyhow::Result<()> {
         match verify_primary_render_attachment(world) {
             Ok(()) => self.primary_attached.store(true, Ordering::SeqCst),
-            Err(error) => eprintln!(
-                "native-render-host-smoke: primary attachment check failed: {error:#}"
-            ),
+            Err(error) => {
+                eprintln!("native-render-host-smoke: primary attachment check failed: {error:#}")
+            }
         }
 
         let secondary_window_id = world
@@ -160,9 +160,9 @@ impl NativeWindowHook for NativeRenderHostSmokeHook {
 
         match verify_secondary_render_attachment(world, secondary_window_id) {
             Ok(()) => self.secondary_attached.store(true, Ordering::SeqCst),
-            Err(error) => eprintln!(
-                "native-render-host-smoke: secondary attachment check failed: {error:#}"
-            ),
+            Err(error) => {
+                eprintln!("native-render-host-smoke: secondary attachment check failed: {error:#}")
+            }
         }
         Ok(())
     }
