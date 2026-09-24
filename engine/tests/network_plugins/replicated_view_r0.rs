@@ -48,7 +48,7 @@ impl R0ReplicatedStateProduct {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, runen_ecs::Resource)]
 struct R0ActiveReplicatedStateProduct {
     active: Option<R0ReplicatedStateProduct>,
 }
@@ -161,8 +161,11 @@ fn replicated_view_r0_prepare_failure_preserves_active_and_activation_is_complet
 
     let initial = r0_prepare_from_world(&world).expect("initial full view should form");
     let initial_bytes = initial.bytes().to_vec();
-    let mut active = R0ActiveReplicatedStateProduct::default();
-    active.activate(initial);
+    world.insert_resource(R0ActiveReplicatedStateProduct::default());
+    world
+        .resource_mut::<R0ActiveReplicatedStateProduct>()
+        .expect("R0 active product owner should exist")
+        .activate(initial);
 
     let duplicate = r0_spawn_actor(&mut world, 10_001, 99, 99, 1);
     assert_eq!(
@@ -170,7 +173,12 @@ fn replicated_view_r0_prepare_failure_preserves_active_and_activation_is_complet
         Err(R0FormationError::DuplicateReplicatedId(10_001))
     );
     assert_eq!(
-        active.active().expect("initial product remains active").bytes(),
+        world
+            .resource::<R0ActiveReplicatedStateProduct>()
+            .expect("R0 active product owner should exist")
+            .active()
+            .expect("initial product remains active")
+            .bytes(),
         initial_bytes.as_slice(),
         "failed preparation must not mutate the active product"
     );
@@ -193,7 +201,12 @@ fn replicated_view_r0_prepare_failure_preserves_active_and_activation_is_complet
 
     let updated = r0_prepare_from_world(&world).expect("updated full view should form");
     assert_eq!(
-        active.active().expect("old product stays active").bytes(),
+        world
+            .resource::<R0ActiveReplicatedStateProduct>()
+            .expect("R0 active product owner should exist")
+            .active()
+            .expect("old product stays active")
+            .bytes(),
         initial_bytes.as_slice(),
         "candidate formation alone must not publish partial state"
     );
@@ -208,8 +221,13 @@ fn replicated_view_r0_prepare_failure_preserves_active_and_activation_is_complet
         "R0 accounting is the exact retained encoded product byte length"
     );
 
-    active.activate(updated);
-    let decoded = active
+    world
+        .resource_mut::<R0ActiveReplicatedStateProduct>()
+        .expect("R0 active product owner should exist")
+        .activate(updated);
+    let decoded = world
+        .resource::<R0ActiveReplicatedStateProduct>()
+        .expect("R0 active product owner should exist")
         .active()
         .expect("updated product should be active")
         .decode();
