@@ -1,4 +1,4 @@
-use engine::runtime::{NativeWindowId, ResMut, WindowStateRegistryResource};
+use engine::runtime::{ResMut, WindowStateRegistryResource};
 
 /// Approves primary-window close intents for standalone workbenches that do not own
 /// editor document state or unsaved-work confirmation.
@@ -22,7 +22,7 @@ fn approve_primary_window_close_intent(windows: &mut WindowStateRegistryResource
 
 #[cfg(test)]
 mod tests {
-    use engine::runtime::NativeWindowLifecycleState;
+    use engine::runtime::{NativeWindowId, NativeWindowLifecycleState};
 
     use super::*;
 
