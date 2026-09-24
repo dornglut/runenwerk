@@ -7,8 +7,7 @@ use editor_viewport::ViewportSurfacePresentationSlot;
 use engine::plugins::render::RenderTargetAliasKey;
 use engine::plugins::render::{
     FeatureContributionStatus, FeatureFallbackPolicy, PreparedFlowInvocationRequest,
-    PreparedMaterialFeatureResource, PreparedRenderFrameRequestResource,
-    PreparedRenderProductSelectionResource, PreparedViewFrame,
+    PreparedMaterialFeatureResource, PreparedRenderFrameRequestResource, PreparedViewFrame,
     RenderDynamicTextureTargetRequestRegistryResource, RenderFlowId, RenderFlowRegistryResource,
     RenderProductSurfaceManifest, RenderProductSurfaceRequest, RenderProductSurfaceRequestBatch,
     ShaderRegistryResource, compile_scene_material_table_shader,
@@ -33,9 +32,8 @@ use crate::runtime::resources::{
     EditorHostResource, EditorViewportModelMeshMaterialSelectionPacket,
 };
 use crate::runtime::viewport::{
-    EDITOR_MATERIAL_PREVIEW_PRODUCT_PRODUCER_ID, EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID,
-    VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW, ViewportProductTargetRegistryResource,
-    ViewportProductTargetStatus,
+    EDITOR_MATERIAL_PREVIEW_PRODUCT_PRODUCER_ID, VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW,
+    ViewportProductTargetRegistryResource, ViewportProductTargetStatus,
 };
 
 pub fn prepare_material_preview_render_resource_system(
@@ -127,32 +125,6 @@ pub fn prepare_material_preview_render_resource_system(
             .material_lab_runtime_mut()
             .record_diagnostic(diagnostic);
     }
-}
-
-pub fn admit_viewport_scene_render_requests_system(
-    material_feature: Res<PreparedMaterialFeatureResource>,
-    mut prepared_frame_requests: ResMut<PreparedRenderFrameRequestResource>,
-    mut prepared_selections: ResMut<PreparedRenderProductSelectionResource>,
-) {
-    admit_viewport_scene_render_requests(
-        &material_feature,
-        &mut prepared_frame_requests,
-        &mut prepared_selections,
-    );
-}
-
-fn admit_viewport_scene_render_requests(
-    material_feature: &PreparedMaterialFeatureResource,
-    prepared_frame_requests: &mut PreparedRenderFrameRequestResource,
-    prepared_selections: &mut PreparedRenderProductSelectionResource,
-) -> bool {
-    if material_feature.payload.scene_bundle.is_some() {
-        return true;
-    }
-
-    let _ = prepared_frame_requests.remove_contribution(EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID);
-    let _ = prepared_selections.remove_contribution(EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID);
-    false
 }
 
 #[cfg(test)]
@@ -915,47 +887,6 @@ mod tests {
         assert!(diagnostic.is_none());
         assert_eq!(material_feature.status, FeatureContributionStatus::Missing);
 
-        let view = PreparedViewFrame::offscreen_product("startup.viewport", (64, 64));
-        let invocation = PreparedFlowInvocationRequest::new(
-            "startup.viewport.invocation",
-            RenderFlowId::try_from_raw(7).expect("test flow id should be non-zero"),
-            view.view_id.clone(),
-        );
-        let mut prepared_frame_requests = PreparedRenderFrameRequestResource::default();
-        prepared_frame_requests
-            .replace_contribution(
-                EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID,
-                [view.clone()],
-                [invocation.clone()],
-            )
-            .expect("viewport startup request should be valid");
-        let mut prepared_selections = PreparedRenderProductSelectionResource::default();
-        prepared_selections
-            .replace_contribution(
-                EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID,
-                [product::RenderProductSelection::new(view.view_id.clone())],
-            )
-            .expect("viewport startup selection should be valid");
-
-        assert!(
-            !admit_viewport_scene_render_requests(
-                &material_feature,
-                &mut prepared_frame_requests,
-                &mut prepared_selections,
-            ),
-            "viewport scene rendering must remain ineligible while the generated material scene bundle is not loaded"
-        );
-        assert!(
-            prepared_frame_requests
-                .requested_flow_invocations()
-                .is_empty(),
-            "startup must not carry the viewport flow invocation into frame preparation without an exact generated scene bundle"
-        );
-        assert!(
-            prepared_selections.snapshot().is_empty(),
-            "suppressed viewport requests must not leave an orphaned render-product selection"
-        );
-
         let lines = shader_registry.poll_updates();
         assert!(
             lines.iter().any(|line| line.contains("material-preview")),
@@ -983,39 +914,6 @@ mod tests {
                 .map(|bundle| bundle.shader_path.as_str()),
             Some(preview.scene_shader_path.as_str())
         );
-
-        prepared_frame_requests
-            .replace_contribution(
-                EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID,
-                [view.clone()],
-                [invocation],
-            )
-            .expect("viewport request should be republished after material preparation");
-        prepared_selections
-            .replace_contribution(
-                EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID,
-                [product::RenderProductSelection::new(view.view_id)],
-            )
-            .expect("viewport selection should be republished after material preparation");
-        assert!(
-            admit_viewport_scene_render_requests(
-                &material_feature,
-                &mut prepared_frame_requests,
-                &mut prepared_selections,
-            ),
-            "viewport scene rendering should become eligible once the exact generated scene bundle is loaded"
-        );
-        assert_eq!(
-            prepared_frame_requests.requested_flow_invocations().len(),
-            1,
-            "ready material scene bundle must preserve the viewport flow invocation"
-        );
-        assert_eq!(
-            prepared_selections.snapshot().len(),
-            1,
-            "ready material scene bundle must preserve the matching product selection"
-        );
-
         let _ = std::fs::remove_dir_all(root);
     }
 
