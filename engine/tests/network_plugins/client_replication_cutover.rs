@@ -322,3 +322,218 @@ fn client_realization_failure_keeps_runennet_commit_and_duplicate_retries_withou
         "committed-but-not-realized"
     );
 }
+
+
+struct ReconstructionFailureDriver;
+
+impl ReplicationDriver for ReconstructionFailureDriver {
+    type Snapshot = TestSnapshot;
+    type Delta = TestDelta;
+    type Input = ClientCommandEnvelope;
+    type Error = io::Error;
+
+    fn capture_snapshot(_world: &World) -> Result<Option<Self::Snapshot>, Self::Error> {
+        Ok(Some(TestSnapshot::default()))
+    }
+
+    fn build_delta(previous: &Self::Snapshot, current: &Self::Snapshot) -> Self::Delta {
+        TestDelta {
+            changed: previous != current,
+        }
+    }
+
+    fn apply_delta_to_snapshot(base: &Self::Snapshot, delta: &Self::Delta) -> Self::Snapshot {
+        if delta.changed {
+            TestSnapshot::default()
+        } else {
+            base.clone()
+        }
+    }
+
+    fn encode_snapshot(snapshot: &Self::Snapshot) -> Result<Vec<u8>, Self::Error> {
+        if snapshot.context.world_scene_label == "gameplay_stub" {
+            return Err(io::Error::other(
+                "test reconstructed snapshot encoding rejected",
+            ));
+        }
+        postcard::to_allocvec(snapshot).map_err(Self::map_codec_error)
+    }
+
+    fn map_codec_error(error: postcard::Error) -> Self::Error {
+        io::Error::new(io::ErrorKind::InvalidData, error.to_string())
+    }
+}
+
+impl SnapshotApplyDriver for ReconstructionFailureDriver {
+    fn apply_snapshot(
+        _world: &mut World,
+        _tick: engine_sim::SimulationTick,
+        _snapshot: Self::Snapshot,
+    ) -> Result<bool, Self::Error> {
+        Ok(true)
+    }
+}
+
+impl InputDriver for ReconstructionFailureDriver {
+    fn receive_remote_input(
+        _world: &mut World,
+        _connection: ConnectionHandle,
+        _tick: engine_sim::SimulationTick,
+        _input: Vec<Self::Input>,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn take_local_input(_world: &mut World) -> Result<Vec<Self::Input>, Self::Error> {
+        Ok(Vec::new())
+    }
+
+    fn apply_input(_world: &mut World, _input: &[Self::Input]) -> Result<(), Self::Error> {
+        Ok(())
+    }
+}
+
+fn client_app_with_reconstruction_failure_driver(policy: ClientReplicationPolicy) -> App {
+    let mut app = App::headless();
+    app.add_plugins(default_plugins());
+    app.add_plugin(SimulationPlugin);
+    app.add_plugin(
+        NetPlugin::<ReconstructionFailureDriver>::new(NetRole::Client).with_config(
+            NetPluginConfig::default().with_client_replication_policy(policy),
+        ),
+    );
+    app
+}
+
+#[test]
+fn malformed_full_snapshot_is_rejected_before_runennet_commit() {
+    let mut app = client_app_with_policy(test_client_replication_policy());
+    enqueue_client_inbox(
+        app.world_mut(),
+        ServerMessage::Snapshot(Snapshot {
+            tick: SimulationTick(1),
+            cursor: SnapshotCursor(1),
+            last_applied: SnapshotCursor::default(),
+            entity_ids: Vec::new(),
+            payload: Vec::new(),
+        }),
+    )
+    .expect("malformed full snapshot should stage");
+
+    let app = app
+        .run_for_frames(1)
+        .expect("malformed full snapshot should fail closed");
+
+    assert_eq!(client_replication_acknowledgement(app.world()), None);
+    assert!(
+        app.world()
+            .resource::<ActiveClientReplicatedStateProduct>()
+            .expect("active product owner should exist")
+            .active()
+            .is_none()
+    );
+    assert_eq!(outbound_ack(app.world()), None);
+}
+
+#[test]
+fn client_delta_reconstruction_failure_enters_runennet_recovery_without_host_mutation() {
+    let mut app =
+        client_app_with_reconstruction_failure_driver(test_client_replication_policy());
+    enqueue_client_inbox(app.world_mut(), client_full_message(1, 1, "baseline"))
+        .expect("baseline should stage");
+    let mut app = app.run_for_frames(1).expect("baseline should commit");
+    clear_client_outbound(app.world_mut());
+    let before = active_client_snapshot(app.world()).expect("baseline should be active");
+
+    enqueue_client_inbox(app.world_mut(), client_delta_message(1, 2, 2, true))
+        .expect("reconstruction-failure delta should stage");
+    let app = app
+        .run_for_frames(1)
+        .expect("reconstruction failure should classify");
+
+    assert_eq!(outbound_ack(app.world()), None);
+    assert_eq!(active_client_snapshot(app.world()), Some(before));
+    assert_eq!(
+        client_replication_state(app.world()),
+        Some(ClientReplicationState::FullSnapshotRequired(
+            ClientRecoveryReason::ReconstructionFailure
+        ))
+    );
+}
+
+#[test]
+fn client_replication_aggregate_retained_bytes_rejection_preserves_current_product() {
+    let first = client_test_snapshot("aggregate-first");
+    let second = client_test_snapshot("aggregate-second");
+    let first_bytes = TestReplicationDriver::encode_snapshot(&first)
+        .expect("first aggregate snapshot should encode")
+        .len();
+    let second_bytes = TestReplicationDriver::encode_snapshot(&second)
+        .expect("second aggregate snapshot should encode")
+        .len();
+    let aggregate_budget = first_bytes
+        .checked_add(second_bytes)
+        .and_then(|total| total.checked_sub(1))
+        .expect("aggregate test budget should be representable");
+
+    let retention = ReplicationRetentionLimits::new(
+        NonZeroUsize::new(64 * 1024).expect("state-image limit must be non-zero"),
+        NonZeroUsize::new(256).expect("retained-image limit must be non-zero"),
+        NonZeroUsize::new(16 * 1024 * 1024).expect("retained-byte limit must be non-zero"),
+        NonZeroUsize::new(64 * 1024).expect("candidate limit must be non-zero"),
+        NonZeroUsize::new(256).expect("emission-evidence limit must be non-zero"),
+    )
+    .expect("aggregate test retention limits must be valid");
+    let aggregate = ClientAggregateLimits::new(
+        NonZeroUsize::new(1).expect("lineage limit must be non-zero"),
+        NonZeroUsize::new(256).expect("aggregate image limit must be non-zero"),
+        NonZeroUsize::new(aggregate_budget).expect("aggregate byte budget must be non-zero"),
+    );
+    let policy = ClientReplicationPolicy::new(
+        ReplicationLineageKey::new(SessionId::new(1), ParticipantId::new(1)),
+        aggregate,
+        retention,
+    );
+
+    let mut app = client_app_with_policy(policy);
+    enqueue_client_inbox(
+        app.world_mut(),
+        ServerMessage::Snapshot(Snapshot {
+            tick: SimulationTick(1),
+            cursor: SnapshotCursor(1),
+            last_applied: SnapshotCursor::default(),
+            entity_ids: Vec::new(),
+            payload: TestReplicationDriver::encode_snapshot(&first)
+                .expect("first aggregate snapshot should encode"),
+        }),
+    )
+    .expect("first aggregate snapshot should stage");
+    let mut app = app
+        .run_for_frames(1)
+        .expect("first aggregate snapshot should commit");
+    clear_client_outbound(app.world_mut());
+    let before = active_client_snapshot(app.world()).expect("first product should be active");
+
+    enqueue_client_inbox(
+        app.world_mut(),
+        ServerMessage::Snapshot(Snapshot {
+            tick: SimulationTick(2),
+            cursor: SnapshotCursor(2),
+            last_applied: SnapshotCursor(1),
+            entity_ids: Vec::new(),
+            payload: TestReplicationDriver::encode_snapshot(&second)
+                .expect("second aggregate snapshot should encode"),
+        }),
+    )
+    .expect("second aggregate snapshot should stage");
+    let app = app
+        .run_for_frames(1)
+        .expect("aggregate rejection should fail closed");
+
+    assert_eq!(
+        client_replication_acknowledgement(app.world()),
+        Some((SnapshotCursor(1), SimulationTick(1)))
+    );
+    assert_eq!(active_client_snapshot(app.world()), Some(before));
+    assert_eq!(outbound_ack(app.world()), None);
+}
