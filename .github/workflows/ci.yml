@@ -81,16 +81,26 @@ jobs:
       - name: Prove Vulkan software adapter
         run: vulkaninfo --summary
 
-      - name: Run native primary-secondary window authority smoke
+      - name: Run native window authority smokes
         env:
           RUST_BACKTRACE: '1'
-          RUNENWERK_SURFACE_IDENTITY_NATIVE_SMOKE: '1'
         run: |
           set -euo pipefail
-          xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
-            cargo +stable test -p runenwerk_editor \
-              --test region_compass_visual_capture \
-              --locked
+          RUNENWERK_SURFACE_IDENTITY_NATIVE_SMOKE=1 \
+            xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+              cargo +stable test -p runenwerk_editor \
+                --test region_compass_visual_capture \
+                --locked
+          RUNENWERK_NATIVE_NO_RENDER_SMOKE=1 \
+            xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+              cargo +stable test -p engine \
+                --test native_host_smoke \
+                --locked
+          RUNENWERK_NATIVE_RENDER_HOST_SMOKE=1 \
+            xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+              cargo +stable test -p engine \
+                --test native_host_smoke \
+                --locked
 
       - name: Run complete R6 public-RunenGPU execution proof module
         env:
