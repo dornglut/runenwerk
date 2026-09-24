@@ -8,7 +8,8 @@ use crate::plugins::render::{
 use runen_gpu::{
     GpuBufferDescriptor, GpuBufferHandle, GpuBufferUsages, GpuTextureDescriptor,
     GpuTextureDimension, GpuTextureFormat, GpuTextureHandle, GpuTextureUsages,
-    GpuTextureViewHandle, GpuWorkResourceId, GpuWorkResourceIdAllocator, PreparedGpuData,
+    GpuTextureViewDimension, GpuTextureViewHandle, GpuWorkResourceId, GpuWorkResourceIdAllocator,
+    PreparedGpuData,
     UniformData,
 };
 use std::fmt;
