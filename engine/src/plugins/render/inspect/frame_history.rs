@@ -228,10 +228,6 @@ impl RenderFrameHistoryState {
         policy: RenderFrameObservationPolicyResource,
         evidence: &[RenderPassTimingEvidence],
     ) {
-        if !policy.enabled {
-            return;
-        }
-
         let mut correlated =
             BTreeMap::<RenderFrameObservationKey, Vec<RenderPassTimingEvidence>>::new();
         for sample in evidence {
@@ -250,6 +246,17 @@ impl RenderFrameHistoryState {
 
         for (key, samples) in correlated {
             let sample_count = u64::try_from(samples.len()).unwrap_or(u64::MAX);
+            if let Some(observation) = self
+                .observations
+                .iter_mut()
+                .find(|observation| observation.key == key)
+            {
+                observation.gpu.merge_pass_evidence(samples);
+                continue;
+            }
+            if !policy.enabled {
+                continue;
+            }
             if !policy.retains_frame(key.frame_index) {
                 self.drop_stats.sampled_out_evidence = self
                     .drop_stats
@@ -257,18 +264,10 @@ impl RenderFrameHistoryState {
                     .saturating_add(sample_count);
                 continue;
             }
-            let Some(observation) = self
-                .observations
-                .iter_mut()
-                .find(|observation| observation.key == key)
-            else {
-                self.drop_stats.late_evidence_after_eviction = self
-                    .drop_stats
-                    .late_evidence_after_eviction
-                    .saturating_add(sample_count);
-                continue;
-            };
-            observation.gpu.merge_pass_evidence(samples);
+            self.drop_stats.late_evidence_after_eviction = self
+                .drop_stats
+                .late_evidence_after_eviction
+                .saturating_add(sample_count);
         }
     }
 
@@ -513,6 +512,34 @@ mod tests {
         );
         assert!(observation.gpu.pass_evidence.is_empty());
         assert_eq!(observation.gpu.whole_frame_millis, None);
+    }
+
+    #[test]
+    fn retained_pending_evidence_completes_after_sampling_policy_changes() {
+        let original = policy(8);
+        let mut history = RenderFrameHistoryState::default();
+        record(
+            &mut history,
+            original,
+            3,
+            1,
+            0.0,
+            RenderGpuTimingCapability::Supported,
+        );
+        history.observe_gpu_pass_timing_evidence(original, &[pending(3, 1)]);
+
+        let changed = original.with_sampling(2);
+        history.observe_gpu_pass_timing_evidence(changed, &[measured(3, 1, 2.0)]);
+
+        let observation = history
+            .observation(RenderFrameObservationKey::new(3, 1))
+            .unwrap();
+        assert_eq!(
+            observation.gpu.capability,
+            RenderGpuTimingCapability::Supported
+        );
+        assert_eq!(observation.gpu.pass_evidence[0].millis, Some(2.0));
+        assert_eq!(history.drop_stats().sampled_out_evidence, 0);
     }
 
     #[test]
