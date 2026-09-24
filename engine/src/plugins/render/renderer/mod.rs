@@ -1089,7 +1089,9 @@ mod tests {
         should_defer_deterministic_surface, validate_deterministic_surface_scope,
     };
     use crate::plugins::render::backend::RenderSurfaceId;
-    use crate::plugins::render::inspect::{RenderGpuTimingCapability, RenderPassTimingEvidence};
+    use crate::plugins::render::inspect::{
+        RenderComposedFrameGpuTimingEvidence, RenderGpuTimingCapability, RenderPassTimingEvidence,
+    };
 
     #[test]
     fn clip_to_scissor_clamps_and_rejects_empty() {
