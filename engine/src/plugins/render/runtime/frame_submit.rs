@@ -315,25 +315,31 @@ fn observe_submitted_frame_history(
     gpu_capability: RenderGpuTimingCapability,
     pass_timings: &[PassTimingSample],
     gpu_evidence: &[RenderPassTimingEvidence],
-) {
+) -> bool {
     let policy = world
         .resource::<RenderFrameObservationPolicyResource>()
         .ok()
         .copied()
         .unwrap_or_default();
-    if let Ok(history) = world.resource_mut::<RenderFrameHistoryState>() {
-        history.observe_submitted_frame(
-            policy,
-            prepared_frame.context.frame_index,
-            prepared_frame.surface.render_surface_id.raw(),
-            prepared_frame.context.prepare_epoch,
-            timings.acquire_ms,
-            timings.renderer,
-            pass_timings,
-            gpu_capability,
-        );
-        history.observe_gpu_pass_timing_evidence(policy, gpu_evidence);
+    let Ok(history) = world.resource_mut::<RenderFrameHistoryState>() else {
+        return false;
+    };
+    history.apply_policy(policy);
+    if !policy.enabled {
+        return false;
     }
+    history.observe_submitted_frame(
+        policy,
+        prepared_frame.context.frame_index,
+        prepared_frame.surface.render_surface_id.raw(),
+        prepared_frame.context.prepare_epoch,
+        timings.acquire_ms,
+        timings.renderer,
+        pass_timings,
+        gpu_capability,
+    );
+    history.observe_gpu_pass_timing_evidence(policy, gpu_evidence);
+    true
 }
 
 pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<()> {
@@ -520,22 +526,21 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
             Ok(timings) => {
                 primary_contribution_state = PrimaryContributionState::Submitted;
                 world.resource_mut::<DebugMetricsState>()?.last_timings = Some(timings);
-                let pass_timings = gfx.renderer.last_pass_timings().to_vec();
-                let gpu_capability = gfx.renderer.last_gpu_timing_capability();
-                let gpu_evidence = gfx.renderer.take_published_gpu_pass_timing_evidence();
 
                 if let Ok(render_debug_timings) = world.resource_mut::<RenderDebugTimingsState>() {
                     render_debug_timings.observe_frame_timings(timings);
-                    render_debug_timings.observe_pass_timings(&pass_timings);
-                    render_debug_timings.observe_gpu_pass_timing_evidence(&gpu_evidence);
+                    render_debug_timings.observe_pass_timings(gfx.renderer.last_pass_timings());
+                    render_debug_timings.observe_gpu_pass_timing_evidence(
+                        gfx.renderer.last_gpu_pass_timing_evidence(),
+                    );
                 }
                 observe_submitted_frame_history(
                     &mut world,
                     &prepared_frame,
                     timings,
-                    gpu_capability,
-                    &pass_timings,
-                    &gpu_evidence,
+                    gfx.renderer.last_gpu_timing_capability(),
+                    gfx.renderer.last_pass_timings(),
+                    gfx.renderer.last_gpu_pass_timing_evidence(),
                 );
 
                 let cache_stats = gfx.renderer.flow_pipeline_cache_stats();
@@ -1059,17 +1064,17 @@ fn render_additional_surfaces(
                 AdditionalSurfaceRenderOutcome::Deferred
             }
             Ok(timings) => {
-                let pass_timings = gfx.renderer.last_pass_timings().to_vec();
-                let gpu_capability = gfx.renderer.last_gpu_timing_capability();
-                let gpu_evidence = gfx.renderer.take_published_gpu_pass_timing_evidence();
-                observe_submitted_frame_history(
+                let history_enabled = observe_submitted_frame_history(
                     world,
                     prepared_frame,
                     timings,
-                    gpu_capability,
-                    &pass_timings,
-                    &gpu_evidence,
+                    gfx.renderer.last_gpu_timing_capability(),
+                    gfx.renderer.last_pass_timings(),
+                    gfx.renderer.last_gpu_pass_timing_evidence(),
                 );
+                if history_enabled {
+                    gfx.renderer.clear_published_gpu_pass_timing_evidence();
+                }
                 AdditionalSurfaceRenderOutcome::Submitted
             }
             Err(err) => {

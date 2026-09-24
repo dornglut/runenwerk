@@ -164,8 +164,8 @@ pub struct RenderFrameObservation {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct RenderFrameHistoryDropStats {
     pub evicted_observations: u64,
-    pub late_evidence_after_eviction: u64,
-    pub sampled_out_evidence: u64,
+    pub sampled_out_observations: u64,
+    pub dropped_correlated_evidence: u64,
     pub uncorrelated_evidence: u64,
 }
 
@@ -176,6 +176,18 @@ pub struct RenderFrameHistoryState {
 }
 
 impl RenderFrameHistoryState {
+    pub fn apply_policy(&mut self, policy: RenderFrameObservationPolicyResource) {
+        if !policy.enabled {
+            self.observations.clear();
+            return;
+        }
+        while self.observations.len() > policy.bounded_capacity() {
+            self.observations.pop_front();
+            self.drop_stats.evicted_observations =
+                self.drop_stats.evicted_observations.saturating_add(1);
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn observe_submitted_frame(
         &mut self,
@@ -188,7 +200,12 @@ impl RenderFrameHistoryState {
         pass_timings: &[PassTimingSample],
         gpu_capability: RenderGpuTimingCapability,
     ) {
+        if !policy.enabled {
+            return;
+        }
         if !policy.retains_frame(frame_index) {
+            self.drop_stats.sampled_out_observations =
+                self.drop_stats.sampled_out_observations.saturating_add(1);
             return;
         }
 
@@ -262,16 +279,9 @@ impl RenderFrameHistoryState {
             if !policy.enabled {
                 continue;
             }
-            if !policy.retains_frame(key.frame_index) {
-                self.drop_stats.sampled_out_evidence = self
-                    .drop_stats
-                    .sampled_out_evidence
-                    .saturating_add(sample_count);
-                continue;
-            }
-            self.drop_stats.late_evidence_after_eviction = self
+            self.drop_stats.dropped_correlated_evidence = self
                 .drop_stats
-                .late_evidence_after_eviction
+                .dropped_correlated_evidence
                 .saturating_add(sample_count);
         }
     }
@@ -544,7 +554,26 @@ mod tests {
             RenderGpuTimingCapability::Supported
         );
         assert_eq!(observation.gpu.pass_evidence[0].millis, Some(2.0));
-        assert_eq!(history.drop_stats().sampled_out_evidence, 0);
+        assert_eq!(history.drop_stats().sampled_out_observations, 0);
+    }
+
+    #[test]
+    fn disabled_policy_clears_retained_observations() {
+        let enabled = policy(8);
+        let mut history = RenderFrameHistoryState::default();
+        record(
+            &mut history,
+            enabled,
+            1,
+            1,
+            0.0,
+            RenderGpuTimingCapability::Supported,
+        );
+        assert_eq!(history.len(), 1);
+
+        history.apply_policy(RenderFrameObservationPolicyResource::default());
+
+        assert!(history.is_empty());
     }
 
     #[test]
@@ -575,7 +604,7 @@ mod tests {
         history.observe_gpu_pass_timing_evidence(policy, &[measured(1, 1, 1.0)]);
 
         assert_eq!(history.drop_stats().evicted_observations, 1);
-        assert_eq!(history.drop_stats().late_evidence_after_eviction, 1);
+        assert_eq!(history.drop_stats().dropped_correlated_evidence, 1);
     }
 
     #[test]
@@ -622,7 +651,8 @@ mod tests {
                 .observation(RenderFrameObservationKey::new(4, 1))
                 .is_some()
         );
-        assert_eq!(history.drop_stats().sampled_out_evidence, 1);
+        assert_eq!(history.drop_stats().sampled_out_observations, 1);
+        assert_eq!(history.drop_stats().dropped_correlated_evidence, 1);
     }
 
     #[test]

@@ -171,10 +171,8 @@ impl Renderer {
         &self.last_gpu_pass_timing_evidence
     }
 
-    pub(in crate::plugins::render) fn take_published_gpu_pass_timing_evidence(
-        &mut self,
-    ) -> Vec<crate::plugins::render::inspect::RenderPassTimingEvidence> {
-        std::mem::take(&mut self.last_gpu_pass_timing_evidence)
+    pub(in crate::plugins::render) fn clear_published_gpu_pass_timing_evidence(&mut self) {
+        self.last_gpu_pass_timing_evidence.clear();
     }
 
     pub fn last_runtime_resources(
