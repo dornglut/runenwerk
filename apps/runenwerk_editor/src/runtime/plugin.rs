@@ -70,9 +70,9 @@ pub enum EditorRuntimeSet {
     ProcgenViewportOverlay,
     ViewportProductTargets,
     ViewportRenderJobs,
-    ViewportRenderProductSelection,
     MaterialPreviewRenderHandoff,
-    ViewportRenderAdmission,
+    ViewportRenderFrameRequestPublication,
+    ViewportRenderProductSelection,
     MaterialPreviewProductUpload,
     TexturePreviewProductUpload,
     ViewportGpuResidencySummary,
@@ -189,7 +189,7 @@ impl Plugin for EditorAppPlugin {
             prepare_material_preview_render_resource_system
                 .on_invoker_thread()
                 .in_set(EditorRuntimeSet::MaterialPreviewRenderHandoff)
-                .before(EditorRuntimeSet::ViewportRenderAdmission)
+                .before(EditorRuntimeSet::ViewportRenderFrameRequestPublication)
                 .before(EditorRuntimeSet::ViewportRenderProductSelection)
                 .before(RenderRuntimeSet::GpuResidency)
                 .before(RenderRuntimeSet::FramePrepare),
@@ -197,7 +197,7 @@ impl Plugin for EditorAppPlugin {
         app.add_systems(
             RenderPrepare,
             publish_viewport_render_frame_requests_system
-                .in_set(EditorRuntimeSet::ViewportRenderAdmission)
+                .in_set(EditorRuntimeSet::ViewportRenderFrameRequestPublication)
                 .after(EditorRuntimeSet::MaterialPreviewRenderHandoff)
                 .before(EditorRuntimeSet::ViewportRenderProductSelection)
                 .before(RenderRuntimeSet::GpuResidency)
@@ -208,7 +208,7 @@ impl Plugin for EditorAppPlugin {
             prepare_viewport_render_product_selections_system
                 .on_invoker_thread()
                 .in_set(EditorRuntimeSet::ViewportRenderProductSelection)
-                .after(EditorRuntimeSet::ViewportRenderAdmission)
+                .after(EditorRuntimeSet::ViewportRenderFrameRequestPublication)
                 .before(RenderRuntimeSet::GpuResidency)
                 .before(RenderRuntimeSet::FramePrepare),
         );
