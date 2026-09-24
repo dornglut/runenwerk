@@ -158,7 +158,8 @@ pub(in crate::plugins::render::renderer) fn prepare_composed_gpu_timing(
         start_node = Some(work.operation("composed renderer GPU timing start", start_marker)?);
         end_node = Some(work.operation("composed renderer GPU timing end", end_marker)?);
         work.operation("resolve composed renderer GPU timestamps", resolve)?;
-        readback_node = Some(work.operation("read back composed renderer GPU timestamps", readback)?);
+        readback_node =
+            Some(work.operation("read back composed renderer GPU timestamps", readback)?);
         Ok(())
     })?;
     let timestamp_period_ns = context.timestamp_period_ns().ok_or_else(|| {
