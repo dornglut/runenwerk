@@ -205,6 +205,12 @@ impl RenderPassTimingEvidence {
     }
 }
 
+/// One complete renderer-owned composed GPU interval for an exact semantic frame and surface.
+///
+/// `gpu_composed_frame_ms` is derived from one start/end timestamp pair. It is independent of
+/// per-pass timing evidence and is never computed by summing pass durations. RunenGPU-owned
+/// initial-content realization, this observation's resolve/readback tail, terminal Present,
+/// compositor/scanout, and Host pacing remain outside the interval.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RenderComposedFrameGpuTimingEvidence {
     pub frame_index: u64,
@@ -249,9 +255,6 @@ impl RenderComposedFrameGpuTimingEvidence {
     }
 }
 
-/// This interval covers renderer-authored composed GPU work. RunenGPU-owned initial-content
-/// realization, this observation's resolve/readback tail, terminal Present, compositor/scanout,
-/// and host pacing remain outside the metric.
 #[derive(Debug, Clone, Default, runen_ecs::Component, runen_ecs::Resource)]
 pub struct RenderDebugTimingsState {
     pub workload_ms: f32,
