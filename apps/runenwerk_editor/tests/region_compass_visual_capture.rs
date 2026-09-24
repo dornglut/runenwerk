@@ -13,7 +13,9 @@ use engine::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, RenderCaptureSelector, RenderCaptureTerminalCode,
     RenderCapturedTextureState, RenderPassProvenanceState, deterministic_capture_filename,
 };
-use engine::runtime::{NativeWindowId, WindowState, WindowStateRegistryResource};
+use engine::runtime::{
+    NativeWindowId, PrimaryPresentationMetricsResource, WindowState, WindowStateRegistryResource,
+};
 use runenwerk_editor::runtime::resources::EditorHostResource;
 use ui_adaptive_composition::DockZone;
 use ui_math::UiPoint;
@@ -164,6 +166,11 @@ fn capture() -> anyhow::Result<()> {
     let mut native_state = WindowState::windowed(window.title());
     native_state.size_px = (size.width, size.height);
     native_state.scale_factor = window.scale_factor();
+    app.world_mut()
+        .insert_resource(PrimaryPresentationMetricsResource::new(
+            native_state.size_px,
+            native_state.scale_factor,
+        ));
     app.world_mut()
         .insert_resource(WindowStateRegistryResource::default());
     app.world_mut()

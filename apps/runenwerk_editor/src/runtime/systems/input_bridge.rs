@@ -4,7 +4,7 @@ use engine::plugins::input::domain::action;
 use engine::plugins::render::{EditorGizmoAxis, EditorPickingTarget};
 use engine::runtime::platform::{PlatformEvent, PlatformWindowEventQueueResource};
 use engine::runtime::{NativeWindowId, Res, ResMut};
-use engine::{WindowCursorIcon, WindowState};
+use engine::{PrimaryPresentationMetricsResource, WindowCursorIcon, WindowState};
 use scene::LocalTransform;
 use ui_input::{
     EventPropagation, PointerButton, PointerEventKind, PointerSourceKind, UiInputEvent,
@@ -50,6 +50,7 @@ pub fn dispatch_editor_input_system(
     mut actions: ResMut<engine::plugins::ActionState>,
     mut target_input: ResMut<EditorTargetInputRuntimeResource>,
     mut platform_events: ResMut<PlatformWindowEventQueueResource>,
+    presentation: Res<PrimaryPresentationMetricsResource>,
     mut window: ResMut<WindowState>,
     mut host: ResMut<EditorHostResource>,
     mut bridge: ResMut<EditorInputBridgeState>,
@@ -103,8 +104,8 @@ pub fn dispatch_editor_input_system(
         return;
     }
 
-    let bounds = window_bounds(&window);
-    let shell_theme = scaled_shell_theme(&host.theme, window.scale_factor);
+    let bounds = presentation_bounds(&presentation);
+    let shell_theme = scaled_shell_theme(&host.theme, presentation.scale_factor());
     let viewport_products = resolve_structural_viewport_products(
         &host.shell_state,
         &viewport_observations,
@@ -983,9 +984,10 @@ fn structural_context_for_widget(
         .copied()
 }
 
-fn window_bounds(window: &WindowState) -> UiRect {
-    let width = window.size_px.0.max(1) as f32;
-    let height = window.size_px.1.max(1) as f32;
+fn presentation_bounds(presentation: &PrimaryPresentationMetricsResource) -> UiRect {
+    let size_px = presentation.size_px();
+    let width = size_px.0 as f32;
+    let height = size_px.1 as f32;
     UiRect::new(0.0, 0.0, width, height)
 }
 

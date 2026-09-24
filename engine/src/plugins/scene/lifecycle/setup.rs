@@ -3,12 +3,12 @@ use super::super::runtime::{
 };
 use crate::plugins::scene::ui::UiPresentationMode;
 use crate::plugins::{SceneManager, SceneResource};
-use crate::runtime::{Res, ResMut, WindowState};
+use crate::runtime::{PrimaryPresentationMetricsResource, Res, ResMut};
 use crate::{SceneCatalog, SceneOverlayViewportState, SceneRuntimeState};
 use anyhow::Result;
 
 pub(crate) fn scene_setup_system(
-    window: Res<WindowState>,
+    presentation: Res<PrimaryPresentationMetricsResource>,
     scene_catalog: Res<SceneCatalog>,
     mut scene_templates: ResMut<SceneTemplateFlowResource>,
     mut scene_resource: ResMut<SceneResource>,
@@ -16,10 +16,10 @@ pub(crate) fn scene_setup_system(
     mut viewport: ResMut<SceneOverlayViewportState>,
 ) -> Result<()> {
     if scene_resource.manager.is_none() {
-        scene_resource.manager = Some(SceneManager::new(&window)?);
+        scene_resource.manager = Some(SceneManager::new(&presentation)?);
     }
     if let Some(manager) = scene_resource.manager.as_mut() {
-        sync_overlay_viewport(manager, &window);
+        sync_overlay_viewport(manager, &presentation);
         scene_templates.ensure_loaded_from_catalog(&scene_catalog)?;
         if scene_templates.has_scenes() {
             manager.set_active_overlay_visible(true);

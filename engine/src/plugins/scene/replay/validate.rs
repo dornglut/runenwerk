@@ -3,7 +3,7 @@ use super::super::snapshot::restore_scene_simulation_snapshot;
 use super::super::{SceneManager, SceneResource};
 use super::codec::{SceneReplayArchive, SceneReplayInputFrameV2};
 use super::playback::replay_scene_frame;
-use crate::runtime::{SimulationTick, WindowState};
+use crate::runtime::{PrimaryPresentationMetricsResource, SimulationTick};
 use anyhow::{Result, anyhow};
 use engine_replay::{ReplayJournalFrame, ReplayValidationReport};
 
@@ -27,13 +27,17 @@ pub(crate) fn validate_scene_replay(
         .collect();
 
     let report = {
-        let window = world.resource::<WindowState>().ok().cloned();
+        let presentation = world
+            .resource::<PrimaryPresentationMetricsResource>()
+            .ok()
+            .cloned();
         let scene_resource = world
             .resource_mut::<SceneResource>()
             .map_err(|_| anyhow!("ScenePlugin resource is not available"))?;
         if scene_resource.manager.is_none() {
-            let window = window.ok_or_else(|| anyhow!("WindowState is not available"))?;
-            scene_resource.manager = Some(SceneManager::new(&window)?);
+            let presentation = presentation
+                .ok_or_else(|| anyhow!("primary presentation metrics are not available"))?;
+            scene_resource.manager = Some(SceneManager::new(&presentation)?);
         }
         let manager = scene_resource
             .manager

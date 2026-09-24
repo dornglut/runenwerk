@@ -19,7 +19,9 @@ use engine::plugins::render::inspect::{
 use engine::plugins::render::{
     Gfx, MaterialPreviewFixture, MaterialShaderCompileRequest, compile_material_shader,
 };
-use engine::runtime::{NativeWindowId, WindowState, WindowStateRegistryResource};
+use engine::runtime::{
+    NativeWindowId, PrimaryPresentationMetricsResource, WindowState, WindowStateRegistryResource,
+};
 use graph::{
     CyclePolicy, GraphDefinition, GraphId, GraphMetadataEntry, GraphValue, NodeDefinition, NodeId,
     PortDefinition, PortDirection, PortId, PortTypeId,
@@ -118,6 +120,11 @@ fn viewport_gpu_truth_smoke() {
     let mut native_state = WindowState::windowed(window.title());
     native_state.size_px = (size.width, size.height);
     native_state.scale_factor = window.scale_factor();
+    app.world_mut()
+        .insert_resource(PrimaryPresentationMetricsResource::new(
+            native_state.size_px,
+            native_state.scale_factor,
+        ));
     app.world_mut()
         .insert_resource(WindowStateRegistryResource::default());
     app.world_mut()

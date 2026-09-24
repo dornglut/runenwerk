@@ -2,6 +2,7 @@ use crate::app::WindowedAppState;
 use crate::plugins::InputState;
 use crate::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryResource};
 use crate::plugins::render::renderer::Gfx;
+use crate::runtime::PrimaryPresentationMetricsResource;
 use crate::runtime::frame_lifecycle::{
     prepare_world_for_run, run_frame as run_runtime_frame, run_startup_if_needed,
 };
@@ -93,8 +94,7 @@ impl WinitRunner {
             window_state.title = window.title().to_string();
             window_state.clone()
         };
-        self.sync_primary_window_state_and_surface_extent(&window_state);
-        Ok(())
+        self.sync_primary_window_state_and_surface_extent(&window_state)
     }
 
     fn apply_event(&mut self, event: PlatformEvent) -> Result<()> {
@@ -132,7 +132,7 @@ impl WinitRunner {
                     apply_platform_event(window_state, &mut input, &event);
                     window_state.clone()
                 };
-                self.sync_primary_window_state_and_surface_extent(&window_state);
+                self.sync_primary_window_state_and_surface_extent(&window_state)?;
             }
             PlatformEvent::KeyboardInput { .. }
             | PlatformEvent::TextInput { .. }
@@ -232,7 +232,15 @@ impl WinitRunner {
         Ok(())
     }
 
-    fn sync_primary_window_state_and_surface_extent(&mut self, window_state: &WindowState) {
+    fn sync_primary_window_state_and_surface_extent(
+        &mut self,
+        window_state: &WindowState,
+    ) -> Result<()> {
+        self.state
+            .world
+            .resource_mut::<PrimaryPresentationMetricsResource>()
+            .context("missing primary presentation metrics")?
+            .update(window_state.size_px, window_state.scale_factor);
         if let Ok(registry) = self
             .state
             .world
@@ -250,6 +258,7 @@ impl WinitRunner {
                 window_state.size_px,
             );
         }
+        Ok(())
     }
 
     fn confirm_primary_render_surface_attachment(
@@ -1160,6 +1169,70 @@ mod tests {
     }
 
     #[test]
+    fn primary_window_events_project_primary_presentation_metrics() {
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+
+        runner
+            .apply_event(PlatformEvent::Resized {
+                width: 1600,
+                height: 900,
+            })
+            .expect("primary resize should apply");
+        runner
+            .apply_event(PlatformEvent::ScaleFactorChanged {
+                scale_factor: 2.0,
+                width: 1600,
+                height: 900,
+            })
+            .expect("primary scale change should apply");
+
+        let presentation = runner
+            .state
+            .world
+            .resource::<PrimaryPresentationMetricsResource>()
+            .expect("primary presentation metrics should exist");
+        assert_eq!(presentation.size_px(), (1600, 900));
+        assert_eq!(presentation.scale_factor(), 2.0);
+    }
+
+    #[test]
+    fn secondary_window_geometry_does_not_replace_primary_presentation_metrics() {
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        let secondary = runner
+            .state
+            .world
+            .resource_mut::<WindowStateRegistryResource>()
+            .expect("window registry should exist")
+            .request_window("Secondary", (640, 480))
+            .native_window_id;
+
+        runner.apply_secondary_window_event(
+            secondary,
+            PlatformEvent::ScaleFactorChanged {
+                scale_factor: 1.75,
+                width: 900,
+                height: 600,
+            },
+        );
+
+        let presentation = runner
+            .state
+            .world
+            .resource::<PrimaryPresentationMetricsResource>()
+            .expect("primary presentation metrics should exist");
+        assert_eq!(presentation, &PrimaryPresentationMetricsResource::default());
+        let secondary_record = runner
+            .state
+            .world
+            .resource::<WindowStateRegistryResource>()
+            .expect("window registry should exist")
+            .record(secondary)
+            .expect("secondary record should exist");
+        assert_eq!(secondary_record.size_px, (900, 600));
+        assert_eq!(secondary_record.scale_factor, 1.75);
+    }
+
+    #[test]
     fn primary_window_state_sync_does_not_manufacture_render_attachment() {
         let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
         runner
@@ -1168,7 +1241,9 @@ mod tests {
             .insert_resource(RenderSurfaceRegistryResource::default());
         let mut state = WindowState::windowed("primary");
         state.size_px = (1440, 900);
-        runner.sync_primary_window_state_and_surface_extent(&state);
+        runner
+            .sync_primary_window_state_and_surface_extent(&state)
+            .expect("primary presentation sync should succeed");
         let surfaces = runner
             .state
             .world

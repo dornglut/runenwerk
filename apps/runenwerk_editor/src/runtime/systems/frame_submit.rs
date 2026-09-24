@@ -1,6 +1,6 @@
 use editor_shell::{ComputedLayoutMap, UiNode, UiNodeKind, viewport_embed_slot_for};
 use editor_viewport::{ViewportId, ViewportSurfacePresentationSlot};
-use engine::WindowState;
+use engine::PrimaryPresentationMetricsResource;
 use engine::plugins::render::{
     EditorPickingTarget, RenderFrameProducerId, SurfaceFrameRoute, SurfaceFrameSubmission,
     SurfaceFrameSubmissionOrder, SurfaceFrameSubmissionRegistryResource, UiFontAtlasResource,
@@ -42,7 +42,7 @@ const fn ui_frame_producer_id(raw: u64) -> RenderFrameProducerId {
 
 #[allow(clippy::too_many_arguments)]
 pub fn submit_editor_frame_system(
-    window: Res<WindowState>,
+    presentation: Res<PrimaryPresentationMetricsResource>,
     debug_metrics: Res<engine::DebugMetricsState>,
     mut host: ResMut<EditorHostResource>,
     mut viewport_render_states: ResMut<ViewportRenderStateResource>,
@@ -55,15 +55,15 @@ pub fn submit_editor_frame_system(
     viewport_picking_results: Res<ViewportPickingResultsResource>,
     mut submissions: ResMut<SurfaceFrameSubmissionRegistryResource>,
 ) {
-    let bounds = window_bounds(&window);
-    let shell_scale = effective_shell_scale(window.scale_factor);
+    let bounds = presentation_bounds(&presentation);
+    let shell_scale = effective_shell_scale(presentation.scale_factor());
     host.apply_pending_editor_definition_activations();
     let EditorHostResource {
         app,
         shell_state,
         theme,
     } = &mut *host;
-    let shell_theme = scaled_shell_theme(theme, window.scale_factor);
+    let shell_theme = scaled_shell_theme(theme, presentation.scale_factor());
     let primary_target_id = shell_state
         .composition_runtime()
         .composition()
@@ -179,10 +179,7 @@ pub fn submit_editor_frame_system(
             viewport_render.should_report_visibility_contradiction(contradiction_active);
         let branch_trace_enabled = viewport_branch_trace_enabled();
         let branch_trace_snapshot = if branch_trace_enabled || should_report_contradiction {
-            Some(
-                viewport_render
-                    .branch_trace_snapshot((window.size_px.0.max(1), window.size_px.1.max(1))),
-            )
+            Some(viewport_render.branch_trace_snapshot(presentation.size_px()))
         } else {
             None
         };
@@ -190,8 +187,10 @@ pub fn submit_editor_frame_system(
         if app.debug_logs_enabled() {
             if viewport_render.should_report_scale_change() {
                 app.append_console_line(format!(
-                    "[ui] shell scale={:.3} window_scale={:.3} expression_version={}",
-                    shell_scale, window.scale_factor, expression_source_version.0
+                    "[ui] shell scale={:.3} presentation_scale={:.3} expression_version={}",
+                    shell_scale,
+                    presentation.scale_factor(),
+                    expression_source_version.0
                 ));
             }
 
@@ -459,9 +458,10 @@ fn build_debug_frame(bounds: UiRect) -> UiFrame {
     )])
 }
 
-fn window_bounds(window: &WindowState) -> UiRect {
-    let width = window.size_px.0.max(1) as f32;
-    let height = window.size_px.1.max(1) as f32;
+fn presentation_bounds(presentation: &PrimaryPresentationMetricsResource) -> UiRect {
+    let size_px = presentation.size_px();
+    let width = size_px.0 as f32;
+    let height = size_px.1 as f32;
     UiRect::new(0.0, 0.0, width, height)
 }
 
