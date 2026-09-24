@@ -1991,7 +1991,6 @@ fn projected_tab_stacks_for_routes(
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct TabStackChromeSurfaceTarget {
-    panel_kind: PanelKind,
     stable_surface_key: ToolSurfaceStableKey,
 }
 
@@ -2001,15 +2000,11 @@ fn tab_stack_chrome_surface_target(
     if let Some(active_panel) = &stack.active_panel
         && let Some(stable_surface_key) = active_panel.active_stable_surface_key.clone()
     {
-        return Some(TabStackChromeSurfaceTarget {
-            panel_kind: active_panel.panel_kind,
-            stable_surface_key,
-        });
+        return Some(TabStackChromeSurfaceTarget { stable_surface_key });
     }
 
     let locked_stable_surface_key = stack.locked_stable_surface_key.clone()?;
     Some(TabStackChromeSurfaceTarget {
-        panel_kind: PanelKind::Placeholder,
         stable_surface_key: locked_stable_surface_key,
     })
 }
@@ -2198,12 +2193,10 @@ mod tests {
             ToolSurfaceCreateCandidate::new(
                 stable_key("runenwerk.scene.viewport"),
                 "Viewport",
-                PanelKind::Viewport,
             ),
             ToolSurfaceCreateCandidate::new(
                 stable_key(STABLE_KEY_ONLY_TEST_SURFACE),
                 "Stable Only",
-                PanelKind::Diagnostics,
             ),
         ];
         register_tab_stack_chrome_routes(&mut actions, stack, &create_candidates);
