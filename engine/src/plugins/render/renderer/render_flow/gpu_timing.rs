@@ -394,8 +394,7 @@ mod composed_native_proof {
         GpuCapabilityFeature, GpuCapabilityProfile, GpuCapabilityRequirement, GpuClearOperation,
         GpuContextDescriptor, GpuContextRequestErrorCategory, GpuExecutionPreference,
         GpuReadbackStatus, GpuReconstruction, GpuResourceLabel, GpuSubmissionStatus,
-        GpuWorkFragment,
-        GpuWorkOperation, GpuWorkResourceIdAllocator,
+        GpuWorkFragment, GpuWorkOperation, GpuWorkResourceIdAllocator,
     };
     use std::time::{Duration, Instant};
 
