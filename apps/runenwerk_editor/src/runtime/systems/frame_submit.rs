@@ -283,10 +283,12 @@ pub fn submit_editor_secondary_native_frames_system(
         .first()
         .map(|target| target.id);
 
-    for entry in shell_state
+    let secondary_targets = shell_state
         .composition_target_bindings()
         .filter(|entry| Some(entry.target_id) != primary_target_id)
-    {
+        .collect::<Vec<_>>();
+
+    for entry in secondary_targets {
         let Some(record) = window_registry.record(entry.binding.native_window_id) else {
             continue;
         };
