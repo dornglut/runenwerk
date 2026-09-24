@@ -263,7 +263,7 @@ pub fn submit_editor_frame_system(
 pub fn submit_editor_secondary_native_frames_system(
     window_registry: Res<WindowStateRegistryResource>,
     debug_metrics: Res<engine::DebugMetricsState>,
-    host: Res<EditorHostResource>,
+    mut host: ResMut<EditorHostResource>,
     viewport_observations: Res<ViewportArtifactObservationResource>,
     viewport_instances: Res<ViewportInstanceRegistryResource>,
     tool_surface_bindings: Res<ToolSurfaceRuntimeBindingRegistryResource>,
@@ -274,7 +274,7 @@ pub fn submit_editor_secondary_native_frames_system(
         app,
         shell_state,
         theme,
-    } = &*host;
+    } = &mut *host;
     let primary_target_id = shell_state
         .composition_runtime()
         .composition()
