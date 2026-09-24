@@ -203,17 +203,25 @@ pub(crate) struct RenderGpuFrameTimingBracket {
 }
 
 impl RenderGpuFrameTimingBracket {
-    pub(crate) fn new(
-        fragment: GpuWorkFragment,
-        start: GpuWorkNodeId,
-        end: GpuWorkNodeId,
-    ) -> Self {
-        Self { fragment, start, end }
+    pub(crate) fn new(fragment: GpuWorkFragment, start: GpuWorkNodeId, end: GpuWorkNodeId) -> Self {
+        Self {
+            fragment,
+            start,
+            end,
+        }
     }
 
-    fn fragment(&self) -> &GpuWorkFragment { &self.fragment }
-    fn start(&self) -> &GpuWorkNodeId { &self.start }
-    fn end(&self) -> &GpuWorkNodeId { &self.end }
+    fn fragment(&self) -> &GpuWorkFragment {
+        &self.fragment
+    }
+
+    fn start(&self) -> &GpuWorkNodeId {
+        &self.start
+    }
+
+    fn end(&self) -> &GpuWorkNodeId {
+        &self.end
+    }
 }
 
 /// Prepares the canonical frame together with renderer-owned composable work. Imports are added
@@ -360,11 +368,8 @@ fn prepare_resolved_render_gpu_work(
         &BTreeSet::new(),
         imports,
     )?;
-    let (provisional_fragments, provisional_graph_orders) = compose_frame_graph_inputs(
-        producer_fragments,
-        &provisional.fragment,
-        timing_bracket,
-    )?;
+    let (provisional_fragments, provisional_graph_orders) =
+        compose_frame_graph_inputs(producer_fragments, &provisional.fragment, timing_bracket)?;
     let provisional_graph = prepare_graph(
         graph_label.clone(),
         provisional_fragments,
@@ -410,7 +415,10 @@ fn compose_frame_graph_inputs(
     fragments.push(renderer_fragment.clone());
     let mut graph_orders = Vec::new();
     if let Some(bracket) = timing_bracket {
-        for fragment in producer_fragments.iter().chain(std::iter::once(renderer_fragment)) {
+        for fragment in producer_fragments
+            .iter()
+            .chain(std::iter::once(renderer_fragment))
+        {
             for node in fragment.nodes() {
                 match node.kind() {
                     GpuWorkNodeKind::Present
@@ -1263,9 +1271,7 @@ mod tests {
         let render = GpuRenderOperation::new(
             [GpuRenderColorAttachment::new(
                 surface_view.clone(),
-                GpuColorAttachmentLoad::Clear(
-                    GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
-                ),
+                GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap()),
                 GpuAttachmentStore::Store,
                 None,
             )
@@ -1331,7 +1337,8 @@ mod tests {
             Ok(())
         })
         .unwrap();
-        let bracket = RenderGpuFrameTimingBracket::new(marker_fragment, start.unwrap(), end.unwrap());
+        let bracket =
+            RenderGpuFrameTimingBracket::new(marker_fragment, start.unwrap(), end.unwrap());
         let graph = prepare_render_gpu_frame_work_with_timing_for_test(
             label("timed composed frame"),
             nodes,
