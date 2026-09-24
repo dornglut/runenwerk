@@ -757,14 +757,9 @@ mod tests {
         let (panel_kind, stable_key) = existing_surface_contract(&runtime);
         let registry = registry_for_surface(panel_kind, &stable_key);
         let before_count = runtime.composition().definition().mounted_units().len();
-        let plan = plan_editor_create_unit(
-            &runtime,
-            stack,
-            registry.surfaces(),
-            stable_key,
-            identities,
-        )
-        .unwrap();
+        let plan =
+            plan_editor_create_unit(&runtime, stack, registry.surfaces(), stable_key, identities)
+                .unwrap();
         apply(&mut runtime, &mut identities, plan);
         let created = runtime
             .composition()
@@ -806,17 +801,14 @@ mod tests {
         let registry = registry_for_surface(panel_kind, &installed_key);
         let unknown = ToolSurfaceStableKey::new("runenwerk.uninstalled.surface").unwrap();
 
-        let rejection = plan_editor_create_unit(
-            &runtime,
-            stack,
-            registry.surfaces(),
-            unknown,
-            identities,
-        )
-        .expect_err("uninstalled stable surface identity must fail closed");
+        let rejection =
+            plan_editor_create_unit(&runtime, stack, registry.surfaces(), unknown, identities)
+                .expect_err("uninstalled stable surface identity must fail closed");
 
         assert!(rejection.records().iter().any(|record| {
-            record.message.contains("Register the requested editor tool surface")
+            record
+                .message
+                .contains("Register the requested editor tool surface")
         }));
     }
 
