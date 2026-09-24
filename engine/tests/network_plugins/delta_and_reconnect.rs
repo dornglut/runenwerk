@@ -559,9 +559,10 @@ fn authority_input_requires_explicit_session_policy() {
     )
     .expect("input should enter bounded server inbox");
 
-    let error = app
-        .run_for_frames(1)
-        .expect_err("remote authority input without explicit policy must fail closed");
+    let error = match app.run_for_frames(1) {
+        Ok(_) => panic!("remote authority input without explicit policy must fail closed"),
+        Err(error) => error,
+    };
     assert!(
         format!("{error:#}").contains("with_authority_input_policy"),
         "configuration failure should name the required explicit session policy: {error:#}"

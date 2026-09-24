@@ -3,7 +3,6 @@ use crate::WorldMut;
 use anyhow::Context;
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 use engine_net::*;
-use engine_sim::SimulationTick;
 use runen_ecs::World;
 use runen_net::identity::ConnectionHandle;
 use std::collections::HashSet;
