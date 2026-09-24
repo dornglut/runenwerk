@@ -676,6 +676,17 @@ fn retained_replacement_preserves_authority_input_evidence_and_execution() {
 
     enqueue_server_inbox_from(
         app.world_mut(),
+        Some(old_connection),
+        ClientMessage::InputFrame(InputFrame {
+            tick: SimulationTick(2),
+            payload: payload.clone(),
+        }),
+    )
+    .unwrap();
+    app = run_network_protocol_frame(app, "old replacement connection should be unauthorized");
+
+    enqueue_server_inbox_from(
+        app.world_mut(),
         Some(new_connection),
         ClientMessage::InputFrame(InputFrame {
             tick: SimulationTick(2),
@@ -685,13 +696,9 @@ fn retained_replacement_preserves_authority_input_evidence_and_execution() {
     .unwrap();
     app = run_network_protocol_frame(app, "replacement duplicate should be classified");
 
-    assert_eq!(
-        app.world()
-            .resource::<ReplicationDiagnostics>()
-            .unwrap()
-            .duplicate_inputs,
-        1
-    );
+    let diagnostics = app.world().resource::<ReplicationDiagnostics>().unwrap();
+    assert_eq!(diagnostics.unauthorized_inputs, 1);
+    assert_eq!(diagnostics.duplicate_inputs, 1);
 
     app = run_network_fixed_step(app, "tick one should run");
     app = run_network_fixed_step(app, "tick two should execute retained authority input");
