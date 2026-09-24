@@ -18,7 +18,8 @@ use engine::plugins::render::inspect::{
 use engine::runtime::platform::{PlatformEvent, apply_native_window_event};
 use engine::runtime::{
     NativeWindowHook, NativeWindowHookRegistryResource, NativeWindowId,
-    PrimaryPresentationMetricsResource, Res, Startup, Update, WindowStateRegistryResource,
+    NativeWindowLifecycleState, PrimaryPresentationMetricsResource, Res, Startup, Update,
+    WindowStateRegistryResource,
 };
 use runenwerk_editor::runtime::resources::EditorHostResource;
 use ui_adaptive_composition::DockZone;
@@ -67,7 +68,9 @@ fn observe_native_no_render_update(probe: Res<NativeNoRenderProbe>) {
 
 struct NativeNoRenderSmokeHook {
     frame_seen: Arc<AtomicBool>,
+    secondary_created: Arc<AtomicBool>,
     unexpected_render_state: Arc<AtomicBool>,
+    secondary_requested: bool,
 }
 
 impl NativeWindowHook for NativeNoRenderSmokeHook {
@@ -77,14 +80,28 @@ impl NativeWindowHook for NativeNoRenderSmokeHook {
 
     fn attach(&mut self, _window: &Window, world: &mut runen_ecs::World) -> anyhow::Result<()> {
         self.observe_render_absence(world);
+        if world
+            .resource::<WindowStateRegistryResource>()?
+            .records()
+            .any(|record| {
+                record.native_window_id != NativeWindowId::primary()
+                    && record.lifecycle_state == NativeWindowLifecycleState::Created
+            })
+        {
+            self.secondary_created.store(true, Ordering::SeqCst);
+        }
         Ok(())
     }
 
     fn frame(&mut self, _window: &Window, world: &mut runen_ecs::World) -> anyhow::Result<()> {
         self.observe_render_absence(world);
         self.frame_seen.store(true, Ordering::SeqCst);
-        world
-            .resource_mut::<WindowStateRegistryResource>()?
+        let windows = world.resource_mut::<WindowStateRegistryResource>()?;
+        if !self.secondary_requested {
+            windows.request_window("Native no-Render secondary", (640, 480));
+            self.secondary_requested = true;
+        }
+        windows
             .record_mut(NativeWindowId::primary())
             .ok_or_else(|| anyhow::anyhow!("native no-Render smoke primary window is missing"))?
             .request_close();
@@ -105,6 +122,7 @@ fn native_no_render_host_smoke() -> anyhow::Result<()> {
     let startup_ran = Arc::new(AtomicBool::new(false));
     let update_ran = Arc::new(AtomicBool::new(false));
     let frame_seen = Arc::new(AtomicBool::new(false));
+    let secondary_created = Arc::new(AtomicBool::new(false));
     let unexpected_render_state = Arc::new(AtomicBool::new(false));
 
     let mut app = engine::App::new();
@@ -120,7 +138,9 @@ fn native_no_render_host_smoke() -> anyhow::Result<()> {
         .resource_mut::<NativeWindowHookRegistryResource>()?
         .register_hook(NativeNoRenderSmokeHook {
             frame_seen: Arc::clone(&frame_seen),
+            secondary_created: Arc::clone(&secondary_created),
             unexpected_render_state: Arc::clone(&unexpected_render_state),
+            secondary_requested: false,
         });
 
     anyhow::ensure!(
@@ -142,6 +162,10 @@ fn native_no_render_host_smoke() -> anyhow::Result<()> {
     anyhow::ensure!(
         frame_seen.load(Ordering::SeqCst),
         "native frame hook did not run"
+    );
+    anyhow::ensure!(
+        secondary_created.load(Ordering::SeqCst),
+        "secondary native window did not reach Created without Render"
     );
     anyhow::ensure!(
         !unexpected_render_state.load(Ordering::SeqCst),
