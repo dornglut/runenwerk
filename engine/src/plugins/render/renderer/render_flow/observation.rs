@@ -171,13 +171,15 @@ impl RendererGpuObservationState {
             }
         }
 
-        let accepted_composed_timing=composed_timing.and_then(|timing|{
+        let accepted_composed_timing = composed_timing.and_then(|timing| {
             if submission.readback(timing.readback_id()).is_some() {
                 Some(timing)
             } else {
-                output.composed_timing_evidence.push(timing.diagnostic_evidence(
-                    "accepted GPU submission omitted the composed renderer timing readback",
-                ));
+                output
+                    .composed_timing_evidence
+                    .push(timing.diagnostic_evidence(
+                        "accepted GPU submission omitted the composed renderer timing readback",
+                    ));
                 None
             }
         });
@@ -215,8 +217,10 @@ impl RendererGpuObservationState {
                     .timing_evidence
                     .extend(timing.diagnostic_evidence(detail.clone()));
             }
-            if let Some(timing)=accepted_composed_timing {
-                output.composed_timing_evidence.push(timing.diagnostic_evidence(detail.clone()));
+            if let Some(timing) = accepted_composed_timing {
+                output
+                    .composed_timing_evidence
+                    .push(timing.diagnostic_evidence(detail.clone()));
             }
             for capture in accepted_captures {
                 let terminal = capture.failed("renderer_observation_capacity_exceeded", &detail);
@@ -229,8 +233,10 @@ impl RendererGpuObservationState {
         for timing in &accepted_timings {
             output.timing_evidence.extend(timing.pending_evidence());
         }
-        if let Some(timing)=accepted_composed_timing.as_ref() {
-            output.composed_timing_evidence.push(timing.pending_evidence());
+        if let Some(timing) = accepted_composed_timing.as_ref() {
+            output
+                .composed_timing_evidence
+                .push(timing.pending_evidence());
         }
         self.accepted.push(AcceptedRendererObservation {
             submission,
@@ -289,27 +295,34 @@ impl RendererGpuObservationState {
                 }
             });
 
-            if let Some(timing)=accepted.composed_timing.take() {
-                let status=accepted.submission.readback(timing.readback_id()).map(|readback|readback.status());
+            if let Some(timing) = accepted.composed_timing.take() {
+                let status = accepted
+                    .submission
+                    .readback(timing.readback_id())
+                    .map(|readback| readback.status());
                 match status {
                     Some(GpuReadbackStatus::Pending)
                         if invalid_context.is_none()
                             && lifecycle != GpuExecutionLifecycleState::Closed =>
                     {
-                        accepted.composed_timing=Some(timing);
+                        accepted.composed_timing = Some(timing);
                     }
-                    Some(GpuReadbackStatus::Ready(bytes))=>{
-                        output.composed_timing_evidence.push(timing.ready_evidence(&bytes));
+                    Some(GpuReadbackStatus::Ready(bytes)) => {
+                        output
+                            .composed_timing_evidence
+                            .push(timing.ready_evidence(&bytes));
                     }
-                    Some(GpuReadbackStatus::Failed(failure))=>{
-                        output.composed_timing_evidence.push(timing.failed_evidence(&failure));
+                    Some(GpuReadbackStatus::Failed(failure)) => {
+                        output
+                            .composed_timing_evidence
+                            .push(timing.failed_evidence(&failure));
                     }
-                    _=>{
-                        output.composed_timing_evidence.push(timing.diagnostic_evidence(
-                            invalid_context.unwrap_or(
+                    _ => {
+                        output
+                            .composed_timing_evidence
+                            .push(timing.diagnostic_evidence(invalid_context.unwrap_or(
                                 "GPU context closed before composed timing readback became terminal",
-                            ),
-                        ));
+                            )));
                     }
                 }
             }
