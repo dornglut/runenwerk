@@ -2,8 +2,9 @@ use editor_shell::viewport_embed_slot_for;
 use editor_viewport::{ViewportId, ViewportSurfacePresentationSlot};
 use engine::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryResource};
 use engine::plugins::render::{
-    CompiledPassExecutionPlan, RenderFlowRegistryResource, RenderFrameProducerId,
-    SurfaceFrameSubmissionRegistryResource, ViewportSurfaceBindingRegistryResource,
+    CompiledPassExecutionPlan, PreparedMaterialFeatureResource, PreparedRenderFrameRequestResource,
+    RenderFlowRegistryResource, RenderFrameProducerId, SurfaceFrameSubmissionRegistryResource,
+    ViewportSurfaceBindingRegistryResource,
 };
 use engine::runtime::platform::PlatformWindowEventQueueResource;
 use engine::runtime::{PrimaryPresentationMetricsResource, WindowStateRegistryResource};
@@ -54,6 +55,82 @@ fn headless_editor_shell_uses_primary_presentation_metrics() {
         .expect("editor shell should publish a primary UI surface");
 
     assert_eq!(surface.size, ui_math::UiSize::new(900.0, 600.0));
+}
+
+#[test]
+fn viewport_scene_submission_waits_for_generated_material_scene_bundle() {
+    let mut app = runenwerk_editor::runtime::build_headless_app()
+        .expect("headless app construction should succeed")
+        .run_for_frames(1)
+        .expect("initial editor frame should establish generated material state");
+
+    let missing_scene_shader_path = std::env::temp_dir().join(format!(
+        "runenwerk-missing-scene-shader-{}-{}.wgsl",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time should be valid")
+            .as_nanos()
+    ));
+    assert!(
+        !missing_scene_shader_path.exists(),
+        "test scene shader path must start absent"
+    );
+
+    {
+        let host = app
+            .world_mut()
+            .resource_mut::<EditorHostResource>()
+            .expect("editor host should exist");
+        let mut preview = host
+            .app
+            .material_lab_runtime()
+            .active_preview()
+            .cloned()
+            .expect("startup should establish the default material preview");
+        preview.scene_shader_path = missing_scene_shader_path.to_string_lossy().to_string();
+        host.app
+            .material_lab_runtime_mut()
+            .set_active_preview(preview);
+    }
+    *app.world_mut()
+        .resource_mut::<PreparedMaterialFeatureResource>()
+        .expect("render plugin should install material feature state") =
+        PreparedMaterialFeatureResource::default();
+
+    app = app
+        .run_for_frames(1)
+        .expect("editor frame must remain valid while generated material scene shader is unavailable");
+
+    let material = app
+        .world()
+        .resource::<PreparedMaterialFeatureResource>()
+        .expect("material feature state should exist");
+    assert!(
+        material.payload.scene_bundle.is_none(),
+        "test must retain the intended no-generated-scene-bundle condition"
+    );
+
+    let editor_flow_id = app
+        .world()
+        .resource::<RenderFlowRegistryResource>()
+        .expect("render flow registry should exist")
+        .compiled_flows()
+        .iter()
+        .find(|flow| flow.flow_label == EDITOR_MAIN_FLOW_ID)
+        .expect("editor main flow should exist")
+        .flow_id;
+    let frame_requests = app
+        .world()
+        .resource::<PreparedRenderFrameRequestResource>()
+        .expect("prepared frame request registry should exist");
+    assert!(
+        frame_requests
+            .requested_flow_invocations()
+            .iter()
+            .all(|request| request.flow_id != editor_flow_id),
+        "viewport editor-main-flow invocation must remain ineligible until an exact generated material scene bundle exists"
+    );
 }
 
 #[test]
