@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-14
+last_reviewed: 2026-09-24
 ---
 
 # Input Plugin
@@ -26,11 +26,12 @@ For the maintained windowed runtime, `engine/src/runtime/winit_input.rs` transla
 
 Raw `DeviceEvent` relative motion is different: winit supplies no window target, so the runtime normalizes its device/source identity and admits the motion directly to the same `InputState` neutral authority. Primary-window redraw after raw motion is host policy and is not input provenance.
 
-The native-tablet `NativeWindowHook` path remains a specialized backend path pending the separately scheduled tablet-convergence slice; it is not the ordinary winit input authority.
+The native-tablet path is a specialized backend producer: native acquisition, calibration, health, and recovery remain adapter-owned, while admitted device-level tablet observations enter the same engine-owned neutral input authority before Draw/UI adaptation.
 
 ## Ownership Boundaries
 
-- `InputState` owns the backend-neutral confirmed physical/device authority plus current non-action text, pointer, scroll, and touch compatibility projections.
+- The internal neutral input owner owns backend-neutral observation semantics, physical-control identity correlation, deterministic admission/reduction, and confirmed held/contact state.
+- `InputState` hosts that owner for Runenwerk and owns current non-action text, pointer, scroll, touch, and frame-local compatibility projections. It does not independently intern or reduce physical controls.
 - `InputState` records frame-local accepted physical keyboard press evidence with the modifier snapshot applicable to that press. It does not own product bindings or product action state.
 - `ActionState` is the single Runenwerk product-action authority. It owns concrete `action::*` ids, `InputBindings`, `KeyChord`, modifier rules/default presets, runtime binding mutation, and frame-local/current `action_pressed` / `action_down` projection.
 - Binding semantic types consume `PhysicalKeyIdentity` directly. They do not contain winit API types or compare debug-formatted backend enums.
@@ -70,7 +71,7 @@ The native-tablet `NativeWindowHook` path remains a specialized backend path pen
 - `ModifierRule`
 - `action::*` constants (built-in Runenwerk action ids)
 
-The neutral reducer and its internal control/contact identities remain implementation authority rather than a standalone framework API. Runtime source/device identities are session-scoped and must not be treated as persistent hardware identity.
+The neutral reducer and its control/contact identity correlation remain Runenwerk implementation authority until the accepted ADR-0008 RunenInput handoff. The source owner is being made transfer-ready without stabilizing a standalone Rust API inside Runenwerk. Runtime source/device identities remain session-scoped and must not be treated as persistent hardware identity.
 
 ### Runtime Model
 
@@ -81,9 +82,10 @@ winit event evidence
     -> runtime winit adapter
         -> backend-neutral input values
             -> existing PlatformWindowEvent path when the event has a window target
-                -> InputState neutral authority
-                    -> frame-local physical press evidence
-                        -> ActionState Runenwerk product projection
+                -> InputState integration shell
+                    -> self-contained neutral input owner
+                        -> frame-local physical press evidence
+                            -> ActionState Runenwerk product projection
 ```
 
 Targetless raw relative motion follows:
@@ -92,7 +94,8 @@ Targetless raw relative motion follows:
 winit DeviceEvent + DeviceId
     -> runtime winit adapter
         -> backend-neutral source/device context
-            -> InputState neutral authority
+            -> InputState integration shell
+                -> self-contained neutral input owner
 ```
 
 `InputState` does not own ordinary raw `WindowEvent`/`DeviceEvent` parsing or product action policy. Its direct `KeyCode`/mouse/touch injection helpers remain transitional backend/test conveniences and feed the same neutral authority; `KeyCode` is not the `KeyChord`/`InputBindings` semantic contract.
@@ -104,13 +107,13 @@ The neutral reducer is the semantic authority for migrated held physical control
 
 Repeat metadata cannot create another ordinary action press. Backend-synthetic keyboard reconciliation may change confirmed held truth but cannot create an ordinary press. If the same physical key is held by multiple device contexts, current product action policy remains aggregate. Binding changes may recompute `action_down`; they do not reinterpret already-processed keyboard evidence to fabricate `action_pressed`.
 
-Absolute cursor position and raw relative motion remain independent quantities. Rich scroll observations preserve both axes and their measurement domain; the existing scalar `scroll_delta` is only a downstream legacy projection of the vertical component. Touch/contact state remains multi-contact and source/device scoped; the drawing-facing touch sample stream remains single-primary as a downstream compatibility projection.
+Absolute cursor position and raw relative motion remain independent quantities. Rich scroll observations preserve both axes and their measurement domain; explicitly unspecified legacy scalar evidence remains marked as unspecified rather than acquiring invented precision, while `scroll_delta` stays a downstream vertical compatibility projection. Touch/contact state remains multi-contact and source/device scoped; the drawing-facing touch sample stream remains single-primary as a downstream compatibility projection.
 
 Physical keyboard identity, logical key meaning, and committed text are separate. Committed text remains a sibling platform event, not held-state authority.
 
 ### Current UI Compatibility Boundary
 
-The editor still performs its existing application-local normalized platform input -> RunenUI translation. I1C changes action/binding ownership only. The historical physical-code-to-logical-character mapping and touch-cancel semantic behavior remain for the later RunenUI-adapter slice; they are not corrected here.
+The editor uses one explicit normalized platform-input adapter into the current local UI ingress for primary and secondary targets. Physical key identity, logical key meaning, committed text, touch cancellation, and product shortcuts retain their accepted separate owners. Standalone RunenUI adoption remains separately owned and is not part of the neutral-input source transfer.
 
 ### Default Action Map
 
