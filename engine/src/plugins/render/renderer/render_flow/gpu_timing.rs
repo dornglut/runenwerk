@@ -1,12 +1,11 @@
-use super::*;
 use super::super::resource_descriptors::{buffer_descriptor, owned_common};
+use super::*;
 use crate::plugins::render::adapters::RenderGpuFrameTimingBracket;
 use runen_gpu::{
     GpuBufferHandle, GpuBufferRange, GpuBufferRegion, GpuBufferUsage, GpuContext, GpuMemoryIntent,
     GpuQueryKind, GpuQueryRange, GpuQueryResolveOperation, GpuQuerySetDescriptor,
-    GpuQuerySetHandle, GpuReadbackBytes, GpuReadbackId, GpuReadbackOperation,
-    GpuResourceLifetime, GpuSubmissionFailure, GpuTimestampMarkerOperation, GpuWorkFragment,
-    GpuWorkResourceIdAllocator,
+    GpuQuerySetHandle, GpuReadbackBytes, GpuReadbackId, GpuReadbackOperation, GpuResourceLifetime,
+    GpuSubmissionFailure, GpuTimestampMarkerOperation, GpuWorkFragment, GpuWorkResourceIdAllocator,
 };
 
 const TIMESTAMP_SIZE_BYTES: usize = 8;
