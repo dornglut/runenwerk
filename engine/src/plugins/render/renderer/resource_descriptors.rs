@@ -5,7 +5,7 @@ use runen_gpu::{
     GpuResourceLifetime, GpuResourceProvenance, GpuSamplerDescriptor, GpuTextureAspect,
     GpuTextureDescriptor, GpuTextureDimension, GpuTextureExtent, GpuTextureFormat,
     GpuTextureHandle, GpuTextureInitialization, GpuTextureSubresourceRange, GpuTextureUsage,
-    GpuTextureUsages, GpuTextureViewDescriptor,
+    GpuTextureUsages, GpuTextureViewDescriptor, GpuTextureViewDimension,
 };
 
 pub(super) fn owned_common(
@@ -187,7 +187,7 @@ mod tests {
 
         let view = whole_texture_view_descriptor("whole volume view test", &texture).unwrap();
 
-        assert_eq!(view.dimension(), GpuTextureDimension::D3);
+        assert_eq!(view.dimension(), GpuTextureViewDimension::D3);
         assert_eq!(view.subresources().array_layer_count(), 1);
     }
 }
