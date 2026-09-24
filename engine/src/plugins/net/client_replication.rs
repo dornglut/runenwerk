@@ -181,17 +181,16 @@ where
     TDriver::Snapshot: Clone + PartialEq,
     TDriver::Input: Clone + PartialEq,
 {
-    if matches!(outcome, ClientSnapshotOutcome::Committed(_))
-        && let Ok(diagnostics) = world.resource_mut::<ReplicationDiagnostics>()
-    {
-        diagnostics.applied_snapshots = diagnostics.applied_snapshots.saturating_add(1);
-    }
-
     if matches!(
         outcome,
         ClientSnapshotOutcome::Committed(_) | ClientSnapshotOutcome::DuplicateCurrent
     ) {
         let (acknowledgement, corrected) = realize_committed_product::<TDriver>(world)?;
+        if matches!(outcome, ClientSnapshotOutcome::Committed(_))
+            && let Ok(diagnostics) = world.resource_mut::<ReplicationDiagnostics>()
+        {
+            diagnostics.applied_snapshots = diagnostics.applied_snapshots.saturating_add(1);
+        }
         if corrected && let Ok(diagnostics) = world.resource_mut::<PredictionDiagnostics>() {
             diagnostics.corrected = diagnostics.corrected.saturating_add(1);
         }
