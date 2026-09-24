@@ -185,10 +185,8 @@ impl WinitRunner {
             .world
             .resource_mut::<RenderSurfaceRegistryResource>()
         {
-            surface_registry.update_surface_extent_for_native_window(
-                NativeWindowId::primary(),
-                size_px,
-            );
+            surface_registry
+                .update_surface_extent_for_native_window(NativeWindowId::primary(), size_px);
         }
         Ok(())
     }

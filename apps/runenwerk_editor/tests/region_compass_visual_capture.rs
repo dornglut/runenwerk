@@ -91,10 +91,8 @@ fn surface_identity_native_smoke() -> anyhow::Result<()> {
         "primary Render surface must be Attached after explicit confirmation"
     );
 
-    let secondary_surface = surfaces.reserve_surface_for_native_window(
-        secondary_native,
-        secondary_size_px,
-    );
+    let secondary_surface =
+        surfaces.reserve_surface_for_native_window(secondary_native, secondary_size_px);
     anyhow::ensure!(
         secondary_surface != RenderSurfaceId::primary(),
         "secondary native window must reserve a distinct Render surface"
@@ -113,11 +111,7 @@ fn surface_identity_native_smoke() -> anyhow::Result<()> {
         Arc::clone(&secondary_window),
         secondary_size_px,
     )?;
-    surfaces.confirm_surface_attachment(
-        secondary_surface,
-        secondary_native,
-        secondary_size_px,
-    )?;
+    surfaces.confirm_surface_attachment(secondary_surface, secondary_native, secondary_size_px)?;
     anyhow::ensure!(
         gfx.has_surface(secondary_surface),
         "secondary Gfx surface must exist after attachment"

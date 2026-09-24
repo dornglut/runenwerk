@@ -218,13 +218,7 @@ impl WindowStateRegistryResource {
     ) {
         self.records.insert(
             native_window_id,
-            NativeWindowRecord::created(
-                native_window_id,
-                title,
-                size_px,
-                scale_factor,
-                focused,
-            ),
+            NativeWindowRecord::created(native_window_id, title, size_px, scale_factor, focused),
         );
         self.next_window_raw = self
             .next_window_raw
@@ -257,7 +251,9 @@ impl WindowStateRegistryResource {
 
     fn allocate_window_id(&mut self) -> NativeWindowId {
         loop {
-            let raw = self.next_window_raw.max(NativeWindowId::primary().raw().saturating_add(1));
+            let raw = self
+                .next_window_raw
+                .max(NativeWindowId::primary().raw().saturating_add(1));
             self.next_window_raw = raw.saturating_add(1);
             if let Ok(id) = NativeWindowId::try_from_raw(raw)
                 && !self.records.contains_key(&id)

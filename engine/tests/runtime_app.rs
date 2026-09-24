@@ -94,7 +94,11 @@ fn selected_input_capability_is_visible_before_startup() {
     let snapshot = app.world().resource::<StartupSnapshot>().unwrap();
     assert!(snapshot.saw_input);
     assert_eq!(snapshot.presentation_size_px, (1280, 720));
-    assert!(app.world().resource::<WindowStateRegistryResource>().is_err());
+    assert!(
+        app.world()
+            .resource::<WindowStateRegistryResource>()
+            .is_err()
+    );
 }
 
 #[test]
@@ -219,7 +223,11 @@ fn demo_style_plugin_updates_input_headlessly_without_native_window_state() {
     app.add_plugin(DemoLogicPlugin);
     let app = app.run_for_frames(1).expect("demo logic should run");
 
-    assert!(app.world().resource::<WindowStateRegistryResource>().is_err());
+    assert!(
+        app.world()
+            .resource::<WindowStateRegistryResource>()
+            .is_err()
+    );
 
     let world = app.world();
     let query = world.query::<&Position>();
