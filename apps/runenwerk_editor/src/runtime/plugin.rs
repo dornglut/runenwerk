@@ -27,9 +27,9 @@ use crate::runtime::resources::{
     RuntimePreviewProcessResource,
 };
 use crate::runtime::systems::{
-    admit_viewport_scene_render_requests_system, bootstrap_editor_demo_system,
-    dispatch_editor_input_system, prepare_material_preview_render_resource_system,
-    produce_editor_picking_system, produce_material_preview_dynamic_uploads_system,
+    bootstrap_editor_demo_system, dispatch_editor_input_system,
+    prepare_material_preview_render_resource_system, produce_editor_picking_system,
+    produce_material_preview_dynamic_uploads_system,
     produce_texture_preview_dynamic_uploads_system, seed_viewport_runtime_contracts_system,
     submit_editor_frame_system, submit_editor_secondary_native_frames_system,
     sync_viewport_instances_system,
@@ -43,7 +43,8 @@ use crate::runtime::viewport::{
     ViewportRenderStateCommandQueueResource, ViewportRenderStateResource,
     ViewportRuntimeSettingsHydrationResource, ViewportSurfaceSetResource,
     apply_viewport_render_state_commands_system, dispatch_viewport_query_publication,
-    prepare_viewport_render_product_selections_system, summarize_viewport_gpu_residency_system,
+    prepare_viewport_render_product_selections_system, publish_viewport_render_frame_requests_system,
+    summarize_viewport_gpu_residency_system,
     sync_viewport_presentation_products_system, sync_viewport_product_targets_system,
     sync_viewport_render_jobs_system,
 };
@@ -185,26 +186,29 @@ impl Plugin for EditorAppPlugin {
         );
         app.add_systems(
             RenderPrepare,
-            prepare_viewport_render_product_selections_system
-                .on_invoker_thread()
-                .in_set(EditorRuntimeSet::ViewportRenderProductSelection)
-                .before(RenderRuntimeSet::GpuResidency),
-        );
-        app.add_systems(
-            RenderPrepare,
             prepare_material_preview_render_resource_system
                 .on_invoker_thread()
                 .in_set(EditorRuntimeSet::MaterialPreviewRenderHandoff)
-                .after(EditorRuntimeSet::ViewportRenderProductSelection)
                 .before(EditorRuntimeSet::ViewportRenderAdmission)
+                .before(EditorRuntimeSet::ViewportRenderProductSelection)
                 .before(RenderRuntimeSet::GpuResidency)
                 .before(RenderRuntimeSet::FramePrepare),
         );
         app.add_systems(
             RenderPrepare,
-            admit_viewport_scene_render_requests_system
+            publish_viewport_render_frame_requests_system
                 .in_set(EditorRuntimeSet::ViewportRenderAdmission)
                 .after(EditorRuntimeSet::MaterialPreviewRenderHandoff)
+                .before(EditorRuntimeSet::ViewportRenderProductSelection)
+                .before(RenderRuntimeSet::GpuResidency)
+                .before(RenderRuntimeSet::FramePrepare),
+        );
+        app.add_systems(
+            RenderPrepare,
+            prepare_viewport_render_product_selections_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::ViewportRenderProductSelection)
+                .after(EditorRuntimeSet::ViewportRenderAdmission)
                 .before(RenderRuntimeSet::GpuResidency)
                 .before(RenderRuntimeSet::FramePrepare),
         );
