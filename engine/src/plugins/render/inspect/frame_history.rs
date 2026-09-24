@@ -371,8 +371,8 @@ mod tests {
             RenderGpuTimingCapability::Supported,
         );
 
-        history.observe_gpu_pass_timing_evidence(&policy, &[measured(2, 1, 2.5)]);
-        history.observe_gpu_pass_timing_evidence(&policy, &[measured(1, 1, 1.5)]);
+        history.observe_gpu_pass_timing_evidence(policy, &[measured(2, 1, 2.5)]);
+        history.observe_gpu_pass_timing_evidence(policy, &[measured(1, 1, 1.5)]);
 
         let first = history
             .observation(RenderFrameObservationKey::new(1, 1))
@@ -407,7 +407,7 @@ mod tests {
             RenderGpuTimingCapability::Supported,
         );
 
-        history.observe_gpu_pass_timing_evidence(&policy, &[measured(7, 2, 3.0)]);
+        history.observe_gpu_pass_timing_evidence(policy, &[measured(7, 2, 3.0)]);
 
         assert!(
             history
@@ -440,7 +440,7 @@ mod tests {
             0.0,
             RenderGpuTimingCapability::Supported,
         );
-        history.observe_gpu_pass_timing_evidence(&policy, &[pending(3, 1)]);
+        history.observe_gpu_pass_timing_evidence(policy, &[pending(3, 1)]);
         assert_eq!(
             history
                 .observation(RenderFrameObservationKey::new(3, 1))
@@ -450,7 +450,7 @@ mod tests {
             RenderGpuTimingCapability::ReadbackPending
         );
 
-        history.observe_gpu_pass_timing_evidence(&policy, &[measured(3, 1, 4.0)]);
+        history.observe_gpu_pass_timing_evidence(policy, &[measured(3, 1, 4.0)]);
         let observation = history
             .observation(RenderFrameObservationKey::new(3, 1))
             .unwrap();
@@ -474,7 +474,7 @@ mod tests {
             0.0,
             RenderGpuTimingCapability::Supported,
         );
-        history.observe_gpu_pass_timing_evidence(&policy, &[pending(4, 1)]);
+        history.observe_gpu_pass_timing_evidence(policy, &[pending(4, 1)]);
         let unavailable = RenderPassTimingEvidence::gpu_diagnostic(
             Some(4),
             Some(1),
@@ -483,7 +483,7 @@ mod tests {
             "compute",
             RenderGpuTimingDiagnostic::unavailable_this_frame("readback failed"),
         );
-        history.observe_gpu_pass_timing_evidence(&policy, &[unavailable]);
+        history.observe_gpu_pass_timing_evidence(policy, &[unavailable]);
 
         let observation = history
             .observation(RenderFrameObservationKey::new(4, 1))
@@ -572,7 +572,7 @@ mod tests {
                 .observation(RenderFrameObservationKey::new(1, 1))
                 .is_none()
         );
-        history.observe_gpu_pass_timing_evidence(&policy, &[measured(1, 1, 1.0)]);
+        history.observe_gpu_pass_timing_evidence(policy, &[measured(1, 1, 1.0)]);
 
         assert_eq!(history.drop_stats().evicted_observations, 1);
         assert_eq!(history.drop_stats().late_evidence_after_eviction, 1);
@@ -590,7 +590,7 @@ mod tests {
             0.0,
             RenderGpuTimingCapability::Supported,
         );
-        history.observe_gpu_pass_timing_evidence(&disabled, &[measured(1, 1, 1.0)]);
+        history.observe_gpu_pass_timing_evidence(disabled, &[measured(1, 1, 1.0)]);
         assert!(history.is_empty());
         assert_eq!(history.drop_stats(), RenderFrameHistoryDropStats::default());
 
@@ -611,7 +611,7 @@ mod tests {
             0.0,
             RenderGpuTimingCapability::Supported,
         );
-        history.observe_gpu_pass_timing_evidence(&sampled, &[measured(3, 1, 3.0)]);
+        history.observe_gpu_pass_timing_evidence(sampled, &[measured(3, 1, 3.0)]);
         assert!(
             history
                 .observation(RenderFrameObservationKey::new(3, 1))
