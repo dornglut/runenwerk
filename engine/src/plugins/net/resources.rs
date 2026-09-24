@@ -773,6 +773,11 @@ pub struct ReplicationDiagnostics {
     pub acked: u64,
     pub rejected_acks: u64,
     pub lagged: u64,
+    pub duplicate_inputs: u64,
+    pub conflicting_inputs: u64,
+    pub future_inputs: u64,
+    pub input_resource_rejections: u64,
+    pub unauthorized_inputs: u64,
 }
 
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq, runen_ecs::Component, runen_ecs::Resource)]

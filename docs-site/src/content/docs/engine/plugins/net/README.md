@@ -5,15 +5,16 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-24
 ---
 
 # Net Plugin
 
 ## Purpose
 
-`engine/src/plugins/net` integrates standalone RunenNet lifecycle/session authority and the
-remaining Runenwerk replication/input migration contracts with engine resources and schedules.
+`engine/src/plugins/net` integrates standalone RunenNet lifecycle/session and authority-input
+semantics with the remaining Runenwerk replication/local-prediction migration contracts, engine
+resources, and schedules.
 
 The game-facing entry point is:
 
@@ -43,7 +44,8 @@ Runenwerk engine integration owns:
 - the read-only `RunenNetSessionProjection` used for engine routing and diagnostics;
 - product/session metadata and host reconnect/deployment policy;
 - bounded inbox/outbox staging for retained replication/application payloads;
-- retained `engine_net` replication/input integration while RN8 migration continues.
+- retained `engine_net` replication/envelope/local-prediction integration while RN8 migration continues;
+- explicit finite authority-input policy selection and host execution staging after RunenNet admission.
 
 The projection is derived state. It never authorizes admission, loss, retention, replacement,
 expiry, removal, or closure.
@@ -61,8 +63,24 @@ per-connection baseline state.
 - `OutboundServerMessage::ToConnection { connection, message }` stages targeted output;
   `OutboundServerMessage::Broadcast(message)` stages broadcast output.
 
-ACK/input processing that requires connection identity is accepted only for a `ConnectionHandle`
-that remains authorized by `RunenNetSessionProjection`.
+Retained ACK processing still uses projected active `ConnectionHandle`s for the local baseline
+state. Remote participant input is different: `RunenNetSessionCore` resolves the actual session
+participant for the source connection and delegates stale/future/duplicate/conflict/resource and
+authorization semantics to RunenNet `AuthorityInputSession`.
+
+## Authority Input Admission
+
+Server/host remote input requires explicit finite policy via
+`RunenNetSessionCore::with_authority_input_policy(AuthorityInputPolicy)`. The policy wraps public
+RunenNet participant and aggregate limit types; Runenwerk supplies the values and defines no
+implicit networking defaults.
+
+Each received `InputFrame` payload is submitted as one opaque participant/tick batch to RunenNet.
+Only `InputAccepted` batches enter participant-aware host execution staging and are decoded/applied
+at their target fixed tick before local input. Stale, future-window, duplicate, conflicting,
+resource-rejected, or unauthorized batches are not executed. Retained membership preserves accepted
+evidence across connection replacement; terminal membership removal, recovery expiry, and session
+closure purge pending host execution.
 
 ## Staging, Not Transport
 

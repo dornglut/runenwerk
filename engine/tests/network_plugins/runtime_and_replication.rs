@@ -340,7 +340,7 @@ fn server_outbox_backpressure_does_not_mark_rejected_snapshot_as_sent() {
 }
 
 #[test]
-fn saturated_input_staging_does_not_send_or_record_rejected_local_input() {
+fn remote_authority_input_does_not_consume_local_prediction_staging() {
     let mut host = App::headless();
     host.add_plugins(default_plugins());
     host.add_plugins((ScenePlugin, NetworkHostPlugin));
@@ -356,7 +356,7 @@ fn saturated_input_staging_does_not_send_or_record_rejected_local_input() {
         })
         .collect::<Vec<_>>();
     let payload = TestReplicationDriver::encode_input(&remote_inputs)
-        .expect("remote saturation payload should encode");
+        .expect("remote authority-input payload should encode");
     enqueue_server_inbox_from(
         host.world_mut(),
         Some(connection),
@@ -365,24 +365,25 @@ fn saturated_input_staging_does_not_send_or_record_rejected_local_input() {
             payload,
         }),
     )
-    .expect("future remote saturation frame should enqueue");
+    .expect("future remote authority input should enqueue");
 
     let mut host = run_backpressure_protocol_frame(
         host,
-        "future remote inputs should saturate private input staging",
+        "remote authority input should be retained outside local prediction staging",
     );
     assert_eq!(
         *host.world().resource::<SimulationTick>().unwrap(),
         SimulationTick(0)
     );
 
+    let local = ClientCommandEnvelope::Ability(AbilityCommand { slot: 252 });
     host.world_mut()
         .resource_mut::<PlayerCommandBuffer>()
         .unwrap()
-        .push(ClientCommandEnvelope::Ability(AbilityCommand { slot: 252 }));
+        .push(local.clone());
     let host = run_backpressure_fixed_step(
         host,
-        "local input rejected by saturated staging should not escape staging",
+        "local input should remain independent of retained remote authority input",
     );
 
     assert_eq!(
@@ -394,17 +395,17 @@ fn saturated_input_staging_does_not_send_or_record_rejected_local_input() {
             .resource::<PredictionState>()
             .unwrap()
             .pending_frames_len(),
-        0
+        1
     );
-    assert!(
-        host.world().resource::<AppliedInputLog>().is_err(),
-        "staging-rejected local input must not be applied"
+    assert_eq!(
+        host.world().resource::<AppliedInputLog>().unwrap().inputs,
+        vec![local]
     );
     let outbound = host.world().resource::<NetworkOutboundQueue>().unwrap();
     assert!(
         outbound
             .client_messages()
             .iter()
-            .all(|message| !matches!(message, ClientMessage::InputFrame(_)))
+            .any(|message| matches!(message, ClientMessage::InputFrame(_)))
     );
 }
