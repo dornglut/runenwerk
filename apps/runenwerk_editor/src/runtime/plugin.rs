@@ -186,12 +186,18 @@ impl Plugin for EditorAppPlugin {
         );
         app.add_systems(
             RenderPrepare,
+            prepare_viewport_render_product_selections_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::ViewportRenderProductSelection)
+                .before(RenderRuntimeSet::GpuResidency),
+        );
+        app.add_systems(
+            RenderPrepare,
             prepare_material_preview_render_resource_system
                 .on_invoker_thread()
                 .in_set(EditorRuntimeSet::MaterialPreviewRenderHandoff)
+                .after(EditorRuntimeSet::ViewportRenderProductSelection)
                 .before(EditorRuntimeSet::ViewportRenderFrameRequestPublication)
-                .before(EditorRuntimeSet::ViewportRenderProductSelection)
-                .before(RenderRuntimeSet::GpuResidency)
                 .before(RenderRuntimeSet::FramePrepare),
         );
         app.add_systems(
@@ -199,17 +205,6 @@ impl Plugin for EditorAppPlugin {
             publish_viewport_render_frame_requests_system
                 .in_set(EditorRuntimeSet::ViewportRenderFrameRequestPublication)
                 .after(EditorRuntimeSet::MaterialPreviewRenderHandoff)
-                .before(EditorRuntimeSet::ViewportRenderProductSelection)
-                .before(RenderRuntimeSet::GpuResidency)
-                .before(RenderRuntimeSet::FramePrepare),
-        );
-        app.add_systems(
-            RenderPrepare,
-            prepare_viewport_render_product_selections_system
-                .on_invoker_thread()
-                .in_set(EditorRuntimeSet::ViewportRenderProductSelection)
-                .after(EditorRuntimeSet::ViewportRenderFrameRequestPublication)
-                .before(RenderRuntimeSet::GpuResidency)
                 .before(RenderRuntimeSet::FramePrepare),
         );
         app.add_systems(
