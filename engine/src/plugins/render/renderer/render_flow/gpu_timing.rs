@@ -153,11 +153,12 @@ pub(in crate::plugins::render::renderer) fn prepare_composed_gpu_timing(
     let end_marker = GpuTimestampMarkerOperation::new(&query_set, 1)?;
     let mut start_node = None;
     let mut end_node = None;
+    let mut readback_node = None;
     let fragment = GpuWorkFragment::build("render.frame.composed-timing", |work| {
         start_node = Some(work.operation("composed renderer GPU timing start", start_marker)?);
         end_node = Some(work.operation("composed renderer GPU timing end", end_marker)?);
         work.operation("resolve composed renderer GPU timestamps", resolve)?;
-        work.operation("read back composed renderer GPU timestamps", readback)?;
+        readback_node = Some(work.operation("read back composed renderer GPU timestamps", readback)?);
         Ok(())
     })?;
     let timestamp_period_ns = context.timestamp_period_ns().ok_or_else(|| {
@@ -168,6 +169,7 @@ pub(in crate::plugins::render::renderer) fn prepare_composed_gpu_timing(
             fragment,
             start_node.expect("composed timing start marker must be authored"),
             end_node.expect("composed timing end marker must be authored"),
+            readback_node.expect("composed timing readback must be authored"),
         ),
         frame: GpuComposedFrameTimingFrame {
             readback_id,
