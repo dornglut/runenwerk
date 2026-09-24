@@ -27,8 +27,9 @@ use crate::runtime::resources::{
     RuntimePreviewProcessResource,
 };
 use crate::runtime::systems::{
-    bootstrap_editor_demo_system, dispatch_editor_input_system,
-    prepare_material_preview_render_resource_system, produce_editor_picking_system,
+    admit_viewport_scene_render_requests_system, bootstrap_editor_demo_system,
+    dispatch_editor_input_system, prepare_material_preview_render_resource_system,
+    produce_editor_picking_system,
     produce_material_preview_dynamic_uploads_system,
     produce_texture_preview_dynamic_uploads_system, seed_viewport_runtime_contracts_system,
     submit_editor_frame_system, submit_editor_secondary_native_frames_system,
@@ -71,6 +72,7 @@ pub enum EditorRuntimeSet {
     ViewportRenderJobs,
     ViewportRenderProductSelection,
     MaterialPreviewRenderHandoff,
+    ViewportRenderAdmission,
     MaterialPreviewProductUpload,
     TexturePreviewProductUpload,
     ViewportGpuResidencySummary,
@@ -195,6 +197,16 @@ impl Plugin for EditorAppPlugin {
                 .on_invoker_thread()
                 .in_set(EditorRuntimeSet::MaterialPreviewRenderHandoff)
                 .after(EditorRuntimeSet::ViewportRenderProductSelection)
+                .before(EditorRuntimeSet::ViewportRenderAdmission)
+                .before(RenderRuntimeSet::GpuResidency)
+                .before(RenderRuntimeSet::FramePrepare),
+        );
+        app.add_systems(
+            RenderPrepare,
+            admit_viewport_scene_render_requests_system
+                .in_set(EditorRuntimeSet::ViewportRenderAdmission)
+                .after(EditorRuntimeSet::MaterialPreviewRenderHandoff)
+                .before(RenderRuntimeSet::GpuResidency)
                 .before(RenderRuntimeSet::FramePrepare),
         );
         app.add_systems(
