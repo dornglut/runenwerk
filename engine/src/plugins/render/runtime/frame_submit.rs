@@ -68,9 +68,8 @@ mod contribution_deferral_tests {
     };
     use crate::plugins::render::backend::RenderSurfaceId;
     use crate::plugins::render::inspect::{
-        RenderComposedFrameGpuTimingEvidence, RenderFrameHistoryState,
-        RenderFrameObservationKey, RenderFrameObservationPolicyResource, RenderGpuTimingCapability,
-        RenderPassTimingEvidence,
+        RenderComposedFrameGpuTimingEvidence, RenderFrameHistoryState, RenderFrameObservationKey,
+        RenderFrameObservationPolicyResource, RenderGpuTimingCapability, RenderPassTimingEvidence,
     };
     use crate::plugins::render::request::{
         RenderObservationSpec, RenderOutputSpec, RenderOutputValue, RenderProbeObservation,
