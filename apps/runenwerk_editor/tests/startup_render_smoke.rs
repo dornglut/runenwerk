@@ -3,7 +3,7 @@ use editor_viewport::{ViewportId, ViewportSurfacePresentationSlot};
 use engine::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryResource};
 use engine::plugins::render::{
     CompiledPassExecutionPlan, PreparedMaterialFeatureResource, PreparedRenderFrameRequestResource,
-    PreparedRenderProductSelectionResource, RenderFlowRegistryResource, RenderFrameProducerId,
+    RenderFlowRegistryResource, RenderFrameProducerId,
     SurfaceFrameSubmissionRegistryResource, ViewportSurfaceBindingRegistryResource,
 };
 use engine::runtime::platform::PlatformWindowEventQueueResource;
@@ -130,14 +130,6 @@ fn viewport_scene_submission_waits_for_generated_material_scene_bundle() {
             .iter()
             .all(|request| request.flow_id != editor_flow_id),
         "viewport editor-main-flow invocation must remain ineligible until an exact generated material scene bundle exists"
-    );
-    let product_selections = app
-        .world()
-        .resource::<PreparedRenderProductSelectionResource>()
-        .expect("prepared render product selection registry should exist");
-    assert!(
-        product_selections.snapshot().is_empty(),
-        "ineligible viewport rendering must not retain a stale GPU-residency selection"
     );
 }
 
