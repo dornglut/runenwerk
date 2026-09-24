@@ -17,9 +17,8 @@ use engine::plugins::render::inspect::{
 };
 use engine::runtime::platform::{PlatformEvent, apply_native_window_event};
 use engine::runtime::{
-    NativeWindowHook, NativeWindowHookRegistryResource, NativeWindowId,
-    NativeWindowLifecycleState, PrimaryPresentationMetricsResource, Res, Startup, Update,
-    WindowStateRegistryResource,
+    NativeWindowHook, NativeWindowHookRegistryResource, NativeWindowId, NativeWindowLifecycleState,
+    PrimaryPresentationMetricsResource, Res, Startup, Update, WindowStateRegistryResource,
 };
 use runenwerk_editor::runtime::resources::EditorHostResource;
 use ui_adaptive_composition::DockZone;

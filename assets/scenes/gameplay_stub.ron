@@ -1,5 +1,0 @@
-(
-  id: "gameplay_stub",
-  layer: Some(world),
-  render_graph_append_passes: [],
-)
