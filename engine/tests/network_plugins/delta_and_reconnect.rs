@@ -740,8 +740,9 @@ fn participant_removal_purges_pending_authority_input_before_readmission() {
         .remove_resource::<RunenNetSessionProjection>()
         .unwrap();
     core.remove_participant(&mut projection, participant).unwrap();
-    core.admit_established(&mut projection, participant, connection)
-        .expect("participant should be able to begin a fresh membership lifetime");
+    let fresh_participant = ParticipantId::new(2);
+    core.admit_established(&mut projection, fresh_participant, connection)
+        .expect("a fresh participant identity should begin a new membership lifetime");
     app.world_mut().insert_resource(core);
     app.world_mut().insert_resource(projection);
     sync_runennet_session_projection(app.world_mut());
@@ -970,7 +971,8 @@ fn recovery_expiry_purges_pending_authority_input_before_new_membership() {
     core.advance_recovery_clock(runen_net::session::RecoveryTime::new(1))
         .unwrap();
     establish_runennet_negotiation(&mut core, new_connection);
-    core.admit_established(&mut projection, participant, new_connection)
+    let fresh_participant = ParticipantId::new(2);
+    core.admit_established(&mut projection, fresh_participant, new_connection)
         .unwrap();
     app.world_mut().insert_resource(core);
     app.world_mut().insert_resource(projection);
