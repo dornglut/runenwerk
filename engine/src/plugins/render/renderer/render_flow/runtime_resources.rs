@@ -9,8 +9,7 @@ use runen_gpu::{
     GpuBufferDescriptor, GpuBufferHandle, GpuBufferUsages, GpuTextureDescriptor,
     GpuTextureDimension, GpuTextureFormat, GpuTextureHandle, GpuTextureUsages,
     GpuTextureViewDimension, GpuTextureViewHandle, GpuWorkResourceId, GpuWorkResourceIdAllocator,
-    PreparedGpuData,
-    UniformData,
+    PreparedGpuData, UniformData,
 };
 use std::fmt;
 
