@@ -1,6 +1,7 @@
 use engine::plugins::input::domain::action;
 use engine::plugins::{
-    ActionState, FixedStepPlugin, InputFinalizePlugin, SimulationPlugin, TimePlugin, default_plugins,
+    ActionState, FixedStepPlugin, InputFinalizePlugin, SimulationPlugin, TimePlugin,
+    default_plugins,
 };
 use engine::prelude::*;
 use winit::event::ElementState;
@@ -111,10 +112,7 @@ fn input_finalize_plugin_installs_owned_input_resources() {
 #[test]
 fn input_bindings_require_selected_input_capability() {
     let mut app = App::headless();
-    app.add_input_bindings([(
-        "test.action",
-        PhysicalKeyIdentity::code("KeyA"),
-    )]);
+    app.add_input_bindings([("test.action", PhysicalKeyIdentity::code("KeyA"))]);
 
     let error = app
         .run_for_frames(0)
