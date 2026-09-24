@@ -1,10 +1,12 @@
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use editor_shell::{
     RegionCompassAccessibility, RegionCompassViewModel, projected_host_tab_stacks,
     tab_stack_container_widget_id,
 };
+use engine::plugins::default_plugins;
 use engine::plugins::render::Gfx;
 use engine::plugins::render::backend::{
     RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
@@ -15,7 +17,8 @@ use engine::plugins::render::inspect::{
 };
 use engine::runtime::platform::{PlatformEvent, apply_native_window_event};
 use engine::runtime::{
-    NativeWindowId, PrimaryPresentationMetricsResource, WindowStateRegistryResource,
+    NativeWindowHook, NativeWindowHookRegistryResource, NativeWindowId,
+    PrimaryPresentationMetricsResource, Res, Startup, Update, WindowStateRegistryResource,
 };
 use runenwerk_editor::runtime::resources::EditorHostResource;
 use ui_adaptive_composition::DockZone;
@@ -27,10 +30,15 @@ use winit::window::Window;
 
 const ENABLE_ENV: &str = "RUNENWERK_CAPTURE_REGION_COMPASS";
 const SURFACE_IDENTITY_SMOKE_ENV: &str = "RUNENWERK_SURFACE_IDENTITY_NATIVE_SMOKE";
+const NATIVE_NO_RENDER_SMOKE_ENV: &str = "RUNENWERK_NATIVE_NO_RENDER_SMOKE";
 const SURFACE_RESOURCE_ID: &str = "surface.color";
 const OUTPUT_DIR: &str = "docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-007/artifacts";
 
 fn main() {
+    if std::env::var_os(NATIVE_NO_RENDER_SMOKE_ENV).is_some() {
+        native_no_render_host_smoke().expect("native no-Render Host smoke should succeed");
+        return;
+    }
     if std::env::var_os(SURFACE_IDENTITY_SMOKE_ENV).is_some() {
         surface_identity_native_smoke().expect("native surface identity smoke should succeed");
         return;
@@ -39,6 +47,104 @@ fn main() {
         return;
     }
     capture().expect("Region Compass GPU visual capture should succeed");
+}
+
+#[derive(Clone)]
+struct NativeNoRenderProbe {
+    startup_ran: Arc<AtomicBool>,
+    update_ran: Arc<AtomicBool>,
+}
+
+impl runen_ecs::Resource for NativeNoRenderProbe {}
+
+fn observe_native_no_render_startup(probe: Res<NativeNoRenderProbe>) {
+    probe.startup_ran.store(true, Ordering::SeqCst);
+}
+
+fn observe_native_no_render_update(probe: Res<NativeNoRenderProbe>) {
+    probe.update_ran.store(true, Ordering::SeqCst);
+}
+
+struct NativeNoRenderSmokeHook {
+    frame_seen: Arc<AtomicBool>,
+    unexpected_render_state: Arc<AtomicBool>,
+}
+
+impl NativeWindowHook for NativeNoRenderSmokeHook {
+    fn name(&self) -> &'static str {
+        "native_no_render_smoke"
+    }
+
+    fn attach(&mut self, _window: &Window, world: &mut runen_ecs::World) -> anyhow::Result<()> {
+        self.observe_render_absence(world);
+        Ok(())
+    }
+
+    fn frame(&mut self, _window: &Window, world: &mut runen_ecs::World) -> anyhow::Result<()> {
+        self.observe_render_absence(world);
+        self.frame_seen.store(true, Ordering::SeqCst);
+        world
+            .resource_mut::<WindowStateRegistryResource>()?
+            .record_mut(NativeWindowId::primary())
+            .ok_or_else(|| anyhow::anyhow!("native no-Render smoke primary window is missing"))?
+            .request_close();
+        Ok(())
+    }
+}
+
+impl NativeNoRenderSmokeHook {
+    fn observe_render_absence(&self, world: &runen_ecs::World) {
+        if world.has_resource::<Gfx>() || world.has_resource::<RenderSurfaceRegistryResource>() {
+            self.unexpected_render_state.store(true, Ordering::SeqCst);
+        }
+    }
+}
+
+fn native_no_render_host_smoke() -> anyhow::Result<()> {
+    eprintln!("native-no-render-smoke: build-app");
+    let startup_ran = Arc::new(AtomicBool::new(false));
+    let update_ran = Arc::new(AtomicBool::new(false));
+    let frame_seen = Arc::new(AtomicBool::new(false));
+    let unexpected_render_state = Arc::new(AtomicBool::new(false));
+
+    let mut app = engine::App::new();
+    app.add_plugins(default_plugins());
+    app.insert_resource(NativeNoRenderProbe {
+        startup_ran: Arc::clone(&startup_ran),
+        update_ran: Arc::clone(&update_ran),
+    });
+    app.add_systems(Startup, observe_native_no_render_startup);
+    app.add_systems(Update, observe_native_no_render_update);
+    app.init_resource::<NativeWindowHookRegistryResource>();
+    app.world_mut()
+        .resource_mut::<NativeWindowHookRegistryResource>()?
+        .register_hook(NativeNoRenderSmokeHook {
+            frame_seen: Arc::clone(&frame_seen),
+            unexpected_render_state: Arc::clone(&unexpected_render_state),
+        });
+
+    anyhow::ensure!(
+        app.world().resource::<Gfx>().is_err(),
+        "no-Render composition must not contain Gfx before native Host realization"
+    );
+    anyhow::ensure!(
+        app.world().resource::<RenderSurfaceRegistryResource>().is_err(),
+        "no-Render composition must not contain a Render surface registry before native Host realization"
+    );
+
+    eprintln!("native-no-render-smoke: run-host");
+    app.run()?;
+
+    anyhow::ensure!(startup_ran.load(Ordering::SeqCst), "Startup did not run");
+    anyhow::ensure!(update_ran.load(Ordering::SeqCst), "Update did not run");
+    anyhow::ensure!(frame_seen.load(Ordering::SeqCst), "native frame hook did not run");
+    anyhow::ensure!(
+        !unexpected_render_state.load(Ordering::SeqCst),
+        "native Host materialized Gfx or Render surface state without RenderPlugin"
+    );
+
+    println!("native_no_render_host_smoke=pass");
+    Ok(())
 }
 
 fn surface_identity_native_smoke() -> anyhow::Result<()> {
