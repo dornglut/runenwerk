@@ -4,8 +4,7 @@ use engine::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryRes
 use engine::plugins::render::{
     CompiledPassExecutionPlan, PreparedMaterialFeatureResource, PreparedRenderFrameRequestResource,
     PreparedRenderProductSelectionResource, RenderFlowRegistryResource, RenderFrameProducerId,
-    SurfaceFrameSubmissionRegistryResource,
-    ViewportSurfaceBindingRegistryResource,
+    SurfaceFrameSubmissionRegistryResource, ViewportSurfaceBindingRegistryResource,
 };
 use engine::runtime::platform::PlatformWindowEventQueueResource;
 use engine::runtime::{PrimaryPresentationMetricsResource, WindowStateRegistryResource};
