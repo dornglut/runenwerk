@@ -1317,6 +1317,34 @@ mod tests {
                 GpuQuerySetDescriptor::new(query_common, GpuQueryKind::Timestamp, 2).unwrap(),
             )
             .unwrap();
+        let resolve_label = label("timed frame timestamp resolve buffer");
+        let resolve_buffer = allocator
+            .allocate_buffer_handle(
+                GpuBufferDescriptor::new(
+                    common("timed frame timestamp resolve buffer"),
+                    16,
+                    GpuBufferUsages::new(
+                        &resolve_label,
+                        [GpuBufferUsage::QueryResolve, GpuBufferUsage::CopySource],
+                    )
+                    .unwrap(),
+                    GpuBufferInitialization::Uninitialized,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let resolve = GpuQueryResolveOperation::new(
+            &query_set,
+            GpuQueryRange::new(&query_set, 0, 2).unwrap(),
+            &resolve_buffer,
+            0,
+        )
+        .unwrap();
+        let readback = GpuReadbackOperation::new(
+            whole_region(&resolve_buffer, 16).into(),
+            GpuReadbackId::allocate().unwrap(),
+        )
+        .unwrap();
         let mut start = None;
         let mut end = None;
         let marker_fragment = GpuWorkFragment::build("timed frame marker fragment", |work| {
@@ -1334,6 +1362,8 @@ mod tests {
                 )
                 .unwrap(),
             );
+            work.operation("timed frame timestamp resolve", resolve)?;
+            work.operation("timed frame timestamp readback", readback)?;
             Ok(())
         })
         .unwrap();
@@ -1359,6 +1389,8 @@ mod tests {
         let producer = node("timed producer clear");
         let renderer = node("timed renderer work");
         let end = node("timed frame end");
+        let resolve = node("timed frame timestamp resolve");
+        let readback = node("timed frame timestamp readback");
         let present = node("timed terminal Present");
         let pos = |wanted| {
             graph
@@ -1371,6 +1403,8 @@ mod tests {
         assert!(pos(start) < pos(renderer));
         assert!(pos(producer) < pos(end));
         assert!(pos(renderer) < pos(end));
+        assert!(pos(end) < pos(resolve));
+        assert!(pos(resolve) < pos(readback));
         assert!(pos(end) < pos(present));
         assert_eq!(
             graph

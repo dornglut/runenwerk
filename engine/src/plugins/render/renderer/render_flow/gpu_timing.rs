@@ -504,7 +504,7 @@ mod composed_native_proof {
             pending.gpu_capability,
             RenderGpuTimingCapability::ReadbackPending
         );
-        assert_eq!(pending.millis, None);
+        assert_eq!(pending.gpu_composed_frame_ms, None);
 
         let deadline = Instant::now() + Duration::from_secs(15);
         let measured = loop {
@@ -536,7 +536,7 @@ mod composed_native_proof {
         );
         assert!(
             measured
-                .millis
+                .gpu_composed_frame_ms
                 .is_some_and(|millis| millis.is_finite() && millis >= 0.0),
             "completed composed timing must publish one finite GPU duration"
         );

@@ -756,7 +756,7 @@ mod tests {
                 .composed_timing_evidence
                 .as_ref()
                 .unwrap()
-                .millis,
+                .gpu_composed_frame_ms,
             Some(3.0)
         );
         assert_eq!(
@@ -767,7 +767,7 @@ mod tests {
                 .composed_timing_evidence
                 .as_ref()
                 .unwrap()
-                .millis,
+                .gpu_composed_frame_ms,
             Some(5.0)
         );
     }
@@ -846,7 +846,7 @@ mod tests {
                 .composed_timing_evidence
                 .as_ref()
                 .unwrap()
-                .millis,
+                .gpu_composed_frame_ms,
             Some(6.5)
         );
     }

@@ -211,7 +211,7 @@ pub struct RenderComposedFrameGpuTimingEvidence {
     pub render_surface_id: u64,
     pub source: RenderTimingSource,
     pub gpu_capability: RenderGpuTimingCapability,
-    pub millis: Option<f32>,
+    pub gpu_composed_frame_ms: Option<f32>,
     pub diagnostics: Vec<RenderGpuTimingDiagnostic>,
 }
 
@@ -222,7 +222,7 @@ impl RenderComposedFrameGpuTimingEvidence {
             render_surface_id,
             source: RenderTimingSource::GpuTimestampQuery,
             gpu_capability: RenderGpuTimingCapability::Supported,
-            millis: Some(millis.max(0.0)),
+            gpu_composed_frame_ms: Some(millis.max(0.0)),
             diagnostics: Vec::new(),
         }
     }
@@ -237,7 +237,7 @@ impl RenderComposedFrameGpuTimingEvidence {
             render_surface_id,
             source: RenderTimingSource::GpuTimestampQuery,
             gpu_capability: diagnostic.capability,
-            millis: None,
+            gpu_composed_frame_ms: None,
             diagnostics: vec![RenderGpuTimingDiagnostic {
                 frame_index: Some(frame_index),
                 render_surface_id: Some(render_surface_id),
