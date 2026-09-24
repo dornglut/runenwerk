@@ -250,7 +250,9 @@ impl Renderer {
             nodes,
             &producer_fragments,
             &radiance_imports,
-            composed_gpu_timing.as_ref().map(PreparedComposedGpuTiming::bracket),
+            composed_gpu_timing
+                .as_ref()
+                .map(PreparedComposedGpuTiming::bracket),
         )?;
         let prepared = pollster::block_on(context.prepare_submission(graph))?;
         let submission = context.submit_prepared(prepared).map_err(|rejection| {
