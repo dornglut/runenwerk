@@ -258,7 +258,7 @@ mod tests {
         let parent_label = gpu_label("runtime test parent texture");
         let parent = GpuTextureDescriptor::new(
             gpu_common("runtime test parent texture"),
-            GpuTextureViewDimension::D2,
+            GpuTextureDimension::D2,
             GpuTextureExtent::new(&parent_label, GpuTextureDimension::D2, 4, 4, 1).unwrap(),
             1,
             1,
@@ -277,7 +277,7 @@ mod tests {
             gpu_common("runtime test texture view"),
             &handle,
             None,
-            GpuTextureDimension::D2,
+            GpuTextureViewDimension::D2,
             subresources,
         )
         .unwrap()
