@@ -2190,10 +2190,7 @@ mod tests {
     fn chrome_actions_for(stack: &ProjectedTabStackSlot) -> BTreeMap<WidgetId, RoutedShellAction> {
         let mut actions = BTreeMap::new();
         let create_candidates = vec![
-            ToolSurfaceCreateCandidate::new(
-                stable_key("runenwerk.scene.viewport"),
-                "Viewport",
-            ),
+            ToolSurfaceCreateCandidate::new(stable_key("runenwerk.scene.viewport"), "Viewport"),
             ToolSurfaceCreateCandidate::new(
                 stable_key(STABLE_KEY_ONLY_TEST_SURFACE),
                 "Stable Only",
