@@ -1,0 +1,68 @@
+@startuml
+title realtime networking architecture (RN8 target)
+
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+left to right direction
+
+package "game / domain" {
+  [Gameplay Simulation] as game_sim
+  [Replicated View / Projection] as replicated_view
+  [World / Relevancy Policy] as world_policy
+}
+
+package "Runenwerk integration" {
+  [Application / Session Lifecycle] as app_lifecycle
+  [ECS <-> RunenNet Adapter] as ecs_adapter
+  [Preview Integration] as preview_integration
+  [Presentation / Diagnostics] as presentation
+}
+
+package "external RunenNet" {
+  [identity + protocol + session] as runennet_session
+  [delivery] as runennet_delivery
+  [replication] as runennet_replication
+  [input / prediction contracts] as runennet_prediction
+  [runen-net-quic] as runennet_quic
+}
+
+package "retained non-network Runenwerk concerns" {
+  [engine_sim] as engine_sim
+  [engine_history] as engine_history
+}
+
+game_sim --> replicated_view
+replicated_view --> ecs_adapter
+world_policy --> ecs_adapter
+app_lifecycle --> ecs_adapter
+ecs_adapter --> runennet_session
+ecs_adapter --> runennet_delivery
+ecs_adapter --> runennet_replication
+ecs_adapter --> runennet_prediction
+preview_integration --> runennet_delivery
+preview_integration --> runennet_quic
+runennet_quic --> runennet_session
+runennet_quic --> runennet_delivery
+presentation --> ecs_adapter
+
+engine_sim --> game_sim : host simulation vocabulary
+engine_history --> app_lifecycle : archive / replay integration
+
+note right of runennet_replication
+RunenNet is the sole reusable
+realtime networking semantic authority.
+end note
+
+note right of ecs_adapter
+Runenwerk owns concrete ECS/game/world
+mapping and lifecycle composition,
+not duplicate networking semantics.
+end note
+
+note bottom of engine_history
+engine_net, engine_net_quic, and old
+network authoring macros are absent
+once their maintained consumers migrate.
+end note
+
+@enduml

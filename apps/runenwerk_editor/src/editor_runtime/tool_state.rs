@@ -1,0 +1,137 @@
+use editor_core::{EditorMutationError, EntityId};
+use editor_scene::SceneSelectionAddress;
+use editor_viewport::SnapSettings;
+use scene::Vec3Value;
+
+use crate::editor_runtime::{TransformPreviewSession, TransformToolKind};
+use crate::editor_tools_state::TranslateAxis;
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct EditorToolRuntimeState {
+    hovered_entity: Option<EntityId>,
+    preview: Option<TransformPreviewSession>,
+    translate_axis: Option<TranslateAxis>,
+    snap_settings: SnapSettings,
+}
+
+impl EditorToolRuntimeState {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn hovered_entity(&self) -> Option<EntityId> {
+        self.hovered_entity
+    }
+
+    pub fn set_hovered_entity(&mut self, entity: Option<EntityId>) {
+        self.hovered_entity = entity;
+    }
+
+    pub fn preview(&self) -> Option<&TransformPreviewSession> {
+        self.preview.as_ref()
+    }
+
+    pub fn preview_active(&self) -> bool {
+        self.preview.is_some()
+    }
+
+    pub fn translate_axis(&self) -> Option<TranslateAxis> {
+        self.translate_axis
+    }
+
+    pub fn snap_settings(&self) -> SnapSettings {
+        self.snap_settings
+    }
+
+    pub fn set_snap_settings(&mut self, snap_settings: SnapSettings) {
+        self.snap_settings = snap_settings;
+    }
+
+    pub fn set_translate_axis(
+        &mut self,
+        axis: Option<TranslateAxis>,
+    ) -> Result<(), EditorMutationError> {
+        if axis.is_some() && self.preview.is_none() {
+            return Err(EditorMutationError::session_rejected(
+                "cannot set translate axis without active preview",
+            ));
+        }
+
+        self.translate_axis = axis;
+        Ok(())
+    }
+
+    pub fn begin_preview(
+        &mut self,
+        selection: SceneSelectionAddress,
+        tool: TransformToolKind,
+    ) -> Result<(), EditorMutationError> {
+        let entity = selection.entity_id();
+
+        self.preview = Some(TransformPreviewSession::new(entity, tool, selection));
+        self.translate_axis = None;
+        Ok(())
+    }
+
+    pub fn update_translation_preview(
+        &mut self,
+        delta: Vec3Value,
+    ) -> Result<(), EditorMutationError> {
+        let preview = self
+            .preview
+            .as_mut()
+            .ok_or(EditorMutationError::session_rejected(
+                "no active preview session",
+            ))?;
+
+        preview.translation_delta = delta;
+        Ok(())
+    }
+
+    pub fn update_rotation_preview(
+        &mut self,
+        delta_radians: Vec3Value,
+    ) -> Result<(), EditorMutationError> {
+        let preview = self
+            .preview
+            .as_mut()
+            .ok_or(EditorMutationError::session_rejected(
+                "no active preview session",
+            ))?;
+
+        preview.rotation_delta_radians = delta_radians;
+        Ok(())
+    }
+
+    pub fn update_scale_preview(&mut self, delta: Vec3Value) -> Result<(), EditorMutationError> {
+        let preview = self
+            .preview
+            .as_mut()
+            .ok_or(EditorMutationError::session_rejected(
+                "no active preview session",
+            ))?;
+
+        preview.scale_delta = delta;
+        Ok(())
+    }
+
+    pub fn update_preview(&mut self) -> Result<(), EditorMutationError> {
+        if self.preview.is_none() {
+            return Err(EditorMutationError::session_rejected(
+                "no active preview session",
+            ));
+        }
+
+        Ok(())
+    }
+
+    pub fn commit_preview(&mut self) -> Option<TransformPreviewSession> {
+        self.translate_axis = None;
+        self.preview.take()
+    }
+
+    pub fn cancel_preview(&mut self) -> Option<TransformPreviewSession> {
+        self.translate_axis = None;
+        self.preview.take()
+    }
+}

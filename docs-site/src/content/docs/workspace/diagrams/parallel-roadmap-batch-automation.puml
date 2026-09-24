@@ -1,0 +1,113 @@
+@startuml
+title Parallel Roadmap Batch Automation - User Gates And Codex Automation
+
+|User|
+start
+:Ask for next parallel batch
+or discuss a new design;
+
+|Codex Coordinator|
+:Run workflow kickoff
+parallel-roadmap-batch;
+:Inspect git state,
+roadmap docs,
+owning roadmaps,
+and code truth;
+
+if (New or changed design?) then (yes)
+  :Run architecture governance intake;
+  :Fit design into lifecycle docs,
+  decision register, triage,
+  and dependency roadmap as needed;
+else (no)
+  :Use current register,
+  triage, and checklist;
+endif
+
+:Select candidate rows by
+gate, dependency level,
+lane, and score;
+:Reject blocked B5 work,
+unaccepted ADR/design work,
+and overlapping write scopes;
+:Produce batch proposal with
+worker prompts, write scopes,
+validations, stop conditions,
+and closeout docs;
+
+|User|
+:Review batch proposal;
+if (Approve batch?) then (yes)
+  |Codex Coordinator|
+  :Create or name integration branch;
+  :Prefer isolated worktrees
+  or worker branches;
+
+  |Codex Workers / Subagents|
+  fork
+    :Worker A inspects,
+    implements, validates,
+    reports files/functions;
+  fork again
+    :Worker B inspects,
+    implements, validates,
+    reports files/functions;
+  fork again
+    :Worker C inspects,
+    implements, validates,
+    reports files/functions;
+  end fork
+
+  |Codex Coordinator|
+  :Review worker outputs
+  and combined diff;
+  if (Conflict, owner leak, or scope expansion?) then (yes)
+    :Repair safely or reject
+    the offending slice;
+  else (no)
+    :Accept bounded worker slices;
+  endif
+
+  :Update coordinator-level docs:
+  checklist, decision register,
+  triage, diagram, owning roadmaps;
+
+  |Validation|
+  :Run focused tests;
+  :Run docs validation;
+  :Run broader gates when
+  cross-domain contracts changed;
+
+  |Codex Coordinator|
+  :Summarize completed slices,
+  validation, blockers,
+  and next recommended batch;
+
+  |User|
+  :Review final result
+  and decide merge/commit;
+  stop
+else (no)
+  |User|
+  :Discuss changes,
+  remove rows, or adjust scope;
+  |Codex Coordinator|
+  :Revise proposal only;
+  stop
+endif
+
+legend right
+  <b>User responsibilities</b>
+  - Provide goal or new design topic
+  - Approve or reject the proposed batch
+  - Review final summary / decide merge
+
+  <b>Codex automation</b>
+  - Inspect roadmap docs and code truth
+  - Propose parallelizable work
+  - Generate worker prompts and scopes
+  - Spawn workers when approved
+  - Integrate, validate, and update docs
+endlegend
+
+@enduml

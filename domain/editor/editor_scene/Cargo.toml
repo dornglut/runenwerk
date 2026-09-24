@@ -1,0 +1,18 @@
+[package]
+name = "editor_scene"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license.workspace = true
+
+[dependencies]
+asset.workspace = true
+commands.workspace = true
+editor_core.workspace = true
+editor_inspector.workspace = true
+glam.workspace = true
+graph.workspace = true
+schema.workspace = true
+runen-spatial.workspace = true
+world_ops.workspace = true
+world_sdf.workspace = true

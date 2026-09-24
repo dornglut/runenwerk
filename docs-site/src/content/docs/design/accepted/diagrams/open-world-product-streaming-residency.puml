@@ -1,0 +1,79 @@
+@startuml
+title Open World Product Streaming - Residency Rings
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam defaultFontName Monospaced
+
+package "Player / Camera Focus" {
+  [Player] as PLAYER
+}
+
+package "Near Zone" {
+  [High-Res Terrain SDF] as N_TERRAIN
+  [Strict Collision Products] as N_COLL
+  [Grass Density + Trample] as N_GRASS
+  [Water Query + Surface] as N_WATER
+  [SDF Prefabs Full Detail] as N_PREFAB
+  [Local Diagnostics] as N_DIAG
+}
+
+package "Mid Zone" {
+  [Medium Terrain Products] as M_TERRAIN
+  [Simplified Prefab Products] as M_PREFAB
+  [Reduced Vegetation] as M_GRASS
+  [Coarse Water Visuals] as M_WATER
+  [AI / Influence Summaries] as M_AI
+}
+
+package "Far Zone" {
+  [Terrain Summary] as F_TERRAIN
+  [Visual Prefab Summaries] as F_PREFAB
+  [Material / Color Contribution] as F_MAT
+  [Lighting / Atmosphere Summary] as F_LIGHT
+}
+
+package "Outside Resident Working Set" {
+  [Deterministic Generation Only] as OUT_GEN
+  [Persistent Edit Logs] as OUT_OPS
+  [Cached Summaries Optional] as OUT_CACHE
+}
+
+PLAYER --> N_TERRAIN
+PLAYER --> N_COLL
+PLAYER --> N_GRASS
+PLAYER --> N_WATER
+PLAYER --> N_PREFAB
+PLAYER --> N_DIAG
+
+N_TERRAIN --> M_TERRAIN : demote with distance
+N_PREFAB --> M_PREFAB
+N_GRASS --> M_GRASS
+N_WATER --> M_WATER
+
+M_TERRAIN --> F_TERRAIN
+M_PREFAB --> F_PREFAB
+M_GRASS --> F_MAT
+M_WATER --> F_LIGHT
+
+F_TERRAIN --> OUT_GEN : unload high detail
+F_PREFAB --> OUT_CACHE
+F_MAT --> OUT_CACHE
+F_LIGHT --> OUT_CACHE
+
+OUT_OPS --> N_TERRAIN : regenerate on demand
+OUT_GEN --> N_TERRAIN : seed + scope
+
+note right of N_COLL
+  Strict collision products are pinned
+  near active gameplay and cannot use
+  visual ghost summaries.
+end note
+
+note bottom of OUT_GEN
+  Infinite world = infinite address space,
+  finite resident products.
+end note
+
+@enduml

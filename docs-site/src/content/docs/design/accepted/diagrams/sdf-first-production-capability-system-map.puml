@@ -1,0 +1,94 @@
+@startuml
+title SDF-First Production Capability - System Map
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam defaultFontName Monospaced
+
+package "World Foundation" {
+  [Endless SDF Terrain] as TERRAIN
+  [Material / Biome Fields] as MATERIALS
+  [Open World Streaming] as STREAM
+  [Field Product Diagnostics] as DIAG
+}
+
+package "SDF Content" {
+  [SDF Prefabs: Trees / Rocks / Ruins] as PREFABS
+  [SDF Player Character] as PLAYER
+  [SDF Enemy Characters] as ENEMIES
+}
+
+package "Field Systems" {
+  [Grass / Vegetation Fields] as GRASS
+  [Water / Wetness Fields] as WATER
+  [Day/Night Atmosphere] as ATM
+  [Influence / Threat Fields] as INFL
+  [Collision / Query Products] as COLL
+}
+
+package "Runtime / Rendering" {
+  [Execution Fabric] as EXEC
+  [SDF Product Renderer] as RENDER
+  [Product Surfaces / Viewports] as VIEW
+}
+
+TERRAIN --> MATERIALS
+TERRAIN --> COLL
+TERRAIN --> GRASS
+TERRAIN --> WATER
+TERRAIN --> PREFABS
+
+MATERIALS --> GRASS
+MATERIALS --> WATER
+MATERIALS --> RENDER
+
+STREAM --> TERRAIN
+STREAM --> PREFABS
+STREAM --> GRASS
+STREAM --> WATER
+STREAM --> COLL
+
+PREFABS --> COLL
+PREFABS --> RENDER
+PREFABS --> INFL
+
+PLAYER --> COLL
+PLAYER --> GRASS : footstep / trample
+PLAYER --> WATER : ripple / wetness query
+PLAYER --> RENDER
+
+ENEMIES --> COLL
+ENEMIES --> INFL
+ENEMIES --> RENDER
+
+ATM --> RENDER
+ATM --> GRASS : glow / day-night response
+ATM --> WATER : fog / reflection / tint
+ATM --> INFL : enemy activity hooks
+
+GRASS --> RENDER
+WATER --> RENDER
+INFL --> ENEMIES : perception / threat queries
+COLL --> PLAYER
+COLL --> ENEMIES
+
+EXEC --> RENDER
+EXEC --> COLL
+EXEC --> INFL
+EXEC --> STREAM
+
+DIAG --> VIEW
+RENDER --> VIEW
+COLL --> DIAG
+GRASS --> DIAG
+WATER --> DIAG
+STREAM --> DIAG
+EXEC --> DIAG
+
+note bottom of TERRAIN
+  Long-term production substrate:
+  capability tracks form certified products.
+end note
+
+@enduml

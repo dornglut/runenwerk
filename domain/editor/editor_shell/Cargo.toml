@@ -1,0 +1,38 @@
+[package]
+name = "editor_shell"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license.workspace = true
+
+[package.metadata.cargo-machete]
+ignored = ["id"]
+
+[dependencies]
+asset.workspace = true
+editor_core.workspace = true
+editor_definition.workspace = true
+editor_scene.workspace = true
+editor_viewport.workspace = true
+graph.workspace = true
+material_graph.workspace = true
+ui_input.workspace = true
+ui_definition.workspace = true
+ui_layout.workspace = true
+ui_render_data.workspace = true
+ui_surface.workspace = true
+ui_graph_editor.workspace = true
+ui_theme.workspace = true
+ui_text.workspace = true
+ui_math.workspace = true
+ui_tree.workspace = true
+ui_runtime.workspace = true
+ui_widgets.workspace = true
+ui_composition.workspace = true
+ui_adaptive_composition.workspace = true
+diagnostics = { path = "../../../foundation/diagnostics" }
+id = { path = "../../../foundation/id" }
+id_macros = { path = "../../../foundation/id_macros" }
+foundation_ratification = { package = "ratification", path = "../../../foundation/ratification" }
+serde = { version = "1.0.228", features = ["derive"] }
+ron = "0.8.1"

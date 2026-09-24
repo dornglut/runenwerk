@@ -1,0 +1,94 @@
+@startuml
+title Live UiPlugin Runtime Platform Architecture
+
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+
+package "App Product" {
+  [ui_counter_runtime] as CounterApp
+  [CounterPlugin] as CounterPlugin
+  [CounterScreen] as CounterScreen
+  [Counter State] as CounterState
+}
+
+package "Engine App Runtime" {
+  [App] as App
+  [Plugin Model] as PluginModel
+  [Windowed / Headless Runner] as Runner
+  [Frame Pacing] as Pacing
+  [Input Events] as Input
+}
+
+package "engine::plugins::ui" {
+  [UiPlugin] as UiPlugin
+  [Mount API] as MountApi
+  [Session Registry] as SessionRegistry
+  [Source Lowering Facade] as SourceFacade
+  [Action Dispatch] as ActionDispatch
+  [Trace / History] as Trace
+  [Agent Driver] as AgentDriver
+  [Render Publisher] as Publisher
+}
+
+package "domain/ui" {
+  [ui_definition] as Definition
+  [ui_program] as Program
+  [ui_surface] as Surface
+  [ui_hosts] as Hosts
+  [ui_evaluator] as Evaluator
+  [ui_runtime_view] as RuntimeView
+  [ui_render_data] as RenderData
+}
+
+package "Render Runtime" {
+  [RenderPlugin] as RenderPlugin
+  [SurfaceFrame Submission] as SurfaceFrame
+  [PreparedRenderFrame] as PreparedFrame
+  [Gfx / wgpu] as Gfx
+}
+
+CounterApp --> App
+CounterApp --> CounterPlugin
+CounterPlugin --> MountApi : app.mount_ui(CounterScreen)
+CounterPlugin --> CounterState : owns mutation
+CounterScreen --> SourceFacade : IntoUi
+App --> PluginModel
+App --> Runner
+App --> UiPlugin
+App --> RenderPlugin
+Runner --> Input
+Runner --> Pacing
+Input --> ActionDispatch
+AgentDriver --> ActionDispatch : scripted semantic actions
+UiPlugin --> MountApi
+UiPlugin --> SessionRegistry
+MountApi --> Surface
+SourceFacade --> Definition
+SourceFacade --> Program
+ActionDispatch --> Hosts
+Hosts --> CounterState : accepted host mutation only
+ActionDispatch --> Trace
+SessionRegistry --> Trace
+UiPlugin --> Evaluator
+Evaluator --> RuntimeView
+RuntimeView --> RenderData
+UiPlugin --> Publisher
+Publisher --> SurfaceFrame
+SurfaceFrame --> RenderPlugin
+RenderPlugin --> PreparedFrame
+PreparedFrame --> Gfx
+
+note right of RenderPlugin
+Render consumes producer/surface/frame facts.
+It must not own UiScreen, source lowering,
+action routing, host mutation, or UI session truth.
+end note
+
+note bottom of Trace
+Trace is generic runtime history:
+source, route, capability, action,
+host mutation, evaluation, frame publication.
+It feeds console, JSONL, tests, and agents.
+end note
+
+@enduml

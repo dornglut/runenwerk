@@ -1,0 +1,46 @@
+@startuml
+title Provider-Owned Graph Routing
+
+skinparam shadowing false
+skinparam defaultFontName Monospaced
+
+actor User
+participant "domain/ui/ui_graph_editor\nGraph Canvas" as Graph
+participant "domain/editor/editor_shell\nStructural route host" as Shell
+participant "Concrete Provider\nmaterial / procgen / gameplay / animation" as Provider
+participant "App Command Executor\napps/*" as App
+participant "Owning Domain\nsource truth + ratification" as Domain
+participant "Derived Projections\nand Products" as Products
+
+User -> Graph : Interact with graph canvas
+Graph -> Shell : GraphCanvasAction\nsemantic-free
+
+note right of Graph
+  GraphCanvasAction carries canvas intent only.
+  It has no material, procgen, gameplay,
+  animation, or physics semantics.
+end note
+
+Shell -> Provider : SurfaceLocalRoute + SurfaceInteraction\nToolSurfaceInstanceId + provider context
+
+note right of Shell
+  Shell hosts structure and route context.
+  It does not branch on MaterialGraphCanvas,
+  ProcgenGraphCanvas, GameplayGraphCanvas,
+  AnimationGraphCanvas, or future graph semantics.
+end note
+
+Provider -> Provider : Map graph action using provider-local context
+Provider -> App : Propose owning-domain command
+App -> Domain : Execute through domain boundary
+Domain -> Domain : Ratify and mutate source truth
+Domain -> Products : Rebuild projections and formed products
+Products -> Provider : Next observation/product inputs
+Provider -> Shell : Next ResolvedSurfaceFrame
+
+note bottom
+  Future graph tools add concrete providers and route descriptors,
+  not shell-level graph-tool routing branches.
+end note
+
+@enduml

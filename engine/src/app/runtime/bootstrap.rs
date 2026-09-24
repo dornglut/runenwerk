@@ -1,0 +1,70 @@
+use crate::app::App;
+use crate::*;
+
+impl App {
+    /// Installs universal runtime resources required by App startup/frame execution.
+    ///
+    /// Capability state such as fixed cadence and simulation identity is installed by
+    /// its owning integration plugin rather than by bare App construction.
+    pub(crate) fn install_builtin_resources(&mut self) {
+        if !self
+            .world
+            .has_resource::<PrimaryPresentationMetricsResource>()
+        {
+            self.world
+                .insert_resource(PrimaryPresentationMetricsResource::default());
+        }
+        if !self
+            .world
+            .has_resource::<ProductPublicationRuntimeResource>()
+        {
+            self.world
+                .insert_resource(ProductPublicationRuntimeResource::default());
+        }
+        if !self.world.has_resource::<QuerySnapshotRuntimeResource>() {
+            self.world
+                .insert_resource(QuerySnapshotRuntimeResource::default());
+        }
+        self.add_product_publication_handler(publish_staged_product_outcomes);
+        self.add_query_snapshot_publication_handler(publish_staged_query_snapshots);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plugins::{ActionState, InputState};
+    use crate::runtime::platform::PlatformWindowEventQueueResource;
+
+    #[test]
+    fn bare_apps_do_not_provision_optional_host_or_input_provider_state() {
+        for app in [App::new(), App::headless()] {
+            assert_eq!(
+                app.world()
+                    .resource::<PrimaryPresentationMetricsResource>()
+                    .expect("bare App should install primary presentation metrics"),
+                &PrimaryPresentationMetricsResource::default(),
+            );
+            assert!(
+                app.world().resource::<InputState>().is_err(),
+                "bare App must not provision physical input capability state"
+            );
+            assert!(
+                app.world().resource::<ActionState>().is_err(),
+                "bare App must not provision product action capability state"
+            );
+            assert!(
+                app.world()
+                    .resource::<WindowStateRegistryResource>()
+                    .is_err(),
+                "bare App must not provision native window lifecycle state"
+            );
+            assert!(
+                app.world()
+                    .resource::<PlatformWindowEventQueueResource>()
+                    .is_err(),
+                "bare App must not provision native platform-window event state"
+            );
+        }
+    }
+}

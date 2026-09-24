@@ -1,0 +1,9 @@
+exclude_loopback = true
+include_fragments = true
+max_retries = 2
+timeout = 20
+accept = [200, 429]
+exclude = [
+  "^file:",
+  "^mailto:",
+]

@@ -1,0 +1,158 @@
+[package]
+name = "engine"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license.workspace = true
+
+[package.metadata.cargo-machete]
+ignored = ["id"]
+
+[features]
+default = []
+tracy = ["dep:tracing-tracy"]
+
+[dependencies]
+anyhow = "1.0.100"
+bytemuck = { version = "1.24.0", features = ["derive"] }
+pollster = "0.4.0"
+runen-gpu.workspace = true
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["fmt", "env-filter"] }
+tracing-appender = "0.2.3"
+tracing-tracy = { version = "0.11.4", optional = true }
+winit = "0.30.9"
+rusttype = "0.9.3"
+image = { version = "0.25.8", default-features = false, features = ["png"] }
+ktx2.workspace = true
+naga = { version = "30.0.0", features = ["wgsl-in"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+ron = "0.8.1"
+glam = "0.30.8"
+postcard = { version = "1.1.3", features = ["alloc"] }
+
+runen_ecs.workspace = true
+asset.workspace = true
+graph.workspace = true
+material_graph.workspace = true
+resource_ref.workspace = true
+product.workspace = true
+runen-net.workspace = true
+runen-spatial.workspace = true
+world_ops = { path = "../domain/world_ops" }
+world_sdf = { path = "../domain/world_sdf" }
+ui_math = { path = "../domain/ui/ui_math" }
+ui_controls = { workspace = true }
+ui_definition = { workspace = true }
+ui_artifacts = { workspace = true }
+ui_evaluator = { workspace = true }
+ui_hosts = { workspace = true }
+ui_program = { workspace = true }
+ui_program_lowering = { workspace = true }
+ui_render_data = { path = "../domain/ui/ui_render_data" }
+ui_runtime = { path = "../domain/ui/ui_runtime" }
+ui_runtime_view = { workspace = true }
+ui_schema = { workspace = true }
+ui_state = { workspace = true }
+ui_surface = { workspace = true }
+ui_text = { path = "../domain/ui/ui_text" }
+ui_theme = { path = "../domain/ui/ui_theme" }
+engine_render_macros = { path = "../engine_render_macros" }
+engine_replay = { path = "../net/engine_history" }
+engine_net = { path = "../net/engine_net" }
+engine_sim = { path = "../net/engine_sim" }
+id_macros = { path = "../foundation/id_macros" }
+id = { path = "../foundation/id" }
+
+crossbeam-channel = "0.5.15"
+crossbeam-deque = "0.8.6"
+thiserror = "2.0.18"
+
+[dev-dependencies]
+trybuild = "1.0.114"
+ui_app_integration = { workspace = true }
+ui_binding = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+criterion = "0.5.1"
+
+[[example]]
+name = "game_of_life_sdf"
+path = "examples/game_of_life_sdf/main.rs"
+
+[[example]]
+name = "boids_render_flow"
+path = "examples/boids_render_flow/main.rs"
+
+[[example]]
+name = "sdf_render_flow"
+path = "examples/sdf_render_flow/main.rs"
+
+[[example]]
+name = "procedural_sky_sdf_terrain"
+path = "examples/procedural_sky_sdf_terrain/main.rs"
+
+[[example]]
+name = "runtime_minimal"
+path = "examples/runtime_minimal/main.rs"
+
+[[example]]
+name = "window_input_demo"
+path = "examples/window_input_demo/main.rs"
+
+[[example]]
+name = "render_flow_fullscreen_minimal"
+path = "examples/render_flow_fullscreen_minimal/main.rs"
+
+[[example]]
+name = "render_flow_postprocess_compositor"
+path = "examples/render_flow_postprocess_compositor/main.rs"
+
+[[example]]
+name = "render_flow_debug_inspect"
+path = "examples/render_flow_debug_inspect/main.rs"
+
+[[example]]
+name = "render_scale_evidence"
+path = "examples/render_scale_evidence.rs"
+
+[[example]]
+name = "render_sdf_runtime_evidence"
+path = "examples/render_sdf_runtime_evidence.rs"
+
+[[example]]
+name = "render_mesh_material_production_evidence"
+path = "examples/render_mesh_material_production_evidence.rs"
+
+[[example]]
+name = "render_temporal_production_evidence"
+path = "examples/render_temporal_production_evidence.rs"
+
+[[example]]
+name = "render_hybrid_ray_sdf_raster_runtime_proof"
+path = "examples/render_hybrid_ray_sdf_raster_runtime_proof.rs"
+
+[[example]]
+name = "render_product_visual_evidence"
+path = "examples/render_product_visual_evidence.rs"
+
+[[bench]]
+name = "phase35_runtime"
+harness = false
+
+[[bench]]
+name = "phase4_runtime"
+harness = false
+
+[[bench]]
+name = "phase5b_runtime"
+harness = false
+
+[[bench]]
+name = "phase6_runtime"
+harness = false
+
+[[bench]]
+name = "render_flow_planning"
+harness = false

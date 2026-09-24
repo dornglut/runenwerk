@@ -1,0 +1,19 @@
+Control(
+	id: AuthoredId("button_selected"),
+	kind: "runenwerk.ui.controls.button",
+	properties: {
+		"label": "Selected",
+		"variant": "secondary",
+		"tone": "neutral",
+		"density": "normal",
+		"size": "md",
+	},
+	bindings: {
+		"selected": "ui_gallery.button.selected.active",
+	},
+	route: Some("ui_gallery.button.selected.activate"),
+	accessibility: Some((
+		role: "button",
+		label: Some("Selected demo button"),
+	)),
+)

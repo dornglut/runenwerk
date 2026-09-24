@@ -1,0 +1,16 @@
+Control(
+	id: AuthoredId("button_basic"),
+	kind: "runenwerk.ui.controls.button",
+	properties: {
+		"label": "Press me",
+		"variant": "primary",
+		"tone": "accent",
+		"density": "normal",
+		"size": "md",
+    },
+    route: Some("ui_gallery.button.basic.activate"),
+    accessibility: Some((
+    	role: "button",
+    	label: Some("Press demo button"),
+    )),
+)

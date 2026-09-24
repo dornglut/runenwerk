@@ -1,0 +1,1055 @@
+use editor_core::EntityId;
+use engine::plugins::render::{EditorGizmoAxis, EditorPickingHit, EditorPickingTarget};
+use engine::runtime::{Res, ResMut};
+use glam::{Vec2, Vec3, vec2, vec3};
+use scene::{LocalTransform, Vec3Value};
+use ui_math::{UiPoint, UiRect};
+
+use crate::editor_runtime::{EditorPrimitiveKind, RunenwerkEditorRuntime};
+#[cfg(test)]
+use crate::runtime::resources::editor_viewport_camera;
+use crate::runtime::resources::{
+    EditorHostResource, EditorViewportCamera, EditorViewportSceneRenderPacket,
+};
+#[cfg(test)]
+use crate::runtime::systems::{entity_primitive, extract_viewport_scene_render_packet};
+use crate::runtime::viewport::{
+    ToolSurfaceRuntimeBindingRegistryResource, ViewportPickingResultsResource,
+    ViewportRenderStateResource,
+};
+use editor_shell::ViewportToolKind;
+
+const GRID_EPSILON: f32 = 1e-5;
+const GIZMO_AXIS_LENGTH: f32 = 1.25;
+const GIZMO_AXIS_PICK_RADIUS_PX: f32 = 10.0;
+const HIT_DISTANCE_EPSILON: f32 = 0.0001;
+const ENTITY_RAYMARCH_HIT_EPSILON: f32 = 0.001;
+const ENTITY_RAYMARCH_MAX_DISTANCE: f32 = 64.0;
+const ENTITY_RAYMARCH_MAX_STEPS: u32 = 96;
+
+#[derive(Debug, Clone, Copy)]
+struct PickingRay {
+    origin: Vec3,
+    direction: Vec3,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct AxisScreenHit {
+    axis: EditorGizmoAxis,
+    ray_distance: f32,
+    screen_distance_px: f32,
+}
+
+pub fn produce_editor_picking_system(
+    input: Res<engine::plugins::InputState>,
+    mut host: ResMut<EditorHostResource>,
+    mut viewport_picking_results: ResMut<ViewportPickingResultsResource>,
+    tool_surface_bindings: Res<ToolSurfaceRuntimeBindingRegistryResource>,
+    viewport_render_states: Res<ViewportRenderStateResource>,
+) {
+    let cursor = UiPoint::new(input.mouse_position.0, input.mouse_position.1);
+    let routed_viewport = routed_viewport_binding(&host, &tool_surface_bindings, cursor);
+    if let Some((mounted_unit_id, binding)) = routed_viewport {
+        let viewport_id = binding.viewport_id;
+        let viewport_bounds = binding.bounds;
+        let previous_hit = viewport_picking_results
+            .result_for(viewport_id)
+            .map(|value| value.hit)
+            .unwrap_or_else(EditorPickingHit::none);
+        let next_hit = if let Some(scene_context) =
+            picking_scene_context_for_viewport(&viewport_render_states, viewport_id)
+        {
+            if let Some(ray) = viewport_ray(
+                cursor,
+                viewport_bounds,
+                scene_context.camera,
+                scene_context.camera_fov_y,
+            ) {
+                compose_picking_hit(
+                    host.app.runtime(),
+                    &scene_context.scene_packet,
+                    Some(host.app.surface_sessions().viewport_tool(mounted_unit_id)),
+                    host.app.runtime().selected_entity(),
+                    cursor,
+                    viewport_bounds,
+                    scene_context.camera,
+                    scene_context.camera_fov_y,
+                    ray,
+                )
+            } else {
+                EditorPickingHit::none()
+            }
+        } else {
+            EditorPickingHit::none()
+        };
+        let cursor_viewport_bounds = (
+            viewport_bounds.x,
+            viewport_bounds.y,
+            viewport_bounds.width,
+            viewport_bounds.height,
+        );
+        viewport_picking_results.set_viewport_result(
+            viewport_id,
+            (cursor.x, cursor.y),
+            cursor_viewport_bounds,
+            next_hit,
+        );
+
+        if host.app.debug_logs_enabled() && hit_changed(previous_hit, next_hit) {
+            host.app.append_console_debug(format!(
+                "[pick] viewport={} cursor=({:.1},{:.1}) local=({:.1},{:.1}) hit={} dist={:.3}",
+                viewport_id.0,
+                cursor.x,
+                cursor.y,
+                cursor.x - viewport_bounds.x,
+                cursor.y - viewport_bounds.y,
+                picking_target_label(next_hit.target),
+                next_hit.distance
+            ));
+        }
+    } else {
+        viewport_picking_results.clear_all_hits((cursor.x, cursor.y));
+    }
+}
+
+#[derive(Debug, Clone)]
+struct PickingSceneContext {
+    camera: EditorViewportCamera,
+    camera_fov_y: f32,
+    scene_packet: EditorViewportSceneRenderPacket,
+}
+
+fn picking_scene_context_for_viewport(
+    viewport_render_states: &ViewportRenderStateResource,
+    viewport_id: editor_viewport::ViewportId,
+) -> Option<PickingSceneContext> {
+    let state = viewport_render_states.state_for(viewport_id)?;
+    Some(PickingSceneContext {
+        camera: state.render_state.camera,
+        camera_fov_y: state.render_state.camera_fov_y_radians,
+        scene_packet: state.render_state.scene_packet.clone(),
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn compose_picking_hit(
+    runtime: &RunenwerkEditorRuntime,
+    scene_packet: &EditorViewportSceneRenderPacket,
+    active_tool: Option<ViewportToolKind>,
+    selected_entity: Option<EntityId>,
+    cursor: UiPoint,
+    viewport_bounds: UiRect,
+    camera: EditorViewportCamera,
+    camera_fov_y: f32,
+    ray: PickingRay,
+) -> EditorPickingHit {
+    if active_tool == Some(ViewportToolKind::Translate)
+        && let Some(selected) = selected_entity
+        && let Some(transform) = entity_transform(runtime, selected)
+        && let Some(axis_hit) = pick_gizmo_axis(
+            cursor,
+            viewport_bounds,
+            camera,
+            camera_fov_y,
+            transform.translation,
+        )
+    {
+        return EditorPickingHit {
+            target: EditorPickingTarget::GizmoAxis(axis_hit.axis),
+            distance: axis_hit.ray_distance.max(0.0),
+        };
+    }
+
+    let entity_hit = pick_entity_hit(scene_packet, ray);
+    let grid_hit = pick_grid_hit(ray);
+    choose_primary_hit(entity_hit, grid_hit)
+}
+
+fn choose_primary_hit(
+    entity_hit: Option<EditorPickingHit>,
+    grid_hit: Option<EditorPickingHit>,
+) -> EditorPickingHit {
+    match (entity_hit, grid_hit) {
+        // Selection UX priority: when an entity is under the cursor, prefer entity hits over
+        // grid fallback hits to avoid near-surface misses around floor intersections.
+        (Some(entity), Some(_grid)) => entity,
+        (Some(entity), None) => entity,
+        (None, Some(grid)) => grid,
+        (None, None) => EditorPickingHit::none(),
+    }
+}
+
+fn pick_entity_hit(
+    scene_packet: &EditorViewportSceneRenderPacket,
+    ray: PickingRay,
+) -> Option<EditorPickingHit> {
+    let mut best: Option<EditorPickingHit> = None;
+
+    for primitive in scene_packet.primitives() {
+        let Some(distance) = ray_primitive_first_hit(ray, *primitive) else {
+            continue;
+        };
+        let candidate = EditorPickingHit {
+            target: EditorPickingTarget::Entity(primitive.entity_id.0),
+            distance,
+        };
+
+        let replace = best
+            .map(|current| candidate.distance < current.distance)
+            .unwrap_or(true);
+        if replace {
+            best = Some(candidate);
+        }
+    }
+
+    best
+}
+
+fn ray_primitive_first_hit(
+    ray: PickingRay,
+    primitive: crate::runtime::resources::EditorViewportPrimitiveInstance,
+) -> Option<f32> {
+    let mut distance_along_ray = 0.0_f32;
+    for _ in 0..ENTITY_RAYMARCH_MAX_STEPS {
+        let sample_pos = ray.origin + ray.direction * distance_along_ray;
+        let distance = primitive_signed_distance(primitive, sample_pos);
+        if distance < ENTITY_RAYMARCH_HIT_EPSILON {
+            return Some(distance_along_ray.max(0.0));
+        }
+
+        distance_along_ray += distance.max(ENTITY_RAYMARCH_HIT_EPSILON);
+        if distance_along_ray > ENTITY_RAYMARCH_MAX_DISTANCE {
+            return None;
+        }
+    }
+
+    None
+}
+
+fn primitive_signed_distance(
+    primitive: crate::runtime::resources::EditorViewportPrimitiveInstance,
+    sample_pos: Vec3,
+) -> f32 {
+    let center = primitive.translation.to_glam();
+    match primitive.primitive_kind {
+        EditorPrimitiveKind::Sphere => {
+            (sample_pos - center).length() - primitive.sphere_radius.max(0.05)
+        }
+        EditorPrimitiveKind::Capsule => signed_distance_capsule(
+            sample_pos,
+            center,
+            primitive.capsule_radius.max(0.05),
+            primitive.capsule_half_height.max(0.05),
+        ),
+        EditorPrimitiveKind::Cylinder => signed_distance_cylinder(
+            sample_pos,
+            center,
+            primitive.capsule_radius.max(0.05),
+            primitive.capsule_half_height.max(0.05),
+        ),
+        EditorPrimitiveKind::Torus => signed_distance_torus(
+            sample_pos,
+            center,
+            (primitive.sphere_radius * 1.5).max(0.05),
+            (primitive.sphere_radius * 0.5).max(0.05),
+        ),
+        EditorPrimitiveKind::Plane => signed_distance_box(
+            sample_pos,
+            center,
+            vec3(
+                primitive.box_half_extents.x.max(0.05),
+                primitive.box_half_extents.y.clamp(0.01, 0.05),
+                primitive.box_half_extents.z.max(0.05),
+            ),
+        ),
+        EditorPrimitiveKind::Box => {
+            signed_distance_box(sample_pos, center, primitive.box_half_extents.to_glam())
+        }
+    }
+}
+
+fn signed_distance_box(sample_pos: Vec3, center: Vec3, half_extents: Vec3) -> f32 {
+    let q = (sample_pos - center).abs() - half_extents;
+    let outside = q.max(Vec3::ZERO).length();
+    let inside = q.x.max(q.y.max(q.z)).min(0.0);
+    outside + inside
+}
+
+fn signed_distance_capsule(sample_pos: Vec3, center: Vec3, radius: f32, half_height: f32) -> f32 {
+    let local = sample_pos - center;
+    let clamped_y = local.y.clamp(-half_height, half_height);
+    let closest = vec3(0.0, clamped_y, 0.0);
+    (local - closest).length() - radius
+}
+
+fn signed_distance_cylinder(sample_pos: Vec3, center: Vec3, radius: f32, half_height: f32) -> f32 {
+    let local = sample_pos - center;
+    let d = vec2(
+        vec2(local.x, local.z).length() - radius,
+        local.y.abs() - half_height,
+    );
+    d.x.max(d.y).min(0.0) + d.max(Vec2::ZERO).length()
+}
+
+fn signed_distance_torus(
+    sample_pos: Vec3,
+    center: Vec3,
+    major_radius: f32,
+    minor_radius: f32,
+) -> f32 {
+    let local = sample_pos - center;
+    let q = vec2(vec2(local.x, local.z).length() - major_radius, local.y);
+    q.length() - minor_radius
+}
+
+fn pick_grid_hit(ray: PickingRay) -> Option<EditorPickingHit> {
+    if ray.direction.y.abs() <= GRID_EPSILON {
+        return None;
+    }
+
+    let distance = -ray.origin.y / ray.direction.y;
+    if distance < 0.0 {
+        return None;
+    }
+
+    Some(EditorPickingHit {
+        target: EditorPickingTarget::Grid,
+        distance,
+    })
+}
+
+fn pick_gizmo_axis(
+    cursor: UiPoint,
+    viewport_bounds: UiRect,
+    camera: EditorViewportCamera,
+    camera_fov_y: f32,
+    center: Vec3Value,
+) -> Option<AxisScreenHit> {
+    let center_world = center.to_glam();
+    let center_screen =
+        project_world_to_screen(center_world, camera, viewport_bounds, camera_fov_y)?;
+    let cursor_vec = vec2(cursor.x, cursor.y);
+
+    let mut best: Option<AxisScreenHit> = None;
+    for (axis, direction) in [
+        (EditorGizmoAxis::X, vec3(1.0, 0.0, 0.0)),
+        (EditorGizmoAxis::Y, vec3(0.0, 1.0, 0.0)),
+        (EditorGizmoAxis::Z, vec3(0.0, 0.0, 1.0)),
+    ] {
+        let end_world = center_world + direction * GIZMO_AXIS_LENGTH;
+        let Some(end_screen) =
+            project_world_to_screen(end_world, camera, viewport_bounds, camera_fov_y)
+        else {
+            continue;
+        };
+
+        let screen_distance = point_segment_distance(cursor_vec, center_screen, end_screen);
+        if screen_distance > GIZMO_AXIS_PICK_RADIUS_PX {
+            continue;
+        }
+
+        let ray_distance = (center_world - camera.position)
+            .dot(camera.forward)
+            .max(0.0);
+        let candidate = AxisScreenHit {
+            axis,
+            ray_distance,
+            screen_distance_px: screen_distance,
+        };
+
+        let replace = best
+            .map(|current| candidate.screen_distance_px < current.screen_distance_px)
+            .unwrap_or(true);
+        if replace {
+            best = Some(candidate);
+        }
+    }
+
+    best
+}
+
+fn point_segment_distance(point: Vec2, start: Vec2, end: Vec2) -> f32 {
+    let segment = end - start;
+    let length_sq = segment.length_squared();
+    if length_sq <= f32::EPSILON {
+        return point.distance(start);
+    }
+
+    let t = ((point - start).dot(segment) / length_sq).clamp(0.0, 1.0);
+    let closest = start + segment * t;
+    point.distance(closest)
+}
+
+fn project_world_to_screen(
+    world_point: Vec3,
+    camera: EditorViewportCamera,
+    viewport_bounds: UiRect,
+    fov_y: f32,
+) -> Option<Vec2> {
+    if viewport_bounds.width <= f32::EPSILON || viewport_bounds.height <= f32::EPSILON {
+        return None;
+    }
+
+    let relative = world_point - camera.position;
+    let x_cam = relative.dot(camera.right);
+    let y_cam = relative.dot(camera.up);
+    let z_cam = relative.dot(camera.forward);
+    if z_cam <= 0.001 {
+        return None;
+    }
+
+    let tan_half_fov = (fov_y * 0.5).tan().max(0.0001);
+    let aspect = (viewport_bounds.width / viewport_bounds.height.max(1.0)).max(0.01);
+    let ndc_x = x_cam / (z_cam * tan_half_fov * aspect);
+    let ndc_y = y_cam / (z_cam * tan_half_fov);
+    if ndc_x.abs() > 1.5 || ndc_y.abs() > 1.5 {
+        return None;
+    }
+
+    Some(vec2(
+        viewport_bounds.x + (ndc_x * 0.5 + 0.5) * viewport_bounds.width,
+        viewport_bounds.y + (0.5 - ndc_y * 0.5) * viewport_bounds.height,
+    ))
+}
+
+fn viewport_ray(
+    cursor: UiPoint,
+    viewport_bounds: UiRect,
+    camera: EditorViewportCamera,
+    camera_fov_y: f32,
+) -> Option<PickingRay> {
+    let width = viewport_bounds.width;
+    let height = viewport_bounds.height;
+    if width <= f32::EPSILON || height <= f32::EPSILON {
+        return None;
+    }
+
+    let local_x = ((cursor.x - viewport_bounds.x) / width).clamp(0.0, 1.0);
+    let local_y = ((cursor.y - viewport_bounds.y) / height).clamp(0.0, 1.0);
+    let ndc = vec2(local_x * 2.0 - 1.0, 1.0 - local_y * 2.0);
+
+    let tan_half_fov = (camera_fov_y * 0.5).tan().max(0.0001);
+    let aspect = width / height;
+    let direction = (camera.forward
+        + camera.right * ndc.x * aspect * tan_half_fov
+        + camera.up * ndc.y * tan_half_fov)
+        .normalize_or_zero();
+    if direction.length_squared() <= f32::EPSILON {
+        return None;
+    }
+
+    Some(PickingRay {
+        origin: camera.position,
+        direction,
+    })
+}
+
+fn entity_transform(runtime: &RunenwerkEditorRuntime, entity: EntityId) -> Option<LocalTransform> {
+    let ecs_entity = runtime.ids().resolve_entity(entity)?;
+    runtime.world().get::<LocalTransform>(ecs_entity).copied()
+}
+
+fn picking_target_label(target: EditorPickingTarget) -> String {
+    match target {
+        EditorPickingTarget::None => "none".to_string(),
+        EditorPickingTarget::Grid => "grid".to_string(),
+        EditorPickingTarget::Entity(entity) => format!("entity:{entity}"),
+        EditorPickingTarget::ComponentHandle {
+            entity,
+            component_type,
+        } => format!("component:{entity}:{component_type}"),
+        EditorPickingTarget::GizmoAxis(axis) => format!("gizmo:{}", axis.as_str()),
+    }
+}
+
+fn hit_changed(previous: EditorPickingHit, next: EditorPickingHit) -> bool {
+    previous.target != next.target
+        || (previous.distance - next.distance).abs() > HIT_DISTANCE_EPSILON
+}
+
+#[cfg(test)]
+fn routed_viewport_bounds(
+    host: &EditorHostResource,
+    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    cursor: UiPoint,
+) -> Option<(editor_viewport::ViewportId, UiRect)> {
+    let runtime_state = host.shell_state.runtime().state();
+    if let Some(captured_widget) = runtime_state.captured_widget {
+        return viewport_scene_binding_for_widget(
+            &host.shell_state,
+            tool_surface_bindings,
+            captured_widget,
+        )
+        .map(|binding| (binding.viewport_id, binding.bounds));
+    }
+
+    let cursor_binding = tool_surface_bindings.binding_containing_cursor(cursor)?;
+    Some((cursor_binding.viewport_id, cursor_binding.bounds))
+}
+
+fn routed_viewport_binding(
+    host: &EditorHostResource,
+    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    cursor: UiPoint,
+) -> Option<(
+    ui_composition::MountedUnitId,
+    crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord,
+)> {
+    let binding = if let Some(captured_widget) = host.shell_state.runtime().state().captured_widget
+    {
+        viewport_scene_binding_for_widget(
+            &host.shell_state,
+            tool_surface_bindings,
+            captured_widget,
+        )?
+    } else {
+        tool_surface_bindings.binding_containing_cursor(cursor)?
+    };
+    let mounted_unit_id = host
+        .shell_state
+        .mounted_unit_id_for_tool_surface(binding.tool_surface_id)?;
+    Some((mounted_unit_id, binding))
+}
+
+fn viewport_scene_binding_for_widget(
+    shell_state: &crate::shell::RunenwerkEditorShellState,
+    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    widget_id: editor_shell::WidgetId,
+) -> Option<crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord> {
+    let context = structural_context_for_widget(shell_state, widget_id)?;
+    let binding = tool_surface_bindings.resolve_structural_context(context)?;
+    (binding.host_widget_id == widget_id).then_some(binding)
+}
+
+fn structural_context_for_widget(
+    shell_state: &crate::shell::RunenwerkEditorShellState,
+    widget_id: editor_shell::WidgetId,
+) -> Option<editor_shell::StructuralWidgetRoutingContext> {
+    shell_state
+        .last_projection_artifacts()
+        .and_then(|artifacts| artifacts.widget_structural_context_by_id.get(&widget_id))
+        .copied()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::editor_app::RunenwerkEditorApp;
+    use crate::editor_runtime::{
+        EditorPrimitive, bootstrap_mvp_scene_if_empty, execute_scene_intent,
+        register_mvp_component_types,
+    };
+    use crate::runtime::viewport::{
+        ViewportLayoutEntry, ViewportLayoutMapResource, ViewportRenderStateEntry,
+    };
+    use crate::shell::RunenwerkEditorShellController;
+    use editor_core::CommandId;
+    use editor_scene::{
+        SceneCommandIntent, SceneQuat, SceneTransform, SceneVec3, SdfBooleanIntent,
+        SdfPrimitiveKind, SdfPrimitiveSpec,
+    };
+    use editor_viewport::ViewportId;
+    use engine::plugins::render::UiFontAtlasResource;
+    use ui_theme::ThemeTokens;
+
+    fn seeded_runtime() -> RunenwerkEditorRuntime {
+        let mut app = RunenwerkEditorApp::new();
+        register_mvp_component_types(app.runtime_mut());
+        bootstrap_mvp_scene_if_empty(app.runtime_mut()).expect("mvp bootstrap should succeed");
+        app.runtime
+    }
+
+    fn entity_with_primitive_kind(
+        runtime: &RunenwerkEditorRuntime,
+        kind: EditorPrimitiveKind,
+    ) -> EntityId {
+        runtime
+            .document()
+            .entity_ids()
+            .find(|entity| {
+                entity_primitive(runtime, *entity)
+                    .map(|(_, primitive)| primitive.kind() == kind)
+                    .unwrap_or(false)
+            })
+            .expect("runtime should contain an entity with requested primitive kind")
+    }
+
+    fn remove_all_editor_primitives(runtime: &mut RunenwerkEditorRuntime) {
+        for entity in runtime.document().entity_ids().collect::<Vec<_>>() {
+            let _ = runtime.remove_component_for_editor_entity::<EditorPrimitive>(entity);
+        }
+    }
+
+    fn create_sdf_primitive(
+        runtime: &mut RunenwerkEditorRuntime,
+        command_id: u64,
+        display_name: &str,
+        translation: SceneVec3,
+        kind: SdfPrimitiveKind,
+    ) -> EntityId {
+        let before = runtime.document().entity_ids().collect::<Vec<_>>();
+        execute_scene_intent(
+            runtime,
+            CommandId(command_id),
+            SceneCommandIntent::CreateSdfPrimitive {
+                parent: None,
+                display_name: display_name.to_string(),
+                primitive: SdfPrimitiveSpec::new(kind, SdfBooleanIntent::Add).with_transform(
+                    SceneTransform::new(translation, SceneQuat::identity(), SceneVec3::one()),
+                ),
+            },
+        )
+        .expect("SDF primitive creation should succeed");
+
+        runtime
+            .document()
+            .entity_ids()
+            .find(|entity| !before.contains(entity))
+            .expect("SDF primitive creation should register one entity")
+    }
+
+    fn seeded_host_with_projection() -> EditorHostResource {
+        let mut host = EditorHostResource::default();
+        let atlas = UiFontAtlasResource::default();
+        let _ = RunenwerkEditorShellController::build_frame(
+            &host.app,
+            &mut host.shell_state,
+            UiRect::new(0.0, 0.0, 1280.0, 720.0),
+            &ThemeTokens::default(),
+            &atlas,
+        );
+        host
+    }
+
+    fn bind_viewport_surface(
+        host: &EditorHostResource,
+        viewport_id: ViewportId,
+        bounds: UiRect,
+    ) -> ToolSurfaceRuntimeBindingRegistryResource {
+        let viewport_embed_widget_id = viewport_embed_widget_id(host);
+        let structural_context = host
+            .shell_state
+            .last_projection_artifacts()
+            .and_then(|artifacts| {
+                artifacts
+                    .widget_structural_context_by_id
+                    .get(&viewport_embed_widget_id)
+                    .copied()
+            })
+            .expect("viewport embed structural context should exist");
+        let mut layout_map = ViewportLayoutMapResource::default();
+        layout_map.upsert_entry(ViewportLayoutEntry {
+            viewport_id,
+            host_widget_id: viewport_embed_widget_id,
+            structural_context,
+            bounds,
+        });
+        let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
+        bindings.rebuild_from_layout_map(&layout_map);
+        bindings
+    }
+
+    fn viewport_surface_id(host: &EditorHostResource) -> editor_shell::ToolSurfaceInstanceId {
+        host.shell_state
+            .workspace_state()
+            .panels()
+            .filter_map(|panel| panel.active_tool_surface)
+            .find(|surface_id| {
+                host.shell_state
+                    .workspace_state()
+                    .tool_surface(*surface_id)
+                    .map(|surface| {
+                        editor_shell::stable_key_for_tool_surface_kind(
+                            editor_shell::ToolSurfaceKind::Viewport,
+                        )
+                        .as_ref()
+                        .is_some_and(|key| surface.stable_surface_key() == key)
+                    })
+                    .unwrap_or(false)
+            })
+            .expect("seeded host should contain an active viewport surface")
+    }
+
+    fn viewport_embed_widget_id(host: &EditorHostResource) -> editor_shell::WidgetId {
+        editor_shell::surface_widget_id(
+            viewport_surface_id(host),
+            editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID,
+        )
+    }
+
+    fn viewport_chrome_widget_id(
+        host: &EditorHostResource,
+        local_id: editor_shell::WidgetId,
+    ) -> editor_shell::WidgetId {
+        editor_shell::surface_widget_id(viewport_surface_id(host), local_id)
+    }
+
+    #[test]
+    fn compose_hit_returns_entity_for_primitive_intersection() {
+        let runtime = seeded_runtime();
+        let entity = entity_with_primitive_kind(&runtime, EditorPrimitiveKind::Box);
+        let transform = entity_transform(&runtime, entity).expect("entity should have transform");
+        let camera = editor_viewport_camera();
+        let camera_fov_y = crate::runtime::resources::editor_viewport_camera_fov_y_radians();
+        let direction = (transform.translation.to_glam() - camera.position).normalize_or_zero();
+        let scene_packet = extract_viewport_scene_render_packet(&runtime, None);
+
+        let hit = compose_picking_hit(
+            &runtime,
+            &scene_packet,
+            None,
+            None,
+            UiPoint::new(640.0, 360.0),
+            UiRect::new(0.0, 0.0, 1280.0, 720.0),
+            camera,
+            camera_fov_y,
+            PickingRay {
+                origin: camera.position,
+                direction,
+            },
+        );
+
+        assert_eq!(hit.target, EditorPickingTarget::Entity(entity.0));
+        assert!(hit.distance >= 0.0);
+    }
+
+    #[test]
+    fn viewport_center_ray_hits_seeded_box_with_viewport_local_aspect() {
+        let runtime = seeded_runtime();
+        let entity = entity_with_primitive_kind(&runtime, EditorPrimitiveKind::Box);
+        let viewport_bounds = UiRect::new(96.0, 72.0, 960.0, 540.0);
+        let cursor = UiPoint::new(
+            viewport_bounds.x + viewport_bounds.width * 0.5,
+            viewport_bounds.y + viewport_bounds.height * 0.5,
+        );
+        let camera = editor_viewport_camera();
+        let camera_fov_y = crate::runtime::resources::editor_viewport_camera_fov_y_radians();
+        let ray = viewport_ray(cursor, viewport_bounds, camera, camera_fov_y)
+            .expect("center of a valid viewport should produce a picking ray");
+        let scene_packet = extract_viewport_scene_render_packet(&runtime, None);
+
+        let hit = compose_picking_hit(
+            &runtime,
+            &scene_packet,
+            None,
+            None,
+            cursor,
+            viewport_bounds,
+            camera,
+            camera_fov_y,
+            ray,
+        );
+
+        assert_eq!(hit.target, EditorPickingTarget::Entity(entity.0));
+    }
+
+    #[test]
+    fn compose_hit_uses_scene_packet_for_multiple_primitives() {
+        let mut runtime = RunenwerkEditorRuntime::new();
+        register_mvp_component_types(&mut runtime);
+        let _side_entity = create_sdf_primitive(
+            &mut runtime,
+            10,
+            "Side Box",
+            SceneVec3::new(-3.0, 0.0, 0.0),
+            SdfPrimitiveKind::Box,
+        );
+        let target_entity = create_sdf_primitive(
+            &mut runtime,
+            11,
+            "Center Sphere",
+            SceneVec3::new(0.0, 0.0, 0.0),
+            SdfPrimitiveKind::Sphere,
+        );
+        let transform =
+            entity_transform(&runtime, target_entity).expect("target entity should have transform");
+        let camera = editor_viewport_camera();
+        let camera_fov_y = crate::runtime::resources::editor_viewport_camera_fov_y_radians();
+        let direction = (transform.translation.to_glam() - camera.position).normalize_or_zero();
+        let scene_packet = extract_viewport_scene_render_packet(&runtime, None);
+
+        let hit = compose_picking_hit(
+            &runtime,
+            &scene_packet,
+            None,
+            None,
+            UiPoint::new(640.0, 360.0),
+            UiRect::new(0.0, 0.0, 1280.0, 720.0),
+            camera,
+            camera_fov_y,
+            PickingRay {
+                origin: camera.position,
+                direction,
+            },
+        );
+
+        assert_eq!(scene_packet.len(), 2);
+        assert_eq!(hit.target, EditorPickingTarget::Entity(target_entity.0));
+    }
+
+    #[test]
+    fn picking_scene_context_comes_from_viewport_render_state_packet() {
+        let viewport_id = ViewportId(4);
+        let mut render_states = ViewportRenderStateResource::default();
+        assert!(
+            picking_scene_context_for_viewport(&render_states, viewport_id).is_none(),
+            "CPU picking must not independently scan runtime entities before a render-state packet exists"
+        );
+
+        let mut render_state = crate::runtime::resources::EditorViewportRenderState::default();
+        render_state.set_primitive(Vec3Value::new(2.0, 1.0, -3.0), EditorPrimitive::default());
+        let expected_packet = render_state.scene_packet.clone();
+        render_states.upsert_state(ViewportRenderStateEntry {
+            viewport_id,
+            tool_surface_id: None,
+            bounds: UiRect::new(0.0, 0.0, 640.0, 360.0),
+            render_state,
+        });
+
+        let context = picking_scene_context_for_viewport(&render_states, viewport_id)
+            .expect("render-state packet should provide picking scene context");
+
+        assert_eq!(context.scene_packet, expected_packet);
+        assert_eq!(
+            context.scene_packet.primitives()[0].translation,
+            Vec3Value::new(2.0, 1.0, -3.0)
+        );
+    }
+
+    #[test]
+    fn compose_hit_returns_grid_when_no_entity_intersection() {
+        let mut runtime = seeded_runtime();
+        remove_all_editor_primitives(&mut runtime);
+
+        let camera = editor_viewport_camera();
+        let camera_fov_y = crate::runtime::resources::editor_viewport_camera_fov_y_radians();
+        let scene_packet = extract_viewport_scene_render_packet(&runtime, None);
+        let hit = compose_picking_hit(
+            &runtime,
+            &scene_packet,
+            None,
+            None,
+            UiPoint::new(640.0, 360.0),
+            UiRect::new(0.0, 0.0, 1280.0, 720.0),
+            camera,
+            camera_fov_y,
+            PickingRay {
+                origin: camera.position,
+                direction: camera.forward,
+            },
+        );
+
+        assert_eq!(hit.target, EditorPickingTarget::Grid);
+        assert!(hit.distance >= 0.0);
+    }
+
+    #[test]
+    fn compose_hit_returns_none_for_parallel_ray_without_entity() {
+        let mut runtime = seeded_runtime();
+        remove_all_editor_primitives(&mut runtime);
+        let scene_packet = extract_viewport_scene_render_packet(&runtime, None);
+
+        let hit = compose_picking_hit(
+            &runtime,
+            &scene_packet,
+            None,
+            None,
+            UiPoint::new(0.0, 0.0),
+            UiRect::new(0.0, 0.0, 1280.0, 720.0),
+            editor_viewport_camera(),
+            crate::runtime::resources::editor_viewport_camera_fov_y_radians(),
+            PickingRay {
+                origin: vec3(0.0, 2.0, 0.0),
+                direction: vec3(1.0, 0.0, 0.0),
+            },
+        );
+
+        assert_eq!(hit.target, EditorPickingTarget::None);
+        assert!(hit.distance.is_infinite());
+    }
+
+    #[test]
+    fn viewport_cpu_picking_hits_bootstrap_ground_plane_as_entity() {
+        let runtime = seeded_runtime();
+        let ground = entity_with_primitive_kind(&runtime, EditorPrimitiveKind::Plane);
+        let scene_packet = extract_viewport_scene_render_packet(&runtime, None);
+
+        let hit = compose_picking_hit(
+            &runtime,
+            &scene_packet,
+            None,
+            None,
+            UiPoint::new(640.0, 360.0),
+            UiRect::new(0.0, 0.0, 1280.0, 720.0),
+            editor_viewport_camera(),
+            crate::runtime::resources::editor_viewport_camera_fov_y_radians(),
+            PickingRay {
+                origin: vec3(4.0, 4.0, 4.0),
+                direction: vec3(0.0, -1.0, 0.0),
+            },
+        );
+
+        assert_eq!(hit.target, EditorPickingTarget::Entity(ground.0));
+    }
+
+    #[test]
+    fn viewport_cpu_entity_picking_respects_torus_hole() {
+        let mut runtime = RunenwerkEditorRuntime::new();
+        register_mvp_component_types(&mut runtime);
+        let _torus = create_sdf_primitive(
+            &mut runtime,
+            10,
+            "Torus",
+            SceneVec3::new(0.0, 0.0, 0.0),
+            SdfPrimitiveKind::Torus,
+        );
+        let scene_packet = extract_viewport_scene_render_packet(&runtime, None);
+
+        let hit = pick_entity_hit(
+            &scene_packet,
+            PickingRay {
+                origin: vec3(0.0, 5.0, 0.0),
+                direction: vec3(0.0, -1.0, 0.0),
+            },
+        );
+
+        assert!(
+            hit.is_none(),
+            "ray through the torus hole must not be accepted by a broad AABB"
+        );
+    }
+
+    #[test]
+    fn viewport_cpu_entity_picking_respects_plane_slab_bounds() {
+        let mut runtime = RunenwerkEditorRuntime::new();
+        register_mvp_component_types(&mut runtime);
+        let plane = create_sdf_primitive(
+            &mut runtime,
+            10,
+            "Plane",
+            SceneVec3::new(0.0, 0.0, 0.0),
+            SdfPrimitiveKind::Plane,
+        );
+        let scene_packet = extract_viewport_scene_render_packet(&runtime, None);
+
+        let inside_hit = pick_entity_hit(
+            &scene_packet,
+            PickingRay {
+                origin: vec3(0.0, 2.0, 0.0),
+                direction: vec3(0.0, -1.0, 0.0),
+            },
+        )
+        .expect("ray over plane slab should hit entity");
+        let outside_hit = pick_entity_hit(
+            &scene_packet,
+            PickingRay {
+                origin: vec3(2.0, 2.0, 0.0),
+                direction: vec3(0.0, -1.0, 0.0),
+            },
+        );
+
+        assert_eq!(inside_hit.target, EditorPickingTarget::Entity(plane.0));
+        assert!(
+            outside_hit.is_none(),
+            "ray outside bounded plane extents must not report an entity hit"
+        );
+    }
+
+    #[test]
+    fn routed_viewport_prefers_canonical_viewport_embed_binding() {
+        let mut host = seeded_host_with_projection();
+        host.shell_state.runtime_mut().state_mut().hovered_widget = None;
+        host.shell_state.runtime_mut().state_mut().captured_widget = None;
+        let expected_bounds = UiRect::new(90.0, 60.0, 900.0, 520.0);
+        let bindings = bind_viewport_surface(&host, ViewportId(7), expected_bounds);
+
+        let routed = routed_viewport_bounds(&host, &bindings, UiPoint::new(120.0, 240.0));
+
+        assert_eq!(routed, Some((ViewportId(7), expected_bounds)));
+    }
+
+    #[test]
+    fn routed_viewport_falls_back_to_cursor_containment_when_projection_is_missing() {
+        let host = EditorHostResource::default();
+        let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
+        bindings.upsert_binding(crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord {
+            tool_surface_id: editor_shell::ToolSurfaceInstanceId::try_from_raw(33).unwrap(),
+            panel_instance_id: editor_shell::PanelInstanceId::try_from_raw(11).unwrap(),
+            tab_stack_id: editor_shell::TabStackId::try_from_raw(22).unwrap(),
+            viewport_id: ViewportId(9),
+            host_widget_id: editor_shell::WidgetId(77),
+            bounds: UiRect::new(100.0, 200.0, 300.0, 250.0),
+            generation: 1,
+        });
+
+        let routed = routed_viewport_bounds(&host, &bindings, UiPoint::new(250.0, 320.0));
+
+        assert_eq!(
+            routed,
+            Some((ViewportId(9), UiRect::new(100.0, 200.0, 300.0, 250.0))),
+        );
+    }
+
+    #[test]
+    fn routed_viewport_returns_none_when_cursor_is_outside_viewport_bounds() {
+        let mut host = seeded_host_with_projection();
+        host.shell_state.runtime_mut().state_mut().hovered_widget = None;
+        host.shell_state.runtime_mut().state_mut().captured_widget = None;
+        let expected_bounds = UiRect::new(90.0, 60.0, 900.0, 520.0);
+        let bindings = bind_viewport_surface(&host, ViewportId(7), expected_bounds);
+
+        let routed = routed_viewport_bounds(&host, &bindings, UiPoint::new(8.0, 8.0));
+
+        assert_eq!(routed, None);
+    }
+
+    #[test]
+    fn routed_viewport_ignores_hovered_viewport_chrome_widget() {
+        let mut host = seeded_host_with_projection();
+        let viewport_chrome_widget =
+            viewport_chrome_widget_id(&host, editor_shell::VIEWPORT_DETAILS_TOGGLE_WIDGET_ID);
+        host.shell_state.runtime_mut().state_mut().hovered_widget = Some(viewport_chrome_widget);
+        host.shell_state.runtime_mut().state_mut().captured_widget = None;
+        let expected_bounds = UiRect::new(90.0, 120.0, 900.0, 520.0);
+        let bindings = bind_viewport_surface(&host, ViewportId(7), expected_bounds);
+
+        let routed = routed_viewport_bounds(&host, &bindings, UiPoint::new(120.0, 60.0));
+
+        assert_eq!(
+            routed, None,
+            "viewport chrome hover must not resolve to scene picking"
+        );
+    }
+
+    #[test]
+    fn routed_viewport_ignores_captured_viewport_chrome_widget() {
+        let mut host = seeded_host_with_projection();
+        let viewport_chrome_widget =
+            viewport_chrome_widget_id(&host, editor_shell::VIEWPORT_DETAILS_TOGGLE_WIDGET_ID);
+        host.shell_state.runtime_mut().state_mut().hovered_widget = None;
+        host.shell_state.runtime_mut().state_mut().captured_widget = Some(viewport_chrome_widget);
+        let expected_bounds = UiRect::new(90.0, 60.0, 900.0, 520.0);
+        let bindings = bind_viewport_surface(&host, ViewportId(7), expected_bounds);
+
+        let routed = routed_viewport_bounds(&host, &bindings, UiPoint::new(120.0, 240.0));
+
+        assert_eq!(
+            routed, None,
+            "non-scene pointer capture must not resolve to scene picking even inside embed bounds"
+        );
+    }
+
+    #[test]
+    fn routed_viewport_keeps_scene_capture_when_cursor_leaves_embed() {
+        let mut host = seeded_host_with_projection();
+        let viewport_embed_widget = viewport_embed_widget_id(&host);
+        host.shell_state.runtime_mut().state_mut().hovered_widget = None;
+        host.shell_state.runtime_mut().state_mut().captured_widget = Some(viewport_embed_widget);
+        let expected_bounds = UiRect::new(90.0, 60.0, 900.0, 520.0);
+        let bindings = bind_viewport_surface(&host, ViewportId(7), expected_bounds);
+
+        let routed = routed_viewport_bounds(&host, &bindings, UiPoint::new(8.0, 8.0));
+
+        assert_eq!(routed, Some((ViewportId(7), expected_bounds)));
+    }
+}

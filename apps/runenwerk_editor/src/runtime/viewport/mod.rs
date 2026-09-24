@@ -1,0 +1,44 @@
+//! File: apps/runenwerk_editor/src/runtime/viewport/mod.rs
+//! Purpose: Editor runtime viewport expression-product and presentation ownership.
+
+pub mod gpu_residency;
+pub mod instance_registry;
+pub mod layout_map;
+pub mod picking_results;
+pub mod presentation_resolver;
+pub mod producer_field;
+pub mod producer_ids;
+pub mod producer_scene;
+pub mod producer_volume;
+pub mod product_registry;
+pub mod product_targets;
+pub mod query_snapshots;
+pub mod render_jobs;
+pub mod render_product_selection;
+pub mod render_state;
+pub mod routing;
+pub mod settings_hydration;
+pub mod surface_mounts;
+pub mod surface_set;
+pub mod tool_surface_binding;
+
+pub use gpu_residency::*;
+pub use instance_registry::*;
+pub use layout_map::*;
+pub use picking_results::*;
+pub use presentation_resolver::*;
+pub use producer_field::*;
+pub use producer_ids::*;
+pub use producer_scene::*;
+pub use producer_volume::*;
+pub use product_registry::*;
+pub use product_targets::*;
+pub use query_snapshots::*;
+pub use render_jobs::*;
+pub use render_product_selection::*;
+pub use render_state::*;
+pub use routing::*;
+pub use settings_hydration::*;
+pub use surface_mounts::*;
+pub use surface_set::*;
+pub use tool_surface_binding::*;

@@ -1,0 +1,109 @@
+use std::path::PathBuf;
+
+use editor_core::RealityVersion;
+use editor_viewport::{
+    ArtifactObservationFrame, ExpressionDimensions, ProducerHealth, ProductAvailabilityState,
+};
+use engine::plugins::render::ShaderRegistryResource;
+use engine::runtime::ResMut;
+
+use crate::editor_runtime::{bootstrap_mvp_scene_if_empty, register_mvp_component_types};
+use crate::material_lab::ensure_default_scene_material_preview;
+use crate::persistence::normalized_scene_file_from_runtime;
+use crate::runtime::resources::EditorHostResource;
+use crate::runtime::viewport::{
+    MAIN_VIEWPORT_ID, ViewportArtifactObservationResource, ViewportPickingResultsResource,
+    ViewportPresentationStateResource, ViewportProductRegistryResource, ViewportSurfaceSetResource,
+    ensure_editor_main_surface_set, initial_presentation_state, initial_product_descriptors,
+};
+
+pub fn bootstrap_editor_demo_system(
+    mut host: ResMut<EditorHostResource>,
+    mut shader_registry: ResMut<ShaderRegistryResource>,
+) {
+    initialize_editor_shader_root(&mut shader_registry);
+    register_mvp_component_types(host.app.runtime_mut());
+    match bootstrap_mvp_scene_if_empty(host.app.runtime_mut()) {
+        Ok(()) => match normalized_scene_file_from_runtime(host.app.runtime()) {
+            Ok(origin_scene) => {
+                let _ = host
+                    .app
+                    .scene_persistence
+                    .adopt_unbound_origin(origin_scene);
+            }
+            Err(error) => eprintln!(
+                "editor scene persistence origin bootstrap failed: {}",
+                error.as_static_str()
+            ),
+        },
+        Err(error) => eprintln!("editor mvp bootstrap failed: {error}"),
+    }
+    if let Err(error) = ensure_default_scene_material_preview(&mut host.app, &mut shader_registry) {
+        eprintln!("editor default material bootstrap failed: {error}");
+    }
+}
+
+pub fn seed_viewport_runtime_contracts_system(
+    mut viewport_surface_sets: ResMut<ViewportSurfaceSetResource>,
+    mut viewport_products: ResMut<ViewportProductRegistryResource>,
+    mut viewport_presentations: ResMut<ViewportPresentationStateResource>,
+    mut viewport_observations: ResMut<ViewportArtifactObservationResource>,
+    mut viewport_picking_results: ResMut<ViewportPickingResultsResource>,
+) {
+    if viewport_surface_sets
+        .surface_set(MAIN_VIEWPORT_ID)
+        .is_none()
+    {
+        ensure_editor_main_surface_set(&mut viewport_surface_sets, MAIN_VIEWPORT_ID);
+    }
+
+    let presentation_state = viewport_presentations
+        .state_for(MAIN_VIEWPORT_ID)
+        .cloned()
+        .unwrap_or_else(|| {
+            let state = initial_presentation_state(MAIN_VIEWPORT_ID);
+            viewport_presentations.upsert_state(state.clone());
+            state
+        });
+
+    let descriptors = viewport_products
+        .descriptors_for(MAIN_VIEWPORT_ID)
+        .map(|value| value.to_vec())
+        .unwrap_or_else(|| {
+            let descriptors =
+                initial_product_descriptors(ExpressionDimensions::new(1, 1), RealityVersion(0));
+            viewport_products.update_viewport_descriptors(MAIN_VIEWPORT_ID, descriptors.clone());
+            descriptors
+        });
+
+    if viewport_observations.frame_for(MAIN_VIEWPORT_ID).is_none() {
+        let mut frame = ArtifactObservationFrame::new(MAIN_VIEWPORT_ID, RealityVersion(0));
+        frame.available_products = descriptors.clone();
+        frame.selected_primary_product_id = Some(presentation_state.selected_primary_product_id);
+        frame.selected_overlay_product_ids =
+            presentation_state.selected_overlay_product_ids.clone();
+        frame.field_visualizer_settings = presentation_state.field_visualizer_settings;
+
+        for descriptor in &descriptors {
+            frame
+                .availability_by_product
+                .insert(descriptor.id, ProductAvailabilityState::Available);
+            frame
+                .producer_health_by_product
+                .insert(descriptor.id, ProducerHealth::Healthy);
+        }
+
+        viewport_observations.upsert_frame(frame);
+    }
+
+    viewport_picking_results.retain_viewports(|viewport_id| viewport_id == MAIN_VIEWPORT_ID);
+}
+
+fn initialize_editor_shader_root(shader_registry: &mut ShaderRegistryResource) {
+    let workspace_shader_root =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/shaders");
+    let shader_root = workspace_shader_root
+        .canonicalize()
+        .unwrap_or(workspace_shader_root);
+    shader_registry.add_root(shader_root.to_string_lossy().to_string());
+}

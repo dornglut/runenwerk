@@ -1,0 +1,3 @@
+[alias]
+validate = "run --manifest-path tools/xtask/Cargo.toml --locked -- validate"
+xtask = "run --manifest-path tools/xtask/Cargo.toml --locked --"

@@ -1,0 +1,455 @@
+use engine::plugins::render::{CompiledDrawSource, CompiledPassExecutionPlan, RenderFlow};
+use engine::plugins::render::{
+    DrawIndexedIndirectArgs, DrawIndirectArgs, GpuStorage, ProceduralBufferBinding,
+    ProceduralPassDescriptor, ProceduralRenderPolicy, ProceduralValidationError, RenderBlendMode,
+    RenderCullMode, RenderDepthPolicy, RenderFlowAuthoringError, RenderFlowValidationIssue,
+    RenderIndirectDrawArgsKind, RenderPassKind, RenderPrimitiveTopology, RenderVertexBufferLayout,
+    RenderVertexFormat, SURFACE_COLOR_RESOURCE_LABEL, compile_flow_plan_checked,
+    current_runtime_gpu_capabilities,
+};
+
+#[derive(Debug, Clone, Copy, GpuStorage)]
+struct Instance {
+    position: [f32; 2],
+    radius: f32,
+    flags: u32,
+}
+
+#[derive(Debug, Clone, Copy, GpuStorage)]
+struct Vertex {
+    position: [f32; 3],
+    uv: [f32; 2],
+}
+
+#[derive(Debug, Clone, Copy, GpuStorage)]
+struct Index {
+    value: u32,
+}
+
+fn instance_layout(slot: u32) -> RenderVertexBufferLayout {
+    RenderVertexBufferLayout::instance(slot, 16)
+        .attribute(0, 0, RenderVertexFormat::Float32x2)
+        .attribute(1, 8, RenderVertexFormat::Float32)
+        .attribute(2, 12, RenderVertexFormat::Uint32)
+}
+
+fn vertex_layout(slot: u32) -> RenderVertexBufferLayout {
+    RenderVertexBufferLayout::vertex(slot, 20)
+        .attribute(3, 0, RenderVertexFormat::Float32x3)
+        .attribute(4, 12, RenderVertexFormat::Float32x2)
+}
+
+#[test]
+fn procedural_instance_quad_sprite_descriptor_builds_pass_shape_safe_graphics_pass() {
+    let (flow, instances) = RenderFlow::new("procedural.quad")
+        .with_surface_color()
+        .expect("render flow authoring should succeed")
+        .storage_array::<Instance>("instances", 64)
+        .expect("render flow authoring should succeed");
+
+    let flow = flow
+        .procedural_pass(
+            ProceduralPassDescriptor::quad_sprites(
+                "draw.quads",
+                ProceduralBufferBinding::storage(instances, instance_layout(0)),
+                64,
+            )
+            .shader_asset("assets/shaders/procedural_quad.wgsl")
+            .write_color_target(SURFACE_COLOR_RESOURCE_LABEL),
+        )
+        .expect("valid quad sprite descriptor should build")
+        .validate()
+        .expect("procedural flow should validate");
+
+    let pass = flow
+        .graph()
+        .passes
+        .passes
+        .iter()
+        .find(|pass| pass.label == "draw.quads")
+        .expect("procedural pass should exist");
+
+    assert_eq!(pass.kind, RenderPassKind::Graphics);
+    assert_eq!(pass.instance_buffers.len(), 1);
+    assert_eq!(pass.instance_buffer_layouts.len(), 1);
+    assert_eq!(pass.draw.expect("draw descriptor").vertex_count, 6);
+    assert_eq!(pass.draw.expect("draw descriptor").instance_count, 64);
+
+    compile_flow_plan_checked(&flow, &current_runtime_gpu_capabilities())
+        .expect("local instance geometry should satisfy pass-shape guards");
+}
+
+#[test]
+fn procedural_instance_mesh_sprite_descriptor_preserves_vertex_and_instance_buffers() {
+    let (flow, vertices) = RenderFlow::new("procedural.mesh")
+        .with_surface_color()
+        .expect("render flow authoring should succeed")
+        .storage_array::<Vertex>("vertices", 6)
+        .expect("render flow authoring should succeed");
+    let (flow, instances) = flow
+        .storage_array::<Instance>("instances", 16)
+        .expect("render flow authoring should succeed");
+
+    let flow = flow
+        .procedural_pass(
+            ProceduralPassDescriptor::mesh_sprites(
+                "draw.mesh",
+                ProceduralBufferBinding::storage(vertices, vertex_layout(0)),
+                6,
+                ProceduralBufferBinding::storage(instances, instance_layout(1)),
+                16,
+            )
+            .shader_asset("assets/shaders/procedural_mesh.wgsl")
+            .write_color_target(SURFACE_COLOR_RESOURCE_LABEL),
+        )
+        .expect("valid mesh sprite descriptor should build");
+
+    let pass = flow
+        .graph()
+        .passes
+        .passes
+        .iter()
+        .find(|pass| pass.label == "draw.mesh")
+        .expect("procedural pass should exist");
+
+    assert_eq!(pass.vertex_buffers.len(), 1);
+    assert_eq!(pass.vertex_buffer_layouts.len(), 1);
+    assert_eq!(pass.instance_buffers.len(), 1);
+    assert_eq!(pass.instance_buffer_layouts.len(), 1);
+}
+
+#[test]
+fn procedural_pass_builder_authors_indirect_draw_without_exposing_graphics_builder() {
+    let (flow, instances) = RenderFlow::new("procedural.builder.indirect")
+        .with_surface_color()
+        .expect("render flow authoring should succeed")
+        .storage_array::<Instance>("instances", 32)
+        .expect("render flow authoring should succeed");
+    let (flow, args) = flow
+        .storage_array::<DrawIndirectArgs>("draw.args", 1)
+        .expect("render flow authoring should succeed");
+
+    let flow = flow
+        .procedural_pass_builder(
+            ProceduralPassDescriptor::quad_sprites(
+                "draw.builder.indirect",
+                ProceduralBufferBinding::storage(instances, instance_layout(0)),
+                32,
+            )
+            .shader_asset("assets/shaders/procedural_builder_indirect.wgsl")
+            .write_color_target(SURFACE_COLOR_RESOURCE_LABEL),
+        )
+        .expect("valid descriptor should create a procedural builder")
+        .draw_indirect(args)
+        .expect("declared draw-argument layout should match")
+        .finish()
+        .expect("procedural builder should lower to a render flow")
+        .validate()
+        .expect("procedural indirect draw should validate");
+
+    let plan = compile_flow_plan_checked(&flow, &current_runtime_gpu_capabilities())
+        .expect("procedural indirect draw should compile");
+    let draw = plan
+        .execution
+        .passes
+        .iter()
+        .find_map(|pass| match pass {
+            CompiledPassExecutionPlan::Graphics(pass) => pass.draw,
+            _ => None,
+        })
+        .expect("compiled graphics pass should expose draw source");
+
+    assert!(matches!(
+        draw.source,
+        CompiledDrawSource::Indirect { byte_offset: 0, .. }
+    ));
+}
+
+#[test]
+fn graphics_indexed_indirect_draw_preserves_typed_args_kind() {
+    let (flow, vertices) = RenderFlow::new("graphics.indexed.indirect")
+        .with_surface_color()
+        .expect("render flow authoring should succeed")
+        .storage_array::<Vertex>("vertices", 6)
+        .expect("render flow authoring should succeed");
+    let (flow, indices) = flow
+        .storage_array::<Index>("indices", 6)
+        .expect("render flow authoring should succeed");
+    let (flow, args) = flow
+        .storage_array::<DrawIndexedIndirectArgs>("draw.indexed.args", 1)
+        .expect("render flow authoring should succeed");
+
+    let flow = flow
+        .graphics_pass("draw.indexed.indirect")
+        .vertex_buffer(vertices, vertex_layout(0))
+        .index_buffer(indices)
+        .write_color_target(SURFACE_COLOR_RESOURCE_LABEL)
+        .draw_indexed_indirect(args, 6, 4)
+        .expect("declared indexed draw-argument layout should match")
+        .finish()
+        .validate()
+        .expect("indexed indirect draw should validate");
+
+    let plan = compile_flow_plan_checked(&flow, &current_runtime_gpu_capabilities())
+        .expect("indexed indirect draw should compile");
+    let draw = plan
+        .execution
+        .passes
+        .iter()
+        .find_map(|pass| match pass {
+            CompiledPassExecutionPlan::Graphics(pass) => pass.draw,
+            _ => None,
+        })
+        .expect("compiled graphics pass should expose draw source");
+
+    assert!(matches!(
+        draw.source,
+        CompiledDrawSource::Indirect {
+            args_kind: RenderIndirectDrawArgsKind::DrawIndexed,
+            byte_offset: 0,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn procedural_indirect_draw_rejects_indexed_args_without_index_buffer() {
+    let (flow, instances) = RenderFlow::new("procedural.indirect.wrong_args")
+        .with_surface_color()
+        .expect("render flow authoring should succeed")
+        .storage_array::<Instance>("instances", 32)
+        .expect("render flow authoring should succeed");
+    let (flow, args) = flow
+        .storage_array::<DrawIndexedIndirectArgs>("draw.indexed.args", 1)
+        .expect("render flow authoring should succeed");
+
+    let flow = flow
+        .procedural_pass_builder(
+            ProceduralPassDescriptor::quad_sprites(
+                "draw.wrong_args",
+                ProceduralBufferBinding::storage(instances, instance_layout(0)),
+                32,
+            )
+            .shader_asset("assets/shaders/procedural_wrong_args.wgsl")
+            .write_color_target(SURFACE_COLOR_RESOURCE_LABEL),
+        )
+        .expect("valid descriptor should create a procedural builder")
+        .draw_indexed_indirect(args)
+        .expect("declared indexed draw-argument layout should match")
+        .finish()
+        .expect("procedural builder should lower to a render flow");
+
+    let err = flow
+        .validation_report()
+        .expect_err("indexed args without index buffer should be rejected");
+
+    assert!(err.issues.iter().any(|issue| matches!(
+        issue,
+        RenderFlowValidationIssue::GraphicsPassIndirectDrawArgsKindMismatch { .. }
+    )));
+}
+
+#[test]
+fn graphics_indirect_draw_rejects_out_of_bounds_byte_offset() {
+    let (flow, instances) = RenderFlow::new("graphics.indirect.oob")
+        .with_surface_color()
+        .expect("render flow authoring should succeed")
+        .storage_array::<Instance>("instances", 32)
+        .expect("render flow authoring should succeed");
+    let (flow, args) = flow
+        .storage_array::<DrawIndirectArgs>("draw.args", 1)
+        .expect("render flow authoring should succeed");
+
+    let err = flow
+        .graphics_pass("draw.oob")
+        .instance_buffer(instances, instance_layout(0))
+        .write_color_target(SURFACE_COLOR_RESOURCE_LABEL)
+        .draw_indirect_with_offsets(args, 6, 32, 0, 0, DrawIndirectArgs::BYTE_SIZE)
+        .expect("declared draw-argument layout should match")
+        .finish()
+        .validation_report()
+        .expect_err("offset at element end should be rejected");
+
+    assert!(err.issues.iter().any(|issue| matches!(
+        issue,
+        RenderFlowValidationIssue::GraphicsPassIndirectDrawOffsetOutOfBounds { .. }
+    )));
+}
+
+#[test]
+fn graphics_indirect_draw_rejects_cpu_side_offsets() {
+    let (flow, instances) = RenderFlow::new("graphics.indirect.cpu_offsets")
+        .with_surface_color()
+        .expect("render flow authoring should succeed")
+        .storage_array::<Instance>("instances", 32)
+        .expect("render flow authoring should succeed");
+    let (flow, args) = flow
+        .storage_array::<DrawIndirectArgs>("draw.args", 1)
+        .expect("render flow authoring should succeed");
+
+    let err = flow
+        .graphics_pass("draw.cpu_offsets")
+        .instance_buffer(instances, instance_layout(0))
+        .write_color_target(SURFACE_COLOR_RESOURCE_LABEL)
+        .draw_indirect_with_offsets(args, 6, 32, 1, 0, 0)
+        .expect("declared draw-argument layout should match")
+        .finish()
+        .validation_report()
+        .expect_err("CPU-side indirect offsets should be rejected");
+
+    assert!(err.issues.iter().any(|issue| matches!(
+        issue,
+        RenderFlowValidationIssue::GraphicsPassIndirectDrawUsesCpuOffsets { .. }
+    )));
+}
+
+#[test]
+fn procedural_instance_local_sdf_2d_impostor_descriptor_is_local_2d_and_pass_shape_safe() {
+    let (flow, instances) = RenderFlow::new("procedural.sdf2d")
+        .with_surface_color()
+        .expect("render flow authoring should succeed")
+        .storage_array::<Instance>("instances", 32)
+        .expect("render flow authoring should succeed");
+
+    let flow = flow
+        .procedural_pass(
+            ProceduralPassDescriptor::local_sdf_2d_impostors(
+                "draw.sdf2d",
+                ProceduralBufferBinding::storage(instances, instance_layout(0)),
+                32,
+            )
+            .shader_asset("assets/shaders/procedural_sdf2d.wgsl")
+            .write_color_target(SURFACE_COLOR_RESOURCE_LABEL),
+        )
+        .expect("valid local 2D SDF impostor descriptor should build");
+
+    compile_flow_plan_checked(&flow, &current_runtime_gpu_capabilities())
+        .expect("local SDF impostor instance geometry should satisfy pass-shape guards");
+}
+
+#[test]
+fn procedural_instance_policy_survives_compilation() {
+    let (flow, instances) = RenderFlow::new("procedural.policy")
+        .with_surface_color()
+        .expect("render flow authoring should succeed")
+        .with_depth_target("procedural.depth")
+        .expect("render flow authoring should succeed")
+        .storage_array::<Instance>("instances", 8)
+        .expect("render flow authoring should succeed");
+
+    let policy = ProceduralRenderPolicy::default()
+        .blend_mode(RenderBlendMode::Replace)
+        .depth_policy(RenderDepthPolicy::ReadWrite)
+        .cull_mode(RenderCullMode::Back)
+        .primitive_topology(RenderPrimitiveTopology::TriangleList);
+
+    let flow = flow
+        .procedural_pass(
+            ProceduralPassDescriptor::quad_sprites(
+                "draw.policy",
+                ProceduralBufferBinding::storage(instances, instance_layout(0)),
+                8,
+            )
+            .shader_asset("assets/shaders/procedural_policy.wgsl")
+            .target(
+                engine::plugins::render::ProceduralTargetDescriptor::color(
+                    SURFACE_COLOR_RESOURCE_LABEL,
+                )
+                .depth_target("procedural.depth"),
+            )
+            .policy(policy),
+        )
+        .expect("valid policy descriptor should build");
+
+    let plan = compile_flow_plan_checked(&flow, &current_runtime_gpu_capabilities())
+        .expect("procedural policy flow should compile");
+    let raster = plan
+        .execution
+        .passes
+        .iter()
+        .find_map(|pass| match pass {
+            CompiledPassExecutionPlan::Graphics(raster) if raster.pass_id.to_string() == "2" => {
+                Some(raster)
+            }
+            CompiledPassExecutionPlan::Graphics(raster) => Some(raster),
+            _ => None,
+        })
+        .expect("compiled graphics pass should exist");
+
+    assert_eq!(
+        raster.raster_state.state.blend_mode,
+        RenderBlendMode::Replace
+    );
+    assert_eq!(
+        raster.raster_state.state.depth_policy,
+        RenderDepthPolicy::ReadWrite
+    );
+    assert_eq!(raster.raster_state.state.cull_mode, RenderCullMode::Back);
+}
+
+#[test]
+fn procedural_instance_descriptor_rejects_vertex_step_mode_for_instance_buffer() {
+    let (flow, instances) = RenderFlow::new("procedural.invalid")
+        .with_surface_color()
+        .expect("render flow authoring should succeed")
+        .storage_array::<Instance>("instances", 4)
+        .expect("render flow authoring should succeed");
+
+    let err = flow
+        .procedural_pass(
+            ProceduralPassDescriptor::quad_sprites(
+                "draw.invalid",
+                ProceduralBufferBinding::storage(
+                    instances,
+                    RenderVertexBufferLayout::vertex(0, 16).attribute(
+                        0,
+                        0,
+                        RenderVertexFormat::Float32x2,
+                    ),
+                ),
+                4,
+            )
+            .shader_asset("assets/shaders/procedural_invalid.wgsl")
+            .write_color_target(SURFACE_COLOR_RESOURCE_LABEL),
+        )
+        .expect_err("instance buffers must use instance step mode");
+
+    assert!(matches!(
+        err,
+        RenderFlowAuthoringError::ProceduralValidation(
+            ProceduralValidationError::InvalidStepMode {
+                role: "instance",
+                ..
+            }
+        )
+    ));
+}
+
+#[test]
+fn procedural_instance_descriptor_rejects_depth_policy_without_depth_target() {
+    let (flow, instances) = RenderFlow::new("procedural.invalid_depth")
+        .with_surface_color()
+        .expect("render flow authoring should succeed")
+        .storage_array::<Instance>("instances", 4)
+        .expect("render flow authoring should succeed");
+
+    let err = flow
+        .procedural_pass(
+            ProceduralPassDescriptor::quad_sprites(
+                "draw.invalid_depth",
+                ProceduralBufferBinding::storage(instances, instance_layout(0)),
+                4,
+            )
+            .shader_asset("assets/shaders/procedural_invalid_depth.wgsl")
+            .write_color_target(SURFACE_COLOR_RESOURCE_LABEL)
+            .policy(ProceduralRenderPolicy::default().depth_policy(RenderDepthPolicy::ReadWrite)),
+        )
+        .expect_err("read/write depth policy requires a depth target");
+
+    assert!(matches!(
+        err,
+        RenderFlowAuthoringError::ProceduralValidation(
+            ProceduralValidationError::MissingDepthTargetForPolicy { .. }
+        )
+    ));
+}

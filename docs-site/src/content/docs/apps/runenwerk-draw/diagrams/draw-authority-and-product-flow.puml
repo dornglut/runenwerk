@@ -1,0 +1,93 @@
+@startuml
+title Runenwerk Draw Authority and Product Flow
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam defaultFontName Monospaced
+
+actor "Pointer / stylus" as Pointer
+
+package "Adapter Boundary" as AdapterPkg {
+  component "native_tablet_input\nnormalization only" as NativeTablet
+}
+
+package "UI Input Domain" as UiInputPkg {
+  component "ui_input\nPointerEvent" as UiPointer
+}
+
+package "Draw App Runtime\napps/runenwerk_draw" as AppPkg {
+  component "DrawingToolInputEvent\napp-owned input DTO" as ToolInput
+  component "DrawingToolSession\napp-owned gesture state" as ToolSession
+  component "DrawingToolIntent\ncommand or app action" as ToolIntent
+  component "App-only navigation /\nselection action" as AppOnlyAction
+  component "Dirty tile invalidation /\nproduct lifecycle" as DirtyLifecycle
+  component "App cache, GPU validation,\npromotion, fallback" as AppRuntimeState
+  component "Visible ink products\ncurrent or last-good" as VisibleProducts
+}
+
+package "Drawing Domain\ndomain/drawing" as DrawingPkg {
+  component "DrawingTransaction /\nDrawingCommand" as DrawingCommand
+  database "DrawingDocument\nSOURCE AUTHORITY" as DrawingDocument
+  component "Deterministic CPU\nink tile formation" as CpuTiles
+}
+
+package "Product Barriers" as ProductPkg {
+  component "ProductPublication\nbarrier" as ProductPublication
+  component "QuerySnapshotPublication\nbarrier" as QuerySnapshotPublication
+}
+
+package "UI Projection Domain" as UiRenderPkg {
+  component "ui_render_data\nproduct-surface UI projection" as UiProjection
+}
+
+package "Engine Render Execution" as RenderPkg {
+  component "Dynamic texture upload /\nallocation" as DynamicTextureUpload
+  component "Renderer / GPU output\nderived execution state" as GpuOutput
+  component "Capture, readback,\ntexture diff" as GpuValidation
+}
+
+Pointer --> NativeTablet : native tablet packet
+Pointer --> UiPointer : mouse / touch / fallback pointer
+NativeTablet --> UiPointer : normalized pointer facts
+UiPointer --> ToolInput : route into Draw
+ToolInput --> ToolSession : begin/update/end session
+ToolSession --> ToolIntent : emit intent
+
+ToolIntent --> DrawingCommand : committed artwork mutation
+ToolIntent --> AppOnlyAction : navigation or selection UI
+DrawingCommand --> DrawingDocument : ratified mutation
+DrawingDocument --> DirtyLifecycle : document revision changed
+AppOnlyAction --> DirtyLifecycle : projection-only update
+
+DirtyLifecycle --> CpuTiles : request affected tiles
+DrawingDocument --> CpuTiles : committed stroke truth
+CpuTiles --> ProductPublication : formed descriptors and payloads
+ProductPublication --> QuerySnapshotPublication : published products
+QuerySnapshotPublication --> AppRuntimeState : accepted snapshots
+AppRuntimeState --> VisibleProducts : promote CPU or validated GPU
+VisibleProducts --> UiProjection : neutral product-surface primitives
+UiProjection --> DynamicTextureUpload : dynamic texture targets
+DynamicTextureUpload --> GpuOutput : sampleable texture state
+
+GpuOutput --> GpuValidation : CPU reference vs GPU output
+GpuValidation --> AppRuntimeState : validation report only
+AppRuntimeState ..> DynamicTextureUpload : request GPU targets after app policy
+
+note right of NativeTablet
+  Normalization only.
+  No drawing semantics.
+end note
+
+note bottom of DrawingDocument
+  Only DrawingDocument is drawing truth.
+  App cache, visibility, and GPU state are derived.
+end note
+
+note bottom of GpuValidation
+  GPU validation feeds app-owned
+  promotion/fallback decisions only.
+  It never mutates DrawingDocument.
+end note
+
+@enduml

@@ -1,0 +1,216 @@
+
+===== FILE: ./Cargo.toml =====
+     1	[package]
+     2	name = "scene"
+     3	version = "0.1.0"
+     4	edition = "2024"
+     5	
+     6	[dependencies]
+     7	ecs.workspace = true
+     8	glam.workspace = true
+===== END FILE: ./Cargo.toml =====
+
+===== FILE: ./src/lib.rs =====
+     1	pub mod transform;
+     2	
+     3	pub use transform::{
+     4		LocalTransform,
+     5		QuatValue,
+     6		Vec3Value,
+     7		WorldTransform,
+     8	};
+===== END FILE: ./src/lib.rs =====
+
+===== FILE: ./src/transform.rs =====
+     1	#[derive(Debug, Copy, Clone, PartialEq, Default, ecs::Reflect)]
+     2	pub struct Vec3Value {
+     3		pub x: f32,
+     4		pub y: f32,
+     5		pub z: f32,
+     6	}
+     7	
+     8	impl Vec3Value {
+     9		/// File: domain/scene/src/transform.rs
+    10		/// Method: new
+    11		pub fn new(x: f32, y: f32, z: f32) -> Self {
+    12			Self { x, y, z }
+    13		}
+    14	
+    15		/// File: domain/scene/src/transform.rs
+    16		/// Method: zero
+    17		pub fn zero() -> Self {
+    18			Self::new(0.0, 0.0, 0.0)
+    19		}
+    20	
+    21		/// File: domain/scene/src/transform.rs
+    22		/// Method: one
+    23		pub fn one() -> Self {
+    24			Self::new(1.0, 1.0, 1.0)
+    25		}
+    26	
+    27		/// File: domain/scene/src/transform.rs
+    28		/// Method: translated
+    29		pub fn translated(mut self, dx: f32, dy: f32, dz: f32) -> Self {
+    30			self.x += dx;
+    31			self.y += dy;
+    32			self.z += dz;
+    33			self
+    34		}
+    35	
+    36		/// File: domain/scene/src/transform.rs
+    37		/// Method: to_glam
+    38		pub fn to_glam(self) -> glam::Vec3 {
+    39			glam::Vec3::new(self.x, self.y, self.z)
+    40		}
+    41	
+    42		/// File: domain/scene/src/transform.rs
+    43		/// Method: from_glam
+    44		pub fn from_glam(value: glam::Vec3) -> Self {
+    45			Self::new(value.x, value.y, value.z)
+    46		}
+    47	}
+    48	
+    49	#[derive(Debug, Copy, Clone, PartialEq, ecs::Reflect)]
+    50	pub struct QuatValue {
+    51		pub x: f32,
+    52		pub y: f32,
+    53		pub z: f32,
+    54		pub w: f32,
+    55	}
+    56	
+    57	impl QuatValue {
+    58		/// File: domain/scene/src/transform.rs
+    59		/// Method: new
+    60		pub fn new(x: f32, y: f32, z: f32, w: f32) -> Self {
+    61			Self { x, y, z, w }
+    62		}
+    63	
+    64		/// File: domain/scene/src/transform.rs
+    65		/// Method: identity
+    66		pub fn identity() -> Self {
+    67			Self::new(0.0, 0.0, 0.0, 1.0)
+    68		}
+    69	
+    70		/// File: domain/scene/src/transform.rs
+    71		/// Method: to_glam
+    72		pub fn to_glam(self) -> glam::Quat {
+    73			glam::Quat::from_xyzw(self.x, self.y, self.z, self.w)
+    74		}
+    75	
+    76		/// File: domain/scene/src/transform.rs
+    77		/// Method: from_glam
+    78		pub fn from_glam(value: glam::Quat) -> Self {
+    79			Self::new(value.x, value.y, value.z, value.w)
+    80		}
+    81	}
+    82	
+    83	impl Default for QuatValue {
+    84		fn default() -> Self {
+    85			Self::identity()
+    86		}
+    87	}
+    88	
+    89	#[derive(Debug, Copy, Clone, PartialEq, ecs::Component, ecs::ReflectComponent)]
+    90	pub struct LocalTransform {
+    91		pub translation: Vec3Value,
+    92		pub rotation: QuatValue,
+    93		pub scale: Vec3Value,
+    94	}
+    95	
+    96	impl LocalTransform {
+    97		/// File: domain/scene/src/transform.rs
+    98		/// Method: new
+    99		pub fn new(
+   100			translation: Vec3Value,
+   101			rotation: QuatValue,
+   102			scale: Vec3Value,
+   103		) -> Self {
+   104			Self {
+   105				translation,
+   106				rotation,
+   107				scale,
+   108			}
+   109		}
+   110	
+   111		/// File: domain/scene/src/transform.rs
+   112		/// Method: from_translation
+   113		pub fn from_translation(translation: Vec3Value) -> Self {
+   114			Self {
+   115				translation,
+   116				..Self::default()
+   117			}
+   118		}
+   119	
+   120		/// File: domain/scene/src/transform.rs
+   121		/// Method: translated
+   122		pub fn translated(mut self, dx: f32, dy: f32, dz: f32) -> Self {
+   123			self.translation = self.translation.translated(dx, dy, dz);
+   124			self
+   125		}
+   126	}
+   127	
+   128	impl Default for LocalTransform {
+   129		fn default() -> Self {
+   130			Self {
+   131				translation: Vec3Value::zero(),
+   132				rotation: QuatValue::identity(),
+   133				scale: Vec3Value::one(),
+   134			}
+   135		}
+   136	}
+   137	
+   138	#[derive(Debug, Copy, Clone, PartialEq, ecs::Component, ecs::ReflectComponent)]
+   139	pub struct WorldTransform {
+   140		pub translation: Vec3Value,
+   141		pub rotation: QuatValue,
+   142		pub scale: Vec3Value,
+   143	}
+   144	
+   145	impl WorldTransform {
+   146		/// File: domain/scene/src/transform.rs
+   147		/// Method: new
+   148		pub fn new(
+   149			translation: Vec3Value,
+   150			rotation: QuatValue,
+   151			scale: Vec3Value,
+   152		) -> Self {
+   153			Self {
+   154				translation,
+   155				rotation,
+   156				scale,
+   157			}
+   158		}
+   159	}
+   160	
+   161	impl Default for WorldTransform {
+   162		fn default() -> Self {
+   163			Self {
+   164				translation: Vec3Value::zero(),
+   165				rotation: QuatValue::identity(),
+   166				scale: Vec3Value::one(),
+   167			}
+   168		}
+   169	}
+   170	
+   171	#[cfg(test)]
+   172	mod tests {
+   173		use super::*;
+   174	
+   175		#[test]
+   176		fn local_transform_defaults_to_identity() {
+   177			let transform = LocalTransform::default();
+   178	
+   179			assert_eq!(transform.translation, Vec3Value::zero());
+   180			assert_eq!(transform.rotation, QuatValue::identity());
+   181			assert_eq!(transform.scale, Vec3Value::one());
+   182		}
+   183	
+   184		#[test]
+   185		fn local_transform_translated_applies_delta() {
+   186			let transform = LocalTransform::from_translation(Vec3Value::new(1.0, 2.0, 3.0))
+   187				.translated(2.0, -1.0, 0.5);
+   188	
+   189			assert_eq!(transform.translation, Vec3Value::new(3.0, 1.0, 3.5));
+   190		}
+   191	}
+===== END FILE: ./src/transform.rs =====

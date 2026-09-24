@@ -1,0 +1,381 @@
+use engine::plugins::render::backend::RenderSurfaceRegistryResource;
+use engine::plugins::render::{
+    PreparedRenderProductSelectionResource, RenderDynamicTextureTargetRequestRegistryResource,
+    RenderDynamicTextureUploadRegistryResource, RenderGpuResidencyBudgetResource,
+    RenderGpuResidencyResource, RenderRuntimeSet, SurfaceFrameSubmissionRegistryResource,
+};
+use engine::prelude::*;
+use engine::runtime::{
+    ProductPublicationOccurrence, ProductPublicationRuntimeResource, SystemConfigExt,
+    SystemMobilityExt, WindowStateRegistryResource, dispatch_product_publication_system,
+    dispatch_query_snapshot_publication_system,
+};
+use runen_ecs::World;
+
+use crate::asset_pipeline::publish_pending_field_product_publications;
+use crate::material_lab::publish_pending_material_preview_publications;
+use crate::runtime::composition::{
+    EditorCompositionTransitionRuntimeResource, EditorTargetInputRuntimeResource,
+    dispatch_editor_target_input_system, sync_editor_composition_transitions_system,
+};
+use crate::runtime::procgen::{
+    dispatch_procgen_product_publication, dispatch_procgen_query_publication,
+    sync_procgen_viewport_overlay_system,
+};
+use crate::runtime::resources::{
+    EditorHostResource, EditorInputBridgeState, EditorViewportRenderState,
+    RuntimePreviewProcessResource,
+};
+use crate::runtime::systems::{
+    bootstrap_editor_demo_system, dispatch_editor_input_system,
+    prepare_material_preview_render_resource_system, produce_editor_picking_system,
+    produce_material_preview_dynamic_uploads_system,
+    produce_texture_preview_dynamic_uploads_system, seed_viewport_runtime_contracts_system,
+    submit_editor_frame_system, submit_editor_secondary_native_frames_system,
+    sync_viewport_instances_system,
+};
+use crate::runtime::viewport::{
+    MountedSurfaceRegistryResource, SurfaceDefinitionRegistryResource,
+    ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
+    ViewportInstanceRegistryResource, ViewportLayoutMapResource, ViewportPickingResultsResource,
+    ViewportPresentationStateResource, ViewportProductRegistryResource,
+    ViewportProductTargetRegistryResource, ViewportRenderJobResource,
+    ViewportRenderStateCommandQueueResource, ViewportRenderStateResource,
+    ViewportRuntimeSettingsHydrationResource, ViewportSurfaceSetResource,
+    apply_viewport_render_state_commands_system, dispatch_viewport_query_publication,
+    prepare_viewport_render_product_selections_system, summarize_viewport_gpu_residency_system,
+    sync_viewport_presentation_products_system, sync_viewport_product_targets_system,
+    sync_viewport_render_jobs_system,
+};
+use crate::shell::EditorWindowPresentationBinding;
+
+pub struct EditorAppPlugin;
+pub struct EditorNativeWindowIntegrationPlugin;
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, SystemSet)]
+pub enum EditorRuntimeSet {
+    Picking,
+    InputBridge,
+    CompositionTransitions,
+    TargetInput,
+    ProductPublication,
+    WindowPresentationRequests,
+    ViewportLifecycle,
+    FrameSubmit,
+    NativeSecondaryFrameSubmit,
+    ViewportRenderStateCommands,
+    ViewportPresentationSync,
+    QuerySnapshotPublication,
+    ProcgenViewportOverlay,
+    ViewportProductTargets,
+    ViewportRenderJobs,
+    ViewportRenderProductSelection,
+    MaterialPreviewRenderHandoff,
+    MaterialPreviewProductUpload,
+    TexturePreviewProductUpload,
+    ViewportGpuResidencySummary,
+}
+
+impl Plugin for EditorAppPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<EditorHostResource>();
+        app.init_resource::<RuntimePreviewProcessResource>();
+        app.init_resource::<EditorInputBridgeState>();
+        app.init_resource::<EditorViewportRenderState>();
+        app.init_resource::<EditorCompositionTransitionRuntimeResource>();
+        app.init_resource::<EditorTargetInputRuntimeResource>();
+        app.init_resource::<ViewportProductRegistryResource>();
+        app.init_resource::<ViewportProductTargetRegistryResource>();
+        app.init_resource::<ViewportPresentationStateResource>();
+        app.init_resource::<ViewportRuntimeSettingsHydrationResource>();
+        app.init_resource::<ViewportArtifactObservationResource>();
+        app.init_resource::<ViewportRenderJobResource>();
+        app.init_resource::<ViewportRenderStateResource>();
+        app.init_resource::<ViewportRenderStateCommandQueueResource>();
+        app.init_resource::<ViewportInstanceRegistryResource>();
+        app.init_resource::<ViewportLayoutMapResource>();
+        app.init_resource::<ToolSurfaceRuntimeBindingRegistryResource>();
+        app.init_resource::<SurfaceDefinitionRegistryResource>();
+        app.init_resource::<MountedSurfaceRegistryResource>();
+        app.init_resource::<ViewportSurfaceSetResource>();
+        app.init_resource::<ViewportPickingResultsResource>();
+        app.init_resource::<SurfaceFrameSubmissionRegistryResource>();
+        app.init_resource::<RenderDynamicTextureTargetRequestRegistryResource>();
+        app.init_resource::<RenderDynamicTextureUploadRegistryResource>();
+        app.init_resource::<PreparedRenderProductSelectionResource>();
+        app.init_resource::<RenderGpuResidencyResource>();
+        app.init_resource::<RenderGpuResidencyBudgetResource>();
+        app.add_product_publication_handler(publish_editor_field_products);
+        app.add_product_publication_handler(dispatch_procgen_product_publication);
+        app.add_product_publication_handler(publish_editor_material_preview_products);
+        app.add_query_snapshot_publication_handler(dispatch_viewport_query_publication);
+        app.add_query_snapshot_publication_handler(dispatch_procgen_query_publication);
+
+        app.add_systems(Startup, bootstrap_editor_demo_system.on_invoker_thread());
+        app.add_systems(Startup, seed_viewport_runtime_contracts_system);
+        app.add_systems(
+            Update,
+            produce_editor_picking_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::Picking),
+        );
+        app.add_systems(
+            Update,
+            apply_viewport_render_state_commands_system
+                .in_set(EditorRuntimeSet::ViewportRenderStateCommands)
+                .after_if_present(EditorRuntimeSet::InputBridge),
+        );
+        app.add_systems(
+            Update,
+            dispatch_product_publication_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::ProductPublication)
+                .after_if_present(EditorRuntimeSet::TargetInput),
+        );
+        app.add_systems(
+            Update,
+            sync_viewport_instances_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::ViewportLifecycle)
+                .after(EditorRuntimeSet::ViewportRenderStateCommands)
+                .after_if_present(EditorRuntimeSet::WindowPresentationRequests),
+        );
+        app.add_systems(
+            Update,
+            submit_editor_frame_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::FrameSubmit)
+                .after(EditorRuntimeSet::ProductPublication)
+                .after(EditorRuntimeSet::ViewportLifecycle),
+        );
+        app.add_systems(
+            Update,
+            sync_viewport_presentation_products_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::ViewportPresentationSync)
+                .after(EditorRuntimeSet::FrameSubmit)
+                .after_if_present(EditorRuntimeSet::NativeSecondaryFrameSubmit),
+        );
+        app.add_systems(
+            Update,
+            dispatch_query_snapshot_publication_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::QuerySnapshotPublication)
+                .after(EditorRuntimeSet::ViewportPresentationSync),
+        );
+        app.add_systems(
+            Update,
+            sync_procgen_viewport_overlay_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::ProcgenViewportOverlay)
+                .after(EditorRuntimeSet::QuerySnapshotPublication),
+        );
+        app.add_systems(
+            Update,
+            sync_viewport_product_targets_system
+                .in_set(EditorRuntimeSet::ViewportProductTargets)
+                .after(EditorRuntimeSet::ProcgenViewportOverlay),
+        );
+        app.add_systems(
+            Update,
+            sync_viewport_render_jobs_system
+                .in_set(EditorRuntimeSet::ViewportRenderJobs)
+                .after(EditorRuntimeSet::ViewportProductTargets),
+        );
+        app.add_systems(
+            RenderPrepare,
+            prepare_viewport_render_product_selections_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::ViewportRenderProductSelection)
+                .before(RenderRuntimeSet::GpuResidency),
+        );
+        app.add_systems(
+            RenderPrepare,
+            prepare_material_preview_render_resource_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::MaterialPreviewRenderHandoff)
+                .after(EditorRuntimeSet::ViewportRenderProductSelection)
+                .before(RenderRuntimeSet::FramePrepare),
+        );
+        app.add_systems(
+            RenderPrepare,
+            produce_material_preview_dynamic_uploads_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::MaterialPreviewProductUpload)
+                .after(EditorRuntimeSet::MaterialPreviewRenderHandoff)
+                .before(RenderRuntimeSet::FramePrepare),
+        );
+        app.add_systems(
+            RenderPrepare,
+            produce_texture_preview_dynamic_uploads_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::TexturePreviewProductUpload)
+                .after(EditorRuntimeSet::MaterialPreviewProductUpload)
+                .before(RenderRuntimeSet::FramePrepare),
+        );
+        app.add_systems(
+            RenderPrepare,
+            summarize_viewport_gpu_residency_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::ViewportGpuResidencySummary)
+                .after(RenderRuntimeSet::GpuResidency)
+                .before(RenderRuntimeSet::FramePrepare),
+        );
+    }
+}
+
+impl Plugin for EditorNativeWindowIntegrationPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(
+            Update,
+            dispatch_editor_input_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::InputBridge)
+                .after(EditorRuntimeSet::Picking),
+        );
+        app.add_systems(
+            Update,
+            sync_editor_composition_transitions_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::CompositionTransitions)
+                .after(EditorRuntimeSet::InputBridge),
+        );
+        app.add_systems(
+            Update,
+            dispatch_editor_target_input_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::TargetInput)
+                .after(EditorRuntimeSet::CompositionTransitions),
+        );
+        app.add_systems(
+            Update,
+            sync_editor_window_presentation_requests_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::WindowPresentationRequests)
+                .after(EditorRuntimeSet::TargetInput),
+        );
+        app.add_systems(
+            Update,
+            submit_editor_secondary_native_frames_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::NativeSecondaryFrameSubmit)
+                .after(EditorRuntimeSet::FrameSubmit)
+                .after(EditorRuntimeSet::WindowPresentationRequests),
+        );
+    }
+}
+
+pub(crate) fn sync_editor_window_presentation_requests_system(
+    mut host: ResMut<EditorHostResource>,
+    mut window_registry: ResMut<WindowStateRegistryResource>,
+    mut surface_registry: ResMut<RenderSurfaceRegistryResource>,
+) {
+    let _ = sync_editor_window_presentation_requests(
+        &mut host,
+        &mut window_registry,
+        &mut surface_registry,
+    );
+}
+
+fn sync_editor_window_presentation_requests(
+    host: &mut EditorHostResource,
+    window_registry: &mut WindowStateRegistryResource,
+    surface_registry: &mut RenderSurfaceRegistryResource,
+) -> usize {
+    let pending = host.shell_state.drain_pending_editor_window_presentations();
+    let synced = pending.len();
+    for editor_window_id in pending {
+        let request = window_registry
+            .request_window(format!("Runenwerk {}", editor_window_id.raw()), (1280, 720));
+        let render_surface_id = surface_registry
+            .reserve_surface_for_native_window(request.native_window_id, request.size_px);
+        let binding = EditorWindowPresentationBinding {
+            native_window_id: request.native_window_id,
+            render_surface_id,
+        };
+        let _ = host
+            .shell_state
+            .bind_editor_window_presentation(editor_window_id, binding);
+    }
+    synced
+}
+
+fn publish_editor_field_products(
+    occurrence: &ProductPublicationOccurrence,
+    world: &mut World,
+) -> anyhow::Result<()> {
+    let Some(mut host) = world.remove_resource::<EditorHostResource>() else {
+        return Ok(());
+    };
+    let Some(mut publications) = world.remove_resource::<ProductPublicationRuntimeResource>()
+    else {
+        world.insert_resource(host);
+        return Ok(());
+    };
+
+    publish_pending_field_product_publications(&mut host.app, &mut publications, occurrence);
+
+    world.insert_resource(publications);
+    world.insert_resource(host);
+    Ok(())
+}
+
+fn publish_editor_material_preview_products(
+    occurrence: &ProductPublicationOccurrence,
+    world: &mut World,
+) -> anyhow::Result<()> {
+    let Some(mut host) = world.remove_resource::<EditorHostResource>() else {
+        return Ok(());
+    };
+    let Some(mut publications) = world.remove_resource::<ProductPublicationRuntimeResource>()
+    else {
+        world.insert_resource(host);
+        return Ok(());
+    };
+
+    publish_pending_material_preview_publications(&mut host.app, &mut publications, occurrence);
+
+    world.insert_resource(publications);
+    world.insert_resource(host);
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use engine::runtime::NativeWindowId;
+
+    #[test]
+    fn window_presentation_requests_bind_editor_windows_to_native_surfaces() {
+        let mut host = EditorHostResource::default();
+        let editor_window_id = host.shell_state.open_editor_window_for_active_workspace();
+        let mut window_registry = WindowStateRegistryResource::default();
+        window_registry.register_primary_window("Runenwerk", (1280, 720), 1.0, true);
+        let mut surface_registry = RenderSurfaceRegistryResource::default();
+
+        let synced = sync_editor_window_presentation_requests(
+            &mut host,
+            &mut window_registry,
+            &mut surface_registry,
+        );
+
+        assert_eq!(synced, 1);
+        let binding = host
+            .shell_state
+            .editor_window_binding(editor_window_id)
+            .expect("secondary editor window should be bound to presentation ids");
+        assert_ne!(binding.native_window_id, NativeWindowId::primary());
+        assert!(window_registry.record(binding.native_window_id).is_some());
+        assert_eq!(
+            surface_registry.surface_for_native_window(binding.native_window_id),
+            Some(binding.render_surface_id)
+        );
+        assert_eq!(
+            surface_registry
+                .record(binding.render_surface_id)
+                .map(|record| record.lifecycle_state),
+            Some(engine::plugins::render::backend::RenderSurfaceLifecycleState::Requested)
+        );
+        assert_eq!(window_registry.pending_creation_requests().len(), 1);
+    }
+}

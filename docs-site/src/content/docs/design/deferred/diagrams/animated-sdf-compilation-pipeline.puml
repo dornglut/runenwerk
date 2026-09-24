@@ -1,0 +1,68 @@
+@startuml
+title Animated SDF Compilation Pipeline
+
+package "Authoring Layer" {
+  [Shape Graph]
+  [Semantic Parts]
+  [Rig / Control Graph]
+  [Motion Graph]
+  [Deformation Graph]
+  [Material / Interaction Layers]
+}
+
+package "Validation Layer" {
+  [Semantic ID Validation]
+  [Field Correctness Checks]
+  [Deformation Safety Checks]
+  [Proxy Requirements]
+  [Cache Invalidation Rules]
+}
+
+package "Intermediate Representation" {
+  [Animated SDF Semantic IR]
+  [Resolved Asset Layers]
+  [Purpose Field Specs]
+}
+
+package "Runtime Planning" {
+  [Runtime Field Plan]
+  [Dirty Region Plan]
+  [Job Dependency Graph]
+  [Proxy Generation Plan]
+}
+
+package "Execution Outputs" {
+  [Render Field]
+  [Physics Field]
+  [Gameplay Field]
+  [VFX Field]
+  [Debug Field]
+}
+
+[Shape Graph] --> [Semantic ID Validation]
+[Semantic Parts] --> [Semantic ID Validation]
+[Rig / Control Graph] --> [Deformation Safety Checks]
+[Motion Graph] --> [Proxy Requirements]
+[Deformation Graph] --> [Field Correctness Checks]
+[Material / Interaction Layers] --> [Cache Invalidation Rules]
+
+[Semantic ID Validation] --> [Animated SDF Semantic IR]
+[Field Correctness Checks] --> [Animated SDF Semantic IR]
+[Deformation Safety Checks] --> [Animated SDF Semantic IR]
+[Proxy Requirements] --> [Purpose Field Specs]
+[Cache Invalidation Rules] --> [Purpose Field Specs]
+
+[Animated SDF Semantic IR] --> [Runtime Field Plan]
+[Resolved Asset Layers] --> [Runtime Field Plan]
+[Purpose Field Specs] --> [Runtime Field Plan]
+
+[Runtime Field Plan] --> [Dirty Region Plan]
+[Runtime Field Plan] --> [Job Dependency Graph]
+[Runtime Field Plan] --> [Proxy Generation Plan]
+
+[Job Dependency Graph] --> [Render Field]
+[Job Dependency Graph] --> [Physics Field]
+[Job Dependency Graph] --> [Gameplay Field]
+[Job Dependency Graph] --> [VFX Field]
+[Job Dependency Graph] --> [Debug Field]
+@enduml

@@ -1,0 +1,78 @@
+@startuml
+title Procedural Animation + SDF Runtime Architecture
+
+package "Animation Domain" {
+  [Motion Intent]
+  [Planner]
+  [Motor Controller]
+  [Constraint Solver]
+  [Animation Events]
+}
+
+package "SDF Runtime" {
+  [Runtime Field Plan]
+  [Field Deformation Jobs]
+  [Runtime Field Cache]
+  [Dirty Region Tracker]
+}
+
+package "Physics Domain" {
+  [Physics Proxy]
+  [Contact Manifold]
+  [Simulation Island]
+  [Simulation Feedback]
+}
+
+package "Rendering Domain" {
+  [Render Proxy]
+  [Distance Mips]
+  [Tile Candidate Lists]
+  [Temporal Reprojection]
+}
+
+package "Gameplay Domain" {
+  [Interaction Fields]
+  [Damage Regions]
+  [Ability Sockets]
+  [Affordance Queries]
+}
+
+package "Scheduler / ECS" {
+  [Deferred Mutations]
+  [Job Dependency Graph]
+  [Apply Sync Points]
+}
+
+[Motion Intent] --> [Planner]
+[Planner] --> [Motor Controller]
+[Motor Controller] --> [Constraint Solver]
+[Constraint Solver] --> [Animation Events]
+[Constraint Solver] --> [Field Deformation Jobs]
+
+[Runtime Field Plan] --> [Job Dependency Graph]
+[Job Dependency Graph] --> [Field Deformation Jobs]
+[Field Deformation Jobs] --> [Dirty Region Tracker]
+[Dirty Region Tracker] --> [Runtime Field Cache]
+
+[Runtime Field Cache] --> [Physics Proxy]
+[Runtime Field Cache] --> [Render Proxy]
+[Runtime Field Cache] --> [Interaction Fields]
+
+[Physics Proxy] --> [Contact Manifold]
+[Contact Manifold] --> [Simulation Island]
+[Simulation Island] --> [Simulation Feedback]
+[Simulation Feedback] --> [Motion Intent]
+[Simulation Feedback] --> [Field Deformation Jobs]
+
+[Render Proxy] --> [Distance Mips]
+[Distance Mips] --> [Tile Candidate Lists]
+[Tile Candidate Lists] --> [Temporal Reprojection]
+
+[Interaction Fields] --> [Damage Regions]
+[Interaction Fields] --> [Ability Sockets]
+[Interaction Fields] --> [Affordance Queries]
+
+[Animation Events] --> [Deferred Mutations]
+[Deferred Mutations] --> [Apply Sync Points]
+[Apply Sync Points] --> [Runtime Field Plan]
+@enduml

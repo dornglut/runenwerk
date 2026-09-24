@@ -1,0 +1,63 @@
+@startuml
+title ECS Scheduler Execution Fabric - Waves, Barriers, and Product Jobs
+
+skinparam shadowing false
+skinparam defaultFontName Monospaced
+
+start
+
+partition "Scheduler Plan" {
+  :Build ExecutionPlan;
+  :Validate access sets;
+  :Group conflict-free nodes into waves;
+  :Insert barriers and apply-deferred nodes;
+}
+
+partition "Update Phase" {
+  fork
+    :Wave A System Node;
+    :Read ECS / Products;
+    :Write deferred commands;
+  fork again
+    :Wave A Product Job;
+    :Read product inputs;
+    :Stage product output;
+  fork again
+    :Wave A Diagnostics Job;
+    :Collect diagnostics;
+  end fork
+
+  :Barrier - Merge Worker Queues;
+  :Apply Deferred Commands;
+  :Publish Product Generation Updates;
+
+  fork
+    :Wave B System Node;
+  fork again
+    :Wave B Product Job;
+  end fork
+
+  :Barrier - Publish Outputs;
+}
+
+partition "RenderPrepare" {
+  :Resolve render products;
+  :Prepare render product set;
+  :Update GPU residency requests;
+}
+
+partition "RenderSubmit" {
+  :Submit prepared render flows;
+  :No live ECS extraction;
+  :Publish renderer diagnostics;
+}
+
+partition "FrameEnd" {
+  :Flush frame diagnostics;
+  :Finalize command/product generations;
+  :Record replay/network facts where authoritative;
+}
+
+stop
+
+@enduml

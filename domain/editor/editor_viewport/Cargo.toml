@@ -1,0 +1,10 @@
+[package]
+name = "editor_viewport"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license.workspace = true
+
+[dependencies]
+editor_core.workspace = true
+ui_math.workspace = true
