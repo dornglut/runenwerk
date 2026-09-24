@@ -1,6 +1,5 @@
 use crate::app::App;
 use crate::app::domain::mode::AppMode;
-use crate::plugins::{ActionState, InputState};
 use crate::*;
 
 impl App {
@@ -9,12 +8,6 @@ impl App {
     /// Capability state such as fixed cadence and simulation identity is installed by
     /// its owning integration plugin rather than by bare App construction.
     pub(crate) fn install_builtin_resources(&mut self) {
-        if self.world.resource::<InputState>().is_err() {
-            self.world.insert_resource(InputState::new());
-        }
-        if self.world.resource::<ActionState>().is_err() {
-            self.world.insert_resource(ActionState::new());
-        }
         if self.world.resource::<WindowState>().is_err() {
             let state = match self.mode {
                 AppMode::Windowed => WindowState::windowed(self.title.clone()),
@@ -41,11 +34,20 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::{ActionState, InputState};
     use crate::runtime::platform::PlatformWindowEventQueueResource;
 
     #[test]
-    fn bare_apps_do_not_provision_native_window_provider_state() {
+    fn bare_apps_do_not_provision_optional_host_or_input_provider_state() {
         for app in [App::new(), App::headless()] {
+            assert!(
+                app.world().resource::<InputState>().is_err(),
+                "bare App must not provision physical input capability state"
+            );
+            assert!(
+                app.world().resource::<ActionState>().is_err(),
+                "bare App must not provision product action capability state"
+            );
             assert!(
                 app.world()
                     .resource::<WindowStateRegistryResource>()

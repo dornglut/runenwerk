@@ -19,8 +19,12 @@ pub(crate) fn scene_transition_system(mut world: WorldMut) -> Result<()> {
         .ok()
         .map(|config| config.step_seconds);
 
-    let mut input = world.remove_resource::<InputState>().unwrap_or_default();
-    let actions = world.remove_resource::<ActionState>().unwrap_or_default();
+    let input_resource = world.remove_resource::<InputState>();
+    let action_resource = world.remove_resource::<ActionState>();
+    let input_was_installed = input_resource.is_some();
+    let actions_were_installed = action_resource.is_some();
+    let mut input = input_resource.unwrap_or_default();
+    let actions = action_resource.unwrap_or_default();
     let mut scene_templates = world
         .remove_resource::<SceneTemplateFlowResource>()
         .unwrap_or_default();
@@ -120,8 +124,12 @@ pub(crate) fn scene_transition_system(mut world: WorldMut) -> Result<()> {
         Ok(())
     })();
 
-    world.insert_resource(input);
-    world.insert_resource(actions);
+    if input_was_installed {
+        world.insert_resource(input);
+    }
+    if actions_were_installed {
+        world.insert_resource(actions);
+    }
     world.insert_resource(scene_templates);
     world.insert_resource(scene_resource);
     world.insert_resource(scene_state);

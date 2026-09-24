@@ -26,6 +26,8 @@ pub struct InputFinalizePlugin;
 
 impl Plugin for InputFinalizePlugin {
     fn build(&self, app: &mut App) {
+        app.init_resource::<state::InputState>();
+        app.init_resource::<ActionState>();
         app.add_systems(PreUpdate, project_actions_system.in_set(CoreSet::Input));
         app.add_systems(FrameEnd, clear_input_system.in_set(CoreSet::FrameEnd));
     }

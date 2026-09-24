@@ -185,17 +185,26 @@ impl App {
     where
         I: IntoIterator<Item = (&'static str, PhysicalKeyIdentity)>,
     {
-        self.init_resource::<InputState>();
-        self.init_resource::<ActionState>();
+        if self.world.resource::<InputState>().is_err()
+            || self.world.resource::<ActionState>().is_err()
+        {
+            self.composition_errors
+                .push(AppCompositionError::MissingCapability {
+                    operation: "add_input_bindings",
+                    capability: "InputFinalizePlugin",
+                });
+            return self;
+        }
+
         let mut actions = self
             .world
             .remove_resource::<ActionState>()
-            .unwrap_or_default();
+            .expect("input capability admission proved ActionState exists");
         {
             let input = self
                 .world
                 .resource::<InputState>()
-                .expect("input state should be installed");
+                .expect("input capability admission proved InputState exists");
             for (action, key) in bindings {
                 actions.map_key(input, action.to_string(), key);
             }
@@ -414,6 +423,10 @@ impl App {
 
 #[derive(Debug)]
 enum AppCompositionError {
+    MissingCapability {
+        operation: &'static str,
+        capability: &'static str,
+    },
     SystemRegistration {
         schedule: &'static str,
         source: RuntimeError,
@@ -428,6 +441,13 @@ enum AppCompositionError {
 impl fmt::Display for AppCompositionError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::MissingCapability {
+                operation,
+                capability,
+            } => write!(
+                formatter,
+                "{operation} requires selected capability '{capability}'"
+            ),
             Self::SystemRegistration { schedule, source } => write!(
                 formatter,
                 "failed to register systems in schedule '{}': {}",
@@ -456,7 +476,7 @@ impl Error for AppCompositionError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::SystemRegistration { source, .. } => Some(source),
-            Self::LateTopologyMutation { .. } => None,
+            Self::MissingCapability { .. } | Self::LateTopologyMutation { .. } => None,
         }
     }
 }
