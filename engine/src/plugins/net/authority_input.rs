@@ -200,10 +200,7 @@ impl RunenNetSessionCore {
         )
     }
 
-    pub(crate) fn drain_authority_input_payloads(
-        &mut self,
-        tick: SimulationTick,
-    ) -> Vec<Vec<u8>> {
+    pub(crate) fn drain_authority_input_payloads(&mut self, tick: SimulationTick) -> Vec<Vec<u8>> {
         self.authority_input
             .as_mut()
             .map(|authority_input| authority_input.drain_tick(tick))

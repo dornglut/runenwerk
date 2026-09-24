@@ -245,10 +245,7 @@ fn test_runennet_session_core() -> RunenNetSessionCore {
         .with_authority_input_policy(test_authority_input_policy())
 }
 
-fn establish_runennet_negotiation(
-    core: &mut RunenNetSessionCore,
-    connection: ConnectionHandle,
-) {
+fn establish_runennet_negotiation(core: &mut RunenNetSessionCore, connection: ConnectionHandle) {
     core.negotiation_mut()
         .start(
             connection,
