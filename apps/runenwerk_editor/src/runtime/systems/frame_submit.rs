@@ -260,6 +260,7 @@ pub fn submit_editor_frame_system(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn submit_editor_secondary_native_frames_system(
     window_registry: Res<WindowStateRegistryResource>,
     debug_metrics: Res<engine::DebugMetricsState>,
