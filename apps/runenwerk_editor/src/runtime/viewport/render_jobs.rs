@@ -7,9 +7,10 @@ use editor_viewport::{ExpressionDimensions, ViewportId, ViewportSurfacePresentat
 #[cfg(test)]
 use engine::plugins::render::RenderTargetAliasKey;
 use engine::plugins::render::{
-    PreparedFlowInvocationRequest, PreparedMaterialFeatureResource, PreparedRenderFrameRequestResource,
-    PreparedViewFrame, RenderDynamicTextureTargetKey, RenderFlowId, RenderFlowRegistryResource,
-    RenderProductSurfaceManifest, RenderProductSurfaceRequest, RenderProductSurfaceRequestBatch,
+    PreparedFlowInvocationRequest, PreparedMaterialFeatureResource,
+    PreparedRenderFrameRequestResource, PreparedViewFrame, RenderDynamicTextureTargetKey,
+    RenderFlowId, RenderFlowRegistryResource, RenderProductSurfaceManifest,
+    RenderProductSurfaceRequest, RenderProductSurfaceRequestBatch,
 };
 use engine::runtime::{Res, ResMut};
 use runen_gpu::GpuWorkResourceId;
@@ -116,8 +117,8 @@ fn publish_viewport_render_frame_requests(
     prepared_frame_requests: &mut PreparedRenderFrameRequestResource,
 ) -> bool {
     if material_feature.payload.scene_bundle.is_none() || viewport_render_jobs.is_empty() {
-        let _ = prepared_frame_requests
-            .remove_contribution(EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID);
+        let _ =
+            prepared_frame_requests.remove_contribution(EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID);
         return false;
     }
 
@@ -411,15 +412,14 @@ mod tests {
         );
 
         let mut ready_material = PreparedMaterialFeatureResource::default();
-        ready_material.payload.scene_bundle = Some(
-            engine::plugins::render::PreparedSceneMaterialBundle::new(
+        ready_material.payload.scene_bundle =
+            Some(engine::plugins::render::PreparedSceneMaterialBundle::new(
                 "scene-artifact",
                 "scene-cache",
                 "generated-scene.wgsl",
                 "scene-identity",
                 "material-table",
-            ),
-        );
+            ));
         assert!(
             publish_viewport_render_frame_requests(&ready_material, &jobs, &mut requests),
             "viewport frame requests should publish once an exact generated material scene bundle exists"
