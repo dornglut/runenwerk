@@ -12,13 +12,21 @@ fn rust_sources_below(root: &Path, output: &mut Vec<PathBuf>) {
     }
 }
 
+fn production_source(path: &Path) -> String {
+    let source = fs::read_to_string(path).expect("Rust source should be readable");
+    source
+        .split_once("\n#[cfg(test)]\nmod tests {")
+        .map_or(source.as_str(), |(production, _)| production)
+        .to_owned()
+}
+
 fn joined_sources(root: &Path) -> String {
     let mut paths = Vec::new();
     rust_sources_below(root, &mut paths);
     paths.sort();
     paths
         .into_iter()
-        .map(|path| fs::read_to_string(path).expect("Rust source should be readable"))
+        .map(|path| production_source(&path))
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -32,7 +40,7 @@ fn gfx_owns_one_nonblocking_renderer_progress_authority() {
     assert_eq!(
         source.matches("context.progress();").count(),
         1,
-        "Gfx must retain exactly one context progress point for renderer timing/capture"
+        "Gfx must retain exactly one production context progress point for renderer timing/capture"
     );
     for forbidden in [
         "device.poll(",
