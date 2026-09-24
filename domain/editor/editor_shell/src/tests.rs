@@ -2759,7 +2759,6 @@ fn create_candidates_for_kinds(kinds: &[ToolSurfaceKind]) -> Vec<ToolSurfaceCrea
                 ToolSurfaceCreateCandidate::new(
                     stable_surface_key,
                     tool_surface_kind_definition_key(kind),
-                    kind.panel_kind(),
                 )
             })
         })
