@@ -1458,9 +1458,7 @@ mod tests {
         let independent_control = graph
             .dependencies()
             .iter()
-            .find(|dependency| {
-                dependency.before() == independent && dependency.after() == present
-            })
+            .find(|dependency| dependency.before() == independent && dependency.after() == present)
             .expect("timing must not suppress the renderer-owned independent control into Present");
         assert!(independent_control.reasons().iter().any(|reason| {
             matches!(
