@@ -43,8 +43,8 @@ use crate::runtime::viewport::{
     ViewportRenderStateCommandQueueResource, ViewportRenderStateResource,
     ViewportRuntimeSettingsHydrationResource, ViewportSurfaceSetResource,
     apply_viewport_render_state_commands_system, dispatch_viewport_query_publication,
-    prepare_viewport_render_product_selections_system, publish_viewport_render_frame_requests_system,
-    summarize_viewport_gpu_residency_system,
+    prepare_viewport_render_product_selections_system,
+    publish_viewport_render_frame_requests_system, summarize_viewport_gpu_residency_system,
     sync_viewport_presentation_products_system, sync_viewport_product_targets_system,
     sync_viewport_render_jobs_system,
 };
