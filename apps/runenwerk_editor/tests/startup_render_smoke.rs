@@ -5,8 +5,8 @@ use engine::plugins::render::{
     CompiledPassExecutionPlan, RenderFlowRegistryResource, RenderFrameProducerId,
     SurfaceFrameSubmissionRegistryResource, ViewportSurfaceBindingRegistryResource,
 };
-use engine::runtime::WindowStateRegistryResource;
 use engine::runtime::platform::PlatformWindowEventQueueResource;
+use engine::runtime::{PrimaryPresentationMetricsResource, WindowStateRegistryResource};
 use runenwerk_editor::runtime::resources::{EditorHostResource, EditorViewportDebugStage};
 use runenwerk_editor::runtime::viewport::{
     EDITOR_MAIN_FLOW_ID, EDITOR_VIEWPORT_SCENE_PRODUCT_UNIFORM_ID, SCENE_COLOR_PRODUCT_ID,
@@ -29,6 +29,31 @@ const fn ui_frame_producer_id(raw: u64) -> RenderFrameProducerId {
         Ok(id) => id,
         Err(_) => panic!("ui frame producer id constants must be non-zero"),
     }
+}
+
+#[test]
+fn headless_editor_shell_uses_primary_presentation_metrics() {
+    let mut app = runenwerk_editor::runtime::build_headless_app()
+        .expect("headless app construction should succeed");
+    app.insert_resource(PrimaryPresentationMetricsResource::new((900, 600), 1.25));
+    let app = app
+        .run_for_frames(1)
+        .expect("headless editor app should run with custom presentation metrics");
+
+    let submissions = app
+        .world()
+        .resource::<SurfaceFrameSubmissionRegistryResource>()
+        .expect("ui submission registry should exist");
+    let submission = submissions
+        .get_for_surface(&EDITOR_SHELL_UI_PRODUCER_ID, RenderSurfaceId::primary())
+        .expect("editor shell primary surface submission should exist");
+    let surface = submission
+        .frame
+        .surfaces
+        .first()
+        .expect("editor shell should publish a primary UI surface");
+
+    assert_eq!(surface.size, ui_math::UiSize::new(900.0, 600.0));
 }
 
 #[test]

@@ -8,6 +8,13 @@ impl App {
     /// Capability state such as fixed cadence and simulation identity is installed by
     /// its owning integration plugin rather than by bare App construction.
     pub(crate) fn install_builtin_resources(&mut self) {
+        if !self
+            .world
+            .has_resource::<PrimaryPresentationMetricsResource>()
+        {
+            self.world
+                .insert_resource(PrimaryPresentationMetricsResource::default());
+        }
         if self.world.resource::<WindowState>().is_err() {
             let state = match self.mode {
                 AppMode::Windowed => WindowState::windowed(self.title.clone()),
@@ -40,6 +47,12 @@ mod tests {
     #[test]
     fn bare_apps_do_not_provision_optional_host_or_input_provider_state() {
         for app in [App::new(), App::headless()] {
+            assert_eq!(
+                app.world()
+                    .resource::<PrimaryPresentationMetricsResource>()
+                    .expect("bare App should install primary presentation metrics"),
+                &PrimaryPresentationMetricsResource::default(),
+            );
             assert!(
                 app.world().resource::<InputState>().is_err(),
                 "bare App must not provision physical input capability state"

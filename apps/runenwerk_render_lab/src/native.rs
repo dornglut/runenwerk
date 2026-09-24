@@ -74,7 +74,7 @@ fn approve_render_lab_close_system(
 fn publish_render_lab_frame_system(
     camera: Res<RenderLabCamera>,
     flow_id: Res<RenderLabFlowId>,
-    window: Res<WindowState>,
+    presentation: Res<engine::PrimaryPresentationMetricsResource>,
     publication: RenderLabFramePublicationResources<'_>,
 ) -> Result<()> {
     let RenderLabFramePublicationResources {
@@ -82,7 +82,7 @@ fn publish_render_lab_frame_system(
         mut frame_requests,
         mut contributions,
     } = publication;
-    let (width, height) = (window.size_px.0.max(1), window.size_px.1.max(1));
+    let (width, height) = render_lab_extent(&presentation);
     let producer_id = engine::plugins::render::RenderFrameProducerId::try_from_raw(RL2_PRODUCER_ID)
         .expect("Render Lab producer id is non-zero");
     let target_key = RenderDynamicTextureTargetKey::new(RL2_TARGET_NAMESPACE, RL2_TARGET_ID);
@@ -128,6 +128,10 @@ fn publish_render_lab_frame_system(
     )
 }
 
+fn render_lab_extent(presentation: &engine::PrimaryPresentationMetricsResource) -> (u32, u32) {
+    presentation.size_px()
+}
+
 /// Validate every RL2 publication against cloned registries before replacing any live product
 /// state. The registries retain their other producers, while a failed replacement leaves the
 /// previous complete frame request intact.
@@ -161,6 +165,12 @@ fn stage_render_lab_frame_publication(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn render_lab_extent_uses_primary_presentation_metrics() {
+        let presentation = engine::PrimaryPresentationMetricsResource::new((901, 577), 1.25);
+        assert_eq!(render_lab_extent(&presentation), (901, 577));
+    }
 
     fn producer(raw: u64) -> engine::plugins::render::RenderFrameProducerId {
         engine::plugins::render::RenderFrameProducerId::try_from_raw(raw)

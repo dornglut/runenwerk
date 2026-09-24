@@ -7,7 +7,10 @@ use crate::plugins::diagnostics::core::model::{
     DiagnosticsEntry, DiagnosticsSeverity, DiagnosticsStatus,
 };
 use crate::plugins::time::domain::Time;
-use crate::runtime::{RenderSubmit, SimulationTick, SystemMobilityExt, WindowState, WorldMut};
+use crate::runtime::{
+    PrimaryPresentationMetricsResource, RenderSubmit, SimulationTick, SystemMobilityExt,
+    WindowState, WorldMut,
+};
 use serde::Serialize;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -61,6 +64,9 @@ fn scheduler_diagnostics_system(mut world: WorldMut) {
         let Ok(window) = world.resource::<WindowState>() else {
             return;
         };
+        let Ok(presentation) = world.resource::<PrimaryPresentationMetricsResource>() else {
+            return;
+        };
         let simulation_tick = world
             .resource::<SimulationTick>()
             .map(|value| value.0)
@@ -70,7 +76,7 @@ fn scheduler_diagnostics_system(mut world: WorldMut) {
             simulation_tick,
             dt_seconds: time.delta_seconds,
             window_title: window.title.clone(),
-            window_size_px: window.size_px,
+            window_size_px: presentation.size_px(),
             headless: window.is_headless(),
         }
     };

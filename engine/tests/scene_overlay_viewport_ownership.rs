@@ -22,6 +22,23 @@ fn scene_plugin_installs_scene_overlay_viewport_state() {
 }
 
 #[test]
+fn headless_scene_startup_uses_primary_presentation_metrics() {
+    let mut app = App::headless();
+    app.insert_resource(PrimaryPresentationMetricsResource::new((960, 540), 1.5));
+    app.add_plugin(ScenePlugin);
+    let app = app
+        .run_for_frames(0)
+        .expect("headless Scene startup should use logical presentation metrics");
+
+    let viewport = app
+        .world()
+        .resource::<SceneOverlayViewportState>()
+        .expect("ScenePlugin should publish its overlay viewport");
+    assert_eq!(viewport.screen_size, (960.0, 540.0));
+    assert_eq!(viewport.scale, 1.5);
+}
+
+#[test]
 fn scene_plugin_preserves_preinserted_scene_overlay_viewport_state() {
     let mut app = App::headless();
     let expected = SceneOverlayViewportState {

@@ -7,12 +7,12 @@ use crate::plugins::input::domain::action;
 use crate::plugins::{ActionState, InputState, SceneResource};
 use crate::prelude::Time;
 use crate::prelude::domain::{SceneCommand, SceneId};
-use crate::runtime::{FixedTimeConfig, WindowState, WorldMut};
+use crate::runtime::{FixedTimeConfig, PrimaryPresentationMetricsResource, WorldMut};
 use crate::{SceneOverlayViewportState, SceneRuntimeState};
 use anyhow::Result;
 
 pub(crate) fn scene_transition_system(mut world: WorldMut) -> Result<()> {
-    let window = world.resource::<WindowState>()?.clone();
+    let presentation = *world.resource::<PrimaryPresentationMetricsResource>()?;
     let delta_seconds = world.resource::<Time>()?.delta_seconds;
     let fixed_step_seconds = world
         .resource::<FixedTimeConfig>()
@@ -41,7 +41,7 @@ pub(crate) fn scene_transition_system(mut world: WorldMut) -> Result<()> {
             return Ok(());
         };
 
-        sync_overlay_viewport(manager, &window);
+        sync_overlay_viewport(manager, &presentation);
         let fixed_step_seconds =
             fixed_step_seconds.unwrap_or(manager.world_runtime.ctx.fixed_step_seconds);
         sync_world_scene_context_from_input(
