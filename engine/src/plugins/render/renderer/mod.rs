@@ -11,9 +11,8 @@ use crate::plugins::render::graph::{
 use crate::plugins::render::inspect::{
     PassTimingSample, RenderCaptureSelectorResult, RenderCapturedTexture,
     RenderComposedFrameGpuTimingEvidence, RenderDebugConfigResource, RenderDebugControlResource,
-    RenderGpuTimingCapability,
-    RenderPassProvenanceRecord, RenderPassTimingEvidence, ResolvedRenderCapturePlan,
-    RuntimeResourceInspectionEntry,
+    RenderGpuTimingCapability, RenderPassProvenanceRecord, RenderPassTimingEvidence,
+    ResolvedRenderCapturePlan, RuntimeResourceInspectionEntry,
 };
 use crate::plugins::render::shader::{ShaderHandle, ShaderRegistryResource};
 use anyhow::Result;
@@ -1155,8 +1154,14 @@ mod tests {
             composed_frame_gpu_timing_capability(false, true, true),
             Some(RenderGpuTimingCapability::Unsupported)
         );
-        assert_eq!(composed_frame_gpu_timing_capability(true, false, true), None);
-        assert_eq!(composed_frame_gpu_timing_capability(true, true, false), None);
+        assert_eq!(
+            composed_frame_gpu_timing_capability(true, false, true),
+            None
+        );
+        assert_eq!(
+            composed_frame_gpu_timing_capability(true, true, false),
+            None
+        );
     }
 
     #[test]
