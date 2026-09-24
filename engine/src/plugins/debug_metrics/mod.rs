@@ -305,9 +305,7 @@ fn debug_overlay_font_atlas() -> &'static UiFontAtlasResource {
 mod tests {
     use super::{DEBUG_METRICS_FRAME_PRODUCER_ID, DebugMetricsPlugin};
     use crate::plugins::render::{RenderReadinessState, SurfaceFrameSubmissionRegistryResource};
-    use crate::plugins::{
-        ActionState, InputFinalizePlugin, InputState, ScenePlugin, TimePlugin,
-    };
+    use crate::plugins::{ActionState, InputFinalizePlugin, InputState, ScenePlugin, TimePlugin};
     use crate::prelude::*;
     use winit::event::ElementState;
     use winit::keyboard::KeyCode;
