@@ -450,7 +450,7 @@ mod tests {
 
     #[test]
     fn scene_file_roundtrip_rebuilds_runtime_hierarchy_projection_without_runtime_identity_persistence()
-    {
+     {
         let scene_file = SceneFileV2::new(vec![
             SceneEntityRecordV2::new(
                 1,
