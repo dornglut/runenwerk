@@ -334,8 +334,7 @@ fn group_measurements_are_projectable(
 
 fn project_pressure(measurement: Option<engine::plugins::AnalogMeasurement>) -> Option<f32> {
     measurement.and_then(|measurement| match measurement.domain {
-        MeasurementDomain::LegacyPressureScalar
-        | MeasurementDomain::NormalizedUnitInterval
+        MeasurementDomain::NormalizedUnitInterval
         | MeasurementDomain::Bounded { min: 0.0, max: 1.0 } => (0.0..=1.0)
             .contains(&measurement.value)
             .then_some(measurement.value),
