@@ -5,77 +5,29 @@ use runen_ecs::{ScheduleLabel, SystemSet};
 /// Frame contract (see `runtime::frame_lifecycle::run_frame`):
 /// `PreUpdate` -> (`FixedStepBegin` -> `FixedUpdate`) (0..N) -> `Update` -> `RenderPrepare` -> `RenderSubmit` -> `FrameEnd`.
 
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Copy, Clone, Default, ScheduleLabel)]
 pub struct Startup;
 
-impl ScheduleLabel for Startup {
-    fn name() -> &'static str {
-        "Startup"
-    }
-}
-
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Copy, Clone, Default, ScheduleLabel)]
 pub struct Update;
 
-impl ScheduleLabel for Update {
-    fn name() -> &'static str {
-        "Update"
-    }
-}
-
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Copy, Clone, Default, ScheduleLabel)]
 pub struct PreUpdate;
 
-impl ScheduleLabel for PreUpdate {
-    fn name() -> &'static str {
-        "PreUpdate"
-    }
-}
-
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Copy, Clone, Default, ScheduleLabel)]
 pub struct FixedStepBegin;
 
-impl ScheduleLabel for FixedStepBegin {
-    fn name() -> &'static str {
-        "FixedStepBegin"
-    }
-}
-
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Copy, Clone, Default, ScheduleLabel)]
 pub struct FixedUpdate;
 
-impl ScheduleLabel for FixedUpdate {
-    fn name() -> &'static str {
-        "FixedUpdate"
-    }
-}
-
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Copy, Clone, Default, ScheduleLabel)]
 pub struct RenderPrepare;
 
-impl ScheduleLabel for RenderPrepare {
-    fn name() -> &'static str {
-        "RenderPrepare"
-    }
-}
-
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Copy, Clone, Default, ScheduleLabel)]
 pub struct RenderSubmit;
 
-impl ScheduleLabel for RenderSubmit {
-    fn name() -> &'static str {
-        "RenderSubmit"
-    }
-}
-
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Copy, Clone, Default, ScheduleLabel)]
 pub struct FrameEnd;
-
-impl ScheduleLabel for FrameEnd {
-    fn name() -> &'static str {
-        "FrameEnd"
-    }
-}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, SystemSet)]
 pub enum CoreSet {
