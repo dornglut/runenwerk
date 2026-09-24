@@ -1309,14 +1309,26 @@ mod tests {
             None,
         )
         .unwrap();
+        let independent_buffer = buffer(&mut allocator, "timed independent control", 16);
         let render_occurrence = RenderGpuWorkOccurrenceId::new(1);
-        let present_occurrence = RenderGpuWorkOccurrenceId::new(2);
+        let independent_occurrence = RenderGpuWorkOccurrenceId::new(2);
+        let present_occurrence = RenderGpuWorkOccurrenceId::new(3);
         let nodes = [
             ResolvedRenderGpuWorkNode::pass(
                 render_occurrence,
                 label("timed renderer work"),
                 GpuWorkOperation::Render(render),
                 GpuExecutionPreference::GraphicsRequired,
+                [],
+            ),
+            ResolvedRenderGpuWorkNode::upload(
+                independent_occurrence,
+                label("timed independent control work"),
+                GpuUploadOperation::new(
+                    whole_region(&independent_buffer, 16).into(),
+                    transfer_payload("timed independent control payload", 16),
+                )
+                .unwrap(),
                 [],
             ),
             ResolvedRenderGpuWorkNode::present(
@@ -1327,7 +1339,7 @@ mod tests {
                     surface_view.descriptor().subresources(),
                 )
                 .unwrap(),
-                [render_occurrence],
+                [independent_occurrence],
             ),
         ];
 
@@ -1421,6 +1433,7 @@ mod tests {
         let start = node("timed frame start");
         let producer = node("timed producer clear");
         let renderer = node("timed renderer work");
+        let independent = node("timed independent control work");
         let end = node("timed frame end");
         let resolve = node("timed frame timestamp resolve");
         let readback = node("timed frame timestamp readback");
@@ -1434,12 +1447,28 @@ mod tests {
         };
         assert!(pos(start) < pos(producer));
         assert!(pos(start) < pos(renderer));
+        assert!(pos(start) < pos(independent));
         assert!(pos(producer) < pos(end));
         assert!(pos(renderer) < pos(end));
+        assert!(pos(independent) < pos(end));
         assert!(pos(end) < pos(resolve));
         assert!(pos(resolve) < pos(readback));
         assert!(pos(readback) < pos(present));
         assert_eq!(graph.topological_order().last(), Some(&present));
+        let independent_control = graph
+            .dependencies()
+            .iter()
+            .find(|dependency| {
+                dependency.before() == independent && dependency.after() == present
+            })
+            .expect("timing must not suppress the renderer-owned independent control into Present");
+        assert!(independent_control.reasons().iter().any(|reason| {
+            matches!(
+                reason,
+                GpuDependencyReason::ExplicitNonData { reason }
+                    if reason == "render-owned occurrence control order"
+            )
+        }));
         assert_eq!(
             graph
                 .nodes()
