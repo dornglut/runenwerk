@@ -382,3 +382,162 @@ fn timing_diagnostic(
         RenderGpuTimingDiagnostic::unavailable_this_frame(message),
     )
 }
+
+
+#[cfg(test)]
+mod composed_native_proof {
+    use super::*;
+    use crate::plugins::render::adapters::{
+        RenderGpuWorkOccurrenceId, ResolvedRenderGpuWorkNode, prepare_render_gpu_frame_work,
+    };
+    use runen_gpu::{
+        GpuBufferDescriptor, GpuBufferInitialization, GpuBufferRegion, GpuBufferUsage,
+        GpuCapabilityFeature, GpuCapabilityProfile, GpuCapabilityRequirement, GpuClearOperation,
+        GpuContextDescriptor, GpuContextRequestErrorCategory, GpuExecutionPreference,
+        GpuReadbackStatus, GpuReconstruction, GpuSubmissionStatus, GpuWorkFragment,
+        GpuWorkOperation, GpuWorkResourceIdAllocator,
+    };
+    use std::time::{Duration, Instant};
+
+    fn timestamp_context() -> Option<GpuContext> {
+        let mut requirements = GpuCapabilityProfile::ComputeBaseline.requirements();
+        requirements
+            .insert(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::TimestampQuery,
+            ))
+            .expect("timestamp requirement should be compatible with compute baseline");
+        let descriptor =
+            GpuContextDescriptor::new(requirements).with_label("RunenRender composed timing proof");
+        match pollster::block_on(GpuContext::request(descriptor)) {
+            Ok(context) => Some(context),
+            Err(error) if error.category() == GpuContextRequestErrorCategory::NoAdapterAvailable => {
+                assert_ne!(
+                    std::env::var("RUNENRENDER_R7_REQUIRE_GPU").ok().as_deref(),
+                    Some("1"),
+                    "permanent R7 composition CI requires a timestamp-capable RunenGPU adapter"
+                );
+                None
+            }
+            Err(error) => panic!("unexpected composed timing RunenGPU context failure: {error}"),
+        }
+    }
+
+    fn clear_buffer(
+        allocator: &mut GpuWorkResourceIdAllocator,
+        label: &str,
+    ) -> runen_gpu::GpuBufferHandle {
+        allocator
+            .allocate_buffer_handle(
+                GpuBufferDescriptor::ordinary_owned(
+                    label,
+                    GpuResourceLifetime::Transient,
+                    GpuReconstruction::SourceBacked,
+                    4,
+                    [GpuBufferUsage::CopyDestination],
+                    GpuBufferInitialization::Uninitialized,
+                )
+                .expect("timing proof buffer descriptor"),
+            )
+            .expect("timing proof buffer handle")
+    }
+
+    #[test]
+    fn deterministic_composition_r7_proof_composed_timing_progresses_pending_to_measured() {
+        let Some(context) = timestamp_context() else {
+            return;
+        };
+
+        let mut allocator = GpuWorkResourceIdAllocator::new();
+        let producer_buffer = clear_buffer(&mut allocator, "timed immutable producer buffer");
+        let producer_clear = GpuClearOperation::buffer_zero(
+            GpuBufferRegion::whole(&producer_buffer).expect("producer clear region"),
+        )
+        .expect("producer clear operation");
+        let producer = GpuWorkFragment::build("timed immutable producer fragment", |work| {
+            work.operation("timed immutable producer clear", producer_clear)?;
+            Ok(())
+        })
+        .expect("producer fragment");
+
+        let renderer_buffer = clear_buffer(&mut allocator, "timed renderer buffer");
+        let renderer_clear = GpuClearOperation::buffer_zero(
+            GpuBufferRegion::whole(&renderer_buffer).expect("renderer clear region"),
+        )
+        .expect("renderer clear operation");
+        let renderer_node = ResolvedRenderGpuWorkNode::pass(
+            RenderGpuWorkOccurrenceId::new(1),
+            GpuResourceLabel::new("timed renderer clear").expect("renderer node label"),
+            GpuWorkOperation::Clear(renderer_clear),
+            GpuExecutionPreference::TransferPreferred,
+            [],
+        );
+
+        let timing = prepare_composed_gpu_timing(&context, 77, 5)
+            .expect("composed timing resources should prepare");
+        let graph = prepare_render_gpu_frame_work(
+            &context,
+            GpuResourceLabel::new("native composed timing proof").expect("graph label"),
+            [renderer_node],
+            &[producer],
+            &[],
+            Some(timing.bracket()),
+        )
+        .expect("composed timing graph should prepare");
+        let timing_frame = timing.into_frame();
+
+        let prepared = pollster::block_on(context.prepare_submission(graph))
+            .expect("composed timing graph should realize");
+        let submission = context
+            .submit_prepared(prepared)
+            .expect("composed timing submission should be accepted");
+        let readback = submission
+            .readback(timing_frame.readback_id())
+            .expect("accepted composed timing submission must retain its readback")
+            .clone();
+
+        let pending = timing_frame.pending_evidence();
+        assert_eq!(pending.frame_index, 77);
+        assert_eq!(pending.render_surface_id, 5);
+        assert_eq!(
+            pending.gpu_capability,
+            RenderGpuTimingCapability::ReadbackPending
+        );
+        assert_eq!(pending.millis, None);
+
+        let deadline = Instant::now() + Duration::from_secs(15);
+        let measured = loop {
+            context.progress();
+            match readback.status() {
+                GpuReadbackStatus::Pending => {
+                    assert!(
+                        Instant::now() < deadline,
+                        "composed timing readback did not complete before timeout"
+                    );
+                    std::thread::yield_now();
+                }
+                GpuReadbackStatus::Ready(bytes) => break timing_frame.ready_evidence(&bytes),
+                GpuReadbackStatus::Failed(failure) => {
+                    panic!("composed timing readback failed: {failure:?}")
+                }
+            }
+        };
+
+        assert!(matches!(
+            submission.status(),
+            GpuSubmissionStatus::Completed | GpuSubmissionStatus::Accepted
+        ));
+        assert_eq!(measured.frame_index, 77);
+        assert_eq!(measured.render_surface_id, 5);
+        assert_eq!(
+            measured.gpu_capability,
+            RenderGpuTimingCapability::Supported
+        );
+        assert!(
+            measured
+                .millis
+                .is_some_and(|millis| millis.is_finite() && millis >= 0.0),
+            "completed composed timing must publish one finite GPU duration"
+        );
+        assert!(measured.diagnostics.is_empty());
+    }
+}
