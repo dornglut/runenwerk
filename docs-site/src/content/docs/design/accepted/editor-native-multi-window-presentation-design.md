@@ -5,7 +5,7 @@ status: accepted
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-09-14
+last_reviewed: 2026-09-24
 related_adrs:
   - ../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
   - ../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md
@@ -131,14 +131,7 @@ feature-owned contribution path, execution compiler maturity, and
 product-surface hardening provide the product-surface groundwork. PM-006 starts
 after that foundation and must not reopen those completed ownership decisions.
 
-Remaining runtime and presentation state is still singleton-shaped:
-
-- `engine/src/runtime/window.rs::WindowState` represents one window.
-- `engine/src/runtime/platform.rs::PlatformEvent` is not window-scoped.
-- render surface handling assumes one active surface target.
-- editor workspace state supports tab stacks, split resizing, and floating hosts, but floating hosts are still inside the main UI composition, not native OS windows.
-
-Those are sufficient for a single-window editor and internal floating layouts, but not for `Window > New Window`.
+Current runtime presentation mechanics use `WindowStateRegistryResource` keyed by `NativeWindowId`, window-scoped `PlatformWindowEvent` occurrences, and Render surfaces keyed independently by `RenderSurfaceId`. Primary and secondary native windows therefore share one native lifecycle/effect authority; host-neutral primary logical size/scale remains separate in `PrimaryPresentationMetricsResource`.
 
 Current editor implementation may still expose predecessor-shaped global
 `EditorSession`/document/history state. This design does not bless that current

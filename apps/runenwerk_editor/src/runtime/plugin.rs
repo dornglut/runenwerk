@@ -31,7 +31,8 @@ use crate::runtime::systems::{
     prepare_material_preview_render_resource_system, produce_editor_picking_system,
     produce_material_preview_dynamic_uploads_system,
     produce_texture_preview_dynamic_uploads_system, seed_viewport_runtime_contracts_system,
-    submit_editor_frame_system, sync_viewport_instances_system,
+    submit_editor_frame_system, submit_editor_secondary_native_frames_system,
+    sync_viewport_instances_system,
 };
 use crate::runtime::viewport::{
     MountedSurfaceRegistryResource, SurfaceDefinitionRegistryResource,
@@ -49,6 +50,7 @@ use crate::runtime::viewport::{
 use crate::shell::EditorWindowPresentationBinding;
 
 pub struct EditorAppPlugin;
+pub struct EditorNativeWindowIntegrationPlugin;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, SystemSet)]
 pub enum EditorRuntimeSet {
@@ -60,6 +62,7 @@ pub enum EditorRuntimeSet {
     WindowPresentationRequests,
     ViewportLifecycle,
     FrameSubmit,
+    NativeSecondaryFrameSubmit,
     ViewportRenderStateCommands,
     ViewportPresentationSync,
     QuerySnapshotPublication,
@@ -118,44 +121,16 @@ impl Plugin for EditorAppPlugin {
         );
         app.add_systems(
             Update,
-            dispatch_editor_input_system
-                .on_invoker_thread()
-                .in_set(EditorRuntimeSet::InputBridge)
-                .after(EditorRuntimeSet::Picking),
-        );
-        app.add_systems(
-            Update,
             apply_viewport_render_state_commands_system
                 .in_set(EditorRuntimeSet::ViewportRenderStateCommands)
-                .after(EditorRuntimeSet::InputBridge),
-        );
-        app.add_systems(
-            Update,
-            sync_editor_composition_transitions_system
-                .on_invoker_thread()
-                .in_set(EditorRuntimeSet::CompositionTransitions)
-                .after(EditorRuntimeSet::InputBridge),
-        );
-        app.add_systems(
-            Update,
-            dispatch_editor_target_input_system
-                .on_invoker_thread()
-                .in_set(EditorRuntimeSet::TargetInput)
-                .after(EditorRuntimeSet::CompositionTransitions),
+                .after_if_present(EditorRuntimeSet::InputBridge),
         );
         app.add_systems(
             Update,
             dispatch_product_publication_system
                 .on_invoker_thread()
                 .in_set(EditorRuntimeSet::ProductPublication)
-                .after(EditorRuntimeSet::TargetInput),
-        );
-        app.add_systems(
-            Update,
-            sync_editor_window_presentation_requests_system
-                .on_invoker_thread()
-                .in_set(EditorRuntimeSet::WindowPresentationRequests)
-                .after(EditorRuntimeSet::TargetInput),
+                .after_if_present(EditorRuntimeSet::TargetInput),
         );
         app.add_systems(
             Update,
@@ -163,7 +138,7 @@ impl Plugin for EditorAppPlugin {
                 .on_invoker_thread()
                 .in_set(EditorRuntimeSet::ViewportLifecycle)
                 .after(EditorRuntimeSet::ViewportRenderStateCommands)
-                .after(EditorRuntimeSet::WindowPresentationRequests),
+                .after_if_present(EditorRuntimeSet::WindowPresentationRequests),
         );
         app.add_systems(
             Update,
@@ -178,7 +153,8 @@ impl Plugin for EditorAppPlugin {
             sync_viewport_presentation_products_system
                 .on_invoker_thread()
                 .in_set(EditorRuntimeSet::ViewportPresentationSync)
-                .after(EditorRuntimeSet::FrameSubmit),
+                .after(EditorRuntimeSet::FrameSubmit)
+                .after_if_present(EditorRuntimeSet::NativeSecondaryFrameSubmit),
         );
         app.add_systems(
             Update,
@@ -248,6 +224,47 @@ impl Plugin for EditorAppPlugin {
     }
 }
 
+impl Plugin for EditorNativeWindowIntegrationPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(
+            Update,
+            dispatch_editor_input_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::InputBridge)
+                .after(EditorRuntimeSet::Picking),
+        );
+        app.add_systems(
+            Update,
+            sync_editor_composition_transitions_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::CompositionTransitions)
+                .after(EditorRuntimeSet::InputBridge),
+        );
+        app.add_systems(
+            Update,
+            dispatch_editor_target_input_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::TargetInput)
+                .after(EditorRuntimeSet::CompositionTransitions),
+        );
+        app.add_systems(
+            Update,
+            sync_editor_window_presentation_requests_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::WindowPresentationRequests)
+                .after(EditorRuntimeSet::TargetInput),
+        );
+        app.add_systems(
+            Update,
+            submit_editor_secondary_native_frames_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::NativeSecondaryFrameSubmit)
+                .after(EditorRuntimeSet::FrameSubmit)
+                .after(EditorRuntimeSet::WindowPresentationRequests),
+        );
+    }
+}
+
 pub(crate) fn sync_editor_window_presentation_requests_system(
     mut host: ResMut<EditorHostResource>,
     mut window_registry: ResMut<WindowStateRegistryResource>,
@@ -271,7 +288,7 @@ fn sync_editor_window_presentation_requests(
         let request = window_registry
             .request_window(format!("Runenwerk {}", editor_window_id.raw()), (1280, 720));
         let render_surface_id = surface_registry
-            .ensure_surface_for_native_window(request.native_window_id, request.size_px);
+            .reserve_surface_for_native_window(request.native_window_id, request.size_px);
         let binding = EditorWindowPresentationBinding {
             native_window_id: request.native_window_id,
             render_surface_id,
@@ -326,14 +343,14 @@ fn publish_editor_material_preview_products(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use engine::runtime::{NativeWindowId, WindowState};
+    use engine::runtime::NativeWindowId;
 
     #[test]
     fn window_presentation_requests_bind_editor_windows_to_native_surfaces() {
         let mut host = EditorHostResource::default();
         let editor_window_id = host.shell_state.open_editor_window_for_active_workspace();
-        let mut window_registry =
-            WindowStateRegistryResource::from_legacy(&WindowState::windowed("Runenwerk"));
+        let mut window_registry = WindowStateRegistryResource::default();
+        window_registry.register_primary_window("Runenwerk", (1280, 720), 1.0, true);
         let mut surface_registry = RenderSurfaceRegistryResource::default();
 
         let synced = sync_editor_window_presentation_requests(
@@ -352,6 +369,12 @@ mod tests {
         assert_eq!(
             surface_registry.surface_for_native_window(binding.native_window_id),
             Some(binding.render_surface_id)
+        );
+        assert_eq!(
+            surface_registry
+                .record(binding.render_surface_id)
+                .map(|record| record.lifecycle_state),
+            Some(engine::plugins::render::backend::RenderSurfaceLifecycleState::Requested)
         );
         assert_eq!(window_registry.pending_creation_requests().len(), 1);
     }

@@ -1,7 +1,7 @@
 use crate::plugins::{
     ContactInput, InputContext, InputState, KeyboardInput, Point2, PointerButtonInput, ScrollInput,
 };
-use crate::runtime::window::{NativeWindowId, WindowState, WindowStateRegistryResource};
+use crate::runtime::window::{NativeWindowId, NativeWindowRecord};
 
 #[derive(Debug, Clone)]
 pub enum PlatformEvent {
@@ -79,134 +79,28 @@ impl PlatformWindowEvent {
     }
 }
 
-pub fn apply_platform_event(
-    window: &mut WindowState,
-    input: &mut InputState,
-    event: &PlatformEvent,
-) {
+pub fn apply_platform_input_event(input: &mut InputState, event: &PlatformEvent) {
     match event {
-        PlatformEvent::Resumed => {
-            window.redraw_requested = true;
-        }
-        PlatformEvent::CloseRequested => {
-            window.receive_close_intent();
-            window.request_redraw();
-        }
-        PlatformEvent::Focused { focused } => {
-            window.focused = *focused;
-            window.request_redraw();
-        }
-        PlatformEvent::Resized { width, height } => {
-            window.size_px = (*width, *height);
-            window.request_redraw();
-        }
-        PlatformEvent::ScaleFactorChanged {
-            scale_factor,
-            width,
-            height,
-        } => {
-            window.scale_factor = *scale_factor;
-            window.size_px = (*width, *height);
-            window.request_redraw();
-        }
         PlatformEvent::KeyboardInput {
             context,
             input: key,
-        } => {
-            input.handle_normalized_keyboard(*context, key);
-        }
-        PlatformEvent::TextInput { text } => {
-            input.handle_text_input(text);
-        }
+        } => input.handle_normalized_keyboard(*context, key),
+        PlatformEvent::TextInput { text } => input.handle_text_input(text),
         PlatformEvent::MouseWheel {
             context,
             input: scroll,
-        } => {
-            input.handle_scroll_input(*context, *scroll);
-        }
+        } => input.handle_scroll_input(*context, *scroll),
         PlatformEvent::CursorMoved { context, position } => {
-            input.handle_cursor_position(*context, *position);
+            input.handle_cursor_position(*context, *position)
         }
         PlatformEvent::MouseInput {
             context,
             input: button,
-        } => {
-            input.handle_pointer_button(*context, *button);
-        }
+        } => input.handle_pointer_button(*context, *button),
         PlatformEvent::Touch {
             context,
             input: contact,
-        } => {
-            input.handle_contact_input(*context, contact);
-        }
-        PlatformEvent::RedrawRequested => {
-            window.redraw_requested = false;
-        }
-    }
-}
-
-pub fn apply_platform_window_event(
-    registry: &mut WindowStateRegistryResource,
-    legacy_primary_window: &mut WindowState,
-    input: &mut InputState,
-    event: &PlatformWindowEvent,
-) {
-    if registry.primary_window_id().is_none() {
-        registry.ensure_primary_from_legacy(legacy_primary_window);
-    }
-
-    let is_primary = registry.primary_window_id() == Some(event.native_window_id);
-    if let Some(record) = registry.record_mut(event.native_window_id) {
-        match &event.event {
-            PlatformEvent::Resumed => {
-                record.redraw_requested = true;
-            }
-            PlatformEvent::CloseRequested => {
-                record.receive_close_intent();
-                record.request_redraw();
-            }
-            PlatformEvent::Focused { focused } => {
-                record.focused = *focused;
-                record.request_redraw();
-            }
-            PlatformEvent::Resized { width, height } => {
-                record.size_px = (*width, *height);
-                record.request_redraw();
-            }
-            PlatformEvent::ScaleFactorChanged {
-                scale_factor,
-                width,
-                height,
-            } => {
-                record.scale_factor = *scale_factor;
-                record.size_px = (*width, *height);
-                record.request_redraw();
-            }
-            PlatformEvent::RedrawRequested => {
-                record.redraw_requested = false;
-            }
-            PlatformEvent::KeyboardInput { .. }
-            | PlatformEvent::TextInput { .. }
-            | PlatformEvent::MouseWheel { .. }
-            | PlatformEvent::CursorMoved { .. }
-            | PlatformEvent::MouseInput { .. }
-            | PlatformEvent::Touch { .. } => {}
-        }
-        if is_primary {
-            record.copy_to_legacy(legacy_primary_window);
-        }
-    }
-
-    match &event.event {
-        PlatformEvent::KeyboardInput { .. }
-        | PlatformEvent::TextInput { .. }
-        | PlatformEvent::MouseWheel { .. }
-        | PlatformEvent::CursorMoved { .. }
-        | PlatformEvent::MouseInput { .. }
-        | PlatformEvent::Touch { .. } => {
-            let mut shadow_window = WindowState::headless("");
-            apply_platform_event(&mut shadow_window, input, &event.event);
-        }
+        } => input.handle_contact_input(*context, contact),
         PlatformEvent::Resumed
         | PlatformEvent::CloseRequested
         | PlatformEvent::Focused { .. }
@@ -216,10 +110,44 @@ pub fn apply_platform_window_event(
     }
 }
 
+pub fn apply_native_window_event(record: &mut NativeWindowRecord, event: &PlatformEvent) {
+    match event {
+        PlatformEvent::Resumed => record.request_redraw(),
+        PlatformEvent::CloseRequested => {
+            record.receive_close_intent();
+            record.request_redraw();
+        }
+        PlatformEvent::Focused { focused } => {
+            record.focused = *focused;
+            record.request_redraw();
+        }
+        PlatformEvent::Resized { width, height } => {
+            record.size_px = ((*width).max(1), (*height).max(1));
+            record.request_redraw();
+        }
+        PlatformEvent::ScaleFactorChanged {
+            scale_factor,
+            width,
+            height,
+        } => {
+            record.scale_factor = *scale_factor;
+            record.size_px = ((*width).max(1), (*height).max(1));
+            record.request_redraw();
+        }
+        PlatformEvent::RedrawRequested => record.redraw_requested = false,
+        PlatformEvent::KeyboardInput { .. }
+        | PlatformEvent::TextInput { .. }
+        | PlatformEvent::MouseWheel { .. }
+        | PlatformEvent::CursorMoved { .. }
+        | PlatformEvent::MouseInput { .. }
+        | PlatformEvent::Touch { .. } => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        PlatformEvent, PlatformWindowEvent, apply_platform_event, apply_platform_window_event,
+        PlatformEvent, PlatformWindowEvent, apply_native_window_event, apply_platform_input_event,
     };
     use crate::plugins::input::domain::action;
     use crate::plugins::{ActionState, InputState};
@@ -228,28 +156,27 @@ mod tests {
         KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey, ObservationOrigin,
         PhysicalKeyIdentity, Point2, PointerButton, PointerButtonInput,
     };
-    use crate::runtime::window::{NativeWindowId, WindowState, WindowStateRegistryResource};
+    use crate::runtime::window::{NativeWindowId, WindowStateRegistryResource};
 
     fn test_context() -> InputContext {
         InputContext::new(InputSourceId::new(90), None)
     }
 
     #[test]
-    fn resize_and_scale_events_update_window_state() {
-        let mut window = WindowState::windowed("Runtime");
-        let mut input = InputState::new();
+    fn native_resize_and_scale_events_update_one_record() {
+        let mut registry = WindowStateRegistryResource::default();
+        let primary = registry.register_primary_window("Runtime", (1280, 720), 1.0, true);
+        let record = registry.record_mut(primary).unwrap();
 
-        apply_platform_event(
-            &mut window,
-            &mut input,
+        apply_native_window_event(
+            record,
             &PlatformEvent::Resized {
                 width: 1600,
                 height: 900,
             },
         );
-        apply_platform_event(
-            &mut window,
-            &mut input,
+        apply_native_window_event(
+            record,
             &PlatformEvent::ScaleFactorChanged {
                 scale_factor: 2.0,
                 width: 1600,
@@ -257,19 +184,17 @@ mod tests {
             },
         );
 
-        assert_eq!(window.size_px, (1600, 900));
-        assert_eq!(window.scale_factor, 2.0);
-        assert!(window.redraw_requested);
+        assert_eq!(record.size_px, (1600, 900));
+        assert_eq!(record.scale_factor, 2.0);
+        assert!(record.redraw_requested);
     }
 
     #[test]
-    fn normalized_input_events_update_input_state() {
-        let mut window = WindowState::headless("Runtime");
+    fn normalized_input_events_update_input_state_without_window_state() {
         let mut input = InputState::new();
         let context = test_context();
 
-        apply_platform_event(
-            &mut window,
+        apply_platform_input_event(
             &mut input,
             &PlatformEvent::KeyboardInput {
                 context,
@@ -283,8 +208,7 @@ mod tests {
                 },
             },
         );
-        apply_platform_event(
-            &mut window,
+        apply_platform_input_event(
             &mut input,
             &PlatformEvent::MouseInput {
                 context,
@@ -295,8 +219,7 @@ mod tests {
             },
         );
         input.handle_relative_motion(context, 5.0, -2.0);
-        apply_platform_event(
-            &mut window,
+        apply_platform_input_event(
             &mut input,
             &PlatformEvent::Touch {
                 context,
@@ -319,98 +242,40 @@ mod tests {
     }
 
     #[test]
-    fn window_scoped_resize_updates_selected_native_window_only() {
-        let mut legacy = WindowState::windowed("Runtime");
-        let mut registry = WindowStateRegistryResource::from_legacy(&legacy);
+    fn native_window_events_update_selected_record_only() {
+        let mut registry = WindowStateRegistryResource::default();
+        let primary = registry.register_primary_window("Runtime", (1280, 720), 1.0, true);
         let secondary = registry
             .request_window("Secondary", (640, 480))
             .native_window_id;
-        let mut input = InputState::new();
 
-        apply_platform_window_event(
-            &mut registry,
-            &mut legacy,
-            &mut input,
-            &PlatformWindowEvent::new(
-                secondary,
-                PlatformEvent::Resized {
-                    width: 1920,
-                    height: 1080,
-                },
-            ),
+        apply_native_window_event(
+            registry.record_mut(secondary).unwrap(),
+            &PlatformEvent::Resized {
+                width: 1920,
+                height: 1080,
+            },
         );
 
-        assert_eq!(legacy.size_px, (1280, 720));
-        assert_eq!(
-            registry.record(secondary).map(|record| record.size_px),
-            Some((1920, 1080))
-        );
-        assert_eq!(
-            registry
-                .record(NativeWindowId::primary())
-                .map(|record| record.size_px),
-            Some((1280, 720))
-        );
+        assert_eq!(registry.record(primary).unwrap().size_px, (1280, 720));
+        assert_eq!(registry.record(secondary).unwrap().size_px, (1920, 1080));
     }
 
     #[test]
-    fn primary_window_scoped_resize_preserves_legacy_compatibility() {
-        let mut legacy = WindowState::windowed("Runtime");
-        let mut registry = WindowStateRegistryResource::from_legacy(&legacy);
-        let mut input = InputState::new();
+    fn close_and_focus_events_remain_pending_for_product_policy() {
+        let mut registry = WindowStateRegistryResource::default();
+        let primary = registry.register_primary_window("Runtime", (1280, 720), 1.0, true);
+        let record = registry.record_mut(primary).unwrap();
 
-        apply_platform_window_event(
-            &mut registry,
-            &mut legacy,
-            &mut input,
-            &PlatformWindowEvent::new(
-                NativeWindowId::primary(),
-                PlatformEvent::Resized {
-                    width: 1024,
-                    height: 768,
-                },
-            ),
-        );
+        apply_native_window_event(record, &PlatformEvent::Focused { focused: false });
+        apply_native_window_event(record, &PlatformEvent::CloseRequested);
 
-        assert_eq!(legacy.size_px, (1024, 768));
+        assert!(!record.focused);
+        assert!(record.close_intent_pending);
+        assert!(!record.close_requested);
         assert_eq!(
-            registry
-                .record(NativeWindowId::primary())
-                .map(|record| record.size_px),
-            Some((1024, 768))
-        );
-    }
-
-    #[test]
-    fn close_and_focus_events_remain_pending_for_app_policy() {
-        let mut legacy = WindowState::windowed("Runtime");
-        let mut registry = WindowStateRegistryResource::from_legacy(&legacy);
-        let mut input = InputState::new();
-
-        apply_platform_window_event(
-            &mut registry,
-            &mut legacy,
-            &mut input,
-            &PlatformWindowEvent::new(
-                NativeWindowId::primary(),
-                PlatformEvent::Focused { focused: false },
-            ),
-        );
-        apply_platform_window_event(
-            &mut registry,
-            &mut legacy,
-            &mut input,
-            &PlatformWindowEvent::new(NativeWindowId::primary(), PlatformEvent::CloseRequested),
-        );
-
-        assert!(!legacy.focused);
-        assert!(legacy.close_intent_pending);
-        assert!(!legacy.close_requested);
-        assert_eq!(
-            registry
-                .record(NativeWindowId::primary())
-                .map(|record| record.lifecycle_state),
-            Some(crate::runtime::window::NativeWindowLifecycleState::CloseIntentPending)
+            record.lifecycle_state,
+            crate::runtime::window::NativeWindowLifecycleState::CloseIntentPending
         );
     }
 

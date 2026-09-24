@@ -37,12 +37,18 @@ const fn ui_frame_producer_id(raw: u64) -> RenderFrameProducerId {
 }
 
 pub struct UiGalleryPlugin;
+pub struct UiGalleryNativeWindowIntegrationPlugin;
 
 impl Plugin for UiGalleryPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<UiGalleryResource>();
-        app.add_systems(Update, approve_primary_window_close_intent_system);
         app.add_systems(Update, submit_ui_gallery_frame_system);
+    }
+}
+
+impl Plugin for UiGalleryNativeWindowIntegrationPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Update, approve_primary_window_close_intent_system);
     }
 }
 
@@ -273,12 +279,13 @@ pub fn run_checked_in_gallery_stories_for_render_target(
 }
 
 pub fn submit_ui_gallery_frame_system(
-    window: Res<WindowState>,
+    presentation: Res<PrimaryPresentationMetricsResource>,
     atlas: Res<UiFontAtlasResource>,
     mut gallery: ResMut<UiGalleryResource>,
     mut submissions: ResMut<SurfaceFrameSubmissionRegistryResource>,
 ) {
-    let size = UiSize::new(window.size_px.0 as f32, window.size_px.1 as f32);
+    let size_px = presentation.size_px();
+    let size = UiSize::new(size_px.0 as f32, size_px.1 as f32);
     gallery.prepare_frame_if_needed(size, &ThemeTokens::default(), &atlas);
     gallery.log_diagnostics_once();
 

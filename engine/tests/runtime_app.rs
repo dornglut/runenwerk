@@ -1,6 +1,7 @@
 use engine::plugins::input::domain::action;
 use engine::plugins::{
-    ActionState, FixedStepPlugin, SimulationPlugin, TimePlugin, default_plugins,
+    ActionState, FixedStepPlugin, InputFinalizePlugin, PhysicalKeyIdentity, SimulationPlugin,
+    TimePlugin, default_plugins,
 };
 use engine::prelude::*;
 use winit::event::ElementState;
@@ -59,8 +60,8 @@ fn app_runs_startup_once_and_updates_each_frame() {
 
 #[derive(Debug, Default, Component, runen_ecs::Resource)]
 struct StartupSnapshot {
-    saw_headless_window: bool,
-    saw_title: String,
+    saw_input: bool,
+    presentation_size_px: (u32, u32),
 }
 
 struct ResourceVisibilityPlugin;
@@ -73,26 +74,58 @@ impl Plugin for ResourceVisibilityPlugin {
 }
 
 fn capture_startup_resources(
-    window: Res<WindowState>,
     _input: Res<InputState>,
+    presentation: Res<PrimaryPresentationMetricsResource>,
     mut snapshot: ResMut<StartupSnapshot>,
 ) {
-    snapshot.saw_headless_window = window.is_headless();
-    snapshot.saw_title = window.title.clone();
+    snapshot.saw_input = true;
+    snapshot.presentation_size_px = presentation.size_px();
 }
 
 #[test]
-fn headless_run_exposes_builtin_runtime_resources_before_startup() {
+fn selected_input_capability_is_visible_before_startup() {
     let mut app = App::headless();
-    app.set_title("Headless Runtime");
+    app.add_plugin(InputFinalizePlugin);
     app.add_plugin(ResourceVisibilityPlugin);
     let app = app
         .run_for_frames(0)
         .expect("startup-only run should succeed");
 
     let snapshot = app.world().resource::<StartupSnapshot>().unwrap();
-    assert!(snapshot.saw_headless_window);
-    assert_eq!(snapshot.saw_title, "Headless Runtime");
+    assert!(snapshot.saw_input);
+    assert_eq!(snapshot.presentation_size_px, (1280, 720));
+    assert!(
+        app.world()
+            .resource::<WindowStateRegistryResource>()
+            .is_err()
+    );
+}
+
+#[test]
+fn input_finalize_plugin_installs_owned_input_resources() {
+    let mut app = App::headless();
+    assert!(app.world().resource::<InputState>().is_err());
+    assert!(app.world().resource::<ActionState>().is_err());
+
+    app.add_plugin(InputFinalizePlugin);
+
+    assert!(app.world().resource::<InputState>().is_ok());
+    assert!(app.world().resource::<ActionState>().is_ok());
+}
+
+#[test]
+fn input_bindings_require_selected_input_capability() {
+    let mut app = App::headless();
+    app.add_input_bindings([("test.action", PhysicalKeyIdentity::code("KeyA"))]);
+
+    let error = match app.run_for_frames(0) {
+        Ok(_) => panic!("bindings without input capability should reject App composition"),
+        Err(error) => error,
+    };
+    assert!(
+        format!("{error:#}").contains("InputFinalizePlugin"),
+        "composition error should identify the missing input capability: {error:#}"
+    );
 }
 
 #[derive(Debug, Default, Component, runen_ecs::Resource)]
@@ -161,7 +194,7 @@ impl Plugin for DemoLogicPlugin {
         app.add_plugins(default_plugins());
         app.add_systems(Startup, setup_demo_player);
         app.add_systems(PreUpdate, inject_demo_input.before(CoreSet::Input));
-        app.add_systems(Update, update_demo_title);
+        app.add_systems(Update, update_demo);
     }
 }
 
@@ -177,33 +210,24 @@ fn inject_demo_input(mut input: ResMut<InputState>, mut frames: ResMut<DemoFrame
     frames.0 += 1;
 }
 
-fn update_demo_title(
-    actions: Res<ActionState>,
-    time: Res<Time>,
-    mut window: ResMut<WindowState>,
-    mut query: Query<&mut Position>,
-) {
+fn update_demo(actions: Res<ActionState>, mut query: Query<&mut Position>) {
     let position = query.single().expect("demo should have one position");
     if actions.action_down(action::WORLD_MOVE_RIGHT) {
         position.x += 1;
     }
-
-    window.set_title(format!("x={} dt={:.4}", position.x, time.delta_seconds));
-    if actions.action_pressed(action::SYSTEM_TOGGLE_PAUSE_MENU) {
-        window.request_close();
-    }
 }
 
 #[test]
-fn demo_style_plugin_updates_title_and_close_state_headlessly() {
+fn demo_style_plugin_updates_input_headlessly_without_native_window_state() {
     let mut app = App::headless();
     app.add_plugin(DemoLogicPlugin);
     let app = app.run_for_frames(1).expect("demo logic should run");
 
-    let window = app.world().resource::<WindowState>().unwrap();
-    assert!(window.close_requested);
-    assert!(window.title.contains("x=1"));
-    assert!(window.title.contains("dt="));
+    assert!(
+        app.world()
+            .resource::<WindowStateRegistryResource>()
+            .is_err()
+    );
 
     let world = app.world();
     let query = world.query::<&Position>();

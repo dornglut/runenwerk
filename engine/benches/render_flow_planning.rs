@@ -189,7 +189,7 @@ fn prepared_frame_for_flow(compiled: &CompiledRenderFlowPlan) -> PreparedRenderF
             shader_registry_revision: 1,
             prepare_epoch: 1,
         },
-        surface: PreparedSurfaceInfo::primary((1280, 720)),
+        surface: PreparedSurfaceInfo::unbound_primary((1280, 720)),
         views: vec![PreparedViewFrame::main((1280, 720))],
         flows: Default::default(),
         flow_invocations: vec![PreparedFlowInvocation::main(

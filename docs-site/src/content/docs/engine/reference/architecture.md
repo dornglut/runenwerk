@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-15
+last_reviewed: 2026-09-24
 ---
 
 # Engine Architecture
@@ -31,11 +31,12 @@ Builtin resource installation:
   simulation identity/configuration.
 - Fixed-cadence state is selected through `FixedStepPlugin`.
 - Simulation integration state is selected through `SimulationPlugin`.
-- Universal bootstrap state still includes current App/platform/publication resources such as:
-  - `InputState`, `ActionState`, `WindowState`
-  - frame-pacing/window platform state
+- Bare App bootstrap retains only universal App/runtime integration state such as:
+  - `PrimaryPresentationMetricsResource`
   - `ProductPublicationRuntimeResource`
   - `QuerySnapshotRuntimeResource`
+- Input capability state is selected through `InputFinalizePlugin`, which installs `InputState` and `ActionState`.
+- Native window/event providers and frame-pacing state are realized by the selected native Host rather than by bare App construction.
 
 `Time` is not a bare App builtin. `TimePlugin` owns default `Time` installation and frame-time
 progression; `default_plugins()` includes `TimePlugin` for the ordinary engine stack.
@@ -205,12 +206,13 @@ restored, replayed, or reassigned without changing the App advancement contract.
   - `engine/src/runtime/winit_runner.rs`
   - delegates startup/frame scheduling to shared runtime lifecycle helpers
 
-`WindowState` in `engine/src/runtime/window.rs` is also the runtime-owned place
-for platform window effects that app systems request declaratively. It currently
-stores title, size, scale factor, close/redraw requests, and `WindowCursorIcon`.
-Windowed execution applies the cursor icon in
-`engine/src/runtime/winit_runner.rs::WinitRunner::apply_window_effects`; app
-systems set the intent on `WindowState` rather than calling winit directly.
+`WindowStateRegistryResource` in `engine/src/runtime/window.rs` is the native Host authority for
+primary and secondary native windows. Each `NativeWindowRecord` owns native title, physical
+size/scale, focus, close intent/approval, redraw intent, cursor intent, and lifecycle/failure state.
+`PrimaryPresentationMetricsResource` is separate host-neutral logical primary size/scale state.
+Headless execution therefore has presentation metrics without a native-window identity or native
+lifecycle sentinel. Windowed execution applies native effects from the keyed record in
+`engine/src/runtime/winit_runner.rs::WinitRunner::apply_window_effects`.
 
 ## Integration Boundaries
 

@@ -2587,22 +2587,28 @@ dependencies = [
 [[package]]
 name = "runen-ecs"
 version = "0.1.0"
-source = "git+https://github.com/dornglut/runen-ecs?rev=c210281e6bd3ce40cd1e3bbb3b4563ca79594227#c210281e6bd3ce40cd1e3bbb3b4563ca79594227"
+source = "git+https://github.com/dornglut/runen-ecs?rev=84fd396f6c6b6fecb7df8cb5f71a7e74770d156a#84fd396f6c6b6fecb7df8cb5f71a7e74770d156a"
 dependencies = [
  "runen-ecs-macros",
+ "runen-graph",
  "thiserror 2.0.18",
 ]
 
 [[package]]
 name = "runen-ecs-macros"
 version = "0.1.0"
-source = "git+https://github.com/dornglut/runen-ecs?rev=c210281e6bd3ce40cd1e3bbb3b4563ca79594227#c210281e6bd3ce40cd1e3bbb3b4563ca79594227"
+source = "git+https://github.com/dornglut/runen-ecs?rev=84fd396f6c6b6fecb7df8cb5f71a7e74770d156a#84fd396f6c6b6fecb7df8cb5f71a7e74770d156a"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "runen-graph"
+version = "0.0.0"
+source = "git+https://github.com/dornglut/runen-graph?rev=075f3c2b4122c1ae89209d9fb7cb1feac6bba0d4#075f3c2b4122c1ae89209d9fb7cb1feac6bba0d4"
 
 [[package]]
 name = "runen-gpu"
@@ -2733,9 +2739,11 @@ dependencies = [
  "engine",
  "image",
  "pollster",
+ "runen-ecs",
  "runen-gpu",
  "serde",
  "serde_json",
+ "winit",
 ]
 
 [[package]]

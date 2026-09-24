@@ -2,6 +2,10 @@ use super::{
     PreparedFrameContext, PreparedFrameContributions, PreparedUiFrameContribution,
     PreparedViewFrame,
 };
+use crate::plugins::render::admission::RenderRepresentationAvailabilityFact;
+use crate::plugins::render::request::RenderRequest;
+use crate::plugins::render::scene::RenderSceneSnapshot;
+use crate::plugins::render::surface_input::RenderSurfaceSemanticInputBinding;
 use crate::plugins::render::{
     RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey,
     RenderDynamicTextureUploadDescriptor, RenderFlowId, RenderFrameProducerId,
@@ -18,6 +22,120 @@ pub struct PreparedRenderFrameResource {
     frames: BTreeMap<RenderSurfaceId, PreparedRenderFrame>,
     next_frame_index: u64,
     next_prepare_epoch: u64,
+}
+
+/// Product-owned semantic work published for exactly one native render frame.
+///
+/// This is intentionally free of GPU objects and maintained-carrier details. The renderer admits
+/// and lowers it only after the frame's dynamic targets have been realized, then composes its
+/// typed work into the canonical frame graph.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderDeterministicFrameContribution {
+    pub producer_id: RenderFrameProducerId,
+    pub render_surface_id: RenderSurfaceId,
+    pub scene: RenderSceneSnapshot,
+    pub request: RenderRequest,
+    pub semantic_inputs: Vec<RenderSurfaceSemanticInputBinding>,
+    pub availability: Vec<RenderRepresentationAvailabilityFact>,
+    pub output_index: usize,
+    pub target_key: RenderDynamicTextureTargetKey,
+}
+
+/// Frame-scoped semantic contributions keyed by their owning producer.
+///
+/// Multiple surfaces/producers may be present in one frame. Each producer may publish one surface
+/// per frame because the deterministic lowerer gives each producer one reusable physical-resource
+/// namespace; repeated publication by the same producer replaces only that producer's contribution.
+#[derive(Debug, Clone, Default, runen_ecs::Component, runen_ecs::Resource)]
+pub struct RenderDeterministicFrameContributionResource {
+    contributions: BTreeMap<RenderFrameProducerId, RenderDeterministicFrameContribution>,
+}
+
+impl RenderDeterministicFrameContributionResource {
+    pub fn replace(&mut self, contribution: RenderDeterministicFrameContribution) {
+        self.contributions
+            .insert(contribution.producer_id, contribution);
+    }
+
+    pub fn remove(
+        &mut self,
+        producer_id: impl Into<RenderFrameProducerId>,
+    ) -> Option<RenderDeterministicFrameContribution> {
+        self.contributions.remove(&producer_id.into())
+    }
+
+    pub fn take_all(&mut self) -> Vec<RenderDeterministicFrameContribution> {
+        std::mem::take(&mut self.contributions)
+            .into_values()
+            .collect()
+    }
+}
+
+#[cfg(test)]
+mod deterministic_contribution_tests {
+    use super::*;
+    use crate::plugins::render::request::{
+        RenderObservationSpec, RenderOutputSpec, RenderOutputValue, RenderProbeObservation,
+        RenderRadiometricRepresentation, RenderRequestedOutput, RenderResultTopology,
+        RenderSamplingSupport, RenderSemanticTolerance,
+    };
+    use crate::plugins::render::scene::RenderSceneStore;
+    use crate::plugins::render::space_time::{
+        RenderAffineTransform3, RenderTimeInterval, RenderTimePoint,
+    };
+
+    fn producer(raw: u64) -> RenderFrameProducerId {
+        RenderFrameProducerId::try_from_raw(raw).expect("test producer id should be nonzero")
+    }
+
+    fn contribution(producer_id: RenderFrameProducerId) -> RenderDeterministicFrameContribution {
+        let shutter = RenderTimeInterval::instant(
+            RenderTimePoint::from_seconds(0.0).expect("test time should be finite"),
+        );
+        let observation = RenderObservationSpec::Probe(
+            RenderProbeObservation::new(
+                RenderAffineTransform3::identity(),
+                shutter,
+                RenderSamplingSupport::ideal_ray(),
+            )
+            .expect("test observation should be valid"),
+        );
+        let output = RenderOutputSpec::new(
+            RenderOutputValue::Radiance {
+                representation: RenderRadiometricRepresentation::spectral_at_wavelength_meters(
+                    550.0e-9,
+                )
+                .expect("test radiance representation should be valid"),
+            },
+            RenderResultTopology::scalar(),
+            RenderSemanticTolerance::absolute(1.0e-4).expect("test tolerance should be valid"),
+        )
+        .expect("test output should be valid");
+        RenderDeterministicFrameContribution {
+            producer_id,
+            render_surface_id: RenderSurfaceId::primary(),
+            scene: RenderSceneStore::new().snapshot(),
+            request: RenderRequest::new(
+                shutter,
+                vec![observation],
+                vec![RenderRequestedOutput::new(0, output)],
+            )
+            .expect("test request should be valid"),
+            semantic_inputs: Vec::new(),
+            availability: Vec::new(),
+            output_index: 0,
+            target_key: RenderDynamicTextureTargetKey::new("test", "radiance"),
+        }
+    }
+
+    #[test]
+    fn deterministic_contributions_replace_by_producer_without_cross_surface_aliasing() {
+        let mut resource = RenderDeterministicFrameContributionResource::default();
+        resource.replace(contribution(producer(1)));
+        resource.replace(contribution(producer(2)));
+        resource.replace(contribution(producer(1)));
+        assert_eq!(resource.take_all().len(), 2);
+    }
 }
 
 impl PreparedRenderFrameResource {
@@ -174,10 +292,10 @@ pub struct PreparedSurfaceInfo {
 }
 
 impl PreparedSurfaceInfo {
-    pub fn primary(target_size_px: (u32, u32)) -> Self {
+    pub fn unbound_primary(target_size_px: (u32, u32)) -> Self {
         Self {
             render_surface_id: RenderSurfaceId::primary(),
-            native_window_id: Some(NativeWindowId::primary()),
+            native_window_id: None,
             target_size_px,
         }
     }
@@ -641,7 +759,7 @@ mod tests {
                 shader_registry_revision: 11,
                 prepare_epoch: 3,
             },
-            surface: PreparedSurfaceInfo::primary((1280, 720)),
+            surface: PreparedSurfaceInfo::unbound_primary((1280, 720)),
             views: vec![PreparedViewFrame::main((1280, 720))],
             flows: BTreeMap::new(),
             flow_invocations: Vec::new(),

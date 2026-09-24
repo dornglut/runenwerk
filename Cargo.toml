@@ -144,7 +144,7 @@ editor_scene = { path = "domain/editor/editor_scene" }
 editor_inspector = { path = "domain/editor/editor_inspector" }
 editor_persistence = { path = "domain/editor/editor_persistence" }
 
-runen_ecs = { package = "runen-ecs", git = "https://github.com/dornglut/runen-ecs", rev = "c210281e6bd3ce40cd1e3bbb3b4563ca79594227" }
+runen_ecs = { package = "runen-ecs", git = "https://github.com/dornglut/runen-ecs", rev = "84fd396f6c6b6fecb7df8cb5f71a7e74770d156a" }
 graph = { path = "domain/graph" }
 texture = { path = "domain/texture" }
 material_graph = { path = "domain/material_graph" }

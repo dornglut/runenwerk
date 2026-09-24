@@ -327,8 +327,13 @@ fn invalidate(output_index: u32, sample_index: u32) {
 }
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) invocation: vec3<u32>) {
-    let sample_index = invocation.x;
+fn main(
+    @builtin(workgroup_id) workgroup: vec3<u32>,
+    @builtin(num_workgroups) workgroups: vec3<u32>,
+    @builtin(local_invocation_index) local_index: u32,
+) {
+    let group_index = workgroup.y * workgroups.x + workgroup.x;
+    let sample_index = group_index * 64u + local_index;
     if sample_index >= input_words[0u] {
         return;
     }

@@ -5,7 +5,7 @@ status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-09-01
+last_reviewed: 2026-09-24
 related_roadmaps:
   - ../../net/multiplayer-replication-implementation-roadmap.md
 ---
@@ -34,7 +34,8 @@ Implemented now:
 
 - ECS `Broadcast*`, `WorkQueue*`, and `TickBuffer*` primitives;
 - engine networking work queues for retained replication/application payload staging;
-- tick-buffer registration for driver input types;
+- tick-buffer registration for local/driver input types;
+- RunenNet `AuthorityInputSession` for remote participant/tick admission, with only accepted opaque batches retained in host execution staging until their target tick;
 - `ReplicationExtractionFilter` over ECS structural deltas;
 - `ReplicationRegistry` and component/entity/resource descriptors;
 - `SnapshotApplyDriver`, `InputDriver`, and `ReplicationDriver` escape hatches for custom integration;
@@ -61,7 +62,7 @@ Standalone RunenNet owns:
 - connection identity;
 - compatibility negotiation;
 - session/participant membership and connection binding/lifecycle;
-- reusable networking semantics adopted by later authorized RN8 cuts.
+- reusable networking semantics adopted by authorized RN8 cuts, including remote participant/tick input admission.
 
 ECS/domain crates own:
 
@@ -78,7 +79,7 @@ Retained `engine_net` currently owns only evidence-backed replication/prediction
 - schedule/resource integration;
 - read-only projection of accepted RunenNet bindings into owner routing and diagnostics;
 - retained driver invocation;
-- input buffering and replay integration;
+- host execution staging for already-accepted remote input plus local input/prediction replay integration;
 - retained replication work queues and per-connection state.
 
 Gameplay/app modules own:
@@ -95,7 +96,7 @@ Gameplay/app modules own:
 - Do not copy ECS work queues or tick buffers into reusable networking semantics.
 - Do not put game-specific component semantics in RunenNet or retained `engine_net`.
 - Do not make transport own extraction or interest policy.
-- Do not use `RunenNetSessionProjection` to authorize RunenNet lifecycle mutations; it is derived state only.
+- Do not use `RunenNetSessionProjection` to authorize RunenNet lifecycle mutations or remote participant input; it is derived state only.
 - Do not recreate deleted engine session/runtime authority through generic bridge or facade types.
 
 ## Future Work Constraints

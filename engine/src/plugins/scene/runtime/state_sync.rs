@@ -5,14 +5,18 @@ use crate::plugins::{ActionState, InputState, SceneManager, SceneResource};
 use crate::prelude::domain::{
     GAMEPLAY_CONFIG_PATH, gameplay_config_modified, load_gameplay_config_with_modified_and_error,
 };
-use crate::{SceneOverlayViewportState, SceneRuntimeState, WindowState};
+use crate::{PrimaryPresentationMetricsResource, SceneOverlayViewportState, SceneRuntimeState};
 use anyhow::Result;
 
 // Owner: Engine Scene Plugin - Runtime State Sync
-pub(crate) fn sync_overlay_viewport(manager: &mut SceneManager, window: &WindowState) {
+pub(crate) fn sync_overlay_viewport(
+    manager: &mut SceneManager,
+    presentation: &PrimaryPresentationMetricsResource,
+) {
+    let size_px = presentation.size_px();
     manager.set_overlay_viewport(
-        (window.size_px.0 as f32, window.size_px.1 as f32),
-        window.scale_factor as f32,
+        (size_px.0 as f32, size_px.1 as f32),
+        presentation.scale_factor() as f32,
     );
 }
 

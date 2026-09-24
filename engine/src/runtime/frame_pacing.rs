@@ -110,6 +110,58 @@ pub struct FramePacingDecision {
     pub next_deadline: Option<Instant>,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct FramePacingSchedule {
+    policy: Option<FramePacingPolicyResource>,
+    next_deadline: Option<Instant>,
+}
+
+impl FramePacingSchedule {
+    pub(crate) fn decide(
+        &mut self,
+        policy: FramePacingPolicyResource,
+        now: Instant,
+    ) -> FramePacingDecision {
+        if self.policy != Some(policy) {
+            self.policy = Some(policy);
+            self.next_deadline = None;
+        }
+
+        let Some(interval) = policy.target_frame_interval() else {
+            self.next_deadline = None;
+            return FramePacingDecision {
+                request_redraw: false,
+                next_deadline: None,
+            };
+        };
+
+        let decision = match self.next_deadline {
+            None => FramePacingDecision {
+                request_redraw: true,
+                next_deadline: Some(now + interval),
+            },
+            Some(deadline) if now < deadline => FramePacingDecision {
+                request_redraw: false,
+                next_deadline: Some(deadline),
+            },
+            Some(deadline) => {
+                let elapsed = now.saturating_duration_since(deadline);
+                let remainder = Duration::from_nanos(
+                    (elapsed.as_nanos() % interval.as_nanos())
+                        .try_into()
+                        .expect("frame interval remainder fits in u64"),
+                );
+                FramePacingDecision {
+                    request_redraw: true,
+                    next_deadline: Some(now + (interval - remainder)),
+                }
+            }
+        };
+        self.next_deadline = decision.next_deadline;
+        decision
+    }
+}
+
 pub fn next_continuous_frame_deadline(
     policy: FramePacingPolicyResource,
     last_frame_at: Option<Instant>,
@@ -201,5 +253,79 @@ mod tests {
 
         assert!(decision.request_redraw);
         assert!(decision.next_deadline.expect("next deadline") > now);
+    }
+
+    #[test]
+    fn continuous_schedule_starts_immediately_then_waits_for_its_deadline() {
+        let start = Instant::now();
+        let interval = FramePacingPolicyResource::default()
+            .target_frame_interval()
+            .expect("continuous interval");
+        let policy = FramePacingPolicyResource::default();
+        let mut schedule = FramePacingSchedule::default();
+
+        let initial = schedule.decide(policy, start);
+        assert!(initial.request_redraw);
+        let deadline = initial.next_deadline.expect("initial deadline");
+        assert_eq!(deadline, start + interval);
+
+        let early = schedule.decide(policy, deadline - Duration::from_millis(1));
+        assert!(!early.request_redraw);
+        assert_eq!(early.next_deadline, Some(deadline));
+    }
+
+    #[test]
+    fn continuous_schedule_preserves_phase_after_a_late_wakeup() {
+        let start = Instant::now();
+        let policy = FramePacingPolicyResource::default();
+        let interval = policy.target_frame_interval().expect("continuous interval");
+        let mut schedule = FramePacingSchedule::default();
+        let initial = schedule.decide(policy, start);
+        let deadline = initial.next_deadline.expect("initial deadline");
+
+        let late_wakeup = deadline + Duration::from_millis(2);
+        let late = schedule.decide(policy, late_wakeup);
+
+        assert!(late.request_redraw);
+        assert_eq!(late.next_deadline, Some(deadline + interval));
+    }
+
+    #[test]
+    fn continuous_schedule_skips_missed_ticks_without_catch_up() {
+        let start = Instant::now();
+        let policy = FramePacingPolicyResource::default();
+        let interval = policy.target_frame_interval().expect("continuous interval");
+        let mut schedule = FramePacingSchedule::default();
+        let initial = schedule.decide(policy, start);
+        let deadline = initial.next_deadline.expect("initial deadline");
+        let late_wakeup = deadline + interval * 3 + Duration::from_millis(2);
+
+        let late = schedule.decide(policy, late_wakeup);
+
+        assert!(late.request_redraw);
+        assert_eq!(late.next_deadline, Some(deadline + interval * 4));
+        assert!(late.next_deadline.expect("next deadline") > late_wakeup);
+    }
+
+    #[test]
+    fn on_demand_policy_clears_continuous_schedule() {
+        let now = Instant::now();
+        let mut schedule = FramePacingSchedule::default();
+        let continuous = FramePacingPolicyResource::default();
+        assert!(schedule.decide(continuous, now).request_redraw);
+
+        let on_demand = schedule.decide(FramePacingPolicyResource::on_demand(), now);
+
+        assert_eq!(
+            on_demand,
+            FramePacingDecision {
+                request_redraw: false,
+                next_deadline: None
+            }
+        );
+        assert_eq!(
+            schedule.decide(continuous, now).next_deadline,
+            Some(now + continuous.target_frame_interval().expect("interval"))
+        );
     }
 }

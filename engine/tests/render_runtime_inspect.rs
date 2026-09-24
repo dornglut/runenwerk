@@ -219,6 +219,7 @@ fn render_runtime_inspect_debug_timing_state_includes_preflight_and_flow_encode(
     let mut state = RenderDebugTimingsState::default();
 
     state.observe_frame_timings(GfxFrameTimings {
+        submitted: true,
         acquire_ms: 0.5,
         renderer: RendererFrameTimings {
             prepare_ui_ms: 1.0,
@@ -663,7 +664,7 @@ fn render_runtime_inspect_compiler_plan_and_preflight_reports_are_structured() {
             shader_registry_revision: 1,
             prepare_epoch: 1,
         },
-        surface: PreparedSurfaceInfo::primary((800, 600)),
+        surface: PreparedSurfaceInfo::unbound_primary((800, 600)),
         views: vec![PreparedViewFrame::offscreen_product(
             "viewport.1",
             (320, 180),
@@ -812,7 +813,7 @@ fn render_runtime_inspect_prepared_frame_inspection_exposes_render_product_selec
             shader_registry_revision: 2,
             prepare_epoch: 5,
         },
-        surface: PreparedSurfaceInfo::primary((1920, 1080)),
+        surface: PreparedSurfaceInfo::unbound_primary((1920, 1080)),
         views: {
             let mut views = vec![PreparedViewFrame::main((1920, 1080))];
             views.append(&mut helper_views);
@@ -1007,7 +1008,7 @@ fn render_runtime_inspect_prepared_frame_rejects_conflicting_dynamic_target_hist
             shader_registry_revision: 2,
             prepare_epoch: 5,
         },
-        surface: PreparedSurfaceInfo::primary((1920, 1080)),
+        surface: PreparedSurfaceInfo::unbound_primary((1920, 1080)),
         views: vec![PreparedViewFrame::offscreen_product(
             "viewport.1",
             (640, 360),
@@ -1184,7 +1185,7 @@ fn render_runtime_inspect_includes_registered_feature_contributions() {
             shader_registry_revision: 0,
             prepare_epoch: 1,
         },
-        surface: PreparedSurfaceInfo::primary((64, 64)),
+        surface: PreparedSurfaceInfo::unbound_primary((64, 64)),
         views: vec![PreparedViewFrame::main((64, 64))],
         flows: BTreeMap::new(),
         flow_invocations: Vec::new(),

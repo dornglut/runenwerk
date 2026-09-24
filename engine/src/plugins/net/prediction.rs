@@ -250,6 +250,8 @@ where
         .copied()
         .unwrap_or_default();
 
+    let mut authority_inputs = drain_authority_input_for_tick::<TDriver>(&mut world, tick)?;
+
     let commands = TDriver::take_local_input(&mut world)
         .map_err(|error| map_driver_error::<TDriver>(error, "take local input"))?;
     let mut staged_commands = Vec::with_capacity(commands.len());
@@ -299,9 +301,11 @@ where
         }
     }
 
-    let inputs_to_apply = world
+    let local_inputs = world
         .resource_mut::<NetworkInputStaging<TDriver::Input>>()?
         .drain_tick(tick);
+    authority_inputs.extend(local_inputs);
+    let inputs_to_apply = authority_inputs;
     if inputs_to_apply.is_empty() {
         return Ok(());
     }

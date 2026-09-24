@@ -12,7 +12,8 @@ use crate::plugins::render::{
     RenderVertexBufferLayout, RenderVertexStepMode,
 };
 use runen_gpu::{
-    GpuBindingKey, GpuStorageBufferAccess, GpuStorageTextureAccess, GpuWorkResourceId,
+    GpuBindingKey, GpuStorageBufferAccess, GpuStorageTextureAccess, GpuTextureSampleClass,
+    GpuWorkResourceId,
 };
 use std::any::TypeId;
 use std::collections::BTreeMap;
@@ -159,6 +160,7 @@ pub enum CompiledBindingEntry {
     SampledTexture {
         key: GpuBindingKey,
         resource: CompiledResourceRef,
+        sample_class: GpuTextureSampleClass,
     },
     Sampler {
         key: GpuBindingKey,
@@ -498,12 +500,14 @@ fn compile_shader_binding(
 ) -> CompiledBindingEntry {
     let key = binding.key();
     match binding.resource() {
-        RenderShaderBindingResource::SampledTexture(resource) => {
-            CompiledBindingEntry::SampledTexture {
-                key,
-                resource: compile_resource_ref(resource, resources),
-            }
-        }
+        RenderShaderBindingResource::SampledTexture {
+            resource,
+            sample_class,
+        } => CompiledBindingEntry::SampledTexture {
+            key,
+            resource: compile_resource_ref(resource, resources),
+            sample_class: *sample_class,
+        },
         RenderShaderBindingResource::Sampler => CompiledBindingEntry::Sampler { key },
         RenderShaderBindingResource::StorageTexture { resource, access } => {
             CompiledBindingEntry::StorageTexture {

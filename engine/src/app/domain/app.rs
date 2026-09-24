@@ -19,7 +19,6 @@ use engine_sim::*;
 use runen_ecs::{Resource, Runtime, RuntimeError, ScheduleLabel, World};
 use std::error::Error;
 use std::fmt;
-use winit::event_loop::ControlFlow;
 
 const DEFAULT_WINDOW_TITLE: &str = "Runenwerk - Engine";
 
@@ -30,7 +29,6 @@ pub struct App {
     pub(crate) lifecycle: AppLifecycle,
     pub(crate) mode: AppMode,
     pub(crate) title: String,
-    pub(crate) control_flow: ControlFlow,
     composition_errors: Vec<AppCompositionError>,
 }
 
@@ -58,7 +56,6 @@ impl App {
             lifecycle: AppLifecycle::default(),
             mode,
             title: title.clone(),
-            control_flow: ControlFlow::Wait,
             composition_errors: Vec::new(),
         };
         app.install_builtin_resources();
@@ -178,9 +175,6 @@ impl App {
 
     pub fn set_title(&mut self, title: impl Into<String>) -> &mut Self {
         self.title = title.into();
-        if let Ok(window) = self.world.resource_mut::<WindowState>() {
-            window.set_title(self.title.clone());
-        }
         self
     }
 
@@ -188,17 +182,26 @@ impl App {
     where
         I: IntoIterator<Item = (&'static str, PhysicalKeyIdentity)>,
     {
-        self.init_resource::<InputState>();
-        self.init_resource::<ActionState>();
+        if self.world.resource::<InputState>().is_err()
+            || self.world.resource::<ActionState>().is_err()
+        {
+            self.composition_errors
+                .push(AppCompositionError::MissingCapability {
+                    operation: "add_input_bindings",
+                    capability: "InputFinalizePlugin",
+                });
+            return self;
+        }
+
         let mut actions = self
             .world
             .remove_resource::<ActionState>()
-            .unwrap_or_default();
+            .expect("input capability admission proved ActionState exists");
         {
             let input = self
                 .world
                 .resource::<InputState>()
-                .expect("input state should be installed");
+                .expect("input capability admission proved InputState exists");
             for (action, key) in bindings {
                 actions.map_key(input, action.to_string(), key);
             }
@@ -346,11 +349,6 @@ impl App {
             .unwrap_or(0)
     }
 
-    pub fn with_control_flow(&mut self, control_flow: ControlFlow) -> &mut Self {
-        self.control_flow = control_flow;
-        self
-    }
-
     pub fn with_frame_pacing(&mut self, policy: FramePacingPolicyResource) -> &mut Self {
         self.world.insert_resource(policy);
         if let Ok(runtime_state) = self.world.resource_mut::<FramePacingRuntimeStateResource>() {
@@ -381,7 +379,6 @@ impl App {
             scheduler: self.scheduler,
             startup_ran: self.lifecycle,
             title: self.title,
-            control_flow: self.control_flow,
         }
     }
 
@@ -423,6 +420,10 @@ impl App {
 
 #[derive(Debug)]
 enum AppCompositionError {
+    MissingCapability {
+        operation: &'static str,
+        capability: &'static str,
+    },
     SystemRegistration {
         schedule: &'static str,
         source: RuntimeError,
@@ -437,6 +438,13 @@ enum AppCompositionError {
 impl fmt::Display for AppCompositionError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::MissingCapability {
+                operation,
+                capability,
+            } => write!(
+                formatter,
+                "{operation} requires selected capability '{capability}'"
+            ),
             Self::SystemRegistration { schedule, source } => write!(
                 formatter,
                 "failed to register systems in schedule '{}': {}",
@@ -465,7 +473,7 @@ impl Error for AppCompositionError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::SystemRegistration { source, .. } => Some(source),
-            Self::LateTopologyMutation { .. } => None,
+            Self::MissingCapability { .. } | Self::LateTopologyMutation { .. } => None,
         }
     }
 }

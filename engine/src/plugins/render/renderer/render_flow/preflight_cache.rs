@@ -114,7 +114,7 @@ mod tests {
                 shader_registry_revision: 1,
                 prepare_epoch: 1,
             },
-            surface: PreparedSurfaceInfo::primary((800, 600)),
+            surface: PreparedSurfaceInfo::unbound_primary((800, 600)),
             views: vec![PreparedViewFrame::offscreen_product(
                 "viewport.cache",
                 (320, 180),

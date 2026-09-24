@@ -7,20 +7,24 @@ use crate::plugins::input::domain::action;
 use crate::plugins::{ActionState, InputState, SceneResource};
 use crate::prelude::Time;
 use crate::prelude::domain::{SceneCommand, SceneId};
-use crate::runtime::{FixedTimeConfig, WindowState, WorldMut};
+use crate::runtime::{FixedTimeConfig, PrimaryPresentationMetricsResource, WorldMut};
 use crate::{SceneOverlayViewportState, SceneRuntimeState};
 use anyhow::Result;
 
 pub(crate) fn scene_transition_system(mut world: WorldMut) -> Result<()> {
-    let window = world.resource::<WindowState>()?.clone();
+    let presentation = *world.resource::<PrimaryPresentationMetricsResource>()?;
     let delta_seconds = world.resource::<Time>()?.delta_seconds;
     let fixed_step_seconds = world
         .resource::<FixedTimeConfig>()
         .ok()
         .map(|config| config.step_seconds);
 
-    let mut input = world.remove_resource::<InputState>().unwrap_or_default();
-    let actions = world.remove_resource::<ActionState>().unwrap_or_default();
+    let input_resource = world.remove_resource::<InputState>();
+    let action_resource = world.remove_resource::<ActionState>();
+    let input_was_installed = input_resource.is_some();
+    let actions_were_installed = action_resource.is_some();
+    let mut input = input_resource.unwrap_or_default();
+    let actions = action_resource.unwrap_or_default();
     let mut scene_templates = world
         .remove_resource::<SceneTemplateFlowResource>()
         .unwrap_or_default();
@@ -37,7 +41,7 @@ pub(crate) fn scene_transition_system(mut world: WorldMut) -> Result<()> {
             return Ok(());
         };
 
-        sync_overlay_viewport(manager, &window);
+        sync_overlay_viewport(manager, &presentation);
         let fixed_step_seconds =
             fixed_step_seconds.unwrap_or(manager.world_runtime.ctx.fixed_step_seconds);
         sync_world_scene_context_from_input(
@@ -120,8 +124,12 @@ pub(crate) fn scene_transition_system(mut world: WorldMut) -> Result<()> {
         Ok(())
     })();
 
-    world.insert_resource(input);
-    world.insert_resource(actions);
+    if input_was_installed {
+        world.insert_resource(input);
+    }
+    if actions_were_installed {
+        world.insert_resource(actions);
+    }
     world.insert_resource(scene_templates);
     world.insert_resource(scene_resource);
     world.insert_resource(scene_state);

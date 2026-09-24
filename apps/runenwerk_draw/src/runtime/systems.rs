@@ -2,7 +2,7 @@
 
 use std::collections::BTreeSet;
 
-use engine::WindowState;
+use engine::PrimaryPresentationMetricsResource;
 use engine::plugins::render::inspect::RenderDebugConfigResource;
 use engine::plugins::render::{
     PreparedRenderFrameRequestResource, PreparedRenderProductSelectionResource,
@@ -656,7 +656,7 @@ fn pointer_sample_from_event(event: &PointerEvent) -> PointerSample {
 }
 
 pub fn submit_draw_frame_system(
-    window: Res<WindowState>,
+    presentation: Res<PrimaryPresentationMetricsResource>,
     mut host: ResMut<DrawingHostResource>,
     mut upload_tracker: ResMut<DrawingInkUploadTrackerResource>,
     gpu_flow: Res<DrawingInkGpuFlowResource>,
@@ -670,7 +670,8 @@ pub fn submit_draw_frame_system(
         mut frame_requests,
         mut debug_config,
     } = render_submission;
-    let size = UiSize::new(window.size_px.0 as f32, window.size_px.1 as f32);
+    let size_px = presentation.size_px();
+    let size = UiSize::new(size_px.0 as f32, size_px.1 as f32);
     let frame = host.app.rebuild_frame(size).clone();
     let committed_products = host
         .app

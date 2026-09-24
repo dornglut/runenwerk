@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-24
 ---
 
 # Network Integration Flow
@@ -17,7 +17,8 @@ last_reviewed: 2026-09-13
 - Application/host lifecycle: places and invokes RunenNet owners through the Runenwerk
   integration boundary.
 - ECS integration: `engine/src/plugins/net/*`, including derived session/routing projections,
-  schedule placement, diagnostics, and retained replication/input staging.
+  schedule placement, diagnostics, retained replication staging, and host execution staging for
+  remote input already accepted by RunenNet.
 - Retained migration contracts: `net/engine_net`, limited to the evidence-backed payload,
   replication/input, metadata, and authoring surface that still has maintained consumers.
 - Concrete transport: separate adapter/product concern. The engine has no generic replacement
@@ -34,7 +35,7 @@ owners through `RunenNetSessionCore`. Only successful bindings are recorded in
 
 `RunenNetSessionProjection` is read-only derived engine state used by routing, streaming,
 diagnostics, and retained replication integration. It does not authorize admission, loss,
-retention, replacement, expiry, removal, or closure.
+retention, replacement, expiry, removal, closure, or remote participant input.
 
 ## Receive Path (`PreUpdate`, `NetPreUpdateSet::Receive`)
 
@@ -45,9 +46,11 @@ retention, replacement, expiry, removal, or closure.
    - stages ACKs in `NetworkClientOutbox`.
 2. `server_receive_system`
    - drains `NetworkServerInbox`;
-   - requires a projected RunenNet `ConnectionHandle` for ACK/input processing;
-   - rejects ACK/input from a connection that is not currently authorized by the projection;
-   - updates retained per-connection baseline and input-staging state.
+   - keeps retained ACK processing scoped to projected active `ConnectionHandle`s;
+   - for remote input, requires a source `ConnectionHandle`, resolves the participant through the
+     actual RunenNet `Session`, and submits the opaque participant/tick batch to RunenNet
+     `AuthorityInputSession` under explicit finite host policy;
+   - stages only `InputAccepted` batches for host execution at their target fixed tick.
 
 `NetworkInboundQueue` records the corresponding engine-visible staged messages. It is not a
 second lifecycle or transport owner.
@@ -60,6 +63,8 @@ The maintained ordering is explicit:
    - reconciles connection-scoped streaming state from the current RunenNet projection;
    - runs after an optional same-schedule `CoreSet::Simulation` owner and before prediction.
 2. `prediction_step_system` (`NetFixedSet::Prediction`)
+   - drains already-accepted remote authority-input batches for the current tick before local input;
+   - preserves the remaining local prediction/replay integration.
 3. `replication_step_system` (`NetFixedSet::Replication`, after prediction)
 
 Relevant Net work is ordered after `CoreSet::Simulation` only when that owner exists. Assemblies

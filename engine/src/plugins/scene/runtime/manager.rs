@@ -4,14 +4,15 @@ use crate::prelude::domain::{
     SceneRegistry, SceneSlot, SceneTransitionResult, build_overlay_runtime,
     build_world_scene_runtime,
 };
-use crate::runtime::WindowState;
+use crate::runtime::PrimaryPresentationMetricsResource;
 use anyhow::Result;
 
 // Owner: Engine Scene Plugin - Manager
 impl SceneManager {
-    pub(crate) fn new(window: &WindowState) -> Result<Self> {
-        let screen_size = (window.size_px.0 as f32, window.size_px.1 as f32);
-        let scale = window.scale_factor as f32;
+    pub(crate) fn new(presentation: &PrimaryPresentationMetricsResource) -> Result<Self> {
+        let size_px = presentation.size_px();
+        let screen_size = (size_px.0 as f32, size_px.1 as f32);
+        let scale = presentation.scale_factor() as f32;
         let registry = SceneRegistry::load();
         let world_scene = SceneId::GameplayStub;
         let mut manager = Self {

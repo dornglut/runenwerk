@@ -6,9 +6,16 @@ use editor_shell::{
     tab_stack_container_widget_id,
 };
 use engine::plugins::render::Gfx;
+use engine::plugins::render::backend::{
+    RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
+};
 use engine::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, RenderCaptureSelector, RenderCaptureTerminalCode,
     RenderCapturedTextureState, RenderPassProvenanceState, deterministic_capture_filename,
+};
+use engine::runtime::platform::{PlatformEvent, apply_native_window_event};
+use engine::runtime::{
+    NativeWindowId, PrimaryPresentationMetricsResource, WindowStateRegistryResource,
 };
 use runenwerk_editor::runtime::resources::EditorHostResource;
 use ui_adaptive_composition::DockZone;
@@ -19,25 +26,204 @@ use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::window::Window;
 
 const ENABLE_ENV: &str = "RUNENWERK_CAPTURE_REGION_COMPASS";
+const SURFACE_IDENTITY_SMOKE_ENV: &str = "RUNENWERK_SURFACE_IDENTITY_NATIVE_SMOKE";
 const SURFACE_RESOURCE_ID: &str = "surface.color";
 const OUTPUT_DIR: &str = "docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-007/artifacts";
 
 fn main() {
+    if std::env::var_os(SURFACE_IDENTITY_SMOKE_ENV).is_some() {
+        surface_identity_native_smoke().expect("native surface identity smoke should succeed");
+        return;
+    }
     if std::env::var_os(ENABLE_ENV).is_none() {
         return;
     }
     capture().expect("Region Compass GPU visual capture should succeed");
 }
 
+fn surface_identity_native_smoke() -> anyhow::Result<()> {
+    eprintln!("surface-identity-smoke: create-windows");
+    let (primary_window, secondary_window) = create_hidden_surface_identity_windows()?;
+
+    let primary_size = primary_window.inner_size();
+    let secondary_size = secondary_window.inner_size();
+    let primary_size_px = (primary_size.width.max(1), primary_size.height.max(1));
+    let secondary_size_px = (secondary_size.width.max(1), secondary_size.height.max(1));
+
+    let mut windows = WindowStateRegistryResource::default();
+    let primary_native = windows.register_primary_window(
+        primary_window.title(),
+        primary_size_px,
+        primary_window.scale_factor(),
+        primary_window.has_focus(),
+    );
+    anyhow::ensure!(
+        primary_native == NativeWindowId::primary(),
+        "real primary window must use the canonical primary native id"
+    );
+    let secondary_request = windows.request_window(secondary_window.title(), secondary_size_px);
+    let secondary_native = secondary_request.native_window_id;
+    windows.register_created_window(
+        secondary_native,
+        secondary_window.title(),
+        secondary_size_px,
+        secondary_window.scale_factor(),
+        secondary_window.has_focus(),
+    );
+
+    eprintln!("surface-identity-smoke: create-gfx");
+    let mut gfx = Gfx::new(Arc::clone(&primary_window))?;
+    anyhow::ensure!(
+        gfx.has_surface(RenderSurfaceId::primary()),
+        "primary Gfx surface must exist after Gfx::new"
+    );
+
+    let mut surfaces = RenderSurfaceRegistryResource::default();
+    surfaces.confirm_surface_attachment(
+        RenderSurfaceId::primary(),
+        NativeWindowId::primary(),
+        primary_size_px,
+    )?;
+    anyhow::ensure!(
+        surfaces
+            .record(RenderSurfaceId::primary())
+            .map(|record| record.lifecycle_state)
+            == Some(RenderSurfaceLifecycleState::Attached),
+        "primary Render surface must be Attached after explicit confirmation"
+    );
+
+    let secondary_surface =
+        surfaces.reserve_surface_for_native_window(secondary_native, secondary_size_px);
+    anyhow::ensure!(
+        secondary_surface != RenderSurfaceId::primary(),
+        "secondary native window must reserve a distinct Render surface"
+    );
+    anyhow::ensure!(
+        surfaces
+            .record(secondary_surface)
+            .map(|record| record.lifecycle_state)
+            == Some(RenderSurfaceLifecycleState::Requested),
+        "secondary reservation must remain Requested before Gfx attachment"
+    );
+
+    eprintln!("surface-identity-smoke: attach-secondary");
+    gfx.attach_surface(
+        secondary_surface,
+        Arc::clone(&secondary_window),
+        secondary_size_px,
+    )?;
+    surfaces.confirm_surface_attachment(secondary_surface, secondary_native, secondary_size_px)?;
+    anyhow::ensure!(
+        gfx.has_surface(secondary_surface),
+        "secondary Gfx surface must exist after attachment"
+    );
+    anyhow::ensure!(
+        surfaces
+            .record(secondary_surface)
+            .map(|record| record.lifecycle_state)
+            == Some(RenderSurfaceLifecycleState::Attached),
+        "secondary Render surface must be Attached after confirmation"
+    );
+
+    eprintln!("surface-identity-smoke: resize-secondary");
+    anyhow::ensure!(
+        gfx.resize(secondary_surface, 900, 600),
+        "secondary Gfx surface resize must succeed"
+    );
+    anyhow::ensure!(
+        gfx.surface_size(secondary_surface) == Some((900, 600)),
+        "secondary Gfx surface must retain the resized extent"
+    );
+    apply_native_window_event(
+        windows
+            .record_mut(secondary_native)
+            .ok_or_else(|| anyhow::anyhow!("secondary native record is missing"))?,
+        &PlatformEvent::Resized {
+            width: 900,
+            height: 600,
+        },
+    );
+    anyhow::ensure!(
+        windows
+            .record(secondary_native)
+            .map(|record| record.size_px)
+            == Some((900, 600)),
+        "secondary native record must retain the resized extent"
+    );
+
+    eprintln!("surface-identity-smoke: detach-secondary");
+    anyhow::ensure!(
+        gfx.detach_surface(secondary_surface),
+        "secondary Gfx surface detach must succeed"
+    );
+    anyhow::ensure!(
+        surfaces.retire_surface_for_native_window(secondary_native) == Some(secondary_surface),
+        "secondary Render surface retirement must resolve the reserved identity"
+    );
+    anyhow::ensure!(
+        windows.remove_window(secondary_native).is_some(),
+        "secondary native record must retire with the secondary window"
+    );
+    anyhow::ensure!(
+        !gfx.has_surface(secondary_surface),
+        "secondary Gfx surface must be absent after detach"
+    );
+    anyhow::ensure!(
+        surfaces
+            .record(secondary_surface)
+            .map(|record| record.lifecycle_state)
+            == Some(RenderSurfaceLifecycleState::Retired),
+        "secondary Render surface must be Retired after detach"
+    );
+    anyhow::ensure!(
+        gfx.has_surface(RenderSurfaceId::primary()),
+        "secondary detach must preserve the primary Gfx surface"
+    );
+    anyhow::ensure!(
+        surfaces
+            .record(RenderSurfaceId::primary())
+            .map(|record| record.lifecycle_state)
+            == Some(RenderSurfaceLifecycleState::Attached),
+        "secondary retirement must preserve the primary Render attachment"
+    );
+    anyhow::ensure!(
+        windows.record(primary_native).is_some(),
+        "secondary retirement must preserve the primary native record"
+    );
+
+    println!("surface_identity_native_smoke=pass");
+    Ok(())
+}
+
 fn capture() -> anyhow::Result<()> {
     eprintln!("region-compass-capture: create-window");
     let window = create_hidden_window()?;
     eprintln!("region-compass-capture: create-gfx");
-    let gfx = Gfx::new(window)?;
+    let gfx = Gfx::new(Arc::clone(&window))?;
     eprintln!("region-compass-capture: build-app");
     let mut app = runenwerk_editor::runtime::build_headless_app()
         .expect("headless app construction should succeed");
     activate_region_compass(&mut app)?;
+    let size = window.inner_size();
+    let size_px = (size.width.max(1), size.height.max(1));
+    let scale_factor = window.scale_factor();
+    app.world_mut()
+        .insert_resource(PrimaryPresentationMetricsResource::new(
+            size_px,
+            scale_factor,
+        ));
+    app.world_mut()
+        .insert_resource(WindowStateRegistryResource::default());
+    app.world_mut()
+        .resource_mut::<WindowStateRegistryResource>()?
+        .register_primary_window(window.title(), size_px, scale_factor, window.has_focus());
+    app.world_mut()
+        .resource_mut::<RenderSurfaceRegistryResource>()?
+        .confirm_surface_attachment(
+            RenderSurfaceId::primary(),
+            NativeWindowId::primary(),
+            size_px,
+        )?;
     app.world_mut().insert_resource(gfx);
     app.update_render_debug_control(|control| {
         control.provenance_enabled = true;
@@ -153,6 +339,72 @@ fn activate_region_compass(app: &mut engine::App) -> anyhow::Result<()> {
     host.shell_state
         .set_region_compass_for_target(target_id, anchor, compass, epoch);
     Ok(())
+}
+
+fn create_hidden_surface_identity_windows() -> anyhow::Result<(Arc<Window>, Arc<Window>)> {
+    struct Bootstrap {
+        windows: Vec<Arc<Window>>,
+        error: Option<String>,
+    }
+
+    impl ApplicationHandler for Bootstrap {
+        fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+            for (title, size) in [
+                (
+                    "Runenwerk surface identity primary",
+                    PhysicalSize::new(1280, 720),
+                ),
+                (
+                    "Runenwerk surface identity secondary",
+                    PhysicalSize::new(800, 600),
+                ),
+            ] {
+                let attributes = Window::default_attributes()
+                    .with_title(title)
+                    .with_visible(false)
+                    .with_inner_size(size);
+                match event_loop.create_window(attributes) {
+                    Ok(window) => self.windows.push(Arc::new(window)),
+                    Err(error) => {
+                        self.error = Some(error.to_string());
+                        break;
+                    }
+                }
+            }
+            event_loop.exit();
+        }
+
+        fn window_event(
+            &mut self,
+            _: &ActiveEventLoop,
+            _: winit::window::WindowId,
+            _: winit::event::WindowEvent,
+        ) {
+        }
+    }
+
+    let event_loop = EventLoop::new()?;
+    let mut bootstrap = Bootstrap {
+        windows: Vec::new(),
+        error: None,
+    };
+    event_loop.run_app(&mut bootstrap)?;
+    if let Some(error) = bootstrap.error {
+        anyhow::bail!("surface identity smoke window creation failed: {error}");
+    }
+    anyhow::ensure!(
+        bootstrap.windows.len() == 2,
+        "surface identity smoke must create exactly two native windows"
+    );
+    let secondary = bootstrap
+        .windows
+        .pop()
+        .ok_or_else(|| anyhow::anyhow!("secondary smoke window is missing"))?;
+    let primary = bootstrap
+        .windows
+        .pop()
+        .ok_or_else(|| anyhow::anyhow!("primary smoke window is missing"))?;
+    Ok((primary, secondary))
 }
 
 fn create_hidden_window() -> anyhow::Result<Arc<Window>> {
