@@ -714,7 +714,11 @@ mod tests {
         )
     }
 
-    fn composed_measured(frame: u64, surface: u64, millis: f32) -> RenderComposedFrameGpuTimingEvidence {
+    fn composed_measured(
+        frame: u64,
+        surface: u64,
+        millis: f32,
+    ) -> RenderComposedFrameGpuTimingEvidence {
         RenderComposedFrameGpuTimingEvidence::gpu_sample(frame, surface, millis)
     }
 
@@ -722,51 +726,148 @@ mod tests {
     fn composed_gpu_timing_updates_exact_frame_after_reverse_arrival() {
         let policy = policy(8);
         let mut history = RenderFrameHistoryState::default();
-        record(&mut history, policy, 1, 1, 1.0, RenderGpuTimingCapability::UnavailableThisFrame);
-        record(&mut history, policy, 2, 1, 2.0, RenderGpuTimingCapability::UnavailableThisFrame);
+        record(
+            &mut history,
+            policy,
+            1,
+            1,
+            1.0,
+            RenderGpuTimingCapability::UnavailableThisFrame,
+        );
+        record(
+            &mut history,
+            policy,
+            2,
+            1,
+            2.0,
+            RenderGpuTimingCapability::UnavailableThisFrame,
+        );
         history.observe_composed_gpu_timing_evidence(policy, &[composed_measured(2, 1, 5.0)]);
         history.observe_composed_gpu_timing_evidence(policy, &[composed_measured(1, 1, 3.0)]);
-        assert_eq!(history.observation(RenderFrameObservationKey::new(1, 1)).unwrap()
-            .gpu.composed_timing_evidence.as_ref().unwrap().millis, Some(3.0));
-        assert_eq!(history.observation(RenderFrameObservationKey::new(2, 1)).unwrap()
-            .gpu.composed_timing_evidence.as_ref().unwrap().millis, Some(5.0));
+        assert_eq!(
+            history
+                .observation(RenderFrameObservationKey::new(1, 1))
+                .unwrap()
+                .gpu
+                .composed_timing_evidence
+                .as_ref()
+                .unwrap()
+                .millis,
+            Some(3.0)
+        );
+        assert_eq!(
+            history
+                .observation(RenderFrameObservationKey::new(2, 1))
+                .unwrap()
+                .gpu
+                .composed_timing_evidence
+                .as_ref()
+                .unwrap()
+                .millis,
+            Some(5.0)
+        );
     }
 
     #[test]
     fn composed_gpu_timing_never_cross_joins_surfaces() {
         let policy = policy(8);
         let mut history = RenderFrameHistoryState::default();
-        record(&mut history, policy, 7, 1, 0.0, RenderGpuTimingCapability::UnavailableThisFrame);
-        record(&mut history, policy, 7, 2, 0.0, RenderGpuTimingCapability::UnavailableThisFrame);
+        record(
+            &mut history,
+            policy,
+            7,
+            1,
+            0.0,
+            RenderGpuTimingCapability::UnavailableThisFrame,
+        );
+        record(
+            &mut history,
+            policy,
+            7,
+            2,
+            0.0,
+            RenderGpuTimingCapability::UnavailableThisFrame,
+        );
         history.observe_composed_gpu_timing_evidence(policy, &[composed_measured(7, 2, 4.0)]);
-        assert!(history.observation(RenderFrameObservationKey::new(7, 1)).unwrap()
-            .gpu.composed_timing_evidence.is_none());
-        assert_eq!(history.observation(RenderFrameObservationKey::new(7, 2)).unwrap()
-            .gpu.composed_timing_capability, RenderGpuTimingCapability::Supported);
+        assert!(
+            history
+                .observation(RenderFrameObservationKey::new(7, 1))
+                .unwrap()
+                .gpu
+                .composed_timing_evidence
+                .is_none()
+        );
+        assert_eq!(
+            history
+                .observation(RenderFrameObservationKey::new(7, 2))
+                .unwrap()
+                .gpu
+                .composed_timing_capability,
+            RenderGpuTimingCapability::Supported
+        );
     }
 
     #[test]
     fn composed_gpu_timing_progresses_pending_to_measured_without_zero_fallback() {
         let policy = policy(8);
         let mut history = RenderFrameHistoryState::default();
-        record(&mut history, policy, 9, 1, 0.0, RenderGpuTimingCapability::UnavailableThisFrame);
+        record(
+            &mut history,
+            policy,
+            9,
+            1,
+            0.0,
+            RenderGpuTimingCapability::UnavailableThisFrame,
+        );
         history.observe_composed_gpu_timing_evidence(policy, &[composed_pending(9, 1)]);
-        assert_eq!(history.observation(RenderFrameObservationKey::new(9, 1)).unwrap()
-            .gpu.composed_timing_capability, RenderGpuTimingCapability::ReadbackPending);
+        assert_eq!(
+            history
+                .observation(RenderFrameObservationKey::new(9, 1))
+                .unwrap()
+                .gpu
+                .composed_timing_capability,
+            RenderGpuTimingCapability::ReadbackPending
+        );
         history.observe_composed_gpu_timing_evidence(policy, &[composed_measured(9, 1, 6.5)]);
-        let observation=history.observation(RenderFrameObservationKey::new(9, 1)).unwrap();
-        assert_eq!(observation.gpu.composed_timing_capability, RenderGpuTimingCapability::Supported);
-        assert_eq!(observation.gpu.composed_timing_evidence.as_ref().unwrap().millis, Some(6.5));
+        let observation = history
+            .observation(RenderFrameObservationKey::new(9, 1))
+            .unwrap();
+        assert_eq!(
+            observation.gpu.composed_timing_capability,
+            RenderGpuTimingCapability::Supported
+        );
+        assert_eq!(
+            observation
+                .gpu
+                .composed_timing_evidence
+                .as_ref()
+                .unwrap()
+                .millis,
+            Some(6.5)
+        );
     }
 
     #[test]
     fn evicted_frame_counts_late_composed_gpu_evidence() {
         let policy = policy(1);
         let mut history = RenderFrameHistoryState::default();
-        record(&mut history, policy, 1, 1, 0.0, RenderGpuTimingCapability::UnavailableThisFrame);
-        record(&mut history, policy, 2, 1, 0.0, RenderGpuTimingCapability::UnavailableThisFrame);
+        record(
+            &mut history,
+            policy,
+            1,
+            1,
+            0.0,
+            RenderGpuTimingCapability::UnavailableThisFrame,
+        );
+        record(
+            &mut history,
+            policy,
+            2,
+            1,
+            0.0,
+            RenderGpuTimingCapability::UnavailableThisFrame,
+        );
         history.observe_composed_gpu_timing_evidence(policy, &[composed_measured(1, 1, 2.0)]);
         assert_eq!(history.drop_stats().dropped_correlated_evidence, 1);
     }
-
 }
