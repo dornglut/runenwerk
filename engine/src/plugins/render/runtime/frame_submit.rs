@@ -166,8 +166,7 @@ mod contribution_deferral_tests {
         let policy = RenderFrameObservationPolicyResource::enabled(8);
         let mut history = RenderFrameHistoryState::default();
         let primary_surface = RenderSurfaceId::primary();
-        let secondary_surface =
-            RenderSurfaceId::try_from_raw(2).expect("secondary surface id");
+        let secondary_surface = RenderSurfaceId::try_from_raw(2).expect("secondary surface id");
         let primary = prepared_frame(primary_surface, 10);
         let secondary = prepared_frame(secondary_surface, 11);
 

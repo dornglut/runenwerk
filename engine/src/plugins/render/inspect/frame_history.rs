@@ -70,7 +70,7 @@ pub struct RenderFrameCpuObservation {
 }
 
 impl RenderFrameCpuObservation {
-    pub fn workload_ms(&self) -> f32 {
+    pub fn observed_renderer_stage_sum_ms(&self) -> f32 {
         self.renderer.prepare_ui_ms
             + self.renderer.prepare_mesh_ms
             + self.renderer.world_prepare_ms
@@ -79,24 +79,22 @@ impl RenderFrameCpuObservation {
             + self.renderer.encode_submit_ms
     }
 
-    pub fn total_observed_cpu_ms(&self) -> f32 {
-        self.acquire_ms + self.workload_ms()
+    pub fn observed_stage_sum_with_acquire_ms(&self) -> f32 {
+        self.acquire_ms + self.observed_renderer_stage_sum_ms()
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct RenderFrameGpuObservation {
-    pub capability: RenderGpuTimingCapability,
+    pub pass_timing_capability: RenderGpuTimingCapability,
     pub pass_evidence: Vec<RenderPassTimingEvidence>,
-    pub whole_frame_millis: Option<f32>,
 }
 
 impl RenderFrameGpuObservation {
     fn new(capability: RenderGpuTimingCapability) -> Self {
         Self {
-            capability,
+            pass_timing_capability: capability,
             pass_evidence: Vec::new(),
-            whole_frame_millis: None,
         }
     }
 
@@ -136,7 +134,8 @@ impl RenderFrameGpuObservation {
         }
 
         if !self.pass_evidence.is_empty() {
-            self.capability = summarize_gpu_pass_timing_evidence(&self.pass_evidence).capability;
+            self.pass_timing_capability =
+                summarize_gpu_pass_timing_evidence(&self.pass_evidence).capability;
         }
     }
 }
@@ -465,7 +464,7 @@ mod tests {
             .observation(RenderFrameObservationKey::new(3, 1))
             .unwrap();
         assert_eq!(
-            observation.gpu.capability,
+            observation.gpu.pass_timing_capability,
             RenderGpuTimingCapability::Supported
         );
         assert_eq!(observation.gpu.pass_evidence.len(), 1);
@@ -499,7 +498,7 @@ mod tests {
             .observation(RenderFrameObservationKey::new(4, 1))
             .unwrap();
         assert_eq!(
-            observation.gpu.capability,
+            observation.gpu.pass_timing_capability,
             RenderGpuTimingCapability::UnavailableThisFrame
         );
         assert_eq!(observation.gpu.pass_evidence[0].millis, None);
@@ -522,11 +521,10 @@ mod tests {
             .observation(RenderFrameObservationKey::new(5, 1))
             .unwrap();
         assert_eq!(
-            observation.gpu.capability,
+            observation.gpu.pass_timing_capability,
             RenderGpuTimingCapability::Unsupported
         );
         assert!(observation.gpu.pass_evidence.is_empty());
-        assert_eq!(observation.gpu.whole_frame_millis, None);
     }
 
     #[test]
@@ -550,7 +548,7 @@ mod tests {
             .observation(RenderFrameObservationKey::new(3, 1))
             .unwrap();
         assert_eq!(
-            observation.gpu.capability,
+            observation.gpu.pass_timing_capability,
             RenderGpuTimingCapability::Supported
         );
         assert_eq!(observation.gpu.pass_evidence[0].millis, Some(2.0));
@@ -675,7 +673,6 @@ mod tests {
             observation.presentation.display_timing,
             RenderDisplayPresentationTiming::Unavailable
         );
-        assert_eq!(observation.cpu.total_observed_cpu_ms(), 0.5);
-        assert_eq!(observation.gpu.whole_frame_millis, None);
+        assert_eq!(observation.cpu.observed_stage_sum_with_acquire_ms(), 0.5);
     }
 }
