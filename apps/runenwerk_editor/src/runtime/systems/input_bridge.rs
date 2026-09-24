@@ -3,8 +3,8 @@ use editor_viewport::ViewportId;
 use engine::plugins::input::domain::action;
 use engine::plugins::render::{EditorGizmoAxis, EditorPickingTarget};
 use engine::runtime::platform::{PlatformEvent, PlatformWindowEventQueueResource};
-use engine::runtime::{NativeWindowId, Res, ResMut};
-use engine::{PrimaryPresentationMetricsResource, WindowCursorIcon, WindowState};
+use engine::runtime::{NativeWindowId, Res, ResMut, WindowStateRegistryResource};
+use engine::{PrimaryPresentationMetricsResource, WindowCursorIcon};
 use scene::LocalTransform;
 use ui_input::{
     EventPropagation, PointerButton, PointerEventKind, PointerSourceKind, UiInputEvent,
@@ -51,7 +51,7 @@ pub fn dispatch_editor_input_system(
     mut target_input: ResMut<EditorTargetInputRuntimeResource>,
     mut platform_events: ResMut<PlatformWindowEventQueueResource>,
     presentation: Res<PrimaryPresentationMetricsResource>,
-    mut window: ResMut<WindowState>,
+    mut windows: ResMut<WindowStateRegistryResource>,
     mut host: ResMut<EditorHostResource>,
     mut bridge: ResMut<EditorInputBridgeState>,
     picking_results: Res<ViewportPickingResultsResource>,
@@ -95,7 +95,7 @@ pub fn dispatch_editor_input_system(
         platform_events.publish(event);
     }
 
-    if !window.focused {
+    if !primary_window_is_focused(&windows, primary_window_id) {
         target_input.clear_window(primary_window_id);
         host.shell_state.runtime_mut().set_focused_widget(None);
         host.shell_state.clear_tab_drag();
@@ -411,7 +411,7 @@ pub fn dispatch_editor_input_system(
 
     let cursor_intent =
         RunenwerkEditorShellController::cursor_intent_for_pointer(&host.shell_state, position);
-    window.set_cursor_icon(window_cursor_icon(cursor_intent));
+    set_primary_cursor_intent(&mut windows, primary_window_id, cursor_intent);
     bridge.last_mouse_position = (position.x, position.y);
 }
 
@@ -460,6 +460,25 @@ fn sync_active_editor_shortcut_bindings(
     }
     bridge.active_shortcut_catalog_active = catalog_active;
     bridge.active_shortcut_signature = signature;
+}
+
+fn primary_window_is_focused(
+    windows: &WindowStateRegistryResource,
+    primary_window_id: NativeWindowId,
+) -> bool {
+    windows
+        .record(primary_window_id)
+        .is_some_and(|record| record.focused)
+}
+
+fn set_primary_cursor_intent(
+    windows: &mut WindowStateRegistryResource,
+    primary_window_id: NativeWindowId,
+    cursor_intent: ShellCursorIntent,
+) {
+    if let Some(primary_window) = windows.record_mut(primary_window_id) {
+        primary_window.set_cursor_icon(window_cursor_icon(cursor_intent));
+    }
 }
 
 fn window_cursor_icon(cursor_intent: ShellCursorIntent) -> WindowCursorIcon {
@@ -1083,6 +1102,30 @@ mod tests {
     use ui_theme::ThemeTokens;
     use winit::event::ElementState;
     use winit::keyboard::KeyCode;
+
+    #[test]
+    fn primary_focus_state_is_read_from_native_window_registry() {
+        let mut windows = WindowStateRegistryResource::default();
+        let primary = windows.register_primary_window("Runenwerk", (1280, 720), 1.0);
+        assert!(primary_window_is_focused(&windows, primary));
+
+        windows.record_mut(primary).unwrap().focused = false;
+        assert!(!primary_window_is_focused(&windows, primary));
+    }
+
+    #[test]
+    fn editor_cursor_intent_updates_primary_native_record() {
+        let mut windows = WindowStateRegistryResource::default();
+        let primary = windows.register_primary_window("Runenwerk", (1280, 720), 1.0);
+
+        set_primary_cursor_intent(&mut windows, primary, ShellCursorIntent::ResizeColumn);
+
+        assert_eq!(
+            windows.record(primary).unwrap().cursor_icon,
+            WindowCursorIcon::ColResize
+        );
+        assert!(windows.record(primary).unwrap().redraw_requested);
+    }
 
     #[test]
     fn active_shortcuts_dispatch_known_tool_and_definition_commands() {

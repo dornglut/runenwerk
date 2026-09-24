@@ -3,19 +3,17 @@ use crate::plugins::InputState;
 use crate::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryResource};
 use crate::plugins::render::renderer::Gfx;
 use crate::runtime::PrimaryPresentationMetricsResource;
-use crate::runtime::frame_lifecycle::{
-    prepare_world_for_run, run_frame as run_runtime_frame, run_startup_if_needed,
-};
+use crate::runtime::frame_lifecycle::{run_frame as run_runtime_frame, run_startup_if_needed};
 use crate::runtime::frame_pacing::{
     FramePacingPolicyResource, FramePacingRuntimeStateResource, FramePacingSchedule,
 };
 use crate::runtime::native_window_hooks::with_native_window_hooks;
 use crate::runtime::platform::{
-    PlatformEvent, PlatformWindowEvent, PlatformWindowEventQueueResource, apply_platform_event,
+    PlatformEvent, PlatformWindowEvent, PlatformWindowEventQueueResource,
+    apply_native_window_event, apply_platform_input_event,
 };
 use crate::runtime::window::{
-    NativeWindowCreationRequest, NativeWindowId, WindowCursorIcon, WindowState,
-    WindowStateRegistryResource,
+    NativeWindowCreationRequest, NativeWindowId, WindowCursorIcon, WindowStateRegistryResource,
 };
 use crate::runtime::winit_input::{
     WinitInputAdapter, contact_input, cursor_position, keyboard_input, pointer_button_input,
@@ -82,19 +80,14 @@ struct WinitRunner {
 impl WinitRunner {
     fn sync_window_state(&mut self, window: &Window) -> Result<()> {
         let size = window.inner_size();
-        let window_state = {
-            let window_state = self
-                .state
-                .world
-                .resource_mut::<WindowState>()
-                .context("missing WindowState resource")?;
-            window_state.set_headless(false);
-            window_state.size_px = (size.width, size.height);
-            window_state.scale_factor = window.scale_factor();
-            window_state.title = window.title().to_string();
-            window_state.clone()
-        };
-        self.sync_primary_window_state_and_surface_extent(&window_state)
+        let size_px = (size.width.max(1), size.height.max(1));
+        let scale_factor = window.scale_factor();
+        self.state
+            .world
+            .resource_mut::<WindowStateRegistryResource>()
+            .context("native Host window registry is unavailable")?
+            .register_primary_window(window.title().to_string(), size_px, scale_factor);
+        self.sync_primary_presentation_and_surface_extent(size_px, scale_factor)
     }
 
     fn apply_event(&mut self, event: PlatformEvent) -> Result<()> {
@@ -111,63 +104,20 @@ impl WinitRunner {
             .resource_mut::<PlatformWindowEventQueueResource>()
             .context("native Host platform-window event queue is unavailable")?
             .publish(PlatformWindowEvent::new(native_window_id, event.clone()));
-        if native_window_id != NativeWindowId::primary() {
-            self.apply_secondary_window_event(native_window_id, event);
-            return Ok(());
-        }
+
         match &event {
-            PlatformEvent::Resumed
-            | PlatformEvent::CloseRequested
-            | PlatformEvent::Focused { .. }
-            | PlatformEvent::Resized { .. }
-            | PlatformEvent::ScaleFactorChanged { .. }
-            | PlatformEvent::RedrawRequested => {
-                let window_state = {
-                    let window_state = self
-                        .state
-                        .world
-                        .resource_mut::<WindowState>()
-                        .context("missing WindowState resource")?;
-                    let mut input = InputState::new();
-                    apply_platform_event(window_state, &mut input, &event);
-                    window_state.clone()
-                };
-                self.sync_primary_window_state_and_surface_extent(&window_state)?;
-            }
             PlatformEvent::KeyboardInput { .. }
             | PlatformEvent::TextInput { .. }
             | PlatformEvent::MouseWheel { .. }
             | PlatformEvent::CursorMoved { .. }
             | PlatformEvent::MouseInput { .. }
             | PlatformEvent::Touch { .. } => {
-                let mut window_state = WindowState::headless("");
                 let input = self
                     .state
                     .world
                     .resource_mut::<InputState>()
                     .context("missing InputState resource")?;
-                apply_platform_event(&mut window_state, input, &event);
-            }
-        }
-        Ok(())
-    }
-
-    fn apply_secondary_window_event(
-        &mut self,
-        native_window_id: NativeWindowId,
-        event: PlatformEvent,
-    ) {
-        match &event {
-            PlatformEvent::KeyboardInput { .. }
-            | PlatformEvent::TextInput { .. }
-            | PlatformEvent::MouseWheel { .. }
-            | PlatformEvent::CursorMoved { .. }
-            | PlatformEvent::MouseInput { .. }
-            | PlatformEvent::Touch { .. } => {
-                if let Ok(input) = self.state.world.resource_mut::<InputState>() {
-                    let mut shadow_window = WindowState::headless("");
-                    apply_platform_event(&mut shadow_window, input, &event);
-                }
+                apply_platform_input_event(input, &event);
             }
             PlatformEvent::Resumed
             | PlatformEvent::CloseRequested
@@ -175,46 +125,34 @@ impl WinitRunner {
             | PlatformEvent::Resized { .. }
             | PlatformEvent::ScaleFactorChanged { .. }
             | PlatformEvent::RedrawRequested => {
-                if let Ok(registry) = self
-                    .state
-                    .world
-                    .resource_mut::<WindowStateRegistryResource>()
-                    && let Some(record) = registry.record_mut(native_window_id)
-                {
-                    match event {
-                        PlatformEvent::Resumed => record.redraw_requested = true,
-                        PlatformEvent::CloseRequested => {
-                            record.receive_close_intent();
-                            record.request_redraw();
-                        }
-                        PlatformEvent::Focused { focused } => {
-                            record.focused = focused;
-                            record.request_redraw();
-                        }
-                        PlatformEvent::Resized { width, height } => {
-                            record.size_px = (width, height);
-                            record.request_redraw();
-                        }
-                        PlatformEvent::ScaleFactorChanged {
-                            scale_factor,
-                            width,
-                            height,
-                        } => {
-                            record.scale_factor = scale_factor;
-                            record.size_px = (width, height);
-                            record.request_redraw();
-                        }
-                        PlatformEvent::RedrawRequested => record.redraw_requested = false,
-                        PlatformEvent::KeyboardInput { .. }
-                        | PlatformEvent::TextInput { .. }
-                        | PlatformEvent::MouseWheel { .. }
-                        | PlatformEvent::CursorMoved { .. }
-                        | PlatformEvent::MouseInput { .. }
-                        | PlatformEvent::Touch { .. } => {}
+                let projected_primary_metrics = {
+                    let registry = self
+                        .state
+                        .world
+                        .resource_mut::<WindowStateRegistryResource>()
+                        .context("native Host window registry is unavailable")?;
+                    let record = registry
+                        .record_mut(native_window_id)
+                        .context("native Host event targets an unknown window")?;
+                    apply_native_window_event(record, &event);
+                    if native_window_id == NativeWindowId::primary()
+                        && matches!(
+                            event,
+                            PlatformEvent::Resized { .. }
+                                | PlatformEvent::ScaleFactorChanged { .. }
+                        )
+                    {
+                        Some((record.size_px, record.scale_factor))
+                    } else {
+                        None
                     }
+                };
+                if let Some((size_px, scale_factor)) = projected_primary_metrics {
+                    self.sync_primary_presentation_and_surface_extent(size_px, scale_factor)?;
                 }
             }
         }
+        Ok(())
     }
 
     fn apply_raw_mouse_motion(
@@ -232,22 +170,16 @@ impl WinitRunner {
         Ok(())
     }
 
-    fn sync_primary_window_state_and_surface_extent(
+    fn sync_primary_presentation_and_surface_extent(
         &mut self,
-        window_state: &WindowState,
+        size_px: (u32, u32),
+        scale_factor: f64,
     ) -> Result<()> {
         self.state
             .world
             .resource_mut::<PrimaryPresentationMetricsResource>()
             .context("missing primary presentation metrics")?
-            .update(window_state.size_px, window_state.scale_factor);
-        if let Ok(registry) = self
-            .state
-            .world
-            .resource_mut::<WindowStateRegistryResource>()
-        {
-            registry.ensure_primary_from_legacy(window_state);
-        }
+            .update(size_px, scale_factor);
         if let Ok(surface_registry) = self
             .state
             .world
@@ -255,7 +187,7 @@ impl WinitRunner {
         {
             surface_registry.update_surface_extent_for_native_window(
                 NativeWindowId::primary(),
-                window_state.size_px,
+                size_px,
             );
         }
         Ok(())
@@ -285,7 +217,6 @@ impl WinitRunner {
     }
 
     fn run_startup_if_needed(&mut self) -> Result<()> {
-        prepare_world_for_run(&mut self.state.world, &self.state.title, false);
         run_startup_if_needed(
             &mut self.state.world,
             &mut self.state.scheduler,
@@ -350,10 +281,10 @@ impl WinitRunner {
             }
         };
 
-        let mut snapshot = WindowState::windowed(request.title);
-        snapshot.size_px = request.size_px;
-        snapshot.scale_factor = window.scale_factor();
-        snapshot.set_headless(false);
+        let realized_size = window.inner_size();
+        let realized_size_px = (realized_size.width.max(1), realized_size.height.max(1));
+        let realized_scale_factor = window.scale_factor();
+        let realized_title = window.title().to_string();
         let render_surface_id = self
             .state
             .world
@@ -382,7 +313,7 @@ impl WinitRunner {
             .resource_mut::<Gfx>()
             .context("runtime gfx is unavailable")
             .and_then(|gfx| {
-                gfx.attach_surface(render_surface_id, Arc::clone(&window), request.size_px)
+                gfx.attach_surface(render_surface_id, Arc::clone(&window), realized_size_px)
             });
         if let Err(err) = attach_result {
             self.mark_window_creation_failed(
@@ -400,7 +331,7 @@ impl WinitRunner {
                 registry.confirm_surface_attachment(
                     render_surface_id,
                     request.native_window_id,
-                    request.size_px,
+                    realized_size_px,
                 )
             });
         if let Err(err) = confirm_result {
@@ -418,7 +349,13 @@ impl WinitRunner {
             .world
             .resource_mut::<WindowStateRegistryResource>()
         {
-            registry.register_created_window(request.native_window_id, &snapshot);
+            registry.register_created_window(
+                request.native_window_id,
+                realized_title,
+                realized_size_px,
+                realized_scale_factor,
+                false,
+            );
         }
 
         self.attach_native_window_hooks(&window);
@@ -580,11 +517,6 @@ impl WinitRunner {
     }
 
     fn request_redraw_for_native_window(&mut self, native_window_id: NativeWindowId) {
-        if native_window_id == NativeWindowId::primary()
-            && let Ok(window_state) = self.state.world.resource_mut::<WindowState>()
-        {
-            window_state.request_redraw();
-        }
         if let Ok(registry) = self
             .state
             .world
@@ -1000,11 +932,10 @@ mod tests {
         let mut app = App::new();
         app.with_frame_pacing(policy);
         install_native_window_provider_resources(app.world_mut());
-        let primary = WindowState::windowed("test primary");
         app.world_mut()
             .resource_mut::<WindowStateRegistryResource>()
             .expect("native Host test fixture should install window registry")
-            .register_created_window(NativeWindowId::primary(), &primary);
+            .register_primary_window("test primary", (1280, 720), 1.0);
         WinitRunner {
             state: app.into_windowed_state(),
             window: None,
@@ -1030,7 +961,7 @@ mod tests {
         let mut headless = App::headless();
         configure_probe(&mut headless);
         headless
-            .prepare_for_run(true)
+            .prepare_for_run()
             .expect("headless startup should run");
         headless.run_frame().expect("headless frame should run");
 
@@ -1206,14 +1137,16 @@ mod tests {
             .request_window("Secondary", (640, 480))
             .native_window_id;
 
-        runner.apply_secondary_window_event(
-            secondary,
-            PlatformEvent::ScaleFactorChanged {
-                scale_factor: 1.75,
-                width: 900,
-                height: 600,
-            },
-        );
+        runner
+            .apply_event_for_native_window(
+                secondary,
+                PlatformEvent::ScaleFactorChanged {
+                    scale_factor: 1.75,
+                    width: 900,
+                    height: 600,
+                },
+            )
+            .expect("secondary scale event should apply");
 
         let presentation = runner
             .state
@@ -1233,16 +1166,14 @@ mod tests {
     }
 
     #[test]
-    fn primary_window_state_sync_does_not_manufacture_render_attachment() {
+    fn primary_presentation_sync_does_not_manufacture_render_attachment() {
         let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
         runner
             .state
             .world
             .insert_resource(RenderSurfaceRegistryResource::default());
-        let mut state = WindowState::windowed("primary");
-        state.size_px = (1440, 900);
         runner
-            .sync_primary_window_state_and_surface_extent(&state)
+            .sync_primary_presentation_and_surface_extent((1440, 900), 1.0)
             .expect("primary presentation sync should succeed");
         let surfaces = runner
             .state

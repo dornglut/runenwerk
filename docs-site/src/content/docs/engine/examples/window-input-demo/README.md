@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-14
+last_reviewed: 2026-09-24
 ---
 
 # Window Input Demo
@@ -16,9 +16,10 @@ It demonstrates:
 
 - real `winit` window creation through `engine::App::run()`
 - plugins on top of `ecs`
-- selected default plugins providing `Time`, physical `InputState`, and product `ActionState`, alongside the current `WindowState` runtime resource
+- selected default plugins providing `Time`, physical `InputState`, and product `ActionState`
 - action-mapped movement with `W`, `A`, `S`, `D` through `ActionState`
-- close-on-`Escape` through the same product action projection
+- close-on-`Escape` by approving close on the primary `NativeWindowRecord` in `WindowStateRegistryResource`
+- dynamic native title intent through the same primary native record
 
 Run it with:
 

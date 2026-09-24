@@ -418,7 +418,6 @@ fn record_rejection(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use engine::runtime::WindowState;
 
     use crate::editor_runtime::{bootstrap_mvp_scene_if_empty, register_mvp_component_types};
 
@@ -465,8 +464,8 @@ mod tests {
     fn target_creation_commits_only_after_native_window_is_created() {
         let mut host = EditorHostResource::default();
         let mut transitions = EditorCompositionTransitionRuntimeResource::default();
-        let mut windows =
-            WindowStateRegistryResource::from_legacy(&WindowState::windowed("Runenwerk"));
+        let mut windows = WindowStateRegistryResource::default();
+        windows.register_primary_window("Runenwerk", (1280, 720), 1.0);
         let mut surfaces = RenderSurfaceRegistryResource::default();
         let source_revision = host
             .shell_state
@@ -535,8 +534,8 @@ mod tests {
     fn target_creation_failure_preserves_composition_revision() {
         let mut host = EditorHostResource::default();
         let mut transitions = EditorCompositionTransitionRuntimeResource::default();
-        let mut windows =
-            WindowStateRegistryResource::from_legacy(&WindowState::windowed("Runenwerk"));
+        let mut windows = WindowStateRegistryResource::default();
+        windows.register_primary_window("Runenwerk", (1280, 720), 1.0);
         let mut surfaces = RenderSurfaceRegistryResource::default();
         let source_revision = host
             .shell_state
@@ -588,8 +587,8 @@ mod tests {
     fn secondary_close_rehomes_content_before_native_teardown() {
         let mut host = EditorHostResource::default();
         let mut transitions = EditorCompositionTransitionRuntimeResource::default();
-        let mut windows =
-            WindowStateRegistryResource::from_legacy(&WindowState::windowed("Runenwerk"));
+        let mut windows = WindowStateRegistryResource::default();
+        windows.register_primary_window("Runenwerk", (1280, 720), 1.0);
         let mut surfaces = RenderSurfaceRegistryResource::default();
         let source_revision = host
             .shell_state
@@ -724,8 +723,8 @@ mod tests {
                 .expect("scene persistence projection should normalize")
         );
         let mut transitions = EditorCompositionTransitionRuntimeResource::default();
-        let mut windows =
-            WindowStateRegistryResource::from_legacy(&WindowState::windowed("Runenwerk"));
+        let mut windows = WindowStateRegistryResource::default();
+        windows.register_primary_window("Runenwerk", (1280, 720), 1.0);
         let mut surfaces = RenderSurfaceRegistryResource::default();
         windows
             .record_mut(NativeWindowId::primary())
@@ -760,8 +759,8 @@ mod tests {
                 .expect("fresh scene persistence projection should normalize")
         );
         let mut transitions = EditorCompositionTransitionRuntimeResource::default();
-        let mut windows =
-            WindowStateRegistryResource::from_legacy(&WindowState::windowed("Runenwerk"));
+        let mut windows = WindowStateRegistryResource::default();
+        windows.register_primary_window("Runenwerk", (1280, 720), 1.0);
         let mut surfaces = RenderSurfaceRegistryResource::default();
         windows
             .record_mut(NativeWindowId::primary())

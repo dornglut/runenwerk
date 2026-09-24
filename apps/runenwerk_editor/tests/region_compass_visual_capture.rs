@@ -13,8 +13,9 @@ use engine::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, RenderCaptureSelector, RenderCaptureTerminalCode,
     RenderCapturedTextureState, RenderPassProvenanceState, deterministic_capture_filename,
 };
+use engine::runtime::platform::{PlatformEvent, apply_native_window_event};
 use engine::runtime::{
-    NativeWindowId, PrimaryPresentationMetricsResource, WindowState, WindowStateRegistryResource,
+    NativeWindowId, PrimaryPresentationMetricsResource, WindowStateRegistryResource,
 };
 use runenwerk_editor::runtime::resources::EditorHostResource;
 use ui_adaptive_composition::DockZone;
@@ -46,6 +47,29 @@ fn surface_identity_native_smoke() -> anyhow::Result<()> {
 
     let primary_size = primary_window.inner_size();
     let secondary_size = secondary_window.inner_size();
+    let primary_size_px = (primary_size.width.max(1), primary_size.height.max(1));
+    let secondary_size_px = (secondary_size.width.max(1), secondary_size.height.max(1));
+
+    let mut windows = WindowStateRegistryResource::default();
+    let primary_native = windows.register_primary_window(
+        primary_window.title(),
+        primary_size_px,
+        primary_window.scale_factor(),
+    );
+    anyhow::ensure!(
+        primary_native == NativeWindowId::primary(),
+        "real primary window must use the canonical primary native id"
+    );
+    let secondary_request = windows.request_window(secondary_window.title(), secondary_size_px);
+    let secondary_native = secondary_request.native_window_id;
+    windows.register_created_window(
+        secondary_native,
+        secondary_window.title(),
+        secondary_size_px,
+        secondary_window.scale_factor(),
+        false,
+    );
+
     eprintln!("surface-identity-smoke: create-gfx");
     let mut gfx = Gfx::new(Arc::clone(&primary_window))?;
     anyhow::ensure!(
@@ -57,7 +81,7 @@ fn surface_identity_native_smoke() -> anyhow::Result<()> {
     surfaces.confirm_surface_attachment(
         RenderSurfaceId::primary(),
         NativeWindowId::primary(),
-        (primary_size.width, primary_size.height),
+        primary_size_px,
     )?;
     anyhow::ensure!(
         surfaces
@@ -67,10 +91,9 @@ fn surface_identity_native_smoke() -> anyhow::Result<()> {
         "primary Render surface must be Attached after explicit confirmation"
     );
 
-    let secondary_native = NativeWindowId::try_from_raw(2)?;
     let secondary_surface = surfaces.reserve_surface_for_native_window(
         secondary_native,
-        (secondary_size.width, secondary_size.height),
+        secondary_size_px,
     );
     anyhow::ensure!(
         secondary_surface != RenderSurfaceId::primary(),
@@ -88,12 +111,12 @@ fn surface_identity_native_smoke() -> anyhow::Result<()> {
     gfx.attach_surface(
         secondary_surface,
         Arc::clone(&secondary_window),
-        (secondary_size.width, secondary_size.height),
+        secondary_size_px,
     )?;
     surfaces.confirm_surface_attachment(
         secondary_surface,
         secondary_native,
-        (secondary_size.width, secondary_size.height),
+        secondary_size_px,
     )?;
     anyhow::ensure!(
         gfx.has_surface(secondary_surface),
@@ -116,6 +139,22 @@ fn surface_identity_native_smoke() -> anyhow::Result<()> {
         gfx.surface_size(secondary_surface) == Some((900, 600)),
         "secondary Gfx surface must retain the resized extent"
     );
+    apply_native_window_event(
+        windows
+            .record_mut(secondary_native)
+            .ok_or_else(|| anyhow::anyhow!("secondary native record is missing"))?,
+        &PlatformEvent::Resized {
+            width: 900,
+            height: 600,
+        },
+    );
+    anyhow::ensure!(
+        windows
+            .record(secondary_native)
+            .map(|record| record.size_px)
+            == Some((900, 600)),
+        "secondary native record must retain the resized extent"
+    );
 
     eprintln!("surface-identity-smoke: detach-secondary");
     anyhow::ensure!(
@@ -125,6 +164,10 @@ fn surface_identity_native_smoke() -> anyhow::Result<()> {
     anyhow::ensure!(
         surfaces.retire_surface_for_native_window(secondary_native) == Some(secondary_surface),
         "secondary Render surface retirement must resolve the reserved identity"
+    );
+    anyhow::ensure!(
+        windows.remove_window(secondary_native).is_some(),
+        "secondary native record must retire with the secondary window"
     );
     anyhow::ensure!(
         !gfx.has_surface(secondary_surface),
@@ -148,6 +191,10 @@ fn surface_identity_native_smoke() -> anyhow::Result<()> {
             == Some(RenderSurfaceLifecycleState::Attached),
         "secondary retirement must preserve the primary Render attachment"
     );
+    anyhow::ensure!(
+        windows.record(primary_native).is_some(),
+        "secondary retirement must preserve the primary native record"
+    );
 
     println!("surface_identity_native_smoke=pass");
     Ok(())
@@ -163,25 +210,24 @@ fn capture() -> anyhow::Result<()> {
         .expect("headless app construction should succeed");
     activate_region_compass(&mut app)?;
     let size = window.inner_size();
-    let mut native_state = WindowState::windowed(window.title());
-    native_state.size_px = (size.width, size.height);
-    native_state.scale_factor = window.scale_factor();
+    let size_px = (size.width.max(1), size.height.max(1));
+    let scale_factor = window.scale_factor();
     app.world_mut()
         .insert_resource(PrimaryPresentationMetricsResource::new(
-            native_state.size_px,
-            native_state.scale_factor,
+            size_px,
+            scale_factor,
         ));
     app.world_mut()
         .insert_resource(WindowStateRegistryResource::default());
     app.world_mut()
         .resource_mut::<WindowStateRegistryResource>()?
-        .register_created_window(NativeWindowId::primary(), &native_state);
+        .register_primary_window(window.title(), size_px, scale_factor);
     app.world_mut()
         .resource_mut::<RenderSurfaceRegistryResource>()?
         .confirm_surface_attachment(
             RenderSurfaceId::primary(),
             NativeWindowId::primary(),
-            native_state.size_px,
+            size_px,
         )?;
     app.world_mut().insert_resource(gfx);
     app.update_render_debug_control(|control| {

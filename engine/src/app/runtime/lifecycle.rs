@@ -2,9 +2,7 @@ use crate::app::App;
 use crate::app::domain::mode::AppMode;
 use crate::app::domain::runner::{FixedFramesRunner, FixedStepsRunner};
 use crate::plugins::fixed_step::fixed_step_is_active;
-use crate::runtime::frame_lifecycle::{
-    prepare_world_for_run, run_frame as run_runtime_frame, run_startup_if_needed,
-};
+use crate::runtime::frame_lifecycle::{run_frame as run_runtime_frame, run_startup_if_needed};
 use anyhow::{Result, anyhow};
 
 impl App {
@@ -48,10 +46,9 @@ impl App {
         Ok(())
     }
 
-    pub(crate) fn prepare_for_run(&mut self, headless: bool) -> Result<()> {
+    pub(crate) fn prepare_for_run(&mut self) -> Result<()> {
         self.admit_composition()?;
         self.prepare_lifecycle_for_execution()?;
-        prepare_world_for_run(&mut self.world, &self.title, headless);
         run_startup_if_needed(&mut self.world, &mut self.scheduler, &mut self.lifecycle)
     }
 

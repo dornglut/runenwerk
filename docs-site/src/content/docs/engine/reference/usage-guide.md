@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-14
+last_reviewed: 2026-09-24
 ---
 
 # Engine Usage Guide
@@ -100,24 +100,11 @@ use anyhow::Result;
 use engine::plugins::default_plugins;
 use engine::prelude::*;
 
-struct WindowPlugin;
-
-impl Plugin for WindowPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_plugins(default_plugins());
-        app.add_systems(Update, update_title);
-    }
-}
-
-fn update_title(time: Res<Time>, mut window: ResMut<WindowState>) {
-    window.set_title(format!("dt={:.4}", time.delta_seconds));
-}
-
 fn main() -> Result<()> {
     let mut app = App::new();
     app.set_title("Engine Window");
     app.with_frame_pacing(FramePacingPolicyResource::continuous_capped(60));
-    app.add_plugin(WindowPlugin);
+    app.add_plugins(default_plugins());
     app.run()
 }
 ```
@@ -129,10 +116,11 @@ and must not be used to represent the Engine's order between schedules.
 
 Windowed apps default to `FramePacingPolicyResource::continuous_capped(60)`.
 Use `App::with_frame_pacing(FramePacingPolicyResource::on_demand())` for tools
-that should redraw only after explicit input, resize, title, cursor, or app
+that should redraw only after explicit input, resize, cursor, native-window intent, or app
 invalidations. The winit runner maps the policy to `WaitUntil` for capped
-animation and `Wait` for on-demand mode; systems publish redraw intent through
-`WindowState` / `WindowStateRegistryResource` instead of calling winit directly.
+animation and `Wait` for on-demand mode. Native lifecycle/effect intent is keyed by
+`NativeWindowId` in `WindowStateRegistryResource`; headless App state does not manufacture a
+native-window surrogate.
 
 ## Schedules You Will Use Most
 

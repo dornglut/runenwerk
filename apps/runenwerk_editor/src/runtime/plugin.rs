@@ -343,14 +343,14 @@ fn publish_editor_material_preview_products(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use engine::runtime::{NativeWindowId, WindowState};
+    use engine::runtime::NativeWindowId;
 
     #[test]
     fn window_presentation_requests_bind_editor_windows_to_native_surfaces() {
         let mut host = EditorHostResource::default();
         let editor_window_id = host.shell_state.open_editor_window_for_active_workspace();
-        let mut window_registry =
-            WindowStateRegistryResource::from_legacy(&WindowState::windowed("Runenwerk"));
+        let mut window_registry = WindowStateRegistryResource::default();
+        window_registry.register_primary_window("Runenwerk", (1280, 720), 1.0);
         let mut surface_registry = RenderSurfaceRegistryResource::default();
 
         let synced = sync_editor_window_presentation_requests(
