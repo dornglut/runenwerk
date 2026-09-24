@@ -16,7 +16,7 @@ It demonstrates:
 
 - real `winit` window creation through `engine::App::run()`
 - plugins on top of `ecs`
-- default runtime resources including `WindowState`, `Time`, physical `InputState`, and product `ActionState`
+- selected default plugins providing `Time`, physical `InputState`, and product `ActionState`, alongside the current `WindowState` runtime resource
 - action-mapped movement with `W`, `A`, `S`, `D` through `ActionState`
 - close-on-`Escape` through the same product action projection
 
