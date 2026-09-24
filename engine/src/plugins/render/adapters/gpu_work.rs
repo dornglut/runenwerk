@@ -756,7 +756,7 @@ mod tests {
             .allocate_texture_handle(
                 GpuTextureDescriptor::new(
                     common("frame surface color"),
-                    GpuTextureDimension::D2,
+                    GpuTextureViewDimension::D2,
                     GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, 4, 4, 1)
                         .expect("test surface extent should be valid"),
                     1,
