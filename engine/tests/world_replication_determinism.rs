@@ -189,7 +189,6 @@ impl SnapshotApplyDriver for ReplicationProbeDriver {
     ) -> Result<bool, Self::Error> {
         Ok(true)
     }
-
 }
 
 impl InputDriver for ReplicationProbeDriver {

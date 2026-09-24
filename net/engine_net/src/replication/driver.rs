@@ -60,7 +60,6 @@ pub trait SnapshotApplyDriver: ReplicationDriver {
         tick: SimulationTick,
         snapshot: Self::Snapshot,
     ) -> Result<bool, Self::Error>;
-
 }
 
 pub trait InputDriver: ReplicationDriver {

@@ -94,15 +94,33 @@ pub fn client_replication_acknowledgement(
         .and_then(ClientReplicationIntegration::acknowledgement)
 }
 
-pub fn require_client_replication_connection_replacement(
-    world: &mut World,
-) -> anyhow::Result<()> {
+pub fn client_replication_lineage(
+    world: &World,
+) -> Option<runen_net::replication::ReplicationLineageKey> {
+    world
+        .resource::<ClientReplicationIntegration>()
+        .ok()
+        .map(|integration| integration.policy.lineage())
+}
+
+pub fn client_replication_state(
+    world: &World,
+) -> Option<runen_net::replication::ClientReplicationState> {
+    let integration = world.resource::<ClientReplicationIntegration>().ok()?;
+    integration
+        .semantic
+        .lineage(integration.policy.lineage())
+        .map(|lineage| lineage.replication_state())
+}
+
+pub fn require_client_replication_connection_replacement(world: &mut World) -> anyhow::Result<()> {
     let integration = world
         .resource_mut::<ClientReplicationIntegration>()
         .context("client replication requires explicit ClientReplicationPolicy")?;
+    let lineage = integration.policy.lineage();
     integration
         .semantic
-        .require_connection_replacement_full(integration.policy.lineage())
+        .require_connection_replacement_full(lineage)
         .map_err(|error| anyhow!("RunenNet client replacement recovery failed: {error:?}"))
 }
 
@@ -137,7 +155,11 @@ where
     if let Ok(tick_resource) = world.resource_mut::<SimulationTick>() {
         *tick_resource = tick;
     }
-    replay_pending_prediction::<TDriver>(world, tick, "replay predicted input after client commit")?;
+    replay_pending_prediction::<TDriver>(
+        world,
+        tick,
+        "replay predicted input after client commit",
+    )?;
 
     Ok((
         Ack {
@@ -168,9 +190,7 @@ where
         ClientSnapshotOutcome::Committed(_) | ClientSnapshotOutcome::DuplicateCurrent
     ) {
         let (acknowledgement, corrected) = realize_committed_product::<TDriver>(world)?;
-        if corrected
-            && let Ok(diagnostics) = world.resource_mut::<PredictionDiagnostics>()
-        {
+        if corrected && let Ok(diagnostics) = world.resource_mut::<PredictionDiagnostics>() {
             diagnostics.corrected = diagnostics.corrected.saturating_add(1);
         }
         return Ok(ClientReplicationProcessResult {
@@ -212,12 +232,14 @@ where
         .remove_resource::<ClientReplicationIntegration>()
         .context("snapshot replication requires explicit ClientReplicationPolicy")?;
     let lineage = integration.policy.lineage();
-    let apply = integration.semantic.apply_full(lineage, runennet_snapshot, |product| {
-        world
-            .resource_mut::<ActiveClientReplicatedStateProduct>()
-            .map(|active| active.activate(product.clone()))
-            .map_err(|_| "client replicated-state product owner is unavailable")
-    });
+    let apply = integration
+        .semantic
+        .apply_full(lineage, runennet_snapshot, |product| {
+            world
+                .resource_mut::<ActiveClientReplicatedStateProduct>()
+                .map(|active| active.activate(product.clone()))
+                .map_err(|_| "client replicated-state product owner is unavailable")
+        });
     world.insert_resource(integration);
 
     let outcome = apply.map_err(|error: ClientApplyError<&'static str>| {

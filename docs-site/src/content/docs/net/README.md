@@ -5,7 +5,7 @@ status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-24
 ---
 
 # net
@@ -34,7 +34,7 @@ Runenwerk owns engine scheduling, ECS/game/world integration, product/session me
 - `engine_history/` (crate name: `engine_replay`)
   - Replay/history/archive/controller/validation substrate.
 
-## Current RN8 Boundary Through N4
+## Current RN8 Boundary Through N7
 
 Engine connection/session integration consumes standalone RunenNet Core directly:
 
@@ -51,7 +51,7 @@ The engine does not translate RunenNet lifecycle state into another semantic sta
 - replication driver/model/profile/interest/mapping/timeline/diagnostics contracts;
 - simulation-facing networking metadata and macros.
 
-Connection-scoped retained state uses RunenNet `ConnectionHandle` directly.
+Server connection-scoped retained state uses RunenNet `ConnectionHandle` directly. Client replication consistency/history/recovery uses RunenNet `ClientReplicationSet` keyed by explicit `ReplicationLineageKey`; Runenwerk retains one active complete encoded product only for downstream realization.
 
 RN8 N2 removed the old `engine_net::session`, Hello/Join lifecycle, `ConnectionId`, `SessionPhase`, session runtime bridge, and client/server connection runtimes.
 
@@ -86,7 +86,7 @@ They are not RunenNet delivery flows, queue admission is not RunenNet `DeliveryA
 4. Keep retained integration behavior stable during dependency-ordered cuts without treating it as reusable semantic authority.
 5. Delete migration residue rather than preserving it through forwarding APIs.
 
-RN8 is currently parked after N4. This page does not authorize N5, a future ordinary multiplayer authoring syntax, or a new engine networking runtime.
+RN8 has progressed through authoritative-input N5, client-boundary investigation N6, the Replicated View R0 prerequisite, and the active N7 client-consistency cut. N7 does not authorize authority-replication delivery acceptance, RunenNet prediction migration, final ordinary multiplayer authoring syntax, or a new engine networking runtime.
 
 ## Architecture
 
