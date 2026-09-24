@@ -454,7 +454,19 @@ fn observe_submitted_frame_history(
     )
 }
 
+fn reconcile_frame_history_policy(world: &mut WorldMut) {
+    let policy = world
+        .resource::<RenderFrameObservationPolicyResource>()
+        .ok()
+        .copied()
+        .unwrap_or_default();
+    if let Ok(history) = world.resource_mut::<RenderFrameHistoryState>() {
+        history.apply_policy(policy);
+    }
+}
+
 pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<()> {
+    reconcile_frame_history_policy(&mut world);
     if world.resource::<SceneResource>()?.manager.is_none() {
         return Ok(());
     }
