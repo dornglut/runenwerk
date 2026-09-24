@@ -250,9 +250,52 @@ pub struct PointerButtonInput {
     pub state: DigitalState,
 }
 
+#[derive(Debug, Default)]
+struct ControlInterner {
+    next_control: u64,
+    keys: HashMap<PhysicalKeyIdentity, ControlId>,
+    buttons: HashMap<PointerButton, ControlId>,
+}
+
+impl ControlInterner {
+    fn intern_key(&mut self, key: &PhysicalKeyIdentity) -> ControlId {
+        if let Some(control) = self.keys.get(key).copied() {
+            return control;
+        }
+        let control = self.next_control();
+        self.keys.insert(key.clone(), control);
+        control
+    }
+
+    fn key(&self, key: &PhysicalKeyIdentity) -> Option<ControlId> {
+        self.keys.get(key).copied()
+    }
+
+    fn intern_button(&mut self, button: PointerButton) -> ControlId {
+        if let Some(control) = self.buttons.get(&button).copied() {
+            return control;
+        }
+        let control = self.next_control();
+        self.buttons.insert(button, control);
+        control
+    }
+
+    fn button(&self, button: PointerButton) -> Option<ControlId> {
+        self.buttons.get(&button).copied()
+    }
+
+    fn next_control(&mut self) -> ControlId {
+        self.next_control = self
+            .next_control
+            .checked_add(1)
+            .expect("neutral input control identity exhausted");
+        ControlId::new(self.next_control)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoordinateSpace {
-    LegacyWindowPhysicalPixels,
+    UnspecifiedTargetUnits,
     WindowPhysicalPixels,
 }
 
@@ -263,7 +306,7 @@ pub enum RelativeMotionUnit {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScrollDomain {
-    LegacyVerticalScalarUnknown,
+    Unspecified,
     Lines,
     WindowPhysicalPixels,
 }
@@ -278,7 +321,7 @@ pub enum ScrollPhase {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MeasurementDomain {
-    LegacyPressureScalar,
+    UnspecifiedScalar,
     NormalizedUnitInterval,
     SignedNormalizedUnitInterval,
     CalibratedForce { max_possible_force: f32 },
@@ -296,7 +339,7 @@ impl MeasurementDomain {
     pub fn max_possible_force(self) -> Option<f32> {
         match self {
             Self::CalibratedForce { max_possible_force } => Some(max_possible_force),
-            Self::LegacyPressureScalar
+            Self::UnspecifiedScalar
             | Self::NormalizedUnitInterval
             | Self::SignedNormalizedUnitInterval
             | Self::Bounded { .. }
@@ -309,9 +352,8 @@ impl MeasurementDomain {
             return false;
         }
         match self {
-            Self::LegacyPressureScalar | Self::NormalizedUnitInterval => {
-                (0.0..=1.0).contains(&value)
-            }
+            Self::UnspecifiedScalar => true,
+            Self::NormalizedUnitInterval => (0.0..=1.0).contains(&value),
             Self::SignedNormalizedUnitInterval => (-1.0..=1.0).contains(&value),
             Self::CalibratedForce { max_possible_force } => {
                 max_possible_force.is_finite()
@@ -357,7 +399,7 @@ pub struct ScrollDelta {
 }
 
 impl ScrollDelta {
-    pub(crate) const fn legacy_vertical(vertical: f32) -> Self {
+    pub(crate) const fn vertical_only(vertical: f32) -> Self {
         Self {
             horizontal: None,
             vertical: Some(vertical),
@@ -552,14 +594,111 @@ struct NeutralInputState {
     absolute_pointer_positions: HashMap<InputSourceId, Point2>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct DigitalAdmission {
+    #[cfg(test)]
+    pub(crate) transition: DigitalTransition,
+    pub(crate) was_down_anywhere: bool,
+    pub(crate) is_down_anywhere: bool,
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct NeutralInputAuthority {
     state: NeutralInputState,
+    controls: ControlInterner,
     source_sequences: HashMap<InputSourceId, SourceSequence>,
     admission_sequence: AdmissionSequence,
 }
 
 impl NeutralInputAuthority {
+    pub(crate) fn admit_keyboard(
+        &mut self,
+        context: InputContext,
+        input: &KeyboardInput,
+    ) -> Result<DigitalAdmission, NeutralInputError> {
+        let control = self.controls.intern_key(&input.physical_key);
+        let transition = match (input.origin, input.state) {
+            (ObservationOrigin::SourceReport, DigitalState::Pressed) => DigitalTransition::Down,
+            (ObservationOrigin::SourceReport, DigitalState::Released) => DigitalTransition::Up,
+            (ObservationOrigin::BackendSyntheticReconciliation, DigitalState::Pressed) => {
+                DigitalTransition::ReconcileDown
+            }
+            (ObservationOrigin::BackendSyntheticReconciliation, DigitalState::Released) => {
+                DigitalTransition::Cancel
+            }
+        };
+        self.admit_digital_control(context, control, transition)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn key_down_in(
+        &self,
+        context: InputContext,
+        key: &PhysicalKeyIdentity,
+    ) -> bool {
+        self.controls
+            .key(key)
+            .is_some_and(|control| self.control_down_in(context, control))
+    }
+
+    pub(crate) fn key_down_anywhere(&self, key: &PhysicalKeyIdentity) -> bool {
+        self.controls
+            .key(key)
+            .is_some_and(|control| self.control_down_anywhere(control))
+    }
+
+    pub(crate) fn admit_pointer_button(
+        &mut self,
+        context: InputContext,
+        input: PointerButtonInput,
+    ) -> Result<DigitalAdmission, NeutralInputError> {
+        let control = self.controls.intern_button(input.button);
+        let transition = match input.state {
+            DigitalState::Pressed => DigitalTransition::Down,
+            DigitalState::Released => DigitalTransition::Up,
+        };
+        self.admit_digital_control(context, control, transition)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn pointer_button_down_in(
+        &self,
+        context: InputContext,
+        button: PointerButton,
+    ) -> bool {
+        self.controls
+            .button(button)
+            .is_some_and(|control| self.control_down_in(context, control))
+    }
+
+    pub(crate) fn pointer_button_down_anywhere(&self, button: PointerButton) -> bool {
+        self.controls
+            .button(button)
+            .is_some_and(|control| self.control_down_anywhere(control))
+    }
+
+    fn admit_digital_control(
+        &mut self,
+        context: InputContext,
+        control: ControlId,
+        transition: DigitalTransition,
+    ) -> Result<DigitalAdmission, NeutralInputError> {
+        let was_down_anywhere = self.control_down_anywhere(control);
+        self.admit(ObservationGroup::single_in(
+            context,
+            InputObservation::DigitalControl {
+                control,
+                transition,
+            },
+        ))?;
+        Ok(DigitalAdmission {
+            #[cfg(test)]
+            transition,
+            was_down_anywhere,
+            is_down_anywhere: self.control_down_anywhere(control),
+        })
+    }
+
     pub(crate) fn admit(&mut self, group: ObservationGroup) -> Result<(), NeutralInputError> {
         if group
             .observations
@@ -775,9 +914,8 @@ fn measurement_is_finite(measurement: AnalogMeasurement) -> bool {
 
 fn has_valid_measurements(observation: &InputObservation) -> bool {
     match observation {
-        // Legacy touch pressure keeps its historical scalar projection semantics; the stricter
-        // measured-domain admission below applies to native tablet observations.
-        InputObservation::Contact { .. } => true,
+        InputObservation::Contact { pressure, .. } => pressure
+            .is_none_or(|measurement| measurement.domain.accepts(measurement.value)),
         InputObservation::Tablet(observation) => {
             observation
                 .pressure
@@ -881,6 +1019,200 @@ mod tests {
         assert_eq!(authority.admission_sequence().get(), 2);
     }
 
+    fn keyboard_input(
+        physical_key: PhysicalKeyIdentity,
+        state: DigitalState,
+        repeat: bool,
+        origin: ObservationOrigin,
+    ) -> KeyboardInput {
+        KeyboardInput {
+            physical_key,
+            logical_key: LogicalKey::Native(NativeLogicalKey::Unidentified),
+            location: KeyLocation::Standard,
+            state,
+            repeat,
+            origin,
+        }
+    }
+
+    #[test]
+    fn keyboard_identity_and_aggregate_held_state_are_neutral_owned() {
+        let mut authority = NeutralInputAuthority::default();
+        let key_a = PhysicalKeyIdentity::code("KeyA");
+        let key_b = PhysicalKeyIdentity::code("KeyB");
+        let context_a =
+            InputContext::new(SOURCE_A, Some(InputDeviceId::new(1)));
+        let context_b =
+            InputContext::new(SOURCE_A, Some(InputDeviceId::new(2)));
+
+        let first = authority
+            .admit_keyboard(
+                context_a,
+                &keyboard_input(
+                    key_a.clone(),
+                    DigitalState::Pressed,
+                    false,
+                    ObservationOrigin::SourceReport,
+                ),
+            )
+            .expect("first key press should admit");
+        assert!(!first.was_down_anywhere);
+        assert!(first.is_down_anywhere);
+        assert!(authority.key_down_in(context_a, &key_a));
+        assert!(!authority.key_down_in(context_b, &key_a));
+        assert!(!authority.key_down_anywhere(&key_b));
+
+        let second = authority
+            .admit_keyboard(
+                context_b,
+                &keyboard_input(
+                    key_a.clone(),
+                    DigitalState::Pressed,
+                    false,
+                    ObservationOrigin::SourceReport,
+                ),
+            )
+            .expect("second-device key press should admit");
+        assert!(second.was_down_anywhere);
+        assert!(second.is_down_anywhere);
+
+        let release_a = authority
+            .admit_keyboard(
+                context_a,
+                &keyboard_input(
+                    key_a.clone(),
+                    DigitalState::Released,
+                    false,
+                    ObservationOrigin::SourceReport,
+                ),
+            )
+            .expect("first-device key release should admit");
+        assert!(release_a.was_down_anywhere);
+        assert!(release_a.is_down_anywhere);
+        assert!(!authority.key_down_in(context_a, &key_a));
+        assert!(authority.key_down_in(context_b, &key_a));
+
+        let release_b = authority
+            .admit_keyboard(
+                context_b,
+                &keyboard_input(
+                    key_a.clone(),
+                    DigitalState::Released,
+                    false,
+                    ObservationOrigin::SourceReport,
+                ),
+            )
+            .expect("second-device key release should admit");
+        assert!(release_b.was_down_anywhere);
+        assert!(!release_b.is_down_anywhere);
+        assert!(!authority.key_down_anywhere(&key_a));
+    }
+
+    #[test]
+    fn keyboard_repeat_and_reconciliation_preserve_neutral_transition_semantics() {
+        let mut authority = NeutralInputAuthority::default();
+        let key = PhysicalKeyIdentity::code("KeyR");
+
+        let first = authority
+            .admit_keyboard(
+                CONTEXT_A,
+                &keyboard_input(
+                    key.clone(),
+                    DigitalState::Pressed,
+                    false,
+                    ObservationOrigin::SourceReport,
+                ),
+            )
+            .expect("ordinary press should admit");
+        assert_eq!(first.transition, DigitalTransition::Down);
+        assert!(!first.was_down_anywhere);
+
+        let repeat = authority
+            .admit_keyboard(
+                CONTEXT_A,
+                &keyboard_input(
+                    key.clone(),
+                    DigitalState::Pressed,
+                    true,
+                    ObservationOrigin::SourceReport,
+                ),
+            )
+            .expect("repeat should admit as repeated evidence");
+        assert_eq!(repeat.transition, DigitalTransition::Down);
+        assert!(repeat.was_down_anywhere);
+        assert!(repeat.is_down_anywhere);
+
+        let cancel = authority
+            .admit_keyboard(
+                CONTEXT_A,
+                &keyboard_input(
+                    key.clone(),
+                    DigitalState::Released,
+                    false,
+                    ObservationOrigin::BackendSyntheticReconciliation,
+                ),
+            )
+            .expect("synthetic release should reconcile");
+        assert_eq!(cancel.transition, DigitalTransition::Cancel);
+        assert!(!cancel.is_down_anywhere);
+
+        let reconcile = authority
+            .admit_keyboard(
+                CONTEXT_A,
+                &keyboard_input(
+                    key.clone(),
+                    DigitalState::Pressed,
+                    false,
+                    ObservationOrigin::BackendSyntheticReconciliation,
+                ),
+            )
+            .expect("synthetic press should reconcile");
+        assert_eq!(reconcile.transition, DigitalTransition::ReconcileDown);
+        assert!(reconcile.is_down_anywhere);
+    }
+
+    #[test]
+    fn pointer_button_identity_and_aggregate_state_are_neutral_owned() {
+        let mut authority = NeutralInputAuthority::default();
+        let context_a =
+            InputContext::new(SOURCE_A, Some(InputDeviceId::new(1)));
+        let context_b =
+            InputContext::new(SOURCE_B, Some(InputDeviceId::new(2)));
+        let pressed = PointerButtonInput {
+            button: PointerButton::Left,
+            state: DigitalState::Pressed,
+        };
+        let released = PointerButtonInput {
+            button: PointerButton::Left,
+            state: DigitalState::Released,
+        };
+
+        let first = authority
+            .admit_pointer_button(context_a, pressed)
+            .expect("first button press should admit");
+        assert!(!first.was_down_anywhere);
+        assert!(authority.pointer_button_down_in(context_a, PointerButton::Left));
+        assert!(!authority.pointer_button_down_anywhere(PointerButton::Right));
+
+        let second = authority
+            .admit_pointer_button(context_b, pressed)
+            .expect("second-source button press should admit");
+        assert!(second.was_down_anywhere);
+
+        let release_a = authority
+            .admit_pointer_button(context_a, released)
+            .expect("first-source release should admit");
+        assert!(release_a.is_down_anywhere);
+        assert!(!authority.pointer_button_down_in(context_a, PointerButton::Left));
+        assert!(authority.pointer_button_down_in(context_b, PointerButton::Left));
+
+        let release_b = authority
+            .admit_pointer_button(context_b, released)
+            .expect("second-source release should admit");
+        assert!(!release_b.is_down_anywhere);
+        assert!(!authority.pointer_button_down_anywhere(PointerButton::Left));
+    }
+
     #[test]
     fn same_control_on_distinct_devices_does_not_alias() {
         let mut authority = NeutralInputAuthority::default();
@@ -968,8 +1300,8 @@ mod tests {
     }
 
     #[test]
-    fn legacy_scalar_scroll_keeps_horizontal_absent_not_measured_zero() {
-        let delta = ScrollDelta::legacy_vertical(0.0);
+    fn vertical_only_scroll_keeps_horizontal_absent_not_measured_zero() {
+        let delta = ScrollDelta::vertical_only(0.0);
 
         assert_eq!(delta.horizontal, None);
         assert_eq!(delta.vertical, Some(0.0));
@@ -984,7 +1316,7 @@ mod tests {
 
     #[test]
     fn omitted_pressure_remains_distinct_from_measured_zero() {
-        let position = Point2::new(10.0, 12.0, CoordinateSpace::LegacyWindowPhysicalPixels);
+        let position = Point2::new(10.0, 12.0, CoordinateSpace::UnspecifiedTargetUnits);
         let omitted = InputObservation::Contact {
             contact: ContactId::new(9),
             phase: ContactPhase::Update,
@@ -998,7 +1330,7 @@ mod tests {
             position,
             pressure: Some(AnalogMeasurement::new(
                 0.0,
-                MeasurementDomain::LegacyPressureScalar,
+                MeasurementDomain::UnspecifiedScalar,
             )),
             altitude_angle_radians: None,
         };

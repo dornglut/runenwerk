@@ -1,12 +1,11 @@
 use super::neutral::{
-    AnalogMeasurement, ContactId, ContactInput, ContactPhase as NeutralContactPhase, ControlId,
-    CoordinateSpace, DigitalState, DigitalTransition, InputContext, InputObservation,
-    InputObservationGroup, InputSourceId, KeyLocation, KeyboardInput, LogicalKey,
-    MeasurementDomain, NativeLogicalKey, NeutralInputAuthority, ObservationGroup,
-    ObservationOrigin, PhysicalKeyIdentity, Point2, PointerButton, PointerButtonInput,
-    RelativeMotionUnit, ScrollDelta, ScrollDomain, ScrollInput, Vector2,
+    AnalogMeasurement, ContactId, ContactInput, ContactPhase as NeutralContactPhase,
+    CoordinateSpace, DigitalState, InputContext, InputObservation, InputObservationGroup,
+    InputSourceId, KeyLocation, KeyboardInput, LogicalKey, MeasurementDomain, NativeLogicalKey,
+    NeutralInputAuthority, ObservationGroup, ObservationOrigin, PhysicalKeyIdentity, Point2,
+    PointerButton, PointerButtonInput, RelativeMotionUnit, ScrollDelta, ScrollDomain, ScrollInput,
+    Vector2,
 };
-use std::collections::HashMap;
 use winit::event::{ElementState, MouseButton};
 use winit::keyboard::KeyCode;
 
@@ -14,53 +13,6 @@ const LEGACY_WINDOW_SOURCE: InputSourceId = InputSourceId::new(1);
 const LEGACY_DEVICE_SOURCE: InputSourceId = InputSourceId::new(2);
 const LEGACY_WINDOW_CONTEXT: InputContext = InputContext::new(LEGACY_WINDOW_SOURCE, None);
 const LEGACY_DEVICE_CONTEXT: InputContext = InputContext::new(LEGACY_DEVICE_SOURCE, None);
-
-#[derive(Debug, Default)]
-struct LegacyControlInterner {
-    next_control: u64,
-    keys: HashMap<PhysicalKeyIdentity, ControlId>,
-    buttons: HashMap<PointerButton, ControlId>,
-}
-
-impl LegacyControlInterner {
-    fn intern_key(&mut self, key: &PhysicalKeyIdentity) -> ControlId {
-        if let Some(control) = self.keys.get(key).copied() {
-            return control;
-        }
-        let control = self.next_control();
-        self.keys.insert(key.clone(), control);
-        control
-    }
-
-    fn key(&self, key: &PhysicalKeyIdentity) -> Option<ControlId> {
-        self.keys.get(key).copied()
-    }
-
-    fn key_code(&self, key: KeyCode) -> Option<ControlId> {
-        self.key(&physical_identity_for_key_code(key))
-    }
-
-    fn intern_button(&mut self, button: PointerButton) -> ControlId {
-        if let Some(control) = self.buttons.get(&button).copied() {
-            return control;
-        }
-        let control = self.next_control();
-        self.buttons.insert(button, control);
-        control
-    }
-
-    fn button(&self, button: PointerButton) -> Option<ControlId> {
-        self.buttons.get(&button).copied()
-    }
-
-    fn next_control(&mut self) -> ControlId {
-        self.next_control = self
-            .next_control
-            .checked_add(1)
-            .expect("legacy input control identity exhausted");
-        ControlId::new(self.next_control)
-    }
-}
 
 fn physical_identity_for_key_code(key: KeyCode) -> PhysicalKeyIdentity {
     PhysicalKeyIdentity::code(format!("{key:?}"))
@@ -164,7 +116,6 @@ pub(super) struct KeyboardPressSample {
 #[derive(Debug, runen_ecs::Component, runen_ecs::Resource)]
 pub struct InputState {
     neutral: NeutralInputAuthority,
-    controls: LegacyControlInterner,
     keyboard_press_samples: Vec<KeyboardPressSample>,
     pub typed_text: String,
     pub overlay_consumed: bool,
@@ -188,7 +139,6 @@ impl Default for InputState {
     fn default() -> Self {
         Self {
             neutral: NeutralInputAuthority::default(),
-            controls: LegacyControlInterner::default(),
             keyboard_press_samples: Vec::new(),
             typed_text: String::new(),
             overlay_consumed: false,
@@ -233,32 +183,15 @@ impl InputState {
         context: InputContext,
         input: &KeyboardInput,
     ) {
-        let control = self.controls.intern_key(&input.physical_key);
-        let was_down_anywhere = self.neutral.control_down_anywhere(control);
-        let transition = match (input.origin, input.state) {
-            (ObservationOrigin::SourceReport, DigitalState::Pressed) => DigitalTransition::Down,
-            (ObservationOrigin::SourceReport, DigitalState::Released) => DigitalTransition::Up,
-            (ObservationOrigin::BackendSyntheticReconciliation, DigitalState::Pressed) => {
-                DigitalTransition::ReconcileDown
-            }
-            (ObservationOrigin::BackendSyntheticReconciliation, DigitalState::Released) => {
-                DigitalTransition::Cancel
-            }
-        };
-        self.neutral
-            .admit(ObservationGroup::single_in(
-                context,
-                InputObservation::DigitalControl {
-                    control,
-                    transition,
-                },
-            ))
+        let admission = self
+            .neutral
+            .admit_keyboard(context, input)
             .expect("digital keyboard observation should always be valid");
 
         if input.origin == ObservationOrigin::SourceReport
             && input.state == DigitalState::Pressed
             && !input.repeat
-            && !was_down_anywhere
+            && !admission.was_down_anywhere
         {
             self.keyboard_press_samples.push(KeyboardPressSample {
                 physical_key: input.physical_key.clone(),
@@ -330,8 +263,8 @@ impl InputState {
         self.handle_scroll_input(
             LEGACY_WINDOW_CONTEXT,
             ScrollInput {
-                delta: ScrollDelta::legacy_vertical(delta),
-                domain: ScrollDomain::LegacyVerticalScalarUnknown,
+                delta: ScrollDelta::vertical_only(delta),
+                domain: ScrollDomain::Unspecified,
                 phase: None,
             },
         );
@@ -364,7 +297,7 @@ impl InputState {
     pub fn handle_cursor_moved(&mut self, x: f32, y: f32) {
         self.handle_cursor_position(
             LEGACY_WINDOW_CONTEXT,
-            Point2::new(x, y, CoordinateSpace::LegacyWindowPhysicalPixels),
+            Point2::new(x, y, CoordinateSpace::UnspecifiedTargetUnits),
         );
     }
 
@@ -373,26 +306,14 @@ impl InputState {
         context: InputContext,
         input: PointerButtonInput,
     ) {
-        let control = self.controls.intern_button(input.button);
-        let was_down_for_product = self.neutral.control_down_anywhere(control);
-        let transition = match input.state {
-            DigitalState::Pressed => DigitalTransition::Down,
-            DigitalState::Released => DigitalTransition::Up,
-        };
-        self.neutral
-            .admit(ObservationGroup::single_in(
-                context,
-                InputObservation::DigitalControl {
-                    control,
-                    transition,
-                },
-            ))
+        let admission = self
+            .neutral
+            .admit_pointer_button(context, input)
             .expect("digital pointer-button observation should always be valid");
-        let is_down_for_product = self.neutral.control_down_anywhere(control);
 
         let changed = match input.state {
-            DigitalState::Pressed => !was_down_for_product && is_down_for_product,
-            DigitalState::Released => was_down_for_product && !is_down_for_product,
+            DigitalState::Pressed => !admission.was_down_anywhere && admission.is_down_anywhere,
+            DigitalState::Released => admission.was_down_anywhere && !admission.is_down_anywhere,
         };
         if !changed {
             return;
@@ -533,9 +454,9 @@ impl InputState {
             &ContactInput {
                 id,
                 phase,
-                position: Point2::new(x, y, CoordinateSpace::LegacyWindowPhysicalPixels),
+                position: Point2::new(x, y, CoordinateSpace::UnspecifiedTargetUnits),
                 pressure: pressure.map(|value| {
-                    AnalogMeasurement::new(value, MeasurementDomain::LegacyPressureScalar)
+                    AnalogMeasurement::new(value, MeasurementDomain::UnspecifiedScalar)
                 }),
                 altitude_angle_radians: None,
             },
@@ -649,15 +570,12 @@ impl InputState {
     }
 
     fn key_down(&self, key: KeyCode) -> bool {
-        self.controls
-            .key_code(key)
-            .is_some_and(|control| self.neutral.control_down_anywhere(control))
+        self.neutral
+            .key_down_anywhere(&physical_identity_for_key_code(key))
     }
 
     pub(super) fn physical_key_down(&self, key: &PhysicalKeyIdentity) -> bool {
-        self.controls
-            .key(key)
-            .is_some_and(|control| self.neutral.control_down_anywhere(control))
+        self.neutral.key_down_anywhere(key)
     }
 
     pub(super) fn keyboard_press_samples(&self) -> &[KeyboardPressSample] {
@@ -665,9 +583,7 @@ impl InputState {
     }
 
     fn button_down(&self, button: PointerButton) -> bool {
-        self.controls
-            .button(button)
-            .is_some_and(|control| self.neutral.control_down_anywhere(control))
+        self.neutral.pointer_button_down_anywhere(button)
     }
 
     #[cfg(test)]
@@ -692,7 +608,7 @@ fn legacy_pressure_projection(measurement: AnalogMeasurement) -> Option<f32> {
             }
             measurement.value / max_possible_force
         }
-        MeasurementDomain::LegacyPressureScalar | MeasurementDomain::NormalizedUnitInterval => {
+        MeasurementDomain::UnspecifiedScalar | MeasurementDomain::NormalizedUnitInterval => {
             measurement.value
         }
         MeasurementDomain::SignedNormalizedUnitInterval => measurement.value,
@@ -715,24 +631,3 @@ pub struct ModifiersSnapshot {
     pub(crate) super_key: bool,
 }
 
-#[cfg(test)]
-mod interner_tests {
-    use super::LegacyControlInterner;
-    use crate::plugins::{NativePhysicalKeyCode, PhysicalKeyIdentity, PointerButton};
-
-    #[test]
-    fn distinct_physical_controls_do_not_alias() {
-        let mut interner = LegacyControlInterner::default();
-        let native_a =
-            interner.intern_key(&PhysicalKeyIdentity::Native(NativePhysicalKeyCode::Xkb(41)));
-        let native_b =
-            interner.intern_key(&PhysicalKeyIdentity::Native(NativePhysicalKeyCode::Xkb(42)));
-        let known = interner.intern_key(&PhysicalKeyIdentity::code("F13"));
-        let button = interner.intern_button(PointerButton::Left);
-
-        assert_ne!(native_a, native_b);
-        assert_ne!(native_a, known);
-        assert_ne!(native_a, button);
-        assert_ne!(known, button);
-    }
-}
