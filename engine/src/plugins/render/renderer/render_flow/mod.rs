@@ -17,10 +17,9 @@ use crate::plugins::render::inspect::{
     RenderCaptureSelector, RenderCaptureSelectorResult, RenderCaptureTerminal,
     RenderCaptureTerminalCode, RenderComposedFrameGpuTimingEvidence, RenderDebugConfigResource,
     RenderDebugControlResource, RenderGpuTimingCapability, RenderGpuTimingDiagnostic,
-    RenderPassMaterialBindingEvidence,
-    RenderPassModelMeshMaterialSelectionEvidence, RenderPassTimingEvidence,
-    RenderSelectorResolution, ResolvedRenderCapturePlan, RuntimeResourceInspectionEntry,
-    RuntimeResourceReuse, resource_kind_name,
+    RenderPassMaterialBindingEvidence, RenderPassModelMeshMaterialSelectionEvidence,
+    RenderPassTimingEvidence, RenderSelectorResolution, ResolvedRenderCapturePlan,
+    RuntimeResourceInspectionEntry, RuntimeResourceReuse, resource_kind_name,
 };
 use crate::plugins::render::pipelines::{FlowPassKind, FlowPassPipelineKey};
 use crate::plugins::render::{RenderResourceDeclaration, current_runtime_gpu_capabilities};
