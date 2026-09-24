@@ -1,6 +1,6 @@
 use engine::plugins::input::domain::action;
 use engine::plugins::{
-    ActionState, FixedStepPlugin, SimulationPlugin, TimePlugin, default_plugins,
+    ActionState, FixedStepPlugin, InputFinalizePlugin, SimulationPlugin, TimePlugin, default_plugins,
 };
 use engine::prelude::*;
 use winit::event::ElementState;
@@ -82,9 +82,10 @@ fn capture_startup_resources(
 }
 
 #[test]
-fn headless_run_exposes_builtin_runtime_resources_before_startup() {
+fn selected_input_capability_is_visible_before_startup() {
     let mut app = App::headless();
     app.set_title("Headless Runtime");
+    app.add_plugin(InputFinalizePlugin);
     app.add_plugin(ResourceVisibilityPlugin);
     let app = app
         .run_for_frames(0)
@@ -93,6 +94,35 @@ fn headless_run_exposes_builtin_runtime_resources_before_startup() {
     let snapshot = app.world().resource::<StartupSnapshot>().unwrap();
     assert!(snapshot.saw_headless_window);
     assert_eq!(snapshot.saw_title, "Headless Runtime");
+}
+
+#[test]
+fn input_finalize_plugin_installs_owned_input_resources() {
+    let mut app = App::headless();
+    assert!(app.world().resource::<InputState>().is_err());
+    assert!(app.world().resource::<ActionState>().is_err());
+
+    app.add_plugin(InputFinalizePlugin);
+
+    assert!(app.world().resource::<InputState>().is_ok());
+    assert!(app.world().resource::<ActionState>().is_ok());
+}
+
+#[test]
+fn input_bindings_require_selected_input_capability() {
+    let mut app = App::headless();
+    app.add_input_bindings([(
+        "test.action",
+        PhysicalKeyIdentity::code("KeyA"),
+    )]);
+
+    let error = app
+        .run_for_frames(0)
+        .expect_err("bindings without input capability should reject App composition");
+    assert!(
+        format!("{error:#}").contains("InputFinalizePlugin"),
+        "composition error should identify the missing input capability: {error:#}"
+    );
 }
 
 #[derive(Debug, Default, Component, runen_ecs::Resource)]
