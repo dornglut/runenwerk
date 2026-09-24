@@ -7,6 +7,7 @@ use editor_scene::{
     DEFAULT_SCENE_MATERIAL_SLOT_ID, SceneCommandIntent, SceneEditorCommand, SdfBooleanIntent,
     SdfPrimitiveKind, SdfPrimitiveSourceId, SdfPrimitiveSpec, scene_intent_to_command,
 };
+use scene::SceneChildOf;
 
 use crate::editor_runtime::{
     EDITOR_PRIMITIVE_COMPONENT_TYPE_ID, EditorPrimitive, EditorPrimitiveKind,
@@ -306,4 +307,343 @@ fn scene_m3_child_duplicate_batch_delete_and_sdf_primitive_commands() {
     .expect("batch delete should delete child subtree");
     assert!(!runtime.document().contains(EntityId(2)));
     assert!(!runtime.document().contains(EntityId(3)));
+}
+
+#[test]
+fn authored_hierarchy_is_projected_into_runtime_relations_and_tracks_reparenting() {
+    let mut runtime = RunenwerkEditorRuntime::new();
+
+    execute_scene_intent(
+        &mut runtime,
+        CommandId(200),
+        SceneCommandIntent::CreateEntity {
+            parent: None,
+            display_name: "Root A".to_string(),
+        },
+    )
+    .expect("first root should be created");
+    execute_scene_intent(
+        &mut runtime,
+        CommandId(201),
+        SceneCommandIntent::CreateEntity {
+            parent: None,
+            display_name: "Root B".to_string(),
+        },
+    )
+    .expect("second root should be created");
+    execute_scene_intent(
+        &mut runtime,
+        CommandId(202),
+        SceneCommandIntent::CreateChildEntity {
+            parent: EntityId(1),
+            display_name: "Child".to_string(),
+        },
+    )
+    .expect("child should be created");
+
+    let root_a = runtime.ids().resolve_entity(EntityId(1)).unwrap();
+    let root_b = runtime.ids().resolve_entity(EntityId(2)).unwrap();
+    let child = runtime.ids().resolve_entity(EntityId(3)).unwrap();
+
+    assert!(
+        runtime
+            .world()
+            .relations::<SceneChildOf>()
+            .targets(root_a)
+            .unwrap()
+            .iter()
+            .next()
+            .is_none(),
+        "authored roots must have no runtime parent edge"
+    );
+    assert_eq!(
+        runtime
+            .world()
+            .relations::<SceneChildOf>()
+            .targets(child)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![root_a]
+    );
+    assert_eq!(
+        runtime
+            .world()
+            .relations::<SceneChildOf>()
+            .sources(root_a)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![child]
+    );
+
+    execute_scene_intent(
+        &mut runtime,
+        CommandId(203),
+        SceneCommandIntent::ReparentEntity {
+            entity: EntityId(3),
+            new_parent: Some(EntityId(2)),
+        },
+    )
+    .expect("reparent should succeed");
+    assert_eq!(
+        runtime
+            .world()
+            .relations::<SceneChildOf>()
+            .targets(child)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![root_b],
+        "source-one runtime relation must replace the previous parent"
+    );
+    assert!(
+        runtime
+            .world()
+            .relations::<SceneChildOf>()
+            .sources(root_a)
+            .unwrap()
+            .iter()
+            .next()
+            .is_none()
+    );
+
+    execute_scene_intent(
+        &mut runtime,
+        CommandId(204),
+        SceneCommandIntent::ReparentEntity {
+            entity: EntityId(3),
+            new_parent: None,
+        },
+    )
+    .expect("reparent to root should succeed");
+    assert!(
+        runtime
+            .world()
+            .relations::<SceneChildOf>()
+            .targets(child)
+            .unwrap()
+            .iter()
+            .next()
+            .is_none(),
+        "root projection must remove the outgoing parent relation"
+    );
+}
+
+#[test]
+fn rejected_cycle_preserves_authored_and_runtime_hierarchy() {
+    let mut runtime = RunenwerkEditorRuntime::new();
+
+    execute_scene_intent(
+        &mut runtime,
+        CommandId(210),
+        SceneCommandIntent::CreateEntity {
+            parent: None,
+            display_name: "Root".to_string(),
+        },
+    )
+    .unwrap();
+    execute_scene_intent(
+        &mut runtime,
+        CommandId(211),
+        SceneCommandIntent::CreateChildEntity {
+            parent: EntityId(1),
+            display_name: "Child".to_string(),
+        },
+    )
+    .unwrap();
+
+    let root = runtime.ids().resolve_entity(EntityId(1)).unwrap();
+    let child = runtime.ids().resolve_entity(EntityId(2)).unwrap();
+
+    let result = execute_scene_intent(
+        &mut runtime,
+        CommandId(212),
+        SceneCommandIntent::ReparentEntity {
+            entity: EntityId(1),
+            new_parent: Some(EntityId(2)),
+        },
+    );
+    assert!(result.is_err());
+    assert_eq!(runtime.document().parent_of(EntityId(1)), Some(None));
+    assert_eq!(
+        runtime.document().parent_of(EntityId(2)),
+        Some(Some(EntityId(1)))
+    );
+    assert!(
+        runtime
+            .world()
+            .relations::<SceneChildOf>()
+            .targets(root)
+            .unwrap()
+            .iter()
+            .next()
+            .is_none()
+    );
+    assert_eq!(
+        runtime
+            .world()
+            .relations::<SceneChildOf>()
+            .targets(child)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![root]
+    );
+}
+
+#[test]
+fn duplicate_delete_and_reparent_undo_redo_keep_runtime_hierarchy_synchronized() {
+    let mut runtime = RunenwerkEditorRuntime::new();
+
+    ratify_scene_command_with_transaction_id(
+        &mut runtime,
+        "Create Root",
+        scene_intent_to_command(
+            CommandId(220),
+            SceneCommandIntent::CreateEntity {
+                parent: None,
+                display_name: "Root".to_string(),
+            },
+        ),
+        TransactionId(220),
+        editor_core::ChangeOrigin::Runtime,
+    )
+    .unwrap();
+    ratify_scene_command_with_transaction_id(
+        &mut runtime,
+        "Create Child",
+        scene_intent_to_command(
+            CommandId(221),
+            SceneCommandIntent::CreateChildEntity {
+                parent: EntityId(1),
+                display_name: "Child".to_string(),
+            },
+        ),
+        TransactionId(221),
+        editor_core::ChangeOrigin::Runtime,
+    )
+    .unwrap();
+    ratify_scene_command_with_transaction_id(
+        &mut runtime,
+        "Create Grandchild",
+        scene_intent_to_command(
+            CommandId(222),
+            SceneCommandIntent::CreateChildEntity {
+                parent: EntityId(2),
+                display_name: "Grandchild".to_string(),
+            },
+        ),
+        TransactionId(222),
+        editor_core::ChangeOrigin::Runtime,
+    )
+    .unwrap();
+
+    execute_scene_intent(
+        &mut runtime,
+        CommandId(223),
+        SceneCommandIntent::DuplicateEntitySubtree {
+            source: EntityId(2),
+            new_parent: Some(EntityId(1)),
+            name_suffix: " Copy".to_string(),
+        },
+    )
+    .expect("subtree duplication should succeed");
+
+    let duplicated_root = runtime.ids().resolve_entity(EntityId(4)).unwrap();
+    let duplicated_child = runtime.ids().resolve_entity(EntityId(5)).unwrap();
+    let root = runtime.ids().resolve_entity(EntityId(1)).unwrap();
+    assert_eq!(
+        runtime
+            .world()
+            .relations::<SceneChildOf>()
+            .targets(duplicated_root)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![root]
+    );
+    assert_eq!(
+        runtime
+            .world()
+            .relations::<SceneChildOf>()
+            .targets(duplicated_child)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![duplicated_root]
+    );
+
+    ratify_scene_command_with_transaction_id(
+        &mut runtime,
+        "Reparent Child",
+        scene_intent_to_command(
+            CommandId(224),
+            SceneCommandIntent::ReparentEntity {
+                entity: EntityId(2),
+                new_parent: None,
+            },
+        ),
+        TransactionId(224),
+        editor_core::ChangeOrigin::Runtime,
+    )
+    .unwrap();
+    let child = runtime.ids().resolve_entity(EntityId(2)).unwrap();
+    assert!(
+        runtime
+            .world()
+            .relations::<SceneChildOf>()
+            .targets(child)
+            .unwrap()
+            .iter()
+            .next()
+            .is_none()
+    );
+
+    ratify_scene_undo(&mut runtime, editor_core::ChangeOrigin::Runtime)
+        .unwrap()
+        .expect("reparent undo should exist");
+    assert_eq!(
+        runtime
+            .world()
+            .relations::<SceneChildOf>()
+            .targets(child)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![root]
+    );
+
+    ratify_scene_redo(&mut runtime, editor_core::ChangeOrigin::Runtime)
+        .unwrap()
+        .expect("reparent redo should exist");
+    assert!(
+        runtime
+            .world()
+            .relations::<SceneChildOf>()
+            .targets(child)
+            .unwrap()
+            .iter()
+            .next()
+            .is_none()
+    );
+
+    execute_scene_intent(
+        &mut runtime,
+        CommandId(225),
+        SceneCommandIntent::DeleteEntities {
+            entities: vec![EntityId(4)],
+        },
+    )
+    .expect("duplicated subtree delete should succeed");
+    assert!(
+        runtime
+            .world()
+            .relations::<SceneChildOf>()
+            .sources(root)
+            .unwrap()
+            .iter()
+            .all(|entity| entity != duplicated_root),
+        "despawn must leave no stale duplicated-root relation"
+    );
 }

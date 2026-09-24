@@ -7,7 +7,7 @@ use editor_scene::{
     SceneComponentSnapshot, SceneEntitySnapshot, SceneRuntime, SceneTransform, SceneVec3,
     SdfPrimitiveKind, SdfPrimitiveSpec,
 };
-use scene::{LocalTransform, QuatValue, Vec3Value};
+use scene::{LocalTransform, QuatValue, SceneChildOf, Vec3Value};
 
 use crate::editor_runtime::{
     EDITOR_PRIMITIVE_COMPONENT_TYPE_ID, EditorPrimitive, EditorPrimitiveKind,
@@ -52,14 +52,30 @@ impl<'a> SceneRuntime for RunenwerkEditorSceneRuntime<'a> {
             ));
         }
 
+        let parent_ecs = parent
+            .map(|parent| self.resolve_runtime_entity(parent))
+            .transpose()?;
         let ecs_entity = self
             .world
             .spawn(EmptyEntityBundle {})
             .map_err(|_| EditorMutationError::runtime_rejected("failed to allocate ecs entity"))?;
         let editor_id = self.ids.allocate_entity_id();
-        self.document
-            .register_entity(editor_id, display_name.to_string(), parent)?;
+
+        if let Err(error) =
+            self.document
+                .register_entity(editor_id, display_name.to_string(), parent)
+        {
+            let _ = self.world.despawn(ecs_entity);
+            return Err(error);
+        }
         self.ids.register_entity(editor_id, ecs_entity);
+
+        if let Err(error) = self.synchronize_parent_relation(ecs_entity, parent_ecs) {
+            let _ = self.ids.unregister_entity(editor_id);
+            let _ = self.document.unregister_entity(editor_id);
+            let _ = self.world.despawn(ecs_entity);
+            return Err(error);
+        }
 
         Ok(editor_id)
     }
@@ -73,13 +89,51 @@ impl<'a> SceneRuntime for RunenwerkEditorSceneRuntime<'a> {
             ));
         }
 
+        let parent_ecs = snapshot
+            .parent
+            .map(|parent| self.resolve_runtime_entity(parent))
+            .transpose()?;
+        let previous_snapshot = self.document.entity_snapshot(snapshot.id);
         self.document.restore_entity(snapshot.clone())?;
 
-        if self.ids.resolve_entity(snapshot.id).is_none() {
-            let ecs_entity = self.world.spawn(EmptyEntityBundle {}).map_err(|_| {
-                EditorMutationError::runtime_rejected("failed to allocate ecs entity")
-            })?;
-            self.ids.register_entity(snapshot.id, ecs_entity);
+        let existing_ecs = self.ids.resolve_entity(snapshot.id);
+        let ecs_entity = match existing_ecs {
+            Some(ecs_entity) => ecs_entity,
+            None => match self.world.spawn(EmptyEntityBundle {}) {
+                Ok(ecs_entity) => {
+                    self.ids.register_entity(snapshot.id, ecs_entity);
+                    ecs_entity
+                }
+                Err(_) => {
+                    match previous_snapshot {
+                        Some(previous) => {
+                            let _ = self.document.restore_entity(previous);
+                        }
+                        None => {
+                            let _ = self.document.unregister_entity(snapshot.id);
+                        }
+                    }
+                    return Err(EditorMutationError::runtime_rejected(
+                        "failed to allocate ecs entity",
+                    ));
+                }
+            },
+        };
+
+        if let Err(error) = self.synchronize_parent_relation(ecs_entity, parent_ecs) {
+            if existing_ecs.is_none() {
+                let _ = self.ids.unregister_entity(snapshot.id);
+                let _ = self.world.despawn(ecs_entity);
+            }
+            match previous_snapshot {
+                Some(previous) => {
+                    let _ = self.document.restore_entity(previous);
+                }
+                None => {
+                    let _ = self.document.unregister_entity(snapshot.id);
+                }
+            }
+            return Err(error);
         }
 
         Ok(())
@@ -146,7 +200,37 @@ impl<'a> SceneRuntime for RunenwerkEditorSceneRuntime<'a> {
         entity: EntityId,
         new_parent: Option<EntityId>,
     ) -> Result<Option<EntityId>, EditorMutationError> {
-        self.document.reparent_entity(entity, new_parent)
+        self.document.validate_reparent(entity, new_parent)?;
+        let previous_parent =
+            self.document
+                .parent_of(entity)
+                .ok_or(EditorMutationError::runtime_rejected(
+                    "editor entity is not registered",
+                ))?;
+        if previous_parent == new_parent {
+            return Ok(previous_parent);
+        }
+
+        let child_ecs = self.resolve_runtime_entity(entity)?;
+        let new_parent_ecs = new_parent
+            .map(|parent| self.resolve_runtime_entity(parent))
+            .transpose()?;
+
+        let previous = self.document.reparent_entity(entity, new_parent)?;
+        let projection = self.synchronize_parent_relation(child_ecs, new_parent_ecs);
+
+        if let Err(error) = projection {
+            self.document
+                .reparent_entity(entity, previous)
+                .map_err(|_| {
+                    EditorMutationError::runtime_rejected(
+                        "failed to roll back authored hierarchy after runtime projection failure",
+                    )
+                })?;
+            return Err(error);
+        }
+
+        Ok(previous)
     }
 
     fn add_component(
@@ -330,6 +414,72 @@ impl<'a> SceneRuntime for RunenwerkEditorSceneRuntime<'a> {
     ) -> Result<String, EditorMutationError> {
         self.document
             .rename_entity(entity, new_display_name.to_string())
+    }
+}
+
+impl RunenwerkEditorSceneRuntime<'_> {
+    fn resolve_runtime_entity(
+        &self,
+        entity: EntityId,
+    ) -> Result<runen_ecs::Entity, EditorMutationError> {
+        self.ids
+            .resolve_entity(entity)
+            .ok_or(EditorMutationError::runtime_rejected(
+                "editor entity is not registered in the runtime",
+            ))
+    }
+
+    fn synchronize_parent_relation(
+        &mut self,
+        child: runen_ecs::Entity,
+        desired_parent: Option<runen_ecs::Entity>,
+    ) -> Result<(), EditorMutationError> {
+        let current_parent = self
+            .world
+            .relations::<SceneChildOf>()
+            .targets(child)
+            .map_err(|_| {
+                EditorMutationError::runtime_rejected(
+                    "failed to inspect runtime scene hierarchy projection",
+                )
+            })?
+            .iter()
+            .next();
+
+        if current_parent == desired_parent {
+            return Ok(());
+        }
+
+        match (current_parent, desired_parent) {
+            (_, Some(parent)) => self
+                .world
+                .relations_mut::<SceneChildOf>()
+                .insert(child, parent)
+                .map(|_| ())
+                .map_err(|_| {
+                    EditorMutationError::runtime_rejected(
+                        "failed to project authored scene parent into runtime hierarchy",
+                    )
+                }),
+            (Some(parent), None) => {
+                let removed = self
+                    .world
+                    .relations_mut::<SceneChildOf>()
+                    .remove(child, parent)
+                    .map_err(|_| {
+                        EditorMutationError::runtime_rejected(
+                            "failed to remove runtime scene parent projection",
+                        )
+                    })?;
+                if !removed {
+                    return Err(EditorMutationError::runtime_rejected(
+                        "runtime scene hierarchy projection changed during synchronization",
+                    ));
+                }
+                Ok(())
+            }
+            (None, None) => Ok(()),
+        }
     }
 }
 
