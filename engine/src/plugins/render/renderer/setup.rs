@@ -80,6 +80,7 @@ impl Renderer {
             preflight_cache: None,
             last_good_ui_prepared: None,
             last_pass_timings: Vec::new(),
+            last_gpu_timing_capability: RenderGpuTimingCapability::UnavailableThisFrame,
             last_gpu_pass_timing_evidence: Vec::new(),
             last_runtime_resources: Vec::new(),
             last_pass_provenance: Vec::new(),
@@ -158,10 +159,22 @@ impl Renderer {
         &self.last_pass_timings
     }
 
+    pub(in crate::plugins::render) const fn last_gpu_timing_capability(
+        &self,
+    ) -> RenderGpuTimingCapability {
+        self.last_gpu_timing_capability
+    }
+
     pub fn last_gpu_pass_timing_evidence(
         &self,
     ) -> &[crate::plugins::render::inspect::RenderPassTimingEvidence] {
         &self.last_gpu_pass_timing_evidence
+    }
+
+    pub(in crate::plugins::render) fn take_published_gpu_pass_timing_evidence(
+        &mut self,
+    ) -> Vec<crate::plugins::render::inspect::RenderPassTimingEvidence> {
+        std::mem::take(&mut self.last_gpu_pass_timing_evidence)
     }
 
     pub fn last_runtime_resources(

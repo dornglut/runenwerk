@@ -819,6 +819,7 @@ pub struct Renderer {
     preflight_cache: Option<render_flow::RendererPreparedFramePreflightCacheEntry>,
     last_good_ui_prepared: Option<UiPreparedDraws>,
     last_pass_timings: Vec<PassTimingSample>,
+    last_gpu_timing_capability: RenderGpuTimingCapability,
     last_gpu_pass_timing_evidence: Vec<RenderPassTimingEvidence>,
     last_runtime_resources: Vec<RuntimeResourceInspectionEntry>,
     last_pass_provenance: Vec<RenderPassProvenanceRecord>,
@@ -944,6 +945,7 @@ impl Gfx {
                 .is_enabled(runen_gpu::GpuCapabilityFeature::TimestampQuery),
             !surface_contributions.is_empty(),
         );
+        self.renderer.last_gpu_timing_capability = gpu_timing_capability;
         let context = self.ctx.context();
         timings.renderer = self.renderer.render(
             context,

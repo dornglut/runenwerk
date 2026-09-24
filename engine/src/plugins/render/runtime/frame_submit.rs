@@ -1,8 +1,10 @@
 use crate::plugins::SceneResource;
 use crate::plugins::inspect::{
     RenderCapturedTextureState, RenderDebugConfigResource, RenderDebugControlResource,
-    RenderDebugFrameReportState, RenderDebugTimingsState, RenderFrameDiagnosticsMode,
-    RenderFrameDiagnosticsPolicyResource, RenderPassProvenanceState,
+    PassTimingSample, RenderDebugFrameReportState, RenderDebugTimingsState,
+    RenderFrameDiagnosticsMode, RenderFrameDiagnosticsPolicyResource, RenderFrameHistoryState,
+    RenderFrameObservationPolicyResource, RenderGpuTimingCapability, RenderPassProvenanceState,
+    RenderPassTimingEvidence,
     RenderRuntimeResourceInspectorState, RenderTextureInspectorState,
     submit_render_frame_report_to_diagnostics,
 };
@@ -307,6 +309,35 @@ fn primary_redraw_interval_logging_enabled() -> bool {
         .unwrap_or(false)
 }
 
+
+fn observe_submitted_frame_history(
+    world: &mut WorldMut,
+    prepared_frame: &PreparedRenderFrame,
+    timings: GfxFrameTimings,
+    gpu_capability: RenderGpuTimingCapability,
+    pass_timings: &[PassTimingSample],
+    gpu_evidence: &[RenderPassTimingEvidence],
+) {
+    let policy = world
+        .resource::<RenderFrameObservationPolicyResource>()
+        .ok()
+        .copied()
+        .unwrap_or_default();
+    if let Ok(history) = world.resource_mut::<RenderFrameHistoryState>() {
+        history.observe_submitted_frame(
+            policy,
+            prepared_frame.context.frame_index,
+            prepared_frame.surface.render_surface_id.raw(),
+            prepared_frame.context.prepare_epoch,
+            timings.acquire_ms,
+            timings.renderer,
+            pass_timings,
+            gpu_capability,
+        );
+        history.observe_gpu_pass_timing_evidence(policy, gpu_evidence);
+    }
+}
+
 pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<()> {
     if world.resource::<SceneResource>()?.manager.is_none() {
         return Ok(());
@@ -491,14 +522,23 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
             Ok(timings) => {
                 primary_contribution_state = PrimaryContributionState::Submitted;
                 world.resource_mut::<DebugMetricsState>()?.last_timings = Some(timings);
+                let pass_timings = gfx.renderer.last_pass_timings().to_vec();
+                let gpu_capability = gfx.renderer.last_gpu_timing_capability();
+                let gpu_evidence = gfx.renderer.take_published_gpu_pass_timing_evidence();
 
                 if let Ok(render_debug_timings) = world.resource_mut::<RenderDebugTimingsState>() {
                     render_debug_timings.observe_frame_timings(timings);
-                    render_debug_timings.observe_pass_timings(gfx.renderer.last_pass_timings());
-                    render_debug_timings.observe_gpu_pass_timing_evidence(
-                        gfx.renderer.last_gpu_pass_timing_evidence(),
-                    );
+                    render_debug_timings.observe_pass_timings(&pass_timings);
+                    render_debug_timings.observe_gpu_pass_timing_evidence(&gpu_evidence);
                 }
+                observe_submitted_frame_history(
+                    &mut world,
+                    &prepared_frame,
+                    timings,
+                    gpu_capability,
+                    &pass_timings,
+                    &gpu_evidence,
+                );
 
                 let cache_stats = gfx.renderer.flow_pipeline_cache_stats();
                 if let Ok(cache_resource) = world.resource_mut::<PipelineCacheResource>() {
@@ -1020,7 +1060,20 @@ fn render_additional_surfaces(
                 );
                 AdditionalSurfaceRenderOutcome::Deferred
             }
-            Ok(_) => AdditionalSurfaceRenderOutcome::Submitted,
+            Ok(timings) => {
+                let pass_timings = gfx.renderer.last_pass_timings().to_vec();
+                let gpu_capability = gfx.renderer.last_gpu_timing_capability();
+                let gpu_evidence = gfx.renderer.take_published_gpu_pass_timing_evidence();
+                observe_submitted_frame_history(
+                    world,
+                    prepared_frame,
+                    timings,
+                    gpu_capability,
+                    &pass_timings,
+                    &gpu_evidence,
+                );
+                AdditionalSurfaceRenderOutcome::Submitted
+            }
             Err(err) => {
                 if let Some(surface_error) = err.downcast_ref::<RenderSurfaceAcquireError>() {
                     match surface_error {
