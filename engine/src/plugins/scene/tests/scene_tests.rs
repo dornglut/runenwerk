@@ -77,7 +77,9 @@ fn scene_plugin_without_input_capability_does_not_install_input_resources() {
         "ScenePlugin must not become an InputState provider"
     );
     assert!(
-        app.world().resource::<crate::plugins::ActionState>().is_err(),
+        app.world()
+            .resource::<crate::plugins::ActionState>()
+            .is_err(),
         "ScenePlugin must not become an ActionState provider"
     );
 }
