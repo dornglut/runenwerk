@@ -143,17 +143,20 @@ pub(in crate::plugins::render::renderer) fn prepare_composed_gpu_timing(
         work.operation("read back composed renderer GPU timestamps", readback)?;
         Ok(())
     })?;
-    let timestamp_period_ns=context.timestamp_period_ns().ok_or_else(||{
+    let timestamp_period_ns = context.timestamp_period_ns().ok_or_else(|| {
         anyhow::anyhow!("composed renderer GPU timing was admitted without a timestamp period")
     })?;
-    Ok(PreparedComposedGpuTiming{
-        bracket:RenderGpuFrameTimingBracket::new(
+    Ok(PreparedComposedGpuTiming {
+        bracket: RenderGpuFrameTimingBracket::new(
             fragment,
             start_node.expect("composed timing start marker must be authored"),
             end_node.expect("composed timing end marker must be authored"),
         ),
-        frame:GpuComposedFrameTimingFrame{
-            readback_id,timestamp_period_ns,frame_index,render_surface_id,
+        frame: GpuComposedFrameTimingFrame {
+            readback_id,
+            timestamp_period_ns,
+            frame_index,
+            render_surface_id,
         },
     })
 }
