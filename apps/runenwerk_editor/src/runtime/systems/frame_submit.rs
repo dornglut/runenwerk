@@ -5,7 +5,7 @@ use engine::plugins::render::{
     EditorPickingTarget, RenderFrameProducerId, SurfaceFrameRoute, SurfaceFrameSubmission,
     SurfaceFrameSubmissionOrder, SurfaceFrameSubmissionRegistryResource, UiFontAtlasResource,
 };
-use engine::runtime::{Res, ResMut, WindowStateRegistryResource};
+use engine::runtime::{NativeWindowLifecycleState, Res, ResMut, WindowStateRegistryResource};
 use scene::LocalTransform;
 use ui_math::UiRect;
 use ui_render_data::{
@@ -277,7 +277,6 @@ pub fn submit_editor_secondary_native_frames_system(
         shell_state,
         theme,
     } = &*host;
-    let shell_theme = scaled_shell_theme(theme, 1.0);
     let primary_target_id = shell_state
         .composition_runtime()
         .composition()
@@ -293,12 +292,16 @@ pub fn submit_editor_secondary_native_frames_system(
         let Some(record) = window_registry.record(entry.binding.native_window_id) else {
             continue;
         };
+        if record.lifecycle_state != NativeWindowLifecycleState::Created {
+            continue;
+        }
         let target_bounds = UiRect::new(
             0.0,
             0.0,
             record.size_px.0.max(1) as f32,
             record.size_px.1.max(1) as f32,
         );
+        let shell_theme = scaled_shell_theme(theme, record.scale_factor);
         let Some(expression) = app.build_shell_expression_frame_for_target_with_surface_resources(
             shell_state,
             entry.target_id,
