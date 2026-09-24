@@ -93,8 +93,13 @@ jobs:
                 --locked
           RUNENWERK_NATIVE_NO_RENDER_SMOKE=1 \
             xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
-              cargo +stable test -p runenwerk_editor \
-                --test region_compass_visual_capture \
+              cargo +stable test -p engine \
+                --test native_host_smoke \
+                --locked
+          RUNENWERK_NATIVE_RENDER_HOST_SMOKE=1 \
+            xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+              cargo +stable test -p engine \
+                --test native_host_smoke \
                 --locked
 
       - name: Run complete R6 public-RunenGPU execution proof module
