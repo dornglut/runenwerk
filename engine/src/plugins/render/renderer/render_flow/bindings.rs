@@ -16,9 +16,9 @@ use runen_gpu::{
     GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor, GpuRuntimeBindingResource,
     GpuRuntimeBindingSet, GpuRuntimeBindingValue, GpuRuntimeBufferBinding,
     GpuRuntimeTextureViewBinding, GpuSamplerClass, GpuSamplerHandle, GpuSpecializationValueSet,
-    GpuTextureFormat, GpuTextureSampleClass, GpuTextureViewHandle,
-    GpuVertexAttribute, GpuVertexBufferLayoutDescriptor, GpuVertexFormat,
-    GpuVertexInputStateDescriptor, GpuVertexStepMode,
+    GpuTextureFormat, GpuTextureSampleClass, GpuTextureViewHandle, GpuVertexAttribute,
+    GpuVertexBufferLayoutDescriptor, GpuVertexFormat, GpuVertexInputStateDescriptor,
+    GpuVertexStepMode,
 };
 use std::num::NonZeroU64;
 
