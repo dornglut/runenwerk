@@ -492,21 +492,16 @@ mod tests {
         );
 
         let mut ready_material = PreparedMaterialFeatureResource::default();
-        ready_material.payload.scene_bundle = Some(
-            engine::plugins::render::PreparedSceneMaterialBundle::new(
+        ready_material.payload.scene_bundle =
+            Some(engine::plugins::render::PreparedSceneMaterialBundle::new(
                 "scene-artifact",
                 "scene-cache",
                 "generated-scene.wgsl",
                 "scene-identity",
                 "material-table",
-            ),
-        );
+            ));
         assert!(
-            admit_viewport_render_product_selections(
-                &ready_material,
-                &mut app,
-                &mut prepared,
-            ),
+            admit_viewport_render_product_selections(&ready_material, &mut app, &mut prepared,),
             "viewport product selection should become eligible once the exact generated material scene bundle exists"
         );
     }
