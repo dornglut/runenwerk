@@ -30,7 +30,7 @@ use runen_gpu::{
     GpuRenderPipelineStateDescriptor, GpuResourceLabel, GpuResourceLifetime, GpuResourceProvenance,
     GpuRuntimeBindingResource, GpuRuntimeBindingValue, GpuRuntimeTextureViewBinding, GpuSubmission,
     GpuSubmissionStatus, GpuTextureDescriptor, GpuTextureFormat, GpuTextureInitialization,
-    GpuTextureSampleClass, GpuTextureUsage, GpuTextureViewDescriptor, GpuTextureViewDimension,
+    GpuTextureSampleClass, GpuTextureUsage, GpuTextureViewDescriptor,
     GpuVertexInputStateDescriptor, GpuWorkFragment, GpuWorkNodeKind, GpuWorkOperation,
     GpuWorkResourceIdAllocator,
 };
