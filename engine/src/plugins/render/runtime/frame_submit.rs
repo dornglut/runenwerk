@@ -1,11 +1,10 @@
 use crate::plugins::SceneResource;
 use crate::plugins::inspect::{
-    RenderCapturedTextureState, RenderDebugConfigResource, RenderDebugControlResource,
-    PassTimingSample, RenderDebugFrameReportState, RenderDebugTimingsState,
+    PassTimingSample, RenderCapturedTextureState, RenderDebugConfigResource,
+    RenderDebugControlResource, RenderDebugFrameReportState, RenderDebugTimingsState,
     RenderFrameDiagnosticsMode, RenderFrameDiagnosticsPolicyResource, RenderFrameHistoryState,
     RenderFrameObservationPolicyResource, RenderGpuTimingCapability, RenderPassProvenanceState,
-    RenderPassTimingEvidence,
-    RenderRuntimeResourceInspectorState, RenderTextureInspectorState,
+    RenderPassTimingEvidence, RenderRuntimeResourceInspectorState, RenderTextureInspectorState,
     submit_render_frame_report_to_diagnostics,
 };
 use crate::plugins::pipelines::{PipelineCacheResource, PipelineCacheStats};
@@ -308,7 +307,6 @@ fn primary_redraw_interval_logging_enabled() -> bool {
         })
         .unwrap_or(false)
 }
-
 
 fn observe_submitted_frame_history(
     world: &mut WorldMut,

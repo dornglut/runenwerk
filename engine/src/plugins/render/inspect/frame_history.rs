@@ -272,10 +272,7 @@ impl RenderFrameHistoryState {
         }
     }
 
-    pub fn observation(
-        &self,
-        key: RenderFrameObservationKey,
-    ) -> Option<&RenderFrameObservation> {
+    pub fn observation(&self, key: RenderFrameObservationKey) -> Option<&RenderFrameObservation> {
         self.observations
             .iter()
             .find(|observation| observation.key == key)
@@ -300,8 +297,8 @@ impl RenderFrameHistoryState {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::timings::RenderGpuTimingDiagnostic;
+    use super::*;
 
     fn policy(capacity: usize) -> RenderFrameObservationPolicyResource {
         RenderFrameObservationPolicyResource::enabled(capacity)
@@ -353,8 +350,22 @@ mod tests {
     fn reverse_gpu_arrival_never_cross_joins_cpu_frames() {
         let policy = policy(8);
         let mut history = RenderFrameHistoryState::default();
-        record(&mut history, policy, 1, 1, 1.0, RenderGpuTimingCapability::Supported);
-        record(&mut history, policy, 2, 1, 2.0, RenderGpuTimingCapability::Supported);
+        record(
+            &mut history,
+            policy,
+            1,
+            1,
+            1.0,
+            RenderGpuTimingCapability::Supported,
+        );
+        record(
+            &mut history,
+            policy,
+            2,
+            1,
+            2.0,
+            RenderGpuTimingCapability::Supported,
+        );
 
         history.observe_gpu_pass_timing_evidence(&policy, &[measured(2, 1, 2.5)]);
         history.observe_gpu_pass_timing_evidence(&policy, &[measured(1, 1, 1.5)]);
@@ -375,8 +386,22 @@ mod tests {
     fn neighboring_surfaces_never_share_gpu_evidence() {
         let policy = policy(8);
         let mut history = RenderFrameHistoryState::default();
-        record(&mut history, policy, 7, 1, 1.0, RenderGpuTimingCapability::Supported);
-        record(&mut history, policy, 7, 2, 2.0, RenderGpuTimingCapability::Supported);
+        record(
+            &mut history,
+            policy,
+            7,
+            1,
+            1.0,
+            RenderGpuTimingCapability::Supported,
+        );
+        record(
+            &mut history,
+            policy,
+            7,
+            2,
+            2.0,
+            RenderGpuTimingCapability::Supported,
+        );
 
         history.observe_gpu_pass_timing_evidence(&policy, &[measured(7, 2, 3.0)]);
 
@@ -403,7 +428,14 @@ mod tests {
     fn pending_gpu_evidence_updates_exact_occurrence_to_measured() {
         let policy = policy(8);
         let mut history = RenderFrameHistoryState::default();
-        record(&mut history, policy, 3, 1, 0.0, RenderGpuTimingCapability::Supported);
+        record(
+            &mut history,
+            policy,
+            3,
+            1,
+            0.0,
+            RenderGpuTimingCapability::Supported,
+        );
         history.observe_gpu_pass_timing_evidence(&policy, &[pending(3, 1)]);
         assert_eq!(
             history
@@ -430,7 +462,14 @@ mod tests {
     fn terminal_unavailable_evidence_replaces_pending_without_zero_sample() {
         let policy = policy(8);
         let mut history = RenderFrameHistoryState::default();
-        record(&mut history, policy, 4, 1, 0.0, RenderGpuTimingCapability::Supported);
+        record(
+            &mut history,
+            policy,
+            4,
+            1,
+            0.0,
+            RenderGpuTimingCapability::Supported,
+        );
         history.observe_gpu_pass_timing_evidence(&policy, &[pending(4, 1)]);
         let unavailable = RenderPassTimingEvidence::gpu_diagnostic(
             Some(4),
@@ -480,8 +519,22 @@ mod tests {
     fn finite_capacity_evicts_and_late_evidence_is_counted() {
         let policy = policy(1);
         let mut history = RenderFrameHistoryState::default();
-        record(&mut history, policy, 1, 1, 0.0, RenderGpuTimingCapability::Supported);
-        record(&mut history, policy, 2, 1, 0.0, RenderGpuTimingCapability::Supported);
+        record(
+            &mut history,
+            policy,
+            1,
+            1,
+            0.0,
+            RenderGpuTimingCapability::Supported,
+        );
+        record(
+            &mut history,
+            policy,
+            2,
+            1,
+            0.0,
+            RenderGpuTimingCapability::Supported,
+        );
         assert!(
             history
                 .observation(RenderFrameObservationKey::new(1, 1))
