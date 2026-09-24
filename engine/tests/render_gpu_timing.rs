@@ -1,5 +1,6 @@
 use engine::plugins::render::inspect::{
-    PassTimingSample, RenderDebugTimingsState, RenderGpuTimingCapability,
+    PassTimingSample, RenderComposedFrameGpuTimingEvidence, RenderDebugTimingsState,
+    RenderGpuTimingCapability,
     RenderGpuTimingDiagnostic, RenderPassTimingEvidence, RenderReadinessBudgetKind,
     RenderReadinessBudgetMeasurements, RenderReadinessBudgetThreshold, RenderTimingSource,
     evaluate_render_readiness_budgets, summarize_gpu_pass_timing_evidence, summarize_pass_timings,
@@ -64,6 +65,34 @@ fn render_gpu_timing_summarizes_supported_timestamp_evidence() {
         RenderTimingSource::GpuTimestampQuery
     );
     assert!(snapshot.diagnostics.is_empty());
+}
+
+#[test]
+fn composed_frame_timing_remains_one_independent_interval_not_a_pass_sum() {
+    let pass_samples = vec![
+        RenderPassTimingEvidence::gpu_sample(
+            Some(31),
+            Some(4),
+            "flow.timing",
+            "timing.compute",
+            "compute",
+            2.0,
+        ),
+        RenderPassTimingEvidence::gpu_sample(
+            Some(31),
+            Some(4),
+            "flow.timing",
+            "timing.visualize",
+            "fullscreen",
+            3.0,
+        ),
+    ];
+    let pass_snapshot = summarize_gpu_pass_timing_evidence(&pass_samples);
+    let composed = RenderComposedFrameGpuTimingEvidence::gpu_sample(31, 4, 7.5);
+
+    assert_eq!(pass_snapshot.total_millis, 5.0);
+    assert_eq!(composed.gpu_composed_frame_ms, Some(7.5));
+    assert_ne!(composed.gpu_composed_frame_ms, Some(pass_snapshot.total_millis));
 }
 
 #[test]
