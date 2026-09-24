@@ -150,10 +150,8 @@ fn admit_viewport_scene_render_requests(
         return true;
     }
 
-    let _ = prepared_frame_requests
-        .remove_contribution(EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID);
-    let _ =
-        prepared_selections.remove_contribution(EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID);
+    let _ = prepared_frame_requests.remove_contribution(EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID);
+    let _ = prepared_selections.remove_contribution(EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID);
     false
 }
 
@@ -948,7 +946,9 @@ mod tests {
             "viewport scene rendering must remain ineligible while the generated material scene bundle is not loaded"
         );
         assert!(
-            prepared_frame_requests.requested_flow_invocations().is_empty(),
+            prepared_frame_requests
+                .requested_flow_invocations()
+                .is_empty(),
             "startup must not carry the viewport flow invocation into frame preparation without an exact generated scene bundle"
         );
         assert!(
