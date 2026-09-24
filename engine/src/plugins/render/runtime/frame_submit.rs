@@ -478,13 +478,7 @@ fn observe_submitted_frame_history(
     let Ok(history) = world.resource_mut::<RenderFrameHistoryState>() else {
         return false;
     };
-    publish_submitted_frame_history(
-        history,
-        policy,
-        prepared_frame,
-        timings,
-        gpu,
-    )
+    publish_submitted_frame_history(history, policy, prepared_frame, timings, gpu)
 }
 
 fn reconcile_frame_history_policy(world: &mut WorldMut) {
