@@ -1,6 +1,7 @@
 use engine::net::prelude::*;
 use engine::plugins::net::{
-    ActiveClientReplicatedStateProduct, NetworkClientInbox, NetworkClientOutbox,
+    ActiveClientReplicatedStateProduct, ClientReplicationPolicy, NetPluginConfig,
+    NetworkClientInbox, NetworkClientOutbox,
     NetworkDiagnostics, NetworkOutboundQueue, NetworkServerInbox, NetworkServerOutbox,
     NetworkSessionStatus, OutboundServerMessage, PredictionDiagnostics,
     PredictionState as NetPredictionState, ReplicationDiagnostics, RunenNetSessionCore,

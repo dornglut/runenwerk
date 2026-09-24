@@ -136,6 +136,7 @@ fn client_snapshot_application_sends_ack_and_reconciles_prediction() {
             _ => None,
         })
         .expect("server should emit a snapshot");
+    let authoritative_tick = authoritative_snapshot.tick;
 
     let mut client = App::headless();
     client.add_plugins(default_plugins());
@@ -188,7 +189,7 @@ fn client_snapshot_application_sends_ack_and_reconciles_prediction() {
     );
     assert_eq!(
         client_replication_acknowledgement(client.world()),
-        Some((SnapshotCursor(1), authoritative_snapshot.tick))
+        Some((SnapshotCursor(1), authoritative_tick))
     );
     assert_eq!(
         client
