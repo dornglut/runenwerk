@@ -1368,6 +1368,7 @@ mod tests {
         .unwrap();
         let mut start = None;
         let mut end = None;
+        let mut readback_node = None;
         let marker_fragment = GpuWorkFragment::build("timed frame marker fragment", |work| {
             start = Some(
                 work.operation(
@@ -1384,12 +1385,16 @@ mod tests {
                 .unwrap(),
             );
             work.operation("timed frame timestamp resolve", resolve)?;
-            work.operation("timed frame timestamp readback", readback)?;
+            readback_node = Some(work.operation("timed frame timestamp readback", readback)?);
             Ok(())
         })
         .unwrap();
-        let bracket =
-            RenderGpuFrameTimingBracket::new(marker_fragment, start.unwrap(), end.unwrap());
+        let bracket = RenderGpuFrameTimingBracket::new(
+            marker_fragment,
+            start.unwrap(),
+            end.unwrap(),
+            readback_node.unwrap(),
+        );
         let graph = prepare_render_gpu_frame_work_with_timing_for_test(
             label("timed composed frame"),
             nodes,
@@ -1426,7 +1431,8 @@ mod tests {
         assert!(pos(renderer) < pos(end));
         assert!(pos(end) < pos(resolve));
         assert!(pos(resolve) < pos(readback));
-        assert!(pos(end) < pos(present));
+        assert!(pos(readback) < pos(present));
+        assert_eq!(graph.topological_order().last(), Some(&present));
         assert_eq!(
             graph
                 .nodes()
