@@ -604,11 +604,18 @@ fn normalize_control_orders(
     occurrence_nodes: &BTreeMap<RenderGpuWorkOccurrenceId, GpuPreparedWorkNodeId>,
     desired: &[(RenderGpuWorkOccurrenceId, RenderGpuWorkOccurrenceId)],
 ) -> BTreeSet<(RenderGpuWorkOccurrenceId, RenderGpuWorkOccurrenceId)> {
-    // This graph comes only from a G3 preparation with zero explicit orders. These edges are
-    // therefore G3-derived data dependencies, not renderer-reconstructed access semantics.
+    // Only typed G3 data dependencies may suppress a renderer-owned control order. The
+    // provisional graph can also contain composed-timing graph orders; those are instrumentation
+    // constraints and must never become authority for renderer control semantics.
     let mut satisfied_edges = provisional_graph
         .dependencies()
         .iter()
+        .filter(|dependency| {
+            dependency
+                .reasons()
+                .iter()
+                .any(|reason| reason.resource().is_some())
+        })
         .map(|dependency| (dependency.before(), dependency.after()))
         .collect::<BTreeSet<_>>();
     let mut retained = BTreeSet::new();
