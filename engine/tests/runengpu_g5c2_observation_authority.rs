@@ -15,7 +15,7 @@ fn rust_sources_below(root: &Path, output: &mut Vec<PathBuf>) {
 fn production_source(path: &Path) -> String {
     let source = fs::read_to_string(path).expect("Rust source should be readable");
     source
-        .split_once("\n#[cfg(test)]\nmod tests {")
+        .split_once("\n#[cfg(test)]\nmod ")
         .map_or(source.as_str(), |(production, _)| production)
         .to_owned()
 }
