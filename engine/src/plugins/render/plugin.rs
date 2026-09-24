@@ -25,7 +25,8 @@ use super::frame::{
 use super::inspect::{
     RenderCapturedTextureState, RenderDebugConfigResource, RenderDebugControlResource,
     RenderDebugFrameReportState, RenderDebugGraphDumpState, RenderDebugOverlayState,
-    RenderDebugTimingsState, RenderFrameDiagnosticsPolicyResource, RenderPassProvenanceState,
+    RenderDebugTimingsState, RenderFrameDiagnosticsPolicyResource, RenderFrameHistoryState,
+    RenderFrameObservationPolicyResource, RenderPassProvenanceState,
     RenderRuntimeResourceInspectorState, RenderTextureInspectorState,
     WorldRuntimeInspectorSnapshot,
 };
@@ -107,6 +108,8 @@ impl Plugin for RenderPlugin {
         app.init_resource::<RenderRuntimeResourceInspectorState>();
         app.init_resource::<RenderTextureInspectorState>();
         app.init_resource::<RenderDebugTimingsState>();
+        app.init_resource::<RenderFrameHistoryState>();
+        app.init_resource::<RenderFrameObservationPolicyResource>();
         app.init_resource::<RenderDebugGraphDumpState>();
         app.init_resource::<RenderDebugControlResource>();
         app.init_resource::<RenderDebugConfigResource>();

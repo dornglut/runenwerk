@@ -1,9 +1,10 @@
 use crate::plugins::SceneResource;
 use crate::plugins::inspect::{
-    RenderCapturedTextureState, RenderDebugConfigResource, RenderDebugControlResource,
-    RenderDebugFrameReportState, RenderDebugTimingsState, RenderFrameDiagnosticsMode,
-    RenderFrameDiagnosticsPolicyResource, RenderPassProvenanceState,
-    RenderRuntimeResourceInspectorState, RenderTextureInspectorState,
+    PassTimingSample, RenderCapturedTextureState, RenderDebugConfigResource,
+    RenderDebugControlResource, RenderDebugFrameReportState, RenderDebugTimingsState,
+    RenderFrameDiagnosticsMode, RenderFrameDiagnosticsPolicyResource, RenderFrameHistoryState,
+    RenderFrameObservationPolicyResource, RenderGpuTimingCapability, RenderPassProvenanceState,
+    RenderPassTimingEvidence, RenderRuntimeResourceInspectorState, RenderTextureInspectorState,
     submit_render_frame_report_to_diagnostics,
 };
 use crate::plugins::pipelines::{PipelineCacheResource, PipelineCacheStats};
@@ -61,8 +62,15 @@ fn render_timing_logging_enabled() -> bool {
 
 #[cfg(test)]
 mod contribution_deferral_tests {
-    use super::{AdditionalSurfaceRenderOutcome, apply_additional_surface_render_outcome};
+    use super::{
+        AdditionalSurfaceRenderOutcome, apply_additional_surface_render_outcome,
+        publish_submitted_frame_history,
+    };
     use crate::plugins::render::backend::RenderSurfaceId;
+    use crate::plugins::render::inspect::{
+        RenderFrameHistoryState, RenderFrameObservationKey, RenderFrameObservationPolicyResource,
+        RenderGpuTimingCapability, RenderPassTimingEvidence,
+    };
     use crate::plugins::render::request::{
         RenderObservationSpec, RenderOutputSpec, RenderOutputValue, RenderProbeObservation,
         RenderRadiometricRepresentation, RenderRequest, RenderRequestedOutput,
@@ -73,7 +81,7 @@ mod contribution_deferral_tests {
         RenderAffineTransform3, RenderTimeInterval, RenderTimePoint,
     };
     use crate::plugins::render::{
-        PreparedFrameContext, PreparedFrameContributions, PreparedRenderFrame,
+        GfxFrameTimings, PreparedFrameContext, PreparedFrameContributions, PreparedRenderFrame,
         PreparedShaderSnapshot, PreparedSurfaceInfo, PreparedViewFrame,
         RenderDeterministicFrameContribution, RenderDynamicTextureTargetKey, RenderFrameProducerId,
     };
@@ -151,6 +159,91 @@ mod contribution_deferral_tests {
                 registry_revision: 11,
             },
         }
+    }
+
+    #[test]
+    fn submitted_secondary_history_keeps_surface_identity_and_delayed_gpu_correlation() {
+        let policy = RenderFrameObservationPolicyResource::enabled(8);
+        let mut history = RenderFrameHistoryState::default();
+        let primary_surface = RenderSurfaceId::primary();
+        let secondary_surface = RenderSurfaceId::try_from_raw(2).expect("secondary surface id");
+        let primary = prepared_frame(primary_surface, 10);
+        let secondary = prepared_frame(secondary_surface, 11);
+
+        assert!(publish_submitted_frame_history(
+            &mut history,
+            policy,
+            &primary,
+            GfxFrameTimings {
+                submitted: true,
+                acquire_ms: 1.0,
+                ..GfxFrameTimings::default()
+            },
+            RenderGpuTimingCapability::Supported,
+            &[],
+            &[],
+        ));
+
+        let delayed_primary_gpu = RenderPassTimingEvidence::gpu_sample(
+            Some(primary.context.frame_index),
+            Some(primary_surface.raw()),
+            "flow",
+            "pass",
+            "compute",
+            2.5,
+        );
+        assert!(publish_submitted_frame_history(
+            &mut history,
+            policy,
+            &secondary,
+            GfxFrameTimings {
+                submitted: true,
+                acquire_ms: 2.0,
+                ..GfxFrameTimings::default()
+            },
+            RenderGpuTimingCapability::Supported,
+            &[],
+            &[delayed_primary_gpu],
+        ));
+
+        let primary_observation = history
+            .observation(RenderFrameObservationKey::new(
+                primary.context.frame_index,
+                primary_surface.raw(),
+            ))
+            .expect("primary observation should remain retained");
+        let secondary_observation = history
+            .observation(RenderFrameObservationKey::new(
+                secondary.context.frame_index,
+                secondary_surface.raw(),
+            ))
+            .expect("secondary observation should be published independently");
+
+        assert_eq!(history.len(), 2);
+        assert_eq!(primary_observation.cpu.acquire_ms, 1.0);
+        assert_eq!(primary_observation.gpu.pass_evidence.len(), 1);
+        assert_eq!(primary_observation.gpu.pass_evidence[0].millis, Some(2.5));
+        assert_eq!(secondary_observation.cpu.acquire_ms, 2.0);
+        assert!(secondary_observation.gpu.pass_evidence.is_empty());
+    }
+
+    #[test]
+    fn unsubmitted_surface_never_publishes_frame_history() {
+        let policy = RenderFrameObservationPolicyResource::enabled(8);
+        let mut history = RenderFrameHistoryState::default();
+        let secondary_surface = RenderSurfaceId::try_from_raw(2).expect("secondary surface id");
+        let secondary = prepared_frame(secondary_surface, 12);
+
+        assert!(!publish_submitted_frame_history(
+            &mut history,
+            policy,
+            &secondary,
+            GfxFrameTimings::default(),
+            RenderGpuTimingCapability::Supported,
+            &[],
+            &[],
+        ));
+        assert!(history.is_empty());
     }
 
     #[test]
@@ -307,7 +400,73 @@ fn primary_redraw_interval_logging_enabled() -> bool {
         .unwrap_or(false)
 }
 
+fn publish_submitted_frame_history(
+    history: &mut RenderFrameHistoryState,
+    policy: RenderFrameObservationPolicyResource,
+    prepared_frame: &PreparedRenderFrame,
+    timings: GfxFrameTimings,
+    gpu_capability: RenderGpuTimingCapability,
+    pass_timings: &[PassTimingSample],
+    gpu_evidence: &[RenderPassTimingEvidence],
+) -> bool {
+    history.apply_policy(policy);
+    if !policy.enabled || !timings.submitted {
+        return false;
+    }
+    history.observe_submitted_frame(
+        policy,
+        prepared_frame.context.frame_index,
+        prepared_frame.surface.render_surface_id.raw(),
+        prepared_frame.context.prepare_epoch,
+        timings.acquire_ms,
+        timings.renderer,
+        pass_timings,
+        gpu_capability,
+    );
+    history.observe_gpu_pass_timing_evidence(policy, gpu_evidence);
+    true
+}
+
+fn observe_submitted_frame_history(
+    world: &mut WorldMut,
+    prepared_frame: &PreparedRenderFrame,
+    timings: GfxFrameTimings,
+    gpu_capability: RenderGpuTimingCapability,
+    pass_timings: &[PassTimingSample],
+    gpu_evidence: &[RenderPassTimingEvidence],
+) -> bool {
+    let policy = world
+        .resource::<RenderFrameObservationPolicyResource>()
+        .ok()
+        .copied()
+        .unwrap_or_default();
+    let Ok(history) = world.resource_mut::<RenderFrameHistoryState>() else {
+        return false;
+    };
+    publish_submitted_frame_history(
+        history,
+        policy,
+        prepared_frame,
+        timings,
+        gpu_capability,
+        pass_timings,
+        gpu_evidence,
+    )
+}
+
+fn reconcile_frame_history_policy(world: &mut WorldMut) {
+    let policy = world
+        .resource::<RenderFrameObservationPolicyResource>()
+        .ok()
+        .copied()
+        .unwrap_or_default();
+    if let Ok(history) = world.resource_mut::<RenderFrameHistoryState>() {
+        history.apply_policy(policy);
+    }
+}
+
 pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<()> {
+    reconcile_frame_history_policy(&mut world);
     if world.resource::<SceneResource>()?.manager.is_none() {
         return Ok(());
     }
@@ -499,6 +658,14 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                         gfx.renderer.last_gpu_pass_timing_evidence(),
                     );
                 }
+                observe_submitted_frame_history(
+                    &mut world,
+                    &prepared_frame,
+                    timings,
+                    gfx.renderer.last_gpu_timing_capability(),
+                    gfx.renderer.last_pass_timings(),
+                    gfx.renderer.last_gpu_pass_timing_evidence(),
+                );
 
                 let cache_stats = gfx.renderer.flow_pipeline_cache_stats();
                 if let Ok(cache_resource) = world.resource_mut::<PipelineCacheResource>() {
@@ -1020,7 +1187,20 @@ fn render_additional_surfaces(
                 );
                 AdditionalSurfaceRenderOutcome::Deferred
             }
-            Ok(_) => AdditionalSurfaceRenderOutcome::Submitted,
+            Ok(timings) => {
+                let history_enabled = observe_submitted_frame_history(
+                    world,
+                    prepared_frame,
+                    timings,
+                    gfx.renderer.last_gpu_timing_capability(),
+                    gfx.renderer.last_pass_timings(),
+                    gfx.renderer.last_gpu_pass_timing_evidence(),
+                );
+                if history_enabled {
+                    gfx.renderer.clear_published_gpu_pass_timing_evidence();
+                }
+                AdditionalSurfaceRenderOutcome::Submitted
+            }
             Err(err) => {
                 if let Some(surface_error) = err.downcast_ref::<RenderSurfaceAcquireError>() {
                     match surface_error {
