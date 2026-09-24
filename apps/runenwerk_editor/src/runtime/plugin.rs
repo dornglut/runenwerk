@@ -31,7 +31,8 @@ use crate::runtime::systems::{
     prepare_material_preview_render_resource_system, produce_editor_picking_system,
     produce_material_preview_dynamic_uploads_system,
     produce_texture_preview_dynamic_uploads_system, seed_viewport_runtime_contracts_system,
-    submit_editor_frame_system, sync_viewport_instances_system,
+    submit_editor_frame_system, submit_editor_secondary_native_frames_system,
+    sync_viewport_instances_system,
 };
 use crate::runtime::viewport::{
     MountedSurfaceRegistryResource, SurfaceDefinitionRegistryResource,
@@ -61,6 +62,7 @@ pub enum EditorRuntimeSet {
     WindowPresentationRequests,
     ViewportLifecycle,
     FrameSubmit,
+    NativeSecondaryFrameSubmit,
     ViewportRenderStateCommands,
     ViewportPresentationSync,
     QuerySnapshotPublication,
@@ -151,7 +153,8 @@ impl Plugin for EditorAppPlugin {
             sync_viewport_presentation_products_system
                 .on_invoker_thread()
                 .in_set(EditorRuntimeSet::ViewportPresentationSync)
-                .after(EditorRuntimeSet::FrameSubmit),
+                .after(EditorRuntimeSet::FrameSubmit)
+                .after_if_present(EditorRuntimeSet::NativeSecondaryFrameSubmit),
         );
         app.add_systems(
             Update,
@@ -250,6 +253,14 @@ impl Plugin for EditorNativeWindowIntegrationPlugin {
                 .on_invoker_thread()
                 .in_set(EditorRuntimeSet::WindowPresentationRequests)
                 .after(EditorRuntimeSet::TargetInput),
+        );
+        app.add_systems(
+            Update,
+            submit_editor_secondary_native_frames_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::NativeSecondaryFrameSubmit)
+                .after(EditorRuntimeSet::FrameSubmit)
+                .after(EditorRuntimeSet::WindowPresentationRequests),
         );
     }
 }
