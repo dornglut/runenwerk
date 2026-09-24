@@ -1,6 +1,6 @@
 use super::timings::{
-    PassTimingSample, RenderGpuTimingCapability, RenderPassTimingEvidence,
-    summarize_gpu_pass_timing_evidence,
+    PassTimingSample, RenderComposedFrameGpuTimingEvidence, RenderGpuTimingCapability,
+    RenderPassTimingEvidence, summarize_gpu_pass_timing_evidence,
 };
 use crate::plugins::render::renderer::RendererFrameTimings;
 use std::collections::{BTreeMap, VecDeque};
@@ -88,6 +88,8 @@ impl RenderFrameCpuObservation {
 pub struct RenderFrameGpuObservation {
     pub pass_timing_capability: RenderGpuTimingCapability,
     pub pass_evidence: Vec<RenderPassTimingEvidence>,
+    pub composed_timing_capability: RenderGpuTimingCapability,
+    pub composed_timing_evidence: Option<RenderComposedFrameGpuTimingEvidence>,
 }
 
 impl RenderFrameGpuObservation {
@@ -95,6 +97,8 @@ impl RenderFrameGpuObservation {
         Self {
             pass_timing_capability: capability,
             pass_evidence: Vec::new(),
+            composed_timing_capability: RenderGpuTimingCapability::UnavailableThisFrame,
+            composed_timing_evidence: None,
         }
     }
 
@@ -137,6 +141,11 @@ impl RenderFrameGpuObservation {
             self.pass_timing_capability =
                 summarize_gpu_pass_timing_evidence(&self.pass_evidence).capability;
         }
+    }
+
+    fn merge_composed_timing_evidence(&mut self, evidence: RenderComposedFrameGpuTimingEvidence) {
+        self.composed_timing_capability = evidence.gpu_capability;
+        self.composed_timing_evidence = Some(evidence);
     }
 }
 
@@ -282,6 +291,32 @@ impl RenderFrameHistoryState {
                 .drop_stats
                 .dropped_correlated_evidence
                 .saturating_add(sample_count);
+        }
+    }
+
+    pub fn observe_composed_gpu_timing_evidence(
+        &mut self,
+        policy: RenderFrameObservationPolicyResource,
+        evidence: &[RenderComposedFrameGpuTimingEvidence],
+    ) {
+        for sample in evidence {
+            let key = RenderFrameObservationKey::new(sample.frame_index, sample.render_surface_id);
+            if let Some(observation) = self
+                .observations
+                .iter_mut()
+                .find(|observation| observation.key == key)
+            {
+                observation
+                    .gpu
+                    .merge_composed_timing_evidence(sample.clone());
+                continue;
+            }
+            if policy.enabled {
+                self.drop_stats.dropped_correlated_evidence = self
+                    .drop_stats
+                    .dropped_correlated_evidence
+                    .saturating_add(1);
+            }
         }
     }
 
@@ -674,5 +709,169 @@ mod tests {
             RenderDisplayPresentationTiming::Unavailable
         );
         assert_eq!(observation.cpu.observed_stage_sum_with_acquire_ms(), 0.5);
+    }
+    fn composed_pending(frame: u64, surface: u64) -> RenderComposedFrameGpuTimingEvidence {
+        RenderComposedFrameGpuTimingEvidence::gpu_diagnostic(
+            frame,
+            surface,
+            RenderGpuTimingDiagnostic::readback_pending("composed timing pending"),
+        )
+    }
+
+    fn composed_measured(
+        frame: u64,
+        surface: u64,
+        millis: f32,
+    ) -> RenderComposedFrameGpuTimingEvidence {
+        RenderComposedFrameGpuTimingEvidence::gpu_sample(frame, surface, millis)
+    }
+
+    #[test]
+    fn composed_gpu_timing_updates_exact_frame_after_reverse_arrival() {
+        let policy = policy(8);
+        let mut history = RenderFrameHistoryState::default();
+        record(
+            &mut history,
+            policy,
+            1,
+            1,
+            1.0,
+            RenderGpuTimingCapability::UnavailableThisFrame,
+        );
+        record(
+            &mut history,
+            policy,
+            2,
+            1,
+            2.0,
+            RenderGpuTimingCapability::UnavailableThisFrame,
+        );
+        history.observe_composed_gpu_timing_evidence(policy, &[composed_measured(2, 1, 5.0)]);
+        history.observe_composed_gpu_timing_evidence(policy, &[composed_measured(1, 1, 3.0)]);
+        assert_eq!(
+            history
+                .observation(RenderFrameObservationKey::new(1, 1))
+                .unwrap()
+                .gpu
+                .composed_timing_evidence
+                .as_ref()
+                .unwrap()
+                .gpu_composed_frame_ms,
+            Some(3.0)
+        );
+        assert_eq!(
+            history
+                .observation(RenderFrameObservationKey::new(2, 1))
+                .unwrap()
+                .gpu
+                .composed_timing_evidence
+                .as_ref()
+                .unwrap()
+                .gpu_composed_frame_ms,
+            Some(5.0)
+        );
+    }
+
+    #[test]
+    fn composed_gpu_timing_never_cross_joins_surfaces() {
+        let policy = policy(8);
+        let mut history = RenderFrameHistoryState::default();
+        record(
+            &mut history,
+            policy,
+            7,
+            1,
+            0.0,
+            RenderGpuTimingCapability::UnavailableThisFrame,
+        );
+        record(
+            &mut history,
+            policy,
+            7,
+            2,
+            0.0,
+            RenderGpuTimingCapability::UnavailableThisFrame,
+        );
+        history.observe_composed_gpu_timing_evidence(policy, &[composed_measured(7, 2, 4.0)]);
+        assert!(
+            history
+                .observation(RenderFrameObservationKey::new(7, 1))
+                .unwrap()
+                .gpu
+                .composed_timing_evidence
+                .is_none()
+        );
+        assert_eq!(
+            history
+                .observation(RenderFrameObservationKey::new(7, 2))
+                .unwrap()
+                .gpu
+                .composed_timing_capability,
+            RenderGpuTimingCapability::Supported
+        );
+    }
+
+    #[test]
+    fn composed_gpu_timing_progresses_pending_to_measured_without_zero_fallback() {
+        let policy = policy(8);
+        let mut history = RenderFrameHistoryState::default();
+        record(
+            &mut history,
+            policy,
+            9,
+            1,
+            0.0,
+            RenderGpuTimingCapability::UnavailableThisFrame,
+        );
+        history.observe_composed_gpu_timing_evidence(policy, &[composed_pending(9, 1)]);
+        assert_eq!(
+            history
+                .observation(RenderFrameObservationKey::new(9, 1))
+                .unwrap()
+                .gpu
+                .composed_timing_capability,
+            RenderGpuTimingCapability::ReadbackPending
+        );
+        history.observe_composed_gpu_timing_evidence(policy, &[composed_measured(9, 1, 6.5)]);
+        let observation = history
+            .observation(RenderFrameObservationKey::new(9, 1))
+            .unwrap();
+        assert_eq!(
+            observation.gpu.composed_timing_capability,
+            RenderGpuTimingCapability::Supported
+        );
+        assert_eq!(
+            observation
+                .gpu
+                .composed_timing_evidence
+                .as_ref()
+                .unwrap()
+                .gpu_composed_frame_ms,
+            Some(6.5)
+        );
+    }
+
+    #[test]
+    fn evicted_frame_counts_late_composed_gpu_evidence() {
+        let policy = policy(1);
+        let mut history = RenderFrameHistoryState::default();
+        record(
+            &mut history,
+            policy,
+            1,
+            1,
+            0.0,
+            RenderGpuTimingCapability::UnavailableThisFrame,
+        );
+        record(
+            &mut history,
+            policy,
+            2,
+            1,
+            0.0,
+            RenderGpuTimingCapability::UnavailableThisFrame,
+        );
+        history.observe_composed_gpu_timing_evidence(policy, &[composed_measured(1, 1, 2.0)]);
+        assert_eq!(history.drop_stats().dropped_correlated_evidence, 1);
     }
 }

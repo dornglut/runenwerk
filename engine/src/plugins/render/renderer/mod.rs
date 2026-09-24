@@ -10,9 +10,9 @@ use crate::plugins::render::graph::{
 };
 use crate::plugins::render::inspect::{
     PassTimingSample, RenderCaptureSelectorResult, RenderCapturedTexture,
-    RenderDebugConfigResource, RenderDebugControlResource, RenderGpuTimingCapability,
-    RenderPassProvenanceRecord, RenderPassTimingEvidence, ResolvedRenderCapturePlan,
-    RuntimeResourceInspectionEntry,
+    RenderComposedFrameGpuTimingEvidence, RenderDebugConfigResource, RenderDebugControlResource,
+    RenderGpuTimingCapability, RenderPassProvenanceRecord, RenderPassTimingEvidence,
+    ResolvedRenderCapturePlan, RuntimeResourceInspectionEntry,
 };
 use crate::plugins::render::shader::{ShaderHandle, ShaderRegistryResource};
 use anyhow::Result;
@@ -821,6 +821,7 @@ pub struct Renderer {
     last_pass_timings: Vec<PassTimingSample>,
     last_gpu_timing_capability: RenderGpuTimingCapability,
     last_gpu_pass_timing_evidence: Vec<RenderPassTimingEvidence>,
+    last_composed_gpu_timing_evidence: Vec<RenderComposedFrameGpuTimingEvidence>,
     last_runtime_resources: Vec<RuntimeResourceInspectionEntry>,
     last_pass_provenance: Vec<RenderPassProvenanceRecord>,
     last_preflight_report: RenderExecutionGraphPreparedReport,
@@ -910,6 +911,7 @@ impl Gfx {
         preflight_config: crate::plugins::render::graph::RenderPreflightValidationConfigResource,
         debug_control: &RenderDebugControlResource,
         debug_config: &RenderDebugConfigResource,
+        composed_gpu_timing_requested: bool,
     ) -> Result<GfxFrameTimings> {
         validate_deterministic_surface_scope(deterministic_contributions.iter().map(
             |contribution| {
@@ -938,12 +940,19 @@ impl Gfx {
         let acquired = self.ctx.acquire_surface_image(render_surface_id)?;
         timings.acquire_ms = acquire_start.elapsed().as_secs_f32() * 1000.0;
         let acquired_extent = acquired.texture().descriptor().extent();
+        let timestamp_queries_enabled = self
+            .ctx
+            .context()
+            .device_facts()
+            .is_enabled(runen_gpu::GpuCapabilityFeature::TimestampQuery);
         let gpu_timing_capability = frame_gpu_timing_capability(
-            self.ctx
-                .context()
-                .device_facts()
-                .is_enabled(runen_gpu::GpuCapabilityFeature::TimestampQuery),
+            timestamp_queries_enabled,
             !surface_contributions.is_empty(),
+        );
+        let composed_gpu_timing_capability = composed_frame_gpu_timing_capability(
+            timestamp_queries_enabled,
+            !surface_contributions.is_empty(),
+            composed_gpu_timing_requested,
         );
         self.renderer.last_gpu_timing_capability = gpu_timing_capability;
         let context = self.ctx.context();
@@ -967,6 +976,7 @@ impl Gfx {
             debug_control,
             debug_config,
             gpu_timing_capability,
+            composed_gpu_timing_capability,
         )?;
         if std::env::var("GROTTO_RENDER_REALIZATION_LOG").is_ok() {
             let stats = context.program_binding_realization_stats();
@@ -1045,6 +1055,21 @@ fn frame_gpu_timing_capability(
     RenderGpuTimingCapability::Supported
 }
 
+fn composed_frame_gpu_timing_capability(
+    timestamp_queries_enabled: bool,
+    has_deterministic_composition: bool,
+    requested: bool,
+) -> Option<RenderGpuTimingCapability> {
+    if !requested || !has_deterministic_composition {
+        return None;
+    }
+    Some(if timestamp_queries_enabled {
+        RenderGpuTimingCapability::Supported
+    } else {
+        RenderGpuTimingCapability::Unsupported
+    })
+}
+
 mod dynamic_targets;
 mod extract;
 mod pipeline_cache;
@@ -1060,11 +1085,13 @@ pub use frame_bindings::RenderFrameDataRegistry;
 #[cfg(test)]
 mod tests {
     use super::{
-        Renderer, frame_gpu_timing_capability, should_defer_deterministic_surface,
-        validate_deterministic_surface_scope,
+        Renderer, composed_frame_gpu_timing_capability, frame_gpu_timing_capability,
+        should_defer_deterministic_surface, validate_deterministic_surface_scope,
     };
     use crate::plugins::render::backend::RenderSurfaceId;
-    use crate::plugins::render::inspect::{RenderGpuTimingCapability, RenderPassTimingEvidence};
+    use crate::plugins::render::inspect::{
+        RenderComposedFrameGpuTimingEvidence, RenderGpuTimingCapability, RenderPassTimingEvidence,
+    };
 
     #[test]
     fn clip_to_scissor_clamps_and_rejects_empty() {
@@ -1120,6 +1147,26 @@ mod tests {
     }
 
     #[test]
+    fn composed_gpu_timing_is_only_admitted_for_retained_deterministic_frames() {
+        assert_eq!(
+            composed_frame_gpu_timing_capability(true, true, true),
+            Some(RenderGpuTimingCapability::Supported)
+        );
+        assert_eq!(
+            composed_frame_gpu_timing_capability(false, true, true),
+            Some(RenderGpuTimingCapability::Unsupported)
+        );
+        assert_eq!(
+            composed_frame_gpu_timing_capability(true, false, true),
+            None
+        );
+        assert_eq!(
+            composed_frame_gpu_timing_capability(true, true, false),
+            None
+        );
+    }
+
+    #[test]
     fn progressed_observation_output_is_retained_until_successful_frame_publication() {
         let mut renderer = Renderer::new();
         renderer
@@ -1133,6 +1180,10 @@ mod tests {
                 "compute",
                 0.5,
             ));
+        renderer
+            .pending_gpu_observation_output
+            .composed_timing_evidence
+            .push(RenderComposedFrameGpuTimingEvidence::gpu_sample(12, 3, 1.5));
 
         assert!(renderer.last_gpu_pass_timing_evidence.is_empty());
         assert_eq!(
@@ -1145,6 +1196,7 @@ mod tests {
 
         renderer.publish_progressed_gpu_observations();
         assert_eq!(renderer.last_gpu_pass_timing_evidence.len(), 1);
+        assert_eq!(renderer.last_composed_gpu_timing_evidence.len(), 1);
         assert!(
             renderer
                 .pending_gpu_observation_output
@@ -1155,5 +1207,6 @@ mod tests {
         assert_eq!(renderer.last_gpu_pass_timing_evidence.len(), 1);
         renderer.clear_published_gpu_observations();
         assert!(renderer.last_gpu_pass_timing_evidence.is_empty());
+        assert!(renderer.last_composed_gpu_timing_evidence.is_empty());
     }
 }

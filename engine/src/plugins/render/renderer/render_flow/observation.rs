@@ -7,6 +7,7 @@ use runen_gpu::{
 #[derive(Debug, Default)]
 pub(in crate::plugins::render::renderer) struct RendererGpuObservationOutput {
     pub timing_evidence: Vec<RenderPassTimingEvidence>,
+    pub composed_timing_evidence: Vec<RenderComposedFrameGpuTimingEvidence>,
     pub captured_textures: Vec<RenderCapturedTexture>,
     pub capture_results: Vec<RenderCaptureSelectorResult>,
 }
@@ -20,6 +21,7 @@ pub(in crate::plugins::render::renderer) struct RendererGpuObservationState {
 struct AcceptedRendererObservation {
     submission: GpuSubmission,
     timings: Vec<GpuPassTimingFrame>,
+    composed_timing: Option<GpuComposedFrameTimingFrame>,
     captures: Vec<CaptureObservation>,
 }
 
@@ -134,12 +136,14 @@ impl RendererGpuObservationState {
         context: &GpuContext,
         submission: GpuSubmission,
         timings: Vec<GpuPassTimingFrame>,
+        composed_timing: Option<GpuComposedFrameTimingFrame>,
         captures: Vec<PreparedCaptureReadback>,
         capture_runtime: &mut FrameCaptureRuntime,
     ) -> RendererGpuObservationOutput {
         self.accept_with_bound(
             submission,
             timings,
+            composed_timing,
             captures,
             capture_runtime,
             context.execution_policy().max_in_flight_submissions().get(),
@@ -150,6 +154,7 @@ impl RendererGpuObservationState {
         &mut self,
         submission: GpuSubmission,
         timings: Vec<GpuPassTimingFrame>,
+        composed_timing: Option<GpuComposedFrameTimingFrame>,
         captures: Vec<PreparedCaptureReadback>,
         capture_runtime: &mut FrameCaptureRuntime,
         bound: usize,
@@ -165,6 +170,19 @@ impl RendererGpuObservationState {
                 ));
             }
         }
+
+        let accepted_composed_timing = composed_timing.and_then(|timing| {
+            if submission.readback(timing.readback_id()).is_some() {
+                Some(timing)
+            } else {
+                output
+                    .composed_timing_evidence
+                    .push(timing.diagnostic_evidence(
+                        "accepted GPU submission omitted the composed renderer timing readback",
+                    ));
+                None
+            }
+        });
 
         let mut accepted_captures = Vec::with_capacity(captures.len());
         for prepared in captures {
@@ -182,7 +200,10 @@ impl RendererGpuObservationState {
             }
         }
 
-        if accepted_timings.is_empty() && accepted_captures.is_empty() {
+        if accepted_timings.is_empty()
+            && accepted_composed_timing.is_none()
+            && accepted_captures.is_empty()
+        {
             return output;
         }
 
@@ -196,6 +217,11 @@ impl RendererGpuObservationState {
                     .timing_evidence
                     .extend(timing.diagnostic_evidence(detail.clone()));
             }
+            if let Some(timing) = accepted_composed_timing {
+                output
+                    .composed_timing_evidence
+                    .push(timing.diagnostic_evidence(detail.clone()));
+            }
             for capture in accepted_captures {
                 let terminal = capture.failed("renderer_observation_capacity_exceeded", &detail);
                 capture_runtime.set_terminal(capture.selector_index, terminal.terminal.clone());
@@ -207,9 +233,15 @@ impl RendererGpuObservationState {
         for timing in &accepted_timings {
             output.timing_evidence.extend(timing.pending_evidence());
         }
+        if let Some(timing) = accepted_composed_timing.as_ref() {
+            output
+                .composed_timing_evidence
+                .push(timing.pending_evidence());
+        }
         self.accepted.push(AcceptedRendererObservation {
             submission,
             timings: accepted_timings,
+            composed_timing: accepted_composed_timing,
             captures: accepted_captures,
         });
         output
@@ -263,6 +295,38 @@ impl RendererGpuObservationState {
                 }
             });
 
+            if let Some(timing) = accepted.composed_timing.take() {
+                let status = accepted
+                    .submission
+                    .readback(timing.readback_id())
+                    .map(|readback| readback.status());
+                match status {
+                    Some(GpuReadbackStatus::Pending)
+                        if invalid_context.is_none()
+                            && lifecycle != GpuExecutionLifecycleState::Closed =>
+                    {
+                        accepted.composed_timing = Some(timing);
+                    }
+                    Some(GpuReadbackStatus::Ready(bytes)) => {
+                        output
+                            .composed_timing_evidence
+                            .push(timing.ready_evidence(&bytes));
+                    }
+                    Some(GpuReadbackStatus::Failed(failure)) => {
+                        output
+                            .composed_timing_evidence
+                            .push(timing.failed_evidence(&failure));
+                    }
+                    _ => {
+                        output
+                            .composed_timing_evidence
+                            .push(timing.diagnostic_evidence(invalid_context.unwrap_or(
+                            "GPU context closed before composed timing readback became terminal",
+                        )));
+                    }
+                }
+            }
+
             accepted.captures.retain(|capture| {
                 let status = accepted
                     .submission
@@ -291,8 +355,11 @@ impl RendererGpuObservationState {
                 false
             });
         }
-        self.accepted
-            .retain(|accepted| !accepted.timings.is_empty() || !accepted.captures.is_empty());
+        self.accepted.retain(|accepted| {
+            !accepted.timings.is_empty()
+                || accepted.composed_timing.is_some()
+                || !accepted.captures.is_empty()
+        });
         output
     }
 }

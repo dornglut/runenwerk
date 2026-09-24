@@ -5,7 +5,7 @@ use runen_gpu::{
     GpuResourceLifetime, GpuResourceProvenance, GpuSamplerDescriptor, GpuTextureAspect,
     GpuTextureDescriptor, GpuTextureDimension, GpuTextureExtent, GpuTextureFormat,
     GpuTextureHandle, GpuTextureInitialization, GpuTextureSubresourceRange, GpuTextureUsage,
-    GpuTextureUsages, GpuTextureViewDescriptor,
+    GpuTextureUsages, GpuTextureViewDescriptor, GpuTextureViewDimension,
 };
 
 pub(super) fn owned_common(
@@ -118,7 +118,17 @@ pub(super) fn whole_texture_view_descriptor(
         common,
         texture,
         None,
-        descriptor.dimension(),
+        match descriptor.dimension() {
+            GpuTextureDimension::D1 => GpuTextureViewDimension::D1,
+            GpuTextureDimension::D2 => {
+                if array_layer_count == 1 {
+                    GpuTextureViewDimension::D2
+                } else {
+                    GpuTextureViewDimension::D2Array
+                }
+            }
+            GpuTextureDimension::D3 => GpuTextureViewDimension::D3,
+        },
         subresources,
     )?)
 }
@@ -177,7 +187,7 @@ mod tests {
 
         let view = whole_texture_view_descriptor("whole volume view test", &texture).unwrap();
 
-        assert_eq!(view.dimension(), GpuTextureDimension::D3);
+        assert_eq!(view.dimension(), GpuTextureViewDimension::D3);
         assert_eq!(view.subresources().array_layer_count(), 1);
     }
 }

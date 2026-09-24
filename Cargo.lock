@@ -2613,7 +2613,7 @@ source = "git+https://github.com/dornglut/runen-graph?rev=075f3c2b4122c1ae89209d
 [[package]]
 name = "runen-gpu"
 version = "0.1.0"
-source = "git+https://github.com/dornglut/runen-gpu?rev=c292b77ff1a3b3e984dc2263bbbf8d8c06e93777#c292b77ff1a3b3e984dc2263bbbf8d8c06e93777"
+source = "git+https://github.com/dornglut/runen-gpu?rev=dc9265bbbbf23ca577346c512afa98042d7b9ae3#dc9265bbbbf23ca577346c512afa98042d7b9ae3"
 dependencies = [
  "bytemuck",
  "naga",
