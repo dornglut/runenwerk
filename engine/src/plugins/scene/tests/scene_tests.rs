@@ -65,6 +65,24 @@ fn scene_plugin_toggles_pause_overlay_and_updates_public_state() {
 }
 
 #[test]
+fn scene_plugin_without_input_capability_does_not_install_input_resources() {
+    let mut app = App::headless();
+    app.add_plugin(TimePlugin);
+    app.add_plugin(ScenePlugin);
+
+    let app = app.run_for_frames(1).expect("scene plugin should run");
+
+    assert!(
+        app.world().resource::<InputState>().is_err(),
+        "ScenePlugin must not become an InputState provider"
+    );
+    assert!(
+        app.world().resource::<crate::plugins::ActionState>().is_err(),
+        "ScenePlugin must not become an ActionState provider"
+    );
+}
+
+#[test]
 fn scene_helper_switches_world_scene_by_label() {
     let mut app = App::headless();
     app.add_plugin(TimePlugin);
@@ -243,6 +261,7 @@ fn glyph_run_text(run: &ui_render_data::GlyphRunPrimitive) -> String {
 #[test]
 fn scene_template_buttons_switch_scene_on_click() {
     let mut app = App::headless();
+    app.add_plugin(InputFinalizePlugin);
     app.add_scene("engine/tests/fixtures/scene_templates/main_menu.ron");
     app.add_scene("engine/tests/fixtures/scene_templates/settings_menu.ron");
     app.add_scene("engine/tests/fixtures/scene_templates/game_scene.ron");
