@@ -350,7 +350,7 @@ mod tests {
         let mut host = EditorHostResource::default();
         let editor_window_id = host.shell_state.open_editor_window_for_active_workspace();
         let mut window_registry = WindowStateRegistryResource::default();
-        window_registry.register_primary_window("Runenwerk", (1280, 720), 1.0);
+        window_registry.register_primary_window("Runenwerk", (1280, 720), 1.0, true);
         let mut surface_registry = RenderSurfaceRegistryResource::default();
 
         let synced = sync_editor_window_presentation_requests(

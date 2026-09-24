@@ -55,6 +55,7 @@ fn surface_identity_native_smoke() -> anyhow::Result<()> {
         primary_window.title(),
         primary_size_px,
         primary_window.scale_factor(),
+        primary_window.has_focus(),
     );
     anyhow::ensure!(
         primary_native == NativeWindowId::primary(),
@@ -67,7 +68,7 @@ fn surface_identity_native_smoke() -> anyhow::Result<()> {
         secondary_window.title(),
         secondary_size_px,
         secondary_window.scale_factor(),
-        false,
+        secondary_window.has_focus(),
     );
 
     eprintln!("surface-identity-smoke: create-gfx");
@@ -215,7 +216,7 @@ fn capture() -> anyhow::Result<()> {
         .insert_resource(WindowStateRegistryResource::default());
     app.world_mut()
         .resource_mut::<WindowStateRegistryResource>()?
-        .register_primary_window(window.title(), size_px, scale_factor);
+        .register_primary_window(window.title(), size_px, scale_factor, window.has_focus());
     app.world_mut()
         .resource_mut::<RenderSurfaceRegistryResource>()?
         .confirm_surface_attachment(

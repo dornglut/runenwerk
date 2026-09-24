@@ -29,7 +29,7 @@ mod tests {
     #[test]
     fn standalone_workbench_close_policy_approves_primary_close_intent() {
         let mut windows = WindowStateRegistryResource::default();
-        windows.register_primary_window("UI Gallery", (1280, 720), 1.0);
+        windows.register_primary_window("UI Gallery", (1280, 720), 1.0, true);
         windows
             .record_mut(NativeWindowId::primary())
             .expect("primary window record")

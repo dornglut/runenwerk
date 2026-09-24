@@ -465,7 +465,7 @@ mod tests {
         let mut host = EditorHostResource::default();
         let mut transitions = EditorCompositionTransitionRuntimeResource::default();
         let mut windows = WindowStateRegistryResource::default();
-        windows.register_primary_window("Runenwerk", (1280, 720), 1.0);
+        windows.register_primary_window("Runenwerk", (1280, 720), 1.0, true);
         let mut surfaces = RenderSurfaceRegistryResource::default();
         let source_revision = host
             .shell_state
@@ -534,7 +534,7 @@ mod tests {
         let mut host = EditorHostResource::default();
         let mut transitions = EditorCompositionTransitionRuntimeResource::default();
         let mut windows = WindowStateRegistryResource::default();
-        windows.register_primary_window("Runenwerk", (1280, 720), 1.0);
+        windows.register_primary_window("Runenwerk", (1280, 720), 1.0, true);
         let mut surfaces = RenderSurfaceRegistryResource::default();
         let source_revision = host
             .shell_state
@@ -587,7 +587,7 @@ mod tests {
         let mut host = EditorHostResource::default();
         let mut transitions = EditorCompositionTransitionRuntimeResource::default();
         let mut windows = WindowStateRegistryResource::default();
-        windows.register_primary_window("Runenwerk", (1280, 720), 1.0);
+        windows.register_primary_window("Runenwerk", (1280, 720), 1.0, true);
         let mut surfaces = RenderSurfaceRegistryResource::default();
         let source_revision = host
             .shell_state
@@ -723,7 +723,7 @@ mod tests {
         );
         let mut transitions = EditorCompositionTransitionRuntimeResource::default();
         let mut windows = WindowStateRegistryResource::default();
-        windows.register_primary_window("Runenwerk", (1280, 720), 1.0);
+        windows.register_primary_window("Runenwerk", (1280, 720), 1.0, true);
         let mut surfaces = RenderSurfaceRegistryResource::default();
         windows
             .record_mut(NativeWindowId::primary())
@@ -759,7 +759,7 @@ mod tests {
         );
         let mut transitions = EditorCompositionTransitionRuntimeResource::default();
         let mut windows = WindowStateRegistryResource::default();
-        windows.register_primary_window("Runenwerk", (1280, 720), 1.0);
+        windows.register_primary_window("Runenwerk", (1280, 720), 1.0, true);
         let mut surfaces = RenderSurfaceRegistryResource::default();
         windows
             .record_mut(NativeWindowId::primary())

@@ -165,7 +165,7 @@ mod tests {
     #[test]
     fn native_resize_and_scale_events_update_one_record() {
         let mut registry = WindowStateRegistryResource::default();
-        let primary = registry.register_primary_window("Runtime", (1280, 720), 1.0);
+        let primary = registry.register_primary_window("Runtime", (1280, 720), 1.0, true);
         let record = registry.record_mut(primary).unwrap();
 
         apply_native_window_event(
@@ -244,7 +244,7 @@ mod tests {
     #[test]
     fn native_window_events_update_selected_record_only() {
         let mut registry = WindowStateRegistryResource::default();
-        let primary = registry.register_primary_window("Runtime", (1280, 720), 1.0);
+        let primary = registry.register_primary_window("Runtime", (1280, 720), 1.0, true);
         let secondary = registry
             .request_window("Secondary", (640, 480))
             .native_window_id;
@@ -264,7 +264,7 @@ mod tests {
     #[test]
     fn close_and_focus_events_remain_pending_for_product_policy() {
         let mut registry = WindowStateRegistryResource::default();
-        let primary = registry.register_primary_window("Runtime", (1280, 720), 1.0);
+        let primary = registry.register_primary_window("Runtime", (1280, 720), 1.0, true);
         let record = registry.record_mut(primary).unwrap();
 
         apply_native_window_event(record, &PlatformEvent::Focused { focused: false });

@@ -129,7 +129,7 @@ fn viewport_gpu_truth_smoke() {
     app.world_mut()
         .resource_mut::<WindowStateRegistryResource>()
         .expect("window registry should exist")
-        .register_primary_window(window.title(), size_px, scale_factor);
+        .register_primary_window(window.title(), size_px, scale_factor, window.has_focus());
     app.world_mut()
         .resource_mut::<RenderSurfaceRegistryResource>()
         .expect("render surface registry should exist")

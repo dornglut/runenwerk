@@ -86,7 +86,12 @@ impl WinitRunner {
             .world
             .resource_mut::<WindowStateRegistryResource>()
             .context("native Host window registry is unavailable")?
-            .register_primary_window(window.title().to_string(), size_px, scale_factor);
+            .register_primary_window(
+                window.title().to_string(),
+                size_px,
+                scale_factor,
+                window.has_focus(),
+            );
         self.sync_primary_presentation_and_surface_extent(size_px, scale_factor)
     }
 
@@ -352,7 +357,7 @@ impl WinitRunner {
                 realized_title,
                 realized_size_px,
                 realized_scale_factor,
-                false,
+                window.has_focus(),
             );
         }
 
@@ -933,7 +938,7 @@ mod tests {
         app.world_mut()
             .resource_mut::<WindowStateRegistryResource>()
             .expect("native Host test fixture should install window registry")
-            .register_primary_window("test primary", (1280, 720), 1.0);
+            .register_primary_window("test primary", (1280, 720), 1.0, true);
         WinitRunner {
             state: app.into_windowed_state(),
             window: None,

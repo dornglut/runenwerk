@@ -1106,7 +1106,7 @@ mod tests {
     #[test]
     fn primary_focus_state_is_read_from_native_window_registry() {
         let mut windows = WindowStateRegistryResource::default();
-        let primary = windows.register_primary_window("Runenwerk", (1280, 720), 1.0);
+        let primary = windows.register_primary_window("Runenwerk", (1280, 720), 1.0, true);
         assert!(primary_window_is_focused(&windows, primary));
 
         windows.record_mut(primary).unwrap().focused = false;
@@ -1116,7 +1116,7 @@ mod tests {
     #[test]
     fn editor_cursor_intent_updates_primary_native_record() {
         let mut windows = WindowStateRegistryResource::default();
-        let primary = windows.register_primary_window("Runenwerk", (1280, 720), 1.0);
+        let primary = windows.register_primary_window("Runenwerk", (1280, 720), 1.0, true);
 
         set_primary_cursor_intent(&mut windows, primary, ShellCursorIntent::ResizeColumn);
 

@@ -184,13 +184,14 @@ impl WindowStateRegistryResource {
         title: impl Into<String>,
         size_px: (u32, u32),
         scale_factor: f64,
+        focused: bool,
     ) -> NativeWindowId {
         let primary = NativeWindowId::primary();
         self.primary_window_id = Some(primary);
         self.next_window_raw = self.next_window_raw.max(primary.raw().saturating_add(1));
         self.records.insert(
             primary,
-            NativeWindowRecord::created(primary, title, size_px, scale_factor, true),
+            NativeWindowRecord::created(primary, title, size_px, scale_factor, focused),
         );
         primary
     }
@@ -276,7 +277,7 @@ mod tests {
     fn window_registry_registers_primary_without_legacy_mirror() {
         let mut registry = WindowStateRegistryResource::default();
 
-        let primary = registry.register_primary_window("Runtime", (1440, 900), 1.5);
+        let primary = registry.register_primary_window("Runtime", (1440, 900), 1.5, true);
         let record = registry
             .record(primary)
             .expect("primary native window record should be present");
@@ -292,7 +293,7 @@ mod tests {
     #[test]
     fn window_registry_tracks_pending_secondary_window_requests() {
         let mut registry = WindowStateRegistryResource::default();
-        registry.register_primary_window("Runtime", (1280, 720), 1.0);
+        registry.register_primary_window("Runtime", (1280, 720), 1.0, true);
 
         let request = registry.request_window("Secondary", (640, 480));
 
@@ -313,7 +314,7 @@ mod tests {
     #[test]
     fn created_secondary_replaces_requested_record_with_realized_native_facts() {
         let mut registry = WindowStateRegistryResource::default();
-        registry.register_primary_window("Runtime", (1280, 720), 1.0);
+        registry.register_primary_window("Runtime", (1280, 720), 1.0, true);
         let request = registry.request_window("Secondary", (640, 480));
 
         registry.register_created_window(
