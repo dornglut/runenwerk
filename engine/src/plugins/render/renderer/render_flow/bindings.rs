@@ -278,7 +278,7 @@ fn runtime_binding_value(
 ) -> Result<GpuRuntimeBindingValue> {
     let resource = match &value.resource {
         RuntimeBindingResource::TextureView(handle) => GpuRuntimeBindingResource::TextureView(
-            GpuRuntimeTextureViewBinding::new(handle.clone(), GpuTextureViewDimension::D2),
+            GpuRuntimeTextureViewBinding::new(handle.clone()),
         ),
         RuntimeBindingResource::Buffer { handle, size } => {
             let size = NonZeroU64::new(*size).ok_or_else(|| {
@@ -450,21 +450,13 @@ fn gpu_material_runtime_binding_values_for_pass(
         .zip(&resources._texture_views)
         .zip(&resources._samplers)
     {
-        let view_dimension = match binding.texture_kind {
-            crate::plugins::render::PreparedMaterialTextureKind::Texture2D => {
-                GpuTextureViewDimension::D2
-            }
-            crate::plugins::render::PreparedMaterialTextureKind::Texture3D => {
-                GpuTextureViewDimension::D3
-            }
-        };
         values.push(GpuRuntimeBindingValue::new(
             GpuBindingKey::try_new(
                 u64::from(binding.bind_group),
                 u64::from(binding.texture_binding),
             )?,
             [GpuRuntimeBindingResource::TextureView(
-                GpuRuntimeTextureViewBinding::new(view._handle.clone(), view_dimension),
+                GpuRuntimeTextureViewBinding::new(view._handle.clone()),
             )],
         )?);
         values.push(GpuRuntimeBindingValue::new(
