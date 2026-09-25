@@ -661,10 +661,10 @@ mod tests {
     #[test]
     fn input_trace_is_explicit_and_requires_input_integration() {
         let mut bare = App::headless();
-        assert_eq!(
+        assert!(matches!(
             bare.start_automation_input_trace(),
             Err(AutomationInputTraceControlError::TraceIntegrationUnavailable)
-        );
+        ));
 
         let mut missing_input = App::headless();
         missing_input.add_plugin(AutomationInputTracePlugin);
@@ -779,10 +779,10 @@ mod tests {
             input.handle_mouse_wheel_delta(0.5);
         }
 
-        assert_eq!(
+        assert!(matches!(
             app.start_automation_input_trace(),
             Err(AutomationInputTraceControlError::AdmittedInputCaptureAlreadyActive)
-        );
+        ));
         assert_eq!(
             app.world_mut()
                 .resource_mut::<InputState>()
