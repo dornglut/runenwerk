@@ -753,6 +753,7 @@ mod tests {
             submitted_frame_limit: Some(1),
             primary_window_size_px: None,
             radiance_target_size_px: None,
+            quality_capture_output_dir: None,
             completed: false,
         };
         let mut windows = WindowStateRegistryResource::default();
