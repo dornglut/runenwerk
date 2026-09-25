@@ -5,20 +5,22 @@ use engine::plugins::net::{
     NetworkDiagnostics, NetworkOutboundQueue, NetworkServerInbox, NetworkServerOutbox,
     NetworkSessionStatus, OutboundServerMessage, PredictionDiagnostics, ReplicationDiagnostics,
     RunenNetSessionCore, RunenNetSessionProjection, authority_replication_submissions,
-    cancel_authority_replication_submission, client_inbox_is_empty,
-    client_outbox_len, client_prediction_connection_lost,
-    client_prediction_participant_membership_ended, client_prediction_pending_bytes,
-    client_prediction_pending_count, client_prediction_session_closed, client_prediction_state,
-    client_replication_acknowledgement, client_replication_lineage, client_replication_state,
-    enqueue_client_inbox, enqueue_client_outbox, enqueue_server_inbox, enqueue_server_inbox_from,
+    cancel_authority_replication_submission, client_inbox_is_empty, client_outbox_len,
+    client_prediction_connection_lost, client_prediction_participant_membership_ended,
+    client_prediction_pending_bytes, client_prediction_pending_count,
+    client_prediction_session_closed, client_prediction_state, client_replication_acknowledgement,
+    client_replication_lineage, client_replication_state, enqueue_client_inbox,
+    enqueue_client_outbox, enqueue_server_inbox, enqueue_server_inbox_from,
     enqueue_server_outbox_broadcast, record_authority_replication_delivery_acceptance,
-    record_reconnect_attempt,
-    require_client_replication_connection_replacement, server_inbox_is_empty, server_outbox_len,
-    sync_runennet_session_projection,
+    record_reconnect_attempt, require_client_replication_connection_replacement,
+    server_inbox_is_empty, server_outbox_len, sync_runennet_session_projection,
 };
 use engine::plugins::{ScenePlugin, SimulationPlugin, default_plugins};
 use engine::prelude::*;
-use runen_net::{DeliveryAcceptance, identity::{ConnectionHandle, ParticipantId, SessionId}};
+use runen_net::{
+    DeliveryAcceptance,
+    identity::{ConnectionHandle, ParticipantId, SessionId},
+};
 use runen_net::input::{
     AuthorityInputAggregateLimits, AuthorityInputLimits, PredictionInvalidationReason,
     PredictionLimits, PredictionState as RunenNetPredictionState,
@@ -264,7 +266,8 @@ fn test_client_replication_policy_with_state_limit(
 }
 
 fn test_authority_replication_policy() -> AuthorityReplicationPolicy {
-    let state_image = NonZeroUsize::new(64 * 1024).expect("test state-image limit must be non-zero");
+    let state_image =
+        NonZeroUsize::new(64 * 1024).expect("test state-image limit must be non-zero");
     let retention = ReplicationRetentionLimits::new(
         state_image,
         NonZeroUsize::new(64).expect("test retained-image limit must be non-zero"),
@@ -277,8 +280,7 @@ fn test_authority_replication_policy() -> AuthorityReplicationPolicy {
         NonZeroUsize::new(16).expect("test lineage limit must be non-zero"),
         NonZeroUsize::new(4 * 1024 * 1024).expect("test state-byte limit must be non-zero"),
         NonZeroUsize::new(1_024).expect("test retained-image aggregate must be non-zero"),
-        NonZeroUsize::new(16 * 1024 * 1024)
-            .expect("test retained-byte aggregate must be non-zero"),
+        NonZeroUsize::new(16 * 1024 * 1024).expect("test retained-byte aggregate must be non-zero"),
         NonZeroUsize::new(1_024).expect("test emission-evidence aggregate must be non-zero"),
     );
     AuthorityReplicationPolicy::new(aggregate, retention)
