@@ -3,7 +3,7 @@
 
 use std::{collections::BTreeSet, fmt, sync::Arc};
 
-use editor_core::{DocumentId, DocumentKind};
+use editor_core::DocumentKind;
 use editor_shell::{
     EditorToolSuite, HostCapabilityPolicy, PanelInstanceId, ProfileRef, ProviderBundle,
     ProviderBundleError, ProviderFamilyId, ProviderFamilyProviderAssignment,
@@ -514,12 +514,11 @@ fn provider_validation_document_contexts(
     }
 
     let mut contexts = vec![SurfaceDocumentContext::NoActiveDocument];
-    contexts.extend(document_kinds.into_iter().enumerate().map(|(index, kind)| {
-        SurfaceDocumentContext::Resolved {
-            document_id: DocumentId(index as u64 + 1),
-            document_kind: kind,
-        }
-    }));
+    contexts.extend(
+        document_kinds
+            .into_iter()
+            .map(|document_kind| SurfaceDocumentContext::Resolved { document_kind }),
+    );
     contexts
 }
 
@@ -1137,7 +1136,6 @@ mod tests {
             unavailable_content_policy: ui_composition::UnavailableContentPolicy::ShowFallback,
             workspace_profile_id: MATERIAL_WORKSPACE_PROFILE_ID,
             document_context: SurfaceDocumentContext::Resolved {
-                document_id: editor_core::DocumentId(6),
                 document_kind: DocumentKind::MaterialGraph,
             },
             panel_instance_id: PanelInstanceId::try_from_raw(50).unwrap(),
