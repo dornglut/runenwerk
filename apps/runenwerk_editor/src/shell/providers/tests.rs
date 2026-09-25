@@ -288,7 +288,6 @@ fn request() -> SurfaceProviderRequest {
         unavailable_content_policy: ui_composition::UnavailableContentPolicy::ShowFallback,
         workspace_profile_id: LAYOUT_WORKSPACE_PROFILE_ID,
         document_context: SurfaceDocumentContext::Resolved {
-            document_id: editor_core::DocumentId(1),
             document_kind: DocumentKind::Scene,
         },
         panel_instance_id: PanelInstanceId::try_from_raw(3).unwrap(),
@@ -350,7 +349,6 @@ fn m6_material_request(tool_surface_kind: ToolSurfaceKind) -> SurfaceProviderReq
         unavailable_content_policy: ui_composition::UnavailableContentPolicy::ShowFallback,
         workspace_profile_id: editor_shell::MATERIAL_WORKSPACE_PROFILE_ID,
         document_context: SurfaceDocumentContext::Resolved {
-            document_id: editor_core::DocumentId(6),
             document_kind: DocumentKind::MaterialGraph,
         },
         panel_instance_id: PanelInstanceId::try_from_raw(20).unwrap(),
@@ -373,7 +371,6 @@ fn stable_key_only_material_request(
         unavailable_content_policy: ui_composition::UnavailableContentPolicy::ShowFallback,
         workspace_profile_id: editor_shell::MATERIAL_WORKSPACE_PROFILE_ID,
         document_context: SurfaceDocumentContext::Resolved {
-            document_id: editor_core::DocumentId(6),
             document_kind: DocumentKind::MaterialGraph,
         },
         panel_instance_id: PanelInstanceId::try_from_raw(20).unwrap(),
@@ -397,7 +394,6 @@ fn m6_texture_request(tool_surface_kind: ToolSurfaceKind) -> SurfaceProviderRequ
         unavailable_content_policy: ui_composition::UnavailableContentPolicy::ShowFallback,
         workspace_profile_id: editor_shell::TEXTURE_WORKSPACE_PROFILE_ID,
         document_context: SurfaceDocumentContext::Resolved {
-            document_id: editor_core::DocumentId(7),
             document_kind,
         },
         panel_instance_id: PanelInstanceId::try_from_raw(21).unwrap(),
@@ -417,7 +413,6 @@ fn m6_procgen_request(tool_surface_kind: ToolSurfaceKind) -> SurfaceProviderRequ
         unavailable_content_policy: ui_composition::UnavailableContentPolicy::ShowFallback,
         workspace_profile_id: editor_shell::PROCGEN_WORKSPACE_PROFILE_ID,
         document_context: SurfaceDocumentContext::Resolved {
-            document_id: editor_core::DocumentId(9),
             document_kind: DocumentKind::ProceduralGenerationGraph,
         },
         panel_instance_id: PanelInstanceId::try_from_raw(23).unwrap(),
@@ -440,7 +435,6 @@ fn m6_sdf_request(
         unavailable_content_policy: ui_composition::UnavailableContentPolicy::ShowFallback,
         workspace_profile_id: editor_shell::FIELD_WORLD_WORKSPACE_PROFILE_ID,
         document_context: SurfaceDocumentContext::Resolved {
-            document_id: editor_core::DocumentId(8),
             document_kind,
         },
         panel_instance_id: PanelInstanceId::try_from_raw(22).unwrap(),
@@ -2432,30 +2426,6 @@ fn no_active_document_does_not_resolve_scene_provider() {
     );
 
     assert_eq!(frame.availability, SurfaceProviderAvailability::Unsupported);
-    assert!(frame.routes.is_empty());
-}
-
-#[test]
-fn unresolved_document_returns_diagnostic_without_routes() {
-    let registry = EditorSurfaceProviderRegistry::runenwerk_default();
-    let app = RunenwerkEditorApp::new();
-    let shell_state = RunenwerkEditorShellState::new();
-    let theme = ThemeTokens::default();
-    let request = request_with_document_context(
-        SurfaceDocumentContext::Unresolved {
-            document_id: editor_core::DocumentId(99),
-        },
-        ToolSurfaceKind::Inspector,
-    );
-
-    let frame = registry.resolve_frame(
-        &context(&app, &shell_state, &theme),
-        &request,
-        &Default::default(),
-    );
-
-    assert_eq!(frame.availability, SurfaceProviderAvailability::Unsupported);
-    assert!(!frame.artifact.diagnostics.is_empty());
     assert!(frame.routes.is_empty());
 }
 
