@@ -17,10 +17,17 @@ pub trait AppRenderExt {
 
 impl AppRenderExt for App {
     fn add_render_flow(&mut self, flow: RenderFlow) -> &mut Self {
-        if self.world().resource::<RenderFlowRegistryResource>().is_err() {
+        if self
+            .world()
+            .resource::<RenderFlowRegistryResource>()
+            .is_err()
+        {
             self.insert_resource(RenderFlowRegistryResource::default());
         }
-        if let Ok(registry) = self.world_mut().resource_mut::<RenderFlowRegistryResource>() {
+        if let Ok(registry) = self
+            .world_mut()
+            .resource_mut::<RenderFlowRegistryResource>()
+        {
             registry.upsert_flow(flow);
         }
         self
@@ -31,7 +38,10 @@ impl AppRenderExt for App {
         F: FnOnce(&mut RenderDebugControlResource),
     {
         self.init_resource::<RenderDebugControlResource>();
-        if let Ok(control) = self.world_mut().resource_mut::<RenderDebugControlResource>() {
+        if let Ok(control) = self
+            .world_mut()
+            .resource_mut::<RenderDebugControlResource>()
+        {
             update(control);
         }
         self
@@ -48,7 +58,6 @@ impl AppRenderExt for App {
         self
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -91,12 +100,12 @@ mod tests {
             control.provenance_enabled = true;
         });
         app.update_render_debug_config(|config| {
-            config.capture_selectors.push(
-                RenderCaptureSelector::named_pass_surface_color(
+            config
+                .capture_selectors
+                .push(RenderCaptureSelector::named_pass_surface_color(
                     "render.owner.preplugin",
                     "surface",
-                ),
-            );
+                ));
         });
 
         assert!(!render_integration_is_active(app.world()));
