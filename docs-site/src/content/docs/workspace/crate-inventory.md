@@ -27,7 +27,6 @@ Dependency direction, peer-framework ownership, and clean-cutover rules live in 
 - `foundation`: low-level reusable primitives with no domain/runtime/app dependencies.
 - `domain`: engine-agnostic reusable contracts and logic owned by Runenwerk while they remain local.
 - `engine/runtime`: runtime composition, plugins, renderer/backend integration, and app-loop glue.
-- `net`: Runenwerk simulation/history support plus engine-owned networking integration.
 - `app`: runnable applications and tools.
 - `adapter/tool`: external host integrations and tooling glue.
 
@@ -60,6 +59,8 @@ Dependency direction, peer-framework ownership, and clean-cutover rules live in 
 | `material_graph` | `domain/material_graph` | domain | Authored material graphs, catalog boundaries, ratification, lowering, source maps, and formed material products. |
 | `procgen` | `domain/procgen` | domain | Deterministic procgen documents, planning metadata, ratification, lowering, and product publication. |
 | `drawing` | `domain/drawing` | domain | Drawing documents, strokes, brushes, composition, commands, ratification, and tile formation contracts. |
+| `engine_sim` | `domain/simulation` | domain | Simulation identity, tick, hash, profile, RNG, and snapshot-codec vocabulary. |
+| `engine_replay` | `domain/replay` | domain | Replay/history/archive/controller/policy/validation substrate. |
 
 Reusable spatial identity/addressing mechanics are not local workspace crates; Runenwerk consumes standalone `runen-spatial` and retains world/product integration in the owners above.
 
@@ -115,14 +116,12 @@ Reusable spatial identity/addressing mechanics are not local workspace crates; R
 | `editor_inspector` | `domain/editor/editor_inspector` | domain | Inspector model, editing, target resolution, bridge, schema interop, session, and validation. |
 | `editor_persistence` | `domain/editor/editor_persistence` | domain | Editor persistence formats, codecs, migration, normalization, formation, and change-log contracts. |
 
-### Engine and networking
+### Engine runtime
 
 | Crate | Path | Layer | Purpose |
 | --- | --- | --- | --- |
 | `engine` | `engine` | engine/runtime | App/runtime/plugin composition and render/input/time/scene/world/net integration. |
 | `engine_render_macros` | `engine_render_macros` | engine/runtime | Render derive macros for GPU parameter contracts. |
-| `engine_sim` | `net/engine_sim` | net | Simulation identity, tick, hash, profile, RNG, command-frame, and codec vocabulary. |
-| `engine_replay` | `net/engine_history` | net | Replay/history/archive/controller/policy/validation substrate. |
 
 Concrete QUIC realization is consumed from external `runen-net-quic` where required; there is no local `net/engine_net_quic` workspace crate.
 

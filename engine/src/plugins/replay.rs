@@ -26,7 +26,7 @@ pub enum ReplayMode {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, runen_ecs::Component, runen_ecs::Resource)]
 pub struct ReplaySessionInfo {
-    pub session_id: SimulationSessionId,
+    pub session_id: Option<SimulationSessionId>,
     pub seed: SimulationSeed,
     pub tick_rate_hz: u16,
 }
@@ -34,7 +34,7 @@ pub struct ReplaySessionInfo {
 impl Default for ReplaySessionInfo {
     fn default() -> Self {
         Self {
-            session_id: SimulationSessionId::default(),
+            session_id: None,
             seed: SimulationSeed::default(),
             tick_rate_hz: 60,
         }
@@ -143,11 +143,9 @@ pub(crate) fn start_recording(world: &mut runen_ecs::World) -> Result<()> {
         .ok()
         .copied()
         .unwrap_or_default();
-    let session_id = world
+    let session_id = *world
         .resource::<SimulationSessionId>()
-        .ok()
-        .copied()
-        .unwrap_or_default();
+        .map_err(|_| anyhow!("replay recording requires an active SimulationSessionId"))?;
     let tick_rate_hz = fixed_tick_rate(world);
     let (checkpoint_policy, storage_policy) = {
         let recorder = world
@@ -169,7 +167,7 @@ pub(crate) fn start_recording(world: &mut runen_ecs::World) -> Result<()> {
 
     if let Ok(info) = world.resource_mut::<ReplaySessionInfo>() {
         *info = ReplaySessionInfo {
-            session_id,
+            session_id: Some(session_id),
             seed,
             tick_rate_hz,
         };

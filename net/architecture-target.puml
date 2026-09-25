@@ -26,9 +26,9 @@ package "external RunenNet" {
   [runen-net-quic] as runennet_quic
 }
 
-package "retained non-network Runenwerk concerns" {
-  [engine_sim] as engine_sim
-  [engine_history] as engine_history
+package "retained non-network Runenwerk domains" {
+  [domain/simulation\n(engine_sim)] as engine_sim
+  [domain/replay\n(engine_replay)] as engine_replay
 }
 
 game_sim --> replicated_view
@@ -46,7 +46,8 @@ runennet_quic --> runennet_delivery
 presentation --> ecs_adapter
 
 engine_sim --> game_sim : host simulation vocabulary
-engine_history --> app_lifecycle : archive / replay integration
+engine_replay --> app_lifecycle : archive / replay integration
+engine_replay --> engine_sim : simulation provenance
 
 note right of runennet_replication
 RunenNet is the sole reusable
@@ -59,7 +60,7 @@ mapping and lifecycle composition,
 not duplicate networking semantics.
 end note
 
-note bottom of engine_history
+note bottom of engine_replay
 engine_net, engine_net_quic, and old
 network authoring macros are absent
 once their maintained consumers migrate.

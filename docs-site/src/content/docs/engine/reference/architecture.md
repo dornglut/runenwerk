@@ -169,8 +169,8 @@ The cadence executor does not import, install, or mutate `SimulationTick`.
 
 ## Simulation Integration Contract
 
-`SimulationPlugin` is Runenwerk's explicit integration provider for the existing `engine_sim`
-owner state:
+`SimulationPlugin` is Runenwerk's explicit integration provider for the `engine_sim` domain at
+`domain/simulation`:
 
 ```text
 SimulationTick
@@ -180,10 +180,11 @@ SimulationSeed
 SimulationRng
 ```
 
-The plugin preserves explicitly supplied owner state. When the plugin is composed with
-`FixedStepPlugin`, it advances `SimulationTick` exactly once in `FixedStepBegin`, before
-`FixedUpdate`. Selecting Simulation alone does not activate cadence; selecting FixedStep alone does
-not manufacture simulation identity.
+The plugin preserves explicitly supplied owner state. When no `SimulationSessionId` is supplied,
+the plugin installs the App-local initial session identity; the identity value type itself owns no
+process-global allocator. When the plugin is composed with `FixedStepPlugin`, it advances
+`SimulationTick` exactly once in `FixedStepBegin`, before `FixedUpdate`. Selecting Simulation
+alone does not activate cadence; selecting FixedStep alone does not manufacture simulation identity.
 
 `App::set_simulation_profile`, `App::set_authority_role`, and `App::set_simulation_seed` are explicit
 composition commands that may materialize the same owner configuration state before plugin
@@ -219,7 +220,7 @@ Headless execution can carry presentation metrics when a selected consumer such 
 - `engine` consumes the exact standalone `runen-ecs` dependency for ECS world, resource, component, query, system, schedule, and deferred-command contracts.
 - `engine` owns Runenwerk host lifecycle, schedule invocation, plugin composition, and product/publication policy around those framework contracts.
 - `engine` consumes `engine_sim` and `engine_replay` for local simulation/history concerns and standalone RunenNet for reusable networking semantics; engine Net integration is owned directly under `engine/src/plugins/net`.
-- `engine` does not own standalone RunenECS internals or the internals of local domain/net crates.
+- `engine` does not own standalone RunenECS internals or the internals of local domain crates.
 
 For reusable RunenECS semantics and current framework architecture, use [standalone RunenECS](https://github.com/dornglut/runen-ecs/blob/main/ARCHITECTURE.md). For API/examples matching this Runenwerk checkout, use the [package guide at the exact consumed revision](https://github.com/dornglut/runen-ecs/blob/6a7af7bbd15da960ce0b68484b446134940fa479/crates/runen-ecs/README.md).
 

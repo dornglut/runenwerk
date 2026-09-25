@@ -1,7 +1,6 @@
 use crate::WorldHash;
 use engine_sim::{
-    DeterminismLevel, SimulationCommandFrame, SimulationProfile, SimulationSeed,
-    SimulationSessionId, SimulationTick,
+    DeterminismLevel, SimulationProfile, SimulationSeed, SimulationSessionId, SimulationTick,
 };
 use serde::{Deserialize, Serialize};
 
@@ -38,14 +37,4 @@ pub struct ReplayJournalFrame<C> {
     pub tick: SimulationTick,
     pub commands: Vec<C>,
     pub post_hash: Option<WorldHash>,
-}
-
-impl<C> From<SimulationCommandFrame<C>> for ReplayJournalFrame<C> {
-    fn from(value: SimulationCommandFrame<C>) -> Self {
-        Self {
-            tick: value.tick,
-            commands: value.commands,
-            post_hash: None,
-        }
-    }
 }

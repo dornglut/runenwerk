@@ -1,5 +1,6 @@
 use engine::plugins::{
-    ReplayControllerResource, ReplayRecorderResource, ReplayState, ScenePlugin, default_plugins,
+    ReplayControllerResource, ReplayPlugin, ReplayRecorderResource, ReplaySessionInfo, ReplayState,
+    ScenePlugin, default_plugins,
 };
 use engine::prelude::*;
 
@@ -28,6 +29,59 @@ fn public_replay_resources_do_not_activate_replay_controls() {
     };
 
     assert!(format!("{error:#}").contains("ReplayPlugin is not installed"));
+}
+
+#[test]
+fn replay_passive_state_does_not_manufacture_simulation_identity() {
+    let mut app = App::headless();
+    app.add_plugin(ReplayPlugin);
+
+    let info = app
+        .world()
+        .resource::<ReplaySessionInfo>()
+        .expect("ReplayPlugin should install passive replay session state");
+    assert_eq!(info.session_id, None);
+    assert!(app.world().resource::<SimulationSessionId>().is_err());
+
+    let error = match app.start_recording() {
+        Ok(_) => panic!("recording without simulation identity must fail closed"),
+        Err(error) => error,
+    };
+    assert!(
+        format!("{error:#}").contains("active SimulationSessionId"),
+        "recording must require simulation-owned provenance: {error:#}"
+    );
+}
+
+#[test]
+fn replay_recording_reuses_active_simulation_session_identity() {
+    let mut app = App::headless();
+    let session = SimulationSessionId(77);
+    app.insert_resource(session);
+    app.add_plugins(default_plugins());
+
+    assert_eq!(
+        app.world()
+            .resource::<ReplaySessionInfo>()
+            .expect("ReplayPlugin should install passive replay state")
+            .session_id,
+        None,
+        "passive replay state must not allocate or copy session identity"
+    );
+
+    app.start_recording()
+        .expect("recording should reuse the active simulation identity");
+    assert_eq!(
+        app.world()
+            .resource::<ReplaySessionInfo>()
+            .expect("recording should project replay session info")
+            .session_id,
+        Some(session)
+    );
+
+    let archive = app.stop_recording().expect("recording should stop cleanly");
+    assert_eq!(archive.header.format_version, 1);
+    assert_eq!(archive.header.session_id, session);
 }
 
 #[test]

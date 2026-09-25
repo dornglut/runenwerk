@@ -30,6 +30,10 @@ The plugin non-overwritingly provides:
 When a seed exists but an RNG does not, the RNG is initialized from the effective seed. Explicitly
 supplied owner state is preserved.
 
+`SimulationSessionId` is a passive value type and owns no process-global allocator. When no session
+identity was supplied, `SimulationPlugin` installs an App-local initial identity; independent Apps
+therefore do not consume shared process identity state.
+
 ## Minimal Setup
 
 ```rust
