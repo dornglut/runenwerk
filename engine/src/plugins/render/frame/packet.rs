@@ -463,6 +463,7 @@ impl PreparedFlowInvocationRequest {
 pub enum PreparedRenderFrameRequestKind {
     View,
     Invocation,
+    AutomaticMainReplacement,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -471,6 +472,7 @@ pub struct PreparedRenderFrameRequestDiagnostic {
     pub existing_producer_id: Option<RenderFrameProducerId>,
     pub view_id: Option<String>,
     pub invocation_id: Option<PreparedFlowInvocationId>,
+    pub flow_id: Option<RenderFlowId>,
     pub request_kind: PreparedRenderFrameRequestKind,
     pub message: String,
 }
@@ -507,6 +509,28 @@ pub enum PreparedRenderFrameRequestError {
         existing_producer_id: RenderFrameProducerId,
         invocation_id: PreparedFlowInvocationId,
     },
+    #[error(
+        "prepared render frame producer {producer_id:?} publishes duplicate automatic-main replacement for flow {flow_id:?} within one contribution"
+    )]
+    DuplicateAutomaticMainReplacementWithinProducer {
+        producer_id: RenderFrameProducerId,
+        flow_id: RenderFlowId,
+    },
+    #[error(
+        "prepared render frame producer {producer_id:?} requests automatic-main replacement for flow {flow_id:?} without an explicit invocation for that flow"
+    )]
+    AutomaticMainReplacementMissingInvocation {
+        producer_id: RenderFrameProducerId,
+        flow_id: RenderFlowId,
+    },
+    #[error(
+        "prepared render frame producer {producer_id:?} requests automatic-main replacement for flow {flow_id:?} already owned by producer {existing_producer_id:?}"
+    )]
+    DuplicateAutomaticMainReplacementAcrossProducers {
+        producer_id: RenderFrameProducerId,
+        existing_producer_id: RenderFrameProducerId,
+        flow_id: RenderFlowId,
+    },
 }
 
 impl PreparedRenderFrameRequestError {
@@ -520,6 +544,7 @@ impl PreparedRenderFrameRequestError {
                 existing_producer_id: None,
                 view_id: Some(view_id.clone()),
                 invocation_id: None,
+                flow_id: None,
                 request_kind: PreparedRenderFrameRequestKind::View,
                 message: self.to_string(),
             },
@@ -532,6 +557,7 @@ impl PreparedRenderFrameRequestError {
                 existing_producer_id: Some(*existing_producer_id),
                 view_id: Some(view_id.clone()),
                 invocation_id: None,
+                flow_id: None,
                 request_kind: PreparedRenderFrameRequestKind::View,
                 message: self.to_string(),
             },
@@ -543,6 +569,7 @@ impl PreparedRenderFrameRequestError {
                 existing_producer_id: None,
                 view_id: None,
                 invocation_id: Some(invocation_id.clone()),
+                flow_id: None,
                 request_kind: PreparedRenderFrameRequestKind::Invocation,
                 message: self.to_string(),
             },
@@ -555,7 +582,37 @@ impl PreparedRenderFrameRequestError {
                 existing_producer_id: Some(*existing_producer_id),
                 view_id: None,
                 invocation_id: Some(invocation_id.clone()),
+                flow_id: None,
                 request_kind: PreparedRenderFrameRequestKind::Invocation,
+                message: self.to_string(),
+            },
+            Self::DuplicateAutomaticMainReplacementWithinProducer {
+                producer_id,
+                flow_id,
+            }
+            | Self::AutomaticMainReplacementMissingInvocation {
+                producer_id,
+                flow_id,
+            } => PreparedRenderFrameRequestDiagnostic {
+                producer_id: *producer_id,
+                existing_producer_id: None,
+                view_id: None,
+                invocation_id: None,
+                flow_id: Some(*flow_id),
+                request_kind: PreparedRenderFrameRequestKind::AutomaticMainReplacement,
+                message: self.to_string(),
+            },
+            Self::DuplicateAutomaticMainReplacementAcrossProducers {
+                producer_id,
+                existing_producer_id,
+                flow_id,
+            } => PreparedRenderFrameRequestDiagnostic {
+                producer_id: *producer_id,
+                existing_producer_id: Some(*existing_producer_id),
+                view_id: None,
+                invocation_id: None,
+                flow_id: Some(*flow_id),
+                request_kind: PreparedRenderFrameRequestKind::AutomaticMainReplacement,
                 message: self.to_string(),
             },
         }
@@ -572,6 +629,7 @@ pub struct PreparedRenderFrameRequestResource {
 pub struct PreparedRenderFrameRequestContribution {
     views: BTreeMap<String, PreparedViewFrame>,
     flow_invocations: Vec<PreparedFlowInvocationRequest>,
+    automatic_main_replacements: BTreeSet<RenderFlowId>,
 }
 
 impl PreparedRenderFrameRequestResource {
@@ -597,12 +655,29 @@ impl PreparedRenderFrameRequestResource {
         flow_invocations: impl IntoIterator<Item = PreparedFlowInvocationRequest>,
     ) -> Result<Option<PreparedRenderFrameRequestContribution>, PreparedRenderFrameRequestError>
     {
+        self.replace_contribution_with_automatic_main_replacements(
+            producer_id,
+            views,
+            flow_invocations,
+            std::iter::empty::<RenderFlowId>(),
+        )
+    }
+
+    pub fn replace_contribution_with_automatic_main_replacements(
+        &mut self,
+        producer_id: impl Into<RenderFrameProducerId>,
+        views: impl IntoIterator<Item = PreparedViewFrame>,
+        flow_invocations: impl IntoIterator<Item = PreparedFlowInvocationRequest>,
+        automatic_main_replacements: impl IntoIterator<Item = RenderFlowId>,
+    ) -> Result<Option<PreparedRenderFrameRequestContribution>, PreparedRenderFrameRequestError>
+    {
         let producer_id = producer_id.into();
         self.clear_diagnostics_for_producer(&producer_id);
         let contribution = match PreparedRenderFrameRequestContribution::from_requests(
             &producer_id,
             views,
             flow_invocations,
+            automatic_main_replacements,
         ) {
             Ok(contribution) => contribution,
             Err(error) => {
@@ -635,6 +710,20 @@ impl PreparedRenderFrameRequestResource {
             .collect()
     }
 
+    pub fn automatic_main_replacement_owner(
+        &self,
+        flow_id: RenderFlowId,
+    ) -> Option<RenderFrameProducerId> {
+        self.contributions
+            .iter()
+            .find_map(|(producer_id, contribution)| {
+                contribution
+                    .automatic_main_replacements
+                    .contains(&flow_id)
+                    .then_some(*producer_id)
+            })
+    }
+
     pub fn is_empty(&self) -> bool {
         self.contributions.is_empty()
     }
@@ -647,6 +736,8 @@ impl PreparedRenderFrameRequestResource {
         let mut view_ids = BTreeMap::<&str, &RenderFrameProducerId>::new();
         let mut invocation_ids =
             BTreeMap::<&PreparedFlowInvocationId, &RenderFrameProducerId>::new();
+        let mut automatic_main_replacement_owners =
+            BTreeMap::<RenderFlowId, &RenderFrameProducerId>::new();
 
         for (existing_producer_id, contribution) in &self.contributions {
             if existing_producer_id == producer_id {
@@ -657,6 +748,9 @@ impl PreparedRenderFrameRequestResource {
             }
             for request in &contribution.flow_invocations {
                 invocation_ids.insert(&request.invocation_id, existing_producer_id);
+            }
+            for flow_id in &contribution.automatic_main_replacements {
+                automatic_main_replacement_owners.insert(*flow_id, existing_producer_id);
             }
         }
 
@@ -682,6 +776,17 @@ impl PreparedRenderFrameRequestResource {
                 );
             }
         }
+        for flow_id in &replacement.automatic_main_replacements {
+            if let Some(existing_producer_id) = automatic_main_replacement_owners.get(flow_id) {
+                return Err(
+                    PreparedRenderFrameRequestError::DuplicateAutomaticMainReplacementAcrossProducers {
+                        producer_id: *producer_id,
+                        existing_producer_id: **existing_producer_id,
+                        flow_id: *flow_id,
+                    },
+                );
+            }
+        }
 
         Ok(())
     }
@@ -703,6 +808,7 @@ impl PreparedRenderFrameRequestContribution {
         producer_id: &RenderFrameProducerId,
         views: impl IntoIterator<Item = PreparedViewFrame>,
         flow_invocations: impl IntoIterator<Item = PreparedFlowInvocationRequest>,
+        automatic_main_replacements: impl IntoIterator<Item = RenderFlowId>,
     ) -> Result<Self, PreparedRenderFrameRequestError> {
         let mut view_map = BTreeMap::<String, PreparedViewFrame>::new();
         for view in views {
@@ -730,9 +836,35 @@ impl PreparedRenderFrameRequestContribution {
             }
         }
 
+        let mut replacement_set = BTreeSet::<RenderFlowId>::new();
+        for flow_id in automatic_main_replacements {
+            if !replacement_set.insert(flow_id) {
+                return Err(
+                    PreparedRenderFrameRequestError::DuplicateAutomaticMainReplacementWithinProducer {
+                        producer_id: *producer_id,
+                        flow_id,
+                    },
+                );
+            }
+        }
+        for flow_id in &replacement_set {
+            if !flow_invocations
+                .iter()
+                .any(|request| request.flow_id == *flow_id)
+            {
+                return Err(
+                    PreparedRenderFrameRequestError::AutomaticMainReplacementMissingInvocation {
+                        producer_id: *producer_id,
+                        flow_id: *flow_id,
+                    },
+                );
+            }
+        }
+
         Ok(Self {
             views: view_map,
             flow_invocations,
+            automatic_main_replacements: replacement_set,
         })
     }
 }
