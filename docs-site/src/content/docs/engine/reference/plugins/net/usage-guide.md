@@ -5,21 +5,21 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-14
+last_reviewed: 2026-09-25
 ---
 
 # Net Plugin Usage Guide
 
 ## Purpose
 
-Install the current Runenwerk engine integration for retained networking migration consumers without recreating lifecycle, delivery, transport, simulation, or cadence authority owned elsewhere.
+Install the current Runenwerk Engine networking integration without recreating lifecycle, delivery, transport, simulation, or cadence authority owned elsewhere.
 
 ## Entry Points
 
 - Module: `engine/src/plugins/net/plugin.rs`
 - Entry: `NetPlugin<TDriver>`
 - Local README: [Net Plugin](../../../plugins/net/README.md)
-- Detailed retained low-level guide: [Networking Usage Guide](../../../plugins/net/networking-usage-guide.md)
+- Detailed low-level expert guide: [Networking Usage Guide](../../../plugins/net/networking-usage-guide.md)
 
 ## Composition
 
@@ -34,7 +34,7 @@ app.add_plugin(SimulationPlugin);
 app.add_plugin(NetPlugin::<MyDriver>::new(NetRole::Client));
 ```
 
-Use `NetRole::Server` or `NetRole::Host` for the corresponding retained integration role.
+Use `NetRole::Server` or `NetRole::Host` for the corresponding integration role.
 
 Networking systems that run in `FixedUpdate` also require explicit fixed cadence:
 
@@ -55,14 +55,14 @@ through `RunenNetSessionProjection`.
 ## Runtime Contract
 
 - Schedule placement: `PreUpdate`, `FixedUpdate`, `FrameEnd`.
-- Connection identity for retained routing/state: RunenNet `ConnectionHandle`.
+- Connection identity for Engine routing/integration state: RunenNet `ConnectionHandle`.
 - Lifecycle authority: standalone RunenNet, not the Net plugin or `engine_net`.
 - Simulation identity/configuration: consumed from `SimulationPlugin` integration; not owned by Net.
 - Fixed cadence: consumed when fixed networking systems are intended to run; not activated by Net.
 - Engine inbox/outbox and `NetworkInboundQueue` / `NetworkOutboundQueue`: bounded staging/projection only.
-- Concrete transport realization: separate adapter/product concern; `engine_net` is not a transport runtime.
+- Concrete transport realization: separate adapter/product concern; the deleted `engine_net` shell is not a transport runtime or compatibility surface.
 
-The current plugin remains transitional RN8 integration. It does not define the future ordinary multiplayer authoring syntax or authorize the next RN8 cut.
+The current plugin is the maintained low-level/expert Engine integration. It does not define the future ordinary multiplayer authoring syntax or authorize final Replicated View syntax under #322.
 
 ## Related
 

@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-09-11
+last_reviewed: 2026-09-25
 ---
 
 # Intra‑Crate Module Structure Guidelines
@@ -276,7 +276,7 @@ Use these rules:
 
 - `domain/` for Runenwerk-owned engine-agnostic domain contracts and logic
 - `engine/` for Runenwerk runtime composition, plugins, rendering integration, input, scene, UI, and time
-- `net/` for the remaining Runenwerk simulation/history/network-authoring and migration surfaces; reusable realtime-networking semantics belong to standalone RunenNet
+- `net/` for the remaining Runenwerk simulation/history packages; realtime networking integration lives under `engine/src/plugins/net`, while reusable realtime-networking semantics belong to standalone RunenNet
 - `apps/` for process wiring, config loading, product policy, and external service integration
 - `adapters/` for explicit external runtime/engine integration glue
 
@@ -376,7 +376,7 @@ Owner:
 - repository: standalone `dornglut/runen-net`
 - package/subsystem: the owning RunenNet replication/delivery contract
 
-If the change is only to Runenwerk's still-retained migration adapter/state, keep that narrower change in the current `net/engine_net` migration surface instead of redefining the reusable contract.
+If the change is only to Runenwerk-specific Engine networking integration, keep that narrower change under `engine/src/plugins/net` instead of redefining the reusable RunenNet contract.
 
 ### Example B: change QUIC datagram MTU safety logic
 Owner:
