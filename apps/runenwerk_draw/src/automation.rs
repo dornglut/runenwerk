@@ -78,8 +78,8 @@ mod tests {
         AppAutomationInputReplayExt, AppAutomationInputTraceExt, AutomationInputReplayOutcome,
         AutomationInputReplaySourceMap, AutomationInputReplayStateAssumption,
         AutomationInputTracePlugin, AutomationInputTraceRecordingWitness, AutomationSession,
-        AutomationSessionId, AutomationStepResult, InputSourceId,
-        export_automation_input_trace_v1, import_automation_input_trace_v1,
+        AutomationSessionId, AutomationStepResult, InputSourceId, export_automation_input_trace_v1,
+        import_automation_input_trace_v1,
     };
     use engine::prelude::App;
     use native_tablet_input::{
@@ -142,8 +142,8 @@ mod tests {
 
     #[test]
     fn document_target_fails_closed_when_identity_is_stale() {
-        let mut app =
-            crate::runtime::build_headless_app().expect("headless Draw automation fixture should build");
+        let mut app = crate::runtime::build_headless_app()
+            .expect("headless Draw automation fixture should build");
         let stale = DrawingAutomationTarget {
             document_id: DrawingDocumentId::new(u64::MAX),
         };
@@ -153,13 +153,17 @@ mod tests {
             .expect("headless Draw should install DrawingHostResource");
         let mut adapter = DrawingAutomationAdapter::new(host);
 
-        assert!(adapter.query(&stale, DrawingAutomationQuery::Document).is_err());
+        assert!(
+            adapter
+                .query(&stale, DrawingAutomationQuery::Document)
+                .is_err()
+        );
     }
 
     #[test]
     fn persisted_atomic_tablet_trace_replays_to_the_same_drawing_document() {
-        let mut recording =
-            crate::runtime::build_headless_app().expect("headless Draw automation fixture should build");
+        let mut recording = crate::runtime::build_headless_app()
+            .expect("headless Draw automation fixture should build");
         recording.add_plugin(AutomationInputTracePlugin);
         recording
             .start_automation_input_trace()
@@ -276,8 +280,8 @@ mod tests {
         assert_ne!(recorded_source, replay_source);
         let source_map = AutomationInputReplaySourceMap::new([(recorded_source, replay_source)]);
 
-        let mut replay =
-            crate::runtime::build_headless_app().expect("fresh headless Draw replay target should build");
+        let mut replay = crate::runtime::build_headless_app()
+            .expect("fresh headless Draw replay target should build");
         let replay_target = current_target(&replay);
         assert_eq!(
             replay_target, target,
