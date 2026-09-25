@@ -214,6 +214,60 @@ fn replay_preflight_rejects_capture_trace_dirty_projection_and_used_pointer_conf
     );
 }
 
+#[test]
+fn replay_requires_headless_host_and_teardown_cleans_extended_pointer_buttons() {
+    let trace = one_frame_trace(vec![InputObservationGroup::single(
+        InputContext::new(InputSourceId::new(2_015), None),
+        InputObservation::PointerButton(PointerButtonInput {
+            button: PointerButton::Back,
+            state: DigitalState::Pressed,
+        }),
+    )]);
+    let mapping = source_map([(2_015, 9_015)]);
+
+    let mut native = App::new();
+    native.add_plugin(InputFinalizePlugin);
+    let native_report = native.replay_automation_input_trace(
+        &trace,
+        &mapping,
+        AutomationInputReplayInitialState::RecordedSourcesNeutralAtCaptureStart,
+    );
+    assert_eq!(
+        native_report.outcome(),
+        AutomationInputReplayOutcome::TargetStateConflict
+    );
+    assert_eq!(native_report.completed_frames(), 0);
+
+    let mut headless = replay_app();
+    let headless_report = headless.replay_automation_input_trace(
+        &trace,
+        &mapping,
+        AutomationInputReplayInitialState::RecordedSourcesNeutralAtCaptureStart,
+    );
+    assert_eq!(
+        headless_report.outcome(),
+        AutomationInputReplayOutcome::Completed
+    );
+    assert!(
+        headless
+            .world()
+            .resource::<InputState>()
+            .unwrap()
+            .pointer_button_down_anywhere(PointerButton::Back)
+    );
+
+    headless
+        .teardown_automation_input_replay(&trace, &mapping)
+        .expect("teardown should clean the replay-owned Back button source");
+    assert!(
+        !headless
+            .world()
+            .resource::<InputState>()
+            .unwrap()
+            .pointer_button_down_anywhere(PointerButton::Back)
+    );
+}
+
 #[derive(Debug, Default, runen_ecs::Resource)]
 struct ReplayFrameCounter(u64);
 
