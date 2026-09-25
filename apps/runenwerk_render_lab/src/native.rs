@@ -64,6 +64,7 @@ struct RenderLabTemporalQualityCaptureEvidence {
     terminal: &'static str,
     artifact_path: String,
     artifact_blake3: String,
+    artifact_manifest_path: Option<String>,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -76,6 +77,7 @@ struct RenderLabTemporalQualityArtifact {
     capture: RenderLabTemporalQualityCaptureEvidence,
 }
 
+const RL2_QUALITY_SCENARIO_ID: &str = "runenwerk.render_lab.rl2.temporal_quality";
 const RL2_QUALITY_FLOW_ID: &str = "runenwerk.render_lab.rl2.fixed_quality";
 const RL2_QUALITY_PASS_ID: &str = "runenwerk.render_lab.rl2.fixed_quality.compose";
 const RL2_QUALITY_COLOR_ALIAS: &str = "runenwerk.render_lab.rl2.fixed_quality.color";
@@ -459,6 +461,112 @@ pub(super) fn render_lab_flow() -> Result<RenderFlow> {
         .validate()
 }
 
+fn temporal_quality_capture_evidence(
+    report_state: &RenderDebugFrameReportState,
+) -> Result<Option<RenderLabTemporalQualityCaptureEvidence>> {
+    let Some(report) = report_state.latest.as_ref() else {
+        return Ok(None);
+    };
+    let Some(result) = report.capture_results.first() else {
+        return Ok(None);
+    };
+    if result.terminal.code != RenderCaptureTerminalCode::Completed {
+        let reason = result
+            .terminal
+            .reason
+            .as_ref()
+            .map(|reason| format!("{}: {}", reason.code, reason.detail))
+            .unwrap_or_else(|| "no terminal reason".to_string());
+        bail!(
+            "temporal quality capture for frame {} terminated as {} ({reason})",
+            report.frame_index,
+            result.terminal.code.as_str()
+        );
+    }
+    let artifact_path = result.artifact_path.as_ref().ok_or_else(|| {
+        anyhow::anyhow!(
+            "temporal quality capture for frame {} completed without an exported artifact path",
+            report.frame_index
+        )
+    })?;
+    let bytes = fs::read(artifact_path).with_context(|| {
+        format!(
+            "read temporal quality capture artifact {}",
+            artifact_path.display()
+        )
+    })?;
+    let frame_index = result
+        .frame_identity
+        .as_ref()
+        .map(|identity| identity.frame_index)
+        .unwrap_or(report.frame_index);
+
+    Ok(Some(RenderLabTemporalQualityCaptureEvidence {
+        frame_index,
+        flow_id: result.capture_point.flow_id.clone(),
+        pass_id: result.capture_point.pass_id.clone(),
+        resource_id: result.capture_point.resource_id.clone(),
+        terminal: result.terminal.code.as_str(),
+        artifact_path: artifact_path.to_string_lossy().into_owned(),
+        artifact_blake3: format!("blake3:{}", blake3::hash(&bytes).to_hex()),
+        artifact_manifest_path: report
+            .artifact_manifest_path
+            .as_ref()
+            .map(|path| path.to_string_lossy().into_owned()),
+    }))
+}
+
+fn write_temporal_quality_artifact(
+    measurement: &RenderLabMeasurementConfig,
+    quality_execution: &RenderLabTemporalQualityExecutionState,
+    capture: RenderLabTemporalQualityCaptureEvidence,
+) -> Result<()> {
+    let capture_root = measurement
+        .quality_capture_output_dir
+        .as_deref()
+        .ok_or_else(|| anyhow::anyhow!("temporal quality capture output directory is unavailable"))?;
+    let output_root = capture_root.parent().ok_or_else(|| {
+        anyhow::anyhow!(
+            "temporal quality capture directory {} has no evidence output parent",
+            capture_root.display()
+        )
+    })?;
+    let requested_internal = measurement
+        .radiance_target_size_px
+        .ok_or_else(|| anyhow::anyhow!("temporal quality requested internal extent is unavailable"))?;
+    let requested_output = measurement
+        .primary_window_size_px
+        .ok_or_else(|| anyhow::anyhow!("temporal quality requested output extent is unavailable"))?;
+    let execution = quality_execution
+        .frame(capture.frame_index)
+        .cloned()
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "temporal quality capture frame {} has no correlated prepared-frame execution evidence",
+                capture.frame_index
+            )
+        })?;
+    let artifact = RenderLabTemporalQualityArtifact {
+        schema_version: 1,
+        scenario_id: RL2_QUALITY_SCENARIO_ID,
+        requested_internal_size_px: [requested_internal.0, requested_internal.1],
+        requested_output_size_px: [requested_output.0, requested_output.1],
+        execution,
+        capture,
+    };
+    let path = output_root.join("quality-evidence.json");
+    fs::create_dir_all(output_root).with_context(|| {
+        format!(
+            "create temporal quality evidence directory {}",
+            output_root.display()
+        )
+    })?;
+    let bytes = serde_json::to_vec_pretty(&artifact)
+        .context("serialize temporal quality execution and capture evidence")?;
+    fs::write(&path, bytes)
+        .with_context(|| format!("write temporal quality evidence {}", path.display()))
+}
+
 fn bounded_measurement_complete(
     measurement: &RenderLabMeasurementConfig,
     history: &RenderFrameHistoryState,
@@ -473,6 +581,8 @@ fn complete_render_lab_measurement_if_requested(
     windows: &mut WindowStateRegistryResource,
     measurement: &mut RenderLabMeasurementConfig,
     history: &RenderFrameHistoryState,
+    quality_execution: &RenderLabTemporalQualityExecutionState,
+    debug_report: &RenderDebugFrameReportState,
 ) -> Result<()> {
     let Some(primary_window_id) = windows.primary_window_id() else {
         return Ok(());
@@ -480,14 +590,30 @@ fn complete_render_lab_measurement_if_requested(
     let close_intent_pending = windows
         .record(primary_window_id)
         .is_some_and(|window| window.close_intent_pending);
-    let bounded_complete = bounded_measurement_complete(measurement, history);
+    let bounded_frames_complete = bounded_measurement_complete(measurement, history);
+    let quality_capture = if measurement.quality_capture_output_dir.is_some()
+        && (bounded_frames_complete || close_intent_pending)
+    {
+        temporal_quality_capture_evidence(debug_report)?
+    } else {
+        None
+    };
+    let quality_ready =
+        measurement.quality_capture_output_dir.is_none() || quality_capture.is_some();
+    let bounded_complete = bounded_frames_complete && quality_ready;
     if !close_intent_pending && !bounded_complete {
         return Ok(());
+    }
+    if close_intent_pending && !quality_ready {
+        bail!("temporal quality run cannot close before a completed exported capture is available");
     }
 
     if !measurement.completed {
         if let Some(output_path) = measurement.output_path.as_deref() {
             write_measurement_artifact(output_path, history, measurement)?;
+        }
+        if let Some(capture) = quality_capture {
+            write_temporal_quality_artifact(measurement, quality_execution, capture)?;
         }
         measurement.completed = true;
     }
@@ -505,8 +631,16 @@ fn approve_render_lab_close_system(
     mut windows: ResMut<WindowStateRegistryResource>,
     mut measurement: ResMut<RenderLabMeasurementConfig>,
     history: Res<RenderFrameHistoryState>,
+    quality_execution: Res<RenderLabTemporalQualityExecutionState>,
+    debug_report: Res<RenderDebugFrameReportState>,
 ) -> Result<()> {
-    complete_render_lab_measurement_if_requested(&mut windows, &mut measurement, &history)
+    complete_render_lab_measurement_if_requested(
+        &mut windows,
+        &mut measurement,
+        &history,
+        &quality_execution,
+        &debug_report,
+    )
 }
 
 fn publish_render_lab_frame_system(
