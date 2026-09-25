@@ -35,7 +35,7 @@ fn clear_client_outbound(world: &mut World) {
     world
         .resource_mut::<NetworkOutboundQueue>()
         .expect("client outbound queue should exist")
-        .clear();
+        .clear_client_messages();
 }
 
 fn outbound_ack(world: &World) -> Option<Ack> {

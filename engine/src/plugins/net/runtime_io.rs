@@ -34,19 +34,20 @@ where
     }
 
     let messages = drain_client_inbox(&mut world);
-    if messages.is_empty() {
-        return Ok(());
-    }
 
     if let Ok(diagnostics) = world.resource_mut::<NetworkDiagnostics>() {
         diagnostics.processed_server_messages_last_frame = messages.len();
     }
 
     if let Ok(inbound) = world.resource_mut::<NetworkInboundQueue>() {
-        inbound.clear();
+        inbound.clear_server_messages();
         for message in &messages {
             inbound.push_server(message.clone());
         }
+    }
+
+    if messages.is_empty() {
+        return Ok(());
     }
 
     for message in messages {
@@ -118,19 +119,20 @@ where
     }
 
     let messages = drain_server_inbox(&mut world);
-    if messages.is_empty() {
-        return Ok(());
-    }
 
     if let Ok(diagnostics) = world.resource_mut::<NetworkDiagnostics>() {
         diagnostics.processed_client_messages_last_frame = messages.len();
     }
 
     if let Ok(inbound) = world.resource_mut::<NetworkInboundQueue>() {
-        inbound.clear();
+        inbound.clear_client_messages();
         for incoming in &messages {
             inbound.push_client(incoming.connection, incoming.message.clone());
         }
+    }
+
+    if messages.is_empty() {
+        return Ok(());
     }
 
     for incoming in messages {
@@ -319,17 +321,16 @@ pub fn client_flush_system(mut world: WorldMut) -> anyhow::Result<()> {
         .resource::<NetworkClientOutbox>()
         .context("NetworkClientOutbox should be installed by the client network role")?;
     let messages = drain_client_outbox(&mut world);
-    if messages.is_empty() {
-        return Ok(());
-    }
 
     if let Ok(diagnostics) = world.resource_mut::<NetworkDiagnostics>() {
         diagnostics.flushed_client_messages_last_frame = messages.len();
-        diagnostics.flush_count = diagnostics.flush_count.saturating_add(1);
+        if !messages.is_empty() {
+            diagnostics.flush_count = diagnostics.flush_count.saturating_add(1);
+        }
     }
 
     if let Ok(queue) = world.resource_mut::<NetworkOutboundQueue>() {
-        queue.clear();
+        queue.clear_client_messages();
         for message in messages {
             queue.push_client(message);
         }
@@ -343,17 +344,16 @@ pub fn server_flush_system(mut world: WorldMut) -> anyhow::Result<()> {
         .resource::<NetworkServerOutbox>()
         .context("NetworkServerOutbox should be installed by the server network role")?;
     let messages = drain_server_outbox(&mut world);
-    if messages.is_empty() {
-        return Ok(());
-    }
 
     if let Ok(diagnostics) = world.resource_mut::<NetworkDiagnostics>() {
         diagnostics.flushed_server_messages_last_frame = messages.len();
-        diagnostics.flush_count = diagnostics.flush_count.saturating_add(1);
+        if !messages.is_empty() {
+            diagnostics.flush_count = diagnostics.flush_count.saturating_add(1);
+        }
     }
 
     if let Ok(queue) = world.resource_mut::<NetworkOutboundQueue>() {
-        queue.clear();
+        queue.clear_server_messages();
         for message in messages {
             queue.push_server(message);
         }

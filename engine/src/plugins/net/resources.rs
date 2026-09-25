@@ -471,6 +471,11 @@ where
     );
 }
 
+/// Engine-visible projection of inbound messages processed during the current frame.
+///
+/// Client-origin and server-origin projections are independent. Each scheduled role replaces
+/// only the direction it owns, including replacing it with an empty projection when that
+/// direction has no work in the current frame.
 #[derive(Debug, Clone, Default, runen_ecs::Component, runen_ecs::Resource)]
 pub struct NetworkInboundQueue {
     client_messages: Vec<InboundClientMessage>,
@@ -478,8 +483,11 @@ pub struct NetworkInboundQueue {
 }
 
 impl NetworkInboundQueue {
-    pub fn clear(&mut self) {
+    pub fn clear_client_messages(&mut self) {
         self.client_messages.clear();
+    }
+
+    pub fn clear_server_messages(&mut self) {
         self.server_messages.clear();
     }
 
@@ -503,6 +511,11 @@ impl NetworkInboundQueue {
     }
 }
 
+/// Engine-visible projection of outbound messages flushed during the current frame.
+///
+/// Client-origin and server-origin projections are independent. Each scheduled role replaces
+/// only the direction it owns, including replacing it with an empty projection when that
+/// direction has no work in the current frame.
 #[derive(Debug, Clone, Default, runen_ecs::Component, runen_ecs::Resource)]
 pub struct NetworkOutboundQueue {
     client_messages: Vec<ClientMessage>,
@@ -510,8 +523,11 @@ pub struct NetworkOutboundQueue {
 }
 
 impl NetworkOutboundQueue {
-    pub fn clear(&mut self) {
+    pub fn clear_client_messages(&mut self) {
         self.client_messages.clear();
+    }
+
+    pub fn clear_server_messages(&mut self) {
         self.server_messages.clear();
     }
 
