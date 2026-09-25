@@ -261,18 +261,23 @@ impl InputState {
         self.handle_normalized_keyboard(LEGACY_WINDOW_CONTEXT, &input);
     }
 
-    pub(crate) fn handle_scroll_input(&mut self, context: InputContext, input: ScrollInput) {
-        if self
-            .neutral
-            .admit(&InputObservationGroup::single(
-                context,
-                InputObservation::Scroll(input),
-            ))
-            .is_ok()
-            && let Some(vertical) = input.delta.vertical
-        {
+    fn admit_scroll_input(
+        &mut self,
+        context: InputContext,
+        input: ScrollInput,
+    ) -> Result<(), InputError> {
+        self.neutral.admit(&InputObservationGroup::single(
+            context,
+            InputObservation::Scroll(input),
+        ))?;
+        if let Some(vertical) = input.delta.vertical {
             self.scroll_delta += vertical;
         }
+        Ok(())
+    }
+
+    pub(crate) fn handle_scroll_input(&mut self, context: InputContext, input: ScrollInput) {
+        let _ = self.admit_scroll_input(context, input);
     }
 
     pub fn handle_mouse_wheel_delta(&mut self, delta: f32) {
@@ -317,18 +322,16 @@ impl InputState {
         );
     }
 
-    pub(crate) fn handle_pointer_button(
+    fn admit_pointer_button(
         &mut self,
         context: InputContext,
         input: PointerButtonInput,
-    ) {
+    ) -> Result<(), InputError> {
         let was_down_anywhere = self.neutral.pointer_button_down_anywhere(input.button);
-        self.neutral
-            .admit(&InputObservationGroup::single(
-                context,
-                InputObservation::PointerButton(input),
-            ))
-            .expect("digital pointer-button observation should always be valid");
+        self.neutral.admit(&InputObservationGroup::single(
+            context,
+            InputObservation::PointerButton(input),
+        ))?;
         let is_down_anywhere = self.neutral.pointer_button_down_anywhere(input.button);
 
         let changed = match input.state {
@@ -336,7 +339,7 @@ impl InputState {
             DigitalState::Released => was_down_anywhere && !is_down_anywhere,
         };
         if !changed {
-            return;
+            return Ok(());
         }
 
         let position = self
@@ -372,6 +375,16 @@ impl InputState {
                 }
             }
         }
+        Ok(())
+    }
+
+    pub(crate) fn handle_pointer_button(
+        &mut self,
+        context: InputContext,
+        input: PointerButtonInput,
+    ) {
+        self.admit_pointer_button(context, input)
+            .expect("digital pointer-button observation should always be valid");
     }
 
     pub fn handle_mouse_input(&mut self, state: ElementState, button: MouseButton) {
@@ -384,21 +397,27 @@ impl InputState {
         );
     }
 
+    fn admit_relative_motion(
+        &mut self,
+        context: InputContext,
+        delta: Vector2,
+        unit: RelativeMotionUnit,
+    ) -> Result<(), InputError> {
+        self.neutral.admit(&InputObservationGroup::single(
+            context,
+            InputObservation::RelativeMotion { delta, unit },
+        ))?;
+        self.mouse_delta.0 += delta.x;
+        self.mouse_delta.1 += delta.y;
+        Ok(())
+    }
+
     pub(crate) fn handle_relative_motion(&mut self, context: InputContext, dx: f32, dy: f32) {
-        if self
-            .neutral
-            .admit(&InputObservationGroup::single(
-                context,
-                InputObservation::RelativeMotion {
-                    delta: Vector2::new(dx, dy),
-                    unit: RelativeMotionUnit::BackendDeviceUnits,
-                },
-            ))
-            .is_ok()
-        {
-            self.mouse_delta.0 += dx;
-            self.mouse_delta.1 += dy;
-        }
+        let _ = self.admit_relative_motion(
+            context,
+            Vector2::new(dx, dy),
+            RelativeMotionUnit::BackendDeviceUnits,
+        );
     }
 
     pub fn handle_mouse_motion(&mut self, dx: f32, dy: f32) {
@@ -474,6 +493,28 @@ impl InputState {
                 altitude_angle_radians: None,
             },
         );
+    }
+
+    pub(crate) fn admit_automation_observation(
+        &mut self,
+        context: InputContext,
+        observation: InputObservation,
+    ) -> Result<bool, InputError> {
+        match observation {
+            InputObservation::PointerButton(input) => {
+                self.admit_pointer_button(context, input)?;
+                Ok(true)
+            }
+            InputObservation::RelativeMotion { delta, unit } => {
+                self.admit_relative_motion(context, delta, unit)?;
+                Ok(true)
+            }
+            InputObservation::Scroll(input) => {
+                self.admit_scroll_input(context, input)?;
+                Ok(true)
+            }
+            _ => Ok(false),
+        }
     }
 
     pub fn clear_frame(&mut self) {

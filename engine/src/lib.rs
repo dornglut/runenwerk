@@ -11,6 +11,7 @@
 extern crate self as engine;
 
 pub mod app;
+pub mod automation;
 pub mod net;
 pub mod plugin;
 pub mod plugins;
