@@ -56,6 +56,37 @@ impl WinitInputAdapter {
         InputContext::new(source, Some(device))
     }
 
+    pub(crate) fn window_source_context(
+        &self,
+        native_window_id: NativeWindowId,
+    ) -> Option<InputContext> {
+        self.window_sources
+            .get(&native_window_id)
+            .copied()
+            .map(|source| InputContext::new(source, None))
+    }
+
+    pub(crate) fn retire_window_source(
+        &mut self,
+        native_window_id: NativeWindowId,
+    ) -> Option<InputContext> {
+        self.window_sources
+            .remove(&native_window_id)
+            .map(|source| InputContext::new(source, None))
+    }
+
+    pub(crate) fn retire_raw_device(
+        &mut self,
+        backend_device_id: DeviceId,
+    ) -> Option<InputContext> {
+        let device = self.raw_devices.remove(&backend_device_id)?;
+        let source = self
+            .raw_sources
+            .remove(&device)
+            .expect("interned raw input device must own a normalized source");
+        Some(InputContext::new(source, Some(device)))
+    }
+
     fn intern_window_device(&mut self, backend_device_id: DeviceId) -> InputDeviceId {
         if let Some(device) = self.window_devices.get(&backend_device_id).copied() {
             return device;
@@ -343,6 +374,48 @@ mod tests {
 
         assert_ne!(window.source, raw.source);
         assert_ne!(window.device, raw.device);
+    }
+
+    #[test]
+    fn window_source_lookup_does_not_allocate_and_retirement_refreshes_only_source_identity() {
+        let mut adapter = WinitInputAdapter::default();
+        let native_window = NativeWindowId::primary();
+        let backend_device = DeviceId::dummy();
+
+        assert_eq!(adapter.window_source_context(native_window), None);
+
+        let initial = adapter.window_context(native_window, backend_device);
+        assert_eq!(
+            adapter.window_source_context(native_window),
+            Some(InputContext::new(initial.source, None))
+        );
+        assert_eq!(
+            adapter.retire_window_source(native_window),
+            Some(InputContext::new(initial.source, None))
+        );
+        assert_eq!(adapter.window_source_context(native_window), None);
+
+        let replacement = adapter.window_context(native_window, backend_device);
+        assert_ne!(replacement.source, initial.source);
+        assert_eq!(replacement.device, initial.device);
+    }
+
+    #[test]
+    fn raw_device_retirement_refreshes_raw_identity_without_touching_window_identity() {
+        let mut adapter = WinitInputAdapter::default();
+        let backend_device = DeviceId::dummy();
+        let window = adapter.window_context(NativeWindowId::primary(), backend_device);
+        let raw = adapter.raw_device_context(backend_device);
+
+        assert_eq!(adapter.retire_raw_device(backend_device), Some(raw));
+
+        let replacement = adapter.raw_device_context(backend_device);
+        assert_ne!(replacement.source, raw.source);
+        assert_ne!(replacement.device, raw.device);
+        assert_eq!(
+            adapter.window_context(NativeWindowId::primary(), backend_device),
+            window
+        );
     }
 
     #[test]

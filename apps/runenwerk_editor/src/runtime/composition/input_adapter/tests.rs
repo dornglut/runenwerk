@@ -1,8 +1,8 @@
 use super::*;
 use runen_input::{
-    AnalogMeasurement, ContactId, ContactInput, CoordinateSpace, InputContext, InputDeviceId,
-    InputSourceId, KeyLocation, KeyboardInput, PhysicalKeyIdentity, Point2, PointerButtonInput,
-    ScrollDelta, ScrollInput,
+    AnalogMeasurement, ContactId, ContactInput, ContinuityLoss, CoordinateSpace, InputContext,
+    InputDeviceId, InputSourceId, KeyLocation, KeyboardInput, PhysicalKeyIdentity, Point2,
+    PointerButtonInput, ScrollDelta, ScrollInput,
 };
 
 fn window() -> NativeWindowId {
@@ -527,5 +527,155 @@ fn only_normalized_pressure_projects_into_ui_pressure() {
     assert!(matches!(
         out_of_range_normalized,
         UiInputEvent::Pointer(PointerEvent { packet, .. }) if packet.pressure.is_none()
+    ));
+}
+
+#[test]
+fn source_continuity_loss_clears_only_matching_editor_projection_without_ui_edges() {
+    let mut runtime = EditorTargetInputRuntimeResource::default();
+    let lost = scoped_context(31, Some(1));
+    let retained = scoped_context(32, Some(2));
+
+    let _ = translate_platform_event(
+        &mut runtime,
+        window(),
+        keyboard_in(
+            lost,
+            "ShiftLeft",
+            LogicalKey::Named("Shift".to_owned()),
+            DigitalState::Pressed,
+            false,
+            ObservationOrigin::SourceReport,
+        ),
+    );
+    let _ = translate_platform_event(
+        &mut runtime,
+        window(),
+        keyboard_in(
+            retained,
+            "ControlLeft",
+            LogicalKey::Named("Control".to_owned()),
+            DigitalState::Pressed,
+            false,
+            ObservationOrigin::SourceReport,
+        ),
+    );
+    let _ = one(
+        &mut runtime,
+        PlatformEvent::CursorMoved {
+            context: lost,
+            position: Point2::new(40.0, 50.0, CoordinateSpace::WindowPhysicalPixels),
+        },
+    );
+
+    assert!(
+        translate_platform_event(
+            &mut runtime,
+            window(),
+            PlatformEvent::InputContinuityLost {
+                context: InputContext::new(lost.source, None),
+                loss: ContinuityLoss::Source,
+            },
+        )
+        .is_empty()
+    );
+
+    let key = one(
+        &mut runtime,
+        keyboard_in(
+            retained,
+            "KeyA",
+            LogicalKey::Character("a".to_owned()),
+            DigitalState::Pressed,
+            false,
+            ObservationOrigin::SourceReport,
+        ),
+    );
+    assert!(matches!(
+        key,
+        UiInputEvent::Keyboard(KeyboardEvent { modifiers, .. })
+            if !modifiers.shift && modifiers.ctrl
+    ));
+
+    let click = one(
+        &mut runtime,
+        PlatformEvent::MouseInput {
+            context: lost,
+            input: PointerButtonInput {
+                button: EnginePointerButton::Left,
+                state: DigitalState::Pressed,
+            },
+        },
+    );
+    assert!(matches!(
+        click,
+        UiInputEvent::Pointer(PointerEvent { position, .. }) if position == UiPoint::ZERO
+    ));
+}
+
+#[test]
+fn device_continuity_loss_keeps_source_mouse_position_but_clears_matching_device_modifiers() {
+    let mut runtime = EditorTargetInputRuntimeResource::default();
+    let first = scoped_context(41, Some(1));
+    let second = scoped_context(41, Some(2));
+
+    let _ = one(
+        &mut runtime,
+        PlatformEvent::CursorMoved {
+            context: first,
+            position: Point2::new(12.0, 14.0, CoordinateSpace::WindowPhysicalPixels),
+        },
+    );
+    let _ = translate_platform_event(
+        &mut runtime,
+        window(),
+        keyboard_in(
+            first,
+            "ShiftLeft",
+            LogicalKey::Named("Shift".to_owned()),
+            DigitalState::Pressed,
+            false,
+            ObservationOrigin::SourceReport,
+        ),
+    );
+    let _ = translate_platform_event(
+        &mut runtime,
+        window(),
+        keyboard_in(
+            second,
+            "ControlLeft",
+            LogicalKey::Named("Control".to_owned()),
+            DigitalState::Pressed,
+            false,
+            ObservationOrigin::SourceReport,
+        ),
+    );
+
+    assert!(
+        translate_platform_event(
+            &mut runtime,
+            window(),
+            PlatformEvent::InputContinuityLost {
+                context: first,
+                loss: ContinuityLoss::Device,
+            },
+        )
+        .is_empty()
+    );
+
+    let click = one(
+        &mut runtime,
+        PlatformEvent::MouseInput {
+            context: second,
+            input: PointerButtonInput {
+                button: EnginePointerButton::Left,
+                state: DigitalState::Pressed,
+            },
+        },
+    );
+    assert!(matches!(
+        click,
+        UiInputEvent::Pointer(PointerEvent { position, modifiers, .. })
+            if position == UiPoint::new(12.0, 14.0) && !modifiers.shift && modifiers.ctrl
     ));
 }
