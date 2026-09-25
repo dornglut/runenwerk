@@ -1,5 +1,5 @@
+use crate::app::domain::host::AppHostSelection;
 use crate::app::domain::lifecycle::AppLifecycle;
-use crate::app::domain::mode::AppMode;
 use crate::app::domain::state::WindowedAppState;
 use crate::prelude::IntoPlugins;
 use crate::runtime::system::IntoSystemConfigs;
@@ -15,7 +15,7 @@ pub struct App {
     pub(crate) world: World,
     pub(crate) scheduler: Runtime,
     pub(crate) lifecycle: AppLifecycle,
-    pub(crate) mode: AppMode,
+    pub(crate) host_selection: AppHostSelection,
     pub(crate) title: String,
     composition_errors: Vec<AppCompositionError>,
 }
@@ -28,20 +28,20 @@ impl Default for App {
 
 impl App {
     pub fn new() -> Self {
-        Self::with_mode(AppMode::Windowed)
+        Self::with_host_selection(AppHostSelection::NativeWindow)
     }
 
     pub fn headless() -> Self {
-        Self::with_mode(AppMode::Headless)
+        Self::with_host_selection(AppHostSelection::Headless)
     }
 
-    fn with_mode(mode: AppMode) -> Self {
+    fn with_host_selection(host_selection: AppHostSelection) -> Self {
         let title = DEFAULT_WINDOW_TITLE.to_string();
         Self {
             world: World::new(),
             scheduler: Runtime::new(),
             lifecycle: AppLifecycle::default(),
-            mode,
+            host_selection,
             title: title.clone(),
             composition_errors: Vec::new(),
         }

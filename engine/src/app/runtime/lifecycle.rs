@@ -1,13 +1,13 @@
 use crate::app::App;
-use crate::app::domain::mode::AppMode;
+use crate::app::domain::host::AppHostSelection;
 use crate::runtime::frame_lifecycle::{run_frame as run_runtime_frame, run_startup_if_needed};
 use anyhow::{Result, anyhow};
 
 impl App {
     pub fn run(self) -> Result<()> {
-        match self.mode {
-            AppMode::Windowed => self.run_windowed(),
-            AppMode::Headless => {
+        match self.host_selection {
+            AppHostSelection::NativeWindow => self.run_windowed(),
+            AppHostSelection::Headless => {
                 let mut app = self;
                 app.run_headless()?;
                 Ok(())
@@ -22,7 +22,7 @@ impl App {
     }
 
     pub(crate) fn require_headless_host(&self, operation: &str) -> Result<()> {
-        if matches!(self.mode, AppMode::Windowed) {
+        if matches!(self.host_selection, AppHostSelection::NativeWindow) {
             return Err(anyhow!(
                 "{operation} requires App::headless(); Host selection is stable and advancement does not change it"
             ));
