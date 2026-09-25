@@ -15,6 +15,7 @@ const RL2_MEASUREMENT_SCHEMA_VERSION: u32 = 1;
 struct RenderLabMeasurementConfig {
     output_path: Option<PathBuf>,
     submitted_frame_limit: Option<usize>,
+    primary_window_size_px: Option<(u32, u32)>,
     completed: bool,
 }
 
@@ -83,13 +84,25 @@ pub fn run_native() -> Result<()> {
 pub fn run_native_measurement(
     output_path: impl Into<PathBuf>,
     submitted_frame_limit: Option<usize>,
+    primary_window_size_px: Option<(u32, u32)>,
 ) -> Result<()> {
     let submitted_frame_limit = validate_measurement_frame_limit(submitted_frame_limit)?;
+    let primary_window_size_px = validate_measurement_window_size(primary_window_size_px)?;
     run_native_with_measurement(Some(RenderLabMeasurementConfig {
         output_path: Some(output_path.into()),
         submitted_frame_limit,
+        primary_window_size_px,
         completed: false,
     }))
+}
+
+fn validate_measurement_window_size(size_px: Option<(u32, u32)>) -> Result<Option<(u32, u32)>> {
+    if let Some((width, height)) = size_px
+        && (width == 0 || height == 0)
+    {
+        bail!("RL2 measurement window size must have positive width and height");
+    }
+    Ok(size_px)
 }
 
 fn validate_measurement_frame_limit(limit: Option<usize>) -> Result<Option<usize>> {
@@ -110,6 +123,12 @@ fn run_native_with_measurement(measurement: Option<RenderLabMeasurementConfig>) 
     let mut app = App::new();
     app.set_title("Runenwerk Render Lab — RL2 native interaction");
     app.with_frame_pacing(FramePacingPolicyResource::continuous_capped(60));
+    if let Some(size_px) = measurement
+        .as_ref()
+        .and_then(|measurement| measurement.primary_window_size_px)
+    {
+        app.with_primary_window_size_px(size_px);
+    }
     app.add_plugins(default_plugins());
     app.add_plugin(ScenePlugin);
     app.add_plugin(RenderPlugin);
@@ -366,6 +385,7 @@ mod tests {
         let measurement = RenderLabMeasurementConfig::default();
         assert!(measurement.output_path.is_none());
         assert!(measurement.submitted_frame_limit.is_none());
+        assert!(measurement.primary_window_size_px.is_none());
         assert!(!measurement.completed);
         assert!(!RenderFrameObservationPolicyResource::default().enabled);
     }
@@ -385,6 +405,17 @@ mod tests {
     }
 
     #[test]
+    fn measurement_window_size_must_be_positive_when_requested() {
+        assert_eq!(validate_measurement_window_size(None).unwrap(), None);
+        assert_eq!(
+            validate_measurement_window_size(Some((1600, 1200))).unwrap(),
+            Some((1600, 1200))
+        );
+        assert!(validate_measurement_window_size(Some((0, 1200))).is_err());
+        assert!(validate_measurement_window_size(Some((1600, 0))).is_err());
+    }
+
+    #[test]
     fn bounded_measurement_completion_counts_retained_submitted_frames_once() {
         use engine::plugins::render::inspect::RenderGpuTimingCapability;
 
@@ -393,6 +424,7 @@ mod tests {
         let mut measurement = RenderLabMeasurementConfig {
             output_path: None,
             submitted_frame_limit: Some(2),
+            primary_window_size_px: None,
             completed: false,
         };
         assert!(!bounded_measurement_complete(&measurement, &history));
@@ -439,6 +471,7 @@ mod tests {
         let mut measurement = RenderLabMeasurementConfig {
             output_path: None,
             submitted_frame_limit: Some(1),
+            primary_window_size_px: None,
             completed: false,
         };
         let mut windows = WindowStateRegistryResource::default();
