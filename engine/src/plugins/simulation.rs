@@ -9,6 +9,8 @@ use engine_sim::{
 #[derive(Debug, Default, Clone, Copy, runen_ecs::Component, runen_ecs::Resource)]
 struct SimulationIntegrationState;
 
+const INITIAL_SIMULATION_SESSION_ID: SimulationSessionId = SimulationSessionId(1);
+
 pub struct SimulationPlugin;
 
 pub trait AppSimulationExt {
@@ -73,7 +75,9 @@ impl Plugin for SimulationPlugin {
         app.init_resource::<SimulationIntegrationState>();
         app.init_resource::<SimulationTick>();
         app.init_resource::<SimulationProfileConfig>();
-        app.init_resource::<SimulationSessionId>();
+        if !app.world().has_resource::<SimulationSessionId>() {
+            app.insert_resource(INITIAL_SIMULATION_SESSION_ID);
+        }
 
         if !app.world().has_resource::<SimulationSeed>() {
             app.insert_resource(SimulationSeed::default());

@@ -1,5 +1,10 @@
-use engine_sim::{NetEntityId, SimulationTick};
+use engine_sim::SimulationTick;
 use serde::{Deserialize, Serialize};
+
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
+)]
+pub struct NetEntityId(pub u64);
 
 #[derive(
     Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,

@@ -12,6 +12,8 @@ members = [
     "domain/material_graph",
     "domain/procgen",
     "domain/drawing",
+    "domain/simulation",
+    "domain/replay",
 
     "domain/ui/ui_math",
     "domain/ui/ui_input",
@@ -67,9 +69,6 @@ members = [
 
     "engine",
     "engine_render_macros",
-
-    "net/engine_sim",
-    "net/engine_history",
 
     "apps/runenwerk_editor",
     "apps/runenwerk_draw",
