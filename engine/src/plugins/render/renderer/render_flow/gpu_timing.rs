@@ -402,9 +402,7 @@ mod composed_native_proof {
     };
     use std::time::{Duration, Instant};
 
-    fn required_timestamp_unavailable(
-        error: Option<&GpuCapabilityAdmissionError>,
-    ) -> bool {
+    fn required_timestamp_unavailable(error: Option<&GpuCapabilityAdmissionError>) -> bool {
         error.is_some_and(|error| {
             error.cause() == GpuCapabilityAdmissionCause::RequiredUnavailable
                 && error.feature() == Some(GpuCapabilityFeature::TimestampQuery)
@@ -426,16 +424,14 @@ mod composed_native_proof {
 
     fn timestamp_requirement_unavailable(error: &GpuContextRequestError) -> bool {
         error.category() == GpuContextRequestErrorCategory::NoAdmissibleCandidate
-            && all_candidates_lack_required_timestamp(
-                error.candidate_dispositions().iter().map(|disposition| {
-                    match disposition {
-                        GpuCandidateDisposition::Rejected(report) => {
-                            report.capability_admission_error()
-                        }
-                        GpuCandidateDisposition::Accepted(_) => None,
+            && all_candidates_lack_required_timestamp(error.candidate_dispositions().iter().map(
+                |disposition| match disposition {
+                    GpuCandidateDisposition::Rejected(report) => {
+                        report.capability_admission_error()
                     }
-                }),
-            )
+                    GpuCandidateDisposition::Accepted(_) => None,
+                },
+            ))
     }
 
     fn timestamp_context() -> Option<GpuContext> {
@@ -497,9 +493,9 @@ mod composed_native_proof {
             Some(&timestamp),
             Some(&timestamp),
         ]));
-        assert!(!all_candidates_lack_required_timestamp(
-            std::iter::empty::<Option<&GpuCapabilityAdmissionError>>()
-        ));
+        assert!(!all_candidates_lack_required_timestamp(std::iter::empty::<
+            Option<&GpuCapabilityAdmissionError>,
+        >()));
         assert!(!all_candidates_lack_required_timestamp([None]));
         assert!(!all_candidates_lack_required_timestamp([
             Some(&timestamp),
@@ -509,7 +505,9 @@ mod composed_native_proof {
             Some(&timestamp),
             Some(&compute),
         ]));
-        assert!(!all_candidates_lack_required_timestamp([Some(&not_enabled)]));
+        assert!(!all_candidates_lack_required_timestamp([Some(
+            &not_enabled
+        )]));
     }
 
     fn clear_buffer(
