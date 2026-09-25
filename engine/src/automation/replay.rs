@@ -10,7 +10,10 @@ use std::fmt;
 use crate::app::App;
 use crate::plugins::input::input_integration_is_active;
 use crate::plugins::InputState;
-use runen_input::{ContinuityLoss, InputContext, InputObservation, InputObservationGroup, InputSourceId, PointerButton};
+use runen_input::{
+    ContinuityLoss, InputContext, InputObservation, InputObservationGroup, InputSourceId,
+    PointerButton,
+};
 
 use super::{AppAutomationInputTraceExt, AutomationInputTrace};
 
@@ -333,6 +336,18 @@ fn cleanup_replay_sources(input: &mut InputState, replay_sources: &[InputSourceI
     }
 }
 
+fn cleanup_failed_admission_frame(
+    input: &mut InputState,
+    replay_sources: &[InputSourceId],
+) {
+    cleanup_replay_sources(input, replay_sources);
+    // Preflight requires a quiescent headless target, and no App frame runs while the groups for
+    // one recorded frame are being admitted. Therefore any frame-local projection present on this
+    // admission-failure path was created by replay itself and can be discarded without erasing
+    // unrelated caller evidence.
+    input.clear_frame();
+}
+
 impl AppAutomationInputReplayExt for App {
     fn replay_automation_input_trace(
         &mut self,
@@ -395,16 +410,19 @@ impl AppAutomationInputReplayExt for App {
                     );
                 };
 
-                let admission = self
-                    .world_mut()
-                    .resource_mut::<InputState>()
-                    .expect("input integration was checked before replay");
-                if let Err(detail) = admit_replay_group(admission, group, replay_source) {
+                let admission_result = {
                     let input = self
                         .world_mut()
                         .resource_mut::<InputState>()
                         .expect("input integration was checked before replay");
-                    cleanup_replay_sources(input, &plan.replay_sources);
+                    admit_replay_group(input, group, replay_source)
+                };
+                if let Err(detail) = admission_result {
+                    let input = self
+                        .world_mut()
+                        .resource_mut::<InputState>()
+                        .expect("input integration was checked before replay");
+                    cleanup_failed_admission_frame(input, &plan.replay_sources);
                     return AutomationInputReplayReport::failed_after_start(
                         AutomationInputReplayOutcome::InvalidOrRejectedInput,
                         completed_frames,
@@ -794,7 +812,6 @@ mod tests {
                 tablet(2, DeliveryRole::OrdinaryCurrent),
             ],
         );
-        let mapping = source_map([(2_030, 9_030)]);
         let mut input = InputState::new();
 
         admit_replay_group(&mut input, &group, InputSourceId::new(9_030))
@@ -814,7 +831,6 @@ mod tests {
             assert_eq!(remapped_time.unit, source_time.unit);
         }
 
-        let _ = mapping;
     }
 
     #[test]
@@ -835,13 +851,22 @@ mod tests {
                 },
                 AutomationInputTraceFrame {
                     frame_ordinal: 1,
-                    groups: vec![InputObservationGroup::single(
-                        context,
-                        InputObservation::RelativeMotion {
-                            delta: Vector2::new(f32::NAN, 0.0),
-                            unit: RelativeMotionUnit::BackendDeviceUnits,
-                        },
-                    )],
+                    groups: vec![
+                        InputObservationGroup::single(
+                            context,
+                            InputObservation::RelativeMotion {
+                                delta: Vector2::new(2.0, 1.0),
+                                unit: RelativeMotionUnit::BackendDeviceUnits,
+                            },
+                        ),
+                        InputObservationGroup::single(
+                            context,
+                            InputObservation::RelativeMotion {
+                                delta: Vector2::new(f32::NAN, 0.0),
+                                unit: RelativeMotionUnit::BackendDeviceUnits,
+                            },
+                        ),
+                    ],
                 },
             ],
             trailing_groups: Vec::new(),
@@ -860,8 +885,13 @@ mod tests {
         );
         assert_eq!(report.completed_frames(), 1);
         assert_eq!(report.failing_frame_ordinal(), Some(1));
-        assert_eq!(report.failing_group_index(), Some(0));
-        assert!(!app.world().resource::<InputState>().unwrap().left_mouse_down());
+        assert_eq!(report.failing_group_index(), Some(1));
+        let input = app.world().resource::<InputState>().unwrap();
+        assert!(!input.left_mouse_down());
+        assert!(
+            input.frame_projection_is_quiescent(),
+            "failed admission must not leave replay-owned partial-frame projection behind"
+        );
     }
 
 
