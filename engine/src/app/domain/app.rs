@@ -39,7 +39,7 @@ impl App {
 
     fn with_mode(mode: AppMode) -> Self {
         let title = DEFAULT_WINDOW_TITLE.to_string();
-        let mut app = Self {
+        Self {
             world: World::new(),
             scheduler: Runtime::new(),
             runner: Box::new(FixedFramesRunner::new(1)),
@@ -47,8 +47,7 @@ impl App {
             mode,
             title: title.clone(),
             composition_errors: Vec::new(),
-        };
-        app
+        }
     }
 
     pub fn add_plugin<P>(&mut self, plugin: P) -> &mut Self
