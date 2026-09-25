@@ -25,11 +25,9 @@ use product::{
     RenderProductSelection, RenderSelectedProduct, RenderTargetDescriptor,
 };
 use runen_input::{
-    AnalogMeasurement, ContactId, ContactPhase, ContactPresence, CoordinateSpace, DeliveryRole,
-    EvidenceStatus, InputContext, InputDeviceId, InputObservation, InputObservationGroup,
-    InputSourceId, InputToolKind, MeasurementDomain, ObservationOrigin, PhysicalTabletControls,
-    Point2, SourceTime, SourceTimeUnit, StylusTilt, TabletCapabilities, TabletObservation, ToolId,
-    Vector2,
+    AnalogMeasurement, ContactPhase, ContactPresence, DeliveryRole, EvidenceStatus, InputObservation,
+    InputObservationGroup, InputToolKind, MeasurementDomain, SourceTime, SourceTimeUnit, StylusTilt,
+    TabletObservation,
 };
 use ui_input::{
     Modifiers, PointerButton, PointerContactId, PointerContactPhase, PointerContactState,
@@ -1140,6 +1138,10 @@ mod tests {
         DrawingInkTilePayload, DrawingInkTileProduct, DrawingProductLineage, DrawingTileProduct,
         DrawingTileProductId, DrawingTileProductSource, FormationVersion, ProductQualityClass,
         TilePyramidLevel,
+    };
+    use runen_input::{
+        ContactId, CoordinateSpace, InputContext, InputDeviceId, InputSourceId, ObservationOrigin,
+        PhysicalTabletControls, Point2, TabletCapabilities, ToolId, Vector2,
     };
 
     fn drawing_product(
