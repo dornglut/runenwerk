@@ -339,16 +339,28 @@ pub(super) fn stage_render_lab_fixed_quality_publication(
     Ok(())
 }
 
+pub(super) struct RenderLabNativeQualityPublication {
+    pub producer_id: engine::plugins::render::RenderFrameProducerId,
+    pub render_surface_id: RenderSurfaceId,
+    pub radiance_target: RenderDynamicTextureTargetDescriptor,
+    pub native_scene_invocation: PreparedFlowInvocationRequest,
+    pub contribution: RenderDeterministicFrameContribution,
+}
+
 pub(super) fn stage_render_lab_native_quality_publication(
     targets: &mut RenderDynamicTextureTargetRequestRegistryResource,
     frame_requests: &mut PreparedRenderFrameRequestResource,
     contributions: &mut RenderDeterministicFrameContributionResource,
-    producer_id: engine::plugins::render::RenderFrameProducerId,
-    render_surface_id: RenderSurfaceId,
-    radiance_target: RenderDynamicTextureTargetDescriptor,
-    native_scene_invocation: PreparedFlowInvocationRequest,
-    contribution: RenderDeterministicFrameContribution,
+    publication: RenderLabNativeQualityPublication,
 ) -> Result<()> {
+    let RenderLabNativeQualityPublication {
+        producer_id,
+        render_surface_id,
+        radiance_target,
+        native_scene_invocation,
+        contribution,
+    } = publication;
+
     if contribution.render_surface_id != render_surface_id {
         bail!(
             "temporal quality native fallback contribution surface does not match admitted surface"
@@ -556,11 +568,13 @@ mod tests {
             &mut targets,
             &mut frame_requests,
             &mut contributions,
-            producer_id,
-            RenderSurfaceId::primary(),
-            target,
-            invocation.clone(),
-            contribution,
+            RenderLabNativeQualityPublication {
+                producer_id,
+                render_surface_id: RenderSurfaceId::primary(),
+                radiance_target: target,
+                native_scene_invocation: invocation.clone(),
+                contribution,
+            },
         )
         .expect("native quality publication should remain atomic");
 
@@ -741,11 +755,13 @@ mod tests {
             &mut targets,
             &mut frame_requests,
             &mut contributions,
-            producer_id,
-            fallback.render_surface_id,
-            target,
-            native_scene_invocation.clone(),
-            contribution,
+            RenderLabNativeQualityPublication {
+                producer_id,
+                render_surface_id: fallback.render_surface_id,
+                radiance_target: target,
+                native_scene_invocation: native_scene_invocation.clone(),
+                contribution,
+            },
         )
         .expect("native fallback publication should remain atomic");
 

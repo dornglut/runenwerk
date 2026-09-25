@@ -12,7 +12,7 @@ use temporal_quality::{
     RenderLabTemporalQualityExecutionState, inspect_render_lab_temporal_quality_execution_system,
     render_lab_fixed_quality_flow, stage_render_lab_fixed_quality_publication,
     stage_render_lab_native_quality_publication, temporal_quality_capture_evidence,
-    write_temporal_quality_artifact,
+    write_temporal_quality_artifact, RenderLabNativeQualityPublication,
 };
 
 #[derive(Debug, Clone, Copy, runen_ecs::Resource)]
@@ -556,11 +556,13 @@ fn publish_render_lab_frame_system(
                     &mut targets,
                     &mut frame_requests,
                     &mut contributions,
-                    producer_id,
-                    fallback.render_surface_id,
-                    target,
-                    native_scene_invocation,
-                    contribution,
+                    RenderLabNativeQualityPublication {
+                        producer_id,
+                        render_surface_id: fallback.render_surface_id,
+                        radiance_target: target,
+                        native_scene_invocation,
+                        contribution,
+                    },
                 )?;
             }
         }
@@ -583,11 +585,13 @@ fn publish_render_lab_frame_system(
             &mut targets,
             &mut frame_requests,
             &mut contributions,
-            producer_id,
-            RenderSurfaceId::primary(),
-            target,
-            invocation,
-            contribution,
+            RenderLabNativeQualityPublication {
+                producer_id,
+                render_surface_id: RenderSurfaceId::primary(),
+                radiance_target: target,
+                native_scene_invocation: invocation,
+                contribution,
+            },
         )?;
         return Ok(());
     }
@@ -647,7 +651,6 @@ fn render_lab_radiance_extent(
 /// Validate every RL2 publication against cloned registries before replacing any live product
 /// state. The registries retain their other producers, while a failed replacement leaves the
 /// previous complete frame request intact.
-
 fn stage_render_lab_frame_publication(
     targets: &mut RenderDynamicTextureTargetRequestRegistryResource,
     frame_requests: &mut PreparedRenderFrameRequestResource,
