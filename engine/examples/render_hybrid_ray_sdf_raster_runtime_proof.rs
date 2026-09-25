@@ -16,12 +16,13 @@ use engine::plugins::render::inspect::{
     RenderTemporalInspectionRequest, RenderTemporalJitterEvidence,
     RenderTemporalProductionEvidenceReport, RenderTemporalProductionEvidenceRequest,
     RenderTemporalProductionHardwareProfile, RenderTemporalReconstructionMode,
-    RenderTemporalResolutionEvidence, RenderTemporalResolutionPolicy, RenderTemporalRuntimeVisualEvidence,
-    RenderTemporalUpscalingAdapterEvidence, RenderTemporalUpscalingAdapterKind,
-    RenderTemporalUpscalingCapabilityState, RenderTemporalUpscalingInspection,
-    RenderTemporalUpscalingInspectionRequest, inspect_render_ray_query_capability,
-    inspect_render_sdf_production_evidence, inspect_render_temporal_inputs,
-    inspect_render_temporal_production_evidence, inspect_render_temporal_upscaling,
+    RenderTemporalResolutionEvidence, RenderTemporalResolutionPolicy,
+    RenderTemporalRuntimeVisualEvidence, RenderTemporalUpscalingAdapterEvidence,
+    RenderTemporalUpscalingAdapterKind, RenderTemporalUpscalingCapabilityState,
+    RenderTemporalUpscalingInspection, RenderTemporalUpscalingInspectionRequest,
+    inspect_render_ray_query_capability, inspect_render_sdf_production_evidence,
+    inspect_render_temporal_inputs, inspect_render_temporal_production_evidence,
+    inspect_render_temporal_upscaling,
 };
 
 fn main() {
