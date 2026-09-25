@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-14
+last_reviewed: 2026-09-25
 related_designs:
   - ../accepted/runenwerk-editor-coordination-semantic-model.md
   - ../implemented/editor-tool-suite-registry-and-workbench-host-design.md
@@ -53,7 +53,7 @@ M5 adopts an external runtime preview process for preview, simulate, and play ex
 
 | Capability Area | Current State | Target Direction | Owning Areas |
 |---|---|---|---|
-| Runtime/editor boundary | M5 external loopback runtime preview process, protocol DTOs, and editor process manager exist; editor authoring composition remains single-process. | Later phases may deepen preview/play product execution after new formed-product domains exist. | `domain/editor/editor_preview`, `net/engine_net`, `net/engine_net_quic`, `engine`, `apps/runenwerk_editor`, `apps/runenwerk_runtime_preview` |
+| Runtime/editor boundary | M5 external loopback runtime preview process, protocol DTOs, and editor process manager exist; editor authoring composition remains single-process. | Later phases may deepen preview/play product execution after new formed-product domains exist. | `domain/editor/editor_preview`, standalone `runen-net`, `runen-net-quic`, `engine`, `apps/runenwerk_editor`, `apps/runenwerk_runtime_preview` |
 | Scene authoring/persistence | Scene document + migration/normalization/formation exists. | Broader authored asset families (prefab/input/ability/etc.) with explicit contracts. | `domain/editor/editor_persistence`, future domain crates |
 | ECS state ownership | Live runtime world + reflected component registration are active. | Keep ECS as live state only; expand contract catalog without ownership leakage. | standalone `runen-ecs`, `apps/runenwerk_editor` |
 | Plugin/type registration | Concrete registration points exist in runtime/editor app code. | Stronger registry-driven discoverability across more gameplay domains. | `engine`, `apps/runenwerk_editor` |
@@ -80,8 +80,8 @@ M5 adopts an external runtime preview process for preview, simulate, and play ex
 The M5 preview boundary is intentionally concrete and narrow:
 
 - `domain/editor/editor_preview` owns engine-agnostic preview protocol DTOs such as `PreviewSessionId`, `PreviewMode`, `PreviewCommand`, `PreviewEvent`, `ReloadDecision`, `ReloadStatus`, `RuntimeProductRef`, ratified payload references, checked preview payload metadata, and serialized bootstrap stdout format.
-- `net/engine_net` owns generic bidirectional typed payload messages that can carry preview DTOs without knowing their semantics.
-- `net/engine_net_quic` owns loopback QUIC transport for those generic payload messages.
+- `domain/editor/editor_preview` owns preview command/event envelope meaning and codecs, while standalone RunenNet owns the reusable protocol/delivery semantics consumed by the preview apps.
+- `runen-net-quic` realizes loopback QUIC, while the Runtime Preview and Editor preview-process modules own their product-specific endpoint/profile/connection wiring.
 - `apps/runenwerk_runtime_preview` owns the child process runtime host, separate preview/play window, bootstrap connection output, headless command loop, and command/event handling for start, mode, heartbeat, product, reload, and shutdown requests.
 - `apps/runenwerk_editor/src/runtime/preview_process/` owns editor-side process spawning, connection management, heartbeat/shutdown, mode requests, status ingestion, bounded pending command queueing, and child lifecycle fallback.
 - `engine` owns generic runtime loading, shader reload status vocabulary, and `world_sdf` runtime intake helpers.

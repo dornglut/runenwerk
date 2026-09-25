@@ -1,11 +1,11 @@
 ---
 title: "Engine Net Integration Design"
-description: "Design for engine scheduling, RunenNet session projection, and retained replication integration."
+description: "Current design for Engine scheduling, RunenNet authority integration, staging/projections, replication, prediction, and diagnostics."
 status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-24
+last_reviewed: 2026-09-25
 related_roadmaps:
   - ../../net/multiplayer-replication-implementation-roadmap.md
 ---
@@ -14,93 +14,125 @@ related_roadmaps:
 
 ## Purpose
 
-`engine/src/plugins/net` integrates standalone RunenNet and the remaining Runenwerk replication/prediction migration contracts with engine schedules and ECS resources.
+`engine/src/plugins/net` integrates standalone RunenNet with Runenwerk engine schedules, ECS/game
+realization, bounded staging, projections, and diagnostics.
 
-It owns integration placement and projections, not reusable networking lifecycle semantics.
+It owns Runenwerk integration placement and product policy. It does not own reusable networking
+lifecycle, replication-consistency, delivery, recovery, prediction, or transport semantics.
 
 ## Ownership
 
-RunenNet Core owns:
+Standalone RunenNet owns:
 
-- connection identity;
-- compatibility negotiation;
-- session membership and binding;
-- connection loss, retention, replacement, expiry, removal, and closure.
+- connection identity and compatibility negotiation;
+- session membership, binding, loss, retention, replacement, expiry, removal, and closure;
+- remote participant/tick input admission;
+- client replication consistency/history/recovery;
+- participant prediction/reconciliation lineage;
+- authority replication cursor/baseline/history/recovery/emission/ACK semantics;
+- reusable delivery/resource-pressure semantics and transport abstraction.
 
-Runenwerk engine integration owns:
+Runenwerk Engine integration owns:
 
-- when Core owners are invoked by application/engine lifecycle code;
-- `RunenNetSessionProjection`, an iterable read-only projection of successful Core bindings;
-- mapping projected connections to engine owner/routing state;
-- product/session metadata;
-- reconnect attempt/timing/deployment policy;
-- schedule placement, work queues, diagnostics, and presentation views;
-- retained server-replication and client-prediction integration pending later RN8 cuts;
-- explicit client-replication policy and host complete-product realization around RunenNet `ClientReplicationSet`;
-- explicit authority-input policy selection for the host integration, while RunenNet owns remote participant/tick admission.
+- placement and invocation of RunenNet owners from application/host lifecycle code;
+- `RunenNetSessionProjection`, an iterable read-only projection of accepted session bindings;
+- mapping projected connections into Engine owner/routing state;
+- network schedule placement and Host role composition;
+- bounded pending inbox/outbox work queues and current-frame message projections;
+- gameplay snapshot/delta/input driver adaptation and complete-product realization;
+- host execution staging for remote input already admitted by RunenNet;
+- formation of authority replication candidates and reporting actual host delivery outcomes back to
+  RunenNet;
+- diagnostics projection plus reconnect/deployment/presentation policy.
 
 ## Implemented Substrate
 
-- `NetPlugin<TDriver>` configures client, server, or host integration roles.
-- `RunenNetSessionCore` places public RunenNet `NegotiationManager` and `Session` owners at the engine boundary without copying their state machines.
+- `NetPlugin<TDriver>` configures client, server, or Host integration roles.
+- `RunenNetSessionCore` places public RunenNet `NegotiationManager` and `Session` owners at the
+  Engine boundary without copying their state machines.
 - `RunenNetSessionProjection` is updated only after successful RunenNet lifecycle operations.
-- Engine owner routing and connection/diagnostic views are reconciled from that projection.
-- `NetworkClientInbox`, `NetworkServerInbox`, `NetworkClientOutbox`, and `NetworkServerOutbox` use ECS work queues for retained replication/application payloads.
-- `client_receive_system` delegates client cursor/history/recovery consistency to RunenNet `ClientReplicationSet`, atomically activates the complete encoded product, then uses `SnapshotApplyDriver::apply_snapshot` only for downstream ECS/game realization.
-- `server_receive_system` keeps retained ACK handling on projected active connections, while remote input resolves the actual participant/connection through `RunenNetSessionCore` and submits the opaque batch to RunenNet `AuthorityInputSession`.
-- `sync_connection_streaming_state_system` reconciles per-connection streaming state from the RunenNet projection.
-- `replication_step_system` emits retained per-connection snapshots/deltas.
-- `prediction_step_system` executes already-accepted remote authority-input batches at their target tick before local input, while preserving the remaining local prediction integration.
-- frame-end flush stages retained outbound messages in engine-visible outbound queues; it is not a transport runtime.
-- diagnostics expose engine-owned status/health/replication/prediction projections.
+- Engine owner routing, streaming state, and connection/diagnostic views are reconciled from that
+  projection.
+- `NetworkClientInbox`, `NetworkServerInbox`, `NetworkClientOutbox`, and
+  `NetworkServerOutbox` are bounded pending work queues.
+- `NetworkInboundQueue` and `NetworkOutboundQueue` are current-frame Engine projections; client
+  and server directions replace only their own side so Host composition is order-safe.
+- `client_receive_system` delegates client cursor/history/recovery consistency to RunenNet
+  `ClientReplicationSet`, atomically activates the complete encoded product, and uses
+  `SnapshotApplyDriver::apply_snapshot` for downstream ECS/game realization.
+- `server_receive_system` resolves remote input through the live RunenNet session and submits the
+  opaque participant/tick batch to RunenNet `AuthorityInputSession`; only accepted batches enter
+  Engine host-execution staging.
+- `prediction_step_system` composes accepted remote input execution with local input while tracked
+  client prediction/reconciliation is owned by RunenNet `PredictionLineage`.
+- `replication_step_system` prepares per-participant authority snapshot/delta submissions around
+  RunenNet `AuthorityReplicationSession`; preparation or queue projection is not emission.
+- Host code reports the actual submission result through
+  `record_authority_replication_delivery_acceptance`; only RunenNet
+  `DeliveryAcceptance::Accepted` creates emission evidence and ACK eligibility.
+- Frame-end flush drains pending Engine outboxes into current-frame outbound projections. It does
+  not perform transport I/O.
+- Diagnostics expose Engine-owned status/health/replication/prediction projections around RunenNet
+  authority.
 
-## Removed Lifecycle Bridge
+## Removed Predecessors
 
-RN8 N2 removes the old engine/runtime lifecycle bridge rather than adapting it:
+RN8 removed rather than forwarded the former Engine-owned networking authorities and migration
+shells:
 
 - no `NetworkRuntimeHandle` session channel;
 - no `SessionRuntimeCommand` / `SessionRuntimeEvent` authority;
-- no `ConnectionId`, `SessionPhase`, or client/server session state machine;
-- no Hello/Join admission protocol in retained engine envelopes;
-- no engine-owned connection allocation or transport teardown semantics.
+- no Engine-owned `ConnectionId`, `SessionPhase`, or client/server lifecycle state machine;
+- no Engine-owned Hello/Join admission protocol;
+- no synthetic lane/delivery vocabulary pretending to be transport;
+- no `net/engine_net` compatibility shell.
 
-Do not recreate these through compatibility aliases or a generic Runenwerk networking runtime facade.
+Do not recreate those predecessors through aliases, facades, or parallel state.
 
 ## Schedule Model
 
-Current engine scheduling remains:
+Current Engine scheduling is:
 
-1. `PreUpdate`: process retained client/server replication/application inboxes.
+1. `PreUpdate`: drain/process client and server pending inbox work.
 2. `FixedUpdate`: synchronize connection streaming state from the RunenNet projection.
-3. `FixedUpdate`: prediction after simulation.
-4. `FixedUpdate`: replication after simulation and prediction.
-5. `FrameEnd`: flush retained outbound work queues into engine outbound staging.
+3. `FixedUpdate`: prediction/input execution after optional simulation work.
+4. `FixedUpdate`: authority replication candidate preparation after prediction.
+5. `FrameEnd`: flush pending client/server outboxes into current-frame outbound projections.
 6. `FrameEnd`: synchronize diagnostics views.
 
-RunenNet connection/session mutations occur from the owning application/host lifecycle integration; the ECS projection then feeds scheduled routing/replication systems.
+RunenNet connection/session mutations remain application/host lifecycle operations. The derived
+Engine projection then feeds scheduled routing and integration systems.
 
 ## Boundary Rules
 
 - Use only public RunenNet APIs.
-- Never consult `RunenNetSessionProjection` to authorize lifecycle mutations; it is derived state.
-- Do not copy RunenNet lifecycle semantics into ECS resources.
-- Host reconnect policy must remain distinct from RunenNet retention/recovery semantics.
+- Never consult `RunenNetSessionProjection` to authorize lifecycle or participant-input
+  admission; it is derived state.
+- Do not copy RunenNet lifecycle, replication, delivery, recovery, or prediction semantics into
+  Engine resources.
+- Engine queue admission and current-frame projection are not RunenNet delivery acceptance.
+- Host reconnect/deployment policy remains distinct from RunenNet membership retention/recovery.
 - Product lobby/roster/settings metadata remains Runenwerk-owned.
-- The former `engine_net` migration shell is retired; engine-owned wire/driver integration stays under `engine/src/plugins/net`.
-- Do not add a concrete transport adapter without a maintained consumer.
-- Do not restore client replication consistency/history semantics in Runenwerk resources; downstream prediction remains separate until its own RN8 cut.
+- The former `engine_net` shell remains deleted; Engine-owned integration lives under
+  `engine/src/plugins/net`.
+- Do not generalize the Editor ↔ Runtime Preview QUIC channel into Engine gameplay networking.
+  A concrete gameplay transport requires a maintained gameplay consumer.
+- Do not freeze final ordinary Replicated View authoring syntax from this low-level integration;
+  #322 remains evidence-gated.
 
 ## Validation
 
-The maintained proof must cover:
+The maintained proof should cover, as applicable:
 
-- established RunenNet negotiation admitted through engine integration;
+- established RunenNet negotiation/session operations through Engine integration;
 - projection/status/owner routing derived from accepted bindings;
-- terminal and retained connection-loss behavior through RunenNet Core;
-- host reconnect diagnostics remaining host-owned;
-- multiple RunenNet connection identities preserving independent server routing/baselines;
-- RunenNet client lineage/retention/recovery outcomes with exact-product activation and ACK derivation;
-- retained prediction tests remaining behaviorally green;
-- no replacement transport runtime introduced.
+- terminal and retained connection-loss behavior through RunenNet;
+- authority-input admission and target-tick host execution;
+- independent participant authority-replication state, real delivery acceptance, and ACK
+  authorization/rejection;
+- client complete-product activation and RunenNet-backed prediction/reconciliation behavior;
+- Host client/server projection composition, including empty-frame replacement;
+- no replacement transport runtime or deleted compatibility authority.
 
-Before merge, repository authority remains `cargo validate` plus the issue-specific focused engine tests at the exact reviewed head.
+Repository acceptance remains the canonical `cargo validate` baseline plus issue-specific focused
+tests on the exact reviewed head.

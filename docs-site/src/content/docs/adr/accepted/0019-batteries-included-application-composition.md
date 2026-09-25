@@ -5,7 +5,7 @@ status: accepted
 owner: workspace
 layer: architecture
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-25
 related_adrs:
   - ./0014-repository-family-extraction-boundaries.md
   - ./0017-cross-authority-consistency-and-graph-semantics.md
@@ -412,10 +412,11 @@ RunenNet owns reusable replication/delivery/recovery/prediction semantics
 Runenwerk owns concrete ECS/game/product integration
 ```
 
-Current retained `engine_net` metadata macros and driver traits are migration-surface
-implementation facts, not a promise that per-component registration is the final normal
-path. The exact common-path authoring shape remains gated by current RunenECS public
-contracts, RunenNet authority, and concrete Runenwerk integration evidence.
+Current Engine networking retains low-level gameplay driver traits as the expert path; the
+legacy `engine_net` metadata macros and component-registration authoring predecessor have
+been deleted. Neither fact promises or defines the final normal path. The exact common-path
+authoring shape remains gated by current RunenECS public contracts, RunenNet authority,
+and concrete Runenwerk integration evidence.
 
 That gap is owned by the current networking architecture and implementation roadmap.
 Documentation must not claim custom-driver-free ordinary multiplayer authoring until it

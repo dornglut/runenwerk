@@ -5,7 +5,7 @@ status: accepted
 owner: workspace
 layer: architecture
 canonical: true
-last_reviewed: 2026-09-14
+last_reviewed: 2026-09-25
 related_adrs:
   - ../adr/accepted/0014-repository-family-extraction-boundaries.md
   - ../adr/accepted/0015-separate-gpu-execution-from-rendering.md
@@ -560,13 +560,13 @@ Runenwerk engine / product integration
   lifecycle placement and scheduling
   ECS / game / world mapping and policy
   RunenNet session projection into engine-visible state
-  retained replication/input staging and migration integration
+  bounded replication/input staging and RunenNet-backed integration
   product / host / reconnect deployment policy
   diagnostics and presentation
 
 engine Net integration
   Runenwerk-owned wire/driver/staging adaptation around RunenNet,
-  replication drivers/models/profiles/macros, and authoring consumers
+  replication/input driver adaptation and authoring consumers
 
 runen-net-quic or another concrete transport realization
   contained realization consumed where a maintained product requires it
@@ -576,7 +576,7 @@ Runenwerk must not recreate standalone RunenNet connection/session, reusable del
 replication-consistency/recovery, or prediction/reconciliation authority inside
 `engine_net`, engine plugin resources, compatibility aliases, or forwarding runtimes.
 
-Engine inbox/outbox and retained replication work queues are bounded staging/integration
+Engine inbox/outbox and replication work queues are bounded staging/integration
 surfaces. They are not transport realization, RunenNet delivery acceptance, or a second
 network runtime.
 
@@ -584,10 +584,10 @@ Concrete world, spatial, team, gameplay, presentation, scheduling, and deploymen
 remain Runenwerk/application concerns. Lower transport/TLS/socket libraries do not gain
 those semantics merely because they realize network I/O.
 
-RN8 has progressed beyond N4: authoritative remote input admission uses RunenNet, the bounded Replicated View R0 proof established a complete derived-state product with atomic owner activation, and the current client replication cut delegates client consistency/history/recovery to RunenNet `ClientReplicationSet`. Authority replication delivery acceptance, reusable prediction cutover, and final ordinary replicated-view/gameplay authoring syntax remain separately gated.
+RN8 is complete: authoritative remote input admission uses RunenNet, Replicated View R0 established a complete derived-state product with atomic owner activation, client replication consistency/history/recovery uses RunenNet `ClientReplicationSet`, tracked client prediction/reconciliation uses `PredictionLineage`, authority replication records real RunenNet `DeliveryAcceptance`, and the final `engine_net` migration shell is deleted. Final ordinary Replicated View/gameplay authoring syntax remains separately evidence-gated under #322.
 
 See the canonical [Runenwerk Networking Architecture](../net/net-architecture.md) for
-the current migration boundary and retained integration details.
+the current ownership boundary and integration details.
 
 # 11. Domain Program and other specialized patterns
 

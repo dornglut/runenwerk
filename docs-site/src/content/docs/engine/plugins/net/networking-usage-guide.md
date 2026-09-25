@@ -1,6 +1,6 @@
 ---
 title: "Networking Usage Guide"
-description: "Current guide for the retained low-level Runenwerk networking migration surface."
+description: "Current low-level expert guide for Runenwerk Engine networking integration around standalone RunenNet."
 status: active
 owner: engine
 layer: engine-runtime
@@ -10,7 +10,7 @@ last_reviewed: 2026-09-25
 
 # Networking Usage Guide
 
-This guide documents the **retained low-level RN8 migration surface** that still has maintained Runenwerk consumers. It is not authority for the future ordinary multiplayer authoring syntax. Current ownership and migration constraints are defined by the Runenwerk networking architecture and multiplayer replication roadmap.
+This guide documents the **current low-level expert networking path** for Runenwerk Engine integration around standalone RunenNet. It is not authority for the future ordinary multiplayer authoring syntax. Current ownership and future-work constraints are defined by the Runenwerk networking architecture and multiplayer replication roadmap.
 
 ## 1) Import the Current Engine Surface
 
@@ -26,7 +26,7 @@ This provides the current engine-facing integration surface, including:
 
 Connection/session lifecycle and reusable replication/input semantics are owned by standalone RunenNet.
 
-## 2) Implement the Retained Driver Boundary
+## 2) Implement the Low-Level Driver Boundary
 
 Current maintained consumers use:
 
@@ -36,7 +36,7 @@ Current maintained consumers use:
 
 `InputDriver::receive_remote_input` receives RunenNet `ConnectionHandle`, so authoritative gameplay/integration code can preserve the already-authorized connection lineage.
 
-These driver traits are the retained low-level path and remain useful for specialized representations. The future common-path authoring API is intentionally not defined by this guide.
+These driver traits are the maintained low-level expert path and remain useful for specialized representations. The future common-path authoring API is intentionally not defined by this guide.
 
 ## 3) Install the Net Plugin
 
@@ -46,13 +46,13 @@ app.add_plugins(NetPlugin::<MyDriver>::new(NetRole::Client));
 
 or `NetRole::Server` / `NetRole::Host`.
 
-`NetPlugin` owns engine schedule placement and retained replication/prediction integration. It does not become the owner of reusable RunenNet session, delivery, recovery, or prediction semantics.
+`NetPlugin` owns Engine schedule placement and RunenNet-backed replication/prediction integration. It does not become the owner of reusable RunenNet session, delivery, recovery, or prediction semantics.
 
 ## 4) Session and Runtime Boundary
 
 There is no `NetworkRuntimeHandle` session bridge in the current architecture.
 
-Standalone RunenNet Core owns compatibility negotiation, session membership, connection binding/loss/retention/replacement/expiry, and closure. Runenwerk projects already-authorized bindings into engine integration and uses engine inbox/outbox work queues for retained replication/application payloads.
+Standalone RunenNet Core owns compatibility negotiation, session membership, connection binding/loss/retention/replacement/expiry, and closure. Runenwerk projects already-authorized bindings into Engine integration and uses Engine inbox/outbox work queues for replication/application payload staging.
 
 Those engine work queues are staging, not a replacement transport or delivery-acceptance runtime. Concrete transport realization is added only where a maintained product consumer requires it.
 
