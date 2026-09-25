@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::{DocumentDescriptor, DocumentId, DocumentKind, EditorMutationError};
+use crate::{DocumentDescriptor, DocumentId, EditorMutationError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ModeId(pub u64);
@@ -12,24 +12,6 @@ pub const EDIT_MODE_ID: ModeId = ModeId(1);
 pub const PLAY_MODE_ID: ModeId = ModeId(2);
 pub const SIMULATE_MODE_ID: ModeId = ModeId(3);
 pub const PREVIEW_MODE_ID: ModeId = ModeId(4);
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DocumentCompatibilityContext {
-    pub allowed_document_kinds: Vec<DocumentKind>,
-}
-
-impl DocumentCompatibilityContext {
-    pub fn new(allowed_document_kinds: impl IntoIterator<Item = DocumentKind>) -> Self {
-        Self {
-            allowed_document_kinds: allowed_document_kinds.into_iter().collect(),
-        }
-    }
-
-    pub fn allows(&self, document_kind: &DocumentKind) -> bool {
-        self.allowed_document_kinds.is_empty()
-            || self.allowed_document_kinds.contains(document_kind)
-    }
-}
 
 #[derive(Debug, Default)]
 pub struct EditorSession {
@@ -72,25 +54,6 @@ impl EditorSession {
         document_id: DocumentId,
     ) -> Result<(), EditorMutationError> {
         self.set_active_document(Some(document_id))
-    }
-
-    pub fn activate_document_with_compatibility(
-        &mut self,
-        document_id: DocumentId,
-        compatibility: &DocumentCompatibilityContext,
-    ) -> Result<(), EditorMutationError> {
-        let document = self
-            .document(document_id)
-            .ok_or(EditorMutationError::session_rejected("document not found"))?;
-
-        if !compatibility.allows(&document.kind) {
-            return Err(EditorMutationError::session_rejected(
-                "document kind is not compatible with the active workspace",
-            ));
-        }
-
-        self.active_document = Some(document_id);
-        Ok(())
     }
 
     pub fn active_document_descriptor(&self) -> Option<&DocumentDescriptor> {
@@ -184,6 +147,7 @@ impl crate::CommandContext for EditorSession {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::DocumentKind;
 
     fn descriptor(id: u64, kind: DocumentKind) -> DocumentDescriptor {
         DocumentDescriptor::new(DocumentId(id), kind, format!("Document {id}"))
@@ -214,19 +178,6 @@ mod tests {
             .expect("document should close");
 
         assert_eq!(session.document_tabs(), &[DocumentId(1)]);
-        assert_eq!(session.active_document(), Some(DocumentId(1)));
-    }
-
-    #[test]
-    fn active_document_switch_validates_document_compatibility() {
-        let mut session = EditorSession::new();
-        session.upsert_document(descriptor(1, DocumentKind::Scene));
-        session.upsert_document(descriptor(2, DocumentKind::Theme));
-        let compatibility = DocumentCompatibilityContext::new([DocumentKind::Scene]);
-
-        let rejected = session.activate_document_with_compatibility(DocumentId(2), &compatibility);
-
-        assert!(rejected.is_err());
         assert_eq!(session.active_document(), Some(DocumentId(1)));
     }
 }
