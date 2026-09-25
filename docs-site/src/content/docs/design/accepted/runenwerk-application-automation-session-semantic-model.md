@@ -521,15 +521,39 @@ Their raw numeric values are not durable identity.
 V1 projects runtime identity into deterministic trace-local slots.
 
 Source slots are assigned by first appearance in canonical frame/group order. Device slots are
-scoped beneath a source. Tablet contact/tool slots preserve equality, distinction, and lifetime
-relationships inside the artifact without claiming cross-run hardware identity.
+scoped beneath a source. Tablet contact and tool slots are scoped beneath the enclosing
+source/device context and preserve equality, distinction, and lifetime relationships inside that
+context without claiming cross-run hardware identity.
 
 Import MAY materialize these slots into deterministic in-memory runtime IDs solely to reconstruct
 one `AutomationInputTrace`. Those materialized IDs remain trace-local tokens. A6 still maps the
 reconstructed recorded sources to fresh replay-owned sources before target mutation.
 
-Tablet source time persists its recorded value and unit plus trace-local source/device context.
-Import MUST reconstruct source-time context consistently with the enclosing group.
+Tablet source time persists its recorded value and unit only. Its context is redundant with the
+validated enclosing observation group and MUST NOT be stored as a second independently writable
+authority. Import reconstructs `SourceTime.context` from the enclosing group's trace-local
+source/device context.
+
+### Recording-side replay precondition witness
+
+A6 requires the caller to establish that recorded sources were pristine when capture began. A4
+does not observe or encode that initial state, so a persisted artifact MUST NOT infer it from trace
+shape.
+
+V1 therefore carries an explicit recording-side precondition witness equivalent to:
+
+~~~
+recorded_sources_pristine_at_capture_start = true
+~~~
+
+The V1 exporter requires this witness from the caller. It is an asserted capture precondition and
+MUST be represented as such; it is not retroactively promoted into observed input evidence.
+
+A V1 artifact without the supported recording-side witness is not eligible for A6 replay.
+
+The witness covers only the recorded side. A future executor still chooses fresh replay-owned source
+IDs at execution time and remains responsible for the replay-side freshness/exclusivity required by
+A6. Replay-owned IDs are never persisted into the artifact.
 
 ### Provenance is not compatibility
 
@@ -571,7 +595,14 @@ Where practical, conversion SHOULD finish by exercising existing RunenInput and 
 than copying reducer laws into the persistence layer.
 
 A persisted trace is untrusted input. The first loader MUST enforce explicit practical bounds for
-input bytes, frame count, group count, observations per group, and human-readable metadata length.
+input bytes, frame count, total/group-local group counts, observations per group, and
+human-readable metadata length.
+
+The byte-size limit MUST be checked before RON parsing. Structural/count limits are checked before
+runtime-trace materialization. A8 MUST choose concrete named V1 loader constants and prove each
+limit with rejection tests rather than leaving bounds implicit.
+
+These loader bounds are security/resource policy, not values supplied by the untrusted artifact.
 Over-limit input fails with a typed load/validation result.
 
 ### Migration policy
@@ -852,13 +883,15 @@ That proof SHOULD:
 3. parse and validate it back under explicit resource bounds;
 4. reconstruct equivalent trace-local source/device/contact/tool relationships without preserving
    raw runtime ID values as durable identity;
-5. reject unsupported A6 shapes during export and malformed/unsupported artifacts during import;
-6. preserve idle frames, group order, supported tablet atomicity/source-time semantics, motion units,
+5. require and preserve the explicit recorded-sources-pristine capture witness while keeping
+   replay-owned source selection execution-local;
+6. reject unsupported A6 shapes during export and malformed/unsupported artifacts during import;
+7. preserve idle frames, group order, supported tablet atomicity/source-time semantics, motion units,
    scroll semantics, and pointer transitions;
-7. prove semantic round-trip equivalence modulo runtime-ID remapping;
-8. feed the imported trace through accepted A6 replay;
-9. prove Render Lab record -> persist -> parse -> replay -> typed camera equality;
-10. require no new serialization dependency while current Engine `serde`/`ron` ownership remains
+8. prove semantic round-trip equivalence modulo runtime-ID remapping;
+9. feed the imported trace through accepted A6 replay;
+10. prove Render Lab record -> persist -> parse -> replay -> typed camera equality;
+11. require no new serialization dependency while current Engine `serde`/`ron` ownership remains
     sufficient.
 
 Do not add a production CLI, generic scenario AST, IPC, remote attach, native OS automation, Scene
