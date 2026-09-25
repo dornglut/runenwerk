@@ -177,6 +177,9 @@ These are advanced runtime boundary types produced by `RenderPrepare` and consum
 - `PreparedFixedResolutionExecution`
 - `RenderFixedResolutionExecutionAdmission`
 - `RenderFixedResolutionFallback`
+- `RenderFixedResolutionExecutionEvidence`
+- `RenderFixedResolutionExecutionEvidenceError`
+- `inspect_fixed_resolution_execution`
 - `fixed_resolution_resolve_flow`
 - `PreparedTargetBinding`
 - `RenderProductSurfaceRequest`
@@ -234,7 +237,9 @@ Contract:
 - `RenderFlowInvocationPolicy::AutomaticMain` is the compatibility default. `ExplicitOnly` is for helper/product flows that must run only through explicit prepared invocations; the fixed-resolution resolve flow uses this policy so registration is safe while fixed execution is inactive.
 - `RenderFixedResolutionExecutionRequest` is a return-only renderer helper. It validates a sub-native same-aspect internal extent and a selected compiled flow's explicit color-target alias, then prepares a sampleable RGBA dynamic target, offscreen view, selected-flow invocation, native-output resolve invocation, and automatic-main replacement claim.
 - Producers remain responsible for explicit publication into `RenderDynamicTextureTargetRequestRegistryResource` and `PreparedRenderFrameRequestResource`; shared fixed-resolution helpers do not mutate ECS registries.
-- `RenderFixedResolutionExecutionAdmission` returns either fully prepared Fixed execution or an explicit Native fallback with a reason. Rejected fixed execution yields no partial fixed request parts.
+- `RenderFixedResolutionExecutionAdmission` returns either fully prepared candidate Fixed execution or an explicit Native fallback with a reason. Rejected fixed execution yields no partial fixed request parts.
+- `inspect_fixed_resolution_execution(...)` is the execution-evidence gate. It reports `policy = Fixed` only when the actual `PreparedRenderFrame` contains the admitted native output extent, internal view, dynamic target, scene invocation/binding, and resolve invocation/binding. Missing partial state is an inspection error, not a fabricated fallback.
+- Native fallback evidence carries both `native_fallback_active = true` and an explicit reason. Temporal inspection rejects active fallback without a reason and rejects stale reasons when fallback is inactive.
 - `fixed_resolution_resolve_flow()` provides portable fullscreen spatial resolve plumbing to native `SurfaceColor`. It does not claim TAAU reconstruction quality or choose a production scale.
 
 Current UI note:
