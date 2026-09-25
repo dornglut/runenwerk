@@ -334,12 +334,7 @@ fn finish_pending_composition_restore(
         Ok(()) => {
             let installed = host.shell_state.composition_runtime().clone();
             host.app.prune_surface_sessions_for_composition(&installed);
-            close_obsolete_editor_windows(
-                host,
-                pending.old_secondary_windows,
-                windows,
-                surfaces,
-            );
+            close_obsolete_editor_windows(host, pending.old_secondary_windows, windows, surfaces);
             host.app.append_console_line(
                 "[composition] restored persisted presentation targets atomically".to_owned(),
             );
@@ -1182,11 +1177,7 @@ mod tests {
             "created provisional surface remains owned until native teardown"
         );
         assert!(windows.record(bound[1].1).is_none());
-        assert!(
-            surfaces
-                .surface_for_native_window(bound[1].1)
-                .is_none()
-        );
+        assert!(surfaces.surface_for_native_window(bound[1].1).is_none());
         assert!(
             transitions
                 .diagnostics()
