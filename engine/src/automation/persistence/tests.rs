@@ -315,6 +315,45 @@ fn loader_probes_kind_and_version_before_strict_v1_payload() {
 }
 
 #[test]
+fn strict_named_enum_payloads_reject_unknown_fields() {
+    let measurement: PersistedMeasurementDomainV1 = ron_options()
+        .from_str("Bounded(min: 0.0, max: 1.0)")
+        .expect("known measurement fields should deserialize");
+    assert_eq!(
+        measurement,
+        PersistedMeasurementDomainV1::Bounded { min: 0.0, max: 1.0 }
+    );
+    let measurement_error = ron_options()
+        .from_str::<PersistedMeasurementDomainV1>(
+            "Bounded(min: 0.0, max: 1.0, unexpected: 2.0)",
+        )
+        .expect_err("unknown measurement-domain fields must fail closed");
+    assert!(matches!(
+        measurement_error.code,
+        RonError::NoSuchStructField { .. }
+    ));
+
+    let source_time: PersistedSourceTimeUnitV1 = ron_options()
+        .from_str("NativeTicks(ticks_per_second: 1000)")
+        .expect("known source-time fields should deserialize");
+    assert_eq!(
+        source_time,
+        PersistedSourceTimeUnitV1::NativeTicks {
+            ticks_per_second: 1000
+        }
+    );
+    let source_time_error = ron_options()
+        .from_str::<PersistedSourceTimeUnitV1>(
+            "NativeTicks(ticks_per_second: 1000, unexpected: 1)",
+        )
+        .expect_err("unknown source-time fields must fail closed");
+    assert!(matches!(
+        source_time_error.code,
+        RonError::NoSuchStructField { .. }
+    ));
+}
+
+#[test]
 fn import_rejects_unsupported_recording_witness() {
     let valid = encode(&replayable_trace());
     let unsupported = valid.replacen(

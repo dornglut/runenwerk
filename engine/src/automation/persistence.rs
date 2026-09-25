@@ -362,6 +362,7 @@ struct PersistedAnalogMeasurementV1 {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 enum PersistedMeasurementDomainV1 {
     UnspecifiedScalar,
     NormalizedUnitInterval,
@@ -415,6 +416,7 @@ struct PersistedSourceTimeV1 {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 enum PersistedSourceTimeUnitV1 {
     Microseconds,
     Milliseconds,
