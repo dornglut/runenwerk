@@ -8,7 +8,6 @@ canonical: true
 last_reviewed: 2026-05-05
 related:
   - ./README.md
-  - ./implementation-roadmap.md
   - ../../design/accepted/foundation-diagnostics-design.md
 ---
 
