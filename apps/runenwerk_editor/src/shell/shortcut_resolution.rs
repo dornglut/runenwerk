@@ -2,7 +2,8 @@
 //! Purpose: App-owned resolution of authored editor shortcuts to engine input chords.
 
 use editor_definition::{EditorShortcutDefinition, EditorShortcutSetDefinition};
-use engine::plugins::{KeyChord, ModifierRule, PhysicalKeyIdentity};
+use engine::plugins::{KeyChord, ModifierRule};
+use runen_input::PhysicalKeyIdentity;
 use ui_definition::UiDefinitionDiagnostic;
 
 use crate::shell::{ActiveEditorDefinitionCatalogs, KnownEditorCommand};

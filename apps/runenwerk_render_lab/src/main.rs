@@ -5,6 +5,9 @@ use std::path::PathBuf;
 fn main() -> anyhow::Result<()> {
     match parse_command(env::args_os().skip(1)) {
         Command::Native => runenwerk_render_lab::run_native(),
+        Command::NativeMeasurement(output_path) => {
+            runenwerk_render_lab::run_native_measurement(output_path)
+        }
         Command::FoundingDirect(output_root) => {
             runenwerk_render_lab::run_founding_direct(output_root)?;
             Ok(())
@@ -16,6 +19,7 @@ fn main() -> anyhow::Result<()> {
 enum Command {
     FoundingDirect(PathBuf),
     Native,
+    NativeMeasurement(PathBuf),
 }
 
 fn parse_command(args: impl IntoIterator<Item = OsString>) -> Command {
@@ -23,6 +27,13 @@ fn parse_command(args: impl IntoIterator<Item = OsString>) -> Command {
     let first = args.next();
     if matches!(first.as_deref(), Some(value) if value == "--rl2" || value == "--native") {
         return Command::Native;
+    }
+    if matches!(first.as_deref(), Some(value) if value == "--rl2-measure") {
+        return Command::NativeMeasurement(
+            args.next()
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from("render-lab/rl2-measurement.json")),
+        );
     }
     Command::FoundingDirect(
         first
@@ -67,5 +78,17 @@ mod tests {
     fn native_mode_is_explicit() {
         assert_eq!(parse_command(args(&["--rl2"])), Command::Native);
         assert_eq!(parse_command(args(&["--native"])), Command::Native);
+    }
+
+    #[test]
+    fn native_measurement_mode_has_explicit_and_default_output_paths() {
+        assert_eq!(
+            parse_command(args(&["--rl2-measure", "evidence/run.json"])),
+            Command::NativeMeasurement(PathBuf::from("evidence/run.json"))
+        );
+        assert_eq!(
+            parse_command(args(&["--rl2-measure"])),
+            Command::NativeMeasurement(PathBuf::from("render-lab/rl2-measurement.json"))
+        );
     }
 }

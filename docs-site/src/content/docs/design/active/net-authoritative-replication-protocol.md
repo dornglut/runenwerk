@@ -61,7 +61,7 @@ Implemented now:
 - sent-cursor and retained-baseline validation for ACK acceptance;
 - per-connection full-snapshot fallback when a usable ACK baseline is unavailable;
 - driver-based snapshot capture, delta construction, decode, and application;
-- client-side cursor/baseline checks in the engine integration;
+- RunenNet-owned client cursor/baseline/recovery checks through `ClientReplicationSet`;
 - deterministic per-connection snapshot/delta emission from admitted RunenNet connections;
 - focused tests for stale/future/unsent/pruned ACK handling, independent connection baselines, snapshot/delta application, and full-resync fallback.
 

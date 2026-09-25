@@ -10,6 +10,7 @@ anyhow = "1.0.100"
 drawing.workspace = true
 runen_ecs.workspace = true
 engine = { path = "../../engine" }
+runen-input.workspace = true
 graph.workspace = true
 native_tablet_input.workspace = true
 product.workspace = true

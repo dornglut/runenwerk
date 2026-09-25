@@ -5,12 +5,12 @@ status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-09-01
+last_reviewed: 2026-09-24
 ---
 
 # Replication Pipeline
 
-This document describes the retained Runenwerk replication path after RN8 N2.
+This document describes the retained Runenwerk replication path during RN8 after the client-consistency cut to standalone RunenNet.
 
 Connection/session lifecycle is not part of this pipeline. RunenNet Core authorizes participant/connection bindings first; retained replication consumes those bindings through RunenNet `ConnectionHandle` identity.
 
@@ -55,14 +55,16 @@ Accepted ACKs advance the connection checkpoint and the corresponding streaming 
 
 On authoritative receive:
 
-1. Validate cursor/tick progression.
-2. For a delta, validate the declared base against retained client state.
-3. Decode and apply through `SnapshotApplyDriver`.
-4. Update the local retained snapshot/baseline state.
-5. Stage an ACK for the applied cursor.
-6. Reconcile retained prediction state through the existing engine integration.
+1. Require explicit client lineage and finite retention policy.
+2. Validate a full payload codec before protocol commit, or submit delta base/target/tick plus raw delta bytes to RunenNet.
+3. Let RunenNet `ClientReplicationSet` classify cursor/tick/base/recovery state.
+4. For a delta, reconstruct from the exact RunenNet-retained declared complete base, then re-encode one complete product.
+5. Account the exact complete-product byte length and atomically activate that product through the Runenwerk host-commit owner.
+6. Realize the committed complete product through the retained `SnapshotApplyDriver::apply_snapshot` escape hatch.
+7. Stage an ACK only from the RunenNet lineage acknowledgement cursor/tick after successful downstream realization.
+8. Replay retained local prediction after realization.
 
-N2 does not redesign prediction or replicated-view semantics.
+Runenwerk no longer owns a client snapshot-history/cursor state machine. Prediction semantics remain a later RN8 cut and must consume the live RunenNet client replication authority rather than recreating it.
 
 ## Streaming Integration
 
@@ -74,7 +76,7 @@ When RunenNet lifecycle behavior removes a projected binding, the normal fixed-u
 
 - Missing or evicted server baseline forces a full snapshot for that connection.
 - Invalid/future/stale ACKs never mutate the accepted baseline.
-- Delta base mismatch or malformed payload does not redefine connection/session state.
+- Missing bases, malformed/reconstruction failures, tick regression, connection replacement, and resource pressure are classified by RunenNet client replication state; rejected targets do not replace the active complete product.
 - Connection loss is decided by RunenNet; retained replication state is reconciled from the resulting engine projection.
 - Host reconnect scheduling remains Runenwerk policy and is distinct from RunenNet session retention.
 

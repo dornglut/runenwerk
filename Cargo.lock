@@ -853,6 +853,7 @@ dependencies = [
  "ron",
  "runen-ecs",
  "runen-gpu",
+ "runen-input",
  "runen-net",
  "runen-spatial",
  "rusttype",
@@ -1601,6 +1602,7 @@ dependencies = [
  "anyhow",
  "engine",
  "runen-ecs",
+ "runen-input",
  "windows-sys 0.61.2",
  "winit",
 ]
@@ -2624,6 +2626,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "runen-input"
+version = "0.1.0"
+source = "git+https://github.com/dornglut/runen-input?rev=b2bf687e8071d19e124ea5b2c8948c49891cc1de#b2bf687e8071d19e124ea5b2c8948c49891cc1de"
+
+[[package]]
 name = "runen-net"
 version = "0.1.0"
 source = "git+https://github.com/dornglut/runen-net?rev=2af5700b2889f6503395ffb72ae85f37629f2625#2af5700b2889f6503395ffb72ae85f37629f2625"
@@ -2659,6 +2666,7 @@ dependencies = [
  "ron",
  "runen-ecs",
  "runen-gpu",
+ "runen-input",
  "serde",
  "tracing",
  "ui_composition",
@@ -2696,6 +2704,7 @@ dependencies = [
  "ron",
  "runen-ecs",
  "runen-gpu",
+ "runen-input",
  "runen-net",
  "runen-net-quic",
  "runen-spatial",

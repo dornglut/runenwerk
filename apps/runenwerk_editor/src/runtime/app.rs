@@ -1,12 +1,13 @@
 use anyhow::Result;
 use engine::plugins::{
-    DiagnosticsConfigResource, PhysicalKeyIdentity, RenderFlow, RenderPlugin, ScenePlugin,
-    SchedulerDiagnosticsPlugin, default_plugins,
+    DiagnosticsConfigResource, RenderFlow, RenderPlugin, ScenePlugin, SchedulerDiagnosticsPlugin,
+    default_plugins,
 };
 use engine::prelude::*;
 use runen_gpu::GpuBindingKey;
 #[cfg(test)]
 use runen_gpu::GpuWorkResourceId;
+use runen_input::PhysicalKeyIdentity;
 
 use crate::runtime::plugin::{EditorAppPlugin, EditorNativeWindowIntegrationPlugin};
 use crate::runtime::resources::{EditorHostResource, EditorViewportRenderState};

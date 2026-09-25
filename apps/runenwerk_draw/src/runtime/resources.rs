@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use drawing::{CanvasTileId, DrawingInkTileProduct, ProductQualityClass};
-use engine::plugins::{ContactId, InputContext, ToolId};
+use runen_input::{ContactId, InputContext, ToolId};
 
 use crate::app::{DrawingInkSurfaceKind, RunenwerkDrawApp};
 
@@ -162,7 +162,7 @@ impl DrawingInkUploadTrackerResource {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use engine::plugins::{InputDeviceId, InputSourceId};
+    use runen_input::{InputDeviceId, InputSourceId};
 
     fn stream(contact: u64) -> NativeInputStreamKey {
         NativeInputStreamKey {

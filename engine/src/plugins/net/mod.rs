@@ -1,4 +1,5 @@
 mod authority_input;
+mod client_replication;
 pub mod config;
 pub mod diagnostics;
 pub mod metadata;
@@ -11,6 +12,7 @@ pub mod session_core;
 pub mod streaming_state;
 
 pub(crate) use authority_input::*;
+pub use client_replication::*;
 pub use config::*;
 pub use metadata::*;
 pub use plugin::*;

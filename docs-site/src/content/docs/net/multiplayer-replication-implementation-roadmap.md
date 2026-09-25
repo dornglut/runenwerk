@@ -5,7 +5,7 @@ status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-24
 related_designs:
   - ../design/active/net-authoritative-replication-protocol.md
   - ../design/active/net-plugin-runtime-bridge.md
@@ -29,7 +29,7 @@ Current networking ownership and architecture are defined by:
 - [networking architecture](net-architecture.md);
 - [engine integration design](../design/active/net-plugin-runtime-bridge.md).
 
-## Current Baseline Through RN8 N4
+## Current Baseline Through RN8 N7
 
 Connection/session authority has moved out of retained `engine_net` and into standalone RunenNet Core.
 
@@ -37,7 +37,7 @@ Current boundary:
 
 - RunenNet `ConnectionHandle` is the connection identity used by engine routing and retained replication state;
 - RunenNet compatibility negotiation and `Session` own admission/binding/loss/retention/replacement/expiry/closure semantics;
-- `engine/src/plugins/net` owns engine scheduling, read-only projections, owner routing, host reconnect policy, diagnostics, and retained live replication/input/prediction integration;
+- `engine/src/plugins/net` owns engine scheduling, read-only projections, owner routing, host reconnect policy, diagnostics, explicit integration policy, active complete client product realization, and the remaining server-replication/prediction integration;
 - retained `engine_net` contains only evidence-backed live replication/protocol-payload/input/authoring migration contracts;
 - old connection/session lifecycle state, replication-runtime command/events, synthetic transport-lane/delivery-guarantee mappings, lane-route diagnostics, and the standalone snapshot-payload prediction helper are removed;
 - no engine `runen-net-quic` or replacement transport runtime is introduced because the engine currently has no maintained concrete transport consumer;
@@ -46,8 +46,9 @@ Current boundary:
 Retained live replication substrate includes:
 
 - snapshot, delta, ACK, input-frame, and typed-payload envelopes;
-- per-connection baseline/checkpoint state keyed by RunenNet `ConnectionHandle`;
-- snapshot/delta construction and apply driver contracts;
+- server per-connection baseline/checkpoint state keyed by RunenNet `ConnectionHandle`;
+- RunenNet-owned client replication consistency/history/recovery through `ClientReplicationSet` with exact encoded complete products;
+- snapshot/delta construction plus retained complete-snapshot realization driver contracts;
 - live pending-input prediction/replay integration in the engine plugin;
 - interest/streaming state and diagnostics;
 - declarative replication metadata/macros pending later disposition.
@@ -66,24 +67,29 @@ It established retained replication invariants that RN8 lifecycle cuts must pres
 
 These completed phases do not authorize restoring their former `engine_net` session/runtime placement.
 
-## Post-N2 Integration Constraints
+## RN8 Progression Constraints
 
-Accepted N3 investigation #390 established that the remaining live semantic migration is not one implementation-ready replication/prediction cut:
+N3 identified several dependency-ordered ownership gaps. Subsequent accepted work resolved two of them without compatibility mirrors:
 
-- RunenNet prediction observes `ClientReplicationSet`, so prediction cannot lead without creating a replication mirror;
+- N5 moved authoritative remote participant-input admission to RunenNet `AuthorityInputSession` with explicit finite Runenwerk policy;
+- N6 identified atomic client host commit as the client cut blocker;
+- Replicated View R0 proved a complete immutable encoded product, exact byte accounting, stable replicated identity, and one owner-level activation operation;
+- N7 moves client cursor/history/recovery consistency to RunenNet `ClientReplicationSet`.
+
+Remaining hard constraints are still dependency ordered:
+
+- RunenNet prediction must observe the live `ClientReplicationSet`; no prediction-first mirror is allowed;
 - authority replication needs actual RunenNet `DeliveryAcceptance`; engine work-queue admission is not equivalent;
-- client replication needs unambiguous lineage routing plus truthful finite retained-state accounting/limits;
-- authority input needs an accepted finite input-window/future-horizon/resource policy;
-- declarative profile/reliability/interest/authoring disposition remains coupled to #322/RunenECS rather than the deleted synthetic lane mapping.
+- declarative profile/reliability/interest/authoring disposition remains coupled to #322 evidence rather than old component-registration plumbing.
 
-These are prerequisite ownership questions, not missing RunenNet semantics. Do not solve them with aliases, guessed defaults, or interim runtimes.
+Do not solve remaining gaps with aliases, guessed defaults, fake delivery acceptance, or interim runtimes.
 
 ## Remaining Replication Work
 
 The following concerns remain real, but their owning RN8 slice must be derived from current authority when prerequisites permit it:
 
-- migration of live client/authority replication consistency state to RunenNet;
-- participant input authority and prediction/reconciliation integration;
+- migration of authority replication consistency/delivery state to RunenNet once real `DeliveryAcceptance` exists;
+- prediction/reconciliation integration against the live RunenNet client replication authority;
 - standard ECS component/resource extraction and apply;
 - declarative replication authoring beyond low-level driver escape hatches;
 - richer interest/relevancy resolution and explanation;

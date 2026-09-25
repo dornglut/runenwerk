@@ -449,6 +449,7 @@ fn publish_submitted_frame_history(
         prepared_frame.context.frame_index,
         prepared_frame.surface.render_surface_id.raw(),
         prepared_frame.context.prepare_epoch,
+        prepared_frame.surface.target_size_px(),
         timings.acquire_ms,
         timings.renderer,
         gpu.pass_timings,

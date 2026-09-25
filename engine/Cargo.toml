@@ -17,6 +17,7 @@ anyhow = "1.0.100"
 bytemuck = { version = "1.24.0", features = ["derive"] }
 pollster = "0.4.0"
 runen-gpu.workspace = true
+runen-input.workspace = true
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["fmt", "env-filter"] }
 tracing-appender = "0.2.3"

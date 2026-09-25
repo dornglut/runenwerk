@@ -1,9 +1,9 @@
-//! Translation from native tablet DTOs into engine-owned neutral observations.
+//! Translation from native tablet DTOs into RunenInput observations.
 
-use engine::plugins::{
-    ContactPhase, ContactPresence, DeliveryRole, EvidenceStatus, InputObservation,
-    InputObservationGroup, MeasurementDomain, ObservationOrigin, PhysicalTabletControls,
-    TabletCapabilities, TabletObservation,
+use runen_input::{
+    ContactId, ContactPhase, ContactPresence, DeliveryRole, EvidenceStatus, InputContext,
+    InputObservation, InputObservationGroup, MeasurementDomain, ObservationOrigin,
+    PhysicalTabletControls, StylusTilt, TabletCapabilities, TabletObservation, ToolId,
 };
 
 use crate::model::{
@@ -69,15 +69,15 @@ pub fn map_native_tablet_packet(
 
 fn tablet_observation(
     packet: &NativeTabletPacket,
-    context: engine::plugins::InputContext,
+    context: InputContext,
     sample: NativeTabletSample,
     delivery: DeliveryRole,
     evidence: EvidenceStatus,
 ) -> TabletObservation {
     let position = calibrated_position(sample.position, packet.calibration);
     TabletObservation {
-        contact: engine::plugins::ContactId::new(packet.contact_id),
-        tool: packet.tool_id.map(engine::plugins::ToolId::new),
+        contact: ContactId::new(packet.contact_id),
+        tool: packet.tool_id.map(ToolId::new),
         tool_kind: packet.tool_kind,
         phase: phase_for_event(packet.kind),
         presence: presence(sample.contact),
@@ -96,7 +96,7 @@ fn tablet_observation(
         tilt: sample
             .tilt
             .filter(|_| packet.capabilities.tilt)
-            .map(|tilt| engine::plugins::StylusTilt::new(tilt.x_degrees, tilt.y_degrees)),
+            .map(|tilt| StylusTilt::new(tilt.x_degrees, tilt.y_degrees)),
         twist: measurement(
             sample.twist_degrees,
             packet.capabilities.twist,
@@ -217,7 +217,8 @@ mod tests {
         NativeTabletBarrelButtons, NativeTabletCapabilities, NativeTabletDelta,
         NativeTabletLatencyClass, NativeTabletPosition, NativeTabletTilt,
     };
-    use engine::plugins::{InputState, SourceTimeUnit};
+    use engine::plugins::InputState;
+    use runen_input::SourceTimeUnit;
 
     #[test]
     fn mapping_preserves_neutral_identity_and_orthogonal_sample_roles() {

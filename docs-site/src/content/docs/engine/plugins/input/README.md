@@ -1,142 +1,98 @@
 ---
 title: "Input Plugin"
-description: "Documentation for Input Plugin."
+description: "Runenwerk integration for standalone RunenInput and product action projection."
 status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-24
+last_reviewed: 2026-09-25
 ---
 
 # Input Plugin
 
 ## Purpose
 
-Maintains backend-neutral confirmed physical/device input state separately from Runenwerk-owned product action/binding projection. Ordinary winit input is normalized at the runtime backend edge before it reaches `InputState`; `ActionState` derives product actions from that confirmed state and frame-local accepted keyboard press evidence.
+Runenwerk's Input Plugin integrates the standalone
+[`dornglut/runen-input`](https://github.com/dornglut/runen-input) framework with
+Runenwerk runtime, ECS, frame-local compatibility projections, and product actions.
 
-## Usage
-
-- Plugin: `InputFinalizePlugin`
-- Action projection: `PreUpdate`, `CoreSet::Input`
-- Frame cleanup: `FrameEnd`, `CoreSet::FrameEnd`
-- Physical/device state resource: `InputState`
-- Product action/binding resource: `ActionState`
-
-For the maintained windowed runtime, `engine/src/runtime/winit_input.rs` translates winit keyboard, scroll, cursor, button, and touch evidence into backend-neutral input values. Window-scoped normalized input continues through the existing `PlatformWindowEventQueueResource`/`PlatformEvent` path before `InputState` admits it to the neutral authority.
-
-Raw `DeviceEvent` relative motion is different: winit supplies no window target, so the runtime normalizes its device/source identity and admits the motion directly to the same `InputState` neutral authority. Primary-window redraw after raw motion is host policy and is not input provenance.
-
-The native-tablet path is a specialized backend producer: native acquisition, calibration, health, and recovery remain adapter-owned, while admitted device-level tablet observations enter the same engine-owned neutral input authority before Draw/UI adaptation.
-
-## Ownership Boundaries
-
-- The internal neutral input owner owns backend-neutral observation semantics, physical-control identity correlation, deterministic admission/reduction, and confirmed held/contact state.
-- `InputState` hosts that owner for Runenwerk and owns current non-action text, pointer, scroll, touch, and frame-local compatibility projections. It does not independently intern or reduce physical controls.
-- `InputState` records frame-local accepted physical keyboard press evidence with the modifier snapshot applicable to that press. It does not own product bindings or product action state.
-- `ActionState` is the single Runenwerk product-action authority. It owns concrete `action::*` ids, `InputBindings`, `KeyChord`, modifier rules/default presets, runtime binding mutation, and frame-local/current `action_pressed` / `action_down` projection.
-- Binding semantic types consume `PhysicalKeyIdentity` directly. They do not contain winit API types or compare debug-formatted backend enums.
-- The winit edge adapter owns translation from winit evidence into Runenwerk backend-neutral input values; winit types do not enter the neutral reducer or `PlatformEvent` input payloads.
-- `InputContext` preserves runtime/session-scoped source identity separately from optional backend device identity. Window target identity remains Runenwerk integration context, not neutral window lifecycle ownership.
-- Legacy mouse/touch histories and scalar scroll remain downstream `InputState` projections for current consumers.
-- Does not own scene/render behavior that consumes input, RunenUI routing/focus semantics, window lifecycle, or native-tablet backend policy.
-
-## Extension Points
-
-- Add Runenwerk product action ids and default bindings in the product-owned action/binding module.
-- Add rebinding flows by applying `InputBindingChange` collections to `ActionState` with the current `InputState` as the physical-state source.
-- Extend neutral device semantics only under the accepted input-boundary design and owning issue; do not add product actions or UI semantics to the neutral reducer.
-- Keep backend translation at the backend/platform edge rather than reintroducing winit parsing into semantic binding types.
-
-## Additional Details
-
-### Goals
-
-- Preserve input evidence before backend-specific facts are lost.
-- Keep physical/control identity distinct from logical keyboard meaning and committed text.
-- Preserve source/device scoping, 2D scroll/domain, raw relative motion, contact lifetime, and optional force evidence truthfully.
-- Keep product action policy downstream from physical/device truth.
-- Allow runtime rebinding without changing product system code or fabricating historical press edges.
-- Keep action/binding semantics backend-neutral while retaining explicit backend/test adapters where needed.
-
-### Core Types
-
-- `InputState`
-- `ActionState`
-- `InputContext`, `InputSourceId`, `InputDeviceId`
-- `KeyboardInput`, `PhysicalKeyIdentity`, `LogicalKey`
-- `ScrollInput`, `ContactInput`, `PointerButtonInput`
-- `InputBindings`
-- `InputBindingChange`
-- `KeyChord`
-- `ModifierRule`
-- `action::*` constants (built-in Runenwerk action ids)
-
-The neutral reducer and its control/contact identity correlation remain Runenwerk implementation authority until the accepted ADR-0008 RunenInput handoff. The source owner is being made transfer-ready without stabilizing a standalone Rust API inside Runenwerk. Runtime source/device identities remain session-scoped and must not be treated as persistent hardware identity.
-
-### Runtime Model
-
-The maintained ordinary path is:
+Reusable backend-neutral device observation and deterministic confirmed-state semantics
+belong to RunenInput. Runenwerk consumes the exact accepted revision:
 
 ```text
-winit event evidence
-    -> runtime winit adapter
-        -> backend-neutral input values
-            -> existing PlatformWindowEvent path when the event has a window target
-                -> InputState integration shell
-                    -> self-contained neutral input owner
-                        -> frame-local physical press evidence
-                            -> ActionState Runenwerk product projection
+b2bf687e8071d19e124ea5b2c8948c49891cc1de
 ```
 
-Targetless raw relative motion follows:
+Runenwerk does not keep a second neutral reducer or compatibility forwarding namespace.
+
+## Ownership
+
+**RunenInput owns:**
+
+- source/device/tool/contact identity and semantic device observations;
+- physical/logical keyboard evidence, pointer buttons/motion, scroll, contacts, and
+  demonstrated tablet/stylus observations;
+- measurement/source-time/evidence/history/origin semantics;
+- grouped validation/admission and deterministic confirmed-state reduction;
+- confirmed key/button, pointer-position, and contact queries.
+
+**Runenwerk owns:**
+
+- `InputState` as the ECS/integration shell around `runen_input::InputState`;
+- frame-local keyboard press evidence, text, mouse/touch histories, scalar compatibility
+  projections, and product edge pulses;
+- `ActionState`, bindings, action ids/defaults, rebinding, and product-action projection;
+- winit/native acquisition, App/Host/window lifecycle, and product adapter policy.
+
+RunenUI focus/routing/text semantics, Draw behavior, camera policy, and backend health or
+calibration acquisition remain with their existing owners.
+
+## Runtime model
+
+Window-scoped input:
 
 ```text
-winit DeviceEvent + DeviceId
-    -> runtime winit adapter
-        -> backend-neutral source/device context
-            -> InputState integration shell
-                -> self-contained neutral input owner
+winit evidence
+  -> runtime winit adapter
+    -> runen_input semantic values
+      -> PlatformEvent
+        -> Runenwerk InputState integration
+          -> runen_input::InputState::admit(...)
+            -> Runenwerk frame/product projections
+              -> ActionState
 ```
 
-`InputState` does not own ordinary raw `WindowEvent`/`DeviceEvent` parsing or product action policy. Its direct `KeyCode`/mouse/touch injection helpers remain transitional backend/test conveniences and feed the same neutral authority; `KeyCode` is not the `KeyChord`/`InputBindings` semantic contract.
+Targetless relative motion follows the same semantic admission path without inventing a
+window target.
 
-The neutral reducer is the semantic authority for migrated held physical controls and active contacts. `ActionState` derives product action state from it:
+Native tablet acquisition remains in `native_tablet_input`. That adapter constructs
+RunenInput observations directly; Draw consumes those observations directly from
+`runen_input` while Runenwerk retains only its integration resource/projection layer.
 
-- `action_pressed(action_id)`: fired this frame only from an ordinary accepted aggregate-first press and the modifier snapshot captured for that press;
-- `action_down(action_id)`: currently held according to neutral confirmed state and current product bindings.
+## Behavioral laws retained by integration
 
-Repeat metadata cannot create another ordinary action press. Backend-synthetic keyboard reconciliation may change confirmed held truth but cannot create an ordinary press. If the same physical key is held by multiple device contexts, current product action policy remains aggregate. Binding changes may recompute `action_down`; they do not reinterpret already-processed keyboard evidence to fabricate `action_pressed`.
+- repeat does not fabricate a second product press edge;
+- backend reconciliation may correct confirmed held state without becoming an ordinary
+  source press;
+- aggregate held state remains true while any source/device context still holds;
+- absolute cursor and relative motion stay distinct;
+- absent scroll axes remain absent rather than measured zero;
+- unknown measurement domains are not upgraded to invented precision;
+- predicted/estimated tablet evidence does not become confirmed state;
+- text/IME remains separate from physical key identity.
 
-Absolute cursor position and raw relative motion remain independent quantities. Rich scroll observations preserve both axes and their measurement domain; explicitly unspecified legacy scalar evidence remains marked as unspecified rather than acquiring invented precision, while `scroll_delta` stays a downstream vertical compatibility projection. Touch/contact state remains multi-contact and source/device scoped; the drawing-facing touch sample stream remains single-primary as a downstream compatibility projection.
+## Product actions
 
-Physical keyboard identity, logical key meaning, and committed text are separate. Committed text remains a sibling platform event, not held-state authority.
-
-### Current UI Compatibility Boundary
-
-The editor uses one explicit normalized platform-input adapter into the current local UI ingress for primary and secondary targets. Physical key identity, logical key meaning, committed text, touch cancellation, and product shortcuts retain their accepted separate owners. Standalone RunenUI adoption remains separately owned and is not part of the neutral-input source transfer.
-
-### Default Action Map
-
-Default bindings are product-owned by `InputBindings::with_default_bindings()` and installed by `ActionState::default()`.
-
-Examples:
-
-- `ui.submit`: `Enter`, `NumpadEnter` (Shift forbidden)
-- `ui.insert_newline`: `Shift+Enter`, `Shift+NumpadEnter`
-- `world.move_left/right/up/down`: `A/D/W/S`
-- `system.toggle_pause_menu`: `Escape`
-- `scene.next` / `scene.prev`: `F2` / `Shift+F2`
-- `scene.overlay_push` / `scene.overlay_pop`: `F5` / `Shift+F5`
-- `ui.save_template`: `Ctrl+S` or `Super+S`
-
-### Runtime Remapping
+Product actions remain Runenwerk-owned:
 
 ```rust
-use engine::plugins::input::domain::{action, ActionState, KeyChord, PhysicalKeyIdentity};
+use engine::plugins::input::domain::{action, ActionState, KeyChord};
 use engine::InputState;
+use runen_input::PhysicalKeyIdentity;
 
 let input = InputState::new();
 let mut actions = ActionState::new();
+
 actions.unmap_key(
     &input,
     action::WORLD_MOVE_LEFT,
@@ -154,58 +110,19 @@ actions.map_chord(
 );
 ```
 
-Read product action state from `ActionState`:
+`action_pressed` is frame-local product policy; `action_down` is derived from
+RunenInput-confirmed physical state plus current bindings.
 
-```rust
-if actions.action_pressed("debug.toggle_freecam") {
-    // toggle freecam
-}
+## Extension rules
 
-if actions.action_down(action::WORLD_MOVE_LEFT) {
-    // held movement
-}
-```
-
-### Resource-Friendly Binding Changes
-
-`InputBindingChange` carries backend-neutral physical identities and can be passed around as product-owned data before application:
-
-```rust
-use engine::plugins::input::domain::{
-    action, ActionState, InputBindingChange, KeyChord, PhysicalKeyIdentity,
-};
-use engine::InputState;
-
-let input = InputState::new();
-let mut actions = ActionState::new();
-let applied = actions.apply_binding_changes(
-    &input,
-    [
-        InputBindingChange::UnmapKey {
-            action: action::WORLD_MOVE_LEFT.to_string(),
-            key: PhysicalKeyIdentity::code("KeyA"),
-        },
-        InputBindingChange::MapChord {
-            action: action::WORLD_MOVE_LEFT.to_string(),
-            chord: KeyChord::code("ArrowLeft"),
-        },
-    ],
-);
-
-assert_eq!(applied, 2);
-```
-
-### Frame Lifecycle
-
-- Ordinary window-scoped winit input is normalized at `runtime::winit_input` and applied through `PlatformEvent` before frame schedules.
-- Raw relative device motion is normalized at the same edge and admitted without fabricating a window target.
-- `InputFinalizePlugin` projects `InputState` into `ActionState` in `PreUpdate` / `CoreSet::Input` before ordinary product consumers.
-- End-of-frame cleanup runs in `FrameEnd` / `CoreSet::FrameEnd`: `ActionState` clears frame-local action pulses, then `InputState` clears frame-local text/deltas/sample histories.
-
-Cleanup does not clear durable neutral held-control or active-contact state. Held product actions are recomputed from that confirmed state and the current bindings.
+- Extend reusable device semantics in `dornglut/runen-input`, not in Runenwerk.
+- Extend Runenwerk action vocabulary/bindings in the product-owned action module.
+- Keep winit/native translation at adapter boundaries.
+- Do not add forwarding re-exports of RunenInput values through
+  `engine::plugins::input`.
 
 ## Guides
 
-- Usage: [../../../docs/reference/plugins/input/usage-guide.md](../../reference/plugins/input/usage-guide.md)
-- Advanced: [../../../docs/reference/plugins/input/advanced-guide.md](../../reference/plugins/input/advanced-guide.md)
-- Architecture: [../../../docs/reference/plugins/input/architecture.md](../../reference/plugins/input/architecture.md)
+- Usage: [../../reference/plugins/input/usage-guide.md](../../reference/plugins/input/usage-guide.md)
+- Advanced: [../../reference/plugins/input/advanced-guide.md](../../reference/plugins/input/advanced-guide.md)
+- Architecture: [../../reference/plugins/input/architecture.md](../../reference/plugins/input/architecture.md)

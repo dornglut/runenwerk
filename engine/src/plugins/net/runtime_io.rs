@@ -51,106 +51,57 @@ where
     }
 
     for message in messages {
-        match message {
+        let result = match &message {
             ServerMessage::Snapshot(snapshot) => {
-                let result = apply_authoritative_snapshot::<TDriver>(
-                    &mut world,
-                    snapshot.tick,
-                    snapshot.cursor,
-                    None,
-                    &snapshot.payload,
-                )
-                .with_context(|| {
+                process_client_full_snapshot::<TDriver>(&mut world, snapshot).with_context(|| {
                     format!(
-                        "failed applying snapshot tick={} cursor={} payload_len={}",
+                        "failed processing snapshot tick={} cursor={} payload_len={}",
                         snapshot.tick.0,
                         snapshot.cursor.0,
                         snapshot.payload.len()
                     )
-                });
-
-                match result {
-                    Ok(corrected) => {
-                        match enqueue_client_outbox(
-                            &mut world,
-                            ClientMessage::Ack(Ack {
-                                cursor: snapshot.cursor,
-                                last_received_tick: snapshot.tick,
-                            }),
-                        ) {
-                            Ok(()) => {}
-                            Err(NetworkPendingEnqueueError::Unavailable { endpoint, .. }) => {
-                                anyhow::bail!("{endpoint} should be installed by NetPlugin");
-                            }
-                            Err(NetworkPendingEnqueueError::Backpressure { capacity, .. }) => {
-                                tracing::warn!(capacity, "failed to enqueue snapshot ack");
-                            }
-                        }
-                        if corrected
-                            && let Ok(diagnostics) = world.resource_mut::<PredictionDiagnostics>()
-                        {
-                            diagnostics.corrected = diagnostics.corrected.saturating_add(1);
-                        }
-                    }
-                    Err(error) => {
-                        tracing::warn!(
-                            error = %format!("{error:#}"),
-                            "network snapshot apply failed"
-                        );
-                    }
-                }
+                })
             }
             ServerMessage::DeltaSnapshot(snapshot) => {
-                let result = apply_authoritative_delta::<TDriver>(
-                    &mut world,
-                    snapshot.tick,
-                    snapshot.base,
-                    snapshot.cursor,
-                    &snapshot.payload,
-                )
-                .with_context(|| {
+                process_client_delta_snapshot::<TDriver>(&mut world, snapshot).with_context(|| {
                     format!(
-                        "failed applying delta snapshot tick={} cursor={} payload_len={}",
+                        "failed processing delta snapshot tick={} cursor={} payload_len={}",
                         snapshot.tick.0,
                         snapshot.cursor.0,
                         snapshot.payload.len()
                     )
-                });
-
-                match result {
-                    Ok(corrected) => {
-                        match enqueue_client_outbox(
-                            &mut world,
-                            ClientMessage::Ack(Ack {
-                                cursor: snapshot.cursor,
-                                last_received_tick: snapshot.tick,
-                            }),
-                        ) {
-                            Ok(()) => {}
-                            Err(NetworkPendingEnqueueError::Unavailable { endpoint, .. }) => {
-                                anyhow::bail!("{endpoint} should be installed by NetPlugin");
-                            }
-                            Err(NetworkPendingEnqueueError::Backpressure { capacity, .. }) => {
-                                tracing::warn!(capacity, "failed to enqueue delta snapshot ack");
-                            }
-                        }
-                        if corrected
-                            && let Ok(diagnostics) = world.resource_mut::<PredictionDiagnostics>()
-                        {
-                            diagnostics.corrected = diagnostics.corrected.saturating_add(1);
-                        }
-                    }
-                    Err(error) => {
-                        tracing::warn!(
-                            error = %format!("{error:#}"),
-                            "network delta snapshot apply failed"
-                        );
-                    }
-                }
+                })
             }
             ServerMessage::RunEvent(_)
             | ServerMessage::RunResult(_)
-            | ServerMessage::TypedPayload(_) => {}
+            | ServerMessage::TypedPayload(_) => continue,
+        };
+
+        match result {
+            Ok(processed) => {
+                if let Some(ack) = processed.acknowledgement {
+                    match enqueue_client_outbox(&mut world, ClientMessage::Ack(ack)) {
+                        Ok(()) => {}
+                        Err(NetworkPendingEnqueueError::Unavailable { endpoint, .. }) => {
+                            anyhow::bail!("{endpoint} should be installed by NetPlugin");
+                        }
+                        Err(NetworkPendingEnqueueError::Backpressure { capacity, .. }) => {
+                            tracing::warn!(capacity, "failed to enqueue client replication ack");
+                        }
+                    }
+                }
+                tracing::trace!(
+                    outcome = ?processed.outcome,
+                    corrected = processed.corrected,
+                    "processed RunenNet client replication message"
+                );
+            }
+            Err(error) => {
+                tracing::warn!(
+                    error = %format!("{error:#}"),
+                    "client replication processing failed"
+                );
+            }
         }
     }
 
