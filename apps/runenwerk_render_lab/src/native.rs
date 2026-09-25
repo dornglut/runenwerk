@@ -1061,9 +1061,17 @@ mod tests {
         };
         let mut windows = WindowStateRegistryResource::default();
         let primary = windows.register_primary_window("RL2", (1600, 1200), 1.0, true);
+        let quality_execution = RenderLabTemporalQualityExecutionState::default();
+        let debug_report = RenderDebugFrameReportState::default();
 
-        complete_render_lab_measurement_if_requested(&mut windows, &mut measurement, &history)
-            .unwrap();
+        complete_render_lab_measurement_if_requested(
+            &mut windows,
+            &mut measurement,
+            &history,
+            &quality_execution,
+            &debug_report,
+        )
+        .unwrap();
 
         assert!(measurement.completed);
         let primary_record = windows.record(primary).expect("primary window");
@@ -1071,8 +1079,14 @@ mod tests {
         assert!(!primary_record.close_intent_pending);
         assert!(!bounded_measurement_complete(&measurement, &history));
 
-        complete_render_lab_measurement_if_requested(&mut windows, &mut measurement, &history)
-            .unwrap();
+        complete_render_lab_measurement_if_requested(
+            &mut windows,
+            &mut measurement,
+            &history,
+            &quality_execution,
+            &debug_report,
+        )
+        .unwrap();
         assert!(measurement.completed);
         assert!(
             windows
