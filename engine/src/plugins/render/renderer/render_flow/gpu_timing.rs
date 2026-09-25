@@ -394,12 +394,45 @@ mod composed_native_proof {
     };
     use runen_gpu::{
         GpuBufferDescriptor, GpuBufferInitialization, GpuBufferRegion, GpuBufferUsage,
+        GpuCandidateDisposition, GpuCapabilityAdmissionCause, GpuCapabilityAdmissionError,
         GpuCapabilityFeature, GpuCapabilityProfile, GpuCapabilityRequirement, GpuClearOperation,
-        GpuContextDescriptor, GpuContextRequestErrorCategory, GpuExecutionPreference,
-        GpuReadbackStatus, GpuReconstruction, GpuResourceLabel, GpuSubmissionStatus,
-        GpuWorkFragment, GpuWorkOperation, GpuWorkResourceIdAllocator,
+        GpuContextDescriptor, GpuContextRequestError, GpuContextRequestErrorCategory,
+        GpuExecutionPreference, GpuReadbackStatus, GpuReconstruction, GpuResourceLabel,
+        GpuSubmissionStatus, GpuWorkFragment, GpuWorkOperation, GpuWorkResourceIdAllocator,
     };
     use std::time::{Duration, Instant};
+
+    fn required_timestamp_unavailable(error: Option<&GpuCapabilityAdmissionError>) -> bool {
+        error.is_some_and(|error| {
+            error.cause() == GpuCapabilityAdmissionCause::RequiredUnavailable
+                && error.feature() == Some(GpuCapabilityFeature::TimestampQuery)
+        })
+    }
+
+    fn all_candidates_lack_required_timestamp<'a>(
+        errors: impl IntoIterator<Item = Option<&'a GpuCapabilityAdmissionError>>,
+    ) -> bool {
+        let mut saw_candidate = false;
+        for error in errors {
+            saw_candidate = true;
+            if !required_timestamp_unavailable(error) {
+                return false;
+            }
+        }
+        saw_candidate
+    }
+
+    fn timestamp_requirement_unavailable(error: &GpuContextRequestError) -> bool {
+        error.category() == GpuContextRequestErrorCategory::NoAdmissibleCandidate
+            && all_candidates_lack_required_timestamp(error.candidate_dispositions().iter().map(
+                |disposition| match disposition {
+                    GpuCandidateDisposition::Rejected(report) => {
+                        report.capability_admission_error()
+                    }
+                    GpuCandidateDisposition::Accepted(_) => None,
+                },
+            ))
+    }
 
     fn timestamp_context() -> Option<GpuContext> {
         let mut requirements = GpuCapabilityProfile::ComputeBaseline.requirements();
@@ -413,7 +446,8 @@ mod composed_native_proof {
         match pollster::block_on(GpuContext::request(descriptor)) {
             Ok(context) => Some(context),
             Err(error)
-                if error.category() == GpuContextRequestErrorCategory::NoAdapterAvailable =>
+                if error.category() == GpuContextRequestErrorCategory::NoAdapterAvailable
+                    || timestamp_requirement_unavailable(&error) =>
             {
                 assert_ne!(
                     std::env::var("RUNENRENDER_R7_REQUIRE_GPU").ok().as_deref(),
@@ -424,6 +458,56 @@ mod composed_native_proof {
             }
             Err(error) => panic!("unexpected composed timing RunenGPU context failure: {error}"),
         }
+    }
+
+    fn capability_error(
+        cause: GpuCapabilityAdmissionCause,
+        feature: Option<GpuCapabilityFeature>,
+    ) -> GpuCapabilityAdmissionError {
+        GpuCapabilityAdmissionError::Rejected {
+            operation: "test",
+            label: "test".to_owned(),
+            cause,
+            feature,
+            correction: "test",
+        }
+    }
+
+    #[test]
+    fn timestamp_unavailable_classifier_is_typed_and_fail_closed() {
+        let timestamp = capability_error(
+            GpuCapabilityAdmissionCause::RequiredUnavailable,
+            Some(GpuCapabilityFeature::TimestampQuery),
+        );
+        let compute = capability_error(
+            GpuCapabilityAdmissionCause::RequiredUnavailable,
+            Some(GpuCapabilityFeature::Compute),
+        );
+        let not_enabled = capability_error(
+            GpuCapabilityAdmissionCause::RequiredNotEnabled,
+            Some(GpuCapabilityFeature::TimestampQuery),
+        );
+
+        assert!(all_candidates_lack_required_timestamp([Some(&timestamp)]));
+        assert!(all_candidates_lack_required_timestamp([
+            Some(&timestamp),
+            Some(&timestamp),
+        ]));
+        assert!(!all_candidates_lack_required_timestamp(std::iter::empty::<
+            Option<&GpuCapabilityAdmissionError>,
+        >()));
+        assert!(!all_candidates_lack_required_timestamp([None]));
+        assert!(!all_candidates_lack_required_timestamp([
+            Some(&timestamp),
+            None,
+        ]));
+        assert!(!all_candidates_lack_required_timestamp([
+            Some(&timestamp),
+            Some(&compute),
+        ]));
+        assert!(!all_candidates_lack_required_timestamp([Some(
+            &not_enabled
+        )]));
     }
 
     fn clear_buffer(
