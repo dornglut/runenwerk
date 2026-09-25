@@ -8,8 +8,8 @@ use std::path::{Path, PathBuf};
 mod temporal_quality;
 
 use temporal_quality::{
-    RenderLabFixedQualityPlans, RenderLabTemporalQualityExecutionState, RL2_QUALITY_COLOR_ALIAS,
-    RL2_QUALITY_FLOW_ID, RL2_QUALITY_PASS_ID, inspect_render_lab_temporal_quality_execution_system,
+    RL2_QUALITY_COLOR_ALIAS, RL2_QUALITY_FLOW_ID, RL2_QUALITY_PASS_ID, RenderLabFixedQualityPlans,
+    RenderLabTemporalQualityExecutionState, inspect_render_lab_temporal_quality_execution_system,
     render_lab_fixed_quality_flow, stage_render_lab_fixed_quality_publication,
     stage_render_lab_native_quality_publication, temporal_quality_capture_evidence,
     write_temporal_quality_artifact,
@@ -335,7 +335,6 @@ fn write_measurement_artifact(
     })
 }
 
-
 pub(super) fn render_lab_flow() -> Result<RenderFlow> {
     RenderFlow::new(RL2_FLOW_ID)
         .with_target_alias(RL2_RADIANCE_ALIAS, RenderTargetAliasKind::Texture)?
@@ -353,8 +352,6 @@ pub(super) fn render_lab_flow() -> Result<RenderFlow> {
         .finish()
         .validate()
 }
-
-
 
 fn bounded_measurement_complete(
     measurement: &RenderLabMeasurementConfig,
@@ -609,7 +606,6 @@ fn publish_render_lab_frame_system(
     )
 }
 
-
 fn render_lab_extent(presentation: &engine::PrimaryPresentationMetricsResource) -> (u32, u32) {
     presentation.size_px()
 }
@@ -651,7 +647,6 @@ fn render_lab_radiance_extent(
 /// Validate every RL2 publication against cloned registries before replacing any live product
 /// state. The registries retain their other producers, while a failed replacement leaves the
 /// previous complete frame request intact.
-
 
 fn stage_render_lab_frame_publication(
     targets: &mut RenderDynamicTextureTargetRequestRegistryResource,
@@ -921,7 +916,6 @@ mod tests {
         assert_eq!(render_lab_extent(&presentation), (901, 577));
     }
 
-    
     #[test]
     fn render_lab_radiance_extent_defaults_to_output_and_accepts_fixed_measurement_override() {
         let presentation = engine::PrimaryPresentationMetricsResource::new((1920, 1080), 1.0);
@@ -1067,12 +1061,6 @@ mod tests {
         assert_eq!(contributions.remove(rl2_producer), Some(old_contribution));
     }
 
-    
-    
-    
-    
-    
-    
     #[test]
     fn rl2_rejects_deterministic_publication_to_a_secondary_surface() {
         let flow = render_lab_flow().expect("RL2 flow should author");
