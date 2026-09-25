@@ -17,7 +17,8 @@ use engine::plugins::render::inspect::{
     RenderPassProvenanceState, RenderPixelCoordinate, deterministic_capture_filename,
 };
 use engine::plugins::render::{
-    Gfx, MaterialPreviewFixture, MaterialShaderCompileRequest, compile_material_shader,
+    AppRenderExt, Gfx, MaterialPreviewFixture, MaterialShaderCompileRequest,
+    compile_material_shader,
 };
 use engine::runtime::{
     NativeWindowId, PrimaryPresentationMetricsResource, WindowStateRegistryResource,
