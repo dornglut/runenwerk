@@ -20,7 +20,6 @@ related:
   - ../../adr/accepted/0009-ui-interaction-formation-v2.md
   - ../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
   - ../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md
-  - ../../design/implemented/workspace-identity-contract-and-migration-map.md
 ---
 
 # Runenwerk UI Substrate and Surface Roadmap

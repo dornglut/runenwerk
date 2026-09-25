@@ -430,6 +430,5 @@ consumer cutover requires a new issue and an exact then-current RunenUI review.
 - [ADR 0013: App-Neutral UI Composition Clean Cutover](../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md)
 - [Runenwerk Editor Coordination Semantic Model](../../design/accepted/runenwerk-editor-coordination-semantic-model.md)
 - [Viewport Expression Upgrade Design](../../design/implemented/workspace-viewport-expression-upgrade-design.md)
-- [Workspace Identity Contract and Migration Map](../../design/implemented/workspace-identity-contract-and-migration-map.md)
 - [UI Substrate Roadmap](./roadmap.md)
 - [Standalone RunenUI Architecture](https://github.com/dornglut/runen-ui/blob/main/ARCHITECTURE.md)

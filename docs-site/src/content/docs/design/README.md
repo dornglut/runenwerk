@@ -69,9 +69,8 @@ Use `deferred/` for designs that are valid but intentionally postponed.
 
 Deferred designs should explain why they are not being implemented now and what would reactivate them.
 
-Index:
-
-- [`deferred/README.md`](deferred/README.md)
+Retained deferred documents are linked from their current owning architecture
+and roadmap documents.
 
 ## `implemented/`
 
@@ -79,14 +78,13 @@ Use `implemented/` for accepted designs that have been checked against actual co
 
 A design belongs here only when the implementation exists, tests pass, and any known divergence from the accepted design has been resolved or documented.
 
-Index:
-
-- [`implemented/README.md`](implemented/README.md)
+Retained implemented documents are linked from their current owning architecture
+and roadmap documents.
 
 Examples:
 
 ```text
-implemented/foundation-ratification-design.md
+implemented/ui-program-architecture.md
 implemented/workspace-viewport-expression-upgrade-design.md
 ```
 
@@ -191,7 +189,7 @@ Preferred:
 
 ```text
 foundation-diagnostics-design.md
-foundation-ratification-design.md
+ui-program-architecture.md
 crate-design-template.md
 ```
 

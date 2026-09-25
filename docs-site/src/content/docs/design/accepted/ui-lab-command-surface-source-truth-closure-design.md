@@ -16,7 +16,6 @@ related_designs:
   - ./ui-lab-perfectionist-audit-design.md
   - ./ui-lab-command-catalog-and-surface-registry-design.md
   - ./ui-lab-runtime-evidence-platform-closure-design.md
-  - ../implemented/ui-lab-productization-design.md
   - ../implemented/editor-tool-suite-registry-and-workbench-host-design.md
   - ./runenwerk-editor-coordination-semantic-model.md
 related_roadmaps:

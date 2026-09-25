@@ -11,10 +11,6 @@ related_designs:
   - ./engine-game-runtime-editor-ecs-scripting-hot-reload-design.md
   - ../accepted/sdf-first-field-world-platform-design.md
   - ./editor-procedural-content-and-simulation-workflow-plan.md
-  - ../deferred/domain-gameplay-actions-design.md
-  - ../deferred/domain-gameplay-powers-design.md
-  - ../deferred/engine-gameplay-action-runtime-design.md
-  - ../deferred/engine-gameplay-power-runtime-design.md
 related:
   - ../../domain/graph/README.md
   - ../../domain/world-sdf/README.md
