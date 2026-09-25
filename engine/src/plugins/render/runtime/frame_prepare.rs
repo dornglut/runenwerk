@@ -84,8 +84,13 @@ pub(crate) fn frame_render_prepare_system(mut world: WorldMut) -> anyhow::Result
         for surface in surface_infos {
             let target_size = surface.target_size_px();
             let flows = build_prepared_flow_inputs(compiled_flows, &extracted, target_size)?;
-            let views = build_prepared_views(target_size, &frame_requests)?;
+            let views = build_prepared_views(
+                surface.render_surface_id,
+                target_size,
+                &frame_requests,
+            )?;
             let flow_invocations = build_prepared_flow_invocations(
+                surface.render_surface_id,
                 compiled_flows,
                 &extracted,
                 &flows,
@@ -236,13 +241,14 @@ fn prepared_surface_infos_from_registry(
 }
 
 fn build_prepared_views(
+    render_surface_id: RenderSurfaceId,
     surface_size: (u32, u32),
     requests: &PreparedRenderFrameRequestResource,
 ) -> anyhow::Result<Vec<PreparedViewFrame>> {
     let mut views = BTreeMap::<String, PreparedViewFrame>::new();
     let main = PreparedViewFrame::main(surface_size);
     views.insert(main.view_id.clone(), main);
-    for view in requests.requested_views() {
+    for view in requests.requested_views_for_surface(render_surface_id) {
         if views.insert(view.view_id.clone(), view.clone()).is_some() {
             anyhow::bail!(
                 "prepared render frame request publishes duplicate view '{}'",
@@ -254,6 +260,7 @@ fn build_prepared_views(
 }
 
 fn build_prepared_flow_invocations(
+    render_surface_id: RenderSurfaceId,
     compiled_flows: &[CompiledRenderFlowPlan],
     extracted_state: &ExtractedRenderStateMap<'_>,
     main_inputs_by_flow: &BTreeMap<RenderFlowId, PreparedFlowInputs>,
@@ -270,7 +277,8 @@ fn build_prepared_flow_invocations(
         .map(|flow| (flow.flow_id, flow))
         .collect::<BTreeMap<_, _>>();
 
-    let requested_flow_invocations = requests.requested_flow_invocations();
+    let requested_flow_invocations =
+        requests.requested_flow_invocations_for_surface(render_surface_id);
     let mut invocation_ids = BTreeSet::<&PreparedFlowInvocationId>::new();
     for request in &requested_flow_invocations {
         if !invocation_ids.insert(&request.invocation_id) {
@@ -333,7 +341,12 @@ fn build_prepared_flow_invocations(
                 anyhow::anyhow!("missing main prepared inputs for flow '{:?}'", flow.flow_id)
             })?;
         if flow.invocation_policy == RenderFlowInvocationPolicy::AutomaticMain
-            && should_emit_automatic_main(flow.flow_id, &requested_flow_invocations, requests)
+            && should_emit_automatic_main(
+                render_surface_id,
+                flow.flow_id,
+                &requested_flow_invocations,
+                requests,
+            )
         {
             invocations.push(PreparedFlowInvocation::main(flow.flow_id, inputs));
         }
@@ -343,6 +356,7 @@ fn build_prepared_flow_invocations(
 }
 
 fn should_emit_automatic_main(
+    render_surface_id: RenderSurfaceId,
     flow_id: RenderFlowId,
     requested_flow_invocations: &[&PreparedFlowInvocationRequest],
     requests: &PreparedRenderFrameRequestResource,
@@ -350,7 +364,7 @@ fn should_emit_automatic_main(
     let has_requested_main = requested_flow_invocations
         .iter()
         .any(|request| request.flow_id == flow_id && request.view_id == "main");
-    !has_requested_main && !requests.replaces_automatic_main_flow(flow_id)
+    !has_requested_main && !requests.replaces_automatic_main_flow(render_surface_id, flow_id)
 }
 
 #[cfg(test)]
@@ -385,8 +399,8 @@ mod automatic_main_replacement_tests {
             .expect("replacement should be admitted");
         let requested = requests.requested_flow_invocations();
 
-        assert!(!should_emit_automatic_main(replaced, &requested, &requests));
-        assert!(should_emit_automatic_main(unrelated, &requested, &requests));
+        assert!(!should_emit_automatic_main(RenderSurfaceId::primary(), replaced, &requested, &requests));
+        assert!(should_emit_automatic_main(RenderSurfaceId::primary(), unrelated, &requested, &requests));
     }
 
     #[test]
@@ -443,12 +457,19 @@ mod automatic_main_replacement_tests {
             )
             .expect("fixed execution requests should publish");
 
-        let views = build_prepared_views((1920, 1080), &requests).expect("views should prepare");
+        let views = build_prepared_views(RenderSurfaceId::primary(), (1920, 1080), &requests).expect("views should prepare");
         let extracted = ExtractedRenderStateMap::new();
         let main_inputs = build_prepared_flow_inputs(&compiled, &extracted, (1920, 1080))
             .expect("main inputs should prepare");
         let invocations =
-            build_prepared_flow_invocations(&compiled, &extracted, &main_inputs, &views, &requests)
+            build_prepared_flow_invocations(
+                RenderSurfaceId::primary(),
+                &compiled,
+                &extracted,
+                &main_inputs,
+                &views,
+                &requests,
+            )
                 .expect("invocations should prepare");
 
         assert_eq!(
@@ -525,12 +546,19 @@ mod automatic_main_replacement_tests {
             .replace_contribution(producer(1), [], [native_request])
             .expect("native fallback request should publish");
 
-        let views = build_prepared_views((1920, 1080), &requests).expect("views should prepare");
+        let views = build_prepared_views(RenderSurfaceId::primary(), (1920, 1080), &requests).expect("views should prepare");
         let extracted = ExtractedRenderStateMap::new();
         let main_inputs = build_prepared_flow_inputs(&compiled, &extracted, (1920, 1080))
             .expect("main inputs should prepare");
         let invocations =
-            build_prepared_flow_invocations(&compiled, &extracted, &main_inputs, &views, &requests)
+            build_prepared_flow_invocations(
+                RenderSurfaceId::primary(),
+                &compiled,
+                &extracted,
+                &main_inputs,
+                &views,
+                &requests,
+            )
                 .expect("native fallback invocation should prepare");
 
         assert_eq!(views.len(), 1);
@@ -575,7 +603,7 @@ mod automatic_main_replacement_tests {
         );
 
         let requests = PreparedRenderFrameRequestResource::default();
-        let views = build_prepared_views((1920, 1080), &requests).expect("views should prepare");
+        let views = build_prepared_views(RenderSurfaceId::primary(), (1920, 1080), &requests).expect("views should prepare");
         let extracted = ExtractedRenderStateMap::new();
         let main_inputs =
             build_prepared_flow_inputs(std::slice::from_ref(&compiled), &extracted, (1920, 1080))
