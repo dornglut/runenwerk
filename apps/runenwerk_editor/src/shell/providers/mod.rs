@@ -802,7 +802,6 @@ fn build_tool_surface_create_candidates(
                 candidates.push(ToolSurfaceCreateCandidate::new(
                     surface.key.clone(),
                     surface.label.clone(),
-                    surface.panel_kind,
                 ));
             }
         }
@@ -818,7 +817,6 @@ fn build_tool_surface_create_candidates(
             candidates.push(ToolSurfaceCreateCandidate::new(
                 surface.key.clone(),
                 surface.label.clone(),
-                surface.panel_kind,
             ));
         }
     }

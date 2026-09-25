@@ -7,9 +7,8 @@ use ui_composition::{
 use ui_surface::SurfaceCapability;
 
 use crate::{
-    PanelKind, ToolSurfaceStableKey, WorkspaceSplitAxis, panel_kind_definition_key,
-    tool_surface_capability_set, tool_surface_kind_for_stable_key,
-    tool_surface_kind_from_definition_key,
+    ToolSurfaceDefinition, ToolSurfaceRegistry, ToolSurfaceStableKey, WorkspaceSplitAxis,
+    panel_kind_definition_key,
 };
 
 use super::{
@@ -51,12 +50,13 @@ pub fn plan_editor_activate_unit(
 pub fn plan_editor_create_unit(
     runtime: &EditorCompositionRuntime,
     stack: RegionId,
-    panel_kind: PanelKind,
+    registry: &ToolSurfaceRegistry,
     stable_key: ToolSurfaceStableKey,
     mut identities: EditorCompositionIdentityAllocator,
 ) -> Result<EditorStructuralEditPlan, EditorCompositionRejection> {
     let ordinal = stack_units(runtime.snapshot(), stack)?.len();
-    let (unit, extension) = build_unit(panel_kind, stable_key, &mut identities)?;
+    let surface = resolve_installed_surface(registry, &stable_key)?;
+    let (unit, extension) = build_unit(surface, &mut identities)?;
     let unit_id = unit.id;
     let mut unit_extensions = runtime.extension().mounted_units().to_vec();
     unit_extensions.push(extension);
@@ -149,7 +149,7 @@ pub fn plan_editor_split_with_new_unit(
     runtime: &EditorCompositionRuntime,
     stack: RegionId,
     axis: WorkspaceSplitAxis,
-    panel_kind: PanelKind,
+    registry: &ToolSurfaceRegistry,
     stable_key: ToolSurfaceStableKey,
     mut identities: EditorCompositionIdentityAllocator,
 ) -> Result<EditorStructuralEditPlan, EditorCompositionRejection> {
@@ -161,7 +161,8 @@ pub fn plan_editor_split_with_new_unit(
         )
     })?;
     stack_units(snapshot, stack)?;
-    let (unit, extension) = build_unit(panel_kind, stable_key, &mut identities)?;
+    let surface = resolve_installed_surface(registry, &stable_key)?;
+    let (unit, extension) = build_unit(surface, &mut identities)?;
     let preserved = identities.allocate_region()?;
     let created = identities.allocate_region()?;
     let created_region = RegionDefinition::new(
@@ -333,12 +334,13 @@ pub fn plan_editor_close_stack(
 pub fn plan_editor_reset_stack(
     runtime: &EditorCompositionRuntime,
     stack: RegionId,
-    panel_kind: PanelKind,
+    registry: &ToolSurfaceRegistry,
     stable_key: ToolSurfaceStableKey,
     mut identities: EditorCompositionIdentityAllocator,
 ) -> Result<EditorStructuralEditPlan, EditorCompositionRejection> {
     let units = stack_units(runtime.snapshot(), stack)?.to_vec();
-    let (unit, extension) = build_unit(panel_kind, stable_key, &mut identities)?;
+    let surface = resolve_installed_surface(registry, &stable_key)?;
+    let (unit, extension) = build_unit(surface, &mut identities)?;
     let mut commands = units
         .iter()
         .copied()
@@ -433,27 +435,29 @@ fn finish_plan(
     })
 }
 
+fn resolve_installed_surface<'a>(
+    registry: &'a ToolSurfaceRegistry,
+    stable_key: &ToolSurfaceStableKey,
+) -> Result<&'a ToolSurfaceDefinition, EditorCompositionRejection> {
+    registry.get(stable_key).ok_or_else(|| {
+        reject(
+            Subject::Profile(stable_key.as_str().to_owned()),
+            "Register the requested editor tool surface before mounting it.",
+        )
+    })
+}
+
 fn build_unit(
-    panel_kind: PanelKind,
-    stable_key: ToolSurfaceStableKey,
+    surface: &ToolSurfaceDefinition,
     identities: &mut EditorCompositionIdentityAllocator,
 ) -> Result<(MountedUnitDefinition, EditorMountedUnitExtensionV1), EditorCompositionRejection> {
-    let kind = tool_surface_kind_for_stable_key(&stable_key)
-        .or_else(|| tool_surface_kind_from_definition_key(panel_kind_definition_key(panel_kind)))
-        .ok_or_else(|| {
-            reject(
-                Subject::Profile(stable_key.as_str().to_owned()),
-                "Register a supported editor content profile before mounting it.",
-            )
-        })?;
     let id = identities.allocate_mounted_unit()?;
     let content = MountedContentRef::new(
         ContentOwnerId::new(EDITOR_CONTENT_OWNER).map_err(reference_rejection)?,
-        ContentProfileId::new(stable_key.as_str()).map_err(reference_rejection)?,
+        ContentProfileId::new(surface.key.as_str()).map_err(reference_rejection)?,
         ContentInstanceRef::new(format!("runenwerk.mounted-{}", id.raw()))
             .map_err(reference_rejection)?,
     );
-    let capability_set = tool_surface_capability_set(kind);
     let capabilities = [
         (SurfaceCapability::Observe, "runenwerk.surface.observe"),
         (SurfaceCapability::Interact, "runenwerk.surface.interact"),
@@ -464,7 +468,7 @@ fn build_unit(
         (SurfaceCapability::Ratify, "runenwerk.surface.ratify"),
     ]
     .into_iter()
-    .filter(|(capability, _)| capability_set.allows(*capability))
+    .filter(|(capability, _)| surface.capabilities.allows(*capability))
     .map(|(_, key)| CapabilityId::new(key).map_err(reference_rejection))
     .collect::<Result<Vec<_>, _>>()?;
     let unit = MountedUnitDefinition::new(
@@ -477,8 +481,8 @@ fn build_unit(
         mounted_unit_id: id,
         panel_instance_raw: identities.allocate_panel_instance()?,
         compatibility_surface_raw: identities.allocate_compatibility_surface()?,
-        stable_content_key: stable_key.as_str().to_owned(),
-        panel_kind_key: panel_kind_definition_key(panel_kind).to_owned(),
+        stable_content_key: surface.key.as_str().to_owned(),
+        panel_kind_key: panel_kind_definition_key(surface.panel_kind).to_owned(),
         viewport_instance_raw: None,
     };
     Ok((unit, extension))
@@ -623,8 +627,11 @@ mod tests {
     };
 
     use crate::{
-        WorkspaceIdentityAllocator, default_workspace_profile_registry, import_legacy_workspace,
-        panel_kind_for_tool_surface_kind, tool_surface_kind_from_definition_key,
+        EditorToolSuite, PanelKind, ProviderFamilyDefinition, ProviderFamilyId, SuiteRef,
+        SurfaceRef, ToolSuiteRegistry, ToolSurfaceCreationPolicy, ToolSurfaceRole,
+        ToolSurfaceRoute, WorkspaceIdentityAllocator, default_workspace_profile_registry,
+        import_legacy_workspace, panel_kind_for_tool_surface_kind,
+        tool_surface_kind_from_definition_key,
     };
 
     use super::*;
@@ -705,6 +712,45 @@ mod tests {
             .id
     }
 
+    fn registry_for_surface(
+        panel_kind: crate::PanelKind,
+        stable_key: &ToolSurfaceStableKey,
+    ) -> ToolSuiteRegistry {
+        registry_for_surface_with_capabilities(
+            panel_kind,
+            stable_key,
+            ui_surface::SurfaceCapabilitySet::new(true, true, true, false),
+        )
+    }
+
+    fn registry_for_surface_with_capabilities(
+        panel_kind: crate::PanelKind,
+        stable_key: &ToolSurfaceStableKey,
+        capabilities: ui_surface::SurfaceCapabilitySet,
+    ) -> ToolSuiteRegistry {
+        let provider_family = ProviderFamilyId::new("runenwerk.test").unwrap();
+        ToolSuiteRegistry::new(vec![EditorToolSuite::new(
+            SuiteRef::from_stable_key("runenwerk.test").unwrap(),
+            "Test",
+            vec![ProviderFamilyDefinition::new(
+                provider_family.clone(),
+                "Test",
+            )],
+            vec![ToolSurfaceDefinition::new(
+                SurfaceRef::from_stable_key(stable_key.as_str()).unwrap(),
+                "Test Surface",
+                ToolSurfaceRole::Primary,
+                panel_kind,
+                provider_family,
+                ToolSurfaceRoute::ProviderOwnedLocal,
+                capabilities,
+                ui_surface::SessionRetentionClass::Restorable,
+                ToolSurfaceCreationPolicy::MultipleInstances,
+            )],
+        )])
+        .unwrap()
+    }
+
     fn existing_surface_contract(
         runtime: &EditorCompositionRuntime,
     ) -> (PanelKind, ToolSurfaceStableKey) {
@@ -722,9 +768,11 @@ mod tests {
         let mut identities = EditorCompositionIdentityAllocator::from_runtime(&runtime);
         let stack = first_stack(&runtime);
         let (panel_kind, stable_key) = existing_surface_contract(&runtime);
+        let registry = registry_for_surface(panel_kind, &stable_key);
         let before_count = runtime.composition().definition().mounted_units().len();
         let plan =
-            plan_editor_create_unit(&runtime, stack, panel_kind, stable_key, identities).unwrap();
+            plan_editor_create_unit(&runtime, stack, registry.surfaces(), stable_key, identities)
+                .unwrap();
         apply(&mut runtime, &mut identities, plan);
         let created = runtime
             .composition()
@@ -758,17 +806,82 @@ mod tests {
     }
 
     #[test]
+    fn stable_key_creation_uses_installed_definition_capabilities() {
+        let mut runtime = runtime();
+        let mut identities = EditorCompositionIdentityAllocator::from_runtime(&runtime);
+        let stack = first_stack(&runtime);
+        let stable_key = ToolSurfaceStableKey::new("runenwerk.test.registry-native").unwrap();
+        let registry = registry_for_surface_with_capabilities(
+            PanelKind::Diagnostics,
+            &stable_key,
+            ui_surface::SurfaceCapabilitySet::new(true, false, false, false),
+        );
+        let before_ids = runtime
+            .composition()
+            .definition()
+            .mounted_units()
+            .iter()
+            .map(|unit| unit.id)
+            .collect::<std::collections::BTreeSet<_>>();
+
+        let plan =
+            plan_editor_create_unit(&runtime, stack, registry.surfaces(), stable_key, identities)
+                .unwrap();
+        apply(&mut runtime, &mut identities, plan);
+
+        let created = runtime
+            .composition()
+            .definition()
+            .mounted_units()
+            .iter()
+            .find(|unit| !before_ids.contains(&unit.id))
+            .expect("one registry-native unit should be created");
+
+        assert_eq!(created.capabilities().len(), 1);
+        assert_eq!(
+            created
+                .capabilities()
+                .iter()
+                .next()
+                .expect("created unit should retain the registry capability")
+                .as_str(),
+            "runenwerk.surface.observe"
+        );
+    }
+
+    #[test]
+    fn stable_key_creation_rejects_uninstalled_surface_identity() {
+        let runtime = runtime();
+        let identities = EditorCompositionIdentityAllocator::from_runtime(&runtime);
+        let stack = first_stack(&runtime);
+        let (panel_kind, installed_key) = existing_surface_contract(&runtime);
+        let registry = registry_for_surface(panel_kind, &installed_key);
+        let unknown = ToolSurfaceStableKey::new("runenwerk.uninstalled.surface").unwrap();
+
+        let rejection =
+            plan_editor_create_unit(&runtime, stack, registry.surfaces(), unknown, identities)
+                .expect_err("uninstalled stable surface identity must fail closed");
+
+        assert!(rejection.diagnostics().iter().any(|record| {
+            record
+                .message()
+                .contains("Register the requested editor tool surface")
+        }));
+    }
+
+    #[test]
     fn split_duplicate_lock_and_reset_remain_canonical() {
         let mut runtime = runtime();
         let mut identities = EditorCompositionIdentityAllocator::from_runtime(&runtime);
         let stack = first_stack(&runtime);
         let (panel_kind, stable_key) = existing_surface_contract(&runtime);
+        let registry = registry_for_surface(panel_kind, &stable_key);
         let before_regions = runtime.composition().definition().regions().len();
         let plan = plan_editor_split_with_new_unit(
             &runtime,
             stack,
             WorkspaceSplitAxis::Horizontal,
-            panel_kind,
+            registry.surfaces(),
             stable_key.clone(),
             identities,
         )
@@ -817,7 +930,7 @@ mod tests {
         let plan = plan_editor_reset_stack(
             &runtime,
             duplicate_stack,
-            panel_kind,
+            registry.surfaces(),
             stable_key,
             identities,
         )

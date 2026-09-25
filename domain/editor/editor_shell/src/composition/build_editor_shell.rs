@@ -114,7 +114,6 @@ pub enum RoutedShellAction {
     },
     CreatePanelTabStableKey {
         tab_stack_id: TabStackId,
-        panel_kind: PanelKind,
         stable_surface_key: ToolSurfaceStableKey,
     },
     ClosePanelTab {
@@ -124,7 +123,6 @@ pub enum RoutedShellAction {
     SplitTabStackAreaStableKey {
         tab_stack_id: TabStackId,
         axis: WorkspaceSplitAxis,
-        panel_kind: PanelKind,
         stable_surface_key: ToolSurfaceStableKey,
     },
     DuplicateTabStackArea {
@@ -135,7 +133,6 @@ pub enum RoutedShellAction {
     },
     ResetTabStackAreaStableKey {
         tab_stack_id: TabStackId,
-        panel_kind: PanelKind,
         stable_surface_key: ToolSurfaceStableKey,
     },
     LockTabStackAreaStableKey {
@@ -1994,7 +1991,6 @@ fn projected_tab_stacks_for_routes(
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct TabStackChromeSurfaceTarget {
-    panel_kind: PanelKind,
     stable_surface_key: ToolSurfaceStableKey,
 }
 
@@ -2004,15 +2000,11 @@ fn tab_stack_chrome_surface_target(
     if let Some(active_panel) = &stack.active_panel
         && let Some(stable_surface_key) = active_panel.active_stable_surface_key.clone()
     {
-        return Some(TabStackChromeSurfaceTarget {
-            panel_kind: active_panel.panel_kind,
-            stable_surface_key,
-        });
+        return Some(TabStackChromeSurfaceTarget { stable_surface_key });
     }
 
     let locked_stable_surface_key = stack.locked_stable_surface_key.clone()?;
     Some(TabStackChromeSurfaceTarget {
-        panel_kind: PanelKind::Placeholder,
         stable_surface_key: locked_stable_surface_key,
     })
 }
@@ -2059,7 +2051,6 @@ fn register_tab_stack_chrome_routes(
             tab_stack_new_surface_menu_item_widget_id(stack.tab_stack_id, index),
             RoutedShellAction::CreatePanelTabStableKey {
                 tab_stack_id: stack.tab_stack_id,
-                panel_kind: candidate.panel_kind,
                 stable_surface_key: candidate.stable_surface_key.clone(),
             },
         );
@@ -2070,7 +2061,6 @@ fn register_tab_stack_chrome_routes(
             RoutedShellAction::SplitTabStackAreaStableKey {
                 tab_stack_id: stack.tab_stack_id,
                 axis: WorkspaceSplitAxis::Horizontal,
-                panel_kind: surface_target.panel_kind,
                 stable_surface_key: surface_target.stable_surface_key.clone(),
             },
         );
@@ -2079,7 +2069,6 @@ fn register_tab_stack_chrome_routes(
             RoutedShellAction::SplitTabStackAreaStableKey {
                 tab_stack_id: stack.tab_stack_id,
                 axis: WorkspaceSplitAxis::Vertical,
-                panel_kind: surface_target.panel_kind,
                 stable_surface_key: surface_target.stable_surface_key.clone(),
             },
         );
@@ -2095,7 +2084,6 @@ fn register_tab_stack_chrome_routes(
             tab_stack_reset_area_button_widget_id(stack.tab_stack_id),
             RoutedShellAction::ResetTabStackAreaStableKey {
                 tab_stack_id: stack.tab_stack_id,
-                panel_kind: surface_target.panel_kind,
                 stable_surface_key: surface_target.stable_surface_key.clone(),
             },
         );
@@ -2202,15 +2190,10 @@ mod tests {
     fn chrome_actions_for(stack: &ProjectedTabStackSlot) -> BTreeMap<WidgetId, RoutedShellAction> {
         let mut actions = BTreeMap::new();
         let create_candidates = vec![
-            ToolSurfaceCreateCandidate::new(
-                stable_key("runenwerk.scene.viewport"),
-                "Viewport",
-                PanelKind::Viewport,
-            ),
+            ToolSurfaceCreateCandidate::new(stable_key("runenwerk.scene.viewport"), "Viewport"),
             ToolSurfaceCreateCandidate::new(
                 stable_key(STABLE_KEY_ONLY_TEST_SURFACE),
                 "Stable Only",
-                PanelKind::Diagnostics,
             ),
         ];
         register_tab_stack_chrome_routes(&mut actions, stack, &create_candidates);
@@ -2266,7 +2249,6 @@ mod tests {
             )),
             Some(RoutedShellAction::SplitTabStackAreaStableKey {
                 stable_surface_key,
-                panel_kind: PanelKind::Diagnostics,
                 ..
             }) if stable_surface_key.as_str() == STABLE_KEY_ONLY_TEST_SURFACE
         ));
@@ -2274,7 +2256,6 @@ mod tests {
             actions.get(&tab_stack_reset_area_button_widget_id(stack.tab_stack_id)),
             Some(RoutedShellAction::ResetTabStackAreaStableKey {
                 stable_surface_key,
-                panel_kind: PanelKind::Diagnostics,
                 ..
             }) if stable_surface_key.as_str() == STABLE_KEY_ONLY_TEST_SURFACE
         ));
@@ -2304,7 +2285,6 @@ mod tests {
             actions.get(&tab_stack_new_surface_menu_item_widget_id(stack.tab_stack_id, 0)),
             Some(RoutedShellAction::CreatePanelTabStableKey {
                 stable_surface_key,
-                panel_kind: PanelKind::Diagnostics,
                 ..
             }) if stable_surface_key.as_str() == STABLE_KEY_ONLY_TEST_SURFACE
         ));
@@ -2319,7 +2299,6 @@ mod tests {
             actions.get(&tab_stack_split_horizontal_button_widget_id(stack.tab_stack_id)),
             Some(RoutedShellAction::SplitTabStackAreaStableKey {
                 stable_surface_key,
-                panel_kind: PanelKind::Diagnostics,
                 ..
             }) if stable_surface_key.as_str() == STABLE_KEY_ONLY_TEST_SURFACE
         ));
@@ -2327,7 +2306,6 @@ mod tests {
             actions.get(&tab_stack_reset_area_button_widget_id(stack.tab_stack_id)),
             Some(RoutedShellAction::ResetTabStackAreaStableKey {
                 stable_surface_key,
-                panel_kind: PanelKind::Diagnostics,
                 ..
             }) if stable_surface_key.as_str() == STABLE_KEY_ONLY_TEST_SURFACE
         ));
