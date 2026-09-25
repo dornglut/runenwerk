@@ -584,8 +584,7 @@ Concrete world, spatial, team, gameplay, presentation, scheduling, and deploymen
 remain Runenwerk/application concerns. Lower transport/TLS/socket libraries do not gain
 those semantics merely because they realize network I/O.
 
-RN8 is currently parked after N4. Current architecture does not authorize N5 and does
-not select a replacement ordinary replicated-view or gameplay authoring syntax.
+RN8 has progressed beyond N4: authoritative remote input admission uses RunenNet, the bounded Replicated View R0 proof established a complete derived-state product with atomic owner activation, and the current client replication cut delegates client consistency/history/recovery to RunenNet `ClientReplicationSet`. Authority replication delivery acceptance, reusable prediction cutover, and final ordinary replicated-view/gameplay authoring syntax remain separately gated.
 
 See the canonical [Runenwerk Networking Architecture](../net/net-architecture.md) for
 the current migration boundary and retained integration details.

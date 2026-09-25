@@ -318,19 +318,13 @@ pub struct ResolvedSurfaceFrame {
 pub struct ToolSurfaceCreateCandidate {
     pub stable_surface_key: ToolSurfaceStableKey,
     pub label: String,
-    pub panel_kind: PanelKind,
 }
 
 impl ToolSurfaceCreateCandidate {
-    pub fn new(
-        stable_surface_key: ToolSurfaceStableKey,
-        label: impl Into<String>,
-        panel_kind: PanelKind,
-    ) -> Self {
+    pub fn new(stable_surface_key: ToolSurfaceStableKey, label: impl Into<String>) -> Self {
         Self {
             stable_surface_key,
             label: label.into(),
-            panel_kind,
         }
     }
 }

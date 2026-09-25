@@ -2067,7 +2067,6 @@ fn tab_chrome_maps_shell_owned_controls_to_structural_commands() {
             ShellCommand::SplitTabStackAreaStableKey {
                 tab_stack_id: split_stack,
                 axis: split_axis,
-                panel_kind: split_panel_kind,
                 stable_surface_key: split_surface_key,
                 projection_epoch: split_epoch,
             },
@@ -2080,7 +2079,6 @@ fn tab_chrome_maps_shell_owned_controls_to_structural_commands() {
             && *anchor_widget_id == tab_stack_new_tab_button_widget_id(viewport_stack)
             && *split_stack == viewport_stack
             && *split_axis == WorkspaceSplitAxis::Horizontal
-            && *split_panel_kind == PanelKind::Viewport
             && split_surface_key.as_str() == "runenwerk.scene.viewport"
             && *split_epoch == projection_epoch
             && *close_stack == viewport_stack
@@ -2185,12 +2183,10 @@ fn tab_stack_area_actions_project_structural_commands_without_surface_submenu() 
         [ShellCommand::SplitTabStackAreaStableKey {
             tab_stack_id: split_stack,
             axis: split_axis,
-            panel_kind: split_panel_kind,
             stable_surface_key: split_surface_key,
             projection_epoch: split_epoch,
         }] if *split_stack == viewport_stack
             && *split_axis == WorkspaceSplitAxis::Horizontal
-            && *split_panel_kind == PanelKind::Viewport
             && split_surface_key.as_str() == "runenwerk.scene.viewport"
             && *split_epoch == projection_epoch
     ));
@@ -2763,7 +2759,6 @@ fn create_candidates_for_kinds(kinds: &[ToolSurfaceKind]) -> Vec<ToolSurfaceCrea
                 ToolSurfaceCreateCandidate::new(
                     stable_surface_key,
                     tool_surface_kind_definition_key(kind),
-                    kind.panel_kind(),
                 )
             })
         })

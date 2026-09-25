@@ -12,9 +12,9 @@ last_reviewed: 2026-09-24
 
 ## Purpose
 
-`engine/src/plugins/net` integrates standalone RunenNet lifecycle/session and authority-input
-semantics with the remaining Runenwerk replication/local-prediction migration contracts, engine
-resources, and schedules.
+`engine/src/plugins/net` integrates standalone RunenNet lifecycle/session, authority-input, and
+client-replication consistency semantics with the remaining Runenwerk server-replication and
+local-prediction migration contracts, engine resources, and schedules.
 
 The game-facing entry point is:
 
@@ -44,8 +44,9 @@ Runenwerk engine integration owns:
 - the read-only `RunenNetSessionProjection` used for engine routing and diagnostics;
 - product/session metadata and host reconnect/deployment policy;
 - bounded inbox/outbox staging for retained replication/application payloads;
-- retained `engine_net` replication/envelope/local-prediction integration while RN8 migration continues;
-- explicit finite authority-input policy selection and host execution staging after RunenNet admission.
+- retained `engine_net` server-replication/envelope/local-prediction integration while RN8 migration continues;
+- explicit finite authority-input policy selection and host execution staging after RunenNet admission;
+- explicit finite client-replication policy, complete encoded-product activation, and downstream host realization around RunenNet `ClientReplicationSet`.
 
 The projection is derived state. It never authorizes admission, loss, retention, replacement,
 expiry, removal, or closure.
@@ -58,15 +59,19 @@ per-connection baseline state.
 - `ConnectionBaselineCheckpoint` tracks sent/acknowledged snapshot cursors and full-resync state.
 - `ServerSnapshotReplicationState<TSnapshot>` stores checkpoints and snapshot history per
   `ConnectionHandle`.
-- `ClientSnapshotReplicationState<TSnapshot>` stores the client's retained applied-snapshot
-  state.
+- client consistency/history/recovery state is owned by RunenNet `ClientReplicationSet`; Runenwerk retains only the active complete encoded product used for downstream realization.
 - `OutboundServerMessage::ToConnection { connection, message }` stages targeted output;
   `OutboundServerMessage::Broadcast(message)` stages broadcast output.
 
-Retained ACK processing still uses projected active `ConnectionHandle`s for the local baseline
-state. Remote participant input is different: `RunenNetSessionCore` resolves the actual session
-participant for the source connection and delegates stale/future/duplicate/conflict/resource and
-authorization semantics to RunenNet `AuthorityInputSession`.
+Server-side ACK processing still uses projected active `ConnectionHandle`s for the retained authority baseline state. Client-side ACK cursor/tick authority comes from the committed RunenNet client lineage, not from incoming message fields or a Runenwerk client history mirror. Remote participant input uses `RunenNetSessionCore` to resolve the actual session participant for the source connection and delegates stale/future/duplicate/conflict/resource and authorization semantics to RunenNet `AuthorityInputSession`.
+
+## Client Replication Consistency
+
+Client snapshot/delta consistency requires an explicit finite `ClientReplicationPolicy`. The policy supplies one accepted `ReplicationLineageKey`, `ClientAggregateLimits`, and per-lineage `ReplicationRetentionLimits`; Runenwerk defines no hidden numeric defaults.
+
+RunenNet `ClientReplicationSet` owns cursor progression, retained complete products, base selection, recovery classification, and the acknowledgement cursor. Runenwerk reconstructs deltas into one complete encoded product and uses its exact encoded byte length for accounting. The RunenNet host-commit callback atomically replaces one active derived-product resource; only after protocol commit does the retained `SnapshotApplyDriver::apply_snapshot` escape hatch realize that complete product into ECS/game state and replay local prediction.
+
+Downstream realization failure does not roll back the RunenNet protocol commit and does not emit an ACK. A duplicate-current resend may retry realization and re-ACK the existing committed cursor without a second protocol commit.
 
 ## Authority Input Admission
 
