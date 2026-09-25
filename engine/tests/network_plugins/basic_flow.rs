@@ -12,6 +12,7 @@ fn server_probe(value: u8) -> ServerMessage {
         tick: engine_sim::SimulationTick(value as u64),
         cursor: SnapshotCursor(value as u64 + 1),
         last_applied: SnapshotCursor(value as u64),
+        entity_ids: Vec::new(),
         payload: vec![value],
     })
 }
