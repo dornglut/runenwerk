@@ -147,8 +147,7 @@ impl RenderDynamicTextureTargetRequestRegistryResource {
         }
 
         for (existing_producer_id, existing_contribution) in &self.contributions {
-            if *existing_producer_id == producer_id
-                || !scope.overlaps(existing_contribution.scope)
+            if *existing_producer_id == producer_id || !scope.overlaps(existing_contribution.scope)
             {
                 continue;
             }
