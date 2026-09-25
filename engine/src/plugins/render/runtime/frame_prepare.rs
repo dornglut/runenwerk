@@ -332,16 +332,70 @@ fn build_prepared_flow_invocations(
             .ok_or_else(|| {
                 anyhow::anyhow!("missing main prepared inputs for flow '{:?}'", flow.flow_id)
             })?;
-        let has_requested_main = requested_flow_invocations
-            .iter()
-            .any(|request| request.flow_id == flow.flow_id && request.view_id == "main");
-        let replaces_automatic_main = requests.replaces_automatic_main_flow(flow.flow_id);
-        if !has_requested_main && !replaces_automatic_main {
+        if should_emit_automatic_main(flow.flow_id, &requested_flow_invocations, requests) {
             invocations.push(PreparedFlowInvocation::main(flow.flow_id, inputs));
         }
     }
 
     Ok(invocations)
+}
+
+fn should_emit_automatic_main(
+    flow_id: RenderFlowId,
+    requested_flow_invocations: &[&PreparedFlowInvocationRequest],
+    requests: &PreparedRenderFrameRequestResource,
+) -> bool {
+    let has_requested_main = requested_flow_invocations
+        .iter()
+        .any(|request| request.flow_id == flow_id && request.view_id == "main");
+    !has_requested_main && !requests.replaces_automatic_main_flow(flow_id)
+}
+
+#[cfg(test)]
+mod automatic_main_replacement_tests {
+    use super::*;
+
+    fn flow(raw: u64) -> RenderFlowId {
+        RenderFlowId::try_from_raw(raw).expect("test flow id should be nonzero")
+    }
+
+    fn producer(raw: u64) -> RenderFrameProducerId {
+        RenderFrameProducerId::try_from_raw(raw).expect("test producer id should be nonzero")
+    }
+
+    #[test]
+    fn replacement_claim_suppresses_only_claimed_flow() {
+        let replaced = flow(7);
+        let unrelated = flow(8);
+        let invocation =
+            PreparedFlowInvocationRequest::new("fixed.scene", replaced, "fixed.scene.view");
+        let mut requests = PreparedRenderFrameRequestResource::default();
+        requests
+            .replace_contribution_with_automatic_main_replacements(
+                producer(1),
+                [PreparedViewFrame::offscreen_product("fixed.scene.view", (1280, 720))],
+                [invocation],
+                [replaced],
+            )
+            .expect("replacement should be admitted");
+        let requested = requests.requested_flow_invocations();
+
+        assert!(!should_emit_automatic_main(replaced, &requested, &requests));
+        assert!(should_emit_automatic_main(unrelated, &requested, &requests));
+    }
+
+    #[test]
+    fn explicit_main_invocation_preserves_existing_main_replacement_behavior() {
+        let flow_id = flow(7);
+        let request = PreparedFlowInvocationRequest::new("scene.main", flow_id, "main");
+        let mut requests = PreparedRenderFrameRequestResource::default();
+        requests
+            .replace_contribution(producer(1), [], [request])
+            .expect("explicit main request should be admitted");
+        let requested = requests.requested_flow_invocations();
+
+        assert!(!should_emit_automatic_main(flow_id, &requested, &requests));
+    }
 }
 
 fn apply_invocation_uniform_overrides(
