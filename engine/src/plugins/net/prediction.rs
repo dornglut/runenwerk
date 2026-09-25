@@ -256,14 +256,7 @@ where
         else {
             continue;
         };
-        if let Some(summary) = prepare_authority_replication_candidate::<TDriver>(
-            &mut world, connection, tick, snapshot,
-        )? && let Ok(diagnostics) = world.resource_mut::<ReplicationDiagnostics>()
-        {
-            diagnostics.last_snapshot_cursor = diagnostics
-                .last_snapshot_cursor
-                .max(summary.target_cursor.get());
-        }
+        prepare_authority_replication_candidate::<TDriver>(&mut world, connection, tick, snapshot)?;
     }
 
     Ok(())
