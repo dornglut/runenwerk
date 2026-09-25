@@ -404,7 +404,7 @@ pub fn plan_editor_resize_split(
     )
 }
 
-fn finish_plan(
+pub(super) fn finish_plan(
     runtime: &EditorCompositionRuntime,
     commands: Vec<CompositionCommand>,
     mounted_units: Vec<EditorMountedUnitExtensionV1>,
@@ -447,7 +447,7 @@ fn resolve_installed_surface<'a>(
     })
 }
 
-fn build_unit(
+pub(super) fn build_unit(
     surface: &ToolSurfaceDefinition,
     identities: &mut EditorCompositionIdentityAllocator,
 ) -> Result<(MountedUnitDefinition, EditorMountedUnitExtensionV1), EditorCompositionRejection> {

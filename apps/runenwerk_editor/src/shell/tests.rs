@@ -336,14 +336,18 @@ fn pm_ui_lab_002_runtime_evidence_reports_catalog_and_registry_chain() {
         None,
     )
     .expect("catalog-backed new window command should dispatch");
-    assert_eq!(shell_state.editor_windows().len(), windows_before + 1);
-    let pending_windows = shell_state.drain_pending_editor_window_presentations();
-    assert_eq!(pending_windows.len(), 1);
+    assert_eq!(shell_state.editor_windows().len(), windows_before);
+    assert!(shell_state.has_pending_fresh_target_request());
+    assert!(shell_state.composition_coordination_pending());
+    assert!(
+        shell_state
+            .drain_pending_editor_window_presentations()
+            .is_empty()
+    );
     writeln!(
         evidence,
-        "- `{}` opened logical editor window `{}`",
-        new_window_descriptor.key,
-        pending_windows[0].raw()
+        "- `{}` queued a composition-coordinated fresh presentation target without early window mutation",
+        new_window_descriptor.key
     )
     .unwrap();
 
