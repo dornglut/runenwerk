@@ -7,6 +7,7 @@ use engine::plugins::render::{
 };
 use engine::runtime::{NativeWindowLifecycleState, Res, ResMut, WindowStateRegistryResource};
 use scene::LocalTransform;
+use ui_composition::PresentationTargetId;
 use ui_math::UiRect;
 use ui_render_data::{
     RectPrimitive, UiDrawKey, UiFrame, UiLayer, UiLayerId, UiPaint, UiPrimitive, UiSortKey,
@@ -48,8 +49,7 @@ pub fn submit_editor_frame_system(
     mut viewport_render_states: ResMut<ViewportRenderStateResource>,
     viewport_observations: Res<ViewportArtifactObservationResource>,
     viewport_instances: Res<ViewportInstanceRegistryResource>,
-    mut viewport_layout_map: ResMut<ViewportLayoutMapResource>,
-    mut tool_surface_bindings: ResMut<ToolSurfaceRuntimeBindingRegistryResource>,
+    tool_surface_bindings: Res<ToolSurfaceRuntimeBindingRegistryResource>,
     mut mounted_surfaces: ResMut<MountedSurfaceRegistryResource>,
     atlas: Res<UiFontAtlasResource>,
     viewport_picking_results: Res<ViewportPickingResultsResource>,
@@ -124,47 +124,7 @@ pub fn submit_editor_frame_system(
             expression.into_ui_frame(),
         )
     };
-    let rendered_viewport_embeds = primary_viewport_embeds_from_frame(&frame);
-    let viewport_bounds = active_viewport_id
-        .and_then(|viewport_id| viewport_bounds_from_frame(&frame, viewport_id.0))
-        .or_else(|| rendered_viewport_embeds.first().map(|(_, bounds)| *bounds))
-        .or_else(|| {
-            viewport_bounds(
-                shell_state.last_tree(),
-                shell_state.last_bounds(),
-                shell_state.runtime(),
-            )
-        })
-        .or_else(|| viewport_bounds_from_render_states(&viewport_render_states))
-        .unwrap_or(bounds);
-    viewport_layout_map.clear();
-    populate_viewport_layout_map_from_shell_tree(
-        shell_state,
-        &mut viewport_layout_map,
-        viewport_bounds,
-    );
-    tool_surface_bindings
-        .rebuild_from_layout_map_with_instances(&viewport_layout_map, &viewport_instances);
-    sync_viewport_render_states_from_bindings(
-        app,
-        &mut viewport_render_states,
-        &tool_surface_bindings,
-        &rendered_viewport_embeds,
-        shell_scale,
-        viewport_debug_stage(),
-        root_background_opaque_enabled(),
-    );
     mounted_surfaces.sync_from_composition(shell_state.composition_runtime());
-    if app.debug_logs_enabled() {
-        for rebind in tool_surface_bindings.latest_rebinds() {
-            app.append_console_line(format!(
-                "[viewport.binding] rebind tool_surface={} from_viewport={} to_viewport={}",
-                rebind.tool_surface_id.raw(),
-                rebind.from_viewport_id.0,
-                rebind.to_viewport_id.0
-            ));
-        }
-    }
 
     let diagnostic_viewport_id =
         active_viewport_id.or_else(|| viewport_render_states.viewport_ids().next());
@@ -331,12 +291,140 @@ pub fn submit_editor_secondary_native_frames_system(
     }
 }
 
+pub fn sync_editor_primary_viewport_projection_system(
+    presentation: Res<PrimaryPresentationMetricsResource>,
+    mut host: ResMut<EditorHostResource>,
+    viewport_instances: Res<ViewportInstanceRegistryResource>,
+    mut viewport_layout_map: ResMut<ViewportLayoutMapResource>,
+    mut tool_surface_bindings: ResMut<ToolSurfaceRuntimeBindingRegistryResource>,
+    mut viewport_render_states: ResMut<ViewportRenderStateResource>,
+) {
+    let Some(primary_target_id) = host
+        .shell_state
+        .composition_runtime()
+        .composition()
+        .definition()
+        .targets()
+        .first()
+        .map(|target| target.id)
+    else {
+        viewport_layout_map.clear();
+        tool_surface_bindings
+            .rebuild_from_layout_map_with_instances(&viewport_layout_map, &viewport_instances);
+        viewport_render_states.retain_viewports(|_| false);
+        return;
+    };
+    let target_scales = [(
+        primary_target_id,
+        effective_shell_scale(presentation.scale_factor()),
+    )];
+    rebuild_viewport_runtime_projection(
+        &mut host,
+        &viewport_instances,
+        &mut viewport_layout_map,
+        &mut tool_surface_bindings,
+        &mut viewport_render_states,
+        &target_scales,
+    );
+}
+
+pub fn sync_editor_all_target_viewport_projection_system(
+    presentation: Res<PrimaryPresentationMetricsResource>,
+    window_registry: Res<WindowStateRegistryResource>,
+    mut host: ResMut<EditorHostResource>,
+    viewport_instances: Res<ViewportInstanceRegistryResource>,
+    mut viewport_layout_map: ResMut<ViewportLayoutMapResource>,
+    mut tool_surface_bindings: ResMut<ToolSurfaceRuntimeBindingRegistryResource>,
+    mut viewport_render_states: ResMut<ViewportRenderStateResource>,
+) {
+    let primary_target_id = host
+        .shell_state
+        .composition_runtime()
+        .composition()
+        .definition()
+        .targets()
+        .first()
+        .map(|target| target.id);
+    let target_ids = host
+        .shell_state
+        .composition_runtime()
+        .composition()
+        .definition()
+        .targets()
+        .iter()
+        .map(|target| target.id)
+        .collect::<Vec<_>>();
+    let target_scales = target_ids
+        .into_iter()
+        .filter_map(|target_id| {
+            if Some(target_id) == primary_target_id {
+                return Some((
+                    target_id,
+                    effective_shell_scale(presentation.scale_factor()),
+                ));
+            }
+            let binding = host.shell_state.composition_target_binding(target_id)?;
+            let window = window_registry.record(binding.native_window_id)?;
+            (window.lifecycle_state == NativeWindowLifecycleState::Created)
+                .then_some((target_id, effective_shell_scale(window.scale_factor)))
+        })
+        .collect::<Vec<_>>();
+    rebuild_viewport_runtime_projection(
+        &mut host,
+        &viewport_instances,
+        &mut viewport_layout_map,
+        &mut tool_surface_bindings,
+        &mut viewport_render_states,
+        &target_scales,
+    );
+}
+
+fn rebuild_viewport_runtime_projection(
+    host: &mut EditorHostResource,
+    viewport_instances: &ViewportInstanceRegistryResource,
+    viewport_layout_map: &mut ViewportLayoutMapResource,
+    tool_surface_bindings: &mut ToolSurfaceRuntimeBindingRegistryResource,
+    viewport_render_states: &mut ViewportRenderStateResource,
+    target_scales: &[(PresentationTargetId, f32)],
+) {
+    viewport_layout_map.clear();
+    let mut fallback_embeds = Vec::new();
+    for (target_id, shell_scale) in target_scales.iter().copied() {
+        populate_viewport_layout_map_for_target(
+            &host.shell_state,
+            target_id,
+            viewport_layout_map,
+            shell_scale,
+            &mut fallback_embeds,
+        );
+    }
+    tool_surface_bindings
+        .rebuild_from_layout_map_with_instances(viewport_layout_map, viewport_instances);
+    sync_viewport_render_states_from_bindings(
+        &host.app,
+        viewport_render_states,
+        tool_surface_bindings,
+        &fallback_embeds,
+        viewport_debug_stage(),
+        root_background_opaque_enabled(),
+    );
+    if host.app.debug_logs_enabled() {
+        for rebind in tool_surface_bindings.latest_rebinds() {
+            host.app.append_console_line(format!(
+                "[viewport.binding] rebind tool_surface={} from_viewport={} to_viewport={}",
+                rebind.tool_surface_id.raw(),
+                rebind.from_viewport_id.0,
+                rebind.to_viewport_id.0
+            ));
+        }
+    }
+}
+
 fn sync_viewport_render_states_from_bindings(
     app: &crate::editor_app::RunenwerkEditorApp,
     viewport_render_states: &mut ViewportRenderStateResource,
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
-    fallback_embeds: &[(ViewportId, UiRect)],
-    shell_scale: f32,
+    fallback_embeds: &[(ViewportId, UiRect, f32)],
     default_debug_stage: EditorViewportDebugStage,
     default_root_background_opaque: bool,
 ) {
@@ -357,7 +445,7 @@ fn sync_viewport_render_states_from_bindings(
             binding.bounds.width,
             binding.bounds.height,
         ));
-        render_state.set_effective_shell_scale(shell_scale);
+        render_state.set_effective_shell_scale(binding.effective_shell_scale);
         populate_viewport_render_state(app, &mut render_state, binding.bounds);
         render_state.update_visibility_diagnostics(viewport_is_valid(binding.bounds), true);
         viewport_ids.insert(binding.viewport_id);
@@ -368,7 +456,7 @@ fn sync_viewport_render_states_from_bindings(
             render_state,
         });
     }
-    for (viewport_id, bounds) in fallback_embeds {
+    for (viewport_id, bounds, shell_scale) in fallback_embeds {
         if viewport_ids.contains(viewport_id) {
             continue;
         }
@@ -382,7 +470,7 @@ fn sync_viewport_render_states_from_bindings(
                 state
             });
         render_state.set_viewport_bounds((bounds.x, bounds.y, bounds.width, bounds.height));
-        render_state.set_effective_shell_scale(shell_scale);
+        render_state.set_effective_shell_scale(*shell_scale);
         populate_viewport_render_state(app, &mut render_state, *bounds);
         render_state.update_visibility_diagnostics(viewport_is_valid(*bounds), true);
         viewport_ids.insert(*viewport_id);
@@ -465,64 +553,35 @@ fn presentation_bounds(presentation: &PrimaryPresentationMetricsResource) -> UiR
     UiRect::new(0.0, 0.0, width, height)
 }
 
-fn viewport_bounds_from_frame(frame: &UiFrame, viewport_id: u64) -> Option<UiRect> {
-    frame
-        .surfaces
-        .iter()
-        .flat_map(|surface| surface.layers.iter())
-        .flat_map(|layer| layer.primitives.iter())
-        .find_map(|primitive| {
-            let UiPrimitive::ViewportSurfaceEmbed(embed) = primitive else {
-                return None;
-            };
-            if embed.viewport_id == viewport_id
-                && embed.slot == viewport_embed_slot_for(ViewportSurfacePresentationSlot::Primary)
-            {
-                Some(embed.rect)
-            } else {
-                None
-            }
-        })
-}
-
-fn primary_viewport_embeds_from_frame(frame: &UiFrame) -> Vec<(ViewportId, UiRect)> {
-    frame
-        .surfaces
-        .iter()
-        .flat_map(|surface| surface.layers.iter())
-        .flat_map(|layer| layer.primitives.iter())
-        .filter_map(|primitive| {
-            let UiPrimitive::ViewportSurfaceEmbed(embed) = primitive else {
-                return None;
-            };
-            (embed.slot == viewport_embed_slot_for(ViewportSurfacePresentationSlot::Primary))
-                .then_some((ViewportId(embed.viewport_id), embed.rect))
-        })
-        .collect()
-}
-
-fn populate_viewport_layout_map_from_shell_tree(
+fn populate_viewport_layout_map_for_target(
     shell_state: &RunenwerkEditorShellState,
+    presentation_target_id: PresentationTargetId,
     viewport_layout_map: &mut ViewportLayoutMapResource,
-    fallback_bounds: UiRect,
+    effective_shell_scale: f32,
+    fallback_embeds: &mut Vec<(ViewportId, UiRect, f32)>,
 ) {
-    let (Some(tree), Some(bounds), Some(artifacts)) = (
-        shell_state.last_tree(),
-        shell_state.last_bounds(),
-        shell_state.last_projection_artifacts(),
+    let (Some(tree), Some(bounds), Some(artifacts), Some(runtime)) = (
+        shell_state.last_tree_for_target(presentation_target_id),
+        shell_state.last_bounds_for_target(presentation_target_id),
+        shell_state.last_projection_artifacts_for_target(presentation_target_id),
+        shell_state.runtime_for_target(presentation_target_id),
     ) else {
         return;
     };
-    let layouts = shell_state.runtime().compute_layout(tree, bounds);
+    let layouts = runtime.compute_layout(tree, bounds);
     collect_viewport_layout_entries(
         &tree.root,
         &layouts,
         &artifacts.widget_structural_context_by_id,
+        presentation_target_id,
         viewport_layout_map,
-        fallback_bounds,
+        bounds,
+        effective_shell_scale,
+        fallback_embeds,
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn collect_viewport_layout_entries(
     node: &UiNode,
     layouts: &ComputedLayoutMap,
@@ -530,39 +589,44 @@ fn collect_viewport_layout_entries(
         editor_shell::WidgetId,
         editor_shell::StructuralWidgetRoutingContext,
     >,
+    presentation_target_id: PresentationTargetId,
     viewport_layout_map: &mut ViewportLayoutMapResource,
     fallback_bounds: UiRect,
+    effective_shell_scale: f32,
+    fallback_embeds: &mut Vec<(ViewportId, UiRect, f32)>,
 ) {
     if let UiNodeKind::ViewportSurfaceEmbed(embed) = &node.kind
         && embed.slot == viewport_embed_slot_for(ViewportSurfacePresentationSlot::Primary)
-        && let Some(structural_context) = structural_contexts.get(&node.id).copied()
     {
-        viewport_layout_map.upsert_entry(ViewportLayoutEntry {
-            viewport_id: editor_viewport::ViewportId(embed.viewport_id),
-            host_widget_id: node.id,
-            structural_context,
-            bounds: layouts
-                .get(&node.id)
-                .map(|layout| layout.bounds)
-                .unwrap_or(fallback_bounds),
-        });
+        let bounds = layouts
+            .get(&node.id)
+            .map(|layout| layout.bounds)
+            .unwrap_or(fallback_bounds);
+        let viewport_id = editor_viewport::ViewportId(embed.viewport_id);
+        fallback_embeds.push((viewport_id, bounds, effective_shell_scale));
+        if let Some(structural_context) = structural_contexts.get(&node.id).copied() {
+            viewport_layout_map.upsert_entry(ViewportLayoutEntry {
+                presentation_target_id,
+                viewport_id,
+                host_widget_id: node.id,
+                structural_context,
+                bounds,
+                effective_shell_scale,
+            });
+        }
     }
     for child in &node.children {
         collect_viewport_layout_entries(
             child,
             layouts,
             structural_contexts,
+            presentation_target_id,
             viewport_layout_map,
             fallback_bounds,
+            effective_shell_scale,
+            fallback_embeds,
         );
     }
-}
-
-fn viewport_bounds_from_render_states(states: &ViewportRenderStateResource) -> Option<UiRect> {
-    states
-        .entries()
-        .find(|entry| entry.bounds.width > f32::EPSILON && entry.bounds.height > f32::EPSILON)
-        .map(|entry| entry.bounds)
 }
 
 fn viewport_is_valid(bounds: UiRect) -> bool {
@@ -603,19 +667,6 @@ fn contradiction_reasons(state: &EditorViewportRenderState) -> String {
         reasons.push("unknown");
     }
     reasons.join(", ")
-}
-
-fn viewport_bounds(
-    tree: Option<&editor_shell::UiTree>,
-    bounds: Option<UiRect>,
-    runtime: &editor_shell::UiRuntime,
-) -> Option<UiRect> {
-    let tree = tree?;
-    let bounds = bounds?;
-    let layouts = runtime.compute_layout(tree, bounds);
-    layouts
-        .get(&editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID)
-        .map(|layout| layout.bounds)
 }
 
 fn populate_viewport_render_state(
@@ -716,7 +767,6 @@ mod tests {
     use editor_shell::{PanelInstanceId, TabStackId, ToolSurfaceInstanceId, WidgetId};
     use editor_viewport::ViewportId;
     use scene::Vec3Value;
-    use ui_render_data::ViewportSurfaceEmbedPrimitive;
 
     fn create_sdf_primitive(
         runtime: &mut crate::editor_runtime::RunenwerkEditorRuntime,
@@ -754,53 +804,222 @@ mod tests {
         bounds: UiRect,
     ) -> ToolSurfaceRuntimeBindingRecord {
         ToolSurfaceRuntimeBindingRecord {
+            presentation_target_id: ui_composition::PresentationTargetId::try_from_raw(1).unwrap(),
             tool_surface_id: ToolSurfaceInstanceId::try_from_raw(surface).unwrap(),
             panel_instance_id: PanelInstanceId::try_from_raw(panel).unwrap(),
             tab_stack_id: TabStackId::try_from_raw(stack).unwrap(),
             viewport_id,
             host_widget_id: WidgetId(10_000 + surface),
             bounds,
+            effective_shell_scale: 1.0,
             generation: 1,
         }
     }
 
+    fn host_with_fresh_secondary_target() -> (
+        EditorHostResource,
+        PresentationTargetId,
+        PresentationTargetId,
+    ) {
+        use crate::shell::{EditorCompositionPolicy, EditorWindowPresentationBinding};
+        use editor_shell::{
+            EditorFreshTargetRequest, WorkspaceProfileLayoutSource,
+            plan_editor_fresh_profile_target,
+        };
+        use engine::plugins::render::backend::RenderSurfaceId;
+        use engine::runtime::NativeWindowId;
+        use ui_composition::{CompositionPolicies, TargetProfileId};
+
+        let mut host = EditorHostResource::default();
+        let primary_target = host.shell_state.primary_composition_target_id();
+        let profile_id = host.shell_state.active_workspace_profile_id();
+        let layout = match &host
+            .app
+            .workbench_host()
+            .workspace_profile(profile_id)
+            .expect("active workspace profile should be installed")
+            .layout_source
+        {
+            WorkspaceProfileLayoutSource::AuthoredLayout { layout, .. } => layout.clone(),
+            other => panic!("fresh target requires normalized authored layout, got {other:?}"),
+        };
+        let request = EditorFreshTargetRequest::new(profile_id, layout);
+        let plan = plan_editor_fresh_profile_target(
+            host.shell_state.composition_runtime(),
+            &request,
+            host.app.workbench_host().tool_surface_registry(),
+            host.shell_state.composition_identity_allocator(),
+            TargetProfileId::new("runenwerk.editor.desktop")
+                .expect("editor desktop target profile should be valid"),
+        )
+        .expect("fresh secondary target should plan");
+        let secondary_target = plan.created_target;
+        let identities = plan.identities;
+        let policy = EditorCompositionPolicy;
+        let prepared = host
+            .shell_state
+            .composition_runtime()
+            .prepare_change(
+                plan.change,
+                CompositionPolicies {
+                    lifecycle: &policy,
+                    capability: &policy,
+                    target: &policy,
+                },
+            )
+            .expect("fresh secondary target should prepare");
+
+        let secondary_window = host.shell_state.open_editor_window_for_active_workspace();
+        let secondary_binding = EditorWindowPresentationBinding {
+            native_window_id: NativeWindowId::try_from_raw(2)
+                .expect("secondary native window id should be valid"),
+            render_surface_id: RenderSurfaceId::try_from_raw(2)
+                .expect("secondary render surface id should be valid"),
+        };
+        assert!(
+            host.shell_state
+                .bind_editor_window_presentation(secondary_window, secondary_binding)
+        );
+        host.shell_state
+            .commit_prepared_composition(prepared, Some((secondary_target, secondary_binding)))
+            .expect("fresh secondary target should commit");
+        host.shell_state
+            .replace_composition_identity_allocator(identities);
+
+        (host, primary_target, secondary_target)
+    }
+
     #[test]
-    fn primary_viewport_embeds_from_frame_collects_split_viewport_embeds() {
-        let first = UiRect::new(10.0, 20.0, 300.0, 200.0);
-        let second = UiRect::new(330.0, 20.0, 300.0, 200.0);
-        let mut layer = UiLayer::new(UiLayerId(0));
-        for (order, rect) in [first, second].into_iter().enumerate() {
-            layer.push(UiPrimitive::ViewportSurfaceEmbed(
-                ViewportSurfaceEmbedPrimitive::new(
-                    2 + order as u64,
-                    viewport_embed_slot_for(ViewportSurfacePresentationSlot::Primary),
-                    rect,
-                    UiRect::new(0.0, 0.0, 1.0, 1.0),
-                    UiPaint::rgba(1.0, 1.0, 1.0, 1.0),
-                    UiSortKey::new(0, 0, order as u32),
-                ),
-            ));
-        }
-        layer.push(UiPrimitive::ViewportSurfaceEmbed(
-            ViewportSurfaceEmbedPrimitive::new(
-                1,
-                viewport_embed_slot_for(ViewportSurfacePresentationSlot::Overlay),
-                UiRect::new(700.0, 20.0, 300.0, 200.0),
-                UiRect::new(0.0, 0.0, 1.0, 1.0),
-                UiPaint::rgba(1.0, 1.0, 1.0, 1.0),
-                UiSortKey::new(0, 0, 3),
+    fn all_target_projection_preserves_secondary_binding_scale_and_prunes_removed_target() {
+        let (mut host, primary_target, secondary_target) = host_with_fresh_secondary_target();
+        let mut viewport_instances = ViewportInstanceRegistryResource::default();
+        viewport_instances.sync_from_composition(host.shell_state.composition_runtime());
+
+        let atlas = UiFontAtlasResource::default();
+        let target_presentations = [
+            (
+                primary_target,
+                UiRect::new(0.0, 0.0, 1280.0, 720.0),
+                1.0_f64,
             ),
-        ));
+            (
+                secondary_target,
+                UiRect::new(0.0, 0.0, 900.0, 600.0),
+                1.75_f64,
+            ),
+        ];
+        for (target_id, bounds, scale_factor) in target_presentations {
+            let shell_theme = scaled_shell_theme(&host.theme, scale_factor);
+            let EditorHostResource {
+                app, shell_state, ..
+            } = &mut host;
+            app.build_shell_expression_frame_for_target_with_surface_resources(
+                shell_state,
+                target_id,
+                bounds,
+                &shell_theme,
+                &atlas,
+                None,
+                None,
+                Some(&viewport_instances),
+                None,
+            )
+            .unwrap_or_else(|| panic!("target {} should build a shell frame", target_id.raw()));
+        }
 
-        let frame = UiFrame::with_surfaces(vec![UiSurface::with_layers(
-            UiSurfaceId(0),
-            UiRect::new(0.0, 0.0, 1280.0, 720.0).size(),
-            vec![layer],
-        )]);
+        let primary_scale = effective_shell_scale(1.0);
+        let secondary_scale = effective_shell_scale(1.75);
+        let target_scales = [
+            (primary_target, primary_scale),
+            (secondary_target, secondary_scale),
+        ];
+        let mut layout = ViewportLayoutMapResource::default();
+        let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
+        let mut render_states = ViewportRenderStateResource::default();
 
+        rebuild_viewport_runtime_projection(
+            &mut host,
+            &viewport_instances,
+            &mut layout,
+            &mut bindings,
+            &mut render_states,
+            &target_scales,
+        );
+
+        assert!(
+            layout
+                .entries()
+                .any(|entry| entry.presentation_target_id == primary_target),
+            "primary target should contribute viewport layout"
+        );
+        assert!(
+            layout
+                .entries()
+                .any(|entry| entry.presentation_target_id == secondary_target),
+            "secondary target should contribute viewport layout"
+        );
+
+        let projected = bindings.bindings().collect::<Vec<_>>();
+        let primary = projected
+            .iter()
+            .find(|binding| binding.presentation_target_id == primary_target)
+            .copied()
+            .expect("primary target should retain a viewport binding");
+        let secondary = projected
+            .iter()
+            .find(|binding| binding.presentation_target_id == secondary_target)
+            .copied()
+            .expect("secondary target should retain a viewport binding");
+
+        assert_ne!(
+            primary.tool_surface_id, secondary.tool_surface_id,
+            "fresh target must retain a distinct Tool Surface identity"
+        );
+        assert_ne!(
+            primary.viewport_id, secondary.viewport_id,
+            "fresh target must retain a distinct viewport identity"
+        );
+        assert_eq!(primary.effective_shell_scale, primary_scale);
+        assert_eq!(secondary.effective_shell_scale, secondary_scale);
         assert_eq!(
-            primary_viewport_embeds_from_frame(&frame),
-            vec![(ViewportId(2), first), (ViewportId(3), second)]
+            render_states
+                .state_for(primary.viewport_id)
+                .expect("primary viewport render state should survive")
+                .render_state
+                .effective_shell_scale,
+            primary_scale
+        );
+        assert_eq!(
+            render_states
+                .state_for(secondary.viewport_id)
+                .expect("secondary viewport render state should survive")
+                .render_state
+                .effective_shell_scale,
+            secondary_scale
+        );
+
+        rebuild_viewport_runtime_projection(
+            &mut host,
+            &viewport_instances,
+            &mut layout,
+            &mut bindings,
+            &mut render_states,
+            &[(primary_target, primary_scale)],
+        );
+
+        assert!(
+            bindings
+                .bindings()
+                .all(|binding| binding.presentation_target_id == primary_target),
+            "removing a secondary target from the accepted projection must prune its binding"
+        );
+        assert!(
+            render_states.state_for(primary.viewport_id).is_some(),
+            "primary viewport state must survive secondary-target pruning"
+        );
+        assert!(
+            render_states.state_for(secondary.viewport_id).is_none(),
+            "secondary viewport state must be pruned when no longer represented by the projection"
         );
     }
 
@@ -825,7 +1044,6 @@ mod tests {
             &mut render_states,
             &bindings,
             &[],
-            1.0,
             EditorViewportDebugStage::Scene,
             false,
         );
@@ -848,7 +1066,6 @@ mod tests {
             &mut render_states,
             &bindings,
             &[],
-            1.0,
             EditorViewportDebugStage::Scene,
             false,
         );

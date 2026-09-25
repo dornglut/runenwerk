@@ -8,18 +8,21 @@ use editor_shell::{
     ToolSurfaceInstanceId, WidgetId,
 };
 use editor_viewport::ViewportId;
+use ui_composition::PresentationTargetId;
 use ui_math::{UiPoint, UiRect};
 
 use crate::runtime::viewport::{ViewportInstanceRegistryResource, ViewportLayoutMapResource};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ToolSurfaceRuntimeBindingRecord {
+    pub presentation_target_id: PresentationTargetId,
     pub tool_surface_id: ToolSurfaceInstanceId,
     pub panel_instance_id: PanelInstanceId,
     pub tab_stack_id: TabStackId,
     pub viewport_id: ViewportId,
     pub host_widget_id: WidgetId,
     pub bounds: UiRect,
+    pub effective_shell_scale: f32,
     pub generation: u64,
 }
 
@@ -166,6 +169,25 @@ impl ToolSurfaceRuntimeBindingRegistryResource {
             .copied()
     }
 
+    pub fn binding_containing_cursor_for_target(
+        &self,
+        presentation_target_id: PresentationTargetId,
+        cursor: UiPoint,
+    ) -> Option<ToolSurfaceRuntimeBindingRecord> {
+        self.bindings_by_tool_surface
+            .values()
+            .filter(|binding| {
+                binding.presentation_target_id == presentation_target_id
+                    && binding.bounds.contains(cursor)
+            })
+            .min_by(|left, right| {
+                let left_area = left.bounds.width * left.bounds.height;
+                let right_area = right.bounds.width * right.bounds.height;
+                left_area.total_cmp(&right_area)
+            })
+            .copied()
+    }
+
     pub fn upsert_binding(&mut self, mut binding: ToolSurfaceRuntimeBindingRecord) {
         if binding.generation == 0 {
             binding.generation = self.generation.max(1);
@@ -214,12 +236,14 @@ impl ToolSurfaceRuntimeBindingRegistryResource {
             };
 
             let binding = ToolSurfaceRuntimeBindingRecord {
+                presentation_target_id: entry.presentation_target_id,
                 tool_surface_id,
                 panel_instance_id: entry.structural_context.panel_instance_id,
                 tab_stack_id: entry.structural_context.tab_stack_id,
                 viewport_id,
                 host_widget_id: entry.host_widget_id,
                 bounds: entry.bounds,
+                effective_shell_scale: entry.effective_shell_scale,
                 generation: self.generation,
             };
 
@@ -332,6 +356,7 @@ mod tests {
         widget_id: u64,
     ) -> ViewportLayoutEntry {
         ViewportLayoutEntry {
+            presentation_target_id: PresentationTargetId::try_from_raw(1).unwrap(),
             viewport_id,
             host_widget_id: WidgetId(widget_id),
             structural_context: StructuralWidgetRoutingContext {
@@ -342,6 +367,7 @@ mod tests {
                 tab_stack_id: TabStackId::try_from_raw(stack).unwrap(),
             },
             bounds: UiRect::new(10.0, 20.0, 300.0, 200.0),
+            effective_shell_scale: 1.0,
         }
     }
 
@@ -440,12 +466,14 @@ mod tests {
     fn resolve_command_target_fails_when_requested_viewport_is_stale() {
         let mut registry = ToolSurfaceRuntimeBindingRegistryResource::default();
         registry.upsert_binding(ToolSurfaceRuntimeBindingRecord {
+            presentation_target_id: PresentationTargetId::try_from_raw(1).unwrap(),
             tool_surface_id: ToolSurfaceInstanceId::try_from_raw(31).unwrap(),
             panel_instance_id: PanelInstanceId::try_from_raw(11).unwrap(),
             tab_stack_id: TabStackId::try_from_raw(21).unwrap(),
             viewport_id: ViewportId(2),
             host_widget_id: WidgetId(42),
             bounds: UiRect::new(0.0, 0.0, 100.0, 50.0),
+            effective_shell_scale: 1.0,
             generation: 1,
         });
         let target = StructuralCommandTarget {
@@ -472,12 +500,14 @@ mod tests {
     fn resolve_command_target_fails_when_structural_identity_mismatch() {
         let mut registry = ToolSurfaceRuntimeBindingRegistryResource::default();
         registry.upsert_binding(ToolSurfaceRuntimeBindingRecord {
+            presentation_target_id: PresentationTargetId::try_from_raw(1).unwrap(),
             tool_surface_id: ToolSurfaceInstanceId::try_from_raw(31).unwrap(),
             panel_instance_id: PanelInstanceId::try_from_raw(22).unwrap(),
             tab_stack_id: TabStackId::try_from_raw(44).unwrap(),
             viewport_id: ViewportId(2),
             host_widget_id: WidgetId(42),
             bounds: UiRect::new(0.0, 0.0, 100.0, 50.0),
+            effective_shell_scale: 1.0,
             generation: 1,
         });
         let target = StructuralCommandTarget {
@@ -503,6 +533,36 @@ mod tests {
                 && bound_panel_instance_id == PanelInstanceId::try_from_raw(22).unwrap()
                 && bound_tab_stack_id == TabStackId::try_from_raw(44).unwrap()
         ));
+    }
+
+    #[test]
+    fn target_scoped_cursor_lookup_disambiguates_overlapping_local_rectangles() {
+        let mut registry = ToolSurfaceRuntimeBindingRegistryResource::default();
+        let first_target = PresentationTargetId::try_from_raw(1).unwrap();
+        let second_target = PresentationTargetId::try_from_raw(2).unwrap();
+        for (target, surface, viewport) in [
+            (first_target, 31, ViewportId(1)),
+            (second_target, 32, ViewportId(2)),
+        ] {
+            registry.upsert_binding(ToolSurfaceRuntimeBindingRecord {
+                presentation_target_id: target,
+                tool_surface_id: ToolSurfaceInstanceId::try_from_raw(surface).unwrap(),
+                panel_instance_id: PanelInstanceId::try_from_raw(surface + 10).unwrap(),
+                tab_stack_id: TabStackId::try_from_raw(surface + 20).unwrap(),
+                viewport_id: viewport,
+                host_widget_id: WidgetId(surface + 30),
+                bounds: UiRect::new(0.0, 0.0, 320.0, 240.0),
+                effective_shell_scale: 1.0,
+                generation: 1,
+            });
+        }
+
+        assert_eq!(
+            registry
+                .binding_containing_cursor_for_target(second_target, UiPoint::new(40.0, 40.0))
+                .map(|binding| binding.viewport_id),
+            Some(ViewportId(2)),
+        );
     }
 
     #[test]

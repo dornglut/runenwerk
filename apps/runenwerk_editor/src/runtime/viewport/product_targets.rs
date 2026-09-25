@@ -717,7 +717,8 @@ mod tests {
     };
     use ui_math::UiRect;
 
-    fn binding(
+    fn binding_for_target(
+        target: u64,
         surface: u64,
         panel: u64,
         stack: u64,
@@ -725,12 +726,15 @@ mod tests {
         bounds: UiRect,
     ) -> ToolSurfaceRuntimeBindingRecord {
         ToolSurfaceRuntimeBindingRecord {
+            presentation_target_id: ui_composition::PresentationTargetId::try_from_raw(target)
+                .unwrap(),
             tool_surface_id: ToolSurfaceInstanceId::try_from_raw(surface).unwrap(),
             panel_instance_id: PanelInstanceId::try_from_raw(panel).unwrap(),
             tab_stack_id: TabStackId::try_from_raw(stack).unwrap(),
             viewport_id,
             host_widget_id: WidgetId(10_000 + surface),
             bounds,
+            effective_shell_scale: 1.0,
             generation: 1,
         }
     }
@@ -1087,19 +1091,27 @@ mod tests {
     }
 
     #[test]
-    fn presentation_sync_prefers_runtime_bindings_over_bootstrap_surface_set() {
+    fn presentation_sync_discovers_primary_and_secondary_runtime_bindings() {
         let mut surface_sets = ViewportSurfaceSetResource::default();
         ensure_editor_main_surface_set(&mut surface_sets, MAIN_VIEWPORT_ID);
         let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
-        let first = ViewportId(2);
-        let second = ViewportId(3);
-        bindings.upsert_binding(binding(1, 1, 1, first, UiRect::new(0.0, 0.0, 320.0, 240.0)));
-        bindings.upsert_binding(binding(
+        let primary_viewport = ViewportId(2);
+        let secondary_viewport = ViewportId(3);
+        bindings.upsert_binding(binding_for_target(
+            1,
+            1,
+            1,
+            1,
+            primary_viewport,
+            UiRect::new(0.0, 0.0, 320.0, 240.0),
+        ));
+        bindings.upsert_binding(binding_for_target(
             2,
             2,
             2,
-            second,
-            UiRect::new(320.0, 0.0, 480.0, 240.0),
+            2,
+            secondary_viewport,
+            UiRect::new(0.0, 0.0, 320.0, 240.0),
         ));
 
         assert_eq!(
@@ -1108,7 +1120,8 @@ mod tests {
                 &surface_sets,
                 &bindings
             ),
-            vec![first, second],
+            vec![primary_viewport, secondary_viewport],
+            "downstream presentation/product synchronization must discover the secondary-target viewport before product-target formation",
         );
     }
 }

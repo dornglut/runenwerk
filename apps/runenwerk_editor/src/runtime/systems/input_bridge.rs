@@ -105,6 +105,7 @@ pub fn dispatch_editor_input_system(
     }
 
     let bounds = presentation_bounds(&presentation);
+    let primary_target_id = host.shell_state.primary_composition_target_id();
     let shell_theme = scaled_shell_theme(&host.theme, presentation.scale_factor());
     let viewport_products = resolve_structural_viewport_products(
         &host.shell_state,
@@ -113,7 +114,9 @@ pub fn dispatch_editor_input_system(
     );
     let position = UiPoint::new(input.mouse_position.0, input.mouse_position.1);
     let previous = UiPoint::new(bridge.last_mouse_position.0, bridge.last_mouse_position.1);
-    if let Some(binding) = tool_surface_bindings.binding_containing_cursor(position) {
+    if let Some(binding) =
+        tool_surface_bindings.binding_containing_cursor_for_target(primary_target_id, position)
+    {
         bridge.last_target_viewport = Some(binding.viewport_id);
     }
     let preferred_viewport_id = bridge.last_target_viewport;
@@ -161,7 +164,9 @@ pub fn dispatch_editor_input_system(
         let Some(pointer) = pointer else {
             continue;
         };
-        if let Some(binding) = tool_surface_bindings.binding_containing_cursor(pointer.position) {
+        if let Some(binding) = tool_surface_bindings
+            .binding_containing_cursor_for_target(primary_target_id, pointer.position)
+        {
             bridge.last_target_viewport = Some(binding.viewport_id);
         }
 
@@ -170,8 +175,11 @@ pub fn dispatch_editor_input_system(
                 if !pointer_event_consumed_by_ui(&outcome)
                     && let Some(scroll_delta) = viewport_scroll_delta
                     && scroll_delta.abs() > f32::EPSILON
-                    && let Some(binding) =
-                        fallback_viewport_binding(&tool_surface_bindings, pointer.position)
+                    && let Some(binding) = fallback_viewport_binding(
+                        &tool_surface_bindings,
+                        primary_target_id,
+                        pointer.position,
+                    )
                 {
                     bridge.last_target_viewport = Some(binding.viewport_id);
                     viewport_render_commands.push(ViewportRenderStateCommand::ZoomCamera {
@@ -643,7 +651,12 @@ fn dispatch_viewport_tool_activation(
     cursor: UiPoint,
     preferred_viewport_id: Option<ViewportId>,
 ) -> Result<(), editor_core::EditorMutationError> {
-    let Some(binding) = fallback_viewport_binding(tool_surface_bindings, cursor).or_else(|| {
+    let Some(binding) = fallback_viewport_binding(
+        tool_surface_bindings,
+        host.shell_state.primary_composition_target_id(),
+        cursor,
+    )
+    .or_else(|| {
         preferred_viewport_id
             .and_then(|viewport_id| viewport_binding_by_id(tool_surface_bindings, viewport_id))
     }) else {
@@ -756,8 +769,12 @@ fn dispatch_viewport_shortcuts(
 
     if actions.action_pressed(ACTION_EDITOR_VIEWPORT_FOCUS)
         && let Some(orbit_target) = selected_entity_origin(&host.app)
-        && let Some(binding) =
-            viewport_binding_for_focus(tool_surface_bindings, cursor, preferred_viewport_id)
+        && let Some(binding) = viewport_binding_for_focus(
+            tool_surface_bindings,
+            host.shell_state.primary_composition_target_id(),
+            cursor,
+            preferred_viewport_id,
+        )
     {
         viewport_render_commands.push(ViewportRenderStateCommand::FocusCameraOn {
             viewport_id: binding.viewport_id,
@@ -844,7 +861,11 @@ fn handle_viewport_tool_radial_shortcut(
     let Some(tool_surface_bindings) = tool_surface_bindings else {
         return;
     };
-    let Some(binding) = fallback_viewport_binding(tool_surface_bindings, cursor) else {
+    let Some(binding) = fallback_viewport_binding(
+        tool_surface_bindings,
+        host.shell_state.primary_composition_target_id(),
+        cursor,
+    ) else {
         return;
     };
 
@@ -906,7 +927,11 @@ fn viewport_pointer_route(
         });
     }
 
-    let binding = fallback_viewport_binding(tool_surface_bindings, position)?;
+    let binding = fallback_viewport_binding(
+        tool_surface_bindings,
+        shell_state.primary_composition_target_id(),
+        position,
+    )?;
     let host_widget_id = binding.host_widget_id;
     let structural_context = structural_context_for_widget(shell_state, host_widget_id).unwrap_or(
         editor_shell::StructuralWidgetRoutingContext {
@@ -947,9 +972,10 @@ fn viewport_capture_active_for_surface(
 
 fn fallback_viewport_binding(
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    presentation_target_id: ui_composition::PresentationTargetId,
     cursor: UiPoint,
 ) -> Option<crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord> {
-    tool_surface_bindings.binding_containing_cursor(cursor)
+    tool_surface_bindings.binding_containing_cursor_for_target(presentation_target_id, cursor)
 }
 
 fn active_camera_viewport_binding(
@@ -963,15 +989,20 @@ fn active_camera_viewport_binding(
 
 fn viewport_binding_for_focus(
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    presentation_target_id: ui_composition::PresentationTargetId,
     cursor: UiPoint,
     preferred_viewport_id: Option<ViewportId>,
 ) -> Option<crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord> {
-    fallback_viewport_binding(tool_surface_bindings, cursor)
+    fallback_viewport_binding(tool_surface_bindings, presentation_target_id, cursor)
         .or_else(|| {
             preferred_viewport_id
                 .and_then(|viewport_id| viewport_binding_by_id(tool_surface_bindings, viewport_id))
         })
-        .or_else(|| tool_surface_bindings.bindings().next())
+        .or_else(|| {
+            tool_surface_bindings
+                .bindings()
+                .find(|binding| binding.presentation_target_id == presentation_target_id)
+        })
 }
 
 fn viewport_binding_by_id(
@@ -1255,10 +1286,12 @@ mod tests {
             .expect("viewport embed structural context should exist");
         let mut layout_map = ViewportLayoutMapResource::default();
         layout_map.upsert_entry(ViewportLayoutEntry {
+            presentation_target_id: ui_composition::PresentationTargetId::try_from_raw(1).unwrap(),
             viewport_id,
             host_widget_id: viewport_embed_widget_id,
             structural_context,
             bounds,
+            effective_shell_scale: 1.0,
         });
         let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
         bindings.rebuild_from_layout_map(&layout_map);
@@ -1308,12 +1341,14 @@ mod tests {
         bounds: UiRect,
     ) -> crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord {
         crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord {
+            presentation_target_id: ui_composition::PresentationTargetId::try_from_raw(1).unwrap(),
             tool_surface_id: editor_shell::ToolSurfaceInstanceId::try_from_raw(raw_id).unwrap(),
             panel_instance_id: editor_shell::PanelInstanceId::try_from_raw(raw_id).unwrap(),
             tab_stack_id: editor_shell::TabStackId::try_from_raw(raw_id).unwrap(),
             viewport_id,
             host_widget_id: editor_shell::WidgetId(10_000 + raw_id),
             bounds,
+            effective_shell_scale: 1.0,
             generation: 1,
         }
     }
@@ -1497,9 +1532,13 @@ mod tests {
     fn focus_binding_uses_last_target_viewport_when_cursor_is_not_hovering() {
         let bindings = dual_viewport_bindings();
 
-        let binding =
-            viewport_binding_for_focus(&bindings, UiPoint::new(900.0, 900.0), Some(ViewportId(8)))
-                .expect("last target viewport should resolve");
+        let binding = viewport_binding_for_focus(
+            &bindings,
+            ui_composition::PresentationTargetId::try_from_raw(1).unwrap(),
+            UiPoint::new(900.0, 900.0),
+            Some(ViewportId(8)),
+        )
+        .expect("last target viewport should resolve");
 
         assert_eq!(binding.viewport_id, ViewportId(8));
     }
