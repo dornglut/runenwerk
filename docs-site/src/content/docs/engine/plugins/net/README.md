@@ -44,7 +44,7 @@ Runenwerk engine integration owns:
 - the read-only `RunenNetSessionProjection` used for engine routing and diagnostics;
 - product/session metadata and host reconnect/deployment policy;
 - bounded inbox/outbox staging for retained replication/application payloads;
-- retained `engine_net` wire envelopes and driver escape hatches while RN8 migration continues;
+- engine-owned wire envelopes and gameplay driver integration contracts around RunenNet;
 - explicit finite authority-replication policy, encoded snapshot/delta formation, and host `DeliveryAcceptance` feedback around RunenNet `AuthorityReplicationSession`;
 - explicit finite authority-input policy selection and host execution staging after RunenNet admission;
 - explicit finite client-replication policy, complete encoded-product activation, and downstream host realization around RunenNet `ClientReplicationSet`.
@@ -136,7 +136,6 @@ conditional composition, not an unconditional intrinsic Net dependency.
 - [Networking usage guide](networking-usage-guide.md)
 - [Engine Net integration design](../../../design/active/net-plugin-runtime-bridge.md)
 - [Runenwerk networking architecture](../../../net/net-architecture.md)
-- [engine_net replication pipeline](../../../net/engine-net/replication-pipeline.md)
 
 ## Guides
 

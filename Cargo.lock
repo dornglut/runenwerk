@@ -834,7 +834,6 @@ dependencies = [
  "criterion",
  "crossbeam-channel",
  "crossbeam-deque",
- "engine_net",
  "engine_render_macros",
  "engine_replay",
  "engine_sim",
@@ -886,17 +885,6 @@ dependencies = [
  "winit",
  "world_ops",
  "world_sdf",
-]
-
-[[package]]
-name = "engine_net"
-version = "0.1.0"
-dependencies = [
- "engine_sim",
- "postcard",
- "runen-ecs",
- "runen-net",
- "serde",
 ]
 
 [[package]]

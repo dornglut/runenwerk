@@ -1,6 +1,6 @@
 ---
 title: "net"
-description: "Documentation for the remaining Runenwerk networking migration subtree."
+description: "Runenwerk simulation/history ownership and realtime networking integration boundaries."
 status: active
 owner: net
 layer: net
@@ -10,87 +10,48 @@ last_reviewed: 2026-09-25
 
 # net
 
-`net/` is the remaining Runenwerk simulation/history/network-integration workspace subtree during the RN8 cutover to standalone RunenNet.
+Runenwerk consumes standalone RunenNet for reusable realtime networking semantics. The local `net/` workspace subtree now contains only Runenwerk-owned simulation and history/replay crates:
 
-Standalone RunenNet owns reusable realtime networking semantics: connection identity, protocol/schema compatibility, sessions/participants, delivery and resource-pressure semantics, recovery contracts, replication consistency/recovery, and participant-input prediction/reconciliation. Concrete QUIC realization belongs to `runen-net-quic` where a maintained consumer requires it.
+- `engine_sim/` — simulation identity, tick, codec/profile, deterministic RNG, command-frame, and hash vocabulary.
+- `engine_history/` (crate name `engine_replay`) — replay/history/archive/controller/policy/validation infrastructure.
 
-Runenwerk owns engine scheduling, ECS/game/world integration, product/session metadata, host deployment/reconnect policy, presentation, diagnostics, and the remaining migration consumers that have not yet been cut over.
+Realtime networking integration itself lives in `engine/src/plugins/net/`.
 
-## Remaining Crates
+## Ownership
 
-- `engine_net/`
-  - Temporary server-replication/protocol-payload integration evidence for maintained engine consumers.
-  - Uses RunenNet `ConnectionHandle` for connection-scoped retained state.
-  - Must not contain connection/session/admission/delivery/transport-runtime authority.
-  - README: [engine_net/README.md](engine-net/README.md)
+Standalone RunenNet owns connection/session identity and lifecycle, compatibility negotiation, delivery and recovery semantics, authority/client replication consistency and retained history, input admission, and prediction/reconciliation.
 
+Runenwerk engine integration owns schedule placement, ECS/game/world mapping, explicit product policy, encoded gameplay snapshot/input adaptation, host delivery integration, bounded staging, diagnostics, presentation projections, and the minimal wire/driver contracts required by that integration.
 
-- `engine_sim/`
-  - Simulation identity, tick, codec/profile, and deterministic vocabulary.
+Concrete transport realization remains a product/adapter concern. Engine inbox/outbox queues and `NetworkInboundQueue` / `NetworkOutboundQueue` are staging only; queue admission is not RunenNet `DeliveryAcceptance`.
 
-- `engine_history/` (crate name: `engine_replay`)
-  - Replay/history/archive/controller/validation substrate.
+## RN8 Result
 
-## Current RN8 Boundary Through N9
+RN8 progressively moved reusable networking authority to standalone RunenNet and deleted the predecessor shell rather than forwarding it. The former `net/engine_net` crate, local networking runtime/session authority, component-registration authoring surface, client/server replication consistency state, and prediction state are not compatibility surfaces.
 
-Engine connection/session integration consumes standalone RunenNet Core directly:
+The retained engine-owned Net protocol surface is deliberately narrow: snapshot/delta/ACK/input envelopes, `SnapshotCursor`, and the gameplay driver traits used to adapt Runenwerk state to RunenNet-backed integration.
 
-- `NegotiationManager` owns compatibility negotiation;
-- `Session` owns participant membership, binding, loss, retention, replacement, expiry, and closure;
-- `ConnectionHandle` is the connection identity used by engine routing and retained replication state;
-- `engine/src/plugins/net` owns Core placement/invocation, read-only ECS projections, owner routing, schedule placement, host policy, product metadata, bounded staging, and diagnostics.
+## Dependency Direction
 
-The engine does not translate RunenNet lifecycle state into another semantic state machine. Its `RunenNetSessionProjection` is derived routing/diagnostic state only.
+```text
+gameplay / world
+      |
+      v
+Runenwerk engine Net integration
+      |
+      +--> standalone RunenNet
+      +--> engine_sim
 
-`engine_net` retains only evidence-backed migration contracts that still have maintained consumers:
+engine_history --> engine_sim
+runen-net-quic --> standalone RunenNet
+```
 
-- snapshot, delta, ACK, input-frame, and typed-payload envelopes;
-- replication driver, mapping, timeline, and diagnostics contracts required by maintained consumers.
-
-Server connection-scoped retained state uses RunenNet `ConnectionHandle` directly. Client replication consistency/history/recovery uses RunenNet `ClientReplicationSet` keyed by explicit `ReplicationLineageKey`; Runenwerk retains one active complete encoded product only for downstream realization.
-
-RN8 N2 removed the old `engine_net::session`, Hello/Join lifecycle, `ConnectionId`, `SessionPhase`, session runtime bridge, and client/server connection runtimes.
-
-RN8 N4 additionally removed dead post-N2 scaffolding with no maintained engine runtime consumer:
-
-- `ReplicationRuntimeCommand` / `ReplicationRuntimeEvent`;
-- `TransportLane`, `DeliveryGuarantee`, synthetic profile-to-lane mappings, and lane-only route diagnostics;
-- the standalone snapshot-payload `PredictionState` / `ReconciliationResult` helper.
-
-These removed concepts are not compatibility surfaces and must not be recreated through aliases or forwarding facades.
-
-## Engine Staging Boundary
-
-The Net plugin's inbox/outbox resources and `NetworkInboundQueue` / `NetworkOutboundQueue` are bounded Runenwerk staging/projection surfaces for retained replication/application messages.
-
-They are not RunenNet delivery flows, queue admission is not RunenNet `DeliveryAcceptance`, and frame-end flush is not transport I/O. No generic engine transport adapter is part of the current boundary.
-
-## Dependency Rules
-
-- Runenwerk integration may depend on public standalone RunenNet contracts.
-- Retained `engine_net` may depend on RunenNet identity needed by migration consumers.
-- RunenNet must not depend on Runenwerk ECS, scheduler, world, gameplay, or product policy.
-- `engine_net` must not become a forwarding facade around RunenNet.
-- Do not reintroduce `engine_net_quic` or another replacement engine adapter without a real maintained consumer.
-- Do not add compatibility aliases for retired networking authority.
-
-## Migration Direction
-
-1. Consume RunenNet directly at the owning engine/product integration boundary.
-2. Preserve Runenwerk-owned ECS, scheduling, gameplay, world, history, host, and presentation policy.
-3. Remove duplicate `engine_net` semantics as their maintained consumers migrate.
-4. Keep retained integration behavior stable during dependency-ordered cuts without treating it as reusable semantic authority.
-5. Delete migration residue rather than preserving it through forwarding APIs.
-
-RN8 has progressed through authoritative-input N5, client replication N7, and client prediction/reconciliation N9. N10 removes the dead predecessor component-registration metadata/macro surface without defining replacement authoring syntax. Authority-replication delivery acceptance and final ordinary Replicated View authoring remain separately gated.
+RunenNet must not depend on Runenwerk ECS, scheduling, world, gameplay, or product policy.
 
 ## Architecture
 
-- Current architecture: [net-architecture.md](net-architecture.md)
-- Direction and ownership rules: [goals.md](goals.md)
-- `engine_net` retained surface: [engine-net/README.md](engine-net/README.md)
-- Replication pipeline: [engine-net/replication-pipeline.md](engine-net/replication-pipeline.md)
-- Engine integration design: [../design/active/net-plugin-runtime-bridge.md](../design/active/net-plugin-runtime-bridge.md)
-- Delivery/transport boundary: [../design/active/net-transport-lanes-delivery.md](../design/active/net-transport-lanes-delivery.md)
-
-Active design documents remain authoritative only within their stated owner/scope and must be interpreted consistently with standalone RunenNet normative ownership and the accepted RN8 cutover boundary.
+- [Networking architecture](net-architecture.md)
+- [Direction and ownership rules](goals.md)
+- [Engine Net plugin](../engine/plugins/net/README.md)
+- [Engine Net integration design](../design/active/net-plugin-runtime-bridge.md)
+- [Delivery/transport boundary](../design/active/net-transport-lanes-delivery.md)

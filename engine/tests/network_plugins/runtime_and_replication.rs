@@ -411,8 +411,11 @@ fn client_outbox_backpressure_does_not_roll_back_admitted_prediction() {
         client,
         "baseline should activate tracked prediction",
     );
-    for index in 0..4_096usize {
-        enqueue_client_outbox(client.world_mut(), client_probe((index % 251) as u8))
+    let expected_outbound = (0..4_096usize)
+        .map(|index| client_probe((index % 251) as u8))
+        .collect::<Vec<_>>();
+    for message in expected_outbound.iter().cloned() {
+        enqueue_client_outbox(client.world_mut(), message)
             .expect("client outbox should fill through its configured capacity");
     }
 
@@ -439,12 +442,10 @@ fn client_outbox_backpressure_does_not_roll_back_admitted_prediction() {
         "an admitted prediction still applies locally when the current delivery submission backpressures"
     );
     let outbound = client.world().resource::<NetworkOutboundQueue>().unwrap();
-    assert_eq!(outbound.client_messages().len(), 4_096);
-    assert!(
-        outbound
-            .client_messages()
-            .iter()
-            .all(|message| !matches!(message, ClientMessage::InputFrame(_)))
+    assert_eq!(
+        outbound.client_messages(),
+        expected_outbound.as_slice(),
+        "backpressure must leave the saturated client outbox unchanged"
     );
 }
 
@@ -453,6 +454,11 @@ fn server_outbox_backpressure_is_orthogonal_to_authority_delivery_acceptance() {
     let mut server = App::headless();
     server.add_plugins(default_plugins());
     server.add_plugins((ScenePlugin, NetworkServerPlugin));
+    let expected_outbound = (0..4_096usize)
+        .map(|index| {
+            OutboundServerMessage::Broadcast(server_probe((index % 251) as u8))
+        })
+        .collect::<Vec<_>>();
     server.add_systems(
         FixedUpdate,
         saturate_server_outbox_before_replication
@@ -509,10 +515,11 @@ fn server_outbox_backpressure_is_orthogonal_to_authority_delivery_acceptance() {
     );
 
     let outbound = server.world().resource::<NetworkOutboundQueue>().unwrap();
-    assert_eq!(outbound.server_messages().len(), 4_096);
-    assert!(outbound.server_messages().iter().all(
-        |message| matches!(message, OutboundServerMessage::Broadcast(ServerMessage::TypedPayload(_)))
-    ));
+    assert_eq!(
+        outbound.server_messages(),
+        expected_outbound.as_slice(),
+        "backpressure must leave the saturated server outbox unchanged"
+    );
 }
 
 #[test]

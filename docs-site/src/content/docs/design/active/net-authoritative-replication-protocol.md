@@ -45,12 +45,11 @@ Standalone RunenNet owns reusable networking identity and lifecycle semantics. I
 
 Runenwerk currently retains replication migration contracts that still have maintained consumers:
 
-- `engine_net` contains retained snapshot/delta/ACK/input wire envelopes, driver escape hatches, mapping, timeline, and diagnostics helpers;
-- `engine/src/plugins/net` owns engine scheduling, driver invocation, encoded candidate formation, host delivery feedback integration, diagnostics, and projections;
+- `engine/src/plugins/net` owns the retained snapshot/delta/ACK/input wire envelopes and gameplay driver contracts together with engine scheduling, encoded candidate formation, host delivery feedback integration, diagnostics, and projections;
 - RunenNet `AuthorityReplicationSession` owns authority cursor/baseline/history/recovery/emission/ACK state per authorized participant;
 - gameplay/app modules own payload extraction meaning, application meaning, and presentation policy.
 
-`engine_net` is not the long-term reusable networking authority and must not regain session, admission, connection-allocation, or transport-runtime semantics.
+Runenwerk's engine-owned wire/driver integration types are not reusable networking authority and must not acquire session, admission, connection-allocation, replication-consistency, prediction, or transport-runtime semantics.
 
 ## Implemented Substrate
 
