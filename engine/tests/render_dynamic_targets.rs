@@ -976,6 +976,49 @@ fn render_dynamic_targets_request_registry_snapshots_valid_requests_by_key() {
 }
 
 #[test]
+fn render_dynamic_targets_request_registry_scopes_same_key_to_distinct_surfaces() {
+    let mut registry = RenderDynamicTextureTargetRequestRegistryResource::default();
+    let primary = engine::plugins::render::backend::RenderSurfaceId::primary();
+    let secondary = engine::plugins::render::backend::RenderSurfaceId::try_from_raw(2)
+        .expect("test surface should be nonzero");
+
+    registry
+        .replace_surface_contribution(
+            producer(1),
+            primary,
+            [dynamic_descriptor(
+                "surface-shared",
+                64,
+                64,
+                RenderTextureTargetFormat::Rgba8Unorm,
+                RenderTextureTargetUsage::color_sampled(),
+                RenderTextureSampleMode::FilterableFloat,
+            )],
+        )
+        .expect("primary surface contribution should publish");
+    registry
+        .replace_surface_contribution(
+            producer(2),
+            secondary,
+            [dynamic_descriptor(
+                "surface-shared",
+                64,
+                64,
+                RenderTextureTargetFormat::Rgba8Unorm,
+                RenderTextureTargetUsage::color_sampled(),
+                RenderTextureSampleMode::FilterableFloat,
+            )],
+        )
+        .expect("disjoint surface may reuse the same local target key");
+
+    let primary_targets = registry.snapshot_for_surface(primary);
+    let secondary_targets = registry.snapshot_for_surface(secondary);
+    assert_eq!(primary_targets.len(), 1);
+    assert_eq!(secondary_targets.len(), 1);
+    assert_eq!(primary_targets[0].key, secondary_targets[0].key);
+}
+
+#[test]
 fn render_dynamic_targets_request_registry_rejects_cross_producer_key_collisions() {
     let mut registry = RenderDynamicTextureTargetRequestRegistryResource::default();
     registry
