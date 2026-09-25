@@ -200,28 +200,6 @@ pub fn run_native_temporal_quality(
         .expect("validated explicit quality output extent");
     let internal_size_px = validate_measurement_radiance_size(Some(internal_size_px))?
         .expect("validated explicit quality internal extent");
-    if internal_size_px.0 > primary_window_size_px.0
-        || internal_size_px.1 > primary_window_size_px.1
-    {
-        bail!(
-            "temporal quality internal extent {}x{} exceeds output extent {}x{}",
-            internal_size_px.0,
-            internal_size_px.1,
-            primary_window_size_px.0,
-            primary_window_size_px.1
-        );
-    }
-    if u64::from(internal_size_px.0) * u64::from(primary_window_size_px.1)
-        != u64::from(internal_size_px.1) * u64::from(primary_window_size_px.0)
-    {
-        bail!(
-            "temporal quality internal extent {}x{} must preserve output aspect {}x{}",
-            internal_size_px.0,
-            internal_size_px.1,
-            primary_window_size_px.0,
-            primary_window_size_px.1
-        );
-    }
 
     let output_root = output_root.into();
     run_native_with_measurement(Some(RenderLabMeasurementConfig {
@@ -929,6 +907,11 @@ fn render_lab_radiance_extent(
     let Some(radiance) = measurement.radiance_target_size_px else {
         return Ok(output);
     };
+    if measurement.quality_capture_output_dir.is_some() {
+        // Temporal-quality mode deliberately preserves the requested extent until the
+        // renderer-owned fixed-resolution admission decides Fixed versus NativeFallback.
+        return Ok(radiance);
+    }
     if radiance.0 > output.0 || radiance.1 > output.1 {
         bail!(
             "RL2 measurement radiance extent {}x{} exceeds realized output extent {}x{}",
@@ -1297,6 +1280,32 @@ mod tests {
     fn render_lab_extent_uses_primary_presentation_metrics() {
         let presentation = engine::PrimaryPresentationMetricsResource::new((901, 577), 1.25);
         assert_eq!(render_lab_extent(&presentation), (901, 577));
+    }
+
+    #[test]
+    fn temporal_quality_extent_defers_fixed_policy_rejection_to_renderer_admission() {
+        let presentation = engine::PrimaryPresentationMetricsResource::new((1920, 1080), 1.0);
+        let quality = RenderLabMeasurementConfig {
+            primary_window_size_px: Some((1920, 1080)),
+            radiance_target_size_px: Some((1280, 800)),
+            quality_capture_output_dir: Some(PathBuf::from("quality-captures")),
+            ..Default::default()
+        };
+        assert_eq!(
+            render_lab_radiance_extent(&presentation, &quality)
+                .expect("quality mode should preserve the requested extent for admission"),
+            (1280, 800)
+        );
+
+        let legacy = RenderLabMeasurementConfig {
+            primary_window_size_px: Some((1920, 1080)),
+            radiance_target_size_px: Some((1280, 800)),
+            ..Default::default()
+        };
+        assert!(
+            render_lab_radiance_extent(&presentation, &legacy).is_err(),
+            "legacy radiance measurement keeps its own same-aspect validation"
+        );
     }
 
     #[test]
