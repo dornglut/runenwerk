@@ -91,8 +91,7 @@ pub fn run_native_measurement(
 ) -> Result<()> {
     let submitted_frame_limit = validate_measurement_frame_limit(submitted_frame_limit)?;
     let primary_window_size_px = validate_measurement_window_size(primary_window_size_px)?;
-    let radiance_target_size_px =
-        validate_measurement_radiance_size(radiance_target_size_px)?;
+    let radiance_target_size_px = validate_measurement_radiance_size(radiance_target_size_px)?;
     run_native_with_measurement(Some(RenderLabMeasurementConfig {
         output_path: Some(output_path.into()),
         submitted_frame_limit,
@@ -111,9 +110,7 @@ fn validate_measurement_window_size(size_px: Option<(u32, u32)>) -> Result<Optio
     Ok(size_px)
 }
 
-fn validate_measurement_radiance_size(
-    size_px: Option<(u32, u32)>,
-) -> Result<Option<(u32, u32)>> {
+fn validate_measurement_radiance_size(size_px: Option<(u32, u32)>) -> Result<Option<(u32, u32)>> {
     if let Some((width, height)) = size_px
         && (width == 0 || height == 0)
     {
@@ -193,10 +190,7 @@ fn build_measurement_artifact(
                 render_surface_id: observation.key.render_surface_id,
                 prepare_epoch: observation.prepare_epoch,
                 target_size_px: [observation.target_size_px.0, observation.target_size_px.1],
-                radiance_target_size_px: [
-                    radiance_target_size_px.0,
-                    radiance_target_size_px.1,
-                ],
+                radiance_target_size_px: [radiance_target_size_px.0, radiance_target_size_px.1],
                 composed_timing_state: observation.gpu.composed_timing_capability.as_str(),
                 gpu_composed_frame_ms: evidence.and_then(|evidence| evidence.gpu_composed_frame_ms),
                 diagnostics,
@@ -391,9 +385,7 @@ fn render_lab_radiance_extent(
             output.1
         );
     }
-    if u64::from(radiance.0) * u64::from(output.1)
-        != u64::from(radiance.1) * u64::from(output.0)
-    {
+    if u64::from(radiance.0) * u64::from(output.1) != u64::from(radiance.1) * u64::from(output.0) {
         bail!(
             "RL2 measurement radiance extent {}x{} must preserve realized output aspect {}x{}",
             radiance.0,
