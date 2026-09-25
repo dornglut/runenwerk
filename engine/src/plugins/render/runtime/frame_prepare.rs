@@ -335,7 +335,8 @@ fn build_prepared_flow_invocations(
         let has_requested_main = requested_flow_invocations
             .iter()
             .any(|request| request.flow_id == flow.flow_id && request.view_id == "main");
-        if !has_requested_main {
+        let replaces_automatic_main = requests.replaces_automatic_main_flow(flow.flow_id);
+        if !has_requested_main && !replaces_automatic_main {
             invocations.push(PreparedFlowInvocation::main(flow.flow_id, inputs));
         }
     }
