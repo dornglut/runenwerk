@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-24
+last_reviewed: 2026-09-25
 ---
 
 # Engine Usage Guide
@@ -115,12 +115,16 @@ an ECS ordering declaration. ECS `before` / `after` references are schedule-loca
 and must not be used to represent the Engine's order between schedules.
 
 Windowed apps default to `FramePacingPolicyResource::continuous_capped(60)`.
-Use `App::with_frame_pacing(FramePacingPolicyResource::on_demand())` for tools
-that should redraw only after explicit input, resize, cursor, native-window intent, or app
-invalidations. The winit runner maps the policy to `WaitUntil` for capped
-animation and `Wait` for on-demand mode. Native lifecycle/effect intent is keyed by
-`NativeWindowId` in `WindowStateRegistryResource`; headless App state does not manufacture a
-native-window surrogate.
+`AppNativeHostExt::with_frame_pacing` configures the selected native-window Host; with
+the trait available through the ordinary prelude, the ergonomic call remains
+`app.with_frame_pacing(FramePacingPolicyResource::on_demand())`. Use on-demand pacing for
+tools that should redraw only after explicit input, resize, cursor, native-window intent,
+or app invalidations. The winit runner maps the policy to `WaitUntil` for capped
+animation and `Wait` for on-demand mode. Native pacing is not a headless policy:
+configuring it on `App::headless()` is rejected during composition admission. Native
+lifecycle/effect intent is keyed by `NativeWindowId` in
+`WindowStateRegistryResource`; headless App state does not manufacture a native-window
+surrogate.
 
 ## Schedules You Will Use Most
 

@@ -907,7 +907,7 @@ fn native_window_id_for_winit_event(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::App;
+    use crate::app::{App, AppNativeHostExt};
     use crate::plugins::render::backend::RenderSurfaceLifecycleState;
     use crate::plugins::{FixedStepPlugin, SimulationPlugin, TimePlugin};
     use crate::runtime::fixed_time::{
