@@ -2,10 +2,12 @@ use super::*;
 use crate::plugins::InputFinalizePlugin;
 use crate::runtime::ResMut;
 use runen_input::{
-    ContactId, ContactPhase, ContactPresence, CoordinateSpace, DeliveryRole, DigitalState,
-    EvidenceStatus, InputDeviceId, InputToolKind, ObservationOrigin, PhysicalTabletControls,
-    Point2, PointerButtonInput, RelativeMotionUnit, ScrollDelta, ScrollDomain, ScrollInput,
-    SourceTime, SourceTimeUnit, TabletCapabilities, TabletObservation, Vector2,
+    ContactId, ContactInput, ContactPhase, ContactPresence, ContinuityLoss, CoordinateSpace,
+    DeliveryRole, DigitalState, EvidenceStatus, InputDeviceId, InputToolKind, KeyLocation,
+    KeyboardInput, LogicalKey, NativeLogicalKey, ObservationOrigin, PhysicalKeyIdentity,
+    PhysicalTabletControls, Point2, PointerButtonInput, RelativeMotionUnit, ScrollDelta,
+    ScrollDomain, ScrollInput, SourceTime, SourceTimeUnit, TabletCapabilities, TabletObservation,
+    Vector2,
 };
 
 use crate::automation::{AutomationInputTraceFrame, AutomationInputTracePlugin};
@@ -140,6 +142,82 @@ fn replay_preflight_rejects_invalid_mapping_trailing_and_unsupported_shapes_with
             .pointer_button_down_anywhere(PointerButton::Forward),
         "unsupported initial digital state must fail before target mutation"
     );
+}
+
+#[test]
+fn replay_preflight_rejects_every_unsupported_first_slice_group_shape_before_mutation() {
+    let source = InputSourceId::new(2_006);
+    let context = InputContext::new(source, None);
+    let mapping = AutomationInputReplaySourceMap::new([(source, InputSourceId::new(9_006))]);
+    let unsupported_groups = vec![
+        InputObservationGroup::single(
+            context,
+            InputObservation::Keyboard(KeyboardInput {
+                physical_key: PhysicalKeyIdentity::code("KeyA"),
+                logical_key: LogicalKey::Native(NativeLogicalKey::Unidentified),
+                location: KeyLocation::Standard,
+                state: DigitalState::Pressed,
+                repeat: false,
+                origin: ObservationOrigin::SourceReport,
+            }),
+        ),
+        InputObservationGroup::single(
+            context,
+            InputObservation::AbsolutePointerPosition {
+                position: Point2::new(1.0, 2.0, CoordinateSpace::WindowPhysicalPixels),
+            },
+        ),
+        InputObservationGroup::single(
+            context,
+            InputObservation::Contact(ContactInput {
+                contact: ContactId::new(1),
+                phase: ContactPhase::Begin,
+                position: Point2::new(3.0, 4.0, CoordinateSpace::WindowPhysicalPixels),
+                pressure: None,
+                altitude_angle_radians: None,
+            }),
+        ),
+        InputObservationGroup::single(
+            context,
+            InputObservation::ContinuityLoss(ContinuityLoss::Source),
+        ),
+        InputObservationGroup::new(
+            context,
+            vec![
+                InputObservation::PointerButton(PointerButtonInput {
+                    button: PointerButton::Left,
+                    state: DigitalState::Pressed,
+                }),
+                InputObservation::Scroll(ScrollInput {
+                    delta: ScrollDelta::vertical_only(1.0),
+                    domain: ScrollDomain::Unspecified,
+                    phase: None,
+                }),
+            ],
+        ),
+        InputObservationGroup::new(context, Vec::new()),
+    ];
+
+    for group in unsupported_groups {
+        let mut app = replay_app();
+        let report = app.replay_automation_input_trace(
+            &one_frame_trace(vec![group]),
+            &mapping,
+            AutomationInputReplayStateAssumption::RecordedAndReplaySourcesPristine,
+        );
+        assert_eq!(
+            report.outcome(),
+            AutomationInputReplayOutcome::UnsupportedTraceShape
+        );
+        assert_eq!(report.completed_frames(), 0);
+        assert!(
+            app.world()
+                .resource::<InputState>()
+                .unwrap()
+                .frame_projection_is_quiescent(),
+            "unsupported trace shape must fail before target mutation"
+        );
+    }
 }
 
 #[test]
