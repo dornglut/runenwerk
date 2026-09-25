@@ -1,6 +1,7 @@
 use runen_net::input::{AuthorityInputAggregateLimits, AuthorityInputLimits, PredictionLimits};
 use runen_net::replication::{
-    ClientAggregateLimits, ReplicationLineageKey, ReplicationRetentionLimits,
+    AuthorityAggregateLimits, ClientAggregateLimits, ReplicationLineageKey,
+    ReplicationRetentionLimits,
 };
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -37,6 +38,32 @@ impl AuthorityInputPolicy {
 
     pub const fn max_future_tick_distance(self) -> u64 {
         self.participant_limits.max_future_tick_distance()
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct AuthorityReplicationPolicy {
+    aggregate_limits: AuthorityAggregateLimits,
+    retention_limits: ReplicationRetentionLimits,
+}
+
+impl AuthorityReplicationPolicy {
+    pub const fn new(
+        aggregate_limits: AuthorityAggregateLimits,
+        retention_limits: ReplicationRetentionLimits,
+    ) -> Self {
+        Self {
+            aggregate_limits,
+            retention_limits,
+        }
+    }
+
+    pub const fn aggregate_limits(self) -> AuthorityAggregateLimits {
+        self.aggregate_limits
+    }
+
+    pub const fn retention_limits(self) -> ReplicationRetentionLimits {
+        self.retention_limits
     }
 }
 
