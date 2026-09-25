@@ -595,7 +595,9 @@ fn authority_input_resource_limits_reject_without_execution() {
     let connection = ConnectionHandle::new(1);
     let participant = ParticipantId::new(1);
     let mut core =
-        test_runennet_session_core_without_authority_input().with_authority_input_policy(policy);
+        test_runennet_session_core_without_authority_input()
+            .with_authority_input_policy(policy)
+            .with_authority_replication_policy(test_authority_replication_policy());
     let mut projection = RunenNetSessionProjection::default();
     establish_runennet_connection(&mut core, &mut projection, participant, connection);
     app.world_mut().insert_resource(core);
@@ -813,7 +815,9 @@ fn authority_input_participant_retained_key_limit_rejects_second_pending_tick() 
     let connection = ConnectionHandle::new(1);
     let participant = ParticipantId::new(1);
     let mut core =
-        test_runennet_session_core_without_authority_input().with_authority_input_policy(policy);
+        test_runennet_session_core_without_authority_input()
+            .with_authority_input_policy(policy)
+            .with_authority_replication_policy(test_authority_replication_policy());
     let mut projection = RunenNetSessionProjection::default();
     establish_runennet_connection(&mut core, &mut projection, participant, connection);
     app.world_mut().insert_resource(core);
@@ -877,7 +881,9 @@ fn authority_input_aggregate_retained_key_limit_is_shared_across_participants() 
     let first_participant = ParticipantId::new(1);
     let second_participant = ParticipantId::new(2);
     let mut core =
-        test_runennet_session_core_without_authority_input().with_authority_input_policy(policy);
+        test_runennet_session_core_without_authority_input()
+            .with_authority_input_policy(policy)
+            .with_authority_replication_policy(test_authority_replication_policy());
     let mut projection = RunenNetSessionProjection::default();
     establish_runennet_connection(
         &mut core,
