@@ -646,7 +646,6 @@ impl RenderFrameSurfaceScope {
     }
 }
 
-
 #[derive(Debug, Clone, Default)]
 pub struct PreparedRenderFrameRequestContribution {
     scope: RenderFrameSurfaceScope,
