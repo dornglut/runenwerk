@@ -261,7 +261,7 @@ fn inspect_tree(
         let Ok(text) = fs::read_to_string(&path) else {
             continue;
         };
-        if is_retained_historical_authority(repository_root, &path, &text) {
+        if is_retained_historical_authority(&text) {
             continue;
         }
         let operational_text = without_markdown_frontmatter(&path, &text);
@@ -289,25 +289,7 @@ fn should_skip_directory(repository_root: &Path, directory: &Path) -> bool {
         || normalized.starts_with("docs-site/src/content/docs/design/superseded")
 }
 
-fn is_retained_historical_authority(repository_root: &Path, path: &Path, text: &str) -> bool {
-    let relative = path.strip_prefix(repository_root).unwrap_or(path);
-    let normalized = relative.to_string_lossy().replace('\\', "/");
-
-    if normalized.starts_with("docs-site/src/content/docs/workspace/specs/")
-        && path.extension().and_then(|extension| extension.to_str()) == Some("ron")
-    {
-        let name = path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or_default();
-        if name.starts_with("pt-")
-            || normalized
-                == "docs-site/src/content/docs/workspace/specs/templates/phase-implementation-spec.ron"
-        {
-            return true;
-        }
-    }
-
+fn is_retained_historical_authority(text: &str) -> bool {
     matches!(
         markdown_frontmatter_status(text),
         Some("superseded" | "archived" | "rejected")
