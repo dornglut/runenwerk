@@ -80,7 +80,8 @@ impl RenderFixedResolutionExecutionRequest {
     ) -> Result<PreparedFixedResolutionExecution, RenderFixedResolutionExecutionError> {
         validate_extents(self.internal_size, output_size)?;
 
-        let identity = fixed_resolution_execution_identity(self.render_surface_id, self.scene_flow_id);
+        let identity =
+            fixed_resolution_execution_identity(self.render_surface_id, self.scene_flow_id);
         let target_key = identity.target_key.clone();
         let view_id = identity.internal_view_id.clone();
         let scene_invocation_id = identity.fixed_scene_invocation_id.clone();
@@ -307,7 +308,8 @@ impl RenderFixedResolutionExecutionRequest {
         compiled_flow: &CompiledRenderFlowPlan,
     ) -> Option<PreparedFlowInvocationRequest> {
         self.validate_selected_flow(compiled_flow).ok()?;
-        let identity = fixed_resolution_execution_identity(self.render_surface_id, self.scene_flow_id);
+        let identity =
+            fixed_resolution_execution_identity(self.render_surface_id, self.scene_flow_id);
         Some(
             PreparedFlowInvocationRequest::new(
                 identity.native_scene_invocation_id,
@@ -343,7 +345,8 @@ impl RenderFixedResolutionExecutionRequest {
         ) {
             Ok(prepared) => RenderFixedResolutionExecutionAdmission::Fixed(prepared),
             Err(error) => {
-                let identity = fixed_resolution_execution_identity(self.render_surface_id, self.scene_flow_id);
+                let identity =
+            fixed_resolution_execution_identity(self.render_surface_id, self.scene_flow_id);
                 RenderFixedResolutionExecutionAdmission::NativeFallback(
                     RenderFixedResolutionFallback {
                         render_surface_id: self.render_surface_id,
