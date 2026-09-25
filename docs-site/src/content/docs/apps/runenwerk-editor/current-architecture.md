@@ -202,7 +202,12 @@ mutation, while `Created` atomically commits the new target and complete present
 binding. This path does not instantiate or import `WorkspaceState`, clone current local
 camera/session state, or persist native/render identities.
 
-Secondary-window viewport/product projection remains a later multi-window closure slice.
+Viewport runtime projection now rebuilds target-local layout, Tool Surface binding, and
+render-state records across every live `PresentationTargetId` after primary and secondary
+UI frames are projected. Target-local rectangles remain scoped by structural presentation
+identity, while transient native window state supplies only per-target presentation metrics
+such as DPI. Secondary-window camera/picking/input product proof remains a later
+multi-window closure slice.
 ADR 0025 separately governs semantic sharing: windows may explicitly share editor
 bindings, selection contexts, history contexts, or persistence contexts, while
 activation/focus/local presentation remain independently scoped.

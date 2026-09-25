@@ -129,12 +129,14 @@ fn test_tool_surface_binding_registry(
 ) -> ToolSurfaceRuntimeBindingRegistryResource {
     let mut registry = ToolSurfaceRuntimeBindingRegistryResource::default();
     registry.upsert_binding(ToolSurfaceRuntimeBindingRecord {
+        presentation_target_id: ui_composition::PresentationTargetId::try_from_raw(1).unwrap(),
         tool_surface_id: tool_surface,
         panel_instance_id: panel,
         tab_stack_id: tab_stack,
         viewport_id: viewport,
         host_widget_id: editor_shell::WidgetId(999),
         bounds: UiRect::new(0.0, 0.0, 640.0, 360.0),
+        effective_shell_scale: 1.0,
         generation: 1,
     });
     registry

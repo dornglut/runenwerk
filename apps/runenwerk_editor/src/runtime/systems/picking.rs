@@ -483,7 +483,10 @@ fn routed_viewport_bounds(
         .map(|binding| (binding.viewport_id, binding.bounds));
     }
 
-    let cursor_binding = tool_surface_bindings.binding_containing_cursor(cursor)?;
+    let cursor_binding = tool_surface_bindings.binding_containing_cursor_for_target(
+        host.shell_state.primary_composition_target_id(),
+        cursor,
+    )?;
     Some((cursor_binding.viewport_id, cursor_binding.bounds))
 }
 
@@ -503,7 +506,10 @@ fn routed_viewport_binding(
             captured_widget,
         )?
     } else {
-        tool_surface_bindings.binding_containing_cursor(cursor)?
+        tool_surface_bindings.binding_containing_cursor_for_target(
+            host.shell_state.primary_composition_target_id(),
+            cursor,
+        )?
     };
     let mounted_unit_id = host
         .shell_state
@@ -639,10 +645,12 @@ mod tests {
             .expect("viewport embed structural context should exist");
         let mut layout_map = ViewportLayoutMapResource::default();
         layout_map.upsert_entry(ViewportLayoutEntry {
+            presentation_target_id: ui_composition::PresentationTargetId::try_from_raw(1).unwrap(),
             viewport_id,
             host_widget_id: viewport_embed_widget_id,
             structural_context,
             bounds,
+            effective_shell_scale: 1.0,
         });
         let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
         bindings.rebuild_from_layout_map(&layout_map);
@@ -973,12 +981,14 @@ mod tests {
         let host = EditorHostResource::default();
         let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
         bindings.upsert_binding(crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord {
+            presentation_target_id: ui_composition::PresentationTargetId::try_from_raw(1).unwrap(),
             tool_surface_id: editor_shell::ToolSurfaceInstanceId::try_from_raw(33).unwrap(),
             panel_instance_id: editor_shell::PanelInstanceId::try_from_raw(11).unwrap(),
             tab_stack_id: editor_shell::TabStackId::try_from_raw(22).unwrap(),
             viewport_id: ViewportId(9),
             host_widget_id: editor_shell::WidgetId(77),
             bounds: UiRect::new(100.0, 200.0, 300.0, 250.0),
+            effective_shell_scale: 1.0,
             generation: 1,
         });
 

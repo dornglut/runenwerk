@@ -685,8 +685,8 @@ fn production_picking_routes_only_through_viewport_scene_region() {
         "picking must distinguish viewport scene region widgets from provider chrome",
     );
     assert!(
-        picking.contains("binding_containing_cursor(cursor)"),
-        "picking fallback must use explicit viewport scene-region bounds",
+        picking.contains("binding_containing_cursor_for_target("),
+        "picking fallback must keep viewport scene-region lookup scoped to the primary presentation target",
     );
     assert!(
         !picking.contains("runtime_state.hovered_widget.and_then"),
@@ -707,6 +707,61 @@ fn editor_frame_submission_runs_after_input_bridge() {
         plugin.contains("submit_editor_frame_system")
             && plugin.contains(".after(EditorRuntimeSet::ViewportLifecycle)"),
         "editor frame submission must consume resolved viewport lifecycle before product targets are prepared",
+    );
+}
+
+#[test]
+fn multi_window_viewport_projection_runs_after_all_target_frames_before_products() {
+    let plugin = include_str!("../src/runtime/plugin.rs");
+    let frame_submit = include_str!("../src/runtime/systems/frame_submit.rs");
+
+    assert!(
+        plugin.contains("sync_editor_primary_viewport_projection_system")
+            && plugin.contains(".in_set(EditorRuntimeSet::ViewportProjection)")
+            && plugin.contains(".after(EditorRuntimeSet::FrameSubmit)"),
+        "primary/headless viewport projection must be separated from frame submission",
+    );
+    assert!(
+        plugin.contains("sync_editor_all_target_viewport_projection_system")
+            && plugin.contains(".in_set(EditorRuntimeSet::NativeAllTargetViewportProjection)")
+            && plugin.contains(".after(EditorRuntimeSet::NativeSecondaryFrameSubmit)")
+            && plugin.contains(".after(EditorRuntimeSet::ViewportProjection)"),
+        "native multi-window projection must run after secondary target frames",
+    );
+    assert!(
+        plugin.contains(".after_if_present(EditorRuntimeSet::NativeAllTargetViewportProjection)"),
+        "viewport product synchronization must wait for all-target projection when native multi-window integration is installed",
+    );
+    assert!(
+        frame_submit.contains("last_tree_for_target(presentation_target_id)")
+            && frame_submit.contains("last_bounds_for_target(presentation_target_id)")
+            && frame_submit
+                .contains("last_projection_artifacts_for_target(presentation_target_id)")
+            && frame_submit.contains("runtime_for_target(presentation_target_id)"),
+        "all-target projection must derive from target-local shell caches rather than native window identity",
+    );
+    assert!(
+        !frame_submit.contains(
+            "viewport_layout_map.clear();\n    populate_viewport_layout_map_from_shell_tree"
+        ),
+        "primary frame submission must not remain the sole viewport projection owner",
+    );
+}
+
+#[test]
+fn cursor_fallbacks_are_presentation_target_scoped() {
+    let input = include_str!("../src/runtime/systems/input_bridge.rs");
+    let picking = include_str!("../src/runtime/systems/picking.rs");
+    let bindings = include_str!("../src/runtime/viewport/tool_surface_binding.rs");
+
+    assert!(
+        bindings.contains("binding_containing_cursor_for_target"),
+        "runtime bindings must support target-local coordinate lookup",
+    );
+    assert!(
+        input.contains("binding_containing_cursor_for_target(primary_target_id")
+            && picking.contains("binding_containing_cursor_for_target("),
+        "primary input and picking must not search secondary target-local rectangles by raw cursor coordinates",
     );
 }
 
@@ -757,6 +812,7 @@ fn runtime_tool_surface_binding_tracks_rebind_without_mutating_structural_identi
     let tab_stack_id = TabStackId::try_from_raw(51).unwrap();
     let mut layout = ViewportLayoutMapResource::default();
     layout.upsert_entry(ViewportLayoutEntry {
+        presentation_target_id: ui_composition::PresentationTargetId::try_from_raw(1).unwrap(),
         viewport_id: ViewportId(1),
         host_widget_id: WidgetId(1001),
         structural_context: StructuralWidgetRoutingContext {
@@ -766,6 +822,7 @@ fn runtime_tool_surface_binding_tracks_rebind_without_mutating_structural_identi
             tab_stack_id,
         },
         bounds: ui_math::UiRect::new(0.0, 0.0, 640.0, 360.0),
+        effective_shell_scale: 1.0,
     });
 
     let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
@@ -773,6 +830,7 @@ fn runtime_tool_surface_binding_tracks_rebind_without_mutating_structural_identi
 
     layout.clear();
     layout.upsert_entry(ViewportLayoutEntry {
+        presentation_target_id: ui_composition::PresentationTargetId::try_from_raw(1).unwrap(),
         viewport_id: ViewportId(2),
         host_widget_id: WidgetId(1002),
         structural_context: StructuralWidgetRoutingContext {
@@ -782,6 +840,7 @@ fn runtime_tool_surface_binding_tracks_rebind_without_mutating_structural_identi
             tab_stack_id,
         },
         bounds: ui_math::UiRect::new(0.0, 0.0, 640.0, 360.0),
+        effective_shell_scale: 1.0,
     });
     bindings.rebuild_from_layout_map(&layout);
 
@@ -804,12 +863,14 @@ fn runtime_tool_surface_binding_tracks_rebind_without_mutating_structural_identi
 fn runtime_binding_resolution_rejects_structural_mismatch_even_when_viewport_matches() {
     let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
     bindings.upsert_binding(ToolSurfaceRuntimeBindingRecord {
+        presentation_target_id: ui_composition::PresentationTargetId::try_from_raw(1).unwrap(),
         tool_surface_id: ToolSurfaceInstanceId::try_from_raw(7).unwrap(),
         panel_instance_id: PanelInstanceId::try_from_raw(11).unwrap(),
         tab_stack_id: TabStackId::try_from_raw(21).unwrap(),
         viewport_id: ViewportId(1),
         host_widget_id: WidgetId(301),
         bounds: ui_math::UiRect::new(0.0, 0.0, 320.0, 200.0),
+        effective_shell_scale: 1.0,
         generation: 1,
     });
 

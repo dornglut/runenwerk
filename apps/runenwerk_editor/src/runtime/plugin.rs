@@ -32,7 +32,8 @@ use crate::runtime::systems::{
     produce_material_preview_dynamic_uploads_system,
     produce_texture_preview_dynamic_uploads_system, seed_viewport_runtime_contracts_system,
     submit_editor_frame_system, submit_editor_secondary_native_frames_system,
-    sync_viewport_instances_system,
+    sync_editor_all_target_viewport_projection_system,
+    sync_editor_primary_viewport_projection_system, sync_viewport_instances_system,
 };
 use crate::runtime::viewport::{
     MountedSurfaceRegistryResource, SurfaceDefinitionRegistryResource,
@@ -63,7 +64,9 @@ pub enum EditorRuntimeSet {
     WindowPresentationRequests,
     ViewportLifecycle,
     FrameSubmit,
+    ViewportProjection,
     NativeSecondaryFrameSubmit,
+    NativeAllTargetViewportProjection,
     ViewportRenderStateCommands,
     ViewportPresentationSync,
     QuerySnapshotPublication,
@@ -152,11 +155,18 @@ impl Plugin for EditorAppPlugin {
         );
         app.add_systems(
             Update,
+            sync_editor_primary_viewport_projection_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::ViewportProjection)
+                .after(EditorRuntimeSet::FrameSubmit),
+        );
+        app.add_systems(
+            Update,
             sync_viewport_presentation_products_system
                 .on_invoker_thread()
                 .in_set(EditorRuntimeSet::ViewportPresentationSync)
-                .after(EditorRuntimeSet::FrameSubmit)
-                .after_if_present(EditorRuntimeSet::NativeSecondaryFrameSubmit),
+                .after(EditorRuntimeSet::ViewportProjection)
+                .after_if_present(EditorRuntimeSet::NativeAllTargetViewportProjection),
         );
         app.add_systems(
             Update,
@@ -270,7 +280,16 @@ impl Plugin for EditorNativeWindowIntegrationPlugin {
                 .on_invoker_thread()
                 .in_set(EditorRuntimeSet::NativeSecondaryFrameSubmit)
                 .after(EditorRuntimeSet::FrameSubmit)
-                .after(EditorRuntimeSet::WindowPresentationRequests),
+                .after(EditorRuntimeSet::WindowPresentationRequests)
+                .before(EditorRuntimeSet::ViewportProjection),
+        );
+        app.add_systems(
+            Update,
+            sync_editor_all_target_viewport_projection_system
+                .on_invoker_thread()
+                .in_set(EditorRuntimeSet::NativeAllTargetViewportProjection)
+                .after(EditorRuntimeSet::NativeSecondaryFrameSubmit)
+                .after(EditorRuntimeSet::ViewportProjection),
         );
     }
 }

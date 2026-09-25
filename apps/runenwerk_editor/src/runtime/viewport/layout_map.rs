@@ -5,14 +5,17 @@ use std::collections::BTreeMap;
 
 use editor_shell::{StructuralWidgetRoutingContext, WidgetId};
 use editor_viewport::ViewportId;
+use ui_composition::PresentationTargetId;
 use ui_math::UiRect;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ViewportLayoutEntry {
+    pub presentation_target_id: PresentationTargetId,
     pub viewport_id: ViewportId,
     pub host_widget_id: WidgetId,
     pub structural_context: StructuralWidgetRoutingContext,
     pub bounds: UiRect,
+    pub effective_shell_scale: f32,
 }
 
 #[derive(Debug, Clone, runen_ecs::Component, runen_ecs::Resource, Default)]
@@ -87,16 +90,20 @@ mod tests {
         let second_context = structural_context(2, 20, 200);
 
         layout.upsert_entry(ViewportLayoutEntry {
+            presentation_target_id: PresentationTargetId::try_from_raw(1).unwrap(),
             viewport_id: ViewportId(7),
             host_widget_id: WidgetId(101),
             structural_context: first_context,
             bounds: UiRect::new(0.0, 0.0, 100.0, 100.0),
+            effective_shell_scale: 1.0,
         });
         layout.upsert_entry(ViewportLayoutEntry {
+            presentation_target_id: PresentationTargetId::try_from_raw(2).unwrap(),
             viewport_id: ViewportId(7),
             host_widget_id: WidgetId(202),
             structural_context: second_context,
             bounds: UiRect::new(100.0, 0.0, 100.0, 100.0),
+            effective_shell_scale: 1.0,
         });
 
         assert_eq!(layout.entries().count(), 2);
