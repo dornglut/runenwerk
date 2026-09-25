@@ -397,7 +397,6 @@ fn fixed_resolution_preflight_accepts_internal_scene_and_native_resolve() {
         .with_color_target_alias("scene_color")
         .expect("scene color alias should be valid")
         .fullscreen_pass("fixed.preflight.scene.pass")
-        .offscreen_products_only()
         .write_target_alias("scene_color")
         .finish()
         .validate()
@@ -506,13 +505,53 @@ fn fixed_resolution_preflight_accepts_internal_scene_and_native_resolve() {
         (1280, 800),
     )
     .admit_against_compiled_flow((1920, 1080), resolve.id(), &compiled_flows[0]);
+
+    assert!(matches!(
+        engine::plugins::render::inspect::inspect_fixed_resolution_execution(&fallback, &frame),
+        Err(
+            engine::plugins::render::inspect::RenderFixedResolutionExecutionEvidenceError::NativeFallbackRetainsInternalView
+        )
+    ));
+
+    let engine::plugins::render::RenderFixedResolutionExecutionAdmission::NativeFallback(
+        fallback_state,
+    ) = &fallback
+    else {
+        panic!("aspect mismatch should produce native fallback");
+    };
+    let fallback_request = fallback_state
+        .native_scene_invocation
+        .as_ref()
+        .expect("validated alias-capable scene should retain explicit native fallback");
+
+    let mut native_frame = frame.clone();
+    native_frame.views.retain(|view| view.view_id == "main");
+    native_frame.flow_invocations = vec![to_prepared(fallback_request)];
+    native_frame.dynamic_texture_targets.clear();
+
+    let native_report = validate_prepared_render_frame(
+        &native_frame,
+        std::slice::from_ref(&compiled_flows[0]),
+        &current_runtime_gpu_capabilities(),
+    );
+    assert!(
+        !native_report.has_errors(),
+        "native fallback frame should pass preflight: {:?}",
+        native_report.diagnostics
+    );
+
     let fallback_evidence =
-        engine::plugins::render::inspect::inspect_fixed_resolution_execution(&fallback, &frame)
-            .expect("explicit native fallback should remain inspectable");
+        engine::plugins::render::inspect::inspect_fixed_resolution_execution(
+            &fallback,
+            &native_frame,
+        )
+        .expect("complete native fallback should remain inspectable");
     assert_eq!(
         fallback_evidence.resolution.policy,
         engine::plugins::render::inspect::RenderTemporalResolutionPolicy::Native
     );
+    assert_eq!(fallback_evidence.resolution.internal_size, [1920, 1080]);
+    assert_eq!(fallback_evidence.resolution.output_size, [1920, 1080]);
     assert!(fallback_evidence.native_fallback_active);
     assert!(
         fallback_evidence
@@ -520,6 +559,14 @@ fn fixed_resolution_preflight_accepts_internal_scene_and_native_resolve() {
             .as_deref()
             .is_some_and(|reason| reason.contains("must preserve output aspect"))
     );
+    assert_eq!(
+        fallback_evidence.scene_invocation_id.as_ref(),
+        Some(&fallback_request.invocation_id)
+    );
+    assert!(fallback_evidence.target_key.is_none());
+    assert!(fallback_evidence.internal_view_id.is_none());
+    assert!(fallback_evidence.resolve_invocation_id.is_none());
+
 }
 
 #[test]

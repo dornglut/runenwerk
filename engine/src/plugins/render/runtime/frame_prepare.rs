@@ -395,7 +395,6 @@ mod automatic_main_replacement_tests {
             .with_color_target_alias("scene_color")
             .expect("scene color alias should be valid")
             .fullscreen_pass("fixed.test.scene.pass")
-            .offscreen_products_only()
             .write_target_alias("scene_color")
             .finish()
             .validate()
@@ -485,6 +484,71 @@ mod automatic_main_replacement_tests {
             .collect::<Vec<_>>();
         assert_eq!(unrelated_invocations.len(), 1);
         assert_eq!(unrelated_invocations[0].view_id, "main");
+    }
+
+    #[test]
+    fn fixed_resolution_rejection_publishes_explicit_native_scene_without_partial_fixed_state() {
+        let scene = RenderFlow::new("fixed.test.fallback.scene")
+            .with_color_target_alias("scene_color")
+            .expect("scene color alias should be valid")
+            .fullscreen_pass("fixed.test.fallback.scene.pass")
+            .write_target_alias("scene_color")
+            .finish()
+            .validate()
+            .expect("scene flow should validate");
+        let resolve = fixed_resolution_resolve_flow().expect("resolve flow should validate");
+        let scene_compiled = compile_flow_plan(&scene).expect("scene flow should compile");
+        let resolve_compiled = compile_flow_plan(&resolve).expect("resolve flow should compile");
+        let compiled = vec![scene_compiled.clone(), resolve_compiled];
+
+        let admission = RenderFixedResolutionExecutionRequest::new(
+            producer(1),
+            scene.id(),
+            RenderTargetAliasKey::new("scene_color").expect("alias should be valid"),
+            (1280, 800),
+        )
+        .admit_against_compiled_flow((1920, 1080), resolve.id(), &scene_compiled);
+        let RenderFixedResolutionExecutionAdmission::NativeFallback(fallback) = &admission else {
+            panic!("aspect mismatch should fall back to native");
+        };
+        let native_request = fallback
+            .native_scene_invocation
+            .clone()
+            .expect("validated scene should retain explicit native fallback invocation");
+
+        let mut requests = PreparedRenderFrameRequestResource::default();
+        requests
+            .replace_contribution(producer(1), [], [native_request])
+            .expect("native fallback request should publish");
+
+        let views = build_prepared_views((1920, 1080), &requests).expect("views should prepare");
+        let extracted = ExtractedRenderStateMap::new();
+        let main_inputs = build_prepared_flow_inputs(&compiled, &extracted, (1920, 1080))
+            .expect("main inputs should prepare");
+        let invocations =
+            build_prepared_flow_invocations(&compiled, &extracted, &main_inputs, &views, &requests)
+                .expect("native fallback invocation should prepare");
+
+        assert_eq!(views.len(), 1);
+        assert_eq!(views[0].view_id, "main");
+        let scene_invocations = invocations
+            .iter()
+            .filter(|invocation| invocation.flow_id == scene.id())
+            .collect::<Vec<_>>();
+        assert_eq!(scene_invocations.len(), 1);
+        assert_eq!(scene_invocations[0].view_id, "main");
+        assert_eq!(
+            scene_invocations[0]
+                .target_alias_bindings
+                .get(&RenderTargetAliasKey::new("scene_color").expect("alias should be valid")),
+            Some(&PreparedTargetBinding::SurfaceColor)
+        );
+        assert!(
+            invocations
+                .iter()
+                .all(|invocation| invocation.flow_id != resolve.id()),
+            "native fallback must not run the fixed resolve flow"
+        );
     }
 
     #[test]

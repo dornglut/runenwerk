@@ -96,14 +96,19 @@ state no longer matches the prepared frame contract.
   Native, fixed, and dynamically adapted resolution are distinct typed policies;
   none may hide quality, timing, or fallback state.
 - Fixed execution may replace only the selected alias-capable scene flow's
-  automatic main invocation. Unrelated flows, including UI, remain on their
-  native-output path.
+  automatic main invocation. The selected color-alias writers must be valid on
+  both native-main and offscreen views so fixed execution and explicit native
+  fallback share one scene-flow definition. Unrelated flows, including UI,
+  remain on their native-output path.
 - Renderer helper/resolve flows that are meaningful only when explicitly
   invoked use typed explicit-invocation flow policy; they must not rely on a
   global disable-default-flows switch or registration churn.
 - Rejected fixed execution falls back to native resolution before any partial
-  internal-routing publication. A simple spatial resolve proves portable
-  plumbing only and is not TAAU reconstruction-quality evidence.
+  internal-routing publication. When the selected alias contract is valid, the
+  fallback publishes an explicit native-main invocation binding that alias to
+  native `SurfaceColor`; execution evidence must reject retained fixed
+  target/view/resolve state. A simple spatial resolve proves portable plumbing
+  only and is not TAAU reconstruction-quality evidence.
 - Missing motion vectors, depth, exposure, reactive masks, SDF, ray-query, or
   adapter capability must produce typed diagnostics, not silent reconstruction.
 - History reuse must fail closed on signature mismatch, missing inputs,
