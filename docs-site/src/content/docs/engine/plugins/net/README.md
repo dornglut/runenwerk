@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-24
+last_reviewed: 2026-09-25
 ---
 
 # Net Plugin
@@ -13,8 +13,7 @@ last_reviewed: 2026-09-24
 ## Purpose
 
 `engine/src/plugins/net` integrates standalone RunenNet lifecycle/session, authority-input, and
-client-replication consistency semantics with the remaining Runenwerk server-replication and
-local-prediction migration contracts, engine resources, and schedules.
+client-replication consistency and prediction semantics with the remaining Runenwerk server-replication integration, engine resources, and schedules.
 
 The game-facing entry point is:
 
@@ -44,7 +43,7 @@ Runenwerk engine integration owns:
 - the read-only `RunenNetSessionProjection` used for engine routing and diagnostics;
 - product/session metadata and host reconnect/deployment policy;
 - bounded inbox/outbox staging for retained replication/application payloads;
-- retained `engine_net` server-replication/envelope/local-prediction integration while RN8 migration continues;
+- retained `engine_net` server-replication/envelope integration while RN8 migration continues;
 - explicit finite authority-input policy selection and host execution staging after RunenNet admission;
 - explicit finite client-replication policy, complete encoded-product activation, and downstream host realization around RunenNet `ClientReplicationSet`.
 

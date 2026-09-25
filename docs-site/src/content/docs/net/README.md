@@ -5,12 +5,12 @@ status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-09-24
+last_reviewed: 2026-09-25
 ---
 
 # net
 
-`net/` is the remaining Runenwerk simulation/history/network-authoring workspace subtree during the RN8 cutover to standalone RunenNet.
+`net/` is the remaining Runenwerk simulation/history/network-integration workspace subtree during the RN8 cutover to standalone RunenNet.
 
 Standalone RunenNet owns reusable realtime networking semantics: connection identity, protocol/schema compatibility, sessions/participants, delivery and resource-pressure semantics, recovery contracts, replication consistency/recovery, and participant-input prediction/reconciliation. Concrete QUIC realization belongs to `runen-net-quic` where a maintained consumer requires it.
 
@@ -19,14 +19,11 @@ Runenwerk owns engine scheduling, ECS/game/world integration, product/session me
 ## Remaining Crates
 
 - `engine_net/`
-  - Temporary replication/input/protocol-payload/authoring migration evidence for maintained engine consumers.
+  - Temporary server-replication/protocol-payload integration evidence for maintained engine consumers.
   - Uses RunenNet `ConnectionHandle` for connection-scoped retained state.
   - Must not contain connection/session/admission/delivery/transport-runtime authority.
   - README: [engine_net/README.md](engine-net/README.md)
 
-- `engine_net_macros/`
-  - Declarative replication metadata macros pending later RN8 disposition.
-  - Must not define reusable networking lifecycle, delivery, replication, or prediction semantics.
 
 - `engine_sim/`
   - Simulation identity, tick, codec/profile, and deterministic vocabulary.
@@ -34,7 +31,7 @@ Runenwerk owns engine scheduling, ECS/game/world integration, product/session me
 - `engine_history/` (crate name: `engine_replay`)
   - Replay/history/archive/controller/validation substrate.
 
-## Current RN8 Boundary Through N7
+## Current RN8 Boundary Through N9
 
 Engine connection/session integration consumes standalone RunenNet Core directly:
 
@@ -48,8 +45,7 @@ The engine does not translate RunenNet lifecycle state into another semantic sta
 `engine_net` retains only evidence-backed migration contracts that still have maintained consumers:
 
 - snapshot, delta, ACK, input-frame, and typed-payload envelopes;
-- replication driver/model/profile/interest/mapping/timeline/diagnostics contracts;
-- simulation-facing networking metadata and macros.
+- replication driver, mapping, timeline, and diagnostics contracts required by maintained consumers.
 
 Server connection-scoped retained state uses RunenNet `ConnectionHandle` directly. Client replication consistency/history/recovery uses RunenNet `ClientReplicationSet` keyed by explicit `ReplicationLineageKey`; Runenwerk retains one active complete encoded product only for downstream realization.
 
@@ -86,7 +82,7 @@ They are not RunenNet delivery flows, queue admission is not RunenNet `DeliveryA
 4. Keep retained integration behavior stable during dependency-ordered cuts without treating it as reusable semantic authority.
 5. Delete migration residue rather than preserving it through forwarding APIs.
 
-RN8 has progressed through authoritative-input N5, client-boundary investigation N6, the Replicated View R0 prerequisite, and the active N7 client-consistency cut. N7 does not authorize authority-replication delivery acceptance, RunenNet prediction migration, final ordinary multiplayer authoring syntax, or a new engine networking runtime.
+RN8 has progressed through authoritative-input N5, client replication N7, and client prediction/reconciliation N9. N10 removes the dead predecessor component-registration metadata/macro surface without defining replacement authoring syntax. Authority-replication delivery acceptance and final ordinary Replicated View authoring remain separately gated.
 
 ## Architecture
 
