@@ -397,6 +397,75 @@ fn import_rejects_non_contiguous_frames_empty_groups_and_bad_identity_slots() {
         import_automation_input_trace_v1(source.as_bytes()),
         Err(AutomationInputTraceImportError::InvalidIdentityReference(_))
     ));
+
+    let tablet_context = context(1, Some(2));
+    let tablet = InputObservation::Tablet(TabletObservation {
+        contact: ContactId::new(3),
+        tool: Some(ToolId::new(4)),
+        tool_kind: InputToolKind::Pen,
+        phase: ContactPhase::Begin,
+        presence: ContactPresence::Contact,
+        position: Point2::new(1.0, 2.0, CoordinateSpace::WindowPhysicalPixels),
+        delta: Vector2::new(0.0, 0.0),
+        pressure: None,
+        tangential_pressure: None,
+        tilt: None,
+        twist: None,
+        controls: PhysicalTabletControls::default(),
+        capabilities: TabletCapabilities::default(),
+        source_time: None,
+        evidence: EvidenceStatus::ObservedConfirmed,
+        delivery: DeliveryRole::OrdinaryCurrent,
+        origin: ObservationOrigin::SourceReport,
+    });
+    let tablet_trace = AutomationInputTrace {
+        frames: vec![AutomationInputTraceFrame {
+            frame_ordinal: 0,
+            groups: vec![InputObservationGroup::new(tablet_context, vec![tablet])],
+        }],
+        trailing_groups: Vec::new(),
+    };
+    let encoded = encode(&tablet_trace);
+
+    let mut bad_device: PersistedTraceV1 = ron_options().from_str(&encoded).unwrap();
+    bad_device.frames[0].groups[0].device_slot = Some(1);
+    let source = ron_options()
+        .to_string_pretty(&bad_device, ron::ser::PrettyConfig::new())
+        .unwrap();
+    assert!(matches!(
+        import_automation_input_trace_v1(source.as_bytes()),
+        Err(AutomationInputTraceImportError::InvalidIdentityReference(_))
+    ));
+
+    let mut bad_contact: PersistedTraceV1 = ron_options().from_str(&encoded).unwrap();
+    let PersistedObservationV1::Tablet(tablet) =
+        &mut bad_contact.frames[0].groups[0].observations[0]
+    else {
+        unreachable!()
+    };
+    tablet.contact_slot = 1;
+    let source = ron_options()
+        .to_string_pretty(&bad_contact, ron::ser::PrettyConfig::new())
+        .unwrap();
+    assert!(matches!(
+        import_automation_input_trace_v1(source.as_bytes()),
+        Err(AutomationInputTraceImportError::InvalidIdentityReference(_))
+    ));
+
+    let mut bad_tool: PersistedTraceV1 = ron_options().from_str(&encoded).unwrap();
+    let PersistedObservationV1::Tablet(tablet) =
+        &mut bad_tool.frames[0].groups[0].observations[0]
+    else {
+        unreachable!()
+    };
+    tablet.tool_slot = Some(1);
+    let source = ron_options()
+        .to_string_pretty(&bad_tool, ron::ser::PrettyConfig::new())
+        .unwrap();
+    assert!(matches!(
+        import_automation_input_trace_v1(source.as_bytes()),
+        Err(AutomationInputTraceImportError::InvalidIdentityReference(_))
+    ));
 }
 
 #[test]
@@ -441,6 +510,19 @@ fn metadata_is_bounded_and_round_trips_when_present() {
             "metadata_string_bytes"
         ))
     ));
+
+    let mut persisted: PersistedTraceV1 = ron_options().from_str(&source).unwrap();
+    persisted.provenance.as_mut().unwrap().label =
+        Some("x".repeat(MAX_METADATA_STRING_BYTES + 1));
+    let oversized_import = ron_options()
+        .to_string_pretty(&persisted, ron::ser::PrettyConfig::new())
+        .unwrap();
+    assert!(matches!(
+        import_automation_input_trace_v1(oversized_import.as_bytes()),
+        Err(AutomationInputTraceImportError::ResourceLimitExceeded(
+            "metadata_string_bytes"
+        ))
+    ));
 }
 
 #[test]
@@ -467,36 +549,31 @@ fn structural_resource_limits_are_enforced_before_runtime_materialization() {
         ))
     ));
 
-    let group = PersistedGroupV1 {
-        source_slot: 0,
-        device_slot: None,
-        observations: vec![PersistedObservationV1::RelativeMotion(
-            PersistedRelativeMotionV1 {
-                delta: PersistedVector2V1 { x: 0.0, y: 0.0 },
-                unit: PersistedRelativeMotionUnitV1::BackendDeviceUnits,
-            },
-        )],
-    };
-    let full_frames = MAX_TOTAL_GROUPS / MAX_GROUPS_PER_FRAME;
-    let mut frames: Vec<_> = (0..full_frames)
-        .map(|frame| PersistedFrameV1 {
-            frame_ordinal: frame as u64,
-            groups: vec![group.clone(); MAX_GROUPS_PER_FRAME],
-        })
-        .collect();
-    frames.push(PersistedFrameV1 {
-        frame_ordinal: full_frames as u64,
-        groups: vec![group],
-    });
-    let persisted = PersistedTraceV1 {
+    let one_group = PersistedTraceV1 {
         artifact_kind: AUTOMATION_INPUT_TRACE_V1_ARTIFACT_KIND.to_owned(),
         schema_version: AUTOMATION_INPUT_TRACE_V1_SCHEMA_VERSION,
         recording_witness: PersistedRecordingWitnessV1::RecordedSourcesPristineAtCaptureStart,
         provenance: None,
-        frames,
+        frames: vec![PersistedFrameV1 {
+            frame_ordinal: 0,
+            groups: vec![PersistedGroupV1 {
+                source_slot: 0,
+                device_slot: None,
+                observations: vec![PersistedObservationV1::RelativeMotion(
+                    PersistedRelativeMotionV1 {
+                        delta: PersistedVector2V1 { x: 0.0, y: 0.0 },
+                        unit: PersistedRelativeMotionUnitV1::BackendDeviceUnits,
+                    },
+                )],
+            }],
+        }],
+    };
+    let mut builder = ImportBuilder {
+        total_groups: MAX_TOTAL_GROUPS,
+        ..ImportBuilder::default()
     };
     assert!(matches!(
-        ImportBuilder::new().build(&persisted),
+        builder.build(&one_group),
         Err(AutomationInputTraceImportError::ResourceLimitExceeded("total_groups"))
     ));
 
