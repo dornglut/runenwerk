@@ -22,7 +22,7 @@ use crate::runtime::winit_input::{
     scroll_input, text_input,
 };
 use anyhow::{Context, Result, anyhow};
-use runen_input::InputContext;
+use runen_input::{ContinuityLoss, InputContext};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
@@ -103,6 +103,58 @@ impl WinitRunner {
         self.apply_event_for_native_window(NativeWindowId::primary(), event)
     }
 
+    fn apply_window_focus_event(
+        &mut self,
+        native_window_id: NativeWindowId,
+        focused: bool,
+    ) -> Result<()> {
+        self.apply_event_for_native_window(native_window_id, PlatformEvent::Focused { focused })?;
+        if !focused
+            && let Some(context) = self.input_adapter.window_source_context(native_window_id)
+        {
+            self.apply_event_for_native_window(
+                native_window_id,
+                PlatformEvent::InputContinuityLost {
+                    context,
+                    loss: ContinuityLoss::Source,
+                },
+            )?;
+        }
+        Ok(())
+    }
+
+    fn retire_window_input_source(&mut self, native_window_id: NativeWindowId) -> Result<bool> {
+        let Some(context) = self.input_adapter.window_source_context(native_window_id) else {
+            return Ok(false);
+        };
+        self.apply_event_for_native_window(
+            native_window_id,
+            PlatformEvent::InputContinuityLost {
+                context,
+                loss: ContinuityLoss::Source,
+            },
+        )?;
+        let retired = self
+            .input_adapter
+            .retire_window_source(native_window_id)
+            .expect("known window input source must remain mapped until retirement");
+        debug_assert_eq!(retired, context);
+        Ok(true)
+    }
+
+    fn apply_raw_device_removal(&mut self, device_id: winit::event::DeviceId) -> Result<bool> {
+        let Some(context) = self.input_adapter.retire_raw_device(device_id) else {
+            return Ok(false);
+        };
+        let input = self
+            .state
+            .world
+            .resource_mut::<InputState>()
+            .context("missing InputState resource")?;
+        input.handle_continuity_loss(context, ContinuityLoss::Source);
+        Ok(true)
+    }
+
     fn apply_event_for_native_window(
         &mut self,
         native_window_id: NativeWindowId,
@@ -116,6 +168,7 @@ impl WinitRunner {
 
         match &event {
             PlatformEvent::KeyboardInput { .. }
+            | PlatformEvent::InputContinuityLost { .. }
             | PlatformEvent::TextInput { .. }
             | PlatformEvent::MouseWheel { .. }
             | PlatformEvent::CursorMoved { .. }
@@ -437,6 +490,7 @@ impl WinitRunner {
                     event_loop.exit();
                     return Ok(());
                 }
+                self.retire_window_input_source(native_window_id)?;
                 let render_surface_id = self
                     .state
                     .world
@@ -711,10 +765,9 @@ impl ApplicationHandler for WinitRunner {
             WindowEvent::CloseRequested => {
                 self.apply_event_for_native_window(native_window_id, PlatformEvent::CloseRequested)
             }
-            WindowEvent::Focused(focused) => self.apply_event_for_native_window(
-                native_window_id,
-                PlatformEvent::Focused { focused },
-            ),
+            WindowEvent::Focused(focused) => {
+                self.apply_window_focus_event(native_window_id, focused)
+            }
             WindowEvent::Resized(size) => self.apply_event_for_native_window(
                 native_window_id,
                 PlatformEvent::Resized {
@@ -884,6 +937,13 @@ impl ApplicationHandler for WinitRunner {
                 }
                 result
             }
+            DeviceEvent::Removed => {
+                let result = self.apply_raw_device_removal(device_id);
+                if result.as_ref().is_ok_and(|removed| *removed) {
+                    self.request_redraw_for_native_window(NativeWindowId::primary());
+                }
+                result.map(|_| ())
+            }
             _ => Ok(()),
         };
 
@@ -1031,6 +1091,147 @@ mod tests {
         assert_eq!(windowed_fixed.steps_ran_last_frame, 3);
         assert_eq!(headless_fixed.saturated_frames, 0);
         assert_eq!(windowed_fixed.saturated_frames, 0);
+    }
+
+    fn normalized_shift_press(context: InputContext) -> PlatformEvent {
+        PlatformEvent::KeyboardInput {
+            context,
+            input: runen_input::KeyboardInput {
+                physical_key: runen_input::PhysicalKeyIdentity::code("ShiftLeft"),
+                logical_key: runen_input::LogicalKey::Native(
+                    runen_input::NativeLogicalKey::Unidentified,
+                ),
+                location: runen_input::KeyLocation::Left,
+                state: runen_input::DigitalState::Pressed,
+                repeat: false,
+                origin: runen_input::ObservationOrigin::SourceReport,
+            },
+        }
+    }
+
+    #[test]
+    fn focus_loss_invalidates_existing_window_source_without_retiring_its_identity() {
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        runner.state.world.insert_resource(InputState::new());
+        let backend_device = winit::event::DeviceId::dummy();
+        let context = runner
+            .input_adapter
+            .window_context(NativeWindowId::primary(), backend_device);
+        runner
+            .apply_event(normalized_shift_press(context))
+            .expect("normalized key press should apply");
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<InputState>()
+                .expect("input state")
+                .shift_down()
+        );
+
+        runner
+            .apply_window_focus_event(NativeWindowId::primary(), false)
+            .expect("focus loss should apply");
+
+        assert!(
+            !runner
+                .state
+                .world
+                .resource::<InputState>()
+                .expect("input state")
+                .shift_down()
+        );
+        assert_eq!(
+            runner
+                .input_adapter
+                .window_source_context(NativeWindowId::primary())
+                .map(|value| value.source),
+            Some(context.source)
+        );
+    }
+
+    #[test]
+    fn focus_loss_does_not_allocate_an_unused_window_source() {
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        runner.state.world.insert_resource(InputState::new());
+
+        assert_eq!(
+            runner
+                .input_adapter
+                .window_source_context(NativeWindowId::primary()),
+            None
+        );
+        runner
+            .apply_window_focus_event(NativeWindowId::primary(), false)
+            .expect("focus loss should apply");
+        assert_eq!(
+            runner
+                .input_adapter
+                .window_source_context(NativeWindowId::primary()),
+            None
+        );
+    }
+
+    #[test]
+    fn explicit_window_source_retirement_invalidates_state_and_refreshes_source_identity() {
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        runner.state.world.insert_resource(InputState::new());
+        let secondary =
+            NativeWindowId::try_from_raw(2).expect("secondary native window id should be valid");
+        let backend_device = winit::event::DeviceId::dummy();
+        let context = runner
+            .input_adapter
+            .window_context(secondary, backend_device);
+        runner
+            .apply_event_for_native_window(secondary, normalized_shift_press(context))
+            .expect("secondary key press should apply");
+
+        assert!(
+            runner
+                .retire_window_input_source(secondary)
+                .expect("window source retirement should apply")
+        );
+        assert!(
+            !runner
+                .state
+                .world
+                .resource::<InputState>()
+                .expect("input state")
+                .shift_down()
+        );
+        assert_eq!(runner.input_adapter.window_source_context(secondary), None);
+
+        let replacement = runner
+            .input_adapter
+            .window_context(secondary, backend_device);
+        assert_ne!(replacement.source, context.source);
+        assert_eq!(replacement.device, context.device);
+    }
+
+    #[test]
+    fn raw_device_removal_retires_only_raw_identity() {
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        runner.state.world.insert_resource(InputState::new());
+        let backend_device = winit::event::DeviceId::dummy();
+        let window = runner
+            .input_adapter
+            .window_context(NativeWindowId::primary(), backend_device);
+        let raw = runner.input_adapter.raw_device_context(backend_device);
+
+        assert!(
+            runner
+                .apply_raw_device_removal(backend_device)
+                .expect("raw device removal should apply")
+        );
+        let replacement = runner.input_adapter.raw_device_context(backend_device);
+        assert_ne!(replacement.source, raw.source);
+        assert_ne!(replacement.device, raw.device);
+        assert_eq!(
+            runner
+                .input_adapter
+                .window_context(NativeWindowId::primary(), backend_device),
+            window
+        );
     }
 
     #[test]
