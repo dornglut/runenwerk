@@ -3,7 +3,7 @@ use engine::plugins::render::inspect::{
     RenderTemporalInputEvidence, RenderTemporalInputKind, RenderTemporalInspection,
     RenderTemporalInspectionRequest, RenderTemporalJitterEvidence,
     RenderTemporalReconstructionMode, RenderTemporalResolutionEvidence,
-    inspect_render_temporal_inputs,
+    RenderTemporalResolutionPolicy, inspect_render_temporal_inputs,
 };
 
 #[test]
@@ -66,27 +66,142 @@ fn render_temporal_inputs_fail_closed_on_valid_history_signature_mismatch() {
 }
 
 #[test]
-fn render_temporal_inputs_fail_closed_on_hidden_dynamic_resolution() {
+fn render_temporal_inputs_accept_native_policy_at_equal_extents() {
     let mut request = request();
     request.reconstruction_mode = RenderTemporalReconstructionMode::Taa;
-    request.resolution.dynamic_resolution_enabled = false;
+    request.resolution.internal_size = [1920, 1080];
+    request.resolution.policy = RenderTemporalResolutionPolicy::Native;
 
     let report = inspect_render_temporal_inputs(request);
 
-    assert!(!report.is_ready());
-    assert!(has_error(&report, "hidden_dynamic_resolution"));
+    assert!(report.is_ready());
+    assert_eq!(
+        report.resolution.policy,
+        RenderTemporalResolutionPolicy::Native
+    );
 }
 
 #[test]
-fn render_temporal_inputs_fail_closed_when_taau_lacks_dynamic_resolution() {
+fn render_temporal_inputs_fail_closed_when_taau_uses_native_policy() {
     let mut request = request();
     request.resolution.internal_size = [1920, 1080];
-    request.resolution.dynamic_resolution_enabled = false;
+    request.resolution.policy = RenderTemporalResolutionPolicy::Native;
 
     let report = inspect_render_temporal_inputs(request);
 
     assert!(!report.is_ready());
-    assert!(has_error(&report, "taau_without_dynamic_resolution"));
+    assert!(has_error(&report, "taau_without_scaled_resolution"));
+}
+
+#[test]
+fn render_temporal_inputs_fail_closed_when_native_policy_hides_scaled_extent() {
+    let mut request = request();
+    request.reconstruction_mode = RenderTemporalReconstructionMode::Taa;
+    request.resolution.policy = RenderTemporalResolutionPolicy::Native;
+
+    let report = inspect_render_temporal_inputs(request);
+
+    assert!(!report.is_ready());
+    assert!(has_error(&report, "native_resolution_mismatch"));
+}
+
+#[test]
+fn render_temporal_inputs_accept_fixed_subnative_taau() {
+    let mut request = request();
+    request.resolution.policy = RenderTemporalResolutionPolicy::Fixed;
+
+    let report = inspect_render_temporal_inputs(request);
+
+    assert!(report.is_ready());
+    assert_eq!(
+        report.resolution.policy,
+        RenderTemporalResolutionPolicy::Fixed
+    );
+    assert_eq!(report.resolution.scale_x, 1280.0 / 1920.0);
+    assert_eq!(report.resolution.scale_y, 720.0 / 1080.0);
+}
+
+#[test]
+fn render_temporal_inputs_fail_closed_when_fixed_taau_supersamples() {
+    let mut request = request();
+    request.resolution.internal_size = [2560, 1440];
+    request.resolution.policy = RenderTemporalResolutionPolicy::Fixed;
+
+    let report = inspect_render_temporal_inputs(request);
+
+    assert!(!report.is_ready());
+    assert!(has_error(&report, "taau_without_scaled_resolution"));
+}
+
+#[test]
+fn render_temporal_inputs_fail_closed_when_dynamic_taau_current_extent_exceeds_output() {
+    let mut request = request();
+    request.resolution.internal_size = [2560, 1440];
+    request.resolution.policy = RenderTemporalResolutionPolicy::Dynamic {
+        min_scale: 0.5,
+        max_scale: 1.5,
+    };
+
+    let report = inspect_render_temporal_inputs(request);
+
+    assert!(!report.is_ready());
+    assert!(has_error(&report, "taau_without_scaled_resolution"));
+}
+
+#[test]
+fn render_temporal_inputs_fail_closed_when_fixed_taau_is_not_scaled() {
+    let mut request = request();
+    request.resolution.internal_size = [1920, 1080];
+    request.resolution.policy = RenderTemporalResolutionPolicy::Fixed;
+
+    let report = inspect_render_temporal_inputs(request);
+
+    assert!(!report.is_ready());
+    assert!(has_error(&report, "taau_without_scaled_resolution"));
+}
+
+#[test]
+fn render_temporal_inputs_fail_closed_on_invalid_dynamic_bounds() {
+    let mut request = request();
+    request.resolution.policy = RenderTemporalResolutionPolicy::Dynamic {
+        min_scale: 1.0,
+        max_scale: 0.5,
+    };
+
+    let report = inspect_render_temporal_inputs(request);
+
+    assert!(!report.is_ready());
+    assert!(has_error(&report, "invalid_dynamic_resolution_limits"));
+}
+
+#[test]
+fn render_temporal_inputs_fail_closed_when_dynamic_scale_is_out_of_bounds() {
+    let mut request = request();
+    request.resolution.policy = RenderTemporalResolutionPolicy::Dynamic {
+        min_scale: 0.75,
+        max_scale: 1.0,
+    };
+
+    let report = inspect_render_temporal_inputs(request);
+
+    assert!(!report.is_ready());
+    assert!(has_error(&report, "dynamic_resolution_out_of_bounds"));
+}
+
+#[test]
+fn render_temporal_inputs_accept_dynamic_policy_at_current_native_scale() {
+    let mut request = request();
+    request.resolution.internal_size = [1920, 1080];
+    request.resolution.policy = RenderTemporalResolutionPolicy::Dynamic {
+        min_scale: 0.5,
+        max_scale: 1.0,
+    };
+
+    let report = inspect_render_temporal_inputs(request);
+
+    assert!(report.is_ready());
+    assert_eq!(report.resolution.scale_x, 1.0);
+    assert_eq!(report.resolution.scale_y, 1.0);
 }
 
 fn request() -> RenderTemporalInspectionRequest {
@@ -97,9 +212,10 @@ fn request() -> RenderTemporalInspectionRequest {
         resolution: RenderTemporalResolutionEvidence {
             internal_size: [1280, 720],
             output_size: [1920, 1080],
-            min_scale: 0.5,
-            max_scale: 1.0,
-            dynamic_resolution_enabled: true,
+            policy: RenderTemporalResolutionPolicy::Dynamic {
+                min_scale: 0.5,
+                max_scale: 1.0,
+            },
         },
         jitter: RenderTemporalJitterEvidence {
             sequence_id: "halton-2-3:v1".to_string(),

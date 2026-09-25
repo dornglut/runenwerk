@@ -67,13 +67,28 @@ impl RenderTemporalReconstructionMode {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum RenderTemporalResolutionPolicy {
+    Native,
+    Fixed,
+    Dynamic { min_scale: f32, max_scale: f32 },
+}
+
+impl RenderTemporalResolutionPolicy {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Native => "native",
+            Self::Fixed => "fixed",
+            Self::Dynamic { .. } => "dynamic",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct RenderTemporalResolutionEvidence {
     pub internal_size: [u32; 2],
     pub output_size: [u32; 2],
-    pub min_scale: f32,
-    pub max_scale: f32,
-    pub dynamic_resolution_enabled: bool,
+    pub policy: RenderTemporalResolutionPolicy,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -82,9 +97,7 @@ pub struct RenderTemporalResolutionInspection {
     pub output_size: [u32; 2],
     pub scale_x: f32,
     pub scale_y: f32,
-    pub min_scale: f32,
-    pub max_scale: f32,
-    pub dynamic_resolution_enabled: bool,
+    pub policy: RenderTemporalResolutionPolicy,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -213,9 +226,7 @@ fn inspect_resolution(
         output_size: resolution.output_size,
         scale_x,
         scale_y,
-        min_scale: resolution.min_scale,
-        max_scale: resolution.max_scale,
-        dynamic_resolution_enabled: resolution.dynamic_resolution_enabled,
+        policy: resolution.policy,
     }
 }
 
@@ -258,39 +269,47 @@ fn validate_resolution(
         ));
     }
 
-    if !evidence.min_scale.is_finite()
-        || !evidence.max_scale.is_finite()
-        || evidence.min_scale <= 0.0
-        || evidence.max_scale <= 0.0
-        || evidence.min_scale > evidence.max_scale
-    {
-        diagnostics.push(RenderTemporalDiagnostic::error(
-            "invalid_dynamic_resolution_limits",
-            "temporal dynamic-resolution scale limits must be finite, positive, and ordered",
-        ));
-        return;
-    }
+    match evidence.policy {
+        RenderTemporalResolutionPolicy::Native => {
+            if evidence.internal_size != evidence.output_size {
+                diagnostics.push(RenderTemporalDiagnostic::error(
+                    "native_resolution_mismatch",
+                    "native temporal resolution requires equal internal and output extents",
+                ));
+            }
+        }
+        RenderTemporalResolutionPolicy::Fixed => {}
+        RenderTemporalResolutionPolicy::Dynamic {
+            min_scale,
+            max_scale,
+        } => {
+            if !min_scale.is_finite()
+                || !max_scale.is_finite()
+                || min_scale <= 0.0
+                || max_scale <= 0.0
+                || min_scale > max_scale
+            {
+                diagnostics.push(RenderTemporalDiagnostic::error(
+                    "invalid_dynamic_resolution_limits",
+                    "temporal dynamic-resolution scale limits must be finite, positive, and ordered",
+                ));
+                return;
+            }
 
-    if !evidence.dynamic_resolution_enabled && evidence.internal_size != evidence.output_size {
-        diagnostics.push(RenderTemporalDiagnostic::error(
-            "hidden_dynamic_resolution",
-            "internal and output resolution differ while dynamic resolution is not reported as enabled",
-        ));
-    }
-
-    if evidence.dynamic_resolution_enabled
-        && (inspection.scale_x < evidence.min_scale
-            || inspection.scale_x > evidence.max_scale
-            || inspection.scale_y < evidence.min_scale
-            || inspection.scale_y > evidence.max_scale)
-    {
-        diagnostics.push(RenderTemporalDiagnostic::error(
-            "dynamic_resolution_out_of_bounds",
-            format!(
-                "temporal internal/output scale ({:.3}, {:.3}) is outside configured range [{:.3}, {:.3}]",
-                inspection.scale_x, inspection.scale_y, evidence.min_scale, evidence.max_scale
-            ),
-        ));
+            if inspection.scale_x < min_scale
+                || inspection.scale_x > max_scale
+                || inspection.scale_y < min_scale
+                || inspection.scale_y > max_scale
+            {
+                diagnostics.push(RenderTemporalDiagnostic::error(
+                    "dynamic_resolution_out_of_bounds",
+                    format!(
+                        "temporal internal/output scale ({:.3}, {:.3}) is outside configured range [{:.3}, {:.3}]",
+                        inspection.scale_x, inspection.scale_y, min_scale, max_scale
+                    ),
+                ));
+            }
+        }
     }
 }
 
@@ -460,12 +479,35 @@ fn validate_reconstruction_mode(
         ));
     }
 
-    if request.reconstruction_mode == RenderTemporalReconstructionMode::Taau
-        && !request.resolution.dynamic_resolution_enabled
-    {
-        diagnostics.push(RenderTemporalDiagnostic::error(
-            "taau_without_dynamic_resolution",
-            "TAAU reconstruction requires explicit dynamic internal resolution evidence",
-        ));
+    if request.reconstruction_mode == RenderTemporalReconstructionMode::Taau {
+        match request.resolution.policy {
+            RenderTemporalResolutionPolicy::Native => {
+                diagnostics.push(RenderTemporalDiagnostic::error(
+                    "taau_without_scaled_resolution",
+                    "TAAU reconstruction requires fixed sub-native or dynamic internal-resolution evidence",
+                ));
+            }
+            RenderTemporalResolutionPolicy::Fixed => {
+                if request.resolution.internal_size == request.resolution.output_size
+                    || request.resolution.internal_size[0] > request.resolution.output_size[0]
+                    || request.resolution.internal_size[1] > request.resolution.output_size[1]
+                {
+                    diagnostics.push(RenderTemporalDiagnostic::error(
+                        "taau_without_scaled_resolution",
+                        "fixed TAAU reconstruction requires a sub-native internal extent",
+                    ));
+                }
+            }
+            RenderTemporalResolutionPolicy::Dynamic { .. } => {
+                if request.resolution.internal_size[0] > request.resolution.output_size[0]
+                    || request.resolution.internal_size[1] > request.resolution.output_size[1]
+                {
+                    diagnostics.push(RenderTemporalDiagnostic::error(
+                        "taau_without_scaled_resolution",
+                        "dynamic TAAU reconstruction cannot use a current internal extent larger than output",
+                    ));
+                }
+            }
+        }
     }
 }

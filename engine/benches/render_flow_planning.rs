@@ -21,13 +21,13 @@ use engine::plugins::render::inspect::{
     RenderTemporalInspectionRequest, RenderTemporalJitterEvidence,
     RenderTemporalProductionEvidenceRequest, RenderTemporalProductionHardwareProfile,
     RenderTemporalReconstructionMode, RenderTemporalResolutionEvidence,
-    RenderTemporalRuntimeVisualEvidence, RenderTemporalUpscalingAdapterEvidence,
-    RenderTemporalUpscalingAdapterKind, RenderTemporalUpscalingCapabilityState,
-    RenderTemporalUpscalingInspection, RenderTemporalUpscalingInspectionRequest,
-    inspect_render_mesh_material_production_evidence, inspect_render_scale_production_evidence,
-    inspect_render_scale_visibility, inspect_render_sdf_production_evidence,
-    inspect_render_temporal_inputs, inspect_render_temporal_production_evidence,
-    inspect_render_temporal_upscaling,
+    RenderTemporalResolutionPolicy, RenderTemporalRuntimeVisualEvidence,
+    RenderTemporalUpscalingAdapterEvidence, RenderTemporalUpscalingAdapterKind,
+    RenderTemporalUpscalingCapabilityState, RenderTemporalUpscalingInspection,
+    RenderTemporalUpscalingInspectionRequest, inspect_render_mesh_material_production_evidence,
+    inspect_render_scale_production_evidence, inspect_render_scale_visibility,
+    inspect_render_sdf_production_evidence, inspect_render_temporal_inputs,
+    inspect_render_temporal_production_evidence, inspect_render_temporal_upscaling,
 };
 use engine::plugins::render::{
     BoundedUniformGrid2dBuildPlan, BoundedUniformGrid2dConfig, BoundedUniformGrid2dStage,
@@ -765,9 +765,10 @@ fn temporal_inspection() -> RenderTemporalInspection {
         resolution: RenderTemporalResolutionEvidence {
             internal_size: [1280, 720],
             output_size: [1920, 1080],
-            min_scale: 0.5,
-            max_scale: 1.0,
-            dynamic_resolution_enabled: true,
+            policy: RenderTemporalResolutionPolicy::Dynamic {
+                min_scale: 0.5,
+                max_scale: 1.0,
+            },
         },
         jitter: RenderTemporalJitterEvidence {
             sequence_id: "halton-2-3:v1".to_string(),

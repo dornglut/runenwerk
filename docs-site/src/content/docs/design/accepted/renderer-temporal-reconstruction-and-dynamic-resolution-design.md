@@ -1,6 +1,6 @@
 ---
 title: Renderer Temporal Reconstruction And Dynamic Resolution Platform
-description: Active design for TAA, TAAU, dynamic resolution, motion-vector/depth/exposure products, and FSR-style optional adapters.
+description: Active design for TAA, TAAU, fixed and dynamic internal resolution, motion-vector/depth/exposure products, and FSR-style optional adapters.
 status: accepted
 owner: engine
 layer: engine-runtime / renderer / postprocess
@@ -21,13 +21,13 @@ related_designs:
 
 Temporal reconstruction is a renderer platform, not a vendor-upscaler shortcut.
 The first durable contract is backend-neutral history, jitter, motion vectors,
-depth, exposure, reactive-mask style metadata, dynamic internal resolution, and
-diagnostics. FSR-style or vendor-specific adapters come after the portable
+depth, exposure, reactive-mask style metadata, explicit native/fixed/dynamic
+internal-resolution policy, and diagnostics. FSR-style or vendor-specific adapters come after the portable
 contract exists.
 
 The renderer may own derived temporal execution state: history textures,
-history signatures, jitter phase, dynamic-resolution state, reconstruction
-mode, timing, capability diagnostics, and adapter invocation records. Product,
+history signatures, jitter phase, fixed/dynamic internal-resolution state,
+reconstruction mode, timing, capability diagnostics, and adapter invocation records. Product,
 scene, camera, material, SDF, ray-query, and exposure producers remain the
 source of semantic truth for their inputs.
 
@@ -39,7 +39,7 @@ This track covers:
 - jittered projection and history invalidation;
 - motion vectors, depth, exposure, luminance, transparency/reactive masks, and
   disocclusion diagnostics;
-- dynamic internal render resolution separate from output resolution;
+- fixed or dynamically adapted internal render resolution separate from output resolution;
 - raymarch and ray-query reconstruction inputs;
 - optional FSR-style adapter hooks and unsupported capability diagnostics.
 
@@ -53,7 +53,7 @@ resource ownership into the renderer.
 ## Ownership Boundaries
 
 - `engine/src/plugins/render` owns temporal reconstruction execution contracts,
-  history allocation, jitter application, dynamic internal resolution,
+  history allocation, jitter application, fixed/dynamic internal resolution,
   upscaler capability diagnostics, pass timing, and production evidence DTOs.
 - Product Graph and product-surface producers own product lineage, freshness,
   authority class, fallback legality, and semantic availability of motion,
@@ -69,7 +69,8 @@ resource ownership into the renderer.
 
 Temporal implementation rows must introduce explicit typed evidence for:
 
-- output resolution versus internal render resolution;
+- output resolution versus internal render resolution, including explicit native,
+  fixed, or dynamic resolution policy;
 - jitter sequence identity and current jitter phase;
 - history resource identity, signature, age, and invalidation reason;
 - motion-vector, depth, exposure, luminance, reactive-mask, SDF, and ray-query
@@ -88,8 +89,9 @@ state no longer matches the prepared frame contract.
 
 - Native rendering and portable TAA/TAAU remain the baseline. Vendor adapters
   are optional capability paths and cannot be required for correctness.
-- Dynamic internal resolution is always reported separately from output
-  resolution and must not hide quality, timing, or fallback state.
+- Internal resolution is always reported separately from output resolution.
+  Native, fixed, and dynamically adapted resolution are distinct typed policies;
+  none may hide quality, timing, or fallback state.
 - Missing motion vectors, depth, exposure, reactive masks, SDF, ray-query, or
   adapter capability must produce typed diagnostics, not silent reconstruction.
 - History reuse must fail closed on signature mismatch, missing inputs,
@@ -102,7 +104,7 @@ state no longer matches the prepared frame contract.
 The accepted implementation sequence is:
 
 1. `WR-070`: temporal inputs, history validity, jitter, diagnostics, and
-   dynamic internal/output resolution separation.
+   native/fixed/dynamic internal/output resolution separation.
 2. `WR-071`: optional upscaling adapters and ray reconstruction inputs,
    capability-gated with explicit unsupported diagnostics.
 3. `WR-072`: temporal production evidence with examples, benchmark/report
@@ -110,7 +112,7 @@ The accepted implementation sequence is:
 
 ## Evidence
 
-Runtime evidence must report internal/output resolution, history validity,
+Runtime evidence must report internal/output resolution and resolution policy, history validity,
 motion-vector availability, reconstruction mode, upscaler capability state,
 GPU timing, quality diagnostics, and fallback to native resolution when inputs
 or backend capabilities are unavailable.
