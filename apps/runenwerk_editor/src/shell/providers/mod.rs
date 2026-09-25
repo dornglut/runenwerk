@@ -840,17 +840,13 @@ pub fn mounted_surface_requests_with_registry(
 }
 
 pub fn active_document_context(app: &RunenwerkEditorApp) -> SurfaceDocumentContext {
-    let active_document = app.runtime().session().active_document();
-    if let Some(document_id) = active_document {
-        if let Some(document) = app.runtime().session().active_document_descriptor() {
-            return SurfaceDocumentContext::Resolved {
-                document_id,
-                document_kind: document.kind.clone(),
-            };
-        }
-        return SurfaceDocumentContext::Unresolved { document_id };
-    }
-    SurfaceDocumentContext::NoActiveDocument
+    app.runtime()
+        .session()
+        .active_document_descriptor()
+        .map(|document| SurfaceDocumentContext::Resolved {
+            document_kind: document.kind.clone(),
+        })
+        .unwrap_or(SurfaceDocumentContext::NoActiveDocument)
 }
 
 fn build_console_view_model(lines: &[ConsoleMessage]) -> ConsoleViewModel {
@@ -1346,16 +1342,8 @@ fn workspace_allows_document(
 
 fn surface_document_context_line(document_context: &SurfaceDocumentContext) -> String {
     match document_context {
-        SurfaceDocumentContext::Resolved {
-            document_id,
-            document_kind,
-        } => format!(
-            "active document: {} #{}",
-            document_kind.stable_name(),
-            document_id.0
-        ),
-        SurfaceDocumentContext::Unresolved { document_id } => {
-            format!("active document: unresolved #{}", document_id.0)
+        SurfaceDocumentContext::Resolved { document_kind } => {
+            format!("active document: {}", document_kind.stable_name())
         }
         SurfaceDocumentContext::NoActiveDocument => "active document: none".to_string(),
     }

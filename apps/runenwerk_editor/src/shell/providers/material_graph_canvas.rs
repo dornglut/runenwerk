@@ -760,7 +760,6 @@ mod tests {
             unavailable_content_policy: ui_composition::UnavailableContentPolicy::ShowFallback,
             workspace_profile_id: editor_shell::MATERIAL_WORKSPACE_PROFILE_ID,
             document_context: SurfaceDocumentContext::Resolved {
-                document_id: editor_core::DocumentId(6),
                 document_kind: DocumentKind::MaterialGraph,
             },
             panel_instance_id: editor_shell::PanelInstanceId::try_from_raw(20).unwrap(),
