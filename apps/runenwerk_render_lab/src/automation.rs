@@ -86,8 +86,8 @@ mod tests {
     use super::*;
     use engine::automation::{
         AppAutomationInputReplayExt, AppAutomationInputTraceExt, AutomationExecutionMode,
-        AutomationInputReplayStateAssumption, AutomationInputReplayOutcome,
-        AutomationInputReplaySourceMap, AutomationInputTracePlugin, AutomationSession,
+        AutomationInputReplayOutcome, AutomationInputReplaySourceMap,
+        AutomationInputReplayStateAssumption, AutomationInputTracePlugin, AutomationSession,
         AutomationSessionId, AutomationStepResult, DigitalState, InputObservation, InputSourceId,
         PointerButton, PointerButtonInput, RelativeMotionUnit, ScrollDelta, ScrollDomain,
         ScrollInput, Vector2,
