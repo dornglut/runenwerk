@@ -1,0 +1,13 @@
+[package]
+name = "runenwerk_arena"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license.workspace = true
+
+[dependencies]
+engine = { path = "../../engine" }
+runen-input.workspace = true
+
+[dev-dependencies]
+winit = "0.30.9"
