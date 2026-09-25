@@ -18,7 +18,7 @@ Owns scene registration/catalog state, scene lifecycle orchestration, and runtim
 
 - Module: engine/src/plugins/scene/plugin.rs
 - Entry: ScenePlugin
-- Scene composition helpers: `App::add_scene`, `App::add_scene_template`
+- Scene composition extension: `AppSceneExt` (`add_scene`, `add_scene_template`, `registered_scene_count`)
 - Local README: engine/src/plugins/scene/README.md
 
 ## Minimal Setup
@@ -35,8 +35,10 @@ use `default_plugins()` get `TimePlugin` from that stack and only need to add `S
 
 `ScenePlugin` installs an empty `SceneCatalog` when no scenes were registered explicitly. A bare
 `App` does not imply Scene catalog state. Applications may register scenes before installing the
-plugin; `App::add_scene` and `App::add_scene_template` create/populate the same Scene-owned catalog,
+plugin; `AppSceneExt::add_scene` and `AppSceneExt::add_scene_template` create/populate the same Scene-owned catalog,
 and later `ScenePlugin` installation preserves those registrations.
+
+Scene runtime controls require explicit `ScenePlugin` activation. Replay/Render may share an empty Scene substrate without activating Scene manager semantics.
 
 ## Runtime Contract
 

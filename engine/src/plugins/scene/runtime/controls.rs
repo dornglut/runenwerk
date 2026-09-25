@@ -1,3 +1,4 @@
+use super::super::plugin::scene_integration_is_active;
 use super::normalize_scene_label_alias;
 use crate::PrimaryPresentationMetricsResource;
 use crate::plugins::{SceneManager, SceneResource};
@@ -9,7 +10,7 @@ fn with_scene_manager_mut<T>(
     world: &mut runen_ecs::World,
     f: impl FnOnce(&mut SceneManager) -> Result<T>,
 ) -> Result<T> {
-    if !world.has_resource::<SceneResource>() {
+    if !scene_integration_is_active(world) {
         return Err(anyhow!("ScenePlugin is not installed"));
     }
     let presentation = world

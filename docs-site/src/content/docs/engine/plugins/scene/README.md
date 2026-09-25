@@ -17,8 +17,9 @@ Coordinates scene registration, world/overlay scene lifecycle, authoritative sce
 ## Usage
 
 - Plugin: `ScenePlugin`
+- App composition extension: `AppSceneExt`
 - Timing provider: `TimePlugin` directly or through `default_plugins()`
-- Scene catalog provider: `ScenePlugin`, or explicit `App::add_scene*` composition before plugin installation
+- Scene catalog provider: `ScenePlugin`, or explicit `AppSceneExt` composition before plugin installation
 - Schedules:
   - `Startup`: initialize the scene manager
   - `PreUpdate`: process transition commands and input-driven scene state
@@ -29,9 +30,11 @@ The plugin consumes `Time` during scene transition/runtime processing but does n
 advance frame timing state.
 
 `SceneCatalog` is Scene-owned composition/runtime input. A bare `App` does not contain a scene
-catalog. `ScenePlugin` installs an empty catalog when none exists, while `App::add_scene` and
-`App::add_scene_template` are explicit composition conveniences that may create and populate the
+catalog. `ScenePlugin` installs an empty catalog when none exists, while `AppSceneExt::add_scene` and
+`AppSceneExt::add_scene_template` are explicit composition conveniences that may create and populate the
 same catalog before the plugin is selected. Plugin installation preserves those registrations.
+
+Scene runtime-control admission uses explicit `ScenePlugin` activation; shared `SceneResource` presence from Replay or Render does not activate Scene semantics.
 
 The plugin owns the runtime scene manager and republishes transport-neutral Scene observation
 state through:

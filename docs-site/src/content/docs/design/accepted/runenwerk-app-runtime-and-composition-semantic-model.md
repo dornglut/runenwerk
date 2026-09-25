@@ -692,13 +692,11 @@ preserve bootstrap/tests.
 
 ### SceneCatalog
 
-Scene registration/catalog state exists because the Scene capability is selected.
-Target owner: Scene integration/plugin.
+Scene registration/catalog state is owned by Scene integration/plugin composition.
 
 ### SceneRuntimeState
 
-Scene runtime state exists because the Scene capability is selected.
-Target owner: Scene integration/plugin.
+Scene runtime state is owned by Scene integration/plugin composition.
 
 ### GameplayRuntimeConfig
 
@@ -777,7 +775,6 @@ capability-specific configuration/authoring
   set_simulation_profile
   set_authority_role
   set_simulation_seed
-  add_scene / add_scene_template
 
 capability-specific runtime control/query
   update_render_debug_*
@@ -790,8 +787,7 @@ The normalized rule is:
 > **Convenience is owned by the capability whose semantics it manipulates, and every
 > operation retains an explicit temporal contract.**
 
-Owner-specific extensions over the same App/runtime are a preferred direction when they
-improve discoverability:
+Scene composition now uses the Scene-owned `AppSceneExt`; other owner-specific extensions over the same App/runtime remain a preferred direction when they improve discoverability:
 
 ```text
 AppSceneExt

@@ -5,7 +5,7 @@ use engine::plugins::render::{
     SurfaceFrameSubmissionRegistryResource,
 };
 use engine::plugins::{DebugMetricsPlugin, InputFinalizePlugin, ScenePlugin, TimePlugin};
-use engine::prelude::{App, CoreSet, InputState, PreUpdate, ResMut, SystemConfigExt};
+use engine::prelude::{App, AppSceneExt, CoreSet, InputState, PreUpdate, ResMut, SystemConfigExt};
 use winit::event::ElementState;
 use winit::keyboard::KeyCode;
 

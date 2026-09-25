@@ -7,9 +7,10 @@ use crate::plugins::render::{
     SurfaceFrameSubmissionRegistryResource,
 };
 use crate::plugins::scene::ui::UiRenderShaderConfig;
-use crate::plugins::{SceneManager, SceneResource};
+use crate::plugins::scene::{
+    SceneManager, SceneOverlayViewportState, SceneResource, SceneRuntimeState,
+};
 use crate::runtime::ResMut;
-use crate::{SceneOverlayViewportState, SceneRuntimeState};
 use anyhow::Result;
 
 const SCENE_OVERLAY_FRAME_PRODUCER_ID: RenderFrameProducerId = render_frame_producer_id(1);
