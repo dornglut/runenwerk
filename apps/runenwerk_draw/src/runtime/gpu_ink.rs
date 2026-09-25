@@ -11,6 +11,7 @@ use engine::plugins::render::inspect::{
     RenderTextureDiffRequest, RenderTextureDiffResult, RenderTextureDiffStatus,
 };
 use engine::plugins::render::{
+    AppRenderExt,
     PreparedFlowInvocationId, PreparedFlowInvocationRequest, PreparedRenderFrameRequestResource,
     PreparedTargetBinding, PreparedViewFrame, RenderDynamicTextureRetention,
     RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey, RenderFlow, RenderFlowId,
