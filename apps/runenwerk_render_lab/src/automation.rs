@@ -85,9 +85,12 @@ pub fn build_headless_automation_app() -> App {
 mod tests {
     use super::*;
     use engine::automation::{
-        AutomationExecutionMode, AutomationSession, AutomationSessionId, AutomationStepResult,
-        DigitalState, InputObservation, InputSourceId, PointerButton, PointerButtonInput,
-        RelativeMotionUnit, ScrollDelta, ScrollDomain, ScrollInput, Vector2,
+        AppAutomationInputReplayExt, AppAutomationInputTraceExt, AutomationExecutionMode,
+        AutomationInputReplayOutcome, AutomationInputReplaySourceMap,
+        AutomationInputReplayStateAssumption, AutomationInputTracePlugin, AutomationSession,
+        AutomationSessionId, AutomationStepResult, DigitalState, InputObservation, InputSourceId,
+        PointerButton, PointerButtonInput, RelativeMotionUnit, ScrollDelta, ScrollDomain,
+        ScrollInput, Vector2,
     };
     use engine::prelude::InputState;
 
@@ -197,5 +200,125 @@ mod tests {
         let observed = camera(&mut app, &mut session);
         assert!(observed.distance < 3.0);
         assert_eq!(observed.pan, [0.0, 0.0]);
+    }
+
+    #[test]
+    fn recorded_normalized_trace_replays_to_the_same_camera_state() {
+        let recorded_source = InputSourceId::new(10_100);
+        let mut recording = build_headless_automation_app();
+        recording.add_plugin(AutomationInputTracePlugin);
+        recording
+            .start_automation_input_trace()
+            .expect("Render Lab trace should start");
+        let mut recording_session =
+            AutomationSession::new(AutomationSessionId::new(100), recorded_source);
+
+        inject(
+            &mut recording,
+            &mut recording_session,
+            InputObservation::PointerButton(PointerButtonInput {
+                button: PointerButton::Left,
+                state: DigitalState::Pressed,
+            }),
+        );
+        inject(
+            &mut recording,
+            &mut recording_session,
+            InputObservation::RelativeMotion {
+                delta: Vector2::new(10.0, -5.0),
+                unit: RelativeMotionUnit::BackendDeviceUnits,
+            },
+        );
+        recording = recording
+            .run_for_frames(1)
+            .expect("recorded orbit frame should run");
+
+        inject(
+            &mut recording,
+            &mut recording_session,
+            InputObservation::PointerButton(PointerButtonInput {
+                button: PointerButton::Left,
+                state: DigitalState::Released,
+            }),
+        );
+        recording = recording
+            .run_for_frames(1)
+            .expect("recorded orbit release frame should run");
+        recording = recording
+            .run_for_frames(1)
+            .expect("recorded idle frame should run");
+
+        inject(
+            &mut recording,
+            &mut recording_session,
+            InputObservation::PointerButton(PointerButtonInput {
+                button: PointerButton::Middle,
+                state: DigitalState::Pressed,
+            }),
+        );
+        inject(
+            &mut recording,
+            &mut recording_session,
+            InputObservation::RelativeMotion {
+                delta: Vector2::new(6.0, -4.0),
+                unit: RelativeMotionUnit::BackendDeviceUnits,
+            },
+        );
+        recording = recording
+            .run_for_frames(1)
+            .expect("recorded pan frame should run");
+
+        inject(
+            &mut recording,
+            &mut recording_session,
+            InputObservation::PointerButton(PointerButtonInput {
+                button: PointerButton::Middle,
+                state: DigitalState::Released,
+            }),
+        );
+        recording = recording
+            .run_for_frames(1)
+            .expect("recorded pan release frame should run");
+
+        inject(
+            &mut recording,
+            &mut recording_session,
+            InputObservation::Scroll(ScrollInput {
+                delta: ScrollDelta::vertical_only(1.0),
+                domain: ScrollDomain::Unspecified,
+                phase: None,
+            }),
+        );
+        recording = recording
+            .run_for_frames(1)
+            .expect("recorded zoom frame should run");
+
+        let recorded_camera = camera(&mut recording, &mut recording_session);
+        let trace = recording
+            .stop_automation_input_trace()
+            .expect("Render Lab trace should stop");
+        assert!(trace.trailing_groups().is_empty());
+        assert_eq!(trace.frames().len(), 6);
+        assert!(trace.frames()[2].groups().is_empty());
+
+        let mut replay = build_headless_automation_app();
+        let source_map =
+            AutomationInputReplaySourceMap::new([(recorded_source, InputSourceId::new(20_100))]);
+        let report = replay.replay_automation_input_trace(
+            &trace,
+            &source_map,
+            AutomationInputReplayStateAssumption::RecordedAndReplaySourcesPristine,
+        );
+        assert_eq!(report.outcome(), AutomationInputReplayOutcome::Completed);
+        assert_eq!(report.completed_frames(), 6);
+
+        let mut query_session =
+            AutomationSession::new(AutomationSessionId::new(101), InputSourceId::new(30_100));
+        let replayed_camera = camera(&mut replay, &mut query_session);
+        assert_eq!(replayed_camera, recorded_camera);
+
+        replay
+            .teardown_automation_input_replay()
+            .expect("Render Lab replay teardown should clean replay-owned input");
     }
 }
