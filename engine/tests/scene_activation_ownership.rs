@@ -4,8 +4,7 @@ use engine::prelude::App;
 
 fn assert_scene_control_rejected(app: &mut App) {
     let error = set_world_paused(app.world_mut(), true)
-        .err()
-        .expect("Scene controls must reject when ScenePlugin is absent");
+        .expect_err("Scene controls must reject when ScenePlugin is absent");
     assert!(format!("{error:#}").contains("ScenePlugin is not installed"));
 }
 

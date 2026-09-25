@@ -39,8 +39,7 @@ mod tests {
         assert!(!scene_integration_is_active(app.world()));
 
         let error = crate::plugins::scene::set_world_paused(app.world_mut(), true)
-            .err()
-            .expect("shared SceneResource must not admit Scene runtime controls");
+            .expect_err("shared SceneResource must not admit Scene runtime controls");
         assert!(format!("{error:#}").contains("ScenePlugin is not installed"));
         assert!(
             app.world()
