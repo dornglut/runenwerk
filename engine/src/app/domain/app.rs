@@ -3,9 +3,6 @@ use crate::app::domain::mode::AppMode;
 use crate::app::domain::runner::{AppRunner, FixedFramesRunner};
 use crate::app::domain::state::WindowedAppState;
 use crate::prelude::IntoPlugins;
-use crate::runtime::publication::{
-    ProductPublicationOccurrence, PublicationHandlers, QuerySnapshotPublicationOccurrence,
-};
 use crate::runtime::system::IntoSystemConfigs;
 use crate::*;
 use anyhow::Result;
@@ -103,40 +100,6 @@ impl App {
                     source,
                 });
         }
-        self
-    }
-
-    pub fn add_product_publication_handler<F>(&mut self, handler: F) -> &mut Self
-    where
-        F: Fn(&ProductPublicationOccurrence, &mut World) -> Result<()> + 'static,
-    {
-        if !self.allow_topology_mutation("add_product_publication_handler", None) {
-            return self;
-        }
-        if !self.world.has_resource::<PublicationHandlers>() {
-            self.world.insert_resource(PublicationHandlers::default());
-        }
-        self.world
-            .resource_mut::<PublicationHandlers>()
-            .expect("publication handler resource should be installed")
-            .add_product(handler);
-        self
-    }
-
-    pub fn add_query_snapshot_publication_handler<F>(&mut self, handler: F) -> &mut Self
-    where
-        F: Fn(&QuerySnapshotPublicationOccurrence, &mut World) -> Result<()> + 'static,
-    {
-        if !self.allow_topology_mutation("add_query_snapshot_publication_handler", None) {
-            return self;
-        }
-        if !self.world.has_resource::<PublicationHandlers>() {
-            self.world.insert_resource(PublicationHandlers::default());
-        }
-        self.world
-            .resource_mut::<PublicationHandlers>()
-            .expect("publication handler resource should be installed")
-            .add_query_snapshot(handler);
         self
     }
 
