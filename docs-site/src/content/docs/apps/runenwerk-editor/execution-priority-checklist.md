@@ -70,7 +70,7 @@ Representative evidence:
 ## Now (Editor/UI Active Work)
 
 - [ ] Keep editor/UI cross-doc sequencing aligned with shipped behavior. Status: Active.
-- [ ] Plan and sequence procedural authoring features through explicit domains. Status: active for M6; M6.0 shared workspace substrate, the first `domain/material_graph`/`domain/texture` contract crates, descriptor-first material/texture providers, full P1 SDF modeling core, SDF-first execution Phases 1 through 5, and the accepted procgen domain contract now exist. M6.2 procgen remains the first product-domain track and must stay scoped to that contract, including its procgen-owned planning lifecycle, reservations, and explanation data; particles, physics, animation, simulation processes, gameplay graph, rendered material/SDF previews, Texture3D GPU adapters, and scripting remain deferred to their owning M6/P3/M7 sub-milestones.
+- [ ] Integrate future procedural/gameplay capabilities through explicit owner domains and bounded Editor Tool Suites. Status: the SDF P1 baseline, Material/Texture M6.1 baseline plus later rendered preview/resource integration, and Procgen Phase 6A-6D baseline are complete. There is no remaining generic “M6.2 Procgen next” Editor task. Future gameplay, particles, physics, animation, world-process, further material/SDF, or post-6D Procgen work requires its own owner-domain/runtime authority and GitHub activation; Editor work follows through stable-key Tool Suite/provider integration. Do not add new product-domain branches to central `DocumentKind`, `ToolSurfaceKind`, `SurfaceLocalAction`, or `EditorDomainMutation` merely to expose a surface.
 
 ## Other Tracked And Gated Work
 
