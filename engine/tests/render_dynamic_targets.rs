@@ -409,6 +409,7 @@ fn fixed_resolution_preflight_accepts_internal_scene_and_native_resolve() {
 
     let fixed = engine::plugins::render::RenderFixedResolutionExecutionRequest::new(
         producer(91),
+        engine::plugins::render::backend::RenderSurfaceId::primary(),
         scene.id(),
         alias_key("scene_color"),
         (1280, 720),
@@ -531,6 +532,7 @@ fn fixed_resolution_preflight_accepts_internal_scene_and_native_resolve() {
 
     let fallback = engine::plugins::render::RenderFixedResolutionExecutionRequest::new(
         producer(92),
+        engine::plugins::render::backend::RenderSurfaceId::primary(),
         scene.id(),
         alias_key("scene_color"),
         (1280, 800),
