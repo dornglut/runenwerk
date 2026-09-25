@@ -37,9 +37,22 @@ struct PingPongStorageRegistration {
     b_id: GpuWorkResourceId,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenderFlowInvocationPolicy {
+    AutomaticMain,
+    ExplicitOnly,
+}
+
+impl Default for RenderFlowInvocationPolicy {
+    fn default() -> Self {
+        Self::AutomaticMain
+    }
+}
+
 #[derive(Debug)]
 pub struct RenderFlow {
     graph: RenderFlowGraph,
+    invocation_policy: RenderFlowInvocationPolicy,
     pass_ids_by_label: BTreeMap<String, RenderPassId>,
     resource_ids_by_label: BTreeMap<String, GpuWorkResourceId>,
     ping_pong_storage: BTreeMap<String, PingPongStorageRegistration>,
@@ -56,6 +69,7 @@ impl RenderFlow {
 
         Self {
             graph: RenderFlowGraph::new(flow_id, label),
+            invocation_policy: RenderFlowInvocationPolicy::AutomaticMain,
             pass_ids_by_label: BTreeMap::new(),
             resource_ids_by_label: BTreeMap::new(),
             ping_pong_storage: BTreeMap::new(),
@@ -169,6 +183,15 @@ impl RenderFlow {
 
     pub fn with_builtin_ui(self) -> Self {
         self
+    }
+
+    pub fn explicit_invocations_only(mut self) -> Self {
+        self.invocation_policy = RenderFlowInvocationPolicy::ExplicitOnly;
+        self
+    }
+
+    pub const fn invocation_policy(&self) -> RenderFlowInvocationPolicy {
+        self.invocation_policy
     }
 
     pub fn storage_array<T>(
