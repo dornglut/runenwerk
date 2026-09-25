@@ -115,6 +115,31 @@ fn replay_preflight_rejects_invalid_mapping_trailing_and_unsupported_shapes_with
         AutomationInputReplayOutcome::UnsupportedTraceShape
     );
     assert_eq!(unsupported_report.completed_frames(), 0);
+
+    let release_first = one_frame_trace(vec![InputObservationGroup::single(
+        InputContext::new(InputSourceId::new(2_003), Some(InputDeviceId::new(5))),
+        InputObservation::PointerButton(PointerButtonInput {
+            button: PointerButton::Forward,
+            state: DigitalState::Released,
+        }),
+    )]);
+    let release_first_report = app.replay_automation_input_trace(
+        &release_first,
+        &source_map([(2_003, 9_003)]),
+        AutomationInputReplayStateAssumption::RecordedAndReplaySourcesPristine,
+    );
+    assert_eq!(
+        release_first_report.outcome(),
+        AutomationInputReplayOutcome::UnsupportedTraceShape
+    );
+    assert_eq!(release_first_report.completed_frames(), 0);
+    assert!(
+        !app.world()
+            .resource::<InputState>()
+            .unwrap()
+            .pointer_button_down_anywhere(PointerButton::Forward),
+        "unsupported initial digital state must fail before target mutation"
+    );
 }
 
 #[test]

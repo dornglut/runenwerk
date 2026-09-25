@@ -11,8 +11,8 @@ use crate::app::App;
 use crate::plugins::InputState;
 use crate::plugins::input::input_integration_is_active;
 use runen_input::{
-    ContinuityLoss, InputContext, InputObservation, InputObservationGroup, InputSourceId,
-    PointerButton,
+    ContinuityLoss, DigitalState, InputContext, InputObservation, InputObservationGroup,
+    InputSourceId, PointerButton,
 };
 
 use super::{AppAutomationInputTraceExt, AutomationInputTrace};
@@ -191,6 +191,7 @@ fn input_replay_preflight(
 
     let mut recorded_sources = Vec::new();
     let mut pointer_buttons = Vec::new();
+    let mut established_pointer_buttons = Vec::new();
     for (frame_index, frame) in trace.frames.iter().enumerate() {
         if frame.frame_ordinal != frame_index as u64 {
             return Err(AutomationInputReplayReport::rejected(
@@ -229,6 +230,16 @@ fn input_replay_preflight(
 
             match &group.observations[0] {
                 InputObservation::PointerButton(input) => {
+                    let identity = (group.context, input.button);
+                    if !established_pointer_buttons.contains(&identity) {
+                        if input.state != DigitalState::Pressed {
+                            return Err(AutomationInputReplayReport::rejected(
+                                AutomationInputReplayOutcome::UnsupportedTraceShape,
+                                "the first traced state for each source/device/pointer button must establish a press",
+                            ));
+                        }
+                        established_pointer_buttons.push(identity);
+                    }
                     if !pointer_buttons.contains(&input.button) {
                         pointer_buttons.push(input.button);
                     }
@@ -260,23 +271,6 @@ fn input_replay_preflight(
         replay_sources,
         pointer_buttons,
     })
-}
-
-fn recorded_sources(trace: &AutomationInputTrace) -> Vec<InputSourceId> {
-    let mut sources = Vec::new();
-    for frame in &trace.frames {
-        for group in &frame.groups {
-            if !sources.contains(&group.context.source) {
-                sources.push(group.context.source);
-            }
-        }
-    }
-    for group in &trace.trailing_groups {
-        if !sources.contains(&group.context.source) {
-            sources.push(group.context.source);
-        }
-    }
-    sources
 }
 
 fn resolve_replay_sources(
