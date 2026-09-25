@@ -23,7 +23,8 @@ forwarding module or duplicate reducer authority.
 
 - `engine/src/plugins/input/state.rs` — Runenwerk ECS/integration and frame projections.
 - `engine/src/plugins/input/actions_and_bindings.rs` — Runenwerk product actions/bindings.
-- `engine/src/plugins/input/mod.rs` — Input plugin installation and Runenwerk-owned exports.
+- `engine/src/plugins/input/app_ext.rs` — Runenwerk product-action App composition convenience.
+- `engine/src/plugins/input/mod.rs` — Input plugin installation, private integration activation, and Runenwerk-owned exports.
 - `engine/src/runtime/winit_input.rs` — winit → RunenInput semantic translation.
 - `adapters/native_tablet_input` — native tablet acquisition/translation.
 - standalone `runen-input` — reusable semantic observation/reducer authority.
@@ -56,6 +57,9 @@ RunenInput does not depend on Runenwerk, RunenECS, RunenUI, Draw, or product pol
   `DigitalAdmission`, `ControlId`, or `DigitalTransition`.
 - Product consumers use Runenwerk `ActionState` when they need actions and use
   RunenInput values directly when they need reusable device semantics.
+- `InputFinalizePlugin` alone installs the private Runenwerk Input integration activation
+  fact. `AppActionBindingsExt::add_input_bindings` admits against that fact rather than
+  inferring plugin selection from public `InputState` / `ActionState` resources.
 - Packages that name RunenInput values declare a direct `runen-input.workspace = true`
   dependency rather than relying on Engine re-export.
 

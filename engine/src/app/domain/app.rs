@@ -2,7 +2,6 @@ use crate::app::domain::lifecycle::AppLifecycle;
 use crate::app::domain::mode::AppMode;
 use crate::app::domain::runner::{AppRunner, FixedFramesRunner};
 use crate::app::domain::state::WindowedAppState;
-use crate::plugins::input::{ActionState, InputState};
 use crate::prelude::IntoPlugins;
 use crate::runtime::publication::{
     ProductPublicationOccurrence, PublicationHandlers, QuerySnapshotPublicationOccurrence,
@@ -11,7 +10,6 @@ use crate::runtime::system::IntoSystemConfigs;
 use crate::*;
 use anyhow::Result;
 use runen_ecs::{Resource, Runtime, RuntimeError, ScheduleLabel, World};
-use runen_input::PhysicalKeyIdentity;
 use std::error::Error;
 use std::fmt;
 
@@ -173,38 +171,6 @@ impl App {
         self
     }
 
-    pub fn add_input_bindings<I>(&mut self, bindings: I) -> &mut Self
-    where
-        I: IntoIterator<Item = (&'static str, PhysicalKeyIdentity)>,
-    {
-        if self.world.resource::<InputState>().is_err()
-            || self.world.resource::<ActionState>().is_err()
-        {
-            self.composition_errors
-                .push(AppCompositionError::MissingCapability {
-                    operation: "add_input_bindings",
-                    capability: "InputFinalizePlugin",
-                });
-            return self;
-        }
-
-        let mut actions = self
-            .world
-            .remove_resource::<ActionState>()
-            .expect("input capability admission proved ActionState exists");
-        {
-            let input = self
-                .world
-                .resource::<InputState>()
-                .expect("input capability admission proved InputState exists");
-            for (action, key) in bindings {
-                actions.map_key(input, action.to_string(), key);
-            }
-        }
-        self.world.insert_resource(actions);
-        self
-    }
-
     pub fn with_frame_pacing(&mut self, policy: FramePacingPolicyResource) -> &mut Self {
         self.world.insert_resource(policy);
         if let Ok(runtime_state) = self.world.resource_mut::<FramePacingRuntimeStateResource>() {
@@ -253,6 +219,18 @@ impl App {
 
     pub(crate) fn prepare_lifecycle_for_execution(&mut self) -> Result<()> {
         self.lifecycle.prepare_for_execution()
+    }
+
+    pub(crate) fn record_missing_capability(
+        &mut self,
+        operation: &'static str,
+        capability: &'static str,
+    ) {
+        self.composition_errors
+            .push(AppCompositionError::MissingCapability {
+                operation,
+                capability,
+            });
     }
 
     pub(crate) fn allow_topology_mutation(

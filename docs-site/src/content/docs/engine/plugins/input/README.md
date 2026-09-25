@@ -113,6 +113,12 @@ actions.map_chord(
 `action_pressed` is frame-local product policy; `action_down` is derived from
 RunenInput-confirmed physical state plus current bindings.
 
+At App composition level, `AppActionBindingsExt::add_input_bindings` is the Runenwerk
+product-action owner convenience. It is admitted only after `InputFinalizePlugin` is
+selected. Public `InputState` and `ActionState` resource presence alone does not activate
+the integration or admit this operation. The extension trait is exported through
+`engine::prelude`.
+
 ## Extension rules
 
 - Extend reusable device semantics in `dornglut/runen-input`, not in Runenwerk.
