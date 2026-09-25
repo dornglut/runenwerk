@@ -90,32 +90,61 @@ fn prediction_waits_for_later_registered_simulation_input() {
 }
 
 #[test]
-fn server_replication_emits_scene_snapshot_payloads_for_runennet_connection() {
+fn server_replication_prepares_snapshot_until_delivery_is_accepted() {
     let mut app = App::headless();
     app.add_plugins(default_plugins());
     app.add_plugins((ScenePlugin, NetworkServerPlugin));
     let connection = ConnectionHandle::new(1);
     install_runennet_connections(&mut app, &[(connection, ParticipantId::new(1))]);
 
-    let app = app
+    let mut app = app
         .run_for_fixed_steps(1)
         .expect("server replication fixed step should run");
-    let outbound = app.world().resource::<NetworkOutboundQueue>().unwrap();
-    let message = outbound
-        .server_messages()
-        .iter()
-        .find_map(|message| match message {
-            OutboundServerMessage::ToConnection {
-                connection: target,
-                message: ServerMessage::Snapshot(snapshot),
-            } if *target == connection => Some(snapshot),
-            _ => None,
-        })
-        .expect("server should emit an initial full snapshot");
+    assert!(
+        app.world()
+            .resource::<NetworkOutboundQueue>()
+            .unwrap()
+            .server_messages()
+            .is_empty(),
+        "preparing authority replication must not imply transport emission"
+    );
+
+    let submissions =
+        authority_replication_submissions(app.world()).expect("prepared authority submission");
+    assert_eq!(submissions.len(), 1);
+    let submission = submissions.into_iter().next().unwrap();
+    assert_eq!(submission.connection(), connection);
+    let message = match submission.message() {
+        ServerMessage::Snapshot(snapshot) => snapshot.clone(),
+        other => panic!("initial authority candidate must be a full snapshot, got {other:?}"),
+    };
     let snapshot: TestSnapshot =
         postcard::from_bytes(&message.payload).expect("snapshot payload should decode");
     assert_eq!(message.cursor, SnapshotCursor(1));
     assert_eq!(snapshot.context.world_scene_label, "gameplay_stub");
+    assert_eq!(
+        app.world()
+            .resource::<ReplicationDiagnostics>()
+            .unwrap()
+            .emitted_snapshots,
+        0
+    );
+
+    let emitted = record_authority_replication_delivery_acceptance(
+        app.world_mut(),
+        submission.token(),
+        DeliveryAcceptance::Accepted,
+    )
+    .expect("accepted delivery feedback should be admitted")
+    .expect("accepted delivery should emit the pending snapshot");
+    assert_eq!(emitted.target_cursor.get(), 1);
+    assert_eq!(
+        app.world()
+            .resource::<ReplicationDiagnostics>()
+            .unwrap()
+            .emitted_snapshots,
+        1
+    );
 }
 
 #[test]
@@ -133,24 +162,26 @@ fn client_snapshot_application_sends_ack_and_reconciles_prediction() {
             x: -0.75,
             y: 0.5,
         }));
-    let server = server
+    let mut server = server
         .run_for_fixed_steps(1)
         .expect("server fixed step should run");
-    let authoritative_snapshot = server
-        .world()
-        .resource::<NetworkOutboundQueue>()
-        .unwrap()
-        .server_messages()
-        .iter()
-        .find_map(|message| match message {
-            OutboundServerMessage::ToConnection {
-                connection: target,
-                message: ServerMessage::Snapshot(snapshot),
-            } if *target == connection => Some(snapshot.clone()),
-            _ => None,
-        })
-        .expect("server should emit a snapshot");
+    let submission = authority_replication_submissions(server.world())
+        .expect("server authority submission should project")
+        .into_iter()
+        .find(|submission| submission.connection() == connection)
+        .expect("server should prepare a snapshot");
+    let authoritative_snapshot = match submission.message() {
+        ServerMessage::Snapshot(snapshot) => snapshot.clone(),
+        other => panic!("initial server authority submission must be a snapshot, got {other:?}"),
+    };
     let authoritative_tick = authoritative_snapshot.tick;
+    record_authority_replication_delivery_acceptance(
+        server.world_mut(),
+        submission.token(),
+        DeliveryAcceptance::Accepted,
+    )
+    .expect("server delivery acceptance should succeed")
+    .expect("accepted server submission should become emitted");
 
     let mut client = App::headless();
     client.add_plugins(default_plugins());
@@ -423,7 +454,7 @@ fn client_outbox_backpressure_does_not_roll_back_admitted_prediction() {
 }
 
 #[test]
-fn server_outbox_backpressure_does_not_mark_rejected_snapshot_as_sent() {
+fn server_outbox_backpressure_is_orthogonal_to_authority_delivery_acceptance() {
     let mut server = App::headless();
     server.add_plugins(default_plugins());
     server.add_plugins((ScenePlugin, NetworkServerPlugin));
@@ -437,34 +468,50 @@ fn server_outbox_backpressure_does_not_mark_rejected_snapshot_as_sent() {
     let connection = ConnectionHandle::new(1);
     install_runennet_connections(&mut server, &[(connection, ParticipantId::new(1))]);
 
-    let server = server
+    let mut server = server
         .run_for_fixed_steps(1)
         .expect("server replication fixed step should survive outbox backpressure");
 
-    let state = server.world().resource::<ServerSnapshotState>().unwrap();
-    let checkpoint = state
-        .checkpoints
-        .get(&connection)
-        .expect("replication should establish connection checkpoint state");
-    assert_eq!(checkpoint.last_sent_cursor, SnapshotCursor::default());
-    assert!(checkpoint.sent_cursors.is_empty());
-    assert!(checkpoint.needs_full_resync);
+    let first = authority_replication_submissions(server.world())
+        .expect("pending authority submission should project")
+        .into_iter()
+        .find(|submission| submission.connection() == connection)
+        .expect("replication should retain a pending candidate despite queue saturation");
+    assert_eq!(
+        server
+            .world()
+            .resource::<ReplicationDiagnostics>()
+            .unwrap()
+            .emitted_snapshots,
+        0,
+        "queue state must not become delivery evidence"
+    );
 
-    let streaming = server
-        .world()
-        .resource::<engine::plugins::net::NetStreamingStateResource>()
-        .unwrap();
-    let streaming_state = streaming
-        .per_connection
-        .get(&connection)
-        .expect("streaming state should exist for admitted connection");
-    assert_eq!(streaming_state.last_sent_cursor.0, 0);
-    assert!(streaming_state.pending_cursor_markers.is_empty());
-    assert!(streaming_state.needs_full_resync);
+    let not_emitted = record_authority_replication_delivery_acceptance(
+        server.world_mut(),
+        first.token(),
+        DeliveryAcceptance::NotAccepted,
+    )
+    .expect("not-accepted delivery feedback should be valid");
+    assert!(not_emitted.is_none());
 
-    let diagnostics = server.world().resource::<ReplicationDiagnostics>().unwrap();
-    assert_eq!(diagnostics.last_snapshot_cursor, 1);
-    assert_eq!(diagnostics.emitted_snapshots, 0);
+    let retry = authority_replication_submissions(server.world())
+        .expect("pending authority retry should project")
+        .into_iter()
+        .find(|submission| submission.connection() == connection)
+        .expect("not-accepted candidate must remain pending for explicit retry");
+    assert_eq!(retry.token(), first.token());
+    assert_eq!(retry.message(), first.message());
+
+    assert!(
+        cancel_authority_replication_submission(server.world_mut(), retry.token())
+            .expect("explicit pending cancellation should succeed")
+    );
+    assert!(
+        authority_replication_submissions(server.world())
+            .expect("post-cancellation projection should succeed")
+            .is_empty()
+    );
 
     let outbound = server.world().resource::<NetworkOutboundQueue>().unwrap();
     assert_eq!(outbound.server_messages().len(), 4_096);
