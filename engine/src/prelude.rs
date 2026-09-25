@@ -13,6 +13,7 @@ pub use crate::plugins::net::{
     RoundTripMetrics,
 };
 pub use crate::plugins::replay::*;
+pub use crate::plugins::render::AppRenderExt;
 pub use crate::plugins::scene::*;
 pub use crate::plugins::simulation::{AppSimulationExt, SimulationPlugin};
 pub use crate::plugins::time::domain::Time;
