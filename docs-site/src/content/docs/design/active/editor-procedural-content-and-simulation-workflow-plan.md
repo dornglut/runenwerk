@@ -1,12 +1,12 @@
 ---
-title: Editor Procedural Content and Simulation Workflow Plan
-description: SDF-first feature plan for procedural authoring, material/texturing, particles, physics, animation, and simulation workflows in the Runenwerk editor and engine.
+title: Procedural Content and Simulation Workflow Plan
+description: Cross-domain SDF-first feature plan for procedural authoring, material/texturing, particles, physics, animation, simulation, runtime, and Editor integration.
 status: active
 owner: workspace
 layer: cross-domain
 canonical: true
 lifecycle_exception: active_phase_evidence
-last_reviewed: 2026-09-12
+last_reviewed: 2026-09-25
 related_designs:
   - ../accepted/sdf-first-field-world-platform-design.md
   - ./editor-asset-pipeline-and-content-workflow-design.md
@@ -23,14 +23,16 @@ related:
   - ../../domain/world-ops/README.md
 ---
 
-# Editor Procedural Content and Simulation Workflow Plan
+# Procedural Content and Simulation Workflow Plan
 
 ## Lifecycle Note
 
 This document remains active because it coordinates multiple unfinished
-procedural, material, physics, animation, VFX, and simulation tracks. Status
-notes for P1 and descriptor-first closeouts are phase evidence only; they do
-not mean the full workflow plan is implemented.
+procedural, material, physics, animation, VFX, and simulation tracks across
+domain, engine/runtime, Runenwerk app-integration, and Editor Tool Suite
+boundaries. It is not an Editor semantic-ownership plan. Status notes for
+completed slices are phase evidence only; they do not mean the full workflow
+plan is implemented.
 
 ## Purpose
 
@@ -49,53 +51,45 @@ Define the feature-complete plan for Runenwerk's procedural authoring workflows:
 
 This plan is SDF-first and field-world-first. Mesh, GLB, and imported material workflows may exist as reference and compatibility paths, but they are not the engine's primary world-authoring substrate.
 
+The normalized ownership rule is “the semantic owner owns the product; the Editor integrates the tool.” Domain/runtime tracks therefore establish authored truth, commands, ratification, formed products, execution, and diagnostics before Editor providers consume those contracts. Stable Tool Suite keys/provider families are the Editor extension mechanism; central product enums are not.
+
 ## Repo Truth Baseline
 
 Implemented today:
 
-- Standalone `dornglut/runen-sdf` owns reusable analytic SDF sampling.
-- Standalone `dornglut/runen-sdf` owns reusable primitives, composition, transforms, raymarch, projection, classification, and sweep foundations.
-- `domain/world_ops/src/operations.rs::Operation` has SDF/world operation vocabulary for legacy `CsgAdd`/`CsgSubtract`, normalized `CsgBrushOperation` modes for P1 Add/Subtract/Intersect/SmoothAdd/SmoothSubtract/SmoothIntersect, `Smooth`, `Stamp`, `StructurePlace`, `MaterialFieldEdit`, and `DensityFieldDeform`.
-- `domain/world_ops/src/build_graph.rs::BuildGraphPhase` already includes `SdfFieldBuild`, `SummaryBuild`, `DerivedRenderBuild`, and `Publish`.
-- `engine/src/plugins/world/build/jobs.rs::dispatch_world_build_jobs_system` builds deterministic chunk payloads from operation windows and tracks material channel masks.
-- `domain/world_sdf/src/storage.rs::SdfChunkStore` owns chunk/page/brick SDF payload records.
-- `domain/world_sdf/src/collision.rs::CollisionQueryService` owns field-query collision readiness and sweep result contracts.
-- `engine/src/plugins/world` owns authoritative chunked SDF runtime state, operation logs, dirty/build integration, prepared world feature payloads, world-to-render invalidation, and streaming/replication read models.
-- `domain/graph` owns only neutral graph structure and validation.
-- `docs-site/src/content/docs/design/active/semantic-graph-ir-and-compilation-design.md` defines the policy for future semantic graph domains.
-- `engine/src/plugins/render` has `RenderFlow`, compute/fullscreen/graphics/copy/present passes, shader registry/hot reload, sampled/storage texture descriptors, prepared render-frame contributions, and a `MATERIAL_RENDER_FEATURE_ID` slot.
-- `engine/src/plugins/render/frame/contributions.rs::PreparedMaterialFeatureContribution` exists as render prepared-frame plumbing for material instances, specialization fragments, and parameter blobs.
-- `domain/editor/editor_core/src/document.rs::DocumentKind` has explicit M6 document kinds for SDF graphs, materials, textures, procgen, gameplay graph, particles, physics, animation, timelines, and runtime debug documents.
-- `domain/editor/editor_shell/src/workspace/profile.rs::default_workspace_profile_registry` has M6 workspace profiles for field worlds, materials, textures, procgen, gameplay graph, particles, physics, animation, simulation processes, runtime debug, and neutral graphs.
-- `domain/editor/editor_shell/src/workspace/state.rs::ToolSurfaceKind` and persisted workspace contracts include M6 tool surfaces for graph, diagnostics, runtime debug, SDF graph, field layers, materials, textures, procgen, gameplay graph, particles, physics, animation, and simulation.
-- `apps/runenwerk_editor/src/shell/providers/m6_workspace.rs::M6WorkspaceProvider` provides fail-closed placeholder routing and diagnostics for M6 surfaces until each owning provider exists.
-- `domain/material_graph` owns the first material graph contract slice: authored material graph documents, first-slice node catalog, semantic ratification, deterministic lowering, source maps, cache keys, and formed material product descriptors.
-- `domain/texture` owns the first texture contract slice: Texture2D and Texture3D/volume descriptors, sampler/color-space/compression metadata, generated texture product lineage, preview descriptors, and ratification.
-- `domain/asset/src/kind.rs::AssetKind`, `domain/asset/src/import_settings.rs::ImportSettings`, `domain/asset/src/artifact.rs::ArtifactPayloadKind`, `domain/editor/editor_preview/src/product.rs::RuntimeProductKind`, and `apps/runenwerk_editor/src/asset_pipeline/catalog_runtime.rs::reload_decision_for_kind` can represent material and texture product families while keeping authored material graphs unsupported for runtime reload.
-- `apps/runenwerk_editor/src/shell/providers/material_graph_canvas.rs::MaterialGraphCanvasProvider`, `material_inspector.rs::MaterialInspectorProvider`, `material_preview.rs::MaterialPreviewProvider`, `texture_viewer.rs::TextureViewerProvider`, and `volume_texture_viewer.rs::VolumeTextureViewerProvider` provide descriptor-first M6.1 surfaces over material/texture domain contracts, asset artifacts, reload diagnostics, and typed texture preview descriptors.
-- `domain/editor/editor_scene/src/sdf_authoring/` owns P1 authored SDF operation documents, SDF graph documents over `domain/graph`, command intents, ratification, projection DTOs, deterministic lowering to `world_ops::OperationRecord` windows, and CPU field-preview formation for scalar distance, vector gradient, occupancy, and material-channel products.
-- `domain/world_sdf/src/preview.rs` owns CPU field-preview product payload DTOs and descriptor/payload ratification.
-- `apps/runenwerk_editor/src/shell/providers/field_layer_stack.rs::FieldLayerStackProvider`, `sdf_graph_canvas.rs::SdfGraphCanvasProvider`, and `field_product_viewer.rs::FieldProductViewerProvider` provide concrete P1 SDF operation, graph, commit, invalidation, and field-preview surfaces through typed shell/domain proposals.
+- Standalone `dornglut/runen-sdf` owns reusable signed-field mathematics and CPU query semantics.
+- `domain/world_ops` owns governed world-operation records, invalidation, dirty/build coordination, and changed-region mechanics.
+- `domain/world_sdf` owns formed field/chunk/page/brick products, field-preview payload contracts, and collision/query readiness.
+- `domain/graph` owns neutral graph structure only; semantic graph domains retain their own node meaning, ratification, lowering, and formed products.
+- `engine/src/plugins/world` owns authoritative chunked SDF runtime integration and world build/execution plumbing.
+- `engine/src/plugins/render` owns rendering execution, shader/resource realization, dynamic product targets, material feature preparation, and GPU-facing preview integration.
+- `domain/material_graph` owns material graph documents, semantic node contracts, ratification, deterministic lowering, source maps, specialization/product metadata, and formed material products.
+- `domain/texture` owns Texture2D/Texture3D descriptors, sampler/color-space/compression metadata, generated texture lineage, and texture ratification.
+- Runenwerk Material Lab now has source-backed graph workflows, formed preview products, generated shader/render handoff, product publication, concrete rendered material preview, resource-resolution diagnostics, and scene-material integration while keeping material source truth in its owner.
+- Runenwerk texture preview has concrete Texture2D/Texture3D providers and KTX2-backed dynamic preview/upload integration; unsupported resource states remain diagnostic rather than silently accepted.
+- `domain/procgen` owns deterministic generator documents, seed/scope/version lineage, ratification, reservations, lowering to `world_ops`, product descriptors, bake contracts, explanation data, and changed-region semantics.
+- The Procgen baseline is implemented through Phase 6D: concrete graph/preview providers, CPU field-preview formation, product publication, query-snapshot publication, viewport overlay integration, bake/rollback, persistence, and runtime-preview reload classification exist.
+- P1 SDF authoring exists through scene-facing authoring adapters plus `world_ops`/`world_sdf`: command-backed operation/layer documents, SDF graph lowering, deterministic CPU field previews, commit/invalidation, and concrete field/SDF providers.
+- The implemented Tool Suite Registry / Workbench Host supplies stable surface keys, provider-family narrowing, provider-owned graph routing, and host capability policy for Editor integration.
+- `ui_composition` owns targets, roots, regions, mounted units, structural transactions/history, and structural persistence.
+
+Current migration residue, not future prerequisites:
+
+- `editor_core::DocumentKind` still enumerates many product families under #737. Existing variants are predecessor-shaped compatibility/product taxonomy, not the extension point for a new domain.
+- legacy `ToolSurfaceKind` variants and persisted mappings still cover many product surfaces, while normal Tool Suite identity is stable-key-based.
+- `SurfaceLocalAction` / `EditorDomainMutation` still contain some concrete Material/SDF action branches. Future domains must not deepen that generic-shell semantic enumeration merely to gain a provider.
+- `M6WorkspaceProvider` remains diagnostic/fallback scaffolding; it is not capability readiness or semantic authority.
 
 Missing today:
 
-- no procgen editor providers, preview execution, bake commands, concrete
-  generator algorithms, or field-payload byte formation; Phase 6A has created
-  the `domain/procgen` crate for graph-backed documents, ratification,
-  deterministic lowering, and product descriptors;
-- no `domain/particles`;
-- no `domain/physics`;
-- no `domain/animation`;
-- no `domain/simulation_process`;
-- no `domain/gameplay_graph` and no accepted gameplay event/action/state/quest contract set for gameplay graph lowering;
-- no concrete editor providers for procedural generation preview, particles, physics authoring/debug, animation timeline, curve editing, or simulation preview;
-- no source-backed material graph document persistence/import workflow beyond descriptor-first material/texture provider surfaces;
-- no rendered/GPU SDF overlay adapter for formed field previews;
-- no rendered material preview adapter or Texture3D GPU upload/runtime adapter;
-- no full PBR preview capability matrix for height/displacement, ambient occlusion, opacity/mask, or normal handling;
-- no particle simulation contract;
-- no general rigid/character physics domain;
-- no animation clip/graph/timeline domain.
+- no accepted/implemented `domain/particles`;
+- no accepted/implemented general `domain/physics`;
+- no accepted/implemented `domain/animation`;
+- no accepted/implemented `domain/simulation_process`;
+- no implemented gameplay event/action/state/quest + gameplay-graph product stack sufficient for runtime lowering;
+- no concrete particle, physics, animation, simulation-process, or gameplay product providers backed by those missing owner contracts;
+- no claim that all P3/P9 material/SDF texturing exit criteria or the full PBR capability matrix are complete;
+- no post-6D Procgen breadth claim for caves, structures, scatter, worker/GPU realization, or package-level persistent caches.
 
 ## Governing Model
 
@@ -116,6 +110,19 @@ Authored procedural document
 Runtime must not interpret editor-authored graphs every frame.
 
 Authoring graphs are intent. Formed products are runtime-facing truth.
+
+Editor integration starts after an owner contract exists:
+
+```text
+owner document/product
+  -> owner command + ratification
+  -> formed product / owner observation
+  -> Runenwerk app adapter or runtime handoff
+  -> Editor provider projection
+  -> provider-owned interaction proposal
+```
+
+A new product suite registers stable surface keys/provider families and concrete providers. It does not gain legitimacy by adding a central document/surface/action enum variant.
 
 ## Closed Default Decisions
 
@@ -140,7 +147,7 @@ Before implementation starts on a feature track, create or update the owning des
 - `docs-site/src/content/docs/domain/texture/README.md`
   - define Texture2D, Texture3D/volume, generated texture products, sampler/color-space/compression policy, cache keys, and preview/inspection contracts.
 - `docs-site/src/content/docs/domain/procgen/README.md`
-  - accepted as the procgen domain contract for seed contracts, bounded generator documents, deterministic lowering, bake targets, invalidation behavior, authored overlay preservation, and server-validated authority. Phase 6A implements the domain crate, and Phase 6B implements the first app-owned provider/runtime overlay proof. Concrete generator algorithms, field payload bytes, bake execution, persistence, and runtime preview reload classification remain deferred to later M6.2 phases.
+  - accepted and implemented for the baseline through Phase 6D: deterministic document/seed/scope contracts, lowering, provider/runtime preview, formed CPU field products, publication/query snapshots, bake/rollback, persistence, and reload classification. Further generator families or execution/cache scaling require a new owner activation rather than reopening a generic Editor M6.2 prerequisite.
 - `docs-site/src/content/docs/domain/particles/README.md`
   - define emitter documents, particle graph semantics, simulation step contracts, SDF/field coupling, formed particle products, and preview determinism.
 - `docs-site/src/content/docs/domain/physics/README.md`
@@ -497,7 +504,7 @@ This matrix makes feature coverage explicit. A milestone cannot close unless its
 
 | Milestone | SDF modeling | Materials/textures | Procgen | Particles | Physics | Animation | World processes |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| P0 | document kinds, field products | asset kinds, expression surfaces | asset kinds | asset kinds | asset kinds | asset kinds | asset kinds |
+| P0 | field products + owner adapters | asset/product kinds + tool-suite surfaces | owner contract + product kinds | owner contract + product kinds | owner contract + product kinds | owner contract + product kinds | owner contract + product kinds |
 | P1 | primitives, brushes, layers, SDF graph, field previews | material-channel overlays | not required | not required | collision-readiness display only | not required | not required |
 | P2 | field inputs for material graph | material graph, PBR, triplanar, Texture2D, Texture3D, generated cache | not required | not required | not required | not required | not required |
 | P3 | SDF/field material previews | render handoff, previews, procedural texture cache | not required | not required | not required | not required | not required |
@@ -516,12 +523,13 @@ Close editor document tabs, provider routing, scoped modes, asset catalog, field
 
 Exit criteria:
 
-- `domain/editor/editor_core/src/document.rs::DocumentKind` has explicit procedural document kinds;
-- asset catalog can represent SDF graph, material graph, texture, Texture3D, particle, physics, animation, and procgen assets;
-- viewport/tool surfaces consume typed expression products, not renderer-private textures;
+- product domains expose owner-defined authored/product identities and contracts before Editor integration;
+- asset/product catalogs can represent the implemented product families without making Editor taxonomy their semantic owner;
+- new Editor tool surfaces register through stable Tool Suite keys/provider families and do not require new central product enum variants;
+- viewport/tool surfaces consume typed expression/products, not renderer-private textures or live editor graph state;
 - `python3 tools/docs/validate_docs.py` passes.
 
-Status after the 2026-05-09 drift check: the shared workspace/profile/surface vocabulary, persisted tool-workspace layout support, asset taxonomy, material/texture artifact payload kinds, material/texture import settings, runtime product kinds, and fail-closed M6 provider routing exist in the current worktree. Concrete document save/load behavior remains per implemented document family and must not be claimed for future M6 domains.
+Current status: the shared Tool Suite/provider/workbench substrate, persisted layout support, asset/product taxonomy, product publication/query-snapshot paths, and fail-closed provider routing exist. Existing `DocumentKind` and `ToolSurfaceKind` product variants are retained migration/compatibility evidence under ADR 0025, not P0 requirements for future domains.
 
 ### P1 - SDF Modeling Core
 
@@ -546,7 +554,7 @@ Exit criteria:
 - first-slice material graphs can be authored, ratified, lowered, previewed, and rejected with source-mapped diagnostics;
 - material graph lowering produces source maps and diagnostics.
 
-Status after the 2026-05-09 descriptor-first closeout: the material/texture domain contract foundation and provider surfaces exist. Authored material documents are still not persisted/imported through a full document UX, material previews are descriptor-first rather than rendered, Texture3D viewers expose typed slice/mip/channel preview descriptors without GPU upload, and source-mapped diagnostics are projected through editor surfaces without making canvas state authoritative.
+Status: the original descriptor/domain foundation is complete and current implementation has advanced beyond it. Source-backed Material Lab workflows, deterministic material lowering, generated shader artifacts, formed preview products, rendered material-preview targets, product publication, resource binding diagnostics, and KTX2-backed Texture2D/Texture3D preview/upload paths exist. This closes the old “descriptor-only/no GPU preview” description, but does not by itself claim the complete P3 field-material/triplanar/PBR capability matrix.
 
 ### P3 - SDF/Field Texturing and PBR Preview
 
@@ -559,6 +567,8 @@ Exit criteria:
 - procedural textures can be generated or cached;
 - PBR parameter changes hot reload safely into preview when the preview capability matrix permits it.
 
+Status: rendered Material Lab preview and texture GPU-preview/resource handoff now exist, so P3 is no longer an “add any rendered preview” milestone. Remaining P3 closure must be judged against the field/SDF material handoff, procedural texture/cache behavior, triplanar/world-coordinate behavior, and explicit PBR capability matrix rather than reimplementing the existing preview spine.
+
 ### P4 - Procedural World Generation
 
 Deliver seed-driven generator documents and bounded preview/bake workflows.
@@ -568,6 +578,8 @@ Exit criteria:
 - a generator graph can form deterministic world operation windows;
 - bounded preview and bake-to-world workflows exist;
 - invalidation and rebuild diagnostics show changed regions and products.
+
+Status: the baseline first slice is complete through Procgen Phase 6D, including deterministic graph documents, bounded CPU preview, lowering, changed-region/explanation data, publication, bake/rollback, persistence, and reload classification. Additional terrain/cave/structure/scatter breadth or GPU/worker realization is separate follow-up product work.
 
 ### P5 - Particles and VFX
 
@@ -683,10 +695,9 @@ Rules:
 
 These are real decisions that must close at the named milestone. They are intentionally not open-ended roadmap items.
 
-- P2: choose the first Texture3D GPU upload path, supported format set, and compression policy for editor preview. Domain descriptors must still represent unsupported formats with diagnostics.
-- P2: choose the first material lowering target for previews: render expression product, shader fragment, or both. The authored graph contract must not depend on this choice.
-- P3: choose the first PBR preview capability matrix for height/displacement, ambient occlusion, opacity/mask, and normal handling so unsupported outputs fail with explicit diagnostics.
-- P4: choose the first procedural generation families to ship beyond the baseline first slice: terrain, cave, structure, or scatter.
+- P2 baseline decisions are closed by current implementation: Material Lab lowers to formed material/shader artifacts and the Editor uses KTX2-backed dynamic Texture2D/Texture3D preview/upload integration. Broader format/compression support remains texture/render product evolution, not an open prerequisite for the existing baseline.
+- P3: close the explicit PBR preview capability matrix for height/displacement, ambient occlusion, opacity/mask, and normal handling so unsupported outputs fail with explicit diagnostics.
+- P4 baseline is closed through Procgen Phase 6D. Choose any additional procedural generation families (terrain breadth, cave, structure, scatter, or others) only in a separately activated Procgen/world product slice.
 - P5: choose whether the first runtime particle backend after CPU preview is GPU compute, indirect draw expansion, or CPU simulation with GPU upload. Authored particle documents must remain backend-neutral.
 - P6: choose the first concrete physics runtime adapter or an in-house minimal solver. `domain/physics` remains solver-neutral either way.
 - P7: choose the first skeletal pose/skeleton asset contract if skeletal assets become part of the first shipping workflow.
