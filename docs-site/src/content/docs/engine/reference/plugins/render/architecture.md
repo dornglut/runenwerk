@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-25
 ---
 
 # Render Plugin Architecture
@@ -21,6 +21,7 @@ last_reviewed: 2026-09-13
 
 ## Current Public Surface
 
+- `AppRenderExt` for Render-owned App ergonomics (`add_render_flow`, debug control/config)
 - `RenderFlow` v2 builder surface
 - pass builders: `compute_pass`, `fullscreen_pass`, `graphics_pass`, `copy_pass`, `present_pass`, `builtin_ui_composite_pass`
 - typed handles: storage arrays, uniforms, ping-pong handles
@@ -31,12 +32,12 @@ last_reviewed: 2026-09-13
 
 ## Runtime Boundary
 
-- Owns: render runtime resources, flow registry integration, render prepare/submit scheduling, and `RenderReadinessState`.
+- Owns: Render-specific App ergonomics, render runtime resources, flow registry integration, render prepare/submit scheduling, and `RenderReadinessState`.
 - Readiness provider: `RenderPlugin` installs a default loading `RenderReadinessState` through non-overwriting resource initialization; bare App construction does not install it.
 - Readiness progression: successful render submission observes render warm-frame evidence and advances the maintained stability/timeout state toward ready.
 - Lifecycle distinction: `RenderReadinessState` is Render capability state and is not the Runenwerk App `Startup` lifecycle.
 - Consumes: `Time` for frame-submit timing/diagnostics; `TimePlugin` owns default installation and progression.
-- Non-ownership: frame-time progression, app input mapping ownership, and scene lifecycle ownership.
+- Non-ownership: frame-time progression/frame pacing, app input mapping ownership, and scene lifecycle ownership.
 - Prepare/submit boundary artifact: `PreparedRenderFrame` in `engine/src/plugins/render/frame/`.
 - Prepared frame packets carry main/offscreen views, flow input snapshots, prepared flow invocations, dynamic target descriptor snapshots, target alias bindings, UI surface bindings, and history signatures.
 - Runtime compatibility helper: `RenderFrameDataRegistry` for projection helpers/tests only, not active submission.
