@@ -4,8 +4,9 @@ use crate::plugins::{
     TouchInputPhase, action,
 };
 use runen_input::{
-    DigitalState, InputContext, InputDeviceId, InputSourceId, KeyLocation, KeyboardInput,
-    LogicalKey, NativeLogicalKey, ObservationOrigin, PhysicalKeyIdentity, PointerButton,
+    ContactId, ContactInput, ContactPhase, ContinuityLoss, CoordinateSpace, DigitalState,
+    InputContext, InputDeviceId, InputSourceId, KeyLocation, KeyboardInput,
+    LogicalKey, NativeLogicalKey, ObservationOrigin, PhysicalKeyIdentity, Point2, PointerButton,
     PointerButtonInput,
 };
 use winit::event::{ElementState, MouseButton};
@@ -491,4 +492,78 @@ fn frame_clear_keeps_durable_neutral_and_action_held_state() {
     assert!(input.neutral_touch_active(11));
     assert!(!actions.action_pressed(action::WORLD_MOVE_RIGHT));
     assert!(!input.left_mouse_pressed());
+}
+
+#[test]
+fn continuity_loss_invalidates_confirmed_state_without_fabricating_edges() {
+    let mut input = InputState::new();
+    let context = InputContext::new(InputSourceId::new(700), Some(InputDeviceId::new(11)));
+
+    input.handle_normalized_keyboard(context, &normalized_key(DigitalState::Pressed));
+    input.handle_pointer_button(
+        context,
+        PointerButtonInput {
+            button: PointerButton::Left,
+            state: DigitalState::Pressed,
+        },
+    );
+    input.clear_frame();
+
+    input.handle_continuity_loss(context, ContinuityLoss::Source);
+
+    assert!(!input.physical_key_down(&PhysicalKeyIdentity::code("KeyW")));
+    assert!(!input.left_mouse_down());
+    assert!(!input.left_mouse_released());
+    assert!(input.mouse_button_transitions().is_empty());
+    assert!(input.keyboard_press_samples().is_empty());
+}
+
+#[test]
+fn source_continuity_loss_is_scoped_and_releases_stale_primary_touch_ownership() {
+    let mut input = InputState::new();
+    let lost = InputContext::new(InputSourceId::new(701), Some(InputDeviceId::new(21)));
+    let retained = InputContext::new(InputSourceId::new(702), Some(InputDeviceId::new(22)));
+
+    input.handle_normalized_keyboard(lost, &normalized_key(DigitalState::Pressed));
+    input.handle_normalized_keyboard(
+        retained,
+        &KeyboardInput {
+            physical_key: PhysicalKeyIdentity::code("KeyD"),
+            logical_key: LogicalKey::Native(NativeLogicalKey::Unidentified),
+            location: KeyLocation::Standard,
+            state: DigitalState::Pressed,
+            repeat: false,
+            origin: ObservationOrigin::SourceReport,
+        },
+    );
+    input.handle_contact_input(
+        lost,
+        &ContactInput {
+            contact: ContactId::new(1),
+            phase: ContactPhase::Begin,
+            position: Point2::new(10.0, 10.0, CoordinateSpace::WindowPhysicalPixels),
+            pressure: None,
+            altitude_angle_radians: None,
+        },
+    );
+    input.clear_frame();
+
+    input.handle_continuity_loss(lost, ContinuityLoss::Source);
+
+    assert!(!input.physical_key_down(&PhysicalKeyIdentity::code("KeyW")));
+    assert!(input.physical_key_down(&PhysicalKeyIdentity::code("KeyD")));
+
+    input.handle_contact_input(
+        retained,
+        &ContactInput {
+            contact: ContactId::new(2),
+            phase: ContactPhase::Begin,
+            position: Point2::new(20.0, 20.0, CoordinateSpace::WindowPhysicalPixels),
+            pressure: None,
+            altitude_angle_radians: None,
+        },
+    );
+
+    assert_eq!(input.touch_samples().len(), 1);
+    assert_eq!(input.touch_samples()[0].id, 2);
 }

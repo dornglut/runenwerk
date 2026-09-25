@@ -1,7 +1,8 @@
 use crate::plugins::InputState;
 use crate::runtime::window::{NativeWindowId, NativeWindowRecord};
 use runen_input::{
-    ContactInput, InputContext, KeyboardInput, Point2, PointerButtonInput, ScrollInput,
+    ContactInput, ContinuityLoss, InputContext, KeyboardInput, Point2, PointerButtonInput,
+    ScrollInput,
 };
 
 #[derive(Debug, Clone)]
@@ -10,6 +11,10 @@ pub enum PlatformEvent {
     CloseRequested,
     Focused {
         focused: bool,
+    },
+    InputContinuityLost {
+        context: InputContext,
+        loss: ContinuityLoss,
     },
     Resized {
         width: u32,
@@ -102,9 +107,13 @@ pub fn apply_platform_input_event(input: &mut InputState, event: &PlatformEvent)
             context,
             input: contact,
         } => input.handle_contact_input(*context, contact),
+        PlatformEvent::InputContinuityLost { context, loss } => {
+            input.handle_continuity_loss(*context, *loss)
+        }
         PlatformEvent::Resumed
         | PlatformEvent::CloseRequested
         | PlatformEvent::Focused { .. }
+        | PlatformEvent::InputContinuityLost { .. }
         | PlatformEvent::Resized { .. }
         | PlatformEvent::ScaleFactorChanged { .. }
         | PlatformEvent::RedrawRequested => {}
@@ -141,7 +150,8 @@ pub fn apply_native_window_event(record: &mut NativeWindowRecord, event: &Platfo
         | PlatformEvent::MouseWheel { .. }
         | PlatformEvent::CursorMoved { .. }
         | PlatformEvent::MouseInput { .. }
-        | PlatformEvent::Touch { .. } => {}
+        | PlatformEvent::Touch { .. }
+        | PlatformEvent::InputContinuityLost { .. } => {}
     }
 }
 

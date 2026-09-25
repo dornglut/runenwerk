@@ -1,6 +1,6 @@
 use runen_input::{
     AnalogMeasurement, ContactId, ContactInput, ContactPhase as NeutralContactPhase,
-    CoordinateSpace, DigitalState, InputContext, InputError, InputObservation,
+    ContinuityLoss, CoordinateSpace, DigitalState, InputContext, InputError, InputObservation,
     InputObservationGroup, InputSourceId, InputState as NeutralInputState, KeyLocation,
     KeyboardInput, LogicalKey, MeasurementDomain, NativeLogicalKey, ObservationOrigin,
     PhysicalKeyIdentity, Point2, PointerButton, PointerButtonInput, RelativeMotionUnit,
@@ -176,6 +176,25 @@ impl InputState {
 
     pub fn drain_device_observation_groups(&mut self) -> Vec<InputObservationGroup> {
         std::mem::take(&mut self.device_observation_groups)
+    }
+
+    pub(crate) fn handle_continuity_loss(
+        &mut self,
+        context: InputContext,
+        loss: ContinuityLoss,
+    ) {
+        self.neutral
+            .admit(&InputObservationGroup::single(
+                context,
+                InputObservation::ContinuityLoss(loss),
+            ))
+            .expect("input continuity loss should always be valid");
+
+        if self.primary_touch.is_some_and(|(touch_context, _)| {
+            continuity_loss_contains_context(context, loss, touch_context)
+        }) {
+            self.primary_touch = None;
+        }
     }
 
     pub(crate) fn handle_normalized_keyboard(
@@ -589,6 +608,19 @@ impl InputState {
         self.neutral
             .contact_position_in(LEGACY_WINDOW_CONTEXT, ContactId::new(id))
             .is_some()
+    }
+}
+
+fn continuity_loss_contains_context(
+    context: InputContext,
+    loss: ContinuityLoss,
+    candidate: InputContext,
+) -> bool {
+    match loss {
+        ContinuityLoss::Source => candidate.source == context.source,
+        ContinuityLoss::Device => {
+            candidate.source == context.source && candidate.device == context.device
+        }
     }
 }
 

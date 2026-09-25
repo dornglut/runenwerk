@@ -2,7 +2,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use engine::runtime::NativeWindowId;
 use runen_input::{
-    ContactPhase, DigitalState, InputContext, InputDeviceId, InputSourceId, PhysicalKeyIdentity,
+    ContactPhase, ContinuityLoss, DigitalState, InputContext, InputDeviceId, InputSourceId,
+    PhysicalKeyIdentity,
 };
 use ui_input::{Modifiers, PointerDeviceId};
 use ui_math::{UiPoint, UiVector};
@@ -38,6 +39,12 @@ impl ModifierState {
                 self.held.remove(&scoped);
             }
         }
+    }
+
+    fn invalidate_continuity(&mut self, context: InputContext, loss: ContinuityLoss) {
+        self.held.retain(|(candidate, _)| {
+            !continuity_loss_contains_context(context, loss, *candidate)
+        });
     }
 
     fn snapshot(&self) -> Modifiers {
@@ -127,6 +134,16 @@ impl TargetInputState {
     pub(super) fn modifiers(&self) -> Modifiers {
         self.modifiers.snapshot()
     }
+
+    fn invalidate_continuity(&mut self, context: InputContext, loss: ContinuityLoss) {
+        if loss == ContinuityLoss::Source {
+            self.mouse_positions.remove(&context.source);
+        }
+        self.touch_positions.retain(|(candidate, _), _| {
+            !continuity_loss_contains_context(context, loss, *candidate)
+        });
+        self.modifiers.invalidate_continuity(context, loss);
+    }
 }
 
 #[derive(Debug, Default, runen_ecs::Resource)]
@@ -139,6 +156,17 @@ pub struct EditorTargetInputRuntimeResource {
 impl EditorTargetInputRuntimeResource {
     pub(crate) fn clear_window(&mut self, native_window_id: NativeWindowId) {
         self.by_window.remove(&native_window_id);
+    }
+
+    pub(super) fn invalidate_continuity(
+        &mut self,
+        native_window_id: NativeWindowId,
+        context: InputContext,
+        loss: ContinuityLoss,
+    ) {
+        if let Some(state) = self.by_window.get_mut(&native_window_id) {
+            state.invalidate_continuity(context, loss);
+        }
     }
 
     pub(super) fn device_id(&mut self, context: InputContext) -> Option<PointerDeviceId> {
@@ -157,6 +185,19 @@ impl EditorTargetInputRuntimeResource {
 
     pub(super) fn target_mut(&mut self, native_window_id: NativeWindowId) -> &mut TargetInputState {
         self.by_window.entry(native_window_id).or_default()
+    }
+}
+
+fn continuity_loss_contains_context(
+    context: InputContext,
+    loss: ContinuityLoss,
+    candidate: InputContext,
+) -> bool {
+    match loss {
+        ContinuityLoss::Source => candidate.source == context.source,
+        ContinuityLoss::Device => {
+            candidate.source == context.source && candidate.device == context.device
+        }
     }
 }
 
