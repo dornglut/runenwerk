@@ -518,11 +518,7 @@ fn import_rejects_invalid_measurement_domain_and_source_time_unit() {
                     tool_kind: InputToolKind::Pen,
                     phase: ContactPhase::Begin,
                     presence: ContactPresence::Contact,
-                    position: Point2::new(
-                        1.0,
-                        2.0,
-                        CoordinateSpace::WindowPhysicalPixels,
-                    ),
+                    position: Point2::new(1.0, 2.0, CoordinateSpace::WindowPhysicalPixels),
                     delta: Vector2::new(0.0, 0.0),
                     pressure: None,
                     tangential_pressure: None,
