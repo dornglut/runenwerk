@@ -14,6 +14,8 @@ const RL2_MEASUREMENT_SCHEMA_VERSION: u32 = 1;
 #[derive(Debug, Clone, Default, runen_ecs::Resource)]
 struct RenderLabMeasurementConfig {
     output_path: Option<PathBuf>,
+    submitted_frame_limit: Option<usize>,
+    completed: bool,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -78,11 +80,33 @@ pub fn run_native() -> Result<()> {
     run_native_with_measurement(None)
 }
 
-pub fn run_native_measurement(output_path: impl Into<PathBuf>) -> Result<()> {
-    run_native_with_measurement(Some(output_path.into()))
+pub fn run_native_measurement(
+    output_path: impl Into<PathBuf>,
+    submitted_frame_limit: Option<usize>,
+) -> Result<()> {
+    let submitted_frame_limit = validate_measurement_frame_limit(submitted_frame_limit)?;
+    run_native_with_measurement(Some(RenderLabMeasurementConfig {
+        output_path: Some(output_path.into()),
+        submitted_frame_limit,
+        completed: false,
+    }))
 }
 
-fn run_native_with_measurement(output_path: Option<PathBuf>) -> Result<()> {
+fn validate_measurement_frame_limit(limit: Option<usize>) -> Result<Option<usize>> {
+    if let Some(limit) = limit {
+        if limit == 0 {
+            bail!("RL2 measurement frame limit must be positive");
+        }
+        if limit > RL2_MEASUREMENT_HISTORY_CAPACITY {
+            bail!(
+                "RL2 measurement frame limit {limit} exceeds retained history capacity {RL2_MEASUREMENT_HISTORY_CAPACITY}"
+            );
+        }
+    }
+    Ok(limit)
+}
+
+fn run_native_with_measurement(measurement: Option<RenderLabMeasurementConfig>) -> Result<()> {
     let mut app = App::new();
     app.set_title("Runenwerk Render Lab — RL2 native interaction");
     app.with_frame_pacing(FramePacingPolicyResource::continuous_capped(60));
@@ -90,10 +114,8 @@ fn run_native_with_measurement(output_path: Option<PathBuf>) -> Result<()> {
     app.add_plugin(ScenePlugin);
     app.add_plugin(RenderPlugin);
     app.add_plugin(RenderLabPlugin);
-    if let Some(output_path) = output_path {
-        app.insert_resource(RenderLabMeasurementConfig {
-            output_path: Some(output_path),
-        });
+    if let Some(measurement) = measurement {
+        app.insert_resource(measurement);
         app.insert_resource(rl2_measurement_policy());
     }
     let flow = render_lab_flow()?;
@@ -190,10 +212,20 @@ pub(super) fn render_lab_flow() -> Result<RenderFlow> {
         .validate()
 }
 
-fn approve_render_lab_close_system(
-    mut windows: ResMut<WindowStateRegistryResource>,
-    measurement: Res<RenderLabMeasurementConfig>,
-    history: Res<RenderFrameHistoryState>,
+fn bounded_measurement_complete(
+    measurement: &RenderLabMeasurementConfig,
+    history: &RenderFrameHistoryState,
+) -> bool {
+    !measurement.completed
+        && measurement
+            .submitted_frame_limit
+            .is_some_and(|limit| history.len() >= limit)
+}
+
+fn complete_render_lab_measurement_if_requested(
+    windows: &mut WindowStateRegistryResource,
+    measurement: &mut RenderLabMeasurementConfig,
+    history: &RenderFrameHistoryState,
 ) -> Result<()> {
     let Some(primary_window_id) = windows.primary_window_id() else {
         return Ok(());
@@ -201,17 +233,33 @@ fn approve_render_lab_close_system(
     let close_intent_pending = windows
         .record(primary_window_id)
         .is_some_and(|window| window.close_intent_pending);
-    if !close_intent_pending {
+    let bounded_complete = bounded_measurement_complete(measurement, history);
+    if !close_intent_pending && !bounded_complete {
         return Ok(());
     }
 
-    if let Some(output_path) = measurement.output_path.as_deref() {
-        write_measurement_artifact(output_path, &history)?;
+    if !measurement.completed {
+        if let Some(output_path) = measurement.output_path.as_deref() {
+            write_measurement_artifact(output_path, history)?;
+        }
+        measurement.completed = true;
     }
     if let Some(primary_window) = windows.record_mut(primary_window_id) {
-        primary_window.approve_close();
+        if bounded_complete {
+            primary_window.request_close();
+        } else {
+            primary_window.approve_close();
+        }
     }
     Ok(())
+}
+
+fn approve_render_lab_close_system(
+    mut windows: ResMut<WindowStateRegistryResource>,
+    mut measurement: ResMut<RenderLabMeasurementConfig>,
+    history: Res<RenderFrameHistoryState>,
+) -> Result<()> {
+    complete_render_lab_measurement_if_requested(&mut windows, &mut measurement, &history)
 }
 
 fn publish_render_lab_frame_system(
@@ -315,8 +363,108 @@ mod tests {
         assert!(policy.enabled);
         assert_eq!(policy.capacity, RL2_MEASUREMENT_HISTORY_CAPACITY);
         assert_eq!(policy.sample_every_nth_frame, 1);
-        assert!(RenderLabMeasurementConfig::default().output_path.is_none());
+        let measurement = RenderLabMeasurementConfig::default();
+        assert!(measurement.output_path.is_none());
+        assert!(measurement.submitted_frame_limit.is_none());
+        assert!(!measurement.completed);
         assert!(!RenderFrameObservationPolicyResource::default().enabled);
+    }
+
+    #[test]
+    fn measurement_frame_limit_must_be_positive_and_retainable() {
+        assert_eq!(validate_measurement_frame_limit(None).unwrap(), None);
+        assert_eq!(validate_measurement_frame_limit(Some(1)).unwrap(), Some(1));
+        assert_eq!(
+            validate_measurement_frame_limit(Some(RL2_MEASUREMENT_HISTORY_CAPACITY)).unwrap(),
+            Some(RL2_MEASUREMENT_HISTORY_CAPACITY)
+        );
+        assert!(validate_measurement_frame_limit(Some(0)).is_err());
+        assert!(
+            validate_measurement_frame_limit(Some(RL2_MEASUREMENT_HISTORY_CAPACITY + 1)).is_err()
+        );
+    }
+
+    #[test]
+    fn bounded_measurement_completion_counts_retained_submitted_frames_once() {
+        use engine::plugins::render::inspect::RenderGpuTimingCapability;
+
+        let policy = rl2_measurement_policy();
+        let mut history = RenderFrameHistoryState::default();
+        let mut measurement = RenderLabMeasurementConfig {
+            output_path: None,
+            submitted_frame_limit: Some(2),
+            completed: false,
+        };
+        assert!(!bounded_measurement_complete(&measurement, &history));
+
+        for frame_index in 1..=2 {
+            history.observe_submitted_frame(
+                policy,
+                frame_index,
+                RenderSurfaceId::primary().raw(),
+                frame_index + 100,
+                (1600, 1200),
+                0.0,
+                Default::default(),
+                &[],
+                RenderGpuTimingCapability::Unsupported,
+            );
+            assert_eq!(
+                bounded_measurement_complete(&measurement, &history),
+                frame_index == 2
+            );
+        }
+
+        measurement.completed = true;
+        assert!(!bounded_measurement_complete(&measurement, &history));
+    }
+
+    #[test]
+    fn bounded_measurement_completion_uses_the_product_close_path_once() {
+        use engine::plugins::render::inspect::RenderGpuTimingCapability;
+
+        let policy = rl2_measurement_policy();
+        let mut history = RenderFrameHistoryState::default();
+        history.observe_submitted_frame(
+            policy,
+            1,
+            RenderSurfaceId::primary().raw(),
+            101,
+            (1600, 1200),
+            0.0,
+            Default::default(),
+            &[],
+            RenderGpuTimingCapability::Unsupported,
+        );
+        let mut measurement = RenderLabMeasurementConfig {
+            output_path: None,
+            submitted_frame_limit: Some(1),
+            completed: false,
+        };
+        let mut windows = WindowStateRegistryResource::default();
+        let primary = windows.register_primary_window("RL2", (1600, 1200), 1.0, true);
+
+        complete_render_lab_measurement_if_requested(
+            &mut windows,
+            &mut measurement,
+            &history,
+        )
+        .unwrap();
+
+        assert!(measurement.completed);
+        let primary_record = windows.record(primary).expect("primary window");
+        assert!(primary_record.close_requested);
+        assert!(!primary_record.close_intent_pending);
+        assert!(!bounded_measurement_complete(&measurement, &history));
+
+        complete_render_lab_measurement_if_requested(
+            &mut windows,
+            &mut measurement,
+            &history,
+        )
+        .unwrap();
+        assert!(measurement.completed);
+        assert!(windows.record(primary).expect("primary window").close_requested);
     }
 
     #[test]
