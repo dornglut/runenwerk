@@ -505,6 +505,88 @@ fn import_finishes_through_runen_input_validation() {
 }
 
 #[test]
+fn import_rejects_invalid_measurement_domain_and_source_time_unit() {
+    let tablet_context = context(1, Some(2));
+    let trace = AutomationInputTrace {
+        frames: vec![AutomationInputTraceFrame {
+            frame_ordinal: 0,
+            groups: vec![InputObservationGroup::single(
+                tablet_context,
+                InputObservation::Tablet(TabletObservation {
+                    contact: ContactId::new(3),
+                    tool: None,
+                    tool_kind: InputToolKind::Pen,
+                    phase: ContactPhase::Begin,
+                    presence: ContactPresence::Contact,
+                    position: Point2::new(
+                        1.0,
+                        2.0,
+                        CoordinateSpace::WindowPhysicalPixels,
+                    ),
+                    delta: Vector2::new(0.0, 0.0),
+                    pressure: None,
+                    tangential_pressure: None,
+                    tilt: None,
+                    twist: None,
+                    controls: PhysicalTabletControls::default(),
+                    capabilities: TabletCapabilities::default(),
+                    source_time: Some(SourceTime::new(
+                        tablet_context,
+                        42,
+                        SourceTimeUnit::NativeTicks {
+                            ticks_per_second: 1_000,
+                        },
+                    )),
+                    evidence: EvidenceStatus::ObservedConfirmed,
+                    delivery: DeliveryRole::OrdinaryCurrent,
+                    origin: ObservationOrigin::SourceReport,
+                }),
+            )],
+        }],
+        trailing_groups: Vec::new(),
+    };
+    let encoded = encode(&trace);
+
+    let mut invalid_measurement: PersistedTraceV1 = ron_options().from_str(&encoded).unwrap();
+    let PersistedObservationV1::Tablet(tablet) =
+        &mut invalid_measurement.frames[0].groups[0].observations[0]
+    else {
+        unreachable!()
+    };
+    tablet.pressure = Some(PersistedAnalogMeasurementV1 {
+        value: 2.0,
+        domain: PersistedMeasurementDomainV1::NormalizedUnitInterval,
+    });
+    let source = ron_options()
+        .to_string_pretty(&invalid_measurement, ron::ser::PrettyConfig::new())
+        .unwrap();
+    assert!(matches!(
+        import_automation_input_trace_v1(source.as_bytes()),
+        Err(AutomationInputTraceImportError::InvalidNormalizedInput(_))
+    ));
+
+    let mut invalid_source_time: PersistedTraceV1 = ron_options().from_str(&encoded).unwrap();
+    let PersistedObservationV1::Tablet(tablet) =
+        &mut invalid_source_time.frames[0].groups[0].observations[0]
+    else {
+        unreachable!()
+    };
+    tablet.source_time = Some(PersistedSourceTimeV1 {
+        value: 42,
+        unit: PersistedSourceTimeUnitV1::NativeTicks {
+            ticks_per_second: 0,
+        },
+    });
+    let source = ron_options()
+        .to_string_pretty(&invalid_source_time, ron::ser::PrettyConfig::new())
+        .unwrap();
+    assert!(matches!(
+        import_automation_input_trace_v1(source.as_bytes()),
+        Err(AutomationInputTraceImportError::InvalidNormalizedInput(_))
+    ));
+}
+
+#[test]
 fn metadata_is_bounded_and_round_trips_when_present() {
     let provenance = AutomationInputTraceProvenance {
         runenwerk_revision: Some("abc123".to_owned()),
