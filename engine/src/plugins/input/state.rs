@@ -125,7 +125,7 @@ pub struct InputState {
     mouse_button_transitions: Vec<MouseButtonTransitionSample>,
     touch_samples: Vec<TouchInputSample>,
     device_observation_groups: Vec<InputObservationGroup>,
-    primary_touch: Option<(InputContext, u64)>,
+    primary_touch: Option<(InputContext, ContactId)>,
     pub scroll_delta: f32,
     left_mouse_pressed: bool,
     left_mouse_released: bool,
@@ -251,11 +251,7 @@ impl InputState {
             .neutral
             .admit(InputObservationGroup::single(
                 context,
-                InputObservation::Scroll {
-                    delta: input.delta,
-                    domain: input.domain,
-                    phase: input.phase,
-                },
+                InputObservation::Scroll(input),
             ))
             .is_ok()
             && let Some(vertical) = input.delta.vertical
@@ -395,30 +391,23 @@ impl InputState {
     }
 
     pub(crate) fn handle_contact_input(&mut self, context: InputContext, input: &ContactInput) {
-        let contact = ContactId::new(input.id);
         let previous = self
             .neutral
-            .contact_position_in(context, contact)
+            .contact_position_in(context, input.contact)
             .map(|position| (position.x, position.y))
             .unwrap_or((input.position.x, input.position.y));
         if self
             .neutral
             .admit(InputObservationGroup::single(
                 context,
-                InputObservation::Contact {
-                    contact,
-                    phase: input.phase,
-                    position: input.position,
-                    pressure: input.pressure,
-                    altitude_angle_radians: input.altitude_angle_radians,
-                },
+                InputObservation::Contact(input.clone()),
             ))
             .is_err()
         {
             return;
         }
 
-        let key = (context, input.id);
+        let key = (context, input.contact);
         let accepted = match input.phase {
             NeutralContactPhase::Begin if self.primary_touch.is_none() => {
                 self.primary_touch = Some(key);
@@ -429,7 +418,7 @@ impl InputState {
 
         if accepted {
             self.touch_samples.push(TouchInputSample {
-                id: input.id,
+                id: input.contact.raw(),
                 phase: input.phase.into(),
                 position: (input.position.x, input.position.y),
                 delta: (input.position.x - previous.0, input.position.y - previous.1),
@@ -461,7 +450,7 @@ impl InputState {
         self.handle_contact_input(
             LEGACY_WINDOW_CONTEXT,
             &ContactInput {
-                id,
+                contact: ContactId::new(id),
                 phase,
                 position: Point2::new(x, y, CoordinateSpace::UnspecifiedTargetUnits),
                 pressure: pressure.map(|value| {

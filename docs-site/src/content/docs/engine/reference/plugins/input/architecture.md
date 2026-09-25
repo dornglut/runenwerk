@@ -15,7 +15,7 @@ last_reviewed: 2026-09-25
 Reusable device-input observation and deterministic confirmed-state semantics are owned
 by `dornglut/runen-input`.
 
-Runenwerk consumes exact accepted revision `b2bf687e8071d19e124ea5b2c8948c49891cc1de`. The former
+Runenwerk consumes exact accepted revision `ba87e7c80a9626239a011038cec97c30010379a8`. The former
 `engine/src/plugins/input/neutral.rs` predecessor implementation is deleted; there is no
 forwarding module or duplicate reducer authority.
 
