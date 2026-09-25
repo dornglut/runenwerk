@@ -228,6 +228,28 @@ fn network_client_plugin_drains_server_messages_and_flushes_client_messages() {
     assert_eq!(diagnostics.flush_count, 1);
     assert!(client_inbox_is_empty(app.world()));
     assert_eq!(client_outbox_len(app.world()), 0);
+
+    let app = app
+        .run_for_frames(1)
+        .expect("empty client network frame should run");
+    let diagnostics = app.world().resource::<NetworkDiagnostics>().unwrap();
+    assert_eq!(diagnostics.processed_server_messages_last_frame, 0);
+    assert_eq!(diagnostics.flushed_client_messages_last_frame, 0);
+    assert_eq!(diagnostics.flush_count, 1);
+    assert!(
+        app.world()
+            .resource::<engine::plugins::net::NetworkInboundQueue>()
+            .unwrap()
+            .server_messages()
+            .is_empty()
+    );
+    assert!(
+        app.world()
+            .resource::<NetworkOutboundQueue>()
+            .unwrap()
+            .client_messages()
+            .is_empty()
+    );
 }
 
 #[test]
@@ -249,6 +271,28 @@ fn network_server_plugin_drains_client_messages_and_flushes_server_messages() {
     assert_eq!(diagnostics.flush_count, 1);
     assert!(server_inbox_is_empty(app.world()));
     assert_eq!(server_outbox_len(app.world()), 0);
+
+    let app = app
+        .run_for_frames(1)
+        .expect("empty server network frame should run");
+    let diagnostics = app.world().resource::<NetworkDiagnostics>().unwrap();
+    assert_eq!(diagnostics.processed_client_messages_last_frame, 0);
+    assert_eq!(diagnostics.flushed_server_messages_last_frame, 0);
+    assert_eq!(diagnostics.flush_count, 1);
+    assert!(
+        app.world()
+            .resource::<engine::plugins::net::NetworkInboundQueue>()
+            .unwrap()
+            .client_messages()
+            .is_empty()
+    );
+    assert!(
+        app.world()
+            .resource::<NetworkOutboundQueue>()
+            .unwrap()
+            .server_messages()
+            .is_empty()
+    );
 }
 
 #[test]
@@ -323,6 +367,42 @@ fn reconnect_attempt_is_host_policy_not_session_authority() {
 }
 
 #[test]
+fn directional_network_projection_clears_preserve_the_opposite_role() {
+    let client_message = client_probe(20);
+    let server_message = server_probe(21);
+
+    let mut inbound = engine::plugins::net::NetworkInboundQueue::default();
+    inbound.push_client(None, client_message.clone());
+    inbound.push_server(server_message.clone());
+
+    inbound.clear_client_messages();
+    assert!(inbound.client_messages().is_empty());
+    assert_eq!(inbound.server_messages(), std::slice::from_ref(&server_message));
+
+    inbound.push_client(None, client_message.clone());
+    inbound.clear_server_messages();
+    assert_eq!(inbound.client_messages().len(), 1);
+    assert_eq!(inbound.client_messages()[0].message, client_message.clone());
+    assert!(inbound.server_messages().is_empty());
+
+    let mut outbound = NetworkOutboundQueue::default();
+    outbound.push_client(client_message.clone());
+    outbound.push_server(OutboundServerMessage::Broadcast(server_message.clone()));
+
+    outbound.clear_server_messages();
+    assert_eq!(outbound.client_messages(), std::slice::from_ref(&client_message));
+    assert!(outbound.server_messages().is_empty());
+
+    outbound.push_server(OutboundServerMessage::Broadcast(server_message.clone()));
+    outbound.clear_client_messages();
+    assert!(outbound.client_messages().is_empty());
+    assert_eq!(
+        outbound.server_messages(),
+        &[OutboundServerMessage::Broadcast(server_message)]
+    );
+}
+
+#[test]
 fn host_plugin_composes_client_and_server_runtime_roles() {
     let mut app = App::headless();
     app.add_plugin(NetworkHostPlugin);
@@ -335,4 +415,88 @@ fn host_plugin_composes_client_and_server_runtime_roles() {
     assert!(app.world().resource::<NetworkClientOutbox>().is_ok());
     assert!(app.world().resource::<NetworkServerInbox>().is_ok());
     assert!(app.world().resource::<NetworkServerOutbox>().is_ok());
+}
+
+#[test]
+fn host_plugin_preserves_bidirectional_inbound_projection_for_the_current_frame() {
+    let mut app = App::headless();
+    app.add_plugin(NetworkHostPlugin);
+
+    let server_inbound = server_probe(30);
+    let client_inbound = client_probe(31);
+    enqueue_client_inbox(app.world_mut(), server_inbound.clone())
+        .expect("host client inbox enqueue should succeed");
+    enqueue_server_inbox(app.world_mut(), client_inbound.clone())
+        .expect("host server inbox enqueue should succeed");
+
+    let app = app
+        .run_for_frames(1)
+        .expect("host bidirectional inbound frame should run");
+
+    let inbound = app
+        .world()
+        .resource::<engine::plugins::net::NetworkInboundQueue>()
+        .unwrap();
+    assert_eq!(inbound.client_messages().len(), 1);
+    assert_eq!(inbound.client_messages()[0].message, client_inbound);
+    assert_eq!(inbound.server_messages(), &[server_inbound]);
+
+    let diagnostics = app.world().resource::<NetworkDiagnostics>().unwrap();
+    assert_eq!(diagnostics.processed_client_messages_last_frame, 1);
+    assert_eq!(diagnostics.processed_server_messages_last_frame, 1);
+
+    let app = app
+        .run_for_frames(1)
+        .expect("host empty inbound frame should run");
+    let inbound = app
+        .world()
+        .resource::<engine::plugins::net::NetworkInboundQueue>()
+        .unwrap();
+    assert!(inbound.client_messages().is_empty());
+    assert!(inbound.server_messages().is_empty());
+
+    let diagnostics = app.world().resource::<NetworkDiagnostics>().unwrap();
+    assert_eq!(diagnostics.processed_client_messages_last_frame, 0);
+    assert_eq!(diagnostics.processed_server_messages_last_frame, 0);
+}
+
+#[test]
+fn host_plugin_preserves_bidirectional_outbound_projection_for_the_current_frame() {
+    let mut app = App::headless();
+    app.add_plugin(NetworkHostPlugin);
+
+    let client_outbound = client_probe(32);
+    let server_outbound = server_probe(33);
+    enqueue_client_outbox(app.world_mut(), client_outbound.clone())
+        .expect("host client outbox enqueue should succeed");
+    enqueue_server_outbox_broadcast(app.world_mut(), server_outbound.clone())
+        .expect("host server outbox enqueue should succeed");
+
+    let app = app
+        .run_for_frames(1)
+        .expect("host bidirectional outbound frame should run");
+
+    let outbound = app.world().resource::<NetworkOutboundQueue>().unwrap();
+    assert_eq!(outbound.client_messages(), &[client_outbound]);
+    assert_eq!(
+        outbound.server_messages(),
+        &[OutboundServerMessage::Broadcast(server_outbound)]
+    );
+
+    let diagnostics = app.world().resource::<NetworkDiagnostics>().unwrap();
+    assert_eq!(diagnostics.flushed_client_messages_last_frame, 1);
+    assert_eq!(diagnostics.flushed_server_messages_last_frame, 1);
+    assert_eq!(diagnostics.flush_count, 2);
+
+    let app = app
+        .run_for_frames(1)
+        .expect("host empty outbound frame should run");
+    let outbound = app.world().resource::<NetworkOutboundQueue>().unwrap();
+    assert!(outbound.client_messages().is_empty());
+    assert!(outbound.server_messages().is_empty());
+
+    let diagnostics = app.world().resource::<NetworkDiagnostics>().unwrap();
+    assert_eq!(diagnostics.flushed_client_messages_last_frame, 0);
+    assert_eq!(diagnostics.flushed_server_messages_last_frame, 0);
+    assert_eq!(diagnostics.flush_count, 2);
 }
