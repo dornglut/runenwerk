@@ -1,38 +1,66 @@
 ---
 title: "Input Plugin Architecture"
-description: "Documentation for Input Plugin Architecture."
+description: "Runenwerk integration boundary for standalone RunenInput."
 status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-24
+last_reviewed: 2026-09-25
 ---
 
 # Input Plugin Architecture
 
-## Ownership Boundary
+## Authority
 
-- The internal neutral input owner owns backend-neutral observation semantics, physical-control identity correlation, deterministic admission/reduction, and confirmed held/contact state.
-- `InputState` is the Runenwerk integration/projection shell around that owner; it retains non-action compatibility projections and accepted frame-local keyboard press evidence but no independent physical-control interner or reducer.
-- `ActionState` owns Runenwerk product action ids, bindings/defaults, rebinding, and held/pressed action projection.
-- Product binding semantic types use `PhysicalKeyIdentity`; they do not own or expose winit key types.
-- Gameplay, editor, scene, RunenUI semantics, window lifecycle, and native-tablet policy remain outside this ownership boundary.
+Reusable device-input observation and deterministic confirmed-state semantics are owned
+by `dornglut/runen-input`.
 
-## Module Layout
+Runenwerk consumes exact accepted revision `b2bf687e8071d19e124ea5b2c8948c49891cc1de`. The former
+`engine/src/plugins/input/neutral.rs` predecessor implementation is deleted; there is no
+forwarding module or duplicate reducer authority.
 
-- Primary module: engine/src/plugins/input/mod.rs
-- Neutral semantic/reducer owner: engine/src/plugins/input/neutral.rs
-- Runenwerk physical/device integration and compatibility projections: engine/src/plugins/input/state.rs
-- Product action/binding projection: engine/src/plugins/input/actions_and_bindings.rs
-- Entry surface: InputFinalizePlugin
-- Runtime schedule touchpoints: `PreUpdate` (`CoreSet::Input`) and `FrameEnd` (`CoreSet::FrameEnd`)
+## Module layout
 
-## Runtime Coupling
+- `engine/src/plugins/input/state.rs` — Runenwerk ECS/integration and frame projections.
+- `engine/src/plugins/input/actions_and_bindings.rs` — Runenwerk product actions/bindings.
+- `engine/src/plugins/input/mod.rs` — Input plugin installation and Runenwerk-owned exports.
+- `engine/src/runtime/winit_input.rs` — winit → RunenInput semantic translation.
+- `adapters/native_tablet_input` — native tablet acquisition/translation.
+- standalone `runen-input` — reusable semantic observation/reducer authority.
 
-- Backend/platform adapters normalize observations before the `InputState` integration shell forwards them to the self-contained neutral owner.
-- The neutral owner, not `InputState`, correlates normalized keyboard/pointer controls with confirmed digital-control state.
-- Runenwerk-only compatibility loss remains explicit through reusable unspecified domains rather than predecessor-named neutral semantics.
-- `ActionState` derives from `InputState`; it is not a second writable physical-state reducer.
-- Product action consumers depend on `ActionState`, while pointer/text/touch consumers continue to use their owning `InputState` projections.
-- Cross-plugin coupling remains data-oriented through typed resources and schedule ordering.
-- Architecture changes should stay narrow and avoid broad app, RunenUI, tablet, or repository extraction redesign.
+## Dependency direction
+
+```text
+winit/native backend adapters
+        |
+        v
+    runen-input
+        |
+        v
+Runenwerk InputState integration
+        |
+        +--> frame-local compatibility projections
+        +--> ActionState product projection
+        +--> Draw/Editor adapters
+```
+
+RunenInput does not depend on Runenwerk, RunenECS, RunenUI, Draw, or product policy.
+
+## Integration rules
+
+- Runenwerk `InputState` contains a private `runen_input::InputState`.
+- All reusable mutation goes through `InputObservationGroup` +
+  `runen_input::InputState::admit`.
+- Keyboard and pointer product edges are projected by comparing confirmed state before
+  and after semantic admission; Runenwerk does not recreate predecessor
+  `DigitalAdmission`, `ControlId`, or `DigitalTransition`.
+- Product consumers use Runenwerk `ActionState` when they need actions and use
+  RunenInput values directly when they need reusable device semantics.
+- Packages that name RunenInput values declare a direct `runen-input.workspace = true`
+  dependency rather than relying on Engine re-export.
+
+## Non-owners
+
+Runenwerk input integration does not own text/IME semantics, RunenUI routing/focus,
+native backend health/calibration acquisition, Draw stroke semantics, camera policy,
+replay/network input formats, or speculative device families.
