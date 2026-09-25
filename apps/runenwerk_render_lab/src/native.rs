@@ -438,7 +438,7 @@ pub(super) fn render_lab_fixed_quality_flow() -> Result<RenderFlow> {
         .shader_asset("assets/shaders/runenwerk_render_lab_radiance.wgsl")
         .sample_texture_load(runen_gpu::GpuBindingKey::try_new(0, 0)?, RL2_RADIANCE_ALIAS)
         .clear_color([0.0, 0.0, 0.0, 1.0])
-        .write_target_alias(RL2_QUALITY_COLOR_ALIAS)?
+        .write_target_alias(RL2_QUALITY_COLOR_ALIAS)
         .finish()
         .validate()
 }
@@ -771,7 +771,7 @@ fn inspect_render_lab_temporal_quality_execution_system(
         let policy = match fixed.resolution.policy {
             engine::plugins::render::inspect::RenderTemporalResolutionPolicy::Native => "native",
             engine::plugins::render::inspect::RenderTemporalResolutionPolicy::Fixed => "fixed",
-            engine::plugins::render::inspect::RenderTemporalResolutionPolicy::Dynamic => "dynamic",
+            engine::plugins::render::inspect::RenderTemporalResolutionPolicy::Dynamic { .. } => "dynamic",
         };
         RenderLabTemporalQualityExecutionEvidence {
             frame_index: frame.context.frame_index,
