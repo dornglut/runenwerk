@@ -20,7 +20,7 @@ Reusable backend-neutral device observation and deterministic confirmed-state se
 belong to RunenInput. Runenwerk consumes the exact accepted revision:
 
 ```text
-b2bf687e8071d19e124ea5b2c8948c49891cc1de
+ba87e7c80a9626239a011038cec97c30010379a8
 ```
 
 Runenwerk does not keep a second neutral reducer or compatibility forwarding namespace.
