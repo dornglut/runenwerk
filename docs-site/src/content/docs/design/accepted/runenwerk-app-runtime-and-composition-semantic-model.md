@@ -773,10 +773,8 @@ core/integration-shaped
   set_runner
   world / world_mut
 
-Runenwerk/native policy still inherent
-  with_frame_pacing
-
 owner-specific App extensions
+  AppNativeHostExt::with_frame_pacing
   AppPublicationExt::add_product_publication_handler
   AppPublicationExt::add_query_snapshot_publication_handler
   AppActionBindingsExt::add_input_bindings
@@ -792,8 +790,9 @@ The normalized rule is:
 Scene composition uses the Scene-owned `AppSceneExt`, Replay runtime controls use the
 Replay-owned `AppReplayExt`, Simulation configuration/query ergonomics use the
 Simulation-owned `AppSimulationExt`, Render ergonomics use the Render-owned
-`AppRenderExt`, and Runenwerk product-action binding composition uses the Input-owner
-`AppActionBindingsExt`:
+`AppRenderExt`, current native-Winit pacing configuration uses the native-Host-owned
+`AppNativeHostExt`, and Runenwerk product-action binding composition uses the
+Input-owner `AppActionBindingsExt`:
 
 ```text
 AppSceneExt
@@ -801,11 +800,13 @@ AppRenderExt
 AppSimulationExt
 AppReplayExt
 AppPublicationExt
+AppNativeHostExt
 AppActionBindingsExt
 ```
 
-These are current concrete owner APIs over the same App/runtime. The remaining inherent
-frame-pacing surface is a separate native-Host/Advancement ownership question.
+These are current concrete owner APIs over the same App/runtime. Current Winit pacing is
+explicitly native-Host-owned; this does not pre-authorize a future generic cross-host
+Advancement pacing contract.
 
 Moving an operation to an owner extension must not silently reclassify it as pre-run
 composition. Owner APIs must distinguish as applicable:

@@ -54,7 +54,8 @@ use engine::plugins::render::{
 };
 use engine::plugins::{ScenePlugin, default_plugins};
 use engine::prelude::{
-    App, AppRenderExt, FramePacingPolicyResource, InputState, Plugin, RenderPrepare, Res, ResMut,
+    App, AppNativeHostExt, AppRenderExt, FramePacingPolicyResource, InputState, Plugin,
+    RenderPrepare, Res, ResMut,
     Update, WindowStateRegistryResource,
 };
 use engine::runtime::SystemConfigExt;

@@ -134,14 +134,6 @@ impl App {
         self
     }
 
-    pub fn with_frame_pacing(&mut self, policy: FramePacingPolicyResource) -> &mut Self {
-        self.world.insert_resource(policy);
-        if let Ok(runtime_state) = self.world.resource_mut::<FramePacingRuntimeStateResource>() {
-            runtime_state.observe_policy(policy);
-        }
-        self
-    }
-
     pub fn world(&self) -> &World {
         &self.world
     }
