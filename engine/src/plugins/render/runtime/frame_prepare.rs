@@ -1,4 +1,6 @@
-use crate::plugins::render::backend::{RenderSurfaceLifecycleState, RenderSurfaceRegistryResource};
+use crate::plugins::render::backend::{
+    RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
+};
 use crate::plugins::render::inspect::RenderDebugTimingsState;
 use crate::plugins::render::*;
 use crate::plugins::scene::SceneResource;
@@ -84,8 +86,10 @@ pub(crate) fn frame_render_prepare_system(mut world: WorldMut) -> anyhow::Result
         for surface in surface_infos {
             let target_size = surface.target_size_px();
             let flows = build_prepared_flow_inputs(compiled_flows, &extracted, target_size)?;
-            let views = build_prepared_views(target_size, &frame_requests)?;
+            let views =
+                build_prepared_views(surface.render_surface_id, target_size, &frame_requests)?;
             let flow_invocations = build_prepared_flow_invocations(
+                surface.render_surface_id,
                 compiled_flows,
                 &extracted,
                 &flows,
@@ -119,10 +123,10 @@ pub(crate) fn frame_render_prepare_system(mut world: WorldMut) -> anyhow::Result
         active_overlay_label,
         &execution_feature_ids,
     );
-    let dynamic_texture_targets = world
+    let dynamic_texture_target_requests = world
         .resource::<RenderDynamicTextureTargetRequestRegistryResource>()
         .ok()
-        .map(|resource| resource.snapshot())
+        .cloned()
         .unwrap_or_default();
     let dynamic_texture_uploads = world
         .resource::<RenderDynamicTextureUploadRegistryResource>()
@@ -160,7 +164,8 @@ pub(crate) fn frame_render_prepare_system(mut world: WorldMut) -> anyhow::Result
                 views,
                 flows,
                 flow_invocations,
-                dynamic_texture_targets: dynamic_texture_targets.clone(),
+                dynamic_texture_targets: dynamic_texture_target_requests
+                    .snapshot_for_surface(surface.render_surface_id),
                 dynamic_texture_uploads: dynamic_texture_uploads.clone(),
                 product_selections: product_selections.clone(),
                 viewport_surface_bindings: viewport_surface_bindings.clone(),
@@ -236,13 +241,14 @@ fn prepared_surface_infos_from_registry(
 }
 
 fn build_prepared_views(
+    render_surface_id: RenderSurfaceId,
     surface_size: (u32, u32),
     requests: &PreparedRenderFrameRequestResource,
 ) -> anyhow::Result<Vec<PreparedViewFrame>> {
     let mut views = BTreeMap::<String, PreparedViewFrame>::new();
     let main = PreparedViewFrame::main(surface_size);
     views.insert(main.view_id.clone(), main);
-    for view in requests.requested_views() {
+    for view in requests.requested_views_for_surface(render_surface_id) {
         if views.insert(view.view_id.clone(), view.clone()).is_some() {
             anyhow::bail!(
                 "prepared render frame request publishes duplicate view '{}'",
@@ -254,6 +260,7 @@ fn build_prepared_views(
 }
 
 fn build_prepared_flow_invocations(
+    render_surface_id: RenderSurfaceId,
     compiled_flows: &[CompiledRenderFlowPlan],
     extracted_state: &ExtractedRenderStateMap<'_>,
     main_inputs_by_flow: &BTreeMap<RenderFlowId, PreparedFlowInputs>,
@@ -270,7 +277,8 @@ fn build_prepared_flow_invocations(
         .map(|flow| (flow.flow_id, flow))
         .collect::<BTreeMap<_, _>>();
 
-    let requested_flow_invocations = requests.requested_flow_invocations();
+    let requested_flow_invocations =
+        requests.requested_flow_invocations_for_surface(render_surface_id);
     let mut invocation_ids = BTreeSet::<&PreparedFlowInvocationId>::new();
     for request in &requested_flow_invocations {
         if !invocation_ids.insert(&request.invocation_id) {
@@ -332,15 +340,366 @@ fn build_prepared_flow_invocations(
             .ok_or_else(|| {
                 anyhow::anyhow!("missing main prepared inputs for flow '{:?}'", flow.flow_id)
             })?;
-        let has_requested_main = requested_flow_invocations
-            .iter()
-            .any(|request| request.flow_id == flow.flow_id && request.view_id == "main");
-        if !has_requested_main {
+        if flow.invocation_policy == RenderFlowInvocationPolicy::AutomaticMain
+            && should_emit_automatic_main(
+                render_surface_id,
+                flow.flow_id,
+                &requested_flow_invocations,
+                requests,
+            )
+        {
             invocations.push(PreparedFlowInvocation::main(flow.flow_id, inputs));
         }
     }
 
     Ok(invocations)
+}
+
+fn should_emit_automatic_main(
+    render_surface_id: RenderSurfaceId,
+    flow_id: RenderFlowId,
+    requested_flow_invocations: &[&PreparedFlowInvocationRequest],
+    requests: &PreparedRenderFrameRequestResource,
+) -> bool {
+    let has_requested_main = requested_flow_invocations
+        .iter()
+        .any(|request| request.flow_id == flow_id && request.view_id == "main");
+    !has_requested_main && !requests.replaces_automatic_main_flow(render_surface_id, flow_id)
+}
+
+#[cfg(test)]
+mod automatic_main_replacement_tests {
+    use super::*;
+
+    fn flow(raw: u64) -> RenderFlowId {
+        RenderFlowId::try_from_raw(raw).expect("test flow id should be nonzero")
+    }
+
+    fn producer(raw: u64) -> RenderFrameProducerId {
+        RenderFrameProducerId::try_from_raw(raw).expect("test producer id should be nonzero")
+    }
+
+    #[test]
+    fn replacement_claim_suppresses_only_claimed_flow() {
+        let replaced = flow(7);
+        let unrelated = flow(8);
+        let invocation =
+            PreparedFlowInvocationRequest::new("fixed.scene", replaced, "fixed.scene.view");
+        let mut requests = PreparedRenderFrameRequestResource::default();
+        requests
+            .replace_contribution_with_automatic_main_replacements(
+                producer(1),
+                [PreparedViewFrame::offscreen_product(
+                    "fixed.scene.view",
+                    (1280, 720),
+                )],
+                [invocation],
+                [replaced],
+            )
+            .expect("replacement should be admitted");
+        let requested = requests.requested_flow_invocations();
+
+        assert!(!should_emit_automatic_main(
+            RenderSurfaceId::primary(),
+            replaced,
+            &requested,
+            &requests
+        ));
+        assert!(should_emit_automatic_main(
+            RenderSurfaceId::primary(),
+            unrelated,
+            &requested,
+            &requests
+        ));
+    }
+
+    #[test]
+    fn fixed_resolution_routes_selected_flow_offscreen_resolve_main_and_unrelated_flow_main() {
+        let scene = RenderFlow::new("fixed.test.scene")
+            .with_color_target_alias("scene_color")
+            .expect("scene color alias should be valid")
+            .fullscreen_pass("fixed.test.scene.pass")
+            .write_target_alias("scene_color")
+            .finish()
+            .validate()
+            .expect("scene flow should validate");
+        let resolve = fixed_resolution_resolve_flow().expect("resolve flow should validate");
+        let unrelated = RenderFlow::new("fixed.test.unrelated")
+            .with_surface_color()
+            .expect("surface color should declare")
+            .fullscreen_pass("fixed.test.unrelated.pass")
+            .main_surface_only()
+            .write_surface_color()
+            .expect("surface color should write")
+            .finish()
+            .validate()
+            .expect("unrelated flow should validate");
+
+        let scene_compiled = compile_flow_plan(&scene).expect("scene flow should compile");
+        let resolve_compiled = compile_flow_plan(&resolve).expect("resolve flow should compile");
+        let unrelated_compiled =
+            compile_flow_plan(&unrelated).expect("unrelated flow should compile");
+        let compiled = vec![
+            scene_compiled.clone(),
+            resolve_compiled.clone(),
+            unrelated_compiled,
+        ];
+
+        let fixed = RenderFixedResolutionExecutionRequest::new(
+            producer(1),
+            RenderSurfaceId::primary(),
+            scene.id(),
+            RenderTargetAliasKey::new("scene_color").expect("alias should be valid"),
+            (1280, 720),
+        )
+        .prepare_against_compiled_flows((1920, 1080), &scene_compiled, &resolve_compiled)
+        .expect("fixed execution should prepare");
+
+        let mut requests = PreparedRenderFrameRequestResource::default();
+        requests
+            .replace_surface_contribution_with_automatic_main_replacements(
+                fixed.producer_id,
+                fixed.render_surface_id,
+                [fixed.internal_view.clone()],
+                [
+                    fixed.scene_invocation.clone(),
+                    fixed.resolve_invocation.clone(),
+                ],
+                [fixed.automatic_main_replacement],
+            )
+            .expect("fixed execution requests should publish");
+
+        let views = build_prepared_views(RenderSurfaceId::primary(), (1920, 1080), &requests)
+            .expect("views should prepare");
+        let extracted = ExtractedRenderStateMap::new();
+        let main_inputs = build_prepared_flow_inputs(&compiled, &extracted, (1920, 1080))
+            .expect("main inputs should prepare");
+        let invocations = build_prepared_flow_invocations(
+            RenderSurfaceId::primary(),
+            &compiled,
+            &extracted,
+            &main_inputs,
+            &views,
+            &requests,
+        )
+        .expect("invocations should prepare");
+
+        assert_eq!(
+            views
+                .iter()
+                .find(|view| view.view_id == "main")
+                .expect("main view should exist")
+                .target_size_px,
+            (1920, 1080)
+        );
+        assert_eq!(
+            views
+                .iter()
+                .find(|view| view.view_id == fixed.internal_view.view_id)
+                .expect("fixed internal view should exist")
+                .target_size_px,
+            (1280, 720)
+        );
+
+        let scene_invocations = invocations
+            .iter()
+            .filter(|invocation| invocation.flow_id == scene.id())
+            .collect::<Vec<_>>();
+        assert_eq!(scene_invocations.len(), 1);
+        assert_eq!(scene_invocations[0].view_id, fixed.internal_view.view_id);
+
+        let resolve_invocations = invocations
+            .iter()
+            .filter(|invocation| invocation.flow_id == resolve.id())
+            .collect::<Vec<_>>();
+        assert_eq!(resolve_invocations.len(), 1);
+        assert_eq!(resolve_invocations[0].view_id, "main");
+
+        let unrelated_invocations = invocations
+            .iter()
+            .filter(|invocation| invocation.flow_id == unrelated.id())
+            .collect::<Vec<_>>();
+        assert_eq!(unrelated_invocations.len(), 1);
+        assert_eq!(unrelated_invocations[0].view_id, "main");
+    }
+
+    #[test]
+    fn fixed_resolution_rejection_publishes_explicit_native_scene_without_partial_fixed_state() {
+        let scene = RenderFlow::new("fixed.test.fallback.scene")
+            .with_color_target_alias("scene_color")
+            .expect("scene color alias should be valid")
+            .fullscreen_pass("fixed.test.fallback.scene.pass")
+            .write_target_alias("scene_color")
+            .finish()
+            .validate()
+            .expect("scene flow should validate");
+        let resolve = fixed_resolution_resolve_flow().expect("resolve flow should validate");
+        let scene_compiled = compile_flow_plan(&scene).expect("scene flow should compile");
+        let resolve_compiled = compile_flow_plan(&resolve).expect("resolve flow should compile");
+        let compiled = vec![scene_compiled.clone(), resolve_compiled.clone()];
+
+        let admission = RenderFixedResolutionExecutionRequest::new(
+            producer(1),
+            RenderSurfaceId::primary(),
+            scene.id(),
+            RenderTargetAliasKey::new("scene_color").expect("alias should be valid"),
+            (1280, 800),
+        )
+        .admit_against_compiled_flows((1920, 1080), &scene_compiled, &resolve_compiled);
+        let RenderFixedResolutionExecutionAdmission::NativeFallback(fallback) = &admission else {
+            panic!("aspect mismatch should fall back to native");
+        };
+        let native_request = fallback
+            .native_scene_invocation
+            .clone()
+            .expect("validated scene should retain explicit native fallback invocation");
+
+        let mut requests = PreparedRenderFrameRequestResource::default();
+        requests
+            .replace_surface_contribution_with_automatic_main_replacements(
+                producer(1),
+                fallback.render_surface_id,
+                [],
+                [native_request],
+                [],
+            )
+            .expect("native fallback request should publish");
+
+        let views = build_prepared_views(RenderSurfaceId::primary(), (1920, 1080), &requests)
+            .expect("views should prepare");
+        let extracted = ExtractedRenderStateMap::new();
+        let main_inputs = build_prepared_flow_inputs(&compiled, &extracted, (1920, 1080))
+            .expect("main inputs should prepare");
+        let invocations = build_prepared_flow_invocations(
+            RenderSurfaceId::primary(),
+            &compiled,
+            &extracted,
+            &main_inputs,
+            &views,
+            &requests,
+        )
+        .expect("native fallback invocation should prepare");
+
+        assert_eq!(views.len(), 1);
+        assert_eq!(views[0].view_id, "main");
+        let scene_invocations = invocations
+            .iter()
+            .filter(|invocation| invocation.flow_id == scene.id())
+            .collect::<Vec<_>>();
+        assert_eq!(scene_invocations.len(), 1);
+        assert_eq!(scene_invocations[0].view_id, "main");
+        assert_eq!(
+            scene_invocations[0]
+                .target_alias_bindings
+                .get(&RenderTargetAliasKey::new("scene_color").expect("alias should be valid")),
+            Some(&PreparedTargetBinding::SurfaceColor)
+        );
+        assert!(
+            invocations
+                .iter()
+                .all(|invocation| invocation.flow_id != resolve.id()),
+            "native fallback must not run the fixed resolve flow"
+        );
+    }
+
+    #[test]
+    fn fixed_resolution_replacement_is_scoped_to_owning_surface() {
+        let flow_id = flow(17);
+        let primary = RenderSurfaceId::primary();
+        let secondary = RenderSurfaceId::try_from_raw(2).expect("test surface should be nonzero");
+        let invocation = PreparedFlowInvocationRequest::new(
+            "fixed.surface.scene",
+            flow_id,
+            "fixed.surface.view",
+        );
+        let mut requests = PreparedRenderFrameRequestResource::default();
+        requests
+            .replace_surface_contribution_with_automatic_main_replacements(
+                producer(1),
+                primary,
+                [PreparedViewFrame::offscreen_product(
+                    "fixed.surface.view",
+                    (1280, 720),
+                )],
+                [invocation],
+                [flow_id],
+            )
+            .expect("surface-scoped replacement should publish");
+
+        let primary_requests = requests.requested_flow_invocations_for_surface(primary);
+        let secondary_requests = requests.requested_flow_invocations_for_surface(secondary);
+        assert_eq!(primary_requests.len(), 1);
+        assert!(secondary_requests.is_empty());
+        assert!(!should_emit_automatic_main(
+            primary,
+            flow_id,
+            &primary_requests,
+            &requests,
+        ));
+        assert!(should_emit_automatic_main(
+            secondary,
+            flow_id,
+            &secondary_requests,
+            &requests,
+        ));
+    }
+
+    #[test]
+    fn explicit_only_flow_never_receives_automatic_main_invocation() {
+        let explicit = RenderFlow::new("explicit.only")
+            .explicit_invocations_only()
+            .with_surface_color()
+            .expect("surface color should declare")
+            .fullscreen_pass("explicit.only.pass")
+            .main_surface_only()
+            .write_surface_color()
+            .expect("surface color should write")
+            .finish()
+            .validate()
+            .expect("explicit-only flow should validate");
+        let compiled = compile_flow_plan(&explicit).expect("flow should compile");
+        assert_eq!(
+            compiled.invocation_policy,
+            RenderFlowInvocationPolicy::ExplicitOnly
+        );
+
+        let requests = PreparedRenderFrameRequestResource::default();
+        let views = build_prepared_views(RenderSurfaceId::primary(), (1920, 1080), &requests)
+            .expect("views should prepare");
+        let extracted = ExtractedRenderStateMap::new();
+        let main_inputs =
+            build_prepared_flow_inputs(std::slice::from_ref(&compiled), &extracted, (1920, 1080))
+                .expect("inputs should prepare");
+        let invocations = build_prepared_flow_invocations(
+            RenderSurfaceId::primary(),
+            std::slice::from_ref(&compiled),
+            &extracted,
+            &main_inputs,
+            &views,
+            &requests,
+        )
+        .expect("invocations should prepare");
+
+        assert!(invocations.is_empty());
+    }
+
+    #[test]
+    fn explicit_main_invocation_preserves_existing_main_replacement_behavior() {
+        let flow_id = flow(7);
+        let request = PreparedFlowInvocationRequest::new("scene.main", flow_id, "main");
+        let mut requests = PreparedRenderFrameRequestResource::default();
+        requests
+            .replace_contribution(producer(1), [], [request])
+            .expect("explicit main request should be admitted");
+        let requested = requests.requested_flow_invocations();
+
+        assert!(!should_emit_automatic_main(
+            RenderSurfaceId::primary(),
+            flow_id,
+            &requested,
+            &requests
+        ));
+    }
 }
 
 fn apply_invocation_uniform_overrides(
@@ -992,9 +1351,11 @@ mod tests {
                 }],
             )
             .unwrap();
-        let views = build_prepared_views((800, 600), &requests).unwrap();
+        let views =
+            build_prepared_views(RenderSurfaceId::primary(), (800, 600), &requests).unwrap();
 
         let invocations = build_prepared_flow_invocations(
+            RenderSurfaceId::primary(),
             &compiled_flows,
             &extracted,
             &main_inputs,

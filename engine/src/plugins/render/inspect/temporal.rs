@@ -142,6 +142,7 @@ pub struct RenderTemporalInspectionRequest {
     pub frame_index: u64,
     pub reconstruction_mode: RenderTemporalReconstructionMode,
     pub native_fallback_active: bool,
+    pub native_fallback_reason: Option<String>,
     pub resolution: RenderTemporalResolutionEvidence,
     pub jitter: RenderTemporalJitterEvidence,
     pub history: RenderTemporalHistoryEvidence,
@@ -153,6 +154,7 @@ pub struct RenderTemporalInspection {
     pub frame_index: u64,
     pub reconstruction_mode: RenderTemporalReconstructionMode,
     pub native_fallback_active: bool,
+    pub native_fallback_reason: Option<String>,
     pub resolution: RenderTemporalResolutionInspection,
     pub jitter: RenderTemporalJitterEvidence,
     pub history: RenderTemporalHistoryEvidence,
@@ -181,6 +183,273 @@ impl RenderTemporalInspection {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct RenderFixedResolutionExecutionEvidence {
+    pub resolution: RenderTemporalResolutionEvidence,
+    pub native_fallback_active: bool,
+    pub native_fallback_reason: Option<String>,
+    pub target_key: Option<crate::plugins::render::RenderDynamicTextureTargetKey>,
+    pub internal_view_id: Option<String>,
+    pub scene_invocation_id: Option<crate::plugins::render::PreparedFlowInvocationId>,
+    pub resolve_invocation_id: Option<crate::plugins::render::PreparedFlowInvocationId>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum RenderFixedResolutionExecutionEvidenceError {
+    #[error(
+        "fixed-resolution prepared frame belongs to a different render surface than the admission"
+    )]
+    SurfaceIdentityMismatch,
+    #[error("fixed-resolution prepared surface extent does not match admitted output extent")]
+    OutputExtentMismatch,
+    #[error("fixed-resolution prepared frame is missing the native main output view")]
+    MissingOutputView,
+    #[error(
+        "fixed-resolution native main output view extent does not match admitted output extent"
+    )]
+    OutputViewExtentMismatch,
+    #[error("fixed-resolution prepared frame is missing the admitted internal view")]
+    MissingInternalView,
+    #[error("fixed-resolution prepared frame is missing the admitted dynamic color target")]
+    MissingDynamicTarget,
+    #[error("fixed-resolution prepared dynamic color target differs from the admitted descriptor")]
+    DynamicTargetDescriptorMismatch,
+    #[error("fixed-resolution prepared frame is missing the admitted scene invocation")]
+    MissingSceneInvocation,
+    #[error(
+        "fixed-resolution prepared frame still contains a native-main invocation for the selected scene flow"
+    )]
+    UnexpectedNativeSceneInvocation,
+    #[error(
+        "fixed-resolution prepared scene invocation does not retain the admitted target binding"
+    )]
+    SceneTargetBindingMismatch,
+    #[error("fixed-resolution prepared frame is missing the admitted resolve invocation")]
+    MissingResolveInvocation,
+    #[error(
+        "fixed-resolution prepared resolve invocation does not retain the admitted source binding"
+    )]
+    ResolveSourceBindingMismatch,
+    #[error("native fallback frame still contains the fixed internal view")]
+    NativeFallbackRetainsInternalView,
+    #[error("native fallback frame still contains the fixed dynamic target")]
+    NativeFallbackRetainsDynamicTarget,
+    #[error("native fallback frame still contains the fixed scene invocation")]
+    NativeFallbackRetainsFixedSceneInvocation,
+    #[error("native fallback frame still contains the fixed resolve invocation")]
+    NativeFallbackRetainsResolveInvocation,
+    #[error(
+        "native fallback frame is missing a native-main invocation for the selected scene flow"
+    )]
+    MissingNativeFallbackSceneInvocation,
+    #[error("native fallback scene invocation does not retain the admitted native target binding")]
+    NativeFallbackSceneBindingMismatch,
+}
+
+pub fn inspect_fixed_resolution_execution(
+    admission: &crate::plugins::render::RenderFixedResolutionExecutionAdmission,
+    frame: &crate::plugins::render::PreparedRenderFrame,
+) -> Result<RenderFixedResolutionExecutionEvidence, RenderFixedResolutionExecutionEvidenceError> {
+    let (expected_surface_id, expected_output_size) = match admission {
+        crate::plugins::render::RenderFixedResolutionExecutionAdmission::Fixed(prepared) => {
+            (prepared.render_surface_id, prepared.output_size)
+        }
+        crate::plugins::render::RenderFixedResolutionExecutionAdmission::NativeFallback(
+            fallback,
+        ) => (fallback.render_surface_id, fallback.output_size),
+    };
+    if frame.surface.render_surface_id != expected_surface_id {
+        return Err(RenderFixedResolutionExecutionEvidenceError::SurfaceIdentityMismatch);
+    }
+    if frame.surface.target_size_px != expected_output_size {
+        return Err(RenderFixedResolutionExecutionEvidenceError::OutputExtentMismatch);
+    }
+    let output_view = frame
+        .views
+        .iter()
+        .find(|view| {
+            view.view_id == "main"
+                && view.kind == crate::plugins::render::PreparedViewKind::MainSurface
+        })
+        .ok_or(RenderFixedResolutionExecutionEvidenceError::MissingOutputView)?;
+    if output_view.target_size_px != expected_output_size {
+        return Err(RenderFixedResolutionExecutionEvidenceError::OutputViewExtentMismatch);
+    }
+
+    match admission {
+        crate::plugins::render::RenderFixedResolutionExecutionAdmission::NativeFallback(
+            fallback,
+        ) => {
+            if frame
+                .views
+                .iter()
+                .any(|view| view.view_id == fallback.internal_view_id)
+            {
+                return Err(
+                    RenderFixedResolutionExecutionEvidenceError::NativeFallbackRetainsInternalView,
+                );
+            }
+            if frame
+                .dynamic_texture_targets
+                .iter()
+                .any(|target| target.key == fallback.target_key)
+            {
+                return Err(
+                    RenderFixedResolutionExecutionEvidenceError::NativeFallbackRetainsDynamicTarget,
+                );
+            }
+            if frame
+                .flow_invocations
+                .iter()
+                .any(|invocation| invocation.invocation_id == fallback.fixed_scene_invocation_id)
+            {
+                return Err(
+                    RenderFixedResolutionExecutionEvidenceError::NativeFallbackRetainsFixedSceneInvocation,
+                );
+            }
+            if frame
+                .flow_invocations
+                .iter()
+                .any(|invocation| invocation.invocation_id == fallback.resolve_invocation_id)
+            {
+                return Err(
+                    RenderFixedResolutionExecutionEvidenceError::NativeFallbackRetainsResolveInvocation,
+                );
+            }
+
+            let native_scene = if let Some(expected) = &fallback.native_scene_invocation {
+                let actual = frame
+                    .flow_invocations
+                    .iter()
+                    .find(|invocation| {
+                        invocation.invocation_id == expected.invocation_id
+                            && invocation.flow_id == expected.flow_id
+                            && invocation.view_id == "main"
+                    })
+                    .ok_or(
+                        RenderFixedResolutionExecutionEvidenceError::MissingNativeFallbackSceneInvocation,
+                    )?;
+                if actual.target_alias_bindings != expected.target_alias_bindings
+                    || actual.history_signature != expected.history_signature
+                {
+                    return Err(
+                        RenderFixedResolutionExecutionEvidenceError::NativeFallbackSceneBindingMismatch,
+                    );
+                }
+                actual
+            } else {
+                frame
+                    .flow_invocations
+                    .iter()
+                    .find(|invocation| {
+                        invocation.flow_id == fallback.scene_flow_id && invocation.view_id == "main"
+                    })
+                    .ok_or(
+                        RenderFixedResolutionExecutionEvidenceError::MissingNativeFallbackSceneInvocation,
+                    )?
+            };
+
+            Ok(RenderFixedResolutionExecutionEvidence {
+                resolution: RenderTemporalResolutionEvidence {
+                    internal_size: [fallback.output_size.0, fallback.output_size.1],
+                    output_size: [fallback.output_size.0, fallback.output_size.1],
+                    policy: RenderTemporalResolutionPolicy::Native,
+                },
+                native_fallback_active: true,
+                native_fallback_reason: Some(fallback.reason.clone()),
+                target_key: None,
+                internal_view_id: None,
+                scene_invocation_id: Some(native_scene.invocation_id.clone()),
+                resolve_invocation_id: None,
+            })
+        }
+        crate::plugins::render::RenderFixedResolutionExecutionAdmission::Fixed(prepared) => {
+            if frame.flow_invocations.iter().any(|invocation| {
+                invocation.flow_id == prepared.scene_invocation.flow_id
+                    && invocation.view_id == "main"
+            }) {
+                return Err(
+                    RenderFixedResolutionExecutionEvidenceError::UnexpectedNativeSceneInvocation,
+                );
+            }
+
+            let internal_view = frame
+                .views
+                .iter()
+                .find(|view| view.view_id == prepared.internal_view.view_id)
+                .filter(|view| {
+                    view.kind == prepared.internal_view.kind
+                        && view.target_size_px == prepared.internal_view.target_size_px
+                        && view.history_signature == prepared.internal_view.history_signature
+                })
+                .ok_or(RenderFixedResolutionExecutionEvidenceError::MissingInternalView)?;
+
+            let target = frame
+                .dynamic_texture_targets
+                .iter()
+                .find(|target| target.key == prepared.target_key)
+                .ok_or(RenderFixedResolutionExecutionEvidenceError::MissingDynamicTarget)?;
+            if target != &prepared.dynamic_target {
+                return Err(
+                    RenderFixedResolutionExecutionEvidenceError::DynamicTargetDescriptorMismatch,
+                );
+            }
+
+            let scene = frame
+                .flow_invocations
+                .iter()
+                .find(|invocation| {
+                    invocation.invocation_id == prepared.scene_invocation.invocation_id
+                })
+                .filter(|invocation| {
+                    invocation.flow_id == prepared.scene_invocation.flow_id
+                        && invocation.view_id == internal_view.view_id
+                })
+                .ok_or(RenderFixedResolutionExecutionEvidenceError::MissingSceneInvocation)?;
+            if scene.target_alias_bindings != prepared.scene_invocation.target_alias_bindings
+                || scene.history_signature != prepared.scene_invocation.history_signature
+            {
+                return Err(
+                    RenderFixedResolutionExecutionEvidenceError::SceneTargetBindingMismatch,
+                );
+            }
+
+            let resolve = frame
+                .flow_invocations
+                .iter()
+                .find(|invocation| {
+                    invocation.invocation_id == prepared.resolve_invocation.invocation_id
+                })
+                .filter(|invocation| {
+                    invocation.flow_id == prepared.resolve_invocation.flow_id
+                        && invocation.view_id == "main"
+                })
+                .ok_or(RenderFixedResolutionExecutionEvidenceError::MissingResolveInvocation)?;
+            if resolve.target_alias_bindings != prepared.resolve_invocation.target_alias_bindings
+                || resolve.history_signature != prepared.resolve_invocation.history_signature
+            {
+                return Err(
+                    RenderFixedResolutionExecutionEvidenceError::ResolveSourceBindingMismatch,
+                );
+            }
+
+            Ok(RenderFixedResolutionExecutionEvidence {
+                resolution: RenderTemporalResolutionEvidence {
+                    internal_size: [prepared.internal_size.0, prepared.internal_size.1],
+                    output_size: [prepared.output_size.0, prepared.output_size.1],
+                    policy: RenderTemporalResolutionPolicy::Fixed,
+                },
+                native_fallback_active: false,
+                native_fallback_reason: None,
+                target_key: Some(target.key.clone()),
+                internal_view_id: Some(internal_view.view_id.clone()),
+                scene_invocation_id: Some(scene.invocation_id.clone()),
+                resolve_invocation_id: Some(resolve.invocation_id.clone()),
+            })
+        }
+    }
+}
+
 pub fn inspect_render_temporal_inputs(
     request: RenderTemporalInspectionRequest,
 ) -> RenderTemporalInspection {
@@ -189,6 +458,7 @@ pub fn inspect_render_temporal_inputs(
     let mut diagnostics = Vec::new();
 
     validate_resolution(&request.resolution, &resolution, &mut diagnostics);
+    validate_native_fallback(&request, &mut diagnostics);
     validate_jitter(&request.jitter, &mut diagnostics);
     validate_history(&request, &mut diagnostics);
     validate_inputs(&request, &mut diagnostics);
@@ -198,6 +468,7 @@ pub fn inspect_render_temporal_inputs(
         frame_index: request.frame_index,
         reconstruction_mode: request.reconstruction_mode,
         native_fallback_active: request.native_fallback_active,
+        native_fallback_reason: request.native_fallback_reason,
         resolution,
         jitter: request.jitter,
         history: request.history,
@@ -310,6 +581,29 @@ fn validate_resolution(
                 ));
             }
         }
+    }
+}
+
+fn validate_native_fallback(
+    request: &RenderTemporalInspectionRequest,
+    diagnostics: &mut Vec<RenderTemporalDiagnostic>,
+) {
+    let reason = request
+        .native_fallback_reason
+        .as_deref()
+        .unwrap_or("")
+        .trim();
+    if request.native_fallback_active && reason.is_empty() {
+        diagnostics.push(RenderTemporalDiagnostic::error(
+            "native_fallback_missing_reason",
+            "active native temporal fallback requires an explicit reason",
+        ));
+    }
+    if !request.native_fallback_active && !reason.is_empty() {
+        diagnostics.push(RenderTemporalDiagnostic::error(
+            "inactive_native_fallback_has_reason",
+            "native temporal fallback reason is present while fallback is inactive",
+        ));
     }
 }
 

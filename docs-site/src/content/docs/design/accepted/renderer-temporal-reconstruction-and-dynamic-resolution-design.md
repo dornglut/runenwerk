@@ -71,6 +71,9 @@ Temporal implementation rows must introduce explicit typed evidence for:
 
 - output resolution versus internal render resolution, including explicit native,
   fixed, or dynamic resolution policy;
+- fixed execution routing when active: selected flow identity, explicit bindable
+  color-target alias, internal offscreen view/target identity, native-output
+  resolve invocation, and producer-owned automatic-main replacement;
 - jitter sequence identity and current jitter phase;
 - history resource identity, signature, age, and invalidation reason;
 - motion-vector, depth, exposure, luminance, reactive-mask, SDF, and ray-query
@@ -92,6 +95,25 @@ state no longer matches the prepared frame contract.
 - Internal resolution is always reported separately from output resolution.
   Native, fixed, and dynamically adapted resolution are distinct typed policies;
   none may hide quality, timing, or fallback state.
+- Fixed execution is scoped to one explicit render surface. It may replace only
+  the selected alias-capable scene flow's automatic main invocation on that
+  surface; other attached surfaces retain their own native routing. Fixed
+  target/view/invocation identity includes the render-surface identity so
+  multi-surface hosts cannot alias one fixed-resolution execution across windows.
+  Every pass in the selected flow must be valid on both native-main and offscreen
+  views, and the flow must route its selected color output exclusively through
+  the bindable alias rather than hard-coding builtin `SurfaceColor`. Fixed
+  execution and explicit native fallback therefore share one scene-flow
+  definition. Unrelated flows, including UI, remain on their native-output path.
+- Renderer helper/resolve flows that are meaningful only when explicitly
+  invoked use typed explicit-invocation flow policy; they must not rely on a
+  global disable-default-flows switch or registration churn.
+- Rejected fixed execution falls back to native resolution before any partial
+  internal-routing publication. When the selected alias contract is valid, the
+  fallback publishes an explicit native-main invocation binding that alias to
+  native `SurfaceColor`; execution evidence must reject retained fixed
+  target/view/resolve state. A simple spatial resolve proves portable plumbing
+  only and is not TAAU reconstruction-quality evidence.
 - Missing motion vectors, depth, exposure, reactive masks, SDF, ray-query, or
   adapter capability must produce typed diagnostics, not silent reconstruction.
 - History reuse must fail closed on signature mismatch, missing inputs,
@@ -103,8 +125,9 @@ state no longer matches the prepared frame contract.
 
 The accepted implementation sequence is:
 
-1. `WR-070`: temporal inputs, history validity, jitter, diagnostics, and
-   native/fixed/dynamic internal/output resolution separation.
+1. `WR-070`: temporal inputs, history validity, jitter, diagnostics,
+   native/fixed/dynamic internal/output resolution separation, and the bounded
+   fixed internal-resolution execution path with explicit native fallback.
 2. `WR-071`: optional upscaling adapters and ray reconstruction inputs,
    capability-gated with explicit unsupported diagnostics.
 3. `WR-072`: temporal production evidence with examples, benchmark/report
