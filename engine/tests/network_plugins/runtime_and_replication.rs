@@ -62,6 +62,20 @@ fn prediction_waits_for_later_registered_simulation_input() {
     let mut app = App::headless();
     app.add_plugins(default_plugins());
     app.add_plugin(NetworkClientPlugin);
+    let payload = TestReplicationDriver::encode_snapshot(&TestSnapshot::default())
+        .expect("baseline snapshot should encode");
+    enqueue_client_inbox(
+        app.world_mut(),
+        ServerMessage::Snapshot(Snapshot {
+            tick: SimulationTick(0),
+            cursor: SnapshotCursor(1),
+            last_applied: SnapshotCursor::default(),
+            entity_ids: Vec::new(),
+            payload,
+        }),
+    )
+    .expect("baseline should stage");
+    let mut app = app.run_for_frames(1).expect("baseline should activate prediction");
     app.add_systems(FixedUpdate, produce_simulation_input.in_set(CoreSet::Simulation));
 
     let app = app
@@ -150,12 +164,9 @@ fn client_snapshot_application_sends_ack_and_reconciles_prediction() {
         .run_for_fixed_steps(1)
         .expect("client prediction fixed step should run");
     assert_eq!(
-        client
-            .world()
-            .resource::<PredictionState>()
-            .unwrap()
-            .pending_frames_len(),
-        1
+        client_prediction_pending_count(client.world()),
+        Some(0),
+        "prediction remains inactive until an authoritative baseline is realized"
     );
 
     enqueue_client_inbox(
@@ -191,33 +202,17 @@ fn client_snapshot_application_sends_ack_and_reconciles_prediction() {
         client_replication_acknowledgement(client.world()),
         Some((SnapshotCursor(1), authoritative_tick))
     );
-    assert_eq!(
-        client
-            .world()
-            .resource::<PredictionState>()
-            .unwrap()
-            .pending_frames_len(),
-        0
-    );
+    assert_eq!(client_prediction_pending_count(client.world()), Some(0));
 }
 
 #[test]
-fn prediction_replay_updates_prediction_diagnostics_counter() {
+fn prediction_replay_preserves_runennet_target_tick_and_updates_diagnostics() {
     let mut client = App::headless();
     client.add_plugins(default_plugins());
     client.add_plugins((ScenePlugin, NetworkClientPlugin));
 
-    client
-        .world_mut()
-        .resource_mut::<PlayerCommandBuffer>()
-        .unwrap()
-        .push(ClientCommandEnvelope::Move(MoveCommand { x: 1.0, y: 0.0 }));
-    let mut client = client
-        .run_for_fixed_steps(1)
-        .expect("first prediction fixed step should run");
-
-    let payload = TestReplicationDriver::encode_snapshot(&TestSnapshot::default())
-        .expect("snapshot payload encoding should succeed");
+    let baseline_payload = TestReplicationDriver::encode_snapshot(&TestSnapshot::default())
+        .expect("baseline snapshot payload should encode");
     enqueue_client_inbox(
         client.world_mut(),
         ServerMessage::Snapshot(Snapshot {
@@ -225,25 +220,79 @@ fn prediction_replay_updates_prediction_diagnostics_counter() {
             cursor: SnapshotCursor(1),
             last_applied: SnapshotCursor::default(),
             entity_ids: Vec::new(),
-            payload,
+            payload: baseline_payload,
         }),
     )
-    .expect("client inbox enqueue should succeed");
+    .expect("baseline should stage");
+    let mut client = client
+        .run_for_frames(1)
+        .expect("baseline should activate prediction");
+
+    client
+        .world_mut()
+        .resource_mut::<PlayerCommandBuffer>()
+        .unwrap()
+        .push(ClientCommandEnvelope::Move(MoveCommand { x: 1.0, y: 0.0 }));
+    client = client
+        .run_for_fixed_steps(1)
+        .expect("predicted fixed step should run");
+    assert_eq!(client_prediction_pending_count(client.world()), Some(1));
+
+    let correction_payload = TestReplicationDriver::encode_snapshot(&TestSnapshot::default())
+        .expect("correction snapshot payload should encode");
+    enqueue_client_inbox(
+        client.world_mut(),
+        ServerMessage::Snapshot(Snapshot {
+            tick: SimulationTick(0),
+            cursor: SnapshotCursor(2),
+            last_applied: SnapshotCursor(1),
+            entity_ids: Vec::new(),
+            payload: correction_payload,
+        }),
+    )
+    .expect("correction should stage");
     let client = client
         .run_for_frames(1)
-        .expect("authoritative snapshot frame should run");
+        .expect("authoritative correction frame should run");
 
     let diagnostics = client.world().resource::<PredictionDiagnostics>().unwrap();
-    assert_eq!(diagnostics.corrected, 1);
     assert_eq!(diagnostics.replayed, 1);
+    assert_eq!(client_prediction_pending_count(client.world()), Some(1));
+    assert!(
+        client
+            .world()
+            .resource::<AppliedInputLog>()
+            .unwrap()
+            .ticks
+            .iter()
+            .all(|tick| *tick == SimulationTick(1)),
+        "ordinary prediction and RunenNet replay must preserve the semantic target tick"
+    );
 }
 
 #[test]
-fn client_outbox_backpressure_does_not_record_unsent_prediction_frame() {
+fn client_outbox_backpressure_does_not_roll_back_admitted_prediction() {
     let mut client = App::headless();
     client.add_plugins(default_plugins());
     client.add_plugins((ScenePlugin, NetworkClientPlugin));
     install_backpressure_test_clock(&mut client);
+    let baseline_payload = TestReplicationDriver::encode_snapshot(&TestSnapshot::default())
+        .expect("baseline should encode");
+    enqueue_client_inbox(
+        client.world_mut(),
+        ServerMessage::Snapshot(Snapshot {
+            tick: SimulationTick(0),
+            cursor: SnapshotCursor(1),
+            last_applied: SnapshotCursor::default(),
+            entity_ids: Vec::new(),
+            payload: baseline_payload,
+        }),
+    )
+    .expect("baseline should stage");
+    client = run_backpressure_protocol_frame(
+        client,
+        "baseline should activate tracked prediction",
+    );
     for index in 0..4_096usize {
         enqueue_client_outbox(client.world_mut(), client_probe((index % 251) as u8))
             .expect("client outbox should fill through its configured capacity");
@@ -262,18 +311,14 @@ fn client_outbox_backpressure_does_not_record_unsent_prediction_frame() {
     );
 
     assert_eq!(
-        client
-            .world()
-            .resource::<PredictionState>()
-            .unwrap()
-            .pending_frames_len(),
-        0,
-        "a frame rejected by the client outbox must not enter prediction replay history"
+        client_prediction_pending_count(client.world()),
+        Some(1),
+        "RunenNet prediction admission remains authoritative despite queue backpressure"
     );
     assert_eq!(
         client.world().resource::<AppliedInputLog>().unwrap().inputs,
         vec![command],
-        "staging-accepted local input still applies locally"
+        "an admitted prediction still applies locally when the current delivery submission backpressures"
     );
     let outbound = client.world().resource::<NetworkOutboundQueue>().unwrap();
     assert_eq!(outbound.client_messages().len(), 4_096);
@@ -388,11 +433,9 @@ fn remote_authority_input_does_not_consume_local_prediction_staging() {
         SimulationTick(1)
     );
     assert_eq!(
-        host.world()
-            .resource::<PredictionState>()
-            .unwrap()
-            .pending_frames_len(),
-        1
+        client_prediction_pending_count(host.world()),
+        Some(0),
+        "peer-host local authority input is not client prediction"
     );
     assert_eq!(
         host.world().resource::<AppliedInputLog>().unwrap().inputs,

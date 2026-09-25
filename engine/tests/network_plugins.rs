@@ -1,11 +1,13 @@
 use engine::net::prelude::*;
 use engine::plugins::net::{
-    ActiveClientReplicatedStateProduct, ClientReplicationPolicy, NetPluginConfig,
+    ActiveClientReplicatedStateProduct, ClientPredictionPolicy, ClientReplicationPolicy,
+    NetPluginConfig,
     NetworkClientInbox, NetworkClientOutbox, NetworkDiagnostics, NetworkOutboundQueue,
     NetworkServerInbox, NetworkServerOutbox, NetworkSessionStatus, OutboundServerMessage,
-    PredictionDiagnostics, PredictionState as NetPredictionState, ReplicationDiagnostics,
+    PredictionDiagnostics, ReplicationDiagnostics,
     RunenNetSessionCore, RunenNetSessionProjection, ServerSnapshotReplicationState,
-    client_inbox_is_empty, client_outbox_len, client_replication_acknowledgement,
+    client_inbox_is_empty, client_outbox_len, client_prediction_pending_count,
+    client_replication_acknowledgement,
     client_replication_lineage, client_replication_state, enqueue_client_inbox,
     enqueue_client_outbox, enqueue_server_inbox, enqueue_server_inbox_from,
     enqueue_server_outbox_broadcast, record_reconnect_attempt,
@@ -15,7 +17,7 @@ use engine::plugins::net::{
 use engine::plugins::{ScenePlugin, SimulationPlugin, default_plugins};
 use engine::prelude::*;
 use runen_net::identity::{ConnectionHandle, ParticipantId, SessionId};
-use runen_net::input::{AuthorityInputAggregateLimits, AuthorityInputLimits};
+use runen_net::input::{AuthorityInputAggregateLimits, AuthorityInputLimits, PredictionLimits};
 use runen_net::protocol::{
     CompatibilityOffer, NegotiatedContract, NegotiationManager, NegotiationManagerLimits,
     NegotiationRequirements, OfferLimits, ProtocolContract, ProtocolId, ProtocolRevision,
@@ -74,6 +76,7 @@ impl PlayerCommandBuffer {
 #[derive(Debug, Clone, Default, PartialEq, runen_ecs::Resource)]
 struct AppliedInputLog {
     inputs: Vec<ClientCommandEnvelope>,
+    ticks: Vec<engine_sim::SimulationTick>,
 }
 
 #[derive(Debug, Clone, Copy, Default, runen_ecs::Resource)]
@@ -169,20 +172,23 @@ impl InputDriver for TestReplicationDriver {
             .unwrap_or_default())
     }
 
-    fn apply_input(world: &mut World, input: &[Self::Input]) -> Result<(), Self::Error> {
+    fn apply_input(
+        world: &mut World,
+        tick: engine_sim::SimulationTick,
+        input: &[Self::Input],
+    ) -> Result<(), Self::Error> {
         if world.resource::<AppliedInputLog>().is_err() {
             world.insert_resource(AppliedInputLog::default());
         }
-        world
+        let log = world
             .resource_mut::<AppliedInputLog>()
-            .expect("applied-input log should exist after initialization")
-            .inputs
-            .extend_from_slice(input);
+            .expect("applied-input log should exist after initialization");
+        log.inputs.extend_from_slice(input);
+        log.ticks.push(tick);
         Ok(())
     }
 }
 
-type PredictionState = NetPredictionState<ClientCommandEnvelope>;
 type ServerSnapshotState = ServerSnapshotReplicationState<TestSnapshot>;
 
 fn test_client_replication_policy() -> ClientReplicationPolicy {
@@ -215,6 +221,14 @@ fn test_client_replication_policy_with_state_limit(
     )
 }
 
+fn test_client_prediction_policy() -> ClientPredictionPolicy {
+    ClientPredictionPolicy::new(PredictionLimits::new(
+        NonZeroUsize::new(256).expect("test pending-input limit must be non-zero"),
+        NonZeroUsize::new(16 * 1024 * 1024).expect("test pending-byte limit must be non-zero"),
+        8,
+    ))
+}
+
 fn test_authority_input_policy() -> AuthorityInputPolicy {
     let participant_limits = AuthorityInputLimits::new(
         NonZeroUsize::new(64 * 1024).expect("test batch limit must be non-zero"),
@@ -239,7 +253,8 @@ impl Plugin for NetworkClientPlugin {
         app.add_plugin(
             NetPlugin::<TestReplicationDriver>::new(NetRole::Client).with_config(
                 NetPluginConfig::default()
-                    .with_client_replication_policy(test_client_replication_policy()),
+                    .with_client_replication_policy(test_client_replication_policy())
+                    .with_client_prediction_policy(test_client_prediction_policy()),
             ),
         );
     }
@@ -264,7 +279,8 @@ impl Plugin for NetworkHostPlugin {
         app.add_plugin(
             NetPlugin::<TestReplicationDriver>::new(NetRole::Host).with_config(
                 NetPluginConfig::default()
-                    .with_client_replication_policy(test_client_replication_policy()),
+                    .with_client_replication_policy(test_client_replication_policy())
+                    .with_client_prediction_policy(test_client_prediction_policy()),
             ),
         );
     }
