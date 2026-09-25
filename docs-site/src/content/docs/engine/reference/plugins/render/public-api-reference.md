@@ -172,7 +172,7 @@ These are advanced runtime boundary types produced by `RenderPrepare` and consum
 - `PreparedRenderFrameRequestDiagnostic`
 - `PreparedRenderFrameRequestError`
 - `PreparedRenderFrameRequestKind`
-- `PreparedRenderFrameRequestScope`
+- `RenderFrameSurfaceScope`
 - `RenderFlowInvocationPolicy`
 - `RenderFixedResolutionExecutionRequest`
 - `PreparedFixedResolutionExecution`
