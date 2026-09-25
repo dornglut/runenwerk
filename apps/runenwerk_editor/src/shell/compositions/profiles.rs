@@ -317,6 +317,14 @@ pub(crate) fn full_editor_profiles(
         .collect()
 }
 
+pub(crate) fn full_editor_profile_refs() -> Vec<ProfileRef> {
+    FULL_EDITOR_PROFILE_SPECS
+        .iter()
+        .filter(|spec| full_editor_supports_profile_id(spec.id))
+        .map(|spec| workspace_profile_ref_for_id(spec.id))
+        .collect()
+}
+
 fn full_editor_supports_profile_id(profile_id: WorkspaceProfileId) -> bool {
     profile_id == SCENE_WORKSPACE_PROFILE_ID
         || profile_id == MODELLING_WORKSPACE_PROFILE_ID
@@ -773,12 +781,15 @@ fn stack(id: impl Into<String>, tabs: &[(&str, &str)]) -> EditorWorkspaceHostDef
     stack_owned(
         id,
         tabs.iter()
-            .map(|(tab_id, surface)| LayoutSurface {
-                key: (*surface).to_owned(),
-                panel_kind: PanelKind::Placeholder,
+            .map(|(tab_id, surface)| {
+                (
+                    (*tab_id).to_owned(),
+                    LayoutSurface {
+                        key: (*surface).to_owned(),
+                        panel_kind: PanelKind::Placeholder,
+                    },
+                )
             })
-            .enumerate()
-            .map(|(index, surface)| (tabs[index].0.to_owned(), surface))
             .collect(),
     )
 }
