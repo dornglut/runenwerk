@@ -3,9 +3,10 @@ use std::collections::VecDeque;
 use editor_shell::{
     EditorCompositionDiagnosticCode as Code, EditorCompositionDiagnosticRecord as Record,
     EditorCompositionDiagnosticStage as Stage, EditorCompositionDiagnosticSubject as Subject,
-    EditorCompositionIdentityAllocator, EditorCompositionRejection, EditorDockingIntent,
-    EditorWindowId, PreparedEditorCompositionCommit, evaluate_editor_docking_intent,
-    plan_editor_docking_transaction, plan_editor_target_close_transaction,
+    EditorCompositionIdentityAllocator, EditorCompositionRejection, EditorCompositionRuntime,
+    EditorDockingIntent, EditorWindowId, PreparedEditorCompositionCommit,
+    evaluate_editor_docking_intent, plan_editor_docking_transaction,
+    plan_editor_target_close_transaction,
 };
 use engine::plugins::render::backend::RenderSurfaceRegistryResource;
 use engine::runtime::{
@@ -14,8 +15,10 @@ use engine::runtime::{
 use ui_composition::{CompositionPolicies, PresentationTargetId, TargetProfileId};
 
 use crate::runtime::resources::EditorHostResource;
-use crate::shell::EditorCompositionPolicy;
-use crate::shell::EditorWindowPresentationBinding;
+use crate::shell::{
+    EditorCompositionPolicy, EditorCompositionTargetBindingRegistry,
+    EditorWindowPresentationBinding,
+};
 
 const EDITOR_DESKTOP_TARGET_PROFILE: &str = "runenwerk.editor.desktop";
 
@@ -24,6 +27,7 @@ pub struct EditorCompositionTransitionRuntimeResource {
     queued: VecDeque<EditorDockingIntent>,
     pending_close_targets: VecDeque<PresentationTargetId>,
     pending: Option<PendingTargetCreation>,
+    pending_restore: Option<PendingCompositionRestore>,
     diagnostics: Vec<Record>,
 }
 
@@ -33,7 +37,10 @@ impl EditorCompositionTransitionRuntimeResource {
     }
 
     pub fn is_pending(&self) -> bool {
-        self.pending.is_some() || !self.queued.is_empty() || !self.pending_close_targets.is_empty()
+        self.pending.is_some()
+            || self.pending_restore.is_some()
+            || !self.queued.is_empty()
+            || !self.pending_close_targets.is_empty()
     }
 }
 
@@ -44,6 +51,19 @@ struct PendingTargetCreation {
     created_target: PresentationTargetId,
     detached_targets: Vec<PresentationTargetId>,
     editor_window_id: EditorWindowId,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct PendingRestorePresentation {
+    target_id: PresentationTargetId,
+    editor_window_id: EditorWindowId,
+}
+
+#[derive(Debug)]
+struct PendingCompositionRestore {
+    candidate: EditorCompositionRuntime,
+    presentations: Vec<PendingRestorePresentation>,
+    old_secondary_windows: Vec<EditorWindowId>,
 }
 
 pub fn sync_editor_composition_transitions_system(
@@ -65,7 +85,21 @@ fn sync_editor_composition_transitions(
         .queued
         .extend(host.shell_state.drain_docking_intents());
     collect_editor_window_close_intents(host, windows, transitions);
+    if transitions.pending_restore.is_none()
+        && transitions.pending.is_none()
+        && transitions.queued.is_empty()
+        && transitions.pending_close_targets.is_empty()
+        && let Some(candidate) = host.shell_state.take_pending_composition_restore()
+    {
+        begin_pending_composition_restore(host, transitions, candidate);
+    }
     refresh_coordination_pending(host, transitions);
+
+    if transitions.pending_restore.is_some() {
+        finish_pending_composition_restore(host, transitions, windows, surfaces);
+        refresh_coordination_pending(host, transitions);
+        return;
+    }
 
     if transitions.pending.is_some() {
         finish_pending_target_creation(host, transitions, windows, surfaces);
@@ -155,12 +189,205 @@ fn sync_editor_composition_transitions(
     refresh_coordination_pending(host, transitions);
 }
 
+fn begin_pending_composition_restore(
+    host: &mut EditorHostResource,
+    transitions: &mut EditorCompositionTransitionRuntimeResource,
+    candidate: EditorCompositionRuntime,
+) {
+    let target_ids = candidate
+        .composition()
+        .definition()
+        .targets()
+        .iter()
+        .map(|target| target.id)
+        .collect::<Vec<_>>();
+    if target_ids.is_empty() {
+        transitions.diagnostics.push(Record::error(
+            Code::WindowTargetBindingMissing,
+            Stage::Projection,
+            Subject::General("composition-restore".to_owned()),
+            "Persisted editor composition has no presentation target.",
+        ));
+        return;
+    }
+
+    let old_secondary_windows = host
+        .shell_state
+        .editor_windows()
+        .records()
+        .filter(|record| {
+            record.editor_window_id != host.shell_state.editor_windows().primary_window_id()
+        })
+        .map(|record| record.editor_window_id)
+        .collect::<Vec<_>>();
+
+    let presentations = target_ids
+        .into_iter()
+        .skip(1)
+        .map(|target_id| PendingRestorePresentation {
+            target_id,
+            editor_window_id: host.shell_state.open_editor_window_for_active_workspace(),
+        })
+        .collect();
+
+    transitions.pending_restore = Some(PendingCompositionRestore {
+        candidate,
+        presentations,
+        old_secondary_windows,
+    });
+}
+
+fn finish_pending_composition_restore(
+    host: &mut EditorHostResource,
+    transitions: &mut EditorCompositionTransitionRuntimeResource,
+    windows: &mut WindowStateRegistryResource,
+    surfaces: &mut RenderSurfaceRegistryResource,
+) {
+    let Some(pending) = transitions.pending_restore.as_ref() else {
+        return;
+    };
+
+    let mut all_created = true;
+    let mut creation_failed = false;
+    for presentation in &pending.presentations {
+        let Some(binding) = host
+            .shell_state
+            .editor_window_binding(presentation.editor_window_id)
+        else {
+            all_created = false;
+            continue;
+        };
+        match windows
+            .record(binding.native_window_id)
+            .map(|record| record.lifecycle_state)
+        {
+            Some(NativeWindowLifecycleState::Created) => {}
+            Some(NativeWindowLifecycleState::CreationFailed)
+            | Some(NativeWindowLifecycleState::CloseIntentPending)
+            | Some(NativeWindowLifecycleState::CloseApproved) => {
+                creation_failed = true;
+            }
+            Some(NativeWindowLifecycleState::Requested) | None => {
+                all_created = false;
+            }
+        }
+    }
+
+    if creation_failed {
+        let pending = transitions
+            .pending_restore
+            .take()
+            .expect("pending composition restore exists");
+        rollback_restore_presentations(host, &pending.presentations, windows, surfaces);
+        transitions.diagnostics.push(Record::error(
+            Code::WindowCreationFailed,
+            Stage::Projection,
+            Subject::General("composition-restore".to_owned()),
+            "A provisional native window failed during composition restore; the live composition remained unchanged.",
+        ));
+        return;
+    }
+    if !all_created {
+        return;
+    }
+
+    let pending = transitions
+        .pending_restore
+        .take()
+        .expect("pending composition restore exists");
+    let primary_target = pending
+        .candidate
+        .composition()
+        .definition()
+        .targets()
+        .first()
+        .expect("validated composition restore candidate has a primary target")
+        .id;
+    let Some(primary_binding) = host
+        .shell_state
+        .editor_window_binding(host.shell_state.editor_windows().primary_window_id())
+    else {
+        rollback_restore_presentations(host, &pending.presentations, windows, surfaces);
+        transitions.diagnostics.push(Record::error(
+            Code::WindowTargetBindingMissing,
+            Stage::Projection,
+            Subject::Target(primary_target.raw()),
+            "Primary editor presentation binding disappeared before composition restore commit.",
+        ));
+        return;
+    };
+
+    let mut bindings = EditorCompositionTargetBindingRegistry::default();
+    bindings.bind(primary_target, primary_binding);
+    for presentation in &pending.presentations {
+        let binding = host
+            .shell_state
+            .editor_window_binding(presentation.editor_window_id)
+            .expect("created provisional editor window retains its presentation binding");
+        bindings.bind(presentation.target_id, binding);
+    }
+
+    match host
+        .shell_state
+        .install_composition_runtime_with_target_bindings(pending.candidate, bindings)
+    {
+        Ok(()) => {
+            let installed = host.shell_state.composition_runtime().clone();
+            host.app.prune_surface_sessions_for_composition(&installed);
+            close_obsolete_editor_windows(host, pending.old_secondary_windows, windows, surfaces);
+            host.app.append_console_line(
+                "[composition] restored persisted presentation targets atomically".to_owned(),
+            );
+        }
+        Err(rejection) => {
+            rollback_restore_presentations(host, &pending.presentations, windows, surfaces);
+            record_rejection(transitions, rejection);
+        }
+    }
+}
+
+fn rollback_restore_presentations(
+    host: &mut EditorHostResource,
+    presentations: &[PendingRestorePresentation],
+    windows: &mut WindowStateRegistryResource,
+    surfaces: &mut RenderSurfaceRegistryResource,
+) {
+    for presentation in presentations {
+        if let Some(binding) = host
+            .shell_state
+            .editor_window_binding(presentation.editor_window_id)
+        {
+            match windows
+                .record(binding.native_window_id)
+                .map(|record| record.lifecycle_state)
+            {
+                Some(NativeWindowLifecycleState::Created)
+                | Some(NativeWindowLifecycleState::CloseIntentPending)
+                | Some(NativeWindowLifecycleState::CloseApproved) => {
+                    if let Some(record) = windows.record_mut(binding.native_window_id) {
+                        record.approve_close();
+                    }
+                }
+                Some(NativeWindowLifecycleState::Requested)
+                | Some(NativeWindowLifecycleState::CreationFailed)
+                | None => {
+                    surfaces.retire_surface_for_native_window(binding.native_window_id);
+                    windows.remove_window(binding.native_window_id);
+                }
+            }
+        }
+        host.shell_state
+            .remove_editor_window_presentation(presentation.editor_window_id);
+    }
+}
+
 fn refresh_coordination_pending(
     host: &mut EditorHostResource,
     transitions: &EditorCompositionTransitionRuntimeResource,
 ) {
+    let pending = transitions.is_pending() || host.shell_state.has_pending_composition_restore();
     host.shell_state
-        .set_composition_coordination_pending(transitions.is_pending());
+        .set_composition_coordination_pending(pending);
 }
 
 fn finish_pending_target_creation(
@@ -237,6 +464,38 @@ fn detached_bindings(
         .iter()
         .filter_map(|target| host.shell_state.composition_target_binding(*target))
         .collect()
+}
+
+fn close_obsolete_editor_windows(
+    host: &mut EditorHostResource,
+    editor_window_ids: Vec<EditorWindowId>,
+    windows: &mut WindowStateRegistryResource,
+    surfaces: &mut RenderSurfaceRegistryResource,
+) {
+    for editor_window_id in editor_window_ids {
+        if let Some(binding) = host.shell_state.editor_window_binding(editor_window_id) {
+            match windows
+                .record(binding.native_window_id)
+                .map(|record| record.lifecycle_state)
+            {
+                Some(NativeWindowLifecycleState::Created)
+                | Some(NativeWindowLifecycleState::CloseIntentPending)
+                | Some(NativeWindowLifecycleState::CloseApproved) => {
+                    if let Some(record) = windows.record_mut(binding.native_window_id) {
+                        record.approve_close();
+                    }
+                }
+                Some(NativeWindowLifecycleState::Requested)
+                | Some(NativeWindowLifecycleState::CreationFailed)
+                | None => {
+                    surfaces.retire_surface_for_native_window(binding.native_window_id);
+                    windows.remove_window(binding.native_window_id);
+                }
+            }
+        }
+        host.shell_state
+            .remove_editor_window_presentation(editor_window_id);
+    }
 }
 
 fn close_detached_windows(
@@ -460,6 +719,134 @@ mod tests {
         (request.native_window_id, binding)
     }
 
+    fn mark_presentation_created(
+        windows: &mut WindowStateRegistryResource,
+        surfaces: &mut RenderSurfaceRegistryResource,
+        native_window_id: NativeWindowId,
+        binding: EditorWindowPresentationBinding,
+    ) {
+        let created_size_px = (900, 600);
+        surfaces
+            .confirm_surface_attachment(
+                binding.render_surface_id,
+                native_window_id,
+                created_size_px,
+            )
+            .expect("test native surface should attach before Created publication");
+        windows.register_created_window(native_window_id, "Secondary", created_size_px, 1.0, false);
+    }
+
+    fn create_secondary_target_for_unit(
+        host: &mut EditorHostResource,
+        transitions: &mut EditorCompositionTransitionRuntimeResource,
+        windows: &mut WindowStateRegistryResource,
+        surfaces: &mut RenderSurfaceRegistryResource,
+        unit: ui_composition::MountedUnitId,
+    ) -> (PresentationTargetId, EditorWindowPresentationBinding) {
+        let source_revision = host
+            .shell_state
+            .composition_runtime()
+            .composition()
+            .revision();
+        host.shell_state
+            .queue_docking_intent(EditorDockingIntent::detach_to_new_target(
+                source_revision,
+                unit,
+            ));
+        sync_editor_composition_transitions(host, transitions, windows, surfaces);
+        let (native_window_id, binding) =
+            bind_pending_native_window(host, transitions, windows, surfaces);
+        mark_presentation_created(windows, surfaces, native_window_id, binding);
+        sync_editor_composition_transitions(host, transitions, windows, surfaces);
+        let target = host
+            .shell_state
+            .composition_target_bindings()
+            .find(|entry| entry.binding == binding)
+            .expect("created secondary target binding")
+            .target_id;
+        (target, binding)
+    }
+
+    fn multi_target_candidate(secondary_count: usize) -> EditorCompositionRuntime {
+        let mut host = EditorHostResource::default();
+        let mut transitions = EditorCompositionTransitionRuntimeResource::default();
+        let mut windows = WindowStateRegistryResource::default();
+        windows.register_primary_window("Runenwerk", (1280, 720), 1.0, true);
+        let mut surfaces = RenderSurfaceRegistryResource::default();
+        let units = host
+            .shell_state
+            .composition_runtime()
+            .composition()
+            .definition()
+            .regions()
+            .iter()
+            .find_map(|region| match &region.kind {
+                ui_composition::RegionKind::Stack { ordered_units, .. }
+                    if ordered_units.len() >= secondary_count =>
+                {
+                    Some(
+                        ordered_units
+                            .iter()
+                            .copied()
+                            .take(secondary_count)
+                            .collect::<Vec<_>>(),
+                    )
+                }
+                _ => None,
+            })
+            .expect("default editor composition should contain enough detachable tabs");
+
+        for unit in units {
+            create_secondary_target_for_unit(
+                &mut host,
+                &mut transitions,
+                &mut windows,
+                &mut surfaces,
+                unit,
+            );
+        }
+
+        host.shell_state.composition_runtime().clone()
+    }
+
+    fn bind_pending_restore_presentations(
+        host: &mut EditorHostResource,
+        transitions: &EditorCompositionTransitionRuntimeResource,
+        windows: &mut WindowStateRegistryResource,
+        surfaces: &mut RenderSurfaceRegistryResource,
+    ) -> Vec<(
+        PendingRestorePresentation,
+        NativeWindowId,
+        EditorWindowPresentationBinding,
+    )> {
+        let presentations = transitions
+            .pending_restore
+            .as_ref()
+            .expect("pending composition restore")
+            .presentations
+            .clone();
+        presentations
+            .into_iter()
+            .map(|presentation| {
+                let request = windows.request_window(
+                    format!("Restore {}", presentation.target_id.raw()),
+                    (900, 600),
+                );
+                let render_surface_id = surfaces
+                    .reserve_surface_for_native_window(request.native_window_id, request.size_px);
+                let binding = EditorWindowPresentationBinding {
+                    native_window_id: request.native_window_id,
+                    render_surface_id,
+                };
+                assert!(
+                    host.shell_state
+                        .bind_editor_window_presentation(presentation.editor_window_id, binding,)
+                );
+                (presentation, request.native_window_id, binding)
+            })
+            .collect()
+    }
+
     #[test]
     fn target_creation_commits_only_after_native_window_is_created() {
         let mut host = EditorHostResource::default();
@@ -579,6 +966,296 @@ mod tests {
                 .diagnostics()
                 .iter()
                 .any(|diagnostic| diagnostic.code() == Code::WindowCreationFailed)
+        );
+    }
+
+    #[test]
+    fn single_target_restore_commits_without_secondary_window_creation() {
+        let mut host = EditorHostResource::default();
+        let candidate = host.shell_state.composition_runtime().clone();
+        let obsolete_unbound_window = host.shell_state.open_editor_window_for_active_workspace();
+        let mut transitions = EditorCompositionTransitionRuntimeResource::default();
+        let mut windows = WindowStateRegistryResource::default();
+        windows.register_primary_window("Runenwerk", (1280, 720), 1.0, true);
+        let mut surfaces = RenderSurfaceRegistryResource::default();
+
+        host.shell_state
+            .queue_composition_restore(candidate.clone())
+            .expect("single-target restore should queue");
+        sync_editor_composition_transitions(
+            &mut host,
+            &mut transitions,
+            &mut windows,
+            &mut surfaces,
+        );
+
+        assert!(!transitions.is_pending());
+        assert_eq!(host.shell_state.composition_runtime(), &candidate);
+        assert_eq!(host.shell_state.editor_windows().len(), 1);
+        assert!(
+            host.shell_state
+                .editor_window_binding(obsolete_unbound_window)
+                .is_none()
+        );
+        assert!(
+            host.shell_state
+                .drain_pending_editor_window_presentations()
+                .is_empty(),
+            "successful restore must cancel obsolete unbound native-window requests"
+        );
+        assert!(!host.shell_state.composition_coordination_pending());
+    }
+
+    #[test]
+    fn persisted_multi_target_restore_waits_for_fresh_presentations_before_commit() {
+        use crate::persistence::{load_editor_composition_layout, save_editor_composition_layout};
+
+        let candidate = multi_target_candidate(1);
+        let expected_targets = candidate
+            .composition()
+            .definition()
+            .targets()
+            .iter()
+            .map(|target| target.id)
+            .collect::<Vec<_>>();
+        let directory = tempfile::tempdir().unwrap();
+        save_editor_composition_layout(directory.path(), &candidate).unwrap();
+        let loaded = load_editor_composition_layout(directory.path()).unwrap();
+        assert_eq!(
+            loaded
+                .composition()
+                .definition()
+                .targets()
+                .iter()
+                .map(|target| target.id)
+                .collect::<Vec<_>>(),
+            expected_targets
+        );
+
+        let mut host = EditorHostResource::default();
+        let live_before = host.shell_state.composition_runtime().clone();
+        let mut transitions = EditorCompositionTransitionRuntimeResource::default();
+        let mut windows = WindowStateRegistryResource::default();
+        windows.register_primary_window("Runenwerk", (1280, 720), 1.0, true);
+        let mut surfaces = RenderSurfaceRegistryResource::default();
+
+        host.shell_state
+            .queue_composition_restore(loaded)
+            .expect("multi-target restore should queue");
+        sync_editor_composition_transitions(
+            &mut host,
+            &mut transitions,
+            &mut windows,
+            &mut surfaces,
+        );
+        assert_eq!(host.shell_state.composition_runtime(), &live_before);
+        assert_eq!(
+            transitions
+                .pending_restore
+                .as_ref()
+                .expect("restore should be pending")
+                .presentations
+                .len(),
+            1
+        );
+
+        let bound = bind_pending_restore_presentations(
+            &mut host,
+            &transitions,
+            &mut windows,
+            &mut surfaces,
+        );
+        sync_editor_composition_transitions(
+            &mut host,
+            &mut transitions,
+            &mut windows,
+            &mut surfaces,
+        );
+        assert_eq!(
+            host.shell_state.composition_runtime(),
+            &live_before,
+            "Requested native windows must not replace the live composition"
+        );
+
+        let (_, native_window_id, binding) = bound[0];
+        mark_presentation_created(&mut windows, &mut surfaces, native_window_id, binding);
+        sync_editor_composition_transitions(
+            &mut host,
+            &mut transitions,
+            &mut windows,
+            &mut surfaces,
+        );
+
+        assert!(!transitions.is_pending());
+        assert_eq!(
+            host.shell_state
+                .composition_runtime()
+                .composition()
+                .definition()
+                .targets()
+                .iter()
+                .map(|target| target.id)
+                .collect::<Vec<_>>(),
+            expected_targets
+        );
+        assert_eq!(
+            host.shell_state
+                .composition_target_binding(expected_targets[1]),
+            Some(binding)
+        );
+        assert_ne!(binding.native_window_id, NativeWindowId::primary());
+    }
+
+    #[test]
+    fn failed_multi_target_restore_rolls_back_every_provisional_presentation() {
+        let candidate = multi_target_candidate(2);
+        let mut host = EditorHostResource::default();
+        let live_before = host.shell_state.composition_runtime().clone();
+        let profile_before = host.shell_state.active_workspace_profile_id();
+        let bindings_before = host
+            .shell_state
+            .composition_target_bindings()
+            .collect::<Vec<_>>();
+        let mut transitions = EditorCompositionTransitionRuntimeResource::default();
+        let mut windows = WindowStateRegistryResource::default();
+        windows.register_primary_window("Runenwerk", (1280, 720), 1.0, true);
+        let mut surfaces = RenderSurfaceRegistryResource::default();
+
+        host.shell_state
+            .queue_composition_restore(candidate)
+            .expect("multi-target restore should queue");
+        sync_editor_composition_transitions(
+            &mut host,
+            &mut transitions,
+            &mut windows,
+            &mut surfaces,
+        );
+        let bound = bind_pending_restore_presentations(
+            &mut host,
+            &transitions,
+            &mut windows,
+            &mut surfaces,
+        );
+        assert_eq!(bound.len(), 2);
+
+        mark_presentation_created(&mut windows, &mut surfaces, bound[0].1, bound[0].2);
+        windows
+            .record_mut(bound[1].1)
+            .expect("second requested restore window")
+            .mark_creation_failed("test restore failure");
+
+        sync_editor_composition_transitions(
+            &mut host,
+            &mut transitions,
+            &mut windows,
+            &mut surfaces,
+        );
+
+        assert!(!transitions.is_pending());
+        assert_eq!(host.shell_state.composition_runtime(), &live_before);
+        assert_eq!(
+            host.shell_state.active_workspace_profile_id(),
+            profile_before
+        );
+        assert_eq!(
+            host.shell_state
+                .composition_target_bindings()
+                .collect::<Vec<_>>(),
+            bindings_before
+        );
+        assert_eq!(host.shell_state.editor_windows().len(), 1);
+        assert_eq!(
+            windows
+                .record(bound[0].1)
+                .expect("already-created provisional window remains for native teardown")
+                .lifecycle_state,
+            NativeWindowLifecycleState::CloseApproved
+        );
+        assert_eq!(
+            surfaces.surface_for_native_window(bound[0].1),
+            Some(bound[0].2.render_surface_id),
+            "created provisional surface remains owned until native teardown"
+        );
+        assert!(windows.record(bound[1].1).is_none());
+        assert!(surfaces.surface_for_native_window(bound[1].1).is_none());
+        assert!(
+            transitions
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.code() == Code::WindowCreationFailed)
+        );
+    }
+
+    #[test]
+    fn restore_rebuilds_secondary_presentation_even_when_target_id_is_unchanged() {
+        let mut host = EditorHostResource::default();
+        let mut transitions = EditorCompositionTransitionRuntimeResource::default();
+        let mut windows = WindowStateRegistryResource::default();
+        windows.register_primary_window("Runenwerk", (1280, 720), 1.0, true);
+        let mut surfaces = RenderSurfaceRegistryResource::default();
+        let unit = unit_from_multi_unit_stack(&host);
+        let (secondary_target, old_binding) = create_secondary_target_for_unit(
+            &mut host,
+            &mut transitions,
+            &mut windows,
+            &mut surfaces,
+            unit,
+        );
+        let old_editor_window = host
+            .shell_state
+            .editor_window_for_binding(old_binding)
+            .expect("old secondary editor window");
+        let candidate = host.shell_state.composition_runtime().clone();
+
+        host.shell_state
+            .queue_composition_restore(candidate)
+            .expect("same-target restore should queue");
+        sync_editor_composition_transitions(
+            &mut host,
+            &mut transitions,
+            &mut windows,
+            &mut surfaces,
+        );
+        let bound = bind_pending_restore_presentations(
+            &mut host,
+            &transitions,
+            &mut windows,
+            &mut surfaces,
+        );
+        assert_eq!(bound.len(), 1);
+        let (_, native_window_id, new_binding) = bound[0];
+        assert_ne!(new_binding, old_binding);
+        mark_presentation_created(&mut windows, &mut surfaces, native_window_id, new_binding);
+
+        sync_editor_composition_transitions(
+            &mut host,
+            &mut transitions,
+            &mut windows,
+            &mut surfaces,
+        );
+
+        assert_eq!(
+            host.shell_state
+                .composition_target_binding(secondary_target),
+            Some(new_binding)
+        );
+        assert_ne!(
+            host.shell_state
+                .composition_target_binding(secondary_target),
+            Some(old_binding)
+        );
+        assert!(
+            host.shell_state
+                .editor_window_binding(old_editor_window)
+                .is_none()
+        );
+        assert_eq!(host.shell_state.editor_windows().len(), 2);
+        assert_eq!(
+            windows
+                .record(old_binding.native_window_id)
+                .expect("old native window remains until Winit teardown")
+                .lifecycle_state,
+            NativeWindowLifecycleState::CloseApproved
         );
     }
 
