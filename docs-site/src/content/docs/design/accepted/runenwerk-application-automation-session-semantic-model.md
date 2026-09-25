@@ -483,6 +483,12 @@ This separation matters because the RON crate may evolve independently of the ar
 RON dependency MUST NOT silently broaden or reinterpret V1. A future parser/library update remains
 acceptable only when the V1 conformance tests prove the same accepted schema semantics.
 
+V1 defines deterministic semantic ordering for frames, groups, observations, and trace-local
+identity-slot assignment. It does not define canonical RON bytes. Whitespace, comments, or harmless
+pretty-printer formatting are not compatibility identity, and this decision does not authorize
+content-addressing, signatures, or byte hashes as semantic equality. Round-trip/conformance compares
+the decoded V1 meaning modulo the explicitly permitted runtime-ID remapping.
+
 The persisted schema MUST be a dedicated storage representation. Runenwerk MUST NOT make
 `AutomationInputTrace` itself the durable schema, derive persistence on RunenInput runtime types
 merely for this format, or treat Rust enum layout as an undocumented compatibility promise.
@@ -923,8 +929,8 @@ That proof SHOULD:
 
 1. define a dedicated strict V1 storage schema rather than serializing runtime trace types directly;
 2. require an explicit typed recording-side pristine-source witness at export;
-3. export one A6-replayable in-memory trace to deterministic pretty RON within the restricted V1
-   profile;
+3. export one A6-replayable in-memory trace to pretty RON with deterministic semantic ordering
+   within the restricted V1 profile;
 4. enforce byte and recursion bounds, probe kind/version, then strictly parse and validate V1 with
    unknown fields rejected;
 5. reconstruct equivalent trace-local source/device/contact/tool relationships without preserving
