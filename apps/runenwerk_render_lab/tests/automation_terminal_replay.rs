@@ -5,12 +5,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use engine::automation::{
     AppAutomationInputReplayExt, AppAutomationInputTraceExt, AutomationExecutionMode,
-    AutomationInputReplayOutcome, AutomationInputReplaySourceMap, AutomationInputReplayStateAssumption,
-    AutomationInputTracePlugin, AutomationInputTraceRecordingWitness, AutomationOwnerAdapter,
-    AutomationSession, AutomationSessionId, AutomationStepResult, DigitalState, InputObservation,
-    InputSourceId, PointerButton, PointerButtonInput, RelativeMotionUnit, ScrollDelta, ScrollDomain,
-    ScrollInput, Vector2, export_automation_input_trace_v1, import_automation_input_trace_v1,
-    MAX_ARTIFACT_BYTES,
+    AutomationInputReplayOutcome, AutomationInputReplaySourceMap,
+    AutomationInputReplayStateAssumption, AutomationInputTracePlugin,
+    AutomationInputTraceRecordingWitness, AutomationOwnerAdapter, AutomationSession,
+    AutomationSessionId, AutomationStepResult, DigitalState, InputObservation, InputSourceId,
+    MAX_ARTIFACT_BYTES, PointerButton, PointerButtonInput, RelativeMotionUnit, ScrollDelta,
+    ScrollDomain, ScrollInput, Vector2, export_automation_input_trace_v1,
+    import_automation_input_trace_v1,
 };
 use engine::prelude::InputState;
 use runenwerk_render_lab::automation::{
@@ -48,8 +49,7 @@ fn persisted_trace_fixture() -> (String, RenderLabCameraObservation) {
     app.add_plugin(AutomationInputTracePlugin);
     app.start_automation_input_trace()
         .expect("trace should start");
-    let mut session =
-        AutomationSession::new(AutomationSessionId::new(100), recorded_source);
+    let mut session = AutomationSession::new(AutomationSessionId::new(100), recorded_source);
 
     inject(
         &mut app,
@@ -77,7 +77,9 @@ fn persisted_trace_fixture() -> (String, RenderLabCameraObservation) {
             state: DigitalState::Released,
         }),
     );
-    app = app.run_for_frames(1).expect("orbit release frame should run");
+    app = app
+        .run_for_frames(1)
+        .expect("orbit release frame should run");
     app = app.run_for_frames(1).expect("idle frame should run");
 
     inject(
@@ -138,13 +140,11 @@ fn persisted_trace_fixture() -> (String, RenderLabCameraObservation) {
 }
 
 fn direct_replay_camera(encoded: &str) -> RenderLabCameraObservation {
-    let imported =
-        import_automation_input_trace_v1(encoded.as_bytes()).expect("persisted trace should import");
+    let imported = import_automation_input_trace_v1(encoded.as_bytes())
+        .expect("persisted trace should import");
     let recorded_source = imported.trace().frames()[0].groups()[0].context.source;
-    let source_map = AutomationInputReplaySourceMap::new([(
-        recorded_source,
-        InputSourceId::new(20_100),
-    )]);
+    let source_map =
+        AutomationInputReplaySourceMap::new([(recorded_source, InputSourceId::new(20_100))]);
     let mut app = build_headless_automation_app();
     let report = app.replay_automation_input_trace(
         imported.trace(),

@@ -117,7 +117,6 @@ fn parse_command(args: impl IntoIterator<Item = OsString>) -> anyhow::Result<Com
     ))
 }
 
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct ReplayTraceSummary {
     completed_frames: u64,
@@ -357,9 +356,7 @@ mod tests {
             Command::ReplayTrace(PathBuf::from("evidence/input.ron"))
         );
         assert!(parse_command(args(&["--replay-trace"])).is_err());
-        assert!(
-            parse_command(args(&["--replay-trace", "first.ron", "second.ron"])).is_err()
-        );
+        assert!(parse_command(args(&["--replay-trace", "first.ron", "second.ron"])).is_err());
     }
 
     #[test]
