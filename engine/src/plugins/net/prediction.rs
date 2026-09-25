@@ -451,12 +451,28 @@ where
     let mut authority_inputs = drain_authority_input_for_tick::<TDriver>(&mut world, tick)?;
     let commands = TDriver::take_local_input(&mut world)
         .map_err(|e| map_driver_error::<TDriver>(e, "take local input"))?;
+    let mut staged_commands = Vec::with_capacity(commands.len());
+    if !commands.is_empty() {
+        let staging = world.resource_mut::<NetworkInputStaging<TDriver::Input>>()?;
+        for command in commands {
+            match staging.stage(tick, command.clone()) {
+                Ok(()) => staged_commands.push(command),
+                Err(NetworkInputStageError::Backpressure { capacity, .. }) => {
+                    tracing::warn!(
+                        capacity,
+                        tick = tick.0,
+                        "network input staging backpressure; rejecting local input"
+                    );
+                }
+            }
+        }
+    }
 
     if matches!(authority, AuthorityRole::Client) {
-        if commands.is_empty() {
+        if staged_commands.is_empty() {
             return Ok(());
         }
-        let payload = TDriver::encode_input(&commands)
+        let payload = TDriver::encode_input(&staged_commands)
             .map_err(|e| map_driver_error::<TDriver>(e, "encode input"))?;
         let outcome = admit_client_prediction(&mut world, tick, &payload);
         let conflicting = matches!(outcome, Some(PredictionInputOutcome::ConflictingInput));
@@ -479,7 +495,7 @@ where
             }
         }
         if matches!(outcome, Some(PredictionInputOutcome::InputAccepted)) {
-            if let Err(error) = TDriver::apply_input(&mut world, tick, &commands) {
+            if let Err(error) = TDriver::apply_input(&mut world, tick, &staged_commands) {
                 mark_client_prediction_local_application_failed(&mut world);
                 let original = map_driver_error::<TDriver>(
                     error,
@@ -490,26 +506,31 @@ where
                 return Err(original);
             }
             if let Ok(d) = world.resource_mut::<PredictionDiagnostics>() {
-                d.commands_applied = d.commands_applied.saturating_add(commands.len() as u64);
+                d.commands_applied = d
+                    .commands_applied
+                    .saturating_add(staged_commands.len() as u64);
             }
         }
         return Ok(());
     }
 
-    if !commands.is_empty() {
-        let staging = world.resource_mut::<NetworkInputStaging<TDriver::Input>>()?;
-        for command in commands {
-            if let Err(NetworkInputStageError::Backpressure { capacity, .. }) =
-                staging.stage(tick, command)
-            {
-                tracing::warn!(
-                    capacity,
-                    tick = tick.0,
-                    "network input staging backpressure; rejecting local authority input"
-                );
+    if matches!(authority, AuthorityRole::Peer) && !staged_commands.is_empty() {
+        let payload = TDriver::encode_input(&staged_commands)
+            .map_err(|e| map_driver_error::<TDriver>(e, "encode peer input"))?;
+        match enqueue_client_outbox(
+            &mut world,
+            ClientMessage::InputFrame(InputFrame { tick, payload }),
+        ) {
+            Ok(()) => {}
+            Err(NetworkPendingEnqueueError::Unavailable { endpoint, .. }) => {
+                anyhow::bail!("{endpoint} should be installed by NetPlugin")
+            }
+            Err(NetworkPendingEnqueueError::Backpressure { capacity, .. }) => {
+                tracing::warn!(capacity, "failed to enqueue local peer input frame")
             }
         }
     }
+
     let local = world
         .resource_mut::<NetworkInputStaging<TDriver::Input>>()?
         .drain_tick(tick);
