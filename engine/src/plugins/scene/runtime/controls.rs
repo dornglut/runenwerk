@@ -1,5 +1,5 @@
-use super::normalize_scene_label_alias;
 use super::super::plugin::scene_integration_is_active;
+use super::normalize_scene_label_alias;
 use crate::PrimaryPresentationMetricsResource;
 use crate::plugins::{SceneManager, SceneResource};
 use crate::prelude::domain::{SceneCommand, SceneId, SceneLayer};

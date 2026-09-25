@@ -5,7 +5,6 @@ use drawing::{
     DrawingTileFormationDiagnosticCode, DrawingTileFormationPolicy, ProductQualityClass, StrokeId,
     StrokeToolKind, form_drawing_ink_tiles, ratify_drawing_document,
 };
-use engine::plugins::scene::SceneRuntimeState;
 use engine::plugins::render::inspect::RenderDebugConfigResource;
 use engine::plugins::render::{
     FeatureContributionStatus, PreparedRenderFrameRequestResource,
@@ -13,6 +12,7 @@ use engine::plugins::render::{
     RenderDynamicTextureTargetRequestRegistryResource, RenderDynamicTextureUploadRegistryResource,
     SurfaceFrameSubmissionRegistryResource,
 };
+use engine::plugins::scene::SceneRuntimeState;
 use engine::plugins::{
     ContactId, InputContext, InputDeviceId, InputSourceId, InputState, ToolId, TouchInputPhase,
 };
