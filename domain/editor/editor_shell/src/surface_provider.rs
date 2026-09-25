@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use editor_core::{DocumentId, DocumentKind};
+use editor_core::DocumentKind;
 use editor_definition::EditorToolbarBinding;
 use id_macros::id;
 use ui_composition::{
@@ -58,30 +58,15 @@ impl SurfaceProviderDescriptor {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SurfaceDocumentContext {
-    Resolved {
-        document_id: DocumentId,
-        document_kind: DocumentKind,
-    },
+    Resolved { document_kind: DocumentKind },
     NoActiveDocument,
-    Unresolved {
-        document_id: DocumentId,
-    },
 }
 
 impl SurfaceDocumentContext {
-    pub fn resolved_document_id(&self) -> Option<DocumentId> {
-        match self {
-            Self::Resolved { document_id, .. } | Self::Unresolved { document_id } => {
-                Some(*document_id)
-            }
-            Self::NoActiveDocument => None,
-        }
-    }
-
     pub fn resolved_document_kind(&self) -> Option<&DocumentKind> {
         match self {
-            Self::Resolved { document_kind, .. } => Some(document_kind),
-            Self::NoActiveDocument | Self::Unresolved { .. } => None,
+            Self::Resolved { document_kind } => Some(document_kind),
+            Self::NoActiveDocument => None,
         }
     }
 }
@@ -533,7 +518,6 @@ mod tests {
             unavailable_content_policy: UnavailableContentPolicy::ShowFallback,
             workspace_profile_id: MATERIAL_WORKSPACE_PROFILE_ID,
             document_context: SurfaceDocumentContext::Resolved {
-                document_id: DocumentId(1),
                 document_kind: DocumentKind::MaterialGraph,
             },
             panel_instance_id: PanelInstanceId::try_from_raw(1).unwrap(),
@@ -609,6 +593,25 @@ mod tests {
     }
 
     #[test]
+    fn surface_document_context_has_no_generic_document_identity_or_unreachable_state() {
+        let source = include_str!("surface_provider.rs");
+        let context_enum = source
+            .split("pub enum SurfaceDocumentContext")
+            .nth(1)
+            .and_then(|rest| rest.split("impl SurfaceDocumentContext").next())
+            .expect("SurfaceDocumentContext source block should exist");
+        let request_struct = source
+            .split("pub struct SurfaceProviderRequest")
+            .nth(1)
+            .and_then(|rest| rest.split("impl SurfaceProviderRequest").next())
+            .expect("SurfaceProviderRequest source block should exist");
+
+        assert!(!context_enum.contains("DocumentId"));
+        assert!(!context_enum.contains("Unresolved"));
+        assert!(!request_struct.contains("DocumentId"));
+    }
+
+    #[test]
     fn provider_request_stable_key_matching_does_not_panic_for_invalid_input() {
         let request = material_graph_request_with_stable_key("runenwerk.material_lab.graph_canvas");
 
@@ -646,7 +649,6 @@ mod tests {
             unavailable_content_policy: UnavailableContentPolicy::ShowFallback,
             workspace_profile_id: MATERIAL_WORKSPACE_PROFILE_ID,
             document_context: SurfaceDocumentContext::Resolved {
-                document_id: DocumentId(1),
                 document_kind: DocumentKind::MaterialGraph,
             },
             panel_instance_id: PanelInstanceId::try_from_raw(1).unwrap(),
