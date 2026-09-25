@@ -142,10 +142,9 @@ impl AuthorityReplicationIntegration {
         })?;
 
         let (state, greatest_emitted, pending, retained_base) = {
-            let lineage = self
-                .semantic
-                .lineage(participant)
-                .context("RunenNet authority replication lineage disappeared after configuration")?;
+            let lineage = self.semantic.lineage(participant).context(
+                "RunenNet authority replication lineage disappeared after configuration",
+            )?;
             let state = lineage.replication_state();
             let retained_base = match state {
                 AuthorityReplicationState::DeltaEligible(base) => {
