@@ -220,7 +220,10 @@ fn v1_preserves_atomic_tablet_payload_source_time_and_identity_relations() {
     };
 
     let source = encode(&trace);
-    assert!(!source.contains("123_456"));
+    assert!(
+        !source.contains("source: 77") && !source.contains("device: 8"),
+        "raw runtime source/device IDs must not become durable identity"
+    );
     let imported = import_automation_input_trace_v1(source.as_bytes()).unwrap();
     let group = &imported.trace().frames()[0].groups()[0];
     assert_eq!(group.observations.len(), 2);
@@ -464,38 +467,34 @@ fn structural_resource_limits_are_enforced_before_runtime_materialization() {
         ))
     ));
 
-    let mut persisted = PersistedTraceV1 {
+    let group = PersistedGroupV1 {
+        source_slot: 0,
+        device_slot: None,
+        observations: vec![PersistedObservationV1::RelativeMotion(
+            PersistedRelativeMotionV1 {
+                delta: PersistedVector2V1 { x: 0.0, y: 0.0 },
+                unit: PersistedRelativeMotionUnitV1::BackendDeviceUnits,
+            },
+        )],
+    };
+    let full_frames = MAX_TOTAL_GROUPS / MAX_GROUPS_PER_FRAME;
+    let mut frames: Vec<_> = (0..full_frames)
+        .map(|frame| PersistedFrameV1 {
+            frame_ordinal: frame as u64,
+            groups: vec![group.clone(); MAX_GROUPS_PER_FRAME],
+        })
+        .collect();
+    frames.push(PersistedFrameV1 {
+        frame_ordinal: full_frames as u64,
+        groups: vec![group],
+    });
+    let persisted = PersistedTraceV1 {
         artifact_kind: AUTOMATION_INPUT_TRACE_V1_ARTIFACT_KIND.to_owned(),
         schema_version: AUTOMATION_INPUT_TRACE_V1_SCHEMA_VERSION,
         recording_witness: PersistedRecordingWitnessV1::RecordedSourcesPristineAtCaptureStart,
         provenance: None,
-        frames: (0..(MAX_TOTAL_GROUPS / MAX_GROUPS_PER_FRAME + 1))
-            .map(|frame| PersistedFrameV1 {
-                frame_ordinal: frame as u64,
-                groups: vec![
-                    PersistedGroupV1 {
-                        source_slot: 0,
-                        device_slot: None,
-                        observations: vec![PersistedObservationV1::RelativeMotion(
-                            PersistedRelativeMotionV1 {
-                                delta: PersistedVector2V1 { x: 0.0, y: 0.0 },
-                                unit: PersistedRelativeMotionUnitV1::BackendDeviceUnits,
-                            },
-                        )],
-                    };
-                    MAX_GROUPS_PER_FRAME
-                ],
-            })
-            .collect(),
+        frames,
     };
-    persisted.frames.last_mut().unwrap().groups.push(PersistedGroupV1 {
-        source_slot: 0,
-        device_slot: None,
-        observations: vec![PersistedObservationV1::RelativeMotion(PersistedRelativeMotionV1 {
-            delta: PersistedVector2V1 { x: 0.0, y: 0.0 },
-            unit: PersistedRelativeMotionUnitV1::BackendDeviceUnits,
-        })],
-    });
     assert!(matches!(
         ImportBuilder::new().build(&persisted),
         Err(AutomationInputTraceImportError::ResourceLimitExceeded("total_groups"))

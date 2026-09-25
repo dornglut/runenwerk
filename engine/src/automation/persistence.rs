@@ -42,7 +42,6 @@ pub enum AutomationInputTraceRecordingWitness {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub enum AutomationInputTraceCaptureHostClass {
     Headless,
     NativeWindow,
@@ -432,6 +431,7 @@ pub fn export_automation_input_trace_v1(
     if !trace.trailing_groups.is_empty() {
         return Err(AutomationInputTraceExportError::UnframedTrailingGroups);
     }
+    validate_export_normalized_input(trace)?;
     validate_provenance_export(provenance)?;
     let persisted = ExportBuilder::new().build(trace, recording_witness, provenance.cloned())?;
     let options = ron_options();
@@ -1119,6 +1119,22 @@ impl ImportBuilder {
             origin: origin_from_persisted(tablet.origin),
         })
     }
+}
+
+fn validate_export_normalized_input(
+    trace: &AutomationInputTrace,
+) -> Result<(), AutomationInputTraceExportError> {
+    let mut neutral = runen_input::InputState::default();
+    for frame in &trace.frames {
+        for group in &frame.groups {
+            neutral.admit(group).map_err(|error| {
+                AutomationInputTraceExportError::UnsupportedTraceShape(format!(
+                    "runtime trace contains invalid normalized input: {error}"
+                ))
+            })?;
+        }
+    }
+    Ok(())
 }
 
 fn validate_imported_normalized_input(
