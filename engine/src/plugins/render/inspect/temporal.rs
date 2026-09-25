@@ -181,6 +181,27 @@ impl RenderTemporalInspection {
     }
 }
 
+pub fn fixed_resolution_admission_resolution_evidence(
+    admission: &crate::plugins::render::RenderFixedResolutionExecutionAdmission,
+) -> RenderTemporalResolutionEvidence {
+    match admission {
+        crate::plugins::render::RenderFixedResolutionExecutionAdmission::Fixed(prepared) => {
+            RenderTemporalResolutionEvidence {
+                internal_size: [prepared.internal_size.0, prepared.internal_size.1],
+                output_size: [prepared.output_size.0, prepared.output_size.1],
+                policy: RenderTemporalResolutionPolicy::Fixed,
+            }
+        }
+        crate::plugins::render::RenderFixedResolutionExecutionAdmission::NativeFallback(
+            fallback,
+        ) => RenderTemporalResolutionEvidence {
+            internal_size: [fallback.output_size.0, fallback.output_size.1],
+            output_size: [fallback.output_size.0, fallback.output_size.1],
+            policy: RenderTemporalResolutionPolicy::Native,
+        },
+    }
+}
+
 pub fn inspect_render_temporal_inputs(
     request: RenderTemporalInspectionRequest,
 ) -> RenderTemporalInspection {
