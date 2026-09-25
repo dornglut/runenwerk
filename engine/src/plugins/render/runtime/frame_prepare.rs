@@ -375,7 +375,10 @@ mod automatic_main_replacement_tests {
         requests
             .replace_contribution_with_automatic_main_replacements(
                 producer(1),
-                [PreparedViewFrame::offscreen_product("fixed.scene.view", (1280, 720))],
+                [PreparedViewFrame::offscreen_product(
+                    "fixed.scene.view",
+                    (1280, 720),
+                )],
                 [invocation],
                 [replaced],
             )
@@ -413,11 +416,7 @@ mod automatic_main_replacement_tests {
         let resolve_compiled = compile_flow_plan(&resolve).expect("resolve flow should compile");
         let unrelated_compiled =
             compile_flow_plan(&unrelated).expect("unrelated flow should compile");
-        let compiled = vec![
-            scene_compiled.clone(),
-            resolve_compiled,
-            unrelated_compiled,
-        ];
+        let compiled = vec![scene_compiled.clone(), resolve_compiled, unrelated_compiled];
 
         let fixed = RenderFixedResolutionExecutionRequest::new(
             producer(1),
@@ -441,20 +440,13 @@ mod automatic_main_replacement_tests {
             )
             .expect("fixed execution requests should publish");
 
-        let views =
-            build_prepared_views((1920, 1080), &requests).expect("views should prepare");
+        let views = build_prepared_views((1920, 1080), &requests).expect("views should prepare");
         let extracted = ExtractedRenderStateMap::new();
-        let main_inputs =
-            build_prepared_flow_inputs(&compiled, &extracted, (1920, 1080))
-                .expect("main inputs should prepare");
-        let invocations = build_prepared_flow_invocations(
-            &compiled,
-            &extracted,
-            &main_inputs,
-            &views,
-            &requests,
-        )
-        .expect("invocations should prepare");
+        let main_inputs = build_prepared_flow_inputs(&compiled, &extracted, (1920, 1080))
+            .expect("main inputs should prepare");
+        let invocations =
+            build_prepared_flow_invocations(&compiled, &extracted, &main_inputs, &views, &requests)
+                .expect("invocations should prepare");
 
         assert_eq!(
             views
@@ -515,8 +507,7 @@ mod automatic_main_replacement_tests {
         );
 
         let requests = PreparedRenderFrameRequestResource::default();
-        let views =
-            build_prepared_views((1920, 1080), &requests).expect("views should prepare");
+        let views = build_prepared_views((1920, 1080), &requests).expect("views should prepare");
         let extracted = ExtractedRenderStateMap::new();
         let main_inputs =
             build_prepared_flow_inputs(std::slice::from_ref(&compiled), &extracted, (1920, 1080))
