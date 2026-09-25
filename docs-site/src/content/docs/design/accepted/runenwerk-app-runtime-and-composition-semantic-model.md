@@ -759,7 +759,8 @@ must follow current consumers rather than bootstrap history.
 
 ## 13. Capability-specific App API and temporal contracts
 
-Current inherent `App` APIs mix several roles:
+Current inherent `App` APIs still mix core/integration-shaped operations with
+Runenwerk policy/integration operations:
 
 ```text
 core/integration-shaped
@@ -769,10 +770,15 @@ core/integration-shaped
   set_runner
   world / world_mut
 
-capability-specific configuration/authoring still inherent on generic App
-  add_input_bindings
+Runenwerk/native policy still inherent
+  with_frame_pacing
 
-Render capability-specific authoring and diagnostic/control
+Runenwerk publication integration still inherent
+  add_product_publication_handler
+  add_query_snapshot_publication_handler
+
+owner-specific App extensions
+  AppActionBindingsExt::add_input_bindings
   AppRenderExt::add_render_flow
   AppRenderExt::update_render_debug_*
 ```
@@ -782,18 +788,23 @@ The normalized rule is:
 > **Convenience is owned by the capability whose semantics it manipulates, and every
 > operation retains an explicit temporal contract.**
 
-Scene composition now uses the Scene-owned `AppSceneExt`, Replay runtime controls use the Replay-owned `AppReplayExt`, and Simulation configuration/query ergonomics use the Simulation-owned `AppSimulationExt`. Other owner-specific extensions over the same App/runtime remain a preferred direction when they improve discoverability:
+Scene composition uses the Scene-owned `AppSceneExt`, Replay runtime controls use the
+Replay-owned `AppReplayExt`, Simulation configuration/query ergonomics use the
+Simulation-owned `AppSimulationExt`, Render ergonomics use the Render-owned
+`AppRenderExt`, and Runenwerk product-action binding composition uses the Input-owner
+`AppActionBindingsExt`:
 
 ```text
 AppSceneExt
 AppRenderExt
 AppSimulationExt
 AppReplayExt
-AppInput/ProductActionExt
+AppActionBindingsExt
 ```
 
-`AppSceneExt`, `AppRenderExt`, `AppReplayExt`, and `AppSimulationExt` are current concrete owner APIs.
-The remaining Input/product-action name is illustrative until its owner cut is separately accepted.
+These are current concrete owner APIs over the same App/runtime. The remaining inherent
+frame-pacing and product/query publication surfaces are separate Runenwerk ownership
+questions and are not reclassified by the Input cut.
 
 Moving an operation to an owner extension must not silently reclassify it as pre-run
 composition. Owner APIs must distinguish as applicable:

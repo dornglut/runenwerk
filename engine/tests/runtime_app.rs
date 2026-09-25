@@ -129,6 +129,63 @@ fn input_bindings_require_selected_input_capability() {
     );
 }
 
+#[test]
+fn public_input_resources_do_not_activate_input_binding_composition() {
+    let mut app = App::headless();
+    app.init_resource::<InputState>();
+    app.init_resource::<ActionState>();
+    app.add_input_bindings([("test.manual", PhysicalKeyIdentity::code("KeyM"))]);
+
+    let error = match app.run_for_frames(0) {
+        Ok(_) => panic!("public input resources must not activate product-action composition"),
+        Err(error) => error,
+    };
+    assert!(
+        format!("{error:#}").contains("InputFinalizePlugin"),
+        "composition error should identify the missing input capability: {error:#}"
+    );
+}
+
+#[test]
+fn selected_input_plugin_admits_product_action_bindings() {
+    let mut app = App::headless();
+    app.add_plugin(InputFinalizePlugin);
+    app.add_input_bindings([("test.plugin", PhysicalKeyIdentity::code("KeyQ"))]);
+
+    let app = app
+        .run_for_frames(0)
+        .expect("selected InputFinalizePlugin should admit product-action bindings");
+    let chords = app
+        .world()
+        .resource::<ActionState>()
+        .expect("InputFinalizePlugin should install ActionState")
+        .bindings()
+        .chords_for_action("test.plugin")
+        .expect("owner extension should register the requested action");
+    assert_eq!(chords.len(), 1);
+    assert_eq!(chords[0].key, PhysicalKeyIdentity::code("KeyQ"));
+}
+
+#[test]
+fn default_plugins_admit_product_action_bindings() {
+    let mut app = App::headless();
+    app.add_plugins(default_plugins());
+    app.add_input_bindings([("test.default", PhysicalKeyIdentity::code("KeyR"))]);
+
+    let app = app
+        .run_for_frames(0)
+        .expect("default plugin composition should admit product-action bindings");
+    let chords = app
+        .world()
+        .resource::<ActionState>()
+        .expect("default plugins should install ActionState")
+        .bindings()
+        .chords_for_action("test.default")
+        .expect("owner extension should register the requested action");
+    assert_eq!(chords.len(), 1);
+    assert_eq!(chords[0].key, PhysicalKeyIdentity::code("KeyR"));
+}
+
 #[derive(Debug, Default, Component, runen_ecs::Resource)]
 struct OrderLog(Vec<&'static str>);
 
