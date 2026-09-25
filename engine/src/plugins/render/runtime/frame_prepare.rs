@@ -385,6 +385,115 @@ mod automatic_main_replacement_tests {
     }
 
     #[test]
+    fn fixed_resolution_routes_selected_flow_offscreen_resolve_main_and_unrelated_flow_main() {
+        let scene = RenderFlow::new("fixed.test.scene")
+            .with_color_target_alias("scene_color")
+            .expect("scene color alias should be valid")
+            .fullscreen_pass("fixed.test.scene.pass")
+            .offscreen_products_only()
+            .write_target_alias("scene_color")
+            .finish()
+            .validate()
+            .expect("scene flow should validate");
+        let resolve = fixed_resolution_resolve_flow().expect("resolve flow should validate");
+        let unrelated = RenderFlow::new("fixed.test.unrelated")
+            .with_surface_color()
+            .expect("surface color should declare")
+            .fullscreen_pass("fixed.test.unrelated.pass")
+            .main_surface_only()
+            .write_surface_color()
+            .expect("surface color should write")
+            .finish()
+            .validate()
+            .expect("unrelated flow should validate");
+
+        let scene_compiled = compile_flow_plan(&scene).expect("scene flow should compile");
+        let resolve_compiled = compile_flow_plan(&resolve).expect("resolve flow should compile");
+        let unrelated_compiled =
+            compile_flow_plan(&unrelated).expect("unrelated flow should compile");
+        let compiled = vec![
+            scene_compiled.clone(),
+            resolve_compiled,
+            unrelated_compiled,
+        ];
+
+        let fixed = RenderFixedResolutionExecutionRequest::new(
+            producer(1),
+            scene.id(),
+            RenderTargetAliasKey::new("scene_color").expect("alias should be valid"),
+            (1280, 720),
+        )
+        .prepare_against_compiled_flow((1920, 1080), resolve.id(), &scene_compiled)
+        .expect("fixed execution should prepare");
+
+        let mut requests = PreparedRenderFrameRequestResource::default();
+        requests
+            .replace_contribution_with_automatic_main_replacements(
+                fixed.producer_id,
+                [fixed.internal_view.clone()],
+                [
+                    fixed.scene_invocation.clone(),
+                    fixed.resolve_invocation.clone(),
+                ],
+                [fixed.automatic_main_replacement],
+            )
+            .expect("fixed execution requests should publish");
+
+        let views =
+            build_prepared_views((1920, 1080), &requests).expect("views should prepare");
+        let extracted = ExtractedRenderStateMap::new();
+        let main_inputs =
+            build_prepared_flow_inputs(&compiled, &extracted, (1920, 1080))
+                .expect("main inputs should prepare");
+        let invocations = build_prepared_flow_invocations(
+            &compiled,
+            &extracted,
+            &main_inputs,
+            &views,
+            &requests,
+        )
+        .expect("invocations should prepare");
+
+        assert_eq!(
+            views
+                .iter()
+                .find(|view| view.view_id == "main")
+                .expect("main view should exist")
+                .target_size_px,
+            (1920, 1080)
+        );
+        assert_eq!(
+            views
+                .iter()
+                .find(|view| view.view_id == fixed.internal_view.view_id)
+                .expect("fixed internal view should exist")
+                .target_size_px,
+            (1280, 720)
+        );
+
+        let scene_invocations = invocations
+            .iter()
+            .filter(|invocation| invocation.flow_id == scene.id())
+            .collect::<Vec<_>>();
+        assert_eq!(scene_invocations.len(), 1);
+        assert_eq!(scene_invocations[0].view_id, fixed.internal_view.view_id);
+
+        let resolve_invocations = invocations
+            .iter()
+            .filter(|invocation| invocation.flow_id == resolve.id())
+            .collect::<Vec<_>>();
+        assert_eq!(resolve_invocations.len(), 1);
+        assert_eq!(resolve_invocations[0].view_id, "main");
+
+        let unrelated_invocations = invocations
+            .iter()
+            .filter(|invocation| invocation.flow_id == unrelated.id())
+            .collect::<Vec<_>>();
+        assert_eq!(unrelated_invocations.len(), 1);
+        assert_eq!(unrelated_invocations[0].view_id, "main");
+    }
+
+    #[test]
     fn explicit_main_invocation_preserves_existing_main_replacement_behavior() {
         let flow_id = flow(7);
         let request = PreparedFlowInvocationRequest::new("scene.main", flow_id, "main");
