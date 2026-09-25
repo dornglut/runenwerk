@@ -1,3 +1,4 @@
+use crate::plugins::render::backend::RenderSurfaceId;
 use crate::plugins::render::{
     CompiledRenderFlowPlan, PreparedFlowInvocationId, PreparedFlowInvocationRequest,
     PreparedTargetBinding, PreparedViewFrame, RenderDynamicTextureRetention,
@@ -24,9 +25,10 @@ struct RenderFixedResolutionExecutionIdentity {
 }
 
 fn fixed_resolution_execution_identity(
+    render_surface_id: RenderSurfaceId,
     scene_flow_id: RenderFlowId,
 ) -> RenderFixedResolutionExecutionIdentity {
-    let identity = scene_flow_id.to_string();
+    let identity = format!("surface-{}.{}", render_surface_id.raw(), scene_flow_id);
     RenderFixedResolutionExecutionIdentity {
         target_key: RenderDynamicTextureTargetKey::new(
             "render.fixed_resolution",
@@ -48,6 +50,7 @@ fn fixed_resolution_execution_identity(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderFixedResolutionExecutionRequest {
     pub producer_id: RenderFrameProducerId,
+    pub render_surface_id: RenderSurfaceId,
     pub scene_flow_id: RenderFlowId,
     pub scene_color_alias: RenderTargetAliasKey,
     pub internal_size: (u32, u32),
@@ -56,12 +59,14 @@ pub struct RenderFixedResolutionExecutionRequest {
 impl RenderFixedResolutionExecutionRequest {
     pub fn new(
         producer_id: RenderFrameProducerId,
+        render_surface_id: RenderSurfaceId,
         scene_flow_id: RenderFlowId,
         scene_color_alias: RenderTargetAliasKey,
         internal_size: (u32, u32),
     ) -> Self {
         Self {
             producer_id,
+            render_surface_id,
             scene_flow_id,
             scene_color_alias,
             internal_size,
@@ -75,7 +80,7 @@ impl RenderFixedResolutionExecutionRequest {
     ) -> Result<PreparedFixedResolutionExecution, RenderFixedResolutionExecutionError> {
         validate_extents(self.internal_size, output_size)?;
 
-        let identity = fixed_resolution_execution_identity(self.scene_flow_id);
+        let identity = fixed_resolution_execution_identity(self.render_surface_id, self.scene_flow_id);
         let target_key = identity.target_key.clone();
         let view_id = identity.internal_view_id.clone();
         let scene_invocation_id = identity.fixed_scene_invocation_id.clone();
@@ -110,6 +115,7 @@ impl RenderFixedResolutionExecutionRequest {
 
         Ok(PreparedFixedResolutionExecution {
             producer_id: self.producer_id,
+            render_surface_id: self.render_surface_id,
             output_size,
             internal_size: self.internal_size,
             scene_color_alias: self.scene_color_alias.clone(),
@@ -301,7 +307,7 @@ impl RenderFixedResolutionExecutionRequest {
         compiled_flow: &CompiledRenderFlowPlan,
     ) -> Option<PreparedFlowInvocationRequest> {
         self.validate_selected_flow(compiled_flow).ok()?;
-        let identity = fixed_resolution_execution_identity(self.scene_flow_id);
+        let identity = fixed_resolution_execution_identity(self.render_surface_id, self.scene_flow_id);
         Some(
             PreparedFlowInvocationRequest::new(
                 identity.native_scene_invocation_id,
@@ -337,9 +343,10 @@ impl RenderFixedResolutionExecutionRequest {
         ) {
             Ok(prepared) => RenderFixedResolutionExecutionAdmission::Fixed(prepared),
             Err(error) => {
-                let identity = fixed_resolution_execution_identity(self.scene_flow_id);
+                let identity = fixed_resolution_execution_identity(self.render_surface_id, self.scene_flow_id);
                 RenderFixedResolutionExecutionAdmission::NativeFallback(
                     RenderFixedResolutionFallback {
+                        render_surface_id: self.render_surface_id,
                         scene_flow_id: self.scene_flow_id,
                         requested_internal_size: self.internal_size,
                         output_size,
@@ -385,6 +392,7 @@ impl RenderFixedResolutionExecutionAdmission {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderFixedResolutionFallback {
+    pub render_surface_id: RenderSurfaceId,
     pub scene_flow_id: RenderFlowId,
     pub requested_internal_size: (u32, u32),
     pub output_size: (u32, u32),
@@ -399,6 +407,7 @@ pub struct RenderFixedResolutionFallback {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreparedFixedResolutionExecution {
     pub producer_id: RenderFrameProducerId,
+    pub render_surface_id: RenderSurfaceId,
     pub output_size: (u32, u32),
     pub internal_size: (u32, u32),
     pub scene_color_alias: RenderTargetAliasKey,
@@ -550,7 +559,11 @@ mod tests {
     #[test]
     fn fixed_resolution_builder_prepares_internal_target_and_native_resolve() {
         let request =
-            RenderFixedResolutionExecutionRequest::new(producer(7), flow(11), alias(), (1280, 720));
+            RenderFixedResolutionExecutionRequest::new(
+                producer(7),
+                RenderSurfaceId::primary(),
+                flow(11),
+                alias(), (1280, 720));
         let prepared = request
             .prepare((1920, 1080), flow(12))
             .expect("valid fixed-resolution request should prepare");
@@ -601,6 +614,7 @@ mod tests {
         let compiled = compiled_scene_flow("scene_color");
         let request = RenderFixedResolutionExecutionRequest::new(
             producer(7),
+            RenderSurfaceId::primary(),
             compiled.flow_id,
             alias(),
             (1280, 720),
@@ -611,6 +625,7 @@ mod tests {
 
         let missing = RenderFixedResolutionExecutionRequest::new(
             producer(7),
+            RenderSurfaceId::primary(),
             compiled.flow_id,
             RenderTargetAliasKey::new("other_color").expect("test alias should be valid"),
             (1280, 720),
@@ -621,7 +636,11 @@ mod tests {
         ));
 
         let mismatched_flow =
-            RenderFixedResolutionExecutionRequest::new(producer(7), flow(99), alias(), (1280, 720));
+            RenderFixedResolutionExecutionRequest::new(
+                producer(7),
+                RenderSurfaceId::primary(),
+                flow(99),
+                alias(), (1280, 720));
         assert!(matches!(
             mismatched_flow.prepare_against_compiled_flows(
                 (1920, 1080),
@@ -647,6 +666,7 @@ mod tests {
             crate::plugins::render::compile_flow_plan(&explicit).expect("flow should compile");
         let explicit_request = RenderFixedResolutionExecutionRequest::new(
             producer(7),
+            RenderSurfaceId::primary(),
             explicit.id(),
             alias(),
             (1280, 720),
@@ -673,6 +693,7 @@ mod tests {
             crate::plugins::render::compile_flow_plan(&main_only).expect("flow should compile");
         let main_only_request = RenderFixedResolutionExecutionRequest::new(
             producer(7),
+            RenderSurfaceId::primary(),
             main_only.id(),
             alias(),
             (1280, 720),
@@ -704,6 +725,7 @@ mod tests {
             crate::plugins::render::compile_flow_plan(&hardcoded).expect("flow should compile");
         let hardcoded_request = RenderFixedResolutionExecutionRequest::new(
             producer(7),
+            RenderSurfaceId::primary(),
             hardcoded.id(),
             alias(),
             (1280, 720),
@@ -724,6 +746,7 @@ mod tests {
         let wrong_resolve = compiled_scene_flow("other_color");
         let request = RenderFixedResolutionExecutionRequest::new(
             producer(7),
+            RenderSurfaceId::primary(),
             compiled.flow_id,
             alias(),
             (1280, 720),
@@ -744,6 +767,7 @@ mod tests {
         let compiled = compiled_scene_flow("scene_color");
         let valid = RenderFixedResolutionExecutionRequest::new(
             producer(7),
+            RenderSurfaceId::primary(),
             compiled.flow_id,
             alias(),
             (1280, 720),
@@ -756,6 +780,7 @@ mod tests {
 
         let invalid = RenderFixedResolutionExecutionRequest::new(
             producer(7),
+            RenderSurfaceId::primary(),
             compiled.flow_id,
             alias(),
             (1280, 800),
@@ -786,21 +811,33 @@ mod tests {
     #[test]
     fn fixed_resolution_builder_rejects_zero_mismatched_and_supersampled_extents() {
         let request =
-            RenderFixedResolutionExecutionRequest::new(producer(7), flow(11), alias(), (0, 720));
+            RenderFixedResolutionExecutionRequest::new(
+                producer(7),
+                RenderSurfaceId::primary(),
+                flow(11),
+                alias(), (0, 720));
         assert!(matches!(
             request.prepare((1920, 1080), flow(12)),
             Err(RenderFixedResolutionExecutionError::ZeroExtent)
         ));
 
         let request =
-            RenderFixedResolutionExecutionRequest::new(producer(7), flow(11), alias(), (1280, 800));
+            RenderFixedResolutionExecutionRequest::new(
+                producer(7),
+                RenderSurfaceId::primary(),
+                flow(11),
+                alias(), (1280, 800));
         assert!(matches!(
             request.prepare((1920, 1080), flow(12)),
             Err(RenderFixedResolutionExecutionError::AspectMismatch { .. })
         ));
 
         let request =
-            RenderFixedResolutionExecutionRequest::new(producer(7), flow(11), alias(), (2560, 1440));
+            RenderFixedResolutionExecutionRequest::new(
+                producer(7),
+                RenderSurfaceId::primary(),
+                flow(11),
+                alias(), (2560, 1440));
         assert!(matches!(
             request.prepare((1920, 1080), flow(12)),
             Err(RenderFixedResolutionExecutionError::InternalExtentExceedsOutput { .. })
