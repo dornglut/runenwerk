@@ -3,8 +3,7 @@
 use runen_input::{
     ContactId, ContactPhase, ContactPresence, DeliveryRole, EvidenceStatus, InputContext,
     InputObservation, InputObservationGroup, MeasurementDomain, ObservationOrigin,
-    PhysicalTabletControls, StylusTilt, TabletCapabilities, TabletObservation,
-    ToolId,
+    PhysicalTabletControls, StylusTilt, TabletCapabilities, TabletObservation, ToolId,
 };
 
 use crate::model::{

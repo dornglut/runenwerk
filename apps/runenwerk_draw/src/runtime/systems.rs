@@ -15,13 +15,6 @@ use engine::plugins::render::{
     SurfaceFrameSubmissionRegistryResource,
 };
 use engine::plugins::{InputState, MouseButtonTransitionSample, MouseMotionSample};
-use runen_input::{
-    AnalogMeasurement, ContactId, ContactPhase, ContactPresence, CoordinateSpace, DeliveryRole,
-    EvidenceStatus, InputContext, InputDeviceId, InputObservation, InputObservationGroup,
-    InputSourceId, InputToolKind, MeasurementDomain, ObservationOrigin, PhysicalTabletControls,
-    Point2, SourceTime, SourceTimeUnit, StylusTilt, TabletCapabilities, TabletObservation, ToolId,
-    Vector2,
-};
 use engine::runtime::RuntimeJobExecutorResource;
 use engine::runtime::{Res, ResMut};
 use native_tablet_input::{
@@ -30,6 +23,13 @@ use native_tablet_input::{
 use product::{
     ProductAuthorityClass, ProductFreshness, ProductIdentity, ProductQueryPolicy, ProductResidency,
     RenderProductSelection, RenderSelectedProduct, RenderTargetDescriptor,
+};
+use runen_input::{
+    AnalogMeasurement, ContactId, ContactPhase, ContactPresence, CoordinateSpace, DeliveryRole,
+    EvidenceStatus, InputContext, InputDeviceId, InputObservation, InputObservationGroup,
+    InputSourceId, InputToolKind, MeasurementDomain, ObservationOrigin, PhysicalTabletControls,
+    Point2, SourceTime, SourceTimeUnit, StylusTilt, TabletCapabilities, TabletObservation, ToolId,
+    Vector2,
 };
 use ui_input::{
     Modifiers, PointerButton, PointerContactId, PointerContactPhase, PointerContactState,
@@ -359,9 +359,7 @@ fn project_twist(measurement: Option<AnalogMeasurement>) -> Option<f32> {
     })
 }
 
-fn project_tangential_pressure(
-    measurement: Option<AnalogMeasurement>,
-) -> Option<f32> {
+fn project_tangential_pressure(measurement: Option<AnalogMeasurement>) -> Option<f32> {
     measurement.and_then(|measurement| match measurement.domain {
         MeasurementDomain::NormalizedUnitInterval
         | MeasurementDomain::Bounded { min: 0.0, max: 1.0 }
@@ -1355,11 +1353,7 @@ mod tests {
             tool_kind: InputToolKind::Pen,
             phase,
             presence: ContactPresence::Contact,
-            position: Point2::new(
-                position_x,
-                20.0,
-                CoordinateSpace::WindowPhysicalPixels,
-            ),
+            position: Point2::new(position_x, 20.0, CoordinateSpace::WindowPhysicalPixels),
             delta: Vector2::new(1.0, 0.0),
             pressure,
             tangential_pressure,
@@ -1376,10 +1370,7 @@ mod tests {
 
     fn tablet_group(observations: Vec<TabletObservation>) -> InputObservationGroup {
         InputObservationGroup::new(
-            InputContext::new(
-                InputSourceId::new(31),
-                Some(InputDeviceId::new(9)),
-            ),
+            InputContext::new(InputSourceId::new(31), Some(InputDeviceId::new(9))),
             observations
                 .into_iter()
                 .map(InputObservation::Tablet)
