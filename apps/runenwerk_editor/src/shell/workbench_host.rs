@@ -311,7 +311,7 @@ impl RunenwerkWorkbenchHost {
     }
 }
 
-fn installed_tool_suites() -> Vec<EditorToolSuite> {
+pub(crate) fn installed_tool_suites() -> Vec<EditorToolSuite> {
     vec![
         tool_suites::core_tool_suite::scene_tool_suite(),
         tool_suites::core_tool_suite::editor_core_tool_suite(),
@@ -391,14 +391,16 @@ fn workspace_profile_manifests_for_composition(
 ) -> Vec<WorkspaceProfileManifest> {
     match composition {
         RunenwerkWorkbenchComposition::FullEditor | RunenwerkWorkbenchComposition::Constrained => {
-            compositions::profiles::full_editor_profiles()
+            compositions::profiles::full_editor_profiles(tool_suites)
         }
         RunenwerkWorkbenchComposition::MaterialLab => {
-            compositions::profiles::material_lab_profiles()
+            compositions::profiles::material_lab_profiles(tool_suites)
         }
-        RunenwerkWorkbenchComposition::UiDesigner => compositions::profiles::ui_designer_profiles(),
+        RunenwerkWorkbenchComposition::UiDesigner => {
+            compositions::profiles::ui_designer_profiles(tool_suites)
+        },
         RunenwerkWorkbenchComposition::HeadlessValidation => {
-            compositions::profiles::headless_validation_profiles()
+            compositions::profiles::headless_validation_profiles(tool_suites)
         }
         RunenwerkWorkbenchComposition::Custom => {
             compositions::profiles::custom_profiles_for_tool_suites(tool_suites)
