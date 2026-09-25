@@ -1,4 +1,5 @@
 pub mod adapters;
+mod app_ext;
 pub mod admission;
 pub mod api;
 pub mod appearance;
@@ -65,6 +66,7 @@ mod plugin;
 pub mod runtime;
 
 pub use adapters::*;
+pub use app_ext::AppRenderExt;
 pub use api::*;
 pub use bytemuck;
 pub use composition::*;
