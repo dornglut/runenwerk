@@ -463,7 +463,8 @@ where
 
 pub(crate) fn configure_prediction<TDriver>(app: &mut App)
 where
-    TDriver: ReplicationDriver + InputDriver + Send + Sync + 'static,
+    TDriver: ReplicationDriver + SnapshotApplyDriver + InputDriver + Send + Sync + 'static,
+    TDriver::Snapshot: Clone + PartialEq + 'static,
     TDriver::Input: Clone + PartialEq + 'static,
 {
     app.init_resource::<NetworkInputStaging<TDriver::Input>>();

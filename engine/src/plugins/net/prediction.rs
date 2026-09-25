@@ -135,7 +135,7 @@ where
     TDriver: ReplicationDriver + InputDriver + Send + Sync + 'static,
     TDriver::Input: Clone + PartialEq,
 {
-    let Ok(mut integration) = world.remove_resource::<ClientPredictionIntegration>() else {
+    let Some(mut integration) = world.remove_resource::<ClientPredictionIntegration>() else {
         return Ok(false);
     };
     let mut replayed_commands = 0u64;
@@ -199,7 +199,7 @@ pub(crate) fn confirm_client_prediction_host_restored(
     world: &mut World,
     replication: &ClientReplicationSet<ClientReplicatedStateProduct>,
 ) -> anyhow::Result<()> {
-    let Ok(mut integration) = world.remove_resource::<ClientPredictionIntegration>() else {
+    let Some(mut integration) = world.remove_resource::<ClientPredictionIntegration>() else {
         return Ok(());
     };
     let result = integration
