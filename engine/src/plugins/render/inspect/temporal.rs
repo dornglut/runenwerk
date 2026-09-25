@@ -204,11 +204,15 @@ pub enum RenderFixedResolutionExecutionEvidenceError {
     MissingDynamicTarget,
     #[error("fixed-resolution prepared frame is missing the admitted scene invocation")]
     MissingSceneInvocation,
-    #[error("fixed-resolution prepared scene invocation does not retain the admitted target binding")]
+    #[error(
+        "fixed-resolution prepared scene invocation does not retain the admitted target binding"
+    )]
     SceneTargetBindingMismatch,
     #[error("fixed-resolution prepared frame is missing the admitted resolve invocation")]
     MissingResolveInvocation,
-    #[error("fixed-resolution prepared resolve invocation does not retain the admitted source binding")]
+    #[error(
+        "fixed-resolution prepared resolve invocation does not retain the admitted source binding"
+    )]
     ResolveSourceBindingMismatch,
 }
 
@@ -257,15 +261,16 @@ pub fn inspect_fixed_resolution_execution(
             let scene = frame
                 .flow_invocations
                 .iter()
-                .find(|invocation| invocation.invocation_id == prepared.scene_invocation.invocation_id)
+                .find(|invocation| {
+                    invocation.invocation_id == prepared.scene_invocation.invocation_id
+                })
                 .filter(|invocation| {
                     invocation.flow_id == prepared.scene_invocation.flow_id
                         && invocation.view_id == internal_view.view_id
                 })
                 .ok_or(RenderFixedResolutionExecutionEvidenceError::MissingSceneInvocation)?;
-            if scene
-                .target_alias_bindings
-                .get(&crate::plugins::render::RenderTargetAliasKey::new(
+            if scene.target_alias_bindings.get(
+                &crate::plugins::render::RenderTargetAliasKey::new(
                     prepared
                         .scene_invocation
                         .target_alias_bindings
@@ -274,11 +279,10 @@ pub fn inspect_fixed_resolution_execution(
                         .expect("prepared fixed scene invocation must retain one target alias")
                         .as_str(),
                 )
-                .expect("prepared target alias is already validated"))
-                != Some(&crate::plugins::render::PreparedTargetBinding::DynamicTexture(
-                    target.key.clone(),
-                ))
-            {
+                .expect("prepared target alias is already validated"),
+            ) != Some(
+                &crate::plugins::render::PreparedTargetBinding::DynamicTexture(target.key.clone()),
+            ) {
                 return Err(
                     RenderFixedResolutionExecutionEvidenceError::SceneTargetBindingMismatch,
                 );
@@ -300,9 +304,11 @@ pub fn inspect_fixed_resolution_execution(
             )
             .expect("fixed-resolution resolve alias constant must remain valid");
             if resolve.target_alias_bindings.get(&resolve_alias)
-                != Some(&crate::plugins::render::PreparedTargetBinding::DynamicTexture(
-                    target.key.clone(),
-                ))
+                != Some(
+                    &crate::plugins::render::PreparedTargetBinding::DynamicTexture(
+                        target.key.clone(),
+                    ),
+                )
             {
                 return Err(
                     RenderFixedResolutionExecutionEvidenceError::ResolveSourceBindingMismatch,
@@ -464,7 +470,11 @@ fn validate_native_fallback(
     request: &RenderTemporalInspectionRequest,
     diagnostics: &mut Vec<RenderTemporalDiagnostic>,
 ) {
-    let reason = request.native_fallback_reason.as_deref().unwrap_or("").trim();
+    let reason = request
+        .native_fallback_reason
+        .as_deref()
+        .unwrap_or("")
+        .trim();
     if request.native_fallback_active && reason.is_empty() {
         diagnostics.push(RenderTemporalDiagnostic::error(
             "native_fallback_missing_reason",
