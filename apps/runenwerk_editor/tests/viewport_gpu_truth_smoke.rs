@@ -2,7 +2,7 @@ use asset::{
     ArtifactCacheKey, ArtifactPayloadKind, AssetArtifactDescriptor, AssetCatalog, AssetKind,
     AssetRecord, AssetSourceDescriptor, SourceHash, asset_artifact_id, asset_id, asset_source_id,
 };
-use editor_core::{DocumentId, DocumentKind};
+use editor_core::DocumentKind;
 use editor_persistence::{
     ProjectFileV3, SceneEntityRecordV2, SceneFileV2, SceneMaterialAssignmentsRecord,
     SceneMaterialSlotRecord, SceneMaterialSourceRefRecord, ScenePrimitiveKind,
@@ -1235,10 +1235,7 @@ fn wr028_texture_surface_request(
         mounted_unit_id: ui_composition::MountedUnitId::new(1),
         unavailable_content_policy: ui_composition::UnavailableContentPolicy::ShowFallback,
         workspace_profile_id: editor_shell::TEXTURE_WORKSPACE_PROFILE_ID,
-        document_context: editor_shell::SurfaceDocumentContext::Resolved {
-            document_id: DocumentId(28),
-            document_kind,
-        },
+        document_context: editor_shell::SurfaceDocumentContext::Resolved { document_kind },
         panel_instance_id: editor_shell::PanelInstanceId::try_from_raw(28).unwrap(),
         tab_stack_id: editor_shell::TabStackId::try_from_raw(28).unwrap(),
         tool_surface_instance_id: editor_shell::ToolSurfaceInstanceId::try_from_raw(28).unwrap(),
