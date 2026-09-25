@@ -1055,7 +1055,7 @@ mod tests {
         let resolve_plan =
             engine::plugins::render::compile_flow_plan(&resolve).expect("resolve flow should compile");
         let producer_id = producer(RL2_PRODUCER_ID);
-        let fixed = engine::plugins::render::RenderFixedResolutionExecutionRequest::new(
+        let mut fixed = engine::plugins::render::RenderFixedResolutionExecutionRequest::new(
             producer_id,
             RenderSurfaceId::primary(),
             scene.id(),
@@ -1068,6 +1068,11 @@ mod tests {
 
         let radiance_key =
             RenderDynamicTextureTargetKey::new(RL2_TARGET_NAMESPACE, RL2_TARGET_ID);
+        fixed.scene_invocation = fixed
+            .scene_invocation
+            .clone()
+            .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, radiance_key.clone())
+            .expect("radiance alias should bind");
         let radiance_target = RenderDynamicTextureTargetDescriptor::new(
             radiance_key.clone(),
             1280,
@@ -1084,11 +1089,6 @@ mod tests {
             RenderTextureSampleMode::NonFilterableFloat,
             RenderDynamicTextureRetention::RetainWhileRequested,
         );
-        let scene_invocation = fixed
-            .scene_invocation
-            .clone()
-            .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, radiance_key.clone())
-            .expect("radiance alias should bind");
         let fixture = founding_fixture_with_observation_and_extent(
             RenderAffineTransform3::identity(),
             1280,
