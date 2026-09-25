@@ -183,35 +183,146 @@ impl RenderTemporalInspection {
     }
 }
 
-pub fn fixed_resolution_admission_resolution_evidence(
-    admission: &crate::plugins::render::RenderFixedResolutionExecutionAdmission,
-) -> RenderTemporalResolutionEvidence {
-    match admission {
-        crate::plugins::render::RenderFixedResolutionExecutionAdmission::Fixed(prepared) => {
-            RenderTemporalResolutionEvidence {
-                internal_size: [prepared.internal_size.0, prepared.internal_size.1],
-                output_size: [prepared.output_size.0, prepared.output_size.1],
-                policy: RenderTemporalResolutionPolicy::Fixed,
-            }
-        }
-        crate::plugins::render::RenderFixedResolutionExecutionAdmission::NativeFallback(
-            fallback,
-        ) => RenderTemporalResolutionEvidence {
-            internal_size: [fallback.output_size.0, fallback.output_size.1],
-            output_size: [fallback.output_size.0, fallback.output_size.1],
-            policy: RenderTemporalResolutionPolicy::Native,
-        },
-    }
+#[derive(Debug, Clone, PartialEq)]
+pub struct RenderFixedResolutionExecutionEvidence {
+    pub resolution: RenderTemporalResolutionEvidence,
+    pub native_fallback_active: bool,
+    pub native_fallback_reason: Option<String>,
+    pub target_key: Option<crate::plugins::render::RenderDynamicTextureTargetKey>,
+    pub internal_view_id: Option<String>,
+    pub scene_invocation_id: Option<crate::plugins::render::PreparedFlowInvocationId>,
+    pub resolve_invocation_id: Option<crate::plugins::render::PreparedFlowInvocationId>,
 }
 
-pub fn fixed_resolution_admission_native_fallback_evidence(
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum RenderFixedResolutionExecutionEvidenceError {
+    #[error("fixed-resolution prepared surface extent does not match admitted output extent")]
+    OutputExtentMismatch,
+    #[error("fixed-resolution prepared frame is missing the admitted internal view")]
+    MissingInternalView,
+    #[error("fixed-resolution prepared frame is missing the admitted dynamic color target")]
+    MissingDynamicTarget,
+    #[error("fixed-resolution prepared frame is missing the admitted scene invocation")]
+    MissingSceneInvocation,
+    #[error("fixed-resolution prepared scene invocation does not retain the admitted target binding")]
+    SceneTargetBindingMismatch,
+    #[error("fixed-resolution prepared frame is missing the admitted resolve invocation")]
+    MissingResolveInvocation,
+    #[error("fixed-resolution prepared resolve invocation does not retain the admitted source binding")]
+    ResolveSourceBindingMismatch,
+}
+
+pub fn inspect_fixed_resolution_execution(
     admission: &crate::plugins::render::RenderFixedResolutionExecutionAdmission,
-) -> (bool, Option<String>) {
+    frame: &crate::plugins::render::PreparedRenderFrame,
+) -> Result<RenderFixedResolutionExecutionEvidence, RenderFixedResolutionExecutionEvidenceError> {
     match admission {
-        crate::plugins::render::RenderFixedResolutionExecutionAdmission::Fixed(_) => (false, None),
         crate::plugins::render::RenderFixedResolutionExecutionAdmission::NativeFallback(
             fallback,
-        ) => (true, Some(fallback.reason.clone())),
+        ) => Ok(RenderFixedResolutionExecutionEvidence {
+            resolution: RenderTemporalResolutionEvidence {
+                internal_size: [fallback.output_size.0, fallback.output_size.1],
+                output_size: [fallback.output_size.0, fallback.output_size.1],
+                policy: RenderTemporalResolutionPolicy::Native,
+            },
+            native_fallback_active: true,
+            native_fallback_reason: Some(fallback.reason.clone()),
+            target_key: None,
+            internal_view_id: None,
+            scene_invocation_id: None,
+            resolve_invocation_id: None,
+        }),
+        crate::plugins::render::RenderFixedResolutionExecutionAdmission::Fixed(prepared) => {
+            if frame.surface.target_size_px != prepared.output_size {
+                return Err(RenderFixedResolutionExecutionEvidenceError::OutputExtentMismatch);
+            }
+
+            let internal_view = frame
+                .views
+                .iter()
+                .find(|view| view.view_id == prepared.internal_view.view_id)
+                .filter(|view| view.target_size_px == prepared.internal_size)
+                .ok_or(RenderFixedResolutionExecutionEvidenceError::MissingInternalView)?;
+
+            let target = frame
+                .dynamic_texture_targets
+                .iter()
+                .find(|target| target.key == prepared.target_key)
+                .filter(|target| {
+                    target.width == prepared.internal_size.0
+                        && target.height == prepared.internal_size.1
+                })
+                .ok_or(RenderFixedResolutionExecutionEvidenceError::MissingDynamicTarget)?;
+
+            let scene = frame
+                .flow_invocations
+                .iter()
+                .find(|invocation| invocation.invocation_id == prepared.scene_invocation.invocation_id)
+                .filter(|invocation| {
+                    invocation.flow_id == prepared.scene_invocation.flow_id
+                        && invocation.view_id == internal_view.view_id
+                })
+                .ok_or(RenderFixedResolutionExecutionEvidenceError::MissingSceneInvocation)?;
+            if scene
+                .target_alias_bindings
+                .get(&crate::plugins::render::RenderTargetAliasKey::new(
+                    prepared
+                        .scene_invocation
+                        .target_alias_bindings
+                        .keys()
+                        .next()
+                        .expect("prepared fixed scene invocation must retain one target alias")
+                        .as_str(),
+                )
+                .expect("prepared target alias is already validated"))
+                != Some(&crate::plugins::render::PreparedTargetBinding::DynamicTexture(
+                    target.key.clone(),
+                ))
+            {
+                return Err(
+                    RenderFixedResolutionExecutionEvidenceError::SceneTargetBindingMismatch,
+                );
+            }
+
+            let resolve = frame
+                .flow_invocations
+                .iter()
+                .find(|invocation| {
+                    invocation.invocation_id == prepared.resolve_invocation.invocation_id
+                })
+                .filter(|invocation| {
+                    invocation.flow_id == prepared.resolve_invocation.flow_id
+                        && invocation.view_id == "main"
+                })
+                .ok_or(RenderFixedResolutionExecutionEvidenceError::MissingResolveInvocation)?;
+            let resolve_alias = crate::plugins::render::RenderTargetAliasKey::new(
+                crate::plugins::render::FIXED_RESOLUTION_RESOLVE_SOURCE_ALIAS,
+            )
+            .expect("fixed-resolution resolve alias constant must remain valid");
+            if resolve.target_alias_bindings.get(&resolve_alias)
+                != Some(&crate::plugins::render::PreparedTargetBinding::DynamicTexture(
+                    target.key.clone(),
+                ))
+            {
+                return Err(
+                    RenderFixedResolutionExecutionEvidenceError::ResolveSourceBindingMismatch,
+                );
+            }
+
+            Ok(RenderFixedResolutionExecutionEvidence {
+                resolution: RenderTemporalResolutionEvidence {
+                    internal_size: [prepared.internal_size.0, prepared.internal_size.1],
+                    output_size: [prepared.output_size.0, prepared.output_size.1],
+                    policy: RenderTemporalResolutionPolicy::Fixed,
+                },
+                native_fallback_active: false,
+                native_fallback_reason: None,
+                target_key: Some(target.key.clone()),
+                internal_view_id: Some(internal_view.view_id.clone()),
+                scene_invocation_id: Some(scene.invocation_id.clone()),
+                resolve_invocation_id: Some(resolve.invocation_id.clone()),
+            })
+        }
     }
 }
 
