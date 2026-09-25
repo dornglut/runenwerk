@@ -810,7 +810,7 @@ mod tests {
         let mut runtime = runtime();
         let mut identities = EditorCompositionIdentityAllocator::from_runtime(&runtime);
         let stack = first_stack(&runtime);
-        let stable_key = ToolSurfaceStableKey::new("runenwerk.test.registry-native").unwrap();
+        let stable_key = ToolSurfaceStableKey::new("runenwerk.test.registry_native").unwrap();
         let registry = registry_for_surface_with_capabilities(
             PanelKind::Diagnostics,
             &stable_key,
