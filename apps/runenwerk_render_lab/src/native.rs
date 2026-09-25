@@ -499,7 +499,7 @@ fn publish_render_lab_frame_system(
             .resolve
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("temporal quality resolve plan is unavailable"))?;
-        let fixed = engine::plugins::render::RenderFixedResolutionExecutionRequest::new(
+        let mut fixed = engine::plugins::render::RenderFixedResolutionExecutionRequest::new(
             producer_id,
             RenderSurfaceId::primary(),
             flow_id.0,
@@ -507,7 +507,7 @@ fn publish_render_lab_frame_system(
             (width, height),
         )
         .prepare_against_compiled_flows(output_size, scene_plan, resolve_plan)?;
-        let scene_invocation = fixed
+        fixed.scene_invocation = fixed
             .scene_invocation
             .clone()
             .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, target_key)?;
@@ -518,7 +518,6 @@ fn publish_render_lab_frame_system(
             producer_id,
             target,
             fixed,
-            scene_invocation,
             contribution,
         );
     }
@@ -577,7 +576,6 @@ fn stage_render_lab_fixed_quality_publication(
     producer_id: engine::plugins::render::RenderFrameProducerId,
     radiance_target: RenderDynamicTextureTargetDescriptor,
     fixed: engine::plugins::render::PreparedFixedResolutionExecution,
-    scene_invocation: PreparedFlowInvocationRequest,
     contribution: RenderDeterministicFrameContribution,
 ) -> Result<()> {
     let mut staged_targets = targets.clone();
@@ -592,7 +590,10 @@ fn stage_render_lab_fixed_quality_publication(
         producer_id,
         fixed.render_surface_id,
         [fixed.internal_view.clone()],
-        [scene_invocation, fixed.resolve_invocation.clone()],
+        [
+            fixed.scene_invocation.clone(),
+            fixed.resolve_invocation.clone(),
+        ],
         [fixed.automatic_main_replacement],
     )?;
 
@@ -1118,7 +1119,6 @@ mod tests {
             producer_id,
             radiance_target,
             fixed,
-            scene_invocation,
             contribution,
         )
         .expect("fixed quality publication");
