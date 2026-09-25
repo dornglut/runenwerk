@@ -7,9 +7,10 @@ use engine::prelude::*;
 fn replay_controls_reject_without_replay_plugin() {
     let mut app = App::headless();
 
-    let error = app
-        .start_recording()
-        .expect_err("Replay controls must reject when ReplayPlugin is absent");
+    let error = match app.start_recording() {
+        Ok(_) => panic!("Replay controls must reject when ReplayPlugin is absent"),
+        Err(error) => error,
+    };
 
     assert!(format!("{error:#}").contains("ReplayPlugin is not installed"));
 }
@@ -21,9 +22,10 @@ fn public_replay_resources_do_not_activate_replay_controls() {
     app.init_resource::<ReplayRecorderResource>();
     app.init_resource::<ReplayControllerResource>();
 
-    let error = app
-        .start_recording()
-        .expect_err("Replay resources alone must not activate Replay controls");
+    let error = match app.start_recording() {
+        Ok(_) => panic!("Replay resources alone must not activate Replay controls"),
+        Err(error) => error,
+    };
 
     assert!(format!("{error:#}").contains("ReplayPlugin is not installed"));
 }
