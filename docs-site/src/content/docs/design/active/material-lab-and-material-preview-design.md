@@ -6,6 +6,8 @@ owner: domain/material_graph
 layer: domain / app-runtime / engine-render
 canonical: true
 last_reviewed: 2026-09-17
+publication: reference
+pagefind: false
 related_designs:
   - ../implemented/editor-rendered-world-and-multi-entity-viewport-design.md
   - ../implemented/render-product-surface-foundation-bundle-design.md

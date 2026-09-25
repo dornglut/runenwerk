@@ -6,6 +6,8 @@ owner: ui
 layer: architecture
 canonical: true
 last_reviewed: 2026-09-13
+publication: reference
+pagefind: false
 related_docs:
   - ./ui-framework-architecture.md
   - ./diagrams/live-uiplugin-runtime-platform.puml

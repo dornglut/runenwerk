@@ -6,6 +6,11 @@ owner: ui
 layer: domain
 canonical: true
 last_reviewed: 2026-09-13
+publication: repository-current
+draft: true
+pagefind: false
+sidebar:
+  hidden: true
 related:
   - ./ui-program-architecture.md
   - ../../architecture/ui-framework-architecture.md

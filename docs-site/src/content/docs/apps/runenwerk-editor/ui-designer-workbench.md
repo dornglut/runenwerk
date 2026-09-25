@@ -6,6 +6,7 @@ owner: editor
 layer: app
 canonical: true
 last_reviewed: 2026-09-10
+publication: primary
 related_designs:
   - ../../design/accepted/ui-designer-workbench-product-design.md
 ---

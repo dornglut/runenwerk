@@ -6,6 +6,7 @@ owner: engine
 layer: engine-runtime
 canonical: true
 last_reviewed: 2026-05-21
+publication: primary
 ---
 
 # Render Target Architecture

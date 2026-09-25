@@ -6,6 +6,7 @@ owner: editor
 layer: domain
 canonical: true
 last_reviewed: 2026-09-16
+publication: primary
 related_designs:
   - ../../design/accepted/runenwerk-editor-coordination-semantic-model.md
   - ../../design/implemented/editor-tool-suite-registry-and-workbench-host-design.md

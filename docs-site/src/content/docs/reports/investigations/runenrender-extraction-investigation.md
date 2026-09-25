@@ -6,6 +6,8 @@ owner: render
 layer: investigation
 canonical: true
 last_reviewed: 2026-07-21
+publication: reference
+pagefind: false
 related_docs:
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md

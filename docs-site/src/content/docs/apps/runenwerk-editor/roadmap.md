@@ -6,6 +6,7 @@ owner: editor
 layer: app
 canonical: true
 last_reviewed: 2026-09-25
+publication: primary
 related_designs:
   - ../../design/accepted/sdf-first-field-world-platform-design.md
   - ../../design/implemented/ui-definition-formation-foundation-design.md

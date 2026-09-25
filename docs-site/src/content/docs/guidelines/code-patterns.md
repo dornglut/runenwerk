@@ -6,6 +6,8 @@ owner: workspace
 layer: workspace
 canonical: true
 last_reviewed: 2026-06-25
+publication: reference
+pagefind: false
 related_docs:
   - ./programming-principles.md
   - ./architecture.md

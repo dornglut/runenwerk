@@ -6,6 +6,7 @@ owner: ui
 layer: domain
 canonical: true
 last_reviewed: 2026-06-20
+publication: primary
 related_designs:
   - ../../design/accepted/adaptive-ui-composition-design.md
   - ../../design/accepted/app-neutral-ui-composition-design.md

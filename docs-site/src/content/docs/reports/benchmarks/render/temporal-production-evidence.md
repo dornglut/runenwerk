@@ -6,6 +6,8 @@ owner: engine
 layer: engine-runtime / renderer temporal production evidence
 canonical: false
 last_reviewed: 2026-05-23
+publication: reference
+pagefind: false
 related:
   - ../../../../engine/reference/plugins/render/public-api-reference.md
   - ../../closeouts/wr-072-renderer-temporal-production-evidence/closeout.md

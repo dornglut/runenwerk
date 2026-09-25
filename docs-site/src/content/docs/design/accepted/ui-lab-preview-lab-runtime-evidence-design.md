@@ -6,6 +6,8 @@ owner: editor
 layer: app/runtime-evidence
 canonical: true
 last_reviewed: 2026-09-12
+publication: reference
+pagefind: false
 related:
   - ./ui-lab-persistence-project-io-diff-apply-rollback-design.md
   - ./ui-lab-operation-driven-visual-authoring-design.md

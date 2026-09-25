@@ -6,6 +6,7 @@ owner: engine
 layer: engine-runtime
 canonical: true
 last_reviewed: 2026-09-25
+publication: primary
 ---
 
 # Input Plugin Architecture

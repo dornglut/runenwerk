@@ -6,6 +6,8 @@ owner: engine
 layer: engine-runtime / render product surfaces
 canonical: true
 last_reviewed: 2026-09-12
+publication: reference
+pagefind: false
 related_designs:
   - ./render-product-graph-platform-design.md
   - ./render-contract-ergonomics-design.md

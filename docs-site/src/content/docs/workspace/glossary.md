@@ -6,6 +6,11 @@ owner: workspace
 layer: workspace
 canonical: true
 last_reviewed: 2026-07-22
+publication: repository-current
+draft: true
+pagefind: false
+sidebar:
+  hidden: true
 related_docs:
   - ./start-here.md
   - ../architecture/repository-family-architecture.md

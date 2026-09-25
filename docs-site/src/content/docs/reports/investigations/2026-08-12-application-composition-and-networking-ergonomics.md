@@ -6,6 +6,8 @@ owner: workspace
 layer: investigation
 canonical: false
 last_reviewed: 2026-09-13
+publication: reference
+pagefind: false
 related_docs:
   - ../../adr/accepted/0017-cross-authority-consistency-and-graph-semantics.md
   - ../../adr/accepted/0018-semantic-federation-and-physical-realization.md

@@ -6,6 +6,8 @@ owner: ui
 layer: reports
 canonical: true
 last_reviewed: 2026-07-06
+publication: reference
+pagefind: false
 related_docs:
   - ../../workspace/start-here.md
   - ../../workspace/workflow-lifecycle.md

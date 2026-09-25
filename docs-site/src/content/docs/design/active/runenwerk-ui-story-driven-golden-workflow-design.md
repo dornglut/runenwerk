@@ -6,6 +6,8 @@ owner: ui
 layer: domain
 canonical: true
 last_reviewed: 2026-09-13
+publication: reference
+pagefind: false
 related_designs:
   - ../implemented/ui-program-architecture.md
 related_docs:

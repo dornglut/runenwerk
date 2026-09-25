@@ -6,6 +6,8 @@ owner: apps/runenwerk_editor
 layer: app-runtime / engine-render
 canonical: true
 last_reviewed: 2026-09-12
+publication: reference
+pagefind: false
 related_designs:
   - ./render-product-surface-foundation-bundle-design.md
   - ./workspace-viewport-expression-upgrade-design.md

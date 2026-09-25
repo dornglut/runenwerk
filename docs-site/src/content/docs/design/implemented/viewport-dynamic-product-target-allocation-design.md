@@ -6,6 +6,8 @@ owner: editor
 layer: engine
 canonical: true
 last_reviewed: 2026-05-16
+publication: reference
+pagefind: false
 related_designs:
   - ./render-product-surface-foundation-bundle-design.md
   - ./workspace-viewport-expression-upgrade-design.md

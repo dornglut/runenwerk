@@ -6,6 +6,7 @@ owner: engine
 layer: engine-runtime / renderer
 canonical: false
 last_reviewed: 2026-05-22
+publication: primary
 related:
   - ../reference/plugins/render/render-flow-usage-guide.md
   - ../reference/plugins/render/public-api-reference.md

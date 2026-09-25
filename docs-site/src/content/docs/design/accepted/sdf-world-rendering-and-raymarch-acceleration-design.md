@@ -6,6 +6,8 @@ owner: engine
 layer: engine-runtime / renderer / sdf-products
 canonical: true
 last_reviewed: 2026-09-13
+publication: reference
+pagefind: false
 related_designs:
   - ./sdf-first-field-world-platform-design.md
   - ./sdf-product-renderer-and-gpu-residency-design.md

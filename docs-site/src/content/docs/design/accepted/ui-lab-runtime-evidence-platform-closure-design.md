@@ -6,6 +6,8 @@ owner: editor
 layer: app/runtime-evidence
 canonical: true
 last_reviewed: 2026-09-12
+publication: reference
+pagefind: false
 related_designs:
   - ./ui-lab-perfectionist-audit-design.md
   - ./ui-lab-preview-lab-runtime-evidence-design.md

@@ -6,6 +6,7 @@ owner: editor
 layer: app
 canonical: true
 last_reviewed: 2026-04-27
+publication: primary
 related:
   - ./first-3d-editor-mvp.md
   - ./implementation-sequence.md

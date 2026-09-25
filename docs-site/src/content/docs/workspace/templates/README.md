@@ -6,6 +6,11 @@ owner: workspace
 layer: workspace
 canonical: true
 last_reviewed: 2026-04-28
+publication: repository-current
+draft: true
+pagefind: false
+sidebar:
+  hidden: true
 ---
 
 # Workspace Templates

@@ -6,6 +6,7 @@ owner: engine
 layer: engine-runtime
 canonical: true
 last_reviewed: 2026-05-22
+publication: primary
 ---
 
 # Render Flow Planning Benchmarks

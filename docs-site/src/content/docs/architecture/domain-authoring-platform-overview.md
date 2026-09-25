@@ -6,6 +6,11 @@ owner: workspace
 layer: history
 canonical: false
 last_reviewed: 2026-08-12
+publication: history
+draft: true
+pagefind: false
+sidebar:
+  hidden: true
 replacement_docs:
   - ./runenwerk-platform-architecture.md
   - ../guidelines/domain-program-architecture-pattern.md

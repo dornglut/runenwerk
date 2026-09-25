@@ -6,6 +6,7 @@ owner: ui
 layer: domain
 canonical: true
 last_reviewed: 2026-09-12
+publication: primary
 ---
 
 # UI Dependency Boundaries

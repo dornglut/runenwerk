@@ -6,6 +6,11 @@ owner: net
 layer: net
 canonical: false
 last_reviewed: 2026-09-15
+publication: history
+draft: true
+pagefind: false
+sidebar:
+  hidden: true
 replaced_by: ./multiplayer-replication-implementation-roadmap.md
 ---
 

@@ -6,6 +6,8 @@ owner: engine
 layer: architecture
 canonical: true
 last_reviewed: 2026-09-12
+publication: reference
+pagefind: false
 related_adrs:
   - ./0018-semantic-federation-and-physical-realization.md
   - ./0019-batteries-included-application-composition.md

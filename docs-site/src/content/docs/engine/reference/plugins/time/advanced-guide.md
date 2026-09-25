@@ -6,6 +6,7 @@ owner: engine
 layer: engine-runtime
 canonical: true
 last_reviewed: 2026-04-27
+publication: primary
 ---
 
 # Time Plugin Advanced Guide

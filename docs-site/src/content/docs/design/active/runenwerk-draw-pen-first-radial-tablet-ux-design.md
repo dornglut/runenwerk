@@ -6,6 +6,8 @@ owner: drawing
 layer: app
 canonical: true
 last_reviewed: 2026-05-19
+publication: reference
+pagefind: false
 related_docs:
   - ../../apps/runenwerk-draw/README.md
   - ./drawing-authoring-and-comic-layout-platform-design.md

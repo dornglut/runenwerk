@@ -11,44 +11,38 @@ export default defineConfig({
 			title: 'Runenwerk Docs',
 			sidebar: [
 				{
-					label: 'Workspace',
-					autogenerate: { directory: 'workspace' },
+					label: 'Start here',
+					items: [
+						{ label: 'Runenwerk Docs', link: '/' },
+						{ label: 'Domain', link: '/domain/00-overview/' },
+						{ label: 'Engine', link: '/engine/' },
+						{
+							label: 'Runenwerk Editor',
+							link: '/apps/runenwerk-editor/current-architecture/',
+						},
+						{ label: 'Networking', link: '/net/readme/' },
+					],
 				},
 				{
-					label: 'Software Development',
-					autogenerate: { directory: 'software-development' },
+					label: 'Primary documentation',
+					items: [
+						{ label: 'Adapters', autogenerate: { directory: 'adapters' } },
+						{ label: 'Apps', autogenerate: { directory: 'apps' } },
+						{ label: 'Domain', autogenerate: { directory: 'domain' } },
+						{ label: 'Engine', autogenerate: { directory: 'engine' } },
+						{ label: 'Foundation', autogenerate: { directory: 'foundation' } },
+						{ label: 'Net', autogenerate: { directory: 'net' } },
+					],
 				},
 				{
-					label: 'Domain',
-					autogenerate: { directory: 'domain' },
-				},
-				{
-					label: 'Engine',
-					autogenerate: { directory: 'engine' },
-				},
-				{
-					label: 'Net',
-					autogenerate: { directory: 'net' },
-				},
-				{
-					label: 'Apps',
-					autogenerate: { directory: 'apps' },
-				},
-				{
-					label: 'Adapters',
-					autogenerate: { directory: 'adapters' },
-				},
-				{
-					label: 'ADRs',
-					autogenerate: { directory: 'adr' },
-				},
-				{
-					label: 'Design',
-					autogenerate: { directory: 'design' },
-				},
-				{
-					label: 'Guidelines',
-					autogenerate: { directory: 'guidelines' },
+					label: 'Reference',
+					items: [
+						{ label: 'Architecture', autogenerate: { directory: 'architecture' } },
+						{ label: 'ADRs', autogenerate: { directory: 'adr' } },
+						{ label: 'Design', autogenerate: { directory: 'design' } },
+						{ label: 'Guidelines', autogenerate: { directory: 'guidelines' } },
+						{ label: 'Reports', autogenerate: { directory: 'reports' } },
+					],
 				},
 			],
 		}),

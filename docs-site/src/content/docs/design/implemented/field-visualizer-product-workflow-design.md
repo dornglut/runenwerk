@@ -6,6 +6,8 @@ owner: apps/runenwerk_editor
 layer: app-runtime / editor-ui
 canonical: true
 last_reviewed: 2026-09-12
+publication: reference
+pagefind: false
 related_designs:
   - ./editor-rendered-world-and-multi-entity-viewport-design.md
   - ./render-product-surface-foundation-bundle-design.md

@@ -6,6 +6,8 @@ owner: workspace
 layer: architecture
 canonical: true
 last_reviewed: 2026-09-14
+publication: reference
+pagefind: false
 related_adrs:
   - ./0014-repository-family-extraction-boundaries.md
   - ./0017-cross-authority-consistency-and-graph-semantics.md

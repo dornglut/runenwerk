@@ -6,6 +6,7 @@ owner: ui
 layer: domain
 canonical: true
 last_reviewed: 2026-09-14
+publication: primary
 ---
 
 # UI Domain Current-State Architecture
@@ -421,10 +422,10 @@ consumer cutover requires a new issue and an exact then-current RunenUI review.
 
 - [Runenwerk UI Local Runtime and Integration Architecture](../../architecture/ui-framework-architecture.md)
 - [Workspace Architecture Boundaries](../../guidelines/architecture.md)
-- [Runenwerk Architecture Doctrine](../../guidelines/runenwerk-architecture.md)
+- [Runenwerk Architecture Doctrine](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/guidelines/runenwerk-architecture.md)
 - [Module Structure Guidelines](../../guidelines/module-structure-guidelines.md)
 - [UI Definition Formation Framework Design](../../design/implemented/ui-definition-formation-foundation-design.md)
-- [UI Program Architecture](../../design/implemented/ui-program-architecture.md)
+- [UI Program Architecture](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/design/implemented/ui-program-architecture.md)
 - [Runenwerk UI Story V2 Consumer and Proof Boundary](../../design/active/runenwerk-ui-story-driven-golden-workflow-design.md)
 - [ADR 0009: UI Interaction Formation V2](../../adr/accepted/0009-ui-interaction-formation-v2.md)
 - [ADR 0013: App-Neutral UI Composition Clean Cutover](../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md)

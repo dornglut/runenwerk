@@ -6,6 +6,8 @@ owner: ui_render_data
 layer: domain
 canonical: true
 last_reviewed: 2026-09-13
+publication: reference
+pagefind: false
 related_designs:
   - ../active/runenwerk-ui-story-driven-golden-workflow-design.md
 related_docs:

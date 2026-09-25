@@ -6,7 +6,9 @@ owner: workspace
 layer: cross-domain
 canonical: true
 lifecycle_exception: active_phase_evidence
-last_reviewed: 2026-05-14
+last_reviewed: 2026-09-25
+publication: reference
+pagefind: false
 related_docs:
   - ../../guidelines/runenwerk-architecture.md
   - ../../domain/graph/README.md
@@ -90,7 +92,7 @@ the drawing app keeps a product-level boundary for canvas-first interaction.
 
 Implemented anchors that this design must respect:
 
-- `domain/graph` owns the neutral graph substrate only.
+- `domain/graph` owns Runenwerk's authored port-graph substrate only.
 - `domain/material_graph` owns authored material graph semantics, ratification,
   lowering, and formed material products.
 - `domain/texture` owns texture product descriptors, not GPU upload or shader
@@ -398,7 +400,7 @@ paint/layer sources + semantic composition graph + deterministic formed tile pro
 ```
 
 The composition graph should be typed, acyclic, semantic, ratified, and owned by
-`domain/drawing`. It may reuse `domain/graph` for neutral graph structure, but
+`domain/drawing`. It may reuse `domain/graph` for Runenwerk-authored port-graph structure, but
 the drawing domain owns node meaning, port types, ratification, diagnostics,
 formation, and source maps.
 
@@ -762,7 +764,7 @@ The accepted graph model is semantic:
 
 ```text
 domain/graph
-  -> neutral graph structure
+  -> Runenwerk-authored port-graph structure
 
 domain/material_graph
   -> material semantics

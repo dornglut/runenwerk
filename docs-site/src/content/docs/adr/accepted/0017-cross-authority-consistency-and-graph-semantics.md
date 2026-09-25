@@ -5,7 +5,9 @@ status: accepted
 owner: workspace
 layer: architecture
 canonical: true
-last_reviewed: 2026-08-11
+last_reviewed: 2026-09-25
+publication: reference
+pagefind: false
 related_adrs:
   - ./0014-repository-family-extraction-boundaries.md
   - ./0015-separate-gpu-execution-from-rendering.md
@@ -298,10 +300,12 @@ One implementation may derive one class from another, but that derivation is an
 explicit owner contract. Structural similarity alone does not authorize a shared
 runtime.
 
-`domain/graph` therefore remains a structural graph substrate. Semantic graph meaning
-stays in the owning domain. RunenGPU G3 remains the owner of its GPU work/access graph.
-Schedulers, RunenRender, RunenUI, and RunenSpatial retain their existing graph or
-topology semantics.
+`domain/graph` therefore remains Runenwerk's authored port-graph substrate.
+It does not acquire reusable caller-key graph/relationship authority; standalone
+RunenGraph owns that separate framework boundary under Engineering ADR 0010. Semantic
+graph meaning stays in the owning domain. RunenGPU G3 remains the owner of its GPU
+work/access graph. Schedulers, RunenRender, RunenUI, and RunenSpatial retain their
+existing graph or topology semantics.
 
 ## Feedback law
 

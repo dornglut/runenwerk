@@ -6,6 +6,8 @@ owner: workspace
 layer: domain / engine-runtime
 canonical: true
 last_reviewed: 2026-09-13
+publication: reference
+pagefind: false
 related_designs:
   - ../accepted/sdf-first-production-capability-map.md
   - ../accepted/sdf-first-field-world-platform-design.md

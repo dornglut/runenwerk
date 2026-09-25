@@ -6,6 +6,8 @@ owner: workspace
 layer: cross-domain
 canonical: true
 last_reviewed: 2026-09-13
+publication: reference
+pagefind: false
 related_adrs:
   - ../../adr/accepted/0008-adopt-sdf-first-field-product-architecture.md
 related_designs:

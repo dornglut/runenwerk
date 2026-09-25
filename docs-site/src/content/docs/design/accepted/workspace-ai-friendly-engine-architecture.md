@@ -6,6 +6,8 @@ owner: workspace
 layer: workspace
 canonical: true
 last_reviewed: 2026-09-11
+publication: reference
+pagefind: false
 related_adrs:
   - ../../adr/accepted/0001-use-domain-owned-commands.md
   - ../../adr/accepted/0002-keep-ai-out-of-foundation.md
@@ -225,11 +227,11 @@ Canonical Runenwerk-local dependency and integration rules live in [`../../guide
 
 Use the docs-site owners directly for detailed repository facts:
 
-- [`../../workspace/crate-inventory.md`](../../workspace/crate-inventory.md) — canonical human-readable active workspace inventory; `Cargo.toml` remains executable membership truth.
+- [the current workspace crate inventory](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/workspace/crate-inventory.md) — canonical human-readable active workspace inventory; `Cargo.toml` remains executable membership truth.
 - [`../../guidelines/architecture.md`](../../guidelines/architecture.md) — current Runenwerk placement and boundary guide.
 - [`../../guidelines/dependency-rules.md`](../../guidelines/dependency-rules.md) — canonical Runenwerk-local dependency direction, adapter boundaries, and framework-consumer rules.
-- [`../../workspace/glossary.md`](../../workspace/glossary.md) — shared architecture and authoring vocabulary.
-- [`../../workspace/ai-agent-boundaries.md`](../../workspace/ai-agent-boundaries.md) — Runenwerk-specific placement rule for runtime AI integrations.
+- [the shared architecture and authoring vocabulary](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/workspace/glossary.md) — the repository-current glossary.
+- [the Runenwerk-specific AI placement rules](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/workspace/ai-agent-boundaries.md) — guidance for runtime AI integrations.
 
 Do not recreate root crate inventories, domain maps, glossaries, or a second AI/executor guide when these owners already exist.
 
@@ -931,7 +933,7 @@ Tests are not just correctness checks. They are executable documentation for hum
 
 ## Executor and Runtime-AI Guidance Requirements
 
-Repository executor guidance lives in root `AGENTS.md`. Runenwerk-specific runtime-AI placement guidance lives in [`../../workspace/ai-agent-boundaries.md`](../../workspace/ai-agent-boundaries.md). Do not create a second `AI_GUIDE.md` authority that duplicates either surface.
+Repository executor guidance lives in root `AGENTS.md`. Runenwerk-specific runtime-AI placement guidance lives in [the repository-current AI boundary guide](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/workspace/ai-agent-boundaries.md). Do not create a second `AI_GUIDE.md` authority that duplicates either surface.
 
 The executor contract should route assistants to:
 

@@ -6,31 +6,42 @@ owner: workspace
 layer: workspace
 canonical: true
 last_reviewed: 2026-09-10
+publication: primary
 ---
 
-# Runenwerk Docs
+# Runenwerk
 
-Runenwerk documentation is organized by ownership area. Current-state docs describe the repository as it exists now. ADRs, design docs, planning records, reports, and archives must state their purpose and status explicitly.
+Runenwerk is the Dornglut integration platform and reference engine: it combines the
+standalone Runen-family frameworks into a usable product, editor, runtime, and
+developer surface. This site is the public guide to the current repository.
 
 ## Start here
 
-- [Workspace Start Here](workspace/start-here.md)
-- [Runenwerk Platform Architecture](architecture/runenwerk-platform-architecture.md)
-- [Documentation Structure](workspace/documentation-structure.md)
-- [Programming Principles](guidelines/programming-principles.md)
+- [Domain overview](domain/00-overview.md) — current product and domain boundaries.
+- [Engine documentation](engine/index.md) — runtime, plugins, examples, and engine usage.
+- [Runenwerk Editor architecture](apps/runenwerk-editor/current-architecture.md) — the editor application and its current ownership.
+- [Networking](net/README.md) — current networking, simulation, replay, and convergence surfaces.
+- [Adapter documentation](adapters/native-tablet-input/README.md) — host and external-system integration.
 
-## Main areas
+## Current areas
 
-- [Runenwerk Platform Architecture](architecture/runenwerk-platform-architecture.md)
-- [Architecture Boundaries](guidelines/architecture.md)
-- [Module Structure Guidelines](guidelines/module-structure-guidelines.md)
-- [Code Patterns](guidelines/code-patterns.md)
-- [Domain](domain/00-overview.md)
-- [Engine](engine/index.md)
-- [Net](net/README.md)
-- [Runenwerk Editor](apps/runenwerk-editor/current-architecture.md)
-- [ADR Index](adr/README.md)
-- [Design Docs](design/README.md)
+- [Domain crates and contracts](domain/00-overview.md)
+- [Engine and plugins](engine/index.md)
+- [Foundation contracts](foundation/README.md)
+- [Applications](apps/runenwerk-editor/README.md)
+- [Networking and simulation](net/README.md)
+
+## Deeper reference
+
+Durable architecture, ADRs, design documents, guidelines, and retained evidence
+are published through the separate Reference navigation group. Start with the
+[Runenwerk platform architecture](architecture/runenwerk-platform-architecture.md)
+or the [ADR index](adr/README.md) when you need the reasoning behind a current
+boundary.
+
+Repository-current authoring and conformance material, along with retained
+historical evidence, stays in the repository rather than becoming production site
+content.
 
 ## Optional local validation
 

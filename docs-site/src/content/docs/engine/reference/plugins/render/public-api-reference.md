@@ -6,6 +6,7 @@ owner: engine
 layer: engine-runtime
 canonical: true
 last_reviewed: 2026-07-28
+publication: primary
 ---
 
 # Render Public API Reference

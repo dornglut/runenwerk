@@ -6,6 +6,8 @@ owner: engine
 layer: architecture / runtime integration
 canonical: true
 last_reviewed: 2026-09-25
+publication: reference
+pagefind: false
 related_adrs:
   - ../../adr/accepted/0017-cross-authority-consistency-and-graph-semantics.md
   - ../../adr/accepted/0018-semantic-federation-and-physical-realization.md

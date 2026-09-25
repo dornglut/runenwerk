@@ -6,6 +6,8 @@ owner: ui
 layer: report
 canonical: false
 last_reviewed: 2026-06-19
+publication: reference
+pagefind: false
 related_designs:
   - ../../../design/accepted/adaptive-ui-composition-design.md
 related_roadmaps:

@@ -6,6 +6,11 @@ owner: workspace
 layer: workspace
 canonical: true
 last_reviewed: 2026-09-11
+publication: repository-current
+draft: true
+pagefind: false
+sidebar:
+  hidden: true
 related_docs:
   - ./documentation-structure.md
   - ../architecture/runenwerk-platform-architecture.md

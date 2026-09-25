@@ -6,6 +6,8 @@ owner: engine
 layer: engine-runtime / renderer / backend-capabilities
 canonical: true
 last_reviewed: 2026-05-23
+publication: reference
+pagefind: false
 related_designs:
   - ./render-product-graph-platform-design.md
   - ./renderer-scale-residency-and-gpu-driven-visibility-design.md

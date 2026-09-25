@@ -6,6 +6,7 @@ owner: ui
 layer: domain
 canonical: true
 last_reviewed: 2026-09-25
+publication: primary
 ---
 
 # UI Crate Ownership

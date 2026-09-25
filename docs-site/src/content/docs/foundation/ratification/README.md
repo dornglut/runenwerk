@@ -6,6 +6,7 @@ owner: foundation
 layer: foundation
 canonical: true
 last_reviewed: 2026-09-09
+publication: primary
 ---
 
 # Ratification

@@ -5,7 +5,8 @@ status: accepted
 owner: procgen
 layer: domain
 canonical: true
-last_reviewed: 2026-05-14
+last_reviewed: 2026-09-25
+publication: primary
 related_docs:
   - ../../design/active/editor-procedural-content-and-simulation-workflow-plan.md
   - ../../design/accepted/execution-fabric-and-product-jobs-design.md
@@ -80,8 +81,8 @@ inside procgen until repeated non-procgen use proves which parts are shared.
 `domain/procgen` owns:
 
 - `ProcgenDocument` source descriptors for deterministic generation intent;
-- procgen-owned semantic node catalog rules over neutral `domain/graph`
-  structure;
+- procgen-owned semantic node catalog rules over Runenwerk-authored `domain/graph`
+  port-graph structure;
 - seed, scope, version, input-product, write-target, and output-product
   descriptor policy;
 - deterministic lowering contracts into bounded operation windows and formed
@@ -103,7 +104,7 @@ This domain does not own:
 ## Accepted Document Contract
 
 The first procgen source format is a typed `ProcgenDocument` over
-`domain/graph::GraphDefinition`. `domain/graph` owns only graph structure.
+`domain/graph::GraphDefinition`. `domain/graph` owns the shared authored port-graph structure only.
 `domain/procgen` owns the node catalog, node semantics, ratification, and
 lowering rules.
 

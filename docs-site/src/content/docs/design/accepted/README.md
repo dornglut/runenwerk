@@ -6,6 +6,8 @@ owner: workspace
 layer: workspace
 canonical: true
 last_reviewed: 2026-09-25
+publication: reference
+pagefind: false
 ---
 
 # Accepted Designs

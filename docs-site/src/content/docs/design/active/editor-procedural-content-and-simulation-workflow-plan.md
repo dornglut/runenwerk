@@ -7,6 +7,8 @@ layer: cross-domain
 canonical: true
 lifecycle_exception: active_phase_evidence
 last_reviewed: 2026-09-25
+publication: reference
+pagefind: false
 related_designs:
   - ../accepted/sdf-first-field-world-platform-design.md
   - ./editor-asset-pipeline-and-content-workflow-design.md
@@ -60,7 +62,7 @@ Implemented today:
 - Standalone `dornglut/runen-sdf` owns reusable signed-field mathematics and CPU query semantics.
 - `domain/world_ops` owns governed world-operation records, invalidation, dirty/build coordination, and changed-region mechanics.
 - `domain/world_sdf` owns formed field/chunk/page/brick products, field-preview payload contracts, and collision/query readiness.
-- `domain/graph` owns neutral graph structure only; semantic graph domains retain their own node meaning, ratification, lowering, and formed products.
+- `domain/graph` owns Runenwerk-authored port-graph structure only; semantic graph domains retain their own node meaning, ratification, lowering, and formed products.
 - `engine/src/plugins/world` owns authoritative chunked SDF runtime integration and world build/execution plumbing.
 - `engine/src/plugins/render` owns rendering execution, shader/resource realization, dynamic product targets, material feature preparation, and GPU-facing preview integration.
 - `domain/material_graph` owns material graph documents, semantic node contracts, ratification, deterministic lowering, source maps, specialization/product metadata, and formed material products.

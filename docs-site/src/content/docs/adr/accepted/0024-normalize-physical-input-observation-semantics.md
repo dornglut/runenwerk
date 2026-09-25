@@ -6,6 +6,8 @@ owner: engine
 layer: architecture
 canonical: true
 last_reviewed: 2026-09-13
+publication: reference
+pagefind: false
 related_adrs:
   - ./0013-app-neutral-ui-composition-clean-cutover.md
   - ./0017-cross-authority-consistency-and-graph-semantics.md

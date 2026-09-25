@@ -6,6 +6,8 @@ owner: workspace
 layer: workspace
 canonical: true
 last_reviewed: 2026-09-12
+publication: reference
+pagefind: false
 related_roadmaps:
   - ../../apps/runenwerk-editor/viewport-expression-implementation-roadmap.md
 ---
