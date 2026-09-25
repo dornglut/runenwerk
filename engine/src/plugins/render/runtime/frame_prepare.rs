@@ -1,4 +1,6 @@
-use crate::plugins::render::backend::{RenderSurfaceLifecycleState, RenderSurfaceRegistryResource};
+use crate::plugins::render::backend::{
+    RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
+};
 use crate::plugins::render::inspect::RenderDebugTimingsState;
 use crate::plugins::render::*;
 use crate::plugins::scene::SceneResource;
