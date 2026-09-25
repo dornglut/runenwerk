@@ -661,6 +661,4 @@ mod tests {
         assert_eq!(staging.drain_tick(SimulationTick(6)), vec![60]);
         assert_eq!(staging.pending_len(), 0);
     }
-
-
 }
