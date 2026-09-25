@@ -1068,6 +1068,48 @@ mod tests {
     }
 
     #[test]
+    fn surface_scoped_requests_allow_independent_replacement_on_distinct_surfaces() {
+        let mut requests = PreparedRenderFrameRequestResource::default();
+        let flow_id = flow(7);
+        let primary = RenderSurfaceId::primary();
+        let secondary = RenderSurfaceId::try_from_raw(2).expect("test surface should be nonzero");
+
+        for (producer_id, surface_id) in [(producer(1), primary), (producer(2), secondary)] {
+            requests
+                .replace_surface_contribution_with_automatic_main_replacements(
+                    producer_id,
+                    surface_id,
+                    [PreparedViewFrame::offscreen_product(
+                        "fixed.shared.view",
+                        (1280, 720),
+                    )],
+                    [PreparedFlowInvocationRequest::new(
+                        "fixed.shared",
+                        flow_id,
+                        "fixed.shared.view",
+                    )],
+                    [flow_id],
+                )
+                .expect("disjoint surface scopes should admit identical local identities");
+        }
+
+        assert_eq!(requests.requested_views_for_surface(primary).len(), 1);
+        assert_eq!(requests.requested_views_for_surface(secondary).len(), 1);
+        assert_eq!(
+            requests.requested_flow_invocations_for_surface(primary).len(),
+            1
+        );
+        assert_eq!(
+            requests
+                .requested_flow_invocations_for_surface(secondary)
+                .len(),
+            1
+        );
+        assert!(requests.replaces_automatic_main_flow(primary, flow_id));
+        assert!(requests.replaces_automatic_main_flow(secondary, flow_id));
+    }
+
+    #[test]
     fn prepared_frame_resource_allocates_monotonic_indices() {
         let mut resource = PreparedRenderFrameResource::default();
         assert_eq!(resource.allocate_frame_index(), 0);
