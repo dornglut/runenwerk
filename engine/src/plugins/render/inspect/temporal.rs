@@ -196,6 +196,8 @@ pub struct RenderFixedResolutionExecutionEvidence {
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum RenderFixedResolutionExecutionEvidenceError {
+    #[error("fixed-resolution prepared frame belongs to a different render surface than the admission")]
+    SurfaceIdentityMismatch,
     #[error("fixed-resolution prepared surface extent does not match admitted output extent")]
     OutputExtentMismatch,
     #[error("fixed-resolution prepared frame is missing the native main output view")]
@@ -246,14 +248,17 @@ pub fn inspect_fixed_resolution_execution(
     admission: &crate::plugins::render::RenderFixedResolutionExecutionAdmission,
     frame: &crate::plugins::render::PreparedRenderFrame,
 ) -> Result<RenderFixedResolutionExecutionEvidence, RenderFixedResolutionExecutionEvidenceError> {
-    let expected_output_size = match admission {
+    let (expected_surface_id, expected_output_size) = match admission {
         crate::plugins::render::RenderFixedResolutionExecutionAdmission::Fixed(prepared) => {
-            prepared.output_size
+            (prepared.render_surface_id, prepared.output_size)
         }
         crate::plugins::render::RenderFixedResolutionExecutionAdmission::NativeFallback(
             fallback,
-        ) => fallback.output_size,
+        ) => (fallback.render_surface_id, fallback.output_size),
     };
+    if frame.surface.render_surface_id != expected_surface_id {
+        return Err(RenderFixedResolutionExecutionEvidenceError::SurfaceIdentityMismatch);
+    }
     if frame.surface.target_size_px != expected_output_size {
         return Err(RenderFixedResolutionExecutionEvidenceError::OutputExtentMismatch);
     }
