@@ -28,7 +28,6 @@ related_designs:
   - ./ui-designer-persistence-migration-diff-and-activation-design.md
   - ./ui-designer-production-readiness-and-evidence-design.md
   - ../implemented/editor-tool-suite-registry-and-workbench-host-design.md
-  - ../superseded/runenwerk-capability-workbench-target-architecture.md
 related_roadmaps:
   - ../../domain/ui/roadmap.md
 ---

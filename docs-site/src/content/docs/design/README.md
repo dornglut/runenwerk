@@ -1,6 +1,6 @@
 ---
 title: Design Documents
-description: Architecture design documents for active, accepted, deferred, and superseded Runenwerk design work.
+description: Architecture design documents for current Runenwerk design work and its lifecycle.
 status: active
 owner: workspace
 layer: workspace
@@ -27,9 +27,6 @@ content/docs/design/
 ├── accepted/
 ├── implemented/
 ├── deferred/
-├── superseded/
-├── rejected/
-├── archived/
 └── templates/
 ```
 
@@ -76,16 +73,6 @@ Index:
 
 - [`deferred/README.md`](deferred/README.md)
 
-## `superseded/`
-
-Use `superseded/` for designs that have been replaced.
-
-A superseded design must link to the replacement design, ADR, or guideline.
-
-Index:
-
-- [`superseded/README.md`](superseded/README.md)
-
 ## `implemented/`
 
 Use `implemented/` for accepted designs that have been checked against actual code.
@@ -102,26 +89,6 @@ Examples:
 implemented/foundation-ratification-design.md
 implemented/workspace-viewport-expression-upgrade-design.md
 ```
-
-## `rejected/`
-
-Use `rejected/` for designs that were explicitly considered and not chosen.
-
-Rejected designs should explain the rejected approach, why it was rejected, and what design, ADR, or guideline should be followed instead.
-
-Index:
-
-- [`rejected/README.md`](rejected/README.md)
-
-## `archived/`
-
-Use `archived/` for historical or imported design material that is no longer authoritative and does not fit `rejected/` or `superseded/`.
-
-Archived designs must link to the replacement document or explain why no replacement exists.
-
-Index:
-
-- [`archived/README.md`](archived/README.md)
 
 ## `templates/`
 
@@ -168,6 +135,10 @@ superseded
 rejected
 archived
 ```
+
+Superseded, rejected, and archived remain valid lifecycle outcomes. Retired
+documents are no longer maintained as live design pages; their point-in-time
+content remains available through Git and GitHub history.
 
 A design can move through:
 

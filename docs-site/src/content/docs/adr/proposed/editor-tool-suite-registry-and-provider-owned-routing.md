@@ -8,7 +8,6 @@ canonical: true
 last_reviewed: 2026-09-14
 related_designs:
   - ../../design/implemented/editor-tool-suite-registry-and-workbench-host-design.md
-  - ../../design/superseded/editor-ui-workspace-tool-surface-architecture.md
   - ../../design/active/material-lab-and-material-preview-design.md
 related_adrs:
   - ../accepted/0001-use-domain-owned-commands.md

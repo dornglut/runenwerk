@@ -131,10 +131,10 @@ Current normalized editor coordination authority:
 - [Runenwerk Editor Coordination Semantic Model](../../design/accepted/runenwerk-editor-coordination-semantic-model.md)
 - [Editor Tool Suite Registry And Workbench Host Design](../../design/implemented/editor-tool-suite-registry-and-workbench-host-design.md)
 
-Historical predecessor designs retained for migration/provenance only:
-
-- [Editor UI Workspace Tool Surface Architecture](../../design/superseded/editor-ui-workspace-tool-surface-architecture.md)
-- [Editor Workspace Document Mode Panel Architecture](../../design/superseded/editor-workspace-document-mode-panel-architecture.md)
+The former workspace/document-mode and tool-surface predecessor designs are
+retired from the live corpus. Their normalized current authority is [ADR
+0025](../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md)
+and its [companion semantic model](../../design/accepted/runenwerk-editor-coordination-semantic-model.md).
 
 ## Deferred Execution Targets
 

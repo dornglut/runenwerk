@@ -9,7 +9,6 @@ related_docs:
   - ../../domain/ui/architecture.md
   - ../../domain/ui/roadmap.md
   - ./ui-component-platform-generic-interaction-design.md
-  - ../superseded/ui-component-platform-ownership-realignment-design.md
   - ./ui-component-platform-render-surface-output-design.md
 ---
 

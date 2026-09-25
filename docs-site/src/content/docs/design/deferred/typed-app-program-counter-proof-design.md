@@ -11,10 +11,8 @@ related:
   - ../../adr/accepted/0020-adopt-federated-semantic-composition.md
   - ../../adr/accepted/0023-normalize-app-runtime-host-lifecycle-and-capability-ownership.md
   - ./typed-app-program-and-ui-proof-design.md
-  - ../superseded/domain-authoring-source-and-program-pattern.md
   - ../implemented/ui-program-architecture.md
   - ../../architecture/ui-framework-architecture.md
-  - ../superseded/runenwerk-typed-app-composition-plugin-framework-design.md
 ---
 
 # Typed App Program Counter Proof Design
