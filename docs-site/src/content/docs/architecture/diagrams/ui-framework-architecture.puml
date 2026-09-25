@@ -3,7 +3,7 @@ title Runenwerk UI Ownership and RunenUI Adoption Architecture
 
 skinparam packageStyle rectangle
 
-package "Retained Runenwerk Authority" {
+package "Retained Runenwerk Authority" as Retained {
   [Authored UI / ui_definition]
   [UiProgram Toolchain]
   [Story V2]
@@ -12,7 +12,7 @@ package "Retained Runenwerk Authority" {
   [App / Domain Mutation]
 }
 
-package "Current Predecessor Runtime" {
+package "Current Predecessor Runtime" as Predecessor {
   [Local Retained UI]
   [ui_surface / ui_hosts]
   [Local Evaluator / Runtime View]
@@ -24,7 +24,7 @@ package "Explicit Adoption Boundary" {
   [Runenwerk UI Integration Adapter]
 }
 
-cloud "Standalone RunenUI" as RunenUI {
+package "Standalone RunenUI" as RunenUI {
   [View / Element]
   [Mounted Runtime]
   [Text / Layout / Interaction]
@@ -65,13 +65,13 @@ package "Runenwerk Product Edges" {
 [Local Evaluator / Runtime View] ..> [Runenwerk Projection Adapter] : retain only independent program semantics
 [Current engine::plugins::ui runtime] ..> [Runenwerk UI Integration Adapter] : narrows to adapter
 
-note bottom of [Retained Runenwerk Authority]
+note bottom of Retained
 RunenUI does not own UiProgram, Story V2,
 application composition, persistence,
 provider policy, or app/domain mutation.
 end note
 
-note right of [Current Predecessor Runtime]
+note right of Predecessor
 Current implementation remains authoritative
 until a named consumer cut is accepted.
 No migrated consumer may keep two
