@@ -98,7 +98,7 @@ pub fn apply_game_commands(
 
         let query = world.query::<(&ArenaPlayer, &mut PlayerControlState)>();
         let mut matches = query
-            .iter(world)
+            .iter(&mut *world)
             .filter(|(player, _)| player.participant == participant_command.participant);
         let Some((_, state)) = matches.next() else {
             return Err(GameCommandError::MissingParticipant(

@@ -1,4 +1,4 @@
-use engine::plugins::ActionState;
+use engine::plugins::{ActionState, AppActionBindingsExt};
 use engine::prelude::{
     App, Commands, CoreSet, FixedUpdate, Plugin, PreUpdate, Res, ResMut, SimulationTick,
     SystemConfigExt, SystemMobilityExt, WorldMut,
