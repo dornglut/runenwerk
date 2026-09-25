@@ -2632,6 +2632,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "runenwerk_arena"
+version = "0.1.0"
+dependencies = [
+ "engine",
+ "runen-ecs",
+ "runen-input",
+ "winit",
+]
+
+[[package]]
 name = "runenwerk_draw"
 version = "0.1.0"
 dependencies = [
