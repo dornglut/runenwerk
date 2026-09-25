@@ -110,6 +110,33 @@ fn render_temporal_inputs_accept_fixed_subnative_taau() {
 }
 
 #[test]
+fn render_temporal_inputs_fail_closed_when_fixed_taau_supersamples() {
+    let mut request = request();
+    request.resolution.internal_size = [2560, 1440];
+    request.resolution.policy = RenderTemporalResolutionPolicy::Fixed;
+
+    let report = inspect_render_temporal_inputs(request);
+
+    assert!(!report.is_ready());
+    assert!(has_error(&report, "taau_without_scaled_resolution"));
+}
+
+#[test]
+fn render_temporal_inputs_fail_closed_when_dynamic_taau_current_extent_exceeds_output() {
+    let mut request = request();
+    request.resolution.internal_size = [2560, 1440];
+    request.resolution.policy = RenderTemporalResolutionPolicy::Dynamic {
+        min_scale: 0.5,
+        max_scale: 1.5,
+    };
+
+    let report = inspect_render_temporal_inputs(request);
+
+    assert!(!report.is_ready());
+    assert!(has_error(&report, "taau_without_scaled_resolution"));
+}
+
+#[test]
 fn render_temporal_inputs_fail_closed_when_fixed_taau_is_not_scaled() {
     let mut request = request();
     request.resolution.internal_size = [1920, 1080];
