@@ -9,7 +9,6 @@ last_reviewed: 2026-09-13
 related_designs:
   - ../accepted/sdf-first-production-capability-map.md
   - ../accepted/sdf-first-field-world-platform-design.md
-  - ./sdf-procedural-animation-and-animated-models-design.md
   - ../implemented/editor-rendered-world-and-multi-entity-viewport-design.md
 ---
 
@@ -169,8 +168,8 @@ Characteristics:
 - interaction emitters
 - changing bounds
 
-Animated character prefabs are further specified in the deferred
-[SDF Procedural Animation and Animated Models Design](sdf-procedural-animation-and-animated-models-design.md).
+Animated character prefab expansion remains outside this deferred prefab
+composition boundary until a separately accepted owner design defines it.
 
 ## Field Emitter Prefabs
 

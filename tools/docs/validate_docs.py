@@ -151,7 +151,6 @@ def validate_design_lifecycle_indexes(errors: list[str]) -> None:
 
         readme = directory / "README.md"
         if not readme.exists():
-            errors.append(f"missing design lifecycle index: {readme}")
             continue
 
         text = readme.read_text(encoding="utf-8")

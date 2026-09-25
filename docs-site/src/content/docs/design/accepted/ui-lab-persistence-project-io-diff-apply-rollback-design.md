@@ -13,7 +13,6 @@ related_adrs:
   - ../../adr/superseded/0006-editor-surface-provider-plugin-seam.md
   - ../../adr/superseded/0012-capability-workbench-clean-break.md
 related_designs:
-  - ../implemented/ui-lab-productization-design.md
   - ./ui-lab-command-catalog-and-surface-registry-design.md
   - ./ui-lab-app-hosted-editor-lab-surface-shell-design.md
   - ./ui-lab-operation-driven-visual-authoring-design.md

@@ -15,12 +15,10 @@ related_adrs:
   - ../../adr/superseded/0006-editor-surface-provider-plugin-seam.md
   - ../../adr/superseded/0012-capability-workbench-clean-break.md
 related_designs:
-  - ../implemented/ui-lab-productization-design.md
   - ./ui-designer-interface-lab-platform-design.md
   - ../implemented/editor-tool-suite-registry-and-workbench-host-design.md
   - ./runenwerk-editor-coordination-semantic-model.md
   - ./app-neutral-ui-composition-design.md
-  - ../implemented/surface-workflow-contract-redesign.md
   - ./ui-designer-target-projection-profiles-design.md
   - ./ui-designer-component-surface-and-widget-recipe-library-design.md
   - ./ui-designer-view-model-capability-and-intent-binding-design.md

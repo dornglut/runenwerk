@@ -10,7 +10,6 @@ related_docs:
   - ./ui-framework-architecture.md
   - ./diagrams/live-uiplugin-runtime-platform.puml
   - ./diagrams/live-uiplugin-runtime-sequence.puml
-  - ../design/deferred/live-uiplugin-runtime-and-surface-frame-rendering-design.md
   - ../domain/ui/roadmap.md
   - ../reports/investigations/live-uiplugin-runtime-current-state-investigation.md
 ---
@@ -27,7 +26,9 @@ Current source/tests and the sections explicitly describing current code facts a
 
 Proposal-era language about the old "cutover", Counter product, source reload, persistence, phase numbers, future SDF work, or phase-spec sequencing is retained only as historical/deferred design context. It does **not** authorize continuation of the archived phase program or new Runenwerk-local reusable-framework expansion.
 
-Any future Runenwerk consumer integration with standalone RunenUI must be re-derived from an exact accepted standalone RunenUI revision and activated by a new owning issue. The deferred consumer-integration record owns that reactivation boundary.
+Any future Runenwerk consumer integration with standalone RunenUI must be
+re-derived from an exact accepted standalone RunenUI revision and activated by
+a new owning issue.
 
 ## Current code facts inspected for this architecture
 

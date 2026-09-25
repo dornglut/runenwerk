@@ -1,6 +1,6 @@
 ---
 title: Game Runtime, Editor, ECS, Scripting, and Hot Reload Design
-description: Current-vs-target architecture map for runtime/editor/ECS boundaries, linked to a deferred preserved target draft.
+description: Current-vs-target architecture map for runtime/editor/ECS boundaries.
 status: active
 owner: engine
 layer: engine-runtime
@@ -10,7 +10,6 @@ related_designs:
   - ../accepted/runenwerk-editor-coordination-semantic-model.md
   - ../implemented/editor-tool-suite-registry-and-workbench-host-design.md
   - ../accepted/sdf-first-field-world-platform-design.md
-  - ../deferred/engine-game-runtime-editor-ecs-scripting-hot-reload-preserved-target-draft.md
 related_adrs:
   - ../../adr/accepted/0007-external-runtime-preview-process.md
   - ../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md
@@ -24,7 +23,8 @@ related_roadmaps:
 
 This page is the current-state grounded architecture/gap document.
 
-The prior long-form target draft is preserved in a separate deferred document so detail is not lost while this page remains implementation-grounded.
+Target-specific future expansion remains subject to a separately accepted owner
+design while this page remains implementation-grounded.
 
 ## Purpose and Scope
 
@@ -114,11 +114,3 @@ M5 closeout validation covers:
 - shader registry reload status reaches existing editor console, asset/import, and viewport/product diagnostics surfaces through app-boundary mapping.
 
 M5 completion evidence is retained in Git history; the accepted external-runtime boundary is owned by ADR 0007 above.
-
-## Deferred Detailed Draft
-
-The prior long-form target draft has been moved (verbatim) to keep this active document concise and implementation-grounded:
-
-- [`../deferred/engine-game-runtime-editor-ecs-scripting-hot-reload-preserved-target-draft.md`](../deferred/engine-game-runtime-editor-ecs-scripting-hot-reload-preserved-target-draft.md)
-
-Use this active doc for current boundaries and gap analysis; use the deferred preserved draft for deeper aspirational details.

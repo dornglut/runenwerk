@@ -13,9 +13,6 @@ related_designs:
   - ./field-product-contracts-diagnostics-and-residency-design.md
   - ./sdf-product-renderer-and-gpu-residency-design.md
   - ./execution-fabric-and-product-jobs-design.md
-  - ../deferred/sdf-procedural-animation-and-animated-models-design.md
-supersedes:
-  - ../deferred/sdf-world-production-slice-design.md
 ---
 
 # SDF-First Production Capability Map
@@ -162,15 +159,6 @@ Detailed future-system drafts and follow-up designs remain useful, but
 they are not implementation instructions until their gates are resolved:
 
 - `../deferred/sdf-prefab-composition-system-design.md`
-- `../deferred/sdf-procedural-animation-and-animated-models-design.md`
-- `../deferred/field-vegetation-system-design.md`
-- `../deferred/day-night-atmosphere-system-design.md`
-- `../deferred/water-wetness-field-system-design.md`
-- `../deferred/sdf-physics-collision-system-design.md`
-- `../deferred/field-influence-ai-system-design.md`
-- `../deferred/procgen-field-product-system-design.md`
-- `../deferred/field-vfx-particles-system-design.md`
-- `../deferred/fluid-snow-erosion-world-processes-system-design.md`
 
 ## Invariants
 
