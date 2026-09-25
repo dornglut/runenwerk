@@ -10,11 +10,11 @@ use crate::input::{
     ACTION_INTERACT, ACTION_JUMP, ACTION_MOVE_DOWN, ACTION_MOVE_LEFT, ACTION_MOVE_RIGHT,
     ACTION_MOVE_UP, GameActionSnapshot, GameInputAccumulator,
 };
-use crate::player::{
-    ArenaPlayer, LOCAL_PARTICIPANT_ID, ParticipantId, PlayerControlState,
-};
+use crate::player::{ArenaPlayer, LOCAL_PARTICIPANT_ID, ParticipantId, PlayerControlState};
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, engine::prelude::Component, engine::prelude::Resource)]
+#[derive(
+    Debug, Clone, Default, PartialEq, Eq, engine::prelude::Component, engine::prelude::Resource,
+)]
 pub struct LastLocalCommandBatch(pub Option<TickCommandBatch>);
 
 pub struct ArenaGamePlugin;
@@ -32,10 +32,7 @@ impl Plugin for ArenaGamePlugin {
             (ACTION_INTERACT, PhysicalKeyIdentity::code("KeyE")),
         ]);
         app.add_systems(engine::prelude::Startup, spawn_local_player);
-        app.add_systems(
-            PreUpdate,
-            collect_game_actions.after(CoreSet::Input),
-        );
+        app.add_systems(PreUpdate, collect_game_actions.after(CoreSet::Input));
         app.add_systems(
             FixedUpdate,
             run_local_game_tick
@@ -54,10 +51,7 @@ fn spawn_local_player(mut commands: Commands) {
     ));
 }
 
-fn collect_game_actions(
-    actions: Res<ActionState>,
-    mut accumulator: ResMut<GameInputAccumulator>,
-) {
+fn collect_game_actions(actions: Res<ActionState>, mut accumulator: ResMut<GameInputAccumulator>) {
     accumulator.collect(GameActionSnapshot::from_actions(&actions));
 }
 

@@ -2,7 +2,7 @@ use engine::prelude::{SimulationTick, World};
 use std::error::Error;
 use std::fmt;
 
-use crate::player::{ArenaPlayer, PlayerControlState, ParticipantId};
+use crate::player::{ArenaPlayer, ParticipantId, PlayerControlState};
 
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
 pub struct PlayerCommand {
@@ -57,7 +57,11 @@ impl fmt::Display for GameCommandError {
                 participant.0
             ),
             Self::MissingParticipant(participant) => {
-                write!(formatter, "participant {} is not present in gameplay state", participant.0)
+                write!(
+                    formatter,
+                    "participant {} is not present in gameplay state",
+                    participant.0
+                )
             }
             Self::DuplicateParticipant(participant) => write!(
                 formatter,

@@ -1,10 +1,9 @@
 use engine::plugins::{InputState, SceneResource};
 use engine::prelude::*;
 use runenwerk_arena::{
-    ArenaPlayer, GameActionSnapshot, GameInputAccumulator, LastLocalCommandBatch,
-    LOCAL_PARTICIPANT_ID,
-    ParticipantCommand, ParticipantId, PlayerCommand, PlayerControlState, TickCommandBatch,
-    apply_game_commands, build_headless_game_app, player_state_for,
+    ArenaPlayer, GameActionSnapshot, GameInputAccumulator, LOCAL_PARTICIPANT_ID,
+    LastLocalCommandBatch, ParticipantCommand, ParticipantId, PlayerCommand, PlayerControlState,
+    TickCommandBatch, apply_game_commands, build_headless_game_app, player_state_for,
 };
 use winit::event::ElementState;
 use winit::keyboard::KeyCode;
@@ -119,7 +118,9 @@ fn one_shot_input_survives_a_frame_with_zero_fixed_ticks() {
 #[test]
 fn one_action_edge_is_consumed_once_across_multiple_fixed_ticks() {
     let mut app = build_headless_game_app();
-    app.add_plugin(BatchedTickInputPlugin { key: KeyCode::Space });
+    app.add_plugin(BatchedTickInputPlugin {
+        key: KeyCode::Space,
+    });
     let app = app
         .run_for_frames(1)
         .expect("batched fixed ticks should run");
