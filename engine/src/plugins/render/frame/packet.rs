@@ -1061,8 +1061,8 @@ mod tests {
                 ..
             } if rejected == flow_id
         ));
-        assert!(requests.replaces_automatic_main_flow(flow_id));
-        assert!(!requests.replaces_automatic_main_flow(flow(8)));
+        assert!(requests.replaces_automatic_main_flow(RenderSurfaceId::primary(), flow_id));
+        assert!(!requests.replaces_automatic_main_flow(RenderSurfaceId::primary(), flow(8)));
     }
 
     #[test]
