@@ -446,6 +446,229 @@ motion delivery, stable cross-run product targeting, or persisted trace portabil
 
 Scene replay and RunenUI replay remain separate owners.
 
+## Persisted normalized replay-trace artifact
+
+A6 proves that one supported in-memory `AutomationInputTrace` can replay through the normalized
+input path and reproduce an owner-observed Render Lab camera result. Persistence is a separate
+contract.
+
+The first durable automation artifact is a **persisted normalized replay trace** owned by Runenwerk
+automation/integration policy. It is not a scenario, product target selector, product assertion,
+native-input recording, Scene replay, RunenUI replay, or CLI protocol.
+
+ADR 0014 applies: the persisted trace format requires an explicit owner, identifier, version,
+validation policy, and migration policy. Runtime IDs MUST NOT silently become persisted identity.
+
+### Artifact identity and first encoding
+
+The first format is:
+
+~~~
+artifact_kind = "runenwerk.automation.normalized-replay-trace"
+schema_version = 1
+encoding = RON
+~~~
+
+RON is the first local handoff encoding because the data is variant-rich and human-reviewable,
+Runenwerk already uses validated RON for durable authored formats, and Engine already depends on
+`serde` and `ron`. This does not make RON a future network or IPC protocol.
+
+V1 defines a restricted RON profile rather than accepting every syntax feature supported by the
+currently linked RON crate. The V1 schema uses only explicitly declared DTO structs/enums,
+primitives, options, and ordered sequences required by this artifact. It MUST NOT depend on RON
+extensions, implicit-some behavior, flattened dynamic fields, raw-value payloads, byte-string
+encoding conventions, or another parser feature whose meaning is outside the V1 schema.
+
+This separation matters because the RON crate may evolve independently of the artifact. Updating the
+RON dependency MUST NOT silently broaden or reinterpret V1. A future parser/library update remains
+acceptable only when the V1 conformance tests prove the same accepted schema semantics.
+
+The persisted schema MUST be a dedicated storage representation. Runenwerk MUST NOT make
+`AutomationInputTrace` itself the durable schema, derive persistence on RunenInput runtime types
+merely for this format, or treat Rust enum layout as an undocumented compatibility promise.
+
+Every strict V1 DTO struct MUST reject unknown fields rather than relying on Serde's default
+unknown-field tolerance. Unknown enum variants likewise fail closed. Adding a field or variant that
+an older V1 reader would not understand therefore requires a schema-version decision rather than
+silent old-reader acceptance.
+
+The conversion boundary is explicit:
+
+~~~
+AutomationInputTrace
+    -> persisted replay-trace schema V1
+        -> RON
+        -> parse + validate V1
+            -> AutomationInputTrace
+                -> accepted A6 replay
+~~~
+
+### V1 replayable scope
+
+V1 represents only the normalized-input subset already accepted by A6:
+
+- canonical App-frame order, including idle frames;
+- pointer-button observations;
+- relative motion with its unit domain;
+- scroll axes, domain, and phase;
+- supported all-tablet atomic groups;
+- exact group order and atomicity.
+
+Export MUST fail closed rather than silently omit or rewrite:
+
+- non-empty trailing groups;
+- keyboard observations;
+- absolute-pointer observations;
+- ordinary contact observations;
+- continuity-loss observations;
+- mixed multi-observation non-tablet groups;
+- empty groups;
+- any other shape rejected by A6 first-slice replay preflight.
+
+A later format version may expand this scope only through an explicit compatibility/migration
+decision.
+
+### Trace-local persisted identity
+
+`InputSourceId`, `InputDeviceId`, `ContactId`, and `ToolId` are runtime/session identities.
+Their raw numeric values are not durable identity.
+
+V1 projects runtime identity into deterministic trace-local slots.
+
+Source slots are assigned by first appearance in canonical frame/group order. Device slots are
+scoped beneath a source. Tablet contact and tool slots are scoped beneath the enclosing
+source/device context and preserve equality, distinction, and lifetime relationships inside that
+context without claiming cross-run hardware identity.
+
+Import MAY materialize these slots into deterministic in-memory runtime IDs solely to reconstruct
+one `AutomationInputTrace`. Those materialized IDs remain trace-local tokens. A6 still maps the
+reconstructed recorded sources to fresh replay-owned sources before target mutation.
+
+Tablet source time persists its recorded value and unit only. Its context is redundant with the
+validated enclosing observation group and MUST NOT be stored as a second independently writable
+authority. Import reconstructs `SourceTime.context` from the enclosing group's trace-local
+source/device context.
+
+### Recording-side replay precondition witness
+
+A6 requires the caller to establish that recorded sources were pristine when capture began. A4
+does not observe or encode that initial state, so a persisted artifact MUST NOT infer it from trace
+shape.
+
+V1 therefore carries an explicit recording-side precondition witness equivalent to:
+
+~~~
+recorded_sources_pristine_at_capture_start = true
+~~~
+
+The V1 exporter requires this witness as an explicit typed caller input. Export MUST NOT infer,
+default, or auto-set it merely because the trace shape looks replayable. The persistence API SHOULD
+use a recording-side witness vocabulary rather than reusing A6's combined
+`RecordedAndReplaySourcesPristine` assumption, because replay-side source freshness is established
+only when an executor later selects fresh replay-owned sources.
+
+The persisted witness is an asserted capture precondition and MUST be represented as such; it is not
+retroactively promoted into observed input evidence.
+
+A V1 artifact without the supported recording-side witness is not eligible for A6 replay.
+
+The witness covers only the recorded side. A future executor still chooses fresh replay-owned source
+IDs at execution time and remains responsible for the replay-side freshness/exclusivity required by
+A6. Replay-owned IDs are never persisted into the artifact.
+
+### Provenance is not compatibility
+
+V1 SHOULD preserve inspectable provenance such as the producing Runenwerk revision, producing
+RunenInput revision or contract provenance, capture Host class when known, and bounded
+human-readable label/description metadata.
+
+Those values are evidence. Exact Git revision equality is not the V1 parsing rule.
+
+Compatibility is established by:
+
+1. supported artifact kind and schema version;
+2. persisted-schema validation;
+3. successful conversion into current normalized runtime semantics;
+4. current A6 replay preflight.
+
+Product identity, fixture identity, owner target identity, product queries/assertions, and expected
+product outcomes do not belong in the generic normalized trace artifact. Those are later
+scenario/caller concerns.
+
+### Validation and untrusted input
+
+Persisted V1 validation MUST reject at least:
+
+- wrong artifact kind;
+- unsupported schema version;
+- malformed or missing required fields;
+- unknown V1 fields or enum variants;
+- non-contiguous frame ordinals;
+- invalid, duplicate, or contradictory trace-local identity references;
+- non-finite numeric values;
+- invalid measurement domains;
+- invalid tablet source-time unit/context;
+- unsupported A6 observation/group shapes;
+- a release-first pointer state for one trace-local source/device/button;
+- trailing/unframed input;
+- structurally empty groups.
+
+Kind/version detection and strict V1 payload decoding are separate phases. The first loader SHOULD:
+
+1. enforce the byte bound before any RON parse;
+2. perform a bounded envelope probe that reads only the artifact kind and schema version while
+   treating the remaining payload as opaque/ignored data under the same parser-safety limits;
+3. reject wrong kind or unsupported version before attempting to interpret that payload as V1;
+4. strictly deserialize the supported V1 DTO with unknown fields rejected;
+5. apply structural/count/semantic validation;
+6. only then materialize runtime trace identity and finish through existing RunenInput/A6
+   validation where practical.
+
+The bounded envelope probe is not schema authority and MUST NOT make unknown V1 fields acceptable in
+the strict decode. Its purpose is to preserve a truthful unsupported-version/wrong-kind boundary for
+future artifacts instead of misreporting them as accidental V1 payload errors.
+
+Where practical, conversion SHOULD finish by exercising existing RunenInput and A6 validation rather
+than copying reducer laws into the persistence layer.
+
+A persisted trace is untrusted input. The first loader MUST enforce explicit practical bounds for
+input bytes, parser recursion depth, frame count, total and per-frame group counts, observations per
+group, trace-local identity cardinality, and human-readable metadata length.
+
+The byte-size limit MUST be checked before RON parsing. RON deserialization MUST use an explicitly
+finite named recursion limit and MUST NOT disable recursion protection. The same recursion policy
+applies to the envelope probe and strict V1 decode. Structural/count limits are checked before
+runtime-trace materialization.
+
+A8 MUST choose concrete named V1 loader constants and prove each rejection boundary rather than
+leaving bounds implicit. Limits are implementation security/resource policy, not values supplied by
+the untrusted artifact. Over-limit input fails with a typed load/validation result.
+
+### Migration policy
+
+V1 has no predecessor migration.
+
+Unknown future schema versions fail closed. The envelope probe MUST preserve a distinct unsupported-
+version result for a well-formed artifact whose declared schema version is not implemented, even
+when its payload is not valid V1.
+
+A future V2+ decision MUST explicitly choose whether to continue accepting V1, provide a reviewed
+V1-to-V2 migration, or reject V1 with an unsupported-version diagnostic. Old artifacts MUST NOT be
+silently reinterpreted under changed runtime enum meaning or because a newer Serde/RON parser became
+more permissive.
+
+### Trace versus authored scenario
+
+The persisted replay trace states only that normalized input facts were recorded in one canonical
+App-frame order.
+
+It does not state which product to launch, which fixture or owner target to resolve, which product
+query to issue, which assertion must pass, or which evidence to request.
+
+A later authored scenario/caller may reference a persisted trace and compose it with product-owned
+target/query/assertion semantics. The trace format itself MUST NOT create a universal product
+command, target, or assertion vocabulary.
+
 ## Target identity and lifetime
 
 Automation target identity belongs to the owning domain. There is no universal target ID.
@@ -681,7 +904,7 @@ or one permanently valid target after composition changes.
 
 ## Accepted implementation progression and next slice
 
-The initial implementation sequence is now accepted:
+The accepted automation sequence is now:
 
 1. A2 proves typed in-process automation sessions, ProductSemantic/NormalizedInput mode separation,
    scoped automation-owned input cleanup, condition waits, and independent Render Lab and Editor
@@ -689,42 +912,40 @@ The initial implementation sequence is now accepted:
 2. A3 adds opt-in exact admitted-`InputObservationGroup` capture at the Runenwerk input boundary.
 3. A4 partitions that capture by canonical App frame while preserving idle frames and explicit
    trailing groups.
+4. A5 defines truthful normalized observed-trace replay semantics.
+5. A6 implements bounded in-memory headless replay and proves record -> replay -> typed Render Lab
+   camera equivalence for the accepted first-slice input families.
 
-The next bounded implementation after this replay design is accepted SHOULD prove normalized
-in-memory trace replay only.
+After this persisted-artifact design is accepted, create exactly one bounded implementation issue
+for persisted replay-trace V1.
 
 That proof SHOULD:
 
-1. accept one in-memory A4 trace with no trailing groups;
-2. require an in-process headless App and preflight the complete trace before replay mutation;
-3. require a complete, injective caller-supplied fresh replay-owned source mapping and an explicit
-   recording-side neutral-state precondition for replayed sources;
-4. reject active admitted-input capture/trace ownership, conflicting already-held pointer buttons,
-   and non-quiescent frame-local input projection before replay input mutation;
-5. replay only the first supported self-contained ordinary families: pointer button, relative
-   motion, and scroll;
-6. remap tablet source-time context consistently and preserve supported all-tablet
-   multi-observation groups through whole-group device admission/staging;
-7. reject absolute-pointer, text-dependent keyboard, pre-capture-state-dependent contact/digital/
-   continuity, and multi-observation non-tablet shapes rather than approximating them;
-8. advance exactly one canonical App frame per recorded trace frame, including idle frames;
-9. report partial progress and truthful failure knowledge;
-10. clean only replay-owned held state through continuity semantics;
-11. prove a recorded Render Lab orbit/pan/zoom sequence that starts capture before button press and
-    includes an idle frame;
-12. prove tablet atomicity, invalid source mapping, target-state conflict, and unsupported
-    initial-state/group-shape behavior at the replay ingress boundary.
+1. define a dedicated strict V1 storage schema rather than serializing runtime trace types directly;
+2. require an explicit typed recording-side pristine-source witness at export;
+3. export one A6-replayable in-memory trace to deterministic pretty RON within the restricted V1
+   profile;
+4. enforce byte and recursion bounds, probe kind/version, then strictly parse and validate V1 with
+   unknown fields rejected;
+5. reconstruct equivalent trace-local source/device/contact/tool relationships without preserving
+   raw runtime ID values as durable identity;
+6. reject unsupported A6 shapes during export and malformed/unsupported artifacts during import;
+7. choose concrete named bounded-resource loader constants and prove each rejection boundary;
+8. preserve idle frames, group order, supported tablet atomicity/source-time semantics, motion units,
+   scroll semantics, and pointer transitions;
+9. prove semantic round-trip equivalence modulo runtime-ID remapping;
+10. feed the imported trace through accepted A6 replay;
+11. prove Render Lab record -> persist -> parse -> replay -> typed camera equality;
+12. require no new serialization dependency only if the currently pinned `serde`/`ron` behavior
+    satisfies this strict profile and its conformance tests.
 
-This first proof intentionally does not claim general keyboard/text, absolute-pointer, or
-mid-contact replay. Those require additional recorded evidence or a separately accepted
-transformation/initial-state contract.
+Do not add a production CLI, generic scenario AST, IPC, remote attach, native OS automation, Scene
+replay changes, or RunenUI replay changes in that slice.
 
-Do not add persistence, a scenario DSL, CLI/IPC, remote attach, native OS automation, Scene replay
-changes, or RunenUI replay changes in that slice.
-
-After the normalized in-memory replay proof is accepted, reassess authored scenario sequencing,
-trace/environment identity, persistence, step/result history, and external terminal control from the
-then-current user workflow rather than pre-authorizing their order.
+After persisted V1 is accepted, reassess the remaining #731 terminal-handoff gap. In particular,
+decide from demonstrated pressure whether the next layer should be a product-local terminal caller,
+a shared authored scenario representation, trace-to-scenario transformation, step/result history,
+or another owner-specific integration. Their order is not pre-authorized here.
 
 ## Why no new ADR is required
 
@@ -765,8 +986,8 @@ raw-motion injection remains unsupported without new proof, no existing replay o
 duplicated, repository documentation validation and exact-head CI pass, and the complete diff
 contains only this already-indexed design authority.
 
-After accepted-main verification, create exactly one implementation issue for the bounded normalized
-in-memory trace replay proof above.
+After accepted-main verification, create exactly one implementation issue for the persisted
+normalized replay-trace V1 proof above.
 
-Do not pre-authorize CLI, IPC, recording persistence, remote attach, or native OS automation in
-that implementation slice.
+Do not pre-authorize a production CLI, authored scenario persistence, IPC, remote attach, or native
+OS automation in that implementation slice.
