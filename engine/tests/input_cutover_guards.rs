@@ -3,7 +3,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const RUNEN_INPUT_REV: &str = "ba87e7c80a9626239a011038cec97c30010379a8";
+const RUNEN_INPUT_REV: &str = "2751e19fa42255b86e786e7cd837198c917b7b25";
 
 fn read(path: &Path) -> String {
     fs::read_to_string(path)

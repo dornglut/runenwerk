@@ -62,7 +62,6 @@ fn app_runs_startup_once_and_updates_each_frame() {
 #[derive(Debug, Default, Component, runen_ecs::Resource)]
 struct StartupSnapshot {
     saw_input: bool,
-    presentation_size_px: (u32, u32),
 }
 
 struct ResourceVisibilityPlugin;
@@ -74,13 +73,8 @@ impl Plugin for ResourceVisibilityPlugin {
     }
 }
 
-fn capture_startup_resources(
-    _input: Res<InputState>,
-    presentation: Res<PrimaryPresentationMetricsResource>,
-    mut snapshot: ResMut<StartupSnapshot>,
-) {
+fn capture_startup_resources(_input: Res<InputState>, mut snapshot: ResMut<StartupSnapshot>) {
     snapshot.saw_input = true;
-    snapshot.presentation_size_px = presentation.size_px();
 }
 
 #[test]
@@ -94,7 +88,6 @@ fn selected_input_capability_is_visible_before_startup() {
 
     let snapshot = app.world().resource::<StartupSnapshot>().unwrap();
     assert!(snapshot.saw_input);
-    assert_eq!(snapshot.presentation_size_px, (1280, 720));
     assert!(
         app.world()
             .resource::<WindowStateRegistryResource>()

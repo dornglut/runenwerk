@@ -5,6 +5,7 @@ use super::{
 use crate::app::App;
 use crate::plugin::Plugin;
 use crate::plugins::render::SurfaceFrameSubmissionRegistryResource;
+use crate::runtime::presentation::ensure_primary_presentation_metrics;
 #[derive(Debug, Default, runen_ecs::Resource)]
 pub(crate) struct SceneIntegrationActivation;
 
@@ -16,6 +17,7 @@ pub struct ScenePlugin;
 
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
+        ensure_primary_presentation_metrics(app.world_mut());
         app.init_resource::<SceneIntegrationActivation>();
         app.init_resource::<SceneCatalog>();
         app.init_resource::<SceneResource>();

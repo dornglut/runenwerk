@@ -10,8 +10,6 @@ related_designs:
   - ../../design/accepted/field-product-contracts-diagnostics-and-residency-design.md
   - ../../design/accepted/execution-fabric-and-product-jobs-design.md
   - ../../design/accepted/sdf-product-renderer-and-gpu-residency-design.md
-related_roadmaps:
-  - ../../workspace/sdf-first-execution-roadmap.md
 ---
 
 # Product Domain

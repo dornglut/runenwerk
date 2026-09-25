@@ -15,7 +15,6 @@ related_designs:
   - ../../../../design/implemented/viewport-dynamic-product-target-allocation-design.md
 related_roadmaps:
   - ../../../roadmaps/fully-featured-renderer-roadmap.md
-  - ../../../../workspace/sdf-first-execution-roadmap.md
 ---
 
 # Render Remaining Features Roadmap

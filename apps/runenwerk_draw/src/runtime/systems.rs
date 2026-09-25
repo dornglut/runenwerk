@@ -25,9 +25,9 @@ use product::{
     RenderProductSelection, RenderSelectedProduct, RenderTargetDescriptor,
 };
 use runen_input::{
-    AnalogMeasurement, ContactPhase, ContactPresence, DeliveryRole, EvidenceStatus,
-    InputObservation, InputObservationGroup, InputToolKind, MeasurementDomain, SourceTime,
-    SourceTimeUnit, StylusTilt, TabletObservation,
+    AnalogMeasurement, CapabilityKnowledge, ContactPhase, ContactPresence, DeliveryRole,
+    EvidenceStatus, InputObservation, InputObservationGroup, InputToolKind, MeasurementDomain,
+    SourceTime, SourceTimeUnit, StylusTilt, TabletObservation,
 };
 use ui_input::{
     Modifiers, PointerButton, PointerContactId, PointerContactPhase, PointerContactState,
@@ -288,32 +288,36 @@ fn ui_capabilities_for_neutral_group(
     current: &TabletObservation,
 ) -> PointerDeviceCapabilities {
     PointerDeviceCapabilities {
-        pressure: current.capabilities.pressure
+        pressure: capability_is_supported(current.capabilities.pressure)
             && group_measurements_are_projectable(
                 group,
                 |observation| observation.pressure,
                 project_pressure,
             ),
-        tilt: current.capabilities.tilt,
-        twist: current.capabilities.twist
+        tilt: capability_is_supported(current.capabilities.tilt),
+        twist: capability_is_supported(current.capabilities.twist)
             && group_measurements_are_projectable(
                 group,
                 |observation| observation.twist,
                 project_twist,
             ),
-        tangential_pressure: current.capabilities.tangential_pressure
+        tangential_pressure: capability_is_supported(current.capabilities.tangential_pressure)
             && group_measurements_are_projectable(
                 group,
                 |observation| observation.tangential_pressure,
                 project_tangential_pressure,
             ),
-        hover: current.capabilities.hover,
-        eraser: current.capabilities.eraser,
-        barrel_buttons: current.capabilities.barrel_controls,
-        coalesced_samples: current.capabilities.historical_samples,
-        predicted_samples: current.capabilities.predicted_samples,
+        hover: capability_is_supported(current.capabilities.hover),
+        eraser: capability_is_supported(current.capabilities.eraser),
+        barrel_buttons: capability_is_supported(current.capabilities.barrel_controls),
+        coalesced_samples: capability_is_supported(current.capabilities.historical_samples),
+        predicted_samples: capability_is_supported(current.capabilities.predicted_samples),
         calibration: false,
     }
+}
+
+fn capability_is_supported(knowledge: CapabilityKnowledge) -> bool {
+    knowledge == CapabilityKnowledge::Supported
 }
 
 fn group_measurements_are_projectable(
@@ -1383,11 +1387,11 @@ mod tests {
     #[test]
     fn draw_projects_capabilities_and_sample_evidence_without_relabeling() {
         let capabilities = TabletCapabilities {
-            pressure: true,
-            tangential_pressure: true,
-            twist: true,
-            historical_samples: true,
-            predicted_samples: true,
+            pressure: CapabilityKnowledge::Supported,
+            tangential_pressure: CapabilityKnowledge::Supported,
+            twist: CapabilityKnowledge::Supported,
+            historical_samples: CapabilityKnowledge::Supported,
+            predicted_samples: CapabilityKnowledge::Supported,
             ..Default::default()
         };
         let historical = tablet_observation(
@@ -1498,7 +1502,7 @@ mod tests {
             None,
             None,
             TabletCapabilities {
-                hover: true,
+                hover: CapabilityKnowledge::Supported,
                 ..Default::default()
             },
         );
@@ -1513,5 +1517,36 @@ mod tests {
         assert_eq!(events.len(), 1);
         assert!(claims.has_current_frame_activity());
         assert!(!claims.has_active_stream());
+    }
+
+    #[test]
+    fn draw_projects_only_supported_capability_knowledge() {
+        for (knowledge, expected) in [
+            (CapabilityKnowledge::Supported, true),
+            (CapabilityKnowledge::Unknown, false),
+            (CapabilityKnowledge::Unsupported, false),
+        ] {
+            let capabilities = TabletCapabilities {
+                pressure: knowledge,
+                ..Default::default()
+            };
+            let current = tablet_observation(
+                ContactPhase::Update,
+                EvidenceStatus::ObservedConfirmed,
+                DeliveryRole::OrdinaryCurrent,
+                20.0,
+                Some(AnalogMeasurement::new(
+                    0.7,
+                    MeasurementDomain::NormalizedUnitInterval,
+                )),
+                None,
+                None,
+                capabilities,
+            );
+            let group = tablet_group(vec![current.clone()]);
+            let packet = pointer_packet_from_neutral(&group, &current);
+
+            assert_eq!(packet.capabilities.pressure, expected);
+        }
     }
 }
