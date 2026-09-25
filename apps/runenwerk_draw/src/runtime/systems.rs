@@ -25,9 +25,9 @@ use product::{
     RenderProductSelection, RenderSelectedProduct, RenderTargetDescriptor,
 };
 use runen_input::{
-    AnalogMeasurement, ContactPhase, ContactPresence, DeliveryRole, EvidenceStatus, InputObservation,
-    InputObservationGroup, InputToolKind, MeasurementDomain, SourceTime, SourceTimeUnit, StylusTilt,
-    TabletObservation,
+    AnalogMeasurement, ContactPhase, ContactPresence, DeliveryRole, EvidenceStatus,
+    InputObservation, InputObservationGroup, InputToolKind, MeasurementDomain, SourceTime,
+    SourceTimeUnit, StylusTilt, TabletObservation,
 };
 use ui_input::{
     Modifiers, PointerButton, PointerContactId, PointerContactPhase, PointerContactState,
