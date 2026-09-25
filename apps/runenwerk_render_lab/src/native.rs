@@ -306,41 +306,32 @@ fn run_native_with_measurement(measurement: Option<RenderLabMeasurementConfig>) 
                 .expect("quality mode requires capture output directory");
         });
 
-        if internal_size == output_size {
-            let flow = render_lab_flow()?;
-            app.update_render_debug_config(|config| {
-                config.capture_selectors.clear();
-                config.capture_selectors.push(
-                    engine::plugins::render::inspect::RenderCaptureSelector::named_pass_surface_color(
-                        RL2_FLOW_ID,
-                        RL2_PASS_ID,
-                    ),
-                );
-            });
-            app.insert_resource(RenderLabFlowId(flow.id()));
-            app.add_render_flow(flow);
-        } else {
-            let scene_flow = render_lab_fixed_quality_flow()?;
-            let resolve_flow = engine::plugins::render::fixed_resolution_resolve_flow()?;
-            let scene_plan = engine::plugins::render::compile_flow_plan(&scene_flow)?;
-            let resolve_plan = engine::plugins::render::compile_flow_plan(&resolve_flow)?;
-            app.insert_resource(RenderLabFixedQualityPlans {
-                scene: Some(scene_plan),
-                resolve: Some(resolve_plan),
-            });
-            app.update_render_debug_config(|config| {
-                config.capture_selectors.clear();
-                config.capture_selectors.push(
-                    engine::plugins::render::inspect::RenderCaptureSelector::named_pass_surface_color(
-                        engine::plugins::render::FIXED_RESOLUTION_RESOLVE_FLOW_LABEL,
-                        engine::plugins::render::FIXED_RESOLUTION_RESOLVE_PASS_LABEL,
-                    ),
-                );
-            });
-            app.insert_resource(RenderLabFlowId(scene_flow.id()));
-            app.add_render_flow(scene_flow);
-            app.add_render_flow(resolve_flow);
-        }
+        let scene_flow = render_lab_fixed_quality_flow()?;
+        let resolve_flow = engine::plugins::render::fixed_resolution_resolve_flow()?;
+        let scene_plan = engine::plugins::render::compile_flow_plan(&scene_flow)?;
+        let resolve_plan = engine::plugins::render::compile_flow_plan(&resolve_flow)?;
+        app.insert_resource(RenderLabFixedQualityPlans {
+            scene: Some(scene_plan),
+            resolve: Some(resolve_plan),
+        });
+        app.update_render_debug_config(|config| {
+            config.capture_selectors.clear();
+            let selector = if internal_size == output_size {
+                engine::plugins::render::inspect::RenderCaptureSelector::named_pass_surface_color(
+                    RL2_QUALITY_FLOW_ID,
+                    RL2_QUALITY_PASS_ID,
+                )
+            } else {
+                engine::plugins::render::inspect::RenderCaptureSelector::named_pass_surface_color(
+                    engine::plugins::render::FIXED_RESOLUTION_RESOLVE_FLOW_LABEL,
+                    engine::plugins::render::FIXED_RESOLUTION_RESOLVE_PASS_LABEL,
+                )
+            };
+            config.capture_selectors.push(selector);
+        });
+        app.insert_resource(RenderLabFlowId(scene_flow.id()));
+        app.add_render_flow(scene_flow);
+        app.add_render_flow(resolve_flow);
     } else {
         let flow = render_lab_flow()?;
         app.insert_resource(RenderLabFlowId(flow.id()));
@@ -769,7 +760,7 @@ fn publish_render_lab_frame_system(
                     build_render_lab_radiance_publication(&camera, producer_id, output_size)?;
                 let native_scene_invocation = native_scene_invocation
                     .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, target_key)?;
-                stage_render_lab_native_quality_fallback_publication(
+                stage_render_lab_native_quality_publication(
                     &mut targets,
                     &mut frame_requests,
                     &mut contributions,
@@ -788,6 +779,27 @@ fn publish_render_lab_frame_system(
 
     let (target_key, target, contribution) =
         build_render_lab_radiance_publication(&camera, producer_id, requested_internal_size)?;
+    if measurement.quality_capture_output_dir.is_some() {
+        let invocation = PreparedFlowInvocationRequest::new(
+            format!("{RL2_QUALITY_FLOW_ID}.native"),
+            flow_id.0,
+            "main",
+        )
+        .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, target_key)?
+        .bind_surface_color_alias(RL2_QUALITY_COLOR_ALIAS)?;
+        stage_render_lab_native_quality_publication(
+            &mut targets,
+            &mut frame_requests,
+            &mut contributions,
+            producer_id,
+            RenderSurfaceId::primary(),
+            target,
+            invocation,
+            contribution,
+        )?;
+        return Ok(());
+    }
+
     let invocation =
         PreparedFlowInvocationRequest::new(format!("{RL2_FLOW_ID}.main"), flow_id.0, "main")
             .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, target_key)?;
@@ -972,7 +984,7 @@ fn stage_render_lab_fixed_quality_publication(
     Ok(())
 }
 
-fn stage_render_lab_native_quality_fallback_publication(
+fn stage_render_lab_native_quality_publication(
     targets: &mut RenderDynamicTextureTargetRequestRegistryResource,
     frame_requests: &mut PreparedRenderFrameRequestResource,
     contributions: &mut RenderDeterministicFrameContributionResource,
@@ -1682,7 +1694,7 @@ mod tests {
         let mut targets = RenderDynamicTextureTargetRequestRegistryResource::default();
         let mut frame_requests = PreparedRenderFrameRequestResource::default();
         let mut contributions = RenderDeterministicFrameContributionResource::default();
-        stage_render_lab_native_quality_fallback_publication(
+        stage_render_lab_native_quality_publication(
             &mut targets,
             &mut frame_requests,
             &mut contributions,
