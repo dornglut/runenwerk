@@ -5,7 +5,7 @@ status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-09-14
+last_reviewed: 2026-09-25
 ---
 
 # UI Domain
@@ -107,8 +107,35 @@ Editor and Draw structure project through `ui_composition`. Current editor
 structural commands commit through the composition transaction path; legacy
 `WorkspaceState` structures remain compatibility/test or migration inputs where
 current source still retains them, not a parallel live structural authority.
-`ui_surface` remains a temporary mapped compatibility boundary rather than a
-second structural target owner.
+`ui_surface` remains a temporary predecessor compatibility boundary rather than a
+second structural target owner. ADR 0013 still requires its deletion after each
+maintained responsibility is mapped to RunenUI or the actual Runenwerk app/domain
+owner; it is not a durable framework boundary.
+
+## RunenUI Adoption Classification
+
+The accepted adoption architecture distinguishes retained Runenwerk semantics
+from predecessor reusable-runtime authority.
+
+Retained Runenwerk authority includes `ui_composition`,
+`ui_adaptive_composition`, authored `ui_definition` / `ui_schema`, the
+UiProgram/lowering/compiler/artifact toolchain, Story V2 proof policy, and
+product/editor mutation semantics.
+
+Predecessor framework authority includes the local retained
+`ui_tree`/`ui_widgets`/`ui_runtime` path and overlapping reusable
+math/input/layout/text/theme/geometry/state/accessibility/testing semantics.
+These remain current implementation authority only until a named consumer moves
+cleanly to standalone RunenUI.
+
+Mixed packages such as `ui_controls`, `ui_binding`, `ui_hosts`,
+`ui_surface`, `ui_evaluator`, `ui_runtime_view`, renderer-neutral output
+packages, and `engine::plugins::ui` are split by semantic responsibility
+during adoption. They are not retained wholesale merely because current code
+uses them.
+
+The canonical classification and consumer sequence live in
+[Runenwerk UI Local Runtime and Integration Architecture](../../architecture/ui-framework-architecture.md).
 
 ## Interaction / Runtime
 
@@ -179,11 +206,14 @@ and must be consumed as a contract by downstream retained UI work.
 
 ## Scope Boundary
 
-`domain/ui` owns current Runenwerk-local substrate/runtime contracts
-(`ui_tree`, `ui_runtime`, `ui_widgets`), app-neutral structural composition
-(`ui_composition`), transient adaptive mechanism (`ui_adaptive_composition`),
-temporary generic surface compatibility contracts (`ui_surface`), general UI
-definition formation, and the implemented UiProgram/artifact/proof families.
+`domain/ui` currently contains both retained Runenwerk authority and predecessor
+reusable-runtime implementation. Retained authority includes app-neutral
+structural composition (`ui_composition`), transient adaptive mechanism
+(`ui_adaptive_composition`), general authored UI definition/schema formation,
+and the UiProgram/artifact/Story proof families. The retained tree/runtime/widget
+and generic surface/runtime packages remain current implementation only for
+not-yet-migrated consumers and are not a second long-term reusable-framework
+authority.
 
 It does not own editor-shell product wording or app extensions, app runtime
 wiring, provider behavior, app IO, native-window lifecycle, renderer execution
@@ -201,6 +231,9 @@ virtualization, reusable renderer/platform integration, accessibility/text
 maturity, framework devtools, and release qualification belong to standalone
 RunenUI rather than a Runenwerk-local framework roadmap.
 
-A future Runenwerk consumer cutover must be accepted separately. Until then,
-Runenwerk-local UI code/tests and the local owners indexed above remain the
-behavior and integration authority.
+A future Runenwerk consumer cutover must be accepted separately and must leave
+one mounted/runtime/interaction authority for that consumer. The first adoption
+proof is intentionally headless and bounded: one maintained authored/UI-program
+consumer should project through ordinary public RunenUI runtime/testing
+contracts before engine, Draw, or Editor migration. Until a cut is accepted,
+current Runenwerk-local code/tests remain behavior authority for that consumer.
