@@ -1,7 +1,7 @@
 use super::*;
 use crate::WorldMut;
 use anyhow::Context;
-use engine_net::replication::{InputDriver, ReplicationDriver};
+use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 use engine_net::*;
 use engine_sim::{AuthorityRole, SimulationProfileConfig, SimulationTick};
 use runen_ecs::World;
