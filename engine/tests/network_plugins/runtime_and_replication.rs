@@ -354,12 +354,12 @@ fn duplicate_current_retries_failed_replay_restoration_before_ack() {
         Some(SnapshotCursor(2)),
         "ACK is allowed only after duplicate-current restores host state"
     );
-    assert!(matches!(
+    assert_eq!(
         client_prediction_state(client.world()),
         Some(RunenNetPredictionState::Active {
-            frontier: runen_net::identity::SimulationTick::new(0)
+            frontier: runen_net::identity::SimulationTick::new(0),
         })
-    ));
+    );
 }
 
 #[test]
