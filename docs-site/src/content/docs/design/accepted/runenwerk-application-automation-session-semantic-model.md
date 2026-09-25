@@ -279,7 +279,7 @@ A trace is not self-contained merely because every captured group is valid. The 
 implementation therefore supports only a deliberately narrow subset whose required state can be
 established from the trace plus that explicit recording precondition:
 
-- pointer-button input when the first traced state for each replay source/device/button is a press;
+- pointer-button input when the explicit recording-side neutral-state precondition is established;
 - relative motion;
 - scroll;
 - all-tablet atomic groups for exact neutral admission and native-tablet staging replay.
@@ -295,7 +295,8 @@ The first replay implementation MUST report UnsupportedTraceShape before target 
 - ordinary contact/touch groups whose first required contact state predates capture;
 - keyboard replay as a claim of recorded text entry, because `PlatformEvent::TextInput` payloads are
   not present in A4;
-- a first digital release/reconciliation state that requires an unrecorded held state;
+- digital input whose required initial state is not covered by the explicit recording-side
+  neutral-state precondition;
 - continuity-loss behavior that would require state established before the trace;
 - any other group whose Runenwerk projection depends on missing pre-capture state.
 
