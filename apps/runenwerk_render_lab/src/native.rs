@@ -4,6 +4,7 @@ use engine::plugins::render::inspect::{
     RenderFrameObservationPolicyResource, inspect_fixed_resolution_execution,
 };
 use engine::prelude::FrameEnd;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, runen_ecs::Resource)]
@@ -15,10 +16,28 @@ struct RenderLabFixedQualityPlans {
     resolve: Option<engine::plugins::render::CompiledRenderFlowPlan>,
 }
 
+const RL2_QUALITY_EXECUTION_HISTORY_CAPACITY: usize = 16;
+
 #[derive(Debug, Clone, Default, runen_ecs::Resource)]
 struct RenderLabTemporalQualityExecutionState {
     pending_admission: Option<engine::plugins::render::RenderFixedResolutionExecutionAdmission>,
-    latest: Option<RenderLabTemporalQualityExecutionEvidence>,
+    by_frame: BTreeMap<u64, RenderLabTemporalQualityExecutionEvidence>,
+}
+
+impl RenderLabTemporalQualityExecutionState {
+    fn observe(&mut self, evidence: RenderLabTemporalQualityExecutionEvidence) {
+        self.by_frame.insert(evidence.frame_index, evidence);
+        while self.by_frame.len() > RL2_QUALITY_EXECUTION_HISTORY_CAPACITY {
+            let Some(oldest) = self.by_frame.keys().next().copied() else {
+                break;
+            };
+            self.by_frame.remove(&oldest);
+        }
+    }
+
+    fn frame(&self, frame_index: u64) -> Option<&RenderLabTemporalQualityExecutionEvidence> {
+        self.by_frame.get(&frame_index)
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -543,7 +562,6 @@ fn publish_render_lab_frame_system(
     let output_size = render_lab_extent(&presentation);
     if measurement.quality_capture_output_dir.is_some() {
         quality_execution.pending_admission = None;
-        quality_execution.latest = None;
     }
     if measurement.quality_capture_output_dir.is_some() && (width, height) != output_size {
         let scene_plan = fixed_quality_plans
@@ -685,7 +703,7 @@ fn inspect_render_lab_temporal_quality_execution_system(
         }
     };
 
-    quality_execution.latest = Some(evidence);
+    quality_execution.observe(evidence);
     Ok(())
 }
 
