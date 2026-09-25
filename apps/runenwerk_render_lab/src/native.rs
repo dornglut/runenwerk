@@ -9,13 +9,14 @@ use std::path::{Path, PathBuf};
 struct RenderLabFlowId(engine::plugins::render::RenderFlowId);
 
 const RL2_MEASUREMENT_HISTORY_CAPACITY: usize = 4096;
-const RL2_MEASUREMENT_SCHEMA_VERSION: u32 = 1;
+const RL2_MEASUREMENT_SCHEMA_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, Default, runen_ecs::Resource)]
 struct RenderLabMeasurementConfig {
     output_path: Option<PathBuf>,
     submitted_frame_limit: Option<usize>,
     primary_window_size_px: Option<(u32, u32)>,
+    radiance_target_size_px: Option<(u32, u32)>,
     completed: bool,
 }
 
@@ -35,6 +36,7 @@ struct RenderLabMeasurementSample {
     render_surface_id: u64,
     prepare_epoch: u64,
     target_size_px: [u32; 2],
+    radiance_target_size_px: [u32; 2],
     composed_timing_state: &'static str,
     gpu_composed_frame_ms: Option<f32>,
     diagnostics: Vec<RenderLabMeasurementDiagnostic>,
@@ -85,13 +87,16 @@ pub fn run_native_measurement(
     output_path: impl Into<PathBuf>,
     submitted_frame_limit: Option<usize>,
     primary_window_size_px: Option<(u32, u32)>,
+    radiance_target_size_px: Option<(u32, u32)>,
 ) -> Result<()> {
     let submitted_frame_limit = validate_measurement_frame_limit(submitted_frame_limit)?;
     let primary_window_size_px = validate_measurement_window_size(primary_window_size_px)?;
+    let radiance_target_size_px = validate_measurement_radiance_size(radiance_target_size_px)?;
     run_native_with_measurement(Some(RenderLabMeasurementConfig {
         output_path: Some(output_path.into()),
         submitted_frame_limit,
         primary_window_size_px,
+        radiance_target_size_px,
         completed: false,
     }))
 }
@@ -101,6 +106,15 @@ fn validate_measurement_window_size(size_px: Option<(u32, u32)>) -> Result<Optio
         && (width == 0 || height == 0)
     {
         bail!("RL2 measurement window size must have positive width and height");
+    }
+    Ok(size_px)
+}
+
+fn validate_measurement_radiance_size(size_px: Option<(u32, u32)>) -> Result<Option<(u32, u32)>> {
+    if let Some((width, height)) = size_px
+        && (width == 0 || height == 0)
+    {
+        bail!("RL2 measurement radiance size must have positive width and height");
     }
     Ok(size_px)
 }
@@ -147,11 +161,17 @@ fn rl2_measurement_policy() -> RenderFrameObservationPolicyResource {
     RenderFrameObservationPolicyResource::enabled(RL2_MEASUREMENT_HISTORY_CAPACITY)
 }
 
-fn build_measurement_artifact(history: &RenderFrameHistoryState) -> RenderLabMeasurementArtifact {
+fn build_measurement_artifact(
+    history: &RenderFrameHistoryState,
+    measurement: &RenderLabMeasurementConfig,
+) -> RenderLabMeasurementArtifact {
     let samples = history
         .observations()
         .map(|observation| {
             let evidence = observation.gpu.composed_timing_evidence.as_ref();
+            let radiance_target_size_px = measurement
+                .radiance_target_size_px
+                .unwrap_or(observation.target_size_px);
             let diagnostics = evidence
                 .map(|evidence| {
                     evidence
@@ -170,6 +190,7 @@ fn build_measurement_artifact(history: &RenderFrameHistoryState) -> RenderLabMea
                 render_surface_id: observation.key.render_surface_id,
                 prepare_epoch: observation.prepare_epoch,
                 target_size_px: [observation.target_size_px.0, observation.target_size_px.1],
+                radiance_target_size_px: [radiance_target_size_px.0, radiance_target_size_px.1],
                 composed_timing_state: observation.gpu.composed_timing_capability.as_str(),
                 gpu_composed_frame_ms: evidence.and_then(|evidence| evidence.gpu_composed_frame_ms),
                 diagnostics,
@@ -192,7 +213,11 @@ fn build_measurement_artifact(history: &RenderFrameHistoryState) -> RenderLabMea
     }
 }
 
-fn write_measurement_artifact(output_path: &Path, history: &RenderFrameHistoryState) -> Result<()> {
+fn write_measurement_artifact(
+    output_path: &Path,
+    history: &RenderFrameHistoryState,
+    measurement: &RenderLabMeasurementConfig,
+) -> Result<()> {
     if let Some(parent) = output_path.parent()
         && !parent.as_os_str().is_empty()
     {
@@ -203,7 +228,7 @@ fn write_measurement_artifact(output_path: &Path, history: &RenderFrameHistorySt
             )
         })?;
     }
-    let bytes = serde_json::to_vec_pretty(&build_measurement_artifact(history))
+    let bytes = serde_json::to_vec_pretty(&build_measurement_artifact(history, measurement))
         .context("serialize RL2 composed GPU measurement artifact")?;
     fs::write(output_path, bytes).with_context(|| {
         format!(
@@ -259,7 +284,7 @@ fn complete_render_lab_measurement_if_requested(
 
     if !measurement.completed {
         if let Some(output_path) = measurement.output_path.as_deref() {
-            write_measurement_artifact(output_path, history)?;
+            write_measurement_artifact(output_path, history, measurement)?;
         }
         measurement.completed = true;
     }
@@ -285,6 +310,7 @@ fn publish_render_lab_frame_system(
     camera: Res<RenderLabCamera>,
     flow_id: Res<RenderLabFlowId>,
     presentation: Res<engine::PrimaryPresentationMetricsResource>,
+    measurement: Res<RenderLabMeasurementConfig>,
     publication: RenderLabFramePublicationResources<'_>,
 ) -> Result<()> {
     let RenderLabFramePublicationResources {
@@ -292,7 +318,7 @@ fn publish_render_lab_frame_system(
         mut frame_requests,
         mut contributions,
     } = publication;
-    let (width, height) = render_lab_extent(&presentation);
+    let (width, height) = render_lab_radiance_extent(&presentation, &measurement)?;
     let producer_id = engine::plugins::render::RenderFrameProducerId::try_from_raw(RL2_PRODUCER_ID)
         .expect("Render Lab producer id is non-zero");
     let target_key = RenderDynamicTextureTargetKey::new(RL2_TARGET_NAMESPACE, RL2_TARGET_ID);
@@ -342,6 +368,35 @@ fn render_lab_extent(presentation: &engine::PrimaryPresentationMetricsResource) 
     presentation.size_px()
 }
 
+fn render_lab_radiance_extent(
+    presentation: &engine::PrimaryPresentationMetricsResource,
+    measurement: &RenderLabMeasurementConfig,
+) -> Result<(u32, u32)> {
+    let output = render_lab_extent(presentation);
+    let Some(radiance) = measurement.radiance_target_size_px else {
+        return Ok(output);
+    };
+    if radiance.0 > output.0 || radiance.1 > output.1 {
+        bail!(
+            "RL2 measurement radiance extent {}x{} exceeds realized output extent {}x{}",
+            radiance.0,
+            radiance.1,
+            output.0,
+            output.1
+        );
+    }
+    if u64::from(radiance.0) * u64::from(output.1) != u64::from(radiance.1) * u64::from(output.0) {
+        bail!(
+            "RL2 measurement radiance extent {}x{} must preserve realized output aspect {}x{}",
+            radiance.0,
+            radiance.1,
+            output.0,
+            output.1
+        );
+    }
+    Ok(radiance)
+}
+
 /// Validate every RL2 publication against cloned registries before replacing any live product
 /// state. The registries retain their other producers, while a failed replacement leaves the
 /// previous complete frame request intact.
@@ -386,6 +441,7 @@ mod tests {
         assert!(measurement.output_path.is_none());
         assert!(measurement.submitted_frame_limit.is_none());
         assert!(measurement.primary_window_size_px.is_none());
+        assert!(measurement.radiance_target_size_px.is_none());
         assert!(!measurement.completed);
         assert!(!RenderFrameObservationPolicyResource::default().enabled);
     }
@@ -416,6 +472,17 @@ mod tests {
     }
 
     #[test]
+    fn measurement_radiance_size_must_be_positive_when_requested() {
+        assert_eq!(validate_measurement_radiance_size(None).unwrap(), None);
+        assert_eq!(
+            validate_measurement_radiance_size(Some((1280, 720))).unwrap(),
+            Some((1280, 720))
+        );
+        assert!(validate_measurement_radiance_size(Some((0, 720))).is_err());
+        assert!(validate_measurement_radiance_size(Some((1280, 0))).is_err());
+    }
+
+    #[test]
     fn bounded_measurement_completion_counts_retained_submitted_frames_once() {
         use engine::plugins::render::inspect::RenderGpuTimingCapability;
 
@@ -425,6 +492,7 @@ mod tests {
             output_path: None,
             submitted_frame_limit: Some(2),
             primary_window_size_px: None,
+            radiance_target_size_px: None,
             completed: false,
         };
         assert!(!bounded_measurement_complete(&measurement, &history));
@@ -472,6 +540,7 @@ mod tests {
             output_path: None,
             submitted_frame_limit: Some(1),
             primary_window_size_px: None,
+            radiance_target_size_px: None,
             completed: false,
         };
         let mut windows = WindowStateRegistryResource::default();
@@ -545,7 +614,11 @@ mod tests {
             )],
         );
 
-        let artifact = build_measurement_artifact(&history);
+        let measurement = RenderLabMeasurementConfig {
+            radiance_target_size_px: Some((1280, 720)),
+            ..Default::default()
+        };
+        let artifact = build_measurement_artifact(&history, &measurement);
         assert_eq!(artifact.metric, "gpu_composed_frame_ms");
         assert_eq!(artifact.samples.len(), 2);
         assert_eq!(artifact.samples[0].frame_index, 21);
@@ -555,6 +628,7 @@ mod tests {
         );
         assert_eq!(artifact.samples[0].prepare_epoch, 121);
         assert_eq!(artifact.samples[0].target_size_px, [1600, 1200]);
+        assert_eq!(artifact.samples[0].radiance_target_size_px, [1280, 720]);
         assert_eq!(artifact.samples[0].gpu_composed_frame_ms, Some(6.25));
         assert_eq!(artifact.samples[1].frame_index, 22);
         assert_eq!(
@@ -563,6 +637,7 @@ mod tests {
         );
         assert_eq!(artifact.samples[1].prepare_epoch, 122);
         assert_eq!(artifact.samples[1].target_size_px, [3024, 1964]);
+        assert_eq!(artifact.samples[1].radiance_target_size_px, [1280, 720]);
         assert_eq!(
             artifact.samples[1].composed_timing_state,
             "readback_pending"
@@ -575,6 +650,42 @@ mod tests {
     fn render_lab_extent_uses_primary_presentation_metrics() {
         let presentation = engine::PrimaryPresentationMetricsResource::new((901, 577), 1.25);
         assert_eq!(render_lab_extent(&presentation), (901, 577));
+    }
+
+    #[test]
+    fn render_lab_radiance_extent_defaults_to_output_and_accepts_fixed_measurement_override() {
+        let presentation = engine::PrimaryPresentationMetricsResource::new((1920, 1080), 1.0);
+        let coupled = RenderLabMeasurementConfig::default();
+        assert_eq!(
+            render_lab_radiance_extent(&presentation, &coupled).unwrap(),
+            (1920, 1080)
+        );
+
+        let fixed = RenderLabMeasurementConfig {
+            radiance_target_size_px: Some((1280, 720)),
+            ..Default::default()
+        };
+        assert_eq!(
+            render_lab_radiance_extent(&presentation, &fixed).unwrap(),
+            (1280, 720)
+        );
+        assert_eq!(render_lab_extent(&presentation), (1920, 1080));
+    }
+
+    #[test]
+    fn fixed_radiance_measurement_rejects_aspect_mismatch_and_supersampling() {
+        let presentation = engine::PrimaryPresentationMetricsResource::new((1920, 1080), 1.0);
+        let mismatched = RenderLabMeasurementConfig {
+            radiance_target_size_px: Some((1600, 1200)),
+            ..Default::default()
+        };
+        assert!(render_lab_radiance_extent(&presentation, &mismatched).is_err());
+
+        let supersampled = RenderLabMeasurementConfig {
+            radiance_target_size_px: Some((2560, 1440)),
+            ..Default::default()
+        };
+        assert!(render_lab_radiance_extent(&presentation, &supersampled).is_err());
     }
 
     fn producer(raw: u64) -> engine::plugins::render::RenderFrameProducerId {

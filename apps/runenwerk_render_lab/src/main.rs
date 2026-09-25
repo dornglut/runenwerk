@@ -9,10 +9,12 @@ fn main() -> anyhow::Result<()> {
             output_path,
             submitted_frame_limit,
             window_size_px,
+            radiance_size_px,
         } => runenwerk_render_lab::run_native_measurement(
             output_path,
             submitted_frame_limit,
             window_size_px,
+            radiance_size_px,
         ),
         Command::FoundingDirect(output_root) => {
             runenwerk_render_lab::run_founding_direct(output_root)?;
@@ -29,6 +31,7 @@ enum Command {
         output_path: PathBuf,
         submitted_frame_limit: Option<usize>,
         window_size_px: Option<(u32, u32)>,
+        radiance_size_px: Option<(u32, u32)>,
     },
 }
 
@@ -49,6 +52,7 @@ fn parse_command(args: impl IntoIterator<Item = OsString>) -> anyhow::Result<Com
         };
         let mut submitted_frame_limit = None;
         let mut window_size_px = None;
+        let mut radiance_size_px = None;
         while let Some(flag) = args.next() {
             if flag == "--submitted-frames" {
                 if submitted_frame_limit.is_some() {
@@ -60,6 +64,11 @@ fn parse_command(args: impl IntoIterator<Item = OsString>) -> anyhow::Result<Com
                     anyhow::bail!("duplicate --window-size-px argument");
                 }
                 window_size_px = Some(parse_window_size_px(args.next())?);
+            } else if flag == "--radiance-size-px" {
+                if radiance_size_px.is_some() {
+                    anyhow::bail!("duplicate --radiance-size-px argument");
+                }
+                radiance_size_px = Some(parse_radiance_size_px(args.next())?);
             } else {
                 anyhow::bail!(
                     "unexpected RL2 measurement argument '{}'",
@@ -71,6 +80,7 @@ fn parse_command(args: impl IntoIterator<Item = OsString>) -> anyhow::Result<Com
             output_path,
             submitted_frame_limit,
             window_size_px,
+            radiance_size_px,
         });
     }
     Ok(Command::FoundingDirect(
@@ -114,6 +124,28 @@ fn parse_window_size_px(value: Option<OsString>) -> anyhow::Result<(u32, u32)> {
         .map_err(|_| anyhow::anyhow!("invalid --window-size-px height in '{value}'"))?;
     if width == 0 || height == 0 {
         anyhow::bail!("--window-size-px requires positive WIDTHxHEIGHT");
+    }
+    Ok((width, height))
+}
+
+fn parse_radiance_size_px(value: Option<OsString>) -> anyhow::Result<(u32, u32)> {
+    let Some(value) = value else {
+        anyhow::bail!("--radiance-size-px requires WIDTHxHEIGHT");
+    };
+    let Some(value) = value.to_str() else {
+        anyhow::bail!("--radiance-size-px requires a UTF-8 WIDTHxHEIGHT value");
+    };
+    let Some((width, height)) = value.split_once('x') else {
+        anyhow::bail!("invalid --radiance-size-px value '{value}'; expected WIDTHxHEIGHT");
+    };
+    let width = width
+        .parse::<u32>()
+        .map_err(|_| anyhow::anyhow!("invalid --radiance-size-px width in '{value}'"))?;
+    let height = height
+        .parse::<u32>()
+        .map_err(|_| anyhow::anyhow!("invalid --radiance-size-px height in '{value}'"))?;
+    if width == 0 || height == 0 {
+        anyhow::bail!("--radiance-size-px requires positive WIDTHxHEIGHT");
     }
     Ok((width, height))
 }
@@ -164,6 +196,7 @@ mod tests {
                 output_path: PathBuf::from("evidence/run.json"),
                 submitted_frame_limit: None,
                 window_size_px: None,
+                radiance_size_px: None,
             }
         );
         assert_eq!(
@@ -172,6 +205,7 @@ mod tests {
                 output_path: PathBuf::from("render-lab/rl2-measurement.json"),
                 submitted_frame_limit: None,
                 window_size_px: None,
+                radiance_size_px: None,
             }
         );
     }
@@ -190,6 +224,7 @@ mod tests {
                 output_path: PathBuf::from("evidence/run.json"),
                 submitted_frame_limit: Some(600),
                 window_size_px: None,
+                radiance_size_px: None,
             }
         );
         assert_eq!(
@@ -198,6 +233,7 @@ mod tests {
                 output_path: PathBuf::from("render-lab/rl2-measurement.json"),
                 submitted_frame_limit: Some(420),
                 window_size_px: None,
+                radiance_size_px: None,
             }
         );
     }
@@ -218,6 +254,7 @@ mod tests {
                 output_path: PathBuf::from("evidence/run.json"),
                 submitted_frame_limit: Some(600),
                 window_size_px: Some((1600, 1200)),
+                radiance_size_px: None,
             }
         );
         assert_eq!(
@@ -233,8 +270,53 @@ mod tests {
                 output_path: PathBuf::from("render-lab/rl2-measurement.json"),
                 submitted_frame_limit: Some(420),
                 window_size_px: Some((800, 600)),
+                radiance_size_px: None,
             }
         );
+    }
+
+    #[test]
+    fn native_measurement_mode_accepts_explicit_radiance_size() {
+        assert_eq!(
+            parse_command(args(&[
+                "--rl2-measure",
+                "evidence/run.json",
+                "--window-size-px",
+                "1920x1080",
+                "--radiance-size-px",
+                "1280x720",
+                "--submitted-frames",
+                "600"
+            ]))
+            .unwrap(),
+            Command::NativeMeasurement {
+                output_path: PathBuf::from("evidence/run.json"),
+                submitted_frame_limit: Some(600),
+                window_size_px: Some((1920, 1080)),
+                radiance_size_px: Some((1280, 720)),
+            }
+        );
+    }
+
+    #[test]
+    fn native_measurement_mode_rejects_invalid_radiance_sizes() {
+        for values in [
+            vec!["--rl2-measure", "--radiance-size-px"],
+            vec!["--rl2-measure", "--radiance-size-px", "0x720"],
+            vec!["--rl2-measure", "--radiance-size-px", "1280x0"],
+            vec!["--rl2-measure", "--radiance-size-px", "1280"],
+            vec!["--rl2-measure", "--radiance-size-px", "1280X720"],
+            vec!["--rl2-measure", "--radiance-size-px", "watx720"],
+            vec![
+                "--rl2-measure",
+                "--radiance-size-px",
+                "1280x720",
+                "--radiance-size-px",
+                "960x540",
+            ],
+        ] {
+            assert!(parse_command(args(&values)).is_err(), "{values:?}");
+        }
     }
 
     #[test]
