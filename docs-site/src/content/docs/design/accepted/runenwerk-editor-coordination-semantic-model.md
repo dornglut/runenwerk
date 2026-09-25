@@ -719,6 +719,10 @@ This design replaces the two predecessor documents as current editor-coordinatio
 - `editor-workspace-document-mode-panel-architecture.md`;
 - `editor-ui-workspace-tool-surface-architecture.md`.
 
-Those documents remain in `design/superseded/` as implementation-era and migration evidence. Current docs must link to this model for generic editor coordination, to ADR 0013 for structural composition, and to the implemented Tool Suite design for registry/provider host contracts.
+Those documents are retired from the live corpus; their implementation-era and
+migration evidence remains in Git and GitHub history. Current docs must link to
+this model for generic editor coordination, to ADR 0013 for structural
+composition, and to the implemented Tool Suite design for registry/provider
+host contracts.
 
 Historical plans/reports retain their original prose and receive path-only reference repair when required by the documentation validator.

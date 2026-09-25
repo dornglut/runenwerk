@@ -9,8 +9,6 @@ last_reviewed: 2026-09-13
 related_docs:
   - ../../architecture/ui-framework-architecture.md
   - ../../architecture/live-uiplugin-runtime-platform-architecture.md
-  - ../archived/ui-framework-app-integration-direction-review.md
-  - ../archived/live-uiplugin-runtime-full-cutover-plan.md
   - ../implemented/ui-program-architecture.md
   - ../../domain/ui/roadmap.md
   - ../../reports/investigations/live-uiplugin-runtime-current-state-investigation.md

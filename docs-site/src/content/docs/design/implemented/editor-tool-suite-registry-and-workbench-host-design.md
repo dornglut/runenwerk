@@ -18,7 +18,6 @@ related_adrs:
 related_designs:
   - ../accepted/runenwerk-editor-coordination-semantic-model.md
   - ../active/material-lab-and-material-preview-design.md
-  - ../superseded/runenwerk-capability-workbench-target-architecture.md
 ---
 
 # Editor Tool Suite Registry And Workbench Host Design
