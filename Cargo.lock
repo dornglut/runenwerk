@@ -2618,7 +2618,7 @@ source = "git+https://github.com/dornglut/runen-graph?rev=075f3c2b4122c1ae89209d
 [[package]]
 name = "runen-input"
 version = "0.1.0"
-source = "git+https://github.com/dornglut/runen-input?rev=ba87e7c80a9626239a011038cec97c30010379a8#ba87e7c80a9626239a011038cec97c30010379a8"
+source = "git+https://github.com/dornglut/runen-input?rev=2751e19fa42255b86e786e7cd837198c917b7b25#2751e19fa42255b86e786e7cd837198c917b7b25"
 
 [[package]]
 name = "runen-net"
