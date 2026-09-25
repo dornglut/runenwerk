@@ -357,7 +357,7 @@ fn duplicate_current_retries_failed_replay_restoration_before_ack() {
     assert!(matches!(
         client_prediction_state(client.world()),
         Some(RunenNetPredictionState::Active {
-            frontier: runen_net::identity::SimulationTick::ZERO
+            frontier: runen_net::identity::SimulationTick::new(0)
         })
     ));
 }
