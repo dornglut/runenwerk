@@ -98,7 +98,7 @@ mod tests {
 
     #[test]
     fn explicit_native_host_policy_updates_existing_observation_mode_without_resetting_observations()
-    {
+     {
         let mut app = App::new();
         app.insert_resource(FramePacingRuntimeStateResource {
             mode: FramePacingMode::ContinuousCapped { target_fps: 60 },
