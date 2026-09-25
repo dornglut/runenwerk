@@ -278,7 +278,7 @@ fn finish_pending_composition_restore(
             .pending_restore
             .take()
             .expect("pending composition restore exists");
-        rollback_restore_presentations(host, &pending, windows, surfaces);
+        rollback_restore_presentations(host, &pending.presentations, windows, surfaces);
         transitions.diagnostics.push(Record::error(
             Code::WindowCreationFailed,
             Stage::Projection,
@@ -307,7 +307,7 @@ fn finish_pending_composition_restore(
         .shell_state
         .editor_window_binding(host.shell_state.editor_windows().primary_window_id())
     else {
-        rollback_restore_presentations(host, &pending, windows, surfaces);
+        rollback_restore_presentations(host, &pending.presentations, windows, surfaces);
         transitions.diagnostics.push(Record::error(
             Code::WindowTargetBindingMissing,
             Stage::Projection,
@@ -340,7 +340,7 @@ fn finish_pending_composition_restore(
             );
         }
         Err(rejection) => {
-            rollback_restore_presentations(host, &pending, windows, surfaces);
+            rollback_restore_presentations(host, &pending.presentations, windows, surfaces);
             record_rejection(transitions, rejection);
         }
     }
@@ -348,17 +348,33 @@ fn finish_pending_composition_restore(
 
 fn rollback_restore_presentations(
     host: &mut EditorHostResource,
-    pending: &PendingCompositionRestore,
+    presentations: &[PendingRestorePresentation],
     windows: &mut WindowStateRegistryResource,
     surfaces: &mut RenderSurfaceRegistryResource,
 ) {
-    for presentation in &pending.presentations {
+    for presentation in presentations {
         if let Some(binding) = host
             .shell_state
             .editor_window_binding(presentation.editor_window_id)
         {
-            surfaces.retire_surface_for_native_window(binding.native_window_id);
-            windows.remove_window(binding.native_window_id);
+            match windows
+                .record(binding.native_window_id)
+                .map(|record| record.lifecycle_state)
+            {
+                Some(NativeWindowLifecycleState::Created)
+                | Some(NativeWindowLifecycleState::CloseIntentPending)
+                | Some(NativeWindowLifecycleState::CloseApproved) => {
+                    if let Some(record) = windows.record_mut(binding.native_window_id) {
+                        record.approve_close();
+                    }
+                }
+                Some(NativeWindowLifecycleState::Requested)
+                | Some(NativeWindowLifecycleState::CreationFailed)
+                | None => {
+                    surfaces.retire_surface_for_native_window(binding.native_window_id);
+                    windows.remove_window(binding.native_window_id);
+                }
+            }
         }
         host.shell_state
             .remove_editor_window_presentation(presentation.editor_window_id);
@@ -1132,14 +1148,24 @@ mod tests {
             bindings_before
         );
         assert_eq!(host.shell_state.editor_windows().len(), 1);
-        for (_, native_window_id, _) in bound {
-            assert!(windows.record(native_window_id).is_none());
-            assert!(
-                surfaces
-                    .surface_for_native_window(native_window_id)
-                    .is_none()
-            );
-        }
+        assert_eq!(
+            windows
+                .record(bound[0].1)
+                .expect("already-created provisional window remains for native teardown")
+                .lifecycle_state,
+            NativeWindowLifecycleState::CloseApproved
+        );
+        assert_eq!(
+            surfaces.surface_for_native_window(bound[0].1),
+            Some(bound[0].2.render_surface_id),
+            "created provisional surface remains owned until native teardown"
+        );
+        assert!(windows.record(bound[1].1).is_none());
+        assert!(
+            surfaces
+                .surface_for_native_window(bound[1].1)
+                .is_none()
+        );
         assert!(
             transitions
                 .diagnostics()
