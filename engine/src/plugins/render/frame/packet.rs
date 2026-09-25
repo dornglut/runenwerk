@@ -933,7 +933,10 @@ impl PreparedRenderFrameRequestContribution {
             }
         }
         for flow_id in &replacement_flows {
-            if !flow_invocations.iter().any(|request| request.flow_id == *flow_id) {
+            if !flow_invocations
+                .iter()
+                .any(|request| request.flow_id == *flow_id)
+            {
                 return Err(
                     PreparedRenderFrameRequestError::MissingAutomaticMainReplacementInvocation {
                         producer_id: *producer_id,
@@ -1003,12 +1006,7 @@ mod tests {
         let flow_id = flow(7);
 
         let error = requests
-            .replace_contribution_with_automatic_main_replacements(
-                producer(1),
-                [],
-                [],
-                [flow_id],
-            )
+            .replace_contribution_with_automatic_main_replacements(producer(1), [], [], [flow_id])
             .expect_err("replacement without invocation must fail closed");
 
         assert!(matches!(
@@ -1096,7 +1094,9 @@ mod tests {
         assert_eq!(requests.requested_views_for_surface(primary).len(), 1);
         assert_eq!(requests.requested_views_for_surface(secondary).len(), 1);
         assert_eq!(
-            requests.requested_flow_invocations_for_surface(primary).len(),
+            requests
+                .requested_flow_invocations_for_surface(primary)
+                .len(),
             1
         );
         assert_eq!(
