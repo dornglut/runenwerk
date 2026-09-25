@@ -5,12 +5,12 @@ use engine::plugins::render::inspect::{
     RenderTemporalInputKind, RenderTemporalInspection, RenderTemporalInspectionRequest,
     RenderTemporalJitterEvidence, RenderTemporalProductionEvidenceReport,
     RenderTemporalProductionEvidenceRequest, RenderTemporalProductionHardwareProfile,
-    RenderTemporalReconstructionMode, RenderTemporalResolutionEvidence, RenderTemporalResolutionPolicy,
-    RenderTemporalRuntimeVisualEvidence, RenderTemporalUpscalingAdapterEvidence,
-    RenderTemporalUpscalingAdapterKind, RenderTemporalUpscalingCapabilityState,
-    RenderTemporalUpscalingInspection, RenderTemporalUpscalingInspectionRequest,
-    inspect_render_temporal_inputs, inspect_render_temporal_production_evidence,
-    inspect_render_temporal_upscaling,
+    RenderTemporalReconstructionMode, RenderTemporalResolutionEvidence,
+    RenderTemporalResolutionPolicy, RenderTemporalRuntimeVisualEvidence,
+    RenderTemporalUpscalingAdapterEvidence, RenderTemporalUpscalingAdapterKind,
+    RenderTemporalUpscalingCapabilityState, RenderTemporalUpscalingInspection,
+    RenderTemporalUpscalingInspectionRequest, inspect_render_temporal_inputs,
+    inspect_render_temporal_production_evidence, inspect_render_temporal_upscaling,
 };
 
 fn main() {
