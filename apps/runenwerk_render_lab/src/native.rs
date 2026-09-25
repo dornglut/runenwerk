@@ -324,7 +324,7 @@ fn publish_render_lab_frame_system(
         mut frame_requests,
         mut contributions,
     } = publication;
-    let (width, height) = render_lab_radiance_extent(&presentation, &measurement);
+    let (width, height) = render_lab_radiance_extent(&presentation, &measurement)?;
     let producer_id = engine::plugins::render::RenderFrameProducerId::try_from_raw(RL2_PRODUCER_ID)
         .expect("Render Lab producer id is non-zero");
     let target_key = RenderDynamicTextureTargetKey::new(RL2_TARGET_NAMESPACE, RL2_TARGET_ID);
@@ -377,10 +377,32 @@ fn render_lab_extent(presentation: &engine::PrimaryPresentationMetricsResource) 
 fn render_lab_radiance_extent(
     presentation: &engine::PrimaryPresentationMetricsResource,
     measurement: &RenderLabMeasurementConfig,
-) -> (u32, u32) {
-    measurement
-        .radiance_target_size_px
-        .unwrap_or_else(|| render_lab_extent(presentation))
+) -> Result<(u32, u32)> {
+    let output = render_lab_extent(presentation);
+    let Some(radiance) = measurement.radiance_target_size_px else {
+        return Ok(output);
+    };
+    if radiance.0 > output.0 || radiance.1 > output.1 {
+        bail!(
+            "RL2 measurement radiance extent {}x{} exceeds realized output extent {}x{}",
+            radiance.0,
+            radiance.1,
+            output.0,
+            output.1
+        );
+    }
+    if u64::from(radiance.0) * u64::from(output.1)
+        != u64::from(radiance.1) * u64::from(output.0)
+    {
+        bail!(
+            "RL2 measurement radiance extent {}x{} must preserve realized output aspect {}x{}",
+            radiance.0,
+            radiance.1,
+            output.0,
+            output.1
+        );
+    }
+    Ok(radiance)
 }
 
 /// Validate every RL2 publication against cloned registries before replacing any live product
@@ -643,7 +665,7 @@ mod tests {
         let presentation = engine::PrimaryPresentationMetricsResource::new((1920, 1080), 1.0);
         let coupled = RenderLabMeasurementConfig::default();
         assert_eq!(
-            render_lab_radiance_extent(&presentation, &coupled),
+            render_lab_radiance_extent(&presentation, &coupled).unwrap(),
             (1920, 1080)
         );
 
@@ -652,10 +674,26 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            render_lab_radiance_extent(&presentation, &fixed),
+            render_lab_radiance_extent(&presentation, &fixed).unwrap(),
             (1280, 720)
         );
         assert_eq!(render_lab_extent(&presentation), (1920, 1080));
+    }
+
+    #[test]
+    fn fixed_radiance_measurement_rejects_aspect_mismatch_and_supersampling() {
+        let presentation = engine::PrimaryPresentationMetricsResource::new((1920, 1080), 1.0);
+        let mismatched = RenderLabMeasurementConfig {
+            radiance_target_size_px: Some((1600, 1200)),
+            ..Default::default()
+        };
+        assert!(render_lab_radiance_extent(&presentation, &mismatched).is_err());
+
+        let supersampled = RenderLabMeasurementConfig {
+            radiance_target_size_px: Some((2560, 1440)),
+            ..Default::default()
+        };
+        assert!(render_lab_radiance_extent(&presentation, &supersampled).is_err());
     }
 
     fn producer(raw: u64) -> engine::plugins::render::RenderFrameProducerId {
