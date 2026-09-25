@@ -1180,16 +1180,17 @@ fn self_authoring_live_activation_uses_domain_workspace_formation_and_versioned_
         "workspace layout definitions should produce a non-theme live activation contract",
     );
     assert!(
-        resources.contains("form_workspace_state_from_definition_with_registry")
-            && resources.contains("install_composition_runtime"),
-        "app runtime should apply authored workspace layouts through editor_shell formation",
+        resources.contains("form_editor_profile_composition")
+            && resources.contains("install_composition_runtime")
+            && !resources.contains("form_workspace_state_from_definition"),
+        "app runtime should apply authored workspace layouts through composition-native editor_shell formation",
     );
     assert!(
-        shell_workspace.contains("WorkspaceDefinitionFormationError")
+        shell_workspace.contains("resolve_authored_tool_surface_reference")
             && shell_workspace.contains("tool_surface_kind_from_definition_key")
             && shell_surface_contract.contains("panel_kind_definition_key")
             && shell_surface_contract.contains("tool_surface_kind_definition_key"),
-        "workspace definition formation and authored panel/tool-surface key mapping must live in editor_shell",
+        "authored panel/tool-surface reference resolution must live in editor_shell",
     );
     assert!(
         self_authoring.contains("EditorDefinitionExportPackage")

@@ -12,7 +12,7 @@ use crate::{
     workspace_split_host_widget_id,
 };
 
-pub fn project_workspace_for_shell(
+pub(crate) fn project_workspace_for_shell(
     workspace_state: &WorkspaceState,
 ) -> Result<WorkspaceProjectionArtifact, WorkspaceStateError> {
     workspace_state.validate_integrity()?;

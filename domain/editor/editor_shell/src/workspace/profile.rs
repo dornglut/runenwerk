@@ -10,18 +10,21 @@ use editor_definition::EditorWorkspaceLayoutDefinition;
 use id_macros::id;
 
 use crate::{
-    PanelHostKind, PanelKind, ToolSurfaceKind, WorkspaceId, WorkspaceIdentityAllocator,
-    WorkspaceSplitAxis,
+    PanelKind, ToolSurfaceKind,
     tool_suite::{ProfileRef, ToolSurfaceRegistry, ToolSurfaceStableKey},
 };
 
+#[cfg(test)]
 use super::definition_form::{
     WorkspaceDefinitionFormationError, form_workspace_state_from_definition_with_registry,
 };
+use super::state::{WorkspaceDefaultToolSurface, WorkspaceSurfaceIdentityError};
+#[cfg(test)]
 use super::state::{
-    WorkspaceDefaultToolSurface, WorkspaceState, WorkspaceStateError,
-    WorkspaceSurfaceIdentityError, WorkspaceToolSurfaceRegistryCompatibilityReport,
+    WorkspaceState, WorkspaceStateError, WorkspaceToolSurfaceRegistryCompatibilityReport,
 };
+#[cfg(test)]
+use crate::{PanelHostKind, WorkspaceId, WorkspaceIdentityAllocator, WorkspaceSplitAxis};
 
 #[id]
 pub struct WorkspaceProfileId;
@@ -78,7 +81,8 @@ impl WorkspaceLayoutTemplate {
         }
     }
 
-    pub fn build_workspace_state(
+    #[cfg(test)]
+    pub(crate) fn build_workspace_state(
         self,
         workspace_id: WorkspaceId,
         allocator: &mut WorkspaceIdentityAllocator,
@@ -97,7 +101,8 @@ impl WorkspaceLayoutTemplate {
         }
     }
 
-    pub fn default_graph_matches(self, workspace_state: &WorkspaceState) -> bool {
+    #[cfg(test)]
+    pub(crate) fn default_graph_matches(self, workspace_state: &WorkspaceState) -> bool {
         match self {
             Self::Scene | Self::CurrentFixedEditor => {
                 scene_derived_default_graph_matches(workspace_state)
@@ -177,19 +182,22 @@ pub enum WorkspaceProfileRegistryBackedBuildError {
         profile_id: WorkspaceProfileId,
         tool_surface_kind: ToolSurfaceKind,
     },
+    #[cfg(test)]
     WorkspaceCompatibility {
         profile_id: WorkspaceProfileId,
         report: Box<WorkspaceToolSurfaceRegistryCompatibilityReport>,
     },
+    #[cfg(test)]
     WorkspaceState {
         profile_id: WorkspaceProfileId,
         error: Box<WorkspaceStateError>,
     },
+    #[cfg(test)]
     WorkspaceDefinitionFormation {
         profile_id: WorkspaceProfileId,
         error: Box<WorkspaceDefinitionFormationError>,
     },
-    CompositionImport {
+    CompositionFormation {
         profile_id: WorkspaceProfileId,
         error: Box<crate::EditorCompositionRejection>,
     },
@@ -227,22 +235,25 @@ impl fmt::Display for WorkspaceProfileRegistryBackedBuildError {
                 "workspace profile {} references {tool_surface_kind:?} without a safe stable-key mapping",
                 profile_id.raw()
             ),
+            #[cfg(test)]
             Self::WorkspaceCompatibility { profile_id, .. } => write!(
                 f,
                 "workspace profile {} produced a workspace that is not compatible with the tool-surface registry",
                 profile_id.raw()
             ),
+            #[cfg(test)]
             Self::WorkspaceState { profile_id, error } => write!(
                 f,
                 "workspace profile {} failed to build workspace state: {error}",
                 profile_id.raw()
             ),
+            #[cfg(test)]
             Self::WorkspaceDefinitionFormation { profile_id, error } => write!(
                 f,
                 "workspace profile {} failed to form authored workspace layout: {error:?}",
                 profile_id.raw()
             ),
-            Self::CompositionImport { profile_id, error } => write!(
+            Self::CompositionFormation { profile_id, error } => write!(
                 f,
                 "workspace profile {} failed one-way composition import: {error}",
                 profile_id.raw()
@@ -317,7 +328,8 @@ impl WorkspaceProfile {
         ))
     }
 
-    pub fn build_default_workspace_state(
+    #[cfg(test)]
+    pub(crate) fn build_default_workspace_state(
         &self,
         workspace_id: WorkspaceId,
         allocator: &mut WorkspaceIdentityAllocator,
@@ -326,7 +338,8 @@ impl WorkspaceProfile {
             .expect("compiled-in workspace profile default surfaces should keep C3 legacy metadata")
     }
 
-    pub fn try_build_default_workspace_state(
+    #[cfg(test)]
+    pub(crate) fn try_build_default_workspace_state(
         &self,
         workspace_id: WorkspaceId,
         allocator: &mut WorkspaceIdentityAllocator,
@@ -343,7 +356,8 @@ impl WorkspaceProfile {
             .build_workspace_state(workspace_id, allocator))
     }
 
-    pub fn build_default_workspace_state_with_registry(
+    #[cfg(test)]
+    pub(crate) fn build_default_workspace_state_with_registry(
         &self,
         workspace_id: WorkspaceId,
         allocator: &mut WorkspaceIdentityAllocator,
@@ -387,7 +401,11 @@ impl WorkspaceProfile {
         }
     }
 
-    pub fn required_tool_surfaces_are_present(&self, workspace_state: &WorkspaceState) -> bool {
+    #[cfg(test)]
+    pub(crate) fn required_tool_surfaces_are_present(
+        &self,
+        workspace_state: &WorkspaceState,
+    ) -> bool {
         self.default_surfaces.iter().all(|required_surface| {
             workspace_state.tool_surfaces().any(|surface| {
                 surface.stable_surface_key() == required_surface.stable_surface_key()
@@ -452,6 +470,7 @@ impl WorkspaceProfile {
     }
 }
 
+#[cfg(test)]
 fn scene_derived_default_graph_matches(workspace_state: &WorkspaceState) -> bool {
     if workspace_state.validate_integrity().is_err() {
         return false;
@@ -489,6 +508,7 @@ fn scene_derived_default_graph_matches(workspace_state: &WorkspaceState) -> bool
             == Some(vec![PanelKind::Console])
 }
 
+#[cfg(test)]
 fn modelling_default_graph_matches(workspace_state: &WorkspaceState) -> bool {
     if workspace_state.validate_integrity().is_err() {
         return false;
@@ -526,6 +546,7 @@ fn modelling_default_graph_matches(workspace_state: &WorkspaceState) -> bool {
             == Some(vec![PanelKind::Console])
 }
 
+#[cfg(test)]
 fn split_host_with_axis(
     workspace_state: &WorkspaceState,
     host_id: crate::PanelHostId,
@@ -538,6 +559,7 @@ fn split_host_with_axis(
     }
 }
 
+#[cfg(test)]
 fn tab_stack_panel_kinds_by_host(
     workspace_state: &WorkspaceState,
     host_id: crate::PanelHostId,

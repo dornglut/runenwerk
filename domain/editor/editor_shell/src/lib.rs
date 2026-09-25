@@ -13,13 +13,18 @@ pub mod tool_suite;
 pub mod ux_lab;
 pub mod view_models;
 pub mod workbench;
-pub mod workspace;
+mod workspace;
 
 #[cfg(test)]
 mod tests;
 
 pub use commands::*;
 pub use composition::*;
+#[cfg(test)]
+pub(crate) use composition::{
+    build_editor_shell_frame, build_editor_shell_frame_with_docking_visual_state,
+    import_legacy_workspace,
+};
 pub use expression::*;
 pub use ids::*;
 pub use observation::*;
@@ -74,9 +79,8 @@ pub use tool_suite::{
     ToolSurfacePersistence, ToolSurfaceRegistry, ToolSurfaceResolution, ToolSurfaceRole,
     ToolSurfaceRoute, ToolSurfaceStableKey, ToolSurfaceTargetProfileCompatibility,
     resolve_legacy_tool_surface_kind, saveable_tool_surface_stable_key_candidates,
-    stable_key_candidate_for_key, stable_key_candidate_for_kind,
-    stable_key_candidate_for_persisted_kind, stable_key_for_persisted_tool_surface_kind_v2,
-    stable_key_for_tool_surface_kind, tool_surface_kind_for_stable_key,
+    stable_key_candidate_for_key, stable_key_candidate_for_kind, stable_key_for_tool_surface_kind,
+    tool_surface_kind_for_stable_key,
 };
 pub use ux_lab::*;
 pub use view_models::*;
@@ -102,51 +106,39 @@ pub use workspace::{
     MATERIAL_WORKSPACE_PROFILE_ID, MENU_EDITOR_SURFACE_DEFINITION_ID,
     MODELLING_WORKSPACE_PROFILE_ID, OUTLINER_SURFACE_DEFINITION_ID,
     PARTICLE_GRAPH_CANVAS_SURFACE_DEFINITION_ID, PARTICLE_PREVIEW_SURFACE_DEFINITION_ID,
-    PARTICLE_WORKSPACE_PROFILE_ID, PERSISTED_WORKSPACE_STATE_VERSION_V1,
-    PERSISTED_WORKSPACE_STATE_VERSION_V2, PERSISTED_WORKSPACE_STATE_VERSION_V3,
-    PERSISTED_WORKSPACE_STATE_VERSION_V4, PERSISTED_WORKSPACE_STATE_VERSION_V5,
-    PHYSICS_AUTHORING_SURFACE_DEFINITION_ID, PHYSICS_DEBUG_SURFACE_DEFINITION_ID,
-    PHYSICS_WORKSPACE_PROFILE_ID, PLACEHOLDER_SURFACE_DEFINITION_ID,
-    PROCGEN_GRAPH_CANVAS_SURFACE_DEFINITION_ID, PROCGEN_PREVIEW_SURFACE_DEFINITION_ID,
-    PROCGEN_WORKSPACE_PROFILE_ID, PanelHostId, PanelHostKind, PanelHostNode, PanelInstanceId,
-    PanelInstanceState, PanelKind, PersistedPanelHostKindV1, PersistedPanelHostNodeV1,
-    PersistedPanelInstanceStateV1, PersistedPanelInstanceStateV2, PersistedPanelKindV1,
-    PersistedPanelKindV2, PersistedTabStackStateV1, PersistedTabStackStateV5,
-    PersistedToolSurfaceKindV1, PersistedToolSurfaceKindV2, PersistedToolSurfaceMountV1,
-    PersistedToolSurfaceStateV1, PersistedToolSurfaceStateV2, PersistedToolSurfaceStateV3,
-    PersistedToolSurfaceStateV5, PersistedWorkspaceSplitAxisV1, PersistedWorkspaceStateV1,
-    PersistedWorkspaceStateV2, PersistedWorkspaceStateV3, PersistedWorkspaceStateV4,
-    PersistedWorkspaceStateV5, RUNTIME_DEBUG_SURFACE_DEFINITION_ID,
-    RUNTIME_DEBUG_WORKSPACE_PROFILE_ID, SCENE_WORKSPACE_PROFILE_ID,
-    SDF_BRUSH_BROWSER_SURFACE_DEFINITION_ID, SDF_GRAPH_CANVAS_SURFACE_DEFINITION_ID,
-    SHORTCUT_EDITOR_SURFACE_DEFINITION_ID, SIMULATION_DIAGNOSTICS_SURFACE_DEFINITION_ID,
-    SIMULATION_PREVIEW_SURFACE_DEFINITION_ID, SIMULATION_WORKSPACE_PROFILE_ID,
-    STYLE_INSPECTOR_SURFACE_DEFINITION_ID, SplitHostState, TEXTURE_VIEWER_SURFACE_DEFINITION_ID,
-    TEXTURE_WORKSPACE_PROFILE_ID, THEME_EDITOR_SURFACE_DEFINITION_ID,
-    TIMELINE_SURFACE_DEFINITION_ID, TabStackHostState, TabStackId, TabStackState,
-    ToolSurfaceDisplayMetadata, ToolSurfaceDisplayMetadataSource, ToolSurfaceInstanceId,
-    ToolSurfaceKind, ToolSurfaceMount, ToolSurfaceState, UI_CANVAS_SURFACE_DEFINITION_ID,
-    UI_HIERARCHY_SURFACE_DEFINITION_ID, VIEWPORT_SURFACE_DEFINITION_ID,
-    VOLUME_TEXTURE_VIEWER_SURFACE_DEFINITION_ID, WorkspaceDefaultToolSurface,
-    WorkspaceDefinitionFormationError, WorkspaceId, WorkspaceIdentityAllocator,
-    WorkspaceIdentitySeed, WorkspaceLayoutTemplate, WorkspaceMutation, WorkspaceProfile,
-    WorkspaceProfileId, WorkspaceProfileLayoutSource, WorkspaceProfileRegistry,
-    WorkspaceProfileRegistryBackedBuildError, WorkspaceProfileToolSurfaceCompatibilityReport,
-    WorkspaceProfileToolSurfaceCompatibleSurface, WorkspaceProfileToolSurfaceLegacySurface,
-    WorkspaceProfileToolSurfaceUnmappedLegacySurface, WorkspaceSplitAxis, WorkspaceState,
-    WorkspaceStateError, WorkspaceSurfaceIdentityError,
-    WorkspaceToolSurfaceRegistryCompatibilityReport, WorkspaceToolSurfaceRegistryCompatibleSurface,
-    WorkspaceToolSurfaceRegistryIncompatibleSurface, WorkspaceToolSurfaceRegistryLegacySurface,
-    WorkspaceToolSurfaceRegistryUnknownStableKey,
-    WorkspaceToolSurfaceRegistryUnmappedLegacySurface, compact_empty_tab_stack_areas,
-    default_workspace_profile_registry, editor_surface_definitions,
-    form_workspace_state_from_definition, form_workspace_state_from_definition_with_registry,
-    mounted_surface_instance, mounted_surface_instances, panel_kind_definition_key,
-    panel_kind_for_tool_surface_kind, project_workspace_for_shell, reduce_workspace,
-    resolve_authored_tool_surface_reference, tool_surface_capabilities_from_registry_or_legacy,
-    tool_surface_capability_set, tool_surface_definition_id,
-    tool_surface_display_metadata_from_registry_or_legacy, tool_surface_kind_definition_key,
-    tool_surface_kind_from_definition_key, tool_surface_readiness,
-    tool_surface_readiness_for_definition_id, tool_surface_retention_class_from_registry_or_legacy,
-    tool_surface_session_retention_class, viewport_embed_slot_for, workspace_profile_ref_for_id,
+    PARTICLE_WORKSPACE_PROFILE_ID, PHYSICS_AUTHORING_SURFACE_DEFINITION_ID,
+    PHYSICS_DEBUG_SURFACE_DEFINITION_ID, PHYSICS_WORKSPACE_PROFILE_ID,
+    PLACEHOLDER_SURFACE_DEFINITION_ID, PROCGEN_GRAPH_CANVAS_SURFACE_DEFINITION_ID,
+    PROCGEN_PREVIEW_SURFACE_DEFINITION_ID, PROCGEN_WORKSPACE_PROFILE_ID, PanelHostId,
+    PanelHostKind, PanelHostNode, PanelInstanceId, PanelInstanceState, PanelKind,
+    RUNTIME_DEBUG_SURFACE_DEFINITION_ID, RUNTIME_DEBUG_WORKSPACE_PROFILE_ID,
+    SCENE_WORKSPACE_PROFILE_ID, SDF_BRUSH_BROWSER_SURFACE_DEFINITION_ID,
+    SDF_GRAPH_CANVAS_SURFACE_DEFINITION_ID, SHORTCUT_EDITOR_SURFACE_DEFINITION_ID,
+    SIMULATION_DIAGNOSTICS_SURFACE_DEFINITION_ID, SIMULATION_PREVIEW_SURFACE_DEFINITION_ID,
+    SIMULATION_WORKSPACE_PROFILE_ID, STYLE_INSPECTOR_SURFACE_DEFINITION_ID, SplitHostState,
+    TEXTURE_VIEWER_SURFACE_DEFINITION_ID, TEXTURE_WORKSPACE_PROFILE_ID,
+    THEME_EDITOR_SURFACE_DEFINITION_ID, TIMELINE_SURFACE_DEFINITION_ID, TabStackHostState,
+    TabStackId, TabStackState, ToolSurfaceDisplayMetadata, ToolSurfaceDisplayMetadataSource,
+    ToolSurfaceInstanceId, ToolSurfaceKind, ToolSurfaceMount, ToolSurfaceState,
+    UI_CANVAS_SURFACE_DEFINITION_ID, UI_HIERARCHY_SURFACE_DEFINITION_ID,
+    VIEWPORT_SURFACE_DEFINITION_ID, VOLUME_TEXTURE_VIEWER_SURFACE_DEFINITION_ID,
+    WorkspaceDefaultToolSurface, WorkspaceId, WorkspaceIdentityAllocator, WorkspaceIdentitySeed,
+    WorkspaceLayoutTemplate, WorkspaceProfile, WorkspaceProfileId, WorkspaceProfileLayoutSource,
+    WorkspaceProfileRegistry, WorkspaceProfileRegistryBackedBuildError,
+    WorkspaceProfileToolSurfaceCompatibilityReport, WorkspaceProfileToolSurfaceCompatibleSurface,
+    WorkspaceProfileToolSurfaceLegacySurface, WorkspaceProfileToolSurfaceUnmappedLegacySurface,
+    WorkspaceSplitAxis, WorkspaceSurfaceIdentityError, default_workspace_profile_registry,
+    editor_surface_definitions, mounted_surface_instance, panel_kind_definition_key,
+    panel_kind_for_tool_surface_kind, resolve_authored_tool_surface_reference,
+    tool_surface_capabilities_from_registry_or_legacy, tool_surface_capability_set,
+    tool_surface_definition_id, tool_surface_display_metadata_from_registry_or_legacy,
+    tool_surface_kind_definition_key, tool_surface_kind_from_definition_key,
+    tool_surface_readiness, tool_surface_readiness_for_definition_id,
+    tool_surface_retention_class_from_registry_or_legacy, tool_surface_session_retention_class,
+    viewport_embed_slot_for, workspace_profile_ref_for_id,
+};
+#[cfg(test)]
+pub(crate) use workspace::{
+    WorkspaceMutation, WorkspaceState, WorkspaceStateError, project_workspace_for_shell,
+    reduce_workspace,
 };

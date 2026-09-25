@@ -1,27 +1,36 @@
 //! File: domain/editor/editor_shell/src/workspace/definition_form.rs
 //! Purpose: Form authored editor workspace definitions into shell workspace state.
 
+#[cfg(test)]
 use std::collections::BTreeMap;
 
+#[cfg(test)]
 use editor_definition::{
     EditorWorkspaceFloatingHostDefinition, EditorWorkspaceHostDefinition,
     EditorWorkspaceLayoutDefinition, EditorWorkspacePanelTabDefinition,
     EditorWorkspaceSplitAxisDefinition,
 };
 
+#[cfg(test)]
+use crate::workspace::WorkspaceSurfaceIdentityError;
+#[cfg(test)]
 use crate::{
     FloatingHostBounds, FloatingHostPlaceholderState, PanelHostId, PanelHostKind, PanelHostNode,
     PanelInstanceState, PanelKind, SplitHostState, TabStackHostState, TabStackId, TabStackState,
-    ToolSurfaceKind, ToolSurfaceMount, ToolSurfaceState, WorkspaceId, WorkspaceIdentityAllocator,
-    WorkspaceSplitAxis, WorkspaceState, WorkspaceStateError, stable_key_for_tool_surface_kind,
+    ToolSurfaceMount, ToolSurfaceState, WorkspaceId, WorkspaceIdentityAllocator,
+    WorkspaceSplitAxis, WorkspaceState, WorkspaceStateError,
+};
+use crate::{
+    ToolSurfaceKind, stable_key_for_tool_surface_kind,
     tool_suite::{ToolSurfaceDefinition, ToolSurfaceRegistry, ToolSurfaceStableKey},
     tool_surface_kind_from_definition_key,
-    workspace::WorkspaceSurfaceIdentityError,
 };
 
+#[cfg(test)]
 const DEFAULT_FLOATING_HOST_BOUNDS: FloatingHostBounds =
     FloatingHostBounds::new(96.0, 96.0, 520.0, 360.0);
 
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum WorkspaceDefinitionFormationError {
     EmptyTabStack {
@@ -91,7 +100,8 @@ pub fn resolve_authored_tool_surface_reference<'a>(
     }
 }
 
-pub fn form_workspace_state_from_definition(
+#[cfg(test)]
+pub(crate) fn form_workspace_state_from_definition(
     definition: &EditorWorkspaceLayoutDefinition,
     workspace_id: WorkspaceId,
     allocator: &mut WorkspaceIdentityAllocator,
@@ -104,7 +114,8 @@ pub fn form_workspace_state_from_definition(
     builder.finish(root_host_id)
 }
 
-pub fn form_workspace_state_from_definition_with_registry(
+#[cfg(test)]
+pub(crate) fn form_workspace_state_from_definition_with_registry(
     definition: &EditorWorkspaceLayoutDefinition,
     workspace_id: WorkspaceId,
     allocator: &mut WorkspaceIdentityAllocator,
@@ -118,6 +129,7 @@ pub fn form_workspace_state_from_definition_with_registry(
     builder.finish(root_host_id)
 }
 
+#[cfg(test)]
 struct WorkspaceDefinitionBuilder<'a> {
     workspace_id: WorkspaceId,
     allocator: &'a mut WorkspaceIdentityAllocator,
@@ -129,6 +141,7 @@ struct WorkspaceDefinitionBuilder<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg(test)]
 enum ResolvedTabToolSurface {
     Stable {
         stable_surface_key: ToolSurfaceStableKey,
@@ -136,6 +149,7 @@ enum ResolvedTabToolSurface {
     },
 }
 
+#[cfg(test)]
 impl<'a> WorkspaceDefinitionBuilder<'a> {
     fn new(
         workspace_id: WorkspaceId,
@@ -354,6 +368,7 @@ impl<'a> WorkspaceDefinitionBuilder<'a> {
     }
 }
 
+#[cfg(test)]
 fn form_split_axis(axis: EditorWorkspaceSplitAxisDefinition) -> WorkspaceSplitAxis {
     match axis {
         EditorWorkspaceSplitAxisDefinition::Horizontal => WorkspaceSplitAxis::Horizontal,

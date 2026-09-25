@@ -8,8 +8,8 @@ use crate::{
     ProviderFamilyProviderAssignment, ProviderFamilyProviderMap, SurfaceRef,
     ToolSuiteCapabilityDeclaration, ToolSuiteId, ToolSuiteRegistry, ToolSurfaceRegistry,
     ToolSurfaceStableKey, ToolSurfaceTargetProfileCompatibility, WorkspaceDefaultToolSurface,
-    WorkspaceIdentityAllocator, WorkspaceProfile, WorkspaceProfileId, WorkspaceProfileRegistry,
-    WorkspaceProfileRegistryBackedBuildError, WorkspaceToolSurfaceRegistryCompatibilityReport,
+    WorkspaceProfile, WorkspaceProfileId, WorkspaceProfileRegistry,
+    WorkspaceProfileRegistryBackedBuildError, form_editor_profile_layout_source,
     resolve_authored_tool_surface_reference, workspace::WorkspaceProfileLayoutSource,
 };
 use editor_definition::{
@@ -452,53 +452,34 @@ fn validate_profile_layout(
     profile: &WorkspaceProfile,
     registry: &ToolSurfaceRegistry,
 ) -> Result<(), WorkbenchCompositionCompileError> {
-    let mut allocator = WorkspaceIdentityAllocator::new();
-    let workspace_id = allocator.allocate_workspace_id();
-    let workspace = match profile.build_default_workspace_state_with_registry(
-        workspace_id,
-        &mut allocator,
-        registry,
-    ) {
-        Ok(workspace) => workspace,
-        Err(WorkspaceProfileRegistryBackedBuildError::WorkspaceDefinitionFormation {
-            error,
-            ..
-        }) => {
-            return Err(
-                WorkbenchCompositionCompileError::WorkspaceDefinitionFormation {
-                    profile_ref: profile.profile_ref.clone(),
-                    error: *error,
+    form_editor_profile_layout_source(profile.id, &profile.layout_source, registry).map_err(
+        |error| {
+            WorkbenchCompositionCompileError::WorkspaceProfileRegistry(
+                WorkspaceProfileRegistryBackedBuildError::CompositionFormation {
+                    profile_id: profile.id,
+                    error: Box::new(error),
                 },
-            );
-        }
-        Err(error) => {
-            return Err(WorkbenchCompositionCompileError::WorkspaceProfileRegistry(
-                error,
-            ));
-        }
-    };
-
-    let report: WorkspaceToolSurfaceRegistryCompatibilityReport =
-        workspace.validate_tool_surface_registry_compatibility(registry);
-    if !report.is_fully_compatible() {
-        return Err(WorkbenchCompositionCompileError::WorkspaceProfileRegistry(
-            WorkspaceProfileRegistryBackedBuildError::WorkspaceCompatibility {
-                profile_id: profile.id,
-                report: Box::new(report),
-            },
-        ));
-    }
+            )
+        },
+    )?;
 
     let mut surface_keys = profile
         .default_surfaces
         .iter()
         .map(|surface| surface.stable_surface_key().clone())
         .collect::<BTreeSet<_>>();
-    surface_keys.extend(
-        workspace
-            .tool_surfaces()
-            .map(|surface| surface.stable_surface_key().clone()),
-    );
+    if let WorkspaceProfileLayoutSource::AuthoredLayout { layout_ref, layout } =
+        &profile.layout_source
+    {
+        collect_authored_layout_surface_refs(
+            &profile.profile_ref,
+            layout_ref,
+            layout,
+            registry,
+            &mut surface_keys,
+        )?;
+    }
+
     for surface_key in surface_keys {
         let Some(definition) = registry.get(&surface_key) else {
             continue;
@@ -525,7 +506,6 @@ mod tests {
     use crate::{
         HostCapabilityPolicy, ProviderFamilyDefinition, SuiteRef, SurfaceProviderId,
         ToolSurfaceCreationPolicy, ToolSurfaceDefinition, ToolSurfaceRole, ToolSurfaceRoute,
-        WorkspaceLayoutTemplate,
     };
     use editor_core::{DocumentKind, EDIT_MODE_ID};
     use editor_definition::{
@@ -534,7 +514,7 @@ mod tests {
     };
 
     #[test]
-    fn compiles_template_profile_through_manifest_path() {
+    fn compiles_authored_profile_through_manifest_path() {
         let compiled = compile_workbench_composition(input(
             vec![profile_manifest(
                 "runenwerk.workspace.test",
@@ -738,9 +718,23 @@ mod tests {
             profile_ref: ProfileRef::new(profile_ref).unwrap(),
             compatibility_id,
             label: "Test".to_string(),
-            layout_source: WorkspaceProfileLayoutSource::Template(
-                WorkspaceLayoutTemplate::ToolWorkspace,
-            ),
+            layout_source: WorkspaceProfileLayoutSource::AuthoredLayout {
+                layout_ref: "runenwerk.layout.test".to_string(),
+                layout: EditorWorkspaceLayoutDefinition {
+                    id: "runenwerk.layout.test".to_string(),
+                    label: "Test Layout".to_string(),
+                    root: EditorWorkspaceHostDefinition::TabStack {
+                        id: "root".to_string(),
+                        tabs: vec![EditorWorkspacePanelTabDefinition {
+                            id: "tab".to_string(),
+                            label: "Tab".to_string(),
+                            tool_surface: "runenwerk.test.surface".to_string(),
+                        }],
+                        active_tab: Some("tab".to_string()),
+                    },
+                    floating_hosts: Vec::new(),
+                },
+            },
             default_surfaces: vec![SurfaceRef::from_stable_key("runenwerk.test.surface").unwrap()],
             default_modes: vec![EDIT_MODE_ID],
             document_kind_filters: vec![DocumentKind::Graph],
