@@ -172,6 +172,12 @@ These are advanced runtime boundary types produced by `RenderPrepare` and consum
 - `PreparedRenderFrameRequestDiagnostic`
 - `PreparedRenderFrameRequestError`
 - `PreparedRenderFrameRequestKind`
+- `RenderFlowInvocationPolicy`
+- `RenderFixedResolutionExecutionRequest`
+- `PreparedFixedResolutionExecution`
+- `RenderFixedResolutionExecutionAdmission`
+- `RenderFixedResolutionFallback`
+- `fixed_resolution_resolve_flow`
 - `PreparedTargetBinding`
 - `RenderProductSurfaceRequest`
 - `RenderProductSurfaceRequestBatch`
@@ -223,7 +229,13 @@ Contract:
 - `PreparedRenderFrame::flow_invocations` carries per-view/per-product flow invocation requests and target alias bindings.
 - `PreparedRenderFrame::dynamic_texture_targets` carries the frame-stable dynamic target descriptor snapshot.
 - `RenderProductSurfaceRequest`, `RenderProductSurfaceRequestBatch`, and `RenderProductSurfaceManifest` are return-only helpers for assembling dynamic target descriptors, dynamic uploads, prepared views, prepared flow invocation requests, UI binding intents, and product-surface status. Producers still publish render parts explicitly into ECS resources.
-- `PreparedRenderFrameRequestResource::diagnostics()` exposes typed producer-scoped duplicate view/invocation diagnostics.
+- `PreparedRenderFrameRequestResource::diagnostics()` exposes typed producer-scoped duplicate view/invocation/replacement diagnostics.
+- `PreparedRenderFrameRequestResource::replace_contribution_with_automatic_main_replacements(...)` lets one producer explicitly replace one selected flow's automatic main invocation. Claims require an explicit invocation for the same flow and conflict across producers fail closed.
+- `RenderFlowInvocationPolicy::AutomaticMain` is the compatibility default. `ExplicitOnly` is for helper/product flows that must run only through explicit prepared invocations; the fixed-resolution resolve flow uses this policy so registration is safe while fixed execution is inactive.
+- `RenderFixedResolutionExecutionRequest` is a return-only renderer helper. It validates a sub-native same-aspect internal extent and a selected compiled flow's explicit color-target alias, then prepares a sampleable RGBA dynamic target, offscreen view, selected-flow invocation, native-output resolve invocation, and automatic-main replacement claim.
+- Producers remain responsible for explicit publication into `RenderDynamicTextureTargetRequestRegistryResource` and `PreparedRenderFrameRequestResource`; shared fixed-resolution helpers do not mutate ECS registries.
+- `RenderFixedResolutionExecutionAdmission` returns either fully prepared Fixed execution or an explicit Native fallback with a reason. Rejected fixed execution yields no partial fixed request parts.
+- `fixed_resolution_resolve_flow()` provides portable fullscreen spatial resolve plumbing to native `SurfaceColor`. It does not claim TAAU reconstruction quality or choose a production scale.
 
 Current UI note:
 
