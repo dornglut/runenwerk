@@ -580,7 +580,7 @@ pub(crate) fn acknowledge_authority_replication(
     world: &mut World,
     connection: ConnectionHandle,
     cursor: SnapshotCursor,
-) -> anyhow::Result<AuthorityAckOutcome> {
+) -> anyhow::Result<Option<AuthorityAckOutcome>> {
     let mut core = world
         .remove_resource::<RunenNetSessionCore>()
         .context("authority replication ACK requires RunenNetSessionCore")?;
