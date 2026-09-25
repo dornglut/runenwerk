@@ -91,10 +91,12 @@ and installs the built-in product/query publication handlers.
 
 Bootstrap placement is implementation evidence, not semantic ownership.
 
-### 1.3 Current host and advancement semantics are conflated
+### 1.3 Adoption-baseline host and advancement semantics were conflated
 
-`App::new()` records `AppMode::Windowed`; `App::headless()` records
-`AppMode::Headless`. However:
+At this model's adoption baseline, `App::new()` recorded `AppMode::Windowed` and
+`App::headless()` recorded `AppMode::Headless`. That predecessor naming mixed Host
+selection with run-mode language. The accepted implementation now names the stable Host
+selection explicitly as `AppHostSelection::{NativeWindow, Headless}`.
 
 ```text
 run_for_frames(...)
@@ -912,7 +914,7 @@ This matrix is normative ownership pressure, not permission to move every row in
 | RunenECS `Runtime` | contained RunenECS runtime | retain current containment until separately redesigned; schedule semantics remain RunenECS-owned |
 | `startup_ran` | predecessor App lifecycle marker | replace/refine only when implementing explicit attempting/failed/non-runnable lifecycle semantics; current consuming runners already discard/exit on Startup failure |
 | `title` | host-neutral application metadata | composition/configuration; Host projects it as needed |
-| `AppMode` | Host selection mixed with run mode | replace/refine around explicit Host selection |
+| removed `AppMode` predecessor | ambiguous Host-selection/run-mode naming | replaced by private `AppHostSelection::{NativeWindow, Headless}`; Host selection remains Runenwerk-owned |
 | removed `AppRunner` predecessor | rejected mixed/headless-only advancement abstraction | bounded frames are explicit App advancement; bounded fixed steps are owned by `AppFixedStepExt`; future cross-Host advancement must be re-proven |
 | Winit `ControlFlow` | native-host policy | native-window Host |
 | `WindowState` | native-host state | native-window Host only; no required headless sentinel |

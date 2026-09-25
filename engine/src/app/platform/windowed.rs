@@ -1,5 +1,5 @@
 use crate::app::App;
-use crate::app::domain::mode::AppMode;
+use crate::app::domain::host::AppHostSelection;
 use crate::runtime::frame_pacing::{FramePacingPolicyResource, FramePacingRuntimeStateResource};
 use crate::runtime::winit_runner;
 use anyhow::Result;
@@ -10,7 +10,7 @@ pub trait AppNativeHostExt {
 
 impl AppNativeHostExt for App {
     fn with_frame_pacing(&mut self, policy: FramePacingPolicyResource) -> &mut Self {
-        if matches!(self.mode, AppMode::Headless) {
+        if matches!(self.host_selection, AppHostSelection::Headless) {
             self.record_missing_capability("with_frame_pacing", "native-window Host");
             return self;
         }
