@@ -632,12 +632,12 @@ pub enum RenderFrameSurfaceScope {
 }
 
 impl RenderFrameSurfaceScope {
-    fn applies_to(self, render_surface_id: RenderSurfaceId) -> bool {
+    pub fn applies_to(self, render_surface_id: RenderSurfaceId) -> bool {
         matches!(self, Self::AllSurfaces)
             || matches!(self, Self::Surface(surface_id) if surface_id == render_surface_id)
     }
 
-    fn overlaps(self, other: Self) -> bool {
+    pub fn overlaps(self, other: Self) -> bool {
         match (self, other) {
             (Self::AllSurfaces, _) | (_, Self::AllSurfaces) => true,
             (Self::Surface(left), Self::Surface(right)) => left == right,
