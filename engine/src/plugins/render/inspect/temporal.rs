@@ -142,6 +142,7 @@ pub struct RenderTemporalInspectionRequest {
     pub frame_index: u64,
     pub reconstruction_mode: RenderTemporalReconstructionMode,
     pub native_fallback_active: bool,
+    pub native_fallback_reason: Option<String>,
     pub resolution: RenderTemporalResolutionEvidence,
     pub jitter: RenderTemporalJitterEvidence,
     pub history: RenderTemporalHistoryEvidence,
@@ -153,6 +154,7 @@ pub struct RenderTemporalInspection {
     pub frame_index: u64,
     pub reconstruction_mode: RenderTemporalReconstructionMode,
     pub native_fallback_active: bool,
+    pub native_fallback_reason: Option<String>,
     pub resolution: RenderTemporalResolutionInspection,
     pub jitter: RenderTemporalJitterEvidence,
     pub history: RenderTemporalHistoryEvidence,
@@ -202,6 +204,17 @@ pub fn fixed_resolution_admission_resolution_evidence(
     }
 }
 
+pub fn fixed_resolution_admission_native_fallback_evidence(
+    admission: &crate::plugins::render::RenderFixedResolutionExecutionAdmission,
+) -> (bool, Option<String>) {
+    match admission {
+        crate::plugins::render::RenderFixedResolutionExecutionAdmission::Fixed(_) => (false, None),
+        crate::plugins::render::RenderFixedResolutionExecutionAdmission::NativeFallback(
+            fallback,
+        ) => (true, Some(fallback.reason.clone())),
+    }
+}
+
 pub fn inspect_render_temporal_inputs(
     request: RenderTemporalInspectionRequest,
 ) -> RenderTemporalInspection {
@@ -210,6 +223,7 @@ pub fn inspect_render_temporal_inputs(
     let mut diagnostics = Vec::new();
 
     validate_resolution(&request.resolution, &resolution, &mut diagnostics);
+    validate_native_fallback(&request, &mut diagnostics);
     validate_jitter(&request.jitter, &mut diagnostics);
     validate_history(&request, &mut diagnostics);
     validate_inputs(&request, &mut diagnostics);
@@ -219,6 +233,7 @@ pub fn inspect_render_temporal_inputs(
         frame_index: request.frame_index,
         reconstruction_mode: request.reconstruction_mode,
         native_fallback_active: request.native_fallback_active,
+        native_fallback_reason: request.native_fallback_reason,
         resolution,
         jitter: request.jitter,
         history: request.history,
@@ -331,6 +346,25 @@ fn validate_resolution(
                 ));
             }
         }
+    }
+}
+
+fn validate_native_fallback(
+    request: &RenderTemporalInspectionRequest,
+    diagnostics: &mut Vec<RenderTemporalDiagnostic>,
+) {
+    let reason = request.native_fallback_reason.as_deref().unwrap_or("").trim();
+    if request.native_fallback_active && reason.is_empty() {
+        diagnostics.push(RenderTemporalDiagnostic::error(
+            "native_fallback_missing_reason",
+            "active native temporal fallback requires an explicit reason",
+        ));
+    }
+    if !request.native_fallback_active && !reason.is_empty() {
+        diagnostics.push(RenderTemporalDiagnostic::error(
+            "inactive_native_fallback_has_reason",
+            "native temporal fallback reason is present while fallback is inactive",
+        ));
     }
 }
 
