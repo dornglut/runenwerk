@@ -1,10 +1,24 @@
 use std::env;
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::fs::File;
+use std::io::{Read, Take};
+use std::path::{Path, PathBuf};
+
+use anyhow::{Context, bail};
+use engine::automation::{
+    AppAutomationInputReplayExt, AutomationInputReplayOutcome, AutomationInputReplaySourceMap,
+    AutomationInputReplayStateAssumption, AutomationInputTraceRecordingWitness,
+    AutomationOwnerAdapter, InputSourceId, MAX_ARTIFACT_BYTES, import_automation_input_trace_v1,
+};
+use runenwerk_render_lab::automation::{
+    RenderLabAutomationAdapter, RenderLabAutomationQuery, RenderLabAutomationTarget,
+    RenderLabCameraObservation, build_headless_automation_app,
+};
 
 fn main() -> anyhow::Result<()> {
     match parse_command(env::args_os().skip(1))? {
         Command::Native => runenwerk_render_lab::run_native(),
+        Command::ReplayTrace(path) => run_replay_trace(&path),
         Command::NativeMeasurement {
             output_path,
             submitted_frame_limit,
@@ -27,6 +41,7 @@ fn main() -> anyhow::Result<()> {
 enum Command {
     FoundingDirect(PathBuf),
     Native,
+    ReplayTrace(PathBuf),
     NativeMeasurement {
         output_path: PathBuf,
         submitted_frame_limit: Option<usize>,
@@ -40,6 +55,18 @@ fn parse_command(args: impl IntoIterator<Item = OsString>) -> anyhow::Result<Com
     let first = args.next();
     if matches!(first.as_deref(), Some(value) if value == "--rl2" || value == "--native") {
         return Ok(Command::Native);
+    }
+    if matches!(first.as_deref(), Some(value) if value == "--replay-trace") {
+        let Some(path) = args.next() else {
+            bail!("--replay-trace requires a persisted trace path");
+        };
+        if let Some(extra) = args.next() {
+            bail!(
+                "unexpected --replay-trace argument '{}'",
+                extra.to_string_lossy()
+            );
+        }
+        return Ok(Command::ReplayTrace(PathBuf::from(path)));
     }
     if matches!(first.as_deref(), Some(value) if value == "--rl2-measure") {
         let default_output = PathBuf::from("render-lab/rl2-measurement.json");
@@ -88,6 +115,141 @@ fn parse_command(args: impl IntoIterator<Item = OsString>) -> anyhow::Result<Com
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("render-lab")),
     ))
+}
+
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct ReplayTraceSummary {
+    completed_frames: u64,
+    camera: RenderLabCameraObservation,
+}
+
+fn run_replay_trace(path: &Path) -> anyhow::Result<()> {
+    let bytes = read_trace_file(path)?;
+    let summary = replay_trace_bytes(&bytes)?;
+    println!(
+        "replay completed: frames={} camera_yaw_radians={} camera_pitch_radians={} camera_distance={} camera_pan_x={} camera_pan_y={}",
+        summary.completed_frames,
+        summary.camera.yaw_radians,
+        summary.camera.pitch_radians,
+        summary.camera.distance,
+        summary.camera.pan[0],
+        summary.camera.pan[1],
+    );
+    Ok(())
+}
+
+fn read_trace_file(path: &Path) -> anyhow::Result<Vec<u8>> {
+    let file = File::open(path)
+        .with_context(|| format!("open persisted automation trace {}", path.display()))?;
+    read_bounded_trace(file)
+        .with_context(|| format!("read persisted automation trace {}", path.display()))
+}
+
+fn read_bounded_trace(reader: impl Read) -> anyhow::Result<Vec<u8>> {
+    let limit = u64::try_from(MAX_ARTIFACT_BYTES)
+        .expect("persisted trace byte limit fits u64")
+        .checked_add(1)
+        .expect("persisted trace byte limit leaves room for sentinel byte");
+    let mut reader: Take<_> = reader.take(limit);
+    let mut bytes = Vec::new();
+    reader
+        .read_to_end(&mut bytes)
+        .context("read persisted automation trace bytes")?;
+    if bytes.len() > MAX_ARTIFACT_BYTES {
+        bail!(
+            "persisted automation trace exceeds the {} byte limit",
+            MAX_ARTIFACT_BYTES
+        );
+    }
+    Ok(bytes)
+}
+
+fn replay_trace_bytes(bytes: &[u8]) -> anyhow::Result<ReplayTraceSummary> {
+    let imported = import_automation_input_trace_v1(bytes)
+        .context("import persisted normalized replay trace V1")?;
+    if imported.recording_witness()
+        != AutomationInputTraceRecordingWitness::RecordedSourcesPristineAtCaptureStart
+    {
+        bail!("persisted automation trace has an unsupported recording-state witness");
+    }
+
+    let recorded_sources = recorded_sources(imported.trace());
+    let source_map = fresh_replay_source_map(&recorded_sources)?;
+
+    let mut app = build_headless_automation_app();
+    let report = app.replay_automation_input_trace(
+        imported.trace(),
+        &source_map,
+        AutomationInputReplayStateAssumption::RecordedAndReplaySourcesPristine,
+    );
+    if report.outcome() != AutomationInputReplayOutcome::Completed {
+        bail!(
+            "normalized replay failed: outcome={:?}, completed_frames={}, failing_frame={:?}, failing_group={:?}, detail={}",
+            report.outcome(),
+            report.completed_frames(),
+            report.failing_frame_ordinal(),
+            report.failing_group_index(),
+            report.detail().unwrap_or("none"),
+        );
+    }
+
+    let camera_result = {
+        let mut adapter = RenderLabAutomationAdapter::new(&mut app);
+        adapter
+            .query(&RenderLabAutomationTarget, RenderLabAutomationQuery::Camera)
+            .map_err(anyhow::Error::msg)
+            .context("query Render Lab camera after replay")
+    };
+    let teardown_result = app
+        .teardown_automation_input_replay()
+        .context("tear down replay-owned normalized input state");
+
+    let camera = camera_result?;
+    teardown_result?;
+
+    Ok(ReplayTraceSummary {
+        completed_frames: report.completed_frames(),
+        camera,
+    })
+}
+
+fn recorded_sources(trace: &engine::automation::AutomationInputTrace) -> Vec<InputSourceId> {
+    let mut sources = Vec::new();
+    for frame in trace.frames() {
+        for group in frame.groups() {
+            if !sources.contains(&group.context.source) {
+                sources.push(group.context.source);
+            }
+        }
+    }
+    sources
+}
+
+fn fresh_replay_source_map(
+    recorded_sources: &[InputSourceId],
+) -> anyhow::Result<AutomationInputReplaySourceMap> {
+    let mut entries = Vec::with_capacity(recorded_sources.len());
+    let mut next_raw = u64::MAX;
+
+    for recorded in recorded_sources {
+        let replay_source = loop {
+            let candidate = InputSourceId::new(next_raw);
+            next_raw = next_raw
+                .checked_sub(1)
+                .ok_or_else(|| anyhow::anyhow!("exhausted replay-owned input source identity"))?;
+            if !recorded_sources.contains(&candidate)
+                && !entries
+                    .iter()
+                    .any(|(_, replay): &(InputSourceId, InputSourceId)| *replay == candidate)
+            {
+                break candidate;
+            }
+        };
+        entries.push((*recorded, replay_source));
+    }
+
+    Ok(AutomationInputReplaySourceMap::new(entries))
 }
 
 fn parse_frame_limit(value: Option<OsString>) -> anyhow::Result<usize> {
@@ -186,6 +348,39 @@ mod tests {
     fn native_mode_is_explicit() {
         assert_eq!(parse_command(args(&["--rl2"])).unwrap(), Command::Native);
         assert_eq!(parse_command(args(&["--native"])).unwrap(), Command::Native);
+    }
+
+    #[test]
+    fn persisted_trace_replay_mode_requires_exactly_one_path() {
+        assert_eq!(
+            parse_command(args(&["--replay-trace", "evidence/input.ron"])).unwrap(),
+            Command::ReplayTrace(PathBuf::from("evidence/input.ron"))
+        );
+        assert!(parse_command(args(&["--replay-trace"])).is_err());
+        assert!(
+            parse_command(args(&["--replay-trace", "first.ron", "second.ron"])).is_err()
+        );
+    }
+
+    #[test]
+    fn persisted_trace_reader_rejects_oversize_input_before_unbounded_growth() {
+        let reader = std::io::repeat(0).take(
+            u64::try_from(MAX_ARTIFACT_BYTES)
+                .unwrap()
+                .checked_add(1)
+                .unwrap(),
+        );
+        assert!(read_bounded_trace(reader).is_err());
+    }
+
+    #[test]
+    fn persisted_trace_import_errors_remain_typed_causes() {
+        let error = replay_trace_bytes(b"this is not RON").unwrap_err();
+        assert!(
+            error
+                .downcast_ref::<engine::automation::AutomationInputTraceImportError>()
+                .is_some()
+        );
     }
 
     #[test]
