@@ -158,29 +158,55 @@ impl RenderFixedResolutionExecutionRequest {
                 alias: self.scene_color_alias.clone(),
             })?;
 
+        let surface_color_ids = compiled_flow
+            .resources
+            .resources
+            .iter()
+            .filter_map(|resource| match resource {
+                RenderResourceDeclaration::ImportedTexture(texture)
+                    if texture.semantic == RenderImportedTextureSemantic::SurfaceColor =>
+                {
+                    Some(texture.id)
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
         let mut alias_writer_count = 0usize;
         for pass in &compiled_flow.render_passes {
             let node = pass.node();
+            if node.view_scope != RenderPassViewScope::AllViews {
+                return Err(
+                    RenderFixedResolutionExecutionError::SelectedFlowNotDualViewCapable {
+                        flow_id: self.scene_flow_id,
+                    },
+                );
+            }
+            if node
+                .color_outputs
+                .iter()
+                .chain(node.copy_destination.iter())
+                .chain(node.write_textures.iter())
+                .any(|resource_id| surface_color_ids.contains(resource_id))
+            {
+                return Err(
+                    RenderFixedResolutionExecutionError::SelectedFlowHardCodesSurfaceColor {
+                        flow_id: self.scene_flow_id,
+                    },
+                );
+            }
+
             let writes_alias = node.color_outputs.contains(&alias_resource_id)
                 || node.copy_destination == Some(alias_resource_id)
                 || node.write_textures.contains(&alias_resource_id);
-            if !writes_alias {
-                continue;
-            }
-            alias_writer_count += 1;
-            if node.view_scope != RenderPassViewScope::AllViews {
-                return Err(
-                    RenderFixedResolutionExecutionError::SelectedFlowAliasNotDualViewCapable {
-                        flow_id: self.scene_flow_id,
-                        alias: self.scene_color_alias.clone(),
-                    },
-                );
+            if writes_alias {
+                alias_writer_count += 1;
             }
         }
 
         if alias_writer_count == 0 {
             return Err(
-                RenderFixedResolutionExecutionError::SelectedFlowAliasNotDualViewCapable {
+                RenderFixedResolutionExecutionError::SelectedFlowDoesNotWriteColorAlias {
                     flow_id: self.scene_flow_id,
                     alias: self.scene_color_alias.clone(),
                 },
@@ -418,9 +444,17 @@ pub enum RenderFixedResolutionExecutionError {
     )]
     SelectedFlowRequiresAutomaticMain { flow_id: RenderFlowId },
     #[error(
-        "fixed internal-resolution flow {flow_id:?} color target alias '{alias}' must be written by at least one pass and every writer must support both main and offscreen views"
+        "fixed internal-resolution flow {flow_id:?} must keep every pass valid on both native-main and offscreen views"
     )]
-    SelectedFlowAliasNotDualViewCapable {
+    SelectedFlowNotDualViewCapable { flow_id: RenderFlowId },
+    #[error(
+        "fixed internal-resolution flow {flow_id:?} hard-codes builtin SurfaceColor instead of routing color through the selected target alias"
+    )]
+    SelectedFlowHardCodesSurfaceColor { flow_id: RenderFlowId },
+    #[error(
+        "fixed internal-resolution flow {flow_id:?} declares color target alias '{alias}' but no pass writes it"
+    )]
+    SelectedFlowDoesNotWriteColorAlias {
         flow_id: RenderFlowId,
         alias: RenderTargetAliasKey,
     },
@@ -649,9 +683,38 @@ mod tests {
                 &main_only_compiled,
                 &compiled_resolve_flow()
             ),
-            Err(
-                RenderFixedResolutionExecutionError::SelectedFlowAliasNotDualViewCapable { .. }
-            )
+            Err(RenderFixedResolutionExecutionError::SelectedFlowNotDualViewCapable { .. })
+        ));
+
+        let hardcoded = RenderFlow::new("fixed.test.hardcoded-surface")
+            .with_color_target_alias("scene_color")
+            .expect("test color alias should be valid")
+            .with_surface_color()
+            .expect("surface color should declare")
+            .fullscreen_pass("fixed.test.hardcoded-surface.native")
+            .write_surface_color()
+            .expect("surface color should write")
+            .finish()
+            .fullscreen_pass("fixed.test.hardcoded-surface.alias")
+            .write_target_alias("scene_color")
+            .finish()
+            .validate()
+            .expect("hardcoded test flow should validate");
+        let hardcoded_compiled =
+            crate::plugins::render::compile_flow_plan(&hardcoded).expect("flow should compile");
+        let hardcoded_request = RenderFixedResolutionExecutionRequest::new(
+            producer(7),
+            hardcoded.id(),
+            alias(),
+            (1280, 720),
+        );
+        assert!(matches!(
+            hardcoded_request.prepare_against_compiled_flows(
+                (1920, 1080),
+                &hardcoded_compiled,
+                &compiled_resolve_flow()
+            ),
+            Err(RenderFixedResolutionExecutionError::SelectedFlowHardCodesSurfaceColor { .. })
         ));
     }
 

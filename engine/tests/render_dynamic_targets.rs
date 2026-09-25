@@ -498,6 +498,33 @@ fn fixed_resolution_preflight_accepts_internal_scene_and_native_resolve() {
         )
     ));
 
+    let mut missing_output_view = frame.clone();
+    missing_output_view.views.retain(|view| view.view_id != "main");
+    assert!(matches!(
+        engine::plugins::render::inspect::inspect_fixed_resolution_execution(
+            &admission,
+            &missing_output_view
+        ),
+        Err(
+            engine::plugins::render::inspect::RenderFixedResolutionExecutionEvidenceError::MissingOutputView
+        )
+    ));
+
+    let mut duplicate_native_scene = frame.clone();
+    duplicate_native_scene.flow_invocations.push(PreparedFlowInvocation::main(
+        scene.id(),
+        PreparedFlowInputs::default(),
+    ));
+    assert!(matches!(
+        engine::plugins::render::inspect::inspect_fixed_resolution_execution(
+            &admission,
+            &duplicate_native_scene
+        ),
+        Err(
+            engine::plugins::render::inspect::RenderFixedResolutionExecutionEvidenceError::UnexpectedNativeSceneInvocation
+        )
+    ));
+
     let fallback = engine::plugins::render::RenderFixedResolutionExecutionRequest::new(
         producer(92),
         scene.id(),

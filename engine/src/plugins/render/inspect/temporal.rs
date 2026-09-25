@@ -198,6 +198,10 @@ pub struct RenderFixedResolutionExecutionEvidence {
 pub enum RenderFixedResolutionExecutionEvidenceError {
     #[error("fixed-resolution prepared surface extent does not match admitted output extent")]
     OutputExtentMismatch,
+    #[error("fixed-resolution prepared frame is missing the native main output view")]
+    MissingOutputView,
+    #[error("fixed-resolution native main output view extent does not match admitted output extent")]
+    OutputViewExtentMismatch,
     #[error("fixed-resolution prepared frame is missing the admitted internal view")]
     MissingInternalView,
     #[error("fixed-resolution prepared frame is missing the admitted dynamic color target")]
@@ -236,13 +240,33 @@ pub fn inspect_fixed_resolution_execution(
     admission: &crate::plugins::render::RenderFixedResolutionExecutionAdmission,
     frame: &crate::plugins::render::PreparedRenderFrame,
 ) -> Result<RenderFixedResolutionExecutionEvidence, RenderFixedResolutionExecutionEvidenceError> {
+    let expected_output_size = match admission {
+        crate::plugins::render::RenderFixedResolutionExecutionAdmission::Fixed(prepared) => {
+            prepared.output_size
+        }
+        crate::plugins::render::RenderFixedResolutionExecutionAdmission::NativeFallback(
+            fallback,
+        ) => fallback.output_size,
+    };
+    if frame.surface.target_size_px != expected_output_size {
+        return Err(RenderFixedResolutionExecutionEvidenceError::OutputExtentMismatch);
+    }
+    let output_view = frame
+        .views
+        .iter()
+        .find(|view| {
+            view.view_id == "main"
+                && view.kind == crate::plugins::render::PreparedViewKind::MainSurface
+        })
+        .ok_or(RenderFixedResolutionExecutionEvidenceError::MissingOutputView)?;
+    if output_view.target_size_px != expected_output_size {
+        return Err(RenderFixedResolutionExecutionEvidenceError::OutputViewExtentMismatch);
+    }
+
     match admission {
         crate::plugins::render::RenderFixedResolutionExecutionAdmission::NativeFallback(
             fallback,
         ) => {
-            if frame.surface.target_size_px != fallback.output_size {
-                return Err(RenderFixedResolutionExecutionEvidenceError::OutputExtentMismatch);
-            }
             if frame
                 .views
                 .iter()
@@ -292,7 +316,9 @@ pub fn inspect_fixed_resolution_execution(
                     .ok_or(
                         RenderFixedResolutionExecutionEvidenceError::MissingNativeFallbackSceneInvocation,
                     )?;
-                if actual.target_alias_bindings != expected.target_alias_bindings {
+                if actual.target_alias_bindings != expected.target_alias_bindings
+                    || actual.history_signature != expected.history_signature
+                {
                     return Err(
                         RenderFixedResolutionExecutionEvidenceError::NativeFallbackSceneBindingMismatch,
                     );
@@ -325,9 +351,6 @@ pub fn inspect_fixed_resolution_execution(
             })
         }
         crate::plugins::render::RenderFixedResolutionExecutionAdmission::Fixed(prepared) => {
-            if frame.surface.target_size_px != prepared.output_size {
-                return Err(RenderFixedResolutionExecutionEvidenceError::OutputExtentMismatch);
-            }
             if frame
                 .flow_invocations
                 .iter()
@@ -345,7 +368,11 @@ pub fn inspect_fixed_resolution_execution(
                 .views
                 .iter()
                 .find(|view| view.view_id == prepared.internal_view.view_id)
-                .filter(|view| view.target_size_px == prepared.internal_size)
+                .filter(|view| {
+                    view.kind == prepared.internal_view.kind
+                        && view.target_size_px == prepared.internal_view.target_size_px
+                        && view.history_signature == prepared.internal_view.history_signature
+                })
                 .ok_or(RenderFixedResolutionExecutionEvidenceError::MissingInternalView)?;
 
             let target = frame
@@ -370,12 +397,8 @@ pub fn inspect_fixed_resolution_execution(
                         && invocation.view_id == internal_view.view_id
                 })
                 .ok_or(RenderFixedResolutionExecutionEvidenceError::MissingSceneInvocation)?;
-            if scene.target_alias_bindings.get(&prepared.scene_color_alias)
-                != Some(
-                    &crate::plugins::render::PreparedTargetBinding::DynamicTexture(
-                        target.key.clone(),
-                    ),
-                )
+            if scene.target_alias_bindings != prepared.scene_invocation.target_alias_bindings
+                || scene.history_signature != prepared.scene_invocation.history_signature
             {
                 return Err(
                     RenderFixedResolutionExecutionEvidenceError::SceneTargetBindingMismatch,
@@ -393,16 +416,8 @@ pub fn inspect_fixed_resolution_execution(
                         && invocation.view_id == "main"
                 })
                 .ok_or(RenderFixedResolutionExecutionEvidenceError::MissingResolveInvocation)?;
-            let resolve_alias = crate::plugins::render::RenderTargetAliasKey::new(
-                crate::plugins::render::FIXED_RESOLUTION_RESOLVE_SOURCE_ALIAS,
-            )
-            .expect("fixed-resolution resolve alias constant must remain valid");
-            if resolve.target_alias_bindings.get(&resolve_alias)
-                != Some(
-                    &crate::plugins::render::PreparedTargetBinding::DynamicTexture(
-                        target.key.clone(),
-                    ),
-                )
+            if resolve.target_alias_bindings != prepared.resolve_invocation.target_alias_bindings
+                || resolve.history_signature != prepared.resolve_invocation.history_signature
             {
                 return Err(
                     RenderFixedResolutionExecutionEvidenceError::ResolveSourceBindingMismatch,
