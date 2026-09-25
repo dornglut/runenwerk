@@ -137,6 +137,11 @@ path = "examples/render_hybrid_ray_sdf_raster_runtime_proof.rs"
 name = "render_product_visual_evidence"
 path = "examples/render_product_visual_evidence.rs"
 
+[[test]]
+name = "native_host_smoke"
+path = "tests/native_host_smoke.rs"
+harness = false
+
 [[bench]]
 name = "phase35_runtime"
 harness = false

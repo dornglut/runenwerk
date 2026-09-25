@@ -80,6 +80,7 @@ pub use graph::*;
 pub use material_compiler::*;
 pub use params::*;
 pub use plugin::RenderPlugin;
+pub(crate) use plugin::render_integration_is_active;
 pub use procedural::*;
 pub use readiness::{RenderReadinessPhase, RenderReadinessState};
 pub use render_result::{

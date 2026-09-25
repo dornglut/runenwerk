@@ -49,10 +49,20 @@ use crate::plugins::ui::UiRuntimeSet;
 use crate::runtime::{RenderPrepare, RenderSubmit, SystemConfigExt, SystemMobilityExt};
 use crate::state::DebugMetricsState;
 
+#[derive(Debug, Default)]
+pub(crate) struct RenderIntegrationActivation;
+
+impl runen_ecs::Resource for RenderIntegrationActivation {}
+
+pub(crate) fn render_integration_is_active(world: &runen_ecs::World) -> bool {
+    world.has_resource::<RenderIntegrationActivation>()
+}
+
 pub struct RenderPlugin;
 
 impl Plugin for RenderPlugin {
     fn build(&self, app: &mut App) {
+        app.init_resource::<RenderIntegrationActivation>();
         app.init_resource::<SceneResource>();
         app.init_resource::<ShaderRegistryResource>();
         app.init_resource::<RenderFlowRegistryResource>();
@@ -146,5 +156,22 @@ impl Plugin for RenderPlugin {
                 .in_set(RenderRuntimeSet::FramePrepare),
         );
         app.add_systems(RenderSubmit, frame_render_submit_system.on_invoker_thread());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn render_selection_is_explicit_and_not_inferred_from_surface_registry_presence() {
+        let mut app = App::new();
+        app.init_resource::<RenderSurfaceRegistryResource>();
+
+        assert!(!render_integration_is_active(app.world()));
+
+        app.add_plugin(RenderPlugin);
+
+        assert!(render_integration_is_active(app.world()));
     }
 }

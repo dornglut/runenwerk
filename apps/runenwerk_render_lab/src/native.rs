@@ -1,7 +1,56 @@
 use super::*;
+use engine::plugins::render::inspect::{
+    RenderFrameHistoryState, RenderFrameObservationPolicyResource,
+};
+use engine::prelude::FrameEnd;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, runen_ecs::Resource)]
 struct RenderLabFlowId(engine::plugins::render::RenderFlowId);
+
+const RL2_MEASUREMENT_HISTORY_CAPACITY: usize = 4096;
+const RL2_MEASUREMENT_SCHEMA_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, Default, runen_ecs::Resource)]
+struct RenderLabMeasurementConfig {
+    output_path: Option<PathBuf>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct RenderLabMeasurementArtifact {
+    schema_version: u32,
+    scenario_id: &'static str,
+    metric: &'static str,
+    host_frame_pacing_target_fps: u32,
+    samples: Vec<RenderLabMeasurementSample>,
+    drop_stats: RenderLabMeasurementDropStats,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct RenderLabMeasurementSample {
+    frame_index: u64,
+    render_surface_id: u64,
+    prepare_epoch: u64,
+    target_size_px: [u32; 2],
+    composed_timing_state: &'static str,
+    gpu_composed_frame_ms: Option<f32>,
+    diagnostics: Vec<RenderLabMeasurementDiagnostic>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct RenderLabMeasurementDiagnostic {
+    kind: &'static str,
+    capability: &'static str,
+    message: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct RenderLabMeasurementDropStats {
+    evicted_observations: u64,
+    sampled_out_observations: u64,
+    dropped_correlated_evidence: u64,
+    uncorrelated_evidence: u64,
+}
 
 #[derive(runen_ecs::SystemParam)]
 struct RenderLabFramePublicationResources<'w> {
@@ -15,8 +64,9 @@ struct RenderLabPlugin;
 impl Plugin for RenderLabPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<RenderLabCamera>();
+        app.init_resource::<RenderLabMeasurementConfig>();
         app.add_systems(Update, camera::update_render_lab_camera_system);
-        app.add_systems(Update, approve_render_lab_close_system);
+        app.add_systems(FrameEnd, approve_render_lab_close_system);
         app.add_systems(
             RenderPrepare,
             publish_render_lab_frame_system.before(RenderRuntimeSet::FramePrepare),
@@ -25,6 +75,14 @@ impl Plugin for RenderLabPlugin {
 }
 
 pub fn run_native() -> Result<()> {
+    run_native_with_measurement(None)
+}
+
+pub fn run_native_measurement(output_path: impl Into<PathBuf>) -> Result<()> {
+    run_native_with_measurement(Some(output_path.into()))
+}
+
+fn run_native_with_measurement(output_path: Option<PathBuf>) -> Result<()> {
     let mut app = App::new();
     app.set_title("Runenwerk Render Lab — RL2 native interaction");
     app.with_frame_pacing(FramePacingPolicyResource::continuous_capped(60));
@@ -32,10 +90,86 @@ pub fn run_native() -> Result<()> {
     app.add_plugin(ScenePlugin);
     app.add_plugin(RenderPlugin);
     app.add_plugin(RenderLabPlugin);
+    if let Some(output_path) = output_path {
+        app.insert_resource(RenderLabMeasurementConfig {
+            output_path: Some(output_path),
+        });
+        app.insert_resource(rl2_measurement_policy());
+    }
     let flow = render_lab_flow()?;
     app.insert_resource(RenderLabFlowId(flow.id()));
     app.add_render_flow(flow);
     app.run()
+}
+
+fn rl2_measurement_policy() -> RenderFrameObservationPolicyResource {
+    RenderFrameObservationPolicyResource::enabled(RL2_MEASUREMENT_HISTORY_CAPACITY)
+}
+
+fn build_measurement_artifact(history: &RenderFrameHistoryState) -> RenderLabMeasurementArtifact {
+    let samples = history
+        .observations()
+        .map(|observation| {
+            let evidence = observation.gpu.composed_timing_evidence.as_ref();
+            let diagnostics = evidence
+                .map(|evidence| {
+                    evidence
+                        .diagnostics
+                        .iter()
+                        .map(|diagnostic| RenderLabMeasurementDiagnostic {
+                            kind: diagnostic.kind.as_str(),
+                            capability: diagnostic.capability.as_str(),
+                            message: diagnostic.message.clone(),
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            RenderLabMeasurementSample {
+                frame_index: observation.key.frame_index,
+                render_surface_id: observation.key.render_surface_id,
+                prepare_epoch: observation.prepare_epoch,
+                target_size_px: [observation.target_size_px.0, observation.target_size_px.1],
+                composed_timing_state: observation.gpu.composed_timing_capability.as_str(),
+                gpu_composed_frame_ms: evidence.and_then(|evidence| evidence.gpu_composed_frame_ms),
+                diagnostics,
+            }
+        })
+        .collect();
+    let drop_stats = history.drop_stats();
+    RenderLabMeasurementArtifact {
+        schema_version: RL2_MEASUREMENT_SCHEMA_VERSION,
+        scenario_id: RL2_FLOW_ID,
+        metric: "gpu_composed_frame_ms",
+        host_frame_pacing_target_fps: 60,
+        samples,
+        drop_stats: RenderLabMeasurementDropStats {
+            evicted_observations: drop_stats.evicted_observations,
+            sampled_out_observations: drop_stats.sampled_out_observations,
+            dropped_correlated_evidence: drop_stats.dropped_correlated_evidence,
+            uncorrelated_evidence: drop_stats.uncorrelated_evidence,
+        },
+    }
+}
+
+fn write_measurement_artifact(output_path: &Path, history: &RenderFrameHistoryState) -> Result<()> {
+    if let Some(parent) = output_path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        fs::create_dir_all(parent).with_context(|| {
+            format!(
+                "create RL2 measurement artifact directory {}",
+                parent.display()
+            )
+        })?;
+    }
+    let bytes = serde_json::to_vec_pretty(&build_measurement_artifact(history))
+        .context("serialize RL2 composed GPU measurement artifact")?;
+    fs::write(output_path, bytes).with_context(|| {
+        format!(
+            "write RL2 composed GPU measurement artifact {}",
+            output_path.display()
+        )
+    })
 }
 
 pub(super) fn render_lab_flow() -> Result<RenderFlow> {
@@ -56,13 +190,28 @@ pub(super) fn render_lab_flow() -> Result<RenderFlow> {
         .validate()
 }
 
-fn approve_render_lab_close_system(mut windows: ResMut<WindowStateRegistryResource>) {
-    if let Some(primary_window_id) = windows.primary_window_id()
-        && let Some(primary_window) = windows.record_mut(primary_window_id)
-        && primary_window.close_intent_pending
-    {
+fn approve_render_lab_close_system(
+    mut windows: ResMut<WindowStateRegistryResource>,
+    measurement: Res<RenderLabMeasurementConfig>,
+    history: Res<RenderFrameHistoryState>,
+) -> Result<()> {
+    let Some(primary_window_id) = windows.primary_window_id() else {
+        return Ok(());
+    };
+    let close_intent_pending = windows
+        .record(primary_window_id)
+        .is_some_and(|window| window.close_intent_pending);
+    if !close_intent_pending {
+        return Ok(());
+    }
+
+    if let Some(output_path) = measurement.output_path.as_deref() {
+        write_measurement_artifact(output_path, &history)?;
+    }
+    if let Some(primary_window) = windows.record_mut(primary_window_id) {
         primary_window.approve_close();
     }
+    Ok(())
 }
 
 fn publish_render_lab_frame_system(
@@ -159,6 +308,90 @@ fn stage_render_lab_frame_publication(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rl2_measurement_policy_is_explicit_and_bounded() {
+        let policy = rl2_measurement_policy();
+        assert!(policy.enabled);
+        assert_eq!(policy.capacity, RL2_MEASUREMENT_HISTORY_CAPACITY);
+        assert_eq!(policy.sample_every_nth_frame, 1);
+        assert!(RenderLabMeasurementConfig::default().output_path.is_none());
+        assert!(!RenderFrameObservationPolicyResource::default().enabled);
+    }
+
+    #[test]
+    fn measurement_artifact_preserves_exact_extent_and_nonzero_semantics() {
+        use engine::plugins::render::inspect::{
+            RenderComposedFrameGpuTimingEvidence, RenderGpuTimingCapability,
+            RenderGpuTimingDiagnostic,
+        };
+
+        let policy = rl2_measurement_policy();
+        let mut history = RenderFrameHistoryState::default();
+        history.observe_submitted_frame(
+            policy,
+            21,
+            RenderSurfaceId::primary().raw(),
+            121,
+            (1600, 1200),
+            0.0,
+            Default::default(),
+            &[],
+            RenderGpuTimingCapability::UnavailableThisFrame,
+        );
+        history.observe_composed_gpu_timing_evidence(
+            policy,
+            &[RenderComposedFrameGpuTimingEvidence::gpu_sample(
+                21,
+                RenderSurfaceId::primary().raw(),
+                6.25,
+            )],
+        );
+        history.observe_submitted_frame(
+            policy,
+            22,
+            RenderSurfaceId::primary().raw(),
+            122,
+            (3024, 1964),
+            0.0,
+            Default::default(),
+            &[],
+            RenderGpuTimingCapability::UnavailableThisFrame,
+        );
+        history.observe_composed_gpu_timing_evidence(
+            policy,
+            &[RenderComposedFrameGpuTimingEvidence::gpu_diagnostic(
+                22,
+                RenderSurfaceId::primary().raw(),
+                RenderGpuTimingDiagnostic::readback_pending("pending"),
+            )],
+        );
+
+        let artifact = build_measurement_artifact(&history);
+        assert_eq!(artifact.metric, "gpu_composed_frame_ms");
+        assert_eq!(artifact.samples.len(), 2);
+        assert_eq!(artifact.samples[0].frame_index, 21);
+        assert_eq!(
+            artifact.samples[0].render_surface_id,
+            RenderSurfaceId::primary().raw()
+        );
+        assert_eq!(artifact.samples[0].prepare_epoch, 121);
+        assert_eq!(artifact.samples[0].target_size_px, [1600, 1200]);
+        assert_eq!(artifact.samples[0].gpu_composed_frame_ms, Some(6.25));
+        assert_eq!(artifact.samples[1].frame_index, 22);
+        assert_eq!(
+            artifact.samples[1].render_surface_id,
+            RenderSurfaceId::primary().raw()
+        );
+        assert_eq!(artifact.samples[1].prepare_epoch, 122);
+        assert_eq!(artifact.samples[1].target_size_px, [3024, 1964]);
+        assert_eq!(
+            artifact.samples[1].composed_timing_state,
+            "readback_pending"
+        );
+        assert_eq!(artifact.samples[1].gpu_composed_frame_ms, None);
+        assert_eq!(artifact.samples[1].diagnostics.len(), 1);
+    }
 
     #[test]
     fn render_lab_extent_uses_primary_presentation_metrics() {

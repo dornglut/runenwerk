@@ -74,7 +74,7 @@ mod camera;
 mod native;
 
 use camera::RenderLabCamera;
-pub use native::run_native;
+pub use native::{run_native, run_native_measurement};
 
 pub const SCENARIO_ID: &str = "founding-direct";
 pub const SCENARIO_REVISION: u32 = 1;

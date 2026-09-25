@@ -197,7 +197,7 @@ fn client_delta_missing_base_and_malformed_payload_enter_runennet_recovery_witho
     clear_client_outbound(missing.world_mut());
     let before = active_client_snapshot(missing.world()).expect("baseline should be active");
 
-    enqueue_client_inbox(missing.world_mut(), client_delta_message(99, 2, 2, false))
+    enqueue_client_inbox(missing.world_mut(), client_delta_message(99, 100, 2, false))
         .expect("missing-base delta should stage");
     let missing = missing
         .run_for_frames(1)
