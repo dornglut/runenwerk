@@ -48,3 +48,89 @@ impl AppRenderExt for App {
         self
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plugins::render::inspect::RenderCaptureSelector;
+    use crate::plugins::render::{RenderPlugin, render_integration_is_active};
+
+    #[test]
+    fn preplugin_flow_registration_is_preserved_without_activating_render() {
+        let mut app = App::headless();
+
+        app.add_render_flow(RenderFlow::new("render.owner.preplugin"));
+
+        assert!(!render_integration_is_active(app.world()));
+        assert_eq!(
+            app.world()
+                .resource::<RenderFlowRegistryResource>()
+                .expect("owner extension should materialize the flow registry")
+                .flow_count(),
+            1
+        );
+
+        app.add_plugin(RenderPlugin);
+
+        assert!(render_integration_is_active(app.world()));
+        assert_eq!(
+            app.world()
+                .resource::<RenderFlowRegistryResource>()
+                .expect("RenderPlugin should preserve the preconfigured flow registry")
+                .flow_count(),
+            1
+        );
+    }
+
+    #[test]
+    fn preplugin_debug_state_is_preserved_without_activating_render() {
+        let mut app = App::headless();
+
+        app.update_render_debug_control(|control| {
+            control.provenance_enabled = true;
+        });
+        app.update_render_debug_config(|config| {
+            config.capture_selectors.push(
+                RenderCaptureSelector::named_pass_surface_color(
+                    "render.owner.preplugin",
+                    "surface",
+                ),
+            );
+        });
+
+        assert!(!render_integration_is_active(app.world()));
+        assert!(
+            app.world()
+                .resource::<RenderDebugControlResource>()
+                .expect("owner extension should materialize debug control")
+                .provenance_enabled
+        );
+        assert_eq!(
+            app.world()
+                .resource::<RenderDebugConfigResource>()
+                .expect("owner extension should materialize debug config")
+                .capture_selectors
+                .len(),
+            1
+        );
+
+        app.add_plugin(RenderPlugin);
+
+        assert!(render_integration_is_active(app.world()));
+        assert!(
+            app.world()
+                .resource::<RenderDebugControlResource>()
+                .expect("RenderPlugin should preserve preconfigured debug control")
+                .provenance_enabled
+        );
+        assert_eq!(
+            app.world()
+                .resource::<RenderDebugConfigResource>()
+                .expect("RenderPlugin should preserve preconfigured debug config")
+                .capture_selectors
+                .len(),
+            1
+        );
+    }
+}
