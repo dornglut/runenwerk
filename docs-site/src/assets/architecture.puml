@@ -1,126 +1,72 @@
 @startuml
-title Grotto Quest - Multiplayer ECS Workspace Architecture
+title Runenwerk Realtime Networking Architecture
 
 skinparam packageStyle rectangle
 skinparam shadowing false
 skinparam linetype ortho
 
-package "ecs" as ECS {
-  [World]
-  [Entity]
-  [Bundle]
-  [Query]
-  [Resources]
-}
-
-package "scheduler" as SCHED {
-  [Schedule]
-  [Labels]
-  [Execution Plan]
+package "RunenECS" as ECS {
+  [World / Query / Schedule]
 }
 
 package "engine" as ENG {
   [App / Runtime]
-  [Plugin System]
-  [Fixed Step]
-  [Runtime Resources]
-  [Net Runtime Bridge]
-  [Replay Plugin Integration]
+  [NetPlugin]
+  [RunenNet Session Projection]
+  [Wire / Driver Integration]
+  [World / Streaming Integration]
 }
 
-package "engine_net" as ENET {
-  [Session Model]
-  [Protocol Types]
-  [Replication Contracts]
-  [SimulationTick]
-  [Transport Abstractions]
+package "standalone RunenNet" as RNET {
+  [Connection / Session]
+  [Delivery / Recovery]
+  [Authority Replication]
+  [Client Replication]
+  [Input / Prediction]
 }
 
-package "engine_net_quic" as QUIC {
-  [QUIC Client Runtime]
-  [QUIC Server Runtime]
-  [Reconnect / Loss / Jitter Handling]
+package "runen-net-quic" as QUIC {
+  [QUIC Transport Realization]
+}
+
+package "engine_sim" as SIM {
+  [Simulation Identity / Tick / Profile]
 }
 
 package "engine_replay" as REPLAY {
-  [Replay / Checkpoint Substrate]
+  [Replay / Archive / Validation]
 }
 
-package "cavern_hunt" as GAME {
-  package "domain" {
-    [Gameplay State]
-    [World State]
-    [Snapshot DTOs]
-    [Replication Policy]
-  }
-
-  package "plugins" {
-    [Game Plugin]
-    [net_sync]
-    [Prediction / Apply / Emit]
-  }
+package "gameplay / world" as GAME {
+  [Gameplay State]
+  [Snapshot / Input Adaptation]
+  [Relevancy / Product Policy]
 }
 
-package "grotto_client" as CLIENT {
-  [Client App Entry]
-}
+ENG --> ECS : runtime integration
+ENG --> RNET : public semantic contracts
+ENG --> SIM : simulation vocabulary
+ENG --> REPLAY : replay integration
+QUIC --> RNET : transport realization
 
-package "grotto_server" as SERVER {
-  [Dedicated Server Entry]
-}
+GAME --> ECS
+GAME --> ENG
+GAME --> SIM
 
-package "grotto_online" as ONLINE {
-  [Join / Handoff / Operator Glue]
-}
-
-package "grotto_fleet_control" as FLEET {
-  [Fleet / Kubernetes Control]
-}
-
-ECS --> SCHED : queried/executed by
-ENG --> ECS : uses
-ENG --> SCHED : uses
-
-ENET --> ECS : ECS-aware contracts\n(snapshot/replication over World)
-ENG --> ENET : runtime integration
-QUIC --> ENET : implements transport/session model
-ENG --> REPLAY : integrates replay runtime
-
-GAME --> ECS : gameplay data in World
-GAME --> ENET : implements protocol/contracts
-GAME --> ENG : registers plugins into runtime
-GAME --> REPLAY : uses checkpoints/snapshots
-
-CLIENT --> ENG : boots runtime
-CLIENT --> GAME : loads game plugin
-
-SERVER --> ENG : boots runtime
-SERVER --> GAME : loads authoritative game plugin
-SERVER --> QUIC : hosts transport backend
-
-ONLINE --> SERVER : handoff / session coordination
-FLEET --> SERVER : deploys / manages instances
-
-note right of ECS
-Owns only ECS primitives.
-No game-specific multiplayer logic.
-end note
-
-note right of ENET
-Best place for generic,
-game-agnostic but ECS-aware
-multiplayer contracts.
+note right of RNET
+Sole reusable realtime networking
+semantic authority.
 end note
 
 note right of ENG
-Owns runtime/plugin wiring,
-not game replication schema.
+Owns Runenwerk integration only:
+scheduling, policy, wire DTOs,
+driver adaptation, diagnostics.
 end note
 
 note right of GAME
-Owns concrete snapshots,
-patches, replication rules,
-and authoritative game logic.
+Owns concrete gameplay/world
+state and replication policy.
 end note
 
 @enduml

@@ -22,7 +22,7 @@ The Net plugin owns Runenwerk engine composition for retained networking integra
 
 It does **not** own reusable networking lifecycle, delivery, replication-consistency, recovery, or prediction/reconciliation semantics. Those belong to standalone RunenNet.
 
-It also does not own concrete transport realization. `engine_net` is retained migration evidence for live payload/replication/input/authoring consumers, not a transport implementation. Concrete adapters such as `runen-net-quic` are selected only by maintained product consumers.
+It also does not own concrete transport realization. The engine-owned wire/driver contracts are integration mechanics only; concrete adapters such as `runen-net-quic` are selected only by maintained product consumers.
 
 ## Module Layout
 

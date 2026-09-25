@@ -19,8 +19,8 @@ last_reviewed: 2026-09-24
 - ECS integration: `engine/src/plugins/net/*`, including derived session/routing projections,
   schedule placement, diagnostics, retained replication staging, and host execution staging for
   remote input already accepted by RunenNet.
-- Retained migration contracts: `net/engine_net`, limited to the evidence-backed payload,
-  replication/input, metadata, and authoring surface that still has maintained consumers.
+- Engine-owned networking contracts: `engine/src/plugins/net`, limited to the wire/staging DTOs,
+  gameplay driver traits, scheduling, policy, host integration, and diagnostics around RunenNet.
 - Concrete transport: separate adapter/product concern. The engine has no generic replacement
   transport runtime; the already-migrated preview channel may consume `runen-net-quic` directly.
 

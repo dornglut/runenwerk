@@ -84,28 +84,21 @@ pub fn build_headless_automation_app() -> App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use engine::prelude::InputState;
     use engine::automation::{
         AutomationExecutionMode, AutomationSession, AutomationSessionId, DigitalState,
         InputObservation, InputSourceId, PointerButton, PointerButtonInput, RelativeMotionUnit,
         ScrollDelta, ScrollDomain, ScrollInput, Vector2,
     };
+    use engine::prelude::InputState;
 
-    fn inject(
-        app: &mut App,
-        session: &mut AutomationSession,
-        observation: InputObservation,
-    ) {
+    fn inject(app: &mut App, session: &mut AutomationSession, observation: InputObservation) {
         let input = app
             .world_mut()
             .resource_mut::<InputState>()
             .expect("headless automation fixture should install InputState");
         assert_eq!(
-            session.inject_normalized(
-                AutomationExecutionMode::NormalizedInput,
-                input,
-                observation,
-            ),
+            session
+                .inject_normalized(AutomationExecutionMode::NormalizedInput, input, observation,),
             AutomationStepResult::AdmittedOrDelivered
         );
     }
@@ -125,10 +118,8 @@ mod tests {
     #[test]
     fn normalized_left_drag_orbits_headlessly() {
         let mut app = build_headless_automation_app();
-        let mut session = AutomationSession::new(
-            AutomationSessionId::new(1),
-            InputSourceId::new(10_001),
-        );
+        let mut session =
+            AutomationSession::new(AutomationSessionId::new(1), InputSourceId::new(10_001));
         inject(
             &mut app,
             &mut session,
@@ -158,10 +149,8 @@ mod tests {
     #[test]
     fn normalized_middle_drag_pans_headlessly() {
         let mut app = build_headless_automation_app();
-        let mut session = AutomationSession::new(
-            AutomationSessionId::new(2),
-            InputSourceId::new(10_002),
-        );
+        let mut session =
+            AutomationSession::new(AutomationSessionId::new(2), InputSourceId::new(10_002));
         inject(
             &mut app,
             &mut session,
@@ -190,10 +179,8 @@ mod tests {
     #[test]
     fn normalized_scroll_zooms_headlessly() {
         let mut app = build_headless_automation_app();
-        let mut session = AutomationSession::new(
-            AutomationSessionId::new(3),
-            InputSourceId::new(10_003),
-        );
+        let mut session =
+            AutomationSession::new(AutomationSessionId::new(3), InputSourceId::new(10_003));
         inject(
             &mut app,
             &mut session,

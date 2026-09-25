@@ -1,8 +1,6 @@
 use super::*;
 use crate::WorldMut;
 use anyhow::Context;
-use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
-use engine_net::*;
 use runen_ecs::World;
 use runen_net::identity::ConnectionHandle;
 use runen_net::replication::AuthorityAckOutcome;
@@ -73,9 +71,6 @@ where
                     )
                 })
             }
-            ServerMessage::RunEvent(_)
-            | ServerMessage::RunResult(_)
-            | ServerMessage::TypedPayload(_) => continue,
         };
 
         match result {

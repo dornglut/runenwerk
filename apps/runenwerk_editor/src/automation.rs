@@ -105,7 +105,10 @@ impl AutomationOwnerAdapter for EditorAutomationAdapter<'_> {
         self.resolve_viewport_target(target)?;
         match query {
             EditorAutomationQuery::ViewportTool => Ok(EditorAutomationObservation::ViewportTool(
-                self.host.app.surface_sessions().viewport_tool(target.mounted_unit_id),
+                self.host
+                    .app
+                    .surface_sessions()
+                    .viewport_tool(target.mounted_unit_id),
             )),
         }
     }
@@ -145,10 +148,8 @@ mod tests {
                 .expect("headless Editor should install EditorHostResource");
             viewport_target(host)
         };
-        let mut session = AutomationSession::new(
-            AutomationSessionId::new(20),
-            InputSourceId::new(20_001),
-        );
+        let mut session =
+            AutomationSession::new(AutomationSessionId::new(20), InputSourceId::new(20_001));
 
         {
             let host = app
@@ -166,14 +167,10 @@ mod tests {
                 AutomationStepResult::Dispatched
             );
             assert_eq!(
-                session.query_owner(
-                    &mut adapter,
-                    &target,
-                    EditorAutomationQuery::ViewportTool,
-                ),
-                AutomationStepResult::EffectConfirmed(
-                    EditorAutomationObservation::ViewportTool(ViewportToolKind::Rotate)
-                )
+                session.query_owner(&mut adapter, &target, EditorAutomationQuery::ViewportTool,),
+                AutomationStepResult::EffectConfirmed(EditorAutomationObservation::ViewportTool(
+                    ViewportToolKind::Rotate
+                ))
             );
         }
     }
@@ -182,10 +179,8 @@ mod tests {
     fn stale_mounted_unit_fails_closed_without_redirecting() {
         let mut app = crate::runtime::build_headless_app()
             .expect("headless Editor automation fixture should build");
-        let mut session = AutomationSession::new(
-            AutomationSessionId::new(21),
-            InputSourceId::new(20_002),
-        );
+        let mut session =
+            AutomationSession::new(AutomationSessionId::new(21), InputSourceId::new(20_002));
         let target = EditorAutomationTarget {
             mounted_unit_id: MountedUnitId::try_from_raw(999_999)
                 .expect("test mounted-unit id should be valid"),
@@ -219,10 +214,8 @@ mod tests {
                 .expect("headless Editor should install EditorHostResource");
             viewport_target(host)
         };
-        let mut session = AutomationSession::new(
-            AutomationSessionId::new(22),
-            InputSourceId::new(20_003),
-        );
+        let mut session =
+            AutomationSession::new(AutomationSessionId::new(22), InputSourceId::new(20_003));
         let host = app
             .world_mut()
             .resource_mut::<EditorHostResource>()
@@ -239,14 +232,10 @@ mod tests {
             AutomationStepResult::Unsupported
         );
         assert_eq!(
-            session.query_owner(
-                &mut adapter,
-                &target,
-                EditorAutomationQuery::ViewportTool,
-            ),
-            AutomationStepResult::EffectConfirmed(
-                EditorAutomationObservation::ViewportTool(ViewportToolKind::Select)
-            )
+            session.query_owner(&mut adapter, &target, EditorAutomationQuery::ViewportTool,),
+            AutomationStepResult::EffectConfirmed(EditorAutomationObservation::ViewportTool(
+                ViewportToolKind::Select
+            ))
         );
     }
 }

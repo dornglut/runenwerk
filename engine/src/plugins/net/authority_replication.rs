@@ -1,8 +1,8 @@
-use anyhow::{Context, anyhow};
-use engine_net::protocol::{
-    DeltaSnapshot as EngineDeltaSnapshot, ServerMessage, Snapshot as EngineSnapshot,
+use super::{
+    DeltaSnapshot as EngineDeltaSnapshot, ReplicationDriver, ServerMessage,
+    Snapshot as EngineSnapshot, SnapshotCursor,
 };
-use engine_net::replication::{ReplicationDriver, SnapshotCursor};
+use anyhow::{Context, anyhow};
 use engine_sim::SimulationTick;
 use runen_ecs::World;
 use runen_net::{

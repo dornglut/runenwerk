@@ -7,12 +7,11 @@ use std::fmt::Display;
 use std::time::Duration;
 
 use crate::plugins::InputState;
+use runen_input::{ContinuityLoss, InputContext};
 pub use runen_input::{
     DigitalState, InputObservation, InputSourceId, PointerButton, PointerButtonInput,
     RelativeMotionUnit, ScrollDelta, ScrollDomain, ScrollInput, Vector2,
 };
-use runen_input::{ContinuityLoss, InputContext};
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AutomationSessionId(u64);
 
@@ -215,10 +214,7 @@ impl AutomationSession {
     }
 
     fn cleanup_input(&self, input: &mut InputState) {
-        input.handle_continuity_loss(
-            InputContext::new(self.source, None),
-            ContinuityLoss::Source,
-        );
+        input.handle_continuity_loss(InputContext::new(self.source, None), ContinuityLoss::Source);
     }
 
     fn inactive_result<T>(&self) -> AutomationStepResult<T> {
@@ -280,10 +276,7 @@ mod tests {
 
     #[test]
     fn session_identity_and_modes_are_explicit() {
-        let session = AutomationSession::new(
-            AutomationSessionId::new(41),
-            InputSourceId::new(901),
-        );
+        let session = AutomationSession::new(AutomationSessionId::new(41), InputSourceId::new(901));
         assert_eq!(session.id().raw(), 41);
         assert_eq!(session.source(), InputSourceId::new(901));
         assert!(session.is_active());
@@ -292,10 +285,8 @@ mod tests {
 
     #[test]
     fn native_mode_is_unsupported_without_normalized_fallback() {
-        let mut session = AutomationSession::new(
-            AutomationSessionId::new(42),
-            InputSourceId::new(902),
-        );
+        let mut session =
+            AutomationSession::new(AutomationSessionId::new(42), InputSourceId::new(902));
         let mut input = InputState::new();
 
         assert_eq!(
@@ -314,10 +305,8 @@ mod tests {
 
     #[test]
     fn cleanup_invalidates_only_automation_owned_state_without_release_edges() {
-        let mut session = AutomationSession::new(
-            AutomationSessionId::new(43),
-            InputSourceId::new(903),
-        );
+        let mut session =
+            AutomationSession::new(AutomationSessionId::new(43), InputSourceId::new(903));
         let mut input = InputState::new();
 
         assert_eq!(
@@ -353,10 +342,8 @@ mod tests {
 
     #[test]
     fn condition_wait_confirms_owner_state_and_times_out_deterministically() {
-        let mut session = AutomationSession::new(
-            AutomationSessionId::new(44),
-            InputSourceId::new(904),
-        );
+        let mut session =
+            AutomationSession::new(AutomationSessionId::new(44), InputSourceId::new(904));
         let mut adapter = DummyAdapter::default();
         assert_eq!(
             session.dispatch_product(
@@ -399,10 +386,8 @@ mod tests {
 
     #[test]
     fn cancellation_prevents_later_mutation_and_cleans_owned_input() {
-        let mut session = AutomationSession::new(
-            AutomationSessionId::new(45),
-            InputSourceId::new(905),
-        );
+        let mut session =
+            AutomationSession::new(AutomationSessionId::new(45), InputSourceId::new(905));
         let mut input = InputState::new();
         let mut adapter = DummyAdapter::default();
 
