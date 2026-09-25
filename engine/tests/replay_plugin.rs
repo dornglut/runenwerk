@@ -1,4 +1,6 @@
-use engine::plugins::{ReplayControllerResource, ReplayRecorderResource, ReplayState, ScenePlugin, default_plugins};
+use engine::plugins::{
+    ReplayControllerResource, ReplayRecorderResource, ReplayState, ScenePlugin, default_plugins,
+};
 use engine::prelude::*;
 
 #[test]
