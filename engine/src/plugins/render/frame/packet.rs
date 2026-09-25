@@ -625,8 +625,35 @@ pub struct PreparedRenderFrameRequestResource {
     diagnostics: Vec<PreparedRenderFrameRequestDiagnostic>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PreparedRenderFrameRequestScope {
+    AllSurfaces,
+    Surface(RenderSurfaceId),
+}
+
+impl PreparedRenderFrameRequestScope {
+    fn applies_to(self, render_surface_id: RenderSurfaceId) -> bool {
+        matches!(self, Self::AllSurfaces)
+            || matches!(self, Self::Surface(surface_id) if surface_id == render_surface_id)
+    }
+
+    fn overlaps(self, other: Self) -> bool {
+        match (self, other) {
+            (Self::AllSurfaces, _) | (_, Self::AllSurfaces) => true,
+            (Self::Surface(left), Self::Surface(right)) => left == right,
+        }
+    }
+}
+
+impl Default for PreparedRenderFrameRequestScope {
+    fn default() -> Self {
+        Self::AllSurfaces
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct PreparedRenderFrameRequestContribution {
+    scope: PreparedRenderFrameRequestScope,
     views: BTreeMap<String, PreparedViewFrame>,
     flow_invocations: Vec<PreparedFlowInvocationRequest>,
     automatic_main_replacements: BTreeSet<RenderFlowId>,
@@ -671,10 +698,46 @@ impl PreparedRenderFrameRequestResource {
         automatic_main_replacements: impl IntoIterator<Item = RenderFlowId>,
     ) -> Result<Option<PreparedRenderFrameRequestContribution>, PreparedRenderFrameRequestError>
     {
-        let producer_id = producer_id.into();
+        self.replace_scoped_contribution(
+            producer_id.into(),
+            PreparedRenderFrameRequestScope::AllSurfaces,
+            views,
+            flow_invocations,
+            automatic_main_replacements,
+        )
+    }
+
+    pub fn replace_surface_contribution_with_automatic_main_replacements(
+        &mut self,
+        producer_id: impl Into<RenderFrameProducerId>,
+        render_surface_id: RenderSurfaceId,
+        views: impl IntoIterator<Item = PreparedViewFrame>,
+        flow_invocations: impl IntoIterator<Item = PreparedFlowInvocationRequest>,
+        automatic_main_replacements: impl IntoIterator<Item = RenderFlowId>,
+    ) -> Result<Option<PreparedRenderFrameRequestContribution>, PreparedRenderFrameRequestError>
+    {
+        self.replace_scoped_contribution(
+            producer_id.into(),
+            PreparedRenderFrameRequestScope::Surface(render_surface_id),
+            views,
+            flow_invocations,
+            automatic_main_replacements,
+        )
+    }
+
+    fn replace_scoped_contribution(
+        &mut self,
+        producer_id: RenderFrameProducerId,
+        scope: PreparedRenderFrameRequestScope,
+        views: impl IntoIterator<Item = PreparedViewFrame>,
+        flow_invocations: impl IntoIterator<Item = PreparedFlowInvocationRequest>,
+        automatic_main_replacements: impl IntoIterator<Item = RenderFlowId>,
+    ) -> Result<Option<PreparedRenderFrameRequestContribution>, PreparedRenderFrameRequestError>
+    {
         self.clear_diagnostics_for_producer(&producer_id);
         let contribution = match PreparedRenderFrameRequestContribution::from_requests(
             &producer_id,
+            scope,
             views,
             flow_invocations,
             automatic_main_replacements,
@@ -703,6 +766,17 @@ impl PreparedRenderFrameRequestResource {
             .collect()
     }
 
+    pub fn requested_views_for_surface(
+        &self,
+        render_surface_id: RenderSurfaceId,
+    ) -> Vec<&PreparedViewFrame> {
+        self.contributions
+            .values()
+            .filter(|contribution| contribution.scope.applies_to(render_surface_id))
+            .flat_map(|contribution| contribution.views.values())
+            .collect()
+    }
+
     pub fn requested_flow_invocations(&self) -> Vec<&PreparedFlowInvocationRequest> {
         self.contributions
             .values()
@@ -710,10 +784,26 @@ impl PreparedRenderFrameRequestResource {
             .collect()
     }
 
-    pub fn replaces_automatic_main_flow(&self, flow_id: RenderFlowId) -> bool {
+    pub fn requested_flow_invocations_for_surface(
+        &self,
+        render_surface_id: RenderSurfaceId,
+    ) -> Vec<&PreparedFlowInvocationRequest> {
         self.contributions
             .values()
-            .any(|contribution| contribution.automatic_main_replacements.contains(&flow_id))
+            .filter(|contribution| contribution.scope.applies_to(render_surface_id))
+            .flat_map(|contribution| contribution.flow_invocations.iter())
+            .collect()
+    }
+
+    pub fn replaces_automatic_main_flow(
+        &self,
+        render_surface_id: RenderSurfaceId,
+        flow_id: RenderFlowId,
+    ) -> bool {
+        self.contributions.values().any(|contribution| {
+            contribution.scope.applies_to(render_surface_id)
+                && contribution.automatic_main_replacements.contains(&flow_id)
+        })
     }
 
     pub fn is_empty(&self) -> bool {
@@ -732,7 +822,7 @@ impl PreparedRenderFrameRequestResource {
             BTreeMap::<RenderFlowId, &RenderFrameProducerId>::new();
 
         for (existing_producer_id, contribution) in &self.contributions {
-            if existing_producer_id == producer_id {
+            if existing_producer_id == producer_id || !replacement.scope.overlaps(contribution.scope) {
                 continue;
             }
             for view_id in contribution.views.keys() {
@@ -798,6 +888,7 @@ impl PreparedRenderFrameRequestResource {
 impl PreparedRenderFrameRequestContribution {
     fn from_requests(
         producer_id: &RenderFrameProducerId,
+        scope: PreparedRenderFrameRequestScope,
         views: impl IntoIterator<Item = PreparedViewFrame>,
         flow_invocations: impl IntoIterator<Item = PreparedFlowInvocationRequest>,
         automatic_main_replacements: impl IntoIterator<Item = RenderFlowId>,
@@ -851,6 +942,7 @@ impl PreparedRenderFrameRequestContribution {
         }
 
         Ok(Self {
+            scope,
             views: view_map,
             flow_invocations,
             automatic_main_replacements: replacement_flows,
