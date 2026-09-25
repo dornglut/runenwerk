@@ -558,12 +558,13 @@ mod tests {
 
     #[test]
     fn fixed_resolution_builder_prepares_internal_target_and_native_resolve() {
-        let request =
-            RenderFixedResolutionExecutionRequest::new(
-                producer(7),
-                RenderSurfaceId::primary(),
-                flow(11),
-                alias(), (1280, 720));
+        let request = RenderFixedResolutionExecutionRequest::new(
+            producer(7),
+            RenderSurfaceId::primary(),
+            flow(11),
+            alias(),
+            (1280, 720),
+        );
         let prepared = request
             .prepare((1920, 1080), flow(12))
             .expect("valid fixed-resolution request should prepare");
@@ -588,6 +589,37 @@ mod tests {
             Some(&PreparedTargetBinding::DynamicTexture(
                 prepared.target_key.clone()
             ))
+        );
+    }
+
+    #[test]
+    fn fixed_resolution_identity_is_surface_scoped() {
+        let primary = RenderFixedResolutionExecutionRequest::new(
+            producer(7),
+            RenderSurfaceId::primary(),
+            flow(11),
+            alias(),
+            (1280, 720),
+        )
+        .prepare((1920, 1080), flow(12))
+        .expect("primary fixed request should prepare");
+        let secondary_surface =
+            RenderSurfaceId::try_from_raw(2).expect("test surface should be nonzero");
+        let secondary = RenderFixedResolutionExecutionRequest::new(
+            producer(7),
+            secondary_surface,
+            flow(11),
+            alias(),
+            (1280, 720),
+        )
+        .prepare((1920, 1080), flow(12))
+        .expect("secondary fixed request should prepare");
+
+        assert_ne!(primary.target_key, secondary.target_key);
+        assert_ne!(primary.internal_view.view_id, secondary.internal_view.view_id);
+        assert_ne!(
+            primary.scene_invocation.invocation_id,
+            secondary.scene_invocation.invocation_id
         );
     }
 
@@ -635,12 +667,13 @@ mod tests {
             Err(RenderFixedResolutionExecutionError::MissingBindableColorAlias { .. })
         ));
 
-        let mismatched_flow =
-            RenderFixedResolutionExecutionRequest::new(
-                producer(7),
-                RenderSurfaceId::primary(),
-                flow(99),
-                alias(), (1280, 720));
+        let mismatched_flow = RenderFixedResolutionExecutionRequest::new(
+            producer(7),
+            RenderSurfaceId::primary(),
+            flow(99),
+            alias(),
+            (1280, 720),
+        );
         assert!(matches!(
             mismatched_flow.prepare_against_compiled_flows(
                 (1920, 1080),
@@ -810,34 +843,37 @@ mod tests {
 
     #[test]
     fn fixed_resolution_builder_rejects_zero_mismatched_and_supersampled_extents() {
-        let request =
-            RenderFixedResolutionExecutionRequest::new(
-                producer(7),
-                RenderSurfaceId::primary(),
-                flow(11),
-                alias(), (0, 720));
+        let request = RenderFixedResolutionExecutionRequest::new(
+            producer(7),
+            RenderSurfaceId::primary(),
+            flow(11),
+            alias(),
+            (0, 720),
+        );
         assert!(matches!(
             request.prepare((1920, 1080), flow(12)),
             Err(RenderFixedResolutionExecutionError::ZeroExtent)
         ));
 
-        let request =
-            RenderFixedResolutionExecutionRequest::new(
-                producer(7),
-                RenderSurfaceId::primary(),
-                flow(11),
-                alias(), (1280, 800));
+        let request = RenderFixedResolutionExecutionRequest::new(
+            producer(7),
+            RenderSurfaceId::primary(),
+            flow(11),
+            alias(),
+            (1280, 800),
+        );
         assert!(matches!(
             request.prepare((1920, 1080), flow(12)),
             Err(RenderFixedResolutionExecutionError::AspectMismatch { .. })
         ));
 
-        let request =
-            RenderFixedResolutionExecutionRequest::new(
-                producer(7),
-                RenderSurfaceId::primary(),
-                flow(11),
-                alias(), (2560, 1440));
+        let request = RenderFixedResolutionExecutionRequest::new(
+            producer(7),
+            RenderSurfaceId::primary(),
+            flow(11),
+            alias(),
+            (2560, 1440),
+        );
         assert!(matches!(
             request.prepare((1920, 1080), flow(12)),
             Err(RenderFixedResolutionExecutionError::InternalExtentExceedsOutput { .. })
