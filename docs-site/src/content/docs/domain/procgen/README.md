@@ -7,7 +7,6 @@ layer: domain
 canonical: true
 last_reviewed: 2026-05-14
 related_docs:
-  - ../../workspace/sdf-first-execution-roadmap.md
   - ../../design/active/editor-procedural-content-and-simulation-workflow-plan.md
   - ../../design/accepted/execution-fabric-and-product-jobs-design.md
   - ../../design/accepted/field-product-contracts-diagnostics-and-residency-design.md
