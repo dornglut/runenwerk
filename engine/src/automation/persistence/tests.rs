@@ -593,7 +593,7 @@ fn structural_resource_limits_are_enforced_before_runtime_materialization() {
             }],
         }],
     };
-    let mut builder = ImportBuilder {
+    let builder = ImportBuilder {
         total_groups: MAX_TOTAL_GROUPS,
         ..ImportBuilder::default()
     };
