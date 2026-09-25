@@ -1,8 +1,8 @@
 //! Translation from native tablet DTOs into RunenInput observations.
 
 use runen_input::{
-    ContactId, ContactPhase, ContactPresence, DeliveryRole, EvidenceStatus, InputContext,
-    InputObservation, InputObservationGroup, MeasurementDomain, ObservationOrigin,
+    CapabilityKnowledge, ContactId, ContactPhase, ContactPresence, DeliveryRole, EvidenceStatus,
+    InputContext, InputObservation, InputObservationGroup, MeasurementDomain, ObservationOrigin,
     PhysicalTabletControls, StylusTilt, TabletCapabilities, TabletObservation, ToolId,
 };
 
@@ -111,20 +111,28 @@ fn tablet_observation(
             barrel_secondary: packet.capabilities.barrel_buttons && packet.barrel_buttons.secondary,
         },
         capabilities: TabletCapabilities {
-            pressure: packet.capabilities.pressure,
-            tilt: packet.capabilities.tilt,
-            twist: packet.capabilities.twist,
-            tangential_pressure: packet.capabilities.tangential_pressure,
-            hover: packet.capabilities.hover,
-            eraser: packet.capabilities.eraser,
-            barrel_controls: packet.capabilities.barrel_buttons,
-            historical_samples: packet.capabilities.coalesced_samples,
-            predicted_samples: packet.capabilities.predicted_samples,
+            pressure: capability_knowledge(packet.capabilities.pressure),
+            tilt: capability_knowledge(packet.capabilities.tilt),
+            twist: capability_knowledge(packet.capabilities.twist),
+            tangential_pressure: capability_knowledge(packet.capabilities.tangential_pressure),
+            hover: capability_knowledge(packet.capabilities.hover),
+            eraser: capability_knowledge(packet.capabilities.eraser),
+            barrel_controls: capability_knowledge(packet.capabilities.barrel_buttons),
+            historical_samples: capability_knowledge(packet.capabilities.coalesced_samples),
+            predicted_samples: capability_knowledge(packet.capabilities.predicted_samples),
         },
         source_time: source_time(context, sample.timestamp_micros),
         evidence,
         delivery,
         origin: ObservationOrigin::SourceReport,
+    }
+}
+
+fn capability_knowledge(established: bool) -> CapabilityKnowledge {
+    if established {
+        CapabilityKnowledge::Supported
+    } else {
+        CapabilityKnowledge::Unknown
     }
 }
 
@@ -218,7 +226,7 @@ mod tests {
         NativeTabletLatencyClass, NativeTabletPosition, NativeTabletTilt,
     };
     use engine::plugins::InputState;
-    use runen_input::SourceTimeUnit;
+    use runen_input::{CapabilityKnowledge, SourceTimeUnit};
 
     #[test]
     fn mapping_preserves_neutral_identity_and_orthogonal_sample_roles() {
@@ -347,6 +355,99 @@ mod tests {
         assert_eq!(current.pressure, None);
         assert_eq!(current.tilt, None);
         assert_eq!(current.presence, ContactPresence::Hover);
+        assert_eq!(current.capabilities.pressure, CapabilityKnowledge::Unknown);
+        assert_eq!(current.capabilities.eraser, CapabilityKnowledge::Supported);
+        assert_ne!(
+            current.capabilities.pressure,
+            CapabilityKnowledge::Unsupported
+        );
+    }
+
+    #[test]
+    fn native_capability_evidence_maps_to_supported_or_unknown_only() {
+        let packet = NativeTabletPacket::windows_pointer(
+            12,
+            NativeTabletEventKind::Move,
+            NativeTabletPosition::new(10.0, 10.0),
+            NativeTabletDelta::ZERO,
+        )
+        .with_capabilities(NativeTabletCapabilities {
+            pressure: true,
+            tilt: false,
+            twist: true,
+            tangential_pressure: false,
+            hover: true,
+            eraser: false,
+            barrel_buttons: false,
+            coalesced_samples: true,
+            predicted_samples: false,
+            calibration: false,
+        });
+
+        let mapping = map_native_tablet_packet(&packet).expect("packet should map");
+        let InputObservation::Tablet(current) = &mapping.group.observations[0] else {
+            panic!("current observation should be a tablet observation")
+        };
+
+        assert_eq!(
+            current.capabilities.pressure,
+            CapabilityKnowledge::Supported
+        );
+        assert_eq!(current.capabilities.tilt, CapabilityKnowledge::Unknown);
+        assert_eq!(current.capabilities.twist, CapabilityKnowledge::Supported);
+        assert_eq!(
+            current.capabilities.tangential_pressure,
+            CapabilityKnowledge::Unknown
+        );
+        assert_eq!(current.capabilities.hover, CapabilityKnowledge::Supported);
+        assert_eq!(current.capabilities.eraser, CapabilityKnowledge::Unknown);
+        assert_eq!(
+            current.capabilities.barrel_controls,
+            CapabilityKnowledge::Unknown
+        );
+        assert_eq!(
+            current.capabilities.historical_samples,
+            CapabilityKnowledge::Supported
+        );
+        assert_eq!(
+            current.capabilities.predicted_samples,
+            CapabilityKnowledge::Unknown
+        );
+        let capability_knowledge = [
+            current.capabilities.pressure,
+            current.capabilities.tilt,
+            current.capabilities.twist,
+            current.capabilities.tangential_pressure,
+            current.capabilities.hover,
+            current.capabilities.eraser,
+            current.capabilities.barrel_controls,
+            current.capabilities.historical_samples,
+            current.capabilities.predicted_samples,
+        ];
+        assert!(
+            capability_knowledge
+                .into_iter()
+                .all(|knowledge| knowledge != CapabilityKnowledge::Unsupported)
+        );
+    }
+
+    #[test]
+    fn valid_group_is_retained_after_borrowed_admission() {
+        let packet = NativeTabletPacket::windows_pointer(
+            91,
+            NativeTabletEventKind::Move,
+            NativeTabletPosition::new(100.0, 200.0),
+            NativeTabletDelta::ZERO,
+        );
+        let mapping = map_native_tablet_packet(&packet).expect("mapping should succeed");
+        let expected = mapping.group.clone();
+        let mut input = InputState::new();
+
+        input
+            .admit_device_observation_group(mapping.group)
+            .expect("valid group should be admitted");
+
+        assert_eq!(input.drain_device_observation_groups(), vec![expected]);
     }
 
     #[test]
