@@ -12,7 +12,6 @@ related_docs:
   - ../../architecture/runenwerk-platform-architecture.md
   - ../implemented/ui-program-architecture.md
   - ../implemented/ui-program-architecture-owner-map.md
-  - ../archived/ui-framework-app-integration-direction-review.md
   - ./typed-app-program-counter-proof-design.md
 ---
 

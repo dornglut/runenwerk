@@ -11,7 +11,6 @@ related_docs:
   - ./diagrams/live-uiplugin-runtime-platform.puml
   - ./diagrams/live-uiplugin-runtime-sequence.puml
   - ../design/deferred/live-uiplugin-runtime-and-surface-frame-rendering-design.md
-  - ../design/archived/live-uiplugin-runtime-full-cutover-plan.md
   - ../domain/ui/roadmap.md
   - ../reports/investigations/live-uiplugin-runtime-current-state-investigation.md
 ---

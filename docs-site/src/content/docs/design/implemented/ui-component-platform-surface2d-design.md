@@ -9,7 +9,6 @@ last_reviewed: 2026-09-13
 related_designs:
   - ../active/runenwerk-ui-story-driven-golden-workflow-design.md
   - ./editor-ui-runtime-v2-and-interaction-formation-design.md
-  - ../superseded/runenwerk-typed-app-composition-plugin-framework-design.md
 related_docs:
   - ../../domain/ui/architecture.md
   - ../../domain/ui/roadmap.md

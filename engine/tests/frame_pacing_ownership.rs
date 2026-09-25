@@ -1,4 +1,4 @@
-use engine::prelude::App;
+use engine::prelude::{App, AppNativeHostExt};
 use engine::runtime::{
     FramePacingMode, FramePacingPolicyResource, FramePacingRuntimeStateResource,
 };
@@ -74,5 +74,34 @@ fn bounded_headless_execution_does_not_require_frame_pacing_resources() {
             .resource::<FramePacingRuntimeStateResource>()
             .is_err(),
         "headless execution should not synthesize native pacing observation state"
+    );
+}
+
+#[test]
+fn native_frame_pacing_rejects_headless_host_without_manufacturing_native_state() {
+    let mut app = App::headless();
+
+    app.with_frame_pacing(FramePacingPolicyResource::on_demand());
+
+    assert!(
+        app.world().resource::<FramePacingPolicyResource>().is_err(),
+        "headless Host must not retain native-Winit pacing policy"
+    );
+    assert!(
+        app.world()
+            .resource::<FramePacingRuntimeStateResource>()
+            .is_err(),
+        "headless Host must not materialize native pacing observation state"
+    );
+
+    let error = app
+        .run_for_frames(1)
+        .err()
+        .expect("headless native pacing configuration should reject App composition");
+    assert!(
+        error
+            .to_string()
+            .contains("with_frame_pacing requires selected capability 'native-window Host'"),
+        "unexpected composition error: {error:#}"
     );
 }
