@@ -339,7 +339,7 @@ impl InputState {
             DigitalState::Released => was_down_anywhere && !is_down_anywhere,
         };
         if !changed {
-            return;
+            return Ok(());
         }
 
         let position = self
