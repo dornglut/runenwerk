@@ -502,6 +502,7 @@ fn publish_render_lab_frame_system(
         mut frame_requests,
         mut contributions,
         fixed_quality_plans,
+        mut quality_execution,
     } = publication;
     let (width, height) = render_lab_radiance_extent(&presentation, &measurement)?;
     let producer_id = engine::plugins::render::RenderFrameProducerId::try_from_raw(RL2_PRODUCER_ID)
@@ -540,6 +541,10 @@ fn publish_render_lab_frame_system(
     };
 
     let output_size = render_lab_extent(&presentation);
+    if measurement.quality_capture_output_dir.is_some() {
+        quality_execution.pending_admission = None;
+        quality_execution.latest = None;
+    }
     if measurement.quality_capture_output_dir.is_some() && (width, height) != output_size {
         let scene_plan = fixed_quality_plans
             .scene
@@ -561,7 +566,9 @@ fn publish_render_lab_frame_system(
             .scene_invocation
             .clone()
             .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, target_key)?;
-        return stage_render_lab_fixed_quality_publication(
+        let admission =
+            engine::plugins::render::RenderFixedResolutionExecutionAdmission::Fixed(fixed.clone());
+        stage_render_lab_fixed_quality_publication(
             &mut targets,
             &mut frame_requests,
             &mut contributions,
@@ -569,7 +576,9 @@ fn publish_render_lab_frame_system(
             target,
             fixed,
             contribution,
-        );
+        )?;
+        quality_execution.pending_admission = Some(admission);
+        return Ok(());
     }
 
     stage_render_lab_frame_publication(
