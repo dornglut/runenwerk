@@ -423,7 +423,7 @@ mod automatic_main_replacement_tests {
             RenderTargetAliasKey::new("scene_color").expect("alias should be valid"),
             (1280, 720),
         )
-        .prepare_against_compiled_flow((1920, 1080), resolve.id(), &scene_compiled)
+        .prepare_against_compiled_flows((1920, 1080), &scene_compiled, &resolve_compiled)
         .expect("fixed execution should prepare");
 
         let mut requests = PreparedRenderFrameRequestResource::default();
@@ -507,7 +507,7 @@ mod automatic_main_replacement_tests {
             RenderTargetAliasKey::new("scene_color").expect("alias should be valid"),
             (1280, 800),
         )
-        .admit_against_compiled_flow((1920, 1080), resolve.id(), &scene_compiled);
+        .admit_against_compiled_flows((1920, 1080), &scene_compiled, &resolve_compiled);
         let RenderFixedResolutionExecutionAdmission::NativeFallback(fallback) = &admission else {
             panic!("aspect mismatch should fall back to native");
         };

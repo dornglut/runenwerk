@@ -413,7 +413,7 @@ fn fixed_resolution_preflight_accepts_internal_scene_and_native_resolve() {
         alias_key("scene_color"),
         (1280, 720),
     )
-    .prepare_against_compiled_flow((1920, 1080), resolve.id(), &scene_compiled)
+    .prepare_against_compiled_flows((1920, 1080), &scene_compiled, &resolve_compiled)
     .expect("fixed execution should prepare");
 
     let to_prepared = |request: &PreparedFlowInvocationRequest| PreparedFlowInvocation {
@@ -504,7 +504,11 @@ fn fixed_resolution_preflight_accepts_internal_scene_and_native_resolve() {
         alias_key("scene_color"),
         (1280, 800),
     )
-    .admit_against_compiled_flow((1920, 1080), resolve.id(), &compiled_flows[0]);
+    .admit_against_compiled_flows(
+        (1920, 1080),
+        &compiled_flows[0],
+        &compiled_flows[1],
+    );
 
     assert!(matches!(
         engine::plugins::render::inspect::inspect_fixed_resolution_execution(&fallback, &frame),

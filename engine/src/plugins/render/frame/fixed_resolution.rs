@@ -2,9 +2,9 @@ use crate::plugins::render::{
     CompiledRenderFlowPlan, PreparedFlowInvocationId, PreparedFlowInvocationRequest,
     PreparedTargetBinding, PreparedViewFrame, RenderDynamicTextureRetention,
     RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey, RenderFlow, RenderFlowId,
-    RenderFlowInvocationPolicy, RenderFrameProducerId, RenderPassViewScope,
-    RenderResourceDeclaration, RenderTargetAliasKey, RenderTargetAliasKind, RenderTextureSampleMode,
-    RenderTextureTargetFormat,
+    RenderFlowInvocationPolicy, RenderFrameProducerId, RenderImportedTextureSemantic,
+    RenderPassKind, RenderPassViewScope, RenderResourceDeclaration, RenderShaderReference,
+    RenderTargetAliasKey, RenderTargetAliasKind, RenderTextureSampleMode, RenderTextureTargetFormat,
 };
 use runen_gpu::GpuBindingKey;
 
@@ -190,6 +190,86 @@ impl RenderFixedResolutionExecutionRequest {
         Ok(())
     }
 
+    fn validate_resolve_flow(
+        &self,
+        compiled_flow: &CompiledRenderFlowPlan,
+    ) -> Result<(), RenderFixedResolutionExecutionError> {
+        if compiled_flow.flow_label != FIXED_RESOLUTION_RESOLVE_FLOW_LABEL {
+            return Err(RenderFixedResolutionExecutionError::InvalidResolveFlow {
+                flow_id: compiled_flow.flow_id,
+                reason: "flow label does not match the renderer fixed-resolution resolve",
+            });
+        }
+        if compiled_flow.invocation_policy != RenderFlowInvocationPolicy::ExplicitOnly {
+            return Err(RenderFixedResolutionExecutionError::InvalidResolveFlow {
+                flow_id: compiled_flow.flow_id,
+                reason: "resolve flow must use explicit-only invocation policy",
+            });
+        }
+
+        let source_alias_id = compiled_flow
+            .resources
+            .resources
+            .iter()
+            .find_map(|resource| match resource {
+                RenderResourceDeclaration::TargetAlias(alias)
+                    if alias.binding_key().as_str() == FIXED_RESOLUTION_RESOLVE_SOURCE_ALIAS
+                        && alias.kind() == RenderTargetAliasKind::Texture =>
+                {
+                    Some(alias.id())
+                }
+                _ => None,
+            })
+            .ok_or(RenderFixedResolutionExecutionError::InvalidResolveFlow {
+                flow_id: compiled_flow.flow_id,
+                reason: "resolve flow is missing the fixed-resolution sampled source alias",
+            })?;
+
+        let surface_color_id = compiled_flow
+            .resources
+            .resources
+            .iter()
+            .find_map(|resource| match resource {
+                RenderResourceDeclaration::ImportedTexture(texture)
+                    if texture.semantic == RenderImportedTextureSemantic::SurfaceColor =>
+                {
+                    Some(texture.id)
+                }
+                _ => None,
+            })
+            .ok_or(RenderFixedResolutionExecutionError::InvalidResolveFlow {
+                flow_id: compiled_flow.flow_id,
+                reason: "resolve flow is missing native SurfaceColor output",
+            })?;
+
+        let [pass] = compiled_flow.render_passes.as_slice() else {
+            return Err(RenderFixedResolutionExecutionError::InvalidResolveFlow {
+                flow_id: compiled_flow.flow_id,
+                reason: "resolve flow must contain exactly one render pass",
+            });
+        };
+        let node = pass.node();
+        let shader_matches = matches!(
+            node.shader.as_ref(),
+            Some(RenderShaderReference::AssetPath(path))
+                if path == FIXED_RESOLUTION_RESOLVE_SHADER_ASSET
+        );
+        if node.label != FIXED_RESOLUTION_RESOLVE_PASS_LABEL
+            || node.kind != RenderPassKind::Fullscreen
+            || node.view_scope != RenderPassViewScope::MainSurfaceOnly
+            || !shader_matches
+            || node.sampled_textures.as_slice() != [source_alias_id]
+            || node.color_outputs.as_slice() != [surface_color_id]
+        {
+            return Err(RenderFixedResolutionExecutionError::InvalidResolveFlow {
+                flow_id: compiled_flow.flow_id,
+                reason: "resolve pass shape does not match the renderer fixed-resolution resolve contract",
+            });
+        }
+
+        Ok(())
+    }
+
     fn native_fallback_invocation_against_compiled_flow(
         &self,
         compiled_flow: &CompiledRenderFlowPlan,
@@ -207,23 +287,28 @@ impl RenderFixedResolutionExecutionRequest {
         )
     }
 
-    pub fn prepare_against_compiled_flow(
+    pub fn prepare_against_compiled_flows(
         &self,
         output_size: (u32, u32),
-        resolve_flow_id: RenderFlowId,
-        compiled_flow: &CompiledRenderFlowPlan,
+        scene_compiled_flow: &CompiledRenderFlowPlan,
+        resolve_compiled_flow: &CompiledRenderFlowPlan,
     ) -> Result<PreparedFixedResolutionExecution, RenderFixedResolutionExecutionError> {
-        self.validate_selected_flow(compiled_flow)?;
-        self.prepare(output_size, resolve_flow_id)
+        self.validate_selected_flow(scene_compiled_flow)?;
+        self.validate_resolve_flow(resolve_compiled_flow)?;
+        self.prepare(output_size, resolve_compiled_flow.flow_id)
     }
 
-    pub fn admit_against_compiled_flow(
+    pub fn admit_against_compiled_flows(
         &self,
         output_size: (u32, u32),
-        resolve_flow_id: RenderFlowId,
-        compiled_flow: &CompiledRenderFlowPlan,
+        scene_compiled_flow: &CompiledRenderFlowPlan,
+        resolve_compiled_flow: &CompiledRenderFlowPlan,
     ) -> RenderFixedResolutionExecutionAdmission {
-        match self.prepare_against_compiled_flow(output_size, resolve_flow_id, compiled_flow) {
+        match self.prepare_against_compiled_flows(
+            output_size,
+            scene_compiled_flow,
+            resolve_compiled_flow,
+        ) {
             Ok(prepared) => RenderFixedResolutionExecutionAdmission::Fixed(prepared),
             Err(error) => {
                 let identity = fixed_resolution_execution_identity(self.scene_flow_id);
@@ -234,7 +319,7 @@ impl RenderFixedResolutionExecutionRequest {
                         output_size,
                         reason: error.to_string(),
                         native_scene_invocation: self
-                            .native_fallback_invocation_against_compiled_flow(compiled_flow),
+                            .native_fallback_invocation_against_compiled_flow(scene_compiled_flow),
                         target_key: identity.target_key,
                         internal_view_id: identity.internal_view_id,
                         fixed_scene_invocation_id: identity.fixed_scene_invocation_id,
@@ -338,6 +423,11 @@ pub enum RenderFixedResolutionExecutionError {
     SelectedFlowAliasNotDualViewCapable {
         flow_id: RenderFlowId,
         alias: RenderTargetAliasKey,
+    },
+    #[error("fixed internal-resolution resolve flow {flow_id:?} is invalid: {reason}")]
+    InvalidResolveFlow {
+        flow_id: RenderFlowId,
+        reason: &'static str,
     },
     #[error(
         "fixed internal-resolution flow {flow_id:?} does not expose required color target alias '{alias}'"
@@ -467,6 +557,11 @@ mod tests {
             .expect("test scene flow should compile")
     }
 
+    fn compiled_resolve_flow() -> CompiledRenderFlowPlan {
+        let flow = fixed_resolution_resolve_flow().expect("fixed resolve flow should validate");
+        crate::plugins::render::compile_flow_plan(&flow).expect("fixed resolve flow should compile")
+    }
+
     #[test]
     fn fixed_resolution_builder_requires_selected_flow_color_alias() {
         let compiled = compiled_scene_flow("scene_color");
@@ -477,7 +572,7 @@ mod tests {
             (1280, 720),
         );
         request
-            .prepare_against_compiled_flow((1920, 1080), flow(12), &compiled)
+            .prepare_against_compiled_flows((1920, 1080), &compiled, &compiled_resolve_flow())
             .expect("declared color alias should admit fixed resolution");
 
         let missing = RenderFixedResolutionExecutionRequest::new(
@@ -487,17 +582,17 @@ mod tests {
             (1280, 720),
         );
         assert!(matches!(
-            missing.prepare_against_compiled_flow((1920, 1080), flow(12), &compiled),
+            missing.prepare_against_compiled_flows((1920, 1080), &compiled, &compiled_resolve_flow()),
             Err(RenderFixedResolutionExecutionError::MissingBindableColorAlias { .. })
         ));
 
         let mismatched_flow =
             RenderFixedResolutionExecutionRequest::new(producer(7), flow(99), alias(), (1280, 720));
         assert!(matches!(
-            mismatched_flow.prepare_against_compiled_flow(
+            mismatched_flow.prepare_against_compiled_flows(
                 (1920, 1080),
-                flow(12),
-                &compiled
+                &compiled,
+                &compiled_resolve_flow()
             ),
             Err(RenderFixedResolutionExecutionError::SelectedFlowMismatch { .. })
         ));
@@ -523,10 +618,10 @@ mod tests {
             (1280, 720),
         );
         assert!(matches!(
-            explicit_request.prepare_against_compiled_flow(
+            explicit_request.prepare_against_compiled_flows(
                 (1920, 1080),
-                flow(12),
-                &explicit_compiled
+                &explicit_compiled,
+                &compiled_resolve_flow()
             ),
             Err(RenderFixedResolutionExecutionError::SelectedFlowRequiresAutomaticMain { .. })
         ));
@@ -549,14 +644,35 @@ mod tests {
             (1280, 720),
         );
         assert!(matches!(
-            main_only_request.prepare_against_compiled_flow(
+            main_only_request.prepare_against_compiled_flows(
                 (1920, 1080),
-                flow(12),
-                &main_only_compiled
+                &main_only_compiled,
+                &compiled_resolve_flow()
             ),
             Err(
                 RenderFixedResolutionExecutionError::SelectedFlowAliasNotDualViewCapable { .. }
             )
+        ));
+    }
+
+    #[test]
+    fn fixed_resolution_rejects_noncanonical_resolve_flow() {
+        let compiled = compiled_scene_flow("scene_color");
+        let wrong_resolve = compiled_scene_flow("other_color");
+        let request = RenderFixedResolutionExecutionRequest::new(
+            producer(7),
+            compiled.flow_id,
+            alias(),
+            (1280, 720),
+        );
+
+        assert!(matches!(
+            request.prepare_against_compiled_flows(
+                (1920, 1080),
+                &compiled,
+                &wrong_resolve
+            ),
+            Err(RenderFixedResolutionExecutionError::InvalidResolveFlow { .. })
         ));
     }
 
@@ -569,7 +685,7 @@ mod tests {
             alias(),
             (1280, 720),
         )
-        .admit_against_compiled_flow((1920, 1080), flow(12), &compiled);
+        .admit_against_compiled_flows((1920, 1080), &compiled, &compiled_resolve_flow());
         assert!(!valid.native_fallback_active());
         let prepared = valid.prepared().expect("valid admission should retain fixed parts");
         assert_eq!(prepared.internal_size, (1280, 720));
@@ -581,7 +697,7 @@ mod tests {
             alias(),
             (1280, 800),
         )
-        .admit_against_compiled_flow((1920, 1080), flow(12), &compiled);
+        .admit_against_compiled_flows((1920, 1080), &compiled, &compiled_resolve_flow());
         assert!(invalid.native_fallback_active());
         assert!(
             invalid
