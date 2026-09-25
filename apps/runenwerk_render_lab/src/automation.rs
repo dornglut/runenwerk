@@ -302,10 +302,8 @@ mod tests {
         assert!(trace.frames()[2].groups().is_empty());
 
         let mut replay = build_headless_automation_app();
-        let source_map = AutomationInputReplaySourceMap::new([(
-            recorded_source,
-            InputSourceId::new(20_100),
-        )]);
+        let source_map =
+            AutomationInputReplaySourceMap::new([(recorded_source, InputSourceId::new(20_100))]);
         let report = replay.replay_automation_input_trace(
             &trace,
             &source_map,
@@ -323,5 +321,4 @@ mod tests {
             .teardown_automation_input_replay(&trace, &source_map)
             .expect("Render Lab replay teardown should clean replay-owned input");
     }
-
 }

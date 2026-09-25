@@ -3,9 +3,9 @@ use crate::plugins::InputFinalizePlugin;
 use crate::runtime::{ResMut, Update};
 use runen_input::{
     ContactId, ContactPhase, ContactPresence, CoordinateSpace, DeliveryRole, DigitalState,
-    EvidenceStatus, InputDeviceId, InputToolKind, ObservationOrigin, PhysicalTabletControls, Point2,
-    PointerButtonInput, RelativeMotionUnit, ScrollDelta, ScrollDomain, ScrollInput, SourceTime,
-    SourceTimeUnit, TabletCapabilities, TabletObservation, Vector2,
+    EvidenceStatus, InputDeviceId, InputToolKind, ObservationOrigin, PhysicalTabletControls,
+    Point2, PointerButtonInput, RelativeMotionUnit, ScrollDelta, ScrollDomain, ScrollInput,
+    SourceTime, SourceTimeUnit, TabletCapabilities, TabletObservation, Vector2,
 };
 
 use crate::automation::{AutomationInputTraceFrame, AutomationInputTracePlugin};
@@ -32,15 +32,11 @@ fn trace_app() -> App {
     app
 }
 
-fn source_map(
-    entries: impl IntoIterator<Item = (u64, u64)>,
-) -> AutomationInputReplaySourceMap {
+fn source_map(entries: impl IntoIterator<Item = (u64, u64)>) -> AutomationInputReplaySourceMap {
     AutomationInputReplaySourceMap::new(
         entries
             .into_iter()
-            .map(|(recorded, replay)| {
-                (InputSourceId::new(recorded), InputSourceId::new(replay))
-            }),
+            .map(|(recorded, replay)| (InputSourceId::new(recorded), InputSourceId::new(replay))),
     )
 }
 
@@ -64,7 +60,12 @@ fn replay_preflight_rejects_invalid_mapping_trailing_and_unsupported_shapes_with
         missing.outcome(),
         AutomationInputReplayOutcome::InvalidSourceMapping
     );
-    assert!(!app.world().resource::<InputState>().unwrap().left_mouse_down());
+    assert!(
+        !app.world()
+            .resource::<InputState>()
+            .unwrap()
+            .left_mouse_down()
+    );
 
     let second = InputObservationGroup::single(
         InputContext::new(InputSourceId::new(2_002), None),
@@ -143,11 +144,13 @@ fn replay_preflight_rejects_capture_trace_dirty_projection_and_used_pointer_conf
             .outcome(),
         AutomationInputReplayOutcome::TargetStateConflict
     );
-    assert!(capture
-        .world()
-        .resource::<InputState>()
-        .unwrap()
-        .admitted_input_capture_active());
+    assert!(
+        capture
+            .world()
+            .resource::<InputState>()
+            .unwrap()
+            .admitted_input_capture_active()
+    );
 
     let mut tracing = trace_app();
     tracing.start_automation_input_trace().unwrap();
@@ -287,7 +290,10 @@ fn replay_preserves_group_order_idle_frames_and_unrelated_held_state() {
     assert_eq!(app.world().resource::<ReplayFrameCounter>().unwrap().0, 3);
     let input = app.world().resource::<InputState>().unwrap();
     assert!(input.left_mouse_down());
-    assert!(input.right_mouse_down(), "unrelated held source must survive replay");
+    assert!(
+        input.right_mouse_down(),
+        "unrelated held source must survive replay"
+    );
 
     app.teardown_automation_input_replay(&trace, &mapping)
         .expect("replay teardown should succeed");
@@ -300,11 +306,7 @@ fn replay_preserves_group_order_idle_frames_and_unrelated_held_state() {
 fn replay_remaps_atomic_tablet_group_and_source_time_context() {
     let recorded_context =
         InputContext::new(InputSourceId::new(2_030), Some(InputDeviceId::new(77)));
-    let source_time = SourceTime::new(
-        recorded_context,
-        123_456,
-        SourceTimeUnit::Microseconds,
-    );
+    let source_time = SourceTime::new(recorded_context, 123_456, SourceTimeUnit::Microseconds);
     let tablet = |contact, delivery| {
         InputObservation::Tablet(TabletObservation {
             contact: ContactId::new(contact),
@@ -346,12 +348,13 @@ fn replay_remaps_atomic_tablet_group_and_source_time_context() {
         let InputObservation::Tablet(tablet) = observation else {
             panic!("staged group should remain all-tablet");
         };
-        let remapped_time = tablet.source_time.expect("source time should remain present");
+        let remapped_time = tablet
+            .source_time
+            .expect("source time should remain present");
         assert_eq!(remapped_time.context, staged[0].context);
         assert_eq!(remapped_time.value, source_time.value);
         assert_eq!(remapped_time.unit, source_time.unit);
     }
-
 }
 
 #[test]

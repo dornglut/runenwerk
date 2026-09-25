@@ -8,8 +8,8 @@ use std::collections::HashSet;
 use std::fmt;
 
 use crate::app::App;
-use crate::plugins::input::input_integration_is_active;
 use crate::plugins::InputState;
+use crate::plugins::input::input_integration_is_active;
 use runen_input::{
     ContinuityLoss, InputContext, InputObservation, InputObservationGroup, InputSourceId,
     PointerButton,
@@ -231,12 +231,13 @@ fn input_replay_preflight(
         }
     }
 
-    let replay_sources = resolve_replay_sources(&recorded_sources, source_map).map_err(|detail| {
-        AutomationInputReplayReport::rejected(
-            AutomationInputReplayOutcome::InvalidSourceMapping,
-            detail,
-        )
-    })?;
+    let replay_sources =
+        resolve_replay_sources(&recorded_sources, source_map).map_err(|detail| {
+            AutomationInputReplayReport::rejected(
+                AutomationInputReplayOutcome::InvalidSourceMapping,
+                detail,
+            )
+        })?;
 
     Ok(AutomationInputReplayPlan {
         replay_sources,
@@ -305,7 +306,9 @@ fn input_replay_target_state_conflict(
         .copied()
         .any(|button| input.pointer_button_down_anywhere(button))
     {
-        return Some("a pointer button used by the trace is already held in target input state".to_owned());
+        return Some(
+            "a pointer button used by the trace is already held in target input state".to_owned(),
+        );
     }
     None
 }
@@ -356,17 +359,11 @@ fn admit_replay_group(
 
 fn cleanup_replay_sources(input: &mut InputState, replay_sources: &[InputSourceId]) {
     for source in replay_sources {
-        input.handle_continuity_loss(
-            InputContext::new(*source, None),
-            ContinuityLoss::Source,
-        );
+        input.handle_continuity_loss(InputContext::new(*source, None), ContinuityLoss::Source);
     }
 }
 
-fn cleanup_failed_admission_frame(
-    input: &mut InputState,
-    replay_sources: &[InputSourceId],
-) {
+fn cleanup_failed_admission_frame(input: &mut InputState, replay_sources: &[InputSourceId]) {
     cleanup_replay_sources(input, replay_sources);
     // Preflight requires a quiescent headless target, and no App frame runs while the groups for
     // one recorded frame are being admitted. Therefore any frame-local projection present on this
@@ -422,9 +419,9 @@ impl AppAutomationInputReplayExt for App {
         let mut completed_frames = 0u64;
         for frame in &trace.frames {
             for (group_index, group) in frame.groups.iter().enumerate() {
-                let replay_source = source_map
-                    .mapped_source(group.context.source)
-                    .expect("replay preflight established a unique mapping for every recorded source");
+                let replay_source = source_map.mapped_source(group.context.source).expect(
+                    "replay preflight established a unique mapping for every recorded source",
+                );
 
                 let admission_result = {
                     let input = self
