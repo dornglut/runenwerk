@@ -17,7 +17,7 @@ use engine::plugins::world::{
     build::jobs::WorldBuildStaleness,
 };
 use engine::plugins::{FixedStepPlugin, SimulationPlugin};
-use engine::prelude::{App, AuthorityRole};
+use engine::prelude::{App, AppSimulationExt, AuthorityRole};
 use runen_spatial::{ChunkCoord3, ChunkId, WorldId};
 use world_ops::{
     BrushShape, BuildGeneration, ChunkGeneration, ChunkRevision, DirtyReason, Operation,
