@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-09-11
+last_reviewed: 2026-09-25
 publication: repository-current
 draft: true
 pagefind: false
@@ -28,6 +28,76 @@ docs-site/src/content/docs
 ```
 
 When they overlap, the docs-site document owns the detail. Root files summarize and link; they do not duplicate full policy or design.
+
+## Publication classes
+
+Every documentation source has exactly one `publication` class. This field is the
+semantic publication authority. Directory placement, lifecycle names such as
+`accepted` or `active`, and words such as `reference` in a path do not determine
+the class by themselves.
+
+Publication controls production exposure. For routed classes, the current Starlight
+configuration groups pages in the public sidebar by source directory; the publication
+class does not independently choose a sidebar section. The production-build validator
+still requires every routed publication page to appear in the generated sidebar.
+
+| Class | Use it for | Production projection |
+|---|---|---|
+| `primary` | Maintained product/developer documentation intended for normal public discovery. | Production route, sitemap, default Pagefind search, and generated public sidebar. |
+| `reference` | Maintained deeper reference, design, architecture, guideline, or evidence material that should remain publicly routable without entering default search. | Production route, sitemap, generated public sidebar, and `pagefind: false`. |
+| `repository-current` | Maintained repository/contributor/process material that is current authority for repository work but is not public site content. | Source retained only; no production route, Pagefind, sitemap, or public sidebar entry. Requires `draft: true`, `pagefind: false`, and `sidebar.hidden: true`. |
+| `history` | Retained historical evidence or superseded context that remains useful for provenance but does not authorize current work. | Source retained only; no production route, Pagefind, sitemap, or public sidebar entry. Requires `draft: true`, `pagefind: false`, and `sidebar.hidden: true`. |
+
+The current sidebar configuration presents owner/developer directories under
+**Primary documentation** and architecture, ADR, design, guideline, and report
+directories under **Reference**. That grouping is navigation presentation, not a
+second publication authority.
+
+`draft`, `pagefind`, and `sidebar.hidden` are projection controls derived from the
+publication role. They must not contradict `publication`. In particular:
+
+- a `primary` page must remain routed, searchable, and present in the generated sidebar;
+- a `reference` page must remain routed and present in the generated sidebar, with
+  default Pagefind disabled;
+- `repository-current` and `history` pages must carry all three suppression controls
+  shown above.
+
+Typical frontmatter shapes are:
+
+```yaml
+# Normal maintained owner/developer page.
+publication: primary
+```
+
+```yaml
+# Accepted design or other deeper public reference.
+publication: reference
+pagefind: false
+```
+
+```yaml
+# Current repository-only workspace/process authority.
+publication: repository-current
+draft: true
+pagefind: false
+sidebar:
+  hidden: true
+```
+
+```yaml
+# Retained historical evidence.
+publication: history
+draft: true
+pagefind: false
+sidebar:
+  hidden: true
+```
+
+For a new document, choose the class explicitly from its semantic role. For a moved
+or re-homed document, preserve the existing class when its role is unchanged and
+re-evaluate it only when the owning work explicitly changes that role. Never allow a
+move to drop publication metadata or infer a new class merely from the destination
+path.
 
 ## Relation metadata
 

@@ -453,9 +453,10 @@ fn fixed_resolution_preflight_accepts_internal_scene_and_native_resolve() {
         },
     };
 
+    let compiled_flows = [scene_compiled, resolve_compiled];
     let report = validate_prepared_render_frame(
         &frame,
-        &[scene_compiled, resolve_compiled],
+        &compiled_flows,
         &current_runtime_gpu_capabilities(),
     );
 
@@ -504,7 +505,7 @@ fn fixed_resolution_preflight_accepts_internal_scene_and_native_resolve() {
         alias_key("scene_color"),
         (1280, 800),
     )
-    .admit_against_compiled_flow((1920, 1080), resolve.id(), &scene_compiled);
+    .admit_against_compiled_flow((1920, 1080), resolve.id(), &compiled_flows[0]);
     let fallback_evidence =
         engine::plugins::render::inspect::inspect_fixed_resolution_execution(&fallback, &frame)
             .expect("explicit native fallback should remain inspectable");
