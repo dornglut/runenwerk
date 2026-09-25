@@ -2633,12 +2633,12 @@ source = "git+https://github.com/dornglut/runen-input?rev=b2bf687e8071d19e124ea5
 [[package]]
 name = "runen-net"
 version = "0.1.0"
-source = "git+https://github.com/dornglut/runen-net?rev=2af5700b2889f6503395ffb72ae85f37629f2625#2af5700b2889f6503395ffb72ae85f37629f2625"
+source = "git+https://github.com/dornglut/runen-net?rev=e8dce38b2578eb3559356968beb2351cc03c6758#e8dce38b2578eb3559356968beb2351cc03c6758"
 
 [[package]]
 name = "runen-net-quic"
 version = "0.1.0"
-source = "git+https://github.com/dornglut/runen-net?rev=2af5700b2889f6503395ffb72ae85f37629f2625#2af5700b2889f6503395ffb72ae85f37629f2625"
+source = "git+https://github.com/dornglut/runen-net?rev=e8dce38b2578eb3559356968beb2351cc03c6758#e8dce38b2578eb3559356968beb2351cc03c6758"
 dependencies = [
  "quinn",
  "runen-net",

@@ -207,6 +207,7 @@ impl InputDriver for ReplicationProbeDriver {
 
     fn apply_input(
         _world: &mut runen_ecs::World,
+        _tick: SimulationTick,
         _input: &[Self::Input],
     ) -> Result<(), Self::Error> {
         Ok(())

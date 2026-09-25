@@ -13,8 +13,9 @@ use runen_net::replication::{
 use std::sync::Arc;
 
 use super::{
-    ClientReplicationPolicy, PredictionDiagnostics, ReplicationDiagnostics,
-    replay_pending_prediction,
+    ClientPredictionIntegration, ClientReplicationPolicy, PredictionDiagnostics,
+    ReplicationDiagnostics, confirm_client_prediction_host_restored,
+    confirm_client_prediction_host_restored_if_needed, observe_client_prediction,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -74,6 +75,16 @@ impl ClientReplicationIntegration {
         let tick = lineage.current_tick()?;
         Some((SnapshotCursor(cursor.get()), SimulationTick(tick.get())))
     }
+
+    pub(crate) fn semantic(&self) -> &ClientReplicationSet<ClientReplicatedStateProduct> {
+        &self.semantic
+    }
+
+    pub(crate) fn semantic_mut(
+        &mut self,
+    ) -> &mut ClientReplicationSet<ClientReplicatedStateProduct> {
+        &mut self.semantic
+    }
 }
 
 pub(crate) fn configure_client_replication(
@@ -116,14 +127,26 @@ pub fn client_replication_state(
 }
 
 pub fn require_client_replication_connection_replacement(world: &mut World) -> anyhow::Result<()> {
-    let integration = world
-        .resource_mut::<ClientReplicationIntegration>()
+    let mut integration = world
+        .remove_resource::<ClientReplicationIntegration>()
         .context("client replication requires explicit ClientReplicationPolicy")?;
-    let lineage = integration.policy.lineage();
-    integration
-        .semantic
-        .require_connection_replacement_full(lineage)
-        .map_err(|error| anyhow!("RunenNet client replacement recovery failed: {error:?}"))
+    let result = if let Some(mut prediction) =
+        world.remove_resource::<ClientPredictionIntegration>()
+    {
+        let result = prediction
+            .require_connection_replacement(integration.semantic_mut())
+            .map_err(|e| anyhow!("RunenNet client prediction/replacement recovery failed: {e:?}"));
+        world.insert_resource(prediction);
+        result
+    } else {
+        let lineage = integration.policy.lineage();
+        integration
+            .semantic
+            .require_connection_replacement_full(lineage)
+            .map_err(|e| anyhow!("RunenNet client replacement recovery failed: {e:?}"))
+    };
+    world.insert_resource(integration);
+    result
 }
 
 #[derive(Debug)]
@@ -133,7 +156,9 @@ pub(crate) struct ClientReplicationProcessResult {
     pub(crate) corrected: bool,
 }
 
-fn realize_committed_product<TDriver>(world: &mut World) -> anyhow::Result<(Ack, bool)>
+pub(crate) fn realize_active_authoritative_product<TDriver>(
+    world: &mut World,
+) -> anyhow::Result<(Ack, bool)>
 where
     TDriver: ReplicationDriver + SnapshotApplyDriver + InputDriver + Send + Sync + 'static,
     TDriver::Snapshot: Clone + PartialEq,
@@ -153,16 +178,9 @@ where
     let corrected = TDriver::apply_snapshot(world, tick, snapshot)
         .map_err(anyhow::Error::new)
         .context("realize committed client replicated-state product")?;
-
-    if let Ok(tick_resource) = world.resource_mut::<SimulationTick>() {
-        *tick_resource = tick;
+    if let Ok(t) = world.resource_mut::<SimulationTick>() {
+        *t = tick;
     }
-    replay_pending_prediction::<TDriver>(
-        world,
-        tick,
-        "replay predicted input after client commit",
-    )?;
-
     Ok((
         Ack {
             cursor,
@@ -170,6 +188,49 @@ where
         },
         corrected,
     ))
+}
+
+pub(crate) fn restore_client_prediction_host_after_failure<TDriver>(
+    world: &mut World,
+) -> anyhow::Result<()>
+where
+    TDriver: ReplicationDriver + SnapshotApplyDriver + InputDriver + Send + Sync + 'static,
+    TDriver::Snapshot: Clone + PartialEq,
+    TDriver::Input: Clone + PartialEq,
+{
+    let _ = realize_active_authoritative_product::<TDriver>(world)?;
+    let integration = world
+        .remove_resource::<ClientReplicationIntegration>()
+        .context("client replication integration is unavailable during prediction restoration")?;
+    let result = confirm_client_prediction_host_restored(world, integration.semantic());
+    world.insert_resource(integration);
+    result
+}
+
+fn realize_committed_product<TDriver>(world: &mut World) -> anyhow::Result<(Ack, bool)>
+where
+    TDriver: ReplicationDriver + SnapshotApplyDriver + InputDriver + Send + Sync + 'static,
+    TDriver::Snapshot: Clone + PartialEq,
+    TDriver::Input: Clone + PartialEq,
+{
+    let (ack, corrected) = realize_active_authoritative_product::<TDriver>(world)?;
+    let integration = world
+        .remove_resource::<ClientReplicationIntegration>()
+        .context(
+            "client replication integration is unavailable during prediction reconciliation",
+        )?;
+    let restoration_confirmation =
+        confirm_client_prediction_host_restored_if_needed(world, integration.semantic());
+    if let Err(error) = restoration_confirmation {
+        world.insert_resource(integration);
+        return Err(error);
+    }
+    let replay_failed = observe_client_prediction::<TDriver>(world, integration.semantic());
+    world.insert_resource(integration);
+    if replay_failed? {
+        restore_client_prediction_host_after_failure::<TDriver>(world)?;
+    }
+    Ok((ack, corrected))
 }
 
 fn finalize_outcome<TDriver>(
@@ -201,6 +262,14 @@ where
         });
     }
 
+    let integration = world
+        .remove_resource::<ClientReplicationIntegration>()
+        .context(
+            "client replication integration is unavailable during prediction recovery observation",
+        )?;
+    let observation = observe_client_prediction::<TDriver>(world, integration.semantic());
+    world.insert_resource(integration);
+    observation?;
     Ok(ClientReplicationProcessResult {
         outcome,
         acknowledgement: None,

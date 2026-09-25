@@ -69,7 +69,7 @@ Server-side ACK processing still uses projected active `ConnectionHandle`s for t
 
 Client snapshot/delta consistency requires an explicit finite `ClientReplicationPolicy`. The policy supplies one accepted `ReplicationLineageKey`, `ClientAggregateLimits`, and per-lineage `ReplicationRetentionLimits`; Runenwerk defines no hidden numeric defaults.
 
-RunenNet `ClientReplicationSet` owns cursor progression, retained complete products, base selection, recovery classification, and the acknowledgement cursor. Runenwerk reconstructs deltas into one complete encoded product and uses its exact encoded byte length for accounting. The RunenNet host-commit callback atomically replaces one active derived-product resource; only after protocol commit does the retained `SnapshotApplyDriver::apply_snapshot` escape hatch realize that complete product into ECS/game state and replay local prediction.
+RunenNet `ClientReplicationSet` owns cursor progression, retained complete products, base selection, recovery classification, and the acknowledgement cursor. Runenwerk reconstructs deltas into one complete encoded product and uses its exact encoded byte length for accounting. The RunenNet host-commit callback atomically replaces one active derived-product resource; only after protocol commit does the retained `SnapshotApplyDriver::apply_snapshot` escape hatch realize that complete product into ECS/game state. Tracked client prediction is separately owned by RunenNet `PredictionLineage`, which observes this live `ClientReplicationSet`.
 
 Downstream realization failure does not roll back the RunenNet protocol commit and does not emit an ACK. A duplicate-current resend may retry realization and re-ACK the existing committed cursor without a second protocol commit.
 
@@ -129,3 +129,12 @@ conditional composition, not an unconditional intrinsic Net dependency.
 - Usage: [Net Plugin Usage Guide](../../reference/plugins/net/usage-guide.md)
 - Advanced: [Net Plugin Advanced Guide](../../reference/plugins/net/advanced-guide.md)
 - Architecture: [Net Plugin Architecture](../../reference/plugins/net/architecture.md)
+
+
+## Client Prediction
+
+Tracked client prediction requires explicit `ClientPredictionPolicy` plus `ClientReplicationPolicy`. The prediction policy supplies finite RunenNet `PredictionLimits`; lineage identity is reused from client replication and is not independently configurable.
+
+RunenNet `PredictionLineage<Vec<u8>>` owns prediction eligibility/frontier, exact encoded per-tick pending batches, duplicate/conflict/resource classification, retirement, recovery invalidation, and replay order. Runenwerk retains input codec, tick-aware gameplay execution, bounded queue staging, authoritative product realization/restoration, scheduling, and diagnostics.
+
+Outbound queue admission is orthogonal to prediction admission. Backpressure does not roll back an already admitted prediction batch. A client cannot mutate gameplay through tracked prediction before RunenNet admits that batch, and replay uses the target tick supplied by RunenNet.

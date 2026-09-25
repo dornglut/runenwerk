@@ -388,7 +388,11 @@ impl InputDriver for ReconstructionFailureDriver {
         Ok(Vec::new())
     }
 
-    fn apply_input(_world: &mut World, _input: &[Self::Input]) -> Result<(), Self::Error> {
+    fn apply_input(
+        _world: &mut World,
+        _tick: engine_sim::SimulationTick,
+        _input: &[Self::Input],
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 }
