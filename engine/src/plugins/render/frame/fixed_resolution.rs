@@ -5,7 +5,8 @@ use crate::plugins::render::{
     RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey, RenderFlow, RenderFlowId,
     RenderFlowInvocationPolicy, RenderFrameProducerId, RenderImportedTextureSemantic,
     RenderPassKind, RenderPassViewScope, RenderResourceDeclaration, RenderShaderReference,
-    RenderTargetAliasKey, RenderTargetAliasKind, RenderTextureSampleMode, RenderTextureTargetFormat,
+    RenderTargetAliasKey, RenderTargetAliasKind, RenderTextureSampleMode,
+    RenderTextureTargetFormat,
 };
 use runen_gpu::GpuBindingKey;
 
@@ -96,7 +97,8 @@ impl RenderFixedResolutionExecutionRequest {
             RenderDynamicTextureRetention::RetainWhileRequested,
         );
 
-        let internal_view = PreparedViewFrame::offscreen_product(view_id.clone(), self.internal_size);
+        let internal_view =
+            PreparedViewFrame::offscreen_product(view_id.clone(), self.internal_size);
 
         let scene_invocation =
             PreparedFlowInvocationRequest::new(scene_invocation_id, self.scene_flow_id, view_id)
@@ -108,7 +110,10 @@ impl RenderFixedResolutionExecutionRequest {
 
         let resolve_invocation =
             PreparedFlowInvocationRequest::new(resolve_invocation_id, resolve_flow_id, "main")
-                .bind_dynamic_texture_alias(FIXED_RESOLUTION_RESOLVE_SOURCE_ALIAS, target_key.clone())
+                .bind_dynamic_texture_alias(
+                    FIXED_RESOLUTION_RESOLVE_SOURCE_ALIAS,
+                    target_key.clone(),
+                )
                 .map_err(RenderFixedResolutionExecutionError::AliasBinding)?;
 
         Ok(PreparedFixedResolutionExecution {
@@ -510,11 +515,7 @@ fn validate_extents(
     internal_size: (u32, u32),
     output_size: (u32, u32),
 ) -> Result<(), RenderFixedResolutionExecutionError> {
-    if internal_size.0 == 0
-        || internal_size.1 == 0
-        || output_size.0 == 0
-        || output_size.1 == 0
-    {
+    if internal_size.0 == 0 || internal_size.1 == 0 || output_size.0 == 0 || output_size.1 == 0 {
         return Err(RenderFixedResolutionExecutionError::ZeroExtent);
     }
     if internal_size.0 > output_size.0 || internal_size.1 > output_size.1 {
@@ -635,8 +636,7 @@ mod tests {
             .finish()
             .validate()
             .expect("test scene flow should validate");
-        crate::plugins::render::compile_flow_plan(&flow)
-            .expect("test scene flow should compile")
+        crate::plugins::render::compile_flow_plan(&flow).expect("test scene flow should compile")
     }
 
     fn compiled_resolve_flow() -> CompiledRenderFlowPlan {
@@ -666,7 +666,11 @@ mod tests {
             (1280, 720),
         );
         assert!(matches!(
-            missing.prepare_against_compiled_flows((1920, 1080), &compiled, &compiled_resolve_flow()),
+            missing.prepare_against_compiled_flows(
+                (1920, 1080),
+                &compiled,
+                &compiled_resolve_flow()
+            ),
             Err(RenderFixedResolutionExecutionError::MissingBindableColorAlias { .. })
         ));
 
@@ -789,11 +793,7 @@ mod tests {
         );
 
         assert!(matches!(
-            request.prepare_against_compiled_flows(
-                (1920, 1080),
-                &compiled,
-                &wrong_resolve
-            ),
+            request.prepare_against_compiled_flows((1920, 1080), &compiled, &wrong_resolve),
             Err(RenderFixedResolutionExecutionError::InvalidResolveFlow { .. })
         ));
     }
