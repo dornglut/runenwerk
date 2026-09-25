@@ -60,7 +60,7 @@ Implemented now:
 The former `engine_net` admission/handoff state machines and `engine_net_quic`
 reconnect/runtime ownership are deleted.
 
-The Editor <-> Runtime Preview control channel is a separate maintained application consumer of
+The Editor ↔ Runtime Preview control channel is a separate maintained application consumer of
 standalone RunenNet and `runen-net-quic`; it does not make Engine gameplay networking a QUIC
 runtime.
 

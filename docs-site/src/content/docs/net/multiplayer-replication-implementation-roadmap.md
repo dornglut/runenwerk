@@ -65,7 +65,7 @@ Engine work-queue admission and frame-end projection are not transport emission 
 current-frame projections whose client/server directions compose independently.
 
 Concrete transport remains a maintained-consumer concern. Runenwerk currently consumes
-`runen-net-quic` for the separate Editor <-> Runtime Preview product channel; that consumer does
+`runen-net-quic` for the separate Editor ↔ Runtime Preview product channel; that consumer does
 not authorize a generic QUIC runtime inside the Engine gameplay Net plugin.
 
 ## RN8 Result

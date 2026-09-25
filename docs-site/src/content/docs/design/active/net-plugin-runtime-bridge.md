@@ -115,7 +115,7 @@ Engine projection then feeds scheduled routing and integration systems.
 - Product lobby/roster/settings metadata remains Runenwerk-owned.
 - The former `engine_net` shell remains deleted; Engine-owned integration lives under
   `engine/src/plugins/net`.
-- Do not generalize the Editor <-> Runtime Preview QUIC channel into Engine gameplay networking.
+- Do not generalize the Editor ↔ Runtime Preview QUIC channel into Engine gameplay networking.
   A concrete gameplay transport requires a maintained gameplay consumer.
 - Do not freeze final ordinary Replicated View authoring syntax from this low-level integration;
   #322 remains evidence-gated.

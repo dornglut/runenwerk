@@ -36,7 +36,7 @@ real submission result through the RunenNet `DeliveryAcceptance` boundary; only 
 makes that authority cursor emitted and ACK-eligible.
 
 The Engine gameplay Net plugin has no maintained concrete transport consumer. The existing Editor
-<-> Runtime Preview channel is a separate product consumer of standalone `runen-net-quic` and
+↔ Runtime Preview channel is a separate product consumer of standalone `runen-net-quic` and
 must not be generalized into an Engine networking runtime.
 
 ## Current-Frame Staging and Projection
