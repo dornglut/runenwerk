@@ -1947,7 +1947,9 @@ fn load_workspace_profile_layout(
         }
         shell_state
             .queue_composition_restore(runtime)
-            .map_err(|_| EditorMutationError::runtime_rejected("composition restore queue failed"))?;
+            .map_err(|_| {
+                EditorMutationError::runtime_rejected("composition restore queue failed")
+            })?;
         app.append_console_line(format!(
             "[composition] queued persisted {} layout restore",
             profile.label
@@ -2117,9 +2119,7 @@ fn load_scene_from_default_path(
                 shell_state
                     .queue_composition_restore(runtime)
                     .map_err(|_| {
-                        EditorMutationError::runtime_rejected(
-                            "composition restore queue failed",
-                        )
+                        EditorMutationError::runtime_rejected("composition restore queue failed")
                     })?;
                 app.append_console_line(format!(
                     "[io] queued composition layout restore {}",

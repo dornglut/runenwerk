@@ -5,8 +5,8 @@ use editor_shell::{
     EditorCompositionDiagnosticStage as Stage, EditorCompositionDiagnosticSubject as Subject,
     EditorCompositionIdentityAllocator, EditorCompositionRejection, EditorCompositionRuntime,
     EditorDockingIntent, EditorWindowId, PreparedEditorCompositionCommit,
-    evaluate_editor_docking_intent,
-    plan_editor_docking_transaction, plan_editor_target_close_transaction,
+    evaluate_editor_docking_intent, plan_editor_docking_transaction,
+    plan_editor_target_close_transaction,
 };
 use engine::plugins::render::backend::RenderSurfaceRegistryResource;
 use engine::runtime::{
@@ -369,9 +369,9 @@ fn refresh_coordination_pending(
     host: &mut EditorHostResource,
     transitions: &EditorCompositionTransitionRuntimeResource,
 ) {
-    let pending =
-        transitions.is_pending() || host.shell_state.has_pending_composition_restore();
-    host.shell_state.set_composition_coordination_pending(pending);
+    let pending = transitions.is_pending() || host.shell_state.has_pending_composition_restore();
+    host.shell_state
+        .set_composition_coordination_pending(pending);
 }
 
 fn finish_pending_target_creation(
@@ -806,10 +806,10 @@ mod tests {
                     native_window_id: request.native_window_id,
                     render_surface_id,
                 };
-                assert!(host.shell_state.bind_editor_window_presentation(
-                    presentation.editor_window_id,
-                    binding,
-                ));
+                assert!(
+                    host.shell_state
+                        .bind_editor_window_presentation(presentation.editor_window_id, binding,)
+                );
                 (presentation, request.native_window_id, binding)
             })
             .collect()
@@ -1046,12 +1046,7 @@ mod tests {
         );
 
         let (_, native_window_id, binding) = bound[0];
-        mark_presentation_created(
-            &mut windows,
-            &mut surfaces,
-            native_window_id,
-            binding,
-        );
+        mark_presentation_created(&mut windows, &mut surfaces, native_window_id, binding);
         sync_editor_composition_transitions(
             &mut host,
             &mut transitions,
@@ -1111,12 +1106,7 @@ mod tests {
         );
         assert_eq!(bound.len(), 2);
 
-        mark_presentation_created(
-            &mut windows,
-            &mut surfaces,
-            bound[0].1,
-            bound[0].2,
-        );
+        mark_presentation_created(&mut windows, &mut surfaces, bound[0].1, bound[0].2);
         windows
             .record_mut(bound[1].1)
             .expect("second requested restore window")
@@ -1131,7 +1121,10 @@ mod tests {
 
         assert!(!transitions.is_pending());
         assert_eq!(host.shell_state.composition_runtime(), &live_before);
-        assert_eq!(host.shell_state.active_workspace_profile_id(), profile_before);
+        assert_eq!(
+            host.shell_state.active_workspace_profile_id(),
+            profile_before
+        );
         assert_eq!(
             host.shell_state
                 .composition_target_bindings()
@@ -1141,7 +1134,11 @@ mod tests {
         assert_eq!(host.shell_state.editor_windows().len(), 1);
         for (_, native_window_id, _) in bound {
             assert!(windows.record(native_window_id).is_none());
-            assert!(surfaces.surface_for_native_window(native_window_id).is_none());
+            assert!(
+                surfaces
+                    .surface_for_native_window(native_window_id)
+                    .is_none()
+            );
         }
         assert!(
             transitions
@@ -1190,12 +1187,7 @@ mod tests {
         assert_eq!(bound.len(), 1);
         let (_, native_window_id, new_binding) = bound[0];
         assert_ne!(new_binding, old_binding);
-        mark_presentation_created(
-            &mut windows,
-            &mut surfaces,
-            native_window_id,
-            new_binding,
-        );
+        mark_presentation_created(&mut windows, &mut surfaces, native_window_id, new_binding);
 
         sync_editor_composition_transitions(
             &mut host,
