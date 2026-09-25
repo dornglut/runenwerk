@@ -44,7 +44,6 @@ pub enum RenderFlowInvocationPolicy {
     ExplicitOnly,
 }
 
-
 #[derive(Debug)]
 pub struct RenderFlow {
     graph: RenderFlowGraph,
