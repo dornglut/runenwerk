@@ -348,11 +348,7 @@ fn strict_v1_rejects_unknown_fields_variants_and_missing_fields() {
         Err(AutomationInputTraceImportError::UnknownVariant(_))
     ));
 
-    let missing = valid.replacen(
-        "recorded_sources_pristine_at_capture_start: true,",
-        "",
-        1,
-    );
+    let missing = valid.replacen("recorded_sources_pristine_at_capture_start: true,", "", 1);
     assert!(matches!(
         import_automation_input_trace_v1(missing.as_bytes()),
         Err(AutomationInputTraceImportError::MalformedArtifact(_))
