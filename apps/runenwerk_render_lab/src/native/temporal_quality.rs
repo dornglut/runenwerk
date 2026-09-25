@@ -382,8 +382,8 @@ pub(super) fn stage_render_lab_native_quality_publication(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::*;
+    use super::*;
     use std::{fs, path::PathBuf};
 
     fn producer(raw: u64) -> engine::plugins::render::RenderFrameProducerId {
