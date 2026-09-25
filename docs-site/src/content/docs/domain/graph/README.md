@@ -1,20 +1,20 @@
 ---
 title: Graph Domain
-description: Current documentation for the domain-neutral graph substrate crate.
+description: Current documentation for Runenwerk's authored port-graph substrate.
 status: active
 owner: graph
 layer: domain
 canonical: true
-last_reviewed: 2026-05-09
+last_reviewed: 2026-09-25
 related_docs:
   - ../../adr/accepted/0010-graph-substrate-canvas-boundary.md
 ---
 
 # Graph Domain
 
-`domain/graph` owns Runenwerk's domain-neutral graph substrate.
+`domain/graph` owns Runenwerk's local authored port-graph substrate.
 
-It defines reusable graph truth for systems that need graph-shaped authoring or validation without coupling those systems to editor surfaces, runtime rendering, material semantics, ability semantics, or scene-specific inspection behavior.
+It defines the graph, node, port, and edge structure used by Runenwerk domains that need authored graph documents or structural validation without coupling those domains to editor surfaces, runtime rendering, material semantics, ability semantics, or scene-specific inspection behavior. It is not the organization-wide reusable graph/relationship framework authority.
 
 ## Ownership
 
@@ -35,6 +35,8 @@ This crate owns:
 
 This crate does not own:
 
+- organization-wide reusable graph or relationship semantics over caller-owned identities; standalone RunenGraph owns that framework boundary;
+
 - graph canvas layout;
 - pan, zoom, marquee, or hit testing behavior;
 - material graph semantics;
@@ -45,7 +47,9 @@ This crate does not own:
 
 ## Boundary
 
-Graph model truth belongs here.
+Runenwerk-authored port-graph structure belongs here.
+
+Standalone reusable caller-key graph/relationship semantics belong to RunenGraph and are not implied by this crate. `domain/graph` is not a RunenGraph implementation, predecessor, source authority, or implicit consumer.
 
 Graph presentation belongs in editor/UI surface code.
 

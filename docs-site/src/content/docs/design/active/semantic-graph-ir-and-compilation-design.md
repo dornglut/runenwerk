@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: cross-domain
 canonical: true
-last_reviewed: 2026-09-15
+last_reviewed: 2026-09-25
 related_docs:
   - ../../guidelines/runenwerk-architecture.md
 related_designs:
@@ -45,7 +45,7 @@ The runtime should execute formed ECS systems, domain-owned event products, sche
 
 Current implemented anchors:
 
-- `domain/graph` owns the domain-neutral graph substrate: typed graph, node, port, edge definitions, validation, traversal, and cycle policy.
+- `domain/graph` owns Runenwerk's authored port-graph substrate: graph, node, port, and edge identities/definitions, typed ports, validation, traversal, and cycle policy. It is not the organization-wide reusable graph/relationship framework authority.
 - Standalone `runen-ecs` owns the reusable ECS state, query, system, schedule, deferred-command, execution, and conformance contracts exposed by its accepted public API. It is not a generic gameplay/domain event-channel authority.
 - `foundation/schema` owns portable schema vocabulary.
 - `foundation/commands` owns portable command descriptor/proposal vocabulary, not execution.
@@ -71,12 +71,12 @@ This design does not:
 
 ## Architectural Position
 
-Semantic graph meaning belongs in an owning domain crate or subsystem, not in the neutral graph substrate.
+Semantic graph meaning belongs in an owning domain crate or subsystem, not in Runenwerk's authored port-graph substrate.
 
 Examples:
 
 ```text
-domain/graph                 -> structural graph substrate only
+domain/graph                 -> Runenwerk-authored port-graph substrate only
 future domain/material_graph  -> material graph semantics and lowering
 future domain/ability_graph   -> ability or skill graph semantics and lowering
 future domain/simulation_graph -> simulation rule semantics and lowering
@@ -219,7 +219,7 @@ Traceability is not optional. Without it, semantic graph compilation becomes har
 
 ## Boundary With `domain/graph`
 
-`domain/graph` remains neutral.
+`domain/graph` remains semantically neutral within Runenwerk-authored graph documents. It does not own the organization-wide reusable graph/relationship framework boundary; standalone RunenGraph owns reusable graph and relationship semantics over caller-owned identities.
 
 It may own:
 
@@ -497,4 +497,4 @@ runtime executes formed products
 editor observes and authors through contracts
 ```
 
-This keeps graph tooling powerful without turning the editor into the runtime brain or the neutral graph substrate into a universal programming language.
+This keeps graph tooling powerful without turning the editor into the runtime brain or Runenwerk's authored port-graph substrate into a universal programming language.

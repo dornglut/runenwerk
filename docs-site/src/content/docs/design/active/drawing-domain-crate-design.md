@@ -5,7 +5,7 @@ status: active
 owner: drawing
 layer: domain
 canonical: true
-last_reviewed: 2026-05-10
+last_reviewed: 2026-09-25
 related_docs:
   - ../../guidelines/runenwerk-architecture.md
   - ../../domain/drawing/README.md
@@ -46,7 +46,7 @@ The first `domain/drawing` slice proves:
 `domain/drawing` owns engine-agnostic drawing truth and invariants.
 
 It may depend on foundation vocabulary and lower-level domain contracts such as
-`domain/graph` where that is the established neutral graph substrate. It must
+`domain/graph` where the shared Runenwerk-authored port-graph substrate is needed. It must
 not depend on engine runtime, app crates, native tablet adapters, concrete GPU
 resources, Wacom APIs, renderer-private passes, or editor shell state.
 
