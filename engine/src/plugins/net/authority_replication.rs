@@ -88,8 +88,10 @@ impl AuthorityReplicationIntegration {
     }
 
     fn clear(&mut self) {
-        self.semantic =
-            AuthorityReplicationSession::new(self.semantic.session_id(), self.policy.aggregate_limits());
+        self.semantic = AuthorityReplicationSession::new(
+            self.semantic.session_id(),
+            self.policy.aggregate_limits(),
+        );
     }
 
     fn remove_lineage(&mut self, participant: ParticipantId) {
@@ -135,8 +137,9 @@ impl AuthorityReplicationIntegration {
     where
         TDriver: ReplicationDriver,
     {
-        self.ensure_lineage(participant)
-            .map_err(|error| anyhow!("configure RunenNet authority replication lineage: {error:?}"))?;
+        self.ensure_lineage(participant).map_err(|error| {
+            anyhow!("configure RunenNet authority replication lineage: {error:?}")
+        })?;
 
         let (state, greatest_emitted, pending, retained_base) = {
             let lineage = self
@@ -191,11 +194,13 @@ impl AuthorityReplicationIntegration {
                 )
                 .map_err(|error| anyhow!("prepare RunenNet authority full snapshot: {error:?}"))?,
             AuthorityReplicationState::DeltaEligible(base_cursor) => {
-                let (retained_cursor, base_bytes) = retained_base
-                    .context("RunenNet delta-eligible authority lineage has no retained base entry")?;
+                let (retained_cursor, base_bytes) = retained_base.context(
+                    "RunenNet delta-eligible authority lineage has no retained base entry",
+                )?;
                 debug_assert_eq!(base_cursor, retained_cursor);
-                let base_bytes = base_bytes
-                    .context("RunenNet delta-eligible authority lineage has no retained base state")?;
+                let base_bytes = base_bytes.context(
+                    "RunenNet delta-eligible authority lineage has no retained base state",
+                )?;
                 let base_snapshot = TDriver::decode_snapshot(&base_bytes)
                     .map_err(anyhow::Error::new)
                     .context("decode RunenNet-retained authority delta base")?;
@@ -213,7 +218,9 @@ impl AuthorityReplicationIntegration {
                         encoded_delta,
                         delta_bytes,
                     )
-                    .map_err(|error| anyhow!("prepare RunenNet authority delta snapshot: {error:?}"))?
+                    .map_err(|error| {
+                        anyhow!("prepare RunenNet authority delta snapshot: {error:?}")
+                    })?
             }
         };
 
@@ -350,12 +357,11 @@ impl AuthorityReplicationIntegration {
 }
 
 impl RunenNetSessionCore {
-    pub fn with_authority_replication_policy(
-        mut self,
-        policy: AuthorityReplicationPolicy,
-    ) -> Self {
-        self.authority_replication =
-            Some(AuthorityReplicationIntegration::new(self.session().id(), policy));
+    pub fn with_authority_replication_policy(mut self, policy: AuthorityReplicationPolicy) -> Self {
+        self.authority_replication = Some(AuthorityReplicationIntegration::new(
+            self.session().id(),
+            policy,
+        ));
         self
     }
 
@@ -365,10 +371,7 @@ impl RunenNetSessionCore {
             .map(AuthorityReplicationIntegration::policy)
     }
 
-    pub(crate) fn authority_replication_pending(
-        &self,
-        connection: ConnectionHandle,
-    ) -> bool {
+    pub(crate) fn authority_replication_pending(&self, connection: ConnectionHandle) -> bool {
         let Some(participant) = self.session.participant_for_connection(connection) else {
             return false;
         };
@@ -411,9 +414,10 @@ impl RunenNetSessionCore {
         token: AuthorityReplicationSubmissionToken,
         acceptance: DeliveryAcceptance,
     ) -> anyhow::Result<Option<EmittedSnapshot>> {
-        let integration = self.authority_replication.as_mut().context(
-            "authority replication delivery feedback requires explicit finite policy",
-        )?;
+        let integration = self
+            .authority_replication
+            .as_mut()
+            .context("authority replication delivery feedback requires explicit finite policy")?;
         integration.record_delivery_acceptance(&self.session, token, acceptance)
     }
 
@@ -421,9 +425,10 @@ impl RunenNetSessionCore {
         &mut self,
         token: AuthorityReplicationSubmissionToken,
     ) -> anyhow::Result<bool> {
-        let integration = self.authority_replication.as_mut().context(
-            "authority replication cancellation requires explicit finite policy",
-        )?;
+        let integration = self
+            .authority_replication
+            .as_mut()
+            .context("authority replication cancellation requires explicit finite policy")?;
         integration.cancel_submission(&self.session, token)
     }
 
@@ -432,9 +437,10 @@ impl RunenNetSessionCore {
         connection: ConnectionHandle,
         cursor: SnapshotCursor,
     ) -> anyhow::Result<AuthorityAckOutcome> {
-        let integration = self.authority_replication.as_mut().context(
-            "authority replication ACK requires explicit finite policy",
-        )?;
+        let integration = self
+            .authority_replication
+            .as_mut()
+            .context("authority replication ACK requires explicit finite policy")?;
         integration.acknowledge(&self.session, connection, cursor)
     }
 
