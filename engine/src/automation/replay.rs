@@ -231,28 +231,55 @@ fn input_replay_preflight(
         }
     }
 
-    let mut replay_sources = Vec::with_capacity(recorded_sources.len());
-    let mut unique_replay_sources = HashSet::with_capacity(recorded_sources.len());
-    for recorded in recorded_sources {
-        let Some(replay) = source_map.mapped_source(recorded) else {
-            return Err(AutomationInputReplayReport::rejected(
-                AutomationInputReplayOutcome::InvalidSourceMapping,
-                format!("recorded input source {} has no unique replay mapping", recorded.raw()),
-            ));
-        };
-        if !unique_replay_sources.insert(replay) {
-            return Err(AutomationInputReplayReport::rejected(
-                AutomationInputReplayOutcome::InvalidSourceMapping,
-                "distinct recorded input sources map to the same replay source",
-            ));
-        }
-        replay_sources.push(replay);
-    }
+    let replay_sources = resolve_replay_sources(&recorded_sources, source_map).map_err(|detail| {
+        AutomationInputReplayReport::rejected(
+            AutomationInputReplayOutcome::InvalidSourceMapping,
+            detail,
+        )
+    })?;
 
     Ok(AutomationInputReplayPlan {
         replay_sources,
         pointer_buttons,
     })
+}
+
+fn recorded_sources(trace: &AutomationInputTrace) -> Vec<InputSourceId> {
+    let mut sources = Vec::new();
+    for frame in &trace.frames {
+        for group in &frame.groups {
+            if !sources.contains(&group.context.source) {
+                sources.push(group.context.source);
+            }
+        }
+    }
+    for group in &trace.trailing_groups {
+        if !sources.contains(&group.context.source) {
+            sources.push(group.context.source);
+        }
+    }
+    sources
+}
+
+fn resolve_replay_sources(
+    recorded_sources: &[InputSourceId],
+    source_map: &AutomationInputReplaySourceMap,
+) -> Result<Vec<InputSourceId>, String> {
+    let mut replay_sources = Vec::with_capacity(recorded_sources.len());
+    let mut unique_replay_sources = HashSet::with_capacity(recorded_sources.len());
+    for recorded in recorded_sources {
+        let Some(replay) = source_map.mapped_source(*recorded) else {
+            return Err(format!(
+                "recorded input source {} has no unique replay mapping",
+                recorded.raw()
+            ));
+        };
+        if !unique_replay_sources.insert(replay) {
+            return Err("distinct recorded input sources map to the same replay source".to_owned());
+        }
+        replay_sources.push(replay);
+    }
+    Ok(replay_sources)
 }
 
 fn input_replay_target_state_conflict(
@@ -395,20 +422,9 @@ impl AppAutomationInputReplayExt for App {
         let mut completed_frames = 0u64;
         for frame in &trace.frames {
             for (group_index, group) in frame.groups.iter().enumerate() {
-                let Some(replay_source) = source_map.mapped_source(group.context.source) else {
-                    let input = self
-                        .world_mut()
-                        .resource_mut::<InputState>()
-                        .expect("input integration was checked before replay");
-                    cleanup_replay_sources(input, &plan.replay_sources);
-                    return AutomationInputReplayReport::failed_after_start(
-                        AutomationInputReplayOutcome::InvalidSourceMapping,
-                        completed_frames,
-                        frame.frame_ordinal,
-                        Some(group_index),
-                        "replay source mapping changed after preflight",
-                    );
-                };
+                let replay_source = source_map
+                    .mapped_source(group.context.source)
+                    .expect("replay preflight established a unique mapping for every recorded source");
 
                 let admission_result = {
                     let input = self
@@ -458,17 +474,13 @@ impl AppAutomationInputReplayExt for App {
         trace: &AutomationInputTrace,
         source_map: &AutomationInputReplaySourceMap,
     ) -> Result<&mut Self, AutomationInputReplayTeardownError> {
-        let plan = input_replay_preflight(
-            trace,
-            source_map,
-            AutomationInputReplayInitialState::RecordedSourcesNeutralAtCaptureStart,
-        )
-        .map_err(|_| AutomationInputReplayTeardownError::InvalidSourceMapping)?;
+        let replay_sources = resolve_replay_sources(&recorded_sources(trace), source_map)
+            .map_err(|_| AutomationInputReplayTeardownError::InvalidSourceMapping)?;
         let input = self
             .world_mut()
             .resource_mut::<InputState>()
             .map_err(|_| AutomationInputReplayTeardownError::InputIntegrationUnavailable)?;
-        cleanup_replay_sources(input, &plan.replay_sources);
+        cleanup_replay_sources(input, &replay_sources);
         Ok(self)
     }
 }
