@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-09-15
+last_reviewed: 2026-09-25
 related_designs:
   - ../../design/accepted/app-neutral-ui-composition-design.md
   - ../../design/accepted/runenwerk-editor-coordination-semantic-model.md
@@ -192,11 +192,20 @@ fresh Editor/native/Render presentation attachment before the candidate replaces
 live composition. Creation failure rolls back provisional presentations and leaves the
 current composition active.
 
-Ordinary `Window > New Window` still requires the separately owned fresh-target layout
-formation decision, and secondary-window viewport/product projection remains a later
-multi-window closure slice. ADR 0025 separately governs semantic sharing: windows may
-explicitly share editor bindings, selection contexts, history contexts, or persistence
-contexts, while activation/focus/local presentation remain independently scoped.
+Ordinary `Window > New Window` now resolves the active Workbench/profile's normalized
+`EditorWorkspaceLayoutDefinition`, forms a fresh composition target directly through
+the Editor structural planner, allocates fresh Editor compatibility and viewport
+identities, and then reuses the same native-window transition coordinator as detach and
+persisted restore. The current composition remains live while native creation is
+`Requested`; `CreationFailed` retires the provisional presentation without structural
+mutation, while `Created` atomically commits the new target and complete presentation
+binding. This path does not instantiate or import `WorkspaceState`, clone current local
+camera/session state, or persist native/render identities.
+
+Secondary-window viewport/product projection remains a later multi-window closure slice.
+ADR 0025 separately governs semantic sharing: windows may explicitly share editor
+bindings, selection contexts, history contexts, or persistence contexts, while
+activation/focus/local presentation remain independently scoped.
 
 ## Persistence
 

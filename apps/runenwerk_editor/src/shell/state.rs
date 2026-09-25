@@ -3,13 +3,14 @@ use editor_shell::{
     CENTER_RIGHT_SPLIT_WIDGET_ID, DockDropCandidate, DockDropCandidateState, DockSplitSide,
     DockingInteractionVisualState, DockingPreviewDropTarget, EditorCompositionIdentityAllocator,
     EditorCompositionProjectionArtifact, EditorCompositionRuntime, EditorDockingIntent,
-    EditorStructuralEditPlan, EditorWindowId, EditorWindowRegistry, LEFT_RIGHT_SPLIT_WIDGET_ID,
-    MODELLING_WORKSPACE_PROFILE_ID, PanelHostId, PanelInstanceId, PreparedEditorCompositionCommit,
-    ProfileRef, RegionCompassViewModel, SCENE_WORKSPACE_PROFILE_ID, ShellProjectionArtifacts,
-    TabStackId, TabStackPopupMenuKind, ToolSurfaceInstanceId, ToolSurfaceRegistry, ToolbarMenuKind,
-    UiRuntime, UiTree, WidgetId, WorkspaceId, WorkspaceIdentityAllocator, WorkspaceProfileId,
-    WorkspaceProfileRegistry, WorkspaceProfileRegistryBackedBuildError, WorkspaceSplitAxis,
-    WorkspaceState, import_legacy_workspace, project_editor_composition,
+    EditorFreshTargetRequest, EditorStructuralEditPlan, EditorWindowId, EditorWindowRegistry,
+    LEFT_RIGHT_SPLIT_WIDGET_ID, MODELLING_WORKSPACE_PROFILE_ID, PanelHostId, PanelInstanceId,
+    PreparedEditorCompositionCommit, ProfileRef, RegionCompassViewModel,
+    SCENE_WORKSPACE_PROFILE_ID, ShellProjectionArtifacts, TabStackId, TabStackPopupMenuKind,
+    ToolSurfaceInstanceId, ToolSurfaceRegistry, ToolbarMenuKind, UiRuntime, UiTree, WidgetId,
+    WorkspaceId, WorkspaceIdentityAllocator, WorkspaceProfileId, WorkspaceProfileRegistry,
+    WorkspaceProfileRegistryBackedBuildError, WorkspaceSplitAxis, WorkspaceState,
+    import_legacy_workspace, project_editor_composition,
 };
 #[cfg(test)]
 use editor_shell::{WorkspaceMutation, reduce_workspace};
@@ -121,6 +122,7 @@ pub struct RunenwerkEditorShellState {
     composition_runtime: EditorCompositionRuntime,
     composition_identity_allocator: EditorCompositionIdentityAllocator,
     pending_docking_intents: Vec<EditorDockingIntent>,
+    pending_fresh_target_request: Option<EditorFreshTargetRequest>,
     pending_composition_restore: Option<EditorCompositionRuntime>,
     composition_coordination_pending: bool,
     composition_projection: EditorCompositionProjectionArtifact,
@@ -387,6 +389,7 @@ impl RunenwerkEditorShellState {
             composition_runtime,
             composition_identity_allocator,
             pending_docking_intents: Vec::new(),
+            pending_fresh_target_request: None,
             pending_composition_restore: None,
             composition_coordination_pending: false,
             composition_projection,
@@ -743,6 +746,38 @@ impl RunenwerkEditorShellState {
 
     pub fn take_pending_composition_restore(&mut self) -> Option<EditorCompositionRuntime> {
         self.pending_composition_restore.take()
+    }
+
+    pub fn queue_fresh_target_request(
+        &mut self,
+        request: EditorFreshTargetRequest,
+    ) -> Result<(), editor_shell::EditorCompositionRejection> {
+        if self.composition_coordination_pending
+            || self.pending_fresh_target_request.is_some()
+            || self.pending_composition_restore.is_some()
+        {
+            return Err(editor_shell::EditorCompositionRejection::single(
+                editor_shell::EditorCompositionDiagnosticRecord::error(
+                    editor_shell::EditorCompositionDiagnosticCode::CoordinationPending,
+                    editor_shell::EditorCompositionDiagnosticStage::Policy,
+                    editor_shell::EditorCompositionDiagnosticSubject::General(
+                        "fresh-presentation-target".to_owned(),
+                    ),
+                    "Wait for the pending composition transition to commit or roll back before opening another window.",
+                ),
+            ));
+        }
+        self.pending_fresh_target_request = Some(request);
+        self.composition_coordination_pending = true;
+        Ok(())
+    }
+
+    pub fn has_pending_fresh_target_request(&self) -> bool {
+        self.pending_fresh_target_request.is_some()
+    }
+
+    pub fn take_pending_fresh_target_request(&mut self) -> Option<EditorFreshTargetRequest> {
+        self.pending_fresh_target_request.take()
     }
 
     pub fn queue_docking_intent(&mut self, intent: EditorDockingIntent) {

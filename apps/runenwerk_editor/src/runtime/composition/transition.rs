@@ -4,9 +4,9 @@ use editor_shell::{
     EditorCompositionDiagnosticCode as Code, EditorCompositionDiagnosticRecord as Record,
     EditorCompositionDiagnosticStage as Stage, EditorCompositionDiagnosticSubject as Subject,
     EditorCompositionIdentityAllocator, EditorCompositionRejection, EditorCompositionRuntime,
-    EditorDockingIntent, EditorWindowId, PreparedEditorCompositionCommit,
+    EditorDockingIntent, EditorFreshTargetRequest, EditorWindowId, PreparedEditorCompositionCommit,
     evaluate_editor_docking_intent, plan_editor_docking_transaction,
-    plan_editor_target_close_transaction,
+    plan_editor_fresh_profile_target, plan_editor_target_close_transaction,
 };
 use engine::plugins::render::backend::RenderSurfaceRegistryResource;
 use engine::runtime::{
@@ -85,6 +85,14 @@ fn sync_editor_composition_transitions(
         .queued
         .extend(host.shell_state.drain_docking_intents());
     collect_editor_window_close_intents(host, windows, transitions);
+    if transitions.pending_restore.is_none()
+        && transitions.pending.is_none()
+        && transitions.queued.is_empty()
+        && transitions.pending_close_targets.is_empty()
+        && let Some(request) = host.shell_state.take_pending_fresh_target_request()
+    {
+        begin_pending_fresh_target_creation(host, transitions, request);
+    }
     if transitions.pending_restore.is_none()
         && transitions.pending.is_none()
         && transitions.queued.is_empty()
@@ -187,6 +195,72 @@ fn sync_editor_composition_transitions(
         Err(rejection) => record_rejection(transitions, rejection),
     }
     refresh_coordination_pending(host, transitions);
+}
+
+fn begin_pending_fresh_target_creation(
+    host: &mut EditorHostResource,
+    transitions: &mut EditorCompositionTransitionRuntimeResource,
+    request: EditorFreshTargetRequest,
+) {
+    if request.workspace_profile_id != host.shell_state.active_workspace_profile_id() {
+        transitions.diagnostics.push(Record::error(
+            Code::LayoutActivationFailed,
+            Stage::Policy,
+            Subject::Profile(request.workspace_profile_id.raw().to_string()),
+            "Retry New Window from the currently active workspace profile.",
+        ));
+        return;
+    }
+    if host
+        .app
+        .workbench_host()
+        .workspace_profile(request.workspace_profile_id)
+        .is_none()
+    {
+        transitions.diagnostics.push(Record::error(
+            Code::LayoutActivationFailed,
+            Stage::Policy,
+            Subject::Profile(request.workspace_profile_id.raw().to_string()),
+            "Keep the requested workspace profile installed until fresh-target formation completes.",
+        ));
+        return;
+    }
+
+    let target_profile = match TargetProfileId::new(EDITOR_DESKTOP_TARGET_PROFILE) {
+        Ok(profile) => profile,
+        Err(_) => unreachable!("editor desktop target profile is a checked static identity"),
+    };
+    let plan = plan_editor_fresh_profile_target(
+        host.shell_state.composition_runtime(),
+        &request,
+        host.app.workbench_host().tool_surface_registry(),
+        host.shell_state.composition_identity_allocator(),
+        target_profile,
+    );
+    let policy = EditorCompositionPolicy;
+    let policies = CompositionPolicies {
+        lifecycle: &policy,
+        capability: &policy,
+        target: &policy,
+    };
+    match plan.and_then(|plan| {
+        host.shell_state
+            .composition_runtime()
+            .prepare_change(plan.change, policies)
+            .map(|prepared| (plan.identities, plan.created_target, prepared))
+    }) {
+        Ok((identities, created_target, prepared)) => {
+            let editor_window_id = host.shell_state.open_editor_window_for_active_workspace();
+            transitions.pending = Some(PendingTargetCreation {
+                prepared,
+                identities,
+                created_target,
+                detached_targets: Vec::new(),
+                editor_window_id,
+            });
+        }
+        Err(rejection) => record_rejection(transitions, rejection),
+    }
 }
 
 fn begin_pending_composition_restore(
@@ -385,7 +459,9 @@ fn refresh_coordination_pending(
     host: &mut EditorHostResource,
     transitions: &EditorCompositionTransitionRuntimeResource,
 ) {
-    let pending = transitions.is_pending() || host.shell_state.has_pending_composition_restore();
+    let pending = transitions.is_pending()
+        || host.shell_state.has_pending_fresh_target_request()
+        || host.shell_state.has_pending_composition_restore();
     host.shell_state
         .set_composition_coordination_pending(pending);
 }
@@ -1004,6 +1080,313 @@ mod tests {
             "successful restore must cancel obsolete unbound native-window requests"
         );
         assert!(!host.shell_state.composition_coordination_pending());
+    }
+
+    fn active_profile_fresh_target_request(host: &EditorHostResource) -> EditorFreshTargetRequest {
+        let profile_id = host.shell_state.active_workspace_profile_id();
+        let profile = host
+            .app
+            .workbench_host()
+            .workspace_profile(profile_id)
+            .expect("active profile should be installed");
+        let editor_shell::WorkspaceProfileLayoutSource::AuthoredLayout { layout, .. } =
+            &profile.layout_source
+        else {
+            panic!("accepted built-in profile should have normalized authored layout");
+        };
+        EditorFreshTargetRequest::new(profile_id, layout.clone())
+    }
+
+    fn assert_all_profiles_form_fresh_targets(
+        workbench_host: crate::shell::RunenwerkWorkbenchHost,
+    ) {
+        use crate::shell::RunenwerkEditorShellState;
+
+        for manifest in workbench_host.profiles() {
+            let profile = workbench_host
+                .workspace_profile_by_ref(&manifest.profile_ref)
+                .expect("compiled workbench manifest profile should be registered");
+            let shell_state =
+                RunenwerkEditorShellState::new_for_workspace_profile_with_workspace_profile_registry_and_tool_surface_registry(
+                    profile.id,
+                    workbench_host.workspace_profile_registry(),
+                    workbench_host.tool_surface_registry(),
+                )
+                .expect("pressure profile should form its current composition");
+            let editor_shell::WorkspaceProfileLayoutSource::AuthoredLayout { layout, .. } =
+                &profile.layout_source
+            else {
+                panic!("fresh-target pressure profile must expose normalized authored layout");
+            };
+            let existing_mounted_units = shell_state
+                .composition_runtime()
+                .extension()
+                .mounted_units()
+                .iter()
+                .map(|extension| extension.mounted_unit_id)
+                .collect::<Vec<_>>();
+            let request = EditorFreshTargetRequest::new(profile.id, layout.clone());
+            let target_profile = TargetProfileId::new(EDITOR_DESKTOP_TARGET_PROFILE)
+                .expect("editor desktop target profile is valid");
+            let plan = plan_editor_fresh_profile_target(
+                shell_state.composition_runtime(),
+                &request,
+                workbench_host.tool_surface_registry(),
+                shell_state.composition_identity_allocator(),
+                target_profile,
+            )
+            .unwrap_or_else(|rejection| {
+                panic!(
+                    "{} fresh-target formation failed: {:?}",
+                    manifest.label,
+                    rejection.diagnostics()
+                )
+            });
+            let created_target = plan.created_target;
+            let policy = EditorCompositionPolicy;
+            let policies = CompositionPolicies {
+                lifecycle: &policy,
+                capability: &policy,
+                target: &policy,
+            };
+            let mut runtime = shell_state.composition_runtime().clone();
+            let prepared = runtime
+                .prepare_change(plan.change, policies)
+                .unwrap_or_else(|rejection| {
+                    panic!(
+                        "{} fresh-target preparation failed: {:?}",
+                        manifest.label,
+                        rejection.diagnostics()
+                    )
+                });
+            runtime
+                .commit_prepared(prepared)
+                .expect("fresh-target pressure commit should remain revision-valid");
+            assert!(
+                runtime
+                    .composition()
+                    .definition()
+                    .targets()
+                    .iter()
+                    .any(|target| target.id == created_target),
+                "{} fresh target was not present after commit",
+                manifest.label
+            );
+            runtime
+                .extension()
+                .validate_against(runtime.composition())
+                .expect("fresh-target pressure commit must keep extension aligned");
+            let fresh_extensions = runtime
+                .extension()
+                .mounted_units()
+                .iter()
+                .filter(|extension| !existing_mounted_units.contains(&extension.mounted_unit_id))
+                .collect::<Vec<_>>();
+            assert!(
+                !fresh_extensions.is_empty(),
+                "{} fresh target must add mounted units",
+                manifest.label
+            );
+            for extension in fresh_extensions {
+                if extension.panel_kind_key
+                    == editor_shell::panel_kind_definition_key(editor_shell::PanelKind::Viewport)
+                {
+                    assert!(
+                        extension.viewport_instance_raw.is_some(),
+                        "{} fresh viewport surface must retain a fresh viewport instance identity",
+                        manifest.label
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn fresh_target_former_covers_full_focused_headless_constrained_and_custom_profiles() {
+        use crate::shell::{EditorSurfaceProviderRegistry, RunenwerkWorkbenchHost};
+
+        assert_all_profiles_form_fresh_targets(
+            RunenwerkWorkbenchHost::new().expect("full editor workbench should compile"),
+        );
+        assert_all_profiles_form_fresh_targets(
+            RunenwerkWorkbenchHost::material_lab().expect("Material Lab workbench should compile"),
+        );
+        assert_all_profiles_form_fresh_targets(
+            RunenwerkWorkbenchHost::ui_designer().expect("UI Designer workbench should compile"),
+        );
+        assert_all_profiles_form_fresh_targets(
+            RunenwerkWorkbenchHost::headless_validation()
+                .expect("headless validation workbench should compile"),
+        );
+        assert_all_profiles_form_fresh_targets(
+            RunenwerkWorkbenchHost::constrained().expect("constrained workbench should compile"),
+        );
+        let custom = RunenwerkWorkbenchHost::from_tool_suites_and_provider_registry(
+            vec![
+                crate::shell::tool_suites::core_tool_suite::editor_core_tool_suite(),
+                crate::shell::tool_suites::diagnostics_tool_suite::diagnostics_tool_suite(),
+            ],
+            EditorSurfaceProviderRegistry::runenwerk_default(),
+        )
+        .expect("custom/authored-style workbench should compile");
+        assert_all_profiles_form_fresh_targets(custom);
+    }
+
+    #[test]
+    fn fresh_profile_target_waits_for_native_creation_before_atomic_commit() {
+        let mut host = EditorHostResource::default();
+        let live_before = host.shell_state.composition_runtime().clone();
+        let old_targets = live_before.composition().definition().targets().len();
+        let mut transitions = EditorCompositionTransitionRuntimeResource::default();
+        let mut windows = WindowStateRegistryResource::default();
+        windows.register_primary_window("Runenwerk", (1280, 720), 1.0, true);
+        let mut surfaces = RenderSurfaceRegistryResource::default();
+
+        let request = active_profile_fresh_target_request(&host);
+        host.shell_state
+            .queue_fresh_target_request(request)
+            .expect("fresh target request should queue");
+        sync_editor_composition_transitions(
+            &mut host,
+            &mut transitions,
+            &mut windows,
+            &mut surfaces,
+        );
+
+        assert_eq!(host.shell_state.composition_runtime(), &live_before);
+        assert!(transitions.pending.is_some());
+        assert!(host.shell_state.composition_coordination_pending());
+        let (native_window_id, binding) =
+            bind_pending_native_window(&mut host, &transitions, &mut windows, &mut surfaces);
+
+        sync_editor_composition_transitions(
+            &mut host,
+            &mut transitions,
+            &mut windows,
+            &mut surfaces,
+        );
+        assert_eq!(
+            host.shell_state.composition_runtime(),
+            &live_before,
+            "Requested native presentation must not mutate the live target graph"
+        );
+
+        mark_presentation_created(&mut windows, &mut surfaces, native_window_id, binding);
+        let created_target = transitions
+            .pending
+            .as_ref()
+            .expect("fresh target remains pending until Created is observed")
+            .created_target;
+        sync_editor_composition_transitions(
+            &mut host,
+            &mut transitions,
+            &mut windows,
+            &mut surfaces,
+        );
+
+        assert!(!transitions.is_pending());
+        assert!(!host.shell_state.composition_coordination_pending());
+        assert_eq!(
+            host.shell_state
+                .composition_runtime()
+                .composition()
+                .definition()
+                .targets()
+                .len(),
+            old_targets + 1
+        );
+        assert_eq!(
+            host.shell_state.composition_target_binding(created_target),
+            Some(binding)
+        );
+        assert_ne!(binding.native_window_id, NativeWindowId::primary());
+        host.shell_state
+            .composition_runtime()
+            .extension()
+            .validate_against(host.shell_state.composition_runtime().composition())
+            .expect("fresh target commit must keep core and editor extension aligned");
+    }
+
+    #[test]
+    fn failed_fresh_profile_target_creation_preserves_live_composition() {
+        let mut host = EditorHostResource::default();
+        let live_before = host.shell_state.composition_runtime().clone();
+        let profile_before = host.shell_state.active_workspace_profile_id();
+        let existing_unit = live_before
+            .extension()
+            .mounted_units()
+            .first()
+            .expect("fresh editor composition should contain a mounted surface")
+            .mounted_unit_id;
+        host.app
+            .surface_sessions_mut()
+            .session_mut(existing_unit)
+            .viewport_details_visible = true;
+        let sessions_before = host.app.surface_sessions().clone();
+        let bindings_before = host
+            .shell_state
+            .composition_target_bindings()
+            .collect::<Vec<_>>();
+        let mut transitions = EditorCompositionTransitionRuntimeResource::default();
+        let mut windows = WindowStateRegistryResource::default();
+        windows.register_primary_window("Runenwerk", (1280, 720), 1.0, true);
+        let mut surfaces = RenderSurfaceRegistryResource::default();
+
+        let request = active_profile_fresh_target_request(&host);
+        host.shell_state
+            .queue_fresh_target_request(request)
+            .expect("fresh target request should queue");
+        sync_editor_composition_transitions(
+            &mut host,
+            &mut transitions,
+            &mut windows,
+            &mut surfaces,
+        );
+        let (native_window_id, binding) =
+            bind_pending_native_window(&mut host, &transitions, &mut windows, &mut surfaces);
+        windows
+            .record_mut(native_window_id)
+            .expect("requested fresh-target native window")
+            .mark_creation_failed("test fresh-target failure");
+
+        sync_editor_composition_transitions(
+            &mut host,
+            &mut transitions,
+            &mut windows,
+            &mut surfaces,
+        );
+
+        assert_eq!(host.shell_state.composition_runtime(), &live_before);
+        assert_eq!(
+            host.shell_state.active_workspace_profile_id(),
+            profile_before
+        );
+        assert_eq!(host.app.surface_sessions(), &sessions_before);
+        assert_eq!(
+            host.shell_state
+                .composition_target_bindings()
+                .collect::<Vec<_>>(),
+            bindings_before
+        );
+        assert_eq!(host.shell_state.editor_windows().len(), 1);
+        assert!(windows.record(native_window_id).is_none());
+        assert!(
+            surfaces
+                .surface_for_native_window(native_window_id)
+                .is_none()
+        );
+        assert!(
+            host.shell_state
+                .editor_window_for_binding(binding)
+                .is_none()
+        );
+        assert!(!host.shell_state.composition_coordination_pending());
+        assert!(
+            transitions
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.code() == Code::WindowCreationFailed)
+        );
     }
 
     #[test]

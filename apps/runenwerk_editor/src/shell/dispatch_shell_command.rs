@@ -7,11 +7,12 @@ use editor_definition::{
 };
 use editor_shell::{
     DockSplitSide, EditorCompositionRejection, EditorDockingDestination, EditorDockingIntent,
-    EditorStructuralEditPlan, ShellCommand, TabDropDestination, TabStackPopupMenuKind,
-    ToolbarCommandKind, UI_DESIGNER_WORKBENCH_TARGET_PROFILE, editor_design_system_recipe_library,
-    plan_editor_activate_unit, plan_editor_close_other_units, plan_editor_close_stack,
-    plan_editor_close_unit, plan_editor_create_unit, plan_editor_duplicate_stack,
-    plan_editor_reset_stack, plan_editor_set_stack_lock, plan_editor_split_with_new_unit,
+    EditorFreshTargetRequest, EditorStructuralEditPlan, ShellCommand, TabDropDestination,
+    TabStackPopupMenuKind, ToolbarCommandKind, UI_DESIGNER_WORKBENCH_TARGET_PROFILE,
+    WorkspaceProfileLayoutSource, editor_design_system_recipe_library, plan_editor_activate_unit,
+    plan_editor_close_other_units, plan_editor_close_stack, plan_editor_close_unit,
+    plan_editor_create_unit, plan_editor_duplicate_stack, plan_editor_reset_stack,
+    plan_editor_set_stack_lock, plan_editor_split_with_new_unit,
 };
 use ui_adaptive_composition::DockZone;
 use ui_composition::CompositionPolicies;
@@ -38,7 +39,7 @@ use crate::shell::providers::{
 use crate::shell::self_authoring::EditorLabProductPathEvidenceCapture;
 use crate::shell::{
     EditorCommandAvailabilityContext, EditorCompositionPolicy, RunenwerkEditorShellState,
-    editor_command_catalog,
+    RunenwerkWorkbenchComposition, editor_command_catalog,
 };
 use ui_theme::ThemeTokens;
 
@@ -1803,11 +1804,36 @@ fn dispatch_toolbar_command(
             let shell_state = shell_state.ok_or(EditorMutationError::runtime_rejected(
                 "missing shell state for new window command",
             ))?;
-            let editor_window_id = shell_state.open_editor_window_for_active_workspace();
+            if !workbench_allows_new_window(app.workbench_host().composition()) {
+                return Err(EditorMutationError::runtime_rejected(
+                    "new editor windows are unavailable in this workbench composition",
+                ));
+            }
+            let profile_id = shell_state.active_workspace_profile_id();
+            let profile = app.workbench_host().workspace_profile(profile_id).ok_or(
+                EditorMutationError::runtime_rejected("active workspace profile missing"),
+            )?;
+            let WorkspaceProfileLayoutSource::AuthoredLayout { layout, .. } =
+                &profile.layout_source
+            else {
+                return Err(EditorMutationError::runtime_rejected(
+                    "active workspace profile has no normalized authored layout",
+                ));
+            };
+            shell_state
+                .queue_fresh_target_request(EditorFreshTargetRequest::new(
+                    profile_id,
+                    layout.clone(),
+                ))
+                .map_err(|_| {
+                    EditorMutationError::runtime_rejected(
+                        "fresh editor target request rejected by composition coordination",
+                    )
+                })?;
             shell_state.close_toolbar_menu();
             app.append_console_line(format!(
-                "[ui] requested editor window {}",
-                editor_window_id.raw()
+                "[composition] queued fresh editor target for profile {}",
+                profile_id.raw()
             ));
         }
         ToolbarCommandKind::LoadCustomWorkspace => {
@@ -1967,6 +1993,14 @@ fn load_workspace_profile_layout(
     app.prune_surface_sessions_for_composition(shell_state.composition_runtime());
     app.append_console_line(format!("[composition] loaded {} layout", profile.label));
     Ok(())
+}
+
+fn workbench_allows_new_window(composition: RunenwerkWorkbenchComposition) -> bool {
+    !matches!(
+        composition,
+        RunenwerkWorkbenchComposition::HeadlessValidation
+            | RunenwerkWorkbenchComposition::Constrained
+    )
 }
 
 fn error_chain_summary(error: &anyhow::Error) -> String {
@@ -2469,5 +2503,32 @@ mod tests {
                 .default_layout_template
                 .default_graph_matches(&legacy_workspace)
         );
+    }
+}
+
+#[cfg(test)]
+mod fresh_window_policy_tests {
+    use super::*;
+
+    #[test]
+    fn headless_and_constrained_workbenches_fail_closed_for_new_window() {
+        assert!(!workbench_allows_new_window(
+            RunenwerkWorkbenchComposition::HeadlessValidation
+        ));
+        assert!(!workbench_allows_new_window(
+            RunenwerkWorkbenchComposition::Constrained
+        ));
+        assert!(workbench_allows_new_window(
+            RunenwerkWorkbenchComposition::FullEditor
+        ));
+        assert!(workbench_allows_new_window(
+            RunenwerkWorkbenchComposition::MaterialLab
+        ));
+        assert!(workbench_allows_new_window(
+            RunenwerkWorkbenchComposition::UiDesigner
+        ));
+        assert!(workbench_allows_new_window(
+            RunenwerkWorkbenchComposition::Custom
+        ));
     }
 }
