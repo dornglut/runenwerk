@@ -75,7 +75,10 @@ fn render_temporal_inputs_accept_native_policy_at_equal_extents() {
     let report = inspect_render_temporal_inputs(request);
 
     assert!(report.is_ready());
-    assert_eq!(report.resolution.policy, RenderTemporalResolutionPolicy::Native);
+    assert_eq!(
+        report.resolution.policy,
+        RenderTemporalResolutionPolicy::Native
+    );
 }
 
 #[test]
@@ -98,7 +101,10 @@ fn render_temporal_inputs_accept_fixed_subnative_taau() {
     let report = inspect_render_temporal_inputs(request);
 
     assert!(report.is_ready());
-    assert_eq!(report.resolution.policy, RenderTemporalResolutionPolicy::Fixed);
+    assert_eq!(
+        report.resolution.policy,
+        RenderTemporalResolutionPolicy::Fixed
+    );
     assert_eq!(report.resolution.scale_x, 1280.0 / 1920.0);
     assert_eq!(report.resolution.scale_y, 720.0 / 1080.0);
 }
