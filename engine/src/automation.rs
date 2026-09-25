@@ -225,6 +225,8 @@ impl AppAutomationInputTraceExt for App {
     }
 }
 
+mod persistence;
+pub use persistence::*;
 mod replay;
 pub use replay::*;
 
