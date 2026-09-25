@@ -225,6 +225,9 @@ impl AppAutomationInputTraceExt for App {
     }
 }
 
+mod replay;
+pub use replay::*;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AutomationSessionId(u64);
 
