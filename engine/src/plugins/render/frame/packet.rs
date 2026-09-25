@@ -939,7 +939,10 @@ mod tests {
         requests
             .replace_contribution_with_automatic_main_replacements(
                 producer(1),
-                [PreparedViewFrame::offscreen_product("fixed.first.view", (1280, 720))],
+                [PreparedViewFrame::offscreen_product(
+                    "fixed.first.view",
+                    (1280, 720),
+                )],
                 [first],
                 [flow_id],
             )
@@ -950,7 +953,10 @@ mod tests {
         let error = requests
             .replace_contribution_with_automatic_main_replacements(
                 producer(2),
-                [PreparedViewFrame::offscreen_product("fixed.second.view", (1280, 720))],
+                [PreparedViewFrame::offscreen_product(
+                    "fixed.second.view",
+                    (1280, 720),
+                )],
                 [second],
                 [flow_id],
             )
