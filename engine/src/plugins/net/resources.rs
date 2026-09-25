@@ -393,7 +393,6 @@ pub(crate) fn configure_client_role(
     app.init_resource::<NetDiagnosticsView>();
     app.init_resource::<ConnectionHealth>();
     app.init_resource::<RoundTripMetrics>();
-    app.init_resource::<NetworkReplicationMetadata>();
     app.init_resource::<NetStreamingStateResource>();
     app.init_resource::<NetworkDiagnostics>();
     app.add_systems(
@@ -419,7 +418,6 @@ pub(crate) fn configure_server_role(app: &mut App) {
     app.init_resource::<NetDiagnosticsView>();
     app.init_resource::<ConnectionHealth>();
     app.init_resource::<RoundTripMetrics>();
-    app.init_resource::<NetworkReplicationMetadata>();
     app.init_resource::<NetStreamingStateResource>();
     app.init_resource::<NetworkDiagnostics>();
     app.add_systems(

@@ -37,7 +37,6 @@ Implemented now:
 - tick-buffer registration for local/driver input types;
 - RunenNet `AuthorityInputSession` for remote participant/tick admission, with only accepted opaque batches retained in host execution staging until their target tick;
 - `ReplicationExtractionFilter` over ECS structural deltas;
-- `ReplicationRegistry` and component/entity/resource descriptors;
 - `SnapshotApplyDriver`, `InputDriver`, and `ReplicationDriver` escape hatches for custom integration;
 - ECS ownership and controller routing helpers used by the engine networking integration;
 - `RunenNetSessionProjection` as a read-only engine projection of successful RunenNet bindings;
@@ -51,8 +50,7 @@ Partial now:
 
 - standardized component payload extraction is not yet the normal gameplay-facing path;
 - resource snapshot extraction remains partial;
-- component metadata exists, but runtime extraction/application still depends on custom drivers;
-- generic interest and ownership resolvers exist as retained migration contracts, but not yet as a complete declarative ECS replication pipeline;
+- runtime extraction/application still depends on custom drivers;
 - the eventual Replicated View boundary remains separately sequenced and must not be frozen by this design.
 
 ## Ownership Rules
@@ -119,6 +117,5 @@ For the current boundary, validate as applicable:
 - ECS structural extraction tests;
 - engine networking input/replication tests;
 - RunenNet admission/projection/owner-routing tests;
-- replication metadata registry tests;
 - repository canonical validation;
 - docs validation after boundary changes.
