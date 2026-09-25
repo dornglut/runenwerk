@@ -54,6 +54,22 @@ fn replay_passive_state_does_not_manufacture_simulation_identity() {
 }
 
 #[test]
+fn replay_recording_rejects_passive_simulation_session_identity() {
+    let mut app = App::headless();
+    app.insert_resource(SimulationSessionId::default());
+    app.add_plugin(ReplayPlugin);
+
+    let error = match app.start_recording() {
+        Ok(_) => panic!("passive simulation identity must not become replay provenance"),
+        Err(error) => error,
+    };
+    assert!(
+        format!("{error:#}").contains("assigned non-zero SimulationSessionId"),
+        "recording must reject the passive identity sentinel: {error:#}"
+    );
+}
+
+#[test]
 fn replay_recording_reuses_active_simulation_session_identity() {
     let mut app = App::headless();
     let session = SimulationSessionId(77);
