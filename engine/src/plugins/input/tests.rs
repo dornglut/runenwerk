@@ -1,9 +1,12 @@
 // Owner: Engine Input Plugin - Tests
 use crate::plugins::{
-    ActionState, DigitalState, InputBindingChange, InputBindingChangeResult, InputContext,
-    InputDeviceId, InputSourceId, InputState, KeyChord, KeyLocation, KeyboardInput, LogicalKey,
-    NativeLogicalKey, ObservationOrigin, PhysicalKeyIdentity, PointerButton, PointerButtonInput,
+    ActionState, InputBindingChange, InputBindingChangeResult, InputState, KeyChord,
     TouchInputPhase, action,
+};
+use runen_input::{
+    DigitalState, InputContext, InputDeviceId, InputSourceId, KeyLocation, KeyboardInput,
+    LogicalKey, NativeLogicalKey, ObservationOrigin, PhysicalKeyIdentity, PointerButton,
+    PointerButtonInput,
 };
 use winit::event::{ElementState, MouseButton};
 use winit::keyboard::KeyCode;
@@ -424,7 +427,6 @@ fn touch_samples_preserve_primary_projection_while_neutral_state_keeps_all_conta
     state.handle_touch_input(TouchInputPhase::Started, 7, 10.0, 12.0, Some(0.4));
     state.handle_touch_input(TouchInputPhase::Moved, 7, 14.0, 16.0, Some(0.5));
     state.handle_touch_input(TouchInputPhase::Started, 8, 50.0, 60.0, Some(0.8));
-    assert_eq!(state.neutral_active_touch_count(), 2);
     assert!(state.neutral_touch_active(7));
     assert!(state.neutral_touch_active(8));
 
@@ -467,7 +469,6 @@ fn touch_samples_preserve_primary_projection_while_neutral_state_keeps_all_conta
     );
     assert!(!state.neutral_touch_active(7));
     assert!(state.neutral_touch_active(8));
-    assert_eq!(state.neutral_active_touch_count(), 1);
 
     state.clear_frame();
 

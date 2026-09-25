@@ -1,9 +1,9 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use engine::plugins::{
+use engine::runtime::NativeWindowId;
+use runen_input::{
     ContactPhase, DigitalState, InputContext, InputDeviceId, InputSourceId, PhysicalKeyIdentity,
 };
-use engine::runtime::NativeWindowId;
 use ui_input::{Modifiers, PointerDeviceId};
 use ui_math::{UiPoint, UiVector};
 

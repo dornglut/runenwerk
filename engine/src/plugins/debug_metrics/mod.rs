@@ -10,9 +10,10 @@ use crate::plugins::render::{
 };
 use crate::plugins::time::domain::Time;
 use crate::plugins::ui::UiRuntimeSet;
-use crate::plugins::{ActionState, InputState, PhysicalKeyIdentity};
+use crate::plugins::{ActionState, InputState};
 use crate::runtime::{RenderPrepare, Res, ResMut, Startup, SystemConfigExt};
 use crate::state::{DebugMetricsState, SceneOverlayViewportState, SceneRuntimeState};
+use runen_input::PhysicalKeyIdentity;
 use ui_math::{UiInsets, UiRect, UiSize};
 use ui_runtime::{
     ComputedLayout, ComputedLayoutMap, InteractionVisualState, LabelNode, PanelNode, UiNode,

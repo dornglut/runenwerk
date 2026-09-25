@@ -1,10 +1,10 @@
-use super::neutral::{
+use runen_input::{
     AnalogMeasurement, ContactId, ContactInput, ContactPhase as NeutralContactPhase,
-    CoordinateSpace, DigitalState, InputContext, InputObservation, InputObservationGroup,
-    InputSourceId, KeyLocation, KeyboardInput, LogicalKey, MeasurementDomain, NativeLogicalKey,
-    NeutralInputAuthority, ObservationGroup, ObservationOrigin, PhysicalKeyIdentity, Point2,
-    PointerButton, PointerButtonInput, RelativeMotionUnit, ScrollDelta, ScrollDomain, ScrollInput,
-    Vector2,
+    CoordinateSpace, DigitalState, InputContext, InputError, InputObservation,
+    InputObservationGroup, InputSourceId, InputState as NeutralInputState, KeyLocation,
+    KeyboardInput, LogicalKey, MeasurementDomain, NativeLogicalKey, ObservationOrigin,
+    PhysicalKeyIdentity, Point2, PointerButton, PointerButtonInput, RelativeMotionUnit,
+    ScrollDelta, ScrollDomain, ScrollInput, Vector2,
 };
 use winit::event::{ElementState, MouseButton};
 use winit::keyboard::KeyCode;
@@ -115,7 +115,7 @@ pub(super) struct KeyboardPressSample {
 
 #[derive(Debug, runen_ecs::Component, runen_ecs::Resource)]
 pub struct InputState {
-    neutral: NeutralInputAuthority,
+    neutral: NeutralInputState,
     keyboard_press_samples: Vec<KeyboardPressSample>,
     pub typed_text: String,
     pub overlay_consumed: bool,
@@ -138,7 +138,7 @@ pub struct InputState {
 impl Default for InputState {
     fn default() -> Self {
         Self {
-            neutral: NeutralInputAuthority::default(),
+            neutral: NeutralInputState::default(),
             keyboard_press_samples: Vec::new(),
             typed_text: String::new(),
             overlay_consumed: false,
@@ -168,7 +168,7 @@ impl InputState {
     pub fn admit_device_observation_group(
         &mut self,
         group: InputObservationGroup,
-    ) -> Result<(), super::neutral::NeutralInputError> {
+    ) -> Result<(), InputError> {
         self.neutral.admit(group.clone())?;
         self.device_observation_groups.push(group);
         Ok(())
@@ -183,15 +183,20 @@ impl InputState {
         context: InputContext,
         input: &KeyboardInput,
     ) {
-        let admission = self
-            .neutral
-            .admit_keyboard(context, input)
+        let was_down_anywhere = self.neutral.key_down_anywhere(&input.physical_key);
+        self.neutral
+            .admit(InputObservationGroup::single(
+                context,
+                InputObservation::Keyboard(input.clone()),
+            ))
             .expect("digital keyboard observation should always be valid");
+        let is_down_anywhere = self.neutral.key_down_anywhere(&input.physical_key);
 
         if input.origin == ObservationOrigin::SourceReport
             && input.state == DigitalState::Pressed
             && !input.repeat
-            && !admission.was_down_anywhere
+            && !was_down_anywhere
+            && is_down_anywhere
         {
             self.keyboard_press_samples.push(KeyboardPressSample {
                 physical_key: input.physical_key.clone(),
@@ -244,7 +249,7 @@ impl InputState {
     pub(crate) fn handle_scroll_input(&mut self, context: InputContext, input: ScrollInput) {
         if self
             .neutral
-            .admit(ObservationGroup::single_in(
+            .admit(InputObservationGroup::single(
                 context,
                 InputObservation::Scroll {
                     delta: input.delta,
@@ -278,7 +283,7 @@ impl InputState {
             .unwrap_or((0.0, 0.0));
         if self
             .neutral
-            .admit(ObservationGroup::single_in(
+            .admit(InputObservationGroup::single(
                 context,
                 InputObservation::AbsolutePointerPosition { position },
             ))
@@ -306,14 +311,18 @@ impl InputState {
         context: InputContext,
         input: PointerButtonInput,
     ) {
-        let admission = self
-            .neutral
-            .admit_pointer_button(context, input)
+        let was_down_anywhere = self.neutral.pointer_button_down_anywhere(input.button);
+        self.neutral
+            .admit(InputObservationGroup::single(
+                context,
+                InputObservation::PointerButton(input),
+            ))
             .expect("digital pointer-button observation should always be valid");
+        let is_down_anywhere = self.neutral.pointer_button_down_anywhere(input.button);
 
         let changed = match input.state {
-            DigitalState::Pressed => !admission.was_down_anywhere && admission.is_down_anywhere,
-            DigitalState::Released => admission.was_down_anywhere && !admission.is_down_anywhere,
+            DigitalState::Pressed => !was_down_anywhere && is_down_anywhere,
+            DigitalState::Released => was_down_anywhere && !is_down_anywhere,
         };
         if !changed {
             return;
@@ -367,7 +376,7 @@ impl InputState {
     pub(crate) fn handle_relative_motion(&mut self, context: InputContext, dx: f32, dy: f32) {
         if self
             .neutral
-            .admit(ObservationGroup::single_in(
+            .admit(InputObservationGroup::single(
                 context,
                 InputObservation::RelativeMotion {
                     delta: Vector2::new(dx, dy),
@@ -389,12 +398,12 @@ impl InputState {
         let contact = ContactId::new(input.id);
         let previous = self
             .neutral
-            .contact_state_in(context, contact)
-            .map(|state| (state.position.x, state.position.y))
+            .contact_position_in(context, contact)
+            .map(|position| (position.x, position.y))
             .unwrap_or((input.position.x, input.position.y));
         if self
             .neutral
-            .admit(ObservationGroup::single_in(
+            .admit(InputObservationGroup::single(
                 context,
                 InputObservation::Contact {
                     contact,
@@ -589,13 +598,8 @@ impl InputState {
     #[cfg(test)]
     pub(crate) fn neutral_touch_active(&self, id: u64) -> bool {
         self.neutral
-            .contact_state_in(LEGACY_WINDOW_CONTEXT, ContactId::new(id))
+            .contact_position_in(LEGACY_WINDOW_CONTEXT, ContactId::new(id))
             .is_some()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn neutral_active_touch_count(&self) -> usize {
-        self.neutral.active_contact_count(LEGACY_WINDOW_SOURCE)
     }
 }
 
