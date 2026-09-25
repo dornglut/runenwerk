@@ -95,13 +95,16 @@ state no longer matches the prepared frame contract.
 - Internal resolution is always reported separately from output resolution.
   Native, fixed, and dynamically adapted resolution are distinct typed policies;
   none may hide quality, timing, or fallback state.
-- Fixed execution may replace only the selected alias-capable scene flow's
-  automatic main invocation. Every pass in that selected flow must be valid on
-  both native-main and offscreen views, and the flow must route its selected
-  color output exclusively through the bindable alias rather than hard-coding
-  builtin `SurfaceColor`. Fixed execution and explicit native fallback therefore
-  share one scene-flow definition. Unrelated flows, including UI, remain on
-  their native-output path.
+- Fixed execution is scoped to one explicit render surface. It may replace only
+  the selected alias-capable scene flow's automatic main invocation on that
+  surface; other attached surfaces retain their own native routing. Fixed
+  target/view/invocation identity includes the render-surface identity so
+  multi-surface hosts cannot alias one fixed-resolution execution across windows.
+  Every pass in the selected flow must be valid on both native-main and offscreen
+  views, and the flow must route its selected color output exclusively through
+  the bindable alias rather than hard-coding builtin `SurfaceColor`. Fixed
+  execution and explicit native fallback therefore share one scene-flow
+  definition. Unrelated flows, including UI, remain on their native-output path.
 - Renderer helper/resolve flows that are meaningful only when explicitly
   invoked use typed explicit-invocation flow policy; they must not rely on a
   global disable-default-flows switch or registration churn.
