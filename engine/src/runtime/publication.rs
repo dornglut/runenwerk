@@ -1,3 +1,10 @@
+use crate::app::App;
+use crate::runtime::product_publication::{
+    ProductPublicationRuntimeResource, publish_staged_product_outcomes,
+};
+use crate::runtime::query_snapshot::{
+    QuerySnapshotRuntimeResource, publish_staged_query_snapshots,
+};
 use anyhow::{Result, anyhow};
 use runen_ecs::{Resource, World, WorldMut};
 
@@ -74,6 +81,89 @@ pub(crate) struct PublicationHandlers {
 }
 
 impl Resource for PublicationHandlers {}
+
+#[derive(Debug, Default)]
+struct PublicationIntegrationActivation;
+
+impl Resource for PublicationIntegrationActivation {}
+
+pub trait AppPublicationExt {
+    fn add_product_publication_handler<F>(&mut self, handler: F) -> &mut Self
+    where
+        F: Fn(&ProductPublicationOccurrence, &mut World) -> Result<()> + 'static;
+
+    fn add_query_snapshot_publication_handler<F>(&mut self, handler: F) -> &mut Self
+    where
+        F: Fn(&QuerySnapshotPublicationOccurrence, &mut World) -> Result<()> + 'static;
+}
+
+impl AppPublicationExt for App {
+    fn add_product_publication_handler<F>(&mut self, handler: F) -> &mut Self
+    where
+        F: Fn(&ProductPublicationOccurrence, &mut World) -> Result<()> + 'static,
+    {
+        if !self.allow_topology_mutation("add_product_publication_handler", None) {
+            return self;
+        }
+        ensure_publication_integration(self);
+        self.world_mut()
+            .resource_mut::<PublicationHandlers>()
+            .expect("publication integration should install its handler registry")
+            .add_product(handler);
+        self
+    }
+
+    fn add_query_snapshot_publication_handler<F>(&mut self, handler: F) -> &mut Self
+    where
+        F: Fn(&QuerySnapshotPublicationOccurrence, &mut World) -> Result<()> + 'static,
+    {
+        if !self.allow_topology_mutation("add_query_snapshot_publication_handler", None) {
+            return self;
+        }
+        ensure_publication_integration(self);
+        self.world_mut()
+            .resource_mut::<PublicationHandlers>()
+            .expect("publication integration should install its handler registry")
+            .add_query_snapshot(handler);
+        self
+    }
+}
+
+fn ensure_publication_integration(app: &mut App) {
+    if app
+        .world()
+        .has_resource::<PublicationIntegrationActivation>()
+    {
+        return;
+    }
+
+    if !app
+        .world()
+        .has_resource::<ProductPublicationRuntimeResource>()
+    {
+        app.world_mut()
+            .insert_resource(ProductPublicationRuntimeResource::default());
+    }
+    if !app.world().has_resource::<QuerySnapshotRuntimeResource>() {
+        app.world_mut()
+            .insert_resource(QuerySnapshotRuntimeResource::default());
+    }
+    if !app.world().has_resource::<PublicationHandlers>() {
+        app.world_mut()
+            .insert_resource(PublicationHandlers::default());
+    }
+
+    {
+        let handlers = app
+            .world_mut()
+            .resource_mut::<PublicationHandlers>()
+            .expect("publication integration should install its handler registry");
+        handlers.add_product(publish_staged_product_outcomes);
+        handlers.add_query_snapshot(publish_staged_query_snapshots);
+    }
+    app.world_mut()
+        .insert_resource(PublicationIntegrationActivation);
+}
 
 impl PublicationHandlers {
     pub(crate) fn add_product<F>(&mut self, handler: F)
@@ -195,6 +285,79 @@ pub fn dispatch_query_snapshot_publication_system(mut world: WorldMut<'_>) -> Re
 mod tests {
     use super::*;
     use std::panic::{AssertUnwindSafe, catch_unwind};
+
+    #[test]
+    fn product_handler_registration_lazily_installs_publication_integration_once() {
+        let mut app = App::headless();
+        assert!(
+            app.world()
+                .resource::<ProductPublicationRuntimeResource>()
+                .is_err()
+        );
+        assert!(
+            app.world()
+                .resource::<QuerySnapshotRuntimeResource>()
+                .is_err()
+        );
+        assert!(app.world().resource::<PublicationHandlers>().is_err());
+
+        app.add_product_publication_handler(|_, _| Ok(()));
+
+        assert!(
+            app.world()
+                .resource::<ProductPublicationRuntimeResource>()
+                .is_ok()
+        );
+        assert!(
+            app.world()
+                .resource::<QuerySnapshotRuntimeResource>()
+                .is_ok()
+        );
+        assert!(
+            app.world()
+                .resource::<PublicationIntegrationActivation>()
+                .is_ok()
+        );
+        let handlers = app.world().resource::<PublicationHandlers>().unwrap();
+        assert_eq!(handlers.product.len(), 2);
+        assert_eq!(handlers.query_snapshot.len(), 1);
+    }
+
+    #[test]
+    fn query_handler_registration_lazily_installs_publication_integration_once() {
+        let mut app = App::headless();
+        app.add_query_snapshot_publication_handler(|_, _| Ok(()));
+
+        let handlers = app.world().resource::<PublicationHandlers>().unwrap();
+        assert_eq!(handlers.product.len(), 1);
+        assert_eq!(handlers.query_snapshot.len(), 2);
+        assert!(
+            app.world()
+                .resource::<ProductPublicationRuntimeResource>()
+                .is_ok()
+        );
+        assert!(
+            app.world()
+                .resource::<QuerySnapshotRuntimeResource>()
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn repeated_publication_registration_preserves_builtins_and_sequence_state() {
+        let mut app = App::headless();
+        app.add_product_publication_handler(|_, _| Ok(()));
+        dispatch_product_publication(app.world_mut(), "test").unwrap();
+
+        app.add_product_publication_handler(|_, _| Ok(()));
+        app.add_query_snapshot_publication_handler(|_, _| Ok(()));
+
+        let handlers = app.world().resource::<PublicationHandlers>().unwrap();
+        assert_eq!(handlers.product.len(), 3);
+        assert_eq!(handlers.query_snapshot.len(), 2);
+        assert_eq!(handlers.next_product_sequence, 1);
+        assert_eq!(handlers.next_query_snapshot_sequence, 0);
+    }
 
     #[test]
     fn product_and_query_sequences_are_independent() {

@@ -4,8 +4,8 @@ use crate::*;
 impl App {
     /// Installs universal runtime resources required by App startup/frame execution.
     ///
-    /// Capability state such as fixed cadence and simulation identity is installed by
-    /// its owning integration plugin rather than by bare App construction.
+    /// Optional capability and product-integration state is installed by its owning
+    /// composition surface rather than by bare App construction.
     pub(crate) fn install_builtin_resources(&mut self) {
         if !self
             .world
@@ -14,19 +14,6 @@ impl App {
             self.world
                 .insert_resource(PrimaryPresentationMetricsResource::default());
         }
-        if !self
-            .world
-            .has_resource::<ProductPublicationRuntimeResource>()
-        {
-            self.world
-                .insert_resource(ProductPublicationRuntimeResource::default());
-        }
-        if !self.world.has_resource::<QuerySnapshotRuntimeResource>() {
-            self.world
-                .insert_resource(QuerySnapshotRuntimeResource::default());
-        }
-        self.add_product_publication_handler(publish_staged_product_outcomes);
-        self.add_query_snapshot_publication_handler(publish_staged_query_snapshots);
     }
 }
 
@@ -64,6 +51,24 @@ mod tests {
                     .resource::<PlatformWindowEventQueueResource>()
                     .is_err(),
                 "bare App must not provision native platform-window event state"
+            );
+            assert!(
+                app.world()
+                    .resource::<ProductPublicationRuntimeResource>()
+                    .is_err(),
+                "bare App must not provision product-publication integration state"
+            );
+            assert!(
+                app.world()
+                    .resource::<QuerySnapshotRuntimeResource>()
+                    .is_err(),
+                "bare App must not provision query-publication integration state"
+            );
+            assert!(
+                app.world()
+                    .resource::<crate::runtime::publication::PublicationHandlers>()
+                    .is_err(),
+                "bare App must not provision publication handler registry state"
             );
         }
     }

@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-24
+last_reviewed: 2026-09-25
 ---
 
 # Engine Architecture
@@ -33,8 +33,8 @@ Builtin resource installation:
 - Simulation integration state is selected through `SimulationPlugin`.
 - Bare App bootstrap retains only universal App/runtime integration state such as:
   - `PrimaryPresentationMetricsResource`
-  - `ProductPublicationRuntimeResource`
-  - `QuerySnapshotRuntimeResource`
+- Product/query publication state is selected lazily through `AppPublicationExt`; bare App
+  construction does not manufacture publication staging resources or handler registry state.
 - Input capability state is selected through `InputFinalizePlugin`, which installs `InputState` and `ActionState`.
 - Native window/event providers and frame-pacing state are realized by the selected native Host rather than by bare App construction.
 
@@ -72,10 +72,12 @@ not product-family truth. `ProductPublicationRuntimeResource` stages
 `domain/product` publication outcomes and publishes them only from
 `ProductPublication` barrier handlers.
 
-Plugins install product-agnostic barrier behavior through
-`engine::App::add_barrier_handler`. The default engine handler ratifies staged
-outcomes, publishes deterministic journal entries ordered by barrier and stage
-sequence, and keeps invalid publication diagnostics inspectable.
+Applications select product-publication integration through
+`AppPublicationExt::add_product_publication_handler`. The first publication-owner
+registration materializes the publication runtime resources and installs the built-in
+staged-outcome handler before owner-specific handlers. The built-in handler ratifies
+staged outcomes, publishes deterministic journal entries ordered by publication
+occurrence and stage sequence, and keeps invalid publication diagnostics inspectable.
 
 ## Query Snapshot Runtime
 
@@ -84,10 +86,14 @@ product-family truth. `QuerySnapshotRuntimeResource` stages
 `domain/product` query snapshot descriptors and publishes them only from
 `QuerySnapshotPublication` barrier handlers.
 
-The default engine handler ratifies staged snapshots, enforces strict
-product-domain consumption decisions, preserves prior snapshots on rejected
-updates, invalidates snapshots deterministically on source-generation changes,
-and keeps accepted, rejected, preserved, and invalidated decisions inspectable.
+Applications select query-publication integration through
+`AppPublicationExt::add_query_snapshot_publication_handler`. Selection shares the same
+owner-local publication initialization as product publication, so the built-in staged
+snapshot handler is installed exactly once before owner-specific handlers. It ratifies
+staged snapshots, enforces strict product-domain consumption decisions, preserves prior
+snapshots on rejected updates, invalidates snapshots deterministically on
+source-generation changes, and keeps accepted, rejected, preserved, and invalidated
+decisions inspectable.
 
 ## Execution Fabric Runtime
 
