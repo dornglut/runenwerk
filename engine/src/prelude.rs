@@ -12,6 +12,7 @@ pub use crate::plugins::net::{
     NetworkClientOutbox, NetworkInboundQueue, NetworkServerOutbox, NetworkSessionStatus,
     RoundTripMetrics,
 };
+pub use crate::plugins::render::AppRenderExt;
 pub use crate::plugins::replay::*;
 pub use crate::plugins::scene::*;
 pub use crate::plugins::simulation::{AppSimulationExt, SimulationPlugin};

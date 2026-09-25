@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-07-28
+last_reviewed: 2026-09-25
 ---
 
 # Render Flow Usage Guide
@@ -19,12 +19,12 @@ last_reviewed: 2026-07-28
    - `with_color_target`, `with_color_target_exact`, `with_depth_target`, `with_history_texture`
    - `double_buffer_storage_array`
    - pass builders (`compute_pass`, `fullscreen_pass`, `graphics_pass`, `copy_pass`, `present_pass`, `builtin_ui_composite_pass`)
-4. Validate (`.validate()?`) and register with `App::add_render_flow(...)`.
+4. Validate (`.validate()?`) and register through the Render-owned `AppRenderExt::add_render_flow(...)` API.
 
 ## Minimal Flow
 
 ```rust
-use engine::plugins::render::RenderFlow;
+use engine::plugins::render::{AppRenderExt, RenderFlow};
 
 let flow = RenderFlow::new("minimal.flow")
     .with_surface_color()

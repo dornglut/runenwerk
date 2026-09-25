@@ -3,8 +3,6 @@ use crate::app::domain::mode::AppMode;
 use crate::app::domain::runner::{AppRunner, FixedFramesRunner};
 use crate::app::domain::state::WindowedAppState;
 use crate::plugins::input::{ActionState, InputState};
-use crate::plugins::render::inspect::{RenderDebugConfigResource, RenderDebugControlResource};
-use crate::plugins::render::{RenderFlow, RenderFlowRegistryResource};
 use crate::prelude::IntoPlugins;
 use crate::runtime::publication::{
     ProductPublicationOccurrence, PublicationHandlers, QuerySnapshotPublicationOccurrence,
@@ -204,39 +202,6 @@ impl App {
             }
         }
         self.world.insert_resource(actions);
-        self
-    }
-
-    pub fn add_render_flow(&mut self, flow: RenderFlow) -> &mut Self {
-        if self.world.resource::<RenderFlowRegistryResource>().is_err() {
-            self.world
-                .insert_resource(RenderFlowRegistryResource::default());
-        }
-        if let Ok(registry) = self.world.resource_mut::<RenderFlowRegistryResource>() {
-            registry.upsert_flow(flow);
-        }
-        self
-    }
-
-    pub fn update_render_debug_control<F>(&mut self, update: F) -> &mut Self
-    where
-        F: FnOnce(&mut RenderDebugControlResource),
-    {
-        self.init_resource::<RenderDebugControlResource>();
-        if let Ok(control) = self.world.resource_mut::<RenderDebugControlResource>() {
-            update(control);
-        }
-        self
-    }
-
-    pub fn update_render_debug_config<F>(&mut self, update: F) -> &mut Self
-    where
-        F: FnOnce(&mut RenderDebugConfigResource),
-    {
-        self.init_resource::<RenderDebugConfigResource>();
-        if let Ok(config) = self.world.resource_mut::<RenderDebugConfigResource>() {
-            update(config);
-        }
         self
     }
 
