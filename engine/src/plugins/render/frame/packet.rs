@@ -626,12 +626,12 @@ pub struct PreparedRenderFrameRequestResource {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PreparedRenderFrameRequestScope {
+pub enum RenderFrameSurfaceScope {
     AllSurfaces,
     Surface(RenderSurfaceId),
 }
 
-impl PreparedRenderFrameRequestScope {
+impl RenderFrameSurfaceScope {
     fn applies_to(self, render_surface_id: RenderSurfaceId) -> bool {
         matches!(self, Self::AllSurfaces)
             || matches!(self, Self::Surface(surface_id) if surface_id == render_surface_id)
@@ -645,7 +645,7 @@ impl PreparedRenderFrameRequestScope {
     }
 }
 
-impl Default for PreparedRenderFrameRequestScope {
+impl Default for RenderFrameSurfaceScope {
     fn default() -> Self {
         Self::AllSurfaces
     }
@@ -653,7 +653,7 @@ impl Default for PreparedRenderFrameRequestScope {
 
 #[derive(Debug, Clone, Default)]
 pub struct PreparedRenderFrameRequestContribution {
-    scope: PreparedRenderFrameRequestScope,
+    scope: RenderFrameSurfaceScope,
     views: BTreeMap<String, PreparedViewFrame>,
     flow_invocations: Vec<PreparedFlowInvocationRequest>,
     automatic_main_replacements: BTreeSet<RenderFlowId>,
@@ -700,7 +700,7 @@ impl PreparedRenderFrameRequestResource {
     {
         self.replace_scoped_contribution(
             producer_id.into(),
-            PreparedRenderFrameRequestScope::AllSurfaces,
+            RenderFrameSurfaceScope::AllSurfaces,
             views,
             flow_invocations,
             automatic_main_replacements,
@@ -718,7 +718,7 @@ impl PreparedRenderFrameRequestResource {
     {
         self.replace_scoped_contribution(
             producer_id.into(),
-            PreparedRenderFrameRequestScope::Surface(render_surface_id),
+            RenderFrameSurfaceScope::Surface(render_surface_id),
             views,
             flow_invocations,
             automatic_main_replacements,
@@ -728,7 +728,7 @@ impl PreparedRenderFrameRequestResource {
     fn replace_scoped_contribution(
         &mut self,
         producer_id: RenderFrameProducerId,
-        scope: PreparedRenderFrameRequestScope,
+        scope: RenderFrameSurfaceScope,
         views: impl IntoIterator<Item = PreparedViewFrame>,
         flow_invocations: impl IntoIterator<Item = PreparedFlowInvocationRequest>,
         automatic_main_replacements: impl IntoIterator<Item = RenderFlowId>,
@@ -890,7 +890,7 @@ impl PreparedRenderFrameRequestResource {
 impl PreparedRenderFrameRequestContribution {
     fn from_requests(
         producer_id: &RenderFrameProducerId,
-        scope: PreparedRenderFrameRequestScope,
+        scope: RenderFrameSurfaceScope,
         views: impl IntoIterator<Item = PreparedViewFrame>,
         flow_invocations: impl IntoIterator<Item = PreparedFlowInvocationRequest>,
         automatic_main_replacements: impl IntoIterator<Item = RenderFlowId>,
