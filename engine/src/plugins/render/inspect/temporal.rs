@@ -196,7 +196,9 @@ pub struct RenderFixedResolutionExecutionEvidence {
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum RenderFixedResolutionExecutionEvidenceError {
-    #[error("fixed-resolution prepared frame belongs to a different render surface than the admission")]
+    #[error(
+        "fixed-resolution prepared frame belongs to a different render surface than the admission"
+    )]
     SurfaceIdentityMismatch,
     #[error("fixed-resolution prepared surface extent does not match admitted output extent")]
     OutputExtentMismatch,
