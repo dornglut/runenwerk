@@ -122,9 +122,8 @@ pub fn run_native_temporal_quality(
     internal_size_px: (u32, u32),
 ) -> Result<()> {
     let submitted_frame_limit = validate_measurement_frame_limit(submitted_frame_limit)?;
-    let primary_window_size_px =
-        validate_measurement_window_size(Some(primary_window_size_px))?
-            .expect("validated explicit quality output extent");
+    let primary_window_size_px = validate_measurement_window_size(Some(primary_window_size_px))?
+        .expect("validated explicit quality output extent");
     let internal_size_px = validate_measurement_radiance_size(Some(internal_size_px))?
         .expect("validated explicit quality internal extent");
     if internal_size_px.0 > primary_window_size_px.0
@@ -194,23 +193,18 @@ fn validate_measurement_frame_limit(limit: Option<usize>) -> Result<Option<usize
 }
 
 fn run_native_with_measurement(measurement: Option<RenderLabMeasurementConfig>) -> Result<()> {
-    let quality_mode = measurement
-        .as_ref()
-        .and_then(|measurement| {
-            measurement
-                .quality_capture_output_dir
-                .as_ref()
-                .map(|_| {
-                    (
-                        measurement
-                            .primary_window_size_px
-                            .expect("quality mode requires explicit output extent"),
-                        measurement
-                            .radiance_target_size_px
-                            .expect("quality mode requires explicit internal extent"),
-                    )
-                })
-        });
+    let quality_mode = measurement.as_ref().and_then(|measurement| {
+        measurement.quality_capture_output_dir.as_ref().map(|_| {
+            (
+                measurement
+                    .primary_window_size_px
+                    .expect("quality mode requires explicit output extent"),
+                measurement
+                    .radiance_target_size_px
+                    .expect("quality mode requires explicit internal extent"),
+            )
+        })
+    });
     let quality_capture_output_dir = measurement
         .as_ref()
         .and_then(|measurement| measurement.quality_capture_output_dir.clone());
@@ -1010,16 +1004,15 @@ mod tests {
         assert_eq!(contributions.remove(rl2_producer), Some(old_contribution));
     }
 
-
     #[test]
     fn fixed_quality_flow_is_alias_driven_and_admits_production_fixed_execution() {
         let scene = render_lab_fixed_quality_flow().expect("quality flow should author");
         let resolve =
             engine::plugins::render::fixed_resolution_resolve_flow().expect("resolve flow");
-        let scene_plan =
-            engine::plugins::render::compile_flow_plan(&scene).expect("quality flow should compile");
-        let resolve_plan =
-            engine::plugins::render::compile_flow_plan(&resolve).expect("resolve flow should compile");
+        let scene_plan = engine::plugins::render::compile_flow_plan(&scene)
+            .expect("quality flow should compile");
+        let resolve_plan = engine::plugins::render::compile_flow_plan(&resolve)
+            .expect("resolve flow should compile");
 
         let prepared = engine::plugins::render::RenderFixedResolutionExecutionRequest::new(
             producer(RL2_PRODUCER_ID),
@@ -1032,8 +1025,7 @@ mod tests {
         .prepare_against_compiled_flows((1920, 1080), &scene_plan, &resolve_plan)
         .expect("quality flow should admit fixed execution");
 
-        let radiance_key =
-            RenderDynamicTextureTargetKey::new(RL2_TARGET_NAMESPACE, RL2_TARGET_ID);
+        let radiance_key = RenderDynamicTextureTargetKey::new(RL2_TARGET_NAMESPACE, RL2_TARGET_ID);
         let scene_invocation = prepared
             .scene_invocation
             .clone()
@@ -1044,15 +1036,11 @@ mod tests {
         assert_eq!(prepared.internal_size, (1280, 720));
         assert_eq!(prepared.internal_view.target_size_px, (1280, 720));
         assert_eq!(
-            scene_invocation
-                .target_alias_bindings
-                .get(
-                    &engine::plugins::render::RenderTargetAliasKey::new(RL2_RADIANCE_ALIAS)
-                        .expect("radiance alias")
-                ),
-            Some(&engine::plugins::render::PreparedTargetBinding::DynamicTexture(
-                radiance_key
-            ))
+            scene_invocation.target_alias_bindings.get(
+                &engine::plugins::render::RenderTargetAliasKey::new(RL2_RADIANCE_ALIAS)
+                    .expect("radiance alias")
+            ),
+            Some(&engine::plugins::render::PreparedTargetBinding::DynamicTexture(radiance_key))
         );
     }
 
@@ -1137,7 +1125,11 @@ mod tests {
 
         let primary_targets = targets.snapshot_for_surface(RenderSurfaceId::primary());
         assert_eq!(primary_targets.len(), 2);
-        assert!(primary_targets.iter().any(|target| target.key == fixed_target_key));
+        assert!(
+            primary_targets
+                .iter()
+                .any(|target| target.key == fixed_target_key)
+        );
         assert!(
             frame_requests
                 .requested_views_for_surface(RenderSurfaceId::primary())
@@ -1150,10 +1142,9 @@ mod tests {
                 .iter()
                 .any(|invocation| invocation.invocation_id == resolve_invocation_id)
         );
-        assert!(frame_requests.replaces_automatic_main_flow(
-            RenderSurfaceId::primary(),
-            scene.id()
-        ));
+        assert!(
+            frame_requests.replaces_automatic_main_flow(RenderSurfaceId::primary(), scene.id())
+        );
     }
 
     #[test]
