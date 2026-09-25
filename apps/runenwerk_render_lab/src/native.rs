@@ -16,7 +16,7 @@ struct RenderLabFixedQualityPlans {
     resolve: Option<engine::plugins::render::CompiledRenderFlowPlan>,
 }
 
-const RL2_QUALITY_EXECUTION_HISTORY_CAPACITY: usize = 16;
+const RL2_QUALITY_EXECUTION_HISTORY_CAPACITY: usize = RL2_MEASUREMENT_HISTORY_CAPACITY;
 
 #[derive(Debug, Clone, Default, runen_ecs::Resource)]
 struct RenderLabTemporalQualityExecutionState {
