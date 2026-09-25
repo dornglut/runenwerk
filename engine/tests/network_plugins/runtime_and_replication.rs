@@ -271,6 +271,98 @@ fn prediction_replay_preserves_runennet_target_tick_and_updates_diagnostics() {
 }
 
 #[test]
+fn duplicate_current_retries_failed_replay_restoration_before_ack() {
+    let mut client = App::headless();
+    client.add_plugins(default_plugins());
+    client.add_plugins((ScenePlugin, NetworkClientPlugin));
+
+    let baseline_payload = TestReplicationDriver::encode_snapshot(&TestSnapshot::default())
+        .expect("baseline snapshot should encode");
+    enqueue_client_inbox(
+        client.world_mut(),
+        ServerMessage::Snapshot(Snapshot {
+            tick: SimulationTick(0),
+            cursor: SnapshotCursor(1),
+            last_applied: SnapshotCursor::default(),
+            entity_ids: Vec::new(),
+            payload: baseline_payload,
+        }),
+    )
+    .expect("baseline should stage");
+    let mut client = client
+        .run_for_frames(1)
+        .expect("baseline should activate prediction");
+    clear_client_outbound(client.world_mut());
+
+    client
+        .world_mut()
+        .resource_mut::<PlayerCommandBuffer>()
+        .unwrap()
+        .push(ClientCommandEnvelope::Ability(AbilityCommand { slot: 19 }));
+    client = client
+        .run_for_fixed_steps(1)
+        .expect("local predicted input should apply");
+    assert_eq!(client_prediction_pending_count(client.world()), Some(1));
+    clear_client_outbound(client.world_mut());
+
+    client
+        .world_mut()
+        .insert_resource(RejectReplayAndNextSnapshot(true));
+    let correction_payload = TestReplicationDriver::encode_snapshot(&TestSnapshot::default())
+        .expect("correction snapshot should encode");
+    let correction = ServerMessage::Snapshot(Snapshot {
+        tick: SimulationTick(0),
+        cursor: SnapshotCursor(2),
+        last_applied: SnapshotCursor(1),
+        entity_ids: Vec::new(),
+        payload: correction_payload,
+    });
+    enqueue_client_inbox(client.world_mut(), correction.clone())
+        .expect("correction should stage");
+    client = client
+        .run_for_frames(1)
+        .expect("replay/restoration failure should remain contained by receive processing");
+
+    assert_eq!(outbound_ack(client.world()), None);
+    assert_eq!(
+        client_replication_acknowledgement(client.world()),
+        Some((SnapshotCursor(2), SimulationTick(0))),
+        "replication commit remains authoritative despite downstream replay/restoration failure"
+    );
+    assert!(matches!(
+        client_prediction_state(client.world()),
+        Some(RunenNetPredictionState::Invalidated {
+            reason: PredictionInvalidationReason::ReplayFailure,
+            ..
+        })
+    ));
+
+    client
+        .world_mut()
+        .resource_mut::<RejectSnapshotRealization>()
+        .expect("failed replay should arm the restoration rejection")
+        .0 = false;
+    clear_client_outbound(client.world_mut());
+    enqueue_client_inbox(client.world_mut(), correction)
+        .expect("duplicate-current correction should stage");
+    let client = client
+        .run_for_frames(1)
+        .expect("duplicate current should retry authoritative restoration");
+
+    assert_eq!(
+        outbound_ack(client.world()).map(|ack| ack.cursor),
+        Some(SnapshotCursor(2)),
+        "ACK is allowed only after duplicate-current restores host state"
+    );
+    assert!(matches!(
+        client_prediction_state(client.world()),
+        Some(RunenNetPredictionState::Active {
+            frontier: runen_net::identity::SimulationTick::ZERO
+        })
+    ));
+}
+
+#[test]
 fn client_outbox_backpressure_does_not_roll_back_admitted_prediction() {
     let mut client = App::headless();
     client.add_plugins(default_plugins());

@@ -14,7 +14,8 @@ use std::sync::Arc;
 
 use super::{
     ClientPredictionIntegration, ClientReplicationPolicy, PredictionDiagnostics,
-    ReplicationDiagnostics, confirm_client_prediction_host_restored, observe_client_prediction,
+    ReplicationDiagnostics, confirm_client_prediction_host_restored,
+    confirm_client_prediction_host_restored_if_needed, observe_client_prediction,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -217,6 +218,7 @@ where
         .context(
             "client replication integration is unavailable during prediction reconciliation",
         )?;
+    confirm_client_prediction_host_restored_if_needed(world, integration.semantic())?;
     let replay_failed = observe_client_prediction::<TDriver>(world, integration.semantic());
     world.insert_resource(integration);
     if replay_failed? {

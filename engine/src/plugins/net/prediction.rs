@@ -7,8 +7,9 @@ use engine_sim::{AuthorityRole, SimulationProfileConfig, SimulationTick};
 use runen_ecs::World;
 use runen_net::identity::{ConnectionHandle, SimulationTick as RunenNetSimulationTick};
 use runen_net::input::{
-    PredictionInputOutcome, PredictionLineage, PredictionReconciliationError,
-    PredictionReconciliationOutcome, PredictionState as RunenNetPredictionState,
+    PredictionInputOutcome, PredictionInvalidationReason, PredictionLineage,
+    PredictionReconciliationError, PredictionReconciliationOutcome,
+    PredictionState as RunenNetPredictionState,
 };
 use runen_net::replication::ClientReplicationSet;
 use world_ops::SyncCursor;
@@ -169,6 +170,29 @@ where
             "RunenNet client prediction reconciliation failed: {error:?}"
         )),
     }
+}
+
+pub(crate) fn confirm_client_prediction_host_restored_if_needed(
+    world: &mut World,
+    replication: &ClientReplicationSet<ClientReplicatedStateProduct>,
+) -> anyhow::Result<()> {
+    let needs_restoration_confirmation = world
+        .resource::<ClientPredictionIntegration>()
+        .ok()
+        .is_some_and(|integration| {
+            matches!(
+                integration.semantic.state(),
+                RunenNetPredictionState::Invalidated {
+                    reason: PredictionInvalidationReason::LocalApplicationFailure
+                        | PredictionInvalidationReason::ReplayFailure,
+                    ..
+                }
+            )
+        });
+    if needs_restoration_confirmation {
+        confirm_client_prediction_host_restored(world, replication)?;
+    }
+    Ok(())
 }
 
 pub(crate) fn confirm_client_prediction_host_restored(

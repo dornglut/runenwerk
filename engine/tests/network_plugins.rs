@@ -15,7 +15,10 @@ use engine::plugins::net::{
 use engine::plugins::{ScenePlugin, SimulationPlugin, default_plugins};
 use engine::prelude::*;
 use runen_net::identity::{ConnectionHandle, ParticipantId, SessionId};
-use runen_net::input::{AuthorityInputAggregateLimits, AuthorityInputLimits, PredictionLimits};
+use runen_net::input::{
+    AuthorityInputAggregateLimits, AuthorityInputLimits, PredictionInvalidationReason,
+    PredictionLimits, PredictionState as RunenNetPredictionState,
+};
 use runen_net::protocol::{
     CompatibilityOffer, NegotiatedContract, NegotiationManager, NegotiationManagerLimits,
     NegotiationRequirements, OfferLimits, ProtocolContract, ProtocolId, ProtocolRevision,
@@ -79,6 +82,9 @@ struct AppliedInputLog {
 
 #[derive(Debug, Clone, Copy, Default, runen_ecs::Resource)]
 struct RejectSnapshotRealization(bool);
+
+#[derive(Debug, Clone, Copy, Default, runen_ecs::Resource)]
+struct RejectReplayAndNextSnapshot(bool);
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct TestSnapshot {
@@ -175,6 +181,25 @@ impl InputDriver for TestReplicationDriver {
         tick: engine_sim::SimulationTick,
         input: &[Self::Input],
     ) -> Result<(), Self::Error> {
+        let reject_replay = world
+            .resource_mut::<RejectReplayAndNextSnapshot>()
+            .map(|reject| {
+                let reject_now = reject.0;
+                reject.0 = false;
+                reject_now
+            })
+            .unwrap_or(false);
+        if reject_replay {
+            if let Ok(reject_snapshot) = world.resource_mut::<RejectSnapshotRealization>() {
+                reject_snapshot.0 = true;
+            } else {
+                world.insert_resource(RejectSnapshotRealization(true));
+            }
+            return Err(io::Error::other(
+                "test replay application rejected and next snapshot restoration armed",
+            ));
+        }
+
         if world.resource::<AppliedInputLog>().is_err() {
             world.insert_resource(AppliedInputLog::default());
         }
