@@ -487,16 +487,27 @@ fn validate_reconstruction_mode(
                     "TAAU reconstruction requires fixed sub-native or dynamic internal-resolution evidence",
                 ));
             }
-            RenderTemporalResolutionPolicy::Fixed
-                if request.resolution.internal_size == request.resolution.output_size =>
-            {
-                diagnostics.push(RenderTemporalDiagnostic::error(
-                    "taau_without_scaled_resolution",
-                    "fixed TAAU reconstruction requires an internal extent distinct from output",
-                ));
+            RenderTemporalResolutionPolicy::Fixed => {
+                if request.resolution.internal_size == request.resolution.output_size
+                    || request.resolution.internal_size[0] > request.resolution.output_size[0]
+                    || request.resolution.internal_size[1] > request.resolution.output_size[1]
+                {
+                    diagnostics.push(RenderTemporalDiagnostic::error(
+                        "taau_without_scaled_resolution",
+                        "fixed TAAU reconstruction requires a sub-native internal extent",
+                    ));
+                }
             }
-            RenderTemporalResolutionPolicy::Fixed
-            | RenderTemporalResolutionPolicy::Dynamic { .. } => {}
+            RenderTemporalResolutionPolicy::Dynamic { .. } => {
+                if request.resolution.internal_size[0] > request.resolution.output_size[0]
+                    || request.resolution.internal_size[1] > request.resolution.output_size[1]
+                {
+                    diagnostics.push(RenderTemporalDiagnostic::error(
+                        "taau_without_scaled_resolution",
+                        "dynamic TAAU reconstruction cannot use a current internal extent larger than output",
+                    ));
+                }
+            }
         }
     }
 }
