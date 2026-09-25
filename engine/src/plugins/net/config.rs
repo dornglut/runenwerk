@@ -78,8 +78,12 @@ pub struct ClientPredictionPolicy {
     limits: PredictionLimits,
 }
 impl ClientPredictionPolicy {
-    pub const fn new(limits: PredictionLimits) -> Self { Self { limits } }
-    pub const fn limits(self) -> PredictionLimits { self.limits }
+    pub const fn new(limits: PredictionLimits) -> Self {
+        Self { limits }
+    }
+    pub const fn limits(self) -> PredictionLimits {
+        self.limits
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
