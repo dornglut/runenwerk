@@ -35,23 +35,23 @@ fn parse_command(args: impl IntoIterator<Item = OsString>) -> anyhow::Result<Com
     if matches!(first.as_deref(), Some(value) if value == "--rl2-measure") {
         let default_output = PathBuf::from("render-lab/rl2-measurement.json");
         let next = args.next();
-        let (output_path, submitted_frame_limit) =
-            if matches!(next.as_deref(), Some(value) if value == "--submitted-frames") {
-                (default_output, Some(parse_frame_limit(args.next())?))
-            } else {
-                let output_path = next.map(PathBuf::from).unwrap_or(default_output);
-                let submitted_frame_limit = match args.next() {
-                    Some(flag) if flag == "--submitted-frames" => Some(parse_frame_limit(args.next())?),
-                    Some(unexpected) => {
-                        anyhow::bail!(
-                            "unexpected RL2 measurement argument '{}'",
-                            unexpected.to_string_lossy()
-                        )
-                    }
-                    None => None,
-                };
-                (output_path, submitted_frame_limit)
+        let (output_path, submitted_frame_limit) = if matches!(next.as_deref(), Some(value) if value == "--submitted-frames")
+        {
+            (default_output, Some(parse_frame_limit(args.next())?))
+        } else {
+            let output_path = next.map(PathBuf::from).unwrap_or(default_output);
+            let submitted_frame_limit = match args.next() {
+                Some(flag) if flag == "--submitted-frames" => Some(parse_frame_limit(args.next())?),
+                Some(unexpected) => {
+                    anyhow::bail!(
+                        "unexpected RL2 measurement argument '{}'",
+                        unexpected.to_string_lossy()
+                    )
+                }
+                None => None,
             };
+            (output_path, submitted_frame_limit)
+        };
         if let Some(unexpected) = args.next() {
             anyhow::bail!(
                 "unexpected RL2 measurement argument '{}'",
