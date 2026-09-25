@@ -30,6 +30,13 @@ fn bare_app_has_no_fixed_cadence_or_simulation_owner_state() {
 }
 
 #[test]
+fn simulation_owner_query_preserves_absent_tick_behavior() {
+    let app = App::headless();
+
+    assert_eq!(app.current_tick(), 0);
+}
+
+#[test]
 fn public_cadence_resources_do_not_activate_fixed_update() {
     let mut app = App::headless();
     app.insert_resource(FixedTimeConfig::default());
