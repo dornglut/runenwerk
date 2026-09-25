@@ -1,8 +1,9 @@
 use engine::plugins::input::domain::action;
 use engine::plugins::{
-    ActionState, FixedStepPlugin, InputFinalizePlugin, PhysicalKeyIdentity, SimulationPlugin,
-    TimePlugin, default_plugins,
+    ActionState, FixedStepPlugin, InputFinalizePlugin, SimulationPlugin, TimePlugin,
+    default_plugins,
 };
+use runen_input::PhysicalKeyIdentity;
 use engine::prelude::*;
 use winit::event::ElementState;
 use winit::keyboard::KeyCode;

@@ -2,9 +2,10 @@
 
 use std::collections::VecDeque;
 
-use engine::plugins::{
-    AnalogMeasurement, CoordinateSpace, InputContext, InputDeviceId, InputSourceId, InputState,
-    InputToolKind, MeasurementDomain, Point2, SourceTime, SourceTimeUnit, Vector2,
+use engine::plugins::InputState;
+use runen_input::{
+    AnalogMeasurement, CoordinateSpace, InputContext, InputDeviceId, InputSourceId, InputToolKind,
+    MeasurementDomain, Point2, SourceTime, SourceTimeUnit, Vector2,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]

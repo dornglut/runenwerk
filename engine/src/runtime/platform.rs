@@ -1,5 +1,6 @@
-use crate::plugins::{
-    ContactInput, InputContext, InputState, KeyboardInput, Point2, PointerButtonInput, ScrollInput,
+use crate::plugins::InputState;
+use runen_input::{
+    ContactInput, InputContext, KeyboardInput, Point2, PointerButtonInput, ScrollInput,
 };
 use crate::runtime::window::{NativeWindowId, NativeWindowRecord};
 
@@ -151,7 +152,7 @@ mod tests {
     };
     use crate::plugins::input::domain::action;
     use crate::plugins::{ActionState, InputState};
-    use crate::plugins::{
+    use runen_input::{
         ContactInput, ContactPhase, CoordinateSpace, DigitalState, InputContext, InputSourceId,
         KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey, ObservationOrigin,
         PhysicalKeyIdentity, Point2, PointerButton, PointerButtonInput,

@@ -4,11 +4,12 @@ use crate::rendering::{
 use anyhow::Result;
 use engine::plugins::input::domain::action;
 use engine::plugins::{
-    ActionState, PhysicalKeyIdentity, RenderPlugin, ScenePlugin, default_plugins,
+    ActionState, RenderPlugin, ScenePlugin, default_plugins,
 };
 use engine::prelude::{
     App, InputState, Res, ResMut, Startup, Time, Update, WindowStateRegistryResource,
 };
+use runen_input::PhysicalKeyIdentity;
 
 const ACTION_CYCLE_VIEW_MODE: &str = "terrain.view.cycle";
 const ACTION_MOVE_UP: &str = "terrain.move_up";

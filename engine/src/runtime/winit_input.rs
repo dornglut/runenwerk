@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::plugins::{
+use runen_input::{
     AnalogMeasurement, ContactInput, ContactPhase, CoordinateSpace, DigitalState, InputContext,
     InputDeviceId, InputSourceId, KeyLocation, KeyboardInput, LogicalKey, MeasurementDomain,
     NativeLogicalKey, NativePhysicalKeyCode, ObservationOrigin, PhysicalKeyIdentity, Point2,

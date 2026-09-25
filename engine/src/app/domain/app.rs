@@ -2,7 +2,8 @@ use crate::app::domain::lifecycle::AppLifecycle;
 use crate::app::domain::mode::AppMode;
 use crate::app::domain::runner::{AppRunner, FixedFramesRunner};
 use crate::app::domain::state::WindowedAppState;
-use crate::plugins::input::{ActionState, InputState, PhysicalKeyIdentity};
+use crate::plugins::input::{ActionState, InputState};
+use runen_input::PhysicalKeyIdentity;
 use crate::plugins::render::inspect::{RenderDebugConfigResource, RenderDebugControlResource};
 use crate::plugins::render::{RenderFlow, RenderFlowRegistryResource};
 use crate::plugins::{
