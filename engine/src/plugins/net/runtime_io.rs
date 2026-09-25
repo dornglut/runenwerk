@@ -150,8 +150,8 @@ where
                 tracing::warn!("rejecting replication ACK without a RunenNet connection handle");
                 continue;
             };
-            match acknowledge_authority_replication(&mut world, connection, ack.cursor) {
-                Ok(AuthorityAckOutcome::Confirmed) => {
+            match acknowledge_authority_replication(&mut world, connection, ack.cursor)? {
+                Some(AuthorityAckOutcome::Confirmed) => {
                     if let Ok(streaming_state) = world.resource_mut::<NetStreamingStateResource>() {
                         streaming_state
                             .mark_snapshot_acknowledged(connection, SyncCursor(ack.cursor.0));
@@ -160,7 +160,7 @@ where
                         diagnostics.acked = diagnostics.acked.saturating_add(1);
                     }
                 }
-                Ok(outcome) => {
+                Some(outcome) => {
                     if let Ok(diagnostics) = world.resource_mut::<ReplicationDiagnostics>() {
                         diagnostics.rejected_acks = diagnostics.rejected_acks.saturating_add(1);
                     }
@@ -170,14 +170,13 @@ where
                         "RunenNet rejected authority replication ACK"
                     );
                 }
-                Err(error) => {
+                None => {
                     if let Ok(diagnostics) = world.resource_mut::<ReplicationDiagnostics>() {
                         diagnostics.rejected_acks = diagnostics.rejected_acks.saturating_add(1);
                     }
                     tracing::warn!(
                         connection = connection.get(),
-                        error = %format!("{error:#}"),
-                        "RunenNet rejected unauthorized authority replication ACK"
+                        "RunenNet session rejected unauthorized authority replication ACK"
                     );
                 }
             }
