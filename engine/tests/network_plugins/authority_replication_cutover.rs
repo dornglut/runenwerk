@@ -37,9 +37,10 @@ fn authority_replication_requires_explicit_policy_when_work_exists() {
         &[(connection, ParticipantId::new(1))],
     );
 
-    let error = app
-        .run_for_fixed_steps(1)
-        .expect_err("active authority replication without explicit policy must fail");
+    let error = match app.run_for_fixed_steps(1) {
+        Ok(_) => panic!("active authority replication without explicit policy must fail"),
+        Err(error) => error,
+    };
     assert!(
         format!("{error:#}").contains("with_authority_replication_policy"),
         "configuration failure should identify the missing explicit policy: {error:#}"
@@ -266,9 +267,10 @@ fn authority_replication_limits_account_encoded_snapshot_bytes() {
         &[(connection, ParticipantId::new(1))],
     );
 
-    let error = app
-        .run_for_fixed_steps(1)
-        .expect_err("encoded snapshot larger than the explicit byte budget must be rejected");
+    let error = match app.run_for_fixed_steps(1) {
+        Ok(_) => panic!("encoded snapshot larger than the explicit byte budget must be rejected"),
+        Err(error) => error,
+    };
     let text = format!("{error:#}");
     assert!(
         text.contains("CandidateTooLarge") || text.contains("AggregateResourceLimitExceeded"),
