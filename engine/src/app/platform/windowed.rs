@@ -1,11 +1,13 @@
 use crate::app::App;
 use crate::app::domain::host::AppHostSelection;
 use crate::runtime::frame_pacing::{FramePacingPolicyResource, FramePacingRuntimeStateResource};
+use crate::runtime::window::PrimaryWindowInitialSizePxResource;
 use crate::runtime::winit_runner;
 use anyhow::Result;
 
 pub trait AppNativeHostExt {
     fn with_frame_pacing(&mut self, policy: FramePacingPolicyResource) -> &mut Self;
+    fn with_primary_window_size_px(&mut self, size_px: (u32, u32)) -> &mut Self;
 }
 
 impl AppNativeHostExt for App {
@@ -19,6 +21,17 @@ impl AppNativeHostExt for App {
         if let Ok(runtime_state) = self.world.resource_mut::<FramePacingRuntimeStateResource>() {
             runtime_state.observe_policy(policy);
         }
+        self
+    }
+
+    fn with_primary_window_size_px(&mut self, size_px: (u32, u32)) -> &mut Self {
+        if matches!(self.host_selection, AppHostSelection::Headless) {
+            self.record_missing_capability("with_primary_window_size_px", "native-window Host");
+            return self;
+        }
+
+        self.world
+            .insert_resource(PrimaryWindowInitialSizePxResource::new(size_px));
         self
     }
 }
@@ -53,6 +66,36 @@ impl App {
 mod tests {
     use super::*;
     use crate::runtime::frame_pacing::FramePacingMode;
+
+    #[test]
+    fn explicit_primary_window_size_is_native_host_configuration() {
+        let mut app = App::new();
+        app.with_primary_window_size_px((1600, 1200));
+
+        assert_eq!(
+            app.world()
+                .resource::<PrimaryWindowInitialSizePxResource>()
+                .expect("native Host size request should be installed")
+                .size_px(),
+            (1600, 1200)
+        );
+    }
+
+    #[test]
+    fn headless_host_rejects_primary_window_size_configuration() {
+        let mut app = App::headless();
+        app.with_primary_window_size_px((1600, 1200));
+
+        assert!(
+            app.world()
+                .resource::<PrimaryWindowInitialSizePxResource>()
+                .is_err()
+        );
+        assert!(
+            app.admit_composition().is_err(),
+            "native-window configuration must reject headless Host selection"
+        );
+    }
 
     #[test]
     fn windowed_host_preparation_materializes_default_runtime_state_without_policy_resource() {

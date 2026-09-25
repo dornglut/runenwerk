@@ -10,6 +10,23 @@ impl NativeWindowId {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, runen_ecs::Resource)]
+pub(crate) struct PrimaryWindowInitialSizePxResource {
+    size_px: (u32, u32),
+}
+
+impl PrimaryWindowInitialSizePxResource {
+    pub(crate) fn new(size_px: (u32, u32)) -> Self {
+        Self {
+            size_px: normalize_extent(size_px),
+        }
+    }
+
+    pub(crate) fn size_px(self) -> (u32, u32) {
+        self.size_px
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WindowCursorIcon {
     Default,
@@ -272,6 +289,12 @@ fn normalize_extent((width, height): (u32, u32)) -> (u32, u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn primary_window_initial_size_request_is_normalized_without_becoming_window_state() {
+        let request = PrimaryWindowInitialSizePxResource::new((0, 1200));
+        assert_eq!(request.size_px(), (1, 1200));
+    }
 
     #[test]
     fn window_registry_registers_primary_without_legacy_mirror() {
