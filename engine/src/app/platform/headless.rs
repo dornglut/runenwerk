@@ -3,14 +3,15 @@ use anyhow::Result;
 
 impl App {
     pub(crate) fn run_headless(&mut self) -> Result<()> {
+        self.run_headless_for_frames(1)
+    }
+
+    pub(crate) fn run_headless_for_frames(&mut self, frame_count: usize) -> Result<()> {
         self.require_headless_host("headless execution")?;
         self.prepare_for_run()?;
 
-        let mut completed_frames = 0usize;
-        while self.runner.next_frame(completed_frames, &self.world) {
-            self.runner.before_frame(&mut self.world);
+        for _ in 0..frame_count {
             self.run_frame()?;
-            completed_frames = completed_frames.saturating_add(1);
         }
 
         Ok(())

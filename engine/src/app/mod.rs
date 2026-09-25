@@ -10,6 +10,5 @@ mod runtime;
 pub use domain::app::*;
 pub(crate) use domain::lifecycle::AppLifecycle;
 pub use domain::plugins::*;
-pub use domain::runner::*;
 pub(crate) use domain::state::WindowedAppState;
 pub use platform::windowed::AppNativeHostExt;
