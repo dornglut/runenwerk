@@ -5,7 +5,7 @@ use engine::plugins::render::inspect::{
     RenderTemporalInputKind, RenderTemporalInspection, RenderTemporalInspectionRequest,
     RenderTemporalJitterEvidence, RenderTemporalProductionEvidenceReport,
     RenderTemporalProductionEvidenceRequest, RenderTemporalProductionHardwareProfile,
-    RenderTemporalReconstructionMode, RenderTemporalResolutionEvidence,
+    RenderTemporalReconstructionMode, RenderTemporalResolutionEvidence, RenderTemporalResolutionPolicy,
     RenderTemporalRuntimeVisualEvidence, RenderTemporalUpscalingAdapterEvidence,
     RenderTemporalUpscalingAdapterKind, RenderTemporalUpscalingCapabilityState,
     RenderTemporalUpscalingInspection, RenderTemporalUpscalingInspectionRequest,
@@ -65,9 +65,10 @@ fn temporal() -> RenderTemporalInspection {
         resolution: RenderTemporalResolutionEvidence {
             internal_size: [1280, 720],
             output_size: [1920, 1080],
-            min_scale: 0.5,
-            max_scale: 1.0,
-            dynamic_resolution_enabled: true,
+            policy: RenderTemporalResolutionPolicy::Dynamic {
+                min_scale: 0.5,
+                max_scale: 1.0,
+            },
         },
         jitter: RenderTemporalJitterEvidence {
             sequence_id: "halton-2-3:v1".to_string(),
