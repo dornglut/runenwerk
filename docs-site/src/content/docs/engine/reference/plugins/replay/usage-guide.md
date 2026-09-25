@@ -18,6 +18,7 @@ Captures simulation command frames/checkpoints and manages replay state resource
 
 - Module: `engine/src/plugins/replay.rs`
 - Entry: `ReplayPlugin`
+- App runtime controls: `AppReplayExt`
 - Local README: not present (file-based plugin module)
 
 ## Minimal Setup
@@ -40,6 +41,21 @@ app.add_plugins((FixedStepPlugin, SimulationPlugin, ReplayPlugin));
 ```
 
 The ordinary `default_plugins()` stack already selects these in dependency order.
+
+Replay runtime controls are owned by the Replay integration:
+
+```rust
+use engine::prelude::{App, AppReplayExt};
+use engine::plugins::ReplayPlugin;
+
+let mut app = App::headless();
+app.add_plugin(ReplayPlugin);
+app.start_recording()?;
+```
+
+`AppReplayExt` preserves the existing runtime-control timing semantics; these methods are not
+reclassified as App composition. Replay control admission requires explicit `ReplayPlugin`
+selection rather than inferring activation from public Replay resource presence.
 
 ## Runtime Contract
 
