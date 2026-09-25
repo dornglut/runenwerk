@@ -10,7 +10,6 @@ related:
   - ./ui-definition-formation-foundation-design.md
   - ../accepted/runenwerk-editor-coordination-semantic-model.md
   - ./editor-tool-suite-registry-and-workbench-host-design.md
-  - ./workspace-identity-contract-and-migration-map.md
   - ../../apps/runenwerk-editor/execution-priority-checklist.md
   - ../../domain/ui/roadmap.md
 related_adrs:

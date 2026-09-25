@@ -7,7 +7,6 @@ layer: cross-domain
 canonical: true
 last_reviewed: 2026-09-13
 related_designs:
-  - ../../design/deferred/sdf-procedural-animation-and-animated-models-design.md
   - ../../design/accepted/sdf-first-field-world-platform-design.md
   - ../../design/accepted/field-product-contracts-diagnostics-and-residency-design.md
   - ../../design/accepted/execution-fabric-and-product-jobs-design.md
@@ -26,8 +25,8 @@ preserves_context_from:
 Accepted.
 
 This ADR accepts only the durable execution-boundary invariant from the broader
-Animated SDF proposal. The broader product-family context remains preserved in
-the proposed ADR and deferred design.
+Animated SDF proposal. Broader product-family context remains outside this ADR
+until each topic is promoted through its own accepted decision or owning design.
 
 ## Context
 
@@ -76,8 +75,8 @@ This ADR does not decide:
 - scheduler sync point details;
 - the first concrete validation scenario.
 
-Those topics remain in the deferred design and proposed ADR until each is promoted
-through its own accepted decision or owning design.
+Those topics remain outside this ADR until each is promoted through its own
+accepted decision or owning design.
 
 ## Rejected Alternatives
 

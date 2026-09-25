@@ -52,7 +52,7 @@ Do not add crate metadata for them until their implementation milestone lands.
 
 - particles and VFX;
 - physics and collision authoring;
-- animation and procedural motion, with a deferred architecture target tracked in [`../design/deferred/sdf-procedural-animation-and-animated-models-design.md`](../design/deferred/sdf-procedural-animation-and-animated-models-design.md);
+- animation and procedural motion, with capability ownership tracked in the accepted [`SDF-First Production Capability Map`](../design/accepted/sdf-first-production-capability-map.md);
 - simulation/world processes;
 - gameplay graph orchestration after narrower gameplay event/action/state/quest contracts exist.
 

@@ -10,7 +10,6 @@ related_designs:
   - ./ui-lab-perfectionist-audit-design.md
   - ./ui-lab-preview-lab-runtime-evidence-design.md
   - ./ui-lab-persistence-project-io-diff-apply-rollback-design.md
-  - ../implemented/ui-lab-productization-design.md
 related_roadmaps:
   - ../../domain/ui/roadmap.md
 ---
