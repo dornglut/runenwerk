@@ -1,11 +1,11 @@
 ---
 title: Runenwerk UI Local Runtime and Integration Architecture
-description: Canonical Runenwerk-local UI ownership and integration architecture, separating current Runenwerk implementation from standalone RunenUI reusable-framework authority.
+description: Canonical Runenwerk-local UI ownership and RunenUI adoption architecture, separating retained product/authoring/composition semantics from predecessor reusable-runtime authority.
 status: active
 owner: ui
 layer: architecture
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-25
 related_docs:
   - ../domain/ui/README.md
   - ../domain/ui/architecture.md
@@ -14,51 +14,54 @@ related_docs:
   - ../design/implemented/ui-program-architecture.md
   - ../design/implemented/ui-program-architecture-owner-map.md
   - ../design/active/runenwerk-ui-story-driven-golden-workflow-design.md
-  - ../design/deferred/ui-model-multiple-execution-strategies-design.md
-  - domain-authoring-platform-overview.md
   - ../adr/accepted/0009-ui-interaction-formation-v2.md
+  - ../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
 ---
 
 # Runenwerk UI Local Runtime and Integration Architecture
 
 ## Purpose
 
-This is the canonical top-down architecture spine for the UI implementation and
-integration that currently lives inside Runenwerk.
+This is the canonical top-down architecture for UI semantics that currently live
+in Runenwerk and for their eventual consumer adoption of standalone RunenUI.
 
-It answers a deliberately local question: how do Runenwerk-owned UI definition,
-interaction, semantic-program, retained-runtime, story-proof, engine-integration,
-and renderer-facing contracts fit together today?
+It distinguishes three facts that must not be collapsed:
 
-It is **not** the reusable UI-framework architecture for the Dornglut repository
-family. Future reusable framework semantics belong to standalone
-[`dornglut/runen-ui`](https://github.com/dornglut/runen-ui). Current Runenwerk
-UI code remains valid until an explicit consumer-cutover issue changes a named
-boundary.
+1. **current implementation authority** — local code remains authoritative for a
+   consumer until an accepted cutover replaces it;
+2. **retained Runenwerk semantic authority** — authored/program/product/
+   composition semantics that RunenUI does not own;
+3. **predecessor reusable-runtime authority** — local framework-shaped semantics
+   whose long-term reusable owner is standalone RunenUI.
 
-## Authority boundary
+This document does not authorize a RunenUI dependency or source migration by
+itself.
 
-Use the authority that owns the question:
+## Cross-repository authority
 
-1. current Runenwerk code and executable tests own current local behavior;
-2. accepted Runenwerk ADRs and implemented/accepted local designs own durable
-   Runenwerk decisions;
-3. this file owns the top-down **Runenwerk-local** UI integration model;
-4. [UI Domain Current-State Architecture](../domain/ui/architecture.md) owns the
-   detailed local crate and migration map;
-5. [UI Substrate and Surface Roadmap](../domain/ui/roadmap.md) owns durable local
-   sequencing only;
-6. standalone RunenUI [architecture](https://github.com/dornglut/runen-ui/blob/main/ARCHITECTURE.md),
-   [status](https://github.com/dornglut/runen-ui/blob/main/docs/status.md), and
-   [roadmap](https://github.com/dornglut/runen-ui/blob/main/docs/roadmap.md) own
-   future reusable-framework semantics and maturity.
+Standalone `dornglut/runen-ui` owns reusable UI-framework semantics over its
+public contracts, including:
 
-Historical Runenwerk plans and reports remain provenance, not reusable-framework
-authority.
+- transient typed View/Element authoring;
+- keyed reconciliation and persistent mounted-runtime identity;
+- framework-local state/lifecycle/invalidation;
+- pointer/keyboard/text/IME/focus/interaction routing;
+- style, layout, renderer-neutral production text and geometry;
+- renderer-neutral paint/hit/semantic publication;
+- accessibility semantics and platform projection contracts;
+- deterministic headless execution/testing;
+- public wgpu and winit edge integrations where accepted.
 
-## Current local architecture
+Runenwerk must not create a second reusable-framework roadmap for those concerns.
 
-The current Runenwerk-local UI spine is:
+RunenUI does **not** implicitly own Runenwerk's UiProgram language/toolchain,
+Story V2, editor definition/self-authoring, application structural composition,
+workspace persistence, provider/product policy, renderer policy, or app/domain
+mutation.
+
+## Current local implementation
+
+Before a consumer cutover, the current Runenwerk path remains:
 
 ```text
 Authored UI / product definitions
@@ -69,173 +72,231 @@ Authored UI / product definitions
        UiProgram -> ui_program_lowering -> ui_compiler -> ui_artifacts
                  -> ui_evaluator / ui_runtime_view
   -> UiStory V2 workflow proof where applicable
-  -> engine/app host integration
-  -> backend-neutral UiFrame / render data
+  -> engine::plugins::ui
+  -> local renderer-neutral frame/publication
   -> renderer or other product consumer
 ```
 
-The retained path and the UiProgram path coexist. Neither is declared fully
-replaced by the other. Foundation crates such as `ui_math` and `ui_layout` and
-retained crates such as `ui_tree`, `ui_widgets`, and `ui_runtime` remain valid
-owners alongside the implemented UiProgram family.
+This is current code truth, not the desired final reusable-framework boundary.
 
-## Local owner map
+## Adoption disposition map
 
-| Responsibility | Current Runenwerk owner |
-|---|---|
-| UI math and layout vocabulary/algorithms | `ui_math`, `ui_layout` |
-| Input, text, and theme contracts | `ui_input`, `ui_text`, `ui_theme` |
-| Authored UI definitions and normalization | `ui_definition` |
-| Interaction formation | `ui_definition` plus ADR 0009 contracts |
-| Retained tree/runtime/widgets | `ui_tree`, `ui_runtime`, `ui_widgets` |
-| Semantic UI program | `ui_program` |
-| Program lowering | `ui_program_lowering` |
-| Control packages and control-facing requirements | `ui_controls` |
-| Compiler and runtime artifacts | `ui_compiler`, `ui_artifacts` |
-| Artifact-backed evaluation/read models | `ui_evaluator`, `ui_runtime_view` |
-| Binding and host-contract vocabulary | `ui_binding`, `ui_hosts` |
-| Accessibility contracts | `ui_accessibility` |
-| Story/proof orchestration | `ui_story`, `ui_testing` |
-| Renderer-neutral output | `ui_render_data`, `ui_render_primitives`, `ui_static_mount` |
-| Runenwerk app-facing mount/action integration | `engine::plugins::ui` |
-| Historical/proof app bridge | `ui_app_integration` |
-| Editor mutation and product effects | editor/app owners |
-| Renderer execution | engine renderer owners |
+The semantic reason for each family determines its future, not its filename.
 
-The detailed crate-family partition is enforced by
-`domain/ui/ui-crate-ownership.toml`; this page does not redefine that machine
-contract.
+| Current family | Classification | Long-term decision |
+|---|---|---|
+| `ui_composition` | **Retained Runenwerk authority** | Keep app-neutral structural composition, transactions, history and persistence in Runenwerk. |
+| `ui_adaptive_composition` | **Retained Runenwerk authority** | Keep transient structural projection/proposals subordinate to `ui_composition`. |
+| `ui_definition` | **Retained authored authority** | Keep source/normalization semantics; project explicitly into a runtime consumer. |
+| `ui_schema` | **Retained authored authority** | Keep Runenwerk schema contracts where used by UiProgram/source tooling. |
+| `ui_program` | **Retained authored/program authority** | Keep semantic program meaning; do not make RunenUI interpret UiProgram directly. |
+| `ui_program_lowering` | **Retained program/toolchain authority** | Keep source-to-program lowering; runtime-specific lowering must terminate at an explicit adapter. |
+| `ui_compiler` | **Retained program/toolchain authority** | Keep deterministic compiler/source-map/diagnostic semantics. |
+| `ui_artifacts` | **Retained program/toolchain authority** | Keep derived UiProgram artifacts where independently consumed. |
+| `ui_story` | **Retained proof/orchestration authority** | Keep Story V2 workflow/verdict semantics; it may exercise RunenUI as a consumer. |
+| `ui_graph_editor` | **Runenwerk product/UI-tool concern** | Keep only product-facing graph-editor semantics not supplied by generic RunenUI controls. |
+| `ui_app_integration` | **Proof/integration residue** | Retain only independently used app/proof contracts; otherwise delete during consumer cuts. |
+| `ui_math`, `ui_geometry` | **Predecessor framework authority** | Prefer public RunenUI geometry/math for migrated consumers; delete local duplication when unreferenced. |
+| `ui_input` | **Predecessor framework authority** | Migrated consumers use RunenUI input/focus contracts; RunenInput-to-RunenUI translation remains an adapter concern. |
+| `ui_layout` | **Predecessor framework authority** | Migrated consumers use RunenUI layout semantics; retained authored layout vocabulary must be separated if still source meaning. |
+| `ui_text` | **Predecessor framework authority** | Migrated consumers use `runenui_text`; no second shaping/layout authority. |
+| `ui_theme` | **Mostly predecessor framework authority** | Runtime style/theme moves to RunenUI; retain only source/product theme vocabulary proven independent of runtime. |
+| `ui_tree`, `ui_widgets`, `ui_runtime` | **Predecessor framework authority** | Delete for each migrated consumer; RunenUI mounted runtime becomes the sole runtime authority. |
+| `ui_state` | **Predecessor/mixed** | Framework-local widget state moves to RunenUI; app/domain state remains with its Runenwerk owner. |
+| `ui_accessibility` | **Predecessor/mixed** | Reusable semantics/platform publication move to RunenUI; product-specific semantic meaning remains with the product adapter. |
+| `ui_testing` | **Predecessor/mixed proof support** | Framework-runtime testing moves to `runenui_testing`; Story/product assertions remain Runenwerk-owned. |
+| `ui_controls` | **Mixed** | Separate authored/control-package requirements from local runtime/widget implementation; only the former may remain. |
+| `ui_binding` | **Mixed** | Keep Runenwerk source/program binding semantics only; mounted/runtime binding execution belongs to RunenUI adapter/runtime. |
+| `ui_hosts` | **Predecessor/mixed** | Narrow any retained contract to UiProgram-specific lifecycle/event/output semantics; delete generic host/runtime authority and rename only if a real retained package remains. |
+| `ui_surface` | **Temporary predecessor compatibility boundary** | Map every responsibility to RunenUI or the actual Runenwerk app/domain/product owner, then delete the package. No new authority. |
+| `ui_evaluator`, `ui_runtime_view` | **Mixed execution/tooling** | Keep deterministic UiProgram evaluation/read-model semantics only where independently required; remove any second mounted/runtime execution role. |
+| `ui_render_data`, `ui_render_primitives`, `ui_static_mount` | **Mixed output/integration** | Framework-generic publication moves to RunenUI; Runenwerk Render adapter/product payloads remain only when they express Runenwerk integration. |
+| `ui_headless_render`, `ui_headless_render_data` | **Predecessor/proof execution** | Migrate framework execution to ordinary RunenUI headless/testing contracts; retain only Story/product-specific evidence envelopes if needed. |
+| `engine::plugins::ui` | **Current owner; future adapter** | Stop owning mounted/runtime semantics for migrated consumers; install/project/dispatch between Runenwerk owners and RunenUI. |
 
-## Definition and interaction formation
+The detailed current dependency allow-list remains in
+`domain/ui/ui-crate-ownership.toml`. It describes current source legality; it
+does not override this adoption disposition.
 
-`ui_definition` owns Runenwerk's local authored UI source/IR, validation,
-normalization, source maps, and retained formation inputs. Authored identity is
-not retained `WidgetId`, ECS entity identity, renderer identity, or app mutation
-authority.
+## Retained authored/program boundary
 
-ADR 0009 owns execution-neutral interaction formation. Its durable local spine is:
+Runenwerk authored UI remains execution-neutral at the repository boundary.
 
-```text
-NormalizedUiTemplate
-  -> FormedInteractionModel
-  -> local execution consumers
-```
-
-Popup, scroll, focus, menu sizing, docking/drop-zone, chrome-slot, status, and
-input-arbitration facts remain explicit contracts before a retained or other
-accepted execution consumer handles them.
-
-## UiProgram and artifact path
-
-The implemented UiProgram architecture is Runenwerk-local current truth. It owns
-or coordinates typed control, layout, state, style, interaction, binding,
-visual, accessibility, and inspection graph families together with route,
-schema, capability, source-map, and diagnostic identities.
-
-The current artifact path is:
+The future runtime path is:
 
 ```text
-UiProgram
-  -> UiCompiler
-  -> UiRuntimeArtifact
-  -> UiEvaluator / UiRuntimeView
+ui_definition / UiProgram / product facts
+    -> explicit Runenwerk-owned projection
+        -> public RunenUI View/Element/action/semantic contracts
+            -> runenui_runtime
 ```
 
-Artifact tables and manifests are derived executable/read-model products. They
-do not make `UiProgram` an authored source tree, retained widget tree, renderer
-frame, ECS model, or standalone RunenUI contract.
+The projection may resolve Runenwerk source maps, authored route IDs, product
+bindings and command descriptors, but it must not:
 
-## Retained runtime coexistence
+- manufacture a second mounted identity;
+- expose private RunenUI runtime internals;
+- make RunenUI interpret UiProgram bytecode/tables as a new language authority;
+- move app/domain mutation into RunenUI;
+- persist RunenUI mounted identity into authored source or `ui_composition`.
 
-Retained UI remains an implemented Runenwerk execution path. `ui_tree`,
-`ui_widgets`, and `ui_runtime` continue to own retained identity, interaction,
-layout orchestration, and frame generation where current product code consumes
-them.
+A missing or ambiguous projection is a migration blocker, not a reason to keep
+two runtimes live for one consumer.
 
-The existence of UiProgram/compiler/evaluator proofs does not authorize deleting
-or bypassing retained owners. Any named migration requires its own accepted
-consumer cutover and proof.
+## Structural composition boundary
 
-## Story V2 proof boundary
+`ui_composition` describes application structure: targets, roots, regions,
+mounted-content references, structural transactions/history and persistence.
 
-Runenwerk's current `ui_story` implementation uses the V2 workflow graph model,
-not the former flat `UiStoryRunReport` model.
+RunenUI visual/runtime composition describes a framework runtime's mounted
+presentation and publication.
 
-A V2 story manifest selects a workflow profile. Built-in profiles include:
+These are different authorities.
 
 ```text
-ui_story.workflow.source_load_only
-ui_story.workflow.compiler_only
-ui_story.workflow.static_preview
-ui_story.workflow.executable_interaction_proof
+ui_composition snapshot
+    -> Runenwerk app/editor content resolution
+        -> RunenUI view/runtime projection for a concrete target
 ```
 
-Workflow nodes carry owner-produced evidence. `UiStoryWorkflowReportV2` records
-the graph, node outcomes, diagnostics, expected-failure matching, and first
-blocker. `UiStoryMountDecisionV2` derives a fail-closed mount decision; a passed
-preview alone is not permission to mutate product state or bypass host policy.
+RunenUI must not become a second saved application-layout authority.
 
-The local story workflow is proof and product-consumer infrastructure. It is not
-a second reusable-framework authority and does not define future RunenUI testing,
-controls, platform, renderer, or authoring semantics.
+## `ui_surface` and `ui_hosts`
 
-## Host integration and mutation ownership
+ADR 0013 remains authoritative:
 
-Hosts own mutation and effects. Generic Runenwerk UI controls emit facts,
-proposals, or typed events; they do not directly mutate app, editor, game,
-renderer, network, filesystem, or provider truth.
+- `ui_surface` is temporary predecessor compatibility debt and must be deleted
+  after exact responsibility mapping;
+- generic `ui_hosts` authority is not an end state;
+- only independently useful UiProgram-specific host contracts may remain under
+  an owner-accurate boundary;
+- current code may continue using these packages until a named consumer cut is
+  accepted, but new generic authority must not be added.
 
-The accepted Runenwerk tree contains the local engine integration surface:
+This resolves the prior documentation contradiction where accepted ADR 0013
+required supersession while current architecture described the packages as if
+they were durable long-term owners.
 
-- `engine::plugins::ui::UiPlugin`;
-- `AppUiExt::mount_ui(...)` and the `app.ui().mount(...)` facade;
-- typed `UiScreen`/source/action contracts;
-- typed `UiActionHandler` dispatch;
-- mounted runtime/session resources;
-- producer-generic surface-frame publication.
+## Engine/App integration boundary
 
-Those are Runenwerk implementation facts. They do **not** prove standalone
-RunenUI adoption.
+`engine::plugins::ui` currently owns real mounted/session/runtime resources in
+the local path. That is current implementation fact.
 
-## Renderer and product consumers
+For a migrated consumer its role narrows to:
 
-Renderer-facing products remain derived data. `UiFrame` and related local render
-contracts may be consumed by the engine renderer, headless/static proof, or a
-separately accepted product target. Renderer resources and submission do not own
-UI source, route/action semantics, control meaning, or product mutation.
+- install/configure RunenUI integration in Runenwerk App composition;
+- project Runenwerk-authored/product facts into public RunenUI input;
+- translate RunenInput/Host ingress into the accepted RunenUI edge;
+- consume RunenUI actions/semantic output and route them to Runenwerk app/domain
+  owners;
+- publish renderer-facing products through an explicit Runenwerk Render adapter
+  when that route is selected;
+- expose integration diagnostics without becoming the semantic owner of layout,
+  text, mounted state, focus, interaction or accessibility.
 
-Game HUD, SDF, and world-space UI are not promoted here into reusable framework
-semantics. Their exact Runenwerk product integration remains separately owned or
-deferred until a concrete consumer issue accepts it.
+No generic Host trait, service locator, backend registry or RunenApp extraction
+is implied.
 
-## Standalone RunenUI adoption boundary
+## Native host and renderer boundary
 
-Standalone RunenUI is the sole Dornglut owner for future reusable UI-framework
-semantics. Runenwerk does not mirror its roadmap locally.
+Where adopted:
 
-A future Runenwerk adoption or partial cutover must:
+```text
+Native Host
+    -> runenui_winit translation
+        -> RunenUI runtime
 
-1. start from a new owning issue;
-2. inspect the exact then-accepted RunenUI revision and current Runenwerk main;
-3. name the concrete consumer boundary being replaced;
-4. prove migration of current Runenwerk behavior and tests;
-5. preserve product/engine ownership of host mutation and renderer execution;
-6. remove replaced local authority only after the consumer cutover is accepted.
+RunenUI publication
+    -> accepted runenui_render_wgpu edge
+       OR
+    -> explicit Runenwerk Render adapter
+```
+
+Native Host keeps event-loop/window/presentation policy. Runenwerk Render keeps
+renderer/product policy when it is the chosen consumer. A renderer adapter must
+not reconstruct UI semantics from private/local runtime state.
+
+## Story V2 boundary
+
+Story V2 remains Runenwerk proof/orchestration infrastructure.
+
+A story may:
+
+- form/compile Runenwerk-owned source/program facts;
+- invoke a public RunenUI-backed execution adapter;
+- collect owner-produced evidence;
+- compare expected diagnostics/outcomes;
+- derive Runenwerk-local mount eligibility.
+
+Story V2 must not become an alternative mounted runtime or a private RunenUI
+conformance suite.
+
+## Consumer sequence
+
+Migration is deliberately sequenced by proof pressure:
+
+1. **Headless authored/program proof** — prove one maintained Runenwerk source or
+   UiProgram consumer through public RunenUI runtime/testing contracts. This
+   establishes the projection boundary without Editor, Winit or renderer
+   migration.
+2. **Engine/App mounted integration** — migrate one ordinary app-facing mounted
+   consumer so `engine::plugins::ui` becomes an adapter for that consumer.
+3. **Draw or another bounded non-Editor product** — prove a real interactive
+   product path and renderer/input integration without Editor breadth.
+4. **Editor shell/chrome and target-local UI** — migrate only after the adapter,
+   multi-target, text/editing, accessibility and interaction contracts are
+   already proven.
+5. Delete predecessor packages as their final maintained consumers disappear.
+
+This order is not a release roadmap for RunenUI. Each source-bearing cut requires
+its own accepted Runenwerk issue and current-source recensus.
+
+## First consumer gate
+
+The first source-bearing adoption issue is not created by this architecture
+change.
+
+Before it is decision-complete, its census must identify:
+
+- one maintained headless Story/UiProgram or authored-definition consumer;
+- the exact projection into ordinary public RunenUI View/Element/action/semantic
+  contracts;
+- the exact local evaluator/runtime-view/retained-runtime path it replaces for
+  that consumer;
+- the source maps and diagnostics that remain Runenwerk-owned;
+- the proof showing no dual runtime or semantic reinterpretation.
+
+If those facts cannot be named from current source, adoption remains blocked
+rather than adding a speculative adapter framework.
+
+## Clean-cutover rules
+
+Every consumer cut must:
+
+1. re-resolve exact Runenwerk and RunenUI revisions;
+2. name the replaced local owner and retained Runenwerk owner;
+3. migrate tests/proofs through ordinary public RunenUI contracts;
+4. preserve app/domain mutation outside the framework;
+5. preserve `ui_composition` structural authority;
+6. remove the replaced local runtime path for that consumer in the same cut;
+7. leave no forwarding namespace, mirror state or dual input/focus/layout/text
+   authority;
+8. record diagnostics and failure semantics;
+9. pass exact-head repository validation.
 
 ## Non-goals
 
 This architecture does not authorize:
 
-- standalone RunenUI adoption or dependency changes;
-- wholesale replacement of retained Runenwerk UI;
-- a second reusable UI framework inside Runenwerk;
-- future generic controls, animation, virtualization, platform, renderer,
-  accessibility, or authoring roadmaps in Runenwerk;
-- compiled-reactive or ECS-driven UI execution without separate accepted
-  authority;
-- SDF-, renderer-, or ECS-owned UI semantics;
-- app/editor/game mutation from generic UI controls;
-- `foundation/meta` or shared plugin-framework extraction.
+- adding the RunenUI dependency;
+- bulk source deletion;
+- Editor-wide migration;
+- moving `ui_composition` into RunenUI;
+- moving UiProgram/Story/self-authoring semantics into RunenUI;
+- a compatibility facade between local runtime types and RunenUI;
+- a new generic host/service/renderer registry;
+- RunenApp extraction;
+- preserving a local reusable UI framework after its consumers migrate.
 
 ## Diagram
 
@@ -247,9 +308,9 @@ Diagram source:
 - [UI Domain](../domain/ui/README.md)
 - [UI Domain Current-State Architecture](../domain/ui/architecture.md)
 - [UI Substrate and Surface Roadmap](../domain/ui/roadmap.md)
+- [ADR 0013](../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md)
 - [Live UiPlugin Runtime Platform Architecture](./live-uiplugin-runtime-platform-architecture.md)
 - [UI Program Architecture](../design/implemented/ui-program-architecture.md)
 - [UI Program Architecture Owner Map](../design/implemented/ui-program-architecture-owner-map.md)
 - [Runenwerk UI Story V2 Consumer and Proof Boundary](../design/active/runenwerk-ui-story-driven-golden-workflow-design.md)
-- [ADR 0009: UI Interaction Formation V2](../adr/accepted/0009-ui-interaction-formation-v2.md)
 - [Standalone RunenUI Architecture](https://github.com/dornglut/runen-ui/blob/main/ARCHITECTURE.md)
