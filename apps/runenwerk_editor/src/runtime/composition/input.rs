@@ -27,15 +27,16 @@ pub fn dispatch_editor_target_input_system(
         if native_window_id == NativeWindowId::primary() {
             continue;
         }
+        let Some(window) = windows.record(native_window_id) else {
+            runtime.clear_window(native_window_id);
+            continue;
+        };
         let Some(target_id) = host
             .shell_state
             .composition_target_bindings()
             .find(|entry| entry.binding.native_window_id == native_window_id)
             .map(|entry| entry.target_id)
         else {
-            continue;
-        };
-        let Some(window) = windows.record(native_window_id) else {
             continue;
         };
         if matches!(

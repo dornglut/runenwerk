@@ -29,6 +29,10 @@ pub(crate) fn translate_platform_event(
         runtime.clear_window(native_window_id);
         return Vec::new();
     }
+    if let PlatformEvent::InputContinuityLost { context, loss } = &event {
+        runtime.invalidate_continuity(native_window_id, *context, *loss);
+        return Vec::new();
+    }
 
     let device_id = match &event {
         PlatformEvent::MouseWheel { context, .. }
@@ -36,6 +40,7 @@ pub(crate) fn translate_platform_event(
         | PlatformEvent::MouseInput { context, .. }
         | PlatformEvent::Touch { context, .. } => runtime.device_id(*context),
         PlatformEvent::KeyboardInput { .. }
+        | PlatformEvent::InputContinuityLost { .. }
         | PlatformEvent::Resumed
         | PlatformEvent::CloseRequested
         | PlatformEvent::Focused { .. }
@@ -146,6 +151,7 @@ pub(crate) fn translate_platform_event(
             ))]
         }
         PlatformEvent::Focused { .. }
+        | PlatformEvent::InputContinuityLost { .. }
         | PlatformEvent::Resumed
         | PlatformEvent::CloseRequested
         | PlatformEvent::Resized { .. }
@@ -177,6 +183,7 @@ fn platform_event_is_finite(event: &PlatformEvent) -> bool {
         }
         PlatformEvent::Resumed
         | PlatformEvent::CloseRequested
+        | PlatformEvent::InputContinuityLost { .. }
         | PlatformEvent::Focused { .. }
         | PlatformEvent::Resized { .. }
         | PlatformEvent::ScaleFactorChanged { .. }
