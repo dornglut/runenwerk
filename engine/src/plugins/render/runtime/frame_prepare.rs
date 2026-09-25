@@ -415,7 +415,11 @@ mod automatic_main_replacement_tests {
         let resolve_compiled = compile_flow_plan(&resolve).expect("resolve flow should compile");
         let unrelated_compiled =
             compile_flow_plan(&unrelated).expect("unrelated flow should compile");
-        let compiled = vec![scene_compiled.clone(), resolve_compiled, unrelated_compiled];
+        let compiled = vec![
+            scene_compiled.clone(),
+            resolve_compiled.clone(),
+            unrelated_compiled,
+        ];
 
         let fixed = RenderFixedResolutionExecutionRequest::new(
             producer(1),
@@ -499,7 +503,7 @@ mod automatic_main_replacement_tests {
         let resolve = fixed_resolution_resolve_flow().expect("resolve flow should validate");
         let scene_compiled = compile_flow_plan(&scene).expect("scene flow should compile");
         let resolve_compiled = compile_flow_plan(&resolve).expect("resolve flow should compile");
-        let compiled = vec![scene_compiled.clone(), resolve_compiled];
+        let compiled = vec![scene_compiled.clone(), resolve_compiled.clone()];
 
         let admission = RenderFixedResolutionExecutionRequest::new(
             producer(1),
