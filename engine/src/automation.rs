@@ -386,6 +386,38 @@ mod tests {
     }
 
     #[test]
+    fn normalized_automation_uses_the_shared_admitted_input_capture_seam() {
+        let mut session =
+            AutomationSession::new(AutomationSessionId::new(46), InputSourceId::new(906));
+        let mut input = InputState::new();
+        input.start_admitted_input_capture();
+
+        assert_eq!(
+            session.inject_normalized(
+                AutomationExecutionMode::NormalizedInput,
+                &mut input,
+                InputObservation::RelativeMotion {
+                    delta: Vector2::new(4.0, -3.0),
+                    unit: RelativeMotionUnit::BackendDeviceUnits,
+                },
+            ),
+            AutomationStepResult::AdmittedOrDelivered
+        );
+
+        let captured = input.stop_admitted_input_capture();
+        assert_eq!(captured.len(), 1);
+        assert_eq!(captured[0].context.source, session.source());
+        assert_eq!(captured[0].context.device, None);
+        assert_eq!(
+            captured[0].observations,
+            vec![InputObservation::RelativeMotion {
+                delta: Vector2::new(4.0, -3.0),
+                unit: RelativeMotionUnit::BackendDeviceUnits,
+            }]
+        );
+    }
+
+    #[test]
     fn cancellation_prevents_later_mutation_and_cleans_owned_input() {
         let mut session =
             AutomationSession::new(AutomationSessionId::new(45), InputSourceId::new(905));

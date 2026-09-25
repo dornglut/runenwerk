@@ -5,9 +5,9 @@ use crate::plugins::{
 };
 use runen_input::{
     ContactId, ContactInput, ContactPhase, ContinuityLoss, CoordinateSpace, DigitalState,
-    InputContext, InputDeviceId, InputSourceId, KeyLocation, KeyboardInput, LogicalKey,
-    NativeLogicalKey, ObservationOrigin, PhysicalKeyIdentity, Point2, PointerButton,
-    PointerButtonInput,
+    InputContext, InputDeviceId, InputObservation, InputObservationGroup, InputSourceId,
+    KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey, ObservationOrigin,
+    PhysicalKeyIdentity, Point2, PointerButton, PointerButtonInput, RelativeMotionUnit, Vector2,
 };
 use winit::event::{ElementState, MouseButton};
 use winit::keyboard::KeyCode;
@@ -566,4 +566,98 @@ fn source_continuity_loss_is_scoped_and_releases_stale_primary_touch_ownership()
 
     assert_eq!(input.touch_samples().len(), 1);
     assert_eq!(input.touch_samples()[0].id, 2);
+}
+
+#[test]
+fn admitted_input_capture_is_opt_in_and_preserves_admission_order_across_frames() {
+    let mut input = InputState::new();
+
+    input.handle_mouse_input(ElementState::Pressed, MouseButton::Left);
+    assert!(input.drain_admitted_input_capture().is_empty());
+
+    input.start_admitted_input_capture();
+    assert!(input.admitted_input_capture_active());
+
+    input.handle_mouse_input(ElementState::Pressed, MouseButton::Right);
+    input.handle_mouse_motion(3.0, -2.0);
+    input.clear_frame();
+    input.handle_mouse_wheel_delta(1.5);
+
+    let captured = input.drain_admitted_input_capture();
+    assert_eq!(captured.len(), 3);
+    assert!(matches!(
+        captured[0].observations.as_slice(),
+        [InputObservation::PointerButton(PointerButtonInput {
+            button: PointerButton::Right,
+            state: DigitalState::Pressed,
+        })]
+    ));
+    assert!(matches!(
+        captured[1].observations.as_slice(),
+        [InputObservation::RelativeMotion {
+            delta: Vector2 { x: 3.0, y: -2.0 },
+            unit: RelativeMotionUnit::BackendDeviceUnits,
+        }]
+    ));
+    assert!(matches!(
+        captured[2].observations.as_slice(),
+        [InputObservation::Scroll(_)]
+    ));
+    assert!(
+        input.admitted_input_capture_active(),
+        "draining capture must not implicitly stop a still-active recorder"
+    );
+
+    input.reset_admitted_input_capture();
+    input.handle_mouse_input(ElementState::Released, MouseButton::Right);
+    let stopped = input.stop_admitted_input_capture();
+    assert_eq!(stopped.len(), 1);
+    assert!(!input.admitted_input_capture_active());
+
+    input.handle_mouse_motion(9.0, 9.0);
+    assert!(input.drain_admitted_input_capture().is_empty());
+}
+
+#[test]
+fn rejected_group_is_not_captured_or_staged() {
+    let mut input = InputState::new();
+    input.start_admitted_input_capture();
+    let group = InputObservationGroup::single(
+        InputContext::new(InputSourceId::new(711), Some(InputDeviceId::new(9))),
+        InputObservation::RelativeMotion {
+            delta: Vector2::new(f32::NAN, 0.0),
+            unit: RelativeMotionUnit::BackendDeviceUnits,
+        },
+    );
+
+    assert!(input.admit_device_observation_group(group).is_err());
+    assert!(input.drain_admitted_input_capture().is_empty());
+    assert!(input.drain_device_observation_groups().is_empty());
+}
+
+#[test]
+fn continuity_loss_is_captured_as_continuity_without_fabricated_release() {
+    let mut input = InputState::new();
+    let context = InputContext::new(InputSourceId::new(712), Some(InputDeviceId::new(10)));
+    input.handle_pointer_button(
+        context,
+        PointerButtonInput {
+            button: PointerButton::Left,
+            state: DigitalState::Pressed,
+        },
+    );
+    input.clear_frame();
+
+    input.start_admitted_input_capture();
+    input.handle_continuity_loss(context, ContinuityLoss::Source);
+
+    let captured = input.stop_admitted_input_capture();
+    assert_eq!(captured.len(), 1);
+    assert_eq!(captured[0].context, context);
+    assert_eq!(
+        captured[0].observations,
+        vec![InputObservation::ContinuityLoss(ContinuityLoss::Source)]
+    );
+    assert!(!input.left_mouse_released());
+    assert!(input.mouse_button_transitions().is_empty());
 }
