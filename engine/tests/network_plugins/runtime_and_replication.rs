@@ -62,6 +62,7 @@ fn prediction_waits_for_later_registered_simulation_input() {
     let mut app = App::headless();
     app.add_plugins(default_plugins());
     app.add_plugin(NetworkClientPlugin);
+    app.add_systems(FixedUpdate, produce_simulation_input.in_set(CoreSet::Simulation));
     let payload = TestReplicationDriver::encode_snapshot(&TestSnapshot::default())
         .expect("baseline snapshot should encode");
     enqueue_client_inbox(
@@ -75,8 +76,7 @@ fn prediction_waits_for_later_registered_simulation_input() {
         }),
     )
     .expect("baseline should stage");
-    let mut app = app.run_for_frames(1).expect("baseline should activate prediction");
-    app.add_systems(FixedUpdate, produce_simulation_input.in_set(CoreSet::Simulation));
+    let app = app.run_for_frames(1).expect("baseline should activate prediction");
 
     let app = app
         .run_for_fixed_steps(1)
