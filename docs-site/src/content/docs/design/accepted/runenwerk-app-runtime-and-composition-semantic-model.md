@@ -792,7 +792,8 @@ AppReplayExt
 AppInput/ProductActionExt
 ```
 
-Names are illustrative only.
+`AppSceneExt`, `AppReplayExt`, and `AppSimulationExt` are current concrete owner APIs.
+The remaining names are illustrative until their owner cuts are separately accepted.
 
 Moving an operation to an owner extension must not silently reclassify it as pre-run
 composition. Owner APIs must distinguish as applicable:
