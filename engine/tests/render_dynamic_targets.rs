@@ -485,6 +485,20 @@ fn fixed_resolution_preflight_accepts_internal_scene_and_native_resolve() {
     assert!(evidence.native_fallback_reason.is_none());
     assert_eq!(evidence.target_key.as_ref(), Some(&fixed.target_key));
 
+    let mut wrong_surface = frame.clone();
+    wrong_surface.surface.render_surface_id =
+        engine::plugins::render::backend::RenderSurfaceId::try_from_raw(2)
+            .expect("test surface should be nonzero");
+    assert!(matches!(
+        engine::plugins::render::inspect::inspect_fixed_resolution_execution(
+            &admission,
+            &wrong_surface
+        ),
+        Err(
+            engine::plugins::render::inspect::RenderFixedResolutionExecutionEvidenceError::SurfaceIdentityMismatch
+        )
+    ));
+
     let mut incomplete = frame.clone();
     incomplete
         .flow_invocations
