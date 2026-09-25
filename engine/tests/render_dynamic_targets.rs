@@ -499,7 +499,9 @@ fn fixed_resolution_preflight_accepts_internal_scene_and_native_resolve() {
     ));
 
     let mut missing_output_view = frame.clone();
-    missing_output_view.views.retain(|view| view.view_id != "main");
+    missing_output_view
+        .views
+        .retain(|view| view.view_id != "main");
     assert!(matches!(
         engine::plugins::render::inspect::inspect_fixed_resolution_execution(
             &admission,
@@ -511,10 +513,12 @@ fn fixed_resolution_preflight_accepts_internal_scene_and_native_resolve() {
     ));
 
     let mut duplicate_native_scene = frame.clone();
-    duplicate_native_scene.flow_invocations.push(PreparedFlowInvocation::main(
-        scene.id(),
-        PreparedFlowInputs::default(),
-    ));
+    duplicate_native_scene
+        .flow_invocations
+        .push(PreparedFlowInvocation::main(
+            scene.id(),
+            PreparedFlowInputs::default(),
+        ));
     assert!(matches!(
         engine::plugins::render::inspect::inspect_fixed_resolution_execution(
             &admission,
@@ -531,11 +535,7 @@ fn fixed_resolution_preflight_accepts_internal_scene_and_native_resolve() {
         alias_key("scene_color"),
         (1280, 800),
     )
-    .admit_against_compiled_flows(
-        (1920, 1080),
-        &compiled_flows[0],
-        &compiled_flows[1],
-    );
+    .admit_against_compiled_flows((1920, 1080), &compiled_flows[0], &compiled_flows[1]);
 
     assert!(matches!(
         engine::plugins::render::inspect::inspect_fixed_resolution_execution(&fallback, &frame),
@@ -571,12 +571,11 @@ fn fixed_resolution_preflight_accepts_internal_scene_and_native_resolve() {
         native_report.diagnostics
     );
 
-    let fallback_evidence =
-        engine::plugins::render::inspect::inspect_fixed_resolution_execution(
-            &fallback,
-            &native_frame,
-        )
-        .expect("complete native fallback should remain inspectable");
+    let fallback_evidence = engine::plugins::render::inspect::inspect_fixed_resolution_execution(
+        &fallback,
+        &native_frame,
+    )
+    .expect("complete native fallback should remain inspectable");
     assert_eq!(
         fallback_evidence.resolution.policy,
         engine::plugins::render::inspect::RenderTemporalResolutionPolicy::Native
@@ -597,7 +596,6 @@ fn fixed_resolution_preflight_accepts_internal_scene_and_native_resolve() {
     assert!(fallback_evidence.target_key.is_none());
     assert!(fallback_evidence.internal_view_id.is_none());
     assert!(fallback_evidence.resolve_invocation_id.is_none());
-
 }
 
 #[test]
