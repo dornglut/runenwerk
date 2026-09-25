@@ -12,7 +12,6 @@ use runen_net::input::{
     PredictionState as RunenNetPredictionState,
 };
 use runen_net::replication::ClientReplicationSet;
-use world_ops::SyncCursor;
 
 // engine/src/plugins/net/prediction.rs
 

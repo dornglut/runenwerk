@@ -5,6 +5,7 @@ use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDrive
 use engine_net::*;
 use runen_ecs::World;
 use runen_net::identity::ConnectionHandle;
+use runen_net::replication::AuthorityAckOutcome;
 use std::collections::HashSet;
 use world_ops::SyncCursor;
 
