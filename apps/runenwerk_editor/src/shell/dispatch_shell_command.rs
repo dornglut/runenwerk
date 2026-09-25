@@ -1946,19 +1946,22 @@ fn load_workspace_profile_layout(
             ));
         }
         shell_state
-            .install_composition_runtime(runtime)
-            .map_err(|_| EditorMutationError::runtime_rejected("composition install failed"))?;
-    } else {
-        shell_state
-            .activate_workspace_profile_ref_with_registry(
-                &profile.profile_ref,
-                app.workbench_host().workspace_profile_registry(),
-                app.workbench_host().tool_surface_registry(),
-            )
-            .map_err(|_| {
-                EditorMutationError::runtime_rejected("composition profile import failed")
-            })?;
+            .queue_composition_restore(runtime)
+            .map_err(|_| EditorMutationError::runtime_rejected("composition restore queue failed"))?;
+        app.append_console_line(format!(
+            "[composition] queued persisted {} layout restore",
+            profile.label
+        ));
+        return Ok(());
     }
+
+    shell_state
+        .activate_workspace_profile_ref_with_registry(
+            &profile.profile_ref,
+            app.workbench_host().workspace_profile_registry(),
+            app.workbench_host().tool_surface_registry(),
+        )
+        .map_err(|_| EditorMutationError::runtime_rejected("composition profile import failed"))?;
     app.prune_surface_sessions_for_composition(shell_state.composition_runtime());
     app.append_console_line(format!("[composition] loaded {} layout", profile.label));
     Ok(())
@@ -2104,14 +2107,22 @@ fn load_scene_from_default_path(
     if composition_root.join("active-generation.ron").exists() {
         match load_editor_composition_layout(&composition_root) {
             Ok(runtime) => {
+                if runtime.extension().workspace_profile_raw()
+                    != shell_state.active_workspace_profile_id().raw()
+                {
+                    return Err(EditorMutationError::runtime_rejected(
+                        "composition profile identity mismatch",
+                    ));
+                }
                 shell_state
-                    .install_composition_runtime(runtime)
+                    .queue_composition_restore(runtime)
                     .map_err(|_| {
-                        EditorMutationError::runtime_rejected("composition install failed")
+                        EditorMutationError::runtime_rejected(
+                            "composition restore queue failed",
+                        )
                     })?;
-                app.prune_surface_sessions_for_composition(shell_state.composition_runtime());
                 app.append_console_line(format!(
-                    "[io] loaded composition layout {}",
+                    "[io] queued composition layout restore {}",
                     composition_root.display()
                 ));
             }
@@ -2153,7 +2164,10 @@ mod composition_tests {
     fn pending_composition_coordination_blocks_save_before_io() {
         let mut app = RunenwerkEditorApp::new();
         let mut shell = RunenwerkEditorShellState::new();
-        shell.set_composition_coordination_pending(true);
+        let candidate = shell.composition_runtime().clone();
+        shell
+            .queue_composition_restore(candidate)
+            .expect("restore candidate should queue");
 
         assert!(ensure_composition_save_allowed(&mut app, &shell).is_err());
         assert!(app.console_lines().iter().any(|line| {

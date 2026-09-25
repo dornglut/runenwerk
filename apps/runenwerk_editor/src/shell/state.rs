@@ -121,6 +121,7 @@ pub struct RunenwerkEditorShellState {
     composition_runtime: EditorCompositionRuntime,
     composition_identity_allocator: EditorCompositionIdentityAllocator,
     pending_docking_intents: Vec<EditorDockingIntent>,
+    pending_composition_restore: Option<EditorCompositionRuntime>,
     composition_coordination_pending: bool,
     composition_projection: EditorCompositionProjectionArtifact,
     self_authoring: SelfAuthoringWorkspaceState,
@@ -386,6 +387,7 @@ impl RunenwerkEditorShellState {
             composition_runtime,
             composition_identity_allocator,
             pending_docking_intents: Vec::new(),
+            pending_composition_restore: None,
             composition_coordination_pending: false,
             composition_projection,
             self_authoring: SelfAuthoringWorkspaceState::from_checked_in_fixtures()
@@ -699,6 +701,50 @@ impl RunenwerkEditorShellState {
         }
     }
 
+    pub fn queue_composition_restore(
+        &mut self,
+        runtime: EditorCompositionRuntime,
+    ) -> Result<(), editor_shell::EditorCompositionRejection> {
+        if self.composition_coordination_pending || self.pending_composition_restore.is_some() {
+            return Err(editor_shell::EditorCompositionRejection::single(
+                editor_shell::EditorCompositionDiagnosticRecord::error(
+                    editor_shell::EditorCompositionDiagnosticCode::CoordinationPending,
+                    editor_shell::EditorCompositionDiagnosticStage::Policy,
+                    editor_shell::EditorCompositionDiagnosticSubject::General(
+                        "composition-restore".to_owned(),
+                    ),
+                    "Wait for the pending composition transition to commit or roll back before loading another layout.",
+                ),
+            ));
+        }
+        project_editor_composition(&runtime)?;
+        WorkspaceProfileId::try_from_raw(runtime.extension().workspace_profile_raw()).map_err(
+            |_| {
+                editor_shell::EditorCompositionRejection::single(
+                    editor_shell::EditorCompositionDiagnosticRecord::error(
+                        editor_shell::EditorCompositionDiagnosticCode::ExtensionCoreMismatch,
+                        editor_shell::EditorCompositionDiagnosticStage::Extension,
+                        editor_shell::EditorCompositionDiagnosticSubject::Profile(
+                            runtime.extension().workspace_profile_raw().to_string(),
+                        ),
+                        "Use a valid non-zero editor workspace profile compatibility identity.",
+                    ),
+                )
+            },
+        )?;
+        self.pending_composition_restore = Some(runtime);
+        self.composition_coordination_pending = true;
+        Ok(())
+    }
+
+    pub fn has_pending_composition_restore(&self) -> bool {
+        self.pending_composition_restore.is_some()
+    }
+
+    pub fn take_pending_composition_restore(&mut self) -> Option<EditorCompositionRuntime> {
+        self.pending_composition_restore.take()
+    }
+
     pub fn queue_docking_intent(&mut self, intent: EditorDockingIntent) {
         self.pending_docking_intents.push(intent);
         self.composition_coordination_pending = true;
@@ -753,6 +799,8 @@ impl RunenwerkEditorShellState {
             return false;
         }
         self.editor_window_bindings.remove(&editor_window_id);
+        self.pending_editor_window_presentations
+            .retain(|pending| *pending != editor_window_id);
         true
     }
 
@@ -1039,7 +1087,6 @@ impl RunenwerkEditorShellState {
         &mut self,
         runtime: EditorCompositionRuntime,
     ) -> Result<(), editor_shell::EditorCompositionRejection> {
-        let projection = project_editor_composition(&runtime)?;
         let primary_binding = self
             .editor_window_binding(self.editor_windows.primary_window_id())
             .ok_or_else(|| {
@@ -1051,6 +1098,51 @@ impl RunenwerkEditorShellState {
             primary_binding,
             None,
         )?;
+        self.install_composition_runtime_with_target_bindings(runtime, composition_target_bindings)
+    }
+
+    pub(crate) fn install_composition_runtime_with_target_bindings(
+        &mut self,
+        runtime: EditorCompositionRuntime,
+        composition_target_bindings: EditorCompositionTargetBindingRegistry<
+            EditorWindowPresentationBinding,
+        >,
+    ) -> Result<(), editor_shell::EditorCompositionRejection> {
+        let projection = project_editor_composition(&runtime)?;
+        let Some(primary_target) = runtime.composition().definition().targets().first() else {
+            return Err(target_binding_rejection(
+                "editor composition requires at least one presentation target",
+            ));
+        };
+        let primary_binding = self
+            .editor_window_binding(self.editor_windows.primary_window_id())
+            .ok_or_else(|| {
+                target_binding_rejection("primary editor window has no presentation binding")
+            })?;
+        if composition_target_bindings
+            .binding(primary_target.id)
+            .copied()
+            != Some(primary_binding)
+        {
+            return Err(target_binding_rejection(
+                "primary composition target must bind to the current primary editor presentation",
+            ));
+        }
+        for target in runtime.composition().definition().targets() {
+            let binding = composition_target_bindings
+                .binding(target.id)
+                .copied()
+                .ok_or_else(|| {
+                    target_binding_rejection(
+                        "every composition target requires an explicit editor window binding",
+                    )
+                })?;
+            if target.id != primary_target.id && self.editor_window_for_binding(binding).is_none() {
+                return Err(target_binding_rejection(
+                    "secondary composition target binding must reference a live editor window presentation",
+                ));
+            }
+        }
         let profile_id = WorkspaceProfileId::try_from_raw(
             runtime.extension().workspace_profile_raw(),
         )
