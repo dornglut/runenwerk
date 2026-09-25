@@ -126,10 +126,10 @@ pub(crate) fn frame_render_prepare_system(mut world: WorldMut) -> anyhow::Result
         active_overlay_label,
         &execution_feature_ids,
     );
-    let dynamic_texture_targets = world
+    let dynamic_texture_target_requests = world
         .resource::<RenderDynamicTextureTargetRequestRegistryResource>()
         .ok()
-        .map(|resource| resource.snapshot())
+        .cloned()
         .unwrap_or_default();
     let dynamic_texture_uploads = world
         .resource::<RenderDynamicTextureUploadRegistryResource>()
@@ -167,7 +167,8 @@ pub(crate) fn frame_render_prepare_system(mut world: WorldMut) -> anyhow::Result
                 views,
                 flows,
                 flow_invocations,
-                dynamic_texture_targets: dynamic_texture_targets.clone(),
+                dynamic_texture_targets: dynamic_texture_target_requests
+                    .snapshot_for_surface(surface.render_surface_id),
                 dynamic_texture_uploads: dynamic_texture_uploads.clone(),
                 product_selections: product_selections.clone(),
                 viewport_surface_bindings: viewport_surface_bindings.clone(),
