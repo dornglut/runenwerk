@@ -411,6 +411,16 @@ mod tests {
         assert!(invalid.native_fallback_active());
         assert!(invalid.fallback_reason().is_some());
         assert!(invalid.prepared().is_none());
+        let (fallback_active, fallback_reason) =
+            crate::plugins::render::inspect::fixed_resolution_admission_native_fallback_evidence(
+                &invalid,
+            );
+        assert!(fallback_active);
+        assert!(
+            fallback_reason
+                .as_deref()
+                .is_some_and(|reason| reason.contains("must preserve output aspect"))
+        );
         assert_eq!(
             crate::plugins::render::inspect::fixed_resolution_admission_resolution_evidence(&invalid),
             crate::plugins::render::inspect::RenderTemporalResolutionEvidence {
