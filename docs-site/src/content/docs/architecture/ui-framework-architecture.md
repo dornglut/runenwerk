@@ -11,11 +11,9 @@ related_docs:
   - ../domain/ui/architecture.md
   - ../domain/ui/roadmap.md
   - ./live-uiplugin-runtime-platform-architecture.md
-  - ../design/deferred/live-uiplugin-runtime-and-surface-frame-rendering-design.md
   - ../design/implemented/ui-program-architecture.md
   - ../design/implemented/ui-program-architecture-owner-map.md
   - ../design/active/runenwerk-ui-story-driven-golden-workflow-design.md
-  - ../design/deferred/game-runtime-ui-projection-and-hud-platform-design.md
   - ../design/deferred/ui-model-multiple-execution-strategies-design.md
   - domain-authoring-platform-overview.md
   - ../adr/accepted/0009-ui-interaction-formation-v2.md
@@ -224,9 +222,6 @@ A future Runenwerk adoption or partial cutover must:
 5. preserve product/engine ownership of host mutation and renderer execution;
 6. remove replaced local authority only after the consumer cutover is accepted.
 
-The deferred [Live UiPlugin consumer-integration design](../design/deferred/live-uiplugin-runtime-and-surface-frame-rendering-design.md)
-records historical Runenwerk integration context; it is not activation authority.
-
 ## Non-goals
 
 This architecture does not authorize:
@@ -253,7 +248,6 @@ Diagram source:
 - [UI Domain Current-State Architecture](../domain/ui/architecture.md)
 - [UI Substrate and Surface Roadmap](../domain/ui/roadmap.md)
 - [Live UiPlugin Runtime Platform Architecture](./live-uiplugin-runtime-platform-architecture.md)
-- [Deferred Live UiPlugin Consumer Integration](../design/deferred/live-uiplugin-runtime-and-surface-frame-rendering-design.md)
 - [UI Program Architecture](../design/implemented/ui-program-architecture.md)
 - [UI Program Architecture Owner Map](../design/implemented/ui-program-architecture-owner-map.md)
 - [Runenwerk UI Story V2 Consumer and Proof Boundary](../design/active/runenwerk-ui-story-driven-golden-workflow-design.md)

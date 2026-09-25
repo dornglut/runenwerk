@@ -7,7 +7,6 @@ layer: domain
 canonical: true
 last_reviewed: 2026-09-13
 related_designs:
-  - ./ui-component-platform-layout-container-virtualization-design.md
   - ../active/runenwerk-ui-story-driven-golden-workflow-design.md
 related_docs:
   - ../../domain/ui/architecture.md

@@ -11,7 +11,6 @@ related_designs:
   - ./sdf-product-renderer-and-gpu-residency-design.md
   - ./field-product-contracts-diagnostics-and-residency-design.md
   - ./renderer-scale-residency-and-gpu-driven-visibility-design.md
-  - ../deferred/sdf-procedural-animation-and-animated-models-design.md
 ---
 
 # SDF World Rendering And Raymarch Acceleration Platform

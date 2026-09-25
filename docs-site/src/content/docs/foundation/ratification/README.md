@@ -6,8 +6,6 @@ owner: foundation
 layer: foundation
 canonical: true
 last_reviewed: 2026-09-09
-related:
-  - ../../design/implemented/foundation-ratification-design.md
 ---
 
 # Ratification

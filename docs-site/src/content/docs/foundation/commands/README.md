@@ -6,8 +6,6 @@ owner: foundation
 layer: foundation
 canonical: true
 last_reviewed: 2026-05-05
-related:
-  - ../../design/implemented/foundation-commands-design.md
 ---
 
 # Commands

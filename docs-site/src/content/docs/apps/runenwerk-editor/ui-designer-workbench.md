@@ -8,7 +8,6 @@ canonical: true
 last_reviewed: 2026-09-10
 related_designs:
   - ../../design/accepted/ui-designer-workbench-product-design.md
-  - ../../design/deferred/game-runtime-ui-projection-and-hud-platform-design.md
 ---
 
 # UI Designer Workbench

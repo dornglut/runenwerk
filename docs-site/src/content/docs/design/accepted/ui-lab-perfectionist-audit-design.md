@@ -15,7 +15,6 @@ related_adrs:
   - ../../adr/superseded/0012-capability-workbench-clean-break.md
   - ../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md
 related_designs:
-  - ../implemented/ui-lab-productization-design.md
   - ./ui-designer-interface-lab-platform-design.md
   - ../implemented/editor-tool-suite-registry-and-workbench-host-design.md
   - ./runenwerk-editor-coordination-semantic-model.md

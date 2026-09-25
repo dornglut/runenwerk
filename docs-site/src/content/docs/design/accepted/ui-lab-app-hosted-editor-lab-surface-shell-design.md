@@ -14,11 +14,9 @@ related_adrs:
   - ../../adr/accepted/0010-graph-substrate-canvas-boundary.md
   - ../../adr/superseded/0012-capability-workbench-clean-break.md
 related_designs:
-  - ../implemented/ui-lab-productization-design.md
   - ./ui-lab-command-catalog-and-surface-registry-design.md
   - ./ui-designer-interface-lab-platform-design.md
   - ../implemented/editor-self-authoring-and-final-ui-design.md
-  - ../implemented/surface-workflow-contract-redesign.md
   - ./ui-designer-canonical-ir-and-composition-design.md
   - ./ui-designer-target-projection-profiles-design.md
   - ./ui-designer-visual-layout-and-interface-composition-design.md

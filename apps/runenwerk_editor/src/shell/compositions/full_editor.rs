@@ -9,15 +9,11 @@ pub(crate) fn composition_manifest(
     installed_suites: Vec<ToolSuiteId>,
     host_policy: HostCapabilityPolicy,
 ) -> WorkbenchCompositionManifest {
-    let profile_manifests = profiles::full_editor_profiles();
     WorkbenchCompositionManifest {
         composition_ref: profile_ref("runenwerk.workbench.full_editor"),
         label: "Full Editor".to_string(),
         installed_suites,
-        profile_refs: profile_manifests
-            .iter()
-            .map(|profile| profile.profile_ref.clone())
-            .collect(),
+        profile_refs: profiles::full_editor_profile_refs(),
         default_profile_ref: profiles::scene_profile_ref(),
         host_policy,
     }
