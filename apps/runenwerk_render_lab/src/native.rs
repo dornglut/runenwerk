@@ -1553,6 +1553,75 @@ mod tests {
     }
 
     #[test]
+    fn native_quality_reference_uses_the_same_alias_driven_scene_flow() {
+        let scene = render_lab_fixed_quality_flow().expect("quality flow should author");
+        let producer_id = producer(RL2_PRODUCER_ID);
+        let camera = RenderLabCamera::default();
+        let (target_key, target, contribution) =
+            build_render_lab_radiance_publication(&camera, producer_id, (1920, 1080))
+                .expect("native quality radiance publication should build");
+        let invocation = PreparedFlowInvocationRequest::new(
+            format!("{RL2_QUALITY_FLOW_ID}.native"),
+            scene.id(),
+            "main",
+        )
+        .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, target_key.clone())
+        .expect("native quality radiance alias should bind")
+        .bind_surface_color_alias(RL2_QUALITY_COLOR_ALIAS)
+        .expect("native quality color alias should bind");
+
+        let mut targets = RenderDynamicTextureTargetRequestRegistryResource::default();
+        let mut frame_requests = PreparedRenderFrameRequestResource::default();
+        let mut contributions = RenderDeterministicFrameContributionResource::default();
+        stage_render_lab_native_quality_publication(
+            &mut targets,
+            &mut frame_requests,
+            &mut contributions,
+            producer_id,
+            RenderSurfaceId::primary(),
+            target,
+            invocation.clone(),
+            contribution,
+        )
+        .expect("native quality publication should remain atomic");
+
+        let published_targets = targets.snapshot_for_surface(RenderSurfaceId::primary());
+        assert_eq!(published_targets.len(), 1);
+        assert_eq!(published_targets[0].key, target_key);
+        assert_eq!(
+            (published_targets[0].width, published_targets[0].height),
+            (1920, 1080)
+        );
+        assert!(
+            frame_requests
+                .requested_views_for_surface(RenderSurfaceId::primary())
+                .is_empty(),
+            "native quality reference must not publish a fixed internal view"
+        );
+        let invocations =
+            frame_requests.requested_flow_invocations_for_surface(RenderSurfaceId::primary());
+        assert_eq!(invocations.len(), 1);
+        assert_eq!(invocations[0].flow_id, scene.id());
+        assert_eq!(invocations[0].view_id, "main");
+        assert_eq!(
+            invocations[0]
+                .target_alias_bindings
+                .get(
+                    &engine::plugins::render::RenderTargetAliasKey::new(RL2_QUALITY_COLOR_ALIAS)
+                        .expect("quality color alias")
+                ),
+            Some(&engine::plugins::render::PreparedTargetBinding::SurfaceColor)
+        );
+        assert!(
+            !frame_requests.replaces_automatic_main_flow(
+                RenderSurfaceId::primary(),
+                scene.id()
+            ),
+            "native quality reference must not claim fixed automatic-main replacement"
+        );
+    }
+
+    #[test]
     fn fixed_quality_publication_is_surface_scoped_and_atomic() {
         let scene = render_lab_fixed_quality_flow().expect("quality flow should author");
         let resolve =
