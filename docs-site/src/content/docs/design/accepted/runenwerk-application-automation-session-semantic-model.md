@@ -206,6 +206,20 @@ tool identity, origin and reconciliation provenance, evidence status, delivery r
 versus absolute motion, scroll axes/domain, continuity loss, source time where present, and
 canonical App-frame partitioning.
 
+A4 is not a complete platform-event transcript and does not snapshot pre-capture input state.
+
+In particular:
+
+- `PlatformEvent::TextInput` is a separate Runenwerk platform/input side channel and is not an
+  `InputObservationGroup`; A3/A4 therefore do not record typed-text payloads;
+- capture may begin while keys/buttons/contacts are already held or active;
+- capture does not snapshot the absolute-pointer position that existed before its first captured
+  absolute-position observation;
+- capture does not snapshot Runenwerk frame-local projection state such as primary-touch ownership.
+
+Those omissions are truthful recording boundaries, not permission to reconstruct missing facts
+during replay.
+
 Frame-local InputState projections, PlatformWindowEventQueueResource, and native-tablet product
 staging remain non-authoritative as general recording surfaces.
 
@@ -243,30 +257,61 @@ The caller is responsible for supplying replay-owned source IDs that do not coll
 physical/current sources. Runenwerk MUST NOT introduce a global mutable input-ID allocator solely
 for automation.
 
+### Replay preflight and trace self-containment
+
+Before mutating the target App, replay MUST validate that the trace is supported by the selected
+replay contract.
+
+The first replay contract assumes fresh replay-owned source identities and MUST NOT infer state that
+predates capture.
+
+A trace is not self-contained merely because every captured group is valid. The first replay
+implementation therefore supports only a deliberately narrow subset whose required state can be
+established from the trace itself:
+
+- pointer-button input when the first traced state for each replay source/device/button is a press;
+- relative motion;
+- scroll;
+- all-tablet atomic groups only when each replayed contact lifecycle used by the proof is established
+  from captured trace data rather than requiring an unrecorded pre-capture contact state.
+
+The first replay implementation MUST report UnsupportedTraceShape before target mutation for:
+
+- absolute pointer-position groups, because the first Runenwerk cursor-motion projection depends on
+  a pre-capture absolute-position baseline that A4 does not record;
+- ordinary contact/touch groups whose first required contact state predates capture;
+- keyboard replay as a claim of recorded text entry, because `PlatformEvent::TextInput` payloads are
+  not present in A4;
+- a first digital release/reconciliation state that requires an unrecorded held state;
+- continuity-loss behavior that would require state established before the trace;
+- any other group whose Runenwerk projection depends on missing pre-capture state.
+
+A later recorder extension may add explicit initial-state or text-input evidence. Replay MUST NOT
+manufacture those facts in the meantime.
+
+Normalized keyboard observations may eventually be replayed as keyboard observations, but that MUST
+remain explicitly distinct from text-entry replay. A completed normalized keyboard replay would not
+prove that original typed-text behavior was reproduced.
+
 ### Projection-preserving atomic replay ingress
 
 Replay MUST exercise the accepted Runenwerk input integration, not only the neutral RunenInput
 reducer.
 
-For current maintained Runenwerk traces:
+For the first bounded implementation:
 
-- keyboard, pointer button, absolute pointer position, relative motion, scroll, contact, and
-  continuity ingress are single-observation groups;
-- native-tablet ingress may contain multiple tablet observations in one atomic group.
-
-A replay implementation MAY route current single-observation groups through the corresponding
-existing Runenwerk family-specific normalized ingress after identity remapping. This preserves the
-same RunenInput admission and Runenwerk consumer projections used by maintained ingress.
-
-A replay implementation MUST route an all-tablet group through the existing whole-group device
-admission/staging path so historical/current/predicted samples remain one atomic validation and
-product-staging unit.
+- supported pointer-button, relative-motion, and scroll groups route through their existing
+  family-specific normalized Runenwerk ingress after identity remapping;
+- supported all-tablet groups route through the existing whole-group device admission/staging path,
+  so historical/current/predicted samples remain one atomic validation and product-staging unit;
+- unsupported families or non-self-contained group shapes fail before replay begins.
 
 A multi-observation group containing any non-tablet observation is Unsupported until Runenwerk has
 an owner-correct projection contract for that group shape. Replay MUST NOT split such a group into
 independent admissions.
 
-The replay path MUST NOT add a second reducer or reconstruct frame-local state after the fact.
+The replay path MUST NOT add a second reducer, reconstruct missing initial state, synthesize text
+input from keyboard observations, or rebuild frame-local projections after the fact.
 
 ### App-frame replay
 
@@ -295,9 +340,16 @@ A later explicit trace-to-scenario transformation may decide how to handle those
 
 ### Initial state and cleanup
 
-Normalized replay requires explicit caller control of the target App and replay-owned source IDs.
-It MUST NOT clear or invalidate unrelated physical/current input merely to manufacture a pristine
-state.
+Normalized replay requires explicit caller control of the target App and fresh replay-owned source
+IDs.
+
+The caller MUST choose replay-owned source identities that do not already carry target-App input
+state. The first replay implementation does not clear those identities to manufacture a clean
+baseline and does not snapshot/restore unrelated input.
+
+Trace preflight MUST complete before the first replay mutation. A trace that requires pre-capture
+held/contact/absolute-pointer state is Unsupported under the first replay contract rather than being
+silently approximated.
 
 Replay-owned held state is cleaned through existing source-scoped continuity semantics on
 cancellation or explicit replay teardown. Cleanup MUST NOT synthesize physical Up/Cancel
@@ -321,6 +373,10 @@ Replay result knowledge MUST distinguish at least:
 A failure after earlier frames were applied MUST report partial progress, including the last
 completed frame or the failing frame/group location. It MUST NOT report the whole trace as
 successfully replayed merely because iteration started.
+
+`Completed` means all supported normalized groups were replayed and all recorded canonical App
+frames were advanced. It does not by itself prove that every original product effect was reproduced.
+Product equivalence requires an owner-specific query/assertion after replay.
 
 ### Ownership and fidelity
 
@@ -590,17 +646,25 @@ in-memory trace replay only.
 That proof SHOULD:
 
 1. accept one in-memory A4 trace with no trailing groups;
-2. use explicit caller-supplied replay-owned source mapping;
-3. remap tablet source-time context consistently;
-4. replay current maintained single-observation families through their existing normalized
-   Runenwerk ingress;
-5. preserve all-tablet multi-observation groups through whole-group device admission/staging;
-6. fail closed on unsupported multi-observation non-tablet groups before splitting them;
+2. preflight the complete trace before target mutation;
+3. use explicit caller-supplied fresh replay-owned source mapping;
+4. replay only the first supported self-contained ordinary families: pointer button, relative
+   motion, and scroll;
+5. remap tablet source-time context consistently and preserve supported all-tablet
+   multi-observation groups through whole-group device admission/staging;
+6. reject absolute-pointer, text-dependent keyboard, pre-capture-state-dependent contact/digital/
+   continuity, and multi-observation non-tablet shapes rather than approximating them;
 7. advance exactly one canonical App frame per recorded trace frame, including idle frames;
 8. report partial progress and truthful failure knowledge;
 9. clean only replay-owned held state through continuity semantics;
-10. prove a recorded Render Lab orbit/pan/zoom sequence including an idle frame;
-11. prove tablet atomicity and unsupported-shape behavior at the replay ingress boundary.
+10. prove a recorded Render Lab orbit/pan/zoom sequence that starts capture before button press and
+    includes an idle frame;
+11. prove tablet atomicity plus unsupported initial-state/group-shape behavior at the replay ingress
+    boundary.
+
+This first proof intentionally does not claim general keyboard/text, absolute-pointer, or
+mid-contact replay. Those require additional recorded evidence or a separately accepted
+transformation/initial-state contract.
 
 Do not add persistence, a scenario DSL, CLI/IPC, remote attach, native OS automation, Scene replay
 changes, or RunenUI replay changes in that slice.
