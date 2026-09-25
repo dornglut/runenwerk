@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-09-14
+last_reviewed: 2026-09-25
 related_designs:
   - ../../design/accepted/sdf-first-field-world-platform-design.md
   - ../../design/implemented/ui-definition-formation-foundation-design.md
@@ -86,7 +86,7 @@ Current implemented baseline:
 
 Current post-M3 gaps:
 
-- M1 implementation seams are closed in the current predecessor-shaped `editor_core`: `DocumentKind` has the explicit M1 taxonomy, `EditorSession` owns ordered document tabs, active switching, dirty/save/close transitions, document compatibility validation, and mode ids/descriptors/registry compatibility rules; app-local generic document-tab runtime state is split from scene-specific document state. These are current implementation facts, not the normalized long-term ownership model accepted by ADR 0025.
+- M1 implementation seams are closed, while later ADR-0025 normalization has narrowed the remaining predecessor-shaped `editor_core`: `DocumentKind` still carries the central taxonomy and `EditorSession` now retains ordered document tabs plus active switching only. Scene selection/history/persistence, dormant session mode authority, duplicate app-local document-tab runtime state, provider `DocumentId` identity, and session-local document-compatibility activation authority have been removed or moved to their explicit owners. The surviving `DocumentKind` provider/history routing is bounded migration residue under #737, not the normalized long-term model.
 - M2 shell seams are closed as implementation history: tab chrome, editor type switching, new-tab allocation, close/split/duplicate/reset area commands, dynamic split composition, projected-host split resizing, and workspace layout persistence have automated coverage. Current structural mutation and persistence authority has since cut over to `ui_composition`; legacy workspace contracts remain compatibility/test inputs.
 - M3 scene-authoring seams are closed: scene command intents cover child creation, subtree duplication, batch delete, SDF primitive creation, transform set/reset, and component add/remove; rotate/scale viewport tools, transform preview, retained outliner tree rows, common reflected inspector editing, SDF authoring DTOs, and normalized save/load paths have focused coverage.
 - The M3.5 UI definition/formation closeout is implemented: `domain/ui/ui_definition`, `domain/editor/editor_definition`, checked-in RON fixtures under `assets/editor/ui/`, retained formation, inert route/embed products, toolbar/menu fixture formation, normal shell chrome formation, common provider surface fixture formation, and app-owned fixture validation exist. Provider data, viewport overlays, editor mutations, and route execution remain outside `ui_definition`.
