@@ -183,9 +183,19 @@ The composition graph owns `PresentationTargetId`; the app binds supported
 targets to `EditorWindowPresentationBinding`. Native-window lifecycle, monitor
 bounds, DPI, restore policy, and OS vetoes remain app/engine-owned.
 
-The accepted native multi-window design owns the future/native presentation
-mechanics. ADR 0025 separately governs semantic sharing: windows may explicitly
-share editor bindings, selection contexts, history contexts, or persistence
+The native multi-window foundation already supports distinct logical Editor windows,
+native Host windows, Render surfaces, composition targets, target-local UI runtimes,
+input routing, and detach-to-new-target coordination. Persisted multi-target
+compositions restore through the same window coordinator: structural
+`PresentationTargetId` values are retained, while every non-primary target receives a
+fresh Editor/native/Render presentation attachment before the candidate replaces the
+live composition. Creation failure rolls back provisional presentations and leaves the
+current composition active.
+
+Ordinary `Window > New Window` still requires the separately owned fresh-target layout
+formation decision, and secondary-window viewport/product projection remains a later
+multi-window closure slice. ADR 0025 separately governs semantic sharing: windows may
+explicitly share editor bindings, selection contexts, history contexts, or persistence
 contexts, while activation/focus/local presentation remain independently scoped.
 
 ## Persistence
@@ -194,7 +204,10 @@ contexts, while activation/focus/local presentation remain independently scoped.
 atomic composition bundle generations through `CompositionBundleRepository`.
 Save explicitly promotes ratified state and snapshots the complete typed editor
 extension. Load validates the linked core envelope, app compatibility,
-extension schema, hashes, and editor extension before installation.
+extension schema, hashes, and editor extension before installation. Multi-target load
+does not persist or reuse native/render handles: it reconstructs fresh secondary
+presentation attachments and installs the complete target-binding set only after every
+requested native window reaches the created state.
 
 V1 through V5 workspace files are unsupported compatibility input. The app may
 probe them to emit a diagnostic, but it does not make them live structural
