@@ -112,7 +112,7 @@ pub(crate) fn translate_platform_event(
         }
         PlatformEvent::Touch { context, input } => {
             let next = UiPoint::new(input.position.x, input.position.y);
-            let delta = state.observe_touch(context, input.id, input.phase, next);
+            let delta = state.observe_touch(context, input.contact.raw(), input.phase, next);
             let (kind, phase) = match input.phase {
                 ContactPhase::Begin => (PointerEventKind::Down, PointerContactPhase::Begin),
                 ContactPhase::Update => (PointerEventKind::Move, PointerContactPhase::Update),
@@ -121,7 +121,7 @@ pub(crate) fn translate_platform_event(
             };
             let mut packet =
                 pointer_packet(PointerSourceKind::Touch, PointerToolKind::Finger, device_id)
-                    .with_contact_lifecycle(PointerContactId(input.id), phase)
+                    .with_contact_lifecycle(PointerContactId(input.contact.raw()), phase)
                     .with_contact(
                         if matches!(input.phase, ContactPhase::Begin | ContactPhase::Update) {
                             PointerContactState::Contact

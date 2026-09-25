@@ -2,10 +2,11 @@ use std::collections::HashMap;
 
 use crate::runtime::window::NativeWindowId;
 use runen_input::{
-    AnalogMeasurement, ContactInput, ContactPhase, CoordinateSpace, DigitalState, InputContext,
-    InputDeviceId, InputSourceId, KeyLocation, KeyboardInput, LogicalKey, MeasurementDomain,
-    NativeLogicalKey, NativePhysicalKeyCode, ObservationOrigin, PhysicalKeyIdentity, Point2,
-    PointerButton, PointerButtonInput, ScrollDelta, ScrollDomain, ScrollInput, ScrollPhase,
+    AnalogMeasurement, ContactId, ContactInput, ContactPhase, CoordinateSpace, DigitalState,
+    InputContext, InputDeviceId, InputSourceId, KeyLocation, KeyboardInput, LogicalKey,
+    MeasurementDomain, NativeLogicalKey, NativePhysicalKeyCode, ObservationOrigin,
+    PhysicalKeyIdentity, Point2, PointerButton, PointerButtonInput, ScrollDelta, ScrollDomain,
+    ScrollInput, ScrollPhase,
 };
 use winit::dpi::PhysicalPosition;
 use winit::event::{
@@ -168,7 +169,7 @@ pub(crate) fn contact_input(touch: Touch) -> ContactInput {
         .unwrap_or((None, None));
 
     ContactInput {
-        id: touch.id,
+        contact: ContactId::new(touch.id),
         phase: contact_phase(touch.phase),
         position: cursor_position(touch.location),
         pressure,
