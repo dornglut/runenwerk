@@ -12,7 +12,6 @@ use crate::runtime::publication::{
 use crate::runtime::system::IntoSystemConfigs;
 use crate::*;
 use anyhow::Result;
-use engine_sim::*;
 use runen_ecs::{Resource, Runtime, RuntimeError, ScheduleLabel, World};
 use runen_input::PhysicalKeyIdentity;
 use std::error::Error;
@@ -239,53 +238,6 @@ impl App {
             update(config);
         }
         self
-    }
-
-    pub fn set_simulation_profile(&mut self, profile: SimulationProfile) -> &mut Self {
-        self.init_resource::<SimulationProfileConfig>();
-        if let Ok(config) = self.world.resource_mut::<SimulationProfileConfig>() {
-            config.profile = profile;
-            config.determinism = match profile {
-                SimulationProfile::DeterministicLockstep | SimulationProfile::RollbackSession => {
-                    engine_sim::DeterminismLevel::Strict
-                }
-                SimulationProfile::HighThroughputAuthority => {
-                    engine_sim::DeterminismLevel::BestEffort
-                }
-                SimulationProfile::LocalSinglePlayer | SimulationProfile::DedicatedAuthority => {
-                    engine_sim::DeterminismLevel::Validated
-                }
-            };
-        }
-        self
-    }
-
-    pub fn set_authority_role(&mut self, authority: AuthorityRole) -> &mut Self {
-        self.init_resource::<SimulationProfileConfig>();
-        if let Ok(config) = self.world.resource_mut::<SimulationProfileConfig>() {
-            config.authority = authority;
-        }
-        if let Ok(world_runtime_config) =
-            self.world
-                .resource_mut::<crate::plugins::world::plugin::WorldRuntimeConfig>()
-        {
-            world_runtime_config.mode =
-                crate::plugins::world::plugin::world_runtime_mode_for_authority(authority);
-        }
-        self
-    }
-
-    pub fn set_simulation_seed(&mut self, seed: SimulationSeed) -> &mut Self {
-        self.world.insert_resource(seed);
-        self.world.insert_resource(SimulationRng::from_seed(seed));
-        self
-    }
-
-    pub fn current_tick(&self) -> u64 {
-        self.world
-            .resource::<SimulationTick>()
-            .map(|tick| tick.0)
-            .unwrap_or(0)
     }
 
     pub fn with_frame_pacing(&mut self, policy: FramePacingPolicyResource) -> &mut Self {

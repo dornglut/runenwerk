@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-14
+last_reviewed: 2026-09-25
 ---
 
 # Simulation Plugin Usage Guide
@@ -50,12 +50,22 @@ app.add_plugins((FixedStepPlugin, SimulationPlugin));
 For every admitted fixed step, `SimulationPlugin` advances `SimulationTick` in `FixedStepBegin`,
 before `FixedUpdate` systems observe the step.
 
-## App Configuration Helpers
+## App Integration API
 
-`App::set_simulation_profile`, `App::set_authority_role`, and `App::set_simulation_seed` are explicit
-composition commands. They may materialize the same owner configuration state before plugin
-installation; later `SimulationPlugin` installation preserves it rather than creating a competing
-configuration authority.
+Simulation-specific App ergonomics are owned by `AppSimulationExt`:
+
+- `set_simulation_profile`
+- `set_authority_role`
+- `set_simulation_seed`
+- `current_tick`
+
+The three configuration methods are explicit composition commands. They may materialize the same
+owner configuration state before plugin installation; later `SimulationPlugin` installation
+preserves it rather than creating a competing configuration authority.
+
+`current_tick` is a Simulation-owned runtime query. It preserves the established behavior of
+returning `0` when no `SimulationTick` state exists. The extension changes API ownership only; it
+does not make Simulation a bare-App capability or change query fallibility semantics.
 
 ## Related
 

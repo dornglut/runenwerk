@@ -14,7 +14,7 @@ pub use crate::plugins::net::{
 };
 pub use crate::plugins::replay::*;
 pub use crate::plugins::scene::*;
-pub use crate::plugins::simulation::SimulationPlugin;
+pub use crate::plugins::simulation::{AppSimulationExt, SimulationPlugin};
 pub use crate::plugins::time::domain::Time;
 pub use crate::plugins::ui::AppUiExt;
 pub use crate::plugins::{default_plugins, default_plugins_with_diagnostics};

@@ -769,17 +769,12 @@ core/integration-shaped
   set_runner
   world / world_mut
 
-capability-specific configuration/authoring
+capability-specific configuration/authoring still inherent on generic App
   add_input_bindings
   add_render_flow
-  set_simulation_profile
-  set_authority_role
-  set_simulation_seed
 
-capability-specific runtime control/query
+capability-specific runtime diagnostic/control still inherent on generic App
   update_render_debug_*
-  start/stop/load/seek replay
-  current_tick
 ```
 
 The normalized rule is:
@@ -787,7 +782,7 @@ The normalized rule is:
 > **Convenience is owned by the capability whose semantics it manipulates, and every
 > operation retains an explicit temporal contract.**
 
-Scene composition now uses the Scene-owned `AppSceneExt`, and Replay runtime controls use the Replay-owned `AppReplayExt`; other owner-specific extensions over the same App/runtime remain a preferred direction when they improve discoverability:
+Scene composition now uses the Scene-owned `AppSceneExt`, Replay runtime controls use the Replay-owned `AppReplayExt`, and Simulation configuration/query ergonomics use the Simulation-owned `AppSimulationExt`. Other owner-specific extensions over the same App/runtime remain a preferred direction when they improve discoverability:
 
 ```text
 AppSceneExt
@@ -797,7 +792,8 @@ AppReplayExt
 AppInput/ProductActionExt
 ```
 
-Names are illustrative only.
+`AppSceneExt`, `AppReplayExt`, and `AppSimulationExt` are current concrete owner APIs.
+The remaining names are illustrative until their owner cuts are separately accepted.
 
 Moving an operation to an owner extension must not silently reclassify it as pre-run
 composition. Owner APIs must distinguish as applicable:

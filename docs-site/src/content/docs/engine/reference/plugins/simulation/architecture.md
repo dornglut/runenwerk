@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-14
+last_reviewed: 2026-09-25
 ---
 
 # Simulation Plugin Architecture
@@ -51,8 +51,12 @@ cadence; `FixedStepPlugin` by itself does not manufacture simulation identity.
 
 - Explicit owner state inserted before plugin installation is preserved.
 - `SimulationRng` defaults from the effective `SimulationSeed` only when no RNG was supplied.
-- App simulation configuration helpers lower into the same owner state; there is no parallel App
+- Simulation-specific App ergonomics are owned by `AppSimulationExt`; generic `App` does not
+  define Simulation-specific inherent methods.
+- `AppSimulationExt` configuration lowers into the same owner state; there is no parallel App
   simulation configuration object.
+- `AppSimulationExt::current_tick` queries Simulation-owned `SimulationTick` and preserves the
+  established absent-state result of `0`.
 - World, Net, Replay, and Scene remain consumers of the simulation integration they require; they do
   not become duplicate default providers.
 - No generic capability registry, lifecycle event bus, or second scheduler is introduced.
