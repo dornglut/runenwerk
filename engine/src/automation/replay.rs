@@ -482,7 +482,5 @@ impl AppAutomationInputReplayExt for App {
     }
 }
 
-
-
 #[cfg(test)]
 mod tests;
