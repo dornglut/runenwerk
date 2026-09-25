@@ -1,21 +1,20 @@
 // Owner: Engine Networking Tests - Basic Flow
 
 fn client_probe(value: u8) -> ClientMessage {
-    ClientMessage::TypedPayload(TypedPayloadMessage::new(
-        "test/client",
-        "ClientProbe",
-        1,
-        vec![value],
-    ))
+    ClientMessage::InputFrame(InputFrame {
+        tick: engine_sim::SimulationTick(value as u64),
+        payload: vec![value],
+    })
 }
 
 fn server_probe(value: u8) -> ServerMessage {
-    ServerMessage::TypedPayload(TypedPayloadMessage::new(
-        "test/server",
-        "ServerProbe",
-        1,
-        vec![value],
-    ))
+    ServerMessage::Snapshot(Snapshot {
+        tick: engine_sim::SimulationTick(value as u64),
+        cursor: SnapshotCursor(value as u64 + 1),
+        last_applied: SnapshotCursor(value as u64),
+        entity_ids: Vec::new(),
+        payload: vec![value],
+    })
 }
 
 fn install_pending_endpoint_resources(world: &mut World) {
@@ -214,26 +213,10 @@ fn server_pending_resources_are_distinct_from_processed_and_flushed_projections(
 fn network_client_plugin_drains_server_messages_and_flushes_client_messages() {
     let mut app = App::headless();
     app.add_plugin(NetworkClientPlugin);
-    enqueue_client_inbox(
-        app.world_mut(),
-        ServerMessage::TypedPayload(TypedPayloadMessage::new(
-            "test/server",
-            "ServerProbe",
-            1,
-            vec![1],
-        )),
-    )
-    .expect("client inbox enqueue should succeed");
-    enqueue_client_outbox(
-        app.world_mut(),
-        ClientMessage::TypedPayload(TypedPayloadMessage::new(
-            "test/client",
-            "ClientProbe",
-            1,
-            vec![2],
-        )),
-    )
-    .expect("client outbox enqueue should succeed");
+    enqueue_client_inbox(app.world_mut(), server_probe(1))
+        .expect("client inbox enqueue should succeed");
+    enqueue_client_outbox(app.world_mut(), client_probe(2))
+        .expect("client outbox enqueue should succeed");
 
     let app = app
         .run_for_frames(1)
@@ -251,26 +234,10 @@ fn network_client_plugin_drains_server_messages_and_flushes_client_messages() {
 fn network_server_plugin_drains_client_messages_and_flushes_server_messages() {
     let mut app = App::headless();
     app.add_plugin(NetworkServerPlugin);
-    enqueue_server_inbox(
-        app.world_mut(),
-        ClientMessage::TypedPayload(TypedPayloadMessage::new(
-            "test/client",
-            "ClientProbe",
-            1,
-            vec![3],
-        )),
-    )
-    .expect("server inbox enqueue should succeed");
-    enqueue_server_outbox_broadcast(
-        app.world_mut(),
-        ServerMessage::TypedPayload(TypedPayloadMessage::new(
-            "test/server",
-            "ServerProbe",
-            1,
-            vec![4],
-        )),
-    )
-    .expect("server outbox enqueue should succeed");
+    enqueue_server_inbox(app.world_mut(), client_probe(3))
+        .expect("server inbox enqueue should succeed");
+    enqueue_server_outbox_broadcast(app.world_mut(), server_probe(4))
+        .expect("server outbox enqueue should succeed");
 
     let app = app
         .run_for_frames(1)

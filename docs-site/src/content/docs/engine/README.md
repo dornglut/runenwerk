@@ -59,7 +59,7 @@ plugin wiring, and integrated engine-facing systems (scene, render, input, repla
   - Scene lifecycle, world/overlay state publication, snapshot/replay data boundaries.
 - Net
   - `src/net/` and `src/plugins/net/`
-  - Public net prelude + ECS/runtime bridge to `engine_net`.
+  - Public net prelude + ECS/runtime integration around standalone RunenNet.
 - UI integration
   - `src/plugins/scene/ui/` and `domain/ui/*`
   - Scene overlay integration and renderer-independent UI data contracts.
@@ -130,4 +130,4 @@ See `tests/README.md` for integration suite coverage.
 
 - Owns runtime loop, plugin composition, replay/runtime integration, and engine-level feature wiring.
 - Owns fixed-cadence occurrence/progress but not simulation identity semantics.
-- Consumes `ecs`, `scheduler`, `engine_replay`, `engine_net`, and `engine_sim`.
+- Consumes standalone RunenECS/RunenNet plus local `engine_replay` and `engine_sim` integration owners.

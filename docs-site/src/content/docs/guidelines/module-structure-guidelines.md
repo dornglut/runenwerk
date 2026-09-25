@@ -289,8 +289,8 @@ Examples:
 - Reusable realtime-networking contract change  
   -> standalone `dornglut/runen-net`, not `net/engine_net`
 
-- Runenwerk-specific retained replication migration behavior  
-  -> `net/engine_net` only while that current RN8 migration surface exists
+- Runenwerk-specific networking integration  
+  -> `engine/src/plugins/net`; reusable networking semantics remain in standalone RunenNet
 
 - QUIC transport realization  
   -> standalone `runen-net-quic`; Runenwerk keeps only maintained app/host integration

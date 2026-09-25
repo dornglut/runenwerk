@@ -22,7 +22,7 @@ Dependency direction, peer-framework ownership, and clean-cutover rules live in 
 - `foundation`: low-level reusable primitives with no domain/runtime/app dependencies.
 - `domain`: engine-agnostic reusable contracts and logic owned by Runenwerk while they remain local.
 - `engine/runtime`: runtime composition, plugins, renderer/backend integration, and app-loop glue.
-- `net`: remaining Runenwerk simulation/history/network integration and migration surfaces.
+- `net`: Runenwerk simulation/history support plus engine-owned networking integration.
 - `app`: runnable applications and tools.
 - `adapter/tool`: external host integrations and tooling glue.
 
@@ -116,7 +116,6 @@ Reusable spatial identity/addressing mechanics are not local workspace crates; R
 | --- | --- | --- | --- |
 | `engine` | `engine` | engine/runtime | App/runtime/plugin composition and render/input/time/scene/world/net integration. |
 | `engine_render_macros` | `engine_render_macros` | engine/runtime | Render derive macros for GPU parameter contracts. |
-| `engine_net` | `net/engine_net` | net | Temporary live server-replication/protocol-payload integration surface; standalone RunenNet owns reusable networking semantics. |
 | `engine_sim` | `net/engine_sim` | net | Simulation identity, tick, hash, profile, RNG, command-frame, and codec vocabulary. |
 | `engine_replay` | `net/engine_history` | net | Replay/history/archive/controller/policy/validation substrate. |
 
@@ -136,7 +135,7 @@ Concrete QUIC realization is consumed from external `runen-net-quic` where requi
 
 Exact dependency revisions are executable truth in root `Cargo.toml` / `Cargo.lock`.
 
-- `runen-net` and `runen-net-quic` — standalone RunenNet authority/transport realization consumed during the remaining RN8 migration.
+- `runen-net` and `runen-net-quic` — standalone RunenNet authority/transport realization consumed by Runenwerk networking integration.
 - `runen-spatial` — standalone reusable spatial identity/addressing mechanics.
 - `runen-gpu` — standalone GPU execution authority consumed by Runenwerk/RunenRender integration.
 - `runen-ecs` — standalone ECS authority consumed by Runenwerk through an exact accepted Git revision; implementation and downstream conformance live in `dornglut/runen-ecs`.

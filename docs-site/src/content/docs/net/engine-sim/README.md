@@ -51,7 +51,6 @@ It is transport-agnostic and runtime-agnostic. It owns shared simulation vocabul
 This crate is the shared simulation vocabulary used by:
 
 - `engine`
-- `engine_net`
 - `engine_history`
 
 `engine_sim` should stay below networking runtime and replay runtime policy. Higher layers may use these types to identify ticks, sessions, actors, hashes, and command frames, but they should not push concrete transport or replay behavior back into this crate.

@@ -1,5 +1,5 @@
 @startuml
-title net workspace architecture (current through RN8 N12)
+title Runenwerk networking architecture (post-RN8)
 
 skinparam componentStyle rectangle
 skinparam packageStyle rectangle
@@ -13,7 +13,7 @@ package "apps / preview integration" {
 package "engine integration" {
   [Application / Session Lifecycle] as engine_session
   [RunenNet Session Projection] as session_projection
-  [Owner / Routing Projection] as owner_routing
+  [Net Wire + Driver Contracts] as engine_contracts
   [Replication + Prediction Systems] as engine_replication
   [Replication I/O Staging] as engine_io
   [Replay Systems] as engine_replay
@@ -24,14 +24,9 @@ package "external RunenNet" {
   [runen-net-quic] as runennet_quic
 }
 
-package "net (remaining Runenwerk migration evidence)" {
+package "net (Runenwerk support)" {
   package "engine_sim" {
     [simulation vocabulary] as sim
-  }
-
-  package "engine_net" {
-    [snapshot / ack / input envelopes] as net_protocol
-    [wire envelopes / gameplay replication codecs] as net_replication
   }
 
   package "engine_history" {
@@ -45,15 +40,12 @@ runennet_quic --> runennet_core
 
 engine_session --> runennet_core : negotiation + session lifecycle
 engine_session --> session_projection : accepted bindings only
-session_projection --> owner_routing
-session_projection --> engine_replication : authorized ConnectionHandle set
-engine_replication --> runennet_core : authority/client replication semantics
-engine_replication --> net_replication : encode/decode + envelope projection
-engine_io --> net_protocol
+session_projection --> engine_replication : authorized connections
+engine_replication --> runennet_core : replication / input / prediction semantics
+engine_replication --> engine_contracts : encode / decode / envelope formation
+engine_io --> engine_contracts : staged messages
+engine_contracts --> sim
 engine_replay --> history
-
-net_replication --> runennet_core : encoded products + DeliveryAcceptance feedback
-net_replication --> sim
 history --> sim
 
 note right of runennet_core
@@ -62,26 +54,20 @@ connection/session/delivery/replication/prediction
 semantic authority.
 end note
 
-note right of session_projection
-Iterable engine projection only.
-It does not authorize lifecycle mutations.
-end note
-
-note right of net_replication
-engine_net retains wire envelopes and gameplay codec escape hatches.
-RunenNet owns authority/client replication consistency,
-history, recovery, emission evidence, ACK classification,
-and participant prediction semantics.
+note right of engine_contracts
+Runenwerk-owned integration DTOs and gameplay
+driver traits only. No duplicate session,
+history, recovery, or prediction authority.
 end note
 
 note right of engine_io
-Engine work queues stage retained messages.
-Queue admission is not RunenNet DeliveryAcceptance.
+Engine work queues are staging only.
+Queue admission is not DeliveryAcceptance.
 end note
 
 note right of runennet_quic
-Concrete QUIC exists for the already-migrated
-preview channel. The engine has no generic transport adapter.
+Concrete QUIC exists only where selected
+by a maintained consumer.
 end note
 
 @enduml

@@ -86,7 +86,7 @@ RunenNet connection/session mutations occur from the owning application/host lif
 - Do not copy RunenNet lifecycle semantics into ECS resources.
 - Host reconnect policy must remain distinct from RunenNet retention/recovery semantics.
 - Product lobby/roster/settings metadata remains Runenwerk-owned.
-- Retained `engine_net` usage is limited to replication/prediction migration evidence.
+- The former `engine_net` migration shell is retired; engine-owned wire/driver integration stays under `engine/src/plugins/net`.
 - Do not add a concrete transport adapter without a maintained consumer.
 - Do not restore client replication consistency/history semantics in Runenwerk resources; downstream prediction remains separate until its own RN8 cut.
 
