@@ -98,16 +98,13 @@ impl RenderFixedResolutionExecutionRequest {
 
         let internal_view = PreparedViewFrame::offscreen_product(view_id.clone(), self.internal_size);
 
-        let scene_invocation = PreparedFlowInvocationRequest::new(
-            scene_invocation_id,
-            self.scene_flow_id,
-            view_id,
-        )
-        .bind_target_alias(
-            self.scene_color_alias.as_str(),
-            PreparedTargetBinding::DynamicTexture(target_key.clone()),
-        )
-        .map_err(RenderFixedResolutionExecutionError::AliasBinding)?;
+        let scene_invocation =
+            PreparedFlowInvocationRequest::new(scene_invocation_id, self.scene_flow_id, view_id)
+                .bind_target_alias(
+                    self.scene_color_alias.as_str(),
+                    PreparedTargetBinding::DynamicTexture(target_key.clone()),
+                )
+                .map_err(RenderFixedResolutionExecutionError::AliasBinding)?;
 
         let resolve_invocation =
             PreparedFlowInvocationRequest::new(resolve_invocation_id, resolve_flow_id, "main")
@@ -160,10 +157,12 @@ impl RenderFixedResolutionExecutionRequest {
                 }
                 _ => None,
             })
-            .ok_or_else(|| RenderFixedResolutionExecutionError::MissingBindableColorAlias {
-                flow_id: self.scene_flow_id,
-                alias: self.scene_color_alias.clone(),
-            })?;
+            .ok_or_else(
+                || RenderFixedResolutionExecutionError::MissingBindableColorAlias {
+                    flow_id: self.scene_flow_id,
+                    alias: self.scene_color_alias.clone(),
+                },
+            )?;
 
         let surface_color_ids = compiled_flow
             .resources
@@ -451,9 +450,7 @@ pub enum RenderFixedResolutionExecutionError {
         requested: RenderFlowId,
         provided: RenderFlowId,
     },
-    #[error(
-        "fixed internal-resolution flow {flow_id:?} must use automatic-main invocation policy"
-    )]
+    #[error("fixed internal-resolution flow {flow_id:?} must use automatic-main invocation policy")]
     SelectedFlowRequiresAutomaticMain { flow_id: RenderFlowId },
     #[error(
         "fixed internal-resolution flow {flow_id:?} must keep every pass valid on both native-main and offscreen views"
@@ -619,7 +616,10 @@ mod tests {
         .expect("secondary fixed request should prepare");
 
         assert_ne!(primary.target_key, secondary.target_key);
-        assert_ne!(primary.internal_view.view_id, secondary.internal_view.view_id);
+        assert_ne!(
+            primary.internal_view.view_id,
+            secondary.internal_view.view_id
+        );
         assert_ne!(
             primary.scene_invocation.invocation_id,
             secondary.scene_invocation.invocation_id
@@ -810,7 +810,9 @@ mod tests {
         )
         .admit_against_compiled_flows((1920, 1080), &compiled, &compiled_resolve_flow());
         assert!(!valid.native_fallback_active());
-        let prepared = valid.prepared().expect("valid admission should retain fixed parts");
+        let prepared = valid
+            .prepared()
+            .expect("valid admission should retain fixed parts");
         assert_eq!(prepared.internal_size, (1280, 720));
         assert_eq!(prepared.output_size, (1920, 1080));
 
@@ -891,6 +893,9 @@ mod tests {
             flow.invocation_policy(),
             crate::plugins::render::RenderFlowInvocationPolicy::ExplicitOnly
         );
-        assert!(flow.resource_id(FIXED_RESOLUTION_RESOLVE_SOURCE_ALIAS).is_some());
+        assert!(
+            flow.resource_id(FIXED_RESOLUTION_RESOLVE_SOURCE_ALIAS)
+                .is_some()
+        );
     }
 }
