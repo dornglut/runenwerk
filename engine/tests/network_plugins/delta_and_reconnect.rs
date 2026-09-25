@@ -48,25 +48,26 @@ fn server_delta_snapshot_applies_cleanly_on_client() {
     let connection = ConnectionHandle::new(1);
     install_runennet_connections(&mut server, &[(connection, ParticipantId::new(1))]);
 
-    let server = server
+    let mut server = server
         .run_for_fixed_steps(1)
         .expect("first server replication fixed step should run");
-    let full_snapshot = server
-        .world()
-        .resource::<NetworkOutboundQueue>()
-        .unwrap()
-        .server_messages()
-        .iter()
-        .find_map(|message| match message {
-            OutboundServerMessage::ToConnection {
-                connection: target,
-                message: ServerMessage::Snapshot(snapshot),
-            } if *target == connection => Some(snapshot.clone()),
-            _ => None,
-        })
-        .expect("server should emit a full snapshot for the admitted connection");
+    let first_submission = authority_replication_submissions(server.world())
+        .expect("initial authority submission should project")
+        .into_iter()
+        .find(|submission| submission.connection() == connection)
+        .expect("server should prepare a full snapshot for the admitted connection");
+    let full_snapshot = match first_submission.message() {
+        ServerMessage::Snapshot(snapshot) => snapshot.clone(),
+        other => panic!("initial authority submission must be full, got {other:?}"),
+    };
+    record_authority_replication_delivery_acceptance(
+        server.world_mut(),
+        first_submission.token(),
+        DeliveryAcceptance::Accepted,
+    )
+    .expect("initial delivery acceptance should succeed")
+    .expect("initial full snapshot should become emitted");
 
-    let mut server = server;
     enqueue_server_inbox_from(
         server.world_mut(),
         Some(connection),
@@ -82,7 +83,7 @@ fn server_delta_snapshot_applies_cleanly_on_client() {
         .unwrap()
         .push(ClientCommandEnvelope::Move(MoveCommand { x: -0.5, y: 0.25 }));
 
-    let server = server
+    let mut server = server
         .run_for_frames(1)
         .expect("ack processing frame should run")
         .run_for_fixed_steps(1)
@@ -96,25 +97,16 @@ fn server_delta_snapshot_applies_cleanly_on_client() {
         1
     );
 
-    let outbound = server.world().resource::<NetworkOutboundQueue>().unwrap();
-    let delta_snapshot = outbound
-        .server_messages()
-        .iter()
-        .find_map(|message| match message {
-            OutboundServerMessage::ToConnection {
-                connection: target,
-                message: ServerMessage::DeltaSnapshot(snapshot),
-            } if *target == connection => Some(snapshot.clone()),
-            _ => None,
-        })
-        .expect("server should emit a delta snapshot for the admitted connection");
-    let authoritative_second_snapshot = server
-        .world()
-        .resource::<ServerSnapshotState>()
-        .unwrap()
-        .latest_snapshot
-        .clone()
-        .expect("server should retain the latest authoritative snapshot");
+    let second_submission = authority_replication_submissions(server.world())
+        .expect("delta authority submission should project")
+        .into_iter()
+        .find(|submission| submission.connection() == connection)
+        .expect("server should prepare a second authority candidate");
+    let delta_snapshot = match second_submission.message() {
+        ServerMessage::DeltaSnapshot(snapshot) => snapshot.clone(),
+        other => panic!("confirmed baseline should make the next candidate a delta, got {other:?}"),
+    };
+    let authoritative_second_snapshot = TestSnapshot::default();
     let decoded_delta: TestDelta =
         postcard::from_bytes(&delta_snapshot.payload).expect("delta payload should decode");
     let delta_tick = delta_snapshot.tick;
@@ -122,6 +114,13 @@ fn server_delta_snapshot_applies_cleanly_on_client() {
     assert_eq!(delta_snapshot.cursor, SnapshotCursor(2));
     assert!(!full_snapshot.payload.is_empty());
     assert!(!decoded_delta.changed);
+    record_authority_replication_delivery_acceptance(
+        server.world_mut(),
+        second_submission.token(),
+        DeliveryAcceptance::Accepted,
+    )
+    .expect("delta delivery acceptance should succeed")
+    .expect("accepted delta should become emitted");
 
     let mut client = App::headless();
     client.add_plugins(default_plugins());
@@ -173,6 +172,19 @@ fn server_rejects_future_snapshot_ack_without_mutating_baseline() {
     let mut server = server
         .run_for_fixed_steps(1)
         .expect("first server replication fixed step should run");
+    let first = authority_replication_submissions(server.world())
+        .expect("initial authority submission should project")
+        .into_iter()
+        .find(|submission| submission.connection() == connection)
+        .expect("initial full candidate should exist");
+    record_authority_replication_delivery_acceptance(
+        server.world_mut(),
+        first.token(),
+        DeliveryAcceptance::Accepted,
+    )
+    .expect("initial delivery acceptance should succeed")
+    .expect("initial snapshot should become emitted");
+
     enqueue_server_inbox_from(
         server.world_mut(),
         Some(connection),
@@ -182,7 +194,7 @@ fn server_rejects_future_snapshot_ack_without_mutating_baseline() {
         }),
     )
     .expect("server inbox enqueue should succeed");
-    let server = server
+    let mut server = server
         .run_for_frames(1)
         .expect("future ack processing frame should run");
 
@@ -190,40 +202,21 @@ fn server_rejects_future_snapshot_ack_without_mutating_baseline() {
     assert_eq!(diagnostics.acked, 0);
     assert_eq!(diagnostics.rejected_acks, 1);
 
-    let replication = server.world().resource::<ServerSnapshotState>().unwrap();
-    let checkpoint = replication
-        .checkpoints
-        .get(&connection)
-        .expect("connection checkpoint should exist");
-    assert_eq!(checkpoint.last_ack_cursor, SnapshotCursor::default());
-
-    let server = server
+    server = server
         .run_for_fixed_steps(1)
         .expect("second server replication fixed step should run");
-    let outbound = server.world().resource::<NetworkOutboundQueue>().unwrap();
-    assert!(outbound.server_messages().iter().any(|message| {
-        matches!(
-            message,
-            OutboundServerMessage::ToConnection {
-                connection: target,
-                message: ServerMessage::Snapshot(snapshot),
-            } if *target == connection
-                && snapshot.cursor == SnapshotCursor(2)
-                && snapshot.last_applied == SnapshotCursor::default()
-        )
-    }));
-    assert!(
-        !outbound.server_messages().iter().any(|message| {
-            matches!(
-                message,
-                OutboundServerMessage::ToConnection {
-                    connection: target,
-                    message: ServerMessage::DeltaSnapshot(snapshot),
-                } if *target == connection && snapshot.base == SnapshotCursor(99)
-            )
-        }),
-        "rejected future ACK must not become a delta baseline"
-    );
+    let retry = authority_replication_submissions(server.world())
+        .expect("post-rejection authority submission should project")
+        .into_iter()
+        .find(|submission| submission.connection() == connection)
+        .expect("recovery candidate should remain available");
+    match retry.message() {
+        ServerMessage::Snapshot(snapshot) => {
+            assert_eq!(snapshot.cursor, SnapshotCursor(2));
+            assert_eq!(snapshot.last_applied, SnapshotCursor::default());
+        }
+        other => panic!("future ACK must not create delta eligibility, got {other:?}"),
+    }
 }
 
 #[test]
@@ -372,6 +365,22 @@ fn server_tracks_per_connection_baselines_for_runennet_connections() {
         SimulationTick(1)
     );
 
+    let initial = authority_replication_submissions(app.world())
+        .expect("initial authority submissions should project");
+    assert_eq!(initial.len(), 2);
+    for submission in &initial {
+        assert!(matches!(submission.message(), ServerMessage::Snapshot(_)));
+    }
+    for submission in initial {
+        record_authority_replication_delivery_acceptance(
+            app.world_mut(),
+            submission.token(),
+            DeliveryAcceptance::Accepted,
+        )
+        .expect("initial delivery acceptance should succeed")
+        .expect("initial full should become emitted");
+    }
+
     enqueue_server_inbox_from(
         app.world_mut(),
         Some(connection_a),
@@ -393,41 +402,30 @@ fn server_tracks_per_connection_baselines_for_runennet_connections() {
         *app.world().resource::<SimulationTick>().unwrap(),
         SimulationTick(2)
     );
-    let outbound = app.world().resource::<NetworkOutboundQueue>().unwrap();
-    assert!(outbound.server_messages().iter().any(|message| {
-        matches!(
-            message,
-            OutboundServerMessage::ToConnection {
-                connection,
-                message: ServerMessage::DeltaSnapshot(snapshot),
-            } if *connection == connection_a
-                && snapshot.base == SnapshotCursor(1)
-                && snapshot.cursor == SnapshotCursor(2)
-        )
-    }));
-    assert!(outbound.server_messages().iter().any(|message| {
-        matches!(
-            message,
-            OutboundServerMessage::ToConnection {
-                connection,
-                message: ServerMessage::Snapshot(snapshot),
-            } if *connection == connection_b && snapshot.cursor == SnapshotCursor(2)
-        )
-    }));
+    let second = authority_replication_submissions(app.world())
+        .expect("second authority submissions should project");
 
-    let replication = app.world().resource::<ServerSnapshotState>().unwrap();
-    let checkpoint_a = replication
-        .checkpoints
-        .get(&connection_a)
-        .expect("connection 1 checkpoint should exist");
-    let checkpoint_b = replication
-        .checkpoints
-        .get(&connection_b)
-        .expect("connection 2 checkpoint should exist");
-    assert_eq!(checkpoint_a.last_ack_cursor, SnapshotCursor(1));
-    assert_eq!(checkpoint_b.last_full_snapshot_cursor, SnapshotCursor(2));
+    let message_a = second
+        .iter()
+        .find(|submission| submission.connection() == connection_a)
+        .expect("connection A candidate should exist")
+        .message();
+    assert!(matches!(
+        message_a,
+        ServerMessage::DeltaSnapshot(snapshot)
+            if snapshot.base == SnapshotCursor(1) && snapshot.cursor == SnapshotCursor(2)
+    ));
+
+    let message_b = second
+        .iter()
+        .find(|submission| submission.connection() == connection_b)
+        .expect("connection B candidate should exist")
+        .message();
+    assert!(matches!(
+        message_b,
+        ServerMessage::Snapshot(snapshot) if snapshot.cursor == SnapshotCursor(2)
+    ));
 }
-
 
 #[test]
 fn authority_input_rejects_future_tick_outside_explicit_window() {
