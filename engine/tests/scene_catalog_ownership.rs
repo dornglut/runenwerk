@@ -40,7 +40,6 @@ fn scene_plugin_preserves_explicit_scene_registrations() {
     assert!(catalog.handle("main_menu").is_some());
 }
 
-
 #[test]
 fn late_scene_composition_is_rejected_without_mutating_catalog() {
     let mut app = App::headless();

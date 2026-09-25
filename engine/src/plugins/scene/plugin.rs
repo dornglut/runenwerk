@@ -27,7 +27,6 @@ impl Plugin for ScenePlugin {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -38,6 +37,19 @@ mod tests {
         app.init_resource::<SceneResource>();
 
         assert!(!scene_integration_is_active(app.world()));
+
+        let error = crate::plugins::scene::set_world_paused(app.world_mut(), true)
+            .err()
+            .expect("shared SceneResource must not admit Scene runtime controls");
+        assert!(format!("{error:#}").contains("ScenePlugin is not installed"));
+        assert!(
+            app.world()
+                .resource::<SceneResource>()
+                .expect("shared SceneResource should remain installed")
+                .manager
+                .is_none(),
+            "rejected Scene controls must not manufacture a Scene manager"
+        );
 
         app.add_plugin(ScenePlugin);
 

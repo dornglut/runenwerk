@@ -19,7 +19,7 @@ Coordinates scene registration, world/overlay scene lifecycle, authoritative sce
 - Plugin: `ScenePlugin`
 - App composition extension: `AppSceneExt`
 - Timing provider: `TimePlugin` directly or through `default_plugins()`
-- Scene catalog provider: `ScenePlugin`, or explicit `App::add_scene*` composition before plugin installation
+- Scene catalog provider: `ScenePlugin`, or explicit `AppSceneExt` composition before plugin installation
 - Schedules:
   - `Startup`: initialize the scene manager
   - `PreUpdate`: process transition commands and input-driven scene state
