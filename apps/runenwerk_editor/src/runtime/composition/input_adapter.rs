@@ -1,6 +1,6 @@
 mod state;
 
-use engine::plugins::{
+use runen_input::{
     ContactPhase, DigitalState, LogicalKey, MeasurementDomain, ObservationOrigin,
     PointerButton as EnginePointerButton, ScrollDomain,
 };

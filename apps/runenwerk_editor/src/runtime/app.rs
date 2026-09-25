@@ -1,8 +1,9 @@
 use anyhow::Result;
 use engine::plugins::{
-    DiagnosticsConfigResource, PhysicalKeyIdentity, RenderFlow, RenderPlugin, ScenePlugin,
+    DiagnosticsConfigResource, RenderFlow, RenderPlugin, ScenePlugin,
     SchedulerDiagnosticsPlugin, default_plugins,
 };
+use runen_input::PhysicalKeyIdentity;
 use engine::prelude::*;
 use runen_gpu::GpuBindingKey;
 #[cfg(test)]

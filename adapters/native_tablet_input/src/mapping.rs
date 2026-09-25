@@ -3,7 +3,7 @@
 use runen_input::{
     ContactId, ContactPhase, ContactPresence, DeliveryRole, EvidenceStatus, InputContext,
     InputObservation, InputObservationGroup, MeasurementDomain, ObservationOrigin,
-    PhysicalTabletControls, SourceTimeUnit, StylusTilt, TabletCapabilities, TabletObservation,
+    PhysicalTabletControls, StylusTilt, TabletCapabilities, TabletObservation,
     ToolId,
 };
 
@@ -219,6 +219,7 @@ mod tests {
         NativeTabletLatencyClass, NativeTabletPosition, NativeTabletTilt,
     };
     use engine::plugins::InputState;
+    use runen_input::SourceTimeUnit;
 
     #[test]
     fn mapping_preserves_neutral_identity_and_orthogonal_sample_roles() {

@@ -14,10 +14,12 @@ use engine::plugins::render::{
     SurfaceFrameRoute, SurfaceFrameSubmission, SurfaceFrameSubmissionOrder,
     SurfaceFrameSubmissionRegistryResource,
 };
-use engine::plugins::{
-    ContactPhase, ContactPresence, DeliveryRole, EvidenceStatus, InputObservation,
-    InputObservationGroup, InputState, InputToolKind, MeasurementDomain,
-    MouseButtonTransitionSample, MouseMotionSample, SourceTimeUnit, TabletObservation,
+use engine::plugins::{InputState, MouseButtonTransitionSample, MouseMotionSample};
+use runen_input::{
+    AnalogMeasurement, ContactId, ContactPhase, ContactPresence, CoordinateSpace, DeliveryRole,
+    EvidenceStatus, InputContext, InputDeviceId, InputObservation, InputObservationGroup,
+    InputSourceId, InputToolKind, MeasurementDomain, SourceTime, SourceTimeUnit, StylusTilt,
+    TabletObservation, ToolId,
 };
 use engine::runtime::RuntimeJobExecutorResource;
 use engine::runtime::{Res, ResMut};
@@ -317,8 +319,8 @@ fn ui_capabilities_for_neutral_group(
 
 fn group_measurements_are_projectable(
     group: &InputObservationGroup,
-    select: impl Fn(&TabletObservation) -> Option<engine::plugins::AnalogMeasurement>,
-    project: impl Fn(Option<engine::plugins::AnalogMeasurement>) -> Option<f32>,
+    select: impl Fn(&TabletObservation) -> Option<AnalogMeasurement>,
+    project: impl Fn(Option<AnalogMeasurement>) -> Option<f32>,
 ) -> bool {
     group
         .observations
@@ -332,7 +334,7 @@ fn group_measurements_are_projectable(
         .all(|measurement| project(Some(measurement)).is_some())
 }
 
-fn project_pressure(measurement: Option<engine::plugins::AnalogMeasurement>) -> Option<f32> {
+fn project_pressure(measurement: Option<AnalogMeasurement>) -> Option<f32> {
     measurement.and_then(|measurement| match measurement.domain {
         MeasurementDomain::NormalizedUnitInterval
         | MeasurementDomain::Bounded { min: 0.0, max: 1.0 } => (0.0..=1.0)
@@ -342,11 +344,11 @@ fn project_pressure(measurement: Option<engine::plugins::AnalogMeasurement>) -> 
     })
 }
 
-fn project_tilt(tilt: Option<engine::plugins::StylusTilt>) -> Option<PointerTilt> {
+fn project_tilt(tilt: Option<StylusTilt>) -> Option<PointerTilt> {
     tilt.map(|tilt| PointerTilt::new(tilt.x_degrees, tilt.y_degrees))
 }
 
-fn project_twist(measurement: Option<engine::plugins::AnalogMeasurement>) -> Option<f32> {
+fn project_twist(measurement: Option<AnalogMeasurement>) -> Option<f32> {
     measurement.and_then(|measurement| match measurement.domain {
         MeasurementDomain::Degrees {
             min: 0.0,
@@ -357,7 +359,7 @@ fn project_twist(measurement: Option<engine::plugins::AnalogMeasurement>) -> Opt
 }
 
 fn project_tangential_pressure(
-    measurement: Option<engine::plugins::AnalogMeasurement>,
+    measurement: Option<AnalogMeasurement>,
 ) -> Option<f32> {
     measurement.and_then(|measurement| match measurement.domain {
         MeasurementDomain::NormalizedUnitInterval
@@ -370,7 +372,7 @@ fn project_tangential_pressure(
     })
 }
 
-fn source_time_micros(source_time: Option<engine::plugins::SourceTime>) -> Option<u64> {
+fn source_time_micros(source_time: Option<SourceTime>) -> Option<u64> {
     source_time.and_then(|source_time| match source_time.unit {
         SourceTimeUnit::Microseconds => Some(source_time.value),
         SourceTimeUnit::Milliseconds => source_time.value.checked_mul(1_000),
@@ -1341,21 +1343,21 @@ mod tests {
         evidence: EvidenceStatus,
         delivery: DeliveryRole,
         position_x: f32,
-        pressure: Option<engine::plugins::AnalogMeasurement>,
-        tangential_pressure: Option<engine::plugins::AnalogMeasurement>,
-        twist: Option<engine::plugins::AnalogMeasurement>,
+        pressure: Option<AnalogMeasurement>,
+        tangential_pressure: Option<AnalogMeasurement>,
+        twist: Option<AnalogMeasurement>,
         capabilities: engine::plugins::TabletCapabilities,
     ) -> TabletObservation {
         TabletObservation {
-            contact: engine::plugins::ContactId::new(44),
-            tool: Some(engine::plugins::ToolId::new(8)),
+            contact: ContactId::new(44),
+            tool: Some(ToolId::new(8)),
             tool_kind: InputToolKind::Pen,
             phase,
             presence: ContactPresence::Contact,
             position: engine::plugins::Point2::new(
                 position_x,
                 20.0,
-                engine::plugins::CoordinateSpace::WindowPhysicalPixels,
+                CoordinateSpace::WindowPhysicalPixels,
             ),
             delta: engine::plugins::Vector2::new(1.0, 0.0),
             pressure,
@@ -1373,9 +1375,9 @@ mod tests {
 
     fn tablet_group(observations: Vec<TabletObservation>) -> InputObservationGroup {
         InputObservationGroup::new(
-            engine::plugins::InputContext::new(
-                engine::plugins::InputSourceId::new(31),
-                Some(engine::plugins::InputDeviceId::new(9)),
+            InputContext::new(
+                InputSourceId::new(31),
+                Some(InputDeviceId::new(9)),
             ),
             observations
                 .into_iter()
@@ -1399,7 +1401,7 @@ mod tests {
             EvidenceStatus::ObservedConfirmed,
             DeliveryRole::HistoricalCoalesced,
             10.0,
-            Some(engine::plugins::AnalogMeasurement::new(
+            Some(AnalogMeasurement::new(
                 0.7,
                 MeasurementDomain::NormalizedUnitInterval,
             )),
@@ -1413,11 +1415,11 @@ mod tests {
             DeliveryRole::OrdinaryCurrent,
             20.0,
             None,
-            Some(engine::plugins::AnalogMeasurement::new(
+            Some(AnalogMeasurement::new(
                 -0.4,
                 MeasurementDomain::SignedNormalizedUnitInterval,
             )),
-            Some(engine::plugins::AnalogMeasurement::new(
+            Some(AnalogMeasurement::new(
                 45.0,
                 MeasurementDomain::Degrees {
                     min: 0.0,
@@ -1431,7 +1433,7 @@ mod tests {
             EvidenceStatus::PredictedProvisional,
             DeliveryRole::HistoricalCoalesced,
             30.0,
-            Some(engine::plugins::AnalogMeasurement::new(
+            Some(AnalogMeasurement::new(
                 0.9,
                 MeasurementDomain::NormalizedUnitInterval,
             )),
@@ -1444,7 +1446,7 @@ mod tests {
             EvidenceStatus::EstimatedRevisable,
             DeliveryRole::OrdinaryCurrent,
             40.0,
-            Some(engine::plugins::AnalogMeasurement::new(
+            Some(AnalogMeasurement::new(
                 0.2,
                 MeasurementDomain::NormalizedUnitInterval,
             )),

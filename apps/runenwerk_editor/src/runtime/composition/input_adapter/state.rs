@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use engine::plugins::{
+use runen_input::{
     ContactPhase, DigitalState, InputContext, InputDeviceId, InputSourceId, PhysicalKeyIdentity,
 };
 use engine::runtime::NativeWindowId;

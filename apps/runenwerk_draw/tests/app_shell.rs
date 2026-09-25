@@ -13,9 +13,8 @@ use engine::plugins::render::{
     RenderDynamicTextureTargetRequestRegistryResource, RenderDynamicTextureUploadRegistryResource,
     SurfaceFrameSubmissionRegistryResource,
 };
-use engine::plugins::{
-    ContactId, InputContext, InputDeviceId, InputSourceId, InputState, ToolId, TouchInputPhase,
-};
+use engine::plugins::{InputState, TouchInputPhase};
+use runen_input::{ContactId, InputContext, InputDeviceId, InputSourceId, ToolId};
 use engine::runtime::{
     ProductPublicationOccurrence, ProductPublicationRuntimeResource,
     QuerySnapshotPublicationOccurrence, QuerySnapshotRuntimeResource, RuntimeJobExecutorConfig,
