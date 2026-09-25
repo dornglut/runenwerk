@@ -186,6 +186,28 @@ impl InputState {
         self.admitted_input_capture_active
     }
 
+    pub(crate) fn pointer_button_down_anywhere(&self, button: PointerButton) -> bool {
+        self.neutral.pointer_button_down_anywhere(button)
+    }
+
+    pub(crate) fn frame_projection_is_quiescent(&self) -> bool {
+        self.keyboard_press_samples.is_empty()
+            && self.typed_text.is_empty()
+            && !self.overlay_consumed
+            && self.mouse_delta == (0.0, 0.0)
+            && self.mouse_motion_samples.is_empty()
+            && self.mouse_button_transitions.is_empty()
+            && self.touch_samples.is_empty()
+            && self.device_observation_groups.is_empty()
+            && self.scroll_delta == 0.0
+            && !self.left_mouse_pressed
+            && !self.left_mouse_released
+            && !self.right_mouse_pressed
+            && !self.right_mouse_released
+            && !self.middle_mouse_pressed
+            && !self.middle_mouse_released
+    }
+
     pub fn drain_admitted_input_capture(&mut self) -> Vec<InputObservationGroup> {
         std::mem::take(&mut self.captured_admitted_groups)
     }
