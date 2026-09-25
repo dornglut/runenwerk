@@ -564,8 +564,8 @@ Runenwerk engine / product integration
   product / host / reconnect deployment policy
   diagnostics and presentation
 
-retained engine_net
-  bounded migration residue for maintained envelopes,
+engine Net integration
+  Runenwerk-owned wire/driver/staging adaptation around RunenNet,
   replication drivers/models/profiles/macros, and authoring consumers
 
 runen-net-quic or another concrete transport realization

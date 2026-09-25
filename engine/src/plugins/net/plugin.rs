@@ -1,7 +1,8 @@
 use std::marker::PhantomData;
 
-use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
-use engine_net::{AuthorityRole, SimulationProfile, SimulationProfileConfig};
+use engine_sim::{AuthorityRole, SimulationProfile, SimulationProfileConfig};
+
+use super::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 
 use crate::app::App;
 use crate::plugin::Plugin;

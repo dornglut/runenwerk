@@ -1,58 +1,48 @@
 @startuml
-title Ownership Split
+title Runenwerk Networking Ownership Split
 
 left to right direction
 skinparam packageStyle rectangle
 skinparam shadowing false
 
-rectangle "ecs" as ecs
-rectangle "scheduler" as scheduler
+rectangle "RunenECS" as ecs
 rectangle "engine" as engine
-rectangle "engine_net" as engine_net
-rectangle "engine_net_quic" as quic
+rectangle "RunenNet" as runennet
+rectangle "runen-net-quic" as quic
+rectangle "engine_sim" as sim
 rectangle "engine_replay" as replay
-rectangle "cavern_hunt" as game
-
-note bottom of ecs
-World / Entity / Query / Bundle
-end note
-
-note bottom of scheduler
-Schedules / labels / execution
-end note
+rectangle "gameplay / world" as game
 
 note bottom of engine
-App / runtime / plugins / bridge
+App/runtime/plugins,
+Net integration,
+wire + driver contracts
 end note
 
-note bottom of engine_net
-SimulationTick / protocol /
-session / replication contracts
+note bottom of runennet
+Connection/session,
+delivery/recovery,
+replication/input/prediction
 end note
 
-note bottom of quic
-Concrete QUIC transport backend
+note bottom of sim
+Simulation identity,
+ticks/profile/RNG
 end note
 
 note bottom of replay
-Replay / checkpoint substrate
-end note
-
-note bottom of game
-Concrete game state, snapshots,
-patches, replication policy
+Replay/archive/history
+substrate
 end note
 
 engine --> ecs
-engine --> scheduler
-engine --> engine_net
+engine --> runennet
+engine --> sim
 engine --> replay
-
-quic --> engine_net
+quic --> runennet
 
 game --> ecs
 game --> engine
-game --> engine_net
-game --> replay
+game --> sim
 
 @enduml

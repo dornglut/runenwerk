@@ -1,6 +1,5 @@
+use super::{InputDriver, InputFrame};
 use anyhow::{Context, anyhow};
-use engine_net::protocol::InputFrame;
-use engine_net::replication::InputDriver;
 use engine_sim::SimulationTick;
 use runen_ecs::World;
 use runen_net::identity::{

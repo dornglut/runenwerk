@@ -20,11 +20,11 @@ use engine::net::prelude::*;
 
 This provides the current engine-facing integration surface, including:
 
-- retained replication/input/protocol-payload contracts from `engine_net`;
+- engine-owned replication/input wire contracts and gameplay driver traits;
 - `NetPlugin`;
 - `NetRole`.
 
-Connection/session lifecycle authority is not provided by `engine_net`; standalone RunenNet owns that boundary.
+Connection/session lifecycle and reusable replication/input semantics are owned by standalone RunenNet.
 
 ## 2) Implement the Retained Driver Boundary
 

@@ -217,7 +217,7 @@ Headless execution can carry presentation metrics when a selected consumer such 
 
 - `engine` consumes the exact standalone `runen-ecs` dependency for ECS world, resource, component, query, system, schedule, and deferred-command contracts.
 - `engine` owns Runenwerk host lifecycle, schedule invocation, plugin composition, and product/publication policy around those framework contracts.
-- `engine` consumes `engine_sim`, `engine_net`, and `engine_replay` for Runenwerk-local simulation/network/replay integration domains.
+- `engine` consumes `engine_sim` and `engine_replay` for local simulation/history concerns and standalone RunenNet for reusable networking semantics; engine Net integration is owned directly under `engine/src/plugins/net`.
 - `engine` does not own standalone RunenECS internals or the internals of local domain/net crates.
 
 For reusable RunenECS semantics and current framework architecture, use [standalone RunenECS](https://github.com/dornglut/runen-ecs/blob/main/ARCHITECTURE.md). For API/examples matching this Runenwerk checkout, use the [package guide at the exact consumed revision](https://github.com/dornglut/runen-ecs/blob/6a7af7bbd15da960ce0b68484b446134940fa479/crates/runen-ecs/README.md).

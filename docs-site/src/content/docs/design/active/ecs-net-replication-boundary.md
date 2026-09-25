@@ -70,7 +70,7 @@ ECS/domain crates own:
 - event, queue, and tick-buffer primitives;
 - ownership target state.
 
-Retained `engine_net` currently owns only evidence-backed replication/prediction migration contracts still required by maintained consumers. It must not own connection/session lifecycle or transport runtime semantics.
+Runenwerk's retained networking integration contracts now live directly under `engine/src/plugins/net`; standalone RunenNet owns reusable connection/session, delivery, replication-consistency, recovery, and prediction semantics.
 
 `engine/src/plugins/net` owns:
 
@@ -92,7 +92,7 @@ Gameplay/app modules own:
 - Do not serialize raw ECS entity IDs as reusable network identity.
 - Do not use ECS events as the primary source of replicated truth.
 - Do not copy ECS work queues or tick buffers into reusable networking semantics.
-- Do not put game-specific component semantics in RunenNet or retained `engine_net`.
+- Do not put game-specific component semantics in RunenNet or the engine-owned wire/driver integration boundary.
 - Do not make transport own extraction or interest policy.
 - Do not use `RunenNetSessionProjection` to authorize RunenNet lifecycle mutations or remote participant input; it is derived state only.
 - Do not recreate deleted engine session/runtime authority through generic bridge or facade types.
