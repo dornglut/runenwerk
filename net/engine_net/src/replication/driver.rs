@@ -60,12 +60,6 @@ pub trait SnapshotApplyDriver: ReplicationDriver {
         tick: SimulationTick,
         snapshot: Self::Snapshot,
     ) -> Result<bool, Self::Error>;
-
-    fn apply_delta(
-        world: &mut World,
-        tick: SimulationTick,
-        delta: Self::Delta,
-    ) -> Result<bool, Self::Error>;
 }
 
 pub trait InputDriver: ReplicationDriver {

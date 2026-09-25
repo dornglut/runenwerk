@@ -378,8 +378,9 @@ fn configure_session_projection(app: &mut App) {
     app.init_resource::<NetworkSessionStatus>();
 }
 
-pub(crate) fn configure_client_role(app: &mut App) {
+pub(crate) fn configure_client_role(app: &mut App, policy: Option<ClientReplicationPolicy>) {
     app.init_resource::<NetworkClientInbox>();
+    configure_client_replication(app, policy);
     app.init_resource::<NetworkClientOutbox>();
     app.init_resource::<NetworkInboundQueue>();
     app.init_resource::<NetworkOutboundQueue>();
@@ -437,7 +438,6 @@ where
 {
     app.init_resource::<SnapshotCursor>();
     app.init_resource::<ServerSnapshotReplicationState<TDriver::Snapshot>>();
-    app.init_resource::<ClientSnapshotReplicationState<TDriver::Snapshot>>();
     app.init_resource::<ReplicationDiagnostics>();
     app.add_systems(
         FixedUpdate,
@@ -684,33 +684,6 @@ where
             latest_snapshot: None,
             latest_snapshot_per_connection: HashMap::new(),
             latest_tick: SimulationTick::default(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, runen_ecs::Component, runen_ecs::Resource)]
-pub struct ClientSnapshotReplicationState<TSnapshot>
-where
-    TSnapshot: Clone + PartialEq + 'static,
-{
-    pub last_acknowledged_cursor: SnapshotCursor,
-    pub last_received_tick: SimulationTick,
-    pub applied_snapshots: u64,
-    pub last_received_snapshot: Option<TSnapshot>,
-    pub snapshot_history: BTreeMap<SnapshotCursor, TSnapshot>,
-}
-
-impl<TSnapshot> Default for ClientSnapshotReplicationState<TSnapshot>
-where
-    TSnapshot: Clone + PartialEq + 'static,
-{
-    fn default() -> Self {
-        Self {
-            last_acknowledged_cursor: SnapshotCursor::default(),
-            last_received_tick: SimulationTick::default(),
-            applied_snapshots: 0,
-            last_received_snapshot: None,
-            snapshot_history: BTreeMap::new(),
         }
     }
 }

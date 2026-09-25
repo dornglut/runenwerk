@@ -35,7 +35,8 @@ Runenwerk engine integration owns:
 - product/session metadata;
 - reconnect attempt/timing/deployment policy;
 - schedule placement, work queues, diagnostics, and presentation views;
-- retained replication and client-prediction integration pending later RN8 cuts;
+- retained server-replication and client-prediction integration pending later RN8 cuts;
+- explicit client-replication policy and host complete-product realization around RunenNet `ClientReplicationSet`;
 - explicit authority-input policy selection for the host integration, while RunenNet owns remote participant/tick admission.
 
 ## Implemented Substrate
@@ -45,7 +46,7 @@ Runenwerk engine integration owns:
 - `RunenNetSessionProjection` is updated only after successful RunenNet lifecycle operations.
 - Engine owner routing and connection/diagnostic views are reconciled from that projection.
 - `NetworkClientInbox`, `NetworkServerInbox`, `NetworkClientOutbox`, and `NetworkServerOutbox` use ECS work queues for retained replication/application payloads.
-- `client_receive_system` applies retained snapshots/deltas through `SnapshotApplyDriver`.
+- `client_receive_system` delegates client cursor/history/recovery consistency to RunenNet `ClientReplicationSet`, atomically activates the complete encoded product, then uses `SnapshotApplyDriver::apply_snapshot` only for downstream ECS/game realization.
 - `server_receive_system` keeps retained ACK handling on projected active connections, while remote input resolves the actual participant/connection through `RunenNetSessionCore` and submits the opaque batch to RunenNet `AuthorityInputSession`.
 - `sync_connection_streaming_state_system` reconciles per-connection streaming state from the RunenNet projection.
 - `replication_step_system` emits retained per-connection snapshots/deltas.
@@ -87,7 +88,7 @@ RunenNet connection/session mutations occur from the owning application/host lif
 - Product lobby/roster/settings metadata remains Runenwerk-owned.
 - Retained `engine_net` usage is limited to replication/prediction migration evidence.
 - Do not add a concrete transport adapter without a maintained consumer.
-- Do not change replication/prediction correctness semantics as part of lifecycle plumbing.
+- Do not restore client replication consistency/history semantics in Runenwerk resources; downstream prediction remains separate until its own RN8 cut.
 
 ## Validation
 
@@ -97,8 +98,9 @@ The maintained proof must cover:
 - projection/status/owner routing derived from accepted bindings;
 - terminal and retained connection-loss behavior through RunenNet Core;
 - host reconnect diagnostics remaining host-owned;
-- multiple RunenNet connection identities preserving independent routing/baselines;
-- retained replication/prediction tests remaining behaviorally green;
+- multiple RunenNet connection identities preserving independent server routing/baselines;
+- RunenNet client lineage/retention/recovery outcomes with exact-product activation and ACK derivation;
+- retained prediction tests remaining behaviorally green;
 - no replacement transport runtime introduced.
 
 Before merge, repository authority remains `cargo validate` plus the issue-specific focused engine tests at the exact reviewed head.
