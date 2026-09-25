@@ -278,6 +278,49 @@ mod tests {
     }
 
     #[test]
+    fn admitted_capture_preserves_native_tablet_atomic_group_and_provenance() {
+        let packet = NativeTabletPacket::macos_nsevent(
+            314,
+            NativeTabletEventKind::Move,
+            NativeTabletPosition::new(42.0, 24.0),
+            NativeTabletDelta::new(1.0, 2.0),
+        )
+        .with_timestamp_micros(25_000)
+        .with_pressure(0.7)
+        .with_coalesced_samples([NativeTabletSample::new(
+            NativeTabletPosition::new(40.0, 21.0),
+            NativeTabletDelta::new(0.5, 1.0),
+        )
+        .with_timestamp_micros(24_900)
+        .with_pressure(0.6)])
+        .with_predicted_samples([NativeTabletSample::new(
+            NativeTabletPosition::new(44.0, 27.0),
+            NativeTabletDelta::new(2.0, 3.0),
+        )
+        .with_timestamp_micros(25_100)
+        .with_pressure(0.75)]);
+        let mapping = map_native_tablet_packet(&packet).expect("packet should map");
+        let expected = mapping.group.clone();
+        let mut input = InputState::new();
+        input.start_admitted_input_capture();
+
+        input
+            .admit_device_observation_group(mapping.group)
+            .expect("valid tablet group should be admitted");
+
+        assert_eq!(
+            input.stop_admitted_input_capture(),
+            vec![expected.clone()],
+            "capture must retain the exact atomic tablet group"
+        );
+        assert_eq!(
+            input.drain_device_observation_groups(),
+            vec![expected],
+            "tablet product staging must remain separate from admitted capture"
+        );
+    }
+
+    #[test]
     fn native_backend_source_clocks_remain_distinct_for_equal_device_ids() {
         let windows = map_native_tablet_packet(
             &NativeTabletPacket::windows_pointer(

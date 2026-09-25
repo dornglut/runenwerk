@@ -125,6 +125,8 @@ pub struct InputState {
     mouse_button_transitions: Vec<MouseButtonTransitionSample>,
     touch_samples: Vec<TouchInputSample>,
     device_observation_groups: Vec<InputObservationGroup>,
+    admitted_input_capture_active: bool,
+    captured_admitted_groups: Vec<InputObservationGroup>,
     primary_touch: Option<(InputContext, ContactId)>,
     pub scroll_delta: f32,
     left_mouse_pressed: bool,
@@ -148,6 +150,8 @@ impl Default for InputState {
             mouse_button_transitions: Vec::new(),
             touch_samples: Vec::new(),
             device_observation_groups: Vec::new(),
+            admitted_input_capture_active: false,
+            captured_admitted_groups: Vec::new(),
             primary_touch: None,
             scroll_delta: 0.0,
             left_mouse_pressed: false,
@@ -165,11 +169,41 @@ impl InputState {
         Self::default()
     }
 
+    fn admit_group(&mut self, group: &InputObservationGroup) -> Result<(), InputError> {
+        self.neutral.admit(group)?;
+        if self.admitted_input_capture_active {
+            self.captured_admitted_groups.push(group.clone());
+        }
+        Ok(())
+    }
+
+    pub fn start_admitted_input_capture(&mut self) {
+        self.captured_admitted_groups.clear();
+        self.admitted_input_capture_active = true;
+    }
+
+    pub fn admitted_input_capture_active(&self) -> bool {
+        self.admitted_input_capture_active
+    }
+
+    pub fn drain_admitted_input_capture(&mut self) -> Vec<InputObservationGroup> {
+        std::mem::take(&mut self.captured_admitted_groups)
+    }
+
+    pub fn reset_admitted_input_capture(&mut self) {
+        self.captured_admitted_groups.clear();
+    }
+
+    pub fn stop_admitted_input_capture(&mut self) -> Vec<InputObservationGroup> {
+        self.admitted_input_capture_active = false;
+        self.drain_admitted_input_capture()
+    }
+
     pub fn admit_device_observation_group(
         &mut self,
         group: InputObservationGroup,
     ) -> Result<(), InputError> {
-        self.neutral.admit(&group)?;
+        self.admit_group(&group)?;
         self.device_observation_groups.push(group);
         Ok(())
     }
@@ -179,12 +213,11 @@ impl InputState {
     }
 
     pub(crate) fn handle_continuity_loss(&mut self, context: InputContext, loss: ContinuityLoss) {
-        self.neutral
-            .admit(&InputObservationGroup::single(
-                context,
-                InputObservation::ContinuityLoss(loss),
-            ))
-            .expect("input continuity loss should always be valid");
+        self.admit_group(&InputObservationGroup::single(
+            context,
+            InputObservation::ContinuityLoss(loss),
+        ))
+        .expect("input continuity loss should always be valid");
 
         if self.primary_touch.is_some_and(|(touch_context, _)| {
             continuity_loss_contains_context(context, loss, touch_context)
@@ -199,12 +232,11 @@ impl InputState {
         input: &KeyboardInput,
     ) {
         let was_down_anywhere = self.neutral.key_down_anywhere(&input.physical_key);
-        self.neutral
-            .admit(&InputObservationGroup::single(
-                context,
-                InputObservation::Keyboard(input.clone()),
-            ))
-            .expect("digital keyboard observation should always be valid");
+        self.admit_group(&InputObservationGroup::single(
+            context,
+            InputObservation::Keyboard(input.clone()),
+        ))
+        .expect("digital keyboard observation should always be valid");
         let is_down_anywhere = self.neutral.key_down_anywhere(&input.physical_key);
 
         if input.origin == ObservationOrigin::SourceReport
@@ -266,7 +298,7 @@ impl InputState {
         context: InputContext,
         input: ScrollInput,
     ) -> Result<(), InputError> {
-        self.neutral.admit(&InputObservationGroup::single(
+        self.admit_group(&InputObservationGroup::single(
             context,
             InputObservation::Scroll(input),
         ))?;
@@ -298,8 +330,7 @@ impl InputState {
             .map(|point| (point.x, point.y))
             .unwrap_or((0.0, 0.0));
         if self
-            .neutral
-            .admit(&InputObservationGroup::single(
+            .admit_group(&InputObservationGroup::single(
                 context,
                 InputObservation::AbsolutePointerPosition { position },
             ))
@@ -328,7 +359,7 @@ impl InputState {
         input: PointerButtonInput,
     ) -> Result<(), InputError> {
         let was_down_anywhere = self.neutral.pointer_button_down_anywhere(input.button);
-        self.neutral.admit(&InputObservationGroup::single(
+        self.admit_group(&InputObservationGroup::single(
             context,
             InputObservation::PointerButton(input),
         ))?;
@@ -403,7 +434,7 @@ impl InputState {
         delta: Vector2,
         unit: RelativeMotionUnit,
     ) -> Result<(), InputError> {
-        self.neutral.admit(&InputObservationGroup::single(
+        self.admit_group(&InputObservationGroup::single(
             context,
             InputObservation::RelativeMotion { delta, unit },
         ))?;
@@ -431,8 +462,7 @@ impl InputState {
             .map(|position| (position.x, position.y))
             .unwrap_or((input.position.x, input.position.y));
         if self
-            .neutral
-            .admit(&InputObservationGroup::single(
+            .admit_group(&InputObservationGroup::single(
                 context,
                 InputObservation::Contact(input.clone()),
             ))
