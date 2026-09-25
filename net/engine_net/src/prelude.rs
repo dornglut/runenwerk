@@ -1,6 +1,6 @@
 pub use crate::protocol::*;
 pub use crate::replication::{
-    InputDriver, NetEntityMap, NetEntityMapEvent, Replicate, Replicated, ReplicationDriver,
+    InputDriver, NetEntityMap, NetEntityMapEvent, ReplicationDriver,
     ReplicationStats, SnapshotAckOutcome, SnapshotAckRejection, SnapshotApplyDriver, SnapshotCursor,
     SnapshotTimeline, apply_delta_payload, delta_debug_dump, normalize_delta_payload,
     snapshot_debug_dump,
