@@ -6,11 +6,12 @@ use engine::plugins::render::inspect::{
     RenderTemporalJitterEvidence, RenderTemporalProductionEvidenceReport,
     RenderTemporalProductionEvidenceRequest, RenderTemporalProductionEvidenceSeverity,
     RenderTemporalProductionHardwareProfile, RenderTemporalReconstructionMode,
-    RenderTemporalResolutionEvidence, RenderTemporalResolutionPolicy, RenderTemporalRuntimeVisualEvidence,
-    RenderTemporalUpscalingAdapterEvidence, RenderTemporalUpscalingAdapterKind,
-    RenderTemporalUpscalingCapabilityState, RenderTemporalUpscalingInspection,
-    RenderTemporalUpscalingInspectionRequest, inspect_render_temporal_inputs,
-    inspect_render_temporal_production_evidence, inspect_render_temporal_upscaling,
+    RenderTemporalResolutionEvidence, RenderTemporalResolutionPolicy,
+    RenderTemporalRuntimeVisualEvidence, RenderTemporalUpscalingAdapterEvidence,
+    RenderTemporalUpscalingAdapterKind, RenderTemporalUpscalingCapabilityState,
+    RenderTemporalUpscalingInspection, RenderTemporalUpscalingInspectionRequest,
+    inspect_render_temporal_inputs, inspect_render_temporal_production_evidence,
+    inspect_render_temporal_upscaling,
 };
 
 #[test]
