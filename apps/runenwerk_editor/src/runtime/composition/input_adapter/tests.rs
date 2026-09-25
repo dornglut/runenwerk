@@ -1,8 +1,8 @@
 use super::*;
 use runen_input::{
-    AnalogMeasurement, ContactId, ContactInput, CoordinateSpace, InputContext, InputDeviceId, InputSourceId,
-    KeyLocation, KeyboardInput, PhysicalKeyIdentity, Point2, PointerButtonInput, ScrollDelta,
-    ScrollInput,
+    AnalogMeasurement, ContactId, ContactInput, CoordinateSpace, InputContext, InputDeviceId,
+    InputSourceId, KeyLocation, KeyboardInput, PhysicalKeyIdentity, Point2, PointerButtonInput,
+    ScrollDelta, ScrollInput,
 };
 
 fn window() -> NativeWindowId {
