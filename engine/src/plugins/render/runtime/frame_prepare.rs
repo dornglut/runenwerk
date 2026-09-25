@@ -332,7 +332,9 @@ fn build_prepared_flow_invocations(
             .ok_or_else(|| {
                 anyhow::anyhow!("missing main prepared inputs for flow '{:?}'", flow.flow_id)
             })?;
-        if should_emit_automatic_main(flow.flow_id, &requested_flow_invocations, requests) {
+        if flow.invocation_policy == RenderFlowInvocationPolicy::AutomaticMain
+            && should_emit_automatic_main(flow.flow_id, &requested_flow_invocations, requests)
+        {
             invocations.push(PreparedFlowInvocation::main(flow.flow_id, inputs));
         }
     }
@@ -491,6 +493,44 @@ mod automatic_main_replacement_tests {
             .collect::<Vec<_>>();
         assert_eq!(unrelated_invocations.len(), 1);
         assert_eq!(unrelated_invocations[0].view_id, "main");
+    }
+
+    #[test]
+    fn explicit_only_flow_never_receives_automatic_main_invocation() {
+        let explicit = RenderFlow::new("explicit.only")
+            .explicit_invocations_only()
+            .with_surface_color()
+            .expect("surface color should declare")
+            .fullscreen_pass("explicit.only.pass")
+            .main_surface_only()
+            .write_surface_color()
+            .expect("surface color should write")
+            .finish()
+            .validate()
+            .expect("explicit-only flow should validate");
+        let compiled = compile_flow_plan(&explicit).expect("flow should compile");
+        assert_eq!(
+            compiled.invocation_policy,
+            RenderFlowInvocationPolicy::ExplicitOnly
+        );
+
+        let requests = PreparedRenderFrameRequestResource::default();
+        let views =
+            build_prepared_views((1920, 1080), &requests).expect("views should prepare");
+        let extracted = ExtractedRenderStateMap::new();
+        let main_inputs =
+            build_prepared_flow_inputs(std::slice::from_ref(&compiled), &extracted, (1920, 1080))
+                .expect("inputs should prepare");
+        let invocations = build_prepared_flow_invocations(
+            std::slice::from_ref(&compiled),
+            &extracted,
+            &main_inputs,
+            &views,
+            &requests,
+        )
+        .expect("invocations should prepare");
+
+        assert!(invocations.is_empty());
     }
 
     #[test]
