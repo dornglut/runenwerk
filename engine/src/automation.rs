@@ -12,6 +12,7 @@ pub use runen_input::{
     DigitalState, InputObservation, InputSourceId, PointerButton, PointerButtonInput,
     RelativeMotionUnit, ScrollDelta, ScrollDomain, ScrollInput, Vector2,
 };
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AutomationSessionId(u64);
 
