@@ -265,9 +265,19 @@ replay contract.
 The first replay contract assumes fresh replay-owned source identities and MUST NOT infer state that
 predates capture.
 
+Because A4 does not snapshot source state at capture start, trace shape alone cannot prove that the
+first captured press/begin was the first active state for that source. The first replay proof
+therefore also requires a recording-side precondition: for every replayed source/control/contact
+used by the proof, the caller must establish that the relevant normalized state was neutral when
+capture began. The Render Lab proof satisfies this by starting capture on a fresh headless
+`InputState` before the first automation-owned button press.
+
+This is an explicit precondition, not evidence encoded in `AutomationInputTrace`. A later recorder
+extension may capture initial-state evidence if broader observed-human replay requires it.
+
 A trace is not self-contained merely because every captured group is valid. The first replay
 implementation therefore supports only a deliberately narrow subset whose required state can be
-established from the trace itself:
+established from the trace plus that explicit recording precondition:
 
 - pointer-button input when the first traced state for each replay source/device/button is a press;
 - relative motion;
@@ -366,6 +376,12 @@ itself isolate replay semantics.
 Before the first replay input mutation, preflight MUST reject `TargetStateConflict` when any
 pointer button used by the supported trace is already held by target-App input state. It MUST NOT
 clear that other source to make replay proceed.
+
+The target's frame-local input projection must also be quiescent before the first replay frame.
+Pending relative-motion delta, scroll delta, pointer transitions/edges, or native-tablet staging
+from earlier programmatic activity would otherwise be combined with the first replay frame.
+The executor MUST reject that state as `TargetStateConflict`; it MUST NOT call `clear_frame()` to
+erase unrelated evidence merely to make replay proceed.
 
 Replay also MUST reject a target App whose admitted-input capture is already active or whose
 automation input trace recorder is active. Replay must not steal, reset, or silently contaminate
@@ -678,9 +694,10 @@ That proof SHOULD:
 
 1. accept one in-memory A4 trace with no trailing groups;
 2. require an in-process headless App and preflight the complete trace before replay mutation;
-3. require a complete, injective caller-supplied fresh replay-owned source mapping;
-4. reject active admitted-input capture/trace ownership and conflicting already-held pointer buttons
-   before replay input mutation;
+3. require a complete, injective caller-supplied fresh replay-owned source mapping and an explicit
+   recording-side neutral-state precondition for replayed sources;
+4. reject active admitted-input capture/trace ownership, conflicting already-held pointer buttons,
+   and non-quiescent frame-local input projection before replay input mutation;
 5. replay only the first supported self-contained ordinary families: pointer button, relative
    motion, and scroll;
 6. remap tablet source-time context consistently and preserve supported all-tablet
