@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 engine = { path = "../../engine" }
 runen-input.workspace = true
+runen_ecs.workspace = true
 
 [dev-dependencies]
 winit = "0.30.9"
