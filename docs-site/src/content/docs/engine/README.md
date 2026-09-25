@@ -104,7 +104,7 @@ plugin wiring, and integrated engine-facing systems (scene, render, input, repla
   - `engine::Plugin`
   - `engine::prelude::*`
 - On `App::headless()`, use `App::run_for_frames(n)` for frame-count advancement.
-- On `App::headless()`, use `App::run_for_fixed_steps(n)` only after selecting
+- On `App::headless()`, use fixed-cadence-owned `AppFixedStepExt::run_for_fixed_steps(n)` only after selecting
   `FixedStepPlugin`; the stop condition is cadence progress, not simulation identity.
 - Bounded helpers reject `App::new()` rather than silently changing the selected Host.
 - Net-specific integration:

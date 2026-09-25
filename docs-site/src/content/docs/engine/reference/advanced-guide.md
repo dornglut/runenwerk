@@ -87,14 +87,12 @@ Construct the runtime with `App::headless()` before using these controls:
   `FixedStepPlugin`.
 - `run_for_fixed_steps` uses `FixedTimeState::total_completed_steps`, not `SimulationTick`, as its
   stop condition.
-- Set a custom `AppRunner` on `App::headless()` for test harnesses or tools that need other
-  frame-gating logic.
+- `run_for_fixed_steps` is owned by `AppFixedStepExt`; the ordinary prelude keeps the ergonomic
+  `app.run_for_fixed_steps(n)` spelling. Generic custom runners are not part of the App contract.
 - `App::new()` selects the windowed/native Host path; bounded helpers reject it rather than silently
   switching that runtime to headless execution.
 
-Primary runner implementations:
-
-- `engine/src/app/domain/runner.rs`
+Bounded headless advancement is explicit App/fixed-cadence behavior; there is no stored generic runner object.
 
 ## Plugin Authoring Boundaries
 

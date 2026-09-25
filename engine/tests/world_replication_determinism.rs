@@ -10,7 +10,7 @@ use engine::plugins::world::adapters::resources::{
 use engine::plugins::world::edits::ingress::{WorldEditIngressMeta, submit_world_operation};
 use engine::plugins::world::plugin::{WorldAuthorityState, WorldPlugin};
 use engine::plugins::{FixedStepPlugin, SimulationPlugin};
-use engine::prelude::App;
+use engine::prelude::{App, AppFixedStepExt};
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 use runen_net::identity::{ConnectionHandle, ParticipantId, SessionId};
 use runen_net::protocol::{
