@@ -839,7 +839,12 @@ mod tests {
 
         assert_eq!(created.capabilities().len(), 1);
         assert_eq!(
-            created.capabilities()[0].as_str(),
+            created
+                .capabilities()
+                .iter()
+                .next()
+                .expect("created unit should retain the registry capability")
+                .as_str(),
             "runenwerk.surface.observe"
         );
     }
@@ -859,7 +864,7 @@ mod tests {
 
         assert!(rejection.diagnostics().iter().any(|record| {
             record
-                .message
+                .message()
                 .contains("Register the requested editor tool surface")
         }));
     }
