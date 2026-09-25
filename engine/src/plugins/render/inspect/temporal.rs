@@ -200,7 +200,9 @@ pub enum RenderFixedResolutionExecutionEvidenceError {
     OutputExtentMismatch,
     #[error("fixed-resolution prepared frame is missing the native main output view")]
     MissingOutputView,
-    #[error("fixed-resolution native main output view extent does not match admitted output extent")]
+    #[error(
+        "fixed-resolution native main output view extent does not match admitted output extent"
+    )]
     OutputViewExtentMismatch,
     #[error("fixed-resolution prepared frame is missing the admitted internal view")]
     MissingInternalView,
@@ -210,7 +212,9 @@ pub enum RenderFixedResolutionExecutionEvidenceError {
     DynamicTargetDescriptorMismatch,
     #[error("fixed-resolution prepared frame is missing the admitted scene invocation")]
     MissingSceneInvocation,
-    #[error("fixed-resolution prepared frame still contains a native-main invocation for the selected scene flow")]
+    #[error(
+        "fixed-resolution prepared frame still contains a native-main invocation for the selected scene flow"
+    )]
     UnexpectedNativeSceneInvocation,
     #[error(
         "fixed-resolution prepared scene invocation does not retain the admitted target binding"
@@ -230,7 +234,9 @@ pub enum RenderFixedResolutionExecutionEvidenceError {
     NativeFallbackRetainsFixedSceneInvocation,
     #[error("native fallback frame still contains the fixed resolve invocation")]
     NativeFallbackRetainsResolveInvocation,
-    #[error("native fallback frame is missing a native-main invocation for the selected scene flow")]
+    #[error(
+        "native fallback frame is missing a native-main invocation for the selected scene flow"
+    )]
     MissingNativeFallbackSceneInvocation,
     #[error("native fallback scene invocation does not retain the admitted native target binding")]
     NativeFallbackSceneBindingMismatch,
@@ -351,14 +357,10 @@ pub fn inspect_fixed_resolution_execution(
             })
         }
         crate::plugins::render::RenderFixedResolutionExecutionAdmission::Fixed(prepared) => {
-            if frame
-                .flow_invocations
-                .iter()
-                .any(|invocation| {
-                    invocation.flow_id == prepared.scene_invocation.flow_id
-                        && invocation.view_id == "main"
-                })
-            {
+            if frame.flow_invocations.iter().any(|invocation| {
+                invocation.flow_id == prepared.scene_invocation.flow_id
+                    && invocation.view_id == "main"
+            }) {
                 return Err(
                     RenderFixedResolutionExecutionEvidenceError::UnexpectedNativeSceneInvocation,
                 );
