@@ -56,13 +56,25 @@ Standalone RunenNet Core owns compatibility negotiation, session membership, con
 
 Those engine work queues are staging, not a replacement transport or delivery-acceptance runtime. Concrete transport realization is added only where a maintained product consumer requires it.
 
-## 5) Multi-Connection Semantics
+## 5) Multi-Connection Authority Replication
 
-Retained server replication is computed per RunenNet `ConnectionHandle`, not globally:
+Server/host replication state is participant-scoped in RunenNet, not process-global in Runenwerk.
+Configure explicit finite `AuthorityReplicationPolicy` on `RunenNetSessionCore` before active
+authority replication work.
 
-- independent ACK/baseline cursors per authorized connection;
-- targeted snapshot/delta staging;
-- delta fallback to full resync only for the affected connection.
+A fixed replication step prepares a complete snapshot/delta submission for each eligible authorized
+connection. The host then:
+
+1. reads `authority_replication_submissions`;
+2. submits the provided complete `ServerMessage` through its real delivery implementation;
+3. feeds the resulting RunenNet `DeliveryAcceptance` back through
+   `record_authority_replication_delivery_acceptance`.
+
+Reading/projecting a prepared submission is not emission. `NotAccepted` keeps the same pending
+candidate for explicit retry, while `Accepted` alone advances RunenNet emission evidence and makes
+the cursor ACK-eligible. Explicit cancellation is available when the host abandons a pending
+attempt. Full-recovery versus delta preparation is selected from RunenNet authority state and the
+exact retained encoded baseline; there is no periodic full-snapshot timer.
 
 ## Current Authority
 
