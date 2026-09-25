@@ -392,6 +392,229 @@ fn render_dynamic_targets_descriptor_validation_rejects_invalid_shapes() {
 }
 
 #[test]
+fn fixed_resolution_preflight_accepts_internal_scene_and_native_resolve() {
+    let scene = RenderFlow::new("fixed.preflight.scene")
+        .with_color_target_alias("scene_color")
+        .expect("scene color alias should be valid")
+        .fullscreen_pass("fixed.preflight.scene.pass")
+        .write_target_alias("scene_color")
+        .finish()
+        .validate()
+        .expect("scene flow should validate");
+    let scene_compiled = compile_flow_plan(&scene).expect("scene flow should compile");
+
+    let resolve = engine::plugins::render::fixed_resolution_resolve_flow()
+        .expect("resolve flow should validate");
+    let resolve_compiled = compile_flow_plan(&resolve).expect("resolve flow should compile");
+
+    let fixed = engine::plugins::render::RenderFixedResolutionExecutionRequest::new(
+        producer(91),
+        engine::plugins::render::backend::RenderSurfaceId::primary(),
+        scene.id(),
+        alias_key("scene_color"),
+        (1280, 720),
+    )
+    .prepare_against_compiled_flows((1920, 1080), &scene_compiled, &resolve_compiled)
+    .expect("fixed execution should prepare");
+
+    let to_prepared = |request: &PreparedFlowInvocationRequest| PreparedFlowInvocation {
+        invocation_id: request.invocation_id.clone(),
+        flow_id: request.flow_id,
+        view_id: request.view_id.clone(),
+        inputs: PreparedFlowInputs::default(),
+        target_alias_bindings: request.target_alias_bindings.clone(),
+        history_signature: request.history_signature.clone(),
+    };
+
+    let frame = PreparedRenderFrame {
+        context: PreparedFrameContext {
+            frame_index: 1,
+            flow_registry_revision: 1,
+            shader_registry_revision: 1,
+            prepare_epoch: 1,
+        },
+        surface: PreparedSurfaceInfo::unbound_primary((1920, 1080)),
+        views: vec![
+            PreparedViewFrame::main((1920, 1080)),
+            fixed.internal_view.clone(),
+        ],
+        flows: BTreeMap::new(),
+        flow_invocations: vec![
+            to_prepared(&fixed.scene_invocation),
+            to_prepared(&fixed.resolve_invocation),
+        ],
+        dynamic_texture_targets: vec![fixed.dynamic_target.clone()],
+        dynamic_texture_uploads: Vec::new(),
+        product_selections: Vec::new(),
+        viewport_surface_bindings: ViewportSurfaceBindingRegistry::default(),
+        contributions: PreparedFrameContributions::default(),
+        shader: PreparedShaderSnapshot {
+            registry_revision: 1,
+        },
+    };
+
+    let compiled_flows = [scene_compiled, resolve_compiled];
+    let report = validate_prepared_render_frame(
+        &frame,
+        &compiled_flows,
+        &current_runtime_gpu_capabilities(),
+    );
+
+    assert!(
+        !report.has_errors(),
+        "fixed-resolution frame should pass preflight: {:?}",
+        report.diagnostics
+    );
+    assert_eq!(frame.surface.target_size_px, (1920, 1080));
+    assert_eq!(fixed.internal_view.target_size_px, (1280, 720));
+    assert_eq!(fixed.dynamic_target.width, 1280);
+    assert_eq!(fixed.dynamic_target.height, 720);
+
+    let admission =
+        engine::plugins::render::RenderFixedResolutionExecutionAdmission::Fixed(fixed.clone());
+    let evidence =
+        engine::plugins::render::inspect::inspect_fixed_resolution_execution(&admission, &frame)
+            .expect("complete fixed frame should produce fixed execution evidence");
+    assert_eq!(
+        evidence.resolution.policy,
+        engine::plugins::render::inspect::RenderTemporalResolutionPolicy::Fixed
+    );
+    assert_eq!(evidence.resolution.internal_size, [1280, 720]);
+    assert_eq!(evidence.resolution.output_size, [1920, 1080]);
+    assert!(!evidence.native_fallback_active);
+    assert!(evidence.native_fallback_reason.is_none());
+    assert_eq!(evidence.target_key.as_ref(), Some(&fixed.target_key));
+
+    let mut wrong_surface = frame.clone();
+    wrong_surface.surface.render_surface_id =
+        engine::plugins::render::backend::RenderSurfaceId::try_from_raw(2)
+            .expect("test surface should be nonzero");
+    assert!(matches!(
+        engine::plugins::render::inspect::inspect_fixed_resolution_execution(
+            &admission,
+            &wrong_surface
+        ),
+        Err(
+            engine::plugins::render::inspect::RenderFixedResolutionExecutionEvidenceError::SurfaceIdentityMismatch
+        )
+    ));
+
+    let mut incomplete = frame.clone();
+    incomplete
+        .flow_invocations
+        .retain(|invocation| invocation.invocation_id != fixed.resolve_invocation.invocation_id);
+    assert!(matches!(
+        engine::plugins::render::inspect::inspect_fixed_resolution_execution(
+            &admission,
+            &incomplete
+        ),
+        Err(
+            engine::plugins::render::inspect::RenderFixedResolutionExecutionEvidenceError::MissingResolveInvocation
+        )
+    ));
+
+    let mut missing_output_view = frame.clone();
+    missing_output_view
+        .views
+        .retain(|view| view.view_id != "main");
+    assert!(matches!(
+        engine::plugins::render::inspect::inspect_fixed_resolution_execution(
+            &admission,
+            &missing_output_view
+        ),
+        Err(
+            engine::plugins::render::inspect::RenderFixedResolutionExecutionEvidenceError::MissingOutputView
+        )
+    ));
+
+    let mut duplicate_native_scene = frame.clone();
+    duplicate_native_scene
+        .flow_invocations
+        .push(PreparedFlowInvocation::main(
+            scene.id(),
+            PreparedFlowInputs::default(),
+        ));
+    assert!(matches!(
+        engine::plugins::render::inspect::inspect_fixed_resolution_execution(
+            &admission,
+            &duplicate_native_scene
+        ),
+        Err(
+            engine::plugins::render::inspect::RenderFixedResolutionExecutionEvidenceError::UnexpectedNativeSceneInvocation
+        )
+    ));
+
+    let fallback = engine::plugins::render::RenderFixedResolutionExecutionRequest::new(
+        producer(92),
+        engine::plugins::render::backend::RenderSurfaceId::primary(),
+        scene.id(),
+        alias_key("scene_color"),
+        (1280, 800),
+    )
+    .admit_against_compiled_flows((1920, 1080), &compiled_flows[0], &compiled_flows[1]);
+
+    assert!(matches!(
+        engine::plugins::render::inspect::inspect_fixed_resolution_execution(&fallback, &frame),
+        Err(
+            engine::plugins::render::inspect::RenderFixedResolutionExecutionEvidenceError::NativeFallbackRetainsInternalView
+        )
+    ));
+
+    let engine::plugins::render::RenderFixedResolutionExecutionAdmission::NativeFallback(
+        fallback_state,
+    ) = &fallback
+    else {
+        panic!("aspect mismatch should produce native fallback");
+    };
+    let fallback_request = fallback_state
+        .native_scene_invocation
+        .as_ref()
+        .expect("validated alias-capable scene should retain explicit native fallback");
+
+    let mut native_frame = frame.clone();
+    native_frame.views.retain(|view| view.view_id == "main");
+    native_frame.flow_invocations = vec![to_prepared(fallback_request)];
+    native_frame.dynamic_texture_targets.clear();
+
+    let native_report = validate_prepared_render_frame(
+        &native_frame,
+        std::slice::from_ref(&compiled_flows[0]),
+        &current_runtime_gpu_capabilities(),
+    );
+    assert!(
+        !native_report.has_errors(),
+        "native fallback frame should pass preflight: {:?}",
+        native_report.diagnostics
+    );
+
+    let fallback_evidence = engine::plugins::render::inspect::inspect_fixed_resolution_execution(
+        &fallback,
+        &native_frame,
+    )
+    .expect("complete native fallback should remain inspectable");
+    assert_eq!(
+        fallback_evidence.resolution.policy,
+        engine::plugins::render::inspect::RenderTemporalResolutionPolicy::Native
+    );
+    assert_eq!(fallback_evidence.resolution.internal_size, [1920, 1080]);
+    assert_eq!(fallback_evidence.resolution.output_size, [1920, 1080]);
+    assert!(fallback_evidence.native_fallback_active);
+    assert!(
+        fallback_evidence
+            .native_fallback_reason
+            .as_deref()
+            .is_some_and(|reason| reason.contains("must preserve output aspect"))
+    );
+    assert_eq!(
+        fallback_evidence.scene_invocation_id.as_ref(),
+        Some(&fallback_request.invocation_id)
+    );
+    assert!(fallback_evidence.target_key.is_none());
+    assert!(fallback_evidence.internal_view_id.is_none());
+    assert!(fallback_evidence.resolve_invocation_id.is_none());
+}
+
+#[test]
 fn render_dynamic_targets_preflight_reports_missing_target_alias_binding() {
     let flow = RenderFlow::new("preflight.alias.missing")
         .with_color_target_alias("scene_color")
@@ -750,6 +973,49 @@ fn render_dynamic_targets_request_registry_snapshots_valid_requests_by_key() {
     );
     assert_eq!(registry.diagnostics().len(), 1);
     assert_eq!(registry.snapshot().len(), 2);
+}
+
+#[test]
+fn render_dynamic_targets_request_registry_scopes_same_key_to_distinct_surfaces() {
+    let mut registry = RenderDynamicTextureTargetRequestRegistryResource::default();
+    let primary = engine::plugins::render::backend::RenderSurfaceId::primary();
+    let secondary = engine::plugins::render::backend::RenderSurfaceId::try_from_raw(2)
+        .expect("test surface should be nonzero");
+
+    registry
+        .replace_surface_contribution(
+            producer(1),
+            primary,
+            [dynamic_descriptor(
+                "surface-shared",
+                64,
+                64,
+                RenderTextureTargetFormat::Rgba8Unorm,
+                RenderTextureTargetUsage::color_sampled(),
+                RenderTextureSampleMode::FilterableFloat,
+            )],
+        )
+        .expect("primary surface contribution should publish");
+    registry
+        .replace_surface_contribution(
+            producer(2),
+            secondary,
+            [dynamic_descriptor(
+                "surface-shared",
+                64,
+                64,
+                RenderTextureTargetFormat::Rgba8Unorm,
+                RenderTextureTargetUsage::color_sampled(),
+                RenderTextureSampleMode::FilterableFloat,
+            )],
+        )
+        .expect("disjoint surface may reuse the same local target key");
+
+    let primary_targets = registry.snapshot_for_surface(primary);
+    let secondary_targets = registry.snapshot_for_surface(secondary);
+    assert_eq!(primary_targets.len(), 1);
+    assert_eq!(secondary_targets.len(), 1);
+    assert_eq!(primary_targets[0].key, secondary_targets[0].key);
 }
 
 #[test]

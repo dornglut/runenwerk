@@ -762,6 +762,7 @@ fn temporal_inspection() -> RenderTemporalInspection {
         frame_index: 29,
         reconstruction_mode: RenderTemporalReconstructionMode::Taau,
         native_fallback_active: false,
+        native_fallback_reason: None,
         resolution: RenderTemporalResolutionEvidence {
             internal_size: [1280, 720],
             output_size: [1920, 1080],
