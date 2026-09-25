@@ -61,10 +61,18 @@ pub struct ReplayControllerResource {
     pub last_validation: ReplayValidationReport,
 }
 
+#[derive(Debug, Default, runen_ecs::Resource)]
+pub(crate) struct ReplayIntegrationActivation;
+
+pub(crate) fn replay_integration_is_active(world: &runen_ecs::World) -> bool {
+    world.has_resource::<ReplayIntegrationActivation>()
+}
+
 pub struct ReplayPlugin;
 
 impl Plugin for ReplayPlugin {
     fn build(&self, app: &mut App) {
+        app.init_resource::<ReplayIntegrationActivation>();
         app.init_resource::<SceneResource>();
         app.init_resource::<ReplayState>();
         app.init_resource::<ReplaySessionInfo>();
@@ -94,8 +102,35 @@ impl Plugin for ReplayPlugin {
     }
 }
 
+pub trait AppReplayExt {
+    fn start_recording(&mut self) -> Result<&mut Self>;
+    fn stop_recording(&mut self) -> Result<SceneReplayArchive>;
+    fn load_replay(&mut self, archive: SceneReplayArchive) -> Result<&mut Self>;
+    fn seek_tick(&mut self, tick: u64) -> Result<ReplayValidationReport>;
+}
+
+impl AppReplayExt for App {
+    fn start_recording(&mut self) -> Result<&mut Self> {
+        start_recording(self.world_mut())?;
+        Ok(self)
+    }
+
+    fn stop_recording(&mut self) -> Result<SceneReplayArchive> {
+        stop_recording(self.world_mut())
+    }
+
+    fn load_replay(&mut self, archive: SceneReplayArchive) -> Result<&mut Self> {
+        load_replay(self.world_mut(), archive)?;
+        Ok(self)
+    }
+
+    fn seek_tick(&mut self, tick: u64) -> Result<ReplayValidationReport> {
+        seek_loaded_replay(self.world_mut(), SimulationTick(tick))
+    }
+}
+
 pub(crate) fn start_recording(world: &mut runen_ecs::World) -> Result<()> {
-    if !world.has_resource::<ReplayRecorderResource>() || !world.has_resource::<ReplayState>() {
+    if !replay_integration_is_active(world) {
         return Err(anyhow!("ReplayPlugin is not installed"));
     }
     let profile = world
@@ -159,7 +194,7 @@ pub(crate) fn start_recording(world: &mut runen_ecs::World) -> Result<()> {
 }
 
 pub(crate) fn stop_recording(world: &mut runen_ecs::World) -> Result<SceneReplayArchive> {
-    if !world.has_resource::<ReplayRecorderResource>() || !world.has_resource::<ReplayState>() {
+    if !replay_integration_is_active(world) {
         return Err(anyhow!("ReplayPlugin is not installed"));
     }
     let archive = world
@@ -178,7 +213,7 @@ pub(crate) fn stop_recording(world: &mut runen_ecs::World) -> Result<SceneReplay
 }
 
 pub(crate) fn load_replay(world: &mut runen_ecs::World, archive: SceneReplayArchive) -> Result<()> {
-    if !world.has_resource::<ReplayControllerResource>() || !world.has_resource::<ReplayState>() {
+    if !replay_integration_is_active(world) {
         return Err(anyhow!("ReplayPlugin is not installed"));
     }
     if let Ok(controller) = world.resource_mut::<ReplayControllerResource>() {
@@ -197,6 +232,9 @@ pub(crate) fn seek_loaded_replay(
     world: &mut runen_ecs::World,
     target_tick: SimulationTick,
 ) -> Result<ReplayValidationReport> {
+    if !replay_integration_is_active(world) {
+        return Err(anyhow!("ReplayPlugin is not installed"));
+    }
     let archive = world
         .resource::<ReplayControllerResource>()
         .map_err(|_| anyhow!("ReplayPlugin controller resource is not available"))?
