@@ -328,6 +328,14 @@ for frame in trace.frames:
 
 An empty trace frame advances one canonical App frame with no injected group.
 
+The first normalized replay executor is in-process and headless-only. Current canonical explicit
+multi-frame advancement is an `App::headless()` capability; native-window Host execution has a
+different event-loop owner and may admit concurrent physical/native input. The first replay slice
+MUST NOT pretend that headless App-frame advancement proves or controls that native Host path.
+
+A later native/attached normalized replay path requires its own concurrency and Host orchestration
+decision.
+
 Replay MUST NOT substitute simulation ticks, render-frame counters, Host redraw count, sleeps,
 source time, wall-clock time, or presentation intervals for the recorded App-frame boundary.
 
@@ -341,7 +349,7 @@ It MUST NOT drop the groups, append them to the previous frame, or fabricate ano
 
 A later explicit trace-to-scenario transformation may decide how to handle those observations.
 
-### Initial state and cleanup
+### Initial state, exclusivity, and cleanup
 
 Normalized replay requires explicit caller control of the target App and fresh replay-owned source
 IDs.
@@ -350,9 +358,25 @@ The caller MUST choose replay-owned source identities that do not already carry 
 state. The first replay implementation does not clear those identities to manufacture a clean
 baseline and does not snapshot/restore unrelated input.
 
-Trace preflight MUST complete before the first replay mutation. A trace that requires pre-capture
-held/contact/absolute-pointer state is Unsupported under the first replay contract rather than being
-silently approximated.
+The first executor is headless-only, but a headless App may still contain input state established by
+earlier programmatic activity. Runenwerk's current pointer compatibility projection asks whether a
+button is held **anywhere**, across all admitted sources. Source remapping therefore does not by
+itself isolate replay semantics.
+
+Before the first replay input mutation, preflight MUST reject `TargetStateConflict` when any
+pointer button used by the supported trace is already held by target-App input state. It MUST NOT
+clear that other source to make replay proceed.
+
+Replay also MUST reject a target App whose admitted-input capture is already active or whose
+automation input trace recorder is active. Replay must not steal, reset, or silently contaminate
+another capture/evidence owner.
+
+Trace-shape, source-mapping, and trailing-group preflight MUST complete before App startup or replay
+input mutation. Target-state conflict checks MUST run before replay input mutation and SHOULD be
+repeated after startup if startup can establish relevant input state.
+
+A trace that requires pre-capture held/contact/absolute-pointer state is Unsupported under the first
+replay contract rather than being silently approximated.
 
 Replay-owned held state is cleaned through existing source-scoped continuity semantics on
 cancellation or explicit replay teardown. Cleanup MUST NOT synthesize physical Up/Cancel
@@ -367,11 +391,15 @@ Replay result knowledge MUST distinguish at least:
 
 - Completed;
 - UnsupportedTraceShape;
+- InvalidSourceMapping;
 - InvalidOrRejectedInput;
 - UnframedTrailingGroups;
 - TargetStateConflict;
 - Cancelled;
 - InfrastructureFailure.
+
+A source map is invalid when it omits a recorded source or maps distinct recorded sources onto the
+same replay source. This is detected before target mutation.
 
 A failure after earlier frames were applied MUST report partial progress, including the last
 completed frame or the failing frame/group location. It MUST NOT report the whole trace as
@@ -649,21 +677,23 @@ in-memory trace replay only.
 That proof SHOULD:
 
 1. accept one in-memory A4 trace with no trailing groups;
-2. preflight the complete trace before target mutation;
-3. use explicit caller-supplied fresh replay-owned source mapping;
-4. replay only the first supported self-contained ordinary families: pointer button, relative
+2. require an in-process headless App and preflight the complete trace before replay mutation;
+3. require a complete, injective caller-supplied fresh replay-owned source mapping;
+4. reject active admitted-input capture/trace ownership and conflicting already-held pointer buttons
+   before replay input mutation;
+5. replay only the first supported self-contained ordinary families: pointer button, relative
    motion, and scroll;
-5. remap tablet source-time context consistently and preserve supported all-tablet
+6. remap tablet source-time context consistently and preserve supported all-tablet
    multi-observation groups through whole-group device admission/staging;
-6. reject absolute-pointer, text-dependent keyboard, pre-capture-state-dependent contact/digital/
+7. reject absolute-pointer, text-dependent keyboard, pre-capture-state-dependent contact/digital/
    continuity, and multi-observation non-tablet shapes rather than approximating them;
-7. advance exactly one canonical App frame per recorded trace frame, including idle frames;
-8. report partial progress and truthful failure knowledge;
-9. clean only replay-owned held state through continuity semantics;
-10. prove a recorded Render Lab orbit/pan/zoom sequence that starts capture before button press and
+8. advance exactly one canonical App frame per recorded trace frame, including idle frames;
+9. report partial progress and truthful failure knowledge;
+10. clean only replay-owned held state through continuity semantics;
+11. prove a recorded Render Lab orbit/pan/zoom sequence that starts capture before button press and
     includes an idle frame;
-11. prove tablet atomicity plus unsupported initial-state/group-shape behavior at the replay ingress
-    boundary.
+12. prove tablet atomicity, invalid source mapping, target-state conflict, and unsupported
+    initial-state/group-shape behavior at the replay ingress boundary.
 
 This first proof intentionally does not claim general keyboard/text, absolute-pointer, or
 mid-contact replay. Those require additional recorded evidence or a separately accepted
