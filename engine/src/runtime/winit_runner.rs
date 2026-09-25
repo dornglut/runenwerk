@@ -13,6 +13,7 @@ use crate::runtime::platform::{
     PlatformEvent, PlatformWindowEvent, PlatformWindowEventQueueResource,
     apply_native_window_event, apply_platform_input_event,
 };
+use crate::runtime::presentation::ensure_primary_presentation_metrics;
 use crate::runtime::window::{
     NativeWindowCreationRequest, NativeWindowId, WindowCursorIcon, WindowStateRegistryResource,
 };
@@ -60,6 +61,7 @@ pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
 }
 
 fn install_native_window_provider_resources(world: &mut runen_ecs::World) {
+    ensure_primary_presentation_metrics(world);
     if !world.has_resource::<WindowStateRegistryResource>() {
         world.insert_resource(WindowStateRegistryResource::default());
     }

@@ -23,16 +23,10 @@ Internal architecture and runtime contracts for the `engine` crate.
 
 ## Runtime Lifecycle Contract
 
-Builtin resource installation:
-
-- Installed during `App` construction via:
-  - `App::install_builtin_resources` in `engine/src/app/runtime/bootstrap.rs`
-- Bare App construction installs only universal App/runtime state. It does not imply fixed cadence or
-  simulation identity/configuration.
+Bare App construction does not install optional capability, Host, product, or presentation state. It contains the RunenECS world/runtime and App lifecycle/composition state only; fixed cadence, simulation identity/configuration, and logical presentation are selected by their owning integration paths.
 - Fixed-cadence state is selected through `FixedStepPlugin`.
 - Simulation integration state is selected through `SimulationPlugin`.
-- Bare App bootstrap retains only universal App/runtime integration state such as:
-  - `PrimaryPresentationMetricsResource`
+- `PrimaryPresentationMetricsResource` is shared host-neutral logical-presentation integration state. Native Host realization and Scene selection initialize it idempotently when required; caller-supplied headless metrics are preserved.
 - Product/query publication state is selected lazily through `AppPublicationExt`; bare App
   construction does not manufacture publication staging resources or handler registry state.
 - Input capability state is selected through `InputFinalizePlugin`, which installs `InputState` and `ActionState`.
@@ -216,8 +210,7 @@ restored, replayed, or reassigned without changing the App advancement contract.
 primary and secondary native windows. Each `NativeWindowRecord` owns native title, physical
 size/scale, focus, close intent/approval, redraw intent, cursor intent, and lifecycle/failure state.
 `PrimaryPresentationMetricsResource` is separate host-neutral logical primary size/scale state.
-Headless execution therefore has presentation metrics without a native-window identity or native
-lifecycle sentinel. Windowed execution applies native effects from the keyed record in
+Headless execution can carry presentation metrics when a selected consumer such as Scene requires them, without manufacturing native-window identity or native lifecycle state in bare App. Windowed execution applies native effects from the keyed record in
 `engine/src/runtime/winit_runner.rs::WinitRunner::apply_window_effects`.
 
 ## Integration Boundaries

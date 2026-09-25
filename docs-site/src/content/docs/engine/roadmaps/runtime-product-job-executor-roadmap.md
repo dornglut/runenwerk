@@ -10,8 +10,6 @@ related_designs:
   - ../../design/accepted/execution-fabric-and-product-jobs-design.md
   - ../../design/accepted/sdf-first-field-world-platform-design.md
   - ../../design/accepted/field-product-contracts-diagnostics-and-residency-design.md
-related_roadmaps:
-  - ../../workspace/sdf-first-execution-roadmap.md
 ---
 
 # Runtime Product Job Executor Roadmap
