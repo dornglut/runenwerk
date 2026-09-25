@@ -79,6 +79,18 @@ const RL2_QUALITY_SCENARIO_REVISION: u32 = 1;
 pub(super) const RL2_QUALITY_FLOW_ID: &str = "runenwerk.render_lab.rl2.fixed_quality";
 pub(super) const RL2_QUALITY_PASS_ID: &str = "runenwerk.render_lab.rl2.fixed_quality.compose";
 pub(super) const RL2_QUALITY_COLOR_ALIAS: &str = "runenwerk.render_lab.rl2.fixed_quality.color";
+const RL2_QUALITY_PRESENT_FLOW_ID: &str = "runenwerk.render_lab.rl2.quality_present";
+const RL2_QUALITY_PRESENT_PASS_ID: &str = "runenwerk.render_lab.rl2.quality_present.present";
+
+pub(super) fn render_lab_quality_present_flow() -> Result<RenderFlow> {
+    RenderFlow::new(RL2_QUALITY_PRESENT_FLOW_ID)
+        .with_surface_color()?
+        .present_pass(RL2_QUALITY_PRESENT_PASS_ID)?
+        .main_surface_only()
+        .surface_color()?
+        .finish()
+        .validate()
+}
 
 pub(super) fn temporal_quality_capture_selector(
     admission: Option<&engine::plugins::render::RenderFixedResolutionExecutionAdmission>,
@@ -518,6 +530,17 @@ mod tests {
         );
 
         let _ = fs::remove_file(artifact_path);
+    }
+
+    #[test]
+    fn temporal_quality_present_flow_supplies_terminal_native_presentation() {
+        let flow = render_lab_quality_present_flow().expect("quality present flow should author");
+        assert_eq!(flow.label(), RL2_QUALITY_PRESENT_FLOW_ID);
+        assert!(flow.resource_id(engine::plugins::render::SURFACE_COLOR_RESOURCE_LABEL).is_some());
+        assert!(flow.pass_id(RL2_QUALITY_PRESENT_PASS_ID).is_some());
+        let compiled = engine::plugins::render::compile_flow_plan(&flow)
+            .expect("quality present flow should compile");
+        assert_eq!(compiled.render_passes.len(), 1);
     }
 
     #[test]

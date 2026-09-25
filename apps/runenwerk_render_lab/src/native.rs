@@ -12,9 +12,9 @@ use temporal_quality::{
     RL2_QUALITY_COLOR_ALIAS, RL2_QUALITY_FLOW_ID, RenderLabFixedQualityPlans,
     RenderLabNativeQualityPublication, RenderLabTemporalQualityExecutionState,
     inspect_render_lab_temporal_quality_execution_system, render_lab_fixed_quality_flow,
-    stage_render_lab_fixed_quality_publication, stage_render_lab_native_quality_publication,
-    temporal_quality_capture_evidence, temporal_quality_capture_selector,
-    write_temporal_quality_artifact,
+    render_lab_quality_present_flow, stage_render_lab_fixed_quality_publication,
+    stage_render_lab_native_quality_publication, temporal_quality_capture_evidence,
+    temporal_quality_capture_selector, write_temporal_quality_artifact,
 };
 
 #[derive(Debug, Clone, Copy, runen_ecs::Resource)]
@@ -225,6 +225,7 @@ fn run_native_with_measurement(measurement: Option<RenderLabMeasurementConfig>) 
 
         let scene_flow = render_lab_fixed_quality_flow()?;
         let resolve_flow = engine::plugins::render::fixed_resolution_resolve_flow()?;
+        let present_flow = render_lab_quality_present_flow()?;
         let scene_plan = engine::plugins::render::compile_flow_plan(&scene_flow)?;
         let resolve_plan = engine::plugins::render::compile_flow_plan(&resolve_flow)?;
         app.insert_resource(RenderLabFixedQualityPlans {
@@ -237,6 +238,7 @@ fn run_native_with_measurement(measurement: Option<RenderLabMeasurementConfig>) 
         app.insert_resource(RenderLabFlowId(scene_flow.id()));
         app.add_render_flow(scene_flow);
         app.add_render_flow(resolve_flow);
+        app.add_render_flow(present_flow);
     } else {
         let flow = render_lab_flow()?;
         app.insert_resource(RenderLabFlowId(flow.id()));
