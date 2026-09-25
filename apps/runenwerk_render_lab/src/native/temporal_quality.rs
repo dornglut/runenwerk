@@ -50,7 +50,7 @@ struct RenderLabTemporalQualityExecutionEvidence {
 }
 
 #[derive(Debug, serde::Serialize)]
-struct RenderLabTemporalQualityCaptureEvidence {
+pub(super) struct RenderLabTemporalQualityCaptureEvidence {
     frame_index: u64,
     flow_id: String,
     pass_id: String,
