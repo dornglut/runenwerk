@@ -173,15 +173,10 @@ struct EnvelopeProbe {
 struct PersistedTraceV1 {
     artifact_kind: String,
     schema_version: u32,
-    recording_witness: PersistedRecordingWitnessV1,
+    recorded_sources_pristine_at_capture_start: bool,
     #[serde(default)]
     provenance: Option<AutomationInputTraceProvenance>,
     frames: Vec<PersistedFrameV1>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-enum PersistedRecordingWitnessV1 {
-    RecordedSourcesPristineAtCaptureStart,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -471,11 +466,11 @@ pub fn import_automation_input_trace_v1(
     let persisted: PersistedTraceV1 = options.from_str(source).map_err(classify_ron_error)?;
     validate_persisted_header(&persisted)?;
     validate_provenance_import(persisted.provenance.as_ref())?;
-    let recording_witness = match persisted.recording_witness {
-        PersistedRecordingWitnessV1::RecordedSourcesPristineAtCaptureStart => {
-            AutomationInputTraceRecordingWitness::RecordedSourcesPristineAtCaptureStart
-        }
-    };
+    if !persisted.recorded_sources_pristine_at_capture_start {
+        return Err(AutomationInputTraceImportError::UnsupportedRecordingWitness);
+    }
+    let recording_witness =
+        AutomationInputTraceRecordingWitness::RecordedSourcesPristineAtCaptureStart;
 
     let trace = ImportBuilder::new().build(&persisted)?;
     validate_imported_normalized_input(&trace)?;
@@ -633,10 +628,8 @@ impl ExportBuilder {
         Ok(PersistedTraceV1 {
             artifact_kind: AUTOMATION_INPUT_TRACE_V1_ARTIFACT_KIND.to_owned(),
             schema_version: AUTOMATION_INPUT_TRACE_V1_SCHEMA_VERSION,
-            recording_witness: match recording_witness {
-                AutomationInputTraceRecordingWitness::RecordedSourcesPristineAtCaptureStart => {
-                    PersistedRecordingWitnessV1::RecordedSourcesPristineAtCaptureStart
-                }
+            recorded_sources_pristine_at_capture_start: match recording_witness {
+                AutomationInputTraceRecordingWitness::RecordedSourcesPristineAtCaptureStart => true,
             },
             provenance,
             frames,

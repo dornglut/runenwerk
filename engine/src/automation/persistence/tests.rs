@@ -69,7 +69,7 @@ fn v1_emits_exact_identity_and_round_trips_supported_ordinary_input() {
     let source = encode(&replayable_trace());
     assert!(source.contains(AUTOMATION_INPUT_TRACE_V1_ARTIFACT_KIND));
     assert!(source.contains("schema_version: 1"));
-    assert!(source.contains("RecordedSourcesPristineAtCaptureStart"));
+    assert!(source.contains("recorded_sources_pristine_at_capture_start: true"));
     assert!(!source.contains("source: 100"));
 
     let imported = import_automation_input_trace_v1(source.as_bytes()).expect("V1 should import");
@@ -316,6 +316,20 @@ fn loader_probes_kind_and_version_before_strict_v1_payload() {
 }
 
 #[test]
+fn import_rejects_unsupported_recording_witness() {
+    let valid = encode(&replayable_trace());
+    let unsupported = valid.replacen(
+        "recorded_sources_pristine_at_capture_start: true",
+        "recorded_sources_pristine_at_capture_start: false",
+        1,
+    );
+    assert_eq!(
+        import_automation_input_trace_v1(unsupported.as_bytes()),
+        Err(AutomationInputTraceImportError::UnsupportedRecordingWitness)
+    );
+}
+
+#[test]
 fn strict_v1_rejects_unknown_fields_variants_and_missing_fields() {
     let valid = encode(&replayable_trace());
 
@@ -336,7 +350,7 @@ fn strict_v1_rejects_unknown_fields_variants_and_missing_fields() {
     ));
 
     let missing = valid.replacen(
-        "recording_witness: RecordedSourcesPristineAtCaptureStart,",
+        "recorded_sources_pristine_at_capture_start: true,",
         "",
         1,
     );
@@ -552,7 +566,7 @@ fn structural_resource_limits_are_enforced_before_runtime_materialization() {
     let one_group = PersistedTraceV1 {
         artifact_kind: AUTOMATION_INPUT_TRACE_V1_ARTIFACT_KIND.to_owned(),
         schema_version: AUTOMATION_INPUT_TRACE_V1_SCHEMA_VERSION,
-        recording_witness: PersistedRecordingWitnessV1::RecordedSourcesPristineAtCaptureStart,
+        recorded_sources_pristine_at_capture_start: true,
         provenance: None,
         frames: vec![PersistedFrameV1 {
             frame_ordinal: 0,
