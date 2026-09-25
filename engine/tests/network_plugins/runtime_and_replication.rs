@@ -541,3 +541,355 @@ fn remote_authority_input_does_not_consume_local_prediction_staging() {
             .any(|message| matches!(message, ClientMessage::InputFrame(_)))
     );
 }
+
+
+fn client_app_with_prediction_policy(policy: ClientPredictionPolicy) -> App {
+    let mut app = App::headless();
+    app.add_plugins(default_plugins());
+    app.init_resource::<PlayerCommandBuffer>();
+    app.add_plugin(SimulationPlugin);
+    app.add_plugin(
+        NetPlugin::<TestReplicationDriver>::new(NetRole::Client).with_config(
+            NetPluginConfig::default()
+                .with_client_replication_policy(test_client_replication_policy())
+                .with_client_prediction_policy(policy),
+        ),
+    );
+    app
+}
+
+fn activate_client_prediction_baseline(mut app: App) -> App {
+    let payload = TestReplicationDriver::encode_snapshot(&TestSnapshot::default())
+        .expect("baseline snapshot should encode");
+    enqueue_client_inbox(
+        app.world_mut(),
+        ServerMessage::Snapshot(Snapshot {
+            tick: SimulationTick(0),
+            cursor: SnapshotCursor(1),
+            last_applied: SnapshotCursor::default(),
+            entity_ids: Vec::new(),
+            payload,
+        }),
+    )
+    .expect("baseline should stage");
+    let mut app = app
+        .run_for_frames(1)
+        .expect("baseline should activate client prediction");
+    clear_client_outbound(app.world_mut());
+    app
+}
+
+#[test]
+fn client_prediction_policy_requires_explicit_client_replication_policy() {
+    let result = std::panic::catch_unwind(|| {
+        let mut app = App::headless();
+        app.add_plugins(default_plugins());
+        app.init_resource::<PlayerCommandBuffer>();
+        app.add_plugin(SimulationPlugin);
+        app.add_plugin(
+            NetPlugin::<TestReplicationDriver>::new(NetRole::Client).with_config(
+                NetPluginConfig::default()
+                    .with_client_prediction_policy(test_client_prediction_policy()),
+            ),
+        );
+    });
+
+    assert!(
+        result.is_err(),
+        "tracked prediction without an explicit client replication lineage must fail setup"
+    );
+}
+
+#[test]
+fn client_prediction_retains_exact_encoded_staged_batch_and_applies_once() {
+    let mut client = activate_client_prediction_baseline(client_app_with_prediction_policy(
+        test_client_prediction_policy(),
+    ));
+    let command = ClientCommandEnvelope::Ability(AbilityCommand { slot: 11 });
+    let expected_payload = TestReplicationDriver::encode_input(std::slice::from_ref(&command))
+        .expect("prediction batch should encode");
+    client
+        .world_mut()
+        .resource_mut::<PlayerCommandBuffer>()
+        .unwrap()
+        .push(command.clone());
+
+    let client = client
+        .run_for_fixed_steps(1)
+        .expect("new prediction batch should apply");
+
+    assert_eq!(client_prediction_pending_count(client.world()), Some(1));
+    assert_eq!(
+        client_prediction_pending_bytes(client.world()),
+        Some(expected_payload.len()),
+        "RunenNet prediction accounting must use the exact retained encoded batch length"
+    );
+    assert_eq!(
+        client.world().resource::<AppliedInputLog>().unwrap().inputs,
+        vec![command]
+    );
+    assert_eq!(
+        client.world().resource::<AppliedInputLog>().unwrap().ticks,
+        vec![SimulationTick(1)]
+    );
+    assert!(client
+        .world()
+        .resource::<NetworkOutboundQueue>()
+        .unwrap()
+        .client_messages()
+        .iter()
+        .any(|message| matches!(
+            message,
+            ClientMessage::InputFrame(frame)
+                if frame.tick == SimulationTick(1) && frame.payload == expected_payload
+        )));
+}
+
+#[test]
+fn client_prediction_duplicate_and_conflicting_same_tick_batches_are_classified_before_mutation() {
+    let mut client = activate_client_prediction_baseline(client_app_with_prediction_policy(
+        test_client_prediction_policy(),
+    ));
+    let first = ClientCommandEnvelope::Ability(AbilityCommand { slot: 21 });
+    client
+        .world_mut()
+        .resource_mut::<PlayerCommandBuffer>()
+        .unwrap()
+        .push(first.clone());
+    client = client
+        .run_for_fixed_steps(1)
+        .expect("first predicted batch should apply");
+    assert_eq!(
+        client.world().resource::<AppliedInputLog>().unwrap().inputs,
+        vec![first.clone()]
+    );
+
+    *client.world_mut().resource_mut::<SimulationTick>().unwrap() = SimulationTick(0);
+    clear_client_outbound(client.world_mut());
+    client
+        .world_mut()
+        .resource_mut::<PlayerCommandBuffer>()
+        .unwrap()
+        .push(first.clone());
+    client = client
+        .run_for_fixed_steps(1)
+        .expect("duplicate predicted batch should classify");
+    assert_eq!(
+        client.world().resource::<AppliedInputLog>().unwrap().inputs,
+        vec![first.clone()],
+        "duplicate same-tick prediction must not be applied twice"
+    );
+    assert!(client
+        .world()
+        .resource::<NetworkOutboundQueue>()
+        .unwrap()
+        .client_messages()
+        .iter()
+        .any(|message| matches!(message, ClientMessage::InputFrame(_))),
+        "duplicate batch remains eligible for delivery retry"
+    );
+
+    *client.world_mut().resource_mut::<SimulationTick>().unwrap() = SimulationTick(0);
+    clear_client_outbound(client.world_mut());
+    client
+        .world_mut()
+        .resource_mut::<PlayerCommandBuffer>()
+        .unwrap()
+        .push(ClientCommandEnvelope::Ability(AbilityCommand { slot: 22 }));
+    let client = client
+        .run_for_fixed_steps(1)
+        .expect("conflicting same-tick prediction should classify");
+    assert_eq!(
+        client.world().resource::<AppliedInputLog>().unwrap().inputs,
+        vec![first],
+        "conflicting same-tick content must not mutate speculative gameplay"
+    );
+    assert!(client
+        .world()
+        .resource::<NetworkOutboundQueue>()
+        .unwrap()
+        .client_messages()
+        .iter()
+        .all(|message| !matches!(message, ClientMessage::InputFrame(_))),
+        "conflicting same-tick content must not be submitted"
+    );
+}
+
+#[test]
+fn client_prediction_resource_rejection_can_send_without_speculative_mutation() {
+    let policy = ClientPredictionPolicy::new(PredictionLimits::new(
+        NonZeroUsize::new(1).unwrap(),
+        NonZeroUsize::new(1).unwrap(),
+        8,
+    ));
+    let mut client = activate_client_prediction_baseline(client_app_with_prediction_policy(policy));
+    client
+        .world_mut()
+        .resource_mut::<PlayerCommandBuffer>()
+        .unwrap()
+        .push(ClientCommandEnvelope::Ability(AbilityCommand { slot: 31 }));
+
+    let client = client
+        .run_for_fixed_steps(1)
+        .expect("prediction resource rejection should fail closed");
+
+    assert_eq!(client_prediction_pending_count(client.world()), Some(0));
+    assert!(client.world().resource::<AppliedInputLog>().is_err());
+    assert!(client
+        .world()
+        .resource::<NetworkOutboundQueue>()
+        .unwrap()
+        .client_messages()
+        .iter()
+        .any(|message| matches!(message, ClientMessage::InputFrame(_))),
+        "delivery remains orthogonal when product policy permits an unpredicted batch"
+    );
+}
+
+#[test]
+fn client_prediction_uses_bounded_staging_before_forming_prediction_batch() {
+    let mut client = activate_client_prediction_baseline(client_app_with_prediction_policy(
+        test_client_prediction_policy(),
+    ));
+    let commands = (0..4_097usize)
+        .map(|index| ClientCommandEnvelope::Ability(AbilityCommand {
+            slot: (index % 251) as u8,
+        }))
+        .collect::<Vec<_>>();
+    let expected_payload = TestReplicationDriver::encode_input(&commands[..4_096])
+        .expect("bounded accepted batch should encode");
+    client
+        .world_mut()
+        .resource_mut::<PlayerCommandBuffer>()
+        .unwrap()
+        .commands
+        .extend(commands);
+
+    let client = client
+        .run_for_fixed_steps(1)
+        .expect("bounded prediction staging should reject only excess local input");
+
+    assert_eq!(
+        client.world().resource::<AppliedInputLog>().unwrap().inputs.len(),
+        4_096
+    );
+    assert_eq!(
+        client_prediction_pending_bytes(client.world()),
+        Some(expected_payload.len())
+    );
+    assert!(client
+        .world()
+        .resource::<NetworkOutboundQueue>()
+        .unwrap()
+        .client_messages()
+        .iter()
+        .any(|message| matches!(
+            message,
+            ClientMessage::InputFrame(frame) if frame.payload == expected_payload
+        )));
+}
+
+#[test]
+fn client_prediction_recovery_invalidates_pre_recovery_pending_continuity() {
+    let mut client = activate_client_prediction_baseline(client_app_with_prediction_policy(
+        test_client_prediction_policy(),
+    ));
+    client
+        .world_mut()
+        .resource_mut::<PlayerCommandBuffer>()
+        .unwrap()
+        .push(ClientCommandEnvelope::Ability(AbilityCommand { slot: 41 }));
+    client = client
+        .run_for_fixed_steps(1)
+        .expect("prediction should become pending");
+    assert_eq!(client_prediction_pending_count(client.world()), Some(1));
+
+    enqueue_client_inbox(
+        client.world_mut(),
+        ServerMessage::DeltaSnapshot(DeltaSnapshot {
+            tick: SimulationTick(2),
+            base: SnapshotCursor(99),
+            cursor: SnapshotCursor(100),
+            entity_ids: Vec::new(),
+            payload: TestReplicationDriver::encode_delta(&TestDelta { changed: false })
+                .expect("delta should encode"),
+        }),
+    )
+    .expect("missing-base delta should stage");
+    let client = client
+        .run_for_frames(1)
+        .expect("missing-base recovery should be observed by prediction");
+
+    assert_eq!(client_prediction_pending_count(client.world()), Some(0));
+    assert!(matches!(
+        client_prediction_state(client.world()),
+        Some(RunenNetPredictionState::Invalidated {
+            reason: PredictionInvalidationReason::ReplicationRecovery(
+                ClientRecoveryReason::MissingBase
+            ),
+            ..
+        })
+    ));
+}
+
+#[test]
+fn client_prediction_local_application_failure_restores_authoritative_host_before_returning_error() {
+    let mut client = activate_client_prediction_baseline(client_app_with_prediction_policy(
+        test_client_prediction_policy(),
+    ));
+    client
+        .world_mut()
+        .insert_resource(RejectNextInputApplication(true));
+    client
+        .world_mut()
+        .resource_mut::<PlayerCommandBuffer>()
+        .unwrap()
+        .push(ClientCommandEnvelope::Ability(AbilityCommand { slot: 51 }));
+
+    let error = client
+        .run_for_fixed_steps(1)
+        .expect_err("local predicted application failure should surface");
+    let rendered = format!("{error:#}");
+    assert!(
+        rendered.contains("apply newly admitted local prediction batch"),
+        "successful authoritative restoration must return the original local-application failure: {rendered}"
+    );
+    assert!(
+        !rendered.contains("restore authoritative host state"),
+        "restoration itself must have succeeded before the original failure is surfaced: {rendered}"
+    );
+}
+
+#[test]
+fn client_prediction_lifecycle_hooks_project_runennet_invalidation_and_termination() {
+    let mut client = activate_client_prediction_baseline(client_app_with_prediction_policy(
+        test_client_prediction_policy(),
+    ));
+    client_prediction_connection_lost(client.world_mut()).expect("connection loss should project");
+    assert!(matches!(
+        client_prediction_state(client.world()),
+        Some(RunenNetPredictionState::Invalidated {
+            reason: PredictionInvalidationReason::ConnectionLoss,
+            ..
+        })
+    ));
+
+    client_prediction_participant_membership_ended(client.world_mut())
+        .expect("participant end should project");
+    assert!(matches!(
+        client_prediction_state(client.world()),
+        Some(RunenNetPredictionState::Invalidated {
+            reason: PredictionInvalidationReason::ParticipantMembershipEnded,
+            ..
+        })
+    ));
+
+    client_prediction_session_closed(client.world_mut()).expect("session close should project");
+    assert!(matches!(
+        client_prediction_state(client.world()),
+        Some(RunenNetPredictionState::Invalidated {
+            reason: PredictionInvalidationReason::SessionClosed,
+            ..
+        })
+    ));
+}
