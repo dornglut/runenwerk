@@ -113,7 +113,6 @@ pub fn apply_platform_input_event(input: &mut InputState, event: &PlatformEvent)
         PlatformEvent::Resumed
         | PlatformEvent::CloseRequested
         | PlatformEvent::Focused { .. }
-        | PlatformEvent::InputContinuityLost { .. }
         | PlatformEvent::Resized { .. }
         | PlatformEvent::ScaleFactorChanged { .. }
         | PlatformEvent::RedrawRequested => {}
