@@ -1,5 +1,5 @@
 //! File: domain/editor/editor_shell/src/workspace/state.rs
-//! Purpose: Canonical workspace structural graph value model.
+//! Purpose: Predecessor workspace structural graph retained only for compatibility/parity tests.
 //!
 //! Identity invariants:
 //! - `WorkspaceId` identifies the workspace structural root only.
@@ -10,14 +10,18 @@
 //! - runtime `editor_viewport::ViewportId` can be retained for viewport restore metadata, but
 //!   it is never a workspace structural id.
 
+#[cfg(test)]
 use std::collections::{BTreeMap, BTreeSet};
 
 use editor_viewport::{ViewportId, ViewportRuntimeSettings};
 
 use crate::{
-    PanelHostId, PanelInstanceId, TabStackId, ToolSurfaceInstanceId, WorkspaceId,
-    WorkspaceIdentityAllocator, WorkspaceIdentitySeed,
-    tool_suite::{ToolSurfaceRegistry, ToolSurfaceStableKey},
+    PanelHostId, PanelInstanceId, TabStackId, ToolSurfaceInstanceId,
+    tool_suite::ToolSurfaceStableKey,
+};
+#[cfg(test)]
+use crate::{
+    WorkspaceId, WorkspaceIdentityAllocator, WorkspaceIdentitySeed, tool_suite::ToolSurfaceRegistry,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -394,6 +398,7 @@ impl std::fmt::Display for WorkspaceSurfaceIdentityError {
 
 impl std::error::Error for WorkspaceSurfaceIdentityError {}
 
+#[cfg(test)]
 fn compiled_in_tool_surface_state(
     instance_id: ToolSurfaceInstanceId,
     tool_surface_kind: ToolSurfaceKind,
@@ -404,10 +409,12 @@ fn compiled_in_tool_surface_state(
     ToolSurfaceState::new_with_stable_key(instance_id, stable_surface_key, mount)
 }
 
+#[cfg(test)]
 pub(crate) fn is_viewport_stable_surface_key(key: &ToolSurfaceStableKey) -> bool {
     key.as_str() == "runenwerk.scene.viewport"
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq)]
 pub struct WorkspaceState {
     pub(crate) workspace_id: WorkspaceId,
@@ -418,6 +425,7 @@ pub struct WorkspaceState {
     pub(crate) tool_surfaces_by_id: BTreeMap<ToolSurfaceInstanceId, ToolSurfaceState>,
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct WorkspaceToolSurfaceRegistryCompatibilityReport {
     pub compatible_surfaces: Vec<WorkspaceToolSurfaceRegistryCompatibleSurface>,
@@ -427,6 +435,7 @@ pub struct WorkspaceToolSurfaceRegistryCompatibilityReport {
     pub incompatible_surfaces: Vec<WorkspaceToolSurfaceRegistryIncompatibleSurface>,
 }
 
+#[cfg(test)]
 impl WorkspaceToolSurfaceRegistryCompatibilityReport {
     pub fn is_fully_compatible(&self) -> bool {
         self.unregistered_legacy_surfaces.is_empty()
@@ -436,6 +445,7 @@ impl WorkspaceToolSurfaceRegistryCompatibilityReport {
     }
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkspaceToolSurfaceRegistryCompatibleSurface {
     pub tool_surface_id: ToolSurfaceInstanceId,
@@ -443,6 +453,7 @@ pub struct WorkspaceToolSurfaceRegistryCompatibleSurface {
     pub stable_surface_key: ToolSurfaceStableKey,
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkspaceToolSurfaceRegistryLegacySurface {
     pub tool_surface_id: ToolSurfaceInstanceId,
@@ -450,12 +461,14 @@ pub struct WorkspaceToolSurfaceRegistryLegacySurface {
     pub stable_surface_key: ToolSurfaceStableKey,
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkspaceToolSurfaceRegistryUnmappedLegacySurface {
     pub tool_surface_id: ToolSurfaceInstanceId,
     pub tool_surface_kind: Option<ToolSurfaceKind>,
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkspaceToolSurfaceRegistryUnknownStableKey {
     pub tool_surface_id: ToolSurfaceInstanceId,
@@ -463,6 +476,7 @@ pub struct WorkspaceToolSurfaceRegistryUnknownStableKey {
     pub stable_surface_key: ToolSurfaceStableKey,
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkspaceToolSurfaceRegistryIncompatibleSurface {
     pub tool_surface_id: ToolSurfaceInstanceId,
@@ -471,6 +485,7 @@ pub struct WorkspaceToolSurfaceRegistryIncompatibleSurface {
     pub actual_stable_surface_key: ToolSurfaceStableKey,
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum WorkspaceStateError {
     MissingRootHost(PanelHostId),
@@ -561,6 +576,7 @@ pub enum WorkspaceStateError {
     SurfaceIdentity(WorkspaceSurfaceIdentityError),
 }
 
+#[cfg(test)]
 impl std::fmt::Display for WorkspaceStateError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -740,14 +756,17 @@ impl std::fmt::Display for WorkspaceStateError {
     }
 }
 
+#[cfg(test)]
 impl std::error::Error for WorkspaceStateError {}
 
+#[cfg(test)]
 impl From<WorkspaceSurfaceIdentityError> for WorkspaceStateError {
     fn from(error: WorkspaceSurfaceIdentityError) -> Self {
         Self::SurfaceIdentity(error)
     }
 }
 
+#[cfg(test)]
 impl WorkspaceState {
     /// Transitional seed for the current fixed scene-authoring layout only.
     /// This function is not the universal workspace-construction doctrine.
@@ -1695,6 +1714,7 @@ impl WorkspaceState {
     }
 }
 
+#[cfg(test)]
 #[derive(Debug, Default)]
 struct ToolWorkspaceSurfaceGroups {
     left: Vec<WorkspaceDefaultToolSurface>,
@@ -1703,6 +1723,7 @@ struct ToolWorkspaceSurfaceGroups {
     bottom: Vec<WorkspaceDefaultToolSurface>,
 }
 
+#[cfg(test)]
 fn tool_workspace_surface_groups(
     default_surfaces: &[WorkspaceDefaultToolSurface],
 ) -> ToolWorkspaceSurfaceGroups {
@@ -1758,6 +1779,7 @@ fn tool_workspace_surface_groups(
     groups
 }
 
+#[cfg(test)]
 fn unique_tool_workspace_surfaces(
     default_surfaces: &[WorkspaceDefaultToolSurface],
 ) -> Vec<WorkspaceDefaultToolSurface> {
@@ -1780,6 +1802,7 @@ fn unique_tool_workspace_surfaces(
     surfaces
 }
 
+#[cfg(test)]
 fn compiled_in_default_tool_surface(kind: ToolSurfaceKind) -> WorkspaceDefaultToolSurface {
     WorkspaceDefaultToolSurface::new_with_panel_kind(
         crate::stable_key_for_tool_surface_kind(kind)
@@ -1788,6 +1811,7 @@ fn compiled_in_default_tool_surface(kind: ToolSurfaceKind) -> WorkspaceDefaultTo
     )
 }
 
+#[cfg(test)]
 fn insert_tool_workspace_stack(
     tab_stacks_by_id: &mut BTreeMap<TabStackId, TabStackState>,
     panels_by_id: &mut BTreeMap<PanelInstanceId, PanelInstanceState>,

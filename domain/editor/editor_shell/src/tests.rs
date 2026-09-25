@@ -132,7 +132,7 @@ fn material_resource_binding_diagnostics_are_app_neutral_view_models() {
 fn reducer_normal_mutations_do_not_reintroduce_tool_surface_kind_authority_fields() {
     let source = include_str!("workspace/reducer.rs");
     let enum_block = source
-        .split("pub enum WorkspaceMutation {")
+        .split("pub(crate) enum WorkspaceMutation {")
         .nth(1)
         .and_then(|tail| tail.split("impl WorkspaceMutation").next())
         .expect("WorkspaceMutation enum should be followed by impl block");
@@ -206,7 +206,7 @@ fn stable_key_authority_is_end_to_end_guard() {
 
     let mutation_enum = source_block_between(
         reducer_source,
-        "pub enum WorkspaceMutation {",
+        "pub(crate) enum WorkspaceMutation {",
         "impl WorkspaceMutation",
         "WorkspaceMutation",
     );
@@ -502,13 +502,14 @@ fn normal_surface_classifiers_use_stable_keys_when_available() {
     let surface_session_source =
         include_str!("../../../../apps/runenwerk_editor/src/shell/surface_session.rs");
 
-    assert!(viewport_registry_source.contains("surface.stable_surface_key().as_str()"));
+    assert!(
+        viewport_registry_source
+            .contains("extension.stable_content_key != SCENE_VIEWPORT_SURFACE_KEY")
+    );
     assert!(viewport_registry_source.contains("SCENE_VIEWPORT_SURFACE_KEY"));
     assert!(!viewport_registry_source.contains("legacy_tool_surface_kind()"));
 
-    assert!(
-        surface_session_source.contains("retains_live_session_key(surface.stable_surface_key())")
-    );
+    assert!(surface_session_source.contains("retains_live_session_key_str("));
     assert!(surface_session_source.contains("SCENE_VIEWPORT_SURFACE_KEY"));
     assert!(!surface_session_source.contains("legacy_tool_surface_kind()"));
 }

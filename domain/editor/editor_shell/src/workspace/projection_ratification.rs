@@ -37,8 +37,6 @@ pub enum EditorShellProjectionRatificationCode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum EditorShellProjectionRatificationSubject {
     Widget(WidgetId),
-    Panel(PanelInstanceId),
-    TabStack(TabStackId),
 }
 
 /// Concrete candidate for Phase 3 ratification.

@@ -8,13 +8,15 @@ use ui_surface::{
 
 use crate::{
     PanelKind, ToolSurfaceKind, ToolSurfaceMount, ToolSurfaceReadiness, ToolSurfaceState,
-    WorkspaceState,
     tool_suite::{
         ToolSurfaceRegistry, ToolSurfaceStableKey,
         stable_key_for_tool_surface_kind as legacy_stable_key_for_tool_surface_kind,
         tool_surface_kind_for_stable_key,
     },
 };
+
+#[cfg(test)]
+use crate::WorkspaceState;
 
 pub const OUTLINER_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefinitionId::new(1);
 pub const VIEWPORT_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefinitionId::new(2);
@@ -758,6 +760,7 @@ pub fn mounted_surface_instance(tool_surface: &ToolSurfaceState) -> Option<Mount
     ))
 }
 
+#[cfg(test)]
 pub fn mounted_surface_instances(
     workspace_state: &WorkspaceState,
 ) -> impl Iterator<Item = MountedSurfaceInstance> + '_ {

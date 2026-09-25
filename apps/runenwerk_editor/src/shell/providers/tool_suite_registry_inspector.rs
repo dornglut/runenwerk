@@ -1065,10 +1065,6 @@ fn format_provider_ids(provider_ids: &[SurfaceProviderId]) -> String {
 mod tests {
     use std::collections::BTreeSet;
 
-    use editor_shell::{
-        WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceState, reduce_workspace,
-    };
-
     use super::*;
 
     fn view_model() -> ToolSuiteRegistryInspectorViewModel {
@@ -1120,50 +1116,12 @@ mod tests {
         )
     }
 
-    fn view_model_from_shell_state(
-        app: &RunenwerkEditorApp,
-        shell_state: &RunenwerkEditorShellState,
-    ) -> ToolSuiteRegistryInspectorViewModel {
-        build_tool_suite_registry_inspector_view_model(
-            app.workbench_host().tool_suite_registry(),
-            app.workbench_host().workspace_profile_registry(),
-            app.workbench_host().provider_family_provider_map(),
-            app.workbench_host().provider_registry(),
-            shell_state,
-            active_document_context(app),
-        )
-    }
-
     fn shell_state() -> RunenwerkEditorShellState {
         let app = RunenwerkEditorApp::new();
         RunenwerkEditorShellState::new_with_tool_surface_registry(
             app.workbench_host().tool_surface_registry(),
         )
         .expect("shell state should build from hosted registry")
-    }
-
-    fn workspace_with_unknown_stable_key() -> WorkspaceState {
-        let shell_state = shell_state();
-        let workspace = shell_state.workspace_state();
-        let panel_id = workspace
-            .panels()
-            .find(|panel| panel.active_tool_surface.is_some())
-            .expect("default workspace should have a mounted panel")
-            .id;
-        let mut allocator = WorkspaceIdentityAllocator::from_seed(workspace.next_identity_seed());
-
-        reduce_workspace(
-            workspace,
-            WorkspaceMutation::ReplacePanelToolSurfaceStableKey {
-                panel_id,
-                tool_surface_id: allocator.allocate_tool_surface_instance_id(),
-                stable_surface_key: editor_shell::ToolSurfaceStableKey::new(
-                    "runenwerk.unknown.surface",
-                )
-                .expect("test stable key should be syntactically valid"),
-            },
-        )
-        .expect("test workspace should accept stable-key-native unknown registry key")
     }
 
     fn mounted_surface_row_with_diagnostic(
@@ -1207,7 +1165,7 @@ mod tests {
             app.workbench_host().tool_surface_registry(),
         )
         .expect("shell state should build from hosted registry");
-        let workspace_before = shell_state.workspace_state().clone();
+        let composition_before = shell_state.composition_runtime().clone();
         let suite_count_before = app.workbench_host().tool_suite_registry().suites().len();
         let surface_count_before = app.workbench_host().tool_surface_registry().iter().count();
         let provider_count_before = app
@@ -1259,7 +1217,7 @@ mod tests {
                 .len(),
             assignment_count_before
         );
-        assert_eq!(shell_state.workspace_state(), &workspace_before);
+        assert_eq!(shell_state.composition_runtime(), &composition_before);
     }
 
     #[test]
@@ -1541,17 +1499,36 @@ mod tests {
     }
 
     #[test]
-    fn unknown_stable_key_appears_as_diagnostic() {
+    fn mounted_key_missing_from_inspected_registry_appears_as_diagnostic() {
         let app = RunenwerkEditorApp::new();
-        let mut shell_state = shell_state();
-        shell_state.replace_workspace_state(workspace_with_unknown_stable_key());
+        let shell_state = shell_state();
+        let inspected_registry = ToolSuiteRegistry::new(vec![
+            crate::shell::tool_suites::diagnostics_tool_suite::diagnostics_tool_suite(),
+        ])
+        .expect("diagnostic-only inspector registry should build");
+        let inspected_provider_map =
+            ProviderFamilyProviderMap::new(&inspected_registry, Vec::new())
+                .expect("empty provider assignments are valid for diagnostics fixtures");
+        let provider_labels = app
+            .workbench_host()
+            .provider_registry()
+            .provider_ids()
+            .map(|provider_id| (provider_id, provider_id.to_string()))
+            .collect::<BTreeMap<_, _>>();
+        let diagnostics = diagnostic_rows(
+            &inspected_registry,
+            &inspected_provider_map,
+            &provider_labels,
+            shell_state.composition_runtime(),
+            &[],
+            &[],
+            &[],
+        );
 
-        let view_model = view_model_from_shell_state(&app, &shell_state);
-
-        assert!(view_model.diagnostic_rows.iter().any(|row| {
+        assert!(diagnostics.iter().any(|row| {
             row.code == "inspector.surface.unknown_stable_key"
                 && row.scope == ToolSuiteRegistryInspectorDiagnosticScope::Surface
-                && row.related_surface_key.as_deref() == Some("runenwerk.unknown.surface")
+                && row.related_surface_key.as_deref() == Some("runenwerk.scene.viewport")
         }));
     }
 

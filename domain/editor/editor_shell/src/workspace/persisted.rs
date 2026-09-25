@@ -11,11 +11,12 @@ use editor_viewport::{
 };
 use serde::{Deserialize, Serialize};
 
+use super::WorkspaceState;
 use crate::{
     FloatingHostBounds, FloatingHostPlaceholderState, PanelHostId, PanelHostKind, PanelHostNode,
     PanelInstanceId, PanelInstanceState, PanelKind, SplitHostState, TabStackHostState, TabStackId,
     TabStackState, ToolSurfaceInstanceId, ToolSurfaceKind, ToolSurfaceMount, ToolSurfaceState,
-    WorkspaceId, WorkspaceSplitAxis, WorkspaceState, WorkspaceStateError,
+    WorkspaceId, WorkspaceSplitAxis, WorkspaceStateError,
     tool_suite::{
         ToolSurfaceRegistry, ToolSurfaceStableKey, stable_key_for_tool_surface_kind,
         tool_surface_kind_for_stable_key,
@@ -2930,7 +2931,7 @@ mod tests {
 
     #[test]
     fn duplicated_viewport_area_copies_runtime_settings_not_restore_identity() {
-        let workspace = bootstrap_workspace();
+        let mut workspace = bootstrap_workspace();
         let viewport_stack = workspace
             .tab_stacks_by_id
             .values()
@@ -2943,14 +2944,11 @@ mod tests {
             .expect("viewport stack should exist")
             .id;
         let viewport_surface = viewport_surface_id(&workspace);
-        let workspace = reduce_workspace(
-            &workspace,
-            WorkspaceMutation::SetToolSurfaceViewportSettings {
-                tool_surface_id: viewport_surface,
-                viewport_settings: Some(test_viewport_settings()),
-            },
-        )
-        .expect("viewport settings mutation should be valid");
+        workspace
+            .tool_surfaces_by_id
+            .get_mut(&viewport_surface)
+            .expect("viewport surface should exist")
+            .viewport_settings = Some(test_viewport_settings());
         let mut allocator = WorkspaceIdentityAllocator::from_seed(workspace.next_identity_seed());
         let new_panel_id = allocator.allocate_panel_instance_id();
         let new_tool_surface_id = allocator.allocate_tool_surface_instance_id();

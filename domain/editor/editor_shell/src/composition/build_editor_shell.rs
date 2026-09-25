@@ -15,18 +15,11 @@ use ui_definition::{
     UiViewportStatusMetricPriorityDefinition,
 };
 use ui_layout::SizePolicy;
-use ui_math::{Axis, UiInsets};
+use ui_math::{Axis, UiInsets, UiSize};
 use ui_text::{FontId, TextLineHeightPolicy};
 use ui_theme::{ThemeTokens, UiColor};
 use ui_tree::{OverlayAdornmentNode, PopupAlign, PopupFlipPolicy, PopupNode, PopupSide};
 
-use crate::{
-    UiNode, UiNodeKind, UiTree, button, button_selected, hscroll, hstack_with_policies, label,
-    panel, spacer, split, vscroll, vstack_with_policies,
-};
-use ui_math::UiSize;
-
-use crate::workspace::project_workspace_for_shell;
 use crate::{
     BODY_FLOATING_SPLIT_WIDGET_ID, BODY_ROOT_WIDGET_ID, EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
     FLOATING_COLUMN_WIDGET_ID, FLOATING_DROP_ZONE_WIDGET_ID, MATERIAL_WORKSPACE_PROFILE_ID,
@@ -42,26 +35,32 @@ use crate::{
     VIEWPORT_SURFACE_EMBED_WIDGET_ID, VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID,
     VIEWPORT_TOOLS_MENU_LIST_WIDGET_ID, VIEWPORT_TOOLS_MENU_SCROLL_WIDGET_ID,
     VIEWPORT_TOOLS_MENU_WIDGET_ID, WidgetId, WorkspaceProfileId, WorkspaceSplitAxis,
-    WorkspaceState, build_defined_toolbar_menu_popup_with_binding,
-    build_defined_toolbar_with_template, dock_split_preview_overlay_widget_id,
-    region_compass_cell_widget_id, region_compass_detach_button_widget_id,
-    region_compass_detach_overlay_widget_id, region_compass_overlay_widget_id,
-    region_compass_panel_widget_id, surface_widget_id, tab_active_indicator_widget_id,
-    tab_chrome_widget_id, tab_close_button_widget_id, tab_stack_action_menu_list_widget_id,
-    tab_stack_action_menu_popup_widget_id, tab_stack_action_menu_scroll_widget_id,
-    tab_stack_close_area_button_widget_id, tab_stack_container_widget_id,
-    tab_stack_content_widget_id, tab_stack_duplicate_button_widget_id,
-    tab_stack_lock_type_toggle_widget_id, tab_stack_new_surface_menu_item_widget_id,
-    tab_stack_new_surface_menu_list_widget_id, tab_stack_new_surface_menu_popup_widget_id,
-    tab_stack_new_surface_menu_scroll_widget_id, tab_stack_new_tab_button_widget_id,
-    tab_stack_reset_area_button_widget_id, tab_stack_split_horizontal_button_widget_id,
-    tab_stack_split_vertical_button_widget_id, tab_strip_scroll_widget_id,
+    build_defined_toolbar_menu_popup_with_binding, build_defined_toolbar_with_template,
+    dock_split_preview_overlay_widget_id, region_compass_cell_widget_id,
+    region_compass_detach_button_widget_id, region_compass_detach_overlay_widget_id,
+    region_compass_overlay_widget_id, region_compass_panel_widget_id, surface_widget_id,
+    tab_active_indicator_widget_id, tab_chrome_widget_id, tab_close_button_widget_id,
+    tab_stack_action_menu_list_widget_id, tab_stack_action_menu_popup_widget_id,
+    tab_stack_action_menu_scroll_widget_id, tab_stack_close_area_button_widget_id,
+    tab_stack_container_widget_id, tab_stack_content_widget_id,
+    tab_stack_duplicate_button_widget_id, tab_stack_lock_type_toggle_widget_id,
+    tab_stack_new_surface_menu_item_widget_id, tab_stack_new_surface_menu_list_widget_id,
+    tab_stack_new_surface_menu_popup_widget_id, tab_stack_new_surface_menu_scroll_widget_id,
+    tab_stack_new_tab_button_widget_id, tab_stack_reset_area_button_widget_id,
+    tab_stack_split_horizontal_button_widget_id, tab_stack_split_vertical_button_widget_id,
+    tab_strip_scroll_widget_id,
 };
 use crate::{EditorShellFrameModel, ToolSurfaceCreateCandidate};
 use crate::{
     ProjectedFloatingHostSlot, ProjectedTabStackSlot, ProjectedWorkspaceHostSlot,
     StructuralWidgetRoutingContext, WorkspaceProjectionArtifact, projected_host_tab_stacks,
 };
+use crate::{
+    UiNode, UiNodeKind, UiTree, button, button_selected, hscroll, hstack_with_policies, label,
+    panel, spacer, split, vscroll, vstack_with_policies,
+};
+#[cfg(test)]
+use crate::{WorkspaceState, workspace::project_workspace_for_shell};
 
 use super::surface_definition_context::contrast_popup_theme;
 
@@ -257,7 +256,8 @@ pub struct EditorShellBuildResult {
     pub projection_artifacts: ShellProjectionArtifacts,
 }
 
-pub fn build_editor_shell_frame(
+#[cfg(test)]
+pub(crate) fn build_editor_shell_frame(
     frame_model: &EditorShellFrameModel,
     theme: &ThemeTokens,
     workspace_state: &WorkspaceState,
@@ -328,7 +328,8 @@ pub fn build_editor_shell_frame_for_target_from_composition_projection_with_dock
         })
 }
 
-pub fn build_editor_shell_frame_with_docking_visual_state(
+#[cfg(test)]
+pub(crate) fn build_editor_shell_frame_with_docking_visual_state(
     frame_model: &EditorShellFrameModel,
     theme: &ThemeTokens,
     workspace_state: &WorkspaceState,

@@ -5,8 +5,8 @@ use std::fmt;
 
 use crate::{
     ProfileRef, ProviderBundleError, ProviderFamilyId, SurfaceRef, ToolSuiteId,
-    ToolSuiteRegistryError, ToolSurfaceStableKey, WorkspaceDefinitionFormationError,
-    WorkspaceProfileId, WorkspaceProfileRegistryBackedBuildError,
+    ToolSuiteRegistryError, ToolSurfaceStableKey, WorkspaceProfileId,
+    WorkspaceProfileRegistryBackedBuildError,
 };
 
 #[derive(Debug)]
@@ -59,10 +59,6 @@ pub enum WorkbenchCompositionCompileError {
         provider_family_id: ProviderFamilyId,
     },
     WorkspaceProfileRegistry(WorkspaceProfileRegistryBackedBuildError),
-    WorkspaceDefinitionFormation {
-        profile_ref: ProfileRef,
-        error: WorkspaceDefinitionFormationError,
-    },
     TargetProfileCompatibility {
         profile_ref: ProfileRef,
         surface_key: ToolSurfaceStableKey,
@@ -150,10 +146,6 @@ impl fmt::Display for WorkbenchCompositionCompileError {
             Self::WorkspaceProfileRegistry(error) => {
                 write!(f, "Workbench profile registry validation failed: {error}")
             }
-            Self::WorkspaceDefinitionFormation { profile_ref, error } => write!(
-                f,
-                "authored Workspace profile `{profile_ref}` failed layout formation: {error:?}"
-            ),
             Self::TargetProfileCompatibility {
                 profile_ref,
                 surface_key,

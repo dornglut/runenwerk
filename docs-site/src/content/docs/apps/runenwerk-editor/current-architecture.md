@@ -70,16 +70,18 @@ stable content keys, tab-stack chrome IDs, floating bounds, and viewport restore
 identity. Split topology, parentage, mounted-unit order, active units, targets,
 and roots remain exclusively in `CompositionState`.
 
-The current built-in editor profiles are imported through
-`import_legacy_workspace`. The resulting `WorkspaceState` input is dropped.
-Legacy workspace construction and reduction remain only as compatibility/test
-inputs where current source still requires them; they are not a second live
-structural authority.
+Current built-in, authored, and activated workspace profiles form
+`EditorCompositionRuntime` directly from `EditorWorkspaceLayoutDefinition`
+through the editor structural composition former. Current-format startup,
+profile activation, self-authoring layout activation, and Workbench validation
+do not route through `WorkspaceState` or `import_legacy_workspace`.
 
 Reusable shell projection DTOs and route assembly are owned by
-`composition/structural/projection.rs`. The legacy
-`workspace/projection.rs::project_workspace_for_shell` path exists for parity
-coverage rather than as the normal structural owner.
+`composition/structural/projection.rs`. `WorkspaceState` is not a current
+formation or projection boundary for the runnable Editor. The predecessor
+`WorkspaceState` graph, reducer/projection path, legacy importer, authored-state
+former, and V1-V5 persistence DTOs are compiled only for tests that retain
+historical/parity evidence; they are not production compatibility APIs.
 
 ## Structural Transactions
 
