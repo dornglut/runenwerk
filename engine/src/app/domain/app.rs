@@ -5,9 +5,6 @@ use crate::app::domain::state::WindowedAppState;
 use crate::plugins::input::{ActionState, InputState};
 use crate::plugins::render::inspect::{RenderDebugConfigResource, RenderDebugControlResource};
 use crate::plugins::render::{RenderFlow, RenderFlowRegistryResource};
-use crate::plugins::{
-    SceneReplayArchive, load_replay, seek_loaded_replay, start_recording, stop_recording,
-};
 use crate::prelude::IntoPlugins;
 use crate::runtime::publication::{
     ProductPublicationOccurrence, PublicationHandlers, QuerySnapshotPublicationOccurrence,
@@ -282,24 +279,6 @@ impl App {
         self.world.insert_resource(seed);
         self.world.insert_resource(SimulationRng::from_seed(seed));
         self
-    }
-
-    pub fn start_recording(&mut self) -> Result<&mut Self> {
-        start_recording(&mut self.world)?;
-        Ok(self)
-    }
-
-    pub fn stop_recording(&mut self) -> Result<SceneReplayArchive> {
-        stop_recording(&mut self.world)
-    }
-
-    pub fn load_replay(&mut self, archive: SceneReplayArchive) -> Result<&mut Self> {
-        load_replay(&mut self.world, archive)?;
-        Ok(self)
-    }
-
-    pub fn seek_tick(&mut self, tick: u64) -> Result<ReplayValidationReport> {
-        seek_loaded_replay(&mut self.world, SimulationTick(tick))
     }
 
     pub fn current_tick(&self) -> u64 {
