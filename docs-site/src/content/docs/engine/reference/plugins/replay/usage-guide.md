@@ -46,16 +46,19 @@ Replay runtime controls are owned by the Replay integration:
 
 ```rust
 use engine::prelude::{App, AppReplayExt};
-use engine::plugins::ReplayPlugin;
+use engine::plugins::{ReplayPlugin, SimulationPlugin};
 
 let mut app = App::headless();
-app.add_plugin(ReplayPlugin);
+app.add_plugins((SimulationPlugin, ReplayPlugin));
 app.start_recording()?;
 ```
 
 `AppReplayExt` preserves the existing runtime-control timing semantics; these methods are not
 reclassified as App composition. Replay control admission requires explicit `ReplayPlugin`
-selection rather than inferring activation from public Replay resource presence.
+selection rather than inferring activation from public Replay resource presence. Starting a
+recording also requires an active `SimulationSessionId` established or preserved by the
+Simulation integration; replay does not manufacture fallback provenance when simulation identity
+is absent.
 
 ## Runtime Contract
 

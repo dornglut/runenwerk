@@ -29,11 +29,11 @@ package "runen-net-quic" as QUIC {
   [QUIC Transport Realization]
 }
 
-package "engine_sim" as SIM {
+package "domain/simulation (engine_sim)" as SIM {
   [Simulation Identity / Tick / Profile]
 }
 
-package "engine_replay" as REPLAY {
+package "domain/replay (engine_replay)" as REPLAY {
   [Replay / Archive / Validation]
 }
 

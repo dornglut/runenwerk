@@ -14,7 +14,6 @@ fn client_full_message(cursor: u64, tick: u64, label: &str) -> ServerMessage {
         tick: SimulationTick(tick),
         cursor: SnapshotCursor(cursor),
         last_applied: SnapshotCursor::default(),
-        entity_ids: Vec::new(),
         payload: TestReplicationDriver::encode_snapshot(&snapshot)
             .expect("test full snapshot should encode"),
     })
@@ -25,7 +24,6 @@ fn client_delta_message(base: u64, cursor: u64, tick: u64, changed: bool) -> Ser
         tick: SimulationTick(tick),
         base: SnapshotCursor(base),
         cursor: SnapshotCursor(cursor),
-        entity_ids: Vec::new(),
         payload: TestReplicationDriver::encode_delta(&TestDelta { changed })
             .expect("test delta should encode"),
     })
@@ -223,7 +221,6 @@ fn client_delta_missing_base_and_malformed_payload_enter_runennet_recovery_witho
             tick: SimulationTick(2),
             base: SnapshotCursor(1),
             cursor: SnapshotCursor(2),
-            entity_ids: Vec::new(),
             payload: Vec::new(),
         }),
     )
@@ -418,7 +415,6 @@ fn malformed_full_snapshot_is_rejected_before_runennet_commit() {
             tick: SimulationTick(1),
             cursor: SnapshotCursor(1),
             last_applied: SnapshotCursor::default(),
-            entity_ids: Vec::new(),
             payload: Vec::new(),
         }),
     )
@@ -506,7 +502,6 @@ fn client_replication_aggregate_retained_bytes_rejection_preserves_current_produ
             tick: SimulationTick(1),
             cursor: SnapshotCursor(1),
             last_applied: SnapshotCursor::default(),
-            entity_ids: Vec::new(),
             payload: TestReplicationDriver::encode_snapshot(&first)
                 .expect("first aggregate snapshot should encode"),
         }),
@@ -524,7 +519,6 @@ fn client_replication_aggregate_retained_bytes_rejection_preserves_current_produ
             tick: SimulationTick(2),
             cursor: SnapshotCursor(2),
             last_applied: SnapshotCursor(1),
-            entity_ids: Vec::new(),
             payload: TestReplicationDriver::encode_snapshot(&second)
                 .expect("second aggregate snapshot should encode"),
         }),

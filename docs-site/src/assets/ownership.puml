@@ -9,8 +9,8 @@ rectangle "RunenECS" as ecs
 rectangle "engine" as engine
 rectangle "RunenNet" as runennet
 rectangle "runen-net-quic" as quic
-rectangle "engine_sim" as sim
-rectangle "engine_replay" as replay
+rectangle "domain/simulation\n(engine_sim)" as sim
+rectangle "domain/replay\n(engine_replay)" as replay
 rectangle "gameplay / world" as game
 
 note bottom of engine

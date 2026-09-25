@@ -39,7 +39,7 @@ Runenwerk host/application integration owns:
 - deciding when product/gameplay state should be restored, resynchronized, or presented as
   degraded.
 
-`engine_history` is an independent Runenwerk replay/history substrate. It does not own networking
+`engine_replay` in `domain/replay` is an independent Runenwerk replay/history substrate. It does not own networking
 lifecycle or RunenNet recovery semantics and is not implicitly wired into multiplayer reconnect.
 
 ## Implemented Substrate
@@ -54,7 +54,7 @@ Implemented now:
 - lifecycle integration that cancels pending authority work on retained loss, forces full recovery
   after replacement, and removes terminal replication lineages;
 - Engine streaming state reconciled from accepted connection projections;
-- `engine_history` archive, recorder, controller, checkpoint-policy, and validation-report
+- `engine_replay` archive, recorder, controller, checkpoint-policy, and validation-report
   primitives.
 
 The former `engine_net` admission/handoff state machines and `engine_net_quic`
@@ -72,7 +72,7 @@ Partial now:
   retained state cannot continue safely;
 - generic ECS checkpoint capture/restore hooks are not a standardized multiplayer recovery
   contract;
-- `engine_history` is not the default multiplayer reconnect recovery path;
+- `engine_replay` is not the default multiplayer reconnect recovery path;
 - checkpoint-backed or rollback-oriented gameplay recovery remains separately evidence-gated;
 - richer user-facing reconnect/recovery explanation remains product work.
 
@@ -84,7 +84,7 @@ semantics.
 Runenwerk host/application policy owns reconnect scheduling and concrete transport choices. A
 RunenNet recovery-time value is not reconnect backoff, retry timing, or a wall clock.
 
-`engine_history` owns its replay/archive/checkpoint/validation semantics independently of
+`engine_replay` owns its replay/archive/checkpoint/validation semantics independently of
 networking.
 
 Engine/gameplay integration owns:
@@ -112,7 +112,7 @@ Potential future work may include checkpoint-backed gameplay recovery, richer re
 or transport-specific reconnect behavior for a real gameplay consumer. Those concerns require
 current consumer evidence and their own owner; they are not unfinished RN8 migration slices.
 
-This design does not authorize wiring `engine_history` into RunenNet, adding an Engine QUIC
+This design does not authorize wiring `engine_replay` into RunenNet, adding an Engine QUIC
 runtime, or inventing final Replicated View authoring syntax.
 
 ## Validation Plan
@@ -122,7 +122,7 @@ For this boundary, validate as applicable:
 - RunenNet session loss/retention/replacement/expiry tests through Engine integration;
 - host reconnect diagnostics tests that do not mutate membership authority;
 - client/authority replication recovery and full-resynchronization tests;
-- `engine_history` replay/archive tests independently of transport;
+- `engine_replay` replay/archive tests independently of transport;
 - transport tests only in the maintained product consumer that owns that realization;
 - repository canonical validation;
 - documentation validation.

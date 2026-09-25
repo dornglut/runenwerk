@@ -126,6 +126,22 @@ fn simulation_plugin_provides_simulation_state_without_activating_fixed_cadence(
 }
 
 #[test]
+fn simulation_session_identity_is_scoped_to_each_app() {
+    let mut first = App::headless();
+    first.add_plugin(SimulationPlugin);
+    let mut second = App::headless();
+    second.add_plugin(SimulationPlugin);
+
+    let first_session = *first.world().resource::<SimulationSessionId>().unwrap();
+    let second_session = *second.world().resource::<SimulationSessionId>().unwrap();
+
+    assert_eq!(
+        first_session, second_session,
+        "independent Apps must not consume process-global session allocation state"
+    );
+}
+
+#[test]
 fn simulation_plugin_preserves_explicit_owner_state() {
     let mut app = App::headless();
     let tick = SimulationTick(41);

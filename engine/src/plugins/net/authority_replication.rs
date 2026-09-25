@@ -255,7 +255,6 @@ impl AuthorityReplicationIntegration {
                 tick: SimulationTick(snapshot.target_tick().get()),
                 cursor: SnapshotCursor(snapshot.target_cursor().get()),
                 last_applied,
-                entity_ids: Vec::new(),
                 payload: snapshot.image().state().clone(),
             }),
             PendingSnapshotRef::Delta {
@@ -268,7 +267,6 @@ impl AuthorityReplicationIntegration {
                 tick: SimulationTick(target_tick.get()),
                 base: SnapshotCursor(base_cursor.get()),
                 cursor: SnapshotCursor(target_cursor.get()),
-                entity_ids: Vec::new(),
                 payload: delta.clone(),
             }),
         };

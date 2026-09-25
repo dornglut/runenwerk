@@ -60,8 +60,8 @@ ui_surface = { workspace = true }
 ui_text = { path = "../domain/ui/ui_text" }
 ui_theme = { path = "../domain/ui/ui_theme" }
 engine_render_macros = { path = "../engine_render_macros" }
-engine_replay = { path = "../net/engine_history" }
-engine_sim = { path = "../net/engine_sim" }
+engine_replay = { path = "../domain/replay" }
+engine_sim = { path = "../domain/simulation" }
 id_macros = { path = "../foundation/id_macros" }
 id = { path = "../foundation/id" }
 

@@ -50,6 +50,8 @@ cadence; `FixedStepPlugin` by itself does not manufacture simulation identity.
 ## Composition Rules
 
 - Explicit owner state inserted before plugin installation is preserved.
+- `SimulationSessionId` owns no allocator; `SimulationPlugin` installs the App-local initial
+  session identity only when none was supplied.
 - `SimulationRng` defaults from the effective `SimulationSeed` only when no RNG was supplied.
 - Simulation-specific App ergonomics are owned by `AppSimulationExt`; generic `App` does not
   define Simulation-specific inherent methods.

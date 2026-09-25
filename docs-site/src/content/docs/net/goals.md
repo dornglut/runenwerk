@@ -10,27 +10,37 @@ last_reviewed: 2026-09-25
 
 # net Goals
 
-Runenwerk uses standalone RunenNet as its reusable realtime networking semantic layer while retaining concrete engine/game/world integration locally.
+Runenwerk uses standalone RunenNet as its reusable realtime networking semantic layer while
+retaining concrete engine/game/world integration locally.
 
 ## Ownership
 
 ### Standalone RunenNet
 
-Owns reusable connection/session identity and lifecycle, compatibility negotiation, delivery/custody/resource pressure, recovery, replication consistency/history, authority input admission, and participant prediction/reconciliation. `runen-net-quic` owns concrete QUIC realization where selected by a maintained consumer.
+Owns reusable connection/session identity and lifecycle, compatibility negotiation,
+delivery/custody/resource pressure, recovery, replication consistency/history, authority input
+admission, and participant prediction/reconciliation. `runen-net-quic` owns concrete QUIC
+realization where selected by a maintained consumer.
 
 ### Runenwerk engine integration
 
-`engine/src/plugins/net/` owns placement of RunenNet owners in schedules, ECS/game/world adaptation, explicit finite product policy, encoded snapshot/delta/input formation, host delivery feedback integration, bounded staging, diagnostics, and presentation projections.
+`engine/src/plugins/net/` owns placement of RunenNet owners in schedules, ECS/game/world
+adaptation, explicit finite product policy, encoded snapshot/delta/input formation, host delivery
+feedback integration, bounded staging, diagnostics, and presentation projections.
 
-The engine-owned protocol/driver types are integration mechanics only. They must not grow into a second reusable networking semantic layer.
+The engine-owned protocol/driver types are integration mechanics only. They must not grow into a
+second reusable networking semantic layer.
 
 ### Gameplay and world domains
 
-Own gameplay replication mapping, world/spatial relevancy inputs, game/team/ownership rules, correction and presentation policy, and simulation architecture.
+Own gameplay replication mapping, world/spatial relevancy inputs, game/team/ownership rules,
+correction and presentation policy, and simulation architecture.
 
-### Simulation and history
+### Simulation and replay
 
-`engine_sim` and `engine_history` remain independent Runenwerk owners for simulation vocabulary and replay/history infrastructure. They must not duplicate RunenNet networking authority.
+`domain/simulation` (`engine_sim`) and `domain/replay` (`engine_replay`) are independent
+Runenwerk domain owners. They supply simulation and replay/history semantics to networking
+integration without becoming RunenNet authority.
 
 ## Dependency Direction
 
@@ -41,15 +51,15 @@ gameplay / world
 Runenwerk engine integration
       |
       +--> standalone RunenNet
-      +--> engine_sim
+      +--> domain/simulation (engine_sim)
 
-engine_history --> engine_sim
+domain/replay (engine_replay) --> domain/simulation (engine_sim)
 runen-net-quic --> standalone RunenNet
 ```
 
 Rules:
 
-- RunenNet never depends on Runenwerk ECS, scheduler, gameplay, world, or product policy.
+- RunenNet never depends on Runenwerk ECS, scheduler, gameplay, world, simulation, replay, or product policy.
 - Runenwerk may project accepted RunenNet state but must not copy its state machines.
 - Concrete transport adapters are selected only for real consumers.
 - No compatibility crate or forwarding facade may recreate retired networking authority.
@@ -68,4 +78,7 @@ Rules:
 
 ## End State
 
-The steady-state architecture contains standalone RunenNet, optional RunenNet transport adapters, Runenwerk engine integration, gameplay/world policy, and independent `engine_sim` / `engine_history` owners. The former `engine_net` migration shell is absent rather than wrapped.
+The steady-state architecture contains standalone RunenNet, optional RunenNet transport adapters,
+Runenwerk engine integration, gameplay/world policy, and independent simulation/replay domains. The
+former `engine_net` migration shell and local `net/*` workspace packages are absent rather than
+wrapped.

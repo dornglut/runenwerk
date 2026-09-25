@@ -24,12 +24,12 @@ package "external RunenNet" {
   [runen-net-quic] as runennet_quic
 }
 
-package "net (Runenwerk support)" {
-  package "engine_sim" {
+package "Runenwerk simulation / replay domains" {
+  package "domain/simulation (engine_sim)" {
     [simulation vocabulary] as sim
   }
 
-  package "engine_history" {
+  package "domain/replay (engine_replay)" {
     [replay / archive / validation] as history
   }
 }

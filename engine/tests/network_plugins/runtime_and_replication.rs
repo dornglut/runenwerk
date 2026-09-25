@@ -71,7 +71,6 @@ fn prediction_waits_for_later_registered_simulation_input() {
             tick: SimulationTick(0),
             cursor: SnapshotCursor(1),
             last_applied: SnapshotCursor::default(),
-            entity_ids: Vec::new(),
             payload,
         }),
     )
@@ -245,7 +244,6 @@ fn prediction_replay_preserves_runennet_target_tick_and_updates_diagnostics() {
             tick: SimulationTick(0),
             cursor: SnapshotCursor(1),
             last_applied: SnapshotCursor::default(),
-            entity_ids: Vec::new(),
             payload: baseline_payload,
         }),
     )
@@ -272,7 +270,6 @@ fn prediction_replay_preserves_runennet_target_tick_and_updates_diagnostics() {
             tick: SimulationTick(0),
             cursor: SnapshotCursor(2),
             last_applied: SnapshotCursor(1),
-            entity_ids: Vec::new(),
             payload: correction_payload,
         }),
     )
@@ -310,7 +307,6 @@ fn duplicate_current_retries_failed_replay_restoration_before_ack() {
             tick: SimulationTick(0),
             cursor: SnapshotCursor(1),
             last_applied: SnapshotCursor::default(),
-            entity_ids: Vec::new(),
             payload: baseline_payload,
         }),
     )
@@ -340,7 +336,6 @@ fn duplicate_current_retries_failed_replay_restoration_before_ack() {
         tick: SimulationTick(0),
         cursor: SnapshotCursor(2),
         last_applied: SnapshotCursor(1),
-        entity_ids: Vec::new(),
         payload: correction_payload,
     });
     enqueue_client_inbox(client.world_mut(), correction.clone())
@@ -402,7 +397,6 @@ fn client_outbox_backpressure_does_not_roll_back_admitted_prediction() {
             tick: SimulationTick(0),
             cursor: SnapshotCursor(1),
             last_applied: SnapshotCursor::default(),
-            entity_ids: Vec::new(),
             payload: baseline_payload,
         }),
     )
@@ -616,7 +610,6 @@ fn activate_client_prediction_baseline(mut app: App) -> App {
             tick: SimulationTick(0),
             cursor: SnapshotCursor(1),
             last_applied: SnapshotCursor::default(),
-            entity_ids: Vec::new(),
             payload,
         }),
     )
@@ -859,7 +852,6 @@ fn client_prediction_recovery_invalidates_pre_recovery_pending_continuity() {
             tick: SimulationTick(2),
             base: SnapshotCursor(99),
             cursor: SnapshotCursor(100),
-            entity_ids: Vec::new(),
             payload: TestReplicationDriver::encode_delta(&TestDelta { changed: false })
                 .expect("delta should encode"),
         }),

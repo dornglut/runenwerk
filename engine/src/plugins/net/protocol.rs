@@ -1,4 +1,4 @@
-use engine_sim::{NetEntityId, SimulationTick};
+use engine_sim::SimulationTick;
 use serde::{Deserialize, Serialize};
 
 #[derive(
@@ -23,7 +23,6 @@ pub struct Snapshot {
     pub tick: SimulationTick,
     pub cursor: SnapshotCursor,
     pub last_applied: SnapshotCursor,
-    pub entity_ids: Vec<NetEntityId>,
     pub payload: Vec<u8>,
 }
 
@@ -32,7 +31,6 @@ pub struct DeltaSnapshot {
     pub tick: SimulationTick,
     pub base: SnapshotCursor,
     pub cursor: SnapshotCursor,
-    pub entity_ids: Vec<NetEntityId>,
     pub payload: Vec<u8>,
 }
 
