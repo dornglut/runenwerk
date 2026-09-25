@@ -1308,10 +1308,7 @@ mod tests {
         app.with_primary_window_size_px((1600, 1200));
         let state = app.into_windowed_state();
 
-        assert_eq!(
-            requested_primary_window_size_px(&state),
-            Some((1600, 1200))
-        );
+        assert_eq!(requested_primary_window_size_px(&state), Some((1600, 1200)));
     }
 
     #[test]

@@ -96,9 +96,7 @@ pub fn run_native_measurement(
     }))
 }
 
-fn validate_measurement_window_size(
-    size_px: Option<(u32, u32)>,
-) -> Result<Option<(u32, u32)>> {
+fn validate_measurement_window_size(size_px: Option<(u32, u32)>) -> Result<Option<(u32, u32)>> {
     if let Some((width, height)) = size_px
         && (width == 0 || height == 0)
     {

@@ -26,10 +26,7 @@ impl AppNativeHostExt for App {
 
     fn with_primary_window_size_px(&mut self, size_px: (u32, u32)) -> &mut Self {
         if matches!(self.host_selection, AppHostSelection::Headless) {
-            self.record_missing_capability(
-                "with_primary_window_size_px",
-                "native-window Host",
-            );
+            self.record_missing_capability("with_primary_window_size_px", "native-window Host");
             return self;
         }
 
