@@ -5,7 +5,7 @@ status: superseded
 owner: net
 layer: net
 canonical: false
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-25
 replaced_by:
   - net-architecture.md
   - ../design/active/net-authoritative-replication-protocol.md

@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-09-11
+last_reviewed: 2026-09-25
 related_docs:
   - ../guidelines/architecture.md
   - ../guidelines/dependency-rules.md

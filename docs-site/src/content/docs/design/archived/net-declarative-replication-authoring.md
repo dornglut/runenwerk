@@ -5,7 +5,7 @@ status: archived
 owner: net
 layer: net
 canonical: false
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-25
 related:
   - ../../net/net-architecture.md
   - ../../net/multiplayer-replication-implementation-roadmap.md

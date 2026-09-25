@@ -5,7 +5,7 @@ status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-09-24
+last_reviewed: 2026-09-25
 related_roadmaps:
   - ../../net/multiplayer-replication-implementation-roadmap.md
 ---
