@@ -337,10 +337,10 @@ impl AuthorityReplicationIntegration {
         session: &Session,
         connection: ConnectionHandle,
         cursor: SnapshotCursor,
-    ) -> anyhow::Result<AuthorityAckOutcome> {
-        let participant = session
-            .participant_for_connection(connection)
-            .context("replication ACK connection is not authorized by RunenNet session")?;
+    ) -> anyhow::Result<Option<AuthorityAckOutcome>> {
+        let Some(participant) = session.participant_for_connection(connection) else {
+            return Ok(None);
+        };
         if self.semantic.lineage(participant).is_none() {
             anyhow::bail!("replication ACK participant has no RunenNet authority lineage");
         }
@@ -351,6 +351,7 @@ impl AuthorityReplicationIntegration {
                 participant,
                 ReplicationCursor::new(cursor.0),
             )
+            .map(Some)
             .map_err(|error| anyhow!("RunenNet authority ACK failed: {error:?}"))
     }
 }
@@ -435,7 +436,7 @@ impl RunenNetSessionCore {
         &mut self,
         connection: ConnectionHandle,
         cursor: SnapshotCursor,
-    ) -> anyhow::Result<AuthorityAckOutcome> {
+    ) -> anyhow::Result<Option<AuthorityAckOutcome>> {
         let integration = self
             .authority_replication
             .as_mut()
