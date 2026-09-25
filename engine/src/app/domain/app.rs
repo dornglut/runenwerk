@@ -48,7 +48,6 @@ impl App {
             title: title.clone(),
             composition_errors: Vec::new(),
         };
-        app.install_builtin_resources();
         app
     }
 

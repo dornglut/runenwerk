@@ -4,6 +4,7 @@ use crate::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryReso
 use crate::plugins::render::render_integration_is_active;
 use crate::plugins::render::renderer::Gfx;
 use crate::runtime::PrimaryPresentationMetricsResource;
+use crate::runtime::presentation::ensure_primary_presentation_metrics;
 use crate::runtime::frame_lifecycle::{run_frame as run_runtime_frame, run_startup_if_needed};
 use crate::runtime::frame_pacing::{
     FramePacingPolicyResource, FramePacingRuntimeStateResource, FramePacingSchedule,
@@ -60,6 +61,7 @@ pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
 }
 
 fn install_native_window_provider_resources(world: &mut runen_ecs::World) {
+    ensure_primary_presentation_metrics(world);
     if !world.has_resource::<WindowStateRegistryResource>() {
         world.insert_resource(WindowStateRegistryResource::default());
     }
