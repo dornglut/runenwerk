@@ -787,7 +787,7 @@ The normalized rule is:
 > **Convenience is owned by the capability whose semantics it manipulates, and every
 > operation retains an explicit temporal contract.**
 
-Scene composition now uses the Scene-owned `AppSceneExt`; other owner-specific extensions over the same App/runtime remain a preferred direction when they improve discoverability:
+Scene composition now uses the Scene-owned `AppSceneExt`, and Replay runtime controls use the Replay-owned `AppReplayExt`; other owner-specific extensions over the same App/runtime remain a preferred direction when they improve discoverability:
 
 ```text
 AppSceneExt
