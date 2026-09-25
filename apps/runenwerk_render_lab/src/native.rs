@@ -1050,10 +1050,10 @@ mod tests {
         let scene = render_lab_fixed_quality_flow().expect("quality flow should author");
         let resolve =
             engine::plugins::render::fixed_resolution_resolve_flow().expect("resolve flow");
-        let scene_plan =
-            engine::plugins::render::compile_flow_plan(&scene).expect("quality flow should compile");
-        let resolve_plan =
-            engine::plugins::render::compile_flow_plan(&resolve).expect("resolve flow should compile");
+        let scene_plan = engine::plugins::render::compile_flow_plan(&scene)
+            .expect("quality flow should compile");
+        let resolve_plan = engine::plugins::render::compile_flow_plan(&resolve)
+            .expect("resolve flow should compile");
         let producer_id = producer(RL2_PRODUCER_ID);
         let mut fixed = engine::plugins::render::RenderFixedResolutionExecutionRequest::new(
             producer_id,
@@ -1066,8 +1066,7 @@ mod tests {
         .prepare_against_compiled_flows((1920, 1080), &scene_plan, &resolve_plan)
         .expect("quality flow should admit fixed execution");
 
-        let radiance_key =
-            RenderDynamicTextureTargetKey::new(RL2_TARGET_NAMESPACE, RL2_TARGET_ID);
+        let radiance_key = RenderDynamicTextureTargetKey::new(RL2_TARGET_NAMESPACE, RL2_TARGET_ID);
         fixed.scene_invocation = fixed
             .scene_invocation
             .clone()
