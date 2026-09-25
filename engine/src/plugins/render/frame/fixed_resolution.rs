@@ -1,7 +1,7 @@
 use crate::plugins::render::{
     PreparedFlowInvocationRequest, PreparedTargetBinding, PreparedViewFrame,
     RenderDynamicTextureRetention, RenderDynamicTextureTargetDescriptor,
-    RenderDynamicTextureTargetKey, RenderFlow, RenderFlowAuthoringError, RenderFlowId,
+    RenderDynamicTextureTargetKey, RenderFlow, RenderFlowId,
     RenderFrameProducerId, RenderTargetAliasKey, RenderTargetAliasKind, RenderTextureSampleMode,
     RenderTextureTargetFormat,
 };
@@ -130,7 +130,7 @@ pub enum RenderFixedResolutionExecutionError {
     AliasBinding(#[source] crate::plugins::render::RenderGpuResourceAdapterError),
 }
 
-pub fn fixed_resolution_resolve_flow() -> Result<RenderFlow, RenderFlowAuthoringError> {
+pub fn fixed_resolution_resolve_flow() -> anyhow::Result<RenderFlow> {
     RenderFlow::new(FIXED_RESOLUTION_RESOLVE_FLOW_LABEL)
         .with_target_alias(
             FIXED_RESOLUTION_RESOLVE_SOURCE_ALIAS,
