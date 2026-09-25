@@ -102,7 +102,9 @@ pub(super) fn temporal_quality_capture_selector(
                 engine::plugins::render::FIXED_RESOLUTION_RESOLVE_PASS_LABEL,
             )
         }
-        Some(engine::plugins::render::RenderFixedResolutionExecutionAdmission::NativeFallback(_))
+        Some(engine::plugins::render::RenderFixedResolutionExecutionAdmission::NativeFallback(
+            _,
+        ))
         | None => RenderCaptureSelector::named_pass_surface_color(
             RL2_QUALITY_FLOW_ID,
             RL2_QUALITY_PASS_ID,
@@ -536,7 +538,10 @@ mod tests {
     fn temporal_quality_present_flow_supplies_terminal_native_presentation() {
         let flow = render_lab_quality_present_flow().expect("quality present flow should author");
         assert_eq!(flow.label(), RL2_QUALITY_PRESENT_FLOW_ID);
-        assert!(flow.resource_id(engine::plugins::render::SURFACE_COLOR_RESOURCE_LABEL).is_some());
+        assert!(
+            flow.resource_id(engine::plugins::render::SURFACE_COLOR_RESOURCE_LABEL)
+                .is_some()
+        );
         assert!(flow.pass_id(RL2_QUALITY_PRESENT_PASS_ID).is_some());
         let compiled = engine::plugins::render::compile_flow_plan(&flow)
             .expect("quality present flow should compile");
@@ -575,7 +580,9 @@ mod tests {
         assert_eq!(prepared.internal_size, (1280, 720));
         assert_eq!(prepared.internal_view.target_size_px, (1280, 720));
         let fixed_admission =
-            engine::plugins::render::RenderFixedResolutionExecutionAdmission::Fixed(prepared.clone());
+            engine::plugins::render::RenderFixedResolutionExecutionAdmission::Fixed(
+                prepared.clone(),
+            );
         let selector = temporal_quality_capture_selector(Some(&fixed_admission));
         assert_eq!(
             selector.flow_id.as_deref(),
