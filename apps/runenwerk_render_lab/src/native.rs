@@ -724,12 +724,11 @@ fn publish_render_lab_frame_system(
         match &admission {
             engine::plugins::render::RenderFixedResolutionExecutionAdmission::Fixed(prepared) => {
                 let mut fixed = prepared.clone();
-                let (target_key, target, contribution) =
-                    build_render_lab_radiance_publication(
-                        &camera,
-                        producer_id,
-                        requested_internal_size,
-                    )?;
+                let (target_key, target, contribution) = build_render_lab_radiance_publication(
+                    &camera,
+                    producer_id,
+                    requested_internal_size,
+                )?;
                 fixed.scene_invocation = fixed
                     .scene_invocation
                     .clone()
@@ -839,7 +838,9 @@ fn inspect_render_lab_temporal_quality_execution_system(
         let policy = match fixed.resolution.policy {
             engine::plugins::render::inspect::RenderTemporalResolutionPolicy::Native => "native",
             engine::plugins::render::inspect::RenderTemporalResolutionPolicy::Fixed => "fixed",
-            engine::plugins::render::inspect::RenderTemporalResolutionPolicy::Dynamic { .. } => "dynamic",
+            engine::plugins::render::inspect::RenderTemporalResolutionPolicy::Dynamic {
+                ..
+            } => "dynamic",
         };
         RenderLabTemporalQualityExecutionEvidence {
             frame_index: frame.context.frame_index,
@@ -1604,19 +1605,14 @@ mod tests {
         assert_eq!(invocations[0].flow_id, scene.id());
         assert_eq!(invocations[0].view_id, "main");
         assert_eq!(
-            invocations[0]
-                .target_alias_bindings
-                .get(
-                    &engine::plugins::render::RenderTargetAliasKey::new(RL2_QUALITY_COLOR_ALIAS)
-                        .expect("quality color alias")
-                ),
+            invocations[0].target_alias_bindings.get(
+                &engine::plugins::render::RenderTargetAliasKey::new(RL2_QUALITY_COLOR_ALIAS)
+                    .expect("quality color alias")
+            ),
             Some(&engine::plugins::render::PreparedTargetBinding::SurfaceColor)
         );
         assert!(
-            !frame_requests.replaces_automatic_main_flow(
-                RenderSurfaceId::primary(),
-                scene.id()
-            ),
+            !frame_requests.replaces_automatic_main_flow(RenderSurfaceId::primary(), scene.id()),
             "native quality reference must not claim fixed automatic-main replacement"
         );
     }
@@ -1778,7 +1774,10 @@ mod tests {
         let published_targets = targets.snapshot_for_surface(RenderSurfaceId::primary());
         assert_eq!(published_targets.len(), 1);
         assert_eq!(published_targets[0].key, target_key);
-        assert_eq!((published_targets[0].width, published_targets[0].height), (1920, 1080));
+        assert_eq!(
+            (published_targets[0].width, published_targets[0].height),
+            (1920, 1080)
+        );
         assert!(
             frame_requests
                 .requested_views_for_surface(RenderSurfaceId::primary())
@@ -1800,10 +1799,7 @@ mod tests {
             "native fallback must not publish the fixed resolve invocation"
         );
         assert!(
-            !frame_requests.replaces_automatic_main_flow(
-                RenderSurfaceId::primary(),
-                scene.id()
-            ),
+            !frame_requests.replaces_automatic_main_flow(RenderSurfaceId::primary(), scene.id()),
             "explicit native main invocation must not retain a fixed replacement claim"
         );
     }
