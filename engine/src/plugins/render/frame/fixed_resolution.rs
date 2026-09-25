@@ -2,7 +2,6 @@ use crate::plugins::render::{
     PreparedFlowInvocationRequest, PreparedTargetBinding, PreparedViewFrame,
     RenderDynamicTextureRetention, RenderDynamicTextureTargetDescriptor,
     CompiledRenderFlowPlan, RenderDynamicTextureTargetKey, RenderFlow, RenderFlowId,
-    RenderTemporalResolutionEvidence, RenderTemporalResolutionPolicy,
     RenderFrameProducerId, RenderResourceDeclaration, RenderTargetAliasKey, RenderTargetAliasKind,
     RenderTextureSampleMode,
     RenderTextureTargetFormat,
@@ -157,21 +156,6 @@ impl RenderFixedResolutionExecutionAdmission {
         match self {
             Self::Fixed(_) => None,
             Self::NativeFallback(fallback) => Some(fallback.reason.as_str()),
-        }
-    }
-
-    pub fn temporal_resolution_evidence(&self) -> RenderTemporalResolutionEvidence {
-        match self {
-            Self::Fixed(prepared) => RenderTemporalResolutionEvidence {
-                internal_size: [prepared.internal_size.0, prepared.internal_size.1],
-                output_size: [prepared.output_size.0, prepared.output_size.1],
-                policy: RenderTemporalResolutionPolicy::Fixed,
-            },
-            Self::NativeFallback(fallback) => RenderTemporalResolutionEvidence {
-                internal_size: [fallback.output_size.0, fallback.output_size.1],
-                output_size: [fallback.output_size.0, fallback.output_size.1],
-                policy: RenderTemporalResolutionPolicy::Native,
-            },
         }
     }
 
@@ -408,11 +392,11 @@ mod tests {
         .admit_against_compiled_flow((1920, 1080), flow(12), &compiled);
         assert!(!valid.native_fallback_active());
         assert_eq!(
-            valid.temporal_resolution_evidence(),
-            RenderTemporalResolutionEvidence {
+            crate::plugins::render::inspect::fixed_resolution_admission_resolution_evidence(&valid),
+            crate::plugins::render::inspect::RenderTemporalResolutionEvidence {
                 internal_size: [1280, 720],
                 output_size: [1920, 1080],
-                policy: RenderTemporalResolutionPolicy::Fixed,
+                policy: crate::plugins::render::inspect::RenderTemporalResolutionPolicy::Fixed,
             }
         );
 
@@ -427,11 +411,11 @@ mod tests {
         assert!(invalid.fallback_reason().is_some());
         assert!(invalid.prepared().is_none());
         assert_eq!(
-            invalid.temporal_resolution_evidence(),
-            RenderTemporalResolutionEvidence {
+            crate::plugins::render::inspect::fixed_resolution_admission_resolution_evidence(&invalid),
+            crate::plugins::render::inspect::RenderTemporalResolutionEvidence {
                 internal_size: [1920, 1080],
                 output_size: [1920, 1080],
-                policy: RenderTemporalResolutionPolicy::Native,
+                policy: crate::plugins::render::inspect::RenderTemporalResolutionPolicy::Native,
             }
         );
     }
