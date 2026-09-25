@@ -15,7 +15,8 @@ use crate::runtime::platform::{
 };
 use crate::runtime::presentation::ensure_primary_presentation_metrics;
 use crate::runtime::window::{
-    NativeWindowCreationRequest, NativeWindowId, WindowCursorIcon, WindowStateRegistryResource,
+    NativeWindowCreationRequest, NativeWindowId, PrimaryWindowInitialSizePxResource,
+    WindowCursorIcon, WindowStateRegistryResource,
 };
 use crate::runtime::winit_input::{
     WinitInputAdapter, contact_input, cursor_position, keyboard_input, pointer_button_input,
@@ -643,6 +644,22 @@ impl Drop for WinitRunner {
     }
 }
 
+fn requested_primary_window_size_px(state: &WindowedAppState) -> Option<(u32, u32)> {
+    state
+        .world
+        .resource::<PrimaryWindowInitialSizePxResource>()
+        .ok()
+        .map(|request| request.size_px())
+}
+
+fn primary_window_attributes(state: &WindowedAppState) -> WindowAttributes {
+    let attrs = Window::default_attributes().with_title(state.title.clone());
+    let Some((width, height)) = requested_primary_window_size_px(state) else {
+        return attrs;
+    };
+    attrs.with_inner_size(winit::dpi::PhysicalSize::new(width, height))
+}
+
 fn winit_cursor_icon(cursor_icon: WindowCursorIcon) -> CursorIcon {
     match cursor_icon {
         WindowCursorIcon::Default => CursorIcon::Default,
@@ -661,8 +678,7 @@ impl ApplicationHandler for WinitRunner {
             return;
         }
 
-        let attrs: WindowAttributes =
-            Window::default_attributes().with_title(self.state.title.clone());
+        let attrs = primary_window_attributes(&self.state);
         let window = match event_loop.create_window(attrs) {
             Ok(window) => Arc::new(window),
             Err(err) => {
@@ -1276,6 +1292,23 @@ mod tests {
             native_window_id_for_winit_event(&native_windows_by_winit, WindowId::dummy()),
             None
         );
+    }
+
+    #[test]
+    fn primary_window_size_request_is_absent_without_explicit_host_configuration() {
+        let app = App::new();
+        let state = app.into_windowed_state();
+
+        assert_eq!(requested_primary_window_size_px(&state), None);
+    }
+
+    #[test]
+    fn primary_window_size_request_reaches_winit_realization_boundary() {
+        let mut app = App::new();
+        app.with_primary_window_size_px((1600, 1200));
+        let state = app.into_windowed_state();
+
+        assert_eq!(requested_primary_window_size_px(&state), Some((1600, 1200)));
     }
 
     #[test]
