@@ -122,12 +122,11 @@ fn server_replication_prepares_snapshot_until_delivery_is_accepted() {
         postcard::from_bytes(&message.payload).expect("snapshot payload should decode");
     assert_eq!(message.cursor, SnapshotCursor(1));
     assert_eq!(snapshot.context.world_scene_label, "gameplay_stub");
+    let prepared_diagnostics = app.world().resource::<ReplicationDiagnostics>().unwrap();
+    assert_eq!(prepared_diagnostics.emitted_snapshots, 0);
     assert_eq!(
-        app.world()
-            .resource::<ReplicationDiagnostics>()
-            .unwrap()
-            .emitted_snapshots,
-        0
+        prepared_diagnostics.last_snapshot_cursor, 0,
+        "prepared authority submission must not advance emitted-cursor diagnostics"
     );
 
     let emitted = record_authority_replication_delivery_acceptance(
@@ -138,13 +137,9 @@ fn server_replication_prepares_snapshot_until_delivery_is_accepted() {
     .expect("accepted delivery feedback should be admitted")
     .expect("accepted delivery should emit the pending snapshot");
     assert_eq!(emitted.target_cursor.get(), 1);
-    assert_eq!(
-        app.world()
-            .resource::<ReplicationDiagnostics>()
-            .unwrap()
-            .emitted_snapshots,
-        1
-    );
+    let emitted_diagnostics = app.world().resource::<ReplicationDiagnostics>().unwrap();
+    assert_eq!(emitted_diagnostics.emitted_snapshots, 1);
+    assert_eq!(emitted_diagnostics.last_snapshot_cursor, 1);
 }
 
 #[test]
