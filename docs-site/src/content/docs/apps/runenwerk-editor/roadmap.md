@@ -61,6 +61,8 @@ This is not a deferral list. Every phase below is required for feature completio
 
 This roadmap owns app-level implementation sequencing, not editor semantic or structural authority. ADR 0025 and the accepted editor coordination semantic model govern normalized editor semantics; ADR 0013 and `domain/ui/ui_composition` govern structural composition. Completed milestone sections below are retained as point-in-time implementation evidence and do not override those current authorities.
 
+M6 is a cross-domain product/workflow program, not an expansion of generic Editor semantic ownership. Material, texture, procgen, gameplay, particle, physics, animation, simulation, world, render, and runtime semantics stay with their owning domains or engine integrations. The Editor side of an M6 slice is limited to Tool Suite registration, provider/projection integration, surface-local session state, routed proposals, diagnostics, and app-owned preview/IO orchestration. A new product domain must not require a new central `DocumentKind`, `ToolSurfaceKind`, `SurfaceLocalAction`, or `EditorDomainMutation` branch merely to become editable; surviving enum-based paths are migration/compatibility state, not the extension model.
+
 ## Repo Truth Audit
 
 Current implemented baseline:
@@ -92,9 +94,9 @@ Current post-M3 gaps:
 - The M3.5 UI definition/formation closeout is implemented: `domain/ui/ui_definition`, `domain/editor/editor_definition`, checked-in RON fixtures under `assets/editor/ui/`, retained formation, inert route/embed products, toolbar/menu fixture formation, normal shell chrome formation, common provider surface fixture formation, and app-owned fixture validation exist. Provider data, viewport overlays, editor mutations, and route execution remain outside `ui_definition`.
 - The M4 asset foundation exists: `domain/asset` owns asset ids, taxonomy, source/artifact descriptors, dependency graph, deterministic import plans, diagnostics, and ratification; `ProjectFileV2` migration exists in `domain/editor/editor_persistence/src/project_file.rs`; `world_sdf` owns field-product descriptors and ratification; `world_ops` owns generic product invalidation/build helpers; and the editor app owns initial catalog runtime, import jobs, field-product jobs, and first Asset Browser/Import Inspector/Field Product Viewer/SDF Brush Browser providers. M5 now adds external runtime preview, project-owned reload status classification, world_sdf runtime intake, and restart boundaries for the existing product families.
 - `domain/material_graph` and `domain/texture` now exist as initial M6 domain-contract crates with ratifiers, descriptor/product contracts, source/lineage metadata, and focused tests.
-- Descriptor-first material and texture providers exist for material graph canvas, material inspector, material preview, Texture2D/generated texture inspection, and Texture3D/volume inspection. They expose domain descriptors, source/cache/reload diagnostics, and fail-closed adapter boundaries without making editor canvas state authoritative.
-- `domain/procgen` now exists for the Phase 6A domain-first procgen product track: graph-backed deterministic documents, first-slice terrain/material node semantics, ratification, lowering to `world_ops` operation windows, and product job/publication descriptors. There is still no `domain/particles`, `domain/physics`, `domain/animation`, or `domain/simulation_process`.
-- Concrete editor providers for procedural generation preview, particles, physics authoring/debug, animation timeline, curve editing, and simulation preview do not exist yet; their M6 workspace surfaces still route through fail-closed placeholder diagnostics.
+- Material/Texture integration has advanced beyond the original descriptor-first M6.1 baseline: source-backed Material Lab workflows, formed material preview products, generated shader/render handoff, product publication, concrete material preview surfaces, and KTX2-backed Texture2D/Texture3D dynamic preview/upload paths exist. These integrations still keep `domain/material_graph` and `domain/texture` as semantic owners and do not by themselves declare the full P3/P9 material workflow complete.
+- The accepted Procgen baseline program is complete through Phase 6D: `domain/procgen` owns deterministic documents, ratification and lowering; the app has concrete Procgen graph/preview providers, CPU field-preview formation, product/query publication, viewport overlay integration, bake/rollback, persistence, and runtime-preview reload classification. Additional generator families, worker/GPU realization, or cache architecture require separately activated owner work. There is still no `domain/particles`, `domain/physics`, `domain/animation`, or `domain/simulation_process`.
+- Concrete providers exist for Procgen. Gameplay, particle, physics, animation, and simulation product suites remain unimplemented; they must begin with owner-domain/runtime contracts and only then add Editor Tool Suite/provider integration. Placeholder/legacy M6 surface metadata does not authorize those domains or define their semantics.
 - There is no `domain/gameplay_graph`, Action/Trigger/Rule IR, gameplay graph compiler, gameplay graph to ECS query/event/schedule lowering, or gameplay graph editor/debug provider.
 
 ## Implementation Readiness
@@ -105,7 +107,7 @@ Current post-M3 gaps:
 - M3.7 is complete as a no-compromise viewport expression architecture closeout as of 2026-05-08. Multi-viewport previews now have explicit viewport instances, viewport-scoped products, per-viewport render jobs, persisted restore metadata and runtime settings, lifecycle-before-frame-submit sync, viewport-keyed camera/debug/root commands, camera orbit/pan/zoom routing, and duplicate/close lifecycle cleanup. The follow-on provider surface workflow redesign and surface/product maturity pass are also complete as of 2026-05-08 for typed surface wrappers, entity-table query workflows, inspector enum mutation routing, reusable-control polish, visible descriptor-only field/atlas/volume/brickmap/history viewport products, and guard coverage. The M4A-M4I integrated UI/editor/asset foundation and M5 external runtime preview/reload boundary are complete as of 2026-05-09; the SDF-first execution program subsequently completed through Phase 6D and is now a historical substrate record rather than a current activation gate.
 - Native multi-window editing is designed in `docs-site/src/content/docs/design/accepted/editor-native-multi-window-presentation-design.md`. It follows the render product-surface foundation and should land before second-monitor workflows are treated as product-ready.
 - M4 is the integrated UI/editor/asset foundation and now ends at M4I. M4A-M4E finished active UI/editor consumption and reusable-control cleanup; M4F-M4I add the first SDF/field-first asset contracts, `ProjectFileV2`, field-product descriptors, generic product invalidation, app-owned import/field-product jobs, first asset surfaces, scene-manifest catalog adapter, and displayable `Rgba8Unorm` viewport debug products. M5 is complete for external runtime preview, project-owned data reload classification, and restart boundaries over the existing product families.
-- M6 is not one implementation ticket. M6.0 shared workspace substrate has landed, and M6.1 material/texture now has descriptor-first domain contracts plus provider surfaces. Each remaining M6 sub-milestone requires its own current owning design/domain authority and GitHub activation, and must consume the already-completed product-job, query-snapshot, publication, strict-consumer, render-selection, and derived-residency substrate.
+- M6 is not one Editor implementation ticket. Its product capabilities are cross-domain tracks: the original M6.0 workspace/tool-host substrate and M6.1 material/texture baseline have landed, Material/Texture integration has advanced beyond that baseline, and the Procgen Phase 6A-6D baseline is complete. Future gameplay, particle, physics, animation, simulation, or further material/procgen work requires its own current semantic owner, design/roadmap authority, and GitHub activation; Editor work follows as bounded Tool Suite/provider integration over those contracts.
 - M7 is implementation-ready only for preview/play/session boundaries first. Gameplay graph, particles, physics, animation, procgen, and simulation hot reload depend on their formed-product contracts from M6 and on the execution fabric substrate.
 - Later self-authoring packaging/extensibility is implementation-ready for the retained UI path only. Compiled-reactive or ECS-driven UI execution remains blocked; neither strategy was promoted before M2, and any future promotion requires a separate active design or accepted ADR plus a roadmap update.
 - M9 is release-readiness verification, not a feature construction phase.
@@ -454,30 +456,26 @@ Exit criteria:
 - preview/play has explicit state boundaries;
 - reload failures produce diagnostics and preserve prior valid runtime products where safe.
 
-### M6 - Procedural And Gameplay Authoring Domains
+### M6 Summary - Cross-Domain Authoring Products And Editor Integration
 
-Purpose: build later procedural editors on the asset/product/reload foundation instead of adding disconnected graph tools.
+Purpose: build product capabilities in their semantic owners and integrate them into Runenwerk workbenches without turning generic Editor coordination into the owner of every edited domain.
 
-Implementation order:
+Current sequence:
 
-- shared graph/workspace substrate for new document kinds;
-- `domain/material_graph` and `domain/texture`;
-- `domain/procgen`;
-- narrower gameplay event/action/state/quest contracts;
-- `domain/gameplay_graph` ATR IR and ECS query/event/schedule lowering;
-- `domain/particles`;
-- `domain/physics`;
-- `domain/animation`;
-- simulation/world-process previews.
+- retain the implemented Tool Suite/provider/workbench substrate as the Editor integration mechanism;
+- treat the SDF P1, Material/Texture M6.1 baseline, and Procgen Phase 6A-6D baseline as completed evidence;
+- activate future gameplay, particle, physics, animation, simulation, or further material/procgen capability in the owning domain/runtime boundary first;
+- add the corresponding Editor providers only after owner commands, ratification, products, and diagnostics exist.
 
 Validation:
 
-- each domain lands with source lineage, diagnostics, failed-product preservation, provider tests, reload boundary tests, and consumes the completed product-job, publication, query-snapshot, strict-consumer, render-selection, and derived-residency contracts established by the SDF-first execution program;
-- gameplay graph lowering consumes semantic gameplay contracts and emits formed products with source maps, not live graph traversal.
+- owner-domain tests prove semantics, determinism, lineage, failure preservation, and runtime/product contracts;
+- Editor tests prove stable-key registration, provider resolution, projection, local session behavior, routed proposals, diagnostics, and preview/presentation integration;
+- new product tooling does not require extending generic `DocumentKind`, `ToolSurfaceKind`, `SurfaceLocalAction`, or `EditorDomainMutation` as an admission prerequisite.
 
 Exit criteria:
 
-- each implemented domain has a product contract, editor provider, diagnostics, save/load path, and runtime/preview boundary.
+- each activated product track has an owner-defined product/runtime contract and a bounded Editor Tool Suite/provider integration with no duplicate semantic authority.
 
 ### M7 - Scripting And Runtime Gameplay Bridge
 
@@ -1029,144 +1027,69 @@ Validation:
 - `python3 tools/docs/validate_docs.py`;
 - `./quiet_full_gate.sh`.
 
-### M6 - Procedural Authoring Workspaces Beyond Scene Editing
+### M6 Detailed Execution - Cross-Domain Authoring Products And Editor Integration
 
-Purpose: make the editor a multi-document procedural authoring environment.
+Purpose: compose owner-defined procedural/gameplay product capabilities into focused Runenwerk workbenches without transferring those semantics into generic Editor coordination.
 
-Detailed feature slices, milestone gates, and remaining decisions for material graphs, procedural texturing, Texture3D, procgen, particles, physics, animation, and world processes are owned by `docs-site/src/content/docs/design/active/editor-procedural-content-and-simulation-workflow-plan.md`. Gameplay graph ATR IR and ECS lowering are owned by `docs-site/src/content/docs/design/active/gameplay-graph-atr-ir-and-ecs-lowering-design.md`.
+Detailed cross-domain feature slices and product gates are owned by `docs-site/src/content/docs/design/active/editor-procedural-content-and-simulation-workflow-plan.md`. Gameplay ATR IR and ECS lowering remain owned by `docs-site/src/content/docs/design/active/gameplay-graph-atr-ir-and-ecs-lowering-design.md`. This Editor roadmap owns only the Runenwerk app/workbench integration sequence for those capabilities.
 
-The SDF-first execution program is a completed substrate, not a live activation gate. Remaining M6 work is activated by its current owning design/roadmap plus an owning GitHub issue, and product-domain work must consume the completed product-job, publication, query-snapshot, strict-consumer, render-selection, and derived-residency contracts instead of inventing private execution paths.
+Ownership for every M6 slice is:
 
-Current M6 focus:
+```text
+owning domain
+  -> authored/runtime semantic truth, commands, ratification, formed products
+engine/runtime adapter
+  -> execution/scheduling/backend realization where required
+Runenwerk app integration
+  -> project IO, product jobs/publication, preview/render adapters, cross-domain policy
+Editor Tool Suite/provider
+  -> projection, local session state, interaction mapping, diagnostics
+ui_composition
+  -> structural targets, mounted units, layout/history/persistence
+```
 
-- Treat M6.2C procgen bake, rollback, persistence, and runtime preview reload
-  classification as complete on the accepted
-  `docs-site/src/content/docs/domain/procgen/README.md` contract, the Phase 6A
-  `domain/procgen` crate, the Phase 6B editor/runtime overlay proof, the Phase
-  6C concrete CPU field-preview proof, and the Phase 6D bake closeout.
-- Further procgen worker pools, renderer rebuilds, GPU upload, caves, stamps,
-  scatter, and package-level persistent cache sidecars are outside the completed
-  Phase 6D program; any such work requires current owning design/issue authority
-  and must continue through the established product substrate.
-- Rendered SDF/GPU overlays and material/SDF preview handoff are separate later
-  product slices; their activation belongs to their current owning roadmap/design
-  and GitHub issue rather than this completed execution program.
+Extension rule:
 
-Other gated M6 tracks:
+- stable Tool Suite surface keys and provider families are the normal Editor extension point;
+- provider-owned routing maps generic interactions into owner/app proposals;
+- a future gameplay/particle/physics/animation/simulation tool must not require a new central `DocumentKind`, `ToolSurfaceKind`, `SurfaceLocalAction`, or `EditorDomainMutation` variant merely to participate;
+- current enum variants and `document_kind_filters` are predecessor/compatibility state under the ADR-0025 normalization track, not a template for new domains;
+- `M6WorkspaceProvider` is diagnostic fallback/legacy scaffolding, not product readiness or semantic authority.
 
-- Editor Tool Suite Registry And Workbench Host: implemented for the surviving
-  editor-local provider, capability, registration, and workbench-integration
-  contracts. Future graph/product tools consume the
-  [implemented Tool Suite design](../../design/implemented/editor-tool-suite-registry-and-workbench-host-design.md);
-  generic structural composition identity and semantics remain governed by
-  [accepted ADR 0013](../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md).
-- M6.3 gameplay graph, M6.4 particles, M6.5 SDF physics, M6.6 animation, and
-  M6.7 world-process work are not activated by the completed SDF program; each
-  requires current owning contracts and GitHub activation while consuming the
-  established execution substrate.
-- M6.1 intentionally leaves rendered material preview adapters, Texture3D GPU
-  upload/runtime adapters, broad document persistence/import UX, and full PBR
-  preview capability matrices for later P3/P9 work.
+Current accepted baseline:
 
-Remaining sub-milestones:
+- **Editor/tool-host substrate:** stable-key Tool Suite Registry, provider-family narrowing, Workbench composition, capability policy, mounted-unit surface sessions, product publication/query-snapshot substrate, viewport product selection, and render-product integration exist.
+- **SDF authoring:** the P1 CPU/editor-surface baseline is complete for command-backed operation documents, SDF graph lowering, governed `world_ops`, invalidation, and deterministic field-preview products.
+- **Materials/Textures:** the original M6.1 descriptor/domain baseline is complete and later work has added source-backed Material Lab authoring, formed preview products, generated shader/render handoff, concrete rendered material preview, and KTX2-backed Texture2D/Texture3D preview/upload integration. Full P3/P9 field-material/PBR workflow completion is not implied.
+- **Procgen:** the baseline program is complete through Phase 6D, including the `domain/procgen` contract, graph/preview providers, CPU formed previews, product/query publication, viewport overlays, bake/rollback, persistence, and reload classification. Further generator families, worker pools, GPU realization, or cache architecture are separate owner work.
+- **Gameplay / Particles / Physics / Animation / World Processes:** semantic/runtime product domains remain unimplemented or design-gated. Their future Editor surfaces are not activation authority.
 
-- M6.2 Procgen product track: deterministic generator documents, seed/scope contracts, procgen-owned prototype/candidate/reservation/instance-plan metadata, bounded preview, world-operation lowering, bake/rollback, explanation data, and changed-region diagnostics on top of the accepted procgen domain contract and completed SDF-first execution substrate.
-- M6.3 Gameplay graph product track: prerequisite gameplay event/action/state/quest contracts, Action/Trigger/Rule IR, compiler passes, ECS query/event/schedule lowering, SDF physics `HIT` relation readiness, authority diagnostics, and source maps on the completed execution substrate.
-- M6.4 Particles product track: deterministic emitter documents, SDF/field spawn and collision coupling, preview products, count/bounds diagnostics, and backend-neutral formed products on the completed execution substrate.
-- M6.5 SDF physics product track: collision product descriptors, rigid/kinematic/character body contracts, physics material links, field-query readiness, and debug surfaces on the completed execution substrate.
-- M6.6 Animation product track: clips, curves, timeline, state/blend graphs, procedural motion hooks, source maps, and preview diagnostics on the completed execution substrate.
-- M6.7 World-process product track: bounded material-transport previews, timescale/solver-budget contracts, bake/commit to governed `world_ops`, rollback, and product freshness diagnostics on the completed execution substrate.
+Remaining product tracks are owner-domain work with subsequent Editor integration:
 
-Finished M6 baselines:
+- **M6.3 Gameplay:** establish gameplay event/action/state/quest and gameplay-graph semantic/runtime products first; then install graph/diagnostic providers.
+- **M6.4 Particles:** establish deterministic emitter/simulation/formed-product contracts first; then install particle graph/preview providers.
+- **M6.5 Physics:** establish collision/body/material/constraint and solver-adapter contracts first; then install authoring/debug providers.
+- **M6.6 Animation:** establish clip/curve/timeline/state/blend/procedural-motion products first; then install timeline/curve/graph providers.
+- **M6.7 World Processes:** establish bounded simulation-process preview/bake contracts first; then install simulation preview/diagnostic providers.
+- **Material/Texture/SDF follow-ups:** any remaining P3/P9 capability is activated by its material/texture/world/render owner rather than by extending Editor taxonomy.
+- **Further Procgen:** any post-6D generation breadth or realization work is activated by Procgen/world/runtime owners rather than reopening the completed baseline.
 
-- M6.0 shared workspace substrate is complete in the current worktree for workspace profiles, tool-surface/panel vocabulary, persisted layout support, runtime/debug/diagnostic surface routing, and fail-closed provider diagnostics.
-- M6.1 material/texture descriptor-first closeout is complete: `domain/material_graph` and `domain/texture` exist with accepted domain docs, initial ratifiers, descriptors, source/lineage metadata, deterministic lowering, material/texture artifact payload kinds, import settings, runtime product kinds, reload classification for formed material/texture products, and concrete descriptor-first material/texture provider surfaces. Completion evidence remains in Git history.
-- P1/SDF modeling core is complete for the CPU/editor-surface boundary: command-backed operation documents, source-backed SDF graph documents, Add/Subtract/Intersect/SmoothAdd/SmoothSubtract/SmoothIntersect lowering to `world_ops` records, invalidation dirty-reason classification, app-held commit logs, deterministic CPU field-preview products, and concrete field-layer/SDF graph/field-product surfaces. Completion evidence remains in Git history.
+Editor-integration acceptance for a new product track requires:
 
-Implementation targets:
-
-- `domain/editor/editor_shell/src/workspace/profile.rs::default_workspace_profile_registry`
-  - add `Field World`, `SDF Modeling`, `Materials`, `Textures`, `Procedural Generation`, `Gameplay`, `Particles`, `Physics`, `Animation`, `Layout`, `UI`, `Graphs`, `Scripting`, `Simulation`, `Debug`, and `Editor Design` workspace profiles.
-- `domain/editor/editor_core/src/session.rs`
-  - validate mode activation against `(workspace_profile, document_kind)`.
-- `domain/material_graph/src/lib.rs`
-  - own material graph semantics, PBR parameter contracts, procedural texturing nodes, triplanar mapping semantics, ratification, lowering, and formed material products.
-- `domain/texture/src/lib.rs`
-  - own Texture2D, Texture3D/volume texture descriptors, color space, sampler, compression, generated texture cache metadata, and texture diagnostics.
-- future `domain/procgen/src/lib.rs`
-  - own procedural generation documents, seed contracts, generator graphs, and lowering to bounded world operation windows.
-- future `domain/gameplay/events/src/lib.rs`
-  - own gameplay event ids, payload schemas, channel descriptors, authority class, and source-map subjects used by gameplay graph lowering.
-- future `domain/gameplay/actions/src/lib.rs`
-  - own action request, action plan, action result, and effect vocabulary before gameplay graph transforms can request actions.
-- future `domain/gameplay/state/src/lib.rs`
-  - own state machine, state membership, transition, and condition contracts before gameplay graph state transforms lower to runtime products.
-- future `domain/gameplay/quests/src/lib.rs`
-  - own quest, objective, progress, and completion contracts before gameplay graph quest transforms lower to runtime products.
-- future `domain/gameplay_graph/src/lib.rs`
-  - own gameplay graph semantics, Action/Trigger/Rule IR, compiler passes, SDF physics relation binding, and formed ECS query/event/schedule/runtime products while depending on narrower gameplay event/action/state/quest contracts for their semantics.
-- future `domain/particles/src/lib.rs`
-  - own emitter definitions, particle graph semantics, SDF/field coupling contracts, and formed particle products.
-- future `domain/physics/src/lib.rs`
-  - own body, collider, constraint, trigger, physics material, collision product, and readiness contracts.
-- future `domain/animation/src/lib.rs`
-  - own clips, curves, state machines, blend trees, procedural motion, root motion, animation events, and binding diagnostics.
-- `apps/runenwerk_editor/src/shell/providers/ui_hierarchy.rs::UiHierarchyProvider`
-  - show and edit UI document hierarchy.
-- `apps/runenwerk_editor/src/shell/providers/ui_canvas.rs::UiCanvasProvider`
-  - preview retained UI layout documents through the existing UI substrate.
-- `apps/runenwerk_editor/src/shell/providers/graph_canvas.rs::GraphCanvasProvider`
-  - host graph documents using `domain/graph`.
-- `apps/runenwerk_editor/src/shell/providers/field_layer_stack.rs::FieldLayerStackProvider`
-  - show and edit authored field-world layers, SDF operation ordering, and material channel bindings through commands.
-- `apps/runenwerk_editor/src/shell/providers/sdf_graph_canvas.rs::SdfGraphCanvasProvider`
-  - host SDF graph documents while using standalone RunenSDF for reusable field semantics and `domain/graph` only for graph substrate behavior.
-- `apps/runenwerk_editor/src/shell/providers/material_graph_canvas.rs::MaterialGraphCanvasProvider`
-  - edit material graphs without making graph canvas state material truth.
-- `apps/runenwerk_editor/src/shell/providers/material_inspector.rs::MaterialInspectorProvider`
-  - edit PBR parameters, procedural node settings, SDF/field inputs, and material channel bindings.
-- `apps/runenwerk_editor/src/shell/providers/material_preview.rs::MaterialPreviewProvider`
-  - preview material products on SDF primitives, field products, and reference meshes.
-- `apps/runenwerk_editor/src/shell/providers/procgen_graph_canvas.rs::ProcgenGraphCanvasProvider`
-  - edit procedural generation graphs that lower to deterministic world operation windows.
-- `apps/runenwerk_editor/src/shell/providers/procgen_preview.rs::ProcgenPreviewProvider`
-  - preview, bake, and rollback bounded generated worlds.
-- `apps/runenwerk_editor/src/shell/providers/gameplay_graph_canvas.rs::GameplayGraphCanvasProvider`
-  - edit constrained gameplay graphs without making graph canvas state runtime authority.
-- `apps/runenwerk_editor/src/shell/providers/gameplay_compiler_diagnostics.rs::GameplayCompilerDiagnosticsProvider`
-  - inspect ATR IR, ECS query/event/schedule lowering, SDF physics relation readiness, source maps, and authority diagnostics.
-- `apps/runenwerk_editor/src/shell/providers/particle_graph_canvas.rs::ParticleGraphCanvasProvider`
-  - edit emitters and particle graphs.
-- `apps/runenwerk_editor/src/shell/providers/particle_preview.rs::ParticlePreviewProvider`
-  - preview particles, field collision, counts, bounds, and simulation diagnostics.
-- `apps/runenwerk_editor/src/shell/providers/physics_authoring.rs::PhysicsAuthoringProvider`
-  - edit bodies, colliders, materials, layers, masks, constraints, and triggers.
-- `apps/runenwerk_editor/src/shell/providers/physics_debug.rs::PhysicsDebugProvider`
-  - inspect contacts, sweeps, activation, constraints, and missing `world_sdf` readiness.
-- `apps/runenwerk_editor/src/shell/providers/timeline.rs::TimelineProvider`
-  - edit clips, events, and playback ranges.
-- `apps/runenwerk_editor/src/shell/providers/curve_editor.rs::CurveEditorProvider`
-  - edit typed animation/procedural curves.
-- `apps/runenwerk_editor/src/shell/providers/animation_graph_canvas.rs::AnimationGraphCanvasProvider`
-  - edit state machines, blend trees, and procedural motion graphs.
-- `apps/runenwerk_editor/src/shell/providers/simulation_preview.rs::SimulationPreviewProvider`
-  - preview and bake material transport, erosion, snow, water, sediment, and other world-process effects.
-- `apps/runenwerk_editor/src/shell/providers/script_editor.rs::ScriptEditorProvider`
-  - edit script assets while keeping scripting language-neutral at the domain boundary.
-- `apps/runenwerk_editor/src/shell/providers/diagnostics.rs::DiagnosticsProvider`
-  - show project, import, runtime, and validation diagnostics.
-- `apps/runenwerk_editor/src/shell/providers/runtime_debug.rs::RuntimeDebugProvider`
-  - inspect ECS/runtime state without making authored documents ECS entities.
+- an accepted owner contract and owner-defined commands/ratification/products;
+- stable-key Tool Suite registration and provider-family assignment without new generic product enumeration;
+- provider projection that observes owner/app state without mirroring foreign source truth;
+- provider-owned interaction mapping into owner/app proposals;
+- explicit product publication/preview/runtime handoff where needed;
+- focused owner tests plus Editor integration tests proving fail-closed routing and stale-route/session behavior;
+- no bypass of owner mutation, history, persistence, or ratification semantics.
 
 Validation:
 
-- M6.0 through M6.7 each have explicit closeout notes or checklist entries before M6 is marked complete;
-- one document tab per implemented document kind opens, saves, closes, reopens, and reports dirty state correctly;
-- procedural graph lowering never depends on editor graph canvas state;
-- gameplay graph lowering never depends on editor graph canvas state and forms ECS query/event/schedule products with source maps;
-- generated products keep source lineage, seed, version, and diagnostics;
-- unsupported workspace/document/surface combinations fail closed with provider diagnostics;
-- no provider bypasses command or ratification boundaries.
+- product/domain validation belongs with each semantic owner;
+- Editor integration validation proves registration, provider resolution, projection, interaction routing, diagnostics, and product presentation;
+- unsupported or unavailable owner capabilities fail closed without placeholder metadata becoming semantic authority;
+- `cargo validate`, `git diff --check`, and documentation validation remain repository merge gates.
 
 ### M7 - Scripting And Runtime Gameplay Bridge
 
