@@ -49,7 +49,7 @@ app.add_plugins((FixedStepPlugin, SimulationPlugin));
 
 ## Bounded Headless Advancement
 
-Use `App::run_for_fixed_steps(n)` to execute exactly `n` additional completed fixed steps:
+Use fixed-cadence-owned `AppFixedStepExt::run_for_fixed_steps(n)` to execute exactly `n` additional completed fixed steps. The ordinary prelude keeps the ergonomic `app.run_for_fixed_steps(n)` call:
 
 ```rust
 let app = app.run_for_fixed_steps(60)?;

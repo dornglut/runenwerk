@@ -76,14 +76,6 @@ fn headless_bounded_advancement_is_repeatable_and_startup_remains_one_shot() {
     assert_eq!(counts.updates, 5);
 }
 
-struct TwoFrameRunner;
-
-impl AppRunner for TwoFrameRunner {
-    fn next_frame(&mut self, completed_frames: usize, _world: &World) -> bool {
-        completed_frames < 2
-    }
-}
-
 #[derive(Clone, Component, Resource)]
 struct SharedFrameCount(Arc<AtomicUsize>);
 
@@ -92,14 +84,33 @@ fn count_shared_frame(frames: Res<SharedFrameCount>) {
 }
 
 #[test]
-fn custom_runner_remains_a_valid_headless_advancement_policy() {
+fn headless_run_executes_startup_once_and_one_frame() {
+    let startup_ran = Arc::new(AtomicBool::new(false));
     let observed_frames = Arc::new(AtomicUsize::new(0));
     let mut app = App::headless();
+    app.insert_resource(StartupProbe(startup_ran.clone()));
     app.insert_resource(SharedFrameCount(observed_frames.clone()));
+    app.add_systems(Startup, mark_startup);
     app.add_systems(Update, count_shared_frame);
-    app.set_runner(TwoFrameRunner);
 
-    app.run().expect("custom headless runner should succeed");
+    app.run().expect("plain headless run should succeed");
 
-    assert_eq!(observed_frames.load(Ordering::SeqCst), 2);
+    assert!(startup_ran.load(Ordering::SeqCst));
+    assert_eq!(observed_frames.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn zero_frame_advancement_runs_startup_without_update() {
+    let mut app = App::headless();
+    app.init_resource::<LifecycleCounts>();
+    app.add_systems(Startup, count_startup);
+    app.add_systems(Update, count_update);
+
+    let app = app
+        .run_for_frames(0)
+        .expect("zero-frame headless advancement should admit and start");
+
+    let counts = app.world().resource::<LifecycleCounts>().unwrap();
+    assert_eq!(counts.startups, 1);
+    assert_eq!(counts.updates, 0);
 }

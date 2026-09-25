@@ -190,7 +190,7 @@ installation. They do not create a parallel App-side simulation authority.
 
 ## Bounded Advancement
 
-`App::run_for_fixed_steps(n)` advances by `n` additional completed Runenwerk fixed steps. Its stop
+`AppFixedStepExt::run_for_fixed_steps(n)` advances by `n` additional completed Runenwerk fixed steps. Its stop
 condition is `FixedTimeState::total_completed_steps`, not `SimulationTick`.
 
 The API requires `FixedStepPlugin` to have been selected and returns an error otherwise. Repeated

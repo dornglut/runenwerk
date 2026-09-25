@@ -770,11 +770,11 @@ core/integration-shaped
   add_plugin / add_plugins
   add_systems
   init_resource / insert_resource
-  set_runner
   world / world_mut
 
 owner-specific App extensions
   AppNativeHostExt::with_frame_pacing
+  AppFixedStepExt::run_for_fixed_steps
   AppPublicationExt::add_product_publication_handler
   AppPublicationExt::add_query_snapshot_publication_handler
   AppActionBindingsExt::add_input_bindings
@@ -801,6 +801,7 @@ AppSimulationExt
 AppReplayExt
 AppPublicationExt
 AppNativeHostExt
+AppFixedStepExt
 AppActionBindingsExt
 ```
 
@@ -912,7 +913,7 @@ This matrix is normative ownership pressure, not permission to move every row in
 | `startup_ran` | predecessor App lifecycle marker | replace/refine only when implementing explicit attempting/failed/non-runnable lifecycle semantics; current consuming runners already discard/exit on Startup failure |
 | `title` | host-neutral application metadata | composition/configuration; Host projects it as needed |
 | `AppMode` | Host selection mixed with run mode | replace/refine around explicit Host selection |
-| `AppRunner` | Advancement Policy realization | normalize independently from Host and foreign owner state |
+| removed `AppRunner` predecessor | rejected mixed/headless-only advancement abstraction | bounded frames are explicit App advancement; bounded fixed steps are owned by `AppFixedStepExt`; future cross-Host advancement must be re-proven |
 | Winit `ControlFlow` | native-host policy | native-window Host |
 | `WindowState` | native-host state | native-window Host only; no required headless sentinel |
 | `WindowStateRegistryResource` | native-host state | native-window Host |

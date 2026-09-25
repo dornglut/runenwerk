@@ -1,7 +1,5 @@
 use crate::app::App;
 use crate::app::domain::mode::AppMode;
-use crate::app::domain::runner::{FixedFramesRunner, FixedStepsRunner};
-use crate::plugins::fixed_step::fixed_step_is_active;
 use crate::runtime::frame_lifecycle::{run_frame as run_runtime_frame, run_startup_if_needed};
 use anyhow::{Result, anyhow};
 
@@ -19,21 +17,7 @@ impl App {
 
     pub fn run_for_frames(mut self, frame_count: usize) -> Result<Self> {
         self.require_headless_host("run_for_frames")?;
-        self.set_runner(FixedFramesRunner::new(frame_count));
-        self.run_headless()?;
-        Ok(self)
-    }
-
-    pub fn run_for_fixed_steps(mut self, step_count: u64) -> Result<Self> {
-        self.require_headless_host("run_for_fixed_steps")?;
-        self.admit_composition()?;
-        if !fixed_step_is_active(&self.world) {
-            return Err(anyhow!(
-                "run_for_fixed_steps requires FixedStepPlugin to select fixed cadence"
-            ));
-        }
-        self.set_runner(FixedStepsRunner::new(step_count));
-        self.run_headless()?;
+        self.run_headless_for_frames(frame_count)?;
         Ok(self)
     }
 

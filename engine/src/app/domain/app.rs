@@ -1,6 +1,5 @@
 use crate::app::domain::lifecycle::AppLifecycle;
 use crate::app::domain::mode::AppMode;
-use crate::app::domain::runner::{AppRunner, FixedFramesRunner};
 use crate::app::domain::state::WindowedAppState;
 use crate::prelude::IntoPlugins;
 use crate::runtime::system::IntoSystemConfigs;
@@ -15,7 +14,6 @@ const DEFAULT_WINDOW_TITLE: &str = "Runenwerk - Engine";
 pub struct App {
     pub(crate) world: World,
     pub(crate) scheduler: Runtime,
-    pub(crate) runner: Box<dyn AppRunner>,
     pub(crate) lifecycle: AppLifecycle,
     pub(crate) mode: AppMode,
     pub(crate) title: String,
@@ -42,7 +40,6 @@ impl App {
         Self {
             world: World::new(),
             scheduler: Runtime::new(),
-            runner: Box::new(FixedFramesRunner::new(1)),
             lifecycle: AppLifecycle::default(),
             mode,
             title: title.clone(),
@@ -116,14 +113,6 @@ impl App {
         R: Resource,
     {
         self.world.insert_resource(value);
-        self
-    }
-
-    pub fn set_runner<R>(&mut self, runner: R) -> &mut Self
-    where
-        R: AppRunner + 'static,
-    {
-        self.runner = Box::new(runner);
         self
     }
 

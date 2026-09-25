@@ -90,7 +90,7 @@ fn simulate() {}
 ```
 
 `FixedStepPlugin` activates cadence. `SimulationPlugin` is separate: it supplies simulation owner
-state and advances `SimulationTick` during `FixedStepBegin`. `run_for_fixed_steps` stops on cadence
+state and advances `SimulationTick` during `FixedStepBegin`. The fixed-cadence-owned `AppFixedStepExt::run_for_fixed_steps` stops on cadence
 progress, not on simulation tick identity.
 
 ## Windowed Example

@@ -12,7 +12,7 @@ use engine::plugins::world::chunks::render_cache_bridge::{
 use engine::plugins::world::edits::ingress::{WorldEditIngressMeta, submit_world_operation};
 use engine::plugins::world::plugin::WorldPlugin;
 use engine::plugins::{FixedStepPlugin, SimulationPlugin};
-use engine::prelude::App;
+use engine::prelude::{App, AppFixedStepExt};
 use runen_spatial::{ChunkCoord3, ChunkId, WorldId};
 use world_ops::{
     DirtyReason, Operation, QuantizedAabb, WorldQuantizationScale, quantize_aabb, quantize_position,

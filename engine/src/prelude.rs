@@ -6,7 +6,7 @@
 
 pub use crate::app::*;
 pub use crate::plugin::Plugin;
-pub use crate::plugins::fixed_step::FixedStepPlugin;
+pub use crate::plugins::fixed_step::{AppFixedStepExt, FixedStepPlugin};
 pub use crate::plugins::input::AppActionBindingsExt;
 pub use crate::plugins::input::domain::InputState;
 pub use crate::plugins::net::{
