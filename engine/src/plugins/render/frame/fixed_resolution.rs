@@ -2,6 +2,7 @@ use crate::plugins::render::{
     PreparedFlowInvocationRequest, PreparedTargetBinding, PreparedViewFrame,
     RenderDynamicTextureRetention, RenderDynamicTextureTargetDescriptor,
     CompiledRenderFlowPlan, RenderDynamicTextureTargetKey, RenderFlow, RenderFlowId,
+    RenderTemporalResolutionEvidence, RenderTemporalResolutionPolicy,
     RenderFrameProducerId, RenderResourceDeclaration, RenderTargetAliasKey, RenderTargetAliasKind,
     RenderTextureSampleMode,
     RenderTextureTargetFormat,
@@ -121,6 +122,72 @@ impl RenderFixedResolutionExecutionRequest {
 
         self.prepare(output_size, resolve_flow_id)
     }
+
+    pub fn admit_against_compiled_flow(
+        &self,
+        output_size: (u32, u32),
+        resolve_flow_id: RenderFlowId,
+        compiled_flow: &CompiledRenderFlowPlan,
+    ) -> RenderFixedResolutionExecutionAdmission {
+        match self.prepare_against_compiled_flow(output_size, resolve_flow_id, compiled_flow) {
+            Ok(prepared) => RenderFixedResolutionExecutionAdmission::Fixed(prepared),
+            Err(error) => RenderFixedResolutionExecutionAdmission::NativeFallback(
+                RenderFixedResolutionFallback {
+                    requested_internal_size: self.internal_size,
+                    output_size,
+                    reason: error.to_string(),
+                },
+            ),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RenderFixedResolutionExecutionAdmission {
+    Fixed(PreparedFixedResolutionExecution),
+    NativeFallback(RenderFixedResolutionFallback),
+}
+
+impl RenderFixedResolutionExecutionAdmission {
+    pub fn native_fallback_active(&self) -> bool {
+        matches!(self, Self::NativeFallback(_))
+    }
+
+    pub fn fallback_reason(&self) -> Option<&str> {
+        match self {
+            Self::Fixed(_) => None,
+            Self::NativeFallback(fallback) => Some(fallback.reason.as_str()),
+        }
+    }
+
+    pub fn temporal_resolution_evidence(&self) -> RenderTemporalResolutionEvidence {
+        match self {
+            Self::Fixed(prepared) => RenderTemporalResolutionEvidence {
+                internal_size: [prepared.internal_size.0, prepared.internal_size.1],
+                output_size: [prepared.output_size.0, prepared.output_size.1],
+                policy: RenderTemporalResolutionPolicy::Fixed,
+            },
+            Self::NativeFallback(fallback) => RenderTemporalResolutionEvidence {
+                internal_size: [fallback.output_size.0, fallback.output_size.1],
+                output_size: [fallback.output_size.0, fallback.output_size.1],
+                policy: RenderTemporalResolutionPolicy::Native,
+            },
+        }
+    }
+
+    pub fn prepared(&self) -> Option<&PreparedFixedResolutionExecution> {
+        match self {
+            Self::Fixed(prepared) => Some(prepared),
+            Self::NativeFallback(_) => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderFixedResolutionFallback {
+    pub requested_internal_size: (u32, u32),
+    pub output_size: (u32, u32),
+    pub reason: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -327,6 +394,46 @@ mod tests {
             ),
             Err(RenderFixedResolutionExecutionError::SelectedFlowMismatch { .. })
         ));
+    }
+
+    #[test]
+    fn fixed_resolution_admission_projects_fixed_or_native_fallback_evidence() {
+        let compiled = compiled_scene_flow("scene_color");
+        let valid = RenderFixedResolutionExecutionRequest::new(
+            producer(7),
+            compiled.flow_id,
+            alias(),
+            (1280, 720),
+        )
+        .admit_against_compiled_flow((1920, 1080), flow(12), &compiled);
+        assert!(!valid.native_fallback_active());
+        assert_eq!(
+            valid.temporal_resolution_evidence(),
+            RenderTemporalResolutionEvidence {
+                internal_size: [1280, 720],
+                output_size: [1920, 1080],
+                policy: RenderTemporalResolutionPolicy::Fixed,
+            }
+        );
+
+        let invalid = RenderFixedResolutionExecutionRequest::new(
+            producer(7),
+            compiled.flow_id,
+            alias(),
+            (1280, 800),
+        )
+        .admit_against_compiled_flow((1920, 1080), flow(12), &compiled);
+        assert!(invalid.native_fallback_active());
+        assert!(invalid.fallback_reason().is_some());
+        assert!(invalid.prepared().is_none());
+        assert_eq!(
+            invalid.temporal_resolution_evidence(),
+            RenderTemporalResolutionEvidence {
+                internal_size: [1920, 1080],
+                output_size: [1920, 1080],
+                policy: RenderTemporalResolutionPolicy::Native,
+            }
+        );
     }
 
     #[test]
