@@ -14,7 +14,8 @@ const RL2_QUALITY_EXECUTION_HISTORY_CAPACITY: usize = RL2_MEASUREMENT_HISTORY_CA
 
 #[derive(Debug, Clone, Default, runen_ecs::Resource)]
 pub(super) struct RenderLabTemporalQualityExecutionState {
-    pub(super) pending_admission: Option<engine::plugins::render::RenderFixedResolutionExecutionAdmission>,
+    pub(super) pending_admission:
+        Option<engine::plugins::render::RenderFixedResolutionExecutionAdmission>,
     by_frame: BTreeMap<u64, RenderLabTemporalQualityExecutionEvidence>,
 }
 
@@ -391,393 +392,393 @@ mod tests {
     }
 
     #[test]
-        fn temporal_quality_extent_defers_fixed_policy_rejection_to_renderer_admission() {
-            let presentation = engine::PrimaryPresentationMetricsResource::new((1920, 1080), 1.0);
-            let quality = RenderLabMeasurementConfig {
-                primary_window_size_px: Some((1920, 1080)),
-                radiance_target_size_px: Some((1280, 800)),
-                quality_capture_output_dir: Some(PathBuf::from("quality-captures")),
-                ..Default::default()
-            };
-            assert_eq!(
-                render_lab_radiance_extent(&presentation, &quality)
-                    .expect("quality mode should preserve the requested extent for admission"),
-                (1280, 800)
-            );
-    
-            let legacy = RenderLabMeasurementConfig {
-                primary_window_size_px: Some((1920, 1080)),
-                radiance_target_size_px: Some((1280, 800)),
-                ..Default::default()
-            };
-            assert!(
-                render_lab_radiance_extent(&presentation, &legacy).is_err(),
-                "legacy radiance measurement keeps its own same-aspect validation"
-            );
-        }
-    
+    fn temporal_quality_extent_defers_fixed_policy_rejection_to_renderer_admission() {
+        let presentation = engine::PrimaryPresentationMetricsResource::new((1920, 1080), 1.0);
+        let quality = RenderLabMeasurementConfig {
+            primary_window_size_px: Some((1920, 1080)),
+            radiance_target_size_px: Some((1280, 800)),
+            quality_capture_output_dir: Some(PathBuf::from("quality-captures")),
+            ..Default::default()
+        };
+        assert_eq!(
+            render_lab_radiance_extent(&presentation, &quality)
+                .expect("quality mode should preserve the requested extent for admission"),
+            (1280, 800)
+        );
+
+        let legacy = RenderLabMeasurementConfig {
+            primary_window_size_px: Some((1920, 1080)),
+            radiance_target_size_px: Some((1280, 800)),
+            ..Default::default()
+        };
+        assert!(
+            render_lab_radiance_extent(&presentation, &legacy).is_err(),
+            "legacy radiance measurement keeps its own same-aspect validation"
+        );
+    }
+
     #[test]
-        fn temporal_quality_execution_history_is_bounded_and_frame_addressable() {
-            let mut state = RenderLabTemporalQualityExecutionState::default();
-            for frame_index in 0..=RL2_QUALITY_EXECUTION_HISTORY_CAPACITY as u64 {
-                state.observe(RenderLabTemporalQualityExecutionEvidence {
-                    frame_index,
-                    prepare_epoch: frame_index + 100,
-                    policy: "fixed",
-                    internal_size_px: [1280, 720],
-                    output_size_px: [1920, 1080],
-                    native_fallback_active: false,
-                    native_fallback_reason: None,
-                    target_key: Some(format!("target-{frame_index}")),
-                    internal_view_id: Some(format!("view-{frame_index}")),
-                    scene_invocation_id: Some(format!("scene-{frame_index}")),
-                    resolve_invocation_id: Some(format!("resolve-{frame_index}")),
-                });
-            }
-    
-            assert!(state.frame(0).is_none());
-            assert!(
-                state
-                    .frame(RL2_QUALITY_EXECUTION_HISTORY_CAPACITY as u64)
-                    .is_some()
-            );
-            assert_eq!(state.by_frame.len(), RL2_QUALITY_EXECUTION_HISTORY_CAPACITY);
-        }
-    
-    #[test]
-        fn temporal_quality_capture_evidence_hashes_the_exported_frame() {
-            use engine::plugins::render::inspect::{
-                RenderCaptureIdentity, RenderCaptureSelector, RenderCaptureSelectorResult,
-                RenderCaptureTerminal, RenderDebugFrameReport,
-            };
-    
-            let artifact_path = std::env::temp_dir().join(format!(
-                "runenwerk-render-lab-quality-capture-{}.png",
-                std::process::id()
-            ));
-            fs::write(&artifact_path, b"quality-capture-bytes").expect("test capture should write");
-            let selector = RenderCaptureSelector::named_pass_surface_color("quality.flow", "resolve");
-            let capture_point = selector.stable_point_fallback();
-            let identity = RenderCaptureIdentity {
-                frame_index: 42,
-                pass_label: "resolve".to_string(),
-                capture_point: capture_point.clone(),
-            };
-            let mut report_state = RenderDebugFrameReportState::default();
-            report_state.observe_frame(RenderDebugFrameReport {
-                frame_index: 42,
-                capture_results: vec![RenderCaptureSelectorResult {
-                    selector_index: 0,
-                    selector,
-                    capture_point,
-                    frame_identity: Some(identity),
-                    terminal: RenderCaptureTerminal::completed(),
-                    artifact_path: Some(artifact_path.clone()),
-                }],
-                ..RenderDebugFrameReport::default()
+    fn temporal_quality_execution_history_is_bounded_and_frame_addressable() {
+        let mut state = RenderLabTemporalQualityExecutionState::default();
+        for frame_index in 0..=RL2_QUALITY_EXECUTION_HISTORY_CAPACITY as u64 {
+            state.observe(RenderLabTemporalQualityExecutionEvidence {
+                frame_index,
+                prepare_epoch: frame_index + 100,
+                policy: "fixed",
+                internal_size_px: [1280, 720],
+                output_size_px: [1920, 1080],
+                native_fallback_active: false,
+                native_fallback_reason: None,
+                target_key: Some(format!("target-{frame_index}")),
+                internal_view_id: Some(format!("view-{frame_index}")),
+                scene_invocation_id: Some(format!("scene-{frame_index}")),
+                resolve_invocation_id: Some(format!("resolve-{frame_index}")),
             });
-    
-            let evidence = temporal_quality_capture_evidence(&report_state)
-                .expect("capture evidence should inspect")
-                .expect("completed capture should produce evidence");
-            assert_eq!(evidence.frame_index, 42);
-            assert_eq!(evidence.terminal, "completed");
-            assert_eq!(
-                evidence.artifact_blake3,
-                format!("blake3:{}", blake3::hash(b"quality-capture-bytes").to_hex())
-            );
-    
-            let _ = fs::remove_file(artifact_path);
         }
-    
+
+        assert!(state.frame(0).is_none());
+        assert!(
+            state
+                .frame(RL2_QUALITY_EXECUTION_HISTORY_CAPACITY as u64)
+                .is_some()
+        );
+        assert_eq!(state.by_frame.len(), RL2_QUALITY_EXECUTION_HISTORY_CAPACITY);
+    }
+
     #[test]
-        fn fixed_quality_flow_is_alias_driven_and_admits_production_fixed_execution() {
-            let scene = render_lab_fixed_quality_flow().expect("quality flow should author");
-            let resolve =
-                engine::plugins::render::fixed_resolution_resolve_flow().expect("resolve flow");
-            let scene_plan = engine::plugins::render::compile_flow_plan(&scene)
-                .expect("quality flow should compile");
-            let resolve_plan = engine::plugins::render::compile_flow_plan(&resolve)
-                .expect("resolve flow should compile");
-    
-            let prepared = engine::plugins::render::RenderFixedResolutionExecutionRequest::new(
-                producer(RL2_PRODUCER_ID),
-                RenderSurfaceId::primary(),
-                scene.id(),
-                engine::plugins::render::RenderTargetAliasKey::new(RL2_QUALITY_COLOR_ALIAS)
-                    .expect("quality alias"),
-                (1280, 720),
-            )
-            .prepare_against_compiled_flows((1920, 1080), &scene_plan, &resolve_plan)
-            .expect("quality flow should admit fixed execution");
-    
-            let radiance_key = RenderDynamicTextureTargetKey::new(RL2_TARGET_NAMESPACE, RL2_TARGET_ID);
-            let scene_invocation = prepared
-                .scene_invocation
-                .clone()
-                .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, radiance_key.clone())
-                .expect("radiance alias should bind");
-    
-            assert_eq!(prepared.output_size, (1920, 1080));
-            assert_eq!(prepared.internal_size, (1280, 720));
-            assert_eq!(prepared.internal_view.target_size_px, (1280, 720));
-            assert_eq!(
-                scene_invocation.target_alias_bindings.get(
-                    &engine::plugins::render::RenderTargetAliasKey::new(RL2_RADIANCE_ALIAS)
-                        .expect("radiance alias")
-                ),
-                Some(&engine::plugins::render::PreparedTargetBinding::DynamicTexture(radiance_key))
-            );
-        }
-    
+    fn temporal_quality_capture_evidence_hashes_the_exported_frame() {
+        use engine::plugins::render::inspect::{
+            RenderCaptureIdentity, RenderCaptureSelector, RenderCaptureSelectorResult,
+            RenderCaptureTerminal, RenderDebugFrameReport,
+        };
+
+        let artifact_path = std::env::temp_dir().join(format!(
+            "runenwerk-render-lab-quality-capture-{}.png",
+            std::process::id()
+        ));
+        fs::write(&artifact_path, b"quality-capture-bytes").expect("test capture should write");
+        let selector = RenderCaptureSelector::named_pass_surface_color("quality.flow", "resolve");
+        let capture_point = selector.stable_point_fallback();
+        let identity = RenderCaptureIdentity {
+            frame_index: 42,
+            pass_label: "resolve".to_string(),
+            capture_point: capture_point.clone(),
+        };
+        let mut report_state = RenderDebugFrameReportState::default();
+        report_state.observe_frame(RenderDebugFrameReport {
+            frame_index: 42,
+            capture_results: vec![RenderCaptureSelectorResult {
+                selector_index: 0,
+                selector,
+                capture_point,
+                frame_identity: Some(identity),
+                terminal: RenderCaptureTerminal::completed(),
+                artifact_path: Some(artifact_path.clone()),
+            }],
+            ..RenderDebugFrameReport::default()
+        });
+
+        let evidence = temporal_quality_capture_evidence(&report_state)
+            .expect("capture evidence should inspect")
+            .expect("completed capture should produce evidence");
+        assert_eq!(evidence.frame_index, 42);
+        assert_eq!(evidence.terminal, "completed");
+        assert_eq!(
+            evidence.artifact_blake3,
+            format!("blake3:{}", blake3::hash(b"quality-capture-bytes").to_hex())
+        );
+
+        let _ = fs::remove_file(artifact_path);
+    }
+
     #[test]
-        fn native_quality_reference_uses_the_same_alias_driven_scene_flow() {
-            let scene = render_lab_fixed_quality_flow().expect("quality flow should author");
-            let producer_id = producer(RL2_PRODUCER_ID);
-            let camera = RenderLabCamera::default();
-            let (target_key, target, contribution) =
-                build_render_lab_radiance_publication(&camera, producer_id, (1920, 1080))
-                    .expect("native quality radiance publication should build");
-            let invocation = PreparedFlowInvocationRequest::new(
-                format!("{RL2_QUALITY_FLOW_ID}.native"),
-                scene.id(),
-                "main",
-            )
+    fn fixed_quality_flow_is_alias_driven_and_admits_production_fixed_execution() {
+        let scene = render_lab_fixed_quality_flow().expect("quality flow should author");
+        let resolve =
+            engine::plugins::render::fixed_resolution_resolve_flow().expect("resolve flow");
+        let scene_plan = engine::plugins::render::compile_flow_plan(&scene)
+            .expect("quality flow should compile");
+        let resolve_plan = engine::plugins::render::compile_flow_plan(&resolve)
+            .expect("resolve flow should compile");
+
+        let prepared = engine::plugins::render::RenderFixedResolutionExecutionRequest::new(
+            producer(RL2_PRODUCER_ID),
+            RenderSurfaceId::primary(),
+            scene.id(),
+            engine::plugins::render::RenderTargetAliasKey::new(RL2_QUALITY_COLOR_ALIAS)
+                .expect("quality alias"),
+            (1280, 720),
+        )
+        .prepare_against_compiled_flows((1920, 1080), &scene_plan, &resolve_plan)
+        .expect("quality flow should admit fixed execution");
+
+        let radiance_key = RenderDynamicTextureTargetKey::new(RL2_TARGET_NAMESPACE, RL2_TARGET_ID);
+        let scene_invocation = prepared
+            .scene_invocation
+            .clone()
+            .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, radiance_key.clone())
+            .expect("radiance alias should bind");
+
+        assert_eq!(prepared.output_size, (1920, 1080));
+        assert_eq!(prepared.internal_size, (1280, 720));
+        assert_eq!(prepared.internal_view.target_size_px, (1280, 720));
+        assert_eq!(
+            scene_invocation.target_alias_bindings.get(
+                &engine::plugins::render::RenderTargetAliasKey::new(RL2_RADIANCE_ALIAS)
+                    .expect("radiance alias")
+            ),
+            Some(&engine::plugins::render::PreparedTargetBinding::DynamicTexture(radiance_key))
+        );
+    }
+
+    #[test]
+    fn native_quality_reference_uses_the_same_alias_driven_scene_flow() {
+        let scene = render_lab_fixed_quality_flow().expect("quality flow should author");
+        let producer_id = producer(RL2_PRODUCER_ID);
+        let camera = RenderLabCamera::default();
+        let (target_key, target, contribution) =
+            build_render_lab_radiance_publication(&camera, producer_id, (1920, 1080))
+                .expect("native quality radiance publication should build");
+        let invocation = PreparedFlowInvocationRequest::new(
+            format!("{RL2_QUALITY_FLOW_ID}.native"),
+            scene.id(),
+            "main",
+        )
+        .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, target_key.clone())
+        .expect("native quality radiance alias should bind")
+        .bind_surface_color_alias(RL2_QUALITY_COLOR_ALIAS)
+        .expect("native quality color alias should bind");
+
+        let mut targets = RenderDynamicTextureTargetRequestRegistryResource::default();
+        let mut frame_requests = PreparedRenderFrameRequestResource::default();
+        let mut contributions = RenderDeterministicFrameContributionResource::default();
+        stage_render_lab_native_quality_publication(
+            &mut targets,
+            &mut frame_requests,
+            &mut contributions,
+            producer_id,
+            RenderSurfaceId::primary(),
+            target,
+            invocation.clone(),
+            contribution,
+        )
+        .expect("native quality publication should remain atomic");
+
+        let published_targets = targets.snapshot_for_surface(RenderSurfaceId::primary());
+        assert_eq!(published_targets.len(), 1);
+        assert_eq!(published_targets[0].key, target_key);
+        assert_eq!(
+            (published_targets[0].width, published_targets[0].height),
+            (1920, 1080)
+        );
+        assert!(
+            frame_requests
+                .requested_views_for_surface(RenderSurfaceId::primary())
+                .is_empty(),
+            "native quality reference must not publish a fixed internal view"
+        );
+        let invocations =
+            frame_requests.requested_flow_invocations_for_surface(RenderSurfaceId::primary());
+        assert_eq!(invocations.len(), 1);
+        assert_eq!(invocations[0].flow_id, scene.id());
+        assert_eq!(invocations[0].view_id, "main");
+        assert_eq!(
+            invocations[0].target_alias_bindings.get(
+                &engine::plugins::render::RenderTargetAliasKey::new(RL2_QUALITY_COLOR_ALIAS)
+                    .expect("quality color alias")
+            ),
+            Some(&engine::plugins::render::PreparedTargetBinding::SurfaceColor)
+        );
+        assert!(
+            !frame_requests.replaces_automatic_main_flow(RenderSurfaceId::primary(), scene.id()),
+            "native quality reference must not claim fixed automatic-main replacement"
+        );
+    }
+
+    #[test]
+    fn fixed_quality_publication_is_surface_scoped_and_atomic() {
+        let scene = render_lab_fixed_quality_flow().expect("quality flow should author");
+        let resolve =
+            engine::plugins::render::fixed_resolution_resolve_flow().expect("resolve flow");
+        let scene_plan = engine::plugins::render::compile_flow_plan(&scene)
+            .expect("quality flow should compile");
+        let resolve_plan = engine::plugins::render::compile_flow_plan(&resolve)
+            .expect("resolve flow should compile");
+        let producer_id = producer(RL2_PRODUCER_ID);
+        let mut fixed = engine::plugins::render::RenderFixedResolutionExecutionRequest::new(
+            producer_id,
+            RenderSurfaceId::primary(),
+            scene.id(),
+            engine::plugins::render::RenderTargetAliasKey::new(RL2_QUALITY_COLOR_ALIAS)
+                .expect("quality alias"),
+            (1280, 720),
+        )
+        .prepare_against_compiled_flows((1920, 1080), &scene_plan, &resolve_plan)
+        .expect("quality flow should admit fixed execution");
+
+        let radiance_key = RenderDynamicTextureTargetKey::new(RL2_TARGET_NAMESPACE, RL2_TARGET_ID);
+        fixed.scene_invocation = fixed
+            .scene_invocation
+            .clone()
+            .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, radiance_key.clone())
+            .expect("radiance alias should bind");
+        let radiance_target = RenderDynamicTextureTargetDescriptor::new(
+            radiance_key.clone(),
+            1280,
+            720,
+            RenderTextureTargetFormat::R32Float,
+            RenderTextureTargetUsage {
+                color_attachment: false,
+                depth_attachment: false,
+                sampled: true,
+                storage: false,
+                copy_src: false,
+                copy_dst: true,
+            },
+            RenderTextureSampleMode::NonFilterableFloat,
+            RenderDynamicTextureRetention::RetainWhileRequested,
+        );
+        let fixture = founding_fixture_with_observation_and_extent(
+            RenderAffineTransform3::identity(),
+            1280,
+            720,
+        )
+        .expect("fixture");
+        let contribution = RenderDeterministicFrameContribution {
+            producer_id,
+            render_surface_id: RenderSurfaceId::primary(),
+            scene: fixture.scene,
+            request: fixture.request,
+            semantic_inputs: fixture.semantic_inputs,
+            availability: fixture.availability,
+            output_index: 0,
+            target_key: radiance_key,
+        };
+        let fixed_target_key = fixed.target_key.clone();
+        let fixed_view_id = fixed.internal_view.view_id.clone();
+        let resolve_invocation_id = fixed.resolve_invocation.invocation_id.clone();
+
+        let mut targets = RenderDynamicTextureTargetRequestRegistryResource::default();
+        let mut frame_requests = PreparedRenderFrameRequestResource::default();
+        let mut contributions = RenderDeterministicFrameContributionResource::default();
+        stage_render_lab_fixed_quality_publication(
+            &mut targets,
+            &mut frame_requests,
+            &mut contributions,
+            producer_id,
+            radiance_target,
+            fixed,
+            contribution,
+        )
+        .expect("fixed quality publication");
+
+        let primary_targets = targets.snapshot_for_surface(RenderSurfaceId::primary());
+        assert_eq!(primary_targets.len(), 2);
+        assert!(
+            primary_targets
+                .iter()
+                .any(|target| target.key == fixed_target_key)
+        );
+        assert!(
+            frame_requests
+                .requested_views_for_surface(RenderSurfaceId::primary())
+                .iter()
+                .any(|view| view.view_id == fixed_view_id)
+        );
+        assert!(
+            frame_requests
+                .requested_flow_invocations_for_surface(RenderSurfaceId::primary())
+                .iter()
+                .any(|invocation| invocation.invocation_id == resolve_invocation_id)
+        );
+        assert!(
+            frame_requests.replaces_automatic_main_flow(RenderSurfaceId::primary(), scene.id())
+        );
+    }
+
+    #[test]
+    fn fixed_quality_native_fallback_discards_all_partial_fixed_state() {
+        let scene = render_lab_fixed_quality_flow().expect("quality flow should author");
+        let resolve =
+            engine::plugins::render::fixed_resolution_resolve_flow().expect("resolve flow");
+        let scene_plan = engine::plugins::render::compile_flow_plan(&scene)
+            .expect("quality flow should compile");
+        let resolve_plan = engine::plugins::render::compile_flow_plan(&resolve)
+            .expect("resolve flow should compile");
+        let producer_id = producer(RL2_PRODUCER_ID);
+        let admission = engine::plugins::render::RenderFixedResolutionExecutionRequest::new(
+            producer_id,
+            RenderSurfaceId::primary(),
+            scene.id(),
+            engine::plugins::render::RenderTargetAliasKey::new(RL2_QUALITY_COLOR_ALIAS)
+                .expect("quality alias"),
+            (1280, 800),
+        )
+        .admit_against_compiled_flows((1920, 1080), &scene_plan, &resolve_plan);
+        let engine::plugins::render::RenderFixedResolutionExecutionAdmission::NativeFallback(
+            fallback,
+        ) = &admission
+        else {
+            panic!("aspect mismatch should produce explicit native fallback");
+        };
+
+        let native_scene_invocation = fallback
+            .native_scene_invocation
+            .clone()
+            .expect("valid alias-driven scene should provide native fallback");
+        let camera = RenderLabCamera::default();
+        let (target_key, target, contribution) =
+            build_render_lab_radiance_publication(&camera, producer_id, (1920, 1080))
+                .expect("native fallback radiance publication should build");
+        let native_scene_invocation = native_scene_invocation
             .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, target_key.clone())
-            .expect("native quality radiance alias should bind")
-            .bind_surface_color_alias(RL2_QUALITY_COLOR_ALIAS)
-            .expect("native quality color alias should bind");
-    
-            let mut targets = RenderDynamicTextureTargetRequestRegistryResource::default();
-            let mut frame_requests = PreparedRenderFrameRequestResource::default();
-            let mut contributions = RenderDeterministicFrameContributionResource::default();
-            stage_render_lab_native_quality_publication(
-                &mut targets,
-                &mut frame_requests,
-                &mut contributions,
-                producer_id,
-                RenderSurfaceId::primary(),
-                target,
-                invocation.clone(),
-                contribution,
-            )
-            .expect("native quality publication should remain atomic");
-    
-            let published_targets = targets.snapshot_for_surface(RenderSurfaceId::primary());
-            assert_eq!(published_targets.len(), 1);
-            assert_eq!(published_targets[0].key, target_key);
-            assert_eq!(
-                (published_targets[0].width, published_targets[0].height),
-                (1920, 1080)
-            );
-            assert!(
-                frame_requests
-                    .requested_views_for_surface(RenderSurfaceId::primary())
-                    .is_empty(),
-                "native quality reference must not publish a fixed internal view"
-            );
-            let invocations =
-                frame_requests.requested_flow_invocations_for_surface(RenderSurfaceId::primary());
-            assert_eq!(invocations.len(), 1);
-            assert_eq!(invocations[0].flow_id, scene.id());
-            assert_eq!(invocations[0].view_id, "main");
-            assert_eq!(
-                invocations[0].target_alias_bindings.get(
-                    &engine::plugins::render::RenderTargetAliasKey::new(RL2_QUALITY_COLOR_ALIAS)
-                        .expect("quality color alias")
-                ),
-                Some(&engine::plugins::render::PreparedTargetBinding::SurfaceColor)
-            );
-            assert!(
-                !frame_requests.replaces_automatic_main_flow(RenderSurfaceId::primary(), scene.id()),
-                "native quality reference must not claim fixed automatic-main replacement"
-            );
-        }
-    
-    #[test]
-        fn fixed_quality_publication_is_surface_scoped_and_atomic() {
-            let scene = render_lab_fixed_quality_flow().expect("quality flow should author");
-            let resolve =
-                engine::plugins::render::fixed_resolution_resolve_flow().expect("resolve flow");
-            let scene_plan = engine::plugins::render::compile_flow_plan(&scene)
-                .expect("quality flow should compile");
-            let resolve_plan = engine::plugins::render::compile_flow_plan(&resolve)
-                .expect("resolve flow should compile");
-            let producer_id = producer(RL2_PRODUCER_ID);
-            let mut fixed = engine::plugins::render::RenderFixedResolutionExecutionRequest::new(
-                producer_id,
-                RenderSurfaceId::primary(),
-                scene.id(),
-                engine::plugins::render::RenderTargetAliasKey::new(RL2_QUALITY_COLOR_ALIAS)
-                    .expect("quality alias"),
-                (1280, 720),
-            )
-            .prepare_against_compiled_flows((1920, 1080), &scene_plan, &resolve_plan)
-            .expect("quality flow should admit fixed execution");
-    
-            let radiance_key = RenderDynamicTextureTargetKey::new(RL2_TARGET_NAMESPACE, RL2_TARGET_ID);
-            fixed.scene_invocation = fixed
-                .scene_invocation
-                .clone()
-                .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, radiance_key.clone())
-                .expect("radiance alias should bind");
-            let radiance_target = RenderDynamicTextureTargetDescriptor::new(
-                radiance_key.clone(),
-                1280,
-                720,
-                RenderTextureTargetFormat::R32Float,
-                RenderTextureTargetUsage {
-                    color_attachment: false,
-                    depth_attachment: false,
-                    sampled: true,
-                    storage: false,
-                    copy_src: false,
-                    copy_dst: true,
-                },
-                RenderTextureSampleMode::NonFilterableFloat,
-                RenderDynamicTextureRetention::RetainWhileRequested,
-            );
-            let fixture = founding_fixture_with_observation_and_extent(
-                RenderAffineTransform3::identity(),
-                1280,
-                720,
-            )
-            .expect("fixture");
-            let contribution = RenderDeterministicFrameContribution {
-                producer_id,
-                render_surface_id: RenderSurfaceId::primary(),
-                scene: fixture.scene,
-                request: fixture.request,
-                semantic_inputs: fixture.semantic_inputs,
-                availability: fixture.availability,
-                output_index: 0,
-                target_key: radiance_key,
-            };
-            let fixed_target_key = fixed.target_key.clone();
-            let fixed_view_id = fixed.internal_view.view_id.clone();
-            let resolve_invocation_id = fixed.resolve_invocation.invocation_id.clone();
-    
-            let mut targets = RenderDynamicTextureTargetRequestRegistryResource::default();
-            let mut frame_requests = PreparedRenderFrameRequestResource::default();
-            let mut contributions = RenderDeterministicFrameContributionResource::default();
-            stage_render_lab_fixed_quality_publication(
-                &mut targets,
-                &mut frame_requests,
-                &mut contributions,
-                producer_id,
-                radiance_target,
-                fixed,
-                contribution,
-            )
-            .expect("fixed quality publication");
-    
-            let primary_targets = targets.snapshot_for_surface(RenderSurfaceId::primary());
-            assert_eq!(primary_targets.len(), 2);
-            assert!(
-                primary_targets
-                    .iter()
-                    .any(|target| target.key == fixed_target_key)
-            );
-            assert!(
-                frame_requests
-                    .requested_views_for_surface(RenderSurfaceId::primary())
-                    .iter()
-                    .any(|view| view.view_id == fixed_view_id)
-            );
-            assert!(
-                frame_requests
-                    .requested_flow_invocations_for_surface(RenderSurfaceId::primary())
-                    .iter()
-                    .any(|invocation| invocation.invocation_id == resolve_invocation_id)
-            );
-            assert!(
-                frame_requests.replaces_automatic_main_flow(RenderSurfaceId::primary(), scene.id())
-            );
-        }
-    
-    #[test]
-        fn fixed_quality_native_fallback_discards_all_partial_fixed_state() {
-            let scene = render_lab_fixed_quality_flow().expect("quality flow should author");
-            let resolve =
-                engine::plugins::render::fixed_resolution_resolve_flow().expect("resolve flow");
-            let scene_plan = engine::plugins::render::compile_flow_plan(&scene)
-                .expect("quality flow should compile");
-            let resolve_plan = engine::plugins::render::compile_flow_plan(&resolve)
-                .expect("resolve flow should compile");
-            let producer_id = producer(RL2_PRODUCER_ID);
-            let admission = engine::plugins::render::RenderFixedResolutionExecutionRequest::new(
-                producer_id,
-                RenderSurfaceId::primary(),
-                scene.id(),
-                engine::plugins::render::RenderTargetAliasKey::new(RL2_QUALITY_COLOR_ALIAS)
-                    .expect("quality alias"),
-                (1280, 800),
-            )
-            .admit_against_compiled_flows((1920, 1080), &scene_plan, &resolve_plan);
-            let engine::plugins::render::RenderFixedResolutionExecutionAdmission::NativeFallback(
-                fallback,
-            ) = &admission
-            else {
-                panic!("aspect mismatch should produce explicit native fallback");
-            };
-    
-            let native_scene_invocation = fallback
-                .native_scene_invocation
-                .clone()
-                .expect("valid alias-driven scene should provide native fallback");
-            let camera = RenderLabCamera::default();
-            let (target_key, target, contribution) =
-                build_render_lab_radiance_publication(&camera, producer_id, (1920, 1080))
-                    .expect("native fallback radiance publication should build");
-            let native_scene_invocation = native_scene_invocation
-                .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, target_key.clone())
-                .expect("native fallback radiance alias should bind");
-    
-            let mut targets = RenderDynamicTextureTargetRequestRegistryResource::default();
-            let mut frame_requests = PreparedRenderFrameRequestResource::default();
-            let mut contributions = RenderDeterministicFrameContributionResource::default();
-            stage_render_lab_native_quality_publication(
-                &mut targets,
-                &mut frame_requests,
-                &mut contributions,
-                producer_id,
-                fallback.render_surface_id,
-                target,
-                native_scene_invocation.clone(),
-                contribution,
-            )
-            .expect("native fallback publication should remain atomic");
-    
-            let published_targets = targets.snapshot_for_surface(RenderSurfaceId::primary());
-            assert_eq!(published_targets.len(), 1);
-            assert_eq!(published_targets[0].key, target_key);
-            assert_eq!(
-                (published_targets[0].width, published_targets[0].height),
-                (1920, 1080)
-            );
-            assert!(
-                frame_requests
-                    .requested_views_for_surface(RenderSurfaceId::primary())
-                    .is_empty(),
-                "native fallback must not retain the fixed internal view"
-            );
-            let invocations =
-                frame_requests.requested_flow_invocations_for_surface(RenderSurfaceId::primary());
-            assert_eq!(invocations.len(), 1);
-            assert_eq!(
-                invocations[0].invocation_id,
-                native_scene_invocation.invocation_id
-            );
-            assert_eq!(invocations[0].view_id, "main");
-            assert!(
-                invocations
-                    .iter()
-                    .all(|invocation| invocation.flow_id != resolve.id()),
-                "native fallback must not publish the fixed resolve invocation"
-            );
-            assert!(
-                !frame_requests.replaces_automatic_main_flow(RenderSurfaceId::primary(), scene.id()),
-                "explicit native main invocation must not retain a fixed replacement claim"
-            );
-        }
+            .expect("native fallback radiance alias should bind");
+
+        let mut targets = RenderDynamicTextureTargetRequestRegistryResource::default();
+        let mut frame_requests = PreparedRenderFrameRequestResource::default();
+        let mut contributions = RenderDeterministicFrameContributionResource::default();
+        stage_render_lab_native_quality_publication(
+            &mut targets,
+            &mut frame_requests,
+            &mut contributions,
+            producer_id,
+            fallback.render_surface_id,
+            target,
+            native_scene_invocation.clone(),
+            contribution,
+        )
+        .expect("native fallback publication should remain atomic");
+
+        let published_targets = targets.snapshot_for_surface(RenderSurfaceId::primary());
+        assert_eq!(published_targets.len(), 1);
+        assert_eq!(published_targets[0].key, target_key);
+        assert_eq!(
+            (published_targets[0].width, published_targets[0].height),
+            (1920, 1080)
+        );
+        assert!(
+            frame_requests
+                .requested_views_for_surface(RenderSurfaceId::primary())
+                .is_empty(),
+            "native fallback must not retain the fixed internal view"
+        );
+        let invocations =
+            frame_requests.requested_flow_invocations_for_surface(RenderSurfaceId::primary());
+        assert_eq!(invocations.len(), 1);
+        assert_eq!(
+            invocations[0].invocation_id,
+            native_scene_invocation.invocation_id
+        );
+        assert_eq!(invocations[0].view_id, "main");
+        assert!(
+            invocations
+                .iter()
+                .all(|invocation| invocation.flow_id != resolve.id()),
+            "native fallback must not publish the fixed resolve invocation"
+        );
+        assert!(
+            !frame_requests.replaces_automatic_main_flow(RenderSurfaceId::primary(), scene.id()),
+            "explicit native main invocation must not retain a fixed replacement claim"
+        );
+    }
 }
