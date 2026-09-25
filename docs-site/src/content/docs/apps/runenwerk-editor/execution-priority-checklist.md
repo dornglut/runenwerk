@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-09-14
+last_reviewed: 2026-09-25
 related:
   - ./mvp/implementation-sequence.md
   - ./mvp/acceptance-criteria.md
@@ -95,10 +95,10 @@ Representative evidence:
 - [x] MVP acceptance criteria pass as written in `mvp/acceptance-criteria.md`. Status: Automated and manual/UI verified on 2026-05-04.
 - [x] Phase A: Introduce workspace profile abstraction without breaking MVP. Status: Automated verified by shell state and workspace profile tests.
 - [x] Phase B: Decouple workspace layout persistence from scene path coupling. Status: Automated verified by workspace layout persistence tests.
-- [x] Phase C: Formalize document tabs and active document switching. Status: Implemented and test-covered; `EditorSession` owns ordered document tabs, active document switching, dirty/save/close transitions, and document compatibility validation, with app-local generic document-tab runtime state split from scene runtime document state.
+- [x] Phase C: Formalize document tabs and active document switching. Historical M1 closeout remains test-covered. Current ADR-0025-normalized state: `EditorSession` retains ordered document tabs and active switching; Scene dirty/save/close, selection, and history use explicit owner/integration contexts; duplicate app-local tab runtime, provider `DocumentId` identity, and session-local compatibility activation authority have been removed.
 - [x] Phase D: Replace adapter-only panel wiring with provider registry routing. Status: Implemented and test-covered; provider DTOs carry workspace profile, document context, surface definition, capabilities, and provider-local routes, and concrete scene/console providers are split into provider subdomain modules.
 - [x] Close editor app-domain operation migration seams for ratification, scene command execution, transaction orchestration, history, scene, and selection ownership. Status: Implemented for M1; domain-owned scene operation functions execute single commands and transactions with history insertion, while app-owned ECS/reflection, snapshots, retention, projection parity, selection sync, and recording remain in the app layer.
-- [x] Phase E: Expand global mode enum into scoped workspace/document mode sets. Status: Implemented and test-covered; `editor_core` now uses mode ids, descriptors, mode registry, and workspace/document compatibility validation.
+- [x] Phase E: Expand global mode enum into scoped workspace/document mode sets. Historical implementation evidence remains test-covered; the later E5 normalization deleted dormant session-global mode runtime/registry authority while retaining the mode ids still used as workspace/workbench profile metadata.
 - [x] Complete UI docking/tab behavior on top of existing structural identity and binding contracts. Status: Implemented and test-covered; tab reorder, rehome, floating host creation, split resizing, area split/duplicate/reset/close, dynamic split-area composition, and structural identity preservation have automated coverage.
 - [x] Expose editor-area/type switching as a reachable shell UI control. Status: Implemented and test-covered; tab chrome renders an editor type selector and maps `SelectChanged` to `SwitchPanelToolSurfaceKind`.
 - [x] Add plus/new-tab affordance for creating a new tab in a tab stack. Status: Implemented and test-covered; tab chrome exposes a plus/new-tab control that allocates panel and tool-surface identities through `WorkspaceIdentityAllocator` after structural ratification.
