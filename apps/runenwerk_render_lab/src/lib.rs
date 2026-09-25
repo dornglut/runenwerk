@@ -70,6 +70,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+pub mod automation;
 mod camera;
 mod native;
 

@@ -1,4 +1,5 @@
 pub mod asset_pipeline;
+pub mod automation;
 pub mod editor_app;
 pub mod editor_features;
 pub mod editor_panels;
