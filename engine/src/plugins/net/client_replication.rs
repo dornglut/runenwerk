@@ -219,7 +219,12 @@ where
         .context(
             "client replication integration is unavailable during prediction reconciliation",
         )?;
-    confirm_client_prediction_host_restored_if_needed(world, integration.semantic())?;
+    let restoration_confirmation =
+        confirm_client_prediction_host_restored_if_needed(world, integration.semantic());
+    if let Err(error) = restoration_confirmation {
+        world.insert_resource(integration);
+        return Err(error);
+    }
     let replay_failed = observe_client_prediction::<TDriver>(world, integration.semantic());
     world.insert_resource(integration);
     if replay_failed? {
