@@ -282,11 +282,9 @@ fn command_for_activation(
         },
         RoutedShellAction::CreatePanelTabStableKey {
             tab_stack_id,
-            panel_kind,
             stable_surface_key,
         } => ShellCommand::CreatePanelTabStableKey {
             tab_stack_id: *tab_stack_id,
-            panel_kind: *panel_kind,
             stable_surface_key: stable_surface_key.clone(),
             projection_epoch: routing.projection_epoch,
         },
@@ -301,12 +299,10 @@ fn command_for_activation(
         RoutedShellAction::SplitTabStackAreaStableKey {
             tab_stack_id,
             axis,
-            panel_kind,
             stable_surface_key,
         } => ShellCommand::SplitTabStackAreaStableKey {
             tab_stack_id: *tab_stack_id,
             axis: *axis,
-            panel_kind: *panel_kind,
             stable_surface_key: stable_surface_key.clone(),
             projection_epoch: routing.projection_epoch,
         },
@@ -322,11 +318,9 @@ fn command_for_activation(
         },
         RoutedShellAction::ResetTabStackAreaStableKey {
             tab_stack_id,
-            panel_kind,
             stable_surface_key,
         } => ShellCommand::ResetTabStackAreaStableKey {
             tab_stack_id: *tab_stack_id,
-            panel_kind: *panel_kind,
             stable_surface_key: stable_surface_key.clone(),
             projection_epoch: routing.projection_epoch,
         },
