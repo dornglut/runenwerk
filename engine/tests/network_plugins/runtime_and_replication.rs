@@ -846,9 +846,10 @@ fn client_prediction_local_application_failure_restores_authoritative_host_befor
         .unwrap()
         .push(ClientCommandEnvelope::Ability(AbilityCommand { slot: 51 }));
 
-    let error = client
-        .run_for_fixed_steps(1)
-        .expect_err("local predicted application failure should surface");
+    let error = match client.run_for_fixed_steps(1) {
+        Ok(_) => panic!("local predicted application failure should surface"),
+        Err(error) => error,
+    };
     let rendered = format!("{error:#}");
     assert!(
         rendered.contains("apply newly admitted local prediction batch"),
