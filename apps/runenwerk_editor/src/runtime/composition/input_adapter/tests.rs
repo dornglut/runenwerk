@@ -1,6 +1,6 @@
 use super::*;
 use runen_input::{
-    AnalogMeasurement, ContactInput, CoordinateSpace, InputContext, InputDeviceId, InputSourceId,
+    AnalogMeasurement, ContactId, ContactInput, CoordinateSpace, InputContext, InputDeviceId, InputSourceId,
     KeyLocation, KeyboardInput, PhysicalKeyIdentity, Point2, PointerButtonInput, ScrollDelta,
     ScrollInput,
 };
@@ -340,7 +340,7 @@ fn touch_contacts_keep_independent_lifetimes_and_cancel_is_not_semantic_cancel()
     let touch = |id, phase, x, y| PlatformEvent::Touch {
         context: context(Some(3)),
         input: ContactInput {
-            id,
+            contact: ContactId::new(id),
             phase,
             position: Point2::new(x, y, CoordinateSpace::WindowPhysicalPixels),
             pressure: None,
@@ -375,7 +375,7 @@ fn equal_touch_ids_on_distinct_devices_do_not_alias() {
     let touch = |touch_context, phase, x, y| PlatformEvent::Touch {
         context: touch_context,
         input: ContactInput {
-            id: 1,
+            contact: ContactId::new(1),
             phase,
             position: Point2::new(x, y, CoordinateSpace::WindowPhysicalPixels),
             pressure: None,
@@ -450,7 +450,7 @@ fn non_finite_observations_are_rejected_before_ui_state_changes() {
     let touch = |phase, x, pressure| PlatformEvent::Touch {
         context: pointer_context,
         input: ContactInput {
-            id: 9,
+            contact: ContactId::new(9),
             phase,
             position: Point2::new(x, 1.0, CoordinateSpace::WindowPhysicalPixels),
             pressure,
@@ -486,7 +486,7 @@ fn only_normalized_pressure_projects_into_ui_pressure() {
     let touch = |pressure| PlatformEvent::Touch {
         context: context(None),
         input: ContactInput {
-            id: 1,
+            contact: ContactId::new(1),
             phase: ContactPhase::Begin,
             position: Point2::new(1.0, 2.0, CoordinateSpace::WindowPhysicalPixels),
             pressure,

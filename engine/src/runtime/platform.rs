@@ -154,7 +154,7 @@ mod tests {
     use crate::plugins::{ActionState, InputState};
     use crate::runtime::window::{NativeWindowId, WindowStateRegistryResource};
     use runen_input::{
-        ContactInput, ContactPhase, CoordinateSpace, DigitalState, InputContext, InputSourceId,
+        ContactId, ContactInput, ContactPhase, CoordinateSpace, DigitalState, InputContext, InputSourceId,
         KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey, ObservationOrigin,
         PhysicalKeyIdentity, Point2, PointerButton, PointerButtonInput,
     };
@@ -225,7 +225,7 @@ mod tests {
             &PlatformEvent::Touch {
                 context,
                 input: ContactInput {
-                    id: 7,
+                    contact: ContactId::new(7),
                     phase: ContactPhase::Begin,
                     position: Point2::new(10.0, 12.0, CoordinateSpace::WindowPhysicalPixels),
                     pressure: None,
