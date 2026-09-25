@@ -895,6 +895,78 @@ mod tests {
         }
     }
 
+    fn producer(raw: u64) -> RenderFrameProducerId {
+        RenderFrameProducerId::try_from_raw(raw).expect("test producer id should be nonzero")
+    }
+
+    fn flow(raw: u64) -> RenderFlowId {
+        RenderFlowId::try_from_raw(raw).expect("test flow id should be nonzero")
+    }
+
+    #[test]
+    fn automatic_main_replacement_requires_explicit_invocation_for_same_flow() {
+        let mut requests = PreparedRenderFrameRequestResource::default();
+        let flow_id = flow(7);
+
+        let error = requests
+            .replace_contribution_with_automatic_main_replacements(
+                producer(1),
+                [],
+                [],
+                [flow_id],
+            )
+            .expect_err("replacement without invocation must fail closed");
+
+        assert!(matches!(
+            error,
+            PreparedRenderFrameRequestError::MissingAutomaticMainReplacementInvocation {
+                flow_id: rejected,
+                ..
+            } if rejected == flow_id
+        ));
+        assert_eq!(
+            requests.diagnostics()[0].request_kind,
+            PreparedRenderFrameRequestKind::AutomaticMainReplacement
+        );
+        assert_eq!(requests.diagnostics()[0].flow_id, Some(flow_id));
+    }
+
+    #[test]
+    fn automatic_main_replacement_is_single_owner_per_flow() {
+        let mut requests = PreparedRenderFrameRequestResource::default();
+        let flow_id = flow(7);
+        let first = PreparedFlowInvocationRequest::new("fixed.first", flow_id, "fixed.first.view");
+        requests
+            .replace_contribution_with_automatic_main_replacements(
+                producer(1),
+                [PreparedViewFrame::offscreen_product("fixed.first.view", (1280, 720))],
+                [first],
+                [flow_id],
+            )
+            .expect("first replacement owner should be admitted");
+
+        let second =
+            PreparedFlowInvocationRequest::new("fixed.second", flow_id, "fixed.second.view");
+        let error = requests
+            .replace_contribution_with_automatic_main_replacements(
+                producer(2),
+                [PreparedViewFrame::offscreen_product("fixed.second.view", (1280, 720))],
+                [second],
+                [flow_id],
+            )
+            .expect_err("second replacement owner must fail closed");
+
+        assert!(matches!(
+            error,
+            PreparedRenderFrameRequestError::DuplicateAutomaticMainReplacementAcrossProducers {
+                flow_id: rejected,
+                ..
+            } if rejected == flow_id
+        ));
+        assert!(requests.replaces_automatic_main_flow(flow_id));
+        assert!(!requests.replaces_automatic_main_flow(flow(8)));
+    }
+
     #[test]
     fn prepared_frame_resource_allocates_monotonic_indices() {
         let mut resource = PreparedRenderFrameResource::default();
