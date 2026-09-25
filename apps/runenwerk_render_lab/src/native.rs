@@ -71,6 +71,8 @@ struct RenderLabTemporalQualityCaptureEvidence {
 struct RenderLabTemporalQualityArtifact {
     schema_version: u32,
     scenario_id: &'static str,
+    scenario_revision: u32,
+    source_git_revision: Option<String>,
     requested_internal_size_px: [u32; 2],
     requested_output_size_px: [u32; 2],
     execution: RenderLabTemporalQualityExecutionEvidence,
@@ -78,6 +80,7 @@ struct RenderLabTemporalQualityArtifact {
 }
 
 const RL2_QUALITY_SCENARIO_ID: &str = "runenwerk.render_lab.rl2.temporal_quality";
+const RL2_QUALITY_SCENARIO_REVISION: u32 = 1;
 const RL2_QUALITY_FLOW_ID: &str = "runenwerk.render_lab.rl2.fixed_quality";
 const RL2_QUALITY_PASS_ID: &str = "runenwerk.render_lab.rl2.fixed_quality.compose";
 const RL2_QUALITY_COLOR_ALIAS: &str = "runenwerk.render_lab.rl2.fixed_quality.color";
@@ -542,6 +545,8 @@ fn write_temporal_quality_artifact(
     let artifact = RenderLabTemporalQualityArtifact {
         schema_version: 1,
         scenario_id: RL2_QUALITY_SCENARIO_ID,
+        scenario_revision: RL2_QUALITY_SCENARIO_REVISION,
+        source_git_revision: std::env::var("RUNENWERK_SOURCE_REVISION").ok(),
         requested_internal_size_px: [requested_internal.0, requested_internal.1],
         requested_output_size_px: [requested_output.0, requested_output.1],
         execution,
