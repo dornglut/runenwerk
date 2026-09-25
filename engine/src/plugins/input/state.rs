@@ -169,7 +169,7 @@ impl InputState {
         &mut self,
         group: InputObservationGroup,
     ) -> Result<(), InputError> {
-        self.neutral.admit(group.clone())?;
+        self.neutral.admit(&group)?;
         self.device_observation_groups.push(group);
         Ok(())
     }
@@ -185,7 +185,7 @@ impl InputState {
     ) {
         let was_down_anywhere = self.neutral.key_down_anywhere(&input.physical_key);
         self.neutral
-            .admit(InputObservationGroup::single(
+            .admit(&InputObservationGroup::single(
                 context,
                 InputObservation::Keyboard(input.clone()),
             ))
@@ -249,7 +249,7 @@ impl InputState {
     pub(crate) fn handle_scroll_input(&mut self, context: InputContext, input: ScrollInput) {
         if self
             .neutral
-            .admit(InputObservationGroup::single(
+            .admit(&InputObservationGroup::single(
                 context,
                 InputObservation::Scroll(input),
             ))
@@ -279,7 +279,7 @@ impl InputState {
             .unwrap_or((0.0, 0.0));
         if self
             .neutral
-            .admit(InputObservationGroup::single(
+            .admit(&InputObservationGroup::single(
                 context,
                 InputObservation::AbsolutePointerPosition { position },
             ))
@@ -309,7 +309,7 @@ impl InputState {
     ) {
         let was_down_anywhere = self.neutral.pointer_button_down_anywhere(input.button);
         self.neutral
-            .admit(InputObservationGroup::single(
+            .admit(&InputObservationGroup::single(
                 context,
                 InputObservation::PointerButton(input),
             ))
@@ -372,7 +372,7 @@ impl InputState {
     pub(crate) fn handle_relative_motion(&mut self, context: InputContext, dx: f32, dy: f32) {
         if self
             .neutral
-            .admit(InputObservationGroup::single(
+            .admit(&InputObservationGroup::single(
                 context,
                 InputObservation::RelativeMotion {
                     delta: Vector2::new(dx, dy),
@@ -398,7 +398,7 @@ impl InputState {
             .unwrap_or((input.position.x, input.position.y));
         if self
             .neutral
-            .admit(InputObservationGroup::single(
+            .admit(&InputObservationGroup::single(
                 context,
                 InputObservation::Contact(input.clone()),
             ))
