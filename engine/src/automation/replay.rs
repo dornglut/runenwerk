@@ -136,6 +136,7 @@ impl AutomationInputReplayReport {
 pub enum AutomationInputReplayTeardownError {
     ReplayNotActive,
     InputIntegrationUnavailable,
+    EvidenceCaptureActive,
 }
 
 impl fmt::Display for AutomationInputReplayTeardownError {
@@ -143,6 +144,9 @@ impl fmt::Display for AutomationInputReplayTeardownError {
         formatter.write_str(match self {
             Self::ReplayNotActive => "no completed automation input replay is awaiting teardown",
             Self::InputIntegrationUnavailable => "Runenwerk input integration is unavailable",
+            Self::EvidenceCaptureActive => {
+                "automation input replay teardown would contaminate active input capture"
+            }
         })
     }
 }
@@ -515,6 +519,14 @@ impl AppAutomationInputReplayExt for App {
     ) -> Result<&mut Self, AutomationInputReplayTeardownError> {
         if !input_integration_is_active(self.world()) {
             return Err(AutomationInputReplayTeardownError::InputIntegrationUnavailable);
+        }
+        if self.automation_input_trace_active()
+            || self
+                .world()
+                .resource::<InputState>()
+                .is_ok_and(|input| input.admitted_input_capture_active())
+        {
+            return Err(AutomationInputReplayTeardownError::EvidenceCaptureActive);
         }
 
         let replay_sources = {

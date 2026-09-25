@@ -323,6 +323,33 @@ fn replay_requires_headless_host_and_teardown_cleans_extended_pointer_buttons() 
     );
 
     headless
+        .world_mut()
+        .resource_mut::<InputState>()
+        .unwrap()
+        .start_admitted_input_capture();
+    assert!(
+        matches!(
+            headless.teardown_automation_input_replay(),
+            Err(AutomationInputReplayTeardownError::EvidenceCaptureActive)
+        ),
+        "teardown must not inject cleanup continuity into another capture owner"
+    );
+    assert!(
+        headless
+            .world()
+            .resource::<InputState>()
+            .unwrap()
+            .pointer_button_down_anywhere(PointerButton::Back),
+        "blocked teardown must retain replay ownership for a later retry"
+    );
+    let captured = headless
+        .world_mut()
+        .resource_mut::<InputState>()
+        .unwrap()
+        .stop_admitted_input_capture();
+    assert!(captured.is_empty());
+
+    headless
         .teardown_automation_input_replay()
         .expect("teardown should clean the replay-owned Back button source");
     assert!(
