@@ -130,7 +130,8 @@ pub fn require_client_replication_connection_replacement(world: &mut World) -> a
     let mut integration = world
         .remove_resource::<ClientReplicationIntegration>()
         .context("client replication requires explicit ClientReplicationPolicy")?;
-    let result = if let Some(mut prediction) = world.remove_resource::<ClientPredictionIntegration>()
+    let result = if let Some(mut prediction) =
+        world.remove_resource::<ClientPredictionIntegration>()
     {
         let result = prediction
             .require_connection_replacement(integration.semantic_mut())
