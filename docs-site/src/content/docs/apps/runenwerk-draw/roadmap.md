@@ -12,7 +12,7 @@ related_designs:
   - ../../design/implemented/render-product-surface-foundation-bundle-design.md
 related_roadmaps:
   - ../../engine/plugins/render/docs/roadmap.md
-  - ../../workspace/roadmap-index.md
+  - ../../workspace/planning/roadmap.md
 ---
 
 # Runenwerk Draw Rendering Foundation Roadmap
