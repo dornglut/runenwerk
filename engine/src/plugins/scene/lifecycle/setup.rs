@@ -4,7 +4,7 @@ use super::super::runtime::{
 use crate::plugins::scene::ui::UiPresentationMode;
 use crate::plugins::{SceneManager, SceneResource};
 use crate::runtime::{PrimaryPresentationMetricsResource, Res, ResMut};
-use crate::{SceneCatalog, SceneOverlayViewportState, SceneRuntimeState};
+use crate::plugins::scene::{SceneCatalog, SceneOverlayViewportState, SceneRuntimeState};
 use anyhow::Result;
 
 pub(crate) fn scene_setup_system(

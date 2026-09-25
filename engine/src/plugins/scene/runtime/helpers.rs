@@ -1,6 +1,5 @@
-use crate::plugins::SceneManager;
+use crate::plugins::scene::{SceneManager, SceneOverlayViewportState, SceneRuntimeState};
 use crate::prelude::domain::{SceneId, SceneSlot, build_overlay_runtime};
-use crate::{SceneOverlayViewportState, SceneRuntimeState};
 use anyhow::Result;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 

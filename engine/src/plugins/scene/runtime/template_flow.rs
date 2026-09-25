@@ -1,5 +1,4 @@
-use crate::SceneCatalog;
-use crate::plugins::SceneManager;
+use crate::plugins::scene::{SceneCatalog, SceneManager};
 use crate::plugins::scene::ui::{UiStyle, UiStyleTemplate, UiTextTemplate};
 use anyhow::{Context, anyhow};
 use serde::Deserialize;

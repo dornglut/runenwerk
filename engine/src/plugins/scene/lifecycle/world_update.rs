@@ -1,7 +1,6 @@
 use super::super::runtime::publish_scene_state;
-use crate::plugins::SceneResource;
+use crate::plugins::scene::{SceneOverlayViewportState, SceneResource, SceneRuntimeState};
 use crate::runtime::{FixedTimeConfig, WorldMut};
-use crate::{SceneOverlayViewportState, SceneRuntimeState};
 use anyhow::Result;
 
 pub(crate) fn world_scene_update_system(mut world: WorldMut) -> Result<()> {

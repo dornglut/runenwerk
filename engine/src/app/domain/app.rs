@@ -308,47 +308,6 @@ impl App {
             .unwrap_or(0)
     }
 
-    pub fn add_scene<S>(&mut self, scene: S) -> &mut Self
-    where
-        S: Into<SceneRegistration>,
-    {
-        let scene = scene.into();
-        if self.world.resource::<SceneCatalog>().is_err() {
-            self.world.insert_resource(SceneCatalog::default());
-        }
-        if let Ok(catalog) = self.world.resource_mut::<SceneCatalog>() {
-            catalog.register(scene.id, scene.template_path);
-        }
-        self
-    }
-
-    pub fn add_scene_template(&mut self, template_path: impl Into<String>) -> &mut Self {
-        let template_path = template_path.into();
-        let mut id = SceneRegistration::derive_id_from_template_path(&template_path);
-        if self.world.resource::<SceneCatalog>().is_err() {
-            self.world.insert_resource(SceneCatalog::default());
-        }
-        if let Ok(catalog) = self.world.resource_mut::<SceneCatalog>() {
-            if catalog.handle(&id).is_some() {
-                let mut suffix = 2usize;
-                let base = id.clone();
-                while catalog.handle(&format!("{base}_{suffix}")).is_some() {
-                    suffix = suffix.saturating_add(1);
-                }
-                id = format!("{base}_{suffix}");
-            }
-            catalog.register(id, template_path);
-        }
-        self
-    }
-
-    pub fn registered_scene_count(&self) -> usize {
-        self.world
-            .resource::<SceneCatalog>()
-            .map(|catalog| catalog.len())
-            .unwrap_or(0)
-    }
-
     pub fn with_frame_pacing(&mut self, policy: FramePacingPolicyResource) -> &mut Self {
         self.world.insert_resource(policy);
         if let Ok(runtime_state) = self.world.resource_mut::<FramePacingRuntimeStateResource>() {
@@ -399,7 +358,7 @@ impl App {
         self.lifecycle.prepare_for_execution()
     }
 
-    fn allow_topology_mutation(
+    pub(crate) fn allow_topology_mutation(
         &mut self,
         operation: &'static str,
         target: Option<&'static str>,

@@ -5,7 +5,7 @@ use drawing::{
     DrawingTileFormationDiagnosticCode, DrawingTileFormationPolicy, ProductQualityClass, StrokeId,
     StrokeToolKind, form_drawing_ink_tiles, ratify_drawing_document,
 };
-use engine::SceneRuntimeState;
+use engine::plugins::scene::SceneRuntimeState;
 use engine::plugins::render::inspect::RenderDebugConfigResource;
 use engine::plugins::render::{
     FeatureContributionStatus, PreparedRenderFrameRequestResource,
