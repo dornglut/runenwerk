@@ -146,6 +146,11 @@ pub(crate) fn start_recording(world: &mut runen_ecs::World) -> Result<()> {
     let session_id = *world
         .resource::<SimulationSessionId>()
         .map_err(|_| anyhow!("replay recording requires an active SimulationSessionId"))?;
+    if session_id.0 == 0 {
+        return Err(anyhow!(
+            "replay recording requires an assigned non-zero SimulationSessionId"
+        ));
+    }
     let tick_rate_hz = fixed_tick_rate(world);
     let (checkpoint_policy, storage_policy) = {
         let recorder = world
