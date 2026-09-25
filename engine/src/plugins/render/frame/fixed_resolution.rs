@@ -1,8 +1,9 @@
 use crate::plugins::render::{
     PreparedFlowInvocationRequest, PreparedTargetBinding, PreparedViewFrame,
     RenderDynamicTextureRetention, RenderDynamicTextureTargetDescriptor,
-    RenderDynamicTextureTargetKey, RenderFlow, RenderFlowId,
-    RenderFrameProducerId, RenderTargetAliasKey, RenderTargetAliasKind, RenderTextureSampleMode,
+    CompiledRenderFlowPlan, RenderDynamicTextureTargetKey, RenderFlow, RenderFlowId,
+    RenderFrameProducerId, RenderResourceDeclaration, RenderTargetAliasKey, RenderTargetAliasKind,
+    RenderTextureSampleMode,
     RenderTextureTargetFormat,
 };
 use runen_gpu::GpuBindingKey;
@@ -89,6 +90,37 @@ impl RenderFixedResolutionExecutionRequest {
             automatic_main_replacement: self.scene_flow_id,
         })
     }
+
+    pub fn prepare_against_compiled_flow(
+        &self,
+        output_size: (u32, u32),
+        resolve_flow_id: RenderFlowId,
+        compiled_flow: &CompiledRenderFlowPlan,
+    ) -> Result<PreparedFixedResolutionExecution, RenderFixedResolutionExecutionError> {
+        if compiled_flow.flow_id != self.scene_flow_id {
+            return Err(RenderFixedResolutionExecutionError::SelectedFlowMismatch {
+                requested: self.scene_flow_id,
+                provided: compiled_flow.flow_id,
+            });
+        }
+
+        let has_bindable_color_alias = compiled_flow.resources.resources.iter().any(|resource| {
+            matches!(
+                resource,
+                RenderResourceDeclaration::TargetAlias(alias)
+                    if alias.binding_key() == &self.scene_color_alias
+                        && alias.kind() == RenderTargetAliasKind::Color
+            )
+        });
+        if !has_bindable_color_alias {
+            return Err(RenderFixedResolutionExecutionError::MissingBindableColorAlias {
+                flow_id: self.scene_flow_id,
+                alias: self.scene_color_alias.clone(),
+            });
+        }
+
+        self.prepare(output_size, resolve_flow_id)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -125,6 +157,20 @@ pub enum RenderFixedResolutionExecutionError {
         internal_height: u32,
         output_width: u32,
         output_height: u32,
+    },
+    #[error(
+        "fixed internal-resolution request selects flow {requested:?} but admission inspected flow {provided:?}"
+    )]
+    SelectedFlowMismatch {
+        requested: RenderFlowId,
+        provided: RenderFlowId,
+    },
+    #[error(
+        "fixed internal-resolution flow {flow_id:?} does not expose required color target alias '{alias}'"
+    )]
+    MissingBindableColorAlias {
+        flow_id: RenderFlowId,
+        alias: RenderTargetAliasKey,
     },
     #[error("fixed internal-resolution alias binding failed: {0}")]
     AliasBinding(#[source] crate::plugins::render::RenderGpuResourceAdapterError),
@@ -231,6 +277,56 @@ mod tests {
                 prepared.target_key.clone()
             ))
         );
+    }
+
+    fn compiled_scene_flow(alias_name: &str) -> CompiledRenderFlowPlan {
+        let flow = RenderFlow::new("fixed.test.scene")
+            .with_color_target_alias(alias_name)
+            .expect("test color alias should be valid")
+            .fullscreen_pass("fixed.test.scene.pass")
+            .offscreen_products_only()
+            .write_target_alias(alias_name)
+            .finish()
+            .validate()
+            .expect("test scene flow should validate");
+        crate::plugins::render::compile_flow_plan(&flow)
+            .expect("test scene flow should compile")
+    }
+
+    #[test]
+    fn fixed_resolution_builder_requires_selected_flow_color_alias() {
+        let compiled = compiled_scene_flow("scene_color");
+        let request = RenderFixedResolutionExecutionRequest::new(
+            producer(7),
+            compiled.flow_id,
+            alias(),
+            (1280, 720),
+        );
+        request
+            .prepare_against_compiled_flow((1920, 1080), flow(12), &compiled)
+            .expect("declared color alias should admit fixed resolution");
+
+        let missing = RenderFixedResolutionExecutionRequest::new(
+            producer(7),
+            compiled.flow_id,
+            RenderTargetAliasKey::new("other_color").expect("test alias should be valid"),
+            (1280, 720),
+        );
+        assert!(matches!(
+            missing.prepare_against_compiled_flow((1920, 1080), flow(12), &compiled),
+            Err(RenderFixedResolutionExecutionError::MissingBindableColorAlias { .. })
+        ));
+
+        let mismatched_flow =
+            RenderFixedResolutionExecutionRequest::new(producer(7), flow(99), alias(), (1280, 720));
+        assert!(matches!(
+            mismatched_flow.prepare_against_compiled_flow(
+                (1920, 1080),
+                flow(12),
+                &compiled
+            ),
+            Err(RenderFixedResolutionExecutionError::SelectedFlowMismatch { .. })
+        ));
     }
 
     #[test]
