@@ -334,7 +334,12 @@ fn finish_pending_composition_restore(
         Ok(()) => {
             let installed = host.shell_state.composition_runtime().clone();
             host.app.prune_surface_sessions_for_composition(&installed);
-            close_obsolete_editor_windows(host, pending.old_secondary_windows, windows);
+            close_obsolete_editor_windows(
+                host,
+                pending.old_secondary_windows,
+                windows,
+                surfaces,
+            );
             host.app.append_console_line(
                 "[composition] restored persisted presentation targets atomically".to_owned(),
             );
@@ -470,12 +475,28 @@ fn close_obsolete_editor_windows(
     host: &mut EditorHostResource,
     editor_window_ids: Vec<EditorWindowId>,
     windows: &mut WindowStateRegistryResource,
+    surfaces: &mut RenderSurfaceRegistryResource,
 ) {
     for editor_window_id in editor_window_ids {
-        if let Some(binding) = host.shell_state.editor_window_binding(editor_window_id)
-            && let Some(record) = windows.record_mut(binding.native_window_id)
-        {
-            record.approve_close();
+        if let Some(binding) = host.shell_state.editor_window_binding(editor_window_id) {
+            match windows
+                .record(binding.native_window_id)
+                .map(|record| record.lifecycle_state)
+            {
+                Some(NativeWindowLifecycleState::Created)
+                | Some(NativeWindowLifecycleState::CloseIntentPending)
+                | Some(NativeWindowLifecycleState::CloseApproved) => {
+                    if let Some(record) = windows.record_mut(binding.native_window_id) {
+                        record.approve_close();
+                    }
+                }
+                Some(NativeWindowLifecycleState::Requested)
+                | Some(NativeWindowLifecycleState::CreationFailed)
+                | None => {
+                    surfaces.retire_surface_for_native_window(binding.native_window_id);
+                    windows.remove_window(binding.native_window_id);
+                }
+            }
         }
         host.shell_state
             .remove_editor_window_presentation(editor_window_id);
