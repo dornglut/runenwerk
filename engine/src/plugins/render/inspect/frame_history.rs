@@ -164,6 +164,7 @@ pub struct RenderFramePresentationObservation {
 pub struct RenderFrameObservation {
     pub key: RenderFrameObservationKey,
     pub prepare_epoch: u64,
+    pub target_size_px: (u32, u32),
     pub cpu: RenderFrameCpuObservation,
     pub gpu: RenderFrameGpuObservation,
     pub presentation: RenderFramePresentationObservation,
@@ -203,6 +204,7 @@ impl RenderFrameHistoryState {
         frame_index: u64,
         render_surface_id: u64,
         prepare_epoch: u64,
+        target_size_px: (u32, u32),
         acquire_ms: f32,
         renderer: RendererFrameTimings,
         pass_timings: &[PassTimingSample],
@@ -221,6 +223,7 @@ impl RenderFrameHistoryState {
         let observation = RenderFrameObservation {
             key,
             prepare_epoch,
+            target_size_px,
             cpu: RenderFrameCpuObservation {
                 acquire_ms,
                 renderer,
@@ -365,6 +368,7 @@ mod tests {
             frame_index,
             surface,
             frame_index + 100,
+            (1280, 720),
             acquire_ms,
             RendererFrameTimings::default(),
             &[],
@@ -392,6 +396,56 @@ mod tests {
             "compute",
             millis,
         )
+    }
+
+    #[test]
+    fn submitted_extent_remains_attached_to_exact_frame_during_delayed_composed_evidence() {
+        let policy = policy(8);
+        let mut history = RenderFrameHistoryState::default();
+        history.observe_submitted_frame(
+            policy,
+            12,
+            3,
+            112,
+            (3024, 1964),
+            0.0,
+            RendererFrameTimings::default(),
+            &[],
+            RenderGpuTimingCapability::UnavailableThisFrame,
+        );
+        history.observe_submitted_frame(
+            policy,
+            12,
+            4,
+            113,
+            (1600, 1200),
+            0.0,
+            RendererFrameTimings::default(),
+            &[],
+            RenderGpuTimingCapability::UnavailableThisFrame,
+        );
+
+        history.observe_composed_gpu_timing_evidence(policy, &[composed_measured(12, 3, 19.5)]);
+
+        let observation = history
+            .observation(RenderFrameObservationKey::new(12, 3))
+            .expect("submitted frame should remain retained");
+        let neighbor = history
+            .observation(RenderFrameObservationKey::new(12, 4))
+            .expect("neighboring surface should remain retained");
+        assert_eq!(observation.prepare_epoch, 112);
+        assert_eq!(observation.target_size_px, (3024, 1964));
+        assert_eq!(neighbor.prepare_epoch, 113);
+        assert_eq!(neighbor.target_size_px, (1600, 1200));
+        assert!(neighbor.gpu.composed_timing_evidence.is_none());
+        assert_eq!(
+            observation
+                .gpu
+                .composed_timing_evidence
+                .as_ref()
+                .and_then(|evidence| evidence.gpu_composed_frame_ms),
+            Some(19.5)
+        );
     }
 
     #[test]
