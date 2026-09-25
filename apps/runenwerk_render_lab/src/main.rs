@@ -120,10 +120,12 @@ fn parse_command(args: impl IntoIterator<Item = OsString>) -> anyhow::Result<Com
                 );
             }
         }
-        let window_size_px = window_size_px
-            .ok_or_else(|| anyhow::anyhow!("--rl2-quality requires --window-size-px WIDTHxHEIGHT"))?;
-        let internal_size_px = internal_size_px
-            .ok_or_else(|| anyhow::anyhow!("--rl2-quality requires --internal-size-px WIDTHxHEIGHT"))?;
+        let window_size_px = window_size_px.ok_or_else(|| {
+            anyhow::anyhow!("--rl2-quality requires --window-size-px WIDTHxHEIGHT")
+        })?;
+        let internal_size_px = internal_size_px.ok_or_else(|| {
+            anyhow::anyhow!("--rl2-quality requires --internal-size-px WIDTHxHEIGHT")
+        })?;
         return Ok(Command::TemporalQuality {
             output_root,
             submitted_frame_limit,
@@ -526,16 +528,8 @@ mod tests {
     fn temporal_quality_mode_rejects_missing_duplicate_or_malformed_arguments() {
         for values in [
             vec!["--rl2-quality"],
-            vec![
-                "--rl2-quality",
-                "--window-size-px",
-                "1920x1080",
-            ],
-            vec![
-                "--rl2-quality",
-                "--internal-size-px",
-                "1280x720",
-            ],
+            vec!["--rl2-quality", "--window-size-px", "1920x1080"],
+            vec!["--rl2-quality", "--internal-size-px", "1280x720"],
             vec![
                 "--rl2-quality",
                 "--window-size-px",
