@@ -23,15 +23,14 @@ impl AppSimulationExt for App {
         self.init_resource::<SimulationProfileConfig>();
         if let Ok(config) = self.world_mut().resource_mut::<SimulationProfileConfig>() {
             config.profile = profile;
-            config.determinism = match profile {
-                SimulationProfile::DeterministicLockstep | SimulationProfile::RollbackSession => {
-                    DeterminismLevel::Strict
-                }
-                SimulationProfile::HighThroughputAuthority => DeterminismLevel::BestEffort,
-                SimulationProfile::LocalSinglePlayer | SimulationProfile::DedicatedAuthority => {
-                    DeterminismLevel::Validated
-                }
-            };
+            config.determinism =
+                match profile {
+                    SimulationProfile::DeterministicLockstep
+                    | SimulationProfile::RollbackSession => DeterminismLevel::Strict,
+                    SimulationProfile::HighThroughputAuthority => DeterminismLevel::BestEffort,
+                    SimulationProfile::LocalSinglePlayer
+                    | SimulationProfile::DedicatedAuthority => DeterminismLevel::Validated,
+                };
         }
         self
     }
@@ -41,9 +40,9 @@ impl AppSimulationExt for App {
         if let Ok(config) = self.world_mut().resource_mut::<SimulationProfileConfig>() {
             config.authority = authority;
         }
-        if let Ok(world_runtime_config) = self
-            .world_mut()
-            .resource_mut::<crate::plugins::world::plugin::WorldRuntimeConfig>()
+        if let Ok(world_runtime_config) =
+            self.world_mut()
+                .resource_mut::<crate::plugins::world::plugin::WorldRuntimeConfig>()
         {
             world_runtime_config.mode =
                 crate::plugins::world::plugin::world_runtime_mode_for_authority(authority);
