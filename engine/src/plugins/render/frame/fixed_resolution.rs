@@ -346,7 +346,7 @@ impl RenderFixedResolutionExecutionRequest {
             Ok(prepared) => RenderFixedResolutionExecutionAdmission::Fixed(prepared),
             Err(error) => {
                 let identity =
-            fixed_resolution_execution_identity(self.render_surface_id, self.scene_flow_id);
+                    fixed_resolution_execution_identity(self.render_surface_id, self.scene_flow_id);
                 RenderFixedResolutionExecutionAdmission::NativeFallback(
                     RenderFixedResolutionFallback {
                         render_surface_id: self.render_surface_id,
