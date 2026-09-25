@@ -398,7 +398,7 @@ fn workspace_profile_manifests_for_composition(
         }
         RunenwerkWorkbenchComposition::UiDesigner => {
             compositions::profiles::ui_designer_profiles(tool_suites)
-        },
+        }
         RunenwerkWorkbenchComposition::HeadlessValidation => {
             compositions::profiles::headless_validation_profiles(tool_suites)
         }

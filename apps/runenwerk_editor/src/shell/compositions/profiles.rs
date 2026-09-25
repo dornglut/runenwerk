@@ -381,7 +381,10 @@ pub(crate) fn custom_profiles_for_tool_suites(
 ) -> Vec<WorkspaceProfileManifest> {
     let mut surfaces = Vec::<LayoutSurface>::new();
     for surface in tool_suites.iter().flat_map(|suite| suite.surfaces.iter()) {
-        if surfaces.iter().any(|candidate| candidate.key == surface.key.as_str()) {
+        if surfaces
+            .iter()
+            .any(|candidate| candidate.key == surface.key.as_str())
+        {
             continue;
         }
         surfaces.push(LayoutSurface {
@@ -398,11 +401,8 @@ pub(crate) fn custom_profiles_for_tool_suites(
             )
         })
         .collect();
-    let layout = tool_workspace_layout_definition(
-        "runenwerk.editor.layout.custom",
-        "Custom",
-        surfaces,
-    );
+    let layout =
+        tool_workspace_layout_definition("runenwerk.editor.layout.custom", "Custom", surfaces);
 
     vec![WorkspaceProfileManifest {
         profile_ref: custom_profile_ref(),
@@ -474,17 +474,12 @@ fn built_in_layout_definition(
     }
 }
 
-fn installed_layout_surface(
-    tool_suites: &[EditorToolSuite],
-    stable_key: &str,
-) -> LayoutSurface {
+fn installed_layout_surface(tool_suites: &[EditorToolSuite], stable_key: &str) -> LayoutSurface {
     let surface = tool_suites
         .iter()
         .flat_map(|suite| suite.surfaces.iter())
         .find(|surface| surface.key.as_str() == stable_key)
-        .unwrap_or_else(|| {
-            panic!("compiled-in profile surface must be installed: {stable_key}")
-        });
+        .unwrap_or_else(|| panic!("compiled-in profile surface must be installed: {stable_key}"));
     LayoutSurface {
         key: surface.key.as_str().to_owned(),
         panel_kind: surface.panel_kind,
@@ -599,7 +594,10 @@ fn editor_design_layout_definition(
                 stack(
                     "editor-design.outliner",
                     &[
-                        ("definition-outliner", "runenwerk.editor_design.definition_outliner"),
+                        (
+                            "definition-outliner",
+                            "runenwerk.editor_design.definition_outliner",
+                        ),
                         ("ui-hierarchy", "runenwerk.editor_design.ui_hierarchy"),
                     ],
                 ),
@@ -611,7 +609,10 @@ fn editor_design_layout_definition(
                         "editor-design.canvas",
                         &[
                             ("ui-canvas", "runenwerk.editor_design.ui_canvas"),
-                            ("dock-layout-preview", "runenwerk.editor_design.dock_layout_preview"),
+                            (
+                                "dock-layout-preview",
+                                "runenwerk.editor_design.dock_layout_preview",
+                            ),
                         ],
                     ),
                     stack(
@@ -626,7 +627,10 @@ fn editor_design_layout_definition(
             stack(
                 "editor-design.validation",
                 &[
-                    ("definition-validation", "runenwerk.editor_design.definition_validation"),
+                    (
+                        "definition-validation",
+                        "runenwerk.editor_design.definition_validation",
+                    ),
                     ("command-diff", "runenwerk.editor_design.command_diff"),
                 ],
             ),
@@ -765,10 +769,7 @@ fn split(
     }
 }
 
-fn stack(
-    id: impl Into<String>,
-    tabs: &[(&str, &str)],
-) -> EditorWorkspaceHostDefinition {
+fn stack(id: impl Into<String>, tabs: &[(&str, &str)]) -> EditorWorkspaceHostDefinition {
     stack_owned(
         id,
         tabs.iter()
@@ -782,10 +783,7 @@ fn stack(
     )
 }
 
-fn stack_owned<T>(
-    id: impl Into<String>,
-    tabs: Vec<T>,
-) -> EditorWorkspaceHostDefinition
+fn stack_owned<T>(id: impl Into<String>, tabs: Vec<T>) -> EditorWorkspaceHostDefinition
 where
     T: Into<LayoutTab>,
 {
@@ -885,7 +883,10 @@ mod tests {
         collect_surfaces(&layout.root, &mut actual);
         for key in MATERIAL_PROFILE_SURFACE_KEYS {
             assert_eq!(
-                actual.iter().filter(|candidate| candidate.as_str() == *key).count(),
+                actual
+                    .iter()
+                    .filter(|candidate| candidate.as_str() == *key)
+                    .count(),
                 1,
                 "material layout should contain {key} exactly once"
             );
