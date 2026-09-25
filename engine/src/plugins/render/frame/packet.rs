@@ -625,8 +625,9 @@ pub struct PreparedRenderFrameRequestResource {
     diagnostics: Vec<PreparedRenderFrameRequestDiagnostic>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum RenderFrameSurfaceScope {
+    #[default]
     AllSurfaces,
     Surface(RenderSurfaceId),
 }
@@ -645,11 +646,6 @@ impl RenderFrameSurfaceScope {
     }
 }
 
-impl Default for RenderFrameSurfaceScope {
-    fn default() -> Self {
-        Self::AllSurfaces
-    }
-}
 
 #[derive(Debug, Clone, Default)]
 pub struct PreparedRenderFrameRequestContribution {

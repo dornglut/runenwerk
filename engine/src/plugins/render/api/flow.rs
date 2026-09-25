@@ -37,17 +37,13 @@ struct PingPongStorageRegistration {
     b_id: GpuWorkResourceId,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum RenderFlowInvocationPolicy {
+    #[default]
     AutomaticMain,
     ExplicitOnly,
 }
 
-impl Default for RenderFlowInvocationPolicy {
-    fn default() -> Self {
-        Self::AutomaticMain
-    }
-}
 
 #[derive(Debug)]
 pub struct RenderFlow {

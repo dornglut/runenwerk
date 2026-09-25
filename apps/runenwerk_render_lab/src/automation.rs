@@ -87,10 +87,11 @@ mod tests {
     use engine::automation::{
         AppAutomationInputReplayExt, AppAutomationInputTraceExt, AutomationExecutionMode,
         AutomationInputReplayOutcome, AutomationInputReplaySourceMap,
-        AutomationInputReplayStateAssumption, AutomationInputTracePlugin, AutomationSession,
-        AutomationSessionId, AutomationStepResult, DigitalState, InputObservation, InputSourceId,
-        PointerButton, PointerButtonInput, RelativeMotionUnit, ScrollDelta, ScrollDomain,
-        ScrollInput, Vector2,
+        AutomationInputReplayStateAssumption, AutomationInputTracePlugin,
+        AutomationInputTraceRecordingWitness, AutomationSession, AutomationSessionId,
+        AutomationStepResult, DigitalState, InputObservation, InputSourceId, PointerButton,
+        PointerButtonInput, RelativeMotionUnit, ScrollDelta, ScrollDomain, ScrollInput, Vector2,
+        export_automation_input_trace_v1, import_automation_input_trace_v1,
     };
     use engine::prelude::InputState;
 
@@ -203,7 +204,7 @@ mod tests {
     }
 
     #[test]
-    fn recorded_normalized_trace_replays_to_the_same_camera_state() {
+    fn recorded_normalized_trace_persists_and_replays_to_the_same_camera_state() {
         let recorded_source = InputSourceId::new(10_100);
         let mut recording = build_headless_automation_app();
         recording.add_plugin(AutomationInputTracePlugin);
@@ -301,11 +302,27 @@ mod tests {
         assert_eq!(trace.frames().len(), 6);
         assert!(trace.frames()[2].groups().is_empty());
 
-        let mut replay = build_headless_automation_app();
-        let source_map =
-            AutomationInputReplaySourceMap::new([(recorded_source, InputSourceId::new(20_100))]);
-        let report = replay.replay_automation_input_trace(
+        let encoded = export_automation_input_trace_v1(
             &trace,
+            AutomationInputTraceRecordingWitness::RecordedSourcesPristineAtCaptureStart,
+            None,
+        )
+        .expect("Render Lab trace should persist as V1");
+        let imported = import_automation_input_trace_v1(encoded.as_bytes())
+            .expect("persisted Render Lab V1 trace should import");
+        assert_eq!(
+            imported.recording_witness(),
+            AutomationInputTraceRecordingWitness::RecordedSourcesPristineAtCaptureStart
+        );
+        let imported_recorded_source = imported.trace().frames()[0].groups()[0].context.source;
+
+        let mut replay = build_headless_automation_app();
+        let source_map = AutomationInputReplaySourceMap::new([(
+            imported_recorded_source,
+            InputSourceId::new(20_100),
+        )]);
+        let report = replay.replay_automation_input_trace(
+            imported.trace(),
             &source_map,
             AutomationInputReplayStateAssumption::RecordedAndReplaySourcesPristine,
         );
