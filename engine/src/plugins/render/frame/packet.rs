@@ -822,7 +822,9 @@ impl PreparedRenderFrameRequestResource {
             BTreeMap::<RenderFlowId, &RenderFrameProducerId>::new();
 
         for (existing_producer_id, contribution) in &self.contributions {
-            if existing_producer_id == producer_id || !replacement.scope.overlaps(contribution.scope) {
+            if existing_producer_id == producer_id
+                || !replacement.scope.overlaps(contribution.scope)
+            {
                 continue;
             }
             for view_id in contribution.views.keys() {
