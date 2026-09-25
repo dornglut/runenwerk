@@ -524,19 +524,21 @@ fn write_temporal_quality_artifact(
     let capture_root = measurement
         .quality_capture_output_dir
         .as_deref()
-        .ok_or_else(|| anyhow::anyhow!("temporal quality capture output directory is unavailable"))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!("temporal quality capture output directory is unavailable")
+        })?;
     let output_root = capture_root.parent().ok_or_else(|| {
         anyhow::anyhow!(
             "temporal quality capture directory {} has no evidence output parent",
             capture_root.display()
         )
     })?;
-    let requested_internal = measurement
-        .radiance_target_size_px
-        .ok_or_else(|| anyhow::anyhow!("temporal quality requested internal extent is unavailable"))?;
-    let requested_output = measurement
-        .primary_window_size_px
-        .ok_or_else(|| anyhow::anyhow!("temporal quality requested output extent is unavailable"))?;
+    let requested_internal = measurement.radiance_target_size_px.ok_or_else(|| {
+        anyhow::anyhow!("temporal quality requested internal extent is unavailable")
+    })?;
+    let requested_output = measurement.primary_window_size_px.ok_or_else(|| {
+        anyhow::anyhow!("temporal quality requested output extent is unavailable")
+    })?;
     let execution = quality_execution
         .frame(capture.frame_index)
         .cloned()
@@ -1352,10 +1354,7 @@ mod tests {
                 .frame(RL2_QUALITY_EXECUTION_HISTORY_CAPACITY as u64)
                 .is_some()
         );
-        assert_eq!(
-            state.by_frame.len(),
-            RL2_QUALITY_EXECUTION_HISTORY_CAPACITY
-        );
+        assert_eq!(state.by_frame.len(), RL2_QUALITY_EXECUTION_HISTORY_CAPACITY);
     }
 
     #[test]
