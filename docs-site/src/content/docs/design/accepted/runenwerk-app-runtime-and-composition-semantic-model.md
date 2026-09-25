@@ -771,10 +771,10 @@ core/integration-shaped
 
 capability-specific configuration/authoring still inherent on generic App
   add_input_bindings
-  add_render_flow
 
-capability-specific runtime diagnostic/control still inherent on generic App
-  update_render_debug_*
+Render capability-specific authoring and diagnostic/control
+  AppRenderExt::add_render_flow
+  AppRenderExt::update_render_debug_*
 ```
 
 The normalized rule is:
@@ -792,8 +792,8 @@ AppReplayExt
 AppInput/ProductActionExt
 ```
 
-`AppSceneExt`, `AppReplayExt`, and `AppSimulationExt` are current concrete owner APIs.
-The remaining names are illustrative until their owner cuts are separately accepted.
+`AppSceneExt`, `AppRenderExt`, `AppReplayExt`, and `AppSimulationExt` are current concrete owner APIs.
+The remaining Input/product-action name is illustrative until its owner cut is separately accepted.
 
 Moving an operation to an owner extension must not silently reclassify it as pre-run
 composition. Owner APIs must distinguish as applicable:

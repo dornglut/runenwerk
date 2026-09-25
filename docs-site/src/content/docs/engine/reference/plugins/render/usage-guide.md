@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-07
+last_reviewed: 2026-09-25
 ---
 
 # Render Plugin Usage Guide
@@ -23,11 +23,22 @@ This page covers plugin/runtime wiring. For `RenderFlow` authoring, use:
 
 ```rust
 use engine::plugins::{RenderPlugin, ScenePlugin, default_plugins};
+use engine::prelude::AppRenderExt;
 
 app.add_plugins(default_plugins());
 app.add_plugin(ScenePlugin);
 app.add_plugin(RenderPlugin);
 ```
+
+## App integration ownership
+
+Render-specific App ergonomics live on the Render-owned `AppRenderExt` extension:
+
+- `add_render_flow`
+- `update_render_debug_control`
+- `update_render_debug_config`
+
+Import `AppRenderExt` directly or through `engine::prelude::*`. These owner operations may materialize Render-owned configuration/debug resources before `RenderPlugin` is selected; that state does not itself activate Render integration, and later plugin installation preserves it.
 
 ## Runtime Ownership
 
