@@ -5,7 +5,6 @@ use editor_shell::{
     RegionCompassAccessibility, RegionCompassViewModel, projected_host_tab_stacks,
     tab_stack_container_widget_id,
 };
-use engine::plugins::render::{AppRenderExt, Gfx};
 use engine::plugins::render::backend::{
     RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
 };
@@ -13,6 +12,7 @@ use engine::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, RenderCaptureSelector, RenderCaptureTerminalCode,
     RenderCapturedTextureState, RenderPassProvenanceState, deterministic_capture_filename,
 };
+use engine::plugins::render::{AppRenderExt, Gfx};
 use engine::runtime::platform::{PlatformEvent, apply_native_window_event};
 use engine::runtime::{
     NativeWindowId, PrimaryPresentationMetricsResource, WindowStateRegistryResource,
