@@ -1328,6 +1328,83 @@ mod tests {
     }
 
     #[test]
+    fn temporal_quality_execution_history_is_bounded_and_frame_addressable() {
+        let mut state = RenderLabTemporalQualityExecutionState::default();
+        for frame_index in 0..=RL2_QUALITY_EXECUTION_HISTORY_CAPACITY as u64 {
+            state.observe(RenderLabTemporalQualityExecutionEvidence {
+                frame_index,
+                prepare_epoch: frame_index + 100,
+                policy: "fixed",
+                internal_size_px: [1280, 720],
+                output_size_px: [1920, 1080],
+                native_fallback_active: false,
+                native_fallback_reason: None,
+                target_key: Some(format!("target-{frame_index}")),
+                internal_view_id: Some(format!("view-{frame_index}")),
+                scene_invocation_id: Some(format!("scene-{frame_index}")),
+                resolve_invocation_id: Some(format!("resolve-{frame_index}")),
+            });
+        }
+
+        assert!(state.frame(0).is_none());
+        assert!(
+            state
+                .frame(RL2_QUALITY_EXECUTION_HISTORY_CAPACITY as u64)
+                .is_some()
+        );
+        assert_eq!(
+            state.by_frame.len(),
+            RL2_QUALITY_EXECUTION_HISTORY_CAPACITY
+        );
+    }
+
+    #[test]
+    fn temporal_quality_capture_evidence_hashes_the_exported_frame() {
+        use engine::plugins::render::inspect::{
+            RenderCaptureIdentity, RenderCaptureSelector, RenderCaptureSelectorResult,
+            RenderCaptureTerminal, RenderDebugFrameReport,
+        };
+
+        let artifact_path = std::env::temp_dir().join(format!(
+            "runenwerk-render-lab-quality-capture-{}.png",
+            std::process::id()
+        ));
+        fs::write(&artifact_path, b"quality-capture-bytes").expect("test capture should write");
+        let selector = RenderCaptureSelector::named_pass_surface_color("quality.flow", "resolve");
+        let capture_point = selector.stable_point_fallback();
+        let identity = RenderCaptureIdentity {
+            frame_index: 42,
+            pass_label: "resolve".to_string(),
+            capture_point: capture_point.clone(),
+        };
+        let mut report_state = RenderDebugFrameReportState::default();
+        report_state.observe_frame(RenderDebugFrameReport {
+            frame_index: 42,
+            capture_results: vec![RenderCaptureSelectorResult {
+                selector_index: 0,
+                selector,
+                capture_point,
+                frame_identity: Some(identity),
+                terminal: RenderCaptureTerminal::completed(),
+                artifact_path: Some(artifact_path.clone()),
+            }],
+            ..RenderDebugFrameReport::default()
+        });
+
+        let evidence = temporal_quality_capture_evidence(&report_state)
+            .expect("capture evidence should inspect")
+            .expect("completed capture should produce evidence");
+        assert_eq!(evidence.frame_index, 42);
+        assert_eq!(evidence.terminal, "completed");
+        assert_eq!(
+            evidence.artifact_blake3,
+            format!("blake3:{}", blake3::hash(b"quality-capture-bytes").to_hex())
+        );
+
+        let _ = fs::remove_file(artifact_path);
+    }
+
+    #[test]
     fn fixed_quality_flow_is_alias_driven_and_admits_production_fixed_execution() {
         let scene = render_lab_fixed_quality_flow().expect("quality flow should author");
         let resolve =
