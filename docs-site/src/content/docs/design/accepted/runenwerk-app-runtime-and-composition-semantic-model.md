@@ -5,7 +5,7 @@ status: accepted
 owner: engine
 layer: architecture / runtime integration
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-25
 related_adrs:
   - ../../adr/accepted/0017-cross-authority-consistency-and-graph-semantics.md
   - ../../adr/accepted/0018-semantic-federation-and-physical-realization.md
@@ -726,25 +726,28 @@ This model must not create competing authority.
 `ProductPublication` and `QuerySnapshotPublication` are Runenwerk lifecycle classes under
 ADR 0022. Product/query payload semantics remain owner-local.
 
-Current predecessor types such as:
+Current publication integration uses:
 
 ```text
 ProductPublicationRuntimeResource
 QuerySnapshotRuntimeResource
-PublicationBoundary
+PublicationHandlers
 ```
 
-are implementation evidence under #591, not types frozen by this design.
+as Runenwerk runtime integration state. The removed `PublicationBoundary` remains only
+historical predecessor vocabulary from #591.
 
 ### Publication handler registry
 
-#591 explicitly retains/refines the narrow product/query handler-registration mechanism
-and keeps built-in handler registration during App construction as part of deterministic
-registration order.
+#591/#614 established the narrow product/query handler-registration and dispatch
+semantics. Publication configuration is now selected through the Runenwerk-owned
+`AppPublicationExt`. The first owner registration materializes publication runtime
+state and installs the built-in staged product/query handlers before owner-specific
+handlers; bare App construction does not manufacture that optional integration state.
 
-That is valid Runenwerk integration ownership. It does not make product/query payloads
-App-owned. App cleanup must not independently move or redesign this mechanism while #591
-owns the cutover.
+That placement remains Runenwerk integration ownership. It does not make product/query
+payload semantics App-owned and does not create a generic lifecycle or capability
+registry.
 
 ### RuntimeJobExecutorResource
 
@@ -773,11 +776,9 @@ core/integration-shaped
 Runenwerk/native policy still inherent
   with_frame_pacing
 
-Runenwerk publication integration still inherent
-  add_product_publication_handler
-  add_query_snapshot_publication_handler
-
 owner-specific App extensions
+  AppPublicationExt::add_product_publication_handler
+  AppPublicationExt::add_query_snapshot_publication_handler
   AppActionBindingsExt::add_input_bindings
   AppRenderExt::add_render_flow
   AppRenderExt::update_render_debug_*
@@ -799,12 +800,12 @@ AppSceneExt
 AppRenderExt
 AppSimulationExt
 AppReplayExt
+AppPublicationExt
 AppActionBindingsExt
 ```
 
 These are current concrete owner APIs over the same App/runtime. The remaining inherent
-frame-pacing and product/query publication surfaces are separate Runenwerk ownership
-questions and are not reclassified by the Input cut.
+frame-pacing surface is a separate native-Host/Advancement ownership question.
 
 Moving an operation to an owner extension must not silently reclassify it as pre-run
 composition. Owner APIs must distinguish as applicable:
@@ -933,8 +934,8 @@ This matrix is normative ownership pressure, not permission to move every row in
 | `GameplayRuntimeConfig` | product/game policy | actual product/world/scene owner; not App-owned core state |
 | `UiOverlayState` | UI/render/product integration | actual UI/render integration owner; not App-owned core state |
 | current `StartupState` | product/render readiness | rename/rehome under readiness owner; not App lifecycle |
-| current product/query publication resources | ADR-0022 predecessor integration state | exact replacement/removal/placement remains #591-owned |
-| publication handler registries | Runenwerk publication integration | preserve/refine per #591; App registration does not transfer payload authority |
+| current product/query publication resources | Runenwerk publication integration state | materialize lazily when publication integration is selected; absent from bare App |
+| publication handler registries | Runenwerk publication integration | owner-local `AppPublicationExt`; built-ins install once before owner handlers; payload authority remains owner-local |
 | `RuntimeJobExecutorResource` | Execution Fabric subsystem | Execution Fabric owns semantics; final installation universality needs consumer proof |
 | `RuntimeProductCacheResource` | product execution/cache | Execution Fabric/product owner; final placement follows current consumers |
 
@@ -1028,8 +1029,8 @@ re-resolve current main
 -> only then derive the next slice
 ```
 
-Do not pre-open the full migration tree. #591 may materially change the correct first
-implementation boundary.
+Do not pre-open the full migration tree. Select each subsequent boundary from the
+then-current owner/consumer census after the preceding repair is accepted.
 
 ## 20. Explicit non-goals
 
