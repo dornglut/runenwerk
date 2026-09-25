@@ -392,6 +392,85 @@ fn render_dynamic_targets_descriptor_validation_rejects_invalid_shapes() {
 }
 
 #[test]
+fn fixed_resolution_preflight_accepts_internal_scene_and_native_resolve() {
+    let scene = RenderFlow::new("fixed.preflight.scene")
+        .with_color_target_alias("scene_color")
+        .expect("scene color alias should be valid")
+        .fullscreen_pass("fixed.preflight.scene.pass")
+        .offscreen_products_only()
+        .write_target_alias("scene_color")
+        .finish()
+        .validate()
+        .expect("scene flow should validate");
+    let scene_compiled = compile_flow_plan(&scene).expect("scene flow should compile");
+
+    let resolve = engine::plugins::render::fixed_resolution_resolve_flow()
+        .expect("resolve flow should validate");
+    let resolve_compiled = compile_flow_plan(&resolve).expect("resolve flow should compile");
+
+    let fixed = engine::plugins::render::RenderFixedResolutionExecutionRequest::new(
+        producer(91),
+        scene.id(),
+        alias_key("scene_color"),
+        (1280, 720),
+    )
+    .prepare_against_compiled_flow((1920, 1080), resolve.id(), &scene_compiled)
+    .expect("fixed execution should prepare");
+
+    let to_prepared = |request: &PreparedFlowInvocationRequest| PreparedFlowInvocation {
+        invocation_id: request.invocation_id.clone(),
+        flow_id: request.flow_id,
+        view_id: request.view_id.clone(),
+        inputs: PreparedFlowInputs::default(),
+        target_alias_bindings: request.target_alias_bindings.clone(),
+        history_signature: request.history_signature.clone(),
+    };
+
+    let frame = PreparedRenderFrame {
+        context: PreparedFrameContext {
+            frame_index: 1,
+            flow_registry_revision: 1,
+            shader_registry_revision: 1,
+            prepare_epoch: 1,
+        },
+        surface: PreparedSurfaceInfo::unbound_primary((1920, 1080)),
+        views: vec![
+            PreparedViewFrame::main((1920, 1080)),
+            fixed.internal_view.clone(),
+        ],
+        flows: BTreeMap::new(),
+        flow_invocations: vec![
+            to_prepared(&fixed.scene_invocation),
+            to_prepared(&fixed.resolve_invocation),
+        ],
+        dynamic_texture_targets: vec![fixed.dynamic_target.clone()],
+        dynamic_texture_uploads: Vec::new(),
+        product_selections: Vec::new(),
+        viewport_surface_bindings: ViewportSurfaceBindingRegistry::default(),
+        contributions: PreparedFrameContributions::default(),
+        shader: PreparedShaderSnapshot {
+            registry_revision: 1,
+        },
+    };
+
+    let report = validate_prepared_render_frame(
+        &frame,
+        &[scene_compiled, resolve_compiled],
+        &current_runtime_gpu_capabilities(),
+    );
+
+    assert!(
+        report.is_ready(),
+        "fixed-resolution frame should pass preflight: {:?}",
+        report.diagnostics
+    );
+    assert_eq!(frame.surface.target_size_px, (1920, 1080));
+    assert_eq!(fixed.internal_view.target_size_px, (1280, 720));
+    assert_eq!(fixed.dynamic_target.width, 1280);
+    assert_eq!(fixed.dynamic_target.height, 720);
+}
+
+#[test]
 fn render_dynamic_targets_preflight_reports_missing_target_alias_binding() {
     let flow = RenderFlow::new("preflight.alias.missing")
         .with_color_target_alias("scene_color")
