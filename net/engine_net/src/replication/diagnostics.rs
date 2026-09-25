@@ -32,29 +32,6 @@ pub struct EntityMapTrace {
     pub event: NetEntityMapEvent,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SnapshotAckRejection {
-    StaleCursor {
-        last_acknowledged: crate::replication::SnapshotCursor,
-    },
-    FutureCursor {
-        latest_cursor: crate::replication::SnapshotCursor,
-    },
-    UnsentCursor,
-    PrunedCursor,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SnapshotAckOutcome {
-    Accepted {
-        cursor: crate::replication::SnapshotCursor,
-    },
-    Rejected {
-        cursor: crate::replication::SnapshotCursor,
-        reason: SnapshotAckRejection,
-    },
-}
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ReplicationStats {
     pub full_snapshots_built: u64,

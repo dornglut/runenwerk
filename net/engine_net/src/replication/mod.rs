@@ -4,8 +4,8 @@ pub mod model;
 pub mod timeline;
 
 pub use diagnostics::{
-    DeltaDebugDump, EntityMapTrace, ReplicationStats, SnapshotAckOutcome, SnapshotAckRejection,
-    SnapshotDebugDump, delta_debug_dump, snapshot_debug_dump,
+    DeltaDebugDump, EntityMapTrace, ReplicationStats, SnapshotDebugDump, delta_debug_dump,
+    snapshot_debug_dump,
 };
 pub use driver::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 pub use model::{NetEntityMap, NetEntityMapEvent};

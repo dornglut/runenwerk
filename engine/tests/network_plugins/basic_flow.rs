@@ -300,8 +300,10 @@ fn replication_and_prediction_plugins_run_on_fixed_update() {
 
     let replication = app.world().resource::<ReplicationDiagnostics>().unwrap();
     assert_eq!(replication.fixed_steps_observed, 2);
-    assert_eq!(replication.last_snapshot_cursor, 2);
-    assert_eq!(app.world().resource::<SnapshotCursor>().unwrap().0, 2);
+    assert_eq!(
+        replication.last_snapshot_cursor, 0,
+        "without an admitted RunenNet participant there is no authority replication lineage"
+    );
 
     let prediction = app.world().resource::<PredictionDiagnostics>().unwrap();
     assert_eq!(prediction.fixed_steps_observed, 2);

@@ -7,6 +7,8 @@ use runen_net::session::{
 use std::collections::HashMap;
 
 use super::authority_input::AuthorityInputIntegration;
+use super::authority_replication::AuthorityReplicationIntegration;
+use runen_net::replication::AuthoritySessionError;
 
 /// Read-only engine projection of bindings already accepted by RunenNet [`Session`].
 ///
@@ -59,6 +61,7 @@ pub struct RunenNetSessionCore {
     negotiation: NegotiationManager,
     pub(crate) session: Session,
     pub(crate) authority_input: Option<AuthorityInputIntegration>,
+    pub(crate) authority_replication: Option<AuthorityReplicationIntegration>,
 }
 
 impl RunenNetSessionCore {
@@ -67,6 +70,7 @@ impl RunenNetSessionCore {
             negotiation,
             session,
             authority_input: None,
+            authority_replication: None,
         }
     }
 
@@ -112,6 +116,8 @@ impl RunenNetSessionCore {
         self.session
             .bind_replacement(participant, established)
             .map_err(RunenNetSessionCoreError::Session)?;
+        self.authority_replication_connection_replaced(participant, connection)
+            .map_err(RunenNetSessionCoreError::AuthorityReplication)?;
         projection.record_binding(connection, participant);
         Ok(())
     }
@@ -136,6 +142,8 @@ impl RunenNetSessionCore {
             .map_err(RunenNetSessionCoreError::Session)?;
 
         projection.remove_binding(connection);
+        self.authority_replication_connection_lost(participant, outcome)
+            .map_err(RunenNetSessionCoreError::AuthorityReplication)?;
         let negotiation_cleanup = self.negotiation.terminate(connection);
         self.reconcile_authority_input_memberships()
             .map_err(RunenNetSessionCoreError::AuthorityInput)?;
@@ -158,6 +166,7 @@ impl RunenNetSessionCore {
         if let MembershipState::Bound(connection) = previous_state {
             projection.remove_binding(connection);
         }
+        self.remove_authority_replication_lineage(participant);
         self.reconcile_authority_input_memberships()
             .map_err(RunenNetSessionCoreError::AuthorityInput)?;
         Ok(previous_state)
@@ -172,6 +181,9 @@ impl RunenNetSessionCore {
             .session
             .advance_recovery_clock(new_value)
             .map_err(RunenNetSessionCoreError::Session)?;
+        for participant in &expired {
+            self.remove_authority_replication_lineage(*participant);
+        }
         self.reconcile_authority_input_memberships()
             .map_err(RunenNetSessionCoreError::AuthorityInput)?;
         Ok(expired)
@@ -186,6 +198,7 @@ impl RunenNetSessionCore {
         self.session.close();
         projection.clear();
         self.clear_authority_input();
+        self.clear_authority_replication();
     }
 
     pub fn participant_for_connection(
@@ -206,6 +219,7 @@ pub enum RunenNetSessionCoreError {
     Session(SessionError),
     NegotiationCleanup(NegotiationManagerError),
     AuthorityInput(AuthorityInputError),
+    AuthorityReplication(AuthoritySessionError),
 }
 
 #[cfg(test)]

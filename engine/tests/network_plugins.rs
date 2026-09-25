@@ -1,22 +1,22 @@
 use engine::net::prelude::*;
 use engine::plugins::net::{
-    ActiveClientReplicatedStateProduct, ClientPredictionPolicy, ClientReplicationPolicy,
-    NetPluginConfig, NetworkClientInbox, NetworkClientOutbox, NetworkDiagnostics,
-    NetworkOutboundQueue, NetworkServerInbox, NetworkServerOutbox, NetworkSessionStatus,
-    OutboundServerMessage, PredictionDiagnostics, ReplicationDiagnostics, RunenNetSessionCore,
-    RunenNetSessionProjection, ServerSnapshotReplicationState, client_inbox_is_empty,
-    client_outbox_len, client_prediction_connection_lost,
-    client_prediction_participant_membership_ended, client_prediction_pending_bytes,
-    client_prediction_pending_count, client_prediction_session_closed, client_prediction_state,
-    client_replication_acknowledgement, client_replication_lineage, client_replication_state,
-    enqueue_client_inbox, enqueue_client_outbox, enqueue_server_inbox, enqueue_server_inbox_from,
-    enqueue_server_outbox_broadcast, record_reconnect_attempt,
-    require_client_replication_connection_replacement, server_inbox_is_empty, server_outbox_len,
-    sync_runennet_session_projection,
+    ActiveClientReplicatedStateProduct, AuthorityReplicationPolicy, ClientPredictionPolicy,
+    ClientReplicationPolicy, NetPluginConfig, NetworkClientInbox, NetworkClientOutbox,
+    NetworkDiagnostics, NetworkOutboundQueue, NetworkServerInbox, NetworkServerOutbox,
+    NetworkSessionStatus, OutboundServerMessage, PredictionDiagnostics, ReplicationDiagnostics,
+    RunenNetSessionCore, RunenNetSessionProjection, authority_replication_submissions,
+    cancel_authority_replication_submission, client_inbox_is_empty, client_outbox_len,
+    client_prediction_connection_lost, client_prediction_participant_membership_ended,
+    client_prediction_pending_bytes, client_prediction_pending_count,
+    client_prediction_session_closed, client_prediction_state, client_replication_acknowledgement,
+    client_replication_lineage, client_replication_state, enqueue_client_inbox,
+    enqueue_client_outbox, enqueue_server_inbox, enqueue_server_inbox_from,
+    enqueue_server_outbox_broadcast, record_authority_replication_delivery_acceptance,
+    record_reconnect_attempt, require_client_replication_connection_replacement,
+    server_inbox_is_empty, server_outbox_len, sync_runennet_session_projection,
 };
 use engine::plugins::{ScenePlugin, SimulationPlugin, default_plugins};
 use engine::prelude::*;
-use runen_net::identity::{ConnectionHandle, ParticipantId, SessionId};
 use runen_net::input::{
     AuthorityInputAggregateLimits, AuthorityInputLimits, PredictionInvalidationReason,
     PredictionLimits, PredictionState as RunenNetPredictionState,
@@ -26,10 +26,14 @@ use runen_net::protocol::{
     NegotiationRequirements, OfferLimits, ProtocolContract, ProtocolId, ProtocolRevision,
 };
 use runen_net::replication::{
-    ClientAggregateLimits, ClientRecoveryReason, ClientReplicationState, ReplicationLineageKey,
-    ReplicationRetentionLimits,
+    AuthorityAggregateLimits, ClientAggregateLimits, ClientRecoveryReason, ClientReplicationState,
+    ReplicationLineageKey, ReplicationRetentionLimits,
 };
 use runen_net::session::{RecoveryDuration, RetentionPolicy, Session, SessionLimits};
+use runen_net::{
+    DeliveryAcceptance,
+    identity::{ConnectionHandle, ParticipantId, SessionId},
+};
 use serde::{Deserialize, Serialize};
 use std::io;
 use std::num::{NonZeroU64, NonZeroUsize};
@@ -231,8 +235,6 @@ impl InputDriver for TestReplicationDriver {
     }
 }
 
-type ServerSnapshotState = ServerSnapshotReplicationState<TestSnapshot>;
-
 fn test_client_replication_policy() -> ClientReplicationPolicy {
     test_client_replication_policy_with_state_limit(64 * 1024)
 }
@@ -261,6 +263,27 @@ fn test_client_replication_policy_with_state_limit(
         aggregate,
         retention,
     )
+}
+
+fn test_authority_replication_policy() -> AuthorityReplicationPolicy {
+    let state_image =
+        NonZeroUsize::new(64 * 1024).expect("test state-image limit must be non-zero");
+    let retention = ReplicationRetentionLimits::new(
+        state_image,
+        NonZeroUsize::new(64).expect("test retained-image limit must be non-zero"),
+        NonZeroUsize::new(4 * 1024 * 1024).expect("test retained-byte limit must be non-zero"),
+        state_image,
+        NonZeroUsize::new(64).expect("test emission-evidence limit must be non-zero"),
+    )
+    .expect("test authority retention limits must be valid");
+    let aggregate = AuthorityAggregateLimits::new(
+        NonZeroUsize::new(16).expect("test lineage limit must be non-zero"),
+        NonZeroUsize::new(4 * 1024 * 1024).expect("test state-byte limit must be non-zero"),
+        NonZeroUsize::new(1_024).expect("test retained-image aggregate must be non-zero"),
+        NonZeroUsize::new(16 * 1024 * 1024).expect("test retained-byte aggregate must be non-zero"),
+        NonZeroUsize::new(1_024).expect("test emission-evidence aggregate must be non-zero"),
+    );
+    AuthorityReplicationPolicy::new(aggregate, retention)
 }
 
 fn test_client_prediction_policy() -> ClientPredictionPolicy {
@@ -349,6 +372,7 @@ fn test_runennet_session_core_without_authority_input() -> RunenNetSessionCore {
 fn test_runennet_session_core() -> RunenNetSessionCore {
     test_runennet_session_core_without_authority_input()
         .with_authority_input_policy(test_authority_input_policy())
+        .with_authority_replication_policy(test_authority_replication_policy())
 }
 
 fn establish_runennet_negotiation(core: &mut RunenNetSessionCore, connection: ConnectionHandle) {
@@ -401,6 +425,8 @@ include!("network_plugins/basic_flow.rs");
 include!("network_plugins/runtime_and_replication.rs");
 
 include!("network_plugins/delta_and_reconnect.rs");
+
+include!("network_plugins/authority_replication_cutover.rs");
 
 include!("network_plugins/client_replication_cutover.rs");
 

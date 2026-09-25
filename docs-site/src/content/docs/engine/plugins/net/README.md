@@ -12,8 +12,9 @@ last_reviewed: 2026-09-25
 
 ## Purpose
 
-`engine/src/plugins/net` integrates standalone RunenNet lifecycle/session, authority-input, and
-client-replication consistency and prediction semantics with the remaining Runenwerk server-replication integration, engine resources, and schedules.
+`engine/src/plugins/net` integrates standalone RunenNet lifecycle/session, authority-input,
+authority-replication, client-replication, and prediction semantics with Runenwerk-owned engine
+resources, gameplay codecs, host delivery integration, and schedules.
 
 The game-facing entry point is:
 
@@ -43,26 +44,40 @@ Runenwerk engine integration owns:
 - the read-only `RunenNetSessionProjection` used for engine routing and diagnostics;
 - product/session metadata and host reconnect/deployment policy;
 - bounded inbox/outbox staging for retained replication/application payloads;
-- retained `engine_net` server-replication/envelope integration while RN8 migration continues;
+- retained `engine_net` wire envelopes and driver escape hatches while RN8 migration continues;
+- explicit finite authority-replication policy, encoded snapshot/delta formation, and host `DeliveryAcceptance` feedback around RunenNet `AuthorityReplicationSession`;
 - explicit finite authority-input policy selection and host execution staging after RunenNet admission;
 - explicit finite client-replication policy, complete encoded-product activation, and downstream host realization around RunenNet `ClientReplicationSet`.
 
 The projection is derived state. It never authorizes admission, loss, retention, replacement,
 expiry, removal, or closure.
 
-## Multi-Connection Replication
+## Multi-Connection Authority Replication
 
-Retained server replication is keyed by RunenNet `ConnectionHandle` and maintains independent
-per-connection baseline state.
+Server/host replication uses one RunenNet `AuthorityReplicationSession<Vec<u8>, Vec<u8>>` associated
+with `RunenNetSessionCore`. RunenNet owns the per-participant emitted cursor, confirmed baseline,
+retained encoded state, recovery generation, pending candidate, emission evidence, and ACK
+classification.
 
-- `ConnectionBaselineCheckpoint` tracks sent/acknowledged snapshot cursors and full-resync state.
-- `ServerSnapshotReplicationState<TSnapshot>` stores checkpoints and snapshot history per
-  `ConnectionHandle`.
-- client consistency/history/recovery state is owned by RunenNet `ClientReplicationSet`; Runenwerk retains only the active complete encoded product used for downstream realization.
-- `OutboundServerMessage::ToConnection { connection, message }` stages targeted output;
-  `OutboundServerMessage::Broadcast(message)` stages broadcast output.
+Runenwerk captures the connection-specific gameplay snapshot and encodes the complete target image.
+A fixed replication step may prepare a `Snapshot` or `DeltaSnapshot`, but preparation is not
+emission. The host reads `authority_replication_submissions`, submits each complete message through
+its real delivery flow, and calls `record_authority_replication_delivery_acceptance` with the
+resulting RunenNet `DeliveryAcceptance`.
 
-Server-side ACK processing still uses projected active `ConnectionHandle`s for the retained authority baseline state. Client-side ACK cursor/tick authority comes from the committed RunenNet client lineage, not from incoming message fields or a Runenwerk client history mirror. Remote participant input uses `RunenNetSessionCore` to resolve the actual session participant for the source connection and delegates stale/future/duplicate/conflict/resource and authorization semantics to RunenNet `AuthorityInputSession`.
+- `Accepted` records emission and makes the cursor ACK-eligible.
+- `NotAccepted` leaves the exact pending candidate available for an explicit host retry.
+- `cancel_authority_replication_submission` explicitly abandons a still-current pending candidate.
+- stale submission tokens cannot finalize a newer candidate.
+- queue admission, `NetworkOutboundQueue` projection, and FrameEnd flushing never count as delivery acceptance.
+
+Authority replication requires explicit finite `AuthorityReplicationPolicy`; Runenwerk defines no
+numeric defaults. Connection loss, replacement, terminal membership removal/expiry, and session
+closure are forwarded through the RunenNet session owner rather than inferred from queue traffic.
+
+Client consistency/history/recovery remains owned by RunenNet `ClientReplicationSet`; Runenwerk
+retains only the active complete encoded product used for downstream realization. Remote participant
+input likewise delegates reusable admission semantics to RunenNet `AuthorityInputSession`.
 
 ## Client Replication Consistency
 

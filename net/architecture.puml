@@ -1,5 +1,5 @@
 @startuml
-title net workspace architecture (current through RN8 N9)
+title net workspace architecture (current through RN8 N12)
 
 skinparam componentStyle rectangle
 skinparam packageStyle rectangle
@@ -31,7 +31,7 @@ package "net (remaining Runenwerk migration evidence)" {
 
   package "engine_net" {
     [snapshot / ack / input envelopes] as net_protocol
-    [live server replication / protocol integration] as net_replication
+    [wire envelopes / gameplay replication codecs] as net_replication
   }
 
   package "engine_history" {
@@ -47,11 +47,12 @@ engine_session --> runennet_core : negotiation + session lifecycle
 engine_session --> session_projection : accepted bindings only
 session_projection --> owner_routing
 session_projection --> engine_replication : authorized ConnectionHandle set
-engine_replication --> net_replication
+engine_replication --> runennet_core : authority/client replication semantics
+engine_replication --> net_replication : encode/decode + envelope projection
 engine_io --> net_protocol
 engine_replay --> history
 
-net_replication --> runennet_core : ConnectionHandle identity
+net_replication --> runennet_core : encoded products + DeliveryAcceptance feedback
 net_replication --> sim
 history --> sim
 
@@ -67,9 +68,10 @@ It does not authorize lifecycle mutations.
 end note
 
 note right of net_replication
-engine_net is temporary live migration evidence.
-Dead runtime commands/events, synthetic transport lanes,
-client prediction scaffolding, and component-registration authoring metadata are gone.
+engine_net retains wire envelopes and gameplay codec escape hatches.
+RunenNet owns authority/client replication consistency,
+history, recovery, emission evidence, ACK classification,
+and participant prediction semantics.
 end note
 
 note right of engine_io

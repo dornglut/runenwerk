@@ -1,8 +1,9 @@
 use engine::SimulationTick;
 use engine::net::prelude::{Ack, ClientMessage, NetPlugin, NetRole, SnapshotCursor};
 use engine::plugins::net::{
-    NetStreamingStateResource, RunenNetSessionCore, RunenNetSessionProjection,
-    enqueue_server_inbox_from, sync_runennet_session_projection,
+    AuthorityReplicationPolicy, NetStreamingStateResource, RunenNetSessionCore,
+    RunenNetSessionProjection, authority_replication_submissions, enqueue_server_inbox_from,
+    record_authority_replication_delivery_acceptance, sync_runennet_session_projection,
 };
 use engine::plugins::world::adapters::resources::{
     PartitionConfigResource, ReplicationStateResource, WorldQuantizationScaleResource,
@@ -12,11 +13,13 @@ use engine::plugins::world::plugin::{WorldAuthorityState, WorldPlugin};
 use engine::plugins::{FixedStepPlugin, SimulationPlugin};
 use engine::prelude::{App, AppFixedStepExt};
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
+use runen_net::DeliveryAcceptance;
 use runen_net::identity::{ConnectionHandle, ParticipantId, SessionId};
 use runen_net::protocol::{
     CompatibilityOffer, NegotiatedContract, NegotiationManager, NegotiationManagerLimits,
     NegotiationRequirements, OfferLimits, ProtocolContract, ProtocolId, ProtocolRevision,
 };
+use runen_net::replication::{AuthorityAggregateLimits, ReplicationRetentionLimits};
 use runen_net::session::{RetentionPolicy, Session, SessionLimits};
 use runen_spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, WorldId};
 use serde::{Deserialize, Serialize};
@@ -48,6 +51,27 @@ fn test_compatibility_offer() -> CompatibilityOffer {
     CompatibilityOffer::new(vec![test_protocol_contract()], vec![], vec![], None)
 }
 
+fn test_authority_replication_policy() -> AuthorityReplicationPolicy {
+    let state_image =
+        NonZeroUsize::new(64 * 1024).expect("test state-image limit must be non-zero");
+    let retention = ReplicationRetentionLimits::new(
+        state_image,
+        NonZeroUsize::new(64).expect("test retained-image limit must be non-zero"),
+        NonZeroUsize::new(4 * 1024 * 1024).expect("test retained-byte limit must be non-zero"),
+        state_image,
+        NonZeroUsize::new(64).expect("test emission-evidence limit must be non-zero"),
+    )
+    .expect("test authority retention limits must be valid");
+    let aggregate = AuthorityAggregateLimits::new(
+        NonZeroUsize::new(4).expect("test lineage limit must be non-zero"),
+        NonZeroUsize::new(4 * 1024 * 1024).expect("test state-byte limit must be non-zero"),
+        NonZeroUsize::new(256).expect("test retained-image aggregate must be non-zero"),
+        NonZeroUsize::new(16 * 1024 * 1024).expect("test retained-byte aggregate must be non-zero"),
+        NonZeroUsize::new(256).expect("test emission-evidence aggregate must be non-zero"),
+    );
+    AuthorityReplicationPolicy::new(aggregate, retention)
+}
+
 fn test_runennet_session_core() -> RunenNetSessionCore {
     let negotiation =
         NegotiationManager::new(OfferLimits::default(), NegotiationManagerLimits::default())
@@ -56,6 +80,7 @@ fn test_runennet_session_core() -> RunenNetSessionCore {
     let limits = SessionLimits::new(capacity, capacity).expect("test session limits must be valid");
     let session = Session::new(SessionId::new(1), limits);
     RunenNetSessionCore::new(negotiation, session)
+        .with_authority_replication_policy(test_authority_replication_policy())
 }
 
 fn establish_runennet_connection(
@@ -400,7 +425,8 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
     let mut core = test_runennet_session_core();
     let mut projection = RunenNetSessionProjection::default();
     establish_runennet_connection(&mut core, &mut projection, participant, connection);
-    app.world_mut().insert_resource(projection.clone());
+    app.world_mut().insert_resource(core);
+    app.world_mut().insert_resource(projection);
     sync_runennet_session_projection(app.world_mut());
 
     let fixed_point_scale = **app
@@ -423,7 +449,19 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
 
     let mut app = app
         .run_for_fixed_steps(1)
-        .expect("fixed step should produce one replication step");
+        .expect("fixed step should prepare one replication candidate");
+    let submission = authority_replication_submissions(app.world())
+        .expect("authority submission projection should be available")
+        .into_iter()
+        .find(|submission| submission.connection() == connection)
+        .expect("active connection should have a prepared authority submission");
+    record_authority_replication_delivery_acceptance(
+        app.world_mut(),
+        submission.token(),
+        DeliveryAcceptance::Accepted,
+    )
+    .expect("delivery acceptance should be recorded")
+    .expect("accepted authority submission should become emitted");
 
     {
         let interest = app
@@ -525,6 +563,14 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
         );
     }
 
+    let mut core = app
+        .world_mut()
+        .remove_resource::<RunenNetSessionCore>()
+        .expect("RunenNet session core should be installed");
+    let mut projection = app
+        .world_mut()
+        .remove_resource::<RunenNetSessionProjection>()
+        .expect("RunenNet session projection should be installed");
     core.connection_lost(
         &mut projection,
         participant,
@@ -532,6 +578,7 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
         RetentionPolicy::Terminate,
     )
     .expect("RunenNet terminal connection loss should succeed");
+    app.world_mut().insert_resource(core);
     app.world_mut().insert_resource(projection);
     sync_runennet_session_projection(app.world_mut());
 

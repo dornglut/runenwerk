@@ -5,7 +5,7 @@ status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-09-01
+last_reviewed: 2026-09-25
 related_roadmaps:
   - ../../net/multiplayer-replication-implementation-roadmap.md
 ---
@@ -25,8 +25,8 @@ In scope:
 - retained full-snapshot and delta payload envelopes;
 - snapshot cursors and simulation ticks;
 - retained client ACK payloads;
-- engine per-connection baseline/checkpoint state;
-- deterministic full-resync fallback when a retained baseline cannot be used;
+- RunenNet-owned authority replication lineage, retained baseline, recovery, emission, and ACK semantics;
+- transport-independent host delivery-acceptance feedback;
 - current driver-based snapshot/delta extraction and application.
 
 Out of scope:
@@ -45,9 +45,9 @@ Standalone RunenNet owns reusable networking identity and lifecycle semantics. I
 
 Runenwerk currently retains replication migration contracts that still have maintained consumers:
 
-- `engine_net` contains snapshot, delta, ACK, input, profile, interest, mapping, and prediction-related migration evidence;
-- `engine/src/plugins/net` owns engine scheduling, driver invocation, per-connection replication checkpoints, retained snapshot histories, diagnostics, and outbound staging;
-- retained connection-scoped state is keyed directly by RunenNet `ConnectionHandle`;
+- `engine_net` contains retained snapshot/delta/ACK/input wire envelopes, driver escape hatches, mapping, timeline, and diagnostics helpers;
+- `engine/src/plugins/net` owns engine scheduling, driver invocation, encoded candidate formation, host delivery feedback integration, diagnostics, and projections;
+- RunenNet `AuthorityReplicationSession` owns authority cursor/baseline/history/recovery/emission/ACK state per authorized participant;
 - gameplay/app modules own payload extraction meaning, application meaning, and presentation policy.
 
 `engine_net` is not the long-term reusable networking authority and must not regain session, admission, connection-allocation, or transport-runtime semantics.
@@ -56,14 +56,20 @@ Runenwerk currently retains replication migration contracts that still have main
 
 Implemented now:
 
-- retained `Snapshot`, `DeltaSnapshot`, `Ack`, and `SnapshotCursor` contracts;
-- engine `ServerSnapshotReplicationState` and `ConnectionBaselineCheckpoint` keyed by RunenNet `ConnectionHandle`;
-- sent-cursor and retained-baseline validation for ACK acceptance;
-- per-connection full-snapshot fallback when a usable ACK baseline is unavailable;
-- driver-based snapshot capture, delta construction, decode, and application;
+- retained `Snapshot`, `DeltaSnapshot`, `Ack`, and `SnapshotCursor` wire contracts;
+- RunenNet-owned authority cursor, retained encoded baselines, recovery state, pending candidates,
+  emission evidence, and ACK classification through `AuthorityReplicationSession<Vec<u8>, Vec<u8>>`;
+- explicit finite `AuthorityReplicationPolicy` with exact encoded snapshot/delta byte accounting;
+- driver-based connection-specific snapshot capture, delta construction, decode, and application;
+- prepared authority submissions that do not become emitted merely through engine projection or queue admission;
+- explicit host feedback using actual RunenNet `DeliveryAcceptance`, with `Accepted` alone making
+  a cursor emitted/ACK-eligible, `NotAccepted` preserving the exact pending candidate for retry,
+  and explicit validated cancellation;
 - RunenNet-owned client cursor/baseline/recovery checks through `ClientReplicationSet`;
-- deterministic per-connection snapshot/delta emission from admitted RunenNet connections;
-- focused tests for stale/future/unsent/pruned ACK handling, independent connection baselines, snapshot/delta application, and full-resync fallback.
+- lifecycle composition that cancels pending work on retained loss, forces full recovery on
+  replacement, removes terminal lineages, and clears authority state on session close;
+- focused tests for delivery acceptance, stale feedback, authorization, independent participant
+  baselines, snapshot/delta application, recovery, and exact resource accounting.
 
 The former `AuthoritativeServerRuntime`, `ClientReplicationRuntime`, session runtime bridge, and engine-owned connection/session authority are not part of the current architecture.
 
@@ -73,18 +79,18 @@ Partial now:
 
 - normal gameplay replication still relies on low-level driver integration rather than a complete standard ECS extraction/apply path;
 - component/resource schema identity and standard payload authoring remain incomplete at the Runenwerk integration layer;
-- retained replication/prediction contracts still live in `engine_net` pending later dependency-ordered RN8 disposition;
+- retained wire/driver/timeline contracts still live in `engine_net` pending later dependency-ordered RN8 disposition;
 - richer per-connection diagnostics and relevancy explanations remain future work.
 
 ## Invariants
 
 - Authoritative replicated state originates from the authoritative simulation, not clients.
 - Connection identity used by retained replication comes from RunenNet.
-- Snapshot cursors advance monotonically within the retained authoritative timeline.
-- ACKs cannot advance a baseline unless the cursor was sent and its required retained state is available.
-- A delta must reference a valid baseline for that connection.
-- Missing, mismatched, malformed, or pruned retained baselines recover through deterministic full-snapshot fallback for the affected connection.
-- Replication fallback is per connection, not global.
+- Authority snapshot cursors advance only when RunenNet records accepted delivery; candidate preparation alone is not emission.
+- ACKs cannot advance a baseline unless RunenNet has emission evidence for that cursor and the live session authorizes the connection.
+- A delta must reference the exact retained RunenNet-confirmed baseline for that participant.
+- Missing or evicted confirmed baselines recover through RunenNet full-snapshot recovery for the affected participant lineage.
+- Replication recovery is participant-scoped, not process-global.
 - Transport does not decide replication or gameplay visibility policy.
 - Retained `engine_net` contracts must not become a compatibility facade around RunenNet.
 
@@ -106,8 +112,8 @@ For changes to the current retained replication boundary, validate as applicable
 
 - focused `engine_net` replication tests;
 - focused engine networking/Core lifecycle tests;
-- independent per-connection baseline and ACK rejection tests;
-- snapshot/delta application and fallback tests;
+- independent participant-lineage baseline, ACK authorization/rejection, and stale-delivery-feedback tests;
+- snapshot/delta application, delivery-acceptance, resource-limit, and recovery tests;
 - repository canonical validation at the exact reviewed head;
 - documentation validation.
 
