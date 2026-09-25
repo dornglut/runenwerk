@@ -1642,6 +1642,92 @@ mod tests {
     }
 
     #[test]
+    fn fixed_quality_native_fallback_discards_all_partial_fixed_state() {
+        let scene = render_lab_fixed_quality_flow().expect("quality flow should author");
+        let resolve =
+            engine::plugins::render::fixed_resolution_resolve_flow().expect("resolve flow");
+        let scene_plan = engine::plugins::render::compile_flow_plan(&scene)
+            .expect("quality flow should compile");
+        let resolve_plan = engine::plugins::render::compile_flow_plan(&resolve)
+            .expect("resolve flow should compile");
+        let producer_id = producer(RL2_PRODUCER_ID);
+        let admission = engine::plugins::render::RenderFixedResolutionExecutionRequest::new(
+            producer_id,
+            RenderSurfaceId::primary(),
+            scene.id(),
+            engine::plugins::render::RenderTargetAliasKey::new(RL2_QUALITY_COLOR_ALIAS)
+                .expect("quality alias"),
+            (1280, 800),
+        )
+        .admit_against_compiled_flows((1920, 1080), &scene_plan, &resolve_plan);
+        let engine::plugins::render::RenderFixedResolutionExecutionAdmission::NativeFallback(
+            fallback,
+        ) = &admission
+        else {
+            panic!("aspect mismatch should produce explicit native fallback");
+        };
+
+        let native_scene_invocation = fallback
+            .native_scene_invocation
+            .clone()
+            .expect("valid alias-driven scene should provide native fallback");
+        let camera = RenderLabCamera::default();
+        let (target_key, target, contribution) =
+            build_render_lab_radiance_publication(&camera, producer_id, (1920, 1080))
+                .expect("native fallback radiance publication should build");
+        let native_scene_invocation = native_scene_invocation
+            .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, target_key.clone())
+            .expect("native fallback radiance alias should bind");
+
+        let mut targets = RenderDynamicTextureTargetRequestRegistryResource::default();
+        let mut frame_requests = PreparedRenderFrameRequestResource::default();
+        let mut contributions = RenderDeterministicFrameContributionResource::default();
+        stage_render_lab_native_quality_fallback_publication(
+            &mut targets,
+            &mut frame_requests,
+            &mut contributions,
+            producer_id,
+            fallback.render_surface_id,
+            target,
+            native_scene_invocation.clone(),
+            contribution,
+        )
+        .expect("native fallback publication should remain atomic");
+
+        let published_targets = targets.snapshot_for_surface(RenderSurfaceId::primary());
+        assert_eq!(published_targets.len(), 1);
+        assert_eq!(published_targets[0].key, target_key);
+        assert_eq!((published_targets[0].width, published_targets[0].height), (1920, 1080));
+        assert!(
+            frame_requests
+                .requested_views_for_surface(RenderSurfaceId::primary())
+                .is_empty(),
+            "native fallback must not retain the fixed internal view"
+        );
+        let invocations =
+            frame_requests.requested_flow_invocations_for_surface(RenderSurfaceId::primary());
+        assert_eq!(invocations.len(), 1);
+        assert_eq!(
+            invocations[0].invocation_id,
+            native_scene_invocation.invocation_id
+        );
+        assert_eq!(invocations[0].view_id, "main");
+        assert!(
+            invocations
+                .iter()
+                .all(|invocation| invocation.flow_id != resolve.id()),
+            "native fallback must not publish the fixed resolve invocation"
+        );
+        assert!(
+            !frame_requests.replaces_automatic_main_flow(
+                RenderSurfaceId::primary(),
+                scene.id()
+            ),
+            "explicit native main invocation must not retain a fixed replacement claim"
+        );
+    }
+
+    #[test]
     fn rl2_rejects_deterministic_publication_to_a_secondary_surface() {
         let flow = render_lab_flow().expect("RL2 flow should author");
         let fixture = founding_fixture().expect("test fixture should build");
