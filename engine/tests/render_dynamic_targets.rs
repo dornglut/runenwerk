@@ -460,7 +460,7 @@ fn fixed_resolution_preflight_accepts_internal_scene_and_native_resolve() {
     );
 
     assert!(
-        report.is_ready(),
+        !report.has_errors(),
         "fixed-resolution frame should pass preflight: {:?}",
         report.diagnostics
     );
