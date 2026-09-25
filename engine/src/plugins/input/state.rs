@@ -178,11 +178,7 @@ impl InputState {
         std::mem::take(&mut self.device_observation_groups)
     }
 
-    pub(crate) fn handle_continuity_loss(
-        &mut self,
-        context: InputContext,
-        loss: ContinuityLoss,
-    ) {
+    pub(crate) fn handle_continuity_loss(&mut self, context: InputContext, loss: ContinuityLoss) {
         self.neutral
             .admit(&InputObservationGroup::single(
                 context,

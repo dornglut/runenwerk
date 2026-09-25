@@ -1179,7 +1179,9 @@ mod tests {
         let secondary =
             NativeWindowId::try_from_raw(2).expect("secondary native window id should be valid");
         let backend_device = winit::event::DeviceId::dummy();
-        let context = runner.input_adapter.window_context(secondary, backend_device);
+        let context = runner
+            .input_adapter
+            .window_context(secondary, backend_device);
         runner
             .apply_event_for_native_window(secondary, normalized_shift_press(context))
             .expect("secondary key press should apply");
@@ -1199,7 +1201,9 @@ mod tests {
         );
         assert_eq!(runner.input_adapter.window_source_context(secondary), None);
 
-        let replacement = runner.input_adapter.window_context(secondary, backend_device);
+        let replacement = runner
+            .input_adapter
+            .window_context(secondary, backend_device);
         assert_ne!(replacement.source, context.source);
         assert_eq!(replacement.device, context.device);
     }

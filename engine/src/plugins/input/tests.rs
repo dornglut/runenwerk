@@ -5,8 +5,8 @@ use crate::plugins::{
 };
 use runen_input::{
     ContactId, ContactInput, ContactPhase, ContinuityLoss, CoordinateSpace, DigitalState,
-    InputContext, InputDeviceId, InputSourceId, KeyLocation, KeyboardInput,
-    LogicalKey, NativeLogicalKey, ObservationOrigin, PhysicalKeyIdentity, Point2, PointerButton,
+    InputContext, InputDeviceId, InputSourceId, KeyLocation, KeyboardInput, LogicalKey,
+    NativeLogicalKey, ObservationOrigin, PhysicalKeyIdentity, Point2, PointerButton,
     PointerButtonInput,
 };
 use winit::event::{ElementState, MouseButton};

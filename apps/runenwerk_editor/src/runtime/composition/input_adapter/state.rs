@@ -42,9 +42,8 @@ impl ModifierState {
     }
 
     fn invalidate_continuity(&mut self, context: InputContext, loss: ContinuityLoss) {
-        self.held.retain(|(candidate, _)| {
-            !continuity_loss_contains_context(context, loss, *candidate)
-        });
+        self.held
+            .retain(|(candidate, _)| !continuity_loss_contains_context(context, loss, *candidate));
     }
 
     fn snapshot(&self) -> Modifiers {
