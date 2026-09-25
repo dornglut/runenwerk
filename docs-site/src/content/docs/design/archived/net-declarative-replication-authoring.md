@@ -20,11 +20,11 @@ This document records the former component-registration authoring target around
 It is not current networking architecture and must not be used to infer the future
 ordinary multiplayer authoring syntax.
 
-The macros described below still exist as migration-surface implementation evidence,
-but current Runenwerk networking authority treats retained `engine_net` and
-`engine_net_macros` as deletion-bound RN8 residue. Current integration ownership is
-recorded by the [Runenwerk networking architecture](../../net/net-architecture.md) and
-the [multiplayer replication roadmap](../../net/multiplayer-replication-implementation-roadmap.md).
+The macros and descriptor registry described below were retained temporarily as RN8 migration
+evidence and were later deleted once exact consumer closure proved they had no maintained runtime
+consumer. Current integration ownership is recorded by the
+[Runenwerk networking architecture](../../net/net-architecture.md) and the
+[multiplayer replication roadmap](../../net/multiplayer-replication-implementation-roadmap.md).
 The future common authoring path remains gated by accepted RunenECS/RunenNet integration
 evidence; this archive does not reactivate or freeze per-component registration syntax.
 

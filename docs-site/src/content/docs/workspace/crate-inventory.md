@@ -22,7 +22,7 @@ Dependency direction, peer-framework ownership, and clean-cutover rules live in 
 - `foundation`: low-level reusable primitives with no domain/runtime/app dependencies.
 - `domain`: engine-agnostic reusable contracts and logic owned by Runenwerk while they remain local.
 - `engine/runtime`: runtime composition, plugins, renderer/backend integration, and app-loop glue.
-- `net`: remaining Runenwerk simulation/history/network-authoring and migration surfaces.
+- `net`: remaining Runenwerk simulation/history/network integration and migration surfaces.
 - `app`: runnable applications and tools.
 - `adapter/tool`: external host integrations and tooling glue.
 
@@ -116,8 +116,7 @@ Reusable spatial identity/addressing mechanics are not local workspace crates; R
 | --- | --- | --- | --- |
 | `engine` | `engine` | engine/runtime | App/runtime/plugin composition and render/input/time/scene/world/net integration. |
 | `engine_render_macros` | `engine_render_macros` | engine/runtime | Render derive macros for GPU parameter contracts. |
-| `engine_net` | `net/engine_net` | net | Temporary live replication/protocol-payload/input/prediction migration surface; standalone RunenNet owns reusable networking semantics. |
-| `engine_net_macros` | `net/engine_net_macros` | net | Remaining declarative replication metadata macros pending RN8 disposition. |
+| `engine_net` | `net/engine_net` | net | Temporary live server-replication/protocol-payload integration surface; standalone RunenNet owns reusable networking semantics. |
 | `engine_sim` | `net/engine_sim` | net | Simulation identity, tick, hash, profile, RNG, command-frame, and codec vocabulary. |
 | `engine_replay` | `net/engine_history` | net | Replay/history/archive/controller/policy/validation substrate. |
 

@@ -16,9 +16,9 @@ related:
 ## Archive disposition
 
 This document records the former hard-coded `engine_net` interest-policy target. It is
-not current reusable networking architecture. The `InterestPolicy` vocabulary described
-below still exists in current source as RN8 migration residue; that implementation fact
-does not make it the future semantic owner.
+not current reusable networking architecture. The former `InterestPolicy` vocabulary described
+below was deleted with the legacy component-registration metadata surface after exact consumer
+closure proved it had no maintained runtime consumer.
 
 Current Runenwerk networking authority keeps concrete world, spatial, team, audience,
 and gameplay relevancy policy outside reusable networking semantics. Current integration
