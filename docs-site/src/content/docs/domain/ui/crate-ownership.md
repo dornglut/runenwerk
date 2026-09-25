@@ -5,7 +5,7 @@ status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-06-20
+last_reviewed: 2026-09-25
 ---
 
 # UI Crate Ownership
@@ -36,15 +36,15 @@ authored source
 
 | Layer | Meaning |
 |---|---|
-| `foundation` | Primitive UI value types and schema vocabulary. No dependency on higher UI crates. |
+| `foundation` | Current local primitive UI values. Reusable runtime-shaped primitives are predecessor authority for migrated consumers; retained authored vocabulary must have an independent Runenwerk semantic reason. |
 | `definition` | Authored and normalized UI source contracts. |
 | `definition_adapter` | Migration/bridge/adaptation from definition to older retained UI or app workflows. |
 | `program` | UI semantic program, controls, lowering, compiler, artifacts, evaluator, runtime view, binding, host contracts. |
 | `render` | Renderer-neutral render facts and primitive-generation contracts. |
 | `proof` | Story/proof/inspection/static-headless proof contracts. |
 | `composition` | App-neutral saved/ratified structural composition and transient adaptive-mechanism contracts. No app/editor/provider/native-window semantics. |
-| `surface` | Generic surface/mount/intent envelopes. No concrete game/editor/world semantics. |
-| `retained` | Existing retained UI runtime/widges/tree/graph-editor compatibility layer. |
+| `surface` | Temporary predecessor surface/mount/intent compatibility envelopes. This is not a durable target layer. |
+| `retained` | Existing local retained runtime/tree/widget compatibility layer. For migrated consumers, mounted/runtime authority moves to RunenUI; product-specific graph-editor semantics may remain separately owned. |
 | `testing` | Test helpers and conformance utilities. |
 | `app` | Application/editor orchestration. Not allowed inside `domain/ui`; listed for dependency-direction reasoning only. |
 
@@ -156,29 +156,57 @@ hold mutable composition state, execute transactions, persist canonical state,
 or import app/editor/Draw/game/engine/windowing/provider/session semantics.
 Hosts own policy acceptance and any later typed transaction submission.
 
-## Temporary surface ownership rule
+## Temporary surface and host predecessor rules
 
-Until its responsibility-by-responsibility supersession map is completed,
-`ui_surface` remains a temporary generic compatibility boundary for:
+`ui_surface` remains a temporary compatibility boundary only while current
+consumers still depend on it. ADR 0013 requires responsibility-by-responsibility
+supersession:
 
 ```text
-surface definition id
-surface instance id
-host instance id
-capability set
-intent envelope
-payload schema
-observation/presentation envelope
-mount/session metadata
-diagnostics
+reusable mounted/runtime/input/accessibility semantics
+    -> RunenUI when the named consumer migrates
+
+app/domain capability, ratification, session, content and mutation meaning
+    -> actual Runenwerk app/domain owner
+
+renderer/product Surface vocabulary
+    -> renderer/product owners, not ui_surface
 ```
 
-This is current-code description, not target ownership. No new composition
-authority may be added to `ui_surface`, and it must not be deleted until each
-useful neutral contract has a replacement contract and proof or an explicit
-deferred non-goal.
+No new composition, mounted-runtime, product, or world-space authority may be
+added to `ui_surface`. It is deleted after the exact-source census proves its
+last maintained responsibility has moved.
 
-Concrete semantic verbs like `SelectEntity`, `ActivateField`, `FocusEntity`, world-space prompt behavior, nameplates, damage numbers, world anchors, culling, occlusion, and gameplay binding belong to later editor/game/world-space tracks.
+`ui_hosts` is likewise predecessor/mixed authority. Only independently useful
+UiProgram-specific lifecycle/event/output contracts may survive under an
+owner-accurate boundary. Generic runtime, windowing, input, renderer, and app
+mutation authority must not remain there.
+
+Concrete semantic verbs like `SelectEntity`, `ActivateField`, `FocusEntity`,
+world-space prompt behavior, nameplates, damage numbers, world anchors, culling,
+occlusion, and gameplay binding belong to their editor/game/world owners.
+
+## Standalone RunenUI adoption rule
+
+The machine-readable map describes current Runenwerk dependencies; it does not
+grant permanent reusable-framework ownership.
+
+For a consumer accepted onto standalone RunenUI:
+
+- `ui_math`, `ui_geometry`, `ui_input`, `ui_layout`, `ui_text`,
+  runtime `ui_theme`, `ui_tree`, `ui_widgets`, `ui_runtime`,
+  framework-local `ui_state`, reusable `ui_accessibility` and framework
+  testing semantics are predecessor authority;
+- `ui_controls`, `ui_binding`, `ui_render_data`, `ui_evaluator`,
+  `ui_runtime_view`, `ui_hosts`, and `ui_surface` are mixed and must be
+  split by responsibility;
+- `ui_definition`, `ui_schema`, `ui_program`, `ui_program_lowering`,
+  `ui_compiler`, `ui_artifacts`, `ui_story`, `ui_composition`, and
+  `ui_adaptive_composition` remain Runenwerk-owned where their semantics are
+  independently required.
+
+A migrated consumer must never write both local and RunenUI mounted/runtime
+state. The source-bearing migration issue must delete the local path it replaces.
 
 ## Physical folder policy
 
