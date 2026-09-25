@@ -50,7 +50,7 @@ Dependency direction, peer-framework ownership, and clean-cutover rules live in 
 | `world_ops` | `domain/world_ops` | domain | World-operation logs, quantization policy, dirty tracking, build queues, invalidation, and replication deltas. |
 | `world_sdf` | `domain/world_sdf` | domain | SDF world-product payloads and collision/query integration contracts. |
 | `scene` | `domain/scene` | domain | Scene-domain data contracts. |
-| `graph` | `domain/graph` | domain | Domain-neutral graph definitions, typed ports, validation, traversal, and cycle policy. |
+| `graph` | `domain/graph` | domain | Runenwerk-local authored port-graph definitions, typed ports, validation, traversal, and cycle policy. |
 | `texture` | `domain/texture` | domain | Texture product, sampler, color-space, compression, preview, ratification, and lineage contracts. |
 | `material_graph` | `domain/material_graph` | domain | Authored material graphs, catalog boundaries, ratification, lowering, source maps, and formed material products. |
 | `procgen` | `domain/procgen` | domain | Deterministic procgen documents, planning metadata, ratification, lowering, and product publication. |

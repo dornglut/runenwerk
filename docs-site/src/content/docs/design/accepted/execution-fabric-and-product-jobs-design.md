@@ -5,7 +5,7 @@ status: accepted
 owner: engine
 layer: domain / engine-runtime
 canonical: true
-last_reviewed: 2026-09-15
+last_reviewed: 2026-09-25
 related_docs:
   - ../../architecture/repository-family-architecture.md
 related_adrs:
@@ -77,7 +77,7 @@ ECS remains live runtime state under standalone RunenECS contracts.
 Field products remain formed product state.
 Runenwerk owns product-job planning, host execution, and publication policy.
 RunenNet owns reusable networking semantics.
-Graph owns neutral graph structure.
+Runenwerk `domain/graph` owns authored port-graph structure.
 Diagnostics explain failures and provenance.
 ```
 
@@ -118,7 +118,7 @@ simulation state; it does not duplicate those network contracts.
 
 ### Graph
 
-`domain/graph` owns neutral graph structure and validation where independently
+`domain/graph` owns Runenwerk-authored port-graph structure and validation where independently
 justified. It does not become ECS or product execution authority.
 
 ## Two-level plan model

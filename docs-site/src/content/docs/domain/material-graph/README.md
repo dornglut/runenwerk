@@ -5,7 +5,7 @@ status: accepted
 owner: material-graph
 layer: domain
 canonical: true
-last_reviewed: 2026-05-09
+last_reviewed: 2026-09-25
 related_docs:
   - ../../design/active/editor-procedural-content-and-simulation-workflow-plan.md
   - ../graph/README.md
@@ -39,7 +39,7 @@ Runtime and preview systems consume formed material products. They must not cons
 
 This domain owns:
 
-- `MaterialGraphDocument` authored document contracts using `domain/graph::GraphDefinition` for neutral graph structure;
+- `MaterialGraphDocument` authored document contracts using `domain/graph::GraphDefinition` for Runenwerk-authored port-graph structure;
 - material node catalog boundaries for PBR, SDF/field inputs, procedural math/noise, texture sampling, triplanar coordinates, and material-channel outputs;
 - material issue codes, ratifiers, semantic diagnostics, and source maps;
 - normalized material IR used by deterministic lowering;

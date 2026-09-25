@@ -1,5 +1,5 @@
 //! File: domain/graph/src/validation.rs
-//! Purpose: Domain-neutral graph invariant checks.
+//! Purpose: Runenwerk-local authored port-graph invariant checks.
 
 use std::collections::{BTreeMap, BTreeSet};
 

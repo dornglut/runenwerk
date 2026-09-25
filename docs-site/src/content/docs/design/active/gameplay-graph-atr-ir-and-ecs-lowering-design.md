@@ -5,7 +5,7 @@ status: active
 owner: gameplay
 layer: cross-domain
 canonical: true
-last_reviewed: 2026-09-15
+last_reviewed: 2026-09-25
 related_designs:
   - ./semantic-graph-ir-and-compilation-design.md
   - ./engine-game-runtime-editor-ecs-scripting-hot-reload-design.md
@@ -36,7 +36,7 @@ Runtime must execute formed products. It must not interpret editor-authored game
 
 Implemented today:
 
-- `domain/graph` owns neutral graph structure and validation.
+- `domain/graph` owns Runenwerk-authored port-graph structure and validation.
 - `docs-site/src/content/docs/design/active/semantic-graph-ir-and-compilation-design.md` defines the generic semantic graph pipeline and the `SELECT`, `RELATE`, `TRANSFORM` primitive family.
 - Standalone `dornglut/runen-ecs` owns the reusable ECS state, query, system, schedule, deferred-command, execution, and conformance contracts exposed by its accepted public API. Gameplay/domain event semantics require their own owner; RunenECS is not a generic gameplay event bus.
 - Runenwerk owns host lifecycle and adapter policy around the exact RunenECS revision it consumes.
