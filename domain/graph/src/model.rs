@@ -1,5 +1,5 @@
 //! File: domain/graph/src/model.rs
-//! Purpose: Domain-neutral graph definition model.
+//! Purpose: Runenwerk-local authored port-graph definition model.
 
 use crate::{EdgeId, GraphId, NodeId, PortId, PortTypeId};
 use resource_ref::ResourceRef;

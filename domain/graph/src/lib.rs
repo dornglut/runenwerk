@@ -1,5 +1,5 @@
 //! Crate: graph
-//! Purpose: Domain-neutral graph definitions, validation, and traversal.
+//! Purpose: Runenwerk-local authored port-graph definitions, validation, and traversal.
 
 pub mod ids;
 pub mod model;
