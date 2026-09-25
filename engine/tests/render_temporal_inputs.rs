@@ -82,6 +82,18 @@ fn render_temporal_inputs_accept_native_policy_at_equal_extents() {
 }
 
 #[test]
+fn render_temporal_inputs_fail_closed_when_taau_uses_native_policy() {
+    let mut request = request();
+    request.resolution.internal_size = [1920, 1080];
+    request.resolution.policy = RenderTemporalResolutionPolicy::Native;
+
+    let report = inspect_render_temporal_inputs(request);
+
+    assert!(!report.is_ready());
+    assert!(has_error(&report, "taau_without_scaled_resolution"));
+}
+
+#[test]
 fn render_temporal_inputs_fail_closed_when_native_policy_hides_scaled_extent() {
     let mut request = request();
     request.reconstruction_mode = RenderTemporalReconstructionMode::Taa;
