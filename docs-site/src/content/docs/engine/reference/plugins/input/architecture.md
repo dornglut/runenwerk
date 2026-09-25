@@ -15,7 +15,7 @@ last_reviewed: 2026-09-25
 Reusable device-input observation and deterministic confirmed-state semantics are owned
 by `dornglut/runen-input`.
 
-Runenwerk consumes exact accepted revision `ba87e7c80a9626239a011038cec97c30010379a8`. The former
+Runenwerk consumes exact accepted revision `2751e19fa42255b86e786e7cd837198c917b7b25`. The former
 `engine/src/plugins/input/neutral.rs` predecessor implementation is deleted; there is no
 forwarding module or duplicate reducer authority.
 
@@ -51,7 +51,7 @@ RunenInput does not depend on Runenwerk, RunenECS, RunenUI, Draw, or product pol
 
 - Runenwerk `InputState` contains a private `runen_input::InputState`.
 - All reusable mutation goes through `InputObservationGroup` +
-  `runen_input::InputState::admit`.
+  borrowed `runen_input::InputState::admit(&group)`.
 - Keyboard and pointer product edges are projected by comparing confirmed state before
   and after semantic admission; Runenwerk does not recreate predecessor
   `DigitalAdmission`, `ControlId`, or `DigitalTransition`.
@@ -62,6 +62,12 @@ RunenInput does not depend on Runenwerk, RunenECS, RunenUI, Draw, or product pol
   inferring plugin selection from public `InputState` / `ActionState` resources.
 - Packages that name RunenInput values declare a direct `runen-input.workspace = true`
   dependency rather than relying on Engine re-export.
+- Native tablet capability booleans remain acquisition facts. At the RunenInput
+  boundary, `true` maps to `CapabilityKnowledge::Supported` and `false` maps to
+  `CapabilityKnowledge::Unknown`; `Unsupported` requires explicit negative evidence.
+- Draw keeps its UI-owned boolean capability model and projects only `Supported` to
+  `true`; `Unknown` and `Unsupported` project to `false`, subject to its existing
+  measurement-projectability checks.
 
 ## Non-owners
 

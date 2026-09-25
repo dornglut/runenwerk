@@ -20,7 +20,7 @@ Reusable backend-neutral device observation and deterministic confirmed-state se
 belong to RunenInput. Runenwerk consumes the exact accepted revision:
 
 ```text
-ba87e7c80a9626239a011038cec97c30010379a8
+2751e19fa42255b86e786e7cd837198c917b7b25
 ```
 
 Runenwerk does not keep a second neutral reducer or compatibility forwarding namespace.
@@ -35,6 +35,15 @@ Runenwerk does not keep a second neutral reducer or compatibility forwarding nam
 - measurement/source-time/evidence/history/origin semantics;
 - grouped validation/admission and deterministic confirmed-state reduction;
 - confirmed key/button, pointer-position, and contact queries.
+
+At the native tablet boundary, Runenwerk maps backend-native capability facts into
+RunenInput knowledge explicitly: `true` becomes `CapabilityKnowledge::Supported` and
+`false` becomes `CapabilityKnowledge::Unknown`. The adapter does not fabricate
+`Unsupported` knowledge without explicit negative evidence. Draw projects only
+`Supported` knowledge into its UI-owned boolean capability model; `Unknown` and
+`Unsupported` remain unsupported by that boolean projection, with the existing
+measurement-projectability checks preserved for pressure, twist, and
+tangential-pressure.
 
 **Runenwerk owns:**
 
@@ -55,9 +64,9 @@ Window-scoped input:
 winit evidence
   -> runtime winit adapter
     -> runen_input semantic values
-      -> PlatformEvent
+        -> PlatformEvent
         -> Runenwerk InputState integration
-          -> runen_input::InputState::admit(...)
+          -> runen_input::InputState::admit(&group)
             -> Runenwerk frame/product projections
               -> ActionState
 ```
