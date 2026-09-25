@@ -4,7 +4,6 @@ use crate::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryReso
 use crate::plugins::render::render_integration_is_active;
 use crate::plugins::render::renderer::Gfx;
 use crate::runtime::PrimaryPresentationMetricsResource;
-use crate::runtime::presentation::ensure_primary_presentation_metrics;
 use crate::runtime::frame_lifecycle::{run_frame as run_runtime_frame, run_startup_if_needed};
 use crate::runtime::frame_pacing::{
     FramePacingPolicyResource, FramePacingRuntimeStateResource, FramePacingSchedule,
@@ -14,6 +13,7 @@ use crate::runtime::platform::{
     PlatformEvent, PlatformWindowEvent, PlatformWindowEventQueueResource,
     apply_native_window_event, apply_platform_input_event,
 };
+use crate::runtime::presentation::ensure_primary_presentation_metrics;
 use crate::runtime::window::{
     NativeWindowCreationRequest, NativeWindowId, WindowCursorIcon, WindowStateRegistryResource,
 };

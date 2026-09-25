@@ -54,7 +54,9 @@ mod tests {
         world.insert_resource(expected);
         ensure_primary_presentation_metrics(&mut world);
         assert_eq!(
-            world.resource::<PrimaryPresentationMetricsResource>().unwrap(),
+            world
+                .resource::<PrimaryPresentationMetricsResource>()
+                .unwrap(),
             &expected
         );
     }
