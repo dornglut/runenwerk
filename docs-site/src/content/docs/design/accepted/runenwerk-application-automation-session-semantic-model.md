@@ -182,41 +182,269 @@ Human/native capture records an actual execution. It is a capture source, not a 
 
 A captured fact is not automatically reproducible through an automation driver.
 
-## Current physical-input recording gap
+## Accepted normalized-input recording state
 
-Current Runenwerk does not expose one lossless general physical-input trace.
+Runenwerk now exposes an explicit, opt-in admitted-input capture seam and a canonical App-frame trace
+envelope.
 
-The existing mechanisms are insufficient individually:
+Accepted A3 captures exact successfully admitted `InputObservationGroup` values at the Runenwerk
+input-integration boundary. Accepted A4 partitions those groups by canonical App frame and preserves
+idle frames plus explicit trailing groups that have no proven frame membership.
 
-- PlatformWindowEventQueueResource observes normalized window events used by maintained consumers,
-  but raw winit DeviceEvent MouseMotion follows a separate Host path;
-- ordinary keyboard, pointer, scroll, and contact admissions are not uniformly retained as
-  replayable InputObservationGroup values;
-- native-tablet integration temporarily retains observation groups for its product projection;
-- frame-local InputState aggregate deltas, pressed/released flags, touch samples, and actions are
-  consumer projections and lose source/group/provenance information.
-
-A future normalized recorder MUST therefore capture at one explicit admitted-observation boundary,
-not by serializing frame projections or one partial event queue.
-
-The conceptual capture point is:
+The accepted capture relation is:
 
 ~~~
 backend or synthetic normalized producer
     -> InputObservationGroup
         -> validation and admission
-            -> admitted-observation capture
+            -> optional exact-group capture
             -> confirmed-state reduction and product projection
+                -> canonical App FrameEnd
+                    -> trace-local frame ordinal + admitted groups
 ~~~
 
-The capture MUST preserve atomic group boundaries, deterministic admission order, source/device/
-contact/tool identity, origin and reconciliation provenance, evidence status, delivery role,
-relative versus absolute motion, scroll axes/domain, continuity loss, and source time where
-present.
+The trace preserves atomic group boundaries, deterministic admission order, source/device/contact/
+tool identity, origin and reconciliation provenance, evidence status, delivery role, relative
+versus absolute motion, scroll axes/domain, continuity loss, source time where present, and
+canonical App-frame partitioning.
 
-This design does not move recorder ownership into RunenInput. RunenInput remains reusable semantic
-and reducer authority. Application recording is Runenwerk integration/tooling policy until
-independent reusable-framework pressure proves otherwise.
+A4 is not a complete platform-event transcript and does not snapshot pre-capture input state.
+
+In particular:
+
+- `PlatformEvent::TextInput` is a separate Runenwerk platform/input side channel and is not an
+  `InputObservationGroup`; A3/A4 therefore do not record typed-text payloads;
+- capture may begin while keys/buttons/contacts are already held or active;
+- capture does not snapshot the absolute-pointer position that existed before its first captured
+  absolute-position observation;
+- capture does not snapshot Runenwerk frame-local projection state such as primary-touch ownership.
+
+Those omissions are truthful recording boundaries, not permission to reconstruct missing facts
+during replay.
+
+Frame-local InputState projections, PlatformWindowEventQueueResource, and native-tablet product
+staging remain non-authoritative as general recording surfaces.
+
+Recorder ownership remains Runenwerk integration/tooling policy. RunenInput remains reusable input
+meaning, validation, and reducer authority.
+
+## Normalized observed-trace replay
+
+Normalized observed-trace replay is an explicit caller-selected operation over an in-memory
+Runenwerk automation input trace. It is not an implicit trace-to-scenario transformation and does
+not make the observed trace an authored scenario.
+
+The first replay contract is intentionally process-local and version-local. It does not claim a
+persisted trace is portable across application versions, machines, window layouts, devices, or
+product/editor/UI target identities.
+
+### Replay identity mapping
+
+Recorded RunenInput runtime identities are trace-local facts, not stable cross-run selectors.
+
+A normalized replay MUST use caller-supplied replay-owned source identity mapping for every distinct
+recorded `InputSourceId`. The mapping MUST preserve distinct recorded source equivalence classes
+and MUST NOT silently map two recorded sources onto one replay source.
+
+Recorded device identities MAY remain numerically unchanged beneath a remapped replay-owned source,
+because device identity is scoped by `InputContext`. Contact and tablet tool IDs remain trace-local
+payload identity under that remapped context; replay does not promote them to global selectors.
+
+If a tablet observation contains source time, replay MUST rewrite only the embedded
+`SourceTime.context` to the remapped enclosing `InputContext`. Timestamp value and unit remain
+the recorded measurement facts. This rewrite is required by RunenInput validation and does not
+claim the original backend clock exists in the replay execution.
+
+The caller is responsible for supplying replay-owned source IDs that do not collide with unrelated
+physical/current sources. Runenwerk MUST NOT introduce a global mutable input-ID allocator solely
+for automation.
+
+### Replay preflight and trace self-containment
+
+Before mutating the target App, replay MUST validate that the trace is supported by the selected
+replay contract.
+
+The first replay contract assumes fresh replay-owned source identities and MUST NOT infer state that
+predates capture.
+
+Because A4 does not snapshot source state at capture start, trace shape alone cannot prove that the
+first captured press/begin was the first active state for that source. The first replay proof
+therefore also requires a recording-side precondition: for every replayed source/control/contact
+used by the proof, the caller must establish that the relevant normalized state was neutral when
+capture began. The Render Lab proof satisfies this by starting capture on a fresh headless
+`InputState` before the first automation-owned button press.
+
+This is an explicit precondition, not evidence encoded in `AutomationInputTrace`. A later recorder
+extension may capture initial-state evidence if broader observed-human replay requires it.
+
+A trace is not self-contained merely because every captured group is valid. The first replay
+implementation therefore supports only a deliberately narrow subset whose required state can be
+established from the trace plus that explicit recording precondition:
+
+- pointer-button input when the explicit recording-side neutral-state precondition is established;
+- relative motion;
+- scroll;
+- all-tablet atomic groups for exact neutral admission and native-tablet staging replay.
+
+All-tablet support at this layer proves atomic normalized-input transport only. It does not by itself
+prove that a Draw/tablet product stroke whose product state began before capture can be reproduced.
+That stronger owner-level claim requires an owner-specific initial-state/assertion contract.
+
+The first replay implementation MUST report UnsupportedTraceShape before target mutation for:
+
+- absolute pointer-position groups, because the first Runenwerk cursor-motion projection depends on
+  a pre-capture absolute-position baseline that A4 does not record;
+- ordinary contact/touch groups whose first required contact state predates capture;
+- keyboard replay as a claim of recorded text entry, because `PlatformEvent::TextInput` payloads are
+  not present in A4;
+- digital input whose required initial state is not covered by the explicit recording-side
+  neutral-state precondition;
+- continuity-loss behavior that would require state established before the trace;
+- any other group whose Runenwerk projection depends on missing pre-capture state.
+
+A later recorder extension may add explicit initial-state or text-input evidence. Replay MUST NOT
+manufacture those facts in the meantime.
+
+Normalized keyboard observations may eventually be replayed as keyboard observations, but that MUST
+remain explicitly distinct from text-entry replay. A completed normalized keyboard replay would not
+prove that original typed-text behavior was reproduced.
+
+### Projection-preserving atomic replay ingress
+
+Replay MUST exercise the accepted Runenwerk input integration, not only the neutral RunenInput
+reducer.
+
+For the first bounded implementation:
+
+- supported pointer-button, relative-motion, and scroll groups route through their existing
+  family-specific normalized Runenwerk ingress after identity remapping;
+- supported all-tablet groups route through the existing whole-group device admission/staging path,
+  so historical/current/predicted samples remain one atomic validation and product-staging unit;
+- unsupported families or non-self-contained group shapes fail before replay begins.
+
+A multi-observation group containing any non-tablet observation is Unsupported until Runenwerk has
+an owner-correct projection contract for that group shape. Replay MUST NOT split such a group into
+independent admissions.
+
+The replay path MUST NOT add a second reducer, reconstruct missing initial state, synthesize text
+input from keyboard observations, or rebuild frame-local projections after the fact.
+
+### App-frame replay
+
+For every completed trace frame, replay ordering is:
+
+~~~
+for frame in trace.frames:
+    remap and admit/project each group in recorded admission order
+    advance exactly one canonical App frame
+~~~
+
+An empty trace frame advances one canonical App frame with no injected group.
+
+The first normalized replay executor is in-process and headless-only. Current canonical explicit
+multi-frame advancement is an `App::headless()` capability; native-window Host execution has a
+different event-loop owner and may admit concurrent physical/native input. The first replay slice
+MUST NOT pretend that headless App-frame advancement proves or controls that native Host path.
+
+A later native/attached normalized replay path requires its own concurrency and Host orchestration
+decision.
+
+Replay MUST NOT substitute simulation ticks, render-frame counters, Host redraw count, sleeps,
+source time, wall-clock time, or presentation intervals for the recorded App-frame boundary.
+
+### Trailing groups
+
+A trace with non-empty `trailing_groups` has observations whose App-frame membership was not
+established.
+
+The first normalized replay contract MUST reject such a trace before mutating the target App.
+It MUST NOT drop the groups, append them to the previous frame, or fabricate another frame.
+
+A later explicit trace-to-scenario transformation may decide how to handle those observations.
+
+### Initial state, exclusivity, and cleanup
+
+Normalized replay requires explicit caller control of the target App and fresh replay-owned source
+IDs.
+
+The caller MUST choose replay-owned source identities that do not already carry target-App input
+state. The first replay implementation does not clear those identities to manufacture a clean
+baseline and does not snapshot/restore unrelated input.
+
+The first executor is headless-only, but a headless App may still contain input state established by
+earlier programmatic activity. Runenwerk's current pointer compatibility projection asks whether a
+button is held **anywhere**, across all admitted sources. Source remapping therefore does not by
+itself isolate replay semantics.
+
+Before the first replay input mutation, preflight MUST reject `TargetStateConflict` when any
+pointer button used by the supported trace is already held by target-App input state. It MUST NOT
+clear that other source to make replay proceed.
+
+The target's frame-local input projection must also be quiescent before the first replay frame.
+Pending relative-motion delta, scroll delta, pointer transitions/edges, or native-tablet staging
+from earlier programmatic activity would otherwise be combined with the first replay frame.
+The executor MUST reject that state as `TargetStateConflict`; it MUST NOT call `clear_frame()` to
+erase unrelated evidence merely to make replay proceed.
+
+Replay also MUST reject a target App whose admitted-input capture is already active or whose
+automation input trace recorder is active. Replay must not steal, reset, or silently contaminate
+another capture/evidence owner.
+
+Trace-shape, source-mapping, and trailing-group preflight MUST complete before App startup or replay
+input mutation. Target-state conflict checks MUST run before replay input mutation and SHOULD be
+repeated after startup if startup can establish relevant input state.
+
+A trace that requires pre-capture held/contact/absolute-pointer state is Unsupported under the first
+replay contract rather than being silently approximated.
+
+Replay-owned held state is cleaned through existing source-scoped continuity semantics on
+cancellation or explicit replay teardown. Cleanup MUST NOT synthesize physical Up/Cancel
+observations for unrelated sources.
+
+Product/owner assertions that need the post-replay held state MUST run before replay teardown.
+Teardown is an orchestration lifecycle action, not part of the recorded trace.
+
+### Replay result knowledge
+
+Replay result knowledge MUST distinguish at least:
+
+- Completed;
+- UnsupportedTraceShape;
+- InvalidSourceMapping;
+- InvalidOrRejectedInput;
+- UnframedTrailingGroups;
+- TargetStateConflict;
+- Cancelled;
+- InfrastructureFailure.
+
+A source map is invalid when it omits a recorded source or maps distinct recorded sources onto the
+same replay source. This is detected before target mutation.
+
+A failure after earlier frames were applied MUST report partial progress, including the last
+completed frame or the failing frame/group location. It MUST NOT report the whole trace as
+successfully replayed merely because iteration started.
+
+`Completed` means all supported normalized groups were replayed and all recorded canonical App
+frames were advanced. It does not by itself prove that every original product effect was reproduced.
+Product equivalence requires an owner-specific query/assertion after replay.
+
+### Ownership and fidelity
+
+Normalized observed-trace replay proves only the normalized-input path:
+
+~~~
+recorded normalized group
+    -> explicit replay identity remap
+        -> RunenInput validation/reduction
+            -> Runenwerk consumer projection
+                -> canonical App advancement
+                    -> product behavior
+~~~
+
+It does not prove native OS event generation, winit acquisition, physical-device timing, raw-device
+motion delivery, stable cross-run product targeting, or persisted trace portability.
+
+Scene replay and RunenUI replay remain separate owners.
 
 ## Target identity and lifetime
 
@@ -451,32 +679,52 @@ Editor automation resolves targets through current mounted-unit/tool-surface/doc
 It MUST NOT assume one global active document, one universal widget ID, one global command registry,
 or one permanently valid target after composition changes.
 
-## First implementation slice
+## Accepted implementation progression and next slice
 
-After this design is accepted, create exactly one bounded implementation issue proving the semantic
-shape before adding a production CLI, IPC transport, persisted format, or recorder.
+The initial implementation sequence is now accepted:
 
-The first implementation SHOULD provide an in-process automation session proof with:
+1. A2 proves typed in-process automation sessions, ProductSemantic/NormalizedInput mode separation,
+   scoped automation-owned input cleanup, condition waits, and independent Render Lab and Editor
+   owner adapters.
+2. A3 adds opt-in exact admitted-`InputObservationGroup` capture at the Runenwerk input boundary.
+3. A4 partitions that capture by canonical App frame while preserving idle frames and explicit
+   trailing groups.
 
-1. one execution-local session identity;
-2. typed step/result envelopes;
-3. explicit ProductSemantic and NormalizedInput modes;
-4. one automation-owned normalized input source with scoped cleanup;
-5. condition-based wait/query support with timeout;
-6. two structurally different typed owner adapters:
-   - Render Lab camera query/assertion;
-   - Editor target/query/assertion through current mounted-unit/tool-surface ownership;
-7. headless execution where the selected operation is genuinely supported;
-8. explicit Unsupported for Native/OS mode in the proof rather than fake native execution;
-9. no persistence;
-10. no CLI or IPC;
-11. no Scene replay or RunenUI replay modification.
+The next bounded implementation after this replay design is accepted SHOULD prove normalized
+in-memory trace replay only.
 
-The proof succeeds when the same session model can drive the two owners without leaking either
-owner's semantic vocabulary into the orchestration core.
+That proof SHOULD:
 
-Recording follows as a later slice only after this proof demonstrates pressure for the admitted-
-observation capture seam.
+1. accept one in-memory A4 trace with no trailing groups;
+2. require an in-process headless App and preflight the complete trace before replay mutation;
+3. require a complete, injective caller-supplied fresh replay-owned source mapping and an explicit
+   recording-side neutral-state precondition for replayed sources;
+4. reject active admitted-input capture/trace ownership, conflicting already-held pointer buttons,
+   and non-quiescent frame-local input projection before replay input mutation;
+5. replay only the first supported self-contained ordinary families: pointer button, relative
+   motion, and scroll;
+6. remap tablet source-time context consistently and preserve supported all-tablet
+   multi-observation groups through whole-group device admission/staging;
+7. reject absolute-pointer, text-dependent keyboard, pre-capture-state-dependent contact/digital/
+   continuity, and multi-observation non-tablet shapes rather than approximating them;
+8. advance exactly one canonical App frame per recorded trace frame, including idle frames;
+9. report partial progress and truthful failure knowledge;
+10. clean only replay-owned held state through continuity semantics;
+11. prove a recorded Render Lab orbit/pan/zoom sequence that starts capture before button press and
+    includes an idle frame;
+12. prove tablet atomicity, invalid source mapping, target-state conflict, and unsupported
+    initial-state/group-shape behavior at the replay ingress boundary.
+
+This first proof intentionally does not claim general keyboard/text, absolute-pointer, or
+mid-contact replay. Those require additional recorded evidence or a separately accepted
+transformation/initial-state contract.
+
+Do not add persistence, a scenario DSL, CLI/IPC, remote attach, native OS automation, Scene replay
+changes, or RunenUI replay changes in that slice.
+
+After the normalized in-memory replay proof is accepted, reassess authored scenario sequencing,
+trace/environment identity, persistence, step/result history, and external terminal control from the
+then-current user workflow rather than pre-authorizing their order.
 
 ## Why no new ADR is required
 
@@ -515,10 +763,10 @@ This design is accepted only when current App/Host terminology is reconciled, ow
 mode/result/security boundaries remain explicit, all five pressure tests remain truthful, macOS
 raw-motion injection remains unsupported without new proof, no existing replay owner is merged or
 duplicated, repository documentation validation and exact-head CI pass, and the complete diff
-contains only this design authority and its index update.
+contains only this already-indexed design authority.
 
-After accepted-main verification, create one implementation issue for the first in-process proof
-above.
+After accepted-main verification, create exactly one implementation issue for the bounded normalized
+in-memory trace replay proof above.
 
 Do not pre-authorize CLI, IPC, recording persistence, remote attach, or native OS automation in
 that implementation slice.
