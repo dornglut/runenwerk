@@ -6,11 +6,13 @@ owner: workspace
 layer: workspace
 canonical: true
 last_reviewed: 2026-06-19
+publication: reference
+pagefind: false
 ---
 
 # Superseded ADRs
 
-- [Proposed Graph Substrate Canvas Boundary](proposed-graph-substrate-canvas-boundary.md)
-- [Editor Tool Suite Registry And Provider-Owned Routing](../proposed/editor-tool-suite-registry-and-provider-owned-routing.md)
-- [0006: Editor Surface Provider Plugin Seam](0006-editor-surface-provider-plugin-seam.md)
-- [0012: Capability Workbench Clean Break](0012-capability-workbench-clean-break.md)
+- [Proposed Graph Substrate Canvas Boundary](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/adr/superseded/proposed-graph-substrate-canvas-boundary.md)
+- [Editor Tool Suite Registry And Provider-Owned Routing](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/adr/proposed/editor-tool-suite-registry-and-provider-owned-routing.md)
+- [0006: Editor Surface Provider Plugin Seam](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/adr/superseded/0006-editor-surface-provider-plugin-seam.md)
+- [Proposed Graph Substrate Canvas Boundary](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/adr/superseded/proposed-graph-substrate-canvas-boundary.md)

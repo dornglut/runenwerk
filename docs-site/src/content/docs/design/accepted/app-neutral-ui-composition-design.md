@@ -6,6 +6,8 @@ owner: ui
 layer: domain
 canonical: true
 last_reviewed: 2026-06-19
+publication: reference
+pagefind: false
 related_adrs:
   - ../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
 related_designs:

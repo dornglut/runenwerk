@@ -6,6 +6,8 @@ owner: ui
 layer: domain
 canonical: true
 last_reviewed: 2026-09-10
+publication: reference
+pagefind: false
 related:
   - ../../design/implemented/editor-ui-runtime-v2-and-interaction-formation-design.md
   - ../../design/implemented/ui-definition-formation-foundation-design.md

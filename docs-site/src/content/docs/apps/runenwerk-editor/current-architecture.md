@@ -6,6 +6,7 @@ owner: editor
 layer: app
 canonical: true
 last_reviewed: 2026-09-25
+publication: primary
 related_designs:
   - ../../design/accepted/app-neutral-ui-composition-design.md
   - ../../design/accepted/runenwerk-editor-coordination-semantic-model.md

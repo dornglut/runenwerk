@@ -6,6 +6,8 @@ owner: ui
 layer: domain
 canonical: true
 last_reviewed: 2026-05-16
+publication: reference
+pagefind: false
 related:
   - ../../domain/ui/architecture.md
   - ../../domain/ui/roadmap.md

@@ -6,6 +6,8 @@ owner: engine
 layer: engine-runtime / renderer product visual evidence
 canonical: false
 last_reviewed: 2026-05-24
+publication: reference
+pagefind: false
 related:
   - ../../implementation-plans/wr-078-renderer-product-visuals-animation-deformation-and-evidence/plan.md
   - ../../closeouts/wr-078-renderer-product-visuals-animation-deformation-and-evidence/closeout.md

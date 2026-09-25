@@ -6,6 +6,8 @@ owner: workspace
 layer: cross-domain
 canonical: true
 last_reviewed: 2026-09-14
+publication: reference
+pagefind: false
 related_adrs:
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
   - ../../adr/accepted/0017-cross-authority-consistency-and-graph-semantics.md

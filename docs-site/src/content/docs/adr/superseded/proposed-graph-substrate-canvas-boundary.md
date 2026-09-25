@@ -6,6 +6,11 @@ owner: workspace
 layer: domain
 canonical: false
 last_reviewed: 2026-05-16
+publication: history
+draft: true
+pagefind: false
+sidebar:
+  hidden: true
 superseded_by:
   - ../accepted/0010-graph-substrate-canvas-boundary.md
 ---

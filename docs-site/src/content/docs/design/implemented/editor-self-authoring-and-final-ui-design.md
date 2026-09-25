@@ -6,6 +6,8 @@ owner: editor
 layer: domain
 canonical: true
 last_reviewed: 2026-09-14
+publication: reference
+pagefind: false
 related:
   - ./ui-definition-formation-foundation-design.md
   - ../accepted/runenwerk-editor-coordination-semantic-model.md

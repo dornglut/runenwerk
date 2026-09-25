@@ -6,6 +6,8 @@ owner: workspace
 layer: workspace
 canonical: true
 last_reviewed: 2026-09-14
+publication: reference
+pagefind: false
 ---
 
 # ADR Index
@@ -48,8 +50,8 @@ Accepted ADR identifiers are not required to be contiguous; this index lists the
 
 ## Superseded ADRs
 
-- [0006: Editor Surface Provider Plugin Seam](superseded/0006-editor-surface-provider-plugin-seam.md)
-- [0012: Capability Workbench Clean Break](superseded/0012-capability-workbench-clean-break.md)
+- [0006: Editor Surface Provider Plugin Seam](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/adr/superseded/0006-editor-surface-provider-plugin-seam.md)
+- [0006: Editor Surface Provider Plugin Seam](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/adr/superseded/0006-editor-surface-provider-plugin-seam.md)
 
 ## Proposed ADRs
 

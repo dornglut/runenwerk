@@ -6,6 +6,7 @@ owner: editor
 layer: domain
 canonical: true
 last_reviewed: 2026-05-25
+publication: primary
 related:
   - ./README.md
   - ./editor-definition/current-architecture.md

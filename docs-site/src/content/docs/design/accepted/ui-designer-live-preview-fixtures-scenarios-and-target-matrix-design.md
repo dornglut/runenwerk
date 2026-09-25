@@ -6,6 +6,8 @@ owner: editor
 layer: domain/ui-definition
 canonical: true
 last_reviewed: 2026-05-22
+publication: reference
+pagefind: false
 related_adrs:
   - ../../adr/accepted/0004-separate-description-from-execution.md
   - ../../adr/accepted/0005-projections-are-derived-state.md

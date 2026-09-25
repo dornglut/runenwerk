@@ -6,6 +6,11 @@ owner: net
 layer: net
 canonical: false
 last_reviewed: 2026-09-13
+publication: history
+draft: true
+pagefind: false
+sidebar:
+  hidden: true
 replaced_by:
   - net-architecture.md
   - ../design/active/net-authoritative-replication-protocol.md

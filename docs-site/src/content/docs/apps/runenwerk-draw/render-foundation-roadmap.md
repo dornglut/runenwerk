@@ -6,6 +6,11 @@ owner: drawing
 layer: app
 canonical: false
 last_reviewed: 2026-05-14
+publication: history
+draft: true
+pagefind: false
+sidebar:
+  hidden: true
 replaced_by: ./roadmap.md
 related_roadmaps:
   - ./roadmap.md

@@ -6,6 +6,8 @@ owner: workspace
 layer: workspace
 canonical: true
 last_reviewed: 2026-09-11
+publication: reference
+pagefind: false
 ---
 
 # Architecture
@@ -19,7 +21,7 @@ Project-neutral software-design defaults are owned by
 [Dornglut Engineering's Software Design Standard](https://github.com/dornglut/engineering/blob/main/standards/software-design.md).
 
 For the exact current local workspace-member inventory, see
-[`../workspace/crate-inventory.md`](../workspace/crate-inventory.md). For detailed dependency guidance, see [`dependency-rules.md`](dependency-rules.md). Cross-repository family membership, repository relationships, and source-authority transfer governance remain owned by Dornglut Engineering rather than by a Runenwerk guideline.
+[the current workspace crate inventory](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/workspace/crate-inventory.md). For detailed dependency guidance, see [`dependency-rules.md`](dependency-rules.md). Cross-repository family membership, repository relationships, and source-authority transfer governance remain owned by Dornglut Engineering rather than by a Runenwerk guideline.
 
 This page remains the workspace boundary and placement guide; it is not a second crate inventory or repository-family authority.
 
@@ -65,7 +67,7 @@ If logic is reusable across engine hosts, first identify its semantic owner. Reu
 When adding code:
 
 1. Choose the semantic owner first; current code location is evidence, not permanent ownership.
-2. Inspect [`../workspace/crate-inventory.md`](../workspace/crate-inventory.md) for current local package locations and the owning framework/domain docs for semantics.
+2. Inspect [the current workspace crate inventory](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/workspace/crate-inventory.md) for current local package locations and the owning framework/domain docs for semantics.
 3. Reuse local helpers in that owner before adding new abstractions.
 4. Expose narrow public interfaces instead of reaching into internals across crates or repositories.
 5. Preserve the dependency rules and one-way framework direction.
@@ -83,7 +85,7 @@ When adding code:
 See also:
 
 - root `AGENTS.md` for the Runenwerk executor contract;
-- [`../workspace/crate-inventory.md`](../workspace/crate-inventory.md) for current local workspace members;
+- [the current workspace crate inventory](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/workspace/crate-inventory.md) for current local workspace members;
 - [`dependency-rules.md`](dependency-rules.md) for dependency and peer-framework rules;
 - `code-patterns.md` for implementation patterns used across domains;
 - [`domain-program-architecture-pattern.md`](domain-program-architecture-pattern.md) for the optional durable domain-program/compiler/evaluator pattern when a domain actually needs it.

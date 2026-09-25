@@ -6,6 +6,8 @@ owner: engine
 layer: engine-runtime / render graph compiler
 canonical: true
 last_reviewed: 2026-07-27
+publication: reference
+pagefind: false
 related_designs:
   - ./render-product-graph-platform-design.md
   - ./feature-owned-render-contributions-design.md

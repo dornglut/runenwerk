@@ -6,6 +6,8 @@ owner: engine
 layer: engine-runtime
 canonical: true
 last_reviewed: 2026-09-25
+publication: reference
+pagefind: false
 related_designs:
   - ../accepted/runenwerk-editor-coordination-semantic-model.md
   - ../implemented/editor-tool-suite-registry-and-workbench-host-design.md
@@ -36,7 +38,7 @@ M5 adopts an external runtime preview process for preview, simulate, and play ex
 
 ## Current Repository Anchors (Implemented Today)
 
-- Workspace membership is defined by current members in [`Cargo.toml`](../../../../../../Cargo.toml); current local package locations live in the [`workspace crate inventory`](../../workspace/crate-inventory.md), and Runenwerk placement/ownership guidance lives in [`guidelines/architecture.md`](../../guidelines/architecture.md).
+- Workspace membership is defined by current members in [`Cargo.toml`](../../../../../../Cargo.toml); current local package locations live in the [workspace crate inventory](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/workspace/crate-inventory.md), and Runenwerk placement/ownership guidance lives in [`guidelines/architecture.md`](../../guidelines/architecture.md).
 - Runtime app composition currently flows through `engine::App` (`add_plugin`, `add_systems`, `add_scene`, `add_scene_template`, `run`) in [`engine/src/app/domain/app.rs`](../../../../../../engine/src/app/domain/app.rs).
 - Runnable editor composition is in [`apps/runenwerk_editor/src/runtime/app.rs`](../../../../../../apps/runenwerk_editor/src/runtime/app.rs).
 - M5 external runtime preview protocol contracts live in [`domain/editor/editor_preview/src/lib.rs`](../../../../../../domain/editor/editor_preview/src/lib.rs).

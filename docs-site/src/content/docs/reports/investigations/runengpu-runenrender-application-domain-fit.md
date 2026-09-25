@@ -6,6 +6,8 @@ owner: gpu
 layer: investigation
 canonical: false
 last_reviewed: 2026-07-27
+publication: reference
+pagefind: false
 related_docs:
   - ../../design/active/runengpu-architecture-design.md
   - ../../design/active/runenrender-decomposition-design.md

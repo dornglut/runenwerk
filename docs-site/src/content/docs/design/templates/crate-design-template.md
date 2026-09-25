@@ -6,6 +6,11 @@ owner: workspace
 layer: workspace
 canonical: true
 last_reviewed: 2026-04-27
+publication: repository-current
+draft: true
+pagefind: false
+sidebar:
+  hidden: true
 ---
 
 # Crate Design Template

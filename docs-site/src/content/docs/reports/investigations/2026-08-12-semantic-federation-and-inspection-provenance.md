@@ -6,6 +6,8 @@ owner: workspace
 layer: investigation
 canonical: false
 last_reviewed: 2026-08-12
+publication: reference
+pagefind: false
 related_docs:
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
   - ../../adr/accepted/0017-cross-authority-consistency-and-graph-semantics.md

@@ -6,6 +6,7 @@ owner: ui
 layer: domain
 canonical: true
 last_reviewed: 2026-09-14
+publication: primary
 related:
   - ./architecture.md
   - ./story-acceptance-and-review-checklist.md

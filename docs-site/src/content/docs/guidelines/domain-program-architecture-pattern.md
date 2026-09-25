@@ -6,6 +6,8 @@ owner: workspace
 layer: workspace
 canonical: true
 last_reviewed: 2026-08-12
+publication: reference
+pagefind: false
 related:
   - ../architecture/runenwerk-platform-architecture.md
   - ./architecture.md

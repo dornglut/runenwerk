@@ -6,6 +6,11 @@ owner: workspace
 layer: reports
 canonical: true
 last_reviewed: 2026-07-24
+publication: history
+draft: true
+pagefind: false
+sidebar:
+  hidden: true
 related_docs:
   - ../../workspace/planning/completed-work.md
   - ../../workspace/planning/roadmap.md

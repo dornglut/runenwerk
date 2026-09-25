@@ -6,6 +6,8 @@ owner: render
 layer: architecture
 canonical: true
 last_reviewed: 2026-09-08
+publication: reference
+pagefind: false
 related_adrs:
   - ./0014-repository-family-extraction-boundaries.md
   - ./0015-separate-gpu-execution-from-rendering.md

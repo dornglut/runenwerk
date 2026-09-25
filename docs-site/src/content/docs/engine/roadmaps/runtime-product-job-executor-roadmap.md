@@ -6,6 +6,7 @@ owner: engine
 layer: engine-runtime
 canonical: true
 last_reviewed: 2026-09-14
+publication: primary
 related_designs:
   - ../../design/accepted/execution-fabric-and-product-jobs-design.md
   - ../../design/accepted/sdf-first-field-world-platform-design.md

@@ -6,6 +6,8 @@ owner: ui
 layer: architecture
 canonical: true
 last_reviewed: 2026-09-25
+publication: reference
+pagefind: false
 related_docs:
   - ../domain/ui/README.md
   - ../domain/ui/architecture.md
@@ -310,7 +312,7 @@ Diagram source:
 - [UI Substrate and Surface Roadmap](../domain/ui/roadmap.md)
 - [ADR 0013](../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md)
 - [Live UiPlugin Runtime Platform Architecture](./live-uiplugin-runtime-platform-architecture.md)
-- [UI Program Architecture](../design/implemented/ui-program-architecture.md)
-- [UI Program Architecture Owner Map](../design/implemented/ui-program-architecture-owner-map.md)
+- [UI Program Architecture](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/design/implemented/ui-program-architecture.md)
+- [UI Program Architecture](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/design/implemented/ui-program-architecture.md)
 - [Runenwerk UI Story V2 Consumer and Proof Boundary](../design/active/runenwerk-ui-story-driven-golden-workflow-design.md)
 - [Standalone RunenUI Architecture](https://github.com/dornglut/runen-ui/blob/main/ARCHITECTURE.md)

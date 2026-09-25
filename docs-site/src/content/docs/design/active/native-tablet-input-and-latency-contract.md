@@ -6,6 +6,8 @@ owner: workspace
 layer: cross-domain
 canonical: true
 last_reviewed: 2026-05-13
+publication: reference
+pagefind: false
 related_designs:
   - ./drawing-authoring-and-comic-layout-platform-design.md
 ---

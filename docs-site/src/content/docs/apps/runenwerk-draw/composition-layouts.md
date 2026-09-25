@@ -6,6 +6,7 @@ owner: drawing
 layer: app
 canonical: true
 last_reviewed: 2026-06-20
+publication: primary
 related_designs:
   - ../../design/accepted/app-neutral-ui-composition-design.md
   - ../../design/active/drawing-authoring-and-comic-layout-platform-design.md

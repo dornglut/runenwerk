@@ -6,6 +6,8 @@ owner: editor
 layer: domain
 canonical: true
 last_reviewed: 2026-09-14
+publication: reference
+pagefind: false
 related_designs:
   - ../accepted/sdf-first-field-world-platform-design.md
   - ../implemented/editor-rendered-world-and-multi-entity-viewport-design.md

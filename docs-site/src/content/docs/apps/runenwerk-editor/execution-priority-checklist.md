@@ -6,6 +6,7 @@ owner: editor
 layer: app
 canonical: true
 last_reviewed: 2026-09-25
+publication: primary
 related:
   - ./mvp/implementation-sequence.md
   - ./mvp/acceptance-criteria.md

@@ -6,6 +6,7 @@ owner: graph
 layer: domain
 canonical: true
 last_reviewed: 2026-09-25
+publication: primary
 related_docs:
   - ../../adr/accepted/0010-graph-substrate-canvas-boundary.md
 ---

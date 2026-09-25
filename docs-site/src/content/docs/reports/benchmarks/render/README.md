@@ -6,6 +6,8 @@ owner: engine
 layer: engine-runtime / renderer benchmarks
 canonical: false
 last_reviewed: 2026-05-23
+publication: reference
+pagefind: false
 ---
 
 # Render Benchmark Reports

@@ -6,6 +6,7 @@ owner: ecs
 layer: domain
 canonical: true
 last_reviewed: 2026-04-27
+publication: primary
 ---
 
 # ECS Macros Crate

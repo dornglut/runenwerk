@@ -6,6 +6,8 @@ owner: workspace
 layer: architecture
 canonical: true
 last_reviewed: 2026-09-14
+publication: reference
+pagefind: false
 related_designs:
   - ../../architecture/repository-family-architecture.md
   - ../../design/accepted/runenrender-decomposition-design.md
@@ -70,7 +72,7 @@ Runenwerk-local duplicate semantic authority.
 The historical internal G1A-G8/GX designs and proof program were used to establish the
 public boundary before transfer. They are predecessor evidence now, not active
 architecture. Their proof taxonomy is retained noncanonically in
-[the historical RunenGPU proof report](../../reports/design/runengpu-phase-requirements-proof-matrix.md).
+[the historical RunenGPU proof report](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/reports/design/runengpu-phase-requirements-proof-matrix.md).
 
 RunenRender remains Runenwerk-owned until its separately accepted external cutover. Its
 current semantic architecture is owned by the

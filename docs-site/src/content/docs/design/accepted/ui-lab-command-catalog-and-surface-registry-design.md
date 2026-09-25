@@ -6,6 +6,8 @@ owner: editor
 layer: domain/app
 canonical: true
 last_reviewed: 2026-09-14
+publication: reference
+pagefind: false
 related_adrs:
   - ../../adr/accepted/0001-use-domain-owned-commands.md
   - ../../adr/accepted/0004-separate-description-from-execution.md

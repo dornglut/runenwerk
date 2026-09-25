@@ -6,6 +6,11 @@ owner: workspace
 layer: history
 canonical: false
 last_reviewed: 2026-08-12
+publication: history
+draft: true
+pagefind: false
+sidebar:
+  hidden: true
 replacement_docs:
   - ../architecture/runenwerk-platform-architecture.md
   - ../adr/accepted/0017-cross-authority-consistency-and-graph-semantics.md

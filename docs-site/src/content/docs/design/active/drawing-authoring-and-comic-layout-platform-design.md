@@ -7,6 +7,8 @@ layer: cross-domain
 canonical: true
 lifecycle_exception: active_phase_evidence
 last_reviewed: 2026-09-25
+publication: reference
+pagefind: false
 related_docs:
   - ../../guidelines/runenwerk-architecture.md
   - ../../domain/graph/README.md

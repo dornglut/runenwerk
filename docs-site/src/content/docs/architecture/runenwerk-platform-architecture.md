@@ -6,6 +6,8 @@ owner: workspace
 layer: architecture
 canonical: true
 last_reviewed: 2026-09-25
+publication: reference
+pagefind: false
 related_adrs:
   - ../adr/accepted/0014-repository-family-extraction-boundaries.md
   - ../adr/accepted/0015-separate-gpu-execution-from-rendering.md

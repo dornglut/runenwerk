@@ -6,6 +6,8 @@ owner: workspace
 layer: product / app / renderer-integration
 canonical: true
 last_reviewed: 2026-09-12
+publication: reference
+pagefind: false
 related_adrs:
   - ../../adr/accepted/0017-cross-authority-consistency-and-graph-semantics.md
   - ../../adr/accepted/0018-semantic-federation-and-physical-realization.md
@@ -588,7 +590,7 @@ Cold-start order for Render Lab work:
 1. this document — product mission, ownership, normalized model, and proof ladder;
 2. [Runenwerk Platform Architecture](../../architecture/runenwerk-platform-architecture.md) — product/Workbench ownership;
 3. [RunenRender Architecture and Decomposition Design](./runenrender-decomposition-design.md) — renderer semantic authority;
-4. [RunenRender internal execution plan](../active/runenrender-internal-decomposition-execution-plan.md) and the [canonical roadmap](../../workspace/planning/roadmap.md) — durable framework sequence;
+4. [RunenRender internal execution plan](../active/runenrender-internal-decomposition-execution-plan.md) and the [canonical roadmap](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/workspace/planning/roadmap.md) — durable framework sequence;
 5. the current owning GitHub issue/PR — live activation, implementation scope, blockers, and validation evidence.
 
 Historical issue comments and prior editor renderer designs are evidence only. They do not override this accepted design or current code truth.

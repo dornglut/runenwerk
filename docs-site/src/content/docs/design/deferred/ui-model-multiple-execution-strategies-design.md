@@ -6,6 +6,8 @@ owner: ui
 layer: domain
 canonical: true
 last_reviewed: 2026-09-14
+publication: reference
+pagefind: false
 related:
   - ../implemented/editor-tool-suite-registry-and-workbench-host-design.md
   - ../accepted/runenwerk-editor-coordination-semantic-model.md

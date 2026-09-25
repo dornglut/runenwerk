@@ -6,6 +6,8 @@ owner: engine
 layer: engine-runtime
 canonical: true
 last_reviewed: 2026-05-09
+publication: reference
+pagefind: false
 related_designs:
   - ../../design/active/engine-game-runtime-editor-ecs-scripting-hot-reload-design.md
 related_roadmaps:

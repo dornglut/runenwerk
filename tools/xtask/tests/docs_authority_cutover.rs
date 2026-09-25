@@ -134,6 +134,36 @@ fn crate_inventory_validator_rejects_non_workspace_inventory_member() {
     );
 }
 
+#[test]
+fn publication_validator_rejects_missing_class() {
+    let result = run_publication_validator_fixture(None);
+    assert!(
+        !result.success,
+        "validator should reject a missing publication class"
+    );
+    assert!(
+        result.output.contains("missing publication classification"),
+        "validator should report the missing publication class:\n{}",
+        result.output
+    );
+}
+
+#[test]
+fn publication_validator_rejects_unknown_class() {
+    let result = run_publication_validator_fixture(Some("internal-only"));
+    assert!(
+        !result.success,
+        "validator should reject an unknown publication class"
+    );
+    assert!(
+        result
+            .output
+            .contains("invalid publication classification 'internal-only'"),
+        "validator should report the unknown publication class:\n{}",
+        result.output
+    );
+}
+
 struct ValidatorResult {
     success: bool,
     output: String,
@@ -163,6 +193,41 @@ fn run_docs_validator_fixture(
         crate_inventory_document(inventory_paths),
     )
     .unwrap_or_else(|error| panic!("could not write validator fixture inventory: {error}"));
+
+    let output = run_python_validator(&fixture, &validator);
+    let _ = fs::remove_dir_all(&fixture);
+    output
+}
+
+fn run_publication_validator_fixture(publication: Option<&str>) -> ValidatorResult {
+    let repository_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .expect("xtask must remain under <repository>/tools/xtask");
+    let validator = repository_root.join("tools/docs/validate_docs.py");
+    let fixture = fixture_root();
+    let docs_workspace = fixture.join("docs-site/src/content/docs/workspace");
+    fs::create_dir_all(&docs_workspace)
+        .unwrap_or_else(|error| panic!("could not create publication fixture: {error}"));
+
+    fs::write(fixture.join("Cargo.toml"), "[workspace]\nmembers = []\n")
+        .unwrap_or_else(|error| panic!("could not write publication fixture Cargo.toml: {error}"));
+    fs::write(
+        docs_workspace.join("crate-inventory.md"),
+        crate_inventory_document(&[]),
+    )
+    .unwrap_or_else(|error| panic!("could not write publication fixture inventory: {error}"));
+
+    let publication_line = publication
+        .map(|value| format!("publication: {value}\n"))
+        .unwrap_or_default();
+    fs::write(
+        docs_workspace.join("publication-fixture.md"),
+        format!(
+            "---\ntitle: Publication Fixture\ndescription: Validator fixture.\nstatus: active\nowner: workspace\nlayer: workspace\ncanonical: true\n{publication_line}---\n\n# Publication Fixture\n"
+        ),
+    )
+    .unwrap_or_else(|error| panic!("could not write publication fixture document: {error}"));
 
     let output = run_python_validator(&fixture, &validator);
     let _ = fs::remove_dir_all(&fixture);
@@ -229,7 +294,7 @@ fn crate_inventory_document(paths: &[&str]) -> String {
         .collect::<Vec<_>>()
         .join("\n");
     format!(
-        "---\ntitle: Crate Inventory\ndescription: Validator fixture.\nstatus: active\nowner: workspace\nlayer: workspace\ncanonical: true\n---\n\n# Crate Inventory\n\n| Crate | Path | Layer | Purpose |\n| --- | --- | --- | --- |\n{rows}\n"
+        "---\ntitle: Crate Inventory\ndescription: Validator fixture.\nstatus: active\nowner: workspace\nlayer: workspace\ncanonical: true\npublication: repository-current\ndraft: true\npagefind: false\nsidebar:\n  hidden: true\n---\n\n# Crate Inventory\n\n| Crate | Path | Layer | Purpose |\n| --- | --- | --- | --- |\n{rows}\n"
     )
 }
 

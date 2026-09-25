@@ -6,6 +6,8 @@ owner: workspace
 layer: guidelines
 canonical: true
 last_reviewed: 2026-09-11
+publication: reference
+pagefind: false
 related_docs:
   - ../architecture/repository-family-architecture.md
   - ./architecture.md
@@ -55,7 +57,7 @@ foundation -> domain -> engine/runtime -> apps/adapters/tools
   framework or domain invariants merely because they integrate them.
 
 The current local workspace inventory is owned by
-[`../workspace/crate-inventory.md`](../workspace/crate-inventory.md). Physical source
+[the current workspace crate inventory](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/workspace/crate-inventory.md). Physical source
 location is implementation evidence, not permission to reverse these dependency rules.
 
 ## Peer-framework consumption
