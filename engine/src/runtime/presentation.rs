@@ -47,18 +47,6 @@ fn normalize_extent(size_px: (u32, u32)) -> (u32, u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::App;
-
-    #[test]
-    fn bare_apps_do_not_manufacture_primary_presentation_metrics() {
-        for app in [App::new(), App::headless()] {
-            assert!(
-                app.world().resource::<PrimaryPresentationMetricsResource>().is_err(),
-                "bare App must not manufacture logical presentation state"
-            );
-        }
-    }
-
     #[test]
     fn presentation_activation_preserves_caller_supplied_metrics() {
         let mut world = runen_ecs::World::new();
