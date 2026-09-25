@@ -1,4 +1,4 @@
-use engine::plugins::{InputState, SceneResource};
+use engine::plugins::InputState;
 use engine::prelude::*;
 use runenwerk_arena::{
     ArenaPlayer, GameActionSnapshot, GameInputAccumulator, LOCAL_PARTICIPANT_ID,
@@ -85,7 +85,7 @@ fn maintained_game_composes_headlessly_without_scene_or_net() {
         .run_for_frames(0)
         .expect("maintained game should compose headlessly");
 
-    assert!(app.world().resource::<SceneResource>().is_err());
+    assert_eq!(app.registered_scene_count(), 0);
     assert!(app.world().resource::<NetworkInboundQueue>().is_err());
 }
 
@@ -98,7 +98,7 @@ fn app_world_owns_the_gameplay_player() {
     let state = player_state_for(app.world(), LOCAL_PARTICIPANT_ID)
         .expect("local gameplay player should live in the App world");
     assert_eq!(state, PlayerControlState::default());
-    assert!(app.world().resource::<SceneResource>().is_err());
+    assert_eq!(app.registered_scene_count(), 0);
 }
 
 #[test]
