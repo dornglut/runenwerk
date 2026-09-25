@@ -5,10 +5,10 @@ use engine::plugins::net::{
     NetworkOutboundQueue, NetworkServerInbox, NetworkServerOutbox, NetworkSessionStatus,
     OutboundServerMessage, PredictionDiagnostics, ReplicationDiagnostics, RunenNetSessionCore,
     RunenNetSessionProjection, ServerSnapshotReplicationState, client_inbox_is_empty,
-    client_outbox_len, client_prediction_connection_lost, client_prediction_participant_membership_ended,
-    client_prediction_pending_bytes, client_prediction_pending_count, client_prediction_session_closed,
-    client_prediction_state, client_replication_acknowledgement, client_replication_lineage,
-    client_replication_state,
+    client_outbox_len, client_prediction_connection_lost,
+    client_prediction_participant_membership_ended, client_prediction_pending_bytes,
+    client_prediction_pending_count, client_prediction_session_closed, client_prediction_state,
+    client_replication_acknowledgement, client_replication_lineage, client_replication_state,
     enqueue_client_inbox, enqueue_client_outbox, enqueue_server_inbox, enqueue_server_inbox_from,
     enqueue_server_outbox_broadcast, record_reconnect_attempt,
     require_client_replication_connection_replacement, server_inbox_is_empty, server_outbox_len,
@@ -195,7 +195,9 @@ impl InputDriver for TestReplicationDriver {
             })
             .unwrap_or(false);
         if reject_initial {
-            return Err(io::Error::other("test local prediction application rejected"));
+            return Err(io::Error::other(
+                "test local prediction application rejected",
+            ));
         }
 
         let reject_replay = world
