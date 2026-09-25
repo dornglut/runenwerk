@@ -645,6 +645,50 @@ fn approve_render_lab_close_system(
     )
 }
 
+fn build_render_lab_radiance_publication(
+    camera: &RenderLabCamera,
+    producer_id: engine::plugins::render::RenderFrameProducerId,
+    extent: (u32, u32),
+) -> Result<(
+    RenderDynamicTextureTargetKey,
+    RenderDynamicTextureTargetDescriptor,
+    RenderDeterministicFrameContribution,
+)> {
+    let target_key = RenderDynamicTextureTargetKey::new(RL2_TARGET_NAMESPACE, RL2_TARGET_ID);
+    let target = RenderDynamicTextureTargetDescriptor::new(
+        target_key.clone(),
+        extent.0,
+        extent.1,
+        RenderTextureTargetFormat::R32Float,
+        RenderTextureTargetUsage {
+            color_attachment: false,
+            depth_attachment: false,
+            sampled: true,
+            storage: false,
+            copy_src: false,
+            copy_dst: true,
+        },
+        RenderTextureSampleMode::NonFilterableFloat,
+        RenderDynamicTextureRetention::RetainWhileRequested,
+    );
+    let fixture = founding_fixture_with_observation_and_extent(
+        camera.observation_to_scene(),
+        extent.0,
+        extent.1,
+    )?;
+    let contribution = RenderDeterministicFrameContribution {
+        producer_id,
+        render_surface_id: RenderSurfaceId::primary(),
+        scene: fixture.scene,
+        request: fixture.request,
+        semantic_inputs: fixture.semantic_inputs,
+        availability: fixture.availability,
+        output_index: 0,
+        target_key: target_key.clone(),
+    };
+    Ok((target_key, target, contribution))
+}
+
 fn publish_render_lab_frame_system(
     camera: Res<RenderLabCamera>,
     flow_id: Res<RenderLabFlowId>,
@@ -659,47 +703,16 @@ fn publish_render_lab_frame_system(
         fixed_quality_plans,
         mut quality_execution,
     } = publication;
-    let (width, height) = render_lab_radiance_extent(&presentation, &measurement)?;
+    let requested_internal_size = render_lab_radiance_extent(&presentation, &measurement)?;
+    let output_size = render_lab_extent(&presentation);
     let producer_id = engine::plugins::render::RenderFrameProducerId::try_from_raw(RL2_PRODUCER_ID)
         .expect("Render Lab producer id is non-zero");
-    let target_key = RenderDynamicTextureTargetKey::new(RL2_TARGET_NAMESPACE, RL2_TARGET_ID);
-    let target = RenderDynamicTextureTargetDescriptor::new(
-        target_key.clone(),
-        width,
-        height,
-        RenderTextureTargetFormat::R32Float,
-        RenderTextureTargetUsage {
-            color_attachment: false,
-            depth_attachment: false,
-            sampled: true,
-            storage: false,
-            copy_src: false,
-            copy_dst: true,
-        },
-        RenderTextureSampleMode::NonFilterableFloat,
-        RenderDynamicTextureRetention::RetainWhileRequested,
-    );
-    let invocation =
-        PreparedFlowInvocationRequest::new(format!("{RL2_FLOW_ID}.main"), flow_id.0, "main")
-            .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, target_key.clone())?;
-    let fixture =
-        founding_fixture_with_observation_and_extent(camera.observation_to_scene(), width, height)?;
-    let contribution = RenderDeterministicFrameContribution {
-        producer_id,
-        render_surface_id: RenderSurfaceId::primary(),
-        scene: fixture.scene,
-        request: fixture.request,
-        semantic_inputs: fixture.semantic_inputs,
-        availability: fixture.availability,
-        output_index: 0,
-        target_key: target_key.clone(),
-    };
 
-    let output_size = render_lab_extent(&presentation);
     if measurement.quality_capture_output_dir.is_some() {
         quality_execution.pending_admission = None;
     }
-    if measurement.quality_capture_output_dir.is_some() && (width, height) != output_size {
+
+    if measurement.quality_capture_output_dir.is_some() && requested_internal_size != output_size {
         let scene_plan = fixed_quality_plans
             .scene
             .as_ref()
@@ -708,33 +721,76 @@ fn publish_render_lab_frame_system(
             .resolve
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("temporal quality resolve plan is unavailable"))?;
-        let mut fixed = engine::plugins::render::RenderFixedResolutionExecutionRequest::new(
+        let admission = engine::plugins::render::RenderFixedResolutionExecutionRequest::new(
             producer_id,
             RenderSurfaceId::primary(),
             flow_id.0,
             engine::plugins::render::RenderTargetAliasKey::new(RL2_QUALITY_COLOR_ALIAS)?,
-            (width, height),
+            requested_internal_size,
         )
-        .prepare_against_compiled_flows(output_size, scene_plan, resolve_plan)?;
-        fixed.scene_invocation = fixed
-            .scene_invocation
-            .clone()
-            .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, target_key)?;
-        let admission =
-            engine::plugins::render::RenderFixedResolutionExecutionAdmission::Fixed(fixed.clone());
-        stage_render_lab_fixed_quality_publication(
-            &mut targets,
-            &mut frame_requests,
-            &mut contributions,
-            producer_id,
-            target,
-            fixed,
-            contribution,
-        )?;
+        .admit_against_compiled_flows(output_size, scene_plan, resolve_plan);
+
+        match &admission {
+            engine::plugins::render::RenderFixedResolutionExecutionAdmission::Fixed(prepared) => {
+                let mut fixed = prepared.clone();
+                let (target_key, target, contribution) =
+                    build_render_lab_radiance_publication(
+                        &camera,
+                        producer_id,
+                        requested_internal_size,
+                    )?;
+                fixed.scene_invocation = fixed
+                    .scene_invocation
+                    .clone()
+                    .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, target_key)?;
+                stage_render_lab_fixed_quality_publication(
+                    &mut targets,
+                    &mut frame_requests,
+                    &mut contributions,
+                    producer_id,
+                    target,
+                    fixed,
+                    contribution,
+                )?;
+            }
+            engine::plugins::render::RenderFixedResolutionExecutionAdmission::NativeFallback(
+                fallback,
+            ) => {
+                let native_scene_invocation = fallback
+                    .native_scene_invocation
+                    .clone()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "temporal quality fixed admission rejected without a valid native scene fallback: {}",
+                            fallback.reason
+                        )
+                    })?;
+                let (target_key, target, contribution) =
+                    build_render_lab_radiance_publication(&camera, producer_id, output_size)?;
+                let native_scene_invocation = native_scene_invocation
+                    .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, target_key)?;
+                stage_render_lab_native_quality_fallback_publication(
+                    &mut targets,
+                    &mut frame_requests,
+                    &mut contributions,
+                    producer_id,
+                    fallback.render_surface_id,
+                    target,
+                    native_scene_invocation,
+                    contribution,
+                )?;
+            }
+        }
+
         quality_execution.pending_admission = Some(admission);
         return Ok(());
     }
 
+    let (target_key, target, contribution) =
+        build_render_lab_radiance_publication(&camera, producer_id, requested_internal_size)?;
+    let invocation =
+        PreparedFlowInvocationRequest::new(format!("{RL2_FLOW_ID}.main"), flow_id.0, "main")
+            .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, target_key)?;
     stage_render_lab_frame_publication(
         &mut targets,
         &mut frame_requests,
@@ -905,6 +961,47 @@ fn stage_render_lab_fixed_quality_publication(
             fixed.resolve_invocation.clone(),
         ],
         [fixed.automatic_main_replacement],
+    )?;
+
+    let mut staged_contributions = contributions.clone();
+    staged_contributions.replace(contribution);
+
+    *targets = staged_targets;
+    *frame_requests = staged_frame_requests;
+    *contributions = staged_contributions;
+    Ok(())
+}
+
+fn stage_render_lab_native_quality_fallback_publication(
+    targets: &mut RenderDynamicTextureTargetRequestRegistryResource,
+    frame_requests: &mut PreparedRenderFrameRequestResource,
+    contributions: &mut RenderDeterministicFrameContributionResource,
+    producer_id: engine::plugins::render::RenderFrameProducerId,
+    render_surface_id: RenderSurfaceId,
+    radiance_target: RenderDynamicTextureTargetDescriptor,
+    native_scene_invocation: PreparedFlowInvocationRequest,
+    contribution: RenderDeterministicFrameContribution,
+) -> Result<()> {
+    if contribution.render_surface_id != render_surface_id {
+        bail!(
+            "temporal quality native fallback contribution surface does not match admitted surface"
+        );
+    }
+
+    let mut staged_targets = targets.clone();
+    staged_targets.replace_surface_contribution(
+        producer_id,
+        render_surface_id,
+        [radiance_target],
+    )?;
+
+    let mut staged_frame_requests = frame_requests.clone();
+    staged_frame_requests.replace_surface_contribution_with_automatic_main_replacements(
+        producer_id,
+        render_surface_id,
+        [],
+        [native_scene_invocation],
+        [],
     )?;
 
     let mut staged_contributions = contributions.clone();
