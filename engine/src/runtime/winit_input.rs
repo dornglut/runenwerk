@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
+use crate::runtime::window::NativeWindowId;
 use runen_input::{
     AnalogMeasurement, ContactInput, ContactPhase, CoordinateSpace, DigitalState, InputContext,
     InputDeviceId, InputSourceId, KeyLocation, KeyboardInput, LogicalKey, MeasurementDomain,
     NativeLogicalKey, NativePhysicalKeyCode, ObservationOrigin, PhysicalKeyIdentity, Point2,
     PointerButton, PointerButtonInput, ScrollDelta, ScrollDomain, ScrollInput, ScrollPhase,
 };
-use crate::runtime::window::NativeWindowId;
 use winit::dpi::PhysicalPosition;
 use winit::event::{
     DeviceId, ElementState, Force, MouseButton, MouseScrollDelta, Touch, TouchPhase,

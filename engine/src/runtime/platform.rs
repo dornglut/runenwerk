@@ -1,8 +1,8 @@
 use crate::plugins::InputState;
+use crate::runtime::window::{NativeWindowId, NativeWindowRecord};
 use runen_input::{
     ContactInput, InputContext, KeyboardInput, Point2, PointerButtonInput, ScrollInput,
 };
-use crate::runtime::window::{NativeWindowId, NativeWindowRecord};
 
 #[derive(Debug, Clone)]
 pub enum PlatformEvent {
@@ -152,12 +152,12 @@ mod tests {
     };
     use crate::plugins::input::domain::action;
     use crate::plugins::{ActionState, InputState};
+    use crate::runtime::window::{NativeWindowId, WindowStateRegistryResource};
     use runen_input::{
         ContactInput, ContactPhase, CoordinateSpace, DigitalState, InputContext, InputSourceId,
         KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey, ObservationOrigin,
         PhysicalKeyIdentity, Point2, PointerButton, PointerButtonInput,
     };
-    use crate::runtime::window::{NativeWindowId, WindowStateRegistryResource};
 
     fn test_context() -> InputContext {
         InputContext::new(InputSourceId::new(90), None)

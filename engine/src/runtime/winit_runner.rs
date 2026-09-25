@@ -1,6 +1,5 @@
 use crate::app::WindowedAppState;
 use crate::plugins::InputState;
-use runen_input::InputContext;
 use crate::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryResource};
 use crate::plugins::render::render_integration_is_active;
 use crate::plugins::render::renderer::Gfx;
@@ -22,6 +21,7 @@ use crate::runtime::winit_input::{
     scroll_input, text_input,
 };
 use anyhow::{Context, Result, anyhow};
+use runen_input::InputContext;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
@@ -162,12 +162,7 @@ impl WinitRunner {
         Ok(())
     }
 
-    fn apply_raw_mouse_motion(
-        &mut self,
-        context: InputContext,
-        dx: f32,
-        dy: f32,
-    ) -> Result<()> {
+    fn apply_raw_mouse_motion(&mut self, context: InputContext, dx: f32, dy: f32) -> Result<()> {
         let input = self
             .state
             .world

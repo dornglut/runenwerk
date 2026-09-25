@@ -1,11 +1,11 @@
 mod state;
 
+use engine::runtime::NativeWindowId;
+use engine::runtime::platform::PlatformEvent;
 use runen_input::{
     ContactPhase, DigitalState, LogicalKey, MeasurementDomain, ObservationOrigin,
     PointerButton as EnginePointerButton, ScrollDomain,
 };
-use engine::runtime::NativeWindowId;
-use engine::runtime::platform::PlatformEvent;
 use ui_input::{
     Key, KeyState, KeyboardEvent, PointerButton, PointerContactId, PointerContactPhase,
     PointerContactState, PointerDeviceId, PointerEvent, PointerEventKind, PointerPacket,

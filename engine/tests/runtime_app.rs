@@ -3,8 +3,8 @@ use engine::plugins::{
     ActionState, FixedStepPlugin, InputFinalizePlugin, SimulationPlugin, TimePlugin,
     default_plugins,
 };
-use runen_input::PhysicalKeyIdentity;
 use engine::prelude::*;
+use runen_input::PhysicalKeyIdentity;
 use winit::event::ElementState;
 use winit::keyboard::KeyCode;
 

@@ -1,5 +1,5 @@
-use runen_input::PhysicalKeyIdentity;
 use super::state::{InputState, ModifiersSnapshot};
+use runen_input::PhysicalKeyIdentity;
 use std::collections::{HashMap, HashSet};
 
 // Owner: Engine Input Plugin - Runenwerk Product Action Bindings and Projection
