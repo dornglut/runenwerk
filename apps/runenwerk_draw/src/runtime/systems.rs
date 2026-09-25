@@ -18,8 +18,9 @@ use engine::plugins::{InputState, MouseButtonTransitionSample, MouseMotionSample
 use runen_input::{
     AnalogMeasurement, ContactId, ContactPhase, ContactPresence, CoordinateSpace, DeliveryRole,
     EvidenceStatus, InputContext, InputDeviceId, InputObservation, InputObservationGroup,
-    InputSourceId, InputToolKind, MeasurementDomain, SourceTime, SourceTimeUnit, StylusTilt,
-    TabletObservation, ToolId,
+    InputSourceId, InputToolKind, MeasurementDomain, ObservationOrigin, PhysicalTabletControls,
+    Point2, SourceTime, SourceTimeUnit, StylusTilt, TabletCapabilities, TabletObservation, ToolId,
+    Vector2,
 };
 use engine::runtime::RuntimeJobExecutorResource;
 use engine::runtime::{Res, ResMut};
@@ -1346,7 +1347,7 @@ mod tests {
         pressure: Option<AnalogMeasurement>,
         tangential_pressure: Option<AnalogMeasurement>,
         twist: Option<AnalogMeasurement>,
-        capabilities: engine::plugins::TabletCapabilities,
+        capabilities: TabletCapabilities,
     ) -> TabletObservation {
         TabletObservation {
             contact: ContactId::new(44),
@@ -1354,22 +1355,22 @@ mod tests {
             tool_kind: InputToolKind::Pen,
             phase,
             presence: ContactPresence::Contact,
-            position: engine::plugins::Point2::new(
+            position: Point2::new(
                 position_x,
                 20.0,
                 CoordinateSpace::WindowPhysicalPixels,
             ),
-            delta: engine::plugins::Vector2::new(1.0, 0.0),
+            delta: Vector2::new(1.0, 0.0),
             pressure,
             tangential_pressure,
             tilt: None,
             twist,
-            controls: engine::plugins::PhysicalTabletControls::default(),
+            controls: PhysicalTabletControls::default(),
             capabilities,
             source_time: None,
             evidence,
             delivery,
-            origin: engine::plugins::ObservationOrigin::SourceReport,
+            origin: ObservationOrigin::SourceReport,
         }
     }
 
@@ -1388,7 +1389,7 @@ mod tests {
 
     #[test]
     fn draw_projects_capabilities_and_sample_evidence_without_relabeling() {
-        let capabilities = engine::plugins::TabletCapabilities {
+        let capabilities = TabletCapabilities {
             pressure: true,
             tangential_pressure: true,
             twist: true,
@@ -1503,7 +1504,7 @@ mod tests {
             None,
             None,
             None,
-            engine::plugins::TabletCapabilities {
+            TabletCapabilities {
                 hover: true,
                 ..Default::default()
             },
