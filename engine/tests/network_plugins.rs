@@ -424,6 +424,8 @@ include!("network_plugins/runtime_and_replication.rs");
 
 include!("network_plugins/delta_and_reconnect.rs");
 
+include!("network_plugins/authority_replication_cutover.rs");
+
 include!("network_plugins/client_replication_cutover.rs");
 
 include!("network_plugins/replicated_view_r0.rs");
