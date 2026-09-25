@@ -1,4 +1,4 @@
-use super::neutral::PhysicalKeyIdentity;
+use runen_input::PhysicalKeyIdentity;
 use super::state::{InputState, ModifiersSnapshot};
 use std::collections::{HashMap, HashSet};
 
