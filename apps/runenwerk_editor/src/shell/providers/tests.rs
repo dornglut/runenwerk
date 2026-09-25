@@ -393,9 +393,7 @@ fn m6_texture_request(tool_surface_kind: ToolSurfaceKind) -> SurfaceProviderRequ
         mounted_unit_id: ui_composition::MountedUnitId::new(1),
         unavailable_content_policy: ui_composition::UnavailableContentPolicy::ShowFallback,
         workspace_profile_id: editor_shell::TEXTURE_WORKSPACE_PROFILE_ID,
-        document_context: SurfaceDocumentContext::Resolved {
-            document_kind,
-        },
+        document_context: SurfaceDocumentContext::Resolved { document_kind },
         panel_instance_id: PanelInstanceId::try_from_raw(21).unwrap(),
         tab_stack_id: TabStackId::try_from_raw(21).unwrap(),
         tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(21).unwrap(),
@@ -434,9 +432,7 @@ fn m6_sdf_request(
         mounted_unit_id: ui_composition::MountedUnitId::new(1),
         unavailable_content_policy: ui_composition::UnavailableContentPolicy::ShowFallback,
         workspace_profile_id: editor_shell::FIELD_WORLD_WORKSPACE_PROFILE_ID,
-        document_context: SurfaceDocumentContext::Resolved {
-            document_kind,
-        },
+        document_context: SurfaceDocumentContext::Resolved { document_kind },
         panel_instance_id: PanelInstanceId::try_from_raw(22).unwrap(),
         tab_stack_id: TabStackId::try_from_raw(22).unwrap(),
         tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(22).unwrap(),
