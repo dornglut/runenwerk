@@ -63,7 +63,7 @@ struct PendingRestorePresentation {
 struct PendingCompositionRestore {
     candidate: EditorCompositionRuntime,
     presentations: Vec<PendingRestorePresentation>,
-    old_secondary_bindings: Vec<EditorWindowPresentationBinding>,
+    old_secondary_windows: Vec<EditorWindowId>,
 }
 
 pub fn sync_editor_composition_transitions_system(
@@ -211,14 +211,15 @@ fn begin_pending_composition_restore(
         return;
     }
 
-    let mut old_secondary_bindings = Vec::new();
-    for entry in host.shell_state.composition_target_bindings() {
-        if entry.binding.native_window_id != NativeWindowId::primary()
-            && !old_secondary_bindings.contains(&entry.binding)
-        {
-            old_secondary_bindings.push(entry.binding);
-        }
-    }
+    let old_secondary_windows = host
+        .shell_state
+        .editor_windows()
+        .records()
+        .filter(|record| {
+            record.editor_window_id != host.shell_state.editor_windows().primary_window_id()
+        })
+        .map(|record| record.editor_window_id)
+        .collect::<Vec<_>>();
 
     let presentations = target_ids
         .into_iter()
@@ -232,7 +233,7 @@ fn begin_pending_composition_restore(
     transitions.pending_restore = Some(PendingCompositionRestore {
         candidate,
         presentations,
-        old_secondary_bindings,
+        old_secondary_windows,
     });
 }
 
@@ -333,7 +334,7 @@ fn finish_pending_composition_restore(
         Ok(()) => {
             let installed = host.shell_state.composition_runtime().clone();
             host.app.prune_surface_sessions_for_composition(&installed);
-            close_detached_windows(host, pending.old_secondary_bindings, windows);
+            close_obsolete_editor_windows(host, pending.old_secondary_windows, windows);
             host.app.append_console_line(
                 "[composition] restored persisted presentation targets atomically".to_owned(),
             );
@@ -447,6 +448,22 @@ fn detached_bindings(
         .iter()
         .filter_map(|target| host.shell_state.composition_target_binding(*target))
         .collect()
+}
+
+fn close_obsolete_editor_windows(
+    host: &mut EditorHostResource,
+    editor_window_ids: Vec<EditorWindowId>,
+    windows: &mut WindowStateRegistryResource,
+) {
+    for editor_window_id in editor_window_ids {
+        if let Some(binding) = host.shell_state.editor_window_binding(editor_window_id)
+            && let Some(record) = windows.record_mut(binding.native_window_id)
+        {
+            record.approve_close();
+        }
+        host.shell_state
+            .remove_editor_window_presentation(editor_window_id);
+    }
 }
 
 fn close_detached_windows(
@@ -924,6 +941,7 @@ mod tests {
     fn single_target_restore_commits_without_secondary_window_creation() {
         let mut host = EditorHostResource::default();
         let candidate = host.shell_state.composition_runtime().clone();
+        let obsolete_unbound_window = host.shell_state.open_editor_window_for_active_workspace();
         let mut transitions = EditorCompositionTransitionRuntimeResource::default();
         let mut windows = WindowStateRegistryResource::default();
         windows.register_primary_window("Runenwerk", (1280, 720), 1.0, true);
@@ -942,6 +960,17 @@ mod tests {
         assert!(!transitions.is_pending());
         assert_eq!(host.shell_state.composition_runtime(), &candidate);
         assert_eq!(host.shell_state.editor_windows().len(), 1);
+        assert!(
+            host.shell_state
+                .editor_window_binding(obsolete_unbound_window)
+                .is_none()
+        );
+        assert!(
+            host.shell_state
+                .drain_pending_editor_window_presentations()
+                .is_empty(),
+            "successful restore must cancel obsolete unbound native-window requests"
+        );
         assert!(!host.shell_state.composition_coordination_pending());
     }
 
