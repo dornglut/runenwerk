@@ -6,6 +6,8 @@ owner: engine
 layer: engine-runtime / product-render-integration
 canonical: true
 last_reviewed: 2026-05-23
+publication: reference
+pagefind: false
 related_designs:
   - ./field-product-contracts-diagnostics-and-residency-design.md
   - ./sdf-first-field-world-platform-design.md

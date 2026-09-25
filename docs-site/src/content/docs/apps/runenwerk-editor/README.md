@@ -6,6 +6,7 @@ owner: editor
 layer: app
 canonical: true
 last_reviewed: 2026-07-24
+publication: primary
 ---
 
 # Runenwerk Editor

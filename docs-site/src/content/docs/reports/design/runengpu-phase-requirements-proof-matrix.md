@@ -6,6 +6,11 @@ owner: workspace
 layer: reports
 canonical: false
 last_reviewed: 2026-09-13
+publication: history
+draft: true
+pagefind: false
+sidebar:
+  hidden: true
 related_docs:
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0015-separate-gpu-execution-from-rendering.md

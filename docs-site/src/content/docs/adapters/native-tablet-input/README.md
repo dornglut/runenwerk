@@ -6,6 +6,7 @@ owner: adapter
 layer: adapter/tool
 canonical: true
 last_reviewed: 2026-05-14
+publication: primary
 ---
 
 # Native Tablet Input

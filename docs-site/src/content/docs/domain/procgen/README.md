@@ -6,6 +6,7 @@ owner: procgen
 layer: domain
 canonical: true
 last_reviewed: 2026-09-25
+publication: primary
 related_docs:
   - ../../design/active/editor-procedural-content-and-simulation-workflow-plan.md
   - ../../design/accepted/execution-fabric-and-product-jobs-design.md

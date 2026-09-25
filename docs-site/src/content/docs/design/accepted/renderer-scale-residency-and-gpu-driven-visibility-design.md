@@ -6,6 +6,8 @@ owner: engine
 layer: engine-runtime / renderer
 canonical: true
 last_reviewed: 2026-05-22
+publication: reference
+pagefind: false
 related_designs:
   - ./render-product-graph-platform-design.md
   - ./sdf-first-field-world-platform-design.md

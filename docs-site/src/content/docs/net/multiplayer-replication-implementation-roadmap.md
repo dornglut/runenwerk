@@ -6,6 +6,7 @@ owner: net
 layer: net
 canonical: true
 last_reviewed: 2026-09-25
+publication: primary
 related_designs:
   - ../design/active/net-authoritative-replication-protocol.md
   - ../design/active/net-plugin-runtime-bridge.md

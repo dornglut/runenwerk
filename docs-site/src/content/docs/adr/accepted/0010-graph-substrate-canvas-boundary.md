@@ -6,6 +6,8 @@ owner: workspace
 layer: domain
 canonical: true
 last_reviewed: 2026-09-25
+publication: reference
+pagefind: false
 related_docs:
   - ../../domain/graph/README.md
 related_designs:

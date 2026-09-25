@@ -6,6 +6,8 @@ owner: foundation
 layer: foundation
 canonical: true
 last_reviewed: 2026-04-26
+publication: reference
+pagefind: false
 related_adrs: []
 ---
 

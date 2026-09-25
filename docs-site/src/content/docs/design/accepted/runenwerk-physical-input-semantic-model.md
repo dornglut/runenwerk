@@ -6,6 +6,8 @@ owner: engine
 layer: engine-runtime / input
 canonical: true
 last_reviewed: 2026-09-13
+publication: reference
+pagefind: false
 related_adrs:
   - ../../adr/accepted/0024-normalize-physical-input-observation-semantics.md
   - ../../adr/accepted/0023-normalize-app-runtime-host-lifecycle-and-capability-ownership.md

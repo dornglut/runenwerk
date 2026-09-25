@@ -6,6 +6,8 @@ owner: workspace
 layer: workspace
 canonical: true
 last_reviewed: 2026-04-27
+publication: reference
+pagefind: false
 ---
 
 # ADR: Keep AI Out of Foundation

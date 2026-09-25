@@ -6,6 +6,8 @@ owner: engine
 layer: domain / engine-runtime
 canonical: true
 last_reviewed: 2026-09-25
+publication: reference
+pagefind: false
 related_docs:
   - ../../architecture/repository-family-architecture.md
 related_adrs:

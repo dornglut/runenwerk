@@ -6,6 +6,7 @@ owner: product
 layer: domain
 canonical: true
 last_reviewed: 2026-05-13
+publication: primary
 related_designs:
   - ../../design/accepted/field-product-contracts-diagnostics-and-residency-design.md
   - ../../design/accepted/execution-fabric-and-product-jobs-design.md

@@ -6,6 +6,8 @@ owner: workspace
 layer: architecture
 canonical: true
 last_reviewed: 2026-09-15
+publication: reference
+pagefind: false
 related_designs:
   - ../../architecture/repository-family-architecture.md
   - ../../design/accepted/runenrender-decomposition-design.md
@@ -96,7 +98,7 @@ zero real code consumers. Current Runenwerk source contains no tracked `domain/s
 package, workspace member, or duplicate implementation and carries no unused external
 RunenSDF dependency; Runenwerk retains only product/world integration such as
 `domain/world_sdf`. Exact migration and retirement evidence remains in the
-[PT-RUNENSDF-004 closeout](../../reports/closeouts/pt-runensdf-004-internal-sdf-retirement-closeout.md).
+[PT-RUNENSDF-004 closeout](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/reports/closeouts/pt-runensdf-004-internal-sdf-retirement-closeout.md).
 
 ### RunenECS
 

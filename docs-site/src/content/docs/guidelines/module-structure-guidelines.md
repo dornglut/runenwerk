@@ -6,6 +6,8 @@ owner: workspace
 layer: workspace
 canonical: true
 last_reviewed: 2026-09-25
+publication: reference
+pagefind: false
 ---
 
 # Intra‑Crate Module Structure Guidelines
@@ -17,7 +19,7 @@ It complements:
 
 -   `AGENTS.md`
 -   `architecture.md`
--   [`../workspace/crate-inventory.md`](../workspace/crate-inventory.md)
+-   [the current workspace crate inventory](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/workspace/crate-inventory.md)
 -   [`dependency-rules.md`](dependency-rules.md)
 
 These rules help both humans and AI coding agents consistently place

@@ -6,6 +6,8 @@ owner: render
 layer: engine/render
 canonical: true
 last_reviewed: 2026-09-14
+publication: reference
+pagefind: false
 related_docs:
   - ./shader-authoring-and-canonical-artifact-policy.md
   - ../accepted/runenrender-decomposition-design.md
@@ -64,7 +66,7 @@ c292b77ff1a3b3e984dc2263bbbf8d8c06e93777
 That exact pin is a Runenwerk integration-compatibility fact, not a local RunenGPU
 semantic owner. A future repin requires explicit integration review and validation.
 Historical G-phase requirement/proof identifiers remain available in the noncanonical
-[RunenGPU proof report](../../reports/design/runengpu-phase-requirements-proof-matrix.md)
+[RunenGPU proof report](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/reports/design/runengpu-phase-requirements-proof-matrix.md)
 and Git history.
 
 RunenRender must not recreate the retired Runenwerk-local RunenGPU G-phase authority in

@@ -6,6 +6,8 @@ owner: editor
 layer: domain/app
 canonical: true
 last_reviewed: 2026-09-14
+publication: reference
+pagefind: false
 related_adrs:
   - ./0001-use-domain-owned-commands.md
   - ./0003-ratification-is-domain-specific.md

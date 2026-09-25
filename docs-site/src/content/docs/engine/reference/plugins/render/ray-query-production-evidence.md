@@ -6,6 +6,7 @@ owner: engine
 layer: engine-runtime / renderer optional ray-query production evidence
 canonical: false
 last_reviewed: 2026-05-23
+publication: primary
 related_designs:
   - ../../../../design/accepted/renderer-hardware-ray-query-and-hybrid-tracing-design.md
 ---

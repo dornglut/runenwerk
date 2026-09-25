@@ -6,6 +6,11 @@ owner: editor
 layer: domain/app
 canonical: false
 last_reviewed: 2026-06-19
+publication: history
+draft: true
+pagefind: false
+sidebar:
+  hidden: true
 superseded_by:
   - ../accepted/0013-app-neutral-ui-composition-clean-cutover.md
 related_adrs:

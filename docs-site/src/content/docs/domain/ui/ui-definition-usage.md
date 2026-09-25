@@ -6,6 +6,7 @@ owner: ui
 layer: domain
 canonical: true
 last_reviewed: 2026-05-25
+publication: primary
 related:
   - ./README.md
   - ../../design/accepted/ui-lab-api-docs-examples-runtime-closeout-design.md

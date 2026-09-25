@@ -6,6 +6,8 @@ owner: gameplay
 layer: cross-domain
 canonical: true
 last_reviewed: 2026-09-25
+publication: reference
+pagefind: false
 related_designs:
   - ./semantic-graph-ir-and-compilation-design.md
   - ./engine-game-runtime-editor-ecs-scripting-hot-reload-design.md

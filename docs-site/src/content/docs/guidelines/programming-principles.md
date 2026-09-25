@@ -6,6 +6,8 @@ owner: workspace
 layer: guidelines
 canonical: true
 last_reviewed: 2026-07-22
+publication: reference
+pagefind: false
 related_docs:
   - ./architecture.md
   - ./code-patterns.md

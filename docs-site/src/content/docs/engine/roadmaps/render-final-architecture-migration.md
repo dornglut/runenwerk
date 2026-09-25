@@ -6,6 +6,7 @@ owner: engine
 layer: engine-runtime
 canonical: true
 last_reviewed: 2026-05-16
+publication: primary
 related_designs:
   - ../../design/accepted/editor-native-multi-window-presentation-design.md
   - ../../design/implemented/render-product-surface-foundation-bundle-design.md

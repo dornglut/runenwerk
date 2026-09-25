@@ -5,6 +5,8 @@ status: completed
 owner: ecs
 layer: investigation
 last_reviewed: 2026-09-15
+publication: reference
+pagefind: false
 related_docs:
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md

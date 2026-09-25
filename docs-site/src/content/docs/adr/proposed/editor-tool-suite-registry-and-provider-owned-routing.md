@@ -6,6 +6,11 @@ owner: editor
 layer: domain/app
 canonical: true
 last_reviewed: 2026-09-14
+publication: history
+draft: true
+pagefind: false
+sidebar:
+  hidden: true
 related_designs:
   - ../../design/implemented/editor-tool-suite-registry-and-workbench-host-design.md
   - ../../design/active/material-lab-and-material-preview-design.md

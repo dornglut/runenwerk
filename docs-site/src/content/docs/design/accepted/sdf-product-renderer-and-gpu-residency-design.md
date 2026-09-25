@@ -6,6 +6,8 @@ owner: engine
 layer: engine-runtime
 canonical: true
 last_reviewed: 2026-05-12
+publication: reference
+pagefind: false
 related_adrs:
   - ../../adr/accepted/0004-separate-description-from-execution.md
   - ../../adr/accepted/0008-adopt-sdf-first-field-product-architecture.md

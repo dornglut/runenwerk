@@ -6,6 +6,8 @@ owner: ui
 layer: domain/app
 canonical: true
 last_reviewed: 2026-09-25
+publication: reference
+pagefind: false
 supersedes:
   - ../superseded/0006-editor-surface-provider-plugin-seam.md
   - ../superseded/0012-capability-workbench-clean-break.md

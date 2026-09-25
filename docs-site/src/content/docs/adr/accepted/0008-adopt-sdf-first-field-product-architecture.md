@@ -6,6 +6,8 @@ owner: workspace
 layer: workspace
 canonical: true
 last_reviewed: 2026-05-12
+publication: reference
+pagefind: false
 related_designs:
   - ../../design/accepted/sdf-first-field-world-platform-design.md
   - ../../design/accepted/field-product-contracts-diagnostics-and-residency-design.md

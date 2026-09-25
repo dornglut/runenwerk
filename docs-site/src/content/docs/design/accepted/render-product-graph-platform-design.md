@@ -6,6 +6,8 @@ owner: engine
 layer: engine-runtime / product-platform
 canonical: true
 last_reviewed: 2026-05-21
+publication: reference
+pagefind: false
 related_designs:
   - ./sdf-product-renderer-and-gpu-residency-design.md
   - ./field-product-contracts-diagnostics-and-residency-design.md

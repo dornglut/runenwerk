@@ -6,6 +6,11 @@ owner: editor
 layer: domain/editor / app
 canonical: true
 last_reviewed: 2026-05-25
+publication: history
+draft: true
+pagefind: false
+sidebar:
+  hidden: true
 related_designs:
   - ../../../design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md
   - ../../implementation-plans/wr-116-shell-and-product-pattern-polish/plan.md

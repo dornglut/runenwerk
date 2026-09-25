@@ -6,6 +6,8 @@ owner: engine
 layer: engine
 canonical: true
 last_reviewed: 2026-09-10
+publication: reference
+pagefind: false
 related_designs:
   - ./render-product-graph-platform-design.md
   - ./render-production-readiness-and-inspection-design.md

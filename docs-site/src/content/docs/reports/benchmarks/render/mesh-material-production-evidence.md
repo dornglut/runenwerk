@@ -6,6 +6,8 @@ owner: engine
 layer: engine-runtime / renderer mesh material production evidence
 canonical: false
 last_reviewed: 2026-05-23
+publication: reference
+pagefind: false
 related:
   - ../../implementation-plans/wr-069-renderer-mesh-material-production-evidence/plan.md
   - ../../closeouts/wr-069-renderer-mesh-material-production-evidence/closeout.md

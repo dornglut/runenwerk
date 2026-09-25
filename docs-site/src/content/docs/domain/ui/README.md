@@ -6,6 +6,7 @@ owner: ui
 layer: domain
 canonical: true
 last_reviewed: 2026-09-25
+publication: primary
 ---
 
 # UI Domain
@@ -144,8 +145,8 @@ The canonical classification and consumer sequence live in
 
 ## UiProgram / Artifact Path
 
-- [UI Program Architecture](../../design/implemented/ui-program-architecture.md)
-- [UI Program Architecture Owner Map](../../design/implemented/ui-program-architecture-owner-map.md)
+- [UI Program Architecture](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/design/implemented/ui-program-architecture.md)
+- [UI Program Architecture](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/design/implemented/ui-program-architecture.md)
 
 The UiProgram-era crates coexist with retained `ui_tree`, `ui_widgets`, and
 `ui_runtime`; their existence does not imply total retained-UI replacement.

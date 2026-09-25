@@ -6,6 +6,7 @@ owner: domain
 layer: domain
 canonical: true
 last_reviewed: 2026-09-15
+publication: primary
 ---
 
 # Domain Layer Overview
@@ -102,7 +103,7 @@ Start here when working in the domain layer:
 For workspace-wide placement, membership, and dependency ownership, see:
 
 - [`../guidelines/architecture.md`](../guidelines/architecture.md) for Runenwerk placement and boundary guidance;
-- [`../workspace/crate-inventory.md`](../workspace/crate-inventory.md) for current local workspace members;
+- [the current local workspace inventory](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/workspace/crate-inventory.md) for current local workspace members;
 - [`../guidelines/dependency-rules.md`](../guidelines/dependency-rules.md) for dependency direction and peer-framework ownership.
 
 ## Known Gaps

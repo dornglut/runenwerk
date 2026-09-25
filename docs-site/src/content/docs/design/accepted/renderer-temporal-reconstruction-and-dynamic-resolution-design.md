@@ -6,6 +6,8 @@ owner: engine
 layer: engine-runtime / renderer / postprocess
 canonical: true
 last_reviewed: 2026-05-23
+publication: reference
+pagefind: false
 related_designs:
   - ./render-product-graph-platform-design.md
   - ../implemented/render-product-surface-foundation-bundle-design.md

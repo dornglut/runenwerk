@@ -6,6 +6,7 @@ owner: drawing
 layer: domain
 canonical: true
 last_reviewed: 2026-05-19
+publication: primary
 related_docs:
   - ../../design/active/drawing-domain-crate-design.md
   - ../../design/active/drawing-authoring-and-comic-layout-platform-design.md

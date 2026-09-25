@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
+import argparse
+import json
+from html.parser import HTMLParser
 from pathlib import Path
 import re
 import sys
 import tomllib
 import urllib.parse
+from xml.etree import ElementTree
 
 DOCS_ROOT = Path("docs-site/src/content/docs")
 REPO_ROOT = Path(".")
@@ -30,6 +34,13 @@ ALLOWED_STATUS = {
     "rejected",
     "archived",
 }
+PUBLICATION_CLASSES = {
+    "primary",
+    "reference",
+    "repository-current",
+    "history",
+}
+PUBLICATION_ROUTE_CLASSES = {"primary", "reference"}
 RETIRED_PLANNING_LEDGER_PATTERNS = {
     "active-work.md": "GitHub issues and the Engineering Portfolio own live work state; the Markdown active-work ledger is retired",
     "deferred-work.md": "GitHub issues and the Engineering Portfolio own deferred work state; the Markdown deferred-work ledger is retired",
@@ -101,6 +112,203 @@ def extract_frontmatter_value(text: str, key: str) -> str | None:
     match = re.search(rf"^{re.escape(key)}:\s*(.+?)\s*$", frontmatter, re.MULTILINE)
     return match.group(1).strip().strip("\"'") if match else None
 
+
+def publication_class(path: Path, text: str, errors: list[str]) -> str | None:
+    value = extract_frontmatter_value(text, "publication")
+    if value is None:
+        errors.append(f"missing publication classification: {path}")
+        return None
+    if value not in PUBLICATION_CLASSES:
+        errors.append(f"invalid publication classification '{value}': {path}")
+        return None
+
+    draft = extract_frontmatter_value(text, "draft")
+    pagefind = extract_frontmatter_value(text, "pagefind")
+    if draft not in {None, "true", "false"}:
+        errors.append(f"invalid draft value '{draft}': {path}")
+    if pagefind not in {None, "true", "false"}:
+        errors.append(f"invalid pagefind value '{pagefind}': {path}")
+
+    if value == "primary":
+        if draft == "true":
+            errors.append(f"primary publication cannot be a draft: {path}")
+        if pagefind == "false":
+            errors.append(f"primary publication cannot disable Pagefind: {path}")
+    elif value == "reference":
+        if draft == "true":
+            errors.append(f"reference publication must retain a production route: {path}")
+        if pagefind != "false":
+            errors.append(f"reference publication must disable default Pagefind: {path}")
+    else:
+        if draft != "true":
+            errors.append(f"{value} publication must be a production draft: {path}")
+        if pagefind != "false":
+            errors.append(f"{value} publication must disable Pagefind: {path}")
+        if not re.search(r"^sidebar:\s*$\n^\s+hidden:\s+true\s*$", text, re.MULTILINE):
+            errors.append(f"{value} publication must hide its sidebar entry: {path}")
+    return value
+
+
+def docs_source_paths() -> list[Path]:
+    return sorted(
+        path
+        for path in DOCS_ROOT.rglob("*")
+        if path.is_file()
+        and path.suffix in {".md", ".mdx"}
+        and not any(path.is_relative_to(subtree) for subtree in IGNORED_DOCS_SUBTREES)
+    )
+
+
+def route_key(path: Path) -> str:
+    relative = path.relative_to(DOCS_ROOT)
+    if relative.name == "index.mdx" and relative.parent == Path("."):
+        return "/"
+    if relative.name in {"README.md", "index.md"}:
+        relative = relative.parent / ("readme" if relative.name == "README.md" else "")
+    else:
+        relative = relative.with_suffix("")
+    value = relative.as_posix().strip("/")
+    return f"/{value}/" if value else "/"
+
+
+class SidebarLinkParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self._sidebar_depth = 0
+        self.links: set[str] = set()
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attributes = dict(attrs)
+        if tag == "nav" and "sidebar" in attributes.get("class", ""):
+            self._sidebar_depth = 1
+        elif self._sidebar_depth:
+            self._sidebar_depth += 1
+        if tag == "a" and self._sidebar_depth:
+            href = attributes.get("href")
+            if href:
+                self.links.add(href)
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+        self.handle_endtag(tag)
+
+    def handle_endtag(self, tag: str) -> None:
+        if self._sidebar_depth:
+            self._sidebar_depth -= 1
+
+
+def build_route_key(href: str, base: str = "/runenwerk") -> str | None:
+    parsed = urllib.parse.urlparse(href)
+    if parsed.scheme or parsed.netloc:
+        return None
+    path = parsed.path
+    if not path.startswith(base):
+        return None
+    path = path[len(base) :]
+    if not path.startswith("/"):
+        return None
+    return path if path.endswith("/") else f"{path}/"
+
+
+def validate_publication_build(build_root: Path, errors: list[str]) -> None:
+    if not build_root.is_dir():
+        errors.append(f"missing documentation build output: {build_root}")
+        return
+
+    classes: dict[str, str] = {}
+    for path in docs_source_paths():
+        text = path.read_text(encoding="utf-8")
+        value = extract_frontmatter_value(text, "publication")
+        if value in PUBLICATION_CLASSES:
+            classes[route_key(path)] = value
+
+    expected_routes = {
+        route for route, value in classes.items() if value in PUBLICATION_ROUTE_CLASSES
+    }
+    html_routes = {
+        route_key_from_build_path(path, build_root)
+        for path in build_root.rglob("index.html")
+        if path.relative_to(build_root).as_posix() != "404.html"
+    }
+    html_routes.discard(None)
+    if html_routes != expected_routes:
+        errors.append(
+            "generated route set does not match publication classes: "
+            f"expected {len(expected_routes)}, found {len(html_routes)}"
+        )
+
+    sitemap_paths = sorted(build_root.glob("sitemap-*.xml"))
+    sitemap_routes: set[str] = set()
+    sitemap_namespace = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+    for sitemap in sitemap_paths:
+        root = ElementTree.parse(sitemap).getroot()
+        for loc in root.findall("sm:url/sm:loc", sitemap_namespace):
+            if loc.text:
+                route = build_route_key(urllib.parse.urlparse(loc.text).path)
+                if route is not None:
+                    sitemap_routes.add(route)
+    if sitemap_routes != expected_routes:
+        errors.append(
+            "generated sitemap set does not match publication classes: "
+            f"expected {len(expected_routes)}, found {len(sitemap_routes)}"
+        )
+
+    pagefind_entry = build_root / "pagefind" / "pagefind-entry.json"
+    try:
+        pagefind_count = json.loads(pagefind_entry.read_text(encoding="utf-8"))["languages"]["en"][
+            "page_count"
+        ]
+    except (OSError, KeyError, TypeError, json.JSONDecodeError) as error:
+        errors.append(f"could not read generated Pagefind count: {error}")
+        pagefind_count = -1
+    expected_pagefind = sum(value == "primary" for value in classes.values())
+    if pagefind_count != expected_pagefind:
+        errors.append(
+            "generated Pagefind count does not match primary publication: "
+            f"expected {expected_pagefind}, found {pagefind_count}"
+        )
+
+    homepage = build_root / "index.html"
+    sidebar = SidebarLinkParser()
+    try:
+        sidebar.feed(homepage.read_text(encoding="utf-8"))
+    except OSError as error:
+        errors.append(f"could not read generated homepage sidebar: {error}")
+    sidebar_routes = {
+        route
+        for route in (build_route_key(href) for href in sidebar.links)
+        if route is not None
+    }
+    if not expected_routes.issubset(sidebar_routes):
+        missing = sorted(expected_routes - sidebar_routes)
+        errors.append(f"generated sidebar omits routed publication pages: {missing[:5]}")
+    invalid_sidebar_routes = sidebar_routes - expected_routes
+    if invalid_sidebar_routes:
+        errors.append(
+            f"generated sidebar links to non-routed pages: {sorted(invalid_sidebar_routes)[:5]}"
+        )
+
+    print(
+        "publication build passed: "
+        f"source={len(classes)} "
+        f"primary={sum(value == 'primary' for value in classes.values())} "
+        f"reference={sum(value == 'reference' for value in classes.values())} "
+        f"repository-current={sum(value == 'repository-current' for value in classes.values())} "
+        f"history={sum(value == 'history' for value in classes.values())} "
+        f"routes={len(expected_routes)} "
+        f"pagefind={pagefind_count} "
+        f"sitemap={len(sitemap_routes)} "
+        f"sidebar={len(sidebar_routes)}"
+    )
+
+
+def route_key_from_build_path(path: Path, build_root: Path) -> str | None:
+    relative = path.relative_to(build_root)
+    if relative.as_posix() == "index.html":
+        return "/"
+    route = relative.parent.as_posix()
+    return f"/{route}/"
+
 def is_valid_docs_filename(path: Path) -> bool:
     name = path.name
 
@@ -131,6 +339,25 @@ def link_candidates(source: Path, raw_target: str) -> list[Path]:
         base / "index.md",
         base / "index.mdx",
     ]
+
+
+def validate_publication_links(
+    publication_by_path: dict[Path, str | None], errors: list[str]
+) -> None:
+    for source, publication in publication_by_path.items():
+        if publication not in PUBLICATION_ROUTE_CLASSES:
+            continue
+        text = source.read_text(encoding="utf-8")
+        for match in MARKDOWN_LINK.finditer(text):
+            raw_target = match.group(1)
+            for candidate in link_candidates(source, raw_target):
+                target_publication = publication_by_path.get(candidate)
+                if target_publication in {"repository-current", "history"}:
+                    errors.append(
+                        "routed publication links to non-routed publication "
+                        f"{target_publication}: {source} -> {candidate}"
+                    )
+                    break
 
 def repo_path_exists(path_text: str) -> bool:
     if path_text.startswith(("http://", "https://")):
@@ -231,6 +458,13 @@ def validate_crate_inventory_alignment(errors: list[str]) -> None:
         errors.append(f"canonical crate inventory lists non-workspace path as active member: {path}")
 
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--build-output",
+        type=Path,
+        help="also validate generated routes, Pagefind, sitemap, and sidebar output",
+    )
+    arguments = parser.parse_args()
     errors: list[str] = []
 
     if not DOCS_ROOT.exists():
@@ -241,6 +475,7 @@ def main() -> int:
     validate_crate_inventory_alignment(errors)
 
     reports_root = DOCS_ROOT / "reports"
+    publication_by_path: dict[Path, str | None] = {}
 
     for path in DOCS_ROOT.rglob("*"):
         if any(path.is_relative_to(subtree) for subtree in IGNORED_DOCS_SUBTREES):
@@ -249,6 +484,7 @@ def main() -> int:
             text = path.read_text(encoding="utf-8")
             validate_design_lifecycle_status(path, text, errors)
             validate_active_design_lifecycle_claims(path, text, errors)
+            publication_by_path[path.resolve()] = publication_class(path, text, errors)
 
             if path.name == "readme.md":
                 errors.append(f"docs-site landing pages must use README.md, not readme.md: {path}")
@@ -276,6 +512,11 @@ def main() -> int:
                 candidates = link_candidates(path, raw_target)
                 if candidates and not any(candidate.exists() for candidate in candidates):
                     errors.append(f"broken markdown link in {path}: {raw_target}")
+
+    validate_publication_links(publication_by_path, errors)
+
+    if arguments.build_output is not None:
+        validate_publication_build(arguments.build_output, errors)
 
     return report(errors)
 

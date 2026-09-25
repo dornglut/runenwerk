@@ -6,6 +6,8 @@ owner: editor
 layer: app
 canonical: true
 last_reviewed: 2026-09-24
+publication: reference
+pagefind: false
 related_adrs:
   - ../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
   - ../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md

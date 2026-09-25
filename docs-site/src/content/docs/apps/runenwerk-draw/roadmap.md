@@ -6,6 +6,7 @@ owner: drawing
 layer: app
 canonical: true
 last_reviewed: 2026-05-19
+publication: primary
 related_designs:
   - ../../design/active/drawing-authoring-and-comic-layout-platform-design.md
   - ../../design/active/drawing-domain-crate-design.md

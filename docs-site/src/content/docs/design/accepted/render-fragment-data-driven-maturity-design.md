@@ -6,6 +6,8 @@ owner: engine
 layer: engine-runtime
 canonical: true
 last_reviewed: 2026-05-21
+publication: reference
+pagefind: false
 related_designs:
   - ../implemented/render-product-surface-foundation-bundle-design.md
   - ./render-execution-graph-compiler-maturity-design.md

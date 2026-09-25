@@ -6,6 +6,8 @@ owner: workspace
 layer: cross-domain
 canonical: true
 last_reviewed: 2026-05-12
+publication: reference
+pagefind: false
 related_designs:
   - ./sdf-first-field-world-platform-design.md
   - ./field-product-contracts-diagnostics-and-residency-design.md

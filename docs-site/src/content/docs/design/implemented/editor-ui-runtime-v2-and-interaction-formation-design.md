@@ -6,6 +6,8 @@ owner: ui
 layer: domain
 canonical: true
 last_reviewed: 2026-09-12
+publication: reference
+pagefind: false
 related:
   - ./ui-definition-formation-foundation-design.md
   - ./editor-self-authoring-and-final-ui-design.md

@@ -6,6 +6,7 @@ owner: engine
 layer: engine-runtime
 canonical: true
 last_reviewed: 2026-07-24
+publication: primary
 related_designs:
   - ../../../../design/accepted/sdf-product-renderer-and-gpu-residency-design.md
   - ../../../../design/accepted/editor-native-multi-window-presentation-design.md

@@ -6,6 +6,7 @@ owner: engine
 layer: engine/runtime
 canonical: true
 last_reviewed: 2026-04-28
+publication: primary
 ---
 
 # Engine Render Macros

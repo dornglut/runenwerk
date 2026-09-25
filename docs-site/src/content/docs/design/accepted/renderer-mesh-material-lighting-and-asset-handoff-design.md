@@ -6,6 +6,8 @@ owner: engine
 layer: engine-runtime / renderer / asset-handoff
 canonical: true
 last_reviewed: 2026-05-22
+publication: reference
+pagefind: false
 related_designs:
   - ../active/material-lab-and-material-preview-design.md
   - ./render-product-graph-platform-design.md

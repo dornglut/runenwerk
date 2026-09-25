@@ -6,6 +6,8 @@ owner: render
 layer: investigation
 canonical: false
 last_reviewed: 2026-08-04
+publication: reference
+pagefind: false
 related_docs:
   - ../../design/accepted/runenrender-decomposition-design.md
   - ../../design/active/runenrender-internal-decomposition-execution-plan.md

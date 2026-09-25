@@ -6,6 +6,8 @@ owner: workspace
 layer: tooling
 canonical: true
 last_reviewed: 2026-09-13
+publication: reference
+pagefind: false
 related_docs:
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0015-separate-gpu-execution-from-rendering.md
