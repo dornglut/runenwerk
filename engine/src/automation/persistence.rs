@@ -103,7 +103,10 @@ impl fmt::Display for AutomationInputTraceExportError {
                 write!(formatter, "persisted V1 resource limit exceeded: {limit}")
             }
             Self::SerializationFailure(detail) => {
-                write!(formatter, "failed to serialize persisted V1 trace: {detail}")
+                write!(
+                    formatter,
+                    "failed to serialize persisted V1 trace: {detail}"
+                )
             }
         }
     }
@@ -130,28 +133,48 @@ pub enum AutomationInputTraceImportError {
 impl fmt::Display for AutomationInputTraceImportError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::ArtifactTooLarge => formatter.write_str("persisted V1 artifact exceeds byte limit"),
-            Self::ParseFailure(detail) => write!(formatter, "persisted V1 RON parse failed: {detail}"),
+            Self::ArtifactTooLarge => {
+                formatter.write_str("persisted V1 artifact exceeds byte limit")
+            }
+            Self::ParseFailure(detail) => {
+                write!(formatter, "persisted V1 RON parse failed: {detail}")
+            }
             Self::WrongArtifactKind(found) => {
-                write!(formatter, "wrong persisted automation artifact kind: {found}")
+                write!(
+                    formatter,
+                    "wrong persisted automation artifact kind: {found}"
+                )
             }
             Self::UnsupportedSchemaVersion(version) => {
-                write!(formatter, "unsupported persisted automation schema version: {version}")
+                write!(
+                    formatter,
+                    "unsupported persisted automation schema version: {version}"
+                )
             }
-            Self::MalformedArtifact(detail) => write!(formatter, "malformed persisted V1 artifact: {detail}"),
+            Self::MalformedArtifact(detail) => {
+                write!(formatter, "malformed persisted V1 artifact: {detail}")
+            }
             Self::UnknownField(detail) => write!(formatter, "unknown persisted V1 field: {detail}"),
-            Self::UnknownVariant(detail) => write!(formatter, "unknown persisted V1 enum variant: {detail}"),
+            Self::UnknownVariant(detail) => {
+                write!(formatter, "unknown persisted V1 enum variant: {detail}")
+            }
             Self::ResourceLimitExceeded(limit) => {
                 write!(formatter, "persisted V1 resource limit exceeded: {limit}")
             }
             Self::InvalidIdentityReference(detail) => {
-                write!(formatter, "invalid persisted V1 identity reference: {detail}")
+                write!(
+                    formatter,
+                    "invalid persisted V1 identity reference: {detail}"
+                )
             }
             Self::UnsupportedTraceShape(detail) => {
                 write!(formatter, "unsupported persisted V1 trace shape: {detail}")
             }
             Self::InvalidNormalizedInput(detail) => {
-                write!(formatter, "persisted V1 contains invalid normalized input: {detail}")
+                write!(
+                    formatter,
+                    "persisted V1 contains invalid normalized input: {detail}"
+                )
             }
             Self::UnsupportedRecordingWitness => {
                 formatter.write_str("persisted V1 recording witness is unsupported")
@@ -432,7 +455,9 @@ pub fn export_automation_input_trace_v1(
     let options = ron_options();
     let encoded = options
         .to_string_pretty(&persisted, ron::ser::PrettyConfig::new())
-        .map_err(|error| AutomationInputTraceExportError::SerializationFailure(error.to_string()))?;
+        .map_err(|error| {
+            AutomationInputTraceExportError::SerializationFailure(error.to_string())
+        })?;
     if encoded.len() > MAX_ARTIFACT_BYTES {
         return Err(AutomationInputTraceExportError::ResourceLimitExceeded(
             "artifact_bytes",
@@ -519,9 +544,7 @@ fn validate_persisted_header(
     Ok(())
 }
 
-fn metadata_strings(
-    provenance: &AutomationInputTraceProvenance,
-) -> impl Iterator<Item = &String> {
+fn metadata_strings(provenance: &AutomationInputTraceProvenance) -> impl Iterator<Item = &String> {
     [
         provenance.runenwerk_revision.as_ref(),
         provenance.runen_input_revision.as_ref(),
@@ -588,7 +611,9 @@ impl ExportBuilder {
         provenance: Option<AutomationInputTraceProvenance>,
     ) -> Result<PersistedTraceV1, AutomationInputTraceExportError> {
         if trace.frames.len() > MAX_FRAMES {
-            return Err(AutomationInputTraceExportError::ResourceLimitExceeded("frames"));
+            return Err(AutomationInputTraceExportError::ResourceLimitExceeded(
+                "frames",
+            ));
         }
 
         let mut frames = Vec::with_capacity(trace.frames.len());
@@ -603,12 +628,9 @@ impl ExportBuilder {
                     "groups_per_frame",
                 ));
             }
-            self.total_groups = self
-                .total_groups
-                .checked_add(frame.groups.len())
-                .ok_or(AutomationInputTraceExportError::ResourceLimitExceeded(
-                    "total_groups",
-                ))?;
+            self.total_groups = self.total_groups.checked_add(frame.groups.len()).ok_or(
+                AutomationInputTraceExportError::ResourceLimitExceeded("total_groups"),
+            )?;
             if self.total_groups > MAX_TOTAL_GROUPS {
                 return Err(AutomationInputTraceExportError::ResourceLimitExceeded(
                     "total_groups",
@@ -688,7 +710,9 @@ impl ExportBuilder {
             return Ok(*slot);
         }
         if self.sources.len() >= MAX_SOURCES {
-            return Err(AutomationInputTraceExportError::ResourceLimitExceeded("sources"));
+            return Err(AutomationInputTraceExportError::ResourceLimitExceeded(
+                "sources",
+            ));
         }
         let slot = self.next_source;
         self.next_source += 1;
@@ -778,22 +802,18 @@ impl ExportBuilder {
                     },
                 ))
             }
-            InputObservation::RelativeMotion { delta, unit } if !all_tablet => {
-                Ok(PersistedObservationV1::RelativeMotion(
-                    PersistedRelativeMotionV1 {
-                        delta: vector_to_persisted(*delta),
-                        unit: relative_unit_to_persisted(*unit),
-                    },
-                ))
+            InputObservation::RelativeMotion { delta, unit } if !all_tablet => Ok(
+                PersistedObservationV1::RelativeMotion(PersistedRelativeMotionV1 {
+                    delta: vector_to_persisted(*delta),
+                    unit: relative_unit_to_persisted(*unit),
+                }),
+            ),
+            InputObservation::Scroll(input) if !all_tablet => {
+                Ok(PersistedObservationV1::Scroll(scroll_to_persisted(*input)))
             }
-            InputObservation::Scroll(input) if !all_tablet => Ok(PersistedObservationV1::Scroll(
-                scroll_to_persisted(*input),
+            InputObservation::Tablet(tablet) if all_tablet => Ok(PersistedObservationV1::Tablet(
+                self.tablet_to_persisted(context, tablet)?,
             )),
-            InputObservation::Tablet(tablet) if all_tablet => {
-                Ok(PersistedObservationV1::Tablet(self.tablet_to_persisted(
-                    context, tablet,
-                )?))
-            }
             _ => Err(AutomationInputTraceExportError::UnsupportedTraceShape(
                 "trace contains an observation outside persisted V1 replay scope".to_owned(),
             )),
@@ -870,12 +890,9 @@ impl ImportBuilder {
                     "groups_per_frame",
                 ));
             }
-            self.total_groups = self
-                .total_groups
-                .checked_add(frame.groups.len())
-                .ok_or(AutomationInputTraceImportError::ResourceLimitExceeded(
-                    "total_groups",
-                ))?;
+            self.total_groups = self.total_groups.checked_add(frame.groups.len()).ok_or(
+                AutomationInputTraceImportError::ResourceLimitExceeded("total_groups"),
+            )?;
             if self.total_groups > MAX_TOTAL_GROUPS {
                 return Err(AutomationInputTraceImportError::ResourceLimitExceeded(
                     "total_groups",
@@ -951,7 +968,10 @@ impl ImportBuilder {
     ) -> Result<InputSourceId, AutomationInputTraceImportError> {
         if slot > self.next_source {
             return Err(AutomationInputTraceImportError::InvalidIdentityReference(
-                format!("source slot {slot} skipped first-appearance slot {}", self.next_source),
+                format!(
+                    "source slot {slot} skipped first-appearance slot {}",
+                    self.next_source
+                ),
             ));
         }
         if slot == self.next_source {
@@ -993,7 +1013,10 @@ impl ImportBuilder {
         device_slot: Option<u32>,
         slot: u32,
     ) -> Result<ContactId, AutomationInputTraceImportError> {
-        let next = self.next_contact.entry((source_slot, device_slot)).or_default();
+        let next = self
+            .next_contact
+            .entry((source_slot, device_slot))
+            .or_default();
         if slot > *next {
             return Err(AutomationInputTraceImportError::InvalidIdentityReference(
                 format!("contact slot {slot} skipped first-appearance slot {next}"),
@@ -1016,7 +1039,10 @@ impl ImportBuilder {
         device_slot: Option<u32>,
         slot: u32,
     ) -> Result<ToolId, AutomationInputTraceImportError> {
-        let next = self.next_tool.entry((source_slot, device_slot)).or_default();
+        let next = self
+            .next_tool
+            .entry((source_slot, device_slot))
+            .or_default();
         if slot > *next {
             return Err(AutomationInputTraceImportError::InvalidIdentityReference(
                 format!("tool slot {slot} skipped first-appearance slot {next}"),
@@ -1066,14 +1092,9 @@ impl ImportBuilder {
             PersistedObservationV1::Scroll(input) if !all_tablet => {
                 Ok(InputObservation::Scroll(scroll_from_persisted(*input)))
             }
-            PersistedObservationV1::Tablet(tablet) if all_tablet => {
-                Ok(InputObservation::Tablet(self.tablet_from_persisted(
-                    source_slot,
-                    device_slot,
-                    context,
-                    tablet,
-                )?))
-            }
+            PersistedObservationV1::Tablet(tablet) if all_tablet => Ok(InputObservation::Tablet(
+                self.tablet_from_persisted(source_slot, device_slot, context, tablet)?,
+            )),
             _ => Err(AutomationInputTraceImportError::UnsupportedTraceShape(
                 "artifact contains an observation outside persisted V1 replay scope".to_owned(),
             )),
@@ -1105,7 +1126,11 @@ impl ImportBuilder {
             controls: controls_from_persisted(tablet.controls),
             capabilities: capabilities_from_persisted(tablet.capabilities),
             source_time: tablet.source_time.map(|time| {
-                SourceTime::new(context, time.value, source_time_unit_from_persisted(time.unit))
+                SourceTime::new(
+                    context,
+                    time.value,
+                    source_time_unit_from_persisted(time.unit),
+                )
             }),
             evidence: evidence_from_persisted(tablet.evidence),
             delivery: delivery_from_persisted(tablet.delivery),
@@ -1246,8 +1271,12 @@ fn point_to_persisted(value: Point2) -> PersistedPoint2V1 {
         x: value.x,
         y: value.y,
         space: match value.space {
-            CoordinateSpace::UnspecifiedTargetUnits => PersistedCoordinateSpaceV1::UnspecifiedTargetUnits,
-            CoordinateSpace::WindowPhysicalPixels => PersistedCoordinateSpaceV1::WindowPhysicalPixels,
+            CoordinateSpace::UnspecifiedTargetUnits => {
+                PersistedCoordinateSpaceV1::UnspecifiedTargetUnits
+            }
+            CoordinateSpace::WindowPhysicalPixels => {
+                PersistedCoordinateSpaceV1::WindowPhysicalPixels
+            }
         },
     }
 }
@@ -1257,8 +1286,12 @@ fn point_from_persisted(value: PersistedPoint2V1) -> Point2 {
         value.x,
         value.y,
         match value.space {
-            PersistedCoordinateSpaceV1::UnspecifiedTargetUnits => CoordinateSpace::UnspecifiedTargetUnits,
-            PersistedCoordinateSpaceV1::WindowPhysicalPixels => CoordinateSpace::WindowPhysicalPixels,
+            PersistedCoordinateSpaceV1::UnspecifiedTargetUnits => {
+                CoordinateSpace::UnspecifiedTargetUnits
+            }
+            PersistedCoordinateSpaceV1::WindowPhysicalPixels => {
+                CoordinateSpace::WindowPhysicalPixels
+            }
         },
     )
 }
@@ -1268,13 +1301,21 @@ fn measurement_to_persisted(value: AnalogMeasurement) -> PersistedAnalogMeasurem
         value: value.value,
         domain: match value.domain {
             MeasurementDomain::UnspecifiedScalar => PersistedMeasurementDomainV1::UnspecifiedScalar,
-            MeasurementDomain::NormalizedUnitInterval => PersistedMeasurementDomainV1::NormalizedUnitInterval,
-            MeasurementDomain::SignedNormalizedUnitInterval => PersistedMeasurementDomainV1::SignedNormalizedUnitInterval,
+            MeasurementDomain::NormalizedUnitInterval => {
+                PersistedMeasurementDomainV1::NormalizedUnitInterval
+            }
+            MeasurementDomain::SignedNormalizedUnitInterval => {
+                PersistedMeasurementDomainV1::SignedNormalizedUnitInterval
+            }
             MeasurementDomain::CalibratedForce { max_possible_force } => {
                 PersistedMeasurementDomainV1::CalibratedForce { max_possible_force }
             }
-            MeasurementDomain::Bounded { min, max } => PersistedMeasurementDomainV1::Bounded { min, max },
-            MeasurementDomain::Degrees { min, max } => PersistedMeasurementDomainV1::Degrees { min, max },
+            MeasurementDomain::Bounded { min, max } => {
+                PersistedMeasurementDomainV1::Bounded { min, max }
+            }
+            MeasurementDomain::Degrees { min, max } => {
+                PersistedMeasurementDomainV1::Degrees { min, max }
+            }
         },
     }
 }
@@ -1284,13 +1325,21 @@ fn measurement_from_persisted(value: PersistedAnalogMeasurementV1) -> AnalogMeas
         value.value,
         match value.domain {
             PersistedMeasurementDomainV1::UnspecifiedScalar => MeasurementDomain::UnspecifiedScalar,
-            PersistedMeasurementDomainV1::NormalizedUnitInterval => MeasurementDomain::NormalizedUnitInterval,
-            PersistedMeasurementDomainV1::SignedNormalizedUnitInterval => MeasurementDomain::SignedNormalizedUnitInterval,
+            PersistedMeasurementDomainV1::NormalizedUnitInterval => {
+                MeasurementDomain::NormalizedUnitInterval
+            }
+            PersistedMeasurementDomainV1::SignedNormalizedUnitInterval => {
+                MeasurementDomain::SignedNormalizedUnitInterval
+            }
             PersistedMeasurementDomainV1::CalibratedForce { max_possible_force } => {
                 MeasurementDomain::CalibratedForce { max_possible_force }
             }
-            PersistedMeasurementDomainV1::Bounded { min, max } => MeasurementDomain::Bounded { min, max },
-            PersistedMeasurementDomainV1::Degrees { min, max } => MeasurementDomain::Degrees { min, max },
+            PersistedMeasurementDomainV1::Bounded { min, max } => {
+                MeasurementDomain::Bounded { min, max }
+            }
+            PersistedMeasurementDomainV1::Degrees { min, max } => {
+                MeasurementDomain::Degrees { min, max }
+            }
         },
     )
 }

@@ -1,10 +1,7 @@
 use super::*;
 
 fn context(source: u64, device: Option<u64>) -> InputContext {
-    InputContext::new(
-        InputSourceId::new(source),
-        device.map(InputDeviceId::new),
-    )
+    InputContext::new(InputSourceId::new(source), device.map(InputDeviceId::new))
 }
 
 fn pointer_group(source: u64, state: DigitalState) -> InputObservationGroup {
@@ -161,7 +158,11 @@ fn v1_preserves_atomic_tablet_payload_source_time_and_identity_relations() {
             tool_kind: InputToolKind::Pen,
             phase: ContactPhase::Update,
             presence: ContactPresence::Contact,
-            position: Point2::new(10.0 + contact as f32, 20.0, CoordinateSpace::WindowPhysicalPixels),
+            position: Point2::new(
+                10.0 + contact as f32,
+                20.0,
+                CoordinateSpace::WindowPhysicalPixels,
+            ),
             delta: Vector2::new(1.0, -1.0),
             pressure: Some(AnalogMeasurement::new(
                 0.5,
@@ -257,7 +258,9 @@ fn v1_preserves_atomic_tablet_payload_source_time_and_identity_relations() {
 #[test]
 fn export_rejects_trailing_unsupported_and_release_first_input() {
     let mut trailing = replayable_trace();
-    trailing.trailing_groups.push(pointer_group(100, DigitalState::Pressed));
+    trailing
+        .trailing_groups
+        .push(pointer_group(100, DigitalState::Pressed));
     assert!(matches!(
         export_automation_input_trace_v1(&trailing, witness(), None),
         Err(AutomationInputTraceExportError::UnframedTrailingGroups)
@@ -269,11 +272,7 @@ fn export_rejects_trailing_unsupported_and_release_first_input() {
             groups: vec![InputObservationGroup::single(
                 context(1, None),
                 InputObservation::AbsolutePointerPosition {
-                    position: Point2::new(
-                        1.0,
-                        2.0,
-                        CoordinateSpace::WindowPhysicalPixels,
-                    ),
+                    position: Point2::new(1.0, 2.0, CoordinateSpace::WindowPhysicalPixels),
                 },
             )],
         }],
@@ -368,21 +367,25 @@ fn loader_enforces_byte_and_recursion_limits_before_materialization() {
         Err(AutomationInputTraceImportError::ArtifactTooLarge)
     );
 
-    let nested = "[".repeat(MAX_RON_RECURSION_DEPTH + 16)
-        + &"]".repeat(MAX_RON_RECURSION_DEPTH + 16);
+    let nested =
+        "[".repeat(MAX_RON_RECURSION_DEPTH + 16) + &"]".repeat(MAX_RON_RECURSION_DEPTH + 16);
     let source = format!(
         "(artifact_kind:\"{}\",schema_version:1,deep:{nested})",
         AUTOMATION_INPUT_TRACE_V1_ARTIFACT_KIND
     );
     assert!(matches!(
         import_automation_input_trace_v1(source.as_bytes()),
-        Err(AutomationInputTraceImportError::ResourceLimitExceeded("ron_recursion_depth"))
+        Err(AutomationInputTraceImportError::ResourceLimitExceeded(
+            "ron_recursion_depth"
+        ))
     ));
 }
 
 #[test]
 fn import_rejects_non_contiguous_frames_empty_groups_and_bad_identity_slots() {
-    let mut persisted: PersistedTraceV1 = ron_options().from_str(&encode(&replayable_trace())).unwrap();
+    let mut persisted: PersistedTraceV1 = ron_options()
+        .from_str(&encode(&replayable_trace()))
+        .unwrap();
     persisted.frames[1].frame_ordinal = 9;
     let source = ron_options()
         .to_string_pretty(&persisted, ron::ser::PrettyConfig::new())
@@ -392,7 +395,9 @@ fn import_rejects_non_contiguous_frames_empty_groups_and_bad_identity_slots() {
         Err(AutomationInputTraceImportError::UnsupportedTraceShape(_))
     ));
 
-    let mut persisted: PersistedTraceV1 = ron_options().from_str(&encode(&replayable_trace())).unwrap();
+    let mut persisted: PersistedTraceV1 = ron_options()
+        .from_str(&encode(&replayable_trace()))
+        .unwrap();
     persisted.frames[0].groups[0].observations.clear();
     let source = ron_options()
         .to_string_pretty(&persisted, ron::ser::PrettyConfig::new())
@@ -402,7 +407,9 @@ fn import_rejects_non_contiguous_frames_empty_groups_and_bad_identity_slots() {
         Err(AutomationInputTraceImportError::UnsupportedTraceShape(_))
     ));
 
-    let mut persisted: PersistedTraceV1 = ron_options().from_str(&encode(&replayable_trace())).unwrap();
+    let mut persisted: PersistedTraceV1 = ron_options()
+        .from_str(&encode(&replayable_trace()))
+        .unwrap();
     persisted.frames[0].groups[0].source_slot = 1;
     let source = ron_options()
         .to_string_pretty(&persisted, ron::ser::PrettyConfig::new())
@@ -467,8 +474,7 @@ fn import_rejects_non_contiguous_frames_empty_groups_and_bad_identity_slots() {
     ));
 
     let mut bad_tool: PersistedTraceV1 = ron_options().from_str(&encoded).unwrap();
-    let PersistedObservationV1::Tablet(tablet) =
-        &mut bad_tool.frames[0].groups[0].observations[0]
+    let PersistedObservationV1::Tablet(tablet) = &mut bad_tool.frames[0].groups[0].observations[0]
     else {
         unreachable!()
     };
@@ -484,7 +490,9 @@ fn import_rejects_non_contiguous_frames_empty_groups_and_bad_identity_slots() {
 
 #[test]
 fn import_finishes_through_runen_input_validation() {
-    let mut persisted: PersistedTraceV1 = ron_options().from_str(&encode(&replayable_trace())).unwrap();
+    let mut persisted: PersistedTraceV1 = ron_options()
+        .from_str(&encode(&replayable_trace()))
+        .unwrap();
     let PersistedObservationV1::RelativeMotion(motion) =
         &mut persisted.frames[0].groups[1].observations[0]
     else {
@@ -510,7 +518,8 @@ fn metadata_is_bounded_and_round_trips_when_present() {
         description: Some("recorded for persistence proof".to_owned()),
     };
     let source =
-        export_automation_input_trace_v1(&replayable_trace(), witness(), Some(&provenance)).unwrap();
+        export_automation_input_trace_v1(&replayable_trace(), witness(), Some(&provenance))
+            .unwrap();
     let imported = import_automation_input_trace_v1(source.as_bytes()).unwrap();
     assert_eq!(imported.provenance(), Some(&provenance));
 
@@ -526,8 +535,7 @@ fn metadata_is_bounded_and_round_trips_when_present() {
     ));
 
     let mut persisted: PersistedTraceV1 = ron_options().from_str(&source).unwrap();
-    persisted.provenance.as_mut().unwrap().label =
-        Some("x".repeat(MAX_METADATA_STRING_BYTES + 1));
+    persisted.provenance.as_mut().unwrap().label = Some("x".repeat(MAX_METADATA_STRING_BYTES + 1));
     let oversized_import = ron_options()
         .to_string_pretty(&persisted, ron::ser::PrettyConfig::new())
         .unwrap();
@@ -541,7 +549,9 @@ fn metadata_is_bounded_and_round_trips_when_present() {
 
 #[test]
 fn structural_resource_limits_are_enforced_before_runtime_materialization() {
-    let mut persisted: PersistedTraceV1 = ron_options().from_str(&encode(&replayable_trace())).unwrap();
+    let mut persisted: PersistedTraceV1 = ron_options()
+        .from_str(&encode(&replayable_trace()))
+        .unwrap();
 
     persisted.frames = (0..=MAX_FRAMES)
         .map(|index| PersistedFrameV1 {
@@ -551,11 +561,16 @@ fn structural_resource_limits_are_enforced_before_runtime_materialization() {
         .collect();
     assert!(matches!(
         ImportBuilder::new().build(&persisted),
-        Err(AutomationInputTraceImportError::ResourceLimitExceeded("frames"))
+        Err(AutomationInputTraceImportError::ResourceLimitExceeded(
+            "frames"
+        ))
     ));
 
-    let mut persisted: PersistedTraceV1 = ron_options().from_str(&encode(&replayable_trace())).unwrap();
-    persisted.frames[0].groups = vec![persisted.frames[0].groups[0].clone(); MAX_GROUPS_PER_FRAME + 1];
+    let mut persisted: PersistedTraceV1 = ron_options()
+        .from_str(&encode(&replayable_trace()))
+        .unwrap();
+    persisted.frames[0].groups =
+        vec![persisted.frames[0].groups[0].clone(); MAX_GROUPS_PER_FRAME + 1];
     assert!(matches!(
         ImportBuilder::new().build(&persisted),
         Err(AutomationInputTraceImportError::ResourceLimitExceeded(
@@ -588,10 +603,14 @@ fn structural_resource_limits_are_enforced_before_runtime_materialization() {
     };
     assert!(matches!(
         builder.build(&one_group),
-        Err(AutomationInputTraceImportError::ResourceLimitExceeded("total_groups"))
+        Err(AutomationInputTraceImportError::ResourceLimitExceeded(
+            "total_groups"
+        ))
     ));
 
-    let mut persisted: PersistedTraceV1 = ron_options().from_str(&encode(&replayable_trace())).unwrap();
+    let mut persisted: PersistedTraceV1 = ron_options()
+        .from_str(&encode(&replayable_trace()))
+        .unwrap();
     persisted.frames[0].groups[0].observations =
         vec![persisted.frames[0].groups[0].observations[0].clone(); MAX_OBSERVATIONS_PER_GROUP + 1];
     assert!(matches!(
@@ -610,7 +629,9 @@ fn identity_cardinality_limits_are_enforced() {
     }
     assert!(matches!(
         builder.materialize_source(MAX_SOURCES as u32),
-        Err(AutomationInputTraceImportError::ResourceLimitExceeded("sources"))
+        Err(AutomationInputTraceImportError::ResourceLimitExceeded(
+            "sources"
+        ))
     ));
 
     let mut builder = ImportBuilder::new();

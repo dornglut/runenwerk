@@ -89,10 +89,9 @@ mod tests {
         AutomationInputReplayOutcome, AutomationInputReplaySourceMap,
         AutomationInputReplayStateAssumption, AutomationInputTracePlugin,
         AutomationInputTraceRecordingWitness, AutomationSession, AutomationSessionId,
-        AutomationStepResult, DigitalState, InputObservation, InputSourceId,
+        AutomationStepResult, DigitalState, InputObservation, InputSourceId, PointerButton,
+        PointerButtonInput, RelativeMotionUnit, ScrollDelta, ScrollDomain, ScrollInput, Vector2,
         export_automation_input_trace_v1, import_automation_input_trace_v1,
-        PointerButton, PointerButtonInput, RelativeMotionUnit, ScrollDelta, ScrollDomain,
-        ScrollInput, Vector2,
     };
     use engine::prelude::InputState;
 
