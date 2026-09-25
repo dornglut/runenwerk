@@ -9,10 +9,10 @@ mod temporal_quality;
 
 use temporal_quality::{
     RL2_QUALITY_COLOR_ALIAS, RL2_QUALITY_FLOW_ID, RL2_QUALITY_PASS_ID, RenderLabFixedQualityPlans,
-    RenderLabTemporalQualityExecutionState, inspect_render_lab_temporal_quality_execution_system,
-    render_lab_fixed_quality_flow, stage_render_lab_fixed_quality_publication,
-    stage_render_lab_native_quality_publication, temporal_quality_capture_evidence,
-    write_temporal_quality_artifact, RenderLabNativeQualityPublication,
+    RenderLabNativeQualityPublication, RenderLabTemporalQualityExecutionState,
+    inspect_render_lab_temporal_quality_execution_system, render_lab_fixed_quality_flow,
+    stage_render_lab_fixed_quality_publication, stage_render_lab_native_quality_publication,
+    temporal_quality_capture_evidence, write_temporal_quality_artifact,
 };
 
 #[derive(Debug, Clone, Copy, runen_ecs::Resource)]
