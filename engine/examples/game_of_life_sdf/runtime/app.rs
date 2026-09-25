@@ -1,7 +1,7 @@
 use crate::rendering::{GameOfLifeRenderState, build_render_flow};
 use anyhow::Result;
 use engine::plugins::{RenderPlugin, ScenePlugin, default_plugins};
-use engine::prelude::{App, Res, ResMut, Time, Update};
+use engine::prelude::{App, AppRenderExt, Res, ResMut, Time, Update};
 
 pub(crate) fn run() -> Result<()> {
     let mut app = App::new();
