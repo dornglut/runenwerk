@@ -72,5 +72,9 @@ pub trait InputDriver: ReplicationDriver {
 
     fn take_local_input(world: &mut World) -> Result<Vec<Self::Input>, Self::Error>;
 
-    fn apply_input(world: &mut World, input: &[Self::Input]) -> Result<(), Self::Error>;
+    fn apply_input(
+        world: &mut World,
+        tick: SimulationTick,
+        input: &[Self::Input],
+    ) -> Result<(), Self::Error>;
 }

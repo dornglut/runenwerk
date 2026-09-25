@@ -55,7 +55,7 @@ where
     fn build(&self, app: &mut App) {
         match self.role {
             NetRole::Client => {
-                configure_client_role(app, self.config.client_replication);
+                configure_client_role(app, self.config.client_replication, self.config.client_prediction);
                 set_simulation_authority(app, AuthorityRole::Client);
             }
             NetRole::Server => {
@@ -65,7 +65,7 @@ where
             NetRole::Host => {
                 // Host mode is strict role composition: client + server in one process.
                 configure_server_role(app);
-                configure_client_role(app, self.config.client_replication);
+                configure_client_role(app, self.config.client_replication, self.config.client_prediction);
                 set_simulation_authority(app, AuthorityRole::Peer);
             }
         }

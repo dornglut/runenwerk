@@ -378,9 +378,14 @@ fn configure_session_projection(app: &mut App) {
     app.init_resource::<NetworkSessionStatus>();
 }
 
-pub(crate) fn configure_client_role(app: &mut App, policy: Option<ClientReplicationPolicy>) {
+pub(crate) fn configure_client_role(
+    app: &mut App,
+    replication_policy: Option<ClientReplicationPolicy>,
+    prediction_policy: Option<ClientPredictionPolicy>,
+) {
     app.init_resource::<NetworkClientInbox>();
-    configure_client_replication(app, policy);
+    configure_client_replication(app, replication_policy);
+    configure_client_prediction(app, prediction_policy, replication_policy);
     app.init_resource::<NetworkClientOutbox>();
     app.init_resource::<NetworkInboundQueue>();
     app.init_resource::<NetworkOutboundQueue>();
@@ -462,7 +467,6 @@ where
     TDriver::Input: Clone + PartialEq + 'static,
 {
     app.init_resource::<NetworkInputStaging<TDriver::Input>>();
-    app.init_resource::<PredictionState<TDriver::Input>>();
     app.init_resource::<PredictionDiagnostics>();
     app.add_systems(
         FixedUpdate,
@@ -685,43 +689,6 @@ where
             latest_snapshot_per_connection: HashMap::new(),
             latest_tick: SimulationTick::default(),
         }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct PendingInputFrame<TInput>
-where
-    TInput: Clone + PartialEq + 'static,
-{
-    pub tick: SimulationTick,
-    pub commands: Vec<TInput>,
-}
-
-#[derive(Debug, Clone, PartialEq, runen_ecs::Component, runen_ecs::Resource)]
-pub struct PredictionState<TInput>
-where
-    TInput: Clone + PartialEq + 'static,
-{
-    pub pending_frames: Vec<PendingInputFrame<TInput>>,
-}
-
-impl<TInput> Default for PredictionState<TInput>
-where
-    TInput: Clone + PartialEq + 'static,
-{
-    fn default() -> Self {
-        Self {
-            pending_frames: Vec::new(),
-        }
-    }
-}
-
-impl<TInput> PredictionState<TInput>
-where
-    TInput: Clone + PartialEq + 'static,
-{
-    pub fn pending_frames_len(&self) -> usize {
-        self.pending_frames.len()
     }
 }
 

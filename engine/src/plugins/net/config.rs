@@ -1,4 +1,4 @@
-use runen_net::input::{AuthorityInputAggregateLimits, AuthorityInputLimits};
+use runen_net::input::{AuthorityInputAggregateLimits, AuthorityInputLimits, PredictionLimits};
 use runen_net::replication::{
     ClientAggregateLimits, ReplicationLineageKey, ReplicationRetentionLimits,
 };
@@ -73,15 +73,30 @@ impl ClientReplicationPolicy {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct ClientPredictionPolicy {
+    limits: PredictionLimits,
+}
+impl ClientPredictionPolicy {
+    pub const fn new(limits: PredictionLimits) -> Self { Self { limits } }
+    pub const fn limits(self) -> PredictionLimits { self.limits }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub struct NetPluginConfig {
     pub enable_diagnostics: bool,
     pub client_replication: Option<ClientReplicationPolicy>,
+    pub client_prediction: Option<ClientPredictionPolicy>,
 }
 
 impl NetPluginConfig {
     pub const fn with_client_replication_policy(mut self, policy: ClientReplicationPolicy) -> Self {
         self.client_replication = Some(policy);
+        self
+    }
+
+    pub const fn with_client_prediction_policy(mut self, policy: ClientPredictionPolicy) -> Self {
+        self.client_prediction = Some(policy);
         self
     }
 }
