@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-25
 ---
 
 # Networking Usage Guide
@@ -20,39 +20,13 @@ use engine::net::prelude::*;
 
 This provides the current engine-facing integration surface, including:
 
-- retained `#[net_component]` and `#[net_entity]` metadata macros;
 - retained replication/input/protocol-payload contracts from `engine_net`;
 - `NetPlugin`;
 - `NetRole`.
 
 Connection/session lifecycle authority is not provided by `engine_net`; standalone RunenNet owns that boundary.
 
-## 2) Retained Replication Metadata
-
-```rust
-use engine::net::prelude::*;
-
-#[net_entity]
-pub struct Player;
-
-#[net_component(
-    authority = Server,
-    profile = PredictedMovement,
-    owner_prediction = true,
-    interest = Spatial
-)]
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
-pub struct PlayerState {
-    pub x: f32,
-    pub y: f32,
-}
-```
-
-These declarations currently generate replication metadata. They do not generate the complete snapshot extraction, delta generation, ECS apply path, or a future Replicated View authoring API.
-
-The macros are migration-surface implementation, not a promise that per-component registration remains the final ordinary authoring model.
-
-## 3) Implement the Retained Driver Boundary
+## 2) Implement the Retained Driver Boundary
 
 Current maintained consumers use:
 
@@ -64,7 +38,7 @@ Current maintained consumers use:
 
 These driver traits are the retained low-level path and remain useful for specialized representations. The future common-path authoring API is intentionally not defined by this guide.
 
-## 4) Install the Net Plugin
+## 3) Install the Net Plugin
 
 ```rust
 app.add_plugins(NetPlugin::<MyDriver>::new(NetRole::Client));
@@ -74,7 +48,7 @@ or `NetRole::Server` / `NetRole::Host`.
 
 `NetPlugin` owns engine schedule placement and retained replication/prediction integration. It does not become the owner of reusable RunenNet session, delivery, recovery, or prediction semantics.
 
-## 5) Session and Runtime Boundary
+## 4) Session and Runtime Boundary
 
 There is no `NetworkRuntimeHandle` session bridge in the current architecture.
 
@@ -82,7 +56,7 @@ Standalone RunenNet Core owns compatibility negotiation, session membership, con
 
 Those engine work queues are staging, not a replacement transport or delivery-acceptance runtime. Concrete transport realization is added only where a maintained product consumer requires it.
 
-## 6) Multi-Connection Semantics
+## 5) Multi-Connection Semantics
 
 Retained server replication is computed per RunenNet `ConnectionHandle`, not globally:
 
