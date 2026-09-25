@@ -1,93 +1,86 @@
 @startuml
-title Runenwerk UI Local Runtime and Integration Architecture
+title Runenwerk UI Ownership and RunenUI Adoption Architecture
 
 skinparam packageStyle rectangle
 
-package "Runenwerk Authored UI" {
-  [AuthoredUiTemplate]
-  [UiNodeDefinition]
-  [Source Maps]
+package "Retained Runenwerk Authority" {
+  [Authored UI / ui_definition]
+  [UiProgram Toolchain]
+  [Story V2]
+  [ui_composition]
+  [ui_adaptive_composition]
+  [App / Domain Mutation]
 }
 
-package "Interaction Formation" {
-  [NormalizedUiTemplate]
-  [FormedInteractionModel]
+package "Current Predecessor Runtime" {
+  [Local Retained UI]
+  [ui_surface / ui_hosts]
+  [Local Evaluator / Runtime View]
+  [Current engine::plugins::ui runtime]
 }
 
-package "Current Local Execution" {
-  [Retained UI]
-  [UiProgram]
-  [UiCompiler]
-  [UiRuntimeArtifact]
-  [UiEvaluator / UiRuntimeView]
+package "Explicit Adoption Boundary" {
+  [Runenwerk Projection Adapter]
+  [Runenwerk UI Integration Adapter]
 }
 
-package "Local Proof" {
-  [UiStoryManifestV2]
-  [Workflow Profile]
-  [UiStoryWorkflowReportV2]
-  [UiStoryMountDecisionV2]
+cloud "Standalone RunenUI" as RunenUI {
+  [View / Element]
+  [Mounted Runtime]
+  [Text / Layout / Interaction]
+  [Paint / Hit / Semantics]
+  [runenui_testing]
+  [runenui_winit]
 }
 
-package "Runenwerk Hosts" {
-  [engine::plugins::ui]
-  [Editor / App Host]
-  [Headless Proof]
+package "Runenwerk Product Edges" {
+  [Native Host]
+  [Runenwerk Render Adapter]
+  [Editor / Draw / App]
 }
 
-package "Derived Output" {
-  [UiFrame / Render Data]
-  [Engine Renderer]
-}
+[Authored UI / ui_definition] --> [UiProgram Toolchain]
+[ui_composition] --> [Editor / Draw / App]
+[ui_adaptive_composition] --> [Editor / Draw / App]
+[UiProgram Toolchain] --> [Runenwerk Projection Adapter]
+[App / Domain Mutation] <.. [Runenwerk UI Integration Adapter]
 
-cloud "Standalone RunenUI\nfuture reusable-framework authority" as RunenUI
+[Runenwerk Projection Adapter] --> [View / Element]
+[View / Element] --> [Mounted Runtime]
+[Mounted Runtime] --> [Text / Layout / Interaction]
+[Text / Layout / Interaction] --> [Paint / Hit / Semantics]
+[Mounted Runtime] --> [runenui_testing]
 
-[AuthoredUiTemplate] --> [UiNodeDefinition]
-[AuthoredUiTemplate] --> [Source Maps]
-[AuthoredUiTemplate] --> [NormalizedUiTemplate]
-[UiNodeDefinition] --> [NormalizedUiTemplate]
-[NormalizedUiTemplate] --> [FormedInteractionModel]
+[Native Host] --> [runenui_winit]
+[runenui_winit] --> [Mounted Runtime]
+[Paint / Hit / Semantics] --> [Runenwerk UI Integration Adapter]
+[Runenwerk UI Integration Adapter] --> [Runenwerk Render Adapter]
+[Runenwerk UI Integration Adapter] --> [Editor / Draw / App]
 
-[FormedInteractionModel] --> [Retained UI]
-[FormedInteractionModel] --> [UiProgram]
-[UiProgram] --> [UiCompiler]
-[UiCompiler] --> [UiRuntimeArtifact]
-[UiRuntimeArtifact] --> [UiEvaluator / UiRuntimeView]
+[Story V2] ..> [Runenwerk Projection Adapter] : may orchestrate proof
+[runenui_testing] ..> [Story V2] : owner-produced evidence
 
-[UiStoryManifestV2] --> [Workflow Profile]
-[Workflow Profile] --> [UiStoryWorkflowReportV2]
-[UiStoryWorkflowReportV2] --> [UiStoryMountDecisionV2]
-[UiProgram] ..> [UiStoryWorkflowReportV2]
-[UiRuntimeArtifact] ..> [UiStoryWorkflowReportV2]
-[UiEvaluator / UiRuntimeView] ..> [UiStoryWorkflowReportV2]
+[Local Retained UI] ..> [Runenwerk Projection Adapter] : deleted per migrated consumer
+[ui_surface / ui_hosts] ..> [Runenwerk UI Integration Adapter] : responsibilities split then deleted
+[Local Evaluator / Runtime View] ..> [Runenwerk Projection Adapter] : retain only independent program semantics
+[Current engine::plugins::ui runtime] ..> [Runenwerk UI Integration Adapter] : narrows to adapter
 
-[Retained UI] --> [engine::plugins::ui]
-[UiEvaluator / UiRuntimeView] --> [engine::plugins::ui]
-[UiStoryMountDecisionV2] ..> [Editor / App Host]
-[UiStoryWorkflowReportV2] --> [Headless Proof]
-[engine::plugins::ui] --> [Editor / App Host]
-
-[Retained UI] --> [UiFrame / Render Data]
-[UiEvaluator / UiRuntimeView] --> [UiFrame / Render Data]
-[UiFrame / Render Data] --> [Engine Renderer]
-
-RunenUI ..> [engine::plugins::ui] : future explicit\nconsumer cutover only
-
-note right of RunenUI
-RunenUI owns future reusable
-framework semantics.
-Runenwerk does not mirror
-that roadmap locally.
+note bottom of [Retained Runenwerk Authority]
+RunenUI does not own UiProgram, Story V2,
+application composition, persistence,
+provider policy, or app/domain mutation.
 end note
 
-note bottom of [Current Local Execution]
-Retained UI and UiProgram-era owners coexist.
-No total replacement is implied.
+note right of [Current Predecessor Runtime]
+Current implementation remains authoritative
+until a named consumer cut is accepted.
+No migrated consumer may keep two
+mounted/runtime authorities.
 end note
 
-note bottom of [Editor / App Host]
-Hosts own product mutation and effects.
-UI facts do not directly mutate app truth.
+note bottom of RunenUI
+Standalone RunenUI owns reusable UI-framework
+runtime semantics through public contracts.
 end note
 
 @enduml
