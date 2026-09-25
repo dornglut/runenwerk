@@ -1,6 +1,7 @@
 use super::*;
 use engine::plugins::render::inspect::{
-    RenderFrameHistoryState, RenderFrameObservationPolicyResource,
+    RenderCaptureTerminalCode, RenderDebugFrameReportState, RenderFrameHistoryState,
+    RenderFrameObservationPolicyResource, inspect_fixed_resolution_execution,
 };
 use engine::prelude::FrameEnd;
 use std::path::{Path, PathBuf};
@@ -12,6 +13,48 @@ struct RenderLabFlowId(engine::plugins::render::RenderFlowId);
 struct RenderLabFixedQualityPlans {
     scene: Option<engine::plugins::render::CompiledRenderFlowPlan>,
     resolve: Option<engine::plugins::render::CompiledRenderFlowPlan>,
+}
+
+#[derive(Debug, Clone, Default, runen_ecs::Resource)]
+struct RenderLabTemporalQualityExecutionState {
+    pending_admission: Option<engine::plugins::render::RenderFixedResolutionExecutionAdmission>,
+    latest: Option<RenderLabTemporalQualityExecutionEvidence>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct RenderLabTemporalQualityExecutionEvidence {
+    frame_index: u64,
+    prepare_epoch: u64,
+    policy: &'static str,
+    internal_size_px: [u32; 2],
+    output_size_px: [u32; 2],
+    native_fallback_active: bool,
+    native_fallback_reason: Option<String>,
+    target_key: Option<String>,
+    internal_view_id: Option<String>,
+    scene_invocation_id: Option<String>,
+    resolve_invocation_id: Option<String>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct RenderLabTemporalQualityCaptureEvidence {
+    frame_index: u64,
+    flow_id: String,
+    pass_id: String,
+    resource_id: String,
+    terminal: &'static str,
+    artifact_path: String,
+    artifact_blake3: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct RenderLabTemporalQualityArtifact {
+    schema_version: u32,
+    scenario_id: &'static str,
+    requested_internal_size_px: [u32; 2],
+    requested_output_size_px: [u32; 2],
+    execution: RenderLabTemporalQualityExecutionEvidence,
+    capture: RenderLabTemporalQualityCaptureEvidence,
 }
 
 const RL2_QUALITY_FLOW_ID: &str = "runenwerk.render_lab.rl2.fixed_quality";
@@ -74,6 +117,7 @@ struct RenderLabFramePublicationResources<'w> {
     frame_requests: ResMut<'w, PreparedRenderFrameRequestResource>,
     contributions: ResMut<'w, RenderDeterministicFrameContributionResource>,
     fixed_quality_plans: Res<'w, RenderLabFixedQualityPlans>,
+    quality_execution: ResMut<'w, RenderLabTemporalQualityExecutionState>,
 }
 
 struct RenderLabPlugin;
@@ -83,11 +127,17 @@ impl Plugin for RenderLabPlugin {
         app.init_resource::<RenderLabCamera>();
         app.init_resource::<RenderLabMeasurementConfig>();
         app.init_resource::<RenderLabFixedQualityPlans>();
+        app.init_resource::<RenderLabTemporalQualityExecutionState>();
         app.add_systems(Update, camera::update_render_lab_camera_system);
         app.add_systems(FrameEnd, approve_render_lab_close_system);
         app.add_systems(
             RenderPrepare,
             publish_render_lab_frame_system.before(RenderRuntimeSet::FramePrepare),
+        );
+        app.add_systems(
+            RenderPrepare,
+            inspect_render_lab_temporal_quality_execution_system
+                .after(RenderRuntimeSet::FramePrepare),
         );
     }
 }
