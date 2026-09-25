@@ -69,7 +69,6 @@ members = [
     "engine_render_macros",
 
     "net/engine_net",
-    "net/engine_net_macros",
     "net/engine_sim",
     "net/engine_history",
 

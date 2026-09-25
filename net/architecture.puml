@@ -1,5 +1,5 @@
 @startuml
-title net workspace architecture (current through RN8 N4)
+title net workspace architecture (current through RN8 N9)
 
 skinparam componentStyle rectangle
 skinparam packageStyle rectangle
@@ -31,12 +31,7 @@ package "net (remaining Runenwerk migration evidence)" {
 
   package "engine_net" {
     [snapshot / ack / input envelopes] as net_protocol
-    [live replication / input contracts] as net_replication
-    [declarative replication metadata] as net_authoring
-  }
-
-  package "engine_net_macros" {
-    [network authoring macros] as net_macros
+    [live server replication / protocol integration] as net_replication
   }
 
   package "engine_history" {
@@ -58,9 +53,7 @@ engine_replay --> history
 
 net_replication --> runennet_core : ConnectionHandle identity
 net_replication --> sim
-net_authoring --> net_replication
 history --> sim
-net_macros --> net_authoring
 
 note right of runennet_core
 Standalone RunenNet is the sole reusable
@@ -76,7 +69,7 @@ end note
 note right of net_replication
 engine_net is temporary live migration evidence.
 Dead runtime commands/events, synthetic transport lanes,
-and snapshot-payload prediction scaffolding are gone.
+client prediction scaffolding, and component-registration authoring metadata are gone.
 end note
 
 note right of engine_io
