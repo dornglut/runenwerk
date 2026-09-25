@@ -1,6 +1,6 @@
 //! Product-owned Render Lab automation proof.
 
-use engine::automation::{AutomationOwnerAdapter, AutomationStepResult};
+use engine::automation::AutomationOwnerAdapter;
 use engine::plugins::default_plugins;
 use engine::prelude::{App, Update};
 
@@ -85,9 +85,9 @@ pub fn build_headless_automation_app() -> App {
 mod tests {
     use super::*;
     use engine::automation::{
-        AutomationExecutionMode, AutomationSession, AutomationSessionId, DigitalState,
-        InputObservation, InputSourceId, PointerButton, PointerButtonInput, RelativeMotionUnit,
-        ScrollDelta, ScrollDomain, ScrollInput, Vector2,
+        AutomationExecutionMode, AutomationSession, AutomationSessionId, AutomationStepResult,
+        DigitalState, InputObservation, InputSourceId, PointerButton, PointerButtonInput,
+        RelativeMotionUnit, ScrollDelta, ScrollDomain, ScrollInput, Vector2,
     };
     use engine::prelude::InputState;
 

@@ -1,13 +1,13 @@
 //! Product-owned Editor automation proof.
 
+use editor_shell::{
+    ShellCommand, SurfaceSessionMutation, ViewportSessionMutation, ViewportToolKind,
+};
 use engine::automation::AutomationOwnerAdapter;
 use ui_composition::MountedUnitId;
 
 use crate::runtime::resources::EditorHostResource;
-use crate::shell::{
-    ShellCommand, SurfaceSessionMutation, ViewportSessionMutation, ViewportToolKind,
-    dispatch_shell_command,
-};
+use crate::shell::dispatch_shell_command;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EditorAutomationTarget {
