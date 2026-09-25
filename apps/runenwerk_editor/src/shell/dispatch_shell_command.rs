@@ -742,7 +742,6 @@ pub fn dispatch_shell_command_with_viewport_commands(
         }
         ShellCommand::CreatePanelTabStableKey {
             tab_stack_id,
-            panel_kind,
             stable_surface_key,
             projection_epoch,
         } => {
@@ -755,7 +754,7 @@ pub fn dispatch_shell_command_with_viewport_commands(
             let plan = plan_editor_create_unit(
                 shell_state.composition_runtime(),
                 stack,
-                panel_kind,
+                app.workbench_host().tool_surface_registry(),
                 stable_surface_key,
                 shell_state.composition_identity_allocator(),
             )
@@ -807,7 +806,6 @@ pub fn dispatch_shell_command_with_viewport_commands(
         ShellCommand::SplitTabStackAreaStableKey {
             tab_stack_id,
             axis,
-            panel_kind,
             stable_surface_key,
             projection_epoch,
         } => {
@@ -821,7 +819,7 @@ pub fn dispatch_shell_command_with_viewport_commands(
                 shell_state.composition_runtime(),
                 stack,
                 axis,
-                panel_kind,
+                app.workbench_host().tool_surface_registry(),
                 stable_surface_key,
                 shell_state.composition_identity_allocator(),
             )
@@ -866,7 +864,6 @@ pub fn dispatch_shell_command_with_viewport_commands(
         }
         ShellCommand::ResetTabStackAreaStableKey {
             tab_stack_id,
-            panel_kind,
             stable_surface_key,
             projection_epoch,
         } => {
@@ -879,7 +876,7 @@ pub fn dispatch_shell_command_with_viewport_commands(
             let plan = plan_editor_reset_stack(
                 shell_state.composition_runtime(),
                 stack,
-                panel_kind,
+                app.workbench_host().tool_surface_registry(),
                 stable_surface_key,
                 shell_state.composition_identity_allocator(),
             )

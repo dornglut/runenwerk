@@ -138,7 +138,6 @@ pub enum ShellCommand {
     },
     CreatePanelTabStableKey {
         tab_stack_id: TabStackId,
-        panel_kind: crate::PanelKind,
         stable_surface_key: ToolSurfaceStableKey,
         projection_epoch: u64,
     },
@@ -155,7 +154,6 @@ pub enum ShellCommand {
     SplitTabStackAreaStableKey {
         tab_stack_id: TabStackId,
         axis: WorkspaceSplitAxis,
-        panel_kind: crate::PanelKind,
         stable_surface_key: ToolSurfaceStableKey,
         projection_epoch: u64,
     },
@@ -169,7 +167,6 @@ pub enum ShellCommand {
     },
     ResetTabStackAreaStableKey {
         tab_stack_id: TabStackId,
-        panel_kind: crate::PanelKind,
         stable_surface_key: ToolSurfaceStableKey,
         projection_epoch: u64,
     },
