@@ -249,16 +249,16 @@ where
         if authority_replication_pending_for_connection(&world, connection) {
             continue;
         }
-        let Some(snapshot) = TDriver::capture_snapshot_for_connection(&world, connection)
-            .map_err(|error| {
+        let Some(snapshot) =
+            TDriver::capture_snapshot_for_connection(&world, connection).map_err(|error| {
                 map_driver_error::<TDriver>(error, "capture snapshot for connection")
             })?
         else {
             continue;
         };
-        if let Some(summary) =
-            prepare_authority_replication_candidate::<TDriver>(&mut world, connection, tick, snapshot)?
-            && let Ok(diagnostics) = world.resource_mut::<ReplicationDiagnostics>()
+        if let Some(summary) = prepare_authority_replication_candidate::<TDriver>(
+            &mut world, connection, tick, snapshot,
+        )? && let Ok(diagnostics) = world.resource_mut::<ReplicationDiagnostics>()
         {
             diagnostics.last_snapshot_cursor = diagnostics
                 .last_snapshot_cursor
