@@ -468,6 +468,57 @@ fn fixed_resolution_preflight_accepts_internal_scene_and_native_resolve() {
     assert_eq!(fixed.internal_view.target_size_px, (1280, 720));
     assert_eq!(fixed.dynamic_target.width, 1280);
     assert_eq!(fixed.dynamic_target.height, 720);
+
+    let admission =
+        engine::plugins::render::RenderFixedResolutionExecutionAdmission::Fixed(fixed.clone());
+    let evidence =
+        engine::plugins::render::inspect::inspect_fixed_resolution_execution(&admission, &frame)
+            .expect("complete fixed frame should produce fixed execution evidence");
+    assert_eq!(
+        evidence.resolution.policy,
+        engine::plugins::render::inspect::RenderTemporalResolutionPolicy::Fixed
+    );
+    assert_eq!(evidence.resolution.internal_size, [1280, 720]);
+    assert_eq!(evidence.resolution.output_size, [1920, 1080]);
+    assert!(!evidence.native_fallback_active);
+    assert!(evidence.native_fallback_reason.is_none());
+    assert_eq!(evidence.target_key.as_ref(), Some(&fixed.target_key));
+
+    let mut incomplete = frame.clone();
+    incomplete
+        .flow_invocations
+        .retain(|invocation| invocation.invocation_id != fixed.resolve_invocation.invocation_id);
+    assert!(matches!(
+        engine::plugins::render::inspect::inspect_fixed_resolution_execution(
+            &admission,
+            &incomplete
+        ),
+        Err(
+            engine::plugins::render::inspect::RenderFixedResolutionExecutionEvidenceError::MissingResolveInvocation
+        )
+    ));
+
+    let fallback = engine::plugins::render::RenderFixedResolutionExecutionRequest::new(
+        producer(92),
+        scene.id(),
+        alias_key("scene_color"),
+        (1280, 800),
+    )
+    .admit_against_compiled_flow((1920, 1080), resolve.id(), &scene_compiled);
+    let fallback_evidence =
+        engine::plugins::render::inspect::inspect_fixed_resolution_execution(&fallback, &frame)
+            .expect("explicit native fallback should remain inspectable");
+    assert_eq!(
+        fallback_evidence.resolution.policy,
+        engine::plugins::render::inspect::RenderTemporalResolutionPolicy::Native
+    );
+    assert!(fallback_evidence.native_fallback_active);
+    assert!(
+        fallback_evidence
+            .native_fallback_reason
+            .as_deref()
+            .is_some_and(|reason| reason.contains("must preserve output aspect"))
+    );
 }
 
 #[test]
