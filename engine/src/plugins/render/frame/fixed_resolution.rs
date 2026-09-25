@@ -229,6 +229,7 @@ pub enum RenderFixedResolutionExecutionError {
 
 pub fn fixed_resolution_resolve_flow() -> anyhow::Result<RenderFlow> {
     RenderFlow::new(FIXED_RESOLUTION_RESOLVE_FLOW_LABEL)
+        .explicit_invocations_only()
         .with_target_alias(
             FIXED_RESOLUTION_RESOLVE_SOURCE_ALIAS,
             RenderTargetAliasKind::Texture,
@@ -448,6 +449,10 @@ mod tests {
     fn fixed_resolution_resolve_flow_is_portable_and_alias_driven() {
         let flow = fixed_resolution_resolve_flow().expect("resolve flow should validate");
         assert_eq!(flow.label(), FIXED_RESOLUTION_RESOLVE_FLOW_LABEL);
+        assert_eq!(
+            flow.invocation_policy(),
+            crate::plugins::render::RenderFlowInvocationPolicy::ExplicitOnly
+        );
         assert!(flow.resource_id(FIXED_RESOLUTION_RESOLVE_SOURCE_ALIAS).is_some());
     }
 }
