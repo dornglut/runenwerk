@@ -17,10 +17,6 @@ use engine::plugins::net::{
 };
 use engine::plugins::{ScenePlugin, SimulationPlugin, default_plugins};
 use engine::prelude::*;
-use runen_net::{
-    DeliveryAcceptance,
-    identity::{ConnectionHandle, ParticipantId, SessionId},
-};
 use runen_net::input::{
     AuthorityInputAggregateLimits, AuthorityInputLimits, PredictionInvalidationReason,
     PredictionLimits, PredictionState as RunenNetPredictionState,
@@ -34,6 +30,10 @@ use runen_net::replication::{
     ReplicationLineageKey, ReplicationRetentionLimits,
 };
 use runen_net::session::{RecoveryDuration, RetentionPolicy, Session, SessionLimits};
+use runen_net::{
+    DeliveryAcceptance,
+    identity::{ConnectionHandle, ParticipantId, SessionId},
+};
 use serde::{Deserialize, Serialize};
 use std::io;
 use std::num::{NonZeroU64, NonZeroUsize};
