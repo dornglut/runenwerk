@@ -335,7 +335,10 @@ fn build_prepared_flow_invocations(
         let has_requested_main = requested_flow_invocations
             .iter()
             .any(|request| request.flow_id == flow.flow_id && request.view_id == "main");
-        if !has_requested_main {
+        let automatic_main_replaced = requests
+            .automatic_main_replacement_owner(flow.flow_id)
+            .is_some();
+        if !has_requested_main && !automatic_main_replaced {
             invocations.push(PreparedFlowInvocation::main(flow.flow_id, inputs));
         }
     }
@@ -1006,6 +1009,151 @@ mod tests {
         assert_eq!(invocations.len(), 2);
         assert_eq!(invocations[0].view_id, "viewport.1");
         assert_eq!(invocations[1].view_id, "main");
+    }
+
+    #[test]
+    fn producer_owned_replacement_suppresses_only_the_claimed_automatic_main_invocation() {
+        let flow = RenderFlow::new("prepare.replacement")
+            .with_surface_color()
+            .expect("render flow authoring should succeed")
+            .fullscreen_pass("main")
+            .write_surface_color()
+            .expect("render flow authoring should succeed")
+            .finish()
+            .validate()
+            .expect("test flow should validate");
+        let compiled = compile_flow_plan(&flow).expect("test flow should compile");
+        let compiled_flows = vec![compiled.clone()];
+        let extracted = ExtractedRenderStateMap::new();
+        let main_inputs =
+            build_prepared_flow_inputs(&compiled_flows, &extracted, (800, 600)).unwrap();
+        let mut requests = PreparedRenderFrameRequestResource::default();
+        requests
+            .replace_contribution_with_automatic_main_replacements(
+                RenderFrameProducerId::try_from_raw(1).unwrap(),
+                [PreparedViewFrame::offscreen_product(
+                    "temporal.internal",
+                    (320, 200),
+                )],
+                [PreparedFlowInvocationRequest::new(
+                    "temporal.internal.scene",
+                    compiled.flow_id,
+                    "temporal.internal",
+                )],
+                [compiled.flow_id],
+            )
+            .unwrap();
+        let views = build_prepared_views((800, 600), &requests).unwrap();
+
+        let invocations = build_prepared_flow_invocations(
+            &compiled_flows,
+            &extracted,
+            &main_inputs,
+            &views,
+            &requests,
+        )
+        .expect("invocations should prepare");
+
+        assert_eq!(invocations.len(), 1);
+        assert_eq!(invocations[0].flow_id, compiled.flow_id);
+        assert_eq!(invocations[0].view_id, "temporal.internal");
+        assert_eq!(
+            requests.automatic_main_replacement_owner(compiled.flow_id),
+            Some(RenderFrameProducerId::try_from_raw(1).unwrap())
+        );
+    }
+
+    #[test]
+    fn automatic_main_replacement_requires_explicit_invocation_for_the_claimed_flow() {
+        let flow = RenderFlow::new("prepare.replacement.missing")
+            .with_surface_color()
+            .expect("render flow authoring should succeed")
+            .fullscreen_pass("main")
+            .write_surface_color()
+            .expect("render flow authoring should succeed")
+            .finish()
+            .validate()
+            .expect("test flow should validate");
+        let compiled = compile_flow_plan(&flow).expect("test flow should compile");
+        let producer_id = RenderFrameProducerId::try_from_raw(1).unwrap();
+        let mut requests = PreparedRenderFrameRequestResource::default();
+
+        let error = requests
+            .replace_contribution_with_automatic_main_replacements(
+                producer_id,
+                [],
+                [],
+                [compiled.flow_id],
+            )
+            .expect_err("replacement without explicit invocation must fail closed");
+
+        assert_eq!(
+            error,
+            PreparedRenderFrameRequestError::AutomaticMainReplacementMissingInvocation {
+                producer_id,
+                flow_id: compiled.flow_id,
+            }
+        );
+        assert_eq!(
+            requests.diagnostics().last().map(|diagnostic| diagnostic.flow_id),
+            Some(Some(compiled.flow_id))
+        );
+    }
+
+    #[test]
+    fn automatic_main_replacement_has_one_producer_owner_per_flow() {
+        let flow = RenderFlow::new("prepare.replacement.owner")
+            .with_surface_color()
+            .expect("render flow authoring should succeed")
+            .fullscreen_pass("main")
+            .write_surface_color()
+            .expect("render flow authoring should succeed")
+            .finish()
+            .validate()
+            .expect("test flow should validate");
+        let compiled = compile_flow_plan(&flow).expect("test flow should compile");
+        let producer_one = RenderFrameProducerId::try_from_raw(1).unwrap();
+        let producer_two = RenderFrameProducerId::try_from_raw(2).unwrap();
+        let mut requests = PreparedRenderFrameRequestResource::default();
+
+        requests
+            .replace_contribution_with_automatic_main_replacements(
+                producer_one,
+                [PreparedViewFrame::offscreen_product("temporal.one", (320, 200))],
+                [PreparedFlowInvocationRequest::new(
+                    "temporal.one.scene",
+                    compiled.flow_id,
+                    "temporal.one",
+                )],
+                [compiled.flow_id],
+            )
+            .unwrap();
+
+        let error = requests
+            .replace_contribution_with_automatic_main_replacements(
+                producer_two,
+                [PreparedViewFrame::offscreen_product("temporal.two", (320, 200))],
+                [PreparedFlowInvocationRequest::new(
+                    "temporal.two.scene",
+                    compiled.flow_id,
+                    "temporal.two",
+                )],
+                [compiled.flow_id],
+            )
+            .expect_err("replacement ownership conflict must fail closed");
+
+        assert_eq!(
+            error,
+            PreparedRenderFrameRequestError::DuplicateAutomaticMainReplacementAcrossProducers {
+                producer_id: producer_two,
+                existing_producer_id: producer_one,
+                flow_id: compiled.flow_id,
+            }
+        );
+        assert_eq!(
+            requests.automatic_main_replacement_owner(compiled.flow_id),
+            Some(producer_one)
+        );
     }
 
     #[test]
