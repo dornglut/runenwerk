@@ -437,6 +437,7 @@ mod automatic_main_replacement_tests {
 
         let fixed = RenderFixedResolutionExecutionRequest::new(
             producer(1),
+            RenderSurfaceId::primary(),
             scene.id(),
             RenderTargetAliasKey::new("scene_color").expect("alias should be valid"),
             (1280, 720),
@@ -446,8 +447,9 @@ mod automatic_main_replacement_tests {
 
         let mut requests = PreparedRenderFrameRequestResource::default();
         requests
-            .replace_contribution_with_automatic_main_replacements(
+            .replace_surface_contribution_with_automatic_main_replacements(
                 fixed.producer_id,
+                fixed.render_surface_id,
                 [fixed.internal_view.clone()],
                 [
                     fixed.scene_invocation.clone(),
@@ -528,6 +530,7 @@ mod automatic_main_replacement_tests {
 
         let admission = RenderFixedResolutionExecutionRequest::new(
             producer(1),
+            RenderSurfaceId::primary(),
             scene.id(),
             RenderTargetAliasKey::new("scene_color").expect("alias should be valid"),
             (1280, 800),
@@ -543,7 +546,13 @@ mod automatic_main_replacement_tests {
 
         let mut requests = PreparedRenderFrameRequestResource::default();
         requests
-            .replace_contribution(producer(1), [], [native_request])
+            .replace_surface_contribution_with_automatic_main_replacements(
+                producer(1),
+                fallback.render_surface_id,
+                [],
+                [native_request],
+                [],
+            )
             .expect("native fallback request should publish");
 
         let views = build_prepared_views(RenderSurfaceId::primary(), (1920, 1080), &requests).expect("views should prepare");
@@ -581,6 +590,45 @@ mod automatic_main_replacement_tests {
                 .all(|invocation| invocation.flow_id != resolve.id()),
             "native fallback must not run the fixed resolve flow"
         );
+    }
+
+    #[test]
+    fn fixed_resolution_replacement_is_scoped_to_owning_surface() {
+        let flow_id = flow(17);
+        let primary = RenderSurfaceId::primary();
+        let secondary = RenderSurfaceId::try_from_raw(2).expect("test surface should be nonzero");
+        let invocation =
+            PreparedFlowInvocationRequest::new("fixed.surface.scene", flow_id, "fixed.surface.view");
+        let mut requests = PreparedRenderFrameRequestResource::default();
+        requests
+            .replace_surface_contribution_with_automatic_main_replacements(
+                producer(1),
+                primary,
+                [PreparedViewFrame::offscreen_product(
+                    "fixed.surface.view",
+                    (1280, 720),
+                )],
+                [invocation],
+                [flow_id],
+            )
+            .expect("surface-scoped replacement should publish");
+
+        let primary_requests = requests.requested_flow_invocations_for_surface(primary);
+        let secondary_requests = requests.requested_flow_invocations_for_surface(secondary);
+        assert_eq!(primary_requests.len(), 1);
+        assert!(secondary_requests.is_empty());
+        assert!(!should_emit_automatic_main(
+            primary,
+            flow_id,
+            &primary_requests,
+            &requests,
+        ));
+        assert!(should_emit_automatic_main(
+            secondary,
+            flow_id,
+            &secondary_requests,
+            &requests,
+        ));
     }
 
     #[test]
