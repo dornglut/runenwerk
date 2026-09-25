@@ -956,7 +956,8 @@ mod tests {
             WorkspaceProfile, WorkspaceState,
         };
 
-        let host = crate::shell::RunenwerkWorkbenchHost::new().expect("workbench host should build");
+        let host =
+            crate::shell::RunenwerkWorkbenchHost::new().expect("workbench host should build");
         let suites = installed_suites();
 
         for spec in FULL_EDITOR_PROFILE_SPECS
@@ -1049,7 +1050,9 @@ mod tests {
                 workspace: &WorkspaceState,
                 host_id: editor_shell::PanelHostId,
             ) -> String {
-                let host = workspace.host(host_id).expect("referenced host should exist");
+                let host = workspace
+                    .host(host_id)
+                    .expect("referenced host should exist");
                 match host.kind {
                     PanelHostKind::SplitHost(split) => format!(
                         "split({:?},{};{};{})",
@@ -1091,5 +1094,4 @@ mod tests {
             format!("{root}|floating={floating:?}")
         }
     }
-
 }
