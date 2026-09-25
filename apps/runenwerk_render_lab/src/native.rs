@@ -1,6 +1,7 @@
 use super::*;
 use engine::plugins::render::inspect::{
-    RenderDebugFrameReportState, RenderFrameHistoryState, RenderFrameObservationPolicyResource,
+    RenderDebugConfigResource, RenderDebugFrameReportState, RenderFrameHistoryState,
+    RenderFrameObservationPolicyResource,
 };
 use engine::prelude::FrameEnd;
 use std::path::{Path, PathBuf};
@@ -8,11 +9,12 @@ use std::path::{Path, PathBuf};
 mod temporal_quality;
 
 use temporal_quality::{
-    RL2_QUALITY_COLOR_ALIAS, RL2_QUALITY_FLOW_ID, RL2_QUALITY_PASS_ID, RenderLabFixedQualityPlans,
+    RL2_QUALITY_COLOR_ALIAS, RL2_QUALITY_FLOW_ID, RenderLabFixedQualityPlans,
     RenderLabNativeQualityPublication, RenderLabTemporalQualityExecutionState,
     inspect_render_lab_temporal_quality_execution_system, render_lab_fixed_quality_flow,
     stage_render_lab_fixed_quality_publication, stage_render_lab_native_quality_publication,
-    temporal_quality_capture_evidence, write_temporal_quality_artifact,
+    temporal_quality_capture_evidence, temporal_quality_capture_selector,
+    write_temporal_quality_artifact,
 };
 
 #[derive(Debug, Clone, Copy, runen_ecs::Resource)]
@@ -73,6 +75,7 @@ struct RenderLabFramePublicationResources<'w> {
     targets: ResMut<'w, RenderDynamicTextureTargetRequestRegistryResource>,
     frame_requests: ResMut<'w, PreparedRenderFrameRequestResource>,
     contributions: ResMut<'w, RenderDeterministicFrameContributionResource>,
+    debug_config: ResMut<'w, RenderDebugConfigResource>,
     fixed_quality_plans: Res<'w, RenderLabFixedQualityPlans>,
     quality_execution: ResMut<'w, RenderLabTemporalQualityExecutionState>,
 }
@@ -210,7 +213,7 @@ fn run_native_with_measurement(measurement: Option<RenderLabMeasurementConfig>) 
         app.insert_resource(measurement);
         app.insert_resource(rl2_measurement_policy());
     }
-    if let Some((output_size, internal_size)) = quality_mode {
+    if quality_mode.is_some() {
         app.update_render_debug_control(|control| {
             control.capture_enabled = true;
             control.readback_enabled = true;
@@ -230,18 +233,6 @@ fn run_native_with_measurement(measurement: Option<RenderLabMeasurementConfig>) 
         });
         app.update_render_debug_config(|config| {
             config.capture_selectors.clear();
-            let selector = if internal_size == output_size {
-                engine::plugins::render::inspect::RenderCaptureSelector::named_pass_surface_color(
-                    RL2_QUALITY_FLOW_ID,
-                    RL2_QUALITY_PASS_ID,
-                )
-            } else {
-                engine::plugins::render::inspect::RenderCaptureSelector::named_pass_surface_color(
-                    engine::plugins::render::FIXED_RESOLUTION_RESOLVE_FLOW_LABEL,
-                    engine::plugins::render::FIXED_RESOLUTION_RESOLVE_PASS_LABEL,
-                )
-            };
-            config.capture_selectors.push(selector);
         });
         app.insert_resource(RenderLabFlowId(scene_flow.id()));
         app.add_render_flow(scene_flow);
@@ -484,6 +475,7 @@ fn publish_render_lab_frame_system(
         mut targets,
         mut frame_requests,
         mut contributions,
+        mut debug_config,
         fixed_quality_plans,
         mut quality_execution,
     } = publication;
@@ -513,6 +505,7 @@ fn publish_render_lab_frame_system(
             requested_internal_size,
         )
         .admit_against_compiled_flows(output_size, scene_plan, resolve_plan);
+        debug_config.capture_selectors = vec![temporal_quality_capture_selector(Some(&admission))];
 
         match &admission {
             engine::plugins::render::RenderFixedResolutionExecutionAdmission::Fixed(prepared) => {
@@ -574,6 +567,7 @@ fn publish_render_lab_frame_system(
     let (target_key, target, contribution) =
         build_render_lab_radiance_publication(&camera, producer_id, requested_internal_size)?;
     if measurement.quality_capture_output_dir.is_some() {
+        debug_config.capture_selectors = vec![temporal_quality_capture_selector(None)];
         let invocation = PreparedFlowInvocationRequest::new(
             format!("{RL2_QUALITY_FLOW_ID}.native"),
             flow_id.0,

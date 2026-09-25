@@ -1,6 +1,6 @@
 use super::*;
 use engine::plugins::render::inspect::{
-    RenderCaptureTerminalCode, inspect_fixed_resolution_execution,
+    RenderCaptureSelector, RenderCaptureTerminalCode, inspect_fixed_resolution_execution,
 };
 use std::collections::BTreeMap;
 
@@ -79,6 +79,24 @@ const RL2_QUALITY_SCENARIO_REVISION: u32 = 1;
 pub(super) const RL2_QUALITY_FLOW_ID: &str = "runenwerk.render_lab.rl2.fixed_quality";
 pub(super) const RL2_QUALITY_PASS_ID: &str = "runenwerk.render_lab.rl2.fixed_quality.compose";
 pub(super) const RL2_QUALITY_COLOR_ALIAS: &str = "runenwerk.render_lab.rl2.fixed_quality.color";
+
+pub(super) fn temporal_quality_capture_selector(
+    admission: Option<&engine::plugins::render::RenderFixedResolutionExecutionAdmission>,
+) -> RenderCaptureSelector {
+    match admission {
+        Some(engine::plugins::render::RenderFixedResolutionExecutionAdmission::Fixed(_)) => {
+            RenderCaptureSelector::named_pass_surface_color(
+                engine::plugins::render::FIXED_RESOLUTION_RESOLVE_FLOW_LABEL,
+                engine::plugins::render::FIXED_RESOLUTION_RESOLVE_PASS_LABEL,
+            )
+        }
+        Some(engine::plugins::render::RenderFixedResolutionExecutionAdmission::NativeFallback(_))
+        | None => RenderCaptureSelector::named_pass_surface_color(
+            RL2_QUALITY_FLOW_ID,
+            RL2_QUALITY_PASS_ID,
+        ),
+    }
+}
 
 pub(super) fn render_lab_fixed_quality_flow() -> Result<RenderFlow> {
     RenderFlow::new(RL2_QUALITY_FLOW_ID)
@@ -533,6 +551,17 @@ mod tests {
         assert_eq!(prepared.output_size, (1920, 1080));
         assert_eq!(prepared.internal_size, (1280, 720));
         assert_eq!(prepared.internal_view.target_size_px, (1280, 720));
+        let fixed_admission =
+            engine::plugins::render::RenderFixedResolutionExecutionAdmission::Fixed(prepared.clone());
+        let selector = temporal_quality_capture_selector(Some(&fixed_admission));
+        assert_eq!(
+            selector.flow_id.as_deref(),
+            Some(engine::plugins::render::FIXED_RESOLUTION_RESOLVE_FLOW_LABEL)
+        );
+        assert_eq!(
+            selector.pass_id.as_deref(),
+            Some(engine::plugins::render::FIXED_RESOLUTION_RESOLVE_PASS_LABEL)
+        );
         assert_eq!(
             scene_invocation.target_alias_bindings.get(
                 &engine::plugins::render::RenderTargetAliasKey::new(RL2_RADIANCE_ALIAS)
@@ -559,6 +588,10 @@ mod tests {
         .expect("native quality radiance alias should bind")
         .bind_surface_color_alias(RL2_QUALITY_COLOR_ALIAS)
         .expect("native quality color alias should bind");
+
+        let selector = temporal_quality_capture_selector(None);
+        assert_eq!(selector.flow_id.as_deref(), Some(RL2_QUALITY_FLOW_ID));
+        assert_eq!(selector.pass_id.as_deref(), Some(RL2_QUALITY_PASS_ID));
 
         let mut targets = RenderDynamicTextureTargetRequestRegistryResource::default();
         let mut frame_requests = PreparedRenderFrameRequestResource::default();
@@ -734,6 +767,9 @@ mod tests {
         else {
             panic!("aspect mismatch should produce explicit native fallback");
         };
+        let selector = temporal_quality_capture_selector(Some(&admission));
+        assert_eq!(selector.flow_id.as_deref(), Some(RL2_QUALITY_FLOW_ID));
+        assert_eq!(selector.pass_id.as_deref(), Some(RL2_QUALITY_PASS_ID));
 
         let native_scene_invocation = fallback
             .native_scene_invocation
