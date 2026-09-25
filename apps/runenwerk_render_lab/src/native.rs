@@ -592,6 +592,103 @@ fn publish_render_lab_frame_system(
     )
 }
 
+fn inspect_render_lab_temporal_quality_execution_system(
+    measurement: Res<RenderLabMeasurementConfig>,
+    flow_id: Res<RenderLabFlowId>,
+    prepared_frames: Res<engine::plugins::render::PreparedRenderFrameResource>,
+    mut quality_execution: ResMut<RenderLabTemporalQualityExecutionState>,
+) -> Result<()> {
+    if measurement.quality_capture_output_dir.is_none() {
+        return Ok(());
+    }
+
+    let Some(frame) = prepared_frames.frame() else {
+        return Ok(());
+    };
+    let output_size = measurement
+        .primary_window_size_px
+        .ok_or_else(|| anyhow::anyhow!("temporal quality output extent is unavailable"))?;
+    let internal_size = measurement
+        .radiance_target_size_px
+        .ok_or_else(|| anyhow::anyhow!("temporal quality internal extent is unavailable"))?;
+
+    let evidence = if let Some(admission) = quality_execution.pending_admission.as_ref() {
+        let fixed = inspect_fixed_resolution_execution(admission, frame)?;
+        let policy = match fixed.resolution.policy {
+            engine::plugins::render::inspect::RenderTemporalResolutionPolicy::Native => "native",
+            engine::plugins::render::inspect::RenderTemporalResolutionPolicy::Fixed => "fixed",
+            engine::plugins::render::inspect::RenderTemporalResolutionPolicy::Dynamic => "dynamic",
+        };
+        RenderLabTemporalQualityExecutionEvidence {
+            frame_index: frame.context.frame_index,
+            prepare_epoch: frame.context.prepare_epoch,
+            policy,
+            internal_size_px: fixed.resolution.internal_size,
+            output_size_px: fixed.resolution.output_size,
+            native_fallback_active: fixed.native_fallback_active,
+            native_fallback_reason: fixed.native_fallback_reason,
+            target_key: fixed.target_key.map(|key| key.to_string()),
+            internal_view_id: fixed.internal_view_id,
+            scene_invocation_id: fixed.scene_invocation_id.map(|id| id.to_string()),
+            resolve_invocation_id: fixed.resolve_invocation_id.map(|id| id.to_string()),
+        }
+    } else {
+        if internal_size != output_size {
+            bail!(
+                "temporal quality requested {}x{} -> {}x{} without a retained fixed admission",
+                internal_size.0,
+                internal_size.1,
+                output_size.0,
+                output_size.1
+            );
+        }
+        if frame.surface.target_size_px != output_size {
+            bail!(
+                "temporal quality native frame output {}x{} does not match requested {}x{}",
+                frame.surface.target_size_px.0,
+                frame.surface.target_size_px.1,
+                output_size.0,
+                output_size.1
+            );
+        }
+        let main_view = frame
+            .main_view()
+            .ok_or_else(|| anyhow::anyhow!("temporal quality native frame has no main view"))?;
+        if main_view.target_size_px != output_size {
+            bail!(
+                "temporal quality native main view {}x{} does not match requested {}x{}",
+                main_view.target_size_px.0,
+                main_view.target_size_px.1,
+                output_size.0,
+                output_size.1
+            );
+        }
+        let scene_invocation = frame
+            .flow_invocations_for_flow(flow_id.0)
+            .find(|invocation| invocation.view_id == "main")
+            .ok_or_else(|| {
+                anyhow::anyhow!("temporal quality native frame is missing the RL2 main invocation")
+            })?;
+
+        RenderLabTemporalQualityExecutionEvidence {
+            frame_index: frame.context.frame_index,
+            prepare_epoch: frame.context.prepare_epoch,
+            policy: "native",
+            internal_size_px: [internal_size.0, internal_size.1],
+            output_size_px: [output_size.0, output_size.1],
+            native_fallback_active: false,
+            native_fallback_reason: None,
+            target_key: None,
+            internal_view_id: None,
+            scene_invocation_id: Some(scene_invocation.invocation_id.to_string()),
+            resolve_invocation_id: None,
+        }
+    };
+
+    quality_execution.latest = Some(evidence);
+    Ok(())
+}
+
 fn render_lab_extent(presentation: &engine::PrimaryPresentationMetricsResource) -> (u32, u32) {
     presentation.size_px()
 }
