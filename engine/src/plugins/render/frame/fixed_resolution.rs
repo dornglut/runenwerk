@@ -382,7 +382,7 @@ mod tests {
     }
 
     #[test]
-    fn fixed_resolution_admission_projects_fixed_or_native_fallback_evidence() {
+    fn fixed_resolution_admission_returns_complete_fixed_parts_or_native_fallback() {
         let compiled = compiled_scene_flow("scene_color");
         let valid = RenderFixedResolutionExecutionRequest::new(
             producer(7),
@@ -392,14 +392,9 @@ mod tests {
         )
         .admit_against_compiled_flow((1920, 1080), flow(12), &compiled);
         assert!(!valid.native_fallback_active());
-        assert_eq!(
-            crate::plugins::render::inspect::fixed_resolution_admission_resolution_evidence(&valid),
-            crate::plugins::render::inspect::RenderTemporalResolutionEvidence {
-                internal_size: [1280, 720],
-                output_size: [1920, 1080],
-                policy: crate::plugins::render::inspect::RenderTemporalResolutionPolicy::Fixed,
-            }
-        );
+        let prepared = valid.prepared().expect("valid admission should retain fixed parts");
+        assert_eq!(prepared.internal_size, (1280, 720));
+        assert_eq!(prepared.output_size, (1920, 1080));
 
         let invalid = RenderFixedResolutionExecutionRequest::new(
             producer(7),
@@ -409,26 +404,12 @@ mod tests {
         )
         .admit_against_compiled_flow((1920, 1080), flow(12), &compiled);
         assert!(invalid.native_fallback_active());
-        assert!(invalid.fallback_reason().is_some());
-        assert!(invalid.prepared().is_none());
-        let (fallback_active, fallback_reason) =
-            crate::plugins::render::inspect::fixed_resolution_admission_native_fallback_evidence(
-                &invalid,
-            );
-        assert!(fallback_active);
         assert!(
-            fallback_reason
-                .as_deref()
+            invalid
+                .fallback_reason()
                 .is_some_and(|reason| reason.contains("must preserve output aspect"))
         );
-        assert_eq!(
-            crate::plugins::render::inspect::fixed_resolution_admission_resolution_evidence(&invalid),
-            crate::plugins::render::inspect::RenderTemporalResolutionEvidence {
-                internal_size: [1920, 1080],
-                output_size: [1920, 1080],
-                policy: crate::plugins::render::inspect::RenderTemporalResolutionPolicy::Native,
-            }
-        );
+        assert!(invalid.prepared().is_none());
     }
 
     #[test]
