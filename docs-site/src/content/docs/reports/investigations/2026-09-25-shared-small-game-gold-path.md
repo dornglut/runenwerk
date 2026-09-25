@@ -31,7 +31,7 @@ it.
 
 The central conclusion is:
 
-\`\`\`text
+```text
 one maintained game
 one App-world gameplay model
 one tick-command vocabulary
@@ -44,7 +44,7 @@ headless dedicated authority
 
 same gameplay semantics
 different authority, routing, and presentation
-\`\`\`
+```
 
 Runenwerk already contains enough fixed-step, ECS, world-query, RunenNet, RunenInput, UI, and
 renderer substrate to make that direction credible. It does **not** yet contain one maintained
@@ -57,19 +57,19 @@ This report does not implement those seams and does not promote speculative fram
 
 The final pre-publication source census used accepted Runenwerk main:
 
-\`\`\`text
+```text
 f3a5d75448db614dbe770e7511d23e599280da4d
-\`\`\`
+```
 
 Pinned standalone framework revisions relevant to the investigation are:
 
-\`\`\`text
+```text
 RunenECS   84fd396f6c6b6fecb7df8cb5f71a7e74770d156a
 RunenNet   e8dce38b2578eb3559356968beb2351cc03c6758
 RunenInput 2751e19fa42255b86e786e7cd837198c917b7b25
 RunenGPU   789b430fdefeda89bfe59de86d548618b8f8ab9a
 RunenSpatial 2bb6b2ed89894aefaa39bf0e39d296b703916821
-\`\`\`
+```
 
 Open writers at the final source guard were:
 
@@ -85,7 +85,7 @@ must re-resolve the accepted state after that writer lands or is abandoned.
 
 Important current sources inspected include:
 
-\`\`\`text
+```text
 engine/src/plugins/mod.rs
 engine/src/plugins/fixed_step.rs
 engine/src/plugins/simulation.rs
@@ -113,7 +113,7 @@ docs-site/src/content/docs/adr/accepted/0019-batteries-included-application-comp
 docs-site/src/content/docs/net/multiplayer-replication-implementation-roadmap.md
 docs-site/src/content/docs/design/active/engine-game-runtime-editor-ecs-scripting-hot-reload-design.md
 docs-site/src/content/docs/design/active/editor-procedural-content-and-simulation-workflow-plan.md
-\`\`\`
+```
 
 Search was used only for discovery. Absence conclusions below were checked against the relevant
 owner/source surfaces rather than inferred from an empty search alone.
@@ -124,31 +124,31 @@ owner/source surfaces rather than inferred from an empty search alone.
 
 The ordinary runtime baseline is intentionally narrower than a complete game stack.
 
-Current \`default_plugins()\` installs:
+Current `default_plugins()` installs:
 
-\`\`\`text
+```text
 TimePlugin
 FixedStepPlugin
 SimulationPlugin
 ReplayPlugin
 InputFinalizePlugin
 DiagnosticsPlugin
-\`\`\`
+```
 
 Scene, Render, UI, World, and Net remain separately selected capabilities.
 
 The frame schedule is:
 
-\`\`\`text
+```text
 PreUpdate
 -> FixedStepBegin -> FixedUpdate      zero or more times
 -> Update
 -> RenderPrepare
 -> RenderSubmit
 -> FrameEnd
-\`\`\`
+```
 
-\`SimulationPlugin\` advances \`SimulationTick\` at \`FixedStepBegin\`. Fixed cadence and simulation
+`SimulationPlugin` advances `SimulationTick` at `FixedStepBegin`. Fixed cadence and simulation
 identity remain separate capabilities.
 
 This is enough to establish a game-authority spine without creating a second runtime or scheduler.
@@ -157,28 +157,28 @@ This is enough to establish a game-authority spine without creating a second run
 
 Current simulation profile vocabulary includes:
 
-\`\`\`text
+```text
 LocalSinglePlayer
 DeterministicLockstep
 RollbackSession
 DedicatedAuthority
 HighThroughputAuthority
-\`\`\`
+```
 
 and current authority vocabulary includes:
 
-\`\`\`text
+```text
 Local
 Client
 Server
 Peer
-\`\`\`
+```
 
-\`NetPlugin<TDriver>\` currently composes \`Client\`, \`Server\`, and \`Host\` roles. Host installs
-both client and server integration into one App and selects \`AuthorityRole::Peer\`.
+`NetPlugin<TDriver>` currently composes `Client`, `Server`, and `Host` roles. Host installs
+both client and server integration into one App and selects `AuthorityRole::Peer`.
 
 This does not prove the final game topology by itself, but it makes a separate
-\`SinglePlayerGame\`/ \`MultiplayerGame\` simulation split unnecessary and directionally wrong.
+`SinglePlayerGame`/ `MultiplayerGame` simulation split unnecessary and directionally wrong.
 
 The gold path should therefore treat role as **routing and authority policy over one gameplay
 model**.
@@ -206,7 +206,7 @@ No new generic gameplay event bus or second gameplay state container is justifie
 
 Current Scene runtime remains predecessor-shaped for game use.
 
-\`SceneManager\` creates a \`WorldSceneRuntime\` containing its own nested \`runen_ecs::World\`.
+`SceneManager` creates a `WorldSceneRuntime` containing its own nested `runen_ecs::World`.
 The current world runtime contains:
 
 - a frame counter;
@@ -215,34 +215,34 @@ The current world runtime contains:
 - stub notification behavior.
 
 The active world-scene system performs debug motion and stub notifications. Existing
-\`player_move_x\` / \`player_move_y\` state is synchronized from actions but does not drive a real
+`player_move_x` / `player_move_y` state is synchronized from actions but does not drive a real
 player entity.
 
 The current Scene IDs are likewise stub/product-shell shaped:
 
-\`\`\`text
+```text
 GameplayStub
 HubStub
 ConsoleUi
 HudUi
 InventoryUi
-\`\`\`
+```
 
 ### Decision
 
-The new maintained game must **not** deepen \`ScenePlugin\`'s nested World into general gameplay
+The new maintained game must **not** deepen `ScenePlugin`'s nested World into general gameplay
 authority.
 
 Use:
 
-\`\`\`text
+```text
 App World
   -> live gameplay state and simulation authority
 
 Scene integration
   -> only the presentation/lifecycle compatibility responsibilities actually required
      by current Engine integration until those seams are separately normalized
-\`\`\`
+```
 
 This avoids introducing two live ECS worlds for one game and avoids moving product semantics into a
 legacy scene stub.
@@ -252,13 +252,13 @@ legacy scene stub.
 RunenInput correctly stops at physical/device observation and confirmed state. Runenwerk owns
 product actions and bindings.
 
-Current \`InputFinalizePlugin\` projects \`ActionState\` during \`PreUpdate\` in \`CoreSet::Input\`.
-\`ActionState\` has two materially different kinds of information:
+Current `InputFinalizePlugin` projects `ActionState` during `PreUpdate` in `CoreSet::Input`.
+`ActionState` has two materially different kinds of information:
 
-- held state such as \`action_down\`;
-- frame-local edges such as \`action_pressed\`.
+- held state such as `action_down`;
+- frame-local edges such as `action_pressed`.
 
-Frame-local action edges are cleared at \`FrameEnd\`.
+Frame-local action edges are cleared at `FrameEnd`.
 
 Because the fixed-step loop may run zero, one, or multiple times between two rendered frames,
 reading a frame-local edge directly from arbitrary fixed-step gameplay code is not a sufficient
@@ -268,7 +268,7 @@ long-term input contract.
 
 The game needs an explicit product-owned input accumulator:
 
-\`\`\`text
+```text
 RunenInput confirmed state
        |
 ActionState projection in PreUpdate
@@ -280,9 +280,9 @@ Game input accumulator
 zero or more fixed ticks
        |
 one tick-targeted GameCommand batch per participant/tick
-\`\`\`
+```
 
-The collector belongs after \`CoreSet::Input\` and before the fixed-step loop.
+The collector belongs after `CoreSet::Input` and before the fixed-step loop.
 
 Required behavior:
 
@@ -298,21 +298,21 @@ This is the first required game-specific contract.
 
 Current RunenNet-backed Engine prediction does more than buffer input.
 
-For each fixed tick, \`prediction_step_system<TDriver>\`:
+For each fixed tick, `prediction_step_system<TDriver>`:
 
-1. obtains the current \`SimulationTick\`;
+1. obtains the current `SimulationTick`;
 2. drains authority input for that tick;
-3. calls \`TDriver::take_local_input\`;
+3. calls `TDriver::take_local_input`;
 4. stages the local batch for the same tick;
 5. on a Client, admits the encoded batch to RunenNet prediction before applying it;
-6. calls \`TDriver::apply_input(world, tick, commands)\`;
+6. calls `TDriver::apply_input(world, tick, commands)`;
 7. on Server/Peer authority, combines legal authority input with local input and applies the same
    driver path.
 
 RunenNet reconciliation later replays retained predicted input by calling
-\`TDriver::apply_input(world, target_tick, commands)\` directly.
+`TDriver::apply_input(world, target_tick, commands)` directly.
 
-The Net prediction set currently runs after an optional \`CoreSet::Simulation\`, and authority
+The Net prediction set currently runs after an optional `CoreSet::Simulation`, and authority
 replication runs after prediction.
 
 ### Consequence
@@ -323,25 +323,25 @@ to run once."
 Any state that must replay correctly must be expressible through one deterministic function
 callable with:
 
-\`\`\`text
+```text
 World
 SimulationTick
 participant/tick command batch
-\`\`\`
+```
 
 ### Decision
 
 The game should establish one app-owned command-application operation, directionally:
 
-\`\`\`text
+```text
 apply_game_commands(world, tick, commands)
-\`\`\`
+```
 
 The exact public/internal type names are not selected here.
 
 That operation is used by:
 
-\`\`\`text
+```text
 Local single-player
   local fixed-step command executor
       -> apply_game_commands
@@ -357,7 +357,7 @@ Remote client
 Prediction reconciliation
   retained target-tick replay
       -> apply_game_commands
-\`\`\`
+```
 
 This does **not** require every game system to move into one function. It means the predicted subset
 of gameplay—starting with controlled-character motion—must be replayable from the same tick command
@@ -378,12 +378,12 @@ it.
 | Remote client | predicted local + replicated/confirmed remote state, not world authority | RunenNet prediction admission then same application | not authority | predicted-local smoothing + remote interpolation |
 | Dedicated server | authoritative gameplay state | optional server-local/admin commands only | RunenNet authority admission then same application | none |
 
-Current \`WorldPlugin\` already maps:
+Current `WorldPlugin` already maps:
 
-\`\`\`text
+```text
 Client -> ReadOnly
 Local / Server / Peer -> Writable
-\`\`\`
+```
 
 for world mutation, which aligns with this authority model.
 
@@ -408,9 +408,9 @@ Do not manufacture separate host client/server worlds in advance.
 
 Runenwerk does not need collision detection from zero.
 
-\`domain/world_sdf\` already provides strict query truth:
+`domain/world_sdf` already provides strict query truth:
 
-\`\`\`text
+```text
 CollisionQueryService
 SphereSweep
 CollisionHit
@@ -419,12 +419,12 @@ CollisionSweepOutcome
   MissingPayload
   Hit
   Clear
-\`\`\`
+```
 
 The authoritative sweep checks required chunk payload availability and can fail closed with
-\`MissingPayload\`.
+`MissingPayload`.
 
-The active procedural/simulation design separately records that a general \`domain/physics\` does
+The active procedural/simulation design separately records that a general `domain/physics` does
 not yet exist and directs future physics toward body/collider/character contracts plus an
 Engine-owned solver adapter.
 
@@ -453,7 +453,7 @@ game-owned configuration/policy.
 
 ### Owner split
 
-\`\`\`text
+```text
 domain/world_sdf
   strict collision/query truth
 
@@ -465,7 +465,7 @@ engine
 
 game
   movement feel and gameplay consequences
-\`\`\`
+```
 
 ### External pressure test: Rapier
 
@@ -480,7 +480,7 @@ https://rapier.rs/docs/user_guides/rust/character_controller/
 Runenwerk adaptation:
 
 - adopt the useful mechanism distinction between desired motion and query-corrected motion;
-- keep strict SDF query authority in \`world_sdf\`;
+- keep strict SDF query authority in `world_sdf`;
 - keep public physics semantics Runenwerk-owned;
 - evaluate a Rapier adapter later for rigid-body/general-solver demand.
 
@@ -496,20 +496,20 @@ A proper small game cannot render fixed-tick physical position directly and expe
 The fixed loop may execute zero or multiple ticks per rendered frame. The game therefore needs a
 presentation boundary such as:
 
-\`\`\`text
+```text
 PreviousPhysicalPose
 CurrentPhysicalPose
         |
         | frame alpha / overstep fraction
         v
 PresentationPose
-\`\`\`
+```
 
 The presentation pose is derived and must not become the next authoritative simulation input.
 
 This principle is useful for both local and networked play:
 
-\`\`\`text
+```text
 local frame interpolation
   previous fixed pose -> current fixed pose
 
@@ -518,7 +518,7 @@ client predicted presentation
 
 remote network interpolation
   confirmed snapshot A -> confirmed snapshot B on a buffered timeline
-\`\`\`
+```
 
 These are related presentation mechanisms but not the same timeline or authority.
 
@@ -561,21 +561,21 @@ consumer is missing.
 
 Important current facts:
 
-- \`RenderPlugin\` initializes prepared draw/material/world/UI contribution resources;
+- `RenderPlugin` initializes prepared draw/material/world/UI contribution resources;
 - Render submit consumes prepared state rather than discovering live ECS truth;
 - Editor multi-entity rendering is deliberately app-owned extraction from Editor scene reality into
-  an \`EditorViewportSceneRenderPacket\`;
-- current \`frame_render_prepare_system\` still reads \`SceneResource.manager\` for primary frame
+  an `EditorViewportSceneRenderPacket`;
+- current `frame_render_prepare_system` still reads `SceneResource.manager` for primary frame
   size/route context and clears the prepared frame when no manager exists;
-- \`RenderPlugin\` may provision an empty \`SceneResource\`, but only \`ScenePlugin\` activates the
+- `RenderPlugin` may provision an empty `SceneResource`, but only `ScenePlugin` activates the
   Scene manager.
 
 Therefore:
 
-\`\`\`text
+```text
 RunenECS gameplay entity
   -/-> automatic current rendered game object
-\`\`\`
+```
 
 There is no accepted generic App-World ECS-to-render extraction path to assume.
 
@@ -594,13 +594,13 @@ That repair is distinct from gameplay authority and should not be hidden inside 
 
 Unlike game-world rendering, Engine UI already exposes an app-facing mount seam:
 
-\`\`\`text
+```text
 UiPlugin
 AppUiExt::mount_ui
 app.ui().mount(...)
-\`\`\`
+```
 
-\`UiPlugin\` publishes evaluated UI frames through the prepared surface-frame submission path.
+`UiPlugin` publishes evaluated UI frames through the prepared surface-frame submission path.
 
 The current design still defers entity-attached/world-space UI.
 
@@ -615,29 +615,29 @@ prerequisite for the first small game.
 
 Current Editor scene persistence is real:
 
-\`\`\`text
+```text
 SceneFileV2
 -> normalization
 -> FormedScenePackageV2
 -> Editor runtime application
-\`\`\`
+```
 
-but the concrete application target is \`RunenwerkEditorRuntime\`, not the ordinary gameplay App
+but the concrete application target is `RunenwerkEditorRuntime`, not the ordinary gameplay App
 World.
 
-Current project persistence has reached \`ProjectFileV3\` and includes startup-document and asset
+Current project persistence has reached `ProjectFileV3` and includes startup-document and asset
 source/cache/catalog information.
 
 Runtime Preview is also a real external process using RunenNet QUIC, but its current
-\`build_preview_app\` installs only \`default_plugins()\`.
+`build_preview_app` installs only `default_plugins()`.
 
 The preview product protocol distinguishes Scene, Material, Texture, Shader, UI, field/procgen and
-world-SDF product kinds, but \`RuntimeProductPayload\` currently carries:
+world-SDF product kinds, but `RuntimeProductPayload` currently carries:
 
-\`\`\`text
+```text
 Descriptor(RuntimeProductRef)
 WorldSdf(WorldSdfPayloadPackage)
-\`\`\`
+```
 
 Only the world-SDF case contains that concrete payload package directly. A Scene product reference
 does not by itself instantiate a playable game world.
@@ -649,20 +649,20 @@ A standalone game/content-bootstrap seam is genuinely missing.
 Do not:
 
 - call Editor scene loading from the game;
-- make \`RunenwerkEditorRuntime\` a gameplay dependency;
-- make \`ProjectFileV3\` permanent runtime semantic authority merely because it has
-  \`startup_document_id\`;
+- make `RunenwerkEditorRuntime` a gameplay dependency;
+- make `ProjectFileV3` permanent runtime semantic authority merely because it has
+  `startup_document_id`;
 - claim Runtime Preview product descriptors already form a game.
 
 The correct later flow is directionally:
 
-\`\`\`text
+```text
 project/editor source
 -> owner normalization/formation
 -> ratified runtime-facing products
 -> game startup/bootstrap
 -> App World / world products / material products / UI products
-\`\`\`
+```
 
 The exact runtime package contract needs a separate bounded issue after the maintained game
 consumer exists.
@@ -676,17 +676,17 @@ The post-RN8 Engine/RunenNet path already covers substantial difficult semantics
 - client replication consistency/history/recovery;
 - authority replication consistency/history/recovery;
 - prediction and reconciliation lineage;
-- ACK and real \`DeliveryAcceptance\`;
+- ACK and real `DeliveryAcceptance`;
 - bounded Engine staging;
 - role-aware fixed-step integration.
 
 Current low-level game integration still uses:
 
-\`\`\`text
+```text
 ReplicationDriver
 SnapshotApplyDriver
 InputDriver
-\`\`\`
+```
 
 and Replicated View R0 currently proves explicit complete state-product formation, stable replicated
 identity, deterministic ordering, exact byte accounting, and atomic activation as test evidence.
@@ -696,16 +696,16 @@ maintained consumer proves the missing contract.
 
 ### Concrete transport
 
-Standalone \`runen-net-quic\` already exposes production:
+Standalone `runen-net-quic` already exposes production:
 
-\`\`\`text
+```text
 EndpointConfig
 ProfileConfig
 ClientEndpoint
 ServerEndpoint
 ProfileReadyConnection
 Connection
-\`\`\`
+```
 
 with explicit finite resource policy and multi-connection endpoint capacity.
 
@@ -717,7 +717,7 @@ control, not gameplay.
 Do not add a generic Engine QUIC runtime now.
 
 After the maintained game has a local playable command/authority model, add gameplay QUIC as an
-**app-owned maintained consumer** around \`runen-net-quic\` and the existing Engine Net semantic
+**app-owned maintained consumer** around `runen-net-quic` and the existing Engine Net semantic
 boundary.
 
 That real game then becomes the evidence required to advance #322's ordinary Replicated View path.
@@ -728,7 +728,7 @@ The first gold-path game should be deliberately small and system-rich rather tha
 
 Recommended bounded slice:
 
-\`\`\`text
+```text
 one small SDF arena
 one or two player actors
 third-person or simple free-look camera
@@ -740,7 +740,7 @@ one objective that can be completed
 HUD: health + objective state
 win/lose state
 restart
-\`\`\`
+```
 
 This slice is enough to pressure:
 
@@ -827,15 +827,15 @@ The smallest coherent sequence is not the earlier subsystem shopping list.
 
 Expected bounded goal:
 
-- create one maintained game application under \`apps/\`;
+- create one maintained game application under `apps/`;
 - keep live gameplay state in the App World;
 - establish game-owned participant/player identity and minimal player state;
-- collect product input after \`CoreSet::Input\` into a persistent frame-to-tick accumulator;
+- collect product input after `CoreSet::Input` into a persistent frame-to-tick accumulator;
 - form one tick-targeted game-command batch;
 - implement one deterministic game command-application operation;
 - execute it in local single-player fixed-step authority;
 - prove the same operation is callable for an arbitrary retained target tick, so later Net
-  \`InputDriver::apply_input\` does not require a second movement implementation;
+  `InputDriver::apply_input` does not require a second movement implementation;
 - keep presentation, physics, networking, audio, content loading, and broad game mechanics out of
   this first cut.
 
@@ -844,7 +844,7 @@ Critical tests should cover:
 - zero fixed ticks do not lose a one-shot action;
 - multiple fixed ticks do not multiply a one-shot action;
 - held movement remains available for each relevant tick;
-- command application uses the supplied \`SimulationTick\`;
+- command application uses the supplied `SimulationTick`;
 - identical initial state + identical tick-command sequence gives identical game state;
 - the ordinary local path does not depend on NetPlugin;
 - no Scene nested World becomes gameplay authority.
@@ -856,10 +856,10 @@ already visually complete.
 
 After G1 establishes the command application point:
 
-1. create the required \`domain/physics\` owner/design slice required by the active procedural and
+1. create the required `domain/physics` owner/design slice required by the active procedural and
    simulation plan;
 2. implement only the kinematic character-motion contracts needed by the arena;
-3. integrate the current \`world_sdf\` strict sweep/readiness path;
+3. integrate the current `world_sdf` strict sweep/readiness path;
 4. call the same character movement from the G1 command application function.
 
 P0 owner/design work can be prepared in parallel with later G1 work only when current writers and
@@ -902,11 +902,11 @@ disjoint.
 
 Only after the same game is playable locally:
 
-- add app-owned \`runen-net-quic\` client/server endpoint realization;
+- add app-owned `runen-net-quic` client/server endpoint realization;
 - admit real session bindings into current RunenNet owners;
 - move game command frames over the real transport;
 - feed real authority replication submissions into transport delivery and report exact
-  \`DeliveryAcceptance\`;
+  `DeliveryAcceptance`;
 - prove two processes first, then two remote clients where the selected topology requires it;
 - preserve concrete transport outside reusable Engine networking semantics.
 
@@ -916,11 +916,11 @@ Use the real game to decide the smallest explicit network-visible state contract
 
 Target direction:
 
-\`\`\`text
+```text
 game-owned Replicated View
 -> standard Runenwerk extraction/application
 -> RunenNet replication semantics
-\`\`\`
+```
 
 Do not restore deleted component-registration macros and do not serialize the raw ECS world.
 
@@ -949,19 +949,19 @@ With the real game and transport in place:
 
 After G1 is accepted, the following can be prepared in parallel when exact writers remain disjoint:
 
-\`\`\`text
+```text
 physics owner/design
 game presentation adapter
 audio investigation
 RunenInput controller investigation
 runtime bootstrap investigation
-\`\`\`
+```
 
 Do not implement all of them merely because they are parallelizable.
 
 The dependency-critical path remains:
 
-\`\`\`text
+```text
 G1 command/authority spine
   -> character motion
   -> local playable game
@@ -969,7 +969,7 @@ G1 command/authority spine
   -> ordinary replicated view
   -> remote interpolation
   -> host/dedicated product proof
-\`\`\`
+```
 
 Networking syntax should not race ahead of the maintained game's state model.
 
@@ -984,12 +984,12 @@ This report does not select final group names or memberships.
 The game must first prove the real compositions. Only then should Runenwerk encode transparent
 recipes for concepts directionally equivalent to:
 
-\`\`\`text
+```text
 local game
 multiplayer client
 listen host
 dedicated authority
-\`\`\`
+```
 
 Those recipes lower to the same App/plugins/resources; they are not another runtime or semantic
 authority.
@@ -1019,21 +1019,21 @@ This investigation does not authorize or select:
 
 The first implementation issue should be:
 
-\`\`\`text
+```text
 [Game][G1] Establish a maintained local-game executable and tick-command authority spine
-\`\`\`
+```
 
 It should remain intentionally smaller than a playable visual game.
 
 Its purpose is to establish the architectural invariant that all later work depends on:
 
-\`\`\`text
+```text
 physical/product input
 -> retained frame-to-tick intent
 -> tick-targeted game command
 -> one deterministic command application
 -> App-world gameplay state
-\`\`\`
+```
 
 Local single-player proves it first.
 
@@ -1050,7 +1050,7 @@ Runenwerk is not blocked on inventing another broad game framework.
 It is blocked on establishing one maintained game consumer and closing a small number of concrete
 integration seams around that consumer:
 
-\`\`\`text
+```text
 1. frame input -> fixed tick commands
 2. replayable deterministic participant command application
 3. SDF-first character motion
@@ -1060,7 +1060,7 @@ integration seams around that consumer:
 7. real gameplay QUIC transport
 8. ordinary replicated view
 9. remote interpolation
-\`\`\`
+```
 
 The strongest long-term direction is therefore one game with one simulation model and multiple
 authority/routing roles, not separate single-player and multiplayer games.
