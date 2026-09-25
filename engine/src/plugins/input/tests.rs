@@ -5,8 +5,8 @@ use crate::plugins::{
 };
 use runen_input::{
     ContactId, ContactInput, ContactPhase, ContinuityLoss, CoordinateSpace, DigitalState,
-    InputContext, InputDeviceId, InputSourceId, KeyLocation, KeyboardInput, LogicalKey,
-    InputObservation, InputObservationGroup, NativeLogicalKey, ObservationOrigin,
+    InputContext, InputDeviceId, InputObservation, InputObservationGroup, InputSourceId,
+    KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey, ObservationOrigin,
     PhysicalKeyIdentity, Point2, PointerButton, PointerButtonInput, RelativeMotionUnit, Vector2,
 };
 use winit::event::{ElementState, MouseButton};
@@ -567,7 +567,6 @@ fn source_continuity_loss_is_scoped_and_releases_stale_primary_touch_ownership()
     assert_eq!(input.touch_samples().len(), 1);
     assert_eq!(input.touch_samples()[0].id, 2);
 }
-
 
 #[test]
 fn admitted_input_capture_is_opt_in_and_preserves_admission_order_across_frames() {
