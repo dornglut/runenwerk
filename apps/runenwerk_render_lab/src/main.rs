@@ -36,12 +36,12 @@ fn parse_command(args: impl IntoIterator<Item = OsString>) -> anyhow::Result<Com
         let default_output = PathBuf::from("render-lab/rl2-measurement.json");
         let next = args.next();
         let (output_path, submitted_frame_limit) =
-            if matches!(next.as_deref(), Some(value) if value == "--frames") {
+            if matches!(next.as_deref(), Some(value) if value == "--submitted-frames") {
                 (default_output, Some(parse_frame_limit(args.next())?))
             } else {
                 let output_path = next.map(PathBuf::from).unwrap_or(default_output);
                 let submitted_frame_limit = match args.next() {
-                    Some(flag) if flag == "--frames" => Some(parse_frame_limit(args.next())?),
+                    Some(flag) if flag == "--submitted-frames" => Some(parse_frame_limit(args.next())?),
                     Some(unexpected) => {
                         anyhow::bail!(
                             "unexpected RL2 measurement argument '{}'",
@@ -72,16 +72,16 @@ fn parse_command(args: impl IntoIterator<Item = OsString>) -> anyhow::Result<Com
 
 fn parse_frame_limit(value: Option<OsString>) -> anyhow::Result<usize> {
     let Some(value) = value else {
-        anyhow::bail!("--frames requires a positive submitted-frame count");
+        anyhow::bail!("--submitted-frames requires a positive submitted-frame count");
     };
     let Some(value) = value.to_str() else {
-        anyhow::bail!("--frames requires a UTF-8 integer");
+        anyhow::bail!("--submitted-frames requires a UTF-8 integer");
     };
     let limit = value
         .parse::<usize>()
-        .map_err(|_| anyhow::anyhow!("invalid --frames value '{value}'"))?;
+        .map_err(|_| anyhow::anyhow!("invalid --submitted-frames value '{value}'"))?;
     if limit == 0 {
-        anyhow::bail!("--frames requires a positive submitted-frame count");
+        anyhow::bail!("--submitted-frames requires a positive submitted-frame count");
     }
     Ok(limit)
 }
@@ -148,7 +148,7 @@ mod tests {
             parse_command(args(&[
                 "--rl2-measure",
                 "evidence/run.json",
-                "--frames",
+                "--submitted-frames",
                 "600"
             ]))
             .unwrap(),
@@ -158,7 +158,7 @@ mod tests {
             }
         );
         assert_eq!(
-            parse_command(args(&["--rl2-measure", "--frames", "420"])).unwrap(),
+            parse_command(args(&["--rl2-measure", "--submitted-frames", "420"])).unwrap(),
             Command::NativeMeasurement {
                 output_path: PathBuf::from("render-lab/rl2-measurement.json"),
                 submitted_frame_limit: Some(420),
@@ -168,14 +168,14 @@ mod tests {
 
     #[test]
     fn native_measurement_mode_rejects_invalid_or_ambiguous_frame_targets() {
-        assert!(parse_command(args(&["--rl2-measure", "--frames"])).is_err());
-        assert!(parse_command(args(&["--rl2-measure", "--frames", "0"])).is_err());
-        assert!(parse_command(args(&["--rl2-measure", "--frames", "nope"])).is_err());
+        assert!(parse_command(args(&["--rl2-measure", "--submitted-frames"])).is_err());
+        assert!(parse_command(args(&["--rl2-measure", "--submitted-frames", "0"])).is_err());
+        assert!(parse_command(args(&["--rl2-measure", "--submitted-frames", "nope"])).is_err());
         assert!(
             parse_command(args(&[
                 "--rl2-measure",
                 "evidence/run.json",
-                "--frames",
+                "--submitted-frames",
                 "60",
                 "extra"
             ]))
