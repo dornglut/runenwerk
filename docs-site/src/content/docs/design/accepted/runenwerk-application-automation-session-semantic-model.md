@@ -9,7 +9,7 @@ last_reviewed: 2026-09-25
 related_adrs:
   - ../../adr/accepted/0023-normalize-app-runtime-host-lifecycle-and-capability-ownership.md
   - ../../adr/accepted/0024-normalize-physical-input-observation-semantics.md
-  - ../../adr/accepted/0025-normalize-editor-coordination-and-collaboration-ownership.md
+  - ../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
 related_designs:
   - ./runenwerk-app-runtime-and-composition-semantic-model.md
