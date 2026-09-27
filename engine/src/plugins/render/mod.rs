@@ -16,6 +16,7 @@ pub mod deterministic_execution;
 mod deterministic_verification;
 pub mod features;
 pub mod frame;
+mod gpu_context_policy;
 pub mod gpu_primitives;
 pub mod graph;
 pub mod inspect;
@@ -77,6 +78,9 @@ pub use deterministic_capture::{
 pub use engine_render_macros::{GpuStorage, GpuUniform};
 pub use features::*;
 pub use frame::*;
+pub use gpu_context_policy::{
+    apply_runenwerk_gpu_context_policy, runenwerk_gpu_backend_preference,
+};
 pub use gpu_primitives::*;
 pub use graph::*;
 pub use material_compiler::*;

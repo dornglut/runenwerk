@@ -9,6 +9,7 @@ use super::admission::{
     RenderRepresentationAvailabilityState, admit_render_plan,
 };
 use super::appearance::{RenderDiffuseMaterial, RenderDirectionalEmitter};
+use super::apply_runenwerk_gpu_context_policy;
 use super::method::{
     RenderAbstractExecutionRequirement, RenderMethodContract, RenderMethodId,
     RenderMethodOutputContract, RenderMethodOutputGuarantee, RenderMethodOutputKind,
@@ -470,9 +471,10 @@ fn founding_scene_uses_exact_r1_r4_semantic_spine_and_independent_field_capabili
 #[test]
 fn founding_scene_reaches_public_r5_admission_without_synthetic_semantic_bindings() {
     let fixture = founding_fixture();
-    let descriptor =
+    let descriptor = apply_runenwerk_gpu_context_policy(
         GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements())
-            .with_label("RunenRender R6 founding admission proof");
+            .with_label("RunenRender R6 founding admission proof"),
+    );
     let context = match pollster::block_on(GpuContext::request(descriptor)) {
         Ok(context) => context,
         Err(error) if error.category() == GpuContextRequestErrorCategory::NoAdapterAvailable => {
