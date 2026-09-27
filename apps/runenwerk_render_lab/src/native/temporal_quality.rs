@@ -988,9 +988,17 @@ mod tests {
         else {
             panic!("aspect mismatch should produce explicit native fallback");
         };
-        let selector = temporal_quality_capture_selector(Some(&admission));
-        assert_eq!(selector.flow_id.as_deref(), Some(RL2_QUALITY_FLOW_ID));
-        assert_eq!(selector.pass_id.as_deref(), Some(RL2_QUALITY_PASS_ID));
+        let selector =
+            temporal_quality_capture_selector(Some(&admission), &scene_plan, &resolve_plan)
+                .expect("native fallback capture selector should resolve compiled ids");
+        assert_eq!(
+            selector.flow_id.as_deref(),
+            Some(scene_plan.flow_id.to_string().as_str())
+        );
+        assert_eq!(
+            selector.pass_id.as_deref(),
+            Some(scene_plan.render_passes[0].pass_id().to_string().as_str())
+        );
 
         let native_scene_invocation = fallback
             .native_scene_invocation
