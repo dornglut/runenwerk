@@ -61,6 +61,7 @@ pub(super) fn project_compute_operation(
 /// invented placeholder identities.
 pub(super) fn project_render_operation(
     runtime_resources: &FlowRuntimeResources,
+    dynamic_texture_targets: Option<&super::super::dynamic_targets::RendererDynamicTextureTargetCache>,
     pass: &CompiledPassExecutionPlan,
     pipeline: &PreparedPipelinePass,
     surface_color_view: Option<&GpuTextureViewHandle>,
@@ -93,9 +94,13 @@ pub(super) fn project_render_operation(
     }
     let color_key =
         runtime_resources.resolve_resource_key(raster.pass_id, color_target_ref, "color_output")?;
-    let Some(color_target) =
-        logical_texture_target(runtime_resources, &color_key, surface_color_view)
-    else {
+    let Some(color_target) = logical_texture_target(
+        runtime_resources,
+        dynamic_texture_targets,
+        raster.pass_id,
+        &color_key,
+        surface_color_view,
+    )? else {
         return Ok(None);
     };
     if color_target.is_depth {
@@ -126,7 +131,13 @@ pub(super) fn project_render_operation(
     } else if let Some(depth_ref) = raster.targets.depth_output.as_ref() {
         let depth_key =
             runtime_resources.resolve_resource_key(raster.pass_id, depth_ref, "depth_output")?;
-        let Some(depth_target) = logical_texture_target(runtime_resources, &depth_key, None) else {
+        let Some(depth_target) = logical_texture_target(
+            runtime_resources,
+            dynamic_texture_targets,
+            raster.pass_id,
+            &depth_key,
+            None,
+        )? else {
             return Ok(None);
         };
         if !depth_target.is_depth {
@@ -301,21 +312,43 @@ struct LogicalTextureTarget {
 
 fn logical_texture_target(
     runtime_resources: &FlowRuntimeResources,
+    dynamic_texture_targets: Option<&super::super::dynamic_targets::RendererDynamicTextureTargetCache>,
+    pass_id: crate::plugins::render::RenderPassId,
     key: &RuntimeResourceKey,
     surface_color_view: Option<&GpuTextureViewHandle>,
-) -> Option<LogicalTextureTarget> {
+) -> Result<Option<LogicalTextureTarget>> {
     if matches!(key, RuntimeResourceKey::SurfaceColor) {
-        let view = surface_color_view?;
+        let Some(view) = surface_color_view else {
+            return Ok(None);
+        };
         let texture = view.descriptor().texture().descriptor();
         let extent = texture.extent();
-        return Some(LogicalTextureTarget {
+        return Ok(Some(LogicalTextureTarget {
             view: view.clone(),
             size: (extent.width(), extent.height()),
             is_depth: texture.format().is_depth(),
-        });
+        }));
     }
 
-    let texture = match key {
+    if let RuntimeResourceKey::DynamicTexture(dynamic_key) = key {
+        let Some(dynamic_texture_targets) = dynamic_texture_targets else {
+            return Ok(None);
+        };
+        let resolved = dynamic_texture_targets.texture_ref(pass_id, dynamic_key)?;
+        let view = resolved.view_handle.ok_or_else(|| {
+            anyhow::anyhow!(
+                "dynamic texture target '{}' has no logical RunenGPU view handle",
+                dynamic_key
+            )
+        })?;
+        return Ok(Some(LogicalTextureTarget {
+            view: view.clone(),
+            size: resolved.size,
+            is_depth: resolved.is_depth,
+        }));
+    }
+
+    let Some(texture) = (match key {
         RuntimeResourceKey::FlowOwned(resource_id) => runtime_resources.textures.get(resource_id),
         RuntimeResourceKey::InvocationHistory {
             invocation_id,
@@ -327,12 +360,14 @@ fn logical_texture_target(
         | RuntimeResourceKey::DynamicTexture(_)
         | RuntimeResourceKey::SurfaceColor
         | RuntimeResourceKey::SurfaceDepth => None,
-    }?;
-    Some(LogicalTextureTarget {
+    }) else {
+        return Ok(None);
+    };
+    Ok(Some(LogicalTextureTarget {
         view: texture.view_handle.clone(),
         size: texture.size,
         is_depth: texture.is_depth,
-    })
+    }))
 }
 
 fn compiled_resource_ref_matches_id(
@@ -463,17 +498,29 @@ mod tests {
 
         let target = logical_texture_target(
             &runtime_resources,
+            None,
+            crate::plugins::render::RenderPassId::try_from_raw(1)
+                .expect("test pass id should be nonzero"),
             &RuntimeResourceKey::SurfaceColor,
             Some(&view),
         )
+        .expect("surface target resolution should succeed")
         .expect("supplied surface color view should become a logical render target");
 
         assert_eq!(target.view.descriptor(), view.descriptor());
         assert_eq!(target.size, (37, 19));
         assert!(!target.is_depth);
         assert!(
-            logical_texture_target(&runtime_resources, &RuntimeResourceKey::SurfaceColor, None,)
-                .is_none(),
+            logical_texture_target(
+                &runtime_resources,
+                None,
+                crate::plugins::render::RenderPassId::try_from_raw(1)
+                    .expect("test pass id should be nonzero"),
+                &RuntimeResourceKey::SurfaceColor,
+                None,
+            )
+            .expect("surface target resolution should succeed")
+            .is_none(),
             "surface color remains residual until the acquired G7A view is supplied"
         );
     }
