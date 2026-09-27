@@ -8,6 +8,7 @@ use super::adapters::{
     prepare_render_gpu_frame_work_with_composition_for_test,
 };
 use super::admission::{RenderOutputBinding, RenderOutputDestination};
+use super::apply_runenwerk_gpu_context_policy;
 use super::deterministic_admission::admit_deterministic_render;
 use super::deterministic_execution::{
     DeterministicResourceCache, prepare_deterministic_render,
@@ -37,12 +38,13 @@ use runen_gpu::{
 use std::time::{Duration, Instant};
 
 fn request_composition_context() -> Option<GpuContext> {
-    let descriptor =
+    let descriptor = apply_runenwerk_gpu_context_policy(
         GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements())
             .require_format_role(GpuTextureFormat::R32Float, GpuFormatRole::CopyDestination)
             .require_format_role(GpuTextureFormat::R32Float, GpuFormatRole::CopySource)
             .require_format_role(GpuTextureFormat::R32Float, GpuFormatRole::Sampled)
-            .with_label("RunenRender R7 composition proof");
+            .with_label("RunenRender R7 composition proof"),
+    );
     match pollster::block_on(GpuContext::request(descriptor)) {
         Ok(context) => Some(context),
         Err(error) if error.category() == GpuContextRequestErrorCategory::NoAdapterAvailable => {

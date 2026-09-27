@@ -31,8 +31,11 @@ fn architecture_fixtures_compile_evaluate_assert_and_reproduce() {
         run.state.value("state.fixture.title"),
         Some(&UiSchemaValue::string("Inspector"))
     );
-    assert_eq!(run.accessibility.source_mapped_count(), 1);
-    assert_eq!(run.geometry.source_mapped_count(), 1);
+    assert_eq!(run.runenui_publication, Ok(()));
+    assert_eq!(
+        crate::headless_fixture::prove_runenui_minimal_label(&run.artifact, &run.state),
+        Ok(())
+    );
     assert!(
         run.source_map_assertion
             .assert_artifact(&run.artifact)
@@ -45,4 +48,34 @@ fn architecture_fixtures_compile_evaluate_assert_and_reproduce() {
     );
     assert!(run.reproducibility_assertion.passed());
     assert!(run.passed());
+}
+
+#[test]
+fn runenui_minimal_label_projection_fails_closed_without_resolved_state() {
+    let fixture = UiArchitectureFixture::minimal("minimal-label");
+    let artifact = fixture.headless.compile();
+
+    assert_eq!(
+        crate::headless_fixture::prove_runenui_minimal_label(
+            &artifact,
+            &ui_state::UiStateModel::default(),
+        ),
+        Err(crate::headless_fixture::RunenUiHeadlessProofError::MissingTextState)
+    );
+}
+
+#[test]
+fn runenui_minimal_label_projection_fails_closed_on_unexpected_control_shape() {
+    let fixture = UiArchitectureFixture::minimal("minimal-label");
+    let mut artifact = fixture.headless.compile();
+    let duplicate = artifact.tables.controls.rows[0].clone();
+    artifact.tables.controls.rows.push(duplicate);
+
+    assert_eq!(
+        crate::headless_fixture::prove_runenui_minimal_label(
+            &artifact,
+            &ui_state::UiStateModel::default(),
+        ),
+        Err(crate::headless_fixture::RunenUiHeadlessProofError::UnexpectedControlShape)
+    );
 }

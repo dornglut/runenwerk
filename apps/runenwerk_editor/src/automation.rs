@@ -14,6 +14,34 @@ pub struct EditorAutomationTarget {
     pub mounted_unit_id: MountedUnitId,
 }
 
+pub fn resolve_unique_scene_viewport_target(
+    host: &EditorHostResource,
+) -> Result<EditorAutomationTarget, String> {
+    let mut viewports = host
+        .shell_state
+        .composition_runtime()
+        .extension()
+        .mounted_units()
+        .iter()
+        .filter(|record| {
+            record.stable_content_key == crate::shell::tool_suites::SCENE_VIEWPORT_SURFACE_KEY
+        });
+
+    let viewport = viewports
+        .next()
+        .ok_or_else(|| "Editor automation found no mounted scene viewport".to_owned())?;
+    if viewports.next().is_some() {
+        return Err(
+            "Editor automation scene viewport target is ambiguous: multiple viewports are mounted"
+                .to_owned(),
+        );
+    }
+
+    Ok(EditorAutomationTarget {
+        mounted_unit_id: viewport.mounted_unit_id,
+    })
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EditorAutomationCommand {
     ActivateViewportTool(ViewportToolKind),
@@ -118,24 +146,9 @@ impl AutomationOwnerAdapter for EditorAutomationAdapter<'_> {
 mod tests {
     use super::*;
     use engine::automation::{
-        AutomationExecutionMode, AutomationSession, AutomationSessionId, AutomationStepResult,
-        InputSourceId,
+        AutomationExecutionMode, AutomationSession, AutomationSessionId, AutomationStepKind,
+        AutomationStepOutcome, AutomationStepRecord, AutomationStepResult, InputSourceId,
     };
-
-    fn viewport_target(host: &EditorHostResource) -> EditorAutomationTarget {
-        let mounted_unit_id = host
-            .shell_state
-            .composition_runtime()
-            .extension()
-            .mounted_units()
-            .iter()
-            .find(|record| {
-                record.stable_content_key == crate::shell::tool_suites::SCENE_VIEWPORT_SURFACE_KEY
-            })
-            .expect("headless Full Editor should contain a mounted viewport")
-            .mounted_unit_id;
-        EditorAutomationTarget { mounted_unit_id }
-    }
 
     #[test]
     fn product_semantic_session_mutates_and_queries_one_mounted_viewport() {
@@ -146,12 +159,13 @@ mod tests {
                 .world()
                 .resource::<EditorHostResource>()
                 .expect("headless Editor should install EditorHostResource");
-            viewport_target(host)
+            resolve_unique_scene_viewport_target(host)
+                .expect("headless Full Editor should contain exactly one scene viewport")
         };
         let mut session =
             AutomationSession::new(AutomationSessionId::new(20), InputSourceId::new(20_001));
 
-        {
+        let observed = {
             let host = app
                 .world_mut()
                 .resource_mut::<EditorHostResource>()
@@ -166,13 +180,48 @@ mod tests {
                 ),
                 AutomationStepResult::Dispatched
             );
-            assert_eq!(
-                session.query_owner(&mut adapter, &target, EditorAutomationQuery::ViewportTool,),
-                AutomationStepResult::EffectConfirmed(EditorAutomationObservation::ViewportTool(
-                    ViewportToolKind::Rotate
-                ))
-            );
-        }
+            match session.query_owner(&mut adapter, &target, EditorAutomationQuery::ViewportTool) {
+                AutomationStepResult::EffectConfirmed(observation) => observation,
+                other => panic!("Editor viewport query should confirm state, got {other:?}"),
+            }
+        };
+
+        assert_eq!(
+            session.assert_observation(&observed, |observation| {
+                *observation == EditorAutomationObservation::ViewportTool(ViewportToolKind::Rotate)
+            }),
+            AutomationStepResult::AssertionPassed
+        );
+        assert_eq!(
+            session.finish(&mut app),
+            AutomationStepResult::EffectConfirmed(())
+        );
+        assert_eq!(
+            session
+                .history()
+                .iter()
+                .map(AutomationStepRecord::kind)
+                .collect::<Vec<_>>(),
+            vec![
+                AutomationStepKind::ProductDispatch,
+                AutomationStepKind::OwnerQuery,
+                AutomationStepKind::OwnerAssertion,
+                AutomationStepKind::Finish,
+            ]
+        );
+        assert_eq!(
+            session
+                .history()
+                .iter()
+                .map(AutomationStepRecord::outcome)
+                .collect::<Vec<_>>(),
+            vec![
+                AutomationStepOutcome::Dispatched,
+                AutomationStepOutcome::EffectConfirmed,
+                AutomationStepOutcome::AssertionPassed,
+                AutomationStepOutcome::EffectConfirmed,
+            ]
+        );
     }
 
     #[test]
@@ -201,6 +250,10 @@ mod tests {
             ),
             AutomationStepResult::InfrastructureFailure(_)
         ));
+        assert_eq!(
+            session.history()[0].outcome(),
+            AutomationStepOutcome::InfrastructureFailure
+        );
     }
 
     #[test]
@@ -212,7 +265,8 @@ mod tests {
                 .world()
                 .resource::<EditorHostResource>()
                 .expect("headless Editor should install EditorHostResource");
-            viewport_target(host)
+            resolve_unique_scene_viewport_target(host)
+                .expect("headless Full Editor should contain exactly one scene viewport")
         };
         let mut session =
             AutomationSession::new(AutomationSessionId::new(22), InputSourceId::new(20_003));
@@ -236,6 +290,14 @@ mod tests {
             AutomationStepResult::EffectConfirmed(EditorAutomationObservation::ViewportTool(
                 ViewportToolKind::Select
             ))
+        );
+        assert_eq!(
+            session.history()[0].outcome(),
+            AutomationStepOutcome::Unsupported
+        );
+        assert_eq!(
+            session.history()[1].outcome(),
+            AutomationStepOutcome::EffectConfirmed
         );
     }
 }
