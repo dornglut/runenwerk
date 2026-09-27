@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: investigation
 canonical: false
-last_reviewed: 2026-09-25
+last_reviewed: 2026-09-27
 publication: reference
 pagefind: false
 related_docs:
@@ -49,11 +49,13 @@ published separately at `docs-site/src/content/docs/domain/physics/README.md`.
 
 ## Evidence Baseline
 
-The source census used accepted Runenwerk main:
+The source census was revalidated against accepted Runenwerk main:
 
 ```text
-95cd2733241945108f3037c31ffcebbbc78224f5
+2f1d30748ff435db54d0b74b4c9143754edfda5d
 ```
+
+That accepted state includes the maintained G1 arena command spine from #961 and the later GPU-integration acceptance from #992. Neither changes the physics/world-SDF ownership boundary selected here.
 
 Relevant current source and authority included:
 
@@ -69,6 +71,9 @@ engine/src/runtime/fixed_step_executor.rs
 
 engine/src/plugins/net/driver.rs
 engine/src/plugins/net/prediction.rs
+
+apps/runenwerk_arena/src/command.rs
+apps/runenwerk_arena/src/player.rs
 
 docs-site/src/content/docs/domain/world-sdf/README.md
 docs-site/src/content/docs/domain/simulation/README.md
@@ -474,10 +479,12 @@ P0 selects:
 
 ## Next Gate
 
-After this investigation is accepted, P1 is still blocked until G1 has established the maintained
-game's real command-application consumer.
+G1 is now accepted and supplies the maintained game's real `PlayerCommand` /
+`TickCommandBatch` / `apply_game_commands` consumer seam. Current `world_sdf` still exposes
+the authoritative sphere-sweep/readiness contract this decision requires.
 
-At that point #946 may derive one implementation issue bounded to:
+After this P0 investigation is accepted and the current physics/world-SDF writer set is confirmed
+free, #946 may derive one implementation issue bounded to:
 
 ```text
 domain/physics first crate/surface

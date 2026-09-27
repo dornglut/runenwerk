@@ -74,6 +74,7 @@ members = [
     "apps/runenwerk_draw",
     "apps/runenwerk_runtime_preview",
     "apps/runenwerk_render_lab",
+    "apps/runenwerk_arena",
 
     "adapters/native_tablet_input",
 ]

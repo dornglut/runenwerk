@@ -163,6 +163,8 @@ fn temporal(native_fallback_active: bool) -> RenderTemporalInspection {
         frame_index: 11,
         reconstruction_mode: RenderTemporalReconstructionMode::Taau,
         native_fallback_active,
+        native_fallback_reason: native_fallback_active
+            .then(|| "upscaling adapter native fallback".to_string()),
         resolution: RenderTemporalResolutionEvidence {
             internal_size: [1280, 720],
             output_size: [1920, 1080],

@@ -392,6 +392,7 @@ mod composed_native_proof {
     use crate::plugins::render::adapters::{
         RenderGpuWorkOccurrenceId, ResolvedRenderGpuWorkNode, prepare_render_gpu_frame_work,
     };
+    use crate::plugins::render::apply_runenwerk_gpu_context_policy;
     use runen_gpu::{
         GpuBufferDescriptor, GpuBufferInitialization, GpuBufferRegion, GpuBufferUsage,
         GpuCandidateDisposition, GpuCapabilityAdmissionCause, GpuCapabilityAdmissionError,
@@ -441,8 +442,9 @@ mod composed_native_proof {
                 GpuCapabilityFeature::TimestampQuery,
             ))
             .expect("timestamp requirement should be compatible with compute baseline");
-        let descriptor =
-            GpuContextDescriptor::new(requirements).with_label("RunenRender composed timing proof");
+        let descriptor = apply_runenwerk_gpu_context_policy(
+            GpuContextDescriptor::new(requirements).with_label("RunenRender composed timing proof"),
+        );
         match pollster::block_on(GpuContext::request(descriptor)) {
             Ok(context) => Some(context),
             Err(error)

@@ -172,6 +172,16 @@ These are advanced runtime boundary types produced by `RenderPrepare` and consum
 - `PreparedRenderFrameRequestDiagnostic`
 - `PreparedRenderFrameRequestError`
 - `PreparedRenderFrameRequestKind`
+- `RenderFrameSurfaceScope`
+- `RenderFlowInvocationPolicy`
+- `RenderFixedResolutionExecutionRequest`
+- `PreparedFixedResolutionExecution`
+- `RenderFixedResolutionExecutionAdmission`
+- `RenderFixedResolutionFallback`
+- `RenderFixedResolutionExecutionEvidence`
+- `RenderFixedResolutionExecutionEvidenceError`
+- `inspect_fixed_resolution_execution`
+- `fixed_resolution_resolve_flow`
 - `PreparedTargetBinding`
 - `RenderProductSurfaceRequest`
 - `RenderProductSurfaceRequestBatch`
@@ -223,7 +233,16 @@ Contract:
 - `PreparedRenderFrame::flow_invocations` carries per-view/per-product flow invocation requests and target alias bindings.
 - `PreparedRenderFrame::dynamic_texture_targets` carries the frame-stable dynamic target descriptor snapshot.
 - `RenderProductSurfaceRequest`, `RenderProductSurfaceRequestBatch`, and `RenderProductSurfaceManifest` are return-only helpers for assembling dynamic target descriptors, dynamic uploads, prepared views, prepared flow invocation requests, UI binding intents, and product-surface status. Producers still publish render parts explicitly into ECS resources.
-- `PreparedRenderFrameRequestResource::diagnostics()` exposes typed producer-scoped duplicate view/invocation diagnostics.
+- `PreparedRenderFrameRequestResource::diagnostics()` exposes typed producer-scoped duplicate view/invocation/replacement diagnostics.
+- `PreparedRenderFrameRequestResource::replace_contribution_with_automatic_main_replacements(...)` retains the existing all-surfaces request scope for producers whose work is intentionally shared by every prepared surface.
+- `PreparedRenderFrameRequestResource::replace_surface_contribution_with_automatic_main_replacements(...)` scopes views, explicit invocations, and automatic-main replacement claims to one `RenderSurfaceId`. Claims require an explicit invocation for the same flow; overlapping producer scopes conflict fail closed while disjoint surfaces remain independent.
+- `RenderFlowInvocationPolicy::AutomaticMain` is the compatibility default. `ExplicitOnly` is for helper/product flows that must run only through explicit prepared invocations; the fixed-resolution resolve flow uses this policy so registration is safe while fixed execution is inactive.
+- `RenderFixedResolutionExecutionRequest` is a return-only renderer helper scoped to one explicit `RenderSurfaceId`. Its public preparation path validates a sub-native same-aspect internal extent, requires the selected compiled flow to use automatic-main routing, requires every selected-flow pass to be valid on both native-main and offscreen views, rejects selected flows that hard-code builtin `SurfaceColor`, requires the selected color-target alias to be written, and validates the compiled renderer-owned resolve flow rather than accepting an unchecked resolve-flow ID. Surface identity participates in fixed target/view/invocation identity. A valid Fixed admission then prepares a sampleable RGBA dynamic target, offscreen view, selected-flow invocation, native-output resolve invocation, and automatic-main replacement claim for that surface only.
+- Producers remain responsible for explicit publication into `RenderDynamicTextureTargetRequestRegistryResource` and `PreparedRenderFrameRequestResource`; shared fixed-resolution helpers do not mutate ECS registries. Fixed execution publishes its dynamic target through `RenderDynamicTextureTargetRequestRegistryResource::replace_surface_contribution(...)` and its view/invocations/replacement through `PreparedRenderFrameRequestResource::replace_surface_contribution_with_automatic_main_replacements(...)`, using the same admitted `RenderSurfaceId`.
+- `RenderFixedResolutionExecutionAdmission` returns either fully prepared candidate Fixed execution or an explicit Native fallback with a reason. When the selected alias contract is valid but Fixed admission fails (for example because the requested extent is invalid), fallback carries an explicit native-main scene invocation that binds the selected alias to `SurfaceColor`; producers publish that invocation through the existing prepared-frame request resource and publish no fixed target/view/resolve parts.
+- `inspect_fixed_resolution_execution(...)` is the execution-evidence gate. It reports `policy = Fixed` only when the actual `PreparedRenderFrame` belongs to the admitted render surface and contains the admitted native output extent, internal view, exact dynamic-target descriptor, scene invocation/binding, resolve invocation/binding, and no duplicate native-main scene invocation. Native fallback is accepted only on the admitted surface when the actual frame has the expected native-main scene invocation and retains none of the fixed internal view/target/scene/resolve identities.
+- Native fallback evidence carries both `native_fallback_active = true` and an explicit reason. Temporal inspection rejects active fallback without a reason and rejects stale reasons when fallback is inactive.
+- `fixed_resolution_resolve_flow()` provides the canonical portable fullscreen spatial resolve to native `SurfaceColor`. Fixed admission validates the compiled resolve contract—label, explicit-only policy, source alias, pass kind/view scope, shader asset, sampled source, and native output—before publishing the resolve invocation; an unrelated or contract-mismatched flow is not accepted. It does not claim TAAU reconstruction quality or choose a production scale.
 
 Current UI note:
 

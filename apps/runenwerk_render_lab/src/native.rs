@@ -1,9 +1,21 @@
 use super::*;
 use engine::plugins::render::inspect::{
-    RenderFrameHistoryState, RenderFrameObservationPolicyResource,
+    RenderDebugConfigResource, RenderDebugFrameReportState, RenderFrameHistoryState,
+    RenderFrameObservationPolicyResource,
 };
 use engine::prelude::FrameEnd;
 use std::path::{Path, PathBuf};
+
+mod temporal_quality;
+
+use temporal_quality::{
+    RL2_QUALITY_COLOR_ALIAS, RL2_QUALITY_FLOW_ID, RenderLabFixedQualityPlans,
+    RenderLabNativeQualityPublication, RenderLabTemporalQualityExecutionState,
+    inspect_render_lab_temporal_quality_execution_system, render_lab_fixed_quality_flow,
+    render_lab_quality_present_flow, stage_render_lab_fixed_quality_publication,
+    stage_render_lab_native_quality_publication, temporal_quality_capture_evidence,
+    temporal_quality_capture_selector, write_temporal_quality_artifact,
+};
 
 #[derive(Debug, Clone, Copy, runen_ecs::Resource)]
 struct RenderLabFlowId(engine::plugins::render::RenderFlowId);
@@ -17,6 +29,7 @@ struct RenderLabMeasurementConfig {
     submitted_frame_limit: Option<usize>,
     primary_window_size_px: Option<(u32, u32)>,
     radiance_target_size_px: Option<(u32, u32)>,
+    quality_capture_output_dir: Option<PathBuf>,
     completed: bool,
 }
 
@@ -62,6 +75,9 @@ struct RenderLabFramePublicationResources<'w> {
     targets: ResMut<'w, RenderDynamicTextureTargetRequestRegistryResource>,
     frame_requests: ResMut<'w, PreparedRenderFrameRequestResource>,
     contributions: ResMut<'w, RenderDeterministicFrameContributionResource>,
+    debug_config: ResMut<'w, RenderDebugConfigResource>,
+    fixed_quality_plans: Res<'w, RenderLabFixedQualityPlans>,
+    quality_execution: ResMut<'w, RenderLabTemporalQualityExecutionState>,
 }
 
 struct RenderLabPlugin;
@@ -70,11 +86,18 @@ impl Plugin for RenderLabPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<RenderLabCamera>();
         app.init_resource::<RenderLabMeasurementConfig>();
+        app.init_resource::<RenderLabFixedQualityPlans>();
+        app.init_resource::<RenderLabTemporalQualityExecutionState>();
         app.add_systems(Update, camera::update_render_lab_camera_system);
         app.add_systems(FrameEnd, approve_render_lab_close_system);
         app.add_systems(
             RenderPrepare,
             publish_render_lab_frame_system.before(RenderRuntimeSet::FramePrepare),
+        );
+        app.add_systems(
+            RenderPrepare,
+            inspect_render_lab_temporal_quality_execution_system
+                .after(RenderRuntimeSet::FramePrepare),
         );
     }
 }
@@ -97,6 +120,30 @@ pub fn run_native_measurement(
         submitted_frame_limit,
         primary_window_size_px,
         radiance_target_size_px,
+        quality_capture_output_dir: None,
+        completed: false,
+    }))
+}
+
+pub fn run_native_temporal_quality(
+    output_root: impl Into<PathBuf>,
+    submitted_frame_limit: Option<usize>,
+    primary_window_size_px: (u32, u32),
+    internal_size_px: (u32, u32),
+) -> Result<()> {
+    let submitted_frame_limit = validate_measurement_frame_limit(submitted_frame_limit)?;
+    let primary_window_size_px = validate_measurement_window_size(Some(primary_window_size_px))?
+        .expect("validated explicit quality output extent");
+    let internal_size_px = validate_measurement_radiance_size(Some(internal_size_px))?
+        .expect("validated explicit quality internal extent");
+
+    let output_root = output_root.into();
+    run_native_with_measurement(Some(RenderLabMeasurementConfig {
+        output_path: Some(output_root.join("timing.json")),
+        submitted_frame_limit,
+        primary_window_size_px: Some(primary_window_size_px),
+        radiance_target_size_px: Some(internal_size_px),
+        quality_capture_output_dir: Some(output_root.join("captures")),
         completed: false,
     }))
 }
@@ -134,6 +181,21 @@ fn validate_measurement_frame_limit(limit: Option<usize>) -> Result<Option<usize
 }
 
 fn run_native_with_measurement(measurement: Option<RenderLabMeasurementConfig>) -> Result<()> {
+    let quality_mode = measurement.as_ref().and_then(|measurement| {
+        measurement.quality_capture_output_dir.as_ref().map(|_| {
+            (
+                measurement
+                    .primary_window_size_px
+                    .expect("quality mode requires explicit output extent"),
+                measurement
+                    .radiance_target_size_px
+                    .expect("quality mode requires explicit internal extent"),
+            )
+        })
+    });
+    let quality_capture_output_dir = measurement
+        .as_ref()
+        .and_then(|measurement| measurement.quality_capture_output_dir.clone());
     let mut app = App::new();
     app.set_title("Runenwerk Render Lab — RL2 native interaction");
     app.with_frame_pacing(FramePacingPolicyResource::continuous_capped(60));
@@ -151,9 +213,37 @@ fn run_native_with_measurement(measurement: Option<RenderLabMeasurementConfig>) 
         app.insert_resource(measurement);
         app.insert_resource(rl2_measurement_policy());
     }
-    let flow = render_lab_flow()?;
-    app.insert_resource(RenderLabFlowId(flow.id()));
-    app.add_render_flow(flow);
+    if quality_mode.is_some() {
+        app.update_render_debug_control(|control| {
+            control.capture_enabled = true;
+            control.readback_enabled = true;
+            control.artifact_export_enabled = true;
+            control.artifact_output_dir = quality_capture_output_dir
+                .clone()
+                .expect("quality mode requires capture output directory");
+        });
+
+        let scene_flow = render_lab_fixed_quality_flow()?;
+        let resolve_flow = engine::plugins::render::fixed_resolution_resolve_flow()?;
+        let present_flow = render_lab_quality_present_flow()?;
+        let scene_plan = engine::plugins::render::compile_flow_plan(&scene_flow)?;
+        let resolve_plan = engine::plugins::render::compile_flow_plan(&resolve_flow)?;
+        app.insert_resource(RenderLabFixedQualityPlans {
+            scene: Some(scene_plan),
+            resolve: Some(resolve_plan),
+        });
+        app.update_render_debug_config(|config| {
+            config.capture_selectors.clear();
+        });
+        app.insert_resource(RenderLabFlowId(scene_flow.id()));
+        app.add_render_flow(scene_flow);
+        app.add_render_flow(resolve_flow);
+        app.add_render_flow(present_flow);
+    } else {
+        let flow = render_lab_flow()?;
+        app.insert_resource(RenderLabFlowId(flow.id()));
+        app.add_render_flow(flow);
+    }
     app.run()
 }
 
@@ -270,6 +360,8 @@ fn complete_render_lab_measurement_if_requested(
     windows: &mut WindowStateRegistryResource,
     measurement: &mut RenderLabMeasurementConfig,
     history: &RenderFrameHistoryState,
+    quality_execution: &RenderLabTemporalQualityExecutionState,
+    debug_report: &RenderDebugFrameReportState,
 ) -> Result<()> {
     let Some(primary_window_id) = windows.primary_window_id() else {
         return Ok(());
@@ -277,14 +369,30 @@ fn complete_render_lab_measurement_if_requested(
     let close_intent_pending = windows
         .record(primary_window_id)
         .is_some_and(|window| window.close_intent_pending);
-    let bounded_complete = bounded_measurement_complete(measurement, history);
+    let bounded_frames_complete = bounded_measurement_complete(measurement, history);
+    let quality_capture = if measurement.quality_capture_output_dir.is_some()
+        && (bounded_frames_complete || close_intent_pending)
+    {
+        temporal_quality_capture_evidence(debug_report)?
+    } else {
+        None
+    };
+    let quality_ready =
+        measurement.quality_capture_output_dir.is_none() || quality_capture.is_some();
+    let bounded_complete = bounded_frames_complete && quality_ready;
     if !close_intent_pending && !bounded_complete {
         return Ok(());
+    }
+    if close_intent_pending && !quality_ready {
+        bail!("temporal quality run cannot close before a completed exported capture is available");
     }
 
     if !measurement.completed {
         if let Some(output_path) = measurement.output_path.as_deref() {
             write_measurement_artifact(output_path, history, measurement)?;
+        }
+        if let Some(capture) = quality_capture {
+            write_temporal_quality_artifact(measurement, quality_execution, capture)?;
         }
         measurement.completed = true;
     }
@@ -302,8 +410,60 @@ fn approve_render_lab_close_system(
     mut windows: ResMut<WindowStateRegistryResource>,
     mut measurement: ResMut<RenderLabMeasurementConfig>,
     history: Res<RenderFrameHistoryState>,
+    quality_execution: Res<RenderLabTemporalQualityExecutionState>,
+    debug_report: Res<RenderDebugFrameReportState>,
 ) -> Result<()> {
-    complete_render_lab_measurement_if_requested(&mut windows, &mut measurement, &history)
+    complete_render_lab_measurement_if_requested(
+        &mut windows,
+        &mut measurement,
+        &history,
+        &quality_execution,
+        &debug_report,
+    )
+}
+
+fn build_render_lab_radiance_publication(
+    camera: &RenderLabCamera,
+    producer_id: engine::plugins::render::RenderFrameProducerId,
+    extent: (u32, u32),
+) -> Result<(
+    RenderDynamicTextureTargetKey,
+    RenderDynamicTextureTargetDescriptor,
+    RenderDeterministicFrameContribution,
+)> {
+    let target_key = RenderDynamicTextureTargetKey::new(RL2_TARGET_NAMESPACE, RL2_TARGET_ID);
+    let target = RenderDynamicTextureTargetDescriptor::new(
+        target_key.clone(),
+        extent.0,
+        extent.1,
+        RenderTextureTargetFormat::R32Float,
+        RenderTextureTargetUsage {
+            color_attachment: false,
+            depth_attachment: false,
+            sampled: true,
+            storage: false,
+            copy_src: false,
+            copy_dst: true,
+        },
+        RenderTextureSampleMode::NonFilterableFloat,
+        RenderDynamicTextureRetention::RetainWhileRequested,
+    );
+    let fixture = founding_fixture_with_observation_and_extent(
+        camera.observation_to_scene(),
+        extent.0,
+        extent.1,
+    )?;
+    let contribution = RenderDeterministicFrameContribution {
+        producer_id,
+        render_surface_id: RenderSurfaceId::primary(),
+        scene: fixture.scene,
+        request: fixture.request,
+        semantic_inputs: fixture.semantic_inputs,
+        availability: fixture.availability,
+        output_index: 0,
+        target_key: target_key.clone(),
+    };
+    Ok((target_key, target, contribution))
 }
 
 fn publish_render_lab_frame_system(
@@ -317,42 +477,124 @@ fn publish_render_lab_frame_system(
         mut targets,
         mut frame_requests,
         mut contributions,
+        mut debug_config,
+        fixed_quality_plans,
+        mut quality_execution,
     } = publication;
-    let (width, height) = render_lab_radiance_extent(&presentation, &measurement)?;
+    let requested_internal_size = render_lab_radiance_extent(&presentation, &measurement)?;
+    let output_size = render_lab_extent(&presentation);
     let producer_id = engine::plugins::render::RenderFrameProducerId::try_from_raw(RL2_PRODUCER_ID)
         .expect("Render Lab producer id is non-zero");
-    let target_key = RenderDynamicTextureTargetKey::new(RL2_TARGET_NAMESPACE, RL2_TARGET_ID);
-    let target = RenderDynamicTextureTargetDescriptor::new(
-        target_key.clone(),
-        width,
-        height,
-        RenderTextureTargetFormat::R32Float,
-        RenderTextureTargetUsage {
-            color_attachment: false,
-            depth_attachment: false,
-            sampled: true,
-            storage: false,
-            copy_src: false,
-            copy_dst: true,
-        },
-        RenderTextureSampleMode::NonFilterableFloat,
-        RenderDynamicTextureRetention::RetainWhileRequested,
-    );
+
+    if measurement.quality_capture_output_dir.is_some() {
+        quality_execution.pending_admission = None;
+    }
+
+    if measurement.quality_capture_output_dir.is_some() && requested_internal_size != output_size {
+        let scene_plan = fixed_quality_plans
+            .scene
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("temporal quality scene plan is unavailable"))?;
+        let resolve_plan = fixed_quality_plans
+            .resolve
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("temporal quality resolve plan is unavailable"))?;
+        let admission = engine::plugins::render::RenderFixedResolutionExecutionRequest::new(
+            producer_id,
+            RenderSurfaceId::primary(),
+            flow_id.0,
+            engine::plugins::render::RenderTargetAliasKey::new(RL2_QUALITY_COLOR_ALIAS)?,
+            requested_internal_size,
+        )
+        .admit_against_compiled_flows(output_size, scene_plan, resolve_plan);
+        debug_config.capture_selectors = vec![temporal_quality_capture_selector(Some(&admission))];
+
+        match &admission {
+            engine::plugins::render::RenderFixedResolutionExecutionAdmission::Fixed(prepared) => {
+                let mut fixed = prepared.clone();
+                let (target_key, target, contribution) = build_render_lab_radiance_publication(
+                    &camera,
+                    producer_id,
+                    requested_internal_size,
+                )?;
+                fixed.scene_invocation = fixed
+                    .scene_invocation
+                    .clone()
+                    .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, target_key)?;
+                stage_render_lab_fixed_quality_publication(
+                    &mut targets,
+                    &mut frame_requests,
+                    &mut contributions,
+                    producer_id,
+                    target,
+                    fixed,
+                    contribution,
+                )?;
+            }
+            engine::plugins::render::RenderFixedResolutionExecutionAdmission::NativeFallback(
+                fallback,
+            ) => {
+                let native_scene_invocation = fallback
+                    .native_scene_invocation
+                    .clone()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "temporal quality fixed admission rejected without a valid native scene fallback: {}",
+                            fallback.reason
+                        )
+                    })?;
+                let (target_key, target, contribution) =
+                    build_render_lab_radiance_publication(&camera, producer_id, output_size)?;
+                let native_scene_invocation = native_scene_invocation
+                    .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, target_key)?;
+                stage_render_lab_native_quality_publication(
+                    &mut targets,
+                    &mut frame_requests,
+                    &mut contributions,
+                    RenderLabNativeQualityPublication {
+                        producer_id,
+                        render_surface_id: fallback.render_surface_id,
+                        radiance_target: target,
+                        native_scene_invocation,
+                        contribution,
+                    },
+                )?;
+            }
+        }
+
+        quality_execution.pending_admission = Some(admission);
+        return Ok(());
+    }
+
+    let (target_key, target, contribution) =
+        build_render_lab_radiance_publication(&camera, producer_id, requested_internal_size)?;
+    if measurement.quality_capture_output_dir.is_some() {
+        debug_config.capture_selectors = vec![temporal_quality_capture_selector(None)];
+        let invocation = PreparedFlowInvocationRequest::new(
+            format!("{RL2_QUALITY_FLOW_ID}.native"),
+            flow_id.0,
+            "main",
+        )
+        .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, target_key)?
+        .bind_surface_color_alias(RL2_QUALITY_COLOR_ALIAS)?;
+        stage_render_lab_native_quality_publication(
+            &mut targets,
+            &mut frame_requests,
+            &mut contributions,
+            RenderLabNativeQualityPublication {
+                producer_id,
+                render_surface_id: RenderSurfaceId::primary(),
+                radiance_target: target,
+                native_scene_invocation: invocation,
+                contribution,
+            },
+        )?;
+        return Ok(());
+    }
+
     let invocation =
         PreparedFlowInvocationRequest::new(format!("{RL2_FLOW_ID}.main"), flow_id.0, "main")
-            .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, target_key.clone())?;
-    let fixture =
-        founding_fixture_with_observation_and_extent(camera.observation_to_scene(), width, height)?;
-    let contribution = RenderDeterministicFrameContribution {
-        producer_id,
-        render_surface_id: RenderSurfaceId::primary(),
-        scene: fixture.scene,
-        request: fixture.request,
-        semantic_inputs: fixture.semantic_inputs,
-        availability: fixture.availability,
-        output_index: 0,
-        target_key,
-    };
+            .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, target_key)?;
     stage_render_lab_frame_publication(
         &mut targets,
         &mut frame_requests,
@@ -376,6 +618,11 @@ fn render_lab_radiance_extent(
     let Some(radiance) = measurement.radiance_target_size_px else {
         return Ok(output);
     };
+    if measurement.quality_capture_output_dir.is_some() {
+        // Temporal-quality mode deliberately preserves the requested extent until the
+        // renderer-owned fixed-resolution admission decides Fixed versus NativeFallback.
+        return Ok(radiance);
+    }
     if radiance.0 > output.0 || radiance.1 > output.1 {
         bail!(
             "RL2 measurement radiance extent {}x{} exceeds realized output extent {}x{}",
@@ -493,6 +740,7 @@ mod tests {
             submitted_frame_limit: Some(2),
             primary_window_size_px: None,
             radiance_target_size_px: None,
+            quality_capture_output_dir: None,
             completed: false,
         };
         assert!(!bounded_measurement_complete(&measurement, &history));
@@ -541,13 +789,22 @@ mod tests {
             submitted_frame_limit: Some(1),
             primary_window_size_px: None,
             radiance_target_size_px: None,
+            quality_capture_output_dir: None,
             completed: false,
         };
         let mut windows = WindowStateRegistryResource::default();
         let primary = windows.register_primary_window("RL2", (1600, 1200), 1.0, true);
+        let quality_execution = RenderLabTemporalQualityExecutionState::default();
+        let debug_report = RenderDebugFrameReportState::default();
 
-        complete_render_lab_measurement_if_requested(&mut windows, &mut measurement, &history)
-            .unwrap();
+        complete_render_lab_measurement_if_requested(
+            &mut windows,
+            &mut measurement,
+            &history,
+            &quality_execution,
+            &debug_report,
+        )
+        .unwrap();
 
         assert!(measurement.completed);
         let primary_record = windows.record(primary).expect("primary window");
@@ -555,8 +812,14 @@ mod tests {
         assert!(!primary_record.close_intent_pending);
         assert!(!bounded_measurement_complete(&measurement, &history));
 
-        complete_render_lab_measurement_if_requested(&mut windows, &mut measurement, &history)
-            .unwrap();
+        complete_render_lab_measurement_if_requested(
+            &mut windows,
+            &mut measurement,
+            &history,
+            &quality_execution,
+            &debug_report,
+        )
+        .unwrap();
         assert!(measurement.completed);
         assert!(
             windows

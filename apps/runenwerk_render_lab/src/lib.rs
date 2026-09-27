@@ -11,6 +11,7 @@ use engine::plugins::render::admission::{
     RenderRepresentationAvailabilityState,
 };
 use engine::plugins::render::appearance::{RenderDiffuseMaterial, RenderDirectionalEmitter};
+use engine::plugins::render::apply_runenwerk_gpu_context_policy;
 use engine::plugins::render::backend::RenderSurfaceId;
 use engine::plugins::render::deterministic_admission::admit_deterministic_render;
 use engine::plugins::render::deterministic_execution::{
@@ -75,7 +76,7 @@ mod camera;
 mod native;
 
 use camera::RenderLabCamera;
-pub use native::{run_native, run_native_measurement};
+pub use native::{run_native, run_native_measurement, run_native_temporal_quality};
 
 pub const SCENARIO_ID: &str = "founding-direct";
 pub const SCENARIO_REVISION: u32 = 1;
@@ -361,12 +362,17 @@ pub fn run_founding_direct(output_root: impl AsRef<Path>) -> Result<ArtifactPath
     })
 }
 
-fn request_context() -> Result<GpuContext> {
-    let descriptor =
+fn founding_context_descriptor() -> GpuContextDescriptor {
+    apply_runenwerk_gpu_context_policy(
         GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements())
             .require_format_role(GpuTextureFormat::R32Uint, GpuFormatRole::CopyDestination)
             .require_format_role(GpuTextureFormat::R32Uint, GpuFormatRole::CopySource)
-            .with_label("Runenwerk Render Lab founding-direct");
+            .with_label("Runenwerk Render Lab founding-direct"),
+    )
+}
+
+fn request_context() -> Result<GpuContext> {
+    let descriptor = founding_context_descriptor();
     match pollster::block_on(GpuContext::request(descriptor)) {
         Ok(context) => Ok(context),
         Err(error) if error.category() == GpuContextRequestErrorCategory::NoAdapterAvailable => {
@@ -804,6 +810,16 @@ fn scale(value: [f64; 3], factor: f64) -> [f64; 3] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn founding_direct_uses_shared_runenwerk_gpu_context_policy() {
+        let descriptor = founding_context_descriptor();
+        assert_eq!(
+            descriptor.backend_preference_order().collect::<Vec<_>>(),
+            engine::plugins::render::runenwerk_gpu_backend_preference().to_vec()
+        );
+        assert_eq!(descriptor.backend_allowlist().count(), 0);
+    }
 
     #[test]
     fn fixed_exposure_mapping_is_stable_and_clamped() {

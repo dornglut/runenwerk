@@ -27,6 +27,7 @@ fn render_temporal_inputs_report_ready_dynamic_resolution_chain() {
 fn render_temporal_inputs_fail_closed_without_required_input_or_fallback() {
     let mut request = request();
     request.native_fallback_active = false;
+    request.native_fallback_reason = None;
     request.inputs[1].available = false;
     request.inputs[1].product_id = None;
     request.inputs[1].generation = None;
@@ -41,6 +42,7 @@ fn render_temporal_inputs_fail_closed_without_required_input_or_fallback() {
 fn render_temporal_inputs_allow_missing_required_input_with_visible_native_fallback() {
     let mut request = request();
     request.native_fallback_active = true;
+    request.native_fallback_reason = Some("required temporal input missing".to_string());
     request.inputs[0].available = false;
     request.inputs[0].product_id = None;
     request.inputs[0].generation = None;
@@ -63,6 +65,30 @@ fn render_temporal_inputs_fail_closed_on_valid_history_signature_mismatch() {
 
     assert!(!report.is_ready());
     assert!(has_error(&report, "valid_history_signature_mismatch"));
+}
+
+#[test]
+fn render_temporal_inputs_fail_closed_when_native_fallback_reason_is_missing() {
+    let mut request = request();
+    request.native_fallback_active = true;
+    request.native_fallback_reason = None;
+
+    let report = inspect_render_temporal_inputs(request);
+
+    assert!(!report.is_ready());
+    assert!(has_error(&report, "native_fallback_missing_reason"));
+}
+
+#[test]
+fn render_temporal_inputs_fail_closed_when_inactive_fallback_has_reason() {
+    let mut request = request();
+    request.native_fallback_active = false;
+    request.native_fallback_reason = Some("stale fallback reason".to_string());
+
+    let report = inspect_render_temporal_inputs(request);
+
+    assert!(!report.is_ready());
+    assert!(has_error(&report, "inactive_native_fallback_has_reason"));
 }
 
 #[test]
@@ -209,6 +235,7 @@ fn request() -> RenderTemporalInspectionRequest {
         frame_index: 7,
         reconstruction_mode: RenderTemporalReconstructionMode::Taau,
         native_fallback_active: false,
+        native_fallback_reason: None,
         resolution: RenderTemporalResolutionEvidence {
             internal_size: [1280, 720],
             output_size: [1920, 1080],

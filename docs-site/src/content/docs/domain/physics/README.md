@@ -5,7 +5,7 @@ status: accepted
 owner: physics
 layer: domain
 canonical: true
-last_reviewed: 2026-09-25
+last_reviewed: 2026-09-27
 publication: primary
 related_docs:
   - ../../design/active/editor-procedural-content-and-simulation-workflow-plan.md
