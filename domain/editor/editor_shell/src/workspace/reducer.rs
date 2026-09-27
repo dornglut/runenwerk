@@ -942,10 +942,6 @@ fn move_panel_between_tab_stacks(
     Ok(())
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "structural split move carries explicit ids from the workspace allocator"
-)]
 fn move_panel_to_new_floating_host(
     state: &mut WorkspaceState,
     panel_id: PanelInstanceId,
