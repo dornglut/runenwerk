@@ -71,8 +71,7 @@ pub struct RenderTextureDiffResult {
 #[derive(Debug, Clone, Default, runen_ecs::Component, runen_ecs::Resource)]
 pub struct RenderDebugFrameReportState {
     pub latest: Option<RenderDebugFrameReport>,
-    capture_results_by_frame:
-        BTreeMap<u64, (Vec<RenderCaptureSelectorResult>, Option<PathBuf>)>,
+    capture_results_by_frame: BTreeMap<u64, (Vec<RenderCaptureSelectorResult>, Option<PathBuf>)>,
 }
 
 impl RenderDebugFrameReportState {
@@ -85,7 +84,8 @@ impl RenderDebugFrameReportState {
                     report.artifact_manifest_path.clone(),
                 ),
             );
-            while self.capture_results_by_frame.len() > super::DEFAULT_RENDER_FRAME_HISTORY_CAPACITY {
+            while self.capture_results_by_frame.len() > super::DEFAULT_RENDER_FRAME_HISTORY_CAPACITY
+            {
                 let Some(oldest) = self.capture_results_by_frame.keys().next().copied() else {
                     break;
                 };
@@ -190,13 +190,7 @@ mod tests {
             .expect("latest report should be present");
         assert_eq!(latest.frame_index, 2);
         assert_eq!(latest.capture_results.len(), 1);
-        assert_eq!(
-            state.capture_results_for_frame(1).map(<[_]>::len),
-            Some(1)
-        );
-        assert_eq!(
-            state.capture_results_for_frame(2).map(<[_]>::len),
-            Some(1)
-        );
+        assert_eq!(state.capture_results_for_frame(1).map(<[_]>::len), Some(1));
+        assert_eq!(state.capture_results_for_frame(2).map(<[_]>::len), Some(1));
     }
 }
