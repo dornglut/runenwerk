@@ -11,6 +11,7 @@ use runenwerk_editor::editor_features::{
     execute_intent_with_history, redo_last_scene_change, undo_last_scene_change,
 };
 use runenwerk_editor::editor_panels::OutlinerPanelCommand;
+use runenwerk_editor::shell::RunenwerkEditorShellState;
 
 #[derive(Debug, Clone, Default, runen_ecs::Reflect)]
 struct Vec2 {
@@ -82,10 +83,23 @@ fn scene_authoring_workflow_smoke_select_edit_translate_undo_redo() {
     )
     .expect("inspector edit should succeed");
 
-    let workspace = default_workspace_state();
-    let viewport_surface = default_surface_by_kind(&workspace, editor_shell::PanelKind::Viewport);
-    let viewport_mounted_unit =
-        ui_composition::MountedUnitId::try_from_raw(viewport_surface.raw()).unwrap();
+    let viewport_surface_key = app
+        .workbench_host()
+        .tool_surface_registry()
+        .iter()
+        .find(|definition| definition.panel_kind == editor_shell::PanelKind::Viewport)
+        .expect("hosted registry should contain the scene viewport")
+        .key
+        .clone();
+    let shell_state = RunenwerkEditorShellState::new();
+    let viewport_mounted_unit = shell_state
+        .composition_runtime()
+        .extension()
+        .mounted_units()
+        .iter()
+        .find(|unit| unit.stable_content_key == viewport_surface_key.as_str())
+        .expect("default composition should mount the scene viewport")
+        .mounted_unit_id;
     app.surface_sessions_mut()
         .session_mut(viewport_mounted_unit)
         .active_viewport_tool = ViewportToolKind::Translate;
@@ -216,21 +230,4 @@ fn scene_authoring_workflow_smoke_select_edit_translate_undo_redo() {
         .get::<Position>(ecs_entity)
         .expect("position should exist");
     assert_eq!(position.speed, 9.5);
-}
-
-fn default_workspace_state() -> editor_shell::WorkspaceState {
-    let mut allocator = editor_shell::WorkspaceIdentityAllocator::new();
-    let workspace_id = allocator.allocate_workspace_id();
-    editor_shell::WorkspaceState::bootstrap_current_layout(workspace_id, &mut allocator)
-}
-
-fn default_surface_by_kind(
-    workspace_state: &editor_shell::WorkspaceState,
-    panel_kind: editor_shell::PanelKind,
-) -> editor_shell::ToolSurfaceInstanceId {
-    workspace_state
-        .panels()
-        .find(|panel| panel.panel_kind == panel_kind)
-        .and_then(|panel| panel.active_tool_surface)
-        .expect("default workspace should mount requested surface")
 }
