@@ -7,14 +7,14 @@ license.workspace = true
 
 [dependencies]
 serde = { version = "1.0.228", features = ["derive"] }
-ui_accessibility.workspace = true
+runenui_core.workspace = true
+runenui_testing.workspace = true
 ui_adaptive_composition.workspace = true
 ui_artifacts.workspace = true
 ui_binding.workspace = true
 ui_compiler.workspace = true
 ui_composition.workspace = true
 ui_evaluator.workspace = true
-ui_geometry.workspace = true
 ui_hosts.workspace = true
 ui_input.workspace = true
 ui_math.workspace = true

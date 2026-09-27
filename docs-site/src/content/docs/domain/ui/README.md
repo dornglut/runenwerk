@@ -5,7 +5,7 @@ status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-09-25
+last_reviewed: 2026-09-27
 publication: primary
 ---
 
@@ -16,10 +16,10 @@ Runenwerk: substrate/foundation crates, authored definition/formation contracts,
 retained runtime layers, UiProgram-era program/artifact/proof crates, and
 renderer-facing UI products.
 
-This is **Runenwerk-local implementation authority**, not the future reusable UI
+This is **Runenwerk-local implementation authority**, not the reusable UI
 framework for the Dornglut repository family. Standalone
-[`dornglut/runen-ui`](https://github.com/dornglut/runen-ui) owns future reusable
-framework semantics. Existing Runenwerk UI remains valid until an explicit
+[`dornglut/runen-ui`](https://github.com/dornglut/runen-ui) owns reusable
+framework semantics. Unmigrated Runenwerk UI remains valid until an explicit
 consumer cutover replaces a named boundary.
 
 Runenwerk currently has coexisting local execution/program paths:
@@ -168,9 +168,10 @@ and its [companion semantic model](../../design/accepted/runenwerk-editor-coordi
 
 - [UI Model Multiple Execution Strategies Design](../../design/deferred/ui-model-multiple-execution-strategies-design.md)
 
-Deferred local execution ideas do not become reusable-framework authority. Any
-future standalone RunenUI adoption is separately issue-owned and must start from
-the exact then-current RunenUI revision.
+Deferred local execution ideas do not become reusable-framework authority.
+Further standalone RunenUI adoption is separately issue-owned under the accepted
+consumer-cutover program and must start from the exact then-current RunenUI
+revision.
 
 ## Interaction V2 Migration Spine
 
@@ -232,9 +233,12 @@ virtualization, reusable renderer/platform integration, accessibility/text
 maturity, framework devtools, and release qualification belong to standalone
 RunenUI rather than a Runenwerk-local framework roadmap.
 
-A future Runenwerk consumer cutover must be accepted separately and must leave
-one mounted/runtime/interaction authority for that consumer. The first adoption
-proof is intentionally headless and bounded: one maintained authored/UI-program
-consumer should project through ordinary public RunenUI runtime/testing
-contracts before engine, Draw, or Editor migration. Until a cut is accepted,
-current Runenwerk-local code/tests remain behavior authority for that consumer.
+Each Runenwerk consumer cutover is accepted separately and must leave one
+mounted/runtime/interaction authority for that consumer. The first accepted
+adoption proof is intentionally headless and bounded:
+`ui_testing::UiArchitectureFixture::minimal("minimal-label")` retains
+Runenwerk UiProgram/compiler/binding/state authority while projecting its
+resolved artifact/state facts through ordinary public RunenUI runtime/testing
+contracts. Its framework publication/layout/text/semantic proof is RunenUI-owned;
+other consumers remain on their current local paths until separately accepted
+cuts replace them.

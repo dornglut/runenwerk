@@ -94,6 +94,8 @@ runen-net-quic = { git = "https://github.com/dornglut/runen-net", rev = "e8dce38
 runen-spatial = { git = "https://github.com/dornglut/runen-spatial", rev = "2bb6b2ed89894aefaa39bf0e39d296b703916821" }
 runen-gpu = { git = "https://github.com/dornglut/runen-gpu", rev = "789b430fdefeda89bfe59de86d548618b8f8ab9a" }
 runen-input = { git = "https://github.com/dornglut/runen-input", rev = "2751e19fa42255b86e786e7cd837198c917b7b25" }
+runenui_core = { git = "https://github.com/dornglut/runen-ui", rev = "b386e9ade907f4e358ac6ca39b660c9e181b1460" }
+runenui_testing = { git = "https://github.com/dornglut/runen-ui", rev = "b386e9ade907f4e358ac6ca39b660c9e181b1460" }
 world_ops = { path = "domain/world_ops" }
 world_sdf = { path = "domain/world_sdf" }
 

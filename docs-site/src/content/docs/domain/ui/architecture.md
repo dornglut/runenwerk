@@ -5,7 +5,7 @@ status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-09-14
+last_reviewed: 2026-09-27
 publication: primary
 ---
 
@@ -91,6 +91,11 @@ As of the audited repository state:
   retained-UI replacement.
 - `domain/ui/ui_story` uses the V2 workflow-graph model. The former flat
   `UiStoryRunReport` model is not current API authority.
+- `domain/ui/ui_testing` now has one bounded standalone RunenUI consumer cut:
+  the minimal-label architecture fixture keeps Runenwerk program/compiler/state
+  evidence but uses public RunenUI testing/runtime publication for its
+  framework-level layout, text, and semantic proof. Other local UI execution
+  paths remain current until their own accepted cuts.
 
 ## Current Crate Map
 
@@ -395,8 +400,13 @@ Reusable retained controls and opaque render-data slot mapping continue as
 orthogonal local substrate work; they must not reintroduce a second composition
 authority or become a future reusable-framework roadmap.
 
-Standalone RunenUI adoption is not part of this migration sequence. Any future
-consumer cutover requires a new issue and an exact then-current RunenUI review.
+Standalone RunenUI adoption now proceeds through separately issue-owned,
+consumer-bounded clean cuts. The first accepted cut migrates only
+`ui_testing::UiArchitectureFixture::minimal("minimal-label")` framework
+publication/layout/text/semantic proof to exact-revision public RunenUI
+contracts; its UiProgram compiler, source-map, binding, and state semantics
+remain Runenwerk-owned. Every later consumer still requires a fresh current-source
+issue and exact then-current RunenUI review.
 
 ## Testing and Verification Expectations
 
