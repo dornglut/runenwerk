@@ -5,7 +5,7 @@ status: accepted
 owner: render
 layer: framework/render
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-27
 publication: reference
 pagefind: false
 related_docs:
@@ -376,11 +376,33 @@ importance sampling, termination, or work distribution.
 ```text
 semantic sampling support
 != algorithmic sampling strategy
+!= one finite sample or reconstruction estimate
 ```
+
+The support of one logical result sample may depend on more than the observation alone.
+For image-like observations, the concrete semantic support is resolved from the
+unjittered observation, the exact requested output topology, and the declared sampling
+support policy. This keeps a perspective observation reusable across multiple outputs
+whose sample-lattice extents may differ.
+
+The first concrete non-point image support is a perspective lattice-cell / pixel-footprint
+support: each logical sample denotes the region associated with that sample in the exact
+requested lattice under the unjittered perspective observation. The footprint is
+renderer-semantic support. It is not a physical surface pixel, current internal render
+resolution, GPU viewport, presentation target, or product quality preset.
+
+A `RenderMethod` may choose finite sample positions or a deterministic/stochastic phase
+sequence inside admitted semantic support. That phase/sequence is method/evaluation
+state. It must not mutate source-owned camera truth or silently rewrite the semantic
+observation merely to obtain a jittered execution.
 
 Different valid strategies may target the same requested semantics under compatible
 finite-evaluation contracts. Their finite values need not be identical unless a separate
-equality or reproducibility contract requires that.
+equality or reproducibility contract requires that. In particular, one offset sample of
+a non-point footprint does not by itself form the completed requested semantic result.
+A method that reconstructs or accumulates multiple finite samples must retain
+method-appropriate finite-evaluation evidence before result formation; reconstruction
+error remains distinct from semantic/model approximation and numeric realization.
 
 ## Output semantics
 
