@@ -33,8 +33,9 @@ fn main() {
             run_native_render_ui_child_smoke()
                 .expect("native Render + UI Host child smoke should succeed");
         }
-        (false, false, true) => native_render_host_smoke(true)
-            .expect("native Render + UI Host smoke should succeed"),
+        (false, false, true) => {
+            native_render_host_smoke(true).expect("native Render + UI Host smoke should succeed")
+        }
         _ => panic!("native Host smoke modes are mutually exclusive"),
     }
 }
