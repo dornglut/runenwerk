@@ -316,7 +316,9 @@ struct LogicalTextureTarget {
 
 fn logical_texture_target(
     runtime_resources: &FlowRuntimeResources,
-    dynamic_texture_targets: Option<&super::super::dynamic_targets::RendererDynamicTextureTargetCache>,
+    dynamic_texture_targets: Option<
+        &super::super::dynamic_targets::RendererDynamicTextureTargetCache,
+    >,
     pass_id: crate::plugins::render::RenderPassId,
     key: &RuntimeResourceKey,
     surface_color_view: Option<&GpuTextureViewHandle>,
