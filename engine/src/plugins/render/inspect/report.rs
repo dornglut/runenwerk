@@ -71,23 +71,43 @@ pub struct RenderTextureDiffResult {
 #[derive(Debug, Clone, Default, runen_ecs::Component, runen_ecs::Resource)]
 pub struct RenderDebugFrameReportState {
     pub latest: Option<RenderDebugFrameReport>,
-    by_frame: BTreeMap<u64, RenderDebugFrameReport>,
+    capture_results_by_frame:
+        BTreeMap<u64, (Vec<RenderCaptureSelectorResult>, Option<PathBuf>)>,
 }
 
 impl RenderDebugFrameReportState {
     pub fn observe_frame(&mut self, report: RenderDebugFrameReport) {
-        self.by_frame.insert(report.frame_index, report.clone());
-        while self.by_frame.len() > super::DEFAULT_RENDER_FRAME_HISTORY_CAPACITY {
-            let Some(oldest) = self.by_frame.keys().next().copied() else {
-                break;
-            };
-            self.by_frame.remove(&oldest);
+        if !report.capture_results.is_empty() {
+            self.capture_results_by_frame.insert(
+                report.frame_index,
+                (
+                    report.capture_results.clone(),
+                    report.artifact_manifest_path.clone(),
+                ),
+            );
+            while self.capture_results_by_frame.len() > super::DEFAULT_RENDER_FRAME_HISTORY_CAPACITY {
+                let Some(oldest) = self.capture_results_by_frame.keys().next().copied() else {
+                    break;
+                };
+                self.capture_results_by_frame.remove(&oldest);
+            }
         }
         self.latest = Some(report);
     }
 
-    pub fn frame(&self, frame_index: u64) -> Option<&RenderDebugFrameReport> {
-        self.by_frame.get(&frame_index)
+    pub fn capture_results_for_frame(
+        &self,
+        frame_index: u64,
+    ) -> Option<&[RenderCaptureSelectorResult]> {
+        self.capture_results_by_frame
+            .get(&frame_index)
+            .map(|(results, _)| results.as_slice())
+    }
+
+    pub fn capture_artifact_manifest_for_frame(&self, frame_index: u64) -> Option<&PathBuf> {
+        self.capture_results_by_frame
+            .get(&frame_index)
+            .and_then(|(_, manifest)| manifest.as_ref())
     }
 }
 
@@ -170,7 +190,13 @@ mod tests {
             .expect("latest report should be present");
         assert_eq!(latest.frame_index, 2);
         assert_eq!(latest.capture_results.len(), 1);
-        assert_eq!(state.frame(1).map(|report| report.frame_index), Some(1));
-        assert_eq!(state.frame(2).map(|report| report.frame_index), Some(2));
+        assert_eq!(
+            state.capture_results_for_frame(1).map(<[_]>::len),
+            Some(1)
+        );
+        assert_eq!(
+            state.capture_results_for_frame(2).map(<[_]>::len),
+            Some(1)
+        );
     }
 }

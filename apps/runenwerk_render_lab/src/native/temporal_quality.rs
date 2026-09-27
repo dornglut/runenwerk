@@ -168,10 +168,10 @@ pub(super) fn temporal_quality_capture_evidence(
     report_state: &RenderDebugFrameReportState,
     target_frame_index: u64,
 ) -> Result<Option<RenderLabTemporalQualityCaptureEvidence>> {
-    let Some(report) = report_state.frame(target_frame_index) else {
+    let Some(results) = report_state.capture_results_for_frame(target_frame_index) else {
         return Ok(None);
     };
-    let Some(result) = report.capture_results.first() else {
+    let Some(result) = results.first() else {
         return Ok(None);
     };
     if result.terminal.code != RenderCaptureTerminalCode::Completed {
@@ -183,14 +183,14 @@ pub(super) fn temporal_quality_capture_evidence(
             .unwrap_or_else(|| "no terminal reason".to_string());
         bail!(
             "temporal quality capture for frame {} terminated as {} ({reason})",
-            report.frame_index,
+            target_frame_index,
             result.terminal.code.as_str()
         );
     }
     let artifact_path = result.artifact_path.as_ref().ok_or_else(|| {
         anyhow::anyhow!(
             "temporal quality capture for frame {} completed without an exported artifact path",
-            report.frame_index
+            target_frame_index
         )
     })?;
     let bytes = fs::read(artifact_path).with_context(|| {
@@ -203,7 +203,7 @@ pub(super) fn temporal_quality_capture_evidence(
         .frame_identity
         .as_ref()
         .map(|identity| identity.frame_index)
-        .unwrap_or(report.frame_index);
+        .unwrap_or(target_frame_index);
 
     Ok(Some(RenderLabTemporalQualityCaptureEvidence {
         frame_index,
@@ -213,9 +213,8 @@ pub(super) fn temporal_quality_capture_evidence(
         terminal: result.terminal.code.as_str(),
         artifact_path: artifact_path.to_string_lossy().into_owned(),
         artifact_blake3: format!("blake3:{}", blake3::hash(&bytes).to_hex()),
-        artifact_manifest_path: report
-            .artifact_manifest_path
-            .as_ref()
+        artifact_manifest_path: report_state
+            .capture_artifact_manifest_for_frame(target_frame_index)
             .map(|path| path.to_string_lossy().into_owned()),
     }))
 }
