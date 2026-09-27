@@ -356,6 +356,10 @@ fn native_render_host_smoke(with_ui: bool) -> anyhow::Result<()> {
         .main_surface_only()
         .write_surface_color()?
         .finish()
+        .present_pass("native.render.host.smoke.present")?
+        .main_surface_only()
+        .surface_color()?
+        .finish()
         .validate()?;
     app.add_render_flow(flow);
     app.insert_resource(LifecycleProbe {
