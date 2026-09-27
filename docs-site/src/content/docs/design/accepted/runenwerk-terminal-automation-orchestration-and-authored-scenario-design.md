@@ -402,6 +402,12 @@ The session therefore tracks whether a coordinated replay actually completed bef
 teardown as pending. It MUST NOT call teardown after a failed replay and convert the original
 failure into a secondary `ReplayNotActive` error.
 
+A completed replay lease remains active while later owner queries/assertions inspect the
+post-replay product state. The session MUST NOT automatically tear replay down at the end of the
+replay step. Teardown occurs only after those observations are no longer needed, normally through
+explicit session finish/cancel or an explicit orchestration teardown action. This preserves A6's
+accepted rule that product assertions which need post-replay held state run before teardown.
+
 A6 replay is currently a synchronous operation with no cancellation callback. The first shared
 implementation therefore supports cancellation **between orchestration steps**, not interruption
 inside one replay call. Internal replay failure still reports A6 partial progress. Mid-replay
@@ -563,8 +569,9 @@ That issue should:
 9. prove Editor ProductSemantic dispatch/query produces the same session/history shape;
 10. prove Unsupported never falls back and failure/cancellation cleanup is scoped;
 11. prove failed replay does not schedule a bogus teardown, while completed replay retains teardown responsibility;
-12. prove cancellation is truthful at orchestration-step boundaries without claiming mid-replay interruption;
-13. add no persisted scenario AST, central CLI, provider registry, IPC, native automation,
+12. prove owner query/assertion may run against completed replay state before session teardown;
+13. prove cancellation is truthful at orchestration-step boundaries without claiming mid-replay interruption;
+14. add no persisted scenario AST, central CLI, provider registry, IPC, native automation,
     new crate, or universal product payload enum.
 
 The implementation issue must re-census current writers. In particular, any Render Lab
