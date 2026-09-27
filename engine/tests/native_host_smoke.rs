@@ -1,12 +1,12 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use engine::plugins::render::Gfx;
+use engine::plugins::render::{Gfx, RenderFlow};
 use engine::plugins::render::backend::{
     RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
 };
-use engine::plugins::{RenderPlugin, default_plugins};
-use engine::prelude::{App, Res, Startup, Update};
+use engine::plugins::{RenderPlugin, UiPlugin, default_plugins};
+use engine::prelude::{App, AppRenderExt, Res, Startup, Update};
 use engine::runtime::{
     NativeWindowHook, NativeWindowHookRegistryResource, NativeWindowId, NativeWindowLifecycleState,
     WindowStateRegistryResource,
@@ -128,9 +128,11 @@ impl NativeNoRenderSmokeHook {
 
 struct NativeRenderHostSmokeHook {
     frame_seen: Arc<AtomicBool>,
+    frame_submitted: Arc<AtomicBool>,
     primary_attached: Arc<AtomicBool>,
     secondary_attached: Arc<AtomicBool>,
     secondary_requested: bool,
+    frames_seen: usize,
 }
 
 impl NativeWindowHook for NativeRenderHostSmokeHook {
@@ -175,16 +177,29 @@ impl NativeWindowHook for NativeRenderHostSmokeHook {
             }
         }
         self.frame_seen.store(true, Ordering::SeqCst);
+        self.frames_seen += 1;
+        if world
+            .resource::<engine::DebugMetricsState>()
+            .ok()
+            .and_then(|metrics| metrics.last_timings)
+            .is_some_and(|timings| timings.submitted)
+        {
+            self.frame_submitted.store(true, Ordering::SeqCst);
+        }
 
+        let should_close = self.frame_submitted.load(Ordering::SeqCst)
+            && self.secondary_attached.load(Ordering::SeqCst);
         let windows = world.resource_mut::<WindowStateRegistryResource>()?;
         if !self.secondary_requested {
             windows.request_window("Native selected-Render secondary", (640, 480));
             self.secondary_requested = true;
         }
-        windows
-            .record_mut(NativeWindowId::primary())
-            .ok_or_else(|| anyhow::anyhow!("selected-Render smoke primary window is missing"))?
-            .request_close();
+        if should_close || self.frames_seen >= 16 {
+            windows
+                .record_mut(NativeWindowId::primary())
+                .ok_or_else(|| anyhow::anyhow!("selected-Render smoke primary window is missing"))?
+                .request_close();
+        }
         Ok(())
     }
 }
@@ -301,12 +316,22 @@ fn native_render_host_smoke() -> anyhow::Result<()> {
     let startup_ran = Arc::new(AtomicBool::new(false));
     let update_ran = Arc::new(AtomicBool::new(false));
     let frame_seen = Arc::new(AtomicBool::new(false));
+    let frame_submitted = Arc::new(AtomicBool::new(false));
     let primary_attached = Arc::new(AtomicBool::new(false));
     let secondary_attached = Arc::new(AtomicBool::new(false));
 
     let mut app = App::new();
     app.add_plugins(default_plugins());
+    app.add_plugin(UiPlugin);
     app.add_plugin(RenderPlugin);
+    let flow = RenderFlow::new("native.render.host.smoke")
+        .with_surface_color()?
+        .fullscreen_pass("native.render.host.smoke.clear")
+        .main_surface_only()
+        .write_surface_color()?
+        .finish()
+        .validate()?;
+    app.add_render_flow(flow);
     app.insert_resource(LifecycleProbe {
         startup_ran: Arc::clone(&startup_ran),
         update_ran: Arc::clone(&update_ran),
@@ -318,9 +343,11 @@ fn native_render_host_smoke() -> anyhow::Result<()> {
         .resource_mut::<NativeWindowHookRegistryResource>()?
         .register_hook(NativeRenderHostSmokeHook {
             frame_seen: Arc::clone(&frame_seen),
+            frame_submitted: Arc::clone(&frame_submitted),
             primary_attached: Arc::clone(&primary_attached),
             secondary_attached: Arc::clone(&secondary_attached),
             secondary_requested: false,
+            frames_seen: 0,
         });
 
     anyhow::ensure!(
@@ -332,6 +359,13 @@ fn native_render_host_smoke() -> anyhow::Result<()> {
             .resource::<RenderSurfaceRegistryResource>()
             .is_ok(),
         "RenderPlugin must install Render surface state before native Host realization"
+    );
+    anyhow::ensure!(
+        app.world()
+            .resource::<engine::plugins::SceneResource>()?
+            .manager
+            .is_none(),
+        "native Render + UI smoke must not activate a Scene manager"
     );
 
     app.run()?;
@@ -349,6 +383,10 @@ fn native_render_host_smoke() -> anyhow::Result<()> {
     anyhow::ensure!(
         secondary_attached.load(Ordering::SeqCst),
         "selected Render secondary attachment was not observed"
+    );
+    anyhow::ensure!(
+        frame_submitted.load(Ordering::SeqCst),
+        "Render + UiPlugin without ScenePlugin never submitted a native frame"
     );
 
     println!("native_render_host_smoke=pass");
