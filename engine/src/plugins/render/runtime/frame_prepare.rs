@@ -303,37 +303,41 @@ fn build_prepared_flow_invocations(
         }
     }
 
-    for flow in compiled_flows {
-        for request in requested_flow_invocations
-            .iter()
+    // Explicit producer requests are already a deterministic semantic sequence. Preserve that
+    // sequence across flow boundaries instead of regrouping by registry/flow id; helper flows such
+    // as fixed-resolution resolve depend on their producer-authored scene -> resolve order.
+    for request in requested_flow_invocations.iter().copied() {
+        let flow = flows_by_id
+            .get(&request.flow_id)
             .copied()
-            .filter(|request| request.flow_id == flow.flow_id)
-        {
-            let view = views_by_id
-                .get(request.view_id.as_str())
-                .expect("requested invocation view should be prevalidated");
-            let inputs_by_flow = build_prepared_flow_inputs(
-                std::slice::from_ref(flow),
-                extracted_state,
-                view.target_size_px,
-            )?;
-            let mut inputs = inputs_by_flow
-                .get(&request.flow_id)
-                .cloned()
-                .ok_or_else(|| {
-                    anyhow::anyhow!("missing prepared inputs for flow '{:?}'", request.flow_id)
-                })?;
-            apply_invocation_uniform_overrides(flow, request, &mut inputs)?;
-            invocations.push(PreparedFlowInvocation {
-                invocation_id: request.invocation_id.clone(),
-                flow_id: request.flow_id,
-                view_id: request.view_id.clone(),
-                inputs,
-                target_alias_bindings: request.target_alias_bindings.clone(),
-                history_signature: request.history_signature.clone(),
-            });
-        }
+            .expect("requested invocation flow should be prevalidated");
+        let view = views_by_id
+            .get(request.view_id.as_str())
+            .expect("requested invocation view should be prevalidated");
+        let inputs_by_flow = build_prepared_flow_inputs(
+            std::slice::from_ref(flow),
+            extracted_state,
+            view.target_size_px,
+        )?;
+        let mut inputs = inputs_by_flow
+            .get(&request.flow_id)
+            .cloned()
+            .ok_or_else(|| {
+                anyhow::anyhow!("missing prepared inputs for flow '{:?}'", request.flow_id)
+            })?;
+        apply_invocation_uniform_overrides(flow, request, &mut inputs)?;
+        invocations.push(PreparedFlowInvocation {
+            invocation_id: request.invocation_id.clone(),
+            flow_id: request.flow_id,
+            view_id: request.view_id.clone(),
+            inputs,
+            target_alias_bindings: request.target_alias_bindings.clone(),
+            history_signature: request.history_signature.clone(),
+        });
+    }
 
+    // Automatic-main work remains registry-deterministic and follows the explicit product work.
+    for flow in compiled_flows {
         let inputs = main_inputs_by_flow
             .get(&flow.flow_id)
             .cloned()
@@ -1367,6 +1371,66 @@ mod tests {
         assert_eq!(invocations.len(), 2);
         assert_eq!(invocations[0].view_id, "viewport.1");
         assert_eq!(invocations[1].view_id, "main");
+    }
+
+    #[test]
+    fn explicit_cross_flow_invocations_preserve_producer_request_order() {
+        let first = RenderFlow::new("prepare.explicit.first")
+            .with_surface_color()
+            .expect("first flow surface color")
+            .fullscreen_pass("first")
+            .write_surface_color()
+            .expect("first flow output")
+            .finish()
+            .validate()
+            .expect("first flow should validate");
+        let second = RenderFlow::new("prepare.explicit.second")
+            .with_surface_color()
+            .expect("second flow surface color")
+            .fullscreen_pass("second")
+            .write_surface_color()
+            .expect("second flow output")
+            .finish()
+            .validate()
+            .expect("second flow should validate");
+        let first = compile_flow_plan(&first).expect("first flow should compile");
+        let second = compile_flow_plan(&second).expect("second flow should compile");
+
+        // Deliberately reverse registry order relative to the producer-authored invocation order.
+        let compiled_flows = vec![second.clone(), first.clone()];
+        let extracted = ExtractedRenderStateMap::new();
+        let main_inputs =
+            build_prepared_flow_inputs(&compiled_flows, &extracted, (800, 600)).unwrap();
+        let views = vec![PreparedViewFrame::main((800, 600))];
+        let mut requests = PreparedRenderFrameRequestResource::default();
+        requests
+            .replace_contribution(
+                producer(1),
+                [],
+                [
+                    PreparedFlowInvocationRequest::new("explicit.first", first.flow_id, "main"),
+                    PreparedFlowInvocationRequest::new("explicit.second", second.flow_id, "main"),
+                ],
+            )
+            .expect("ordered explicit invocations should publish");
+
+        let invocations = build_prepared_flow_invocations(
+            RenderSurfaceId::primary(),
+            &compiled_flows,
+            &extracted,
+            &main_inputs,
+            &views,
+            &requests,
+        )
+        .expect("explicit invocations should prepare");
+
+        assert_eq!(
+            invocations
+                .iter()
+                .map(|invocation| invocation.invocation_id.0.as_str())
+                .collect::<Vec<_>>(),
+            vec!["explicit.first", "explicit.second"]
+        );
     }
 
     #[test]

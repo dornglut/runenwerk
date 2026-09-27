@@ -441,6 +441,10 @@ impl Renderer {
                 .collect::<Vec<_>>();
             flow_runtime_cache.retain(|flow_id, _| active_flow_ids.contains(flow_id));
             self.flow_pipeline_cache.retain_flows(&active_flow_ids);
+            let flows_by_id = compiled_flows
+                .iter()
+                .map(|flow| (flow.flow_id, flow))
+                .collect::<BTreeMap<_, _>>();
 
             // Reserve every ordinary pass occurrence in one frame-owned identity space before any
             // projected-uniform, fixed-step, or timing-tail auxiliary occurrence is allocated.
@@ -448,8 +452,17 @@ impl Renderer {
             // each invocation's mutable runtime-resource scope is active.
             let mut maximum_occurrence = 0_u64;
             let mut scheduled_invocations = std::collections::VecDeque::new();
-            for flow in compiled_flows {
-                for invocation in prepared_frame.flow_invocations_for_flow(flow.flow_id) {
+            for invocation in &prepared_frame.flow_invocations {
+                let flow = flows_by_id
+                    .get(&invocation.flow_id)
+                    .copied()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "prepared flow invocation '{}' references missing compiled flow '{}'",
+                            invocation.invocation_id.0,
+                            invocation.flow_id
+                        )
+                    })?;
                     let Some(view) = prepared_frame.view(invocation.view_id.as_str()) else {
                         bail!(
                             "prepared flow invocation '{}' references missing view '{}'",
@@ -493,10 +506,10 @@ impl Renderer {
                         invocation_packet,
                         occurrences,
                     ));
-                }
             }
 
             let mut invocations = Vec::new();
+            // Realize/retain each flow's resource scope before invocation-order execution.
             for flow in compiled_flows {
                 let runtime_resources = flow_runtime_cache.entry(flow.flow_id).or_default();
                 runtime_resources.realize_for_frame(
@@ -511,7 +524,24 @@ impl Renderer {
                     .collect::<Vec<_>>();
                 runtime_resources.retain_invocation_uniform_scopes(invocation_ids);
 
-                for invocation in prepared_frame.flow_invocations_for_flow(flow.flow_id) {
+            }
+
+            // Consume exactly the prepared invocation sequence. Cross-flow helper chains such as
+            // fixed scene -> resolve must not be reordered by registry RenderFlowId.
+            for invocation in &prepared_frame.flow_invocations {
+                let flow = flows_by_id
+                    .get(&invocation.flow_id)
+                    .copied()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "prepared flow invocation '{}' references missing compiled flow '{}'",
+                            invocation.invocation_id.0,
+                            invocation.flow_id
+                        )
+                    })?;
+                let runtime_resources = flow_runtime_cache
+                    .get_mut(&flow.flow_id)
+                    .expect("active compiled flow runtime resources should be realized");
                     let Some((
                         scheduled_flow_id,
                         scheduled_invocation_id,
@@ -728,7 +758,12 @@ impl Renderer {
                     })();
                     runtime_resources.clear_active_invocation_uniform_scope();
                     invocations.push(invocation_result?);
-                }
+            }
+
+            for flow in compiled_flows {
+                let runtime_resources = flow_runtime_cache
+                    .get(&flow.flow_id)
+                    .expect("active compiled flow runtime resources should remain realized");
                 self.last_runtime_resources
                     .extend(runtime_resources.inspect_entries(flow.flow_id));
             }
