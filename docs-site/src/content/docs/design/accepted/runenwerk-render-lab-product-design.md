@@ -5,7 +5,7 @@ status: accepted
 owner: workspace
 layer: product / app / renderer-integration
 canonical: true
-last_reviewed: 2026-09-12
+last_reviewed: 2026-09-27
 publication: reference
 pagefind: false
 related_adrs:
@@ -16,6 +16,7 @@ related_adrs:
 related_designs:
   - ./runenrender-decomposition-design.md
   - ../active/runenrender-internal-decomposition-execution-plan.md
+  - ./renderer-temporal-reconstruction-and-dynamic-resolution-design.md
   - ./ui-designer-workbench-product-design.md
 related_roadmaps:
   - ../../workspace/planning/roadmap.md
@@ -31,11 +32,13 @@ It defines durable product ownership, boundaries, proof stages, and acceptance l
 
 RL0 acceptance was censused on accepted `main` after #541 / PR #562. The recorded source state is provenance only; future implementation must re-census exact current `main` rather than reuse an old SHA as authority.
 
-A 2026-09-12 authority reconciliation superseded only RL0's original ordering that deferred #552 until after RL2. Concrete deterministic pressure from #566 required the smallest #552 finite-evaluation normalization before the maintained deterministic execution seam could be formed truthfully. Product ownership, RL1/RL2 goals, and the later stochastic/path-tracing proof sequence remain otherwise unchanged.
+A 2026-09-12 authority reconciliation moved the smallest #552 finite-evaluation normalization before RL1 after #566 demonstrated concrete deterministic result-formation pressure.
+
+A 2026-09-27 authority reconciliation records the accepted RL1/RL2 product reality, the evidence-driven temporal/performance branch that followed RL2, Engineering ADR 0009's RunenShader boundary, and the accepted R8 activation disposition from #898. It preserves durable product and framework boundaries without copying live issue, pull-request, check, branch, or priority state into this document.
 
 ## Purpose
 
-RunenRender now has a normalized semantic spine and a permanent public-RunenGPU execution proof, but its strongest evidence is still proof-local. Runenwerk needs a maintained product consumer that turns those contracts into visible, inspectable, repeatable workloads without moving renderer semantics into product code.
+RunenRender now has a normalized semantic spine, permanent public-RunenGPU execution proofs, and a maintained Render Lab consumer spanning headless deterministic evidence and native real-time interaction. Runenwerk still needs that product consumer to keep turning framework contracts into visible, inspectable, repeatable workloads and concrete public-surface pressure without moving renderer semantics into product code.
 
 Render Lab exists to provide that consumer.
 
@@ -68,18 +71,23 @@ Runenwerk Render Lab
 RunenRender
     renderer scene / request / method / planning /
     admission / result semantics
-        |
-        v
-RunenGPU
-    generic physical GPU execution
+    explicit shader-artifact -> GPU-program bridge where applicable
+        |                         |
+        v                         v
+RunenShader                  RunenGPU
+shader source /              generic physical
+canonical artifact           GPU execution
 ```
 
-Source domains and peer frameworks keep their own semantic authority. Runenwerk adapters may translate source meaning into RunenRender meaning, but Render Lab does not become a source-domain ontology.
+RunenShader and RunenGPU are sibling framework authorities. Engineering ADR 0009 assigns reusable shader-source/toolchain and canonical-artifact meaning to RunenShader while RunenGPU retains canonical program admission and physical GPU execution. A RunenRender consumer integration may compose both; Render Lab does not acquire either authority merely because it exercises the composed path.
+
+Source domains and peer frameworks keep their own semantic authority. Runenwerk adapters may translate source meaning into RunenRender meaning, but Render Lab does not become a source-domain ontology. Current consumer adoption of a sibling framework remains separately issue-owned; this design does not claim an integration is complete merely because the durable ownership relationship exists.
 
 Render Lab is not:
 
 ```text
 RunenRender framework semantics
+RunenShader framework/toolchain semantics
 RunenGPU framework semantics
 an Editor document model
 an Editor viewport mode
@@ -92,48 +100,54 @@ a path-tracing framework
 a global conformance truth authority
 ```
 
-## Post-#541 census and current implementation truth
+## Accepted delivery state and durable findings
 
-The RL0 activation census establishes the following current facts.
+The RL0 census remains historical provenance. Accepted delivery since then established the product pressure that RL0 was designed to create.
 
-### Runenwerk ownership is correct
+### Runenwerk ownership remains correct
 
-Runenwerk is the integration/product repository. `ARCHITECTURE.md` and the platform architecture assign application lifecycle, windows/event-loop policy, product policy, diagnostics presentation, applications, and cross-framework adapters to Runenwerk while RunenRender owns semantic rendering and RunenGPU owns generic GPU execution.
+Runenwerk is the integration/product repository. `ARCHITECTURE.md` and the platform architecture assign application lifecycle, windows/event-loop policy, product policy, diagnostics presentation, applications, and cross-framework adapters to Runenwerk while RunenRender owns semantic rendering. RunenShader owns reusable shader-source/toolchain and canonical-artifact semantics, and RunenGPU owns generic physical GPU execution.
 
-That is sufficient architectural authority for a Runenwerk-owned Render Lab. No new ADR is required merely to define this product while those ownership rules remain unchanged.
+That remains sufficient architectural authority for a Runenwerk-owned Render Lab. No Editor, Workbench, shader-toolchain, or GPU backend becomes Render Lab semantic authority through hosting or use.
 
-### Existing Workbench hosts are implementation evidence, not Render Lab authority
+### RL1 established the product-accessible deterministic path
 
-Current focused products demonstrate several useful host shapes:
+Accepted RL1 created the maintained `apps/runenwerk_render_lab` product and the `founding-direct` scenario through legitimate public RunenRender and RunenGPU contracts. The maintained product can form a meaningful deterministic render, observe public semantic result evidence, perform a separate product-owned readback, compare against an independent CPU oracle, and retain labelled product visualization/evidence artifacts without importing proof-only R6 machinery.
 
-- `RunenwerkWorkbenchHost` has editor-owned `FullEditor`, `MaterialLab`, `UiDesigner`, headless, constrained, and custom compositions;
-- runtime app composition has `FullEditor`, `MaterialLab`, `UiDesigner`, and `UiGallery` modes;
-- Material Lab and UI Designer prove focused standalone/headless product composition can exist;
-- UI Gallery proves a focused app path can exist without installing the editor host resource.
+The earlier RL0 facts that the founding renderer was proof-local and `RenderResult` was not yet a product-facing surface are therefore historical starting conditions, not current implementation truth.
 
-These are useful implementation precedents only. Their editor-specific packages and types do not make `apps/runenwerk_editor` or `domain/editor` the semantic owner of Render Lab.
+### RL2 established the native real-time consumer
 
-### The founding renderer is not yet a product surface
+Accepted RL2 extended the same product into native deterministic presentation with neutral input and continuous orbit, pan, and zoom. The interactive path presents newly rendered frames without intentional synchronous CPU readback.
 
-The accepted R6/R7 proof establishes the semantic spine and public RunenGPU execution, but the founding realization/evaluator remains deliberately proof-local/test-only. The founding perspective proof also uses a `2 x 2` sample lattice: sufficient for semantic/numeric proof, not for a meaningful human-viewable renderer demonstration.
+Subsequent controlled performance work demonstrated meaningful output-resolution-dependent GPU pressure. That evidence does not create a universal RunenRender performance guarantee; it justifies product-owned characterization and the later fixed-internal-resolution / reconstruction-quality branch.
 
-RL1 therefore must not import or expose test-only R6 proof machinery merely to make a product quickly. It must exercise a legitimate product-accessible RunenRender path.
+The maintained dedicated Render Lab app is current implementation truth. Its existence does not make one host shape part of Render Lab semantics and does not justify a generic `RunenLab` host framework.
 
-### `RenderResult` is semantic authority but is not yet a public product API
+### Render Lab is real R8 dogfood, not standalone conformance
 
-After #541, RunenRender has one private bounded `RenderResult` semantic authority. It retains immutable semantic provenance without physical bindings, GPU environment facts, readback IDs, or output bytes.
+The accepted R8 census in #898 established `R8_IMPLEMENTATION_SLICES_JUSTIFIED`. Render Lab is a real maintained Runenwerk consumer of the candidate renderer surface, including headless/offscreen and native paths. It is therefore valid public-surface pressure and dogfood.
 
-The module and result types are currently crate-private. Render Lab must not reach through that boundary or create a mirrored product copy of private renderer state.
+It is not an independent standalone conformance consumer. R8 must still qualify the future public surface, reconcile the shader-artifact handoff, prove materially different method generality, and close standalone validation/provenance/cutover obligations through their owning work before RX.
 
-If an RL1 consumer genuinely requires result facts that current public RunenRender contracts do not expose, that is concrete framework-surface pressure. Open the smallest owner-correct RunenRender issue and expose only the required stable semantic/inspection contract. Do not solve it inside product code and do not pre-author a generic reflection API.
+### RunenShader adoption is a consumer boundary, not product authority
 
-### #552 deterministic normalization is accepted
+Engineering ADR 0009 establishes the long-term source-to-execution composition:
 
-RL0 originally deferred #552 because deterministic product proof had not yet demonstrated a finite-evaluation blocker. #566 later produced concrete deterministic pressure: a maintained finite floating-point evaluator could not truthfully form `RenderResult` for arbitrary `Exact` numeric requests under the then-current contracts.
+```text
+shader source
+    -> RunenShader canonical artifact
+        -> RunenRender-owned artifact/program bridge
+            -> RunenGPU program admission / execution
+```
 
-The smallest #552 normalization is therefore accepted before RL1. It preserves requested semantic target meaning while separating admitted semantic/model approximation, finite-evaluation fidelity/error, and numeric realization. The accepted correction is deterministic and result-formation-local; it does not authorize a generalized stochastic estimator, confidence/convergence, session, history, or progress framework.
+Render Lab may inspect and compare public outcomes from that composed path. It must not become the shader compiler, artifact store, GPU-interface authority, or a product-owned fallback around the accepted framework boundary.
 
-Any additional stochastic-specific finite-evaluation contract remains deferred until a concrete later method demonstrates that pressure.
+### #552 deterministic normalization remains the finite-evaluation baseline
+
+#566 demonstrated that a maintained finite floating-point evaluator could not truthfully form `RenderResult` for arbitrary `Exact` numeric requests under the earlier contracts. The accepted #552 normalization therefore separates requested semantic target meaning, admitted semantic/model approximation, finite-evaluation fidelity/error, and numeric realization.
+
+That deterministic correction does not pre-author stochastic estimator, confidence, convergence, progressive-session, or accumulation semantics. Those remain consumer-gated by a materially different maintained method.
 
 ## Normalized product model
 
@@ -251,7 +265,7 @@ Output bytes, encoded images, screenshots, videos, manifests, and reports remain
 
 ## Interactive and headless parity
 
-Render Lab targets two host modes over the same underlying scenario/run/evidence model:
+Render Lab maintains two host modes over the same underlying scenario/run/evidence model:
 
 ```text
 headless
@@ -267,9 +281,7 @@ interactive
 
 These modes must not construct semantically different renderer paths for the same scenario merely because one has a window.
 
-The exact package, binary, and host placement is deliberately **not frozen by RL0**. At each implementation activation, inspect current app composition and choose the smallest owner-correct form.
-
-Allowed directions include a dedicated app package, a dedicated executable composition, or reuse of genuinely app-neutral host/UI machinery. Convenience does not justify making the editor shell the semantic owner or extracting a generic `RunenLab` host framework from one consumer.
+The current maintained implementation is the dedicated `apps/runenwerk_render_lab` product established by RL1 and extended by RL2. That placement is implementation truth, not semantic ownership. Future host refactoring may reuse genuinely app-neutral machinery only when it preserves the same product contracts and does not make the Editor shell, Workbench packages, or a generic `RunenLab` framework the authority for Render Lab.
 
 ## Public-surface rule
 
@@ -280,6 +292,7 @@ It must not:
 - import test-only R6 modules;
 - depend on crate-private RunenRender state;
 - reach through RunenRender into private RunenGPU/WGPU state;
+- become a shader compiler/toolchain owner or bypass an accepted RunenShader artifact boundary for convenience;
 - copy private framework state into a long-lived product mirror;
 - add privileged friend APIs only for the Lab.
 
@@ -295,22 +308,20 @@ scenario pressure
 
 This is a feature of Render Lab: it reveals whether the candidate standalone RunenRender boundary is actually usable.
 
-## RL1 — first meaningful visual proof
+## RL1 — accepted meaningful visual proof
 
-RL1 is the first product implementation slice after the accepted #552 deterministic normalization and the #566 maintained deterministic execution seam. It still begins from a fresh exact-main census.
+RL1 established the first meaningful human-viewable render produced through the new semantic spine. Its accepted product boundary remains a regression law for later Render Lab work.
 
-Its goal is not a window. Its goal is the **first meaningful human-viewable render produced through the new semantic spine**.
-
-RL1 must provide one named deterministic founding-direct scenario that:
+The retained RL1 contract is one named deterministic `founding-direct` scenario that:
 
 - uses a legitimate product-accessible RunenRender -> public RunenGPU path;
 - renders at a genuinely human-inspectable useful resolution rather than the proof-only `2 x 2` lattice;
 - retains one product-owned visual artifact;
 - retains structured scenario/semantic/oracle/diagnostic evidence;
-- proves the field-backed representation still participates where the founding scenario declares it;
+- proves the field-backed representation participates where the scenario declares it;
 - does not use private/test-only framework reach-through.
 
-A review bundle is conceptually:
+A review bundle remains conceptually:
 
 ```text
 render-lab/founding-direct/
@@ -320,19 +331,17 @@ render-lab/founding-direct/
     [identity visualization]
 ```
 
-The exact file formats and resolution are activation-time product decisions, not RunenRender semantics.
+File formats, resolution, and visualization mapping are product decisions rather than RunenRender semantics. The founding radiance contract is spectral, not generic RGB; a grayscale or false-color mapping is valid only when explicitly product-owned and labelled as visualization.
 
-The founding radiance contract is spectral, not generic RGB. Product visualization must not silently relabel one wavelength as RGB color. A grayscale or false-color inspection mapping is acceptable only when explicitly product-owned and labeled as visualization.
+RL1 is headless-capable. Interactive shell breadth was not required to establish the first product proof.
 
-RL1 may be driven headlessly. Interactive shell breadth is not an RL1 acceptance requirement.
+The durable pressure rule remains: when a later scenario cannot be implemented honestly through public framework contracts, fix the smallest owner-correct framework boundary rather than importing proof code or introducing a privileged Lab API.
 
-After #566, if RL1 demonstrates that an additional product-accessible evaluator capability, result inspection surface, or output transport contract is still missing, stop and open the smallest framework-owned correction rather than importing proof code.
+## RL2 — accepted deterministic real-time product proof
 
-## RL2 — deterministic real-time product proof
+RL2 established the first real-time native Render Lab over the same founding deterministic semantics.
 
-RL2 is the first real-time native Render Lab.
-
-For the founding deterministic scenario, normal behavior is:
+Its retained interaction law is:
 
 ```text
 continuous mouse input
@@ -343,7 +352,7 @@ continuous mouse input
     -> newly presented frame
 ```
 
-Founding interaction scope is:
+The founding interaction scope remains:
 
 ```text
 orbit
@@ -351,7 +360,7 @@ pan
 zoom
 ```
 
-The reference product target is:
+The reference workload target remains:
 
 ```text
 60 presented frames per second
@@ -361,13 +370,15 @@ image updates while dragging, not only after release
 no intentional synchronous CPU readback in the interactive presentation path
 ```
 
-Acceptance records exact hardware/device, backend, output extent, scenario, RenderMethod, build profile, and measurement procedure. This is a declared product/reference-workload target, not a universal RunenRender performance guarantee.
+This is a product/reference-workload target, not a universal RunenRender performance guarantee. Controlled performance claims record the relevant hardware/device, backend, output/internal extents, scenario, RenderMethod, build profile, and measurement procedure required to interpret the observation.
 
-RL2 review evidence includes one screenshot of the actual product surface, one short interaction capture, and one recorded reference frame-rate/frame-time measurement. Those are review artifacts, not authorization for a generic media-capture subsystem.
+Screenshots and short interaction recordings are optional review artifacts. They are not a durable RL2 acceptance dependency and do not authorize a generic media-capture subsystem.
+
+RL2's accepted performance pressure led to controlled output-extent and internal-resolution characterization. That successor work belongs to the evidence-driven temporal/performance branch below; it does not change RL2's semantic ownership.
 
 ## Product surface
 
-The first interactive surface should expose only what the initial scenarios require:
+The maintained interactive surface remains intentionally bounded to what current scenarios require:
 
 ```text
 Scenario
@@ -431,40 +442,61 @@ Stress scenarios report measured behavior. They do not declare aspirational univ
 
 ## Sequencing and proof ladder
 
-The accepted current proof ladder is:
+The accepted deterministic foundation is complete:
 
 ```text
-#541 complete semantic RenderResult/readback proof
-    -> exact-main RunenRender/product census
-    -> RL0 accepted Render Lab product design          [this document]
-    -> #552 minimal deterministic finite-evaluation normalization [accepted]
+#541 semantic RenderResult/readback proof
+    -> RL0 accepted Render Lab product design
+    -> #552 deterministic finite-evaluation normalization
     -> #566 maintained deterministic execution seam
     -> RL1 meaningful deterministic visual artifact
     -> RL2 deterministic real-time interactive Render Lab
-    -> fresh exact-main census
-    -> stochastic-specific finite-evaluation extension only if demonstrated by concrete pressure
-    -> P1 stateless multi-bounce path-tracing RenderMethod
-    -> direct-vs-path-tracer proof through the same semantic spine
-    -> explicit RunenRender extraction-readiness review
-    -> RL3 interactive path-tracing/material-view scenario
-    -> adaptive-refinement consumer
-    -> only then any retained evaluation/session/history semantics demanded by evidence
-    -> broader Render Lab scale/conformance qualification
-    -> R8
-    -> RX according to the then-accepted extraction decision
 ```
 
-The durable canonical phase order remains:
+After RL2, the roadmap is **dependency-branched**, not one serialized feature ladder:
+
+```text
+accepted RL2
+    |
+    +--> deterministic temporal / performance pressure
+    |       -> controlled output/internal-resolution characterization
+    |       -> fixed-resolution execution
+    |       -> controlled reconstruction-quality evidence
+    |       -> spatial or temporal reconstruction work only when evidence justifies it
+    |       -> R8 scale / quality / retained-state evidence
+    |
+    +--> framework public-boundary qualification
+    |       -> consumer-qualified RunenShader artifact handoff
+    |       -> ordinary future-public RunenRender surface qualification
+    |       -> diagnostics / result ergonomics / exact RX source boundary
+    |
+    +--> materially different method pressure
+            -> stochastic-specific finite-evaluation extension only if P1 requires it
+            -> P1 stateless multi-bounce path-tracing RenderMethod
+            -> direct-vs-path-tracer proof through the same semantic spine
+            -> RL3 interactive path-tracing/material-view scenario
+            -> adaptive stochastic evaluation pressure only when demonstrated
+
+all mandatory R8 evidence
+    -> R8 closure
+        -> RX clean standalone cutover
+```
+
+These branches may proceed in parallel only when accepted issues, dependencies, files, and authority do not conflict. One branch does not become accepted dependency authority for another merely because both use Render Lab.
+
+The durable canonical framework order remains:
 
 ```text
 R7 -> R8 -> RX
 ```
 
-The extraction-readiness review is a decision checkpoint, not automatic permission to reorder phases.
+The accepted #898 R8 census already established that R8 qualification may proceed before every generality gate is complete. P1/direct-vs-path evidence is therefore a remaining R8 **closure** obligation for the two-method requirement, not a prerequisite that retroactively precedes R8 activation.
+
+Temporal reconstruction/history pressure is likewise not serialized behind RL3. It is a distinct renderer concern justified by deterministic temporal/output-quality workloads. Conversely, temporal history does not authorize progressive stochastic evaluation/session semantics.
 
 ## #552 and P1 boundary
 
-The deterministic subset of #552 required by #566 is already accepted. It establishes only the normalized distinction needed for truthful deterministic result formation:
+The deterministic subset of #552 required by #566 is accepted and exercised by RL1/RL2. It establishes:
 
 ```text
 requested semantic target
@@ -473,24 +505,19 @@ requested semantic target
 != numeric realization
 ```
 
-RL1 and RL2 still precede any **additional stochastic-specific generalization**. Deterministic product proof should establish:
+Do not extend this vocabulary with estimator confidence, stochastic convergence, progressive accumulation, or session semantics merely because temporal reconstruction work exists. Those concepts answer different questions.
 
-- meaningful visible output;
-- legitimate product presentation;
-- input/camera mutation;
-- request/state invalidation behavior;
-- continuous frame delivery;
-- public-contract usability.
+P1 remains the planned first materially different maintained RunenRender method pressure: a stateless multi-bounce path-tracing method proved headlessly and correctness-first through the same scene/request/planning/admission/result spine. P1 is **RunenRender method work**, never Render Lab algorithm code.
 
-After RL2, re-census exact current pressure. Add stochastic/statistical finite-evaluation vocabulary only if the first materially different stochastic method actually requires it; do not pre-author estimator, confidence, convergence, session, or history machinery.
+Before P1 implementation, re-census exact current pressure. Add stochastic/statistical finite-evaluation contracts only when the real method requires them. The second maintained method must be materially different enough to prove the shared `RenderMethod` abstraction; do not manufacture a nominal second method solely to satisfy an R8 matrix.
 
-P1 is a **RunenRender method**, not Render Lab algorithm code. Its first proof is stateless, headless, and correctness-oriented. Raw noisy finite stochastic output may be useful diagnostic evidence there; it does not define the normal interactive product experience.
+Raw noisy finite stochastic output may be useful correctness/diagnostic evidence for P1. It does not define the normal interactive product experience.
 
 ## RL3 and adaptive refinement
 
-RL3 later adds an interactive path-tracing/material-view scenario with controlled geometry/material/lighting, direct-vs-path-trace comparison, camera interaction, and inspectable evaluation evidence.
+RL3 follows a maintained P1/direct-vs-path proof and adds an interactive path-tracing/material-view scenario with controlled geometry/material/lighting, camera interaction, and inspectable evaluation evidence.
 
-The later adaptive-refinement consumer supplies concrete pressure for retained evaluation state, reconstruction, continuation, convergence, history, or `RenderSession` semantics.
+The later adaptive-refinement consumer supplies concrete pressure specifically for **progressive stochastic evaluation** state such as accumulation, continuation, convergence, cancellation, and any `RenderSession`-like contract required to preserve that work.
 
 The required UX law is:
 
@@ -500,25 +527,33 @@ additional useful work = improves detail and/or evaluation fidelity
 scene/camera/material change = invalidates only incompatible evidence
 ```
 
-Do not pre-author session/progressive machinery merely because that consumer is planned.
+Temporal reconstruction history, jitter, motion/depth inputs, and fixed/dynamic-resolution reconstruction have their own accepted renderer contracts and may be justified earlier by deterministic temporal pressure. They must not be conflated with path-tracing accumulation or used to pre-author a generic retained-evaluation/session framework.
 
-## Extraction-readiness checkpoint
+Do not pre-author progressive stochastic machinery merely because RL3 is planned.
 
-After P1 and the direct-vs-path-tracer proof, explicitly review whether RunenRender is ready for a clean standalone cutover.
+## R8 closure and RX checkpoint
 
-Check at minimum:
+The initial extraction-readiness census has already occurred: accepted #898 concluded that bounded R8 qualification is justified while recording concrete missing/partial gates. Do not repeat that census as a prerequisite to starting R8, and do not interpret it as RX authorization.
+
+Before final R8 closure and RX, current evidence must establish at least:
 
 ```text
-real maintained Runenwerk consumer uses candidate public RunenRender surface
-two materially different RenderMethods share one semantic spine
+real maintained Runenwerk consumer uses the candidate public RunenRender surface
+ordinary headless/offscreen public API works without proof-private constructors
+two materially different maintained RenderMethods share one semantic spine
+direct-vs-path or equivalent method-generality evidence is owner-correct
+RunenShader artifact handoff and RunenGPU execution authority are reconciled
 public RunenGPU only; no WGPU/private reach-through
-ordinary API is usable without proof-private constructors
-standalone conformance can be formed
+structured diagnostics and semantic result definedness are usable publicly
+independent downstream public-API conformance exists beyond Render Lab dogfood
+standalone validation/examples/provenance/release obligations are ready
 consumer migration + predecessor deletion can be one clean cutover
-remaining R7/R8 work is maturity/scale rather than unresolved ownership/API repair
+remaining work is maturity/scale rather than unresolved ownership/API repair
 ```
 
-If evidence supports earlier extraction, propose the smallest canonical phase-order amendment separately. If not, continue proving the boundary internally.
+Render Lab can provide maintained dogfood, visual comparison, performance/quality pressure, and bounded scale evidence. It cannot certify standalone conformance by itself.
+
+After P1 and the direct-vs-path-tracer proof, refresh the R8 gate matrix rather than opening a second extraction-readiness authority. RX remains governed by the canonical RunenRender R8/RX plan and requires the clean standalone transfer/cutover; no compatibility facade, mirror, source include, or dual renderer authority is justified.
 
 ## Adjacent lab boundary
 
@@ -559,8 +594,10 @@ This design does not authorize:
 - render-farm/distributed orchestration;
 - generic image/video/EXR pipeline design;
 - hardware-ray-tracing work merely for Lab completeness;
-- sessions/history/reconstruction/denoising without a concrete consumer;
+- progressive stochastic sessions/accumulation/convergence without a concrete consumer;
+- treating temporal reconstruction history as generic stochastic evaluation state;
 - path tracing in the product layer;
+- treating Render Lab dogfood as independent standalone conformance;
 - claiming R8 complete from one product;
 - extracting generic Lab infrastructure from one proof.
 
@@ -591,7 +628,9 @@ Cold-start order for Render Lab work:
 2. [Runenwerk Platform Architecture](../../architecture/runenwerk-platform-architecture.md) — product/Workbench ownership;
 3. [RunenRender Architecture and Decomposition Design](./runenrender-decomposition-design.md) — renderer semantic authority;
 4. [RunenRender internal execution plan](../active/runenrender-internal-decomposition-execution-plan.md) and the [canonical roadmap](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/workspace/planning/roadmap.md) — durable framework sequence;
-5. the current owning GitHub issue/PR — live activation, implementation scope, blockers, and validation evidence.
+5. [Renderer Temporal Reconstruction and Dynamic Resolution Design](./renderer-temporal-reconstruction-and-dynamic-resolution-design.md) when the selected work concerns internal resolution, reconstruction, temporal inputs, or history;
+6. Engineering ADR 0009 / RunenShader authority when the selected work concerns shader source, canonical artifacts, or shader-to-GPU handoff;
+7. the current owning GitHub issue/PR — live activation, implementation scope, blockers, and validation evidence.
 
 Historical issue comments and prior editor renderer designs are evidence only. They do not override this accepted design or current code truth.
 
@@ -602,11 +641,14 @@ Render Lab is the maintained Runenwerk consumer that makes the RunenRender bound
 ```text
 product owns the experiment
 renderer owns rendering meaning
+shader toolchain owns canonical artifacts
 GPU owns physical execution
 evidence crosses boundaries through explicit contracts
-visual proof precedes stochastic generalization
+deterministic visual and real-time proof precede stochastic generalization
+temporal-quality and method-generality pressure remain distinct
+R8 may qualify incrementally but closes only on its full evidence set
 public-surface pressure is fixed at the owning boundary
 shared infrastructure is extracted only after repeated proof
 ```
 
-That is the accepted RL0 architecture.
+That is the accepted Render Lab product architecture.
