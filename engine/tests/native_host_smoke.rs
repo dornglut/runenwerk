@@ -1,3 +1,4 @@
+use std::process::Command;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -15,21 +16,41 @@ use winit::window::Window;
 
 const NO_RENDER_ENV: &str = "RUNENWERK_NATIVE_NO_RENDER_SMOKE";
 const RENDER_HOST_ENV: &str = "RUNENWERK_NATIVE_RENDER_HOST_SMOKE";
+const RENDER_UI_HOST_ENV: &str = "RUNENWERK_NATIVE_RENDER_UI_HOST_SMOKE";
 
 fn main() {
     match (
         std::env::var_os(NO_RENDER_ENV).is_some(),
         std::env::var_os(RENDER_HOST_ENV).is_some(),
+        std::env::var_os(RENDER_UI_HOST_ENV).is_some(),
     ) {
-        (false, false) => {}
-        (true, false) => {
+        (false, false, false) => {}
+        (true, false, false) => {
             native_no_render_host_smoke().expect("native no-Render Host smoke should succeed")
         }
-        (false, true) => {
-            native_render_host_smoke().expect("native selected-Render Host smoke should succeed")
+        (false, true, false) => {
+            native_render_host_smoke(false).expect("bare native Render Host smoke should succeed");
+            run_native_render_ui_child_smoke()
+                .expect("native Render + UI Host child smoke should succeed");
         }
-        (true, true) => panic!("native Host smoke modes are mutually exclusive"),
+        (false, false, true) => native_render_host_smoke(true)
+            .expect("native Render + UI Host smoke should succeed"),
+        _ => panic!("native Host smoke modes are mutually exclusive"),
     }
+}
+
+fn run_native_render_ui_child_smoke() -> anyhow::Result<()> {
+    let executable = std::env::current_exe()?;
+    let status = Command::new(executable)
+        .env_remove(NO_RENDER_ENV)
+        .env_remove(RENDER_HOST_ENV)
+        .env(RENDER_UI_HOST_ENV, "1")
+        .status()?;
+    anyhow::ensure!(
+        status.success(),
+        "native Render + UI Host child smoke exited with {status}"
+    );
+    Ok(())
 }
 
 #[derive(Clone)]
@@ -194,11 +215,13 @@ impl NativeWindowHook for NativeRenderHostSmokeHook {
             windows.request_window("Native selected-Render secondary", (640, 480));
             self.secondary_requested = true;
         }
+        let primary = windows
+            .record_mut(NativeWindowId::primary())
+            .ok_or_else(|| anyhow::anyhow!("selected-Render smoke primary window is missing"))?;
         if should_close || self.frames_seen >= 16 {
-            windows
-                .record_mut(NativeWindowId::primary())
-                .ok_or_else(|| anyhow::anyhow!("selected-Render smoke primary window is missing"))?
-                .request_close();
+            primary.request_close();
+        } else {
+            primary.request_redraw();
         }
         Ok(())
     }
@@ -312,7 +335,7 @@ fn native_no_render_host_smoke() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn native_render_host_smoke() -> anyhow::Result<()> {
+fn native_render_host_smoke(with_ui: bool) -> anyhow::Result<()> {
     let startup_ran = Arc::new(AtomicBool::new(false));
     let update_ran = Arc::new(AtomicBool::new(false));
     let frame_seen = Arc::new(AtomicBool::new(false));
@@ -322,7 +345,9 @@ fn native_render_host_smoke() -> anyhow::Result<()> {
 
     let mut app = App::new();
     app.add_plugins(default_plugins());
-    app.add_plugin(UiPlugin);
+    if with_ui {
+        app.add_plugin(UiPlugin);
+    }
     app.add_plugin(RenderPlugin);
     let flow = RenderFlow::new("native.render.host.smoke")
         .with_surface_color()?
@@ -365,7 +390,7 @@ fn native_render_host_smoke() -> anyhow::Result<()> {
             .resource::<engine::plugins::SceneResource>()?
             .manager
             .is_none(),
-        "native Render + UI smoke must not activate a Scene manager"
+        "native Render smoke must not activate a Scene manager"
     );
 
     app.run()?;
@@ -386,9 +411,16 @@ fn native_render_host_smoke() -> anyhow::Result<()> {
     );
     anyhow::ensure!(
         frame_submitted.load(Ordering::SeqCst),
-        "Render + UiPlugin without ScenePlugin never submitted a native frame"
+        if with_ui {
+            "Render + UiPlugin without ScenePlugin never submitted a native frame"
+        } else {
+            "Render without ScenePlugin never submitted a native frame"
+        }
     );
 
-    println!("native_render_host_smoke=pass");
+    println!(
+        "native_render_host_smoke=pass ui_plugin={}",
+        if with_ui { "selected" } else { "absent" }
+    );
     Ok(())
 }
