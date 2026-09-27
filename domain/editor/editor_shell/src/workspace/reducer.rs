@@ -1,8 +1,6 @@
 //! File: domain/editor/editor_shell/src/workspace/reducer.rs
 //! Purpose: Explicit reducer-style structural mutations for workspace graph state.
 
-use editor_viewport::{ViewportId, ViewportRuntimeSettings};
-
 use crate::{
     FloatingHostBounds, FloatingHostPlaceholderState, PanelHostId, PanelHostKind, PanelHostNode,
     PanelInstanceId, PanelInstanceState, PanelKind, SplitHostState, TabStackHostState, TabStackId,
@@ -13,7 +11,7 @@ use crate::{
 use super::state::is_viewport_stable_surface_key;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum WorkspaceMutation {
+pub(crate) enum WorkspaceMutation {
     SetTabStackPanels {
         tab_stack_id: TabStackId,
         ordered_panels: Vec<PanelInstanceId>,
@@ -71,9 +69,6 @@ pub enum WorkspaceMutation {
         tab_stack_id: TabStackId,
         locked_stable_surface_key: Option<ToolSurfaceStableKey>,
     },
-    ApplySavedLayoutPreset {
-        workspace_state: Box<WorkspaceState>,
-    },
     AttachToolSurfaceToPanel {
         panel_id: PanelInstanceId,
         tool_surface_id: ToolSurfaceInstanceId,
@@ -81,28 +76,10 @@ pub enum WorkspaceMutation {
     DetachToolSurfaceFromPanel {
         panel_id: PanelInstanceId,
     },
-    SetToolSurfaceMount {
-        tool_surface_id: ToolSurfaceInstanceId,
-        mount: ToolSurfaceMount,
-    },
-    SetToolSurfaceViewportInstanceId {
-        tool_surface_id: ToolSurfaceInstanceId,
-        viewport_instance_id: Option<ViewportId>,
-    },
-    SetToolSurfaceViewportSettings {
-        tool_surface_id: ToolSurfaceInstanceId,
-        viewport_settings: Option<ViewportRuntimeSettings>,
-    },
     ReplacePanelToolSurfaceStableKey {
         panel_id: PanelInstanceId,
         tool_surface_id: ToolSurfaceInstanceId,
         stable_surface_key: ToolSurfaceStableKey,
-    },
-    ReorderPanelInTabStack {
-        tab_stack_id: TabStackId,
-        panel_id: PanelInstanceId,
-        target_index: usize,
-        activate_panel: bool,
     },
     MovePanelBetweenTabStacks {
         panel_id: PanelInstanceId,
@@ -111,29 +88,6 @@ pub enum WorkspaceMutation {
         destination_index: usize,
         activate_panel: bool,
     },
-    MovePanelToNewSplitArea {
-        panel_id: PanelInstanceId,
-        source_tab_stack_id: TabStackId,
-        target_tab_stack_id: TabStackId,
-        split_host_id: PanelHostId,
-        target_child_host_id: PanelHostId,
-        new_child_host_id: PanelHostId,
-        new_tab_stack_id: TabStackId,
-        axis: WorkspaceSplitAxis,
-        target_is_first_child: bool,
-        fraction: f32,
-    },
-    MovePanelToNewHostSplitArea {
-        panel_id: PanelInstanceId,
-        source_tab_stack_id: TabStackId,
-        target_host_id: PanelHostId,
-        split_host_id: PanelHostId,
-        new_child_host_id: PanelHostId,
-        new_tab_stack_id: TabStackId,
-        axis: WorkspaceSplitAxis,
-        target_is_first_child: bool,
-        fraction: f32,
-    },
     MovePanelToNewFloatingHost {
         panel_id: PanelInstanceId,
         source_tab_stack_id: TabStackId,
@@ -141,17 +95,9 @@ pub enum WorkspaceMutation {
         floating_tab_stack_id: TabStackId,
         bounds: FloatingHostBounds,
     },
-    SetFloatingHostBounds {
-        floating_host_id: PanelHostId,
-        bounds: FloatingHostBounds,
-    },
-    SetSplitHostFraction {
-        split_host_id: PanelHostId,
-        fraction: f32,
-    },
 }
 
-pub fn reduce_workspace(
+pub(crate) fn reduce_workspace(
     state: &WorkspaceState,
     op: WorkspaceMutation,
 ) -> Result<WorkspaceState, WorkspaceStateError> {
@@ -289,10 +235,6 @@ fn apply_mutation(
                 .ok_or(WorkspaceStateError::MissingTabStack(tab_stack_id))?;
             stack.locked_stable_surface_key = locked_stable_surface_key;
         }
-        WorkspaceMutation::ApplySavedLayoutPreset { workspace_state } => {
-            workspace_state.validate_integrity()?;
-            *state = compact_empty_tab_stack_areas(&workspace_state)?;
-        }
         WorkspaceMutation::AttachToolSurfaceToPanel {
             panel_id,
             tool_surface_id,
@@ -358,84 +300,6 @@ fn apply_mutation(
                 .ok_or(WorkspaceStateError::MissingToolSurface(tool_surface_id))?;
             tool_surface.mount = ToolSurfaceMount::Unmounted;
         }
-        WorkspaceMutation::SetToolSurfaceMount {
-            tool_surface_id,
-            mount,
-        } => {
-            let old_mount = state
-                .tool_surfaces_by_id
-                .get(&tool_surface_id)
-                .ok_or(WorkspaceStateError::MissingToolSurface(tool_surface_id))?
-                .mount;
-
-            if let ToolSurfaceMount::Mounted { panel_id } = old_mount
-                && let Some(panel) = state.panels_by_id.get_mut(&panel_id)
-                && panel.active_tool_surface == Some(tool_surface_id)
-            {
-                panel.active_tool_surface = None;
-            }
-
-            if let ToolSurfaceMount::Mounted { panel_id } = mount {
-                let panel = state
-                    .panels_by_id
-                    .get(&panel_id)
-                    .copied()
-                    .ok_or(WorkspaceStateError::MissingPanel(panel_id))?;
-                if let Some(existing) = panel.active_tool_surface
-                    && existing != tool_surface_id
-                {
-                    return Err(WorkspaceStateError::PanelAlreadyHasToolSurface {
-                        panel_id,
-                        tool_surface_id: existing,
-                    });
-                }
-                state
-                    .panels_by_id
-                    .get_mut(&panel_id)
-                    .ok_or(WorkspaceStateError::MissingPanel(panel_id))?
-                    .active_tool_surface = Some(tool_surface_id);
-            }
-
-            state
-                .tool_surfaces_by_id
-                .get_mut(&tool_surface_id)
-                .ok_or(WorkspaceStateError::MissingToolSurface(tool_surface_id))?
-                .mount = mount;
-        }
-        WorkspaceMutation::SetToolSurfaceViewportInstanceId {
-            tool_surface_id,
-            viewport_instance_id,
-        } => {
-            let surface = state
-                .tool_surfaces_by_id
-                .get_mut(&tool_surface_id)
-                .ok_or(WorkspaceStateError::MissingToolSurface(tool_surface_id))?;
-            if viewport_instance_id.is_some()
-                && !is_viewport_stable_surface_key(surface.stable_surface_key())
-            {
-                return Err(WorkspaceStateError::ProjectionShapeMismatch(
-                    "viewport instance id can only be assigned to viewport tool surfaces",
-                ));
-            }
-            surface.viewport_instance_id = viewport_instance_id;
-        }
-        WorkspaceMutation::SetToolSurfaceViewportSettings {
-            tool_surface_id,
-            viewport_settings,
-        } => {
-            let surface = state
-                .tool_surfaces_by_id
-                .get_mut(&tool_surface_id)
-                .ok_or(WorkspaceStateError::MissingToolSurface(tool_surface_id))?;
-            if viewport_settings.is_some()
-                && !is_viewport_stable_surface_key(surface.stable_surface_key())
-            {
-                return Err(WorkspaceStateError::ProjectionShapeMismatch(
-                    "viewport settings can only be assigned to viewport tool surfaces",
-                ));
-            }
-            surface.viewport_settings = viewport_settings;
-        }
         WorkspaceMutation::ReplacePanelToolSurfaceStableKey {
             panel_id,
             tool_surface_id,
@@ -484,14 +348,6 @@ fn apply_mutation(
                 .ok_or(WorkspaceStateError::MissingPanel(panel_id))?
                 .active_tool_surface = Some(tool_surface_id);
         }
-        WorkspaceMutation::ReorderPanelInTabStack {
-            tab_stack_id,
-            panel_id,
-            target_index,
-            activate_panel,
-        } => {
-            reorder_panel_in_stack(state, tab_stack_id, panel_id, target_index, activate_panel)?;
-        }
         WorkspaceMutation::MovePanelBetweenTabStacks {
             panel_id,
             source_tab_stack_id,
@@ -506,56 +362,6 @@ fn apply_mutation(
                 destination_tab_stack_id,
                 destination_index,
                 activate_panel,
-            )?;
-        }
-        WorkspaceMutation::MovePanelToNewSplitArea {
-            panel_id,
-            source_tab_stack_id,
-            target_tab_stack_id,
-            split_host_id,
-            target_child_host_id,
-            new_child_host_id,
-            new_tab_stack_id,
-            axis,
-            target_is_first_child,
-            fraction,
-        } => {
-            move_panel_to_new_split_area(
-                state,
-                panel_id,
-                source_tab_stack_id,
-                target_tab_stack_id,
-                split_host_id,
-                target_child_host_id,
-                new_child_host_id,
-                new_tab_stack_id,
-                axis,
-                target_is_first_child,
-                fraction,
-            )?;
-        }
-        WorkspaceMutation::MovePanelToNewHostSplitArea {
-            panel_id,
-            source_tab_stack_id,
-            target_host_id,
-            split_host_id,
-            new_child_host_id,
-            new_tab_stack_id,
-            axis,
-            target_is_first_child,
-            fraction,
-        } => {
-            move_panel_to_new_host_split_area(
-                state,
-                panel_id,
-                source_tab_stack_id,
-                target_host_id,
-                split_host_id,
-                new_child_host_id,
-                new_tab_stack_id,
-                axis,
-                target_is_first_child,
-                fraction,
             )?;
         }
         WorkspaceMutation::MovePanelToNewFloatingHost {
@@ -574,37 +380,7 @@ fn apply_mutation(
                 bounds,
             )?;
         }
-        WorkspaceMutation::SetFloatingHostBounds {
-            floating_host_id,
-            bounds,
-        } => {
-            set_floating_host_bounds(state, floating_host_id, bounds)?;
-        }
-        WorkspaceMutation::SetSplitHostFraction {
-            split_host_id,
-            fraction,
-        } => {
-            set_split_host_fraction(state, split_host_id, fraction)?;
-        }
     }
-    Ok(())
-}
-
-fn set_split_host_fraction(
-    state: &mut WorkspaceState,
-    split_host_id: PanelHostId,
-    fraction: f32,
-) -> Result<(), WorkspaceStateError> {
-    let host = state
-        .hosts_by_id
-        .get_mut(&split_host_id)
-        .ok_or(WorkspaceStateError::MissingHost(split_host_id))?;
-    let PanelHostKind::SplitHost(split) = &mut host.kind else {
-        return Err(WorkspaceStateError::ProjectionShapeMismatch(
-            "requested split fraction update on non-split host",
-        ));
-    };
-    split.fraction = fraction;
     Ok(())
 }
 
@@ -1170,244 +946,6 @@ fn move_panel_between_tab_stacks(
     clippy::too_many_arguments,
     reason = "structural split move carries explicit ids from the workspace allocator"
 )]
-fn move_panel_to_new_split_area(
-    state: &mut WorkspaceState,
-    panel_id: PanelInstanceId,
-    source_tab_stack_id: TabStackId,
-    target_tab_stack_id: TabStackId,
-    split_host_id: PanelHostId,
-    target_child_host_id: PanelHostId,
-    new_child_host_id: PanelHostId,
-    new_tab_stack_id: TabStackId,
-    axis: WorkspaceSplitAxis,
-    target_is_first_child: bool,
-    fraction: f32,
-) -> Result<(), WorkspaceStateError> {
-    if !(fraction > 0.0 && fraction < 1.0 && fraction.is_finite()) {
-        return Err(WorkspaceStateError::InvalidSplitFraction {
-            host_id: split_host_id,
-            fraction,
-        });
-    }
-    if state.hosts_by_id.contains_key(&split_host_id) {
-        return Err(WorkspaceStateError::DuplicateHostId(split_host_id));
-    }
-    if state.hosts_by_id.contains_key(&target_child_host_id) {
-        return Err(WorkspaceStateError::DuplicateHostId(target_child_host_id));
-    }
-    if state.hosts_by_id.contains_key(&new_child_host_id) {
-        return Err(WorkspaceStateError::DuplicateHostId(new_child_host_id));
-    }
-    if state.tab_stacks_by_id.contains_key(&new_tab_stack_id) {
-        return Err(WorkspaceStateError::DuplicateTabStackId(new_tab_stack_id));
-    }
-    if source_tab_stack_id == target_tab_stack_id {
-        let source = state
-            .tab_stacks_by_id
-            .get(&source_tab_stack_id)
-            .ok_or(WorkspaceStateError::MissingTabStack(source_tab_stack_id))?;
-        if source.ordered_panels.len() <= 1 {
-            return Err(WorkspaceStateError::ProjectionShapeMismatch(
-                "cannot split the only tab from its own area",
-            ));
-        }
-    }
-
-    {
-        let source = state
-            .tab_stacks_by_id
-            .get_mut(&source_tab_stack_id)
-            .ok_or(WorkspaceStateError::MissingTabStack(source_tab_stack_id))?;
-        let source_index = source
-            .ordered_panels
-            .iter()
-            .position(|candidate| *candidate == panel_id)
-            .ok_or(WorkspaceStateError::PanelNotInTabStack {
-                tab_stack_id: source_tab_stack_id,
-                panel_id,
-            })?;
-        source.ordered_panels.remove(source_index);
-        if source.active_panel == Some(panel_id) {
-            source.active_panel = source
-                .ordered_panels
-                .get(source_index)
-                .or_else(|| {
-                    source_index
-                        .checked_sub(1)
-                        .and_then(|previous| source.ordered_panels.get(previous))
-                })
-                .copied();
-        }
-    }
-
-    if source_tab_stack_id != target_tab_stack_id {
-        cleanup_empty_tab_stack_area(state, source_tab_stack_id)?;
-    }
-
-    let target_host_id = tab_stack_host_id(state, target_tab_stack_id)?;
-    replace_host_reference(state, target_host_id, split_host_id)?;
-    state.hosts_by_id.remove(&target_host_id);
-
-    let (first_child, second_child) = if target_is_first_child {
-        (target_child_host_id, new_child_host_id)
-    } else {
-        (new_child_host_id, target_child_host_id)
-    };
-    state.hosts_by_id.insert(
-        split_host_id,
-        PanelHostNode {
-            id: split_host_id,
-            kind: PanelHostKind::SplitHost(SplitHostState {
-                axis,
-                fraction,
-                first_child,
-                second_child,
-            }),
-        },
-    );
-    state.hosts_by_id.insert(
-        target_child_host_id,
-        PanelHostNode {
-            id: target_child_host_id,
-            kind: PanelHostKind::TabStackHost(TabStackHostState {
-                tab_stack_id: target_tab_stack_id,
-            }),
-        },
-    );
-    state.hosts_by_id.insert(
-        new_child_host_id,
-        PanelHostNode {
-            id: new_child_host_id,
-            kind: PanelHostKind::TabStackHost(TabStackHostState {
-                tab_stack_id: new_tab_stack_id,
-            }),
-        },
-    );
-    state.tab_stacks_by_id.insert(
-        new_tab_stack_id,
-        TabStackState {
-            id: new_tab_stack_id,
-            ordered_panels: vec![panel_id],
-            active_panel: Some(panel_id),
-            locked_stable_surface_key: None,
-        },
-    );
-    Ok(())
-}
-
-#[expect(
-    clippy::too_many_arguments,
-    reason = "host split move carries explicit ids from the workspace allocator"
-)]
-fn move_panel_to_new_host_split_area(
-    state: &mut WorkspaceState,
-    panel_id: PanelInstanceId,
-    source_tab_stack_id: TabStackId,
-    target_host_id: PanelHostId,
-    split_host_id: PanelHostId,
-    new_child_host_id: PanelHostId,
-    new_tab_stack_id: TabStackId,
-    axis: WorkspaceSplitAxis,
-    target_is_first_child: bool,
-    fraction: f32,
-) -> Result<(), WorkspaceStateError> {
-    if !(fraction > 0.0 && fraction < 1.0 && fraction.is_finite()) {
-        return Err(WorkspaceStateError::InvalidSplitFraction {
-            host_id: split_host_id,
-            fraction,
-        });
-    }
-    if state.hosts_by_id.contains_key(&split_host_id) {
-        return Err(WorkspaceStateError::DuplicateHostId(split_host_id));
-    }
-    if state.hosts_by_id.contains_key(&new_child_host_id) {
-        return Err(WorkspaceStateError::DuplicateHostId(new_child_host_id));
-    }
-    if state.tab_stacks_by_id.contains_key(&new_tab_stack_id) {
-        return Err(WorkspaceStateError::DuplicateTabStackId(new_tab_stack_id));
-    }
-    if !state.hosts_by_id.contains_key(&target_host_id) {
-        return Err(WorkspaceStateError::MissingHost(target_host_id));
-    }
-    if tab_stack_host_id(state, source_tab_stack_id)? == target_host_id {
-        let source = state
-            .tab_stacks_by_id
-            .get(&source_tab_stack_id)
-            .ok_or(WorkspaceStateError::MissingTabStack(source_tab_stack_id))?;
-        if source.ordered_panels.len() <= 1 {
-            return Err(WorkspaceStateError::ProjectionShapeMismatch(
-                "cannot split the only tab from its own host",
-            ));
-        }
-    }
-
-    {
-        let source = state
-            .tab_stacks_by_id
-            .get_mut(&source_tab_stack_id)
-            .ok_or(WorkspaceStateError::MissingTabStack(source_tab_stack_id))?;
-        let source_index = source
-            .ordered_panels
-            .iter()
-            .position(|candidate| *candidate == panel_id)
-            .ok_or(WorkspaceStateError::PanelNotInTabStack {
-                tab_stack_id: source_tab_stack_id,
-                panel_id,
-            })?;
-        source.ordered_panels.remove(source_index);
-        if source.active_panel == Some(panel_id) {
-            source.active_panel = source
-                .ordered_panels
-                .get(source_index)
-                .or_else(|| {
-                    source_index
-                        .checked_sub(1)
-                        .and_then(|previous| source.ordered_panels.get(previous))
-                })
-                .copied();
-        }
-    }
-
-    replace_host_reference(state, target_host_id, split_host_id)?;
-    let (first_child, second_child) = if target_is_first_child {
-        (target_host_id, new_child_host_id)
-    } else {
-        (new_child_host_id, target_host_id)
-    };
-    state.hosts_by_id.insert(
-        split_host_id,
-        PanelHostNode {
-            id: split_host_id,
-            kind: PanelHostKind::SplitHost(SplitHostState {
-                axis,
-                fraction,
-                first_child,
-                second_child,
-            }),
-        },
-    );
-    state.hosts_by_id.insert(
-        new_child_host_id,
-        PanelHostNode {
-            id: new_child_host_id,
-            kind: PanelHostKind::TabStackHost(TabStackHostState {
-                tab_stack_id: new_tab_stack_id,
-            }),
-        },
-    );
-    state.tab_stacks_by_id.insert(
-        new_tab_stack_id,
-        TabStackState {
-            id: new_tab_stack_id,
-            ordered_panels: vec![panel_id],
-            active_panel: Some(panel_id),
-            locked_stable_surface_key: None,
-        },
-    );
-    cleanup_empty_tab_stack_area(state, source_tab_stack_id)?;
-    Ok(())
-}
-
 fn move_panel_to_new_floating_host(
     state: &mut WorkspaceState,
     panel_id: PanelInstanceId,
@@ -1470,30 +1008,6 @@ fn move_panel_to_new_floating_host(
         },
     );
     cleanup_empty_tab_stack_area(state, source_tab_stack_id)?;
-    Ok(())
-}
-
-fn set_floating_host_bounds(
-    state: &mut WorkspaceState,
-    floating_host_id: PanelHostId,
-    bounds: FloatingHostBounds,
-) -> Result<(), WorkspaceStateError> {
-    if !bounds.is_valid() {
-        return Err(WorkspaceStateError::InvalidFloatingHostBounds {
-            host_id: floating_host_id,
-            bounds,
-        });
-    }
-    let host = state
-        .hosts_by_id
-        .get_mut(&floating_host_id)
-        .ok_or(WorkspaceStateError::MissingHost(floating_host_id))?;
-    let PanelHostKind::FloatingHostPlaceholder(placeholder) = &mut host.kind else {
-        return Err(WorkspaceStateError::ProjectionShapeMismatch(
-            "target host is not a floating placeholder",
-        ));
-    };
-    placeholder.bounds = bounds;
     Ok(())
 }
 

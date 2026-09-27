@@ -127,39 +127,24 @@ fn describe_composition_persistence_rejection(
 }
 
 #[cfg(test)]
-pub fn write_workspace_layout(path: &Path, workspace: &editor_shell::WorkspaceState) -> Result<()> {
-    let runtime =
-        editor_shell::import_legacy_workspace(editor_shell::SCENE_WORKSPACE_PROFILE_ID, workspace)
-            .map_err(|error| anyhow!(error.to_string()))?;
-    save_editor_composition_layout(path, &runtime).map(|_| ())
-}
-
-#[cfg(test)]
-// Legacy/test compatibility reader: reverse composition-to-workspace loading is unsupported.
-pub fn read_workspace_layout_legacy_no_registry(
-    _path: &Path,
-) -> Result<editor_shell::WorkspaceState> {
-    Err(anyhow!(
-        "reverse composition-to-workspace loading is intentionally unsupported"
-    ))
-}
-
-#[cfg(test)]
 mod tests {
     use super::*;
-    use editor_shell::{
-        SCENE_WORKSPACE_PROFILE_ID, WorkspaceIdentityAllocator, default_workspace_profile_registry,
-        import_legacy_workspace,
-    };
+    use editor_shell::{SCENE_WORKSPACE_PROFILE_ID, form_editor_profile_layout_source};
 
     #[test]
     fn composition_linked_editor_bundle_round_trips_atomically() {
-        let profiles = default_workspace_profile_registry();
-        let profile = profiles.profile(SCENE_WORKSPACE_PROFILE_ID).unwrap();
-        let mut allocator = WorkspaceIdentityAllocator::new();
-        let workspace_id = allocator.allocate_workspace_id();
-        let workspace = profile.build_default_workspace_state(workspace_id, &mut allocator);
-        let runtime = import_legacy_workspace(profile.id, &workspace).unwrap();
+        let app = crate::editor_app::RunenwerkEditorApp::new();
+        let host = app.workbench_host();
+        let profile = host
+            .workspace_profile_registry()
+            .profile(SCENE_WORKSPACE_PROFILE_ID)
+            .expect("scene profile should be installed");
+        let runtime = form_editor_profile_layout_source(
+            profile.id,
+            &profile.layout_source,
+            host.tool_surface_registry(),
+        )
+        .expect("scene profile should form as composition");
         let directory = tempfile::tempdir().unwrap();
 
         save_editor_composition_layout(directory.path(), &runtime).unwrap();
