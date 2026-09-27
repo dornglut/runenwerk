@@ -1,4 +1,5 @@
 use editor_core::EntityId;
+use editor_viewport::ViewportId;
 use engine::plugins::render::{EditorGizmoAxis, EditorPickingHit, EditorPickingTarget};
 use engine::runtime::{Res, ResMut};
 use glam::{Vec2, Vec3, vec2, vec3};
@@ -47,68 +48,129 @@ pub fn produce_editor_picking_system(
     tool_surface_bindings: Res<ToolSurfaceRuntimeBindingRegistryResource>,
     viewport_render_states: Res<ViewportRenderStateResource>,
 ) {
+    let target_id = host.shell_state.primary_composition_target_id();
     let cursor = UiPoint::new(input.mouse_position.0, input.mouse_position.1);
-    let routed_viewport = routed_viewport_binding(&host, &tool_surface_bindings, cursor);
-    if let Some((mounted_unit_id, binding)) = routed_viewport {
-        let viewport_id = binding.viewport_id;
-        let viewport_bounds = binding.bounds;
-        let previous_hit = viewport_picking_results
-            .result_for(viewport_id)
-            .map(|value| value.hit)
-            .unwrap_or_else(EditorPickingHit::none);
-        let next_hit = if let Some(scene_context) =
-            picking_scene_context_for_viewport(&viewport_render_states, viewport_id)
-        {
-            if let Some(ray) = viewport_ray(
+    update_editor_picking_for_target(
+        target_id,
+        cursor,
+        &mut host,
+        &mut viewport_picking_results,
+        &tool_surface_bindings,
+        &viewport_render_states,
+    );
+}
+
+pub(crate) fn update_editor_picking_for_target(
+    target_id: ui_composition::PresentationTargetId,
+    cursor: UiPoint,
+    host: &mut EditorHostResource,
+    viewport_picking_results: &mut ViewportPickingResultsResource,
+    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    viewport_render_states: &ViewportRenderStateResource,
+) -> Option<ViewportId> {
+    let Some((mounted_unit_id, binding)) =
+        routed_viewport_binding_for_target(host, tool_surface_bindings, target_id, cursor)
+    else {
+        clear_editor_picking_for_target(
+            target_id,
+            cursor,
+            viewport_picking_results,
+            tool_surface_bindings,
+        );
+        return None;
+    };
+
+    let viewport_id = binding.viewport_id;
+    let viewport_bounds = binding.bounds;
+    let previous_hit = viewport_picking_results
+        .result_for(viewport_id)
+        .map(|value| value.hit)
+        .unwrap_or_else(EditorPickingHit::none);
+    let next_hit = if let Some(scene_context) =
+        picking_scene_context_for_viewport(viewport_render_states, viewport_id)
+    {
+        if let Some(ray) = viewport_ray(
+            cursor,
+            viewport_bounds,
+            scene_context.camera,
+            scene_context.camera_fov_y,
+        ) {
+            compose_picking_hit(
+                host.app.runtime(),
+                &scene_context.scene_packet,
+                Some(host.app.surface_sessions().viewport_tool(mounted_unit_id)),
+                host.app.runtime().selected_entity(),
                 cursor,
                 viewport_bounds,
                 scene_context.camera,
                 scene_context.camera_fov_y,
-            ) {
-                compose_picking_hit(
-                    host.app.runtime(),
-                    &scene_context.scene_packet,
-                    Some(host.app.surface_sessions().viewport_tool(mounted_unit_id)),
-                    host.app.runtime().selected_entity(),
-                    cursor,
-                    viewport_bounds,
-                    scene_context.camera,
-                    scene_context.camera_fov_y,
-                    ray,
-                )
-            } else {
-                EditorPickingHit::none()
-            }
+                ray,
+            )
         } else {
             EditorPickingHit::none()
-        };
-        let cursor_viewport_bounds = (
-            viewport_bounds.x,
-            viewport_bounds.y,
-            viewport_bounds.width,
-            viewport_bounds.height,
-        );
-        viewport_picking_results.set_viewport_result(
-            viewport_id,
-            (cursor.x, cursor.y),
-            cursor_viewport_bounds,
-            next_hit,
-        );
-
-        if host.app.debug_logs_enabled() && hit_changed(previous_hit, next_hit) {
-            host.app.append_console_debug(format!(
-                "[pick] viewport={} cursor=({:.1},{:.1}) local=({:.1},{:.1}) hit={} dist={:.3}",
-                viewport_id.0,
-                cursor.x,
-                cursor.y,
-                cursor.x - viewport_bounds.x,
-                cursor.y - viewport_bounds.y,
-                picking_target_label(next_hit.target),
-                next_hit.distance
-            ));
         }
     } else {
-        viewport_picking_results.clear_all_hits((cursor.x, cursor.y));
+        EditorPickingHit::none()
+    };
+    let cursor_viewport_bounds = (
+        viewport_bounds.x,
+        viewport_bounds.y,
+        viewport_bounds.width,
+        viewport_bounds.height,
+    );
+    viewport_picking_results.set_viewport_result(
+        viewport_id,
+        (cursor.x, cursor.y),
+        cursor_viewport_bounds,
+        next_hit,
+    );
+
+    if host.app.debug_logs_enabled() && hit_changed(previous_hit, next_hit) {
+        host.app.append_console_debug(format!(
+            "[pick] target={} viewport={} cursor=({:.1},{:.1}) local=({:.1},{:.1}) hit={} dist={:.3}",
+            target_id.raw(),
+            viewport_id.0,
+            cursor.x,
+            cursor.y,
+            cursor.x - viewport_bounds.x,
+            cursor.y - viewport_bounds.y,
+            picking_target_label(next_hit.target),
+            next_hit.distance
+        ));
+    }
+
+    Some(viewport_id)
+}
+
+pub(crate) fn clear_editor_picking_for_target(
+    target_id: ui_composition::PresentationTargetId,
+    cursor: UiPoint,
+    viewport_picking_results: &mut ViewportPickingResultsResource,
+    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+) {
+    let mut cleared = Vec::new();
+    for binding in tool_surface_bindings
+        .bindings()
+        .filter(|binding| binding.presentation_target_id == target_id)
+    {
+        if cleared.contains(&binding.viewport_id) {
+            continue;
+        }
+        cleared.push(binding.viewport_id);
+        let bounds = viewport_picking_results
+            .result_for(binding.viewport_id)
+            .map(|value| value.viewport_bounds_px)
+            .unwrap_or((
+                binding.bounds.x,
+                binding.bounds.y,
+                binding.bounds.width,
+                binding.bounds.height,
+            ));
+        viewport_picking_results.clear_viewport_hit(
+            binding.viewport_id,
+            (cursor.x, cursor.y),
+            bounds,
+        );
     }
 }
 
@@ -473,43 +535,33 @@ fn routed_viewport_bounds(
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
     cursor: UiPoint,
 ) -> Option<(editor_viewport::ViewportId, UiRect)> {
-    let runtime_state = host.shell_state.runtime().state();
-    if let Some(captured_widget) = runtime_state.captured_widget {
-        return viewport_scene_binding_for_widget(
-            &host.shell_state,
-            tool_surface_bindings,
-            captured_widget,
-        )
-        .map(|binding| (binding.viewport_id, binding.bounds));
-    }
-
-    let cursor_binding = tool_surface_bindings.binding_containing_cursor_for_target(
-        host.shell_state.primary_composition_target_id(),
-        cursor,
-    )?;
-    Some((cursor_binding.viewport_id, cursor_binding.bounds))
+    let target_id = host.shell_state.primary_composition_target_id();
+    routed_viewport_binding_for_target(host, tool_surface_bindings, target_id, cursor)
+        .map(|(_, binding)| (binding.viewport_id, binding.bounds))
 }
 
-fn routed_viewport_binding(
+fn routed_viewport_binding_for_target(
     host: &EditorHostResource,
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    target_id: ui_composition::PresentationTargetId,
     cursor: UiPoint,
 ) -> Option<(
     ui_composition::MountedUnitId,
     crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord,
 )> {
-    let binding = if let Some(captured_widget) = host.shell_state.runtime().state().captured_widget
+    let binding = if let Some(captured_widget) = host
+        .shell_state
+        .runtime_for_target(target_id)
+        .and_then(|runtime| runtime.state().captured_widget)
     {
         viewport_scene_binding_for_widget(
             &host.shell_state,
             tool_surface_bindings,
+            target_id,
             captured_widget,
         )?
     } else {
-        tool_surface_bindings.binding_containing_cursor_for_target(
-            host.shell_state.primary_composition_target_id(),
-            cursor,
-        )?
+        tool_surface_bindings.binding_containing_cursor_for_target(target_id, cursor)?
     };
     let mounted_unit_id = host
         .shell_state
@@ -520,19 +572,27 @@ fn routed_viewport_binding(
 fn viewport_scene_binding_for_widget(
     shell_state: &crate::shell::RunenwerkEditorShellState,
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    target_id: ui_composition::PresentationTargetId,
     widget_id: editor_shell::WidgetId,
 ) -> Option<crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord> {
-    let context = structural_context_for_widget(shell_state, widget_id)?;
+    let context = structural_context_for_widget(shell_state, target_id, widget_id)?;
     let binding = tool_surface_bindings.resolve_structural_context(context)?;
-    (binding.host_widget_id == widget_id).then_some(binding)
+    (binding.presentation_target_id == target_id && binding.host_widget_id == widget_id)
+        .then_some(binding)
 }
 
 fn structural_context_for_widget(
     shell_state: &crate::shell::RunenwerkEditorShellState,
+    target_id: ui_composition::PresentationTargetId,
     widget_id: editor_shell::WidgetId,
 ) -> Option<editor_shell::StructuralWidgetRoutingContext> {
     shell_state
-        .last_projection_artifacts()
+        .last_projection_artifacts_for_target(target_id)
+        .or_else(|| {
+            (target_id == shell_state.primary_composition_target_id())
+                .then(|| shell_state.last_projection_artifacts())
+                .flatten()
+        })
         .and_then(|artifacts| artifacts.widget_structural_context_by_id.get(&widget_id))
         .copied()
 }
@@ -991,6 +1051,68 @@ mod tests {
         assert_eq!(
             routed,
             Some((ViewportId(9), UiRect::new(100.0, 200.0, 300.0, 250.0))),
+        );
+    }
+
+    #[test]
+    fn clearing_secondary_target_picking_preserves_primary_results() {
+        let primary_target = ui_composition::PresentationTargetId::try_from_raw(1).unwrap();
+        let secondary_target = ui_composition::PresentationTargetId::try_from_raw(2).unwrap();
+        let primary_viewport = ViewportId(7);
+        let secondary_viewport = ViewportId(8);
+        let shared_bounds = UiRect::new(100.0, 200.0, 300.0, 250.0);
+        let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
+        for (raw, target_id, viewport_id) in [
+            (31, primary_target, primary_viewport),
+            (32, secondary_target, secondary_viewport),
+        ] {
+            bindings.upsert_binding(crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord {
+                presentation_target_id: target_id,
+                tool_surface_id: editor_shell::ToolSurfaceInstanceId::try_from_raw(raw).unwrap(),
+                panel_instance_id: editor_shell::PanelInstanceId::try_from_raw(raw).unwrap(),
+                tab_stack_id: editor_shell::TabStackId::try_from_raw(raw).unwrap(),
+                viewport_id,
+                host_widget_id: editor_shell::WidgetId(100 + raw),
+                bounds: shared_bounds,
+                effective_shell_scale: 1.0,
+                generation: 1,
+            });
+        }
+        let mut results = ViewportPickingResultsResource::default();
+        results.set_viewport_result(
+            primary_viewport,
+            (140.0, 240.0),
+            (shared_bounds.x, shared_bounds.y, shared_bounds.width, shared_bounds.height),
+            EditorPickingHit {
+                target: EditorPickingTarget::Entity(7),
+                distance: 2.0,
+            },
+        );
+        results.set_viewport_result(
+            secondary_viewport,
+            (140.0, 240.0),
+            (shared_bounds.x, shared_bounds.y, shared_bounds.width, shared_bounds.height),
+            EditorPickingHit {
+                target: EditorPickingTarget::Entity(8),
+                distance: 3.0,
+            },
+        );
+
+        clear_editor_picking_for_target(
+            secondary_target,
+            UiPoint::new(900.0, 900.0),
+            &mut results,
+            &bindings,
+        );
+
+        assert_eq!(
+            results.result_for(primary_viewport).unwrap().hit.target,
+            EditorPickingTarget::Entity(7),
+            "secondary no-route clearing must not touch primary picking",
+        );
+        assert_eq!(
+            results.result_for(secondary_viewport).unwrap().hit.target,
+            EditorPickingTarget::None,
         );
     }
 
