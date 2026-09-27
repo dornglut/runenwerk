@@ -14,6 +14,34 @@ pub struct EditorAutomationTarget {
     pub mounted_unit_id: MountedUnitId,
 }
 
+pub fn resolve_unique_scene_viewport_target(
+    host: &EditorHostResource,
+) -> Result<EditorAutomationTarget, String> {
+    let mut viewports = host
+        .shell_state
+        .composition_runtime()
+        .extension()
+        .mounted_units()
+        .iter()
+        .filter(|record| {
+            record.stable_content_key == crate::shell::tool_suites::SCENE_VIEWPORT_SURFACE_KEY
+        });
+
+    let viewport = viewports
+        .next()
+        .ok_or_else(|| "Editor automation found no mounted scene viewport".to_owned())?;
+    if viewports.next().is_some() {
+        return Err(
+            "Editor automation scene viewport target is ambiguous: multiple viewports are mounted"
+                .to_owned(),
+        );
+    }
+
+    Ok(EditorAutomationTarget {
+        mounted_unit_id: viewport.mounted_unit_id,
+    })
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EditorAutomationCommand {
     ActivateViewportTool(ViewportToolKind),
@@ -122,21 +150,6 @@ mod tests {
         AutomationStepOutcome, AutomationStepRecord, AutomationStepResult, InputSourceId,
     };
 
-    fn viewport_target(host: &EditorHostResource) -> EditorAutomationTarget {
-        let mounted_unit_id = host
-            .shell_state
-            .composition_runtime()
-            .extension()
-            .mounted_units()
-            .iter()
-            .find(|record| {
-                record.stable_content_key == crate::shell::tool_suites::SCENE_VIEWPORT_SURFACE_KEY
-            })
-            .expect("headless Full Editor should contain a mounted viewport")
-            .mounted_unit_id;
-        EditorAutomationTarget { mounted_unit_id }
-    }
-
     #[test]
     fn product_semantic_session_mutates_and_queries_one_mounted_viewport() {
         let mut app = crate::runtime::build_headless_app()
@@ -146,7 +159,8 @@ mod tests {
                 .world()
                 .resource::<EditorHostResource>()
                 .expect("headless Editor should install EditorHostResource");
-            viewport_target(host)
+            resolve_unique_scene_viewport_target(host)
+                .expect("headless Full Editor should contain exactly one scene viewport")
         };
         let mut session =
             AutomationSession::new(AutomationSessionId::new(20), InputSourceId::new(20_001));
@@ -251,7 +265,8 @@ mod tests {
                 .world()
                 .resource::<EditorHostResource>()
                 .expect("headless Editor should install EditorHostResource");
-            viewport_target(host)
+            resolve_unique_scene_viewport_target(host)
+                .expect("headless Full Editor should contain exactly one scene viewport")
         };
         let mut session =
             AutomationSession::new(AutomationSessionId::new(22), InputSourceId::new(20_003));
