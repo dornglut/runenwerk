@@ -304,6 +304,7 @@ The owner-neutral outcome vocabulary preserves at least:
 - AdmittedOrDelivered;
 - EffectConfirmed;
 - AssertionPassed;
+- AssertionFailed;
 - Unsupported;
 - Inconclusive;
 - Cancelled;
@@ -349,10 +350,18 @@ A generic assertion step therefore consumes an owner-supplied typed predicate/as
 operation and records only the resulting knowledge:
 
 ```text
-AssertionPassed
-or
-Inconclusive / InfrastructureFailure
+AssertionPassed      # owner-defined assertion is definitively true
+AssertionFailed      # owner-defined assertion is definitively false
+Inconclusive         # required state/evidence was not established, for example timeout
+InfrastructureFailure
 ```
+
+A definitive mismatch MUST NOT be collapsed into `Inconclusive`; timeout/unknown and
+observed-false are different knowledge states.
+
+`AutomationStepResult` does not currently expose `AssertionFailed`. The first
+implementation successor is authorized to add that owner-neutral result variant so the
+shared history can preserve this distinction.
 
 It MUST NOT copy product state into a universal assertion schema.
 
@@ -529,15 +538,16 @@ That issue should:
 
 1. extend the existing Engine `AutomationSession` rather than add a competing runner;
 2. add ordered owner-neutral current-run history;
-3. make persisted normalized-trace replay a session-coordinated operation reusing A8/A6;
-4. preserve typed owner results outside generic history;
-5. make finish/cancel account for replay-owned teardown where the session coordinated replay;
-6. route the accepted Render Lab A9 replay/query/cleanup through the shared session while
+3. add the owner-neutral `AssertionFailed` result needed to distinguish definitive mismatch from `Inconclusive`;
+4. make persisted normalized-trace replay a session-coordinated operation reusing A8/A6;
+5. preserve typed owner results outside generic history;
+6. make finish/cancel account for replay-owned teardown where the session coordinated replay;
+7. route the accepted Render Lab A9 replay/query/cleanup through the shared session while
    leaving filesystem/CLI UX product-local;
-7. prove Draw persisted tablet replay produces the same session/history shape;
-8. prove Editor ProductSemantic dispatch/query produces the same session/history shape;
-9. prove Unsupported never falls back and failure/cancellation cleanup is scoped;
-10. add no persisted scenario AST, central CLI, provider registry, IPC, native automation,
+8. prove Draw persisted tablet replay produces the same session/history shape;
+9. prove Editor ProductSemantic dispatch/query produces the same session/history shape;
+10. prove Unsupported never falls back and failure/cancellation cleanup is scoped;
+11. add no persisted scenario AST, central CLI, provider registry, IPC, native automation,
     new crate, or universal product payload enum.
 
 The implementation issue must re-census current writers. In particular, any Render Lab
