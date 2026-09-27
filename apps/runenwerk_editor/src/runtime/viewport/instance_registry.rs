@@ -258,13 +258,6 @@ impl ViewportInstanceRegistryResource {
         self.close_mounted_instance(mounted_unit_id)
     }
 
-    #[cfg(test)]
-    pub fn sync_from_workspace_state(&mut self, workspace: &editor_shell::WorkspaceState) {
-        let profile_id = editor_shell::SCENE_WORKSPACE_PROFILE_ID;
-        let runtime = editor_shell::import_legacy_workspace(profile_id, workspace).unwrap();
-        self.sync_from_composition(&runtime);
-    }
-
     fn allocate_viewport_id(&mut self) -> ViewportId {
         let mut viewport_id = ViewportId(self.next_viewport_id.max(FIRST_ALLOCATED_VIEWPORT_ID));
         while viewport_id == MAIN_VIEWPORT_ID
@@ -278,17 +271,27 @@ impl ViewportInstanceRegistryResource {
 }
 
 #[cfg(test)]
-pub(crate) fn is_viewport_tool_surface(surface: &editor_shell::ToolSurfaceState) -> bool {
-    surface.stable_surface_key().as_str() == SCENE_VIEWPORT_SURFACE_KEY
-}
-
-#[cfg(test)]
 mod tests {
     use super::*;
     use editor_shell::{
-        WorkspaceId, WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceState,
-        reduce_workspace,
+        EditorCompositionExtensionV1, EditorCompositionRuntime, SCENE_WORKSPACE_PROFILE_ID,
+        form_editor_profile_layout_source,
     };
+
+    fn default_composition() -> EditorCompositionRuntime {
+        let app = crate::editor_app::RunenwerkEditorApp::new();
+        let host = app.workbench_host();
+        let profile = host
+            .workspace_profile_registry()
+            .profile(SCENE_WORKSPACE_PROFILE_ID)
+            .expect("scene profile should be installed");
+        form_editor_profile_layout_source(
+            profile.id,
+            &profile.layout_source,
+            host.tool_surface_registry(),
+        )
+        .expect("scene profile should form as composition")
+    }
 
     fn ids() -> (
         ToolSurfaceInstanceId,
@@ -334,41 +337,43 @@ mod tests {
 
     #[test]
     fn sync_retains_only_mounted_viewport_surfaces() {
-        let mut allocator = WorkspaceIdentityAllocator::new();
-        let workspace_id = WorkspaceId::try_from_raw(1).unwrap();
-        let workspace = WorkspaceState::bootstrap_current_layout(workspace_id, &mut allocator);
+        let runtime = default_composition();
         let mut registry = ViewportInstanceRegistryResource::default();
 
-        registry.sync_from_workspace_state(&workspace);
+        registry.sync_from_composition(&runtime);
 
         assert!(registry.records().any(|record| {
-            workspace
-                .tool_surface(record.tool_surface_id)
-                .is_some_and(is_viewport_tool_surface)
+            runtime
+                .extension()
+                .mounted_unit(record.mounted_unit_id)
+                .is_some_and(|unit| unit.stable_content_key == SCENE_VIEWPORT_SURFACE_KEY)
         }));
     }
 
     #[test]
     fn sync_restores_persisted_viewport_identity() {
-        let mut allocator = WorkspaceIdentityAllocator::new();
-        let workspace_id = WorkspaceId::try_from_raw(1).unwrap();
-        let workspace = WorkspaceState::bootstrap_current_layout(workspace_id, &mut allocator);
-        let viewport_surface = workspace
-            .tool_surfaces()
-            .find(|surface| is_viewport_tool_surface(surface))
-            .map(|surface| surface.id)
-            .expect("bootstrap workspace should contain a viewport surface");
-        let workspace = reduce_workspace(
-            &workspace,
-            WorkspaceMutation::SetToolSurfaceViewportInstanceId {
-                tool_surface_id: viewport_surface,
-                viewport_instance_id: Some(ViewportId(77)),
-            },
-        )
-        .expect("restore id mutation should be valid");
+        let current = default_composition();
+        let mut mounted_units = current.extension().mounted_units().to_vec();
+        let viewport = mounted_units
+            .iter_mut()
+            .find(|unit| unit.stable_content_key == SCENE_VIEWPORT_SURFACE_KEY)
+            .expect("scene composition should contain a viewport");
+        viewport.viewport_instance_raw = Some(77);
+        let viewport_surface =
+            ToolSurfaceInstanceId::try_from_raw(viewport.compatibility_surface_raw).unwrap();
+        let extension = EditorCompositionExtensionV1::new(
+            current.extension().layout_id(),
+            current.extension().definition_revision(),
+            current.extension().workspace_profile_raw(),
+            mounted_units,
+            current.extension().regions().to_vec(),
+            current.extension().roots().to_vec(),
+        );
+        let runtime = EditorCompositionRuntime::install(current.composition().clone(), extension)
+            .expect("persisted viewport identity should be a valid editor extension");
         let mut registry = ViewportInstanceRegistryResource::default();
 
-        registry.sync_from_workspace_state(&workspace);
+        registry.sync_from_composition(&runtime);
 
         assert_eq!(
             registry.viewport_for_tool_surface(viewport_surface),
