@@ -463,49 +463,45 @@ impl Renderer {
                             invocation.flow_id
                         )
                     })?;
-                    let Some(view) = prepared_frame.view(invocation.view_id.as_str()) else {
-                        bail!(
-                            "prepared flow invocation '{}' references missing view '{}'",
-                            invocation.invocation_id.0,
-                            invocation.view_id
-                        );
-                    };
-                    let mut invocation_packet = packet.clone();
-                    invocation_packet.pending_operations = RendererPendingOperations::default();
-                    invocation_packet.view_id = view.view_id.clone();
-                    invocation_packet.surface_size = view.target_size_px;
-                    let occurrences = expand_render_pass_occurrences_in_frame(
-                        flow,
-                        &invocation.inputs,
-                        &mut maximum_occurrence,
-                        |pass| {
-                            if !self.pass_targets_active_view(
-                                pass,
-                                view.view_id.as_str(),
-                                view.kind,
-                            ) {
-                                return Ok(false);
-                            }
-                            let pass_id = execution_pass_id(pass);
-                            if let Some(feature_id) = execution_pass_feature_id(pass)
-                                && self.resolve_feature_pass_action(
-                                    feature_id,
-                                    pass_id,
-                                    &invocation_packet,
-                                )? == FeaturePassAction::Skip
-                            {
-                                return Ok(false);
-                            }
-                            ensure_compiled_pass_is_supported(pass)?;
-                            Ok(true)
-                        },
-                    )?;
-                    scheduled_invocations.push_back((
-                        flow.flow_id.to_string(),
-                        invocation.invocation_id.0.clone(),
-                        invocation_packet,
-                        occurrences,
-                    ));
+                let Some(view) = prepared_frame.view(invocation.view_id.as_str()) else {
+                    bail!(
+                        "prepared flow invocation '{}' references missing view '{}'",
+                        invocation.invocation_id.0,
+                        invocation.view_id
+                    );
+                };
+                let mut invocation_packet = packet.clone();
+                invocation_packet.pending_operations = RendererPendingOperations::default();
+                invocation_packet.view_id = view.view_id.clone();
+                invocation_packet.surface_size = view.target_size_px;
+                let occurrences = expand_render_pass_occurrences_in_frame(
+                    flow,
+                    &invocation.inputs,
+                    &mut maximum_occurrence,
+                    |pass| {
+                        if !self.pass_targets_active_view(pass, view.view_id.as_str(), view.kind) {
+                            return Ok(false);
+                        }
+                        let pass_id = execution_pass_id(pass);
+                        if let Some(feature_id) = execution_pass_feature_id(pass)
+                            && self.resolve_feature_pass_action(
+                                feature_id,
+                                pass_id,
+                                &invocation_packet,
+                            )? == FeaturePassAction::Skip
+                        {
+                            return Ok(false);
+                        }
+                        ensure_compiled_pass_is_supported(pass)?;
+                        Ok(true)
+                    },
+                )?;
+                scheduled_invocations.push_back((
+                    flow.flow_id.to_string(),
+                    invocation.invocation_id.0.clone(),
+                    invocation_packet,
+                    occurrences,
+                ));
             }
 
             let mut invocations = Vec::new();
@@ -523,7 +519,6 @@ impl Renderer {
                     .map(|invocation| invocation.invocation_id.0.as_str())
                     .collect::<Vec<_>>();
                 runtime_resources.retain_invocation_uniform_scopes(invocation_ids);
-
             }
 
             // Consume exactly the prepared invocation sequence. Cross-flow helper chains such as
@@ -542,222 +537,221 @@ impl Renderer {
                 let runtime_resources = flow_runtime_cache
                     .get_mut(&flow.flow_id)
                     .expect("active compiled flow runtime resources should be realized");
-                    let Some((
+                let Some((
+                    scheduled_flow_id,
+                    scheduled_invocation_id,
+                    invocation_packet,
+                    occurrences,
+                )) = scheduled_invocations.pop_front()
+                else {
+                    bail!(
+                        "frame occurrence reservation is missing flow '{}' invocation '{}'",
+                        flow.flow_id,
+                        invocation.invocation_id.0
+                    );
+                };
+                if scheduled_flow_id != flow.flow_id.to_string()
+                    || scheduled_invocation_id.as_str() != invocation.invocation_id.0.as_str()
+                {
+                    bail!(
+                        "frame occurrence reservation order mismatch: expected flow '{}' invocation '{}', found flow '{}' invocation '{}'",
+                        flow.flow_id,
+                        invocation.invocation_id.0,
                         scheduled_flow_id,
-                        scheduled_invocation_id,
-                        invocation_packet,
-                        occurrences,
-                    )) = scheduled_invocations.pop_front()
-                    else {
-                        bail!(
-                            "frame occurrence reservation is missing flow '{}' invocation '{}'",
-                            flow.flow_id,
-                            invocation.invocation_id.0
-                        );
-                    };
-                    if scheduled_flow_id != flow.flow_id.to_string()
-                        || scheduled_invocation_id.as_str() != invocation.invocation_id.0.as_str()
-                    {
-                        bail!(
-                            "frame occurrence reservation order mismatch: expected flow '{}' invocation '{}', found flow '{}' invocation '{}'",
-                            flow.flow_id,
-                            invocation.invocation_id.0,
-                            scheduled_flow_id,
-                            scheduled_invocation_id
-                        );
-                    }
-                    let Some(view) = prepared_frame.view(invocation.view_id.as_str()) else {
-                        bail!(
-                            "prepared flow invocation '{}' references missing view '{}'",
-                            invocation.invocation_id.0,
-                            invocation.view_id
-                        );
-                    };
-                    runtime_resources.target_alias_bindings =
-                        invocation.target_alias_bindings.clone();
-                    runtime_resources
-                        .set_active_invocation_uniform_scope(invocation.invocation_id.0.clone());
-                    let effective_history_signature = invocation
-                        .history_signature
-                        .as_deref()
-                        .or(view.history_signature.as_deref());
+                        scheduled_invocation_id
+                    );
+                }
+                let Some(view) = prepared_frame.view(invocation.view_id.as_str()) else {
+                    bail!(
+                        "prepared flow invocation '{}' references missing view '{}'",
+                        invocation.invocation_id.0,
+                        invocation.view_id
+                    );
+                };
+                runtime_resources.target_alias_bindings = invocation.target_alias_bindings.clone();
+                runtime_resources
+                    .set_active_invocation_uniform_scope(invocation.invocation_id.0.clone());
+                let effective_history_signature = invocation
+                    .history_signature
+                    .as_deref()
+                    .or(view.history_signature.as_deref());
 
-                    let invocation_result = (|| -> Result<RealizedFlowInvocation<'a>> {
-                        runtime_resources.realize_invocation_history_textures(
-                            invocation.invocation_id.0.as_str(),
-                            invocation_packet.surface_size,
-                            invocation_packet.surface_format,
-                            effective_history_signature,
-                        )?;
+                let invocation_result = (|| -> Result<RealizedFlowInvocation<'a>> {
+                    runtime_resources.realize_invocation_history_textures(
+                        invocation.invocation_id.0.as_str(),
+                        invocation_packet.surface_size,
+                        invocation_packet.surface_format,
+                        effective_history_signature,
+                    )?;
 
-                        let projected_uploads = self.realize_projected_uniform_uploads(
-                            context,
-                            flow,
-                            invocation.invocation_id.0.as_str(),
-                            &invocation.inputs,
-                            runtime_resources,
-                            &mut maximum_occurrence,
-                        )?;
+                    let projected_uploads = self.realize_projected_uniform_uploads(
+                        context,
+                        flow,
+                        invocation.invocation_id.0.as_str(),
+                        &invocation.inputs,
+                        runtime_resources,
+                        &mut maximum_occurrence,
+                    )?;
 
-                        let logical_timing_plan =
-                            if gpu_timing_capability == RenderGpuTimingCapability::Supported {
-                                Some(LogicalGpuPassTimingPlan::new(
-                                    occurrences.iter().map(|occurrence| occurrence.pass),
-                                )?)
-                            } else {
-                                None
-                            };
-                        let mut timing_frame = match logical_timing_plan
-                            .as_ref()
-                            .and_then(LogicalGpuPassTimingPlan::timing)
-                        {
-                            Some(timing) => Some(GpuPassTimingFrame::new(
-                                context,
-                                timing.query_set(),
-                                timing.resolve_buffer(),
-                                timing.readback_id(),
-                                timing.query_capacity(),
-                            )?),
-                            None => None,
+                    let logical_timing_plan =
+                        if gpu_timing_capability == RenderGpuTimingCapability::Supported {
+                            Some(LogicalGpuPassTimingPlan::new(
+                                occurrences.iter().map(|occurrence| occurrence.pass),
+                            )?)
+                        } else {
+                            None
                         };
-                        let mut realized_passes = Vec::new();
-                        for (ordinal, occurrence) in occurrences.into_iter().enumerate() {
-                            let fixed_step_upload = occurrence
-                                .fixed_step_iteration
-                                .map(|iteration| {
-                                    self.realize_fixed_step_iteration_upload(
-                                        context,
-                                        invocation.invocation_id.0.as_str(),
-                                        runtime_resources,
-                                        iteration.region,
-                                        iteration
-                                            .schedule
-                                            .with_substep_index(iteration.substep_index),
-                                        &mut maximum_occurrence,
-                                        occurrence.control_order_after.clone(),
-                                    )
-                                })
-                                .transpose()?;
-                            let pass = occurrence.pass;
-                            let mut before_captures = Vec::new();
-                            if capture_runtime.should_attempt_stage(CaptureStage::Before) {
-                                self.prepare_pass_texture_captures(
+                    let mut timing_frame = match logical_timing_plan
+                        .as_ref()
+                        .and_then(LogicalGpuPassTimingPlan::timing)
+                    {
+                        Some(timing) => Some(GpuPassTimingFrame::new(
+                            context,
+                            timing.query_set(),
+                            timing.resolve_buffer(),
+                            timing.readback_id(),
+                            timing.query_capacity(),
+                        )?),
+                        None => None,
+                    };
+                    let mut realized_passes = Vec::new();
+                    for (ordinal, occurrence) in occurrences.into_iter().enumerate() {
+                        let fixed_step_upload = occurrence
+                            .fixed_step_iteration
+                            .map(|iteration| {
+                                self.realize_fixed_step_iteration_upload(
                                     context,
-                                    surface_texture,
-                                    acquired_surface_extent,
-                                    &invocation_packet,
-                                    flow,
-                                    pass,
+                                    invocation.invocation_id.0.as_str(),
                                     runtime_resources,
-                                    CaptureStage::Before,
-                                    &mut capture_runtime,
-                                    &mut before_captures,
-                                )?;
-                            }
-                            let pipeline = self.realize_compiled_pass(
+                                    iteration.region,
+                                    iteration
+                                        .schedule
+                                        .with_substep_index(iteration.substep_index),
+                                    &mut maximum_occurrence,
+                                    occurrence.control_order_after.clone(),
+                                )
+                            })
+                            .transpose()?;
+                        let pass = occurrence.pass;
+                        let mut before_captures = Vec::new();
+                        if capture_runtime.should_attempt_stage(CaptureStage::Before) {
+                            self.prepare_pass_texture_captures(
                                 context,
+                                surface_texture,
+                                acquired_surface_extent,
                                 &invocation_packet,
                                 flow,
-                                &invocation.inputs,
                                 pass,
-                                shader_registry,
                                 runtime_resources,
+                                CaptureStage::Before,
+                                &mut capture_runtime,
+                                &mut before_captures,
                             )?;
-                            let mut after_captures = Vec::new();
-                            if capture_runtime.should_attempt_stage(CaptureStage::After) {
-                                self.prepare_pass_texture_captures(
-                                    context,
-                                    surface_texture,
-                                    acquired_surface_extent,
-                                    &invocation_packet,
-                                    flow,
-                                    pass,
-                                    runtime_resources,
-                                    CaptureStage::After,
-                                    &mut capture_runtime,
-                                    &mut after_captures,
-                                )?;
-                            }
-                            let timestamp_indices = logical_timing_plan
-                                .as_ref()
-                                .map(|plan| plan.range_for_occurrence(ordinal))
-                                .transpose()?
-                                .flatten();
-                            if let Some(indices) = timestamp_indices {
-                                let frame = timing_frame.as_mut().ok_or_else(|| {
-                                    anyhow::anyhow!(
-                                        "timestampable pass '{}' has no realized timing resources",
-                                        execution_pass_id(pass)
-                                    )
-                                })?;
-                                if !frame.register_pass_metadata(
-                                    indices,
-                                    frame_index,
-                                    prepared_frame.surface.render_surface_id.raw(),
-                                    flow.flow_id.to_string(),
-                                    execution_pass_id(pass).to_string(),
-                                    execution_pass_kind_name(pass).to_string(),
-                                ) {
-                                    bail!(
-                                        "renderer timing metadata for flow '{}' pass '{}' disagrees with its admitted query range",
-                                        flow.flow_id,
-                                        execution_pass_id(pass)
-                                    );
-                                }
-                            }
-                            realized_passes.push(RealizedScheduledPass {
-                                occurrence: occurrence.occurrence_id,
-                                control_order_after: occurrence.control_order_after,
-                                fixed_step_upload,
-                                execution: RealizedPassExecution {
-                                    pass,
-                                    timestamp_indices,
-                                    pipeline,
-                                    before_captures,
-                                    after_captures,
-                                },
-                            });
                         }
-                        let canonical_projections = realized_passes
-                            .iter()
-                            .map(|scheduled| CanonicalPassProjection {
-                                occurrence: scheduled.occurrence,
-                                control_order_after: &scheduled.control_order_after,
-                                pass: scheduled.execution.pass,
-                                pipeline: scheduled.execution.pipeline.as_ref(),
-                                timestamp_indices: scheduled.execution.timestamp_indices,
-                                fixed_step_upload: scheduled.fixed_step_upload.as_ref(),
-                                before_captures: &scheduled.execution.before_captures,
-                                after_captures: &scheduled.execution.after_captures,
-                            })
-                            .collect::<Vec<_>>();
-                        let canonical_resolution = resolve_canonical_invocation(
+                        let pipeline = self.realize_compiled_pass(
+                            context,
+                            &invocation_packet,
                             flow,
                             &invocation.inputs,
+                            pass,
+                            shader_registry,
                             runtime_resources,
-                            Some(&self.dynamic_texture_targets),
-                            CanonicalInvocationProjection {
-                                projected_uploads: &projected_uploads,
-                                passes: &canonical_projections,
-                                surface_color_view: Some(surface_view),
-                                builtin_ui_draws: Some(&builtin_ui_draws),
-                                timing: logical_timing_plan
-                                    .as_ref()
-                                    .and_then(LogicalGpuPassTimingPlan::timing),
-                            },
-                            &mut maximum_occurrence,
                         )?;
-                        Ok(RealizedFlowInvocation {
-                            flow,
-                            invocation,
-                            packet: invocation_packet,
-                            scheduled_passes: realized_passes,
-                            timing_frame,
-                            canonical_resolution: Some(canonical_resolution),
+                        let mut after_captures = Vec::new();
+                        if capture_runtime.should_attempt_stage(CaptureStage::After) {
+                            self.prepare_pass_texture_captures(
+                                context,
+                                surface_texture,
+                                acquired_surface_extent,
+                                &invocation_packet,
+                                flow,
+                                pass,
+                                runtime_resources,
+                                CaptureStage::After,
+                                &mut capture_runtime,
+                                &mut after_captures,
+                            )?;
+                        }
+                        let timestamp_indices = logical_timing_plan
+                            .as_ref()
+                            .map(|plan| plan.range_for_occurrence(ordinal))
+                            .transpose()?
+                            .flatten();
+                        if let Some(indices) = timestamp_indices {
+                            let frame = timing_frame.as_mut().ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "timestampable pass '{}' has no realized timing resources",
+                                    execution_pass_id(pass)
+                                )
+                            })?;
+                            if !frame.register_pass_metadata(
+                                indices,
+                                frame_index,
+                                prepared_frame.surface.render_surface_id.raw(),
+                                flow.flow_id.to_string(),
+                                execution_pass_id(pass).to_string(),
+                                execution_pass_kind_name(pass).to_string(),
+                            ) {
+                                bail!(
+                                    "renderer timing metadata for flow '{}' pass '{}' disagrees with its admitted query range",
+                                    flow.flow_id,
+                                    execution_pass_id(pass)
+                                );
+                            }
+                        }
+                        realized_passes.push(RealizedScheduledPass {
+                            occurrence: occurrence.occurrence_id,
+                            control_order_after: occurrence.control_order_after,
+                            fixed_step_upload,
+                            execution: RealizedPassExecution {
+                                pass,
+                                timestamp_indices,
+                                pipeline,
+                                before_captures,
+                                after_captures,
+                            },
+                        });
+                    }
+                    let canonical_projections = realized_passes
+                        .iter()
+                        .map(|scheduled| CanonicalPassProjection {
+                            occurrence: scheduled.occurrence,
+                            control_order_after: &scheduled.control_order_after,
+                            pass: scheduled.execution.pass,
+                            pipeline: scheduled.execution.pipeline.as_ref(),
+                            timestamp_indices: scheduled.execution.timestamp_indices,
+                            fixed_step_upload: scheduled.fixed_step_upload.as_ref(),
+                            before_captures: &scheduled.execution.before_captures,
+                            after_captures: &scheduled.execution.after_captures,
                         })
-                    })();
-                    runtime_resources.clear_active_invocation_uniform_scope();
-                    invocations.push(invocation_result?);
+                        .collect::<Vec<_>>();
+                    let canonical_resolution = resolve_canonical_invocation(
+                        flow,
+                        &invocation.inputs,
+                        runtime_resources,
+                        Some(&self.dynamic_texture_targets),
+                        CanonicalInvocationProjection {
+                            projected_uploads: &projected_uploads,
+                            passes: &canonical_projections,
+                            surface_color_view: Some(surface_view),
+                            builtin_ui_draws: Some(&builtin_ui_draws),
+                            timing: logical_timing_plan
+                                .as_ref()
+                                .and_then(LogicalGpuPassTimingPlan::timing),
+                        },
+                        &mut maximum_occurrence,
+                    )?;
+                    Ok(RealizedFlowInvocation {
+                        flow,
+                        invocation,
+                        packet: invocation_packet,
+                        scheduled_passes: realized_passes,
+                        timing_frame,
+                        canonical_resolution: Some(canonical_resolution),
+                    })
+                })();
+                runtime_resources.clear_active_invocation_uniform_scope();
+                invocations.push(invocation_result?);
             }
 
             for flow in compiled_flows {
