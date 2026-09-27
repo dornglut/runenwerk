@@ -63,8 +63,9 @@ After an Editor Design apply command succeeds:
    drains the queue at the runtime host boundary.
 4. Theme documents form `ThemeTokens` and replace the live host theme through
    `EditorHostResource::apply_theme`.
-5. Workspace layout documents form a shell workspace through
-   `domain/editor/editor_shell/src/workspace/definition_form.rs::form_workspace_state_from_definition`.
+5. Workspace layout documents form an `EditorCompositionRuntime` directly through
+   `domain/editor/editor_shell/src/composition/structural/layout_formation.rs::form_editor_profile_composition`;
+   the live path does not construct an intermediate `WorkspaceState`.
 6. UI templates, editor bindings, menus, shortcuts, command bindings, panel
    registries, and tool-surface registries install into app-owned active
    catalogs before the next shell frame is built.

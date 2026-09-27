@@ -1301,24 +1301,17 @@ mod tests {
     fn viewport_surface_id(
         shell_state: &RunenwerkEditorShellState,
     ) -> editor_shell::ToolSurfaceInstanceId {
-        shell_state
-            .workspace_state()
-            .panels()
-            .filter_map(|panel| panel.active_tool_surface)
-            .find(|surface_id| {
-                shell_state
-                    .workspace_state()
-                    .tool_surface(*surface_id)
-                    .map(|surface| {
-                        editor_shell::stable_key_for_tool_surface_kind(
-                            editor_shell::ToolSurfaceKind::Viewport,
-                        )
-                        .as_ref()
-                        .is_some_and(|key| surface.stable_surface_key() == key)
-                    })
-                    .unwrap_or(false)
+        let extension = shell_state
+            .composition_runtime()
+            .extension()
+            .mounted_units()
+            .iter()
+            .find(|unit| {
+                unit.stable_content_key == crate::shell::tool_suites::SCENE_VIEWPORT_SURFACE_KEY
             })
-            .expect("seeded shell state should contain an active viewport surface")
+            .expect("seeded shell should contain a mounted viewport");
+        editor_shell::ToolSurfaceInstanceId::try_from_raw(extension.compatibility_surface_raw)
+            .expect("mounted viewport compatibility surface identity should be valid")
     }
 
     fn viewport_embed_widget_id(shell_state: &RunenwerkEditorShellState) -> editor_shell::WidgetId {
