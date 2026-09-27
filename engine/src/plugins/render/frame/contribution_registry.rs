@@ -413,12 +413,11 @@ fn collect_scene_route_contribution(
     context: &RenderFeatureContributionContext<'_>,
 ) -> Result<PreparedFeatureContribution, PreparedFeatureContributionDiagnostic> {
     let Some(scene_route) = context.scene_route().cloned() else {
-        return Err(PreparedFeatureContributionDiagnostic::error(
-            context.descriptor().feature_id,
-            "scene route collector requires prepared scene route labels",
-        )
-        .with_collector_id(context.descriptor().collector_id.clone())
-        .with_payload_kind(context.descriptor().payload_kind.clone()));
+        return Ok(PreparedFeatureContribution {
+            status: FeatureContributionStatus::Missing,
+            fallback_policy: context.fallback_policy(),
+            payload: PreparedFeaturePayload::Empty,
+        });
     };
     Ok(PreparedFeatureContribution {
         status: FeatureContributionStatus::Ready,
@@ -433,6 +432,31 @@ mod tests {
 
     fn test_feature_id(raw: u64) -> RenderFeatureId {
         RenderFeatureId::try_from_raw(raw).expect("test feature id should be non-zero")
+    }
+
+    #[test]
+    fn scene_route_collector_maps_absence_to_missing_empty_contribution() {
+        let world = runen_ecs::World::default();
+        let collector = scene_route_collector();
+        let context = RenderFeatureContributionContext::new(
+            &world,
+            &collector.descriptor,
+            FeatureFallbackPolicy::EmptyContribution,
+            None,
+        );
+
+        let contribution =
+            (collector.collect)(&context).expect("absent Scene route should use empty fallback");
+
+        assert_eq!(contribution.status, FeatureContributionStatus::Missing);
+        assert_eq!(
+            contribution.fallback_policy,
+            FeatureFallbackPolicy::EmptyContribution
+        );
+        assert!(matches!(
+            contribution.payload,
+            PreparedFeaturePayload::Empty
+        ));
     }
 
     fn noop_collector(

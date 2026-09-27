@@ -1,4 +1,3 @@
-use crate::plugins::SceneResource;
 use crate::plugins::inspect::{
     PassTimingSample, RenderCapturedTextureState, RenderComposedFrameGpuTimingEvidence,
     RenderDebugConfigResource, RenderDebugControlResource, RenderDebugFrameReportState,
@@ -490,9 +489,6 @@ fn reconcile_frame_history_policy(world: &mut WorldMut) {
 
 pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<()> {
     reconcile_frame_history_policy(&mut world);
-    if world.resource::<SceneResource>()?.manager.is_none() {
-        return Ok(());
-    }
 
     let _submit_span = tracing::info_span!("systems.frame_render_submit").entered();
     let readiness_ready_before = world.resource::<RenderReadinessState>()?.is_ready();
