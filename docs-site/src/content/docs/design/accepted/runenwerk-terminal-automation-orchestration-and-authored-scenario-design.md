@@ -392,6 +392,21 @@ Cancellation or finish must clean only state owned by that automation execution.
 If replay teardown can fail independently, that failure remains visible in history/result
 knowledge. Cleanup failure must not be overwritten by a successful earlier query/assertion.
 
+A6 currently has asymmetric cleanup that the session MUST preserve:
+
+- replay rejection or failure before completion already cleans replay-owned input and does not
+  leave an active replay lease;
+- only a completed replay retains replay-owned source identity in the App until explicit teardown.
+
+The session therefore tracks whether a coordinated replay actually completed before treating replay
+teardown as pending. It MUST NOT call teardown after a failed replay and convert the original
+failure into a secondary `ReplayNotActive` error.
+
+A6 replay is currently a synchronous operation with no cancellation callback. The first shared
+implementation therefore supports cancellation **between orchestration steps**, not interruption
+inside one replay call. Internal replay failure still reports A6 partial progress. Mid-replay
+operator cancellation requires a separate A6 cancellation design and is not implied by A11.
+
 Unrelated physical/programmatic input remains untouched.
 
 ## Capability discovery
@@ -547,7 +562,9 @@ That issue should:
 8. prove Draw persisted tablet replay produces the same session/history shape;
 9. prove Editor ProductSemantic dispatch/query produces the same session/history shape;
 10. prove Unsupported never falls back and failure/cancellation cleanup is scoped;
-11. add no persisted scenario AST, central CLI, provider registry, IPC, native automation,
+11. prove failed replay does not schedule a bogus teardown, while completed replay retains teardown responsibility;
+12. prove cancellation is truthful at orchestration-step boundaries without claiming mid-replay interruption;
+13. add no persisted scenario AST, central CLI, provider registry, IPC, native automation,
     new crate, or universal product payload enum.
 
 The implementation issue must re-census current writers. In particular, any Render Lab
