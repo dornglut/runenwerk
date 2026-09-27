@@ -1379,8 +1379,7 @@ mod tests {
             world_scene_label: "world.scene".to_string(),
             overlay_scene_label: "overlay.scene".to_string(),
         };
-        let contributions =
-            build_frame_feature_contributions(&world, Some(&scene_route), &[]);
+        let contributions = build_frame_feature_contributions(&world, Some(&scene_route), &[]);
 
         assert_eq!(
             contributions.scene_route_labels(),
@@ -1403,7 +1402,10 @@ mod tests {
             scene_route.fallback_policy,
             FeatureFallbackPolicy::EmptyContribution
         );
-        assert!(matches!(&scene_route.payload, PreparedFeaturePayload::Empty));
+        assert!(matches!(
+            &scene_route.payload,
+            PreparedFeaturePayload::Empty
+        ));
         assert_eq!(contributions.scene_route_labels(), None);
         assert!(contributions.diagnostics().is_empty());
     }

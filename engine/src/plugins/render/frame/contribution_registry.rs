@@ -453,7 +453,10 @@ mod tests {
             contribution.fallback_policy,
             FeatureFallbackPolicy::EmptyContribution
         );
-        assert!(matches!(contribution.payload, PreparedFeaturePayload::Empty));
+        assert!(matches!(
+            contribution.payload,
+            PreparedFeaturePayload::Empty
+        ));
     }
 
     fn noop_collector(
