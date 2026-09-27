@@ -68,7 +68,7 @@ pub(crate) fn update_editor_picking_for_target(
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
     viewport_render_states: &ViewportRenderStateResource,
 ) -> Option<ViewportId> {
-    let Some((mounted_unit_id, binding)) =
+    let Some(binding) =
         routed_viewport_binding_for_target(host, tool_surface_bindings, target_id, cursor)
     else {
         clear_editor_picking_for_target(
@@ -98,7 +98,9 @@ pub(crate) fn update_editor_picking_for_target(
             compose_picking_hit(
                 host.app.runtime(),
                 &scene_context.scene_packet,
-                Some(host.app.surface_sessions().viewport_tool(mounted_unit_id)),
+                host.shell_state
+                    .mounted_unit_id_for_tool_surface(binding.tool_surface_id)
+                    .map(|mounted_unit_id| host.app.surface_sessions().viewport_tool(mounted_unit_id)),
                 host.app.runtime().selected_entity(),
                 cursor,
                 viewport_bounds,
@@ -537,7 +539,7 @@ fn routed_viewport_bounds(
 ) -> Option<(editor_viewport::ViewportId, UiRect)> {
     let target_id = host.shell_state.primary_composition_target_id();
     routed_viewport_binding_for_target(host, tool_surface_bindings, target_id, cursor)
-        .map(|(_, binding)| (binding.viewport_id, binding.bounds))
+        .map(|binding| (binding.viewport_id, binding.bounds))
 }
 
 fn routed_viewport_binding_for_target(
@@ -545,10 +547,7 @@ fn routed_viewport_binding_for_target(
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
     target_id: ui_composition::PresentationTargetId,
     cursor: UiPoint,
-) -> Option<(
-    ui_composition::MountedUnitId,
-    crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord,
-)> {
+) -> Option<crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord> {
     let binding = if let Some(captured_widget) = host
         .shell_state
         .runtime_for_target(target_id)
@@ -563,10 +562,7 @@ fn routed_viewport_binding_for_target(
     } else {
         tool_surface_bindings.binding_containing_cursor_for_target(target_id, cursor)?
     };
-    let mounted_unit_id = host
-        .shell_state
-        .mounted_unit_id_for_tool_surface(binding.tool_surface_id)?;
-    Some((mounted_unit_id, binding))
+    Some(binding)
 }
 
 fn viewport_scene_binding_for_widget(
@@ -1082,7 +1078,12 @@ mod tests {
         results.set_viewport_result(
             primary_viewport,
             (140.0, 240.0),
-            (shared_bounds.x, shared_bounds.y, shared_bounds.width, shared_bounds.height),
+            (
+                shared_bounds.x,
+                shared_bounds.y,
+                shared_bounds.width,
+                shared_bounds.height,
+            ),
             EditorPickingHit {
                 target: EditorPickingTarget::Entity(7),
                 distance: 2.0,
@@ -1091,7 +1092,12 @@ mod tests {
         results.set_viewport_result(
             secondary_viewport,
             (140.0, 240.0),
-            (shared_bounds.x, shared_bounds.y, shared_bounds.width, shared_bounds.height),
+            (
+                shared_bounds.x,
+                shared_bounds.y,
+                shared_bounds.width,
+                shared_bounds.height,
+            ),
             EditorPickingHit {
                 target: EditorPickingTarget::Entity(8),
                 distance: 3.0,

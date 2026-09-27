@@ -758,9 +758,7 @@ impl EditorInputBridgeState {
         self.interaction_by_target.remove(&target_id);
     }
 
-    pub(crate) fn interaction_targets(
-        &self,
-    ) -> impl Iterator<Item = PresentationTargetId> + '_ {
+    pub(crate) fn interaction_targets(&self) -> impl Iterator<Item = PresentationTargetId> + '_ {
         self.interaction_by_target.keys().copied()
     }
 }
