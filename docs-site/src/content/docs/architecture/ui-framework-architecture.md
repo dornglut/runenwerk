@@ -5,7 +5,7 @@ status: active
 owner: ui
 layer: architecture
 canonical: true
-last_reviewed: 2026-09-25
+last_reviewed: 2026-09-27
 publication: reference
 pagefind: false
 related_docs:
@@ -25,7 +25,7 @@ related_docs:
 ## Purpose
 
 This is the canonical top-down architecture for UI semantics that currently live
-in Runenwerk and for their eventual consumer adoption of standalone RunenUI.
+in Runenwerk and for their consumer-by-consumer adoption of standalone RunenUI.
 
 It distinguishes three facts that must not be collapsed:
 
@@ -63,7 +63,7 @@ mutation.
 
 ## Current local implementation
 
-Before a consumer cutover, the current Runenwerk path remains:
+For not-yet-migrated consumers, the current Runenwerk path remains:
 
 ```text
 Authored UI / product definitions
@@ -253,23 +253,29 @@ Migration is deliberately sequenced by proof pressure:
 This order is not a release roadmap for RunenUI. Each source-bearing cut requires
 its own accepted Runenwerk issue and current-source recensus.
 
-## First consumer gate
+## First consumer cut
 
-The first source-bearing adoption issue is not created by this architecture
-change.
+The first source-bearing adoption cut is now concrete and bounded.
 
-Before it is decision-complete, its census must identify:
+`ui_testing::UiArchitectureFixture::minimal("minimal-label")` retains the
+Runenwerk `UiProgram -> UiCompiler -> UiRuntimeArtifact -> UiEvaluator +
+UiStateModel` program/binding/state path, then projects the existing artifact
+and resolved state into ordinary public RunenUI `UiApp` / `View` /
+`runenui_testing` contracts.
 
-- one maintained headless Story/UiProgram or authored-definition consumer;
-- the exact projection into ordinary public RunenUI View/Element/action/semantic
-  contracts;
-- the exact local evaluator/runtime-view/retained-runtime path it replaces for
-  that consumer;
-- the source maps and diagnostics that remain Runenwerk-owned;
-- the proof showing no dual runtime or semantic reinterpretation.
+For that consumer only:
 
-If those facts cannot be named from current source, adoption remains blocked
-rather than adding a speculative adapter framework.
+- RunenUI owns the framework publication, layout, production text, and semantic
+  proof;
+- local `AccessibilityTree::from_artifact` and
+  `GeometryPlan::from_artifact` are no longer proof authority;
+- Runenwerk keeps compiler/source-map/diagnostic/binding/state evidence;
+- unsupported projection shapes fail closed;
+- no compatibility IR, mounted-ID mirror, or private RunenUI reach-through is
+  introduced.
+
+Every other consumer remains on its current local path until a separately
+accepted cut re-derives its exact replacement boundary.
 
 ## Clean-cutover rules
 
@@ -290,7 +296,7 @@ Every consumer cut must:
 
 This architecture does not authorize:
 
-- adding the RunenUI dependency;
+- adding RunenUI dependencies outside an accepted consumer cut;
 - bulk source deletion;
 - Editor-wide migration;
 - moving `ui_composition` into RunenUI;
