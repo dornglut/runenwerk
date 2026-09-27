@@ -85,12 +85,11 @@ pub fn build_headless_automation_app() -> App {
 mod tests {
     use super::*;
     use engine::automation::{
-        AppAutomationInputReplayExt, AppAutomationInputTraceExt, AutomationExecutionMode,
-        AutomationInputReplayOutcome, AutomationInputReplaySourceMap,
-        AutomationInputReplayStateAssumption, AutomationInputTracePlugin,
+        AppAutomationInputTraceExt, AutomationExecutionMode, AutomationInputTracePlugin,
         AutomationInputTraceRecordingWitness, AutomationSession, AutomationSessionId,
-        AutomationStepResult, DigitalState, InputObservation, InputSourceId, PointerButton,
-        PointerButtonInput, RelativeMotionUnit, ScrollDelta, ScrollDomain, ScrollInput, Vector2,
+        AutomationStepKind, AutomationStepOutcome, AutomationStepRecord, AutomationStepResult,
+        DigitalState, InputObservation, InputSourceId, PointerButton, PointerButtonInput,
+        RelativeMotionUnit, ScrollDelta, ScrollDomain, ScrollInput, Vector2,
         export_automation_input_trace_v1, import_automation_input_trace_v1,
     };
     use engine::prelude::InputState;
@@ -314,28 +313,67 @@ mod tests {
             imported.recording_witness(),
             AutomationInputTraceRecordingWitness::RecordedSourcesPristineAtCaptureStart
         );
-        let imported_recorded_source = imported.trace().frames()[0].groups()[0].context.source;
-
         let mut replay = build_headless_automation_app();
-        let source_map = AutomationInputReplaySourceMap::new([(
-            imported_recorded_source,
-            InputSourceId::new(20_100),
-        )]);
-        let report = replay.replay_automation_input_trace(
-            imported.trace(),
-            &source_map,
-            AutomationInputReplayStateAssumption::RecordedAndReplaySourcesPristine,
-        );
-        assert_eq!(report.outcome(), AutomationInputReplayOutcome::Completed);
-        assert_eq!(report.completed_frames(), 6);
-
-        let mut query_session =
+        let mut replay_session =
             AutomationSession::new(AutomationSessionId::new(101), InputSourceId::new(30_100));
-        let replayed_camera = camera(&mut replay, &mut query_session);
-        assert_eq!(replayed_camera, recorded_camera);
+        let report = replay_session
+            .replay_persisted_normalized_trace(
+                AutomationExecutionMode::NormalizedInput,
+                &mut replay,
+                encoded.as_bytes(),
+                engine::automation::AutomationInputReplayStateAssumption::RecordedAndReplaySourcesPristine,
+            )
+            .expect("persisted Render Lab trace should replay through shared session");
+        assert_eq!(
+            report.outcome(),
+            engine::automation::AutomationInputReplayOutcome::Completed
+        );
+        assert_eq!(report.completed_frames(), 6);
+        assert!(replay_session.replay_teardown_pending());
 
-        replay
-            .teardown_automation_input_replay()
-            .expect("Render Lab replay teardown should clean replay-owned input");
+        let replayed_camera = camera(&mut replay, &mut replay_session);
+        assert_eq!(replayed_camera, recorded_camera);
+        assert_eq!(
+            replay_session
+                .assert_observation(&replayed_camera, |camera| { camera == &recorded_camera }),
+            AutomationStepResult::AssertionPassed
+        );
+        assert!(
+            replay_session.replay_teardown_pending(),
+            "camera observation must precede replay teardown"
+        );
+        assert_eq!(
+            replay_session.finish(&mut replay),
+            AutomationStepResult::EffectConfirmed(())
+        );
+
+        assert_eq!(
+            replay_session
+                .history()
+                .iter()
+                .map(AutomationStepRecord::kind)
+                .collect::<Vec<_>>(),
+            vec![
+                AutomationStepKind::PersistedTraceReplay,
+                AutomationStepKind::OwnerQuery,
+                AutomationStepKind::OwnerAssertion,
+                AutomationStepKind::ReplayCleanup,
+                AutomationStepKind::Finish,
+            ]
+        );
+        assert_eq!(
+            replay_session
+                .history()
+                .iter()
+                .map(AutomationStepRecord::outcome)
+                .collect::<Vec<_>>(),
+            vec![
+                AutomationStepOutcome::AdmittedOrDelivered,
+                AutomationStepOutcome::EffectConfirmed,
+                AutomationStepOutcome::AssertionPassed,
+                AutomationStepOutcome::EffectConfirmed,
+                AutomationStepOutcome::EffectConfirmed,
+            ]
+        );
     }
 }

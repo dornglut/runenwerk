@@ -118,8 +118,8 @@ impl AutomationOwnerAdapter for EditorAutomationAdapter<'_> {
 mod tests {
     use super::*;
     use engine::automation::{
-        AutomationExecutionMode, AutomationSession, AutomationSessionId, AutomationStepResult,
-        InputSourceId,
+        AutomationExecutionMode, AutomationSession, AutomationSessionId, AutomationStepKind,
+        AutomationStepOutcome, AutomationStepRecord, AutomationStepResult, InputSourceId,
     };
 
     fn viewport_target(host: &EditorHostResource) -> EditorAutomationTarget {
@@ -151,7 +151,7 @@ mod tests {
         let mut session =
             AutomationSession::new(AutomationSessionId::new(20), InputSourceId::new(20_001));
 
-        {
+        let observed = {
             let host = app
                 .world_mut()
                 .resource_mut::<EditorHostResource>()
@@ -166,13 +166,48 @@ mod tests {
                 ),
                 AutomationStepResult::Dispatched
             );
-            assert_eq!(
-                session.query_owner(&mut adapter, &target, EditorAutomationQuery::ViewportTool,),
-                AutomationStepResult::EffectConfirmed(EditorAutomationObservation::ViewportTool(
-                    ViewportToolKind::Rotate
-                ))
-            );
-        }
+            match session.query_owner(&mut adapter, &target, EditorAutomationQuery::ViewportTool) {
+                AutomationStepResult::EffectConfirmed(observation) => observation,
+                other => panic!("Editor viewport query should confirm state, got {other:?}"),
+            }
+        };
+
+        assert_eq!(
+            session.assert_observation(&observed, |observation| {
+                *observation == EditorAutomationObservation::ViewportTool(ViewportToolKind::Rotate)
+            }),
+            AutomationStepResult::AssertionPassed
+        );
+        assert_eq!(
+            session.finish(&mut app),
+            AutomationStepResult::EffectConfirmed(())
+        );
+        assert_eq!(
+            session
+                .history()
+                .iter()
+                .map(AutomationStepRecord::kind)
+                .collect::<Vec<_>>(),
+            vec![
+                AutomationStepKind::ProductDispatch,
+                AutomationStepKind::OwnerQuery,
+                AutomationStepKind::OwnerAssertion,
+                AutomationStepKind::Finish,
+            ]
+        );
+        assert_eq!(
+            session
+                .history()
+                .iter()
+                .map(AutomationStepRecord::outcome)
+                .collect::<Vec<_>>(),
+            vec![
+                AutomationStepOutcome::Dispatched,
+                AutomationStepOutcome::EffectConfirmed,
+                AutomationStepOutcome::AssertionPassed,
+                AutomationStepOutcome::EffectConfirmed,
+            ]
+        );
     }
 
     #[test]
@@ -201,6 +236,10 @@ mod tests {
             ),
             AutomationStepResult::InfrastructureFailure(_)
         ));
+        assert_eq!(
+            session.history()[0].outcome(),
+            AutomationStepOutcome::InfrastructureFailure
+        );
     }
 
     #[test]
@@ -236,6 +275,14 @@ mod tests {
             AutomationStepResult::EffectConfirmed(EditorAutomationObservation::ViewportTool(
                 ViewportToolKind::Select
             ))
+        );
+        assert_eq!(
+            session.history()[0].outcome(),
+            AutomationStepOutcome::Unsupported
+        );
+        assert_eq!(
+            session.history()[1].outcome(),
+            AutomationStepOutcome::EffectConfirmed
         );
     }
 }
