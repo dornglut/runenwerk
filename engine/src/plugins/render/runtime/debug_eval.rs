@@ -511,6 +511,14 @@ mod tests {
         world
     }
 
+    fn test_scene_route() -> PreparedSceneRouteContribution {
+        PreparedSceneRouteContribution {
+            world_scene_label: "world".to_string(),
+            overlay_scene_label: "overlay".to_string(),
+        }
+    }
+
+
     #[test]
     fn frame_prepare_ingests_draw_material_deformation_feature_resources() {
         let mut world = test_world();
@@ -560,12 +568,9 @@ mod tests {
             },
         });
 
-        let contributions = frame_prepare::build_frame_feature_contributions(
-            &world,
-            "world".to_string(),
-            "overlay".to_string(),
-            &[],
-        );
+        let scene_route = test_scene_route();
+        let contributions =
+            frame_prepare::build_frame_feature_contributions(&world, Some(&scene_route), &[]);
 
         let draw = contributions
             .feature(&WORLD_DRAW_RENDER_FEATURE_ID)
@@ -622,12 +627,9 @@ mod tests {
             },
         });
 
-        let contributions = frame_prepare::build_frame_feature_contributions(
-            &world,
-            "world".to_string(),
-            "overlay".to_string(),
-            &[],
-        );
+        let scene_route = test_scene_route();
+        let contributions =
+            frame_prepare::build_frame_feature_contributions(&world, Some(&scene_route), &[]);
 
         let material = contributions
             .feature(&MATERIAL_RENDER_FEATURE_ID)
@@ -663,11 +665,11 @@ mod tests {
     fn prepare_inserts_missing_gate_for_execution_referenced_feature_without_payload() {
         let world = test_world();
         let execution_feature_ids = vec![CUSTOM_FEATURE_ID];
+        let scene_route = test_scene_route();
         let contributions =
             crate::plugins::render::runtime::frame_prepare::build_frame_feature_contributions(
                 &world,
-                "world".to_string(),
-                "overlay".to_string(),
+                Some(&scene_route),
                 &execution_feature_ids,
             );
 
