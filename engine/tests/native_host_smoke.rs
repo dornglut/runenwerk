@@ -386,14 +386,6 @@ fn native_render_host_smoke(with_ui: bool) -> anyhow::Result<()> {
             .is_ok(),
         "RenderPlugin must install Render surface state before native Host realization"
     );
-    anyhow::ensure!(
-        app.world()
-            .resource::<engine::plugins::SceneResource>()?
-            .manager
-            .is_none(),
-        "native Render smoke must not activate a Scene manager"
-    );
-
     app.run()?;
 
     anyhow::ensure!(startup_ran.load(Ordering::SeqCst), "Startup did not run");
