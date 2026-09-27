@@ -518,7 +518,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn frame_prepare_ingests_draw_material_deformation_feature_resources() {
         let mut world = test_world();
