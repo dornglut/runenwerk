@@ -220,33 +220,26 @@ pub(super) fn temporal_quality_capture_evidence(
     }))
 }
 
-fn temporal_quality_evidence_profile_fingerprint(
-    backend: &str,
-    adapter_class: &str,
-    software_status: &str,
-    fallback_status: &str,
-    diagnostic_name: Option<&str>,
-    driver: Option<&str>,
-    driver_info: Option<&str>,
+#[derive(serde::Serialize)]
+struct RenderLabTemporalQualityGpuFingerprintFacts<'a> {
+    backend: &'a str,
+    adapter_class: &'a str,
+    software_status: &'a str,
+    fallback_status: &'a str,
+    diagnostic_name: Option<&'a str>,
+    driver: Option<&'a str>,
+    driver_info: Option<&'a str>,
     vendor: Option<u32>,
     device: Option<u32>,
-    device_request_profile: &str,
+    device_request_profile: &'a str,
     device_request_profile_supported: bool,
+}
+
+fn temporal_quality_evidence_profile_fingerprint(
+    facts: &RenderLabTemporalQualityGpuFingerprintFacts<'_>,
 ) -> String {
-    let canonical = serde_json::to_vec(&(
-        backend,
-        adapter_class,
-        software_status,
-        fallback_status,
-        diagnostic_name,
-        driver,
-        driver_info,
-        vendor,
-        device,
-        device_request_profile,
-        device_request_profile_supported,
-    ))
-    .expect("fixed temporal-quality adapter evidence tuple must serialize");
+    let canonical = serde_json::to_vec(facts)
+        .expect("fixed temporal-quality adapter evidence tuple must serialize");
     format!("blake3:{}", blake3::hash(&canonical).to_hex())
 }
 
@@ -258,6 +251,19 @@ fn temporal_quality_gpu_evidence(
     let software_status = gpu_software_token(facts.software());
     let fallback_status = gpu_fallback_token(facts.fallback());
     let device_request_profile = gpu_device_profile_token(facts.device_request_profile());
+    let fingerprint_facts = RenderLabTemporalQualityGpuFingerprintFacts {
+        backend,
+        adapter_class,
+        software_status,
+        fallback_status,
+        diagnostic_name: facts.diagnostic_name(),
+        driver: facts.driver(),
+        driver_info: facts.driver_info(),
+        vendor: facts.vendor(),
+        device: facts.device(),
+        device_request_profile,
+        device_request_profile_supported: facts.device_request_profile_supported(),
+    };
     RenderLabTemporalQualityGpuEvidence {
         backend,
         adapter_class,
@@ -271,17 +277,7 @@ fn temporal_quality_gpu_evidence(
         device_request_profile,
         device_request_profile_supported: facts.device_request_profile_supported(),
         evidence_profile_fingerprint: temporal_quality_evidence_profile_fingerprint(
-            backend,
-            adapter_class,
-            software_status,
-            fallback_status,
-            facts.diagnostic_name(),
-            facts.driver(),
-            facts.driver_info(),
-            facts.vendor(),
-            facts.device(),
-            device_request_profile,
-            facts.device_request_profile_supported(),
+            &fingerprint_facts,
         ),
     }
 }
@@ -619,36 +615,32 @@ mod tests {
 
     #[test]
     fn temporal_quality_evidence_profile_fingerprint_preserves_optional_fact_shape() {
-        let absent = temporal_quality_evidence_profile_fingerprint(
-            "vulkan",
-            "cpu",
-            "software",
-            "confirmed_not_fallback",
-            None,
-            None,
-            None,
-            None,
-            None,
-            "modern_portable",
-            true,
-        );
-        let present_empty = temporal_quality_evidence_profile_fingerprint(
-            "vulkan",
-            "cpu",
-            "software",
-            "confirmed_not_fallback",
-            Some(""),
-            Some(""),
-            Some(""),
-            None,
-            None,
-            "modern_portable",
-            true,
-        );
+        let absent = RenderLabTemporalQualityGpuFingerprintFacts {
+            backend: "vulkan",
+            adapter_class: "cpu",
+            software_status: "software",
+            fallback_status: "confirmed_not_fallback",
+            diagnostic_name: None,
+            driver: None,
+            driver_info: None,
+            vendor: None,
+            device: None,
+            device_request_profile: "modern_portable",
+            device_request_profile_supported: true,
+        };
+        let present_empty = RenderLabTemporalQualityGpuFingerprintFacts {
+            diagnostic_name: Some(""),
+            driver: Some(""),
+            driver_info: Some(""),
+            ..absent
+        };
+        let absent_fingerprint = temporal_quality_evidence_profile_fingerprint(&absent);
+        let present_empty_fingerprint =
+            temporal_quality_evidence_profile_fingerprint(&present_empty);
 
-        assert_ne!(absent, present_empty);
-        assert!(absent.starts_with("blake3:"));
-        assert!(present_empty.starts_with("blake3:"));
+        assert_ne!(absent_fingerprint, present_empty_fingerprint);
+        assert!(absent_fingerprint.starts_with("blake3:"));
+        assert!(present_empty_fingerprint.starts_with("blake3:"));
     }
 
     #[test]
