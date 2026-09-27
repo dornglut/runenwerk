@@ -100,7 +100,9 @@ pub(crate) fn update_editor_picking_for_target(
                 &scene_context.scene_packet,
                 host.shell_state
                     .mounted_unit_id_for_tool_surface(binding.tool_surface_id)
-                    .map(|mounted_unit_id| host.app.surface_sessions().viewport_tool(mounted_unit_id)),
+                    .map(|mounted_unit_id| {
+                        host.app.surface_sessions().viewport_tool(mounted_unit_id)
+                    }),
                 host.app.runtime().selected_entity(),
                 cursor,
                 viewport_bounds,
