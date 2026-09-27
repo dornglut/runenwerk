@@ -75,11 +75,10 @@ mod tests {
 
     use drawing::CanvasCoordinate;
     use engine::automation::{
-        AppAutomationInputReplayExt, AppAutomationInputTraceExt, AutomationInputReplayOutcome,
-        AutomationInputReplaySourceMap, AutomationInputReplayStateAssumption,
-        AutomationInputTracePlugin, AutomationInputTraceRecordingWitness, AutomationSession,
-        AutomationSessionId, AutomationStepResult, InputSourceId, export_automation_input_trace_v1,
-        import_automation_input_trace_v1,
+        AppAutomationInputTraceExt, AutomationExecutionMode, AutomationInputTracePlugin,
+        AutomationInputTraceRecordingWitness, AutomationSession, AutomationSessionId,
+        AutomationStepKind, AutomationStepOutcome, AutomationStepRecord, AutomationStepResult,
+        InputSourceId, export_automation_input_trace_v1, import_automation_input_trace_v1,
     };
     use engine::prelude::App;
     use native_tablet_input::{
@@ -275,11 +274,6 @@ mod tests {
             AutomationInputTraceRecordingWitness::RecordedSourcesPristineAtCaptureStart
         );
 
-        let recorded_source = imported.trace().frames()[0].groups()[0].context.source;
-        let replay_source = InputSourceId::new(72_100);
-        assert_ne!(recorded_source, replay_source);
-        let source_map = AutomationInputReplaySourceMap::new([(recorded_source, replay_source)]);
-
         let mut replay = crate::runtime::build_headless_app()
             .expect("fresh headless Draw replay target should build");
         let replay_target = current_target(&replay);
@@ -287,24 +281,87 @@ mod tests {
             replay_target, target,
             "fresh Draw fixture should resolve the same product-owned document identity"
         );
+        let mut replay_session =
+            AutomationSession::new(AutomationSessionId::new(73), InputSourceId::new(72_100));
 
-        let report = replay.replay_automation_input_trace(
-            imported.trace(),
-            &source_map,
-            AutomationInputReplayStateAssumption::RecordedAndReplaySourcesPristine,
+        let report = replay_session
+            .replay_persisted_normalized_trace(
+                AutomationExecutionMode::NormalizedInput,
+                &mut replay,
+                encoded.as_bytes(),
+                engine::automation::AutomationInputReplayStateAssumption::RecordedAndReplaySourcesPristine,
+            )
+            .expect("persisted Draw trace should replay through the shared session");
+        assert_eq!(
+            report.outcome(),
+            engine::automation::AutomationInputReplayOutcome::Completed
         );
-        assert_eq!(report.outcome(), AutomationInputReplayOutcome::Completed);
         assert_eq!(report.completed_frames(), 3);
+        assert!(replay_session.replay_teardown_pending());
 
-        let replayed_document = query_document(&mut replay, replay_target);
+        let replayed_document = {
+            let host = replay
+                .world_mut()
+                .resource_mut::<DrawingHostResource>()
+                .expect("headless Draw should install DrawingHostResource");
+            let mut adapter = DrawingAutomationAdapter::new(host);
+            match replay_session.query_owner(
+                &mut adapter,
+                &replay_target,
+                DrawingAutomationQuery::Document,
+            ) {
+                AutomationStepResult::EffectConfirmed(document) => document,
+                other => panic!("Draw document query should confirm replay state, got {other:?}"),
+            }
+        };
         assert_eq!(
             replayed_document, recorded_document,
             "normalized replay should reproduce Draw-owned committed document state"
         );
         assert_eq!(replayed_document.strokes[0].samples.len(), 4);
+        assert_eq!(
+            replay_session.assert_observation(&replayed_document, |document| {
+                document == &recorded_document
+            }),
+            AutomationStepResult::AssertionPassed
+        );
+        assert!(
+            replay_session.replay_teardown_pending(),
+            "owner query/assertion must run before replay teardown"
+        );
+        assert_eq!(
+            replay_session.finish(&mut replay),
+            AutomationStepResult::EffectConfirmed(())
+        );
+        assert!(!replay_session.replay_teardown_pending());
 
-        replay
-            .teardown_automation_input_replay()
-            .expect("Draw replay teardown should release only replay-owned input state");
+        assert_eq!(
+            replay_session
+                .history()
+                .iter()
+                .map(AutomationStepRecord::kind)
+                .collect::<Vec<_>>(),
+            vec![
+                AutomationStepKind::PersistedTraceReplay,
+                AutomationStepKind::OwnerQuery,
+                AutomationStepKind::OwnerAssertion,
+                AutomationStepKind::ReplayCleanup,
+                AutomationStepKind::Finish,
+            ]
+        );
+        assert_eq!(
+            replay_session
+                .history()
+                .iter()
+                .map(AutomationStepRecord::outcome)
+                .collect::<Vec<_>>(),
+            vec![
+                AutomationStepOutcome::AdmittedOrDelivered,
+                AutomationStepOutcome::EffectConfirmed,
+                AutomationStepOutcome::AssertionPassed,
+                AutomationStepOutcome::EffectConfirmed,
+                AutomationStepOutcome::EffectConfirmed,
+            ]
+        );
     }
 }
