@@ -25,9 +25,7 @@ fn main() {
     runenwerk_editor::runtime::run().expect("runenwerk editor runtime should start");
 }
 
-fn try_run_automation(
-    args: impl IntoIterator<Item = OsString>,
-) -> Option<anyhow::Result<()>> {
+fn try_run_automation(args: impl IntoIterator<Item = OsString>) -> Option<anyhow::Result<()>> {
     let mut args = args.into_iter();
     let first = args.next()?;
     if first != "--automation-viewport-tool" {
@@ -37,9 +35,7 @@ fn try_run_automation(
     Some(run_viewport_tool_automation(args))
 }
 
-fn run_viewport_tool_automation(
-    mut args: impl Iterator<Item = OsString>,
-) -> anyhow::Result<()> {
+fn run_viewport_tool_automation(mut args: impl Iterator<Item = OsString>) -> anyhow::Result<()> {
     let tool = args
         .next()
         .ok_or_else(|| anyhow::anyhow!("--automation-viewport-tool requires a tool"))?;

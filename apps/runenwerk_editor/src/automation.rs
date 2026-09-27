@@ -159,7 +159,8 @@ mod tests {
                 .world()
                 .resource::<EditorHostResource>()
                 .expect("headless Editor should install EditorHostResource");
-            resolve_unique_scene_viewport_target(host).expect("headless Full Editor should contain exactly one scene viewport")
+            resolve_unique_scene_viewport_target(host)
+                .expect("headless Full Editor should contain exactly one scene viewport")
         };
         let mut session =
             AutomationSession::new(AutomationSessionId::new(20), InputSourceId::new(20_001));
@@ -264,7 +265,8 @@ mod tests {
                 .world()
                 .resource::<EditorHostResource>()
                 .expect("headless Editor should install EditorHostResource");
-            resolve_unique_scene_viewport_target(host).expect("headless Full Editor should contain exactly one scene viewport")
+            resolve_unique_scene_viewport_target(host)
+                .expect("headless Full Editor should contain exactly one scene viewport")
         };
         let mut session =
             AutomationSession::new(AutomationSessionId::new(22), InputSourceId::new(20_003));
