@@ -52,7 +52,10 @@ const PRODUCT_CARGO_STEPS: &[(&str, &[&str])] = &[
         "workspace test build",
         &["test", "--workspace", "--locked", "--no-run"],
     ),
-    ("workspace test execution", &["test", "--workspace", "--locked"]),
+    (
+        "workspace test execution",
+        &["test", "--workspace", "--locked"],
+    ),
     (
         "workspace clippy",
         &[
