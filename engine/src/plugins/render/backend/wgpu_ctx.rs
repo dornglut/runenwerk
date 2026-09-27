@@ -1,4 +1,5 @@
 use super::{build_surface_config, preferred_surface_format};
+use crate::plugins::render::apply_runenwerk_gpu_context_policy;
 use anyhow::Result;
 use pollster::block_on;
 use runen_gpu::{
@@ -134,6 +135,7 @@ impl WgpuCtx {
                 descriptor = descriptor.require_format_role(format, role);
             }
         }
+        let descriptor = apply_runenwerk_gpu_context_policy(descriptor);
         let (context, surface) =
             GpuContext::request_for_surface(descriptor, Arc::clone(&window)).await?;
 

@@ -5,6 +5,7 @@
 // path. Direct inspection of renderer-private same-submission bytes is proof evidence only; EVAL-001
 // independently normalizes and certifies the same exact submission before semantic formation.
 
+use super::super::apply_runenwerk_gpu_context_policy;
 use super::super::deterministic_admission::{AdmittedDeterministicRender, admit_deterministic_render};
 use super::super::deterministic_execution::DeterministicVerificationSubmission;
 use super::super::deterministic_verification::{
@@ -270,10 +271,11 @@ fn execution_fixture() -> ExecutionFixture {
 }
 
 fn request_execution_context() -> Option<GpuContext> {
-    let descriptor =
+    let descriptor = apply_runenwerk_gpu_context_policy(
         GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements())
             .require_format_role(GpuTextureFormat::R32Uint, GpuFormatRole::CopyDestination)
-            .with_label("RunenRender R6 maintained execution proof");
+            .with_label("RunenRender R6 maintained execution proof"),
+    );
     match pollster::block_on(GpuContext::request(descriptor)) {
         Ok(context) => Some(context),
         Err(error) if error.category() == GpuContextRequestErrorCategory::NoAdapterAvailable => {
