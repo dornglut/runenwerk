@@ -1082,7 +1082,12 @@ mod tests {
         results.set_viewport_result(
             primary_viewport,
             (140.0, 240.0),
-            (shared_bounds.x, shared_bounds.y, shared_bounds.width, shared_bounds.height),
+            (
+                shared_bounds.x,
+                shared_bounds.y,
+                shared_bounds.width,
+                shared_bounds.height,
+            ),
             EditorPickingHit {
                 target: EditorPickingTarget::Entity(7),
                 distance: 2.0,
@@ -1091,7 +1096,12 @@ mod tests {
         results.set_viewport_result(
             secondary_viewport,
             (140.0, 240.0),
-            (shared_bounds.x, shared_bounds.y, shared_bounds.width, shared_bounds.height),
+            (
+                shared_bounds.x,
+                shared_bounds.y,
+                shared_bounds.width,
+                shared_bounds.height,
+            ),
             EditorPickingHit {
                 target: EditorPickingTarget::Entity(8),
                 distance: 3.0,
