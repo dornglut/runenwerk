@@ -30,6 +30,17 @@ fn main() -> anyhow::Result<()> {
             window_size_px,
             radiance_size_px,
         ),
+        Command::TemporalQuality {
+            output_root,
+            submitted_frame_limit,
+            window_size_px,
+            internal_size_px,
+        } => runenwerk_render_lab::run_native_temporal_quality(
+            output_root,
+            submitted_frame_limit,
+            window_size_px,
+            internal_size_px,
+        ),
         Command::FoundingDirect(output_root) => {
             runenwerk_render_lab::run_founding_direct(output_root)?;
             Ok(())
@@ -47,6 +58,12 @@ enum Command {
         submitted_frame_limit: Option<usize>,
         window_size_px: Option<(u32, u32)>,
         radiance_size_px: Option<(u32, u32)>,
+    },
+    TemporalQuality {
+        output_root: PathBuf,
+        submitted_frame_limit: Option<usize>,
+        window_size_px: (u32, u32),
+        internal_size_px: (u32, u32),
     },
 }
 
@@ -67,6 +84,54 @@ fn parse_command(args: impl IntoIterator<Item = OsString>) -> anyhow::Result<Com
             );
         }
         return Ok(Command::ReplayTrace(PathBuf::from(path)));
+    }
+    if matches!(first.as_deref(), Some(value) if value == "--rl2-quality") {
+        let default_output = PathBuf::from("render-lab/rl2-temporal-quality");
+        let mut args = args.peekable();
+        let output_root = match args.peek() {
+            Some(value) if !value.to_string_lossy().starts_with("--") => {
+                PathBuf::from(args.next().expect("peeked temporal quality output root"))
+            }
+            _ => default_output,
+        };
+        let mut submitted_frame_limit = None;
+        let mut window_size_px = None;
+        let mut internal_size_px = None;
+        while let Some(flag) = args.next() {
+            if flag == "--submitted-frames" {
+                if submitted_frame_limit.is_some() {
+                    bail!("duplicate --submitted-frames argument");
+                }
+                submitted_frame_limit = Some(parse_frame_limit(args.next())?);
+            } else if flag == "--window-size-px" {
+                if window_size_px.is_some() {
+                    bail!("duplicate --window-size-px argument");
+                }
+                window_size_px = Some(parse_window_size_px(args.next())?);
+            } else if flag == "--internal-size-px" {
+                if internal_size_px.is_some() {
+                    bail!("duplicate --internal-size-px argument");
+                }
+                internal_size_px = Some(parse_internal_size_px(args.next())?);
+            } else {
+                bail!(
+                    "unexpected RL2 temporal quality argument '{}'",
+                    flag.to_string_lossy()
+                );
+            }
+        }
+        let window_size_px = window_size_px.ok_or_else(|| {
+            anyhow::anyhow!("--rl2-quality requires --window-size-px WIDTHxHEIGHT")
+        })?;
+        let internal_size_px = internal_size_px.ok_or_else(|| {
+            anyhow::anyhow!("--rl2-quality requires --internal-size-px WIDTHxHEIGHT")
+        })?;
+        return Ok(Command::TemporalQuality {
+            output_root,
+            submitted_frame_limit,
+            window_size_px,
+            internal_size_px,
+        });
     }
     if matches!(first.as_deref(), Some(value) if value == "--rl2-measure") {
         let default_output = PathBuf::from("render-lab/rl2-measurement.json");
@@ -289,6 +354,26 @@ fn parse_window_size_px(value: Option<OsString>) -> anyhow::Result<(u32, u32)> {
     Ok((width, height))
 }
 
+fn parse_internal_size_px(value: Option<OsString>) -> anyhow::Result<(u32, u32)> {
+    let Some(value) = value else {
+        bail!("--internal-size-px requires WIDTHxHEIGHT");
+    };
+    let value = value.to_string_lossy();
+    let Some((width, height)) = value.split_once('x') else {
+        bail!("invalid --internal-size-px value '{value}'; expected WIDTHxHEIGHT");
+    };
+    let width = width
+        .parse::<u32>()
+        .map_err(|_| anyhow::anyhow!("invalid --internal-size-px width in '{value}'"))?;
+    let height = height
+        .parse::<u32>()
+        .map_err(|_| anyhow::anyhow!("invalid --internal-size-px height in '{value}'"))?;
+    if width == 0 || height == 0 {
+        bail!("--internal-size-px requires positive WIDTHxHEIGHT");
+    }
+    Ok((width, height))
+}
+
 fn parse_radiance_size_px(value: Option<OsString>) -> anyhow::Result<(u32, u32)> {
     let Some(value) = value else {
         anyhow::bail!("--radiance-size-px requires WIDTHxHEIGHT");
@@ -378,6 +463,92 @@ mod tests {
                 .downcast_ref::<engine::automation::AutomationInputTraceImportError>()
                 .is_some()
         );
+    }
+
+    #[test]
+    fn temporal_quality_mode_requires_explicit_extents_and_accepts_matrix_cases() {
+        assert_eq!(
+            parse_command(args(&[
+                "--rl2-quality",
+                "evidence/p067",
+                "--window-size-px",
+                "1920x1080",
+                "--internal-size-px",
+                "1280x720",
+                "--submitted-frames",
+                "600"
+            ]))
+            .unwrap(),
+            Command::TemporalQuality {
+                output_root: PathBuf::from("evidence/p067"),
+                submitted_frame_limit: Some(600),
+                window_size_px: (1920, 1080),
+                internal_size_px: (1280, 720),
+            }
+        );
+        assert_eq!(
+            parse_command(args(&[
+                "--rl2-quality",
+                "--window-size-px",
+                "1920x1080",
+                "--internal-size-px",
+                "1920x1080"
+            ]))
+            .unwrap(),
+            Command::TemporalQuality {
+                output_root: PathBuf::from("render-lab/rl2-temporal-quality"),
+                submitted_frame_limit: None,
+                window_size_px: (1920, 1080),
+                internal_size_px: (1920, 1080),
+            }
+        );
+    }
+
+    #[test]
+    fn temporal_quality_mode_preserves_invalid_fixed_policy_shapes_for_runtime_fallback() {
+        assert_eq!(
+            parse_command(args(&[
+                "--rl2-quality",
+                "--window-size-px",
+                "1920x1080",
+                "--internal-size-px",
+                "1280x800"
+            ]))
+            .unwrap(),
+            Command::TemporalQuality {
+                output_root: PathBuf::from("render-lab/rl2-temporal-quality"),
+                submitted_frame_limit: None,
+                window_size_px: (1920, 1080),
+                internal_size_px: (1280, 800),
+            }
+        );
+    }
+
+    #[test]
+    fn temporal_quality_mode_rejects_missing_duplicate_or_malformed_arguments() {
+        for values in [
+            vec!["--rl2-quality"],
+            vec!["--rl2-quality", "--window-size-px", "1920x1080"],
+            vec!["--rl2-quality", "--internal-size-px", "1280x720"],
+            vec![
+                "--rl2-quality",
+                "--window-size-px",
+                "1920x1080",
+                "--window-size-px",
+                "1280x720",
+                "--internal-size-px",
+                "1280x720",
+            ],
+            vec![
+                "--rl2-quality",
+                "--window-size-px",
+                "1920x1080",
+                "--internal-size-px",
+                "1280X720",
+            ],
+        ] {
+            assert!(parse_command(args(&values)).is_err(), "{values:?}");
+        }
     }
 
     #[test]
