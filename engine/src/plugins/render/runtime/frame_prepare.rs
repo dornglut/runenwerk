@@ -1405,7 +1405,7 @@ mod tests {
         let mut requests = PreparedRenderFrameRequestResource::default();
         requests
             .replace_contribution(
-                producer(1),
+                RenderFrameProducerId::try_from_raw(1).expect("test producer id should be nonzero"),
                 [],
                 [
                     PreparedFlowInvocationRequest::new("explicit.first", first.flow_id, "main"),
