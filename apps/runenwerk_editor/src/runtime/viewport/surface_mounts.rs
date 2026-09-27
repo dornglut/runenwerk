@@ -81,23 +81,14 @@ impl MountedSurfaceRegistryResource {
             });
         self.registry.rebuild(mounts);
     }
-
-    #[cfg(test)]
-    pub fn sync_from_workspace_state(&mut self, workspace: &editor_shell::WorkspaceState) {
-        let runtime = editor_shell::import_legacy_workspace(
-            editor_shell::SCENE_WORKSPACE_PROFILE_ID,
-            workspace,
-        )
-        .unwrap();
-        self.sync_from_composition(&runtime);
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use editor_shell::{
-        VIEWPORT_SURFACE_DEFINITION_ID, WorkspaceIdentityAllocator, WorkspaceState,
+        SCENE_WORKSPACE_PROFILE_ID, VIEWPORT_SURFACE_DEFINITION_ID,
+        form_editor_profile_layout_source,
     };
 
     #[test]
@@ -115,14 +106,22 @@ mod tests {
     }
 
     #[test]
-    fn mounted_registry_syncs_from_workspace_mounts() {
-        let mut allocator = WorkspaceIdentityAllocator::new();
-        let workspace_id = allocator.allocate_workspace_id();
-        let workspace_state =
-            WorkspaceState::bootstrap_current_layout(workspace_id, &mut allocator);
+    fn mounted_registry_syncs_from_composition_mounts() {
+        let app = crate::editor_app::RunenwerkEditorApp::new();
+        let host = app.workbench_host();
+        let profile = host
+            .workspace_profile_registry()
+            .profile(SCENE_WORKSPACE_PROFILE_ID)
+            .expect("scene profile should be installed");
+        let runtime = form_editor_profile_layout_source(
+            profile.id,
+            &profile.layout_source,
+            host.tool_surface_registry(),
+        )
+        .expect("scene profile should form as composition");
 
         let mut mounts = MountedSurfaceRegistryResource::default();
-        mounts.sync_from_workspace_state(&workspace_state);
+        mounts.sync_from_composition(&runtime);
 
         assert_eq!(mounts.generation(), 1);
         assert_eq!(mounts.mounted_surfaces().count(), 5);
