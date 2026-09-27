@@ -461,22 +461,12 @@ impl EditorHostResource {
                 workspace_id,
                 layout,
             }) => {
-                let mut identities = editor_shell::WorkspaceIdentityAllocator::new();
-                let legacy_workspace_id = identities.allocate_workspace_id();
-                let result = editor_shell::form_workspace_state_from_definition_with_registry(
+                let result = editor_shell::form_editor_profile_composition(
+                    self.shell_state.active_workspace_profile_id(),
                     &layout,
-                    legacy_workspace_id,
-                    &mut identities,
                     self.app.workbench_host().tool_surface_registry(),
                 )
-                .map_err(|error| format!("authored layout formation failed: {error:?}"))
-                .and_then(|workspace| {
-                    editor_shell::import_legacy_workspace(
-                        self.shell_state.active_workspace_profile_id(),
-                        &workspace,
-                    )
-                    .map_err(|error| format!("composition import failed: {error:?}"))
-                })
+                .map_err(|error| format!("composition formation failed: {error:?}"))
                 .and_then(|runtime| {
                     self.shell_state
                         .install_composition_runtime(runtime)
