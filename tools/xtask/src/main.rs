@@ -48,7 +48,11 @@ const TOOLING_CARGO_STEPS: &[(&str, &[&str])] = &[
 
 const PRODUCT_CARGO_STEPS: &[(&str, &[&str])] = &[
     ("workspace fmt", &["fmt", "--all", "--check"]),
-    ("workspace tests", &["test", "--workspace", "--locked"]),
+    (
+        "workspace test build",
+        &["test", "--workspace", "--locked", "--no-run"],
+    ),
+    ("workspace test execution", &["test", "--workspace", "--locked"]),
     (
         "workspace clippy",
         &[
@@ -260,7 +264,7 @@ fn audit_repository(root: &Path) -> Result<(), String> {
     require_text(
         root,
         ".github/workflows/ci.yml",
-        "uses: dornglut/github-workflows/.github/workflows/reusable-rust-cargo-validate.yml@d74b34121339a15dc352b5b702501f8e7bdd20a2",
+        "uses: dornglut/github-workflows/.github/workflows/reusable-rust-cargo-validate.yml@8ab3bbd59b44143808cc6c61111863935ba3d6eb",
         "CI must invoke the accepted shared orchestration through an immutable revision",
     )?;
     require_text(
