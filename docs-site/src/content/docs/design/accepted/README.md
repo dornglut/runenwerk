@@ -74,6 +74,7 @@ Move a design to `implemented/` only after code has been checked against it and 
 - [Runenwerk App Runtime and Composition Semantic Model](runenwerk-app-runtime-and-composition-semantic-model.md)
 - [Runenwerk Device-Level Input Observation Semantic Model](runenwerk-physical-input-semantic-model.md)
 - [Runenwerk Application Automation Session Semantic Model](runenwerk-application-automation-session-semantic-model.md)
+- [Runenwerk Terminal Automation Orchestration And Authored Scenario Design](runenwerk-terminal-automation-orchestration-and-authored-scenario-design.md)
 - [Feature-Owned Render Contributions Design](feature-owned-render-contributions-design.md)
 - [Product Surface Platform Hardening Design](product-surface-platform-hardening-design.md)
 - [Render Execution Graph Compiler Maturity Design](render-execution-graph-compiler-maturity-design.md)
