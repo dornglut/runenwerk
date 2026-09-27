@@ -5,8 +5,7 @@ use crate::plugins::render::inspect::RenderDebugTimingsState;
 use crate::plugins::render::*;
 use crate::plugins::scene::SceneResource;
 use crate::runtime::{
-    CatchupBudget, FixedTimeConfig, FixedTimeState, NativeWindowLifecycleState,
-    PrimaryPresentationMetricsResource, WorldMut,
+    CatchupBudget, FixedTimeConfig, FixedTimeState, NativeWindowLifecycleState, WorldMut,
 };
 use runen_gpu::GpuWorkResourceId;
 use std::any::{Any, TypeId};
@@ -16,18 +15,22 @@ use std::time::Instant;
 type ExtractedRenderStateMap<'a> = BTreeMap<TypeId, &'a dyn Any>;
 
 pub(crate) fn frame_render_prepare_system(mut world: WorldMut) -> anyhow::Result<()> {
-    let scene_route = world
-        .resource::<SceneResource>()
-        .ok()
-        .and_then(|scene_resource| scene_resource.manager.as_ref())
-        .map(|manager| PreparedSceneRouteContribution {
-            world_scene_label: manager.world.active.label().to_string(),
-            overlay_scene_label: manager.active_overlay().label().to_string(),
-        });
-    let primary_target_size = world
-        .resource::<PrimaryPresentationMetricsResource>()
-        .ok()
-        .map(PrimaryPresentationMetricsResource::size_px);
+    let (target_size, active_world_label, active_overlay_label) = {
+        let scene_resource = world.resource::<SceneResource>()?;
+        let Some(manager) = scene_resource.manager.as_ref() else {
+            clear_prepared_frame(&mut world);
+            return Ok(());
+        };
+        let (window_w, window_h) = manager.overlay_runtime.ui.screen_size;
+        (
+            (
+                window_w.max(1.0).round() as u32,
+                window_h.max(1.0).round() as u32,
+            ),
+            manager.world.active.label().to_string(),
+            manager.active_overlay().label().to_string(),
+        )
+    };
 
     let Some(mut shader_registry) = world.remove_resource::<ShaderRegistryResource>() else {
         clear_prepared_frame(&mut world);
@@ -43,12 +46,8 @@ pub(crate) fn frame_render_prepare_system(mut world: WorldMut) -> anyhow::Result
     }
     let shader_reload_messages = shader_registry.drain_message_lines();
     if !shader_reload_messages.is_empty() {
-        for message in &shader_reload_messages {
-            tracing::info!(message = %message, "render shader registry update");
-        }
-        if let Ok(scene_resource) = world.resource_mut::<SceneResource>()
-            && let Some(manager) = scene_resource.manager.as_mut()
-        {
+        let scene_resource = world.resource_mut::<SceneResource>()?;
+        if let Some(manager) = scene_resource.manager.as_mut() {
             for msg in shader_reload_messages {
                 manager
                     .overlay_runtime
@@ -64,7 +63,7 @@ pub(crate) fn frame_render_prepare_system(mut world: WorldMut) -> anyhow::Result
         }
     }
 
-    let surface_infos = prepared_surface_infos(&mut world, primary_target_size);
+    let surface_infos = prepared_surface_infos(&mut world, target_size);
 
     let (flow_registry_revision, compiled_flows, execution_feature_ids, surface_packets) = {
         let flow_registry = match world.resource::<RenderFlowRegistryResource>() {
@@ -118,8 +117,12 @@ pub(crate) fn frame_render_prepare_system(mut world: WorldMut) -> anyhow::Result
         }
     };
 
-    let contributions =
-        build_frame_feature_contributions(&world, scene_route.as_ref(), &execution_feature_ids);
+    let contributions = build_frame_feature_contributions(
+        &world,
+        active_world_label,
+        active_overlay_label,
+        &execution_feature_ids,
+    );
     let dynamic_texture_target_requests = world
         .resource::<RenderDynamicTextureTargetRequestRegistryResource>()
         .ok()
@@ -193,7 +196,7 @@ pub(crate) fn frame_render_prepare_system(mut world: WorldMut) -> anyhow::Result
 
 fn prepared_surface_infos(
     world: &mut WorldMut,
-    primary_target_size: Option<(u32, u32)>,
+    primary_target_size: (u32, u32),
 ) -> Vec<PreparedSurfaceInfo> {
     let created_windows = world
         .resource::<crate::runtime::WindowStateRegistryResource>()
@@ -213,7 +216,7 @@ fn prepared_surface_infos(
 fn prepared_surface_infos_from_registry(
     registry: Option<&RenderSurfaceRegistryResource>,
     created_windows: &BTreeSet<crate::runtime::NativeWindowId>,
-    primary_target_size: Option<(u32, u32)>,
+    primary_target_size: (u32, u32),
 ) -> Vec<PreparedSurfaceInfo> {
     let surfaces = registry
         .into_iter()
@@ -231,9 +234,7 @@ fn prepared_surface_infos_from_registry(
         })
         .collect::<Vec<_>>();
     if surfaces.is_empty() {
-        primary_target_size
-            .map(|target_size| vec![PreparedSurfaceInfo::unbound_primary(target_size)])
-            .unwrap_or_default()
+        vec![PreparedSurfaceInfo::unbound_primary(primary_target_size)]
     } else {
         surfaces
     }
@@ -738,12 +739,17 @@ pub(crate) fn clear_prepared_frame(world: &mut WorldMut) {
 
 pub(crate) fn build_frame_feature_contributions(
     world: &runen_ecs::World,
-    scene_route: Option<&PreparedSceneRouteContribution>,
+    world_scene_label: String,
+    overlay_scene_label: String,
     execution_feature_ids: &[RenderFeatureId],
 ) -> PreparedFrameContributions {
     let mut contributions = PreparedFrameContributions::default();
+    let scene_route = PreparedSceneRouteContribution {
+        world_scene_label,
+        overlay_scene_label,
+    };
 
-    collect_registered_feature_contributions(world, scene_route, &mut contributions);
+    collect_registered_feature_contributions(world, &scene_route, &mut contributions);
 
     if contributions.feature(&UI_RENDER_FEATURE_ID).is_none()
         && let Ok(resource) = world.resource::<PreparedUiFrameResource>()
@@ -896,7 +902,7 @@ fn apply_surface_ui_contribution(
 
 fn collect_registered_feature_contributions(
     world: &runen_ecs::World,
-    scene_route: Option<&PreparedSceneRouteContribution>,
+    scene_route: &PreparedSceneRouteContribution,
     contributions: &mut PreparedFrameContributions,
 ) {
     let collector_registry = world
@@ -950,8 +956,12 @@ fn collect_registered_feature_contributions(
 
         let fallback_policy =
             feature_policy(world, descriptor.feature_id, descriptor.fallback_policy);
-        let context =
-            RenderFeatureContributionContext::new(world, descriptor, fallback_policy, scene_route);
+        let context = RenderFeatureContributionContext::new(
+            world,
+            descriptor,
+            fallback_policy,
+            Some(scene_route),
+        );
         match (collector.collect)(&context) {
             Ok(contribution) => {
                 if let Err(diagnostic) = validate_collected_contribution(descriptor, &contribution)
@@ -1279,25 +1289,13 @@ mod tests {
     }
 
     #[test]
-    fn surface_preparation_keeps_explicit_headless_primary_unbound() {
+    fn surface_preparation_keeps_headless_primary_unbound() {
         let registry = RenderSurfaceRegistryResource::default();
-        let prepared = prepared_surface_infos_from_registry(
-            Some(&registry),
-            &BTreeSet::new(),
-            Some((800, 600)),
-        );
+        let prepared =
+            prepared_surface_infos_from_registry(Some(&registry), &BTreeSet::new(), (800, 600));
         assert_eq!(prepared.len(), 1);
         assert_eq!(prepared[0].render_surface_id, RenderSurfaceId::primary());
         assert_eq!(prepared[0].native_window_id, None);
-        assert_eq!(registry.records().count(), 0);
-    }
-
-    #[test]
-    fn surface_preparation_does_not_infer_unbound_primary_without_metrics() {
-        let registry = RenderSurfaceRegistryResource::default();
-        let prepared =
-            prepared_surface_infos_from_registry(Some(&registry), &BTreeSet::new(), None);
-        assert!(prepared.is_empty());
         assert_eq!(registry.records().count(), 0);
     }
 
@@ -1308,12 +1306,12 @@ mod tests {
         let surface = registry.reserve_surface_for_native_window(native, (900, 600));
         let created = BTreeSet::from([native]);
         let requested =
-            prepared_surface_infos_from_registry(Some(&registry), &created, Some((1280, 720)));
+            prepared_surface_infos_from_registry(Some(&registry), &created, (1280, 720));
         assert_eq!(requested[0].native_window_id, None);
         registry
             .confirm_surface_attachment(surface, native, (900, 600))
             .unwrap();
-        let attached = prepared_surface_infos_from_registry(Some(&registry), &created, None);
+        let attached = prepared_surface_infos_from_registry(Some(&registry), &created, (1280, 720));
         assert_eq!(attached[0].render_surface_id, surface);
         assert_eq!(attached[0].native_window_id, Some(native));
     }
@@ -1375,38 +1373,17 @@ mod tests {
     fn render_feature_contributions_default_scene_route_uses_registered_collector() {
         let world = runen_ecs::World::default();
 
-        let scene_route = PreparedSceneRouteContribution {
-            world_scene_label: "world.scene".to_string(),
-            overlay_scene_label: "overlay.scene".to_string(),
-        };
-        let contributions = build_frame_feature_contributions(&world, Some(&scene_route), &[]);
+        let contributions = build_frame_feature_contributions(
+            &world,
+            "world.scene".to_string(),
+            "overlay.scene".to_string(),
+            &[],
+        );
 
         assert_eq!(
             contributions.scene_route_labels(),
             Some(("world.scene", "overlay.scene"))
         );
-        assert!(contributions.diagnostics().is_empty());
-    }
-
-    #[test]
-    fn render_feature_contributions_without_scene_route_use_empty_fallback() {
-        let world = runen_ecs::World::default();
-
-        let contributions = build_frame_feature_contributions(&world, None, &[]);
-        let scene_route = contributions
-            .feature(&SCENE_ROUTE_RENDER_FEATURE_ID)
-            .expect("scene route should remain represented when Scene is absent");
-
-        assert_eq!(scene_route.status, FeatureContributionStatus::Missing);
-        assert_eq!(
-            scene_route.fallback_policy,
-            FeatureFallbackPolicy::EmptyContribution
-        );
-        assert!(matches!(
-            &scene_route.payload,
-            PreparedFeaturePayload::Empty
-        ));
-        assert_eq!(contributions.scene_route_labels(), None);
         assert!(contributions.diagnostics().is_empty());
     }
 
@@ -1422,12 +1399,12 @@ mod tests {
             .expect("test collector should register");
         world.insert_resource(collector_registry);
 
-        let scene_route = PreparedSceneRouteContribution {
-            world_scene_label: "world.scene".to_string(),
-            overlay_scene_label: "overlay.scene".to_string(),
-        };
-        let contributions =
-            build_frame_feature_contributions(&world, Some(&scene_route), &[test_feature_id()]);
+        let contributions = build_frame_feature_contributions(
+            &world,
+            "world.scene".to_string(),
+            "overlay.scene".to_string(),
+            &[test_feature_id()],
+        );
 
         let contribution = contributions
             .feature(&test_feature_id())
@@ -1454,12 +1431,12 @@ mod tests {
             .expect("test collector should register");
         world.insert_resource(collector_registry);
 
-        let scene_route = PreparedSceneRouteContribution {
-            world_scene_label: "world.scene".to_string(),
-            overlay_scene_label: "overlay.scene".to_string(),
-        };
-        let contributions =
-            build_frame_feature_contributions(&world, Some(&scene_route), &[test_feature_id()]);
+        let contributions = build_frame_feature_contributions(
+            &world,
+            "world.scene".to_string(),
+            "overlay.scene".to_string(),
+            &[test_feature_id()],
+        );
 
         let contribution = contributions
             .feature(&test_feature_id())
