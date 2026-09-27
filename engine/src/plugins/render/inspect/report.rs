@@ -163,7 +163,7 @@ mod tests {
     }
 
     #[test]
-    fn frame_report_state_keeps_latest_and_frame_addressable_history() {
+    fn frame_report_state_keeps_capture_history_after_capture_free_latest_report() {
         let selector = RenderCaptureSelector {
             flow_id: Some("flow".to_string()),
             pass_id: Some("pass".to_string()),
@@ -171,16 +171,17 @@ mod tests {
             resource_id: "surface.color".to_string(),
             texture_class: CaptureTextureClass::ImportedTexture,
         };
+        let manifest = PathBuf::from("captures/frame-1.json");
         let mut state = RenderDebugFrameReportState::default();
 
         state.observe_frame(RenderDebugFrameReport {
             frame_index: 1,
-            capture_results: vec![selector_result(0, selector.clone())],
+            capture_results: vec![selector_result(0, selector)],
+            artifact_manifest_path: Some(manifest.clone()),
             ..RenderDebugFrameReport::default()
         });
         state.observe_frame(RenderDebugFrameReport {
             frame_index: 2,
-            capture_results: vec![selector_result(0, selector.clone())],
             ..RenderDebugFrameReport::default()
         });
 
@@ -189,8 +190,12 @@ mod tests {
             .as_ref()
             .expect("latest report should be present");
         assert_eq!(latest.frame_index, 2);
-        assert_eq!(latest.capture_results.len(), 1);
+        assert!(latest.capture_results.is_empty());
         assert_eq!(state.capture_results_for_frame(1).map(<[_]>::len), Some(1));
-        assert_eq!(state.capture_results_for_frame(2).map(<[_]>::len), Some(1));
+        assert_eq!(state.capture_results_for_frame(2), None);
+        assert_eq!(
+            state.capture_artifact_manifest_for_frame(1),
+            Some(&manifest)
+        );
     }
 }
