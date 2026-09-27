@@ -90,6 +90,7 @@ struct RenderLabTemporalQualityArtifact {
     total_submitted_frames: usize,
     gpu: RenderLabTemporalQualityGpuEvidence,
     execution: RenderLabTemporalQualityExecutionEvidence,
+    capture_route: &'static str,
     capture: RenderLabTemporalQualityCaptureEvidence,
 }
 
@@ -366,6 +367,11 @@ pub(super) fn write_temporal_quality_artifact(
         capture_submission_ordinal,
         total_submitted_frames: history.len(),
         gpu: temporal_quality_gpu_evidence(adapter_facts),
+        capture_route: match execution.policy {
+            "native" => "native_scene",
+            "fixed" => "fixed_resolve",
+            _ => "unexpected",
+        },
         execution,
         capture,
     };

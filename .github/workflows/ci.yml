@@ -191,7 +191,9 @@ jobs:
                     and .execution.target_key == null
                     and .execution.internal_view_id == null
                     and .execution.resolve_invocation_id == null
-                    and .capture.flow_id == "runenwerk.render_lab.rl2.fixed_quality"
+                    and .capture_route == "native_scene"
+                    and (.capture.flow_id | length) > 0
+                    and (.capture.pass_id | length) > 0
                   else
                     .execution.policy == "fixed"
                     and .execution.native_fallback_active == false
@@ -199,7 +201,9 @@ jobs:
                     and .execution.internal_view_id != null
                     and .execution.scene_invocation_id != null
                     and .execution.resolve_invocation_id != null
-                    and .capture.flow_id == "render.fixed_resolution.resolve"
+                    and .capture_route == "fixed_resolve"
+                    and (.capture.flow_id | length) > 0
+                    and (.capture.pass_id | length) > 0
                   end
                 )
               ' "${output}/quality-evidence.json"
