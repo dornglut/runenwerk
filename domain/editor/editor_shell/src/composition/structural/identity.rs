@@ -23,7 +23,28 @@ pub struct EditorCompositionIdentityAllocator {
     next_tab_stack: Option<u64>,
 }
 
+impl Default for EditorCompositionIdentityAllocator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EditorCompositionIdentityAllocator {
+    pub const fn new() -> Self {
+        Self {
+            next_target: Some(1),
+            next_root: Some(1),
+            next_region: Some(1),
+            next_mounted_unit: Some(1),
+            next_transaction: Some(1),
+            next_panel_instance: Some(1),
+            next_compatibility_surface: Some(1),
+            next_viewport_instance: Some(1),
+            next_compatibility_host: Some(1),
+            next_tab_stack: Some(1),
+        }
+    }
+
     pub fn from_runtime(runtime: &EditorCompositionRuntime) -> Self {
         let definition = runtime.composition().definition();
         Self {
