@@ -294,6 +294,7 @@ impl RenderFixedResolutionExecutionRequest {
         if node.label != FIXED_RESOLUTION_RESOLVE_PASS_LABEL
             || node.kind != RenderPassKind::Fullscreen
             || node.view_scope != RenderPassViewScope::MainSurfaceOnly
+            || node.clear_color != Some([0.0, 0.0, 0.0, 1.0])
             || !shader_matches
             || node.sampled_textures.as_slice() != [source_alias_id]
             || node.color_outputs.as_slice() != [surface_color_id]
