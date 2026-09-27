@@ -63,6 +63,22 @@ pub(super) struct RenderLabTemporalQualityCaptureEvidence {
 }
 
 #[derive(Debug, serde::Serialize)]
+struct RenderLabTemporalQualityGpuEvidence {
+    backend: &'static str,
+    adapter_class: &'static str,
+    software_status: &'static str,
+    fallback_status: &'static str,
+    diagnostic_name: Option<String>,
+    driver: Option<String>,
+    driver_info: Option<String>,
+    vendor: Option<u32>,
+    device: Option<u32>,
+    device_request_profile: &'static str,
+    device_request_profile_supported: bool,
+    evidence_profile_fingerprint: String,
+}
+
+#[derive(Debug, serde::Serialize)]
 struct RenderLabTemporalQualityArtifact {
     schema_version: u32,
     scenario_id: &'static str,
@@ -70,12 +86,16 @@ struct RenderLabTemporalQualityArtifact {
     source_git_revision: Option<String>,
     requested_internal_size_px: [u32; 2],
     requested_output_size_px: [u32; 2],
+    capture_submission_ordinal: usize,
+    total_submitted_frames: usize,
+    gpu: RenderLabTemporalQualityGpuEvidence,
     execution: RenderLabTemporalQualityExecutionEvidence,
     capture: RenderLabTemporalQualityCaptureEvidence,
 }
 
+const RL2_QUALITY_SCHEMA_VERSION: u32 = 2;
 const RL2_QUALITY_SCENARIO_ID: &str = "runenwerk.render_lab.rl2.temporal_quality";
-const RL2_QUALITY_SCENARIO_REVISION: u32 = 1;
+const RL2_QUALITY_SCENARIO_REVISION: u32 = 2;
 pub(super) const RL2_QUALITY_FLOW_ID: &str = "runenwerk.render_lab.rl2.fixed_quality";
 pub(super) const RL2_QUALITY_PASS_ID: &str = "runenwerk.render_lab.rl2.fixed_quality.compose";
 pub(super) const RL2_QUALITY_COLOR_ALIAS: &str = "runenwerk.render_lab.rl2.fixed_quality.color";
@@ -117,7 +137,7 @@ pub(super) fn render_lab_fixed_quality_flow() -> Result<RenderFlow> {
         .with_target_alias(RL2_RADIANCE_ALIAS, RenderTargetAliasKind::Texture)?
         .with_color_target_alias(RL2_QUALITY_COLOR_ALIAS)?
         .fullscreen_pass(RL2_QUALITY_PASS_ID)
-        .shader_asset("assets/shaders/runenwerk_render_lab_radiance.wgsl")
+        .shader_asset("assets/shaders/runenwerk_render_lab_quality.wgsl")
         .sample_texture_load(runen_gpu::GpuBindingKey::try_new(0, 0)?, RL2_RADIANCE_ALIAS)
         .clear_color([0.0, 0.0, 0.0, 1.0])
         .write_target_alias(RL2_QUALITY_COLOR_ALIAS)
@@ -180,10 +200,95 @@ pub(super) fn temporal_quality_capture_evidence(
     }))
 }
 
+fn temporal_quality_gpu_evidence(
+    facts: &runen_gpu::GpuAdapterFacts,
+) -> RenderLabTemporalQualityGpuEvidence {
+    let backend = gpu_backend_token(facts.backend());
+    let adapter_class = gpu_adapter_class_token(facts.class());
+    let software_status = gpu_software_token(facts.software());
+    let fallback_status = gpu_fallback_token(facts.fallback());
+    let device_request_profile = gpu_device_profile_token(facts.device_request_profile());
+    let canonical = format!(
+        "backend={backend};class={adapter_class};software={software_status};fallback={fallback_status};name={};driver={};driver_info={};vendor={:?};device={:?};profile={device_request_profile};profile_supported={}",
+        facts.diagnostic_name().unwrap_or(""),
+        facts.driver().unwrap_or(""),
+        facts.driver_info().unwrap_or(""),
+        facts.vendor(),
+        facts.device(),
+        facts.device_request_profile_supported(),
+    );
+    RenderLabTemporalQualityGpuEvidence {
+        backend,
+        adapter_class,
+        software_status,
+        fallback_status,
+        diagnostic_name: facts.diagnostic_name().map(str::to_owned),
+        driver: facts.driver().map(str::to_owned),
+        driver_info: facts.driver_info().map(str::to_owned),
+        vendor: facts.vendor(),
+        device: facts.device(),
+        device_request_profile,
+        device_request_profile_supported: facts.device_request_profile_supported(),
+        evidence_profile_fingerprint: format!(
+            "blake3:{}",
+            blake3::hash(canonical.as_bytes()).to_hex()
+        ),
+    }
+}
+
+fn gpu_backend_token(value: runen_gpu::GpuBackendFamily) -> &'static str {
+    match value {
+        runen_gpu::GpuBackendFamily::Vulkan => "vulkan",
+        runen_gpu::GpuBackendFamily::Metal => "metal",
+        runen_gpu::GpuBackendFamily::Direct3D12 => "direct3d12",
+        runen_gpu::GpuBackendFamily::OpenGl => "opengl",
+        runen_gpu::GpuBackendFamily::BrowserWebGpu => "browser_webgpu",
+        runen_gpu::GpuBackendFamily::UnknownBackend => "unknown",
+    }
+}
+
+fn gpu_adapter_class_token(value: runen_gpu::GpuAdapterClass) -> &'static str {
+    match value {
+        runen_gpu::GpuAdapterClass::Discrete => "discrete",
+        runen_gpu::GpuAdapterClass::Integrated => "integrated",
+        runen_gpu::GpuAdapterClass::Virtual => "virtual",
+        runen_gpu::GpuAdapterClass::Cpu => "cpu",
+        runen_gpu::GpuAdapterClass::Other => "other",
+        runen_gpu::GpuAdapterClass::Unknown => "unknown",
+    }
+}
+
+fn gpu_software_token(value: runen_gpu::GpuSoftwareStatus) -> &'static str {
+    match value {
+        runen_gpu::GpuSoftwareStatus::Software => "software",
+        runen_gpu::GpuSoftwareStatus::Hardware => "hardware",
+        runen_gpu::GpuSoftwareStatus::Unknown => "unknown",
+    }
+}
+
+fn gpu_fallback_token(value: runen_gpu::GpuFallbackStatus) -> &'static str {
+    match value {
+        runen_gpu::GpuFallbackStatus::ConfirmedFallback => "confirmed_fallback",
+        runen_gpu::GpuFallbackStatus::ConfirmedNotFallback => "confirmed_not_fallback",
+        runen_gpu::GpuFallbackStatus::Unknown => "unknown",
+    }
+}
+
+fn gpu_device_profile_token(value: runen_gpu::GpuDeviceRequestProfile) -> &'static str {
+    match value {
+        runen_gpu::GpuDeviceRequestProfile::ModernPortable => "modern_portable",
+        runen_gpu::GpuDeviceRequestProfile::Downlevel => "downlevel",
+        runen_gpu::GpuDeviceRequestProfile::BrowserWebGpu => "browser_webgpu",
+        runen_gpu::GpuDeviceRequestProfile::DownlevelWebGl2 => "downlevel_webgl2",
+    }
+}
+
 pub(super) fn write_temporal_quality_artifact(
     measurement: &RenderLabMeasurementConfig,
+    history: &RenderFrameHistoryState,
     quality_execution: &RenderLabTemporalQualityExecutionState,
     capture: RenderLabTemporalQualityCaptureEvidence,
+    adapter_facts: &runen_gpu::GpuAdapterFacts,
 ) -> Result<()> {
     let capture_root = measurement
         .quality_capture_output_dir
@@ -212,13 +317,36 @@ pub(super) fn write_temporal_quality_artifact(
                 capture.frame_index
             )
         })?;
+    let capture_submission_ordinal = history
+        .observations()
+        .enumerate()
+        .find_map(|(index, observation)| {
+            (observation.key.frame_index == capture.frame_index).then_some(index + 1)
+        })
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "temporal quality capture frame {} is absent from retained submitted-frame history",
+                capture.frame_index
+            )
+        })?;
+    let expected_capture_ordinal = measurement.submitted_frame_limit.unwrap_or(1);
+    if capture_submission_ordinal != expected_capture_ordinal {
+        bail!(
+            "temporal quality capture submission ordinal {} does not match configured target {}",
+            capture_submission_ordinal,
+            expected_capture_ordinal
+        );
+    }
     let artifact = RenderLabTemporalQualityArtifact {
-        schema_version: 1,
+        schema_version: RL2_QUALITY_SCHEMA_VERSION,
         scenario_id: RL2_QUALITY_SCENARIO_ID,
         scenario_revision: RL2_QUALITY_SCENARIO_REVISION,
         source_git_revision: std::env::var("RUNENWERK_SOURCE_REVISION").ok(),
         requested_internal_size_px: [requested_internal.0, requested_internal.1],
         requested_output_size_px: [requested_output.0, requested_output.1],
+        capture_submission_ordinal,
+        total_submitted_frames: history.len(),
+        gpu: temporal_quality_gpu_evidence(adapter_facts),
         execution,
         capture,
     };
@@ -432,6 +560,30 @@ mod tests {
     fn producer(raw: u64) -> engine::plugins::render::RenderFrameProducerId {
         engine::plugins::render::RenderFrameProducerId::try_from_raw(raw)
             .expect("test producer id should be nonzero")
+    }
+
+    #[test]
+    fn temporal_quality_gpu_tokens_are_stable() {
+        assert_eq!(
+            gpu_backend_token(runen_gpu::GpuBackendFamily::Vulkan),
+            "vulkan"
+        );
+        assert_eq!(
+            gpu_adapter_class_token(runen_gpu::GpuAdapterClass::Cpu),
+            "cpu"
+        );
+        assert_eq!(
+            gpu_software_token(runen_gpu::GpuSoftwareStatus::Software),
+            "software"
+        );
+        assert_eq!(
+            gpu_fallback_token(runen_gpu::GpuFallbackStatus::ConfirmedFallback),
+            "confirmed_fallback"
+        );
+        assert_eq!(
+            gpu_device_profile_token(runen_gpu::GpuDeviceRequestProfile::ModernPortable),
+            "modern_portable"
+        );
     }
 
     #[test]

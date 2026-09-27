@@ -856,6 +856,13 @@ impl Gfx {
         })
     }
 
+    /// Normalized facts for the adapter admitted by the renderer's RunenGPU context.
+    ///
+    /// These are observation facts, not persistent hardware identity.
+    pub fn adapter_facts(&self) -> &runen_gpu::GpuAdapterFacts {
+        self.ctx.context().adapter_facts()
+    }
+
     pub fn attach_surface(
         &mut self,
         render_surface_id: crate::plugins::render::backend::RenderSurfaceId,
