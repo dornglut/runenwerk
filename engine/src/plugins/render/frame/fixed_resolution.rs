@@ -894,8 +894,7 @@ mod tests {
         assert_eq!(flow.label(), FIXED_RESOLUTION_RESOLVE_FLOW_LABEL);
         let compiled =
             crate::plugins::render::compile_flow_plan(&flow).expect("resolve flow should compile");
-        let [CompiledPassExecutionPlan::Fullscreen(resolve)] =
-            compiled.execution.passes.as_slice()
+        let [CompiledPassExecutionPlan::Fullscreen(resolve)] = compiled.execution.passes.as_slice()
         else {
             panic!("fixed resolve should compile as exactly one fullscreen pass");
         };
