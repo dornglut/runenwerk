@@ -5,7 +5,9 @@ use crate::plugins::render::graph::{
     RenderExecutionGraphDiagnosticKind, RenderPassKind, RenderPassNode, ResourceGraph,
     compile_execution_plan, diagnose_compiled_pass_shapes,
 };
-use crate::plugins::render::{RenderFlowId, RenderPassId, validate_compiled_flow_capabilities};
+use crate::plugins::render::{
+    RenderFlowId, RenderFlowInvocationPolicy, RenderPassId, validate_compiled_flow_capabilities,
+};
 use runen_gpu::{GpuCapabilities, GpuWorkResourceId};
 use std::collections::BTreeMap;
 
@@ -13,6 +15,7 @@ use std::collections::BTreeMap;
 pub struct CompiledRenderFlowPlan {
     pub flow_id: RenderFlowId,
     pub flow_label: String,
+    pub invocation_policy: RenderFlowInvocationPolicy,
     pub resource_ids_by_label: BTreeMap<String, GpuWorkResourceId>,
     pub resources: ResourceGraph,
     /// Lexical render-owned pass descriptors and later-phase payload inputs.
@@ -231,6 +234,7 @@ fn build_compiled_flow_plan(
     CompiledRenderFlowPlan {
         flow_id: flow.id(),
         flow_label: flow.label().to_string(),
+        invocation_policy: flow.invocation_policy(),
         resource_ids_by_label: flow.resource_ids_by_label().clone(),
         resources: flow.graph().resources.clone(),
         render_passes,

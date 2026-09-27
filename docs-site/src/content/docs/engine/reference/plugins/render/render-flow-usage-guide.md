@@ -677,7 +677,7 @@ Prepared render frame requests are written before `RenderPrepare`. `RenderPrepar
 
 Current implementation boundary:
 
-- `RenderDynamicTextureTargetRequestRegistryResource` validates producer-scoped dynamic target descriptor contributions and snapshots them into `PreparedRenderFrame`.
+- `RenderDynamicTextureTargetRequestRegistryResource` validates producer-scoped dynamic target descriptor contributions and snapshots them into `PreparedRenderFrame`. `replace_contribution(...)` is intentionally all-surfaces; `replace_surface_contribution(...)` scopes a contribution to one `RenderSurfaceId`, and frame preparation includes only target descriptors applicable to the prepared surface.
 - `RenderProductSurfaceRequestBatch` and `RenderProductSurfaceManifest` are return-only. Producers still call `replace_contribution(...)` on `RenderDynamicTextureTargetRequestRegistryResource`, `RenderDynamicTextureUploadRegistryResource`, and `PreparedRenderFrameRequestResource` explicitly.
 - `RenderProductSurfaceManifest::diagnostics()` reports producer-scoped duplicate target/upload keys, missing dynamic targets, missing upload descriptors for upload-backed bindings, non-sampleable UI bindings, conflicting history signatures, and producer-owned stale/fallback/rejected/unavailable status.
 - `PreparedRenderFrameRequestResource` carries producer-scoped offscreen product views and per-flow invocation requests and exposes typed duplicate diagnostics through `diagnostics()`.

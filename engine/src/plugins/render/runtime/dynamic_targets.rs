@@ -1,6 +1,6 @@
 use crate::plugins::render::{
     RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetDescriptorError,
-    RenderDynamicTextureTargetKey, RenderFrameProducerId,
+    RenderDynamicTextureTargetKey, RenderFrameProducerId, RenderFrameSurfaceScope,
 };
 use std::collections::BTreeMap;
 use std::fmt;
@@ -56,12 +56,15 @@ impl From<RenderDynamicTextureTargetDescriptorError>
     }
 }
 
+#[derive(Debug, Clone, Default)]
+struct RenderDynamicTextureTargetRequestContribution {
+    scope: RenderFrameSurfaceScope,
+    descriptors: BTreeMap<RenderDynamicTextureTargetKey, RenderDynamicTextureTargetDescriptor>,
+}
+
 #[derive(Debug, Default, Clone, runen_ecs::Component, runen_ecs::Resource)]
 pub struct RenderDynamicTextureTargetRequestRegistryResource {
-    contributions: BTreeMap<
-        RenderFrameProducerId,
-        BTreeMap<RenderDynamicTextureTargetKey, RenderDynamicTextureTargetDescriptor>,
-    >,
+    contributions: BTreeMap<RenderFrameProducerId, RenderDynamicTextureTargetRequestContribution>,
     diagnostics: Vec<RenderDynamicTextureTargetRequestDiagnostic>,
 }
 
@@ -75,7 +78,9 @@ impl RenderDynamicTextureTargetRequestRegistryResource {
         &mut self,
         producer_id: impl Into<RenderFrameProducerId>,
     ) -> Option<BTreeMap<RenderDynamicTextureTargetKey, RenderDynamicTextureTargetDescriptor>> {
-        self.contributions.remove(&producer_id.into())
+        self.contributions
+            .remove(&producer_id.into())
+            .map(|contribution| contribution.descriptors)
     }
 
     pub fn replace_contribution(
@@ -83,10 +88,35 @@ impl RenderDynamicTextureTargetRequestRegistryResource {
         producer_id: impl Into<RenderFrameProducerId>,
         descriptors: impl IntoIterator<Item = RenderDynamicTextureTargetDescriptor>,
     ) -> Result<(), RenderDynamicTextureTargetRequestRegistryError> {
-        let producer_id = producer_id.into();
+        self.replace_scoped_contribution(
+            producer_id.into(),
+            RenderFrameSurfaceScope::AllSurfaces,
+            descriptors,
+        )
+    }
+
+    pub fn replace_surface_contribution(
+        &mut self,
+        producer_id: impl Into<RenderFrameProducerId>,
+        render_surface_id: crate::plugins::render::backend::RenderSurfaceId,
+        descriptors: impl IntoIterator<Item = RenderDynamicTextureTargetDescriptor>,
+    ) -> Result<(), RenderDynamicTextureTargetRequestRegistryError> {
+        self.replace_scoped_contribution(
+            producer_id.into(),
+            RenderFrameSurfaceScope::Surface(render_surface_id),
+            descriptors,
+        )
+    }
+
+    fn replace_scoped_contribution(
+        &mut self,
+        producer_id: RenderFrameProducerId,
+        scope: RenderFrameSurfaceScope,
+        descriptors: impl IntoIterator<Item = RenderDynamicTextureTargetDescriptor>,
+    ) -> Result<(), RenderDynamicTextureTargetRequestRegistryError> {
         self.diagnostics
             .retain(|diagnostic| diagnostic.producer_id != producer_id);
-        let mut contribution =
+        let mut descriptors_by_key =
             BTreeMap::<RenderDynamicTextureTargetKey, RenderDynamicTextureTargetDescriptor>::new();
 
         for descriptor in descriptors {
@@ -100,7 +130,7 @@ impl RenderDynamicTextureTargetRequestRegistryResource {
                 return Err(err.into());
             }
             let key = descriptor.key.clone();
-            if contribution.insert(key.clone(), descriptor).is_some() {
+            if descriptors_by_key.insert(key.clone(), descriptor).is_some() {
                 let err =
                     RenderDynamicTextureTargetRequestRegistryError::DuplicateTargetWithinProducer {
                         producer_id,
@@ -117,11 +147,12 @@ impl RenderDynamicTextureTargetRequestRegistryResource {
         }
 
         for (existing_producer_id, existing_contribution) in &self.contributions {
-            if *existing_producer_id == producer_id {
+            if *existing_producer_id == producer_id || !scope.overlaps(existing_contribution.scope)
+            {
                 continue;
             }
-            for key in contribution.keys() {
-                if existing_contribution.contains_key(key) {
+            for key in descriptors_by_key.keys() {
+                if existing_contribution.descriptors.contains_key(key) {
                     let err =
                         RenderDynamicTextureTargetRequestRegistryError::DuplicateTargetAcrossProducers {
                             existing_producer_id: *existing_producer_id,
@@ -138,14 +169,31 @@ impl RenderDynamicTextureTargetRequestRegistryResource {
                 }
             }
         }
-        self.contributions.insert(producer_id, contribution);
+        self.contributions.insert(
+            producer_id,
+            RenderDynamicTextureTargetRequestContribution {
+                scope,
+                descriptors: descriptors_by_key,
+            },
+        );
         Ok(())
     }
 
     pub fn snapshot(&self) -> Vec<RenderDynamicTextureTargetDescriptor> {
         self.contributions
             .values()
-            .flat_map(|contribution| contribution.values().cloned())
+            .flat_map(|contribution| contribution.descriptors.values().cloned())
+            .collect()
+    }
+
+    pub fn snapshot_for_surface(
+        &self,
+        render_surface_id: crate::plugins::render::backend::RenderSurfaceId,
+    ) -> Vec<RenderDynamicTextureTargetDescriptor> {
+        self.contributions
+            .values()
+            .filter(|contribution| contribution.scope.applies_to(render_surface_id))
+            .flat_map(|contribution| contribution.descriptors.values().cloned())
             .collect()
     }
 
@@ -156,6 +204,6 @@ impl RenderDynamicTextureTargetRequestRegistryResource {
     pub fn is_empty(&self) -> bool {
         self.contributions
             .values()
-            .all(|contribution| contribution.is_empty())
+            .all(|contribution| contribution.descriptors.is_empty())
     }
 }
