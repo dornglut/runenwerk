@@ -20,6 +20,7 @@ jobs:
   validate:
     name: Runenwerk validation
     uses: dornglut/github-workflows/.github/workflows/reusable-rust-cargo-validate.yml@4f990b828f1c5ac30f355923da71ae37d790a4d7
+    # Temporary canary: second pass measures warm compiler-cache reuse only.
 
   runenrender-r6-vulkan-execution:
     name: RunenRender Vulkan execution proofs
