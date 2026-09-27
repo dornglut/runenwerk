@@ -27,7 +27,7 @@ const EDITOR_TARGET_RAW: u64 = 1;
 const EDITOR_CONTENT_OWNER: &str = "runenwerk.editor";
 const EDITOR_TARGET_PROFILE: &str = "runenwerk.editor.desktop";
 
-pub fn import_legacy_workspace(
+pub(crate) fn import_legacy_workspace(
     profile_id: WorkspaceProfileId,
     workspace: &WorkspaceState,
 ) -> Result<EditorCompositionRuntime, EditorCompositionRejection> {
