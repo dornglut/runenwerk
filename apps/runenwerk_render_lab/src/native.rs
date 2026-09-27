@@ -623,7 +623,11 @@ fn publish_render_lab_frame_system(
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("temporal quality resolve plan is unavailable"))?;
         debug_config.capture_selectors = if capture_armed {
-            vec![temporal_quality_capture_selector(None, scene_plan, resolve_plan)?]
+            vec![temporal_quality_capture_selector(
+                None,
+                scene_plan,
+                resolve_plan,
+            )?]
         } else {
             Vec::new()
         };

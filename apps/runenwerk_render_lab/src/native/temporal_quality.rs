@@ -792,8 +792,8 @@ mod tests {
         .bind_surface_color_alias(RL2_QUALITY_COLOR_ALIAS)
         .expect("native quality color alias should bind");
 
-        let scene_plan =
-            engine::plugins::render::compile_flow_plan(&scene).expect("quality flow should compile");
+        let scene_plan = engine::plugins::render::compile_flow_plan(&scene)
+            .expect("quality flow should compile");
         let resolve = engine::plugins::render::fixed_resolution_resolve_flow()
             .expect("resolve flow should author");
         let resolve_plan = engine::plugins::render::compile_flow_plan(&resolve)
