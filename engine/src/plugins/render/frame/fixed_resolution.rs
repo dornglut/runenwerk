@@ -894,11 +894,10 @@ mod tests {
         assert_eq!(flow.label(), FIXED_RESOLUTION_RESOLVE_FLOW_LABEL);
         let compiled =
             crate::plugins::render::compile_flow_plan(&flow).expect("resolve flow should compile");
-        let [CompiledPassExecutionPlan::Fullscreen(resolve)] = compiled.execution.passes.as_slice()
-        else {
-            panic!("fixed resolve should compile as exactly one fullscreen pass");
+        let [resolve] = compiled.render_passes.as_slice() else {
+            panic!("fixed resolve should compile as exactly one render pass");
         };
-        assert_eq!(resolve.clear_color, Some([0.0, 0.0, 0.0, 1.0]));
+        assert_eq!(resolve.node().clear_color, Some([0.0, 0.0, 0.0, 1.0]));
         assert_eq!(
             flow.invocation_policy(),
             crate::plugins::render::RenderFlowInvocationPolicy::ExplicitOnly
