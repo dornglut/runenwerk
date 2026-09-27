@@ -80,7 +80,7 @@ in a later accepted slice.
 This track covers:
 
 - TAA and TAAU history workflows;
-- jittered projection and history invalidation;
+- renderer-applied temporal sample phase/jitter and history invalidation;
 - motion vectors, depth, exposure, luminance, transparency/reactive masks, and
   disocclusion diagnostics;
 - fixed or dynamically adapted internal render resolution separate from output resolution;
@@ -103,8 +103,9 @@ resource ownership into the renderer.
   authority class, fallback legality, and semantic availability of motion,
   depth, exposure, reactive, SDF, and ray-query inputs.
 - Camera/scene producers own view/projection source truth. The renderer may
-  consume prepared matrices and jitter offsets but must not become the canonical
-  camera system.
+  consume prepared unjittered matrices or equivalent observation facts and owns
+  application of method/evaluation jitter within admitted semantic support; it
+  must not become the canonical camera system.
 - Optional adapter integrations own only adapter invocation and capability
   translation. Unsupported adapters must report typed diagnostics and fall back
   to portable native/TAA/TAAU behavior.
