@@ -9,11 +9,10 @@ use editor_shell::{
     SCENE_WORKSPACE_PROFILE_ID, ShellProjectionArtifacts, TabStackId, TabStackPopupMenuKind,
     ToolSurfaceInstanceId, ToolSurfaceRegistry, ToolbarMenuKind, UiRuntime, UiTree, WidgetId,
     WorkspaceId, WorkspaceIdentityAllocator, WorkspaceProfileId, WorkspaceProfileRegistry,
-    WorkspaceProfileRegistryBackedBuildError, WorkspaceSplitAxis, WorkspaceState,
-    import_legacy_workspace, project_editor_composition,
+    WorkspaceProfileRegistryBackedBuildError, WorkspaceSplitAxis,
+    form_editor_profile_layout_source, form_editor_profile_layout_source_with_identities,
+    project_editor_composition,
 };
-#[cfg(test)]
-use editor_shell::{WorkspaceMutation, reduce_workspace};
 use engine::plugins::render::backend::RenderSurfaceId;
 use engine::runtime::NativeWindowId;
 use std::collections::BTreeMap;
@@ -129,8 +128,6 @@ pub struct RunenwerkEditorShellState {
     self_authoring: SelfAuthoringWorkspaceState,
     active_editor_definitions: ActiveEditorDefinitionCatalogs,
     interaction_by_target: BTreeMap<PresentationTargetId, TargetInteractionState>,
-    #[cfg(test)]
-    legacy_workspace_snapshot: WorkspaceState,
 }
 
 fn reconcile_composition_target_bindings(
@@ -239,19 +236,24 @@ impl RunenwerkEditorShellState {
         let mut identity_allocator = WorkspaceIdentityAllocator::new();
         let workspace_id = identity_allocator.allocate_workspace_id();
         let active_workspace_profile_id = profile_registry.default_profile_id();
-        let workspace_state = profile_registry
+        let profile = profile_registry
             .default_profile()
-            .expect("default workspace profile should exist")
-            .build_default_workspace_state_with_registry(
-                workspace_id,
-                &mut identity_allocator,
-                registry,
-            )?;
-        debug_assert!(workspace_state.validate_integrity().is_ok());
-        Self::from_bootstrapped_workspace(
+            .expect("default workspace profile should exist");
+        profile.require_tool_surface_registry_compatibility(registry)?;
+        let composition_runtime =
+            form_editor_profile_layout_source(profile.id, &profile.layout_source, registry)
+                .map_err(|error| {
+                    WorkspaceProfileRegistryBackedBuildError::CompositionFormation {
+                        profile_id: profile.id,
+                        error: Box::new(error),
+                    }
+                })?;
+        Self::from_bootstrapped_composition_with_open_profiles(
             identity_allocator,
+            workspace_id,
             active_workspace_profile_id,
-            workspace_state,
+            composition_runtime,
+            vec![SCENE_WORKSPACE_PROFILE_ID, MODELLING_WORKSPACE_PROFILE_ID],
         )
     }
 
@@ -278,37 +280,29 @@ impl RunenwerkEditorShellState {
         let profile = profile_registry.profile(profile_id).ok_or(
             WorkspaceProfileRegistryBackedBuildError::UnknownWorkspaceProfile { profile_id },
         )?;
-        let workspace_state = profile.build_default_workspace_state_with_registry(
-            workspace_id,
-            &mut identity_allocator,
-            registry,
-        )?;
-        debug_assert!(workspace_state.validate_integrity().is_ok());
-        Self::from_bootstrapped_workspace_with_open_profiles(
+        profile.require_tool_surface_registry_compatibility(registry)?;
+        let composition_runtime =
+            form_editor_profile_layout_source(profile.id, &profile.layout_source, registry)
+                .map_err(|error| {
+                    WorkspaceProfileRegistryBackedBuildError::CompositionFormation {
+                        profile_id: profile.id,
+                        error: Box::new(error),
+                    }
+                })?;
+        Self::from_bootstrapped_composition_with_open_profiles(
             identity_allocator,
+            workspace_id,
             profile_id,
-            workspace_state,
+            composition_runtime,
             vec![profile_id],
         )
     }
 
-    fn from_bootstrapped_workspace(
-        identity_allocator: WorkspaceIdentityAllocator,
-        active_workspace_profile_id: WorkspaceProfileId,
-        workspace_state: WorkspaceState,
-    ) -> Result<Self, WorkspaceProfileRegistryBackedBuildError> {
-        Self::from_bootstrapped_workspace_with_open_profiles(
-            identity_allocator,
-            active_workspace_profile_id,
-            workspace_state,
-            vec![SCENE_WORKSPACE_PROFILE_ID, MODELLING_WORKSPACE_PROFILE_ID],
-        )
-    }
-
-    fn from_bootstrapped_workspace_with_open_profiles(
+    fn from_bootstrapped_composition_with_open_profiles(
         mut identity_allocator: WorkspaceIdentityAllocator,
+        workspace_id: WorkspaceId,
         active_workspace_profile_id: WorkspaceProfileId,
-        workspace_state: WorkspaceState,
+        composition_runtime: EditorCompositionRuntime,
         open_workspace_profile_ids: Vec<WorkspaceProfileId>,
     ) -> Result<Self, WorkspaceProfileRegistryBackedBuildError> {
         let mut active_editor_definitions = ActiveEditorDefinitionCatalogs::default();
@@ -321,17 +315,9 @@ impl RunenwerkEditorShellState {
             .install_editor_bindings(checked_in_definitions.bindings)
             .expect("checked-in editor bindings should activate");
 
-        let workspace_id = workspace_state.workspace_id();
-        let composition_runtime =
-            import_legacy_workspace(active_workspace_profile_id, &workspace_state).map_err(
-                |error| WorkspaceProfileRegistryBackedBuildError::CompositionImport {
-                    profile_id: active_workspace_profile_id,
-                    error: Box::new(error),
-                },
-            )?;
         let composition_projection =
             project_editor_composition(&composition_runtime).map_err(|error| {
-                WorkspaceProfileRegistryBackedBuildError::CompositionImport {
+                WorkspaceProfileRegistryBackedBuildError::CompositionFormation {
                     profile_id: active_workspace_profile_id,
                     error: Box::new(error),
                 }
@@ -397,8 +383,6 @@ impl RunenwerkEditorShellState {
                 .expect("checked-in self-authoring fixtures should load"),
             active_editor_definitions,
             interaction_by_target,
-            #[cfg(test)]
-            legacy_workspace_snapshot: workspace_state,
         })
     }
 
@@ -514,30 +498,6 @@ impl RunenwerkEditorShellState {
 
     pub fn workspace_id(&self) -> WorkspaceId {
         self.workspace_id
-    }
-
-    #[cfg(test)]
-    pub(crate) fn workspace_state(&self) -> &WorkspaceState {
-        &self.legacy_workspace_snapshot
-    }
-
-    #[cfg(test)]
-    pub(crate) fn replace_workspace_state(&mut self, workspace: WorkspaceState) {
-        let runtime = import_legacy_workspace(self.active_workspace_profile_id, &workspace)
-            .expect("test workspace replacement should import as editor composition");
-        self.install_composition_runtime(runtime)
-            .expect("test workspace replacement should project as editor composition");
-        self.legacy_workspace_snapshot = workspace;
-    }
-
-    #[cfg(test)]
-    pub(crate) fn apply_workspace_mutation(
-        &mut self,
-        op: WorkspaceMutation,
-    ) -> Result<(), editor_shell::WorkspaceStateError> {
-        let workspace = reduce_workspace(&self.legacy_workspace_snapshot, op)?;
-        self.replace_workspace_state(workspace);
-        Ok(())
     }
 
     pub fn composition_runtime(&self) -> &EditorCompositionRuntime {
@@ -1021,29 +981,29 @@ impl RunenwerkEditorShellState {
                 profile_id: profile_registry.default_profile_id(),
             },
         )?;
+        profile.require_tool_surface_registry_compatibility(registry)?;
         let mut allocator =
             WorkspaceIdentityAllocator::from_seed(self.identity_allocator.seed_snapshot());
         let workspace_id = allocator.allocate_workspace_id();
-        let workspace_state = profile.build_default_workspace_state_with_registry(
-            workspace_id,
-            &mut allocator,
-            registry,
-        )?;
-        let mut seed = workspace_state.next_identity_seed();
-        seed.next_editor_window_id = self
-            .identity_allocator
-            .seed_snapshot()
-            .next_editor_window_id;
-        let composition_runtime =
-            import_legacy_workspace(profile.id, &workspace_state).map_err(|error| {
-                WorkspaceProfileRegistryBackedBuildError::CompositionImport {
+        let seed = allocator.seed_snapshot();
+        let primary_target_id = self.primary_composition_target_id();
+        let (composition_runtime, composition_identities) =
+            form_editor_profile_layout_source_with_identities(
+                profile.id,
+                &profile.layout_source,
+                registry,
+                primary_target_id,
+                self.composition_identity_allocator,
+            )
+            .map_err(|error| {
+                WorkspaceProfileRegistryBackedBuildError::CompositionFormation {
                     profile_id: profile.id,
                     error: Box::new(error),
                 }
             })?;
         let composition_projection =
             project_editor_composition(&composition_runtime).map_err(|error| {
-                WorkspaceProfileRegistryBackedBuildError::CompositionImport {
+                WorkspaceProfileRegistryBackedBuildError::CompositionFormation {
                     profile_id: profile.id,
                     error: Box::new(error),
                 }
@@ -1051,13 +1011,8 @@ impl RunenwerkEditorShellState {
         self.identity_allocator = WorkspaceIdentityAllocator::from_seed(seed);
         self.workspace_id = workspace_id;
         self.composition_runtime = composition_runtime;
-        self.composition_identity_allocator =
-            EditorCompositionIdentityAllocator::from_runtime(&self.composition_runtime);
+        self.composition_identity_allocator = composition_identities;
         self.composition_projection = composition_projection;
-        #[cfg(test)]
-        {
-            self.legacy_workspace_snapshot = workspace_state;
-        }
         self.active_workspace_profile_id = profile.id;
         if !self.open_workspace_profile_ids.contains(&profile.id) {
             self.open_workspace_profile_ids.push(profile.id);
@@ -1996,6 +1951,84 @@ fn split_kind_axis(kind: WorkspaceSplitKind) -> WorkspaceSplitAxis {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn profile_activation_preserves_target_and_advances_composition_identity_space() {
+        let host = crate::shell::RunenwerkWorkbenchHost::new()
+            .expect("default workbench host composition must build");
+        let mut shell_state =
+            RunenwerkEditorShellState::new_with_workspace_profile_registry_and_tool_surface_registry(
+                host.workspace_profile_registry(),
+                host.tool_surface_registry(),
+            )
+            .expect("default workspace profile should form");
+
+        let primary_target = shell_state.primary_composition_target_id();
+        let previous_max_unit = shell_state
+            .composition_runtime()
+            .composition()
+            .definition()
+            .mounted_units()
+            .iter()
+            .map(|unit| unit.id.raw())
+            .max()
+            .expect("default profile should mount content");
+        let previous_max_panel = shell_state
+            .composition_runtime()
+            .extension()
+            .mounted_units()
+            .iter()
+            .map(|unit| unit.panel_instance_raw)
+            .max()
+            .expect("default profile should expose panel compatibility identities");
+        let previous_max_surface = shell_state
+            .composition_runtime()
+            .extension()
+            .mounted_units()
+            .iter()
+            .map(|unit| unit.compatibility_surface_raw)
+            .max()
+            .expect("default profile should expose surface compatibility identities");
+
+        let profile = host
+            .workspace_profile_registry()
+            .profile(editor_shell::MATERIAL_WORKSPACE_PROFILE_ID)
+            .expect("material profile should be installed");
+        shell_state
+            .activate_workspace_profile_ref_with_registry(
+                &profile.profile_ref,
+                host.workspace_profile_registry(),
+                host.tool_surface_registry(),
+            )
+            .expect("material profile should activate");
+
+        assert_eq!(shell_state.primary_composition_target_id(), primary_target);
+        assert!(
+            shell_state
+                .composition_runtime()
+                .composition()
+                .definition()
+                .mounted_units()
+                .iter()
+                .all(|unit| unit.id.raw() > previous_max_unit)
+        );
+        assert!(
+            shell_state
+                .composition_runtime()
+                .extension()
+                .mounted_units()
+                .iter()
+                .all(|unit| unit.panel_instance_raw > previous_max_panel)
+        );
+        assert!(
+            shell_state
+                .composition_runtime()
+                .extension()
+                .mounted_units()
+                .iter()
+                .all(|unit| unit.compatibility_surface_raw > previous_max_surface)
+        );
+    }
 
     #[test]
     fn region_compass_finish_emits_typed_revision_bound_docking_intent() {

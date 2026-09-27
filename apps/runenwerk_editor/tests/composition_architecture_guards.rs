@@ -40,6 +40,115 @@ fn composition_is_the_only_live_editor_structural_authority() {
 }
 
 #[test]
+fn predecessor_workspace_pipeline_is_not_public_editor_shell_authority() {
+    let lib = include_str!("../../../domain/editor/editor_shell/src/lib.rs");
+    assert!(!lib.contains("pub mod workspace;"));
+    let public_workspace_exports = source_between(lib, "pub use workspace::{", "\n};");
+    for retired in [
+        "WorkspaceMutation",
+        "WorkspaceState,",
+        "WorkspaceStateError",
+        "PersistedWorkspaceStateV1",
+        "PersistedWorkspaceStateV2",
+        "PersistedWorkspaceStateV3",
+        "PersistedWorkspaceStateV4",
+        "PersistedWorkspaceStateV5",
+        "PERSISTED_WORKSPACE_STATE_VERSION_V1",
+        "PERSISTED_WORKSPACE_STATE_VERSION_V2",
+        "PERSISTED_WORKSPACE_STATE_VERSION_V3",
+        "PERSISTED_WORKSPACE_STATE_VERSION_V4",
+        "PERSISTED_WORKSPACE_STATE_VERSION_V5",
+        "form_workspace_state_from_definition",
+        "form_workspace_state_from_definition_with_registry",
+        "project_workspace_for_shell",
+        "reduce_workspace",
+        "mounted_surface_instances",
+        "WorkspaceDefinitionFormationError",
+        "WorkspaceToolSurfaceRegistryCompatibilityReport",
+        "WorkspaceToolSurfaceRegistryCompatibleSurface",
+        "WorkspaceToolSurfaceRegistryIncompatibleSurface",
+        "WorkspaceToolSurfaceRegistryLegacySurface",
+        "WorkspaceToolSurfaceRegistryUnknownStableKey",
+        "WorkspaceToolSurfaceRegistryUnmappedLegacySurface",
+    ] {
+        assert!(
+            !public_workspace_exports.contains(retired),
+            "retired predecessor API remains in public editor_shell exports: {retired}",
+        );
+    }
+    assert!(lib.contains("pub(crate) use workspace::{"));
+
+    let workspace_mod = include_str!("../../../domain/editor/editor_shell/src/workspace/mod.rs");
+    assert!(workspace_mod.contains("#[cfg(test)]\nmod persisted;"));
+    assert!(
+        !workspace_mod.contains("use persisted::*;"),
+        "test-only predecessor persistence must not be re-exported",
+    );
+    assert!(workspace_mod.contains("#[cfg(test)]\npub mod projection;"));
+    assert!(workspace_mod.contains("#[cfg(test)]\npub mod reducer;"));
+
+    let structural_mod =
+        include_str!("../../../domain/editor/editor_shell/src/composition/structural/mod.rs");
+    assert!(structural_mod.contains("#[cfg(test)]\nmod legacy_import;"));
+
+    let workspace_state =
+        include_str!("../../../domain/editor/editor_shell/src/workspace/state.rs");
+    assert!(
+        workspace_state.contains(
+            "#[cfg(test)]\n#[derive(Debug, Clone, PartialEq)]\npub struct WorkspaceState"
+        )
+    );
+
+    let reducer = include_str!("../../../domain/editor/editor_shell/src/workspace/reducer.rs");
+    assert!(reducer.contains("pub(crate) enum WorkspaceMutation"));
+    assert!(reducer.contains("pub(crate) fn reduce_workspace"));
+
+    let formation =
+        include_str!("../../../domain/editor/editor_shell/src/workspace/definition_form.rs");
+    assert!(
+        formation.contains("#[cfg(test)]\npub(crate) fn form_workspace_state_from_definition(")
+    );
+    assert!(formation.contains(
+        "#[cfg(test)]\npub(crate) fn form_workspace_state_from_definition_with_registry("
+    ));
+
+    let legacy_import = include_str!(
+        "../../../domain/editor/editor_shell/src/composition/structural/legacy_import.rs"
+    );
+    assert!(legacy_import.contains("pub(crate) fn import_legacy_workspace("));
+}
+
+#[test]
+fn current_editor_formation_bypasses_workspace_state_predecessor() {
+    let state = include_str!("../src/shell/state.rs");
+    let activation = source_between(
+        state,
+        "pub fn activate_workspace_profile_ref_with_registry(",
+        "pub fn close_workspace_profile_id(",
+    );
+    assert!(activation.contains("form_editor_profile_layout_source"));
+    assert!(!activation.contains("import_legacy_workspace"));
+    assert!(!activation.contains("build_default_workspace_state_with_registry"));
+
+    let resources = include_str!("../src/runtime/resources.rs");
+    let apply = source_between(
+        resources,
+        "fn apply_editor_definition_document_activation(",
+        "fn apply_workbench_composition_package_activation(",
+    );
+    assert!(apply.contains("form_editor_profile_composition"));
+    assert!(!apply.contains("form_workspace_state_from_definition"));
+    assert!(!apply.contains("import_legacy_workspace"));
+
+    let compiler = include_str!("../../../domain/editor/editor_shell/src/workbench/compiler.rs");
+    let validation = source_between(compiler, "fn validate_profile_layout(", "#[cfg(test)]");
+    assert!(validation.contains("form_editor_profile_layout_source"));
+    assert!(!validation.contains("build_default_workspace_state"));
+    assert!(!validation.contains("form_workspace_state_from_definition"));
+    assert!(!validation.contains("import_legacy_workspace"));
+}
+
+#[test]
 fn composition_projection_contract_is_owned_by_structural_composition() {
     let structural = include_str!(
         "../../../domain/editor/editor_shell/src/composition/structural/projection.rs"
