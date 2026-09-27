@@ -216,6 +216,7 @@ pub(super) fn resolve_canonical_invocation(
                 let timing = timestamp_projection(timing, projected.timestamp_indices)?;
                 let Some(operation) = project_render_operation(
                     runtime_resources,
+                    dynamic_texture_targets,
                     projected.pass,
                     pipeline,
                     surface_color_view,

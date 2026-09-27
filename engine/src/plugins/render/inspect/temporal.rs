@@ -246,6 +246,21 @@ pub enum RenderFixedResolutionExecutionEvidenceError {
     NativeFallbackSceneBindingMismatch,
 }
 
+fn retains_admitted_target_bindings(
+    actual: &std::collections::BTreeMap<
+        crate::plugins::render::RenderTargetAliasKey,
+        crate::plugins::render::PreparedTargetBinding,
+    >,
+    admitted: &std::collections::BTreeMap<
+        crate::plugins::render::RenderTargetAliasKey,
+        crate::plugins::render::PreparedTargetBinding,
+    >,
+) -> bool {
+    admitted
+        .iter()
+        .all(|(key, binding)| actual.get(key) == Some(binding))
+}
+
 pub fn inspect_fixed_resolution_execution(
     admission: &crate::plugins::render::RenderFixedResolutionExecutionAdmission,
     frame: &crate::plugins::render::PreparedRenderFrame,
@@ -329,8 +344,10 @@ pub fn inspect_fixed_resolution_execution(
                     .ok_or(
                         RenderFixedResolutionExecutionEvidenceError::MissingNativeFallbackSceneInvocation,
                     )?;
-                if actual.target_alias_bindings != expected.target_alias_bindings
-                    || actual.history_signature != expected.history_signature
+                if !retains_admitted_target_bindings(
+                    &actual.target_alias_bindings,
+                    &expected.target_alias_bindings,
+                ) || actual.history_signature != expected.history_signature
                 {
                     return Err(
                         RenderFixedResolutionExecutionEvidenceError::NativeFallbackSceneBindingMismatch,
@@ -406,8 +423,10 @@ pub fn inspect_fixed_resolution_execution(
                         && invocation.view_id == internal_view.view_id
                 })
                 .ok_or(RenderFixedResolutionExecutionEvidenceError::MissingSceneInvocation)?;
-            if scene.target_alias_bindings != prepared.scene_invocation.target_alias_bindings
-                || scene.history_signature != prepared.scene_invocation.history_signature
+            if !retains_admitted_target_bindings(
+                &scene.target_alias_bindings,
+                &prepared.scene_invocation.target_alias_bindings,
+            ) || scene.history_signature != prepared.scene_invocation.history_signature
             {
                 return Err(
                     RenderFixedResolutionExecutionEvidenceError::SceneTargetBindingMismatch,
@@ -803,5 +822,56 @@ fn validate_reconstruction_mode(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod fixed_resolution_binding_retention_tests {
+    use super::*;
+
+    #[test]
+    fn admitted_target_bindings_allow_additional_caller_owned_aliases() {
+        let admitted_key = crate::plugins::render::RenderTargetAliasKey::new("scene_color")
+            .expect("test alias should be valid");
+        let extra_key = crate::plugins::render::RenderTargetAliasKey::new("radiance")
+            .expect("test alias should be valid");
+        let admitted = std::collections::BTreeMap::from([(
+            admitted_key.clone(),
+            crate::plugins::render::PreparedTargetBinding::SurfaceColor,
+        )]);
+        let actual = std::collections::BTreeMap::from([
+            (
+                admitted_key,
+                crate::plugins::render::PreparedTargetBinding::SurfaceColor,
+            ),
+            (
+                extra_key,
+                crate::plugins::render::PreparedTargetBinding::SurfaceDepth,
+            ),
+        ]);
+
+        assert!(retains_admitted_target_bindings(&actual, &admitted));
+    }
+
+    #[test]
+    fn admitted_target_bindings_reject_missing_or_changed_binding() {
+        let key = crate::plugins::render::RenderTargetAliasKey::new("scene_color")
+            .expect("test alias should be valid");
+        let admitted = std::collections::BTreeMap::from([(
+            key.clone(),
+            crate::plugins::render::PreparedTargetBinding::SurfaceColor,
+        )]);
+
+        assert!(!retains_admitted_target_bindings(
+            &std::collections::BTreeMap::new(),
+            &admitted,
+        ));
+        assert!(!retains_admitted_target_bindings(
+            &std::collections::BTreeMap::from([(
+                key,
+                crate::plugins::render::PreparedTargetBinding::SurfaceDepth,
+            )]),
+            &admitted,
+        ));
     }
 }

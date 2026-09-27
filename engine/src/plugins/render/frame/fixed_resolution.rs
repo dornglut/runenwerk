@@ -294,6 +294,7 @@ impl RenderFixedResolutionExecutionRequest {
         if node.label != FIXED_RESOLUTION_RESOLVE_PASS_LABEL
             || node.kind != RenderPassKind::Fullscreen
             || node.view_scope != RenderPassViewScope::MainSurfaceOnly
+            || node.clear_color != Some([0.0, 0.0, 0.0, 1.0])
             || !shader_matches
             || node.sampled_textures.as_slice() != [source_alias_id]
             || node.color_outputs.as_slice() != [surface_color_id]
@@ -506,6 +507,9 @@ pub fn fixed_resolution_resolve_flow() -> anyhow::Result<RenderFlow> {
                 .expect("fixed-resolution sampler binding must fit GpuBindingKey"),
             FIXED_RESOLUTION_RESOLVE_SOURCE_ALIAS,
         )
+        // The resolve fully overwrites native output. Clearing avoids an unnecessary first-use
+        // SurfaceColor read on fixed frames, which would require prior native-surface contents.
+        .clear_color([0.0, 0.0, 0.0, 1.0])
         .write_surface_color()?
         .finish()
         .validate()
@@ -889,6 +893,12 @@ mod tests {
     fn fixed_resolution_resolve_flow_is_portable_and_alias_driven() {
         let flow = fixed_resolution_resolve_flow().expect("resolve flow should validate");
         assert_eq!(flow.label(), FIXED_RESOLUTION_RESOLVE_FLOW_LABEL);
+        let compiled =
+            crate::plugins::render::compile_flow_plan(&flow).expect("resolve flow should compile");
+        let [resolve] = compiled.render_passes.as_slice() else {
+            panic!("fixed resolve should compile as exactly one render pass");
+        };
+        assert_eq!(resolve.node().clear_color, Some([0.0, 0.0, 0.0, 1.0]));
         assert_eq!(
             flow.invocation_policy(),
             crate::plugins::render::RenderFlowInvocationPolicy::ExplicitOnly
