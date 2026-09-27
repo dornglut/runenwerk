@@ -354,6 +354,7 @@ fn native_render_host_smoke(with_ui: bool) -> anyhow::Result<()> {
         .with_surface_color()?
         .fullscreen_pass("native.render.host.smoke.clear")
         .main_surface_only()
+        .clear_color([0.0, 0.0, 0.0, 1.0])
         .write_surface_color()?
         .finish()
         .present_pass("native.render.host.smoke.present")?
