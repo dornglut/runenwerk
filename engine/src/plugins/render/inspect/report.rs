@@ -4,6 +4,7 @@ use super::{
     RenderPixelSampleMode, RenderTextureDiffRequest, ResolvedRenderCapturePlan,
     validate_selector_terminal_invariant,
 };
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -70,11 +71,23 @@ pub struct RenderTextureDiffResult {
 #[derive(Debug, Clone, Default, runen_ecs::Component, runen_ecs::Resource)]
 pub struct RenderDebugFrameReportState {
     pub latest: Option<RenderDebugFrameReport>,
+    by_frame: BTreeMap<u64, RenderDebugFrameReport>,
 }
 
 impl RenderDebugFrameReportState {
     pub fn observe_frame(&mut self, report: RenderDebugFrameReport) {
+        self.by_frame.insert(report.frame_index, report.clone());
+        while self.by_frame.len() > super::DEFAULT_RENDER_FRAME_HISTORY_CAPACITY {
+            let Some(oldest) = self.by_frame.keys().next().copied() else {
+                break;
+            };
+            self.by_frame.remove(&oldest);
+        }
         self.latest = Some(report);
+    }
+
+    pub fn frame(&self, frame_index: u64) -> Option<&RenderDebugFrameReport> {
+        self.by_frame.get(&frame_index)
     }
 }
 
@@ -130,7 +143,7 @@ mod tests {
     }
 
     #[test]
-    fn frame_report_state_keeps_latest_only_by_default() {
+    fn frame_report_state_keeps_latest_and_frame_addressable_history() {
         let selector = RenderCaptureSelector {
             flow_id: Some("flow".to_string()),
             pass_id: Some("pass".to_string()),
@@ -157,5 +170,7 @@ mod tests {
             .expect("latest report should be present");
         assert_eq!(latest.frame_index, 2);
         assert_eq!(latest.capture_results.len(), 1);
+        assert_eq!(state.frame(1).map(|report| report.frame_index), Some(1));
+        assert_eq!(state.frame(2).map(|report| report.frame_index), Some(2));
     }
 }

@@ -166,8 +166,9 @@ pub(super) fn render_lab_fixed_quality_flow() -> Result<RenderFlow> {
 
 pub(super) fn temporal_quality_capture_evidence(
     report_state: &RenderDebugFrameReportState,
+    target_frame_index: u64,
 ) -> Result<Option<RenderLabTemporalQualityCaptureEvidence>> {
-    let Some(report) = report_state.latest.as_ref() else {
+    let Some(report) = report_state.frame(target_frame_index) else {
         return Ok(None);
     };
     let Some(result) = report.capture_results.first() else {
@@ -692,10 +693,15 @@ mod tests {
             ..RenderDebugFrameReport::default()
         });
 
-        let evidence = temporal_quality_capture_evidence(&report_state)
+        let evidence = temporal_quality_capture_evidence(&report_state, 42)
             .expect("capture evidence should inspect")
             .expect("completed capture should produce evidence");
         assert_eq!(evidence.frame_index, 42);
+        assert!(
+            temporal_quality_capture_evidence(&report_state, 41)
+                .expect("other frame inspection should succeed")
+                .is_none()
+        );
         assert_eq!(evidence.terminal, "completed");
         assert_eq!(
             evidence.artifact_blake3,

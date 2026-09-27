@@ -371,6 +371,17 @@ fn temporal_quality_capture_should_arm(
     }
 }
 
+fn temporal_quality_capture_target_frame(
+    measurement: &RenderLabMeasurementConfig,
+    history: &RenderFrameHistoryState,
+) -> Option<u64> {
+    let target_ordinal = measurement.submitted_frame_limit.unwrap_or(1);
+    history
+        .observations()
+        .nth(target_ordinal.saturating_sub(1))
+        .map(|observation| observation.key.frame_index)
+}
+
 fn complete_render_lab_measurement_if_requested(
     windows: &mut WindowStateRegistryResource,
     measurement: &mut RenderLabMeasurementConfig,
@@ -389,7 +400,10 @@ fn complete_render_lab_measurement_if_requested(
     let quality_capture = if measurement.quality_capture_output_dir.is_some()
         && (bounded_frames_complete || close_intent_pending)
     {
-        temporal_quality_capture_evidence(debug_report)?
+        temporal_quality_capture_target_frame(measurement, history)
+            .map(|frame_index| temporal_quality_capture_evidence(debug_report, frame_index))
+            .transpose()?
+            .flatten()
     } else {
         None
     };
@@ -827,6 +841,45 @@ mod tests {
         );
         assert!(validate_measurement_radiance_size(Some((0, 720))).is_err());
         assert!(validate_measurement_radiance_size(Some((1280, 0))).is_err());
+    }
+
+    #[test]
+    fn temporal_quality_capture_target_uses_submitted_ordinal() {
+        use engine::plugins::render::inspect::RenderGpuTimingCapability;
+
+        let policy = rl2_measurement_policy();
+        let mut history = RenderFrameHistoryState::default();
+        for frame_index in [7, 11, 19] {
+            history.observe_submitted_frame(
+                policy,
+                frame_index,
+                RenderSurfaceId::primary().raw(),
+                frame_index + 100,
+                (1920, 1080),
+                0.0,
+                Default::default(),
+                &[],
+                RenderGpuTimingCapability::Unsupported,
+            );
+        }
+        let bounded = RenderLabMeasurementConfig {
+            submitted_frame_limit: Some(2),
+            quality_capture_output_dir: Some(PathBuf::from("quality-captures")),
+            ..Default::default()
+        };
+        assert_eq!(
+            temporal_quality_capture_target_frame(&bounded, &history),
+            Some(11)
+        );
+
+        let unbounded = RenderLabMeasurementConfig {
+            quality_capture_output_dir: Some(PathBuf::from("quality-captures")),
+            ..Default::default()
+        };
+        assert_eq!(
+            temporal_quality_capture_target_frame(&unbounded, &history),
+            Some(7)
+        );
     }
 
     #[test]
