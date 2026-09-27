@@ -3,9 +3,7 @@ use engine::runtime::{NativeWindowId, Res, ResMut, WindowStateRegistryResource};
 use ui_math::UiRect;
 
 use super::{EditorTargetInputRuntimeResource, translate_platform_event};
-use crate::runtime::resources::{
-    EditorHostResource, EditorInputBridgeState, scaled_shell_theme,
-};
+use crate::runtime::resources::{EditorHostResource, EditorInputBridgeState, scaled_shell_theme};
 use crate::runtime::systems::input_bridge::{
     clear_editor_viewport_interaction_for_target, dispatch_editor_viewport_input_for_target,
 };

@@ -11,6 +11,7 @@ use ui_input::{
 };
 use ui_math::{UiPoint, UiRect};
 
+use super::picking::{clear_editor_picking_for_target, update_editor_picking_for_target};
 use crate::editor_features::viewport::ViewportInteractionCommand;
 use crate::runtime::app::{
     ACTION_EDITOR_REDO, ACTION_EDITOR_TOOL_ROTATE, ACTION_EDITOR_TOOL_SCALE,
@@ -29,7 +30,6 @@ use crate::runtime::viewport::{
     ViewportRenderStateCommandQueueResource, ViewportRenderStateResource,
     resolve_structural_viewport_products,
 };
-use super::picking::{clear_editor_picking_for_target, update_editor_picking_for_target};
 use crate::runtime::{build_viewport_picking_product_frame, viewport_hit_from_picking_product};
 use crate::shell::dispatch_shell_command;
 use crate::shell::{
@@ -250,8 +250,7 @@ pub(crate) fn dispatch_editor_viewport_input_for_target(
             let interaction = bridge.interaction_for_target(target_id);
             let captured_scene_interaction = matches!(
                 interaction.pointer_owner,
-                EditorPointerOwner::ViewportTool { .. }
-                    | EditorPointerOwner::ViewportCamera { .. }
+                EditorPointerOwner::ViewportTool { .. } | EditorPointerOwner::ViewportCamera { .. }
             );
             let pointer_routes_to_scene = viewport_pointer_route(
                 &host.shell_state,
@@ -437,13 +436,9 @@ pub(crate) fn dispatch_editor_viewport_input_for_target(
             {
                 eprintln!("viewport pointer-up failed: {error}");
             }
-            bridge.interaction_for_target_mut(target_id).pointer_owner =
-                EditorPointerOwner::None;
+            bridge.interaction_for_target_mut(target_id).pointer_owner = EditorPointerOwner::None;
         }
-        (
-            PointerEventKind::Up,
-            Some(PointerButton::Middle | PointerButton::Secondary),
-        ) => {
+        (PointerEventKind::Up, Some(PointerButton::Middle | PointerButton::Secondary)) => {
             let interaction = bridge.interaction_for_target_mut(target_id);
             interaction.active_camera_viewport = None;
             interaction.pointer_owner = EditorPointerOwner::None;
