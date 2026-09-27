@@ -329,8 +329,9 @@ pub fn inspect_fixed_resolution_execution(
                     .ok_or(
                         RenderFixedResolutionExecutionEvidenceError::MissingNativeFallbackSceneInvocation,
                     )?;
-                if actual.target_alias_bindings != expected.target_alias_bindings
-                    || actual.history_signature != expected.history_signature
+                if !expected.target_alias_bindings.iter().all(|(key, binding)| {
+                    actual.target_alias_bindings.get(key) == Some(binding)
+                }) || actual.history_signature != expected.history_signature
                 {
                     return Err(
                         RenderFixedResolutionExecutionEvidenceError::NativeFallbackSceneBindingMismatch,
@@ -406,7 +407,11 @@ pub fn inspect_fixed_resolution_execution(
                         && invocation.view_id == internal_view.view_id
                 })
                 .ok_or(RenderFixedResolutionExecutionEvidenceError::MissingSceneInvocation)?;
-            if scene.target_alias_bindings != prepared.scene_invocation.target_alias_bindings
+            if !prepared
+                .scene_invocation
+                .target_alias_bindings
+                .iter()
+                .all(|(key, binding)| scene.target_alias_bindings.get(key) == Some(binding))
                 || scene.history_signature != prepared.scene_invocation.history_signature
             {
                 return Err(
