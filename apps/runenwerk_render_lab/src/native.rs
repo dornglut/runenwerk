@@ -545,7 +545,11 @@ fn publish_render_lab_frame_system(
         )
         .admit_against_compiled_flows(output_size, scene_plan, resolve_plan);
         debug_config.capture_selectors = if capture_armed {
-            vec![temporal_quality_capture_selector(Some(&admission))]
+            vec![temporal_quality_capture_selector(
+                Some(&admission),
+                scene_plan,
+                resolve_plan,
+            )?]
         } else {
             Vec::new()
         };
@@ -610,8 +614,16 @@ fn publish_render_lab_frame_system(
     let (target_key, target, contribution) =
         build_render_lab_radiance_publication(&camera, producer_id, requested_internal_size)?;
     if quality_mode {
+        let scene_plan = fixed_quality_plans
+            .scene
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("temporal quality scene plan is unavailable"))?;
+        let resolve_plan = fixed_quality_plans
+            .resolve
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("temporal quality resolve plan is unavailable"))?;
         debug_config.capture_selectors = if capture_armed {
-            vec![temporal_quality_capture_selector(None)]
+            vec![temporal_quality_capture_selector(None, scene_plan, resolve_plan)?]
         } else {
             Vec::new()
         };

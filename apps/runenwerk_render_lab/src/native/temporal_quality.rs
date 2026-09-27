@@ -112,23 +112,42 @@ pub(super) fn render_lab_quality_present_flow() -> Result<RenderFlow> {
         .validate()
 }
 
+fn compiled_surface_color_selector(
+    plan: &engine::plugins::render::CompiledRenderFlowPlan,
+    pass_label: &str,
+) -> Result<RenderCaptureSelector> {
+    let pass = plan
+        .render_passes
+        .iter()
+        .find(|pass| pass.pass_label() == pass_label)
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "temporal quality capture pass '{pass_label}' is absent from compiled flow '{}'",
+                plan.flow_label
+            )
+        })?;
+    Ok(RenderCaptureSelector::named_pass_surface_color(
+        plan.flow_id.to_string(),
+        pass.pass_id().to_string(),
+    ))
+}
+
 pub(super) fn temporal_quality_capture_selector(
     admission: Option<&engine::plugins::render::RenderFixedResolutionExecutionAdmission>,
-) -> RenderCaptureSelector {
+    scene_plan: &engine::plugins::render::CompiledRenderFlowPlan,
+    resolve_plan: &engine::plugins::render::CompiledRenderFlowPlan,
+) -> Result<RenderCaptureSelector> {
     match admission {
         Some(engine::plugins::render::RenderFixedResolutionExecutionAdmission::Fixed(_)) => {
-            RenderCaptureSelector::named_pass_surface_color(
-                engine::plugins::render::FIXED_RESOLUTION_RESOLVE_FLOW_LABEL,
+            compiled_surface_color_selector(
+                resolve_plan,
                 engine::plugins::render::FIXED_RESOLUTION_RESOLVE_PASS_LABEL,
             )
         }
         Some(engine::plugins::render::RenderFixedResolutionExecutionAdmission::NativeFallback(
             _,
         ))
-        | None => RenderCaptureSelector::named_pass_surface_color(
-            RL2_QUALITY_FLOW_ID,
-            RL2_QUALITY_PASS_ID,
-        ),
+        | None => compiled_surface_color_selector(scene_plan, RL2_QUALITY_PASS_ID),
     }
 }
 
@@ -735,14 +754,16 @@ mod tests {
             engine::plugins::render::RenderFixedResolutionExecutionAdmission::Fixed(
                 prepared.clone(),
             );
-        let selector = temporal_quality_capture_selector(Some(&fixed_admission));
+        let selector =
+            temporal_quality_capture_selector(Some(&fixed_admission), &scene_plan, &resolve_plan)
+                .expect("fixed capture selector should resolve compiled ids");
         assert_eq!(
             selector.flow_id.as_deref(),
-            Some(engine::plugins::render::FIXED_RESOLUTION_RESOLVE_FLOW_LABEL)
+            Some(resolve_plan.flow_id.to_string().as_str())
         );
         assert_eq!(
             selector.pass_id.as_deref(),
-            Some(engine::plugins::render::FIXED_RESOLUTION_RESOLVE_PASS_LABEL)
+            Some(resolve_plan.render_passes[0].pass_id().to_string().as_str())
         );
         assert_eq!(
             scene_invocation.target_alias_bindings.get(
@@ -771,9 +792,22 @@ mod tests {
         .bind_surface_color_alias(RL2_QUALITY_COLOR_ALIAS)
         .expect("native quality color alias should bind");
 
-        let selector = temporal_quality_capture_selector(None);
-        assert_eq!(selector.flow_id.as_deref(), Some(RL2_QUALITY_FLOW_ID));
-        assert_eq!(selector.pass_id.as_deref(), Some(RL2_QUALITY_PASS_ID));
+        let scene_plan =
+            engine::plugins::render::compile_flow_plan(&scene).expect("quality flow should compile");
+        let resolve = engine::plugins::render::fixed_resolution_resolve_flow()
+            .expect("resolve flow should author");
+        let resolve_plan = engine::plugins::render::compile_flow_plan(&resolve)
+            .expect("resolve flow should compile");
+        let selector = temporal_quality_capture_selector(None, &scene_plan, &resolve_plan)
+            .expect("native capture selector should resolve compiled ids");
+        assert_eq!(
+            selector.flow_id.as_deref(),
+            Some(scene_plan.flow_id.to_string().as_str())
+        );
+        assert_eq!(
+            selector.pass_id.as_deref(),
+            Some(scene_plan.render_passes[0].pass_id().to_string().as_str())
+        );
 
         let mut targets = RenderDynamicTextureTargetRequestRegistryResource::default();
         let mut frame_requests = PreparedRenderFrameRequestResource::default();
