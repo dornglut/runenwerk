@@ -220,6 +220,36 @@ pub(super) fn temporal_quality_capture_evidence(
     }))
 }
 
+fn temporal_quality_evidence_profile_fingerprint(
+    backend: &str,
+    adapter_class: &str,
+    software_status: &str,
+    fallback_status: &str,
+    diagnostic_name: Option<&str>,
+    driver: Option<&str>,
+    driver_info: Option<&str>,
+    vendor: Option<u32>,
+    device: Option<u32>,
+    device_request_profile: &str,
+    device_request_profile_supported: bool,
+) -> String {
+    let canonical = serde_json::to_vec(&(
+        backend,
+        adapter_class,
+        software_status,
+        fallback_status,
+        diagnostic_name,
+        driver,
+        driver_info,
+        vendor,
+        device,
+        device_request_profile,
+        device_request_profile_supported,
+    ))
+    .expect("fixed temporal-quality adapter evidence tuple must serialize");
+    format!("blake3:{}", blake3::hash(&canonical).to_hex())
+}
+
 fn temporal_quality_gpu_evidence(
     facts: &runen_gpu::GpuAdapterFacts,
 ) -> RenderLabTemporalQualityGpuEvidence {
@@ -228,15 +258,6 @@ fn temporal_quality_gpu_evidence(
     let software_status = gpu_software_token(facts.software());
     let fallback_status = gpu_fallback_token(facts.fallback());
     let device_request_profile = gpu_device_profile_token(facts.device_request_profile());
-    let canonical = format!(
-        "backend={backend};class={adapter_class};software={software_status};fallback={fallback_status};name={};driver={};driver_info={};vendor={:?};device={:?};profile={device_request_profile};profile_supported={}",
-        facts.diagnostic_name().unwrap_or(""),
-        facts.driver().unwrap_or(""),
-        facts.driver_info().unwrap_or(""),
-        facts.vendor(),
-        facts.device(),
-        facts.device_request_profile_supported(),
-    );
     RenderLabTemporalQualityGpuEvidence {
         backend,
         adapter_class,
@@ -249,9 +270,18 @@ fn temporal_quality_gpu_evidence(
         device: facts.device(),
         device_request_profile,
         device_request_profile_supported: facts.device_request_profile_supported(),
-        evidence_profile_fingerprint: format!(
-            "blake3:{}",
-            blake3::hash(canonical.as_bytes()).to_hex()
+        evidence_profile_fingerprint: temporal_quality_evidence_profile_fingerprint(
+            backend,
+            adapter_class,
+            software_status,
+            fallback_status,
+            facts.diagnostic_name(),
+            facts.driver(),
+            facts.driver_info(),
+            facts.vendor(),
+            facts.device(),
+            device_request_profile,
+            facts.device_request_profile_supported(),
         ),
     }
 }
@@ -585,6 +615,40 @@ mod tests {
     fn producer(raw: u64) -> engine::plugins::render::RenderFrameProducerId {
         engine::plugins::render::RenderFrameProducerId::try_from_raw(raw)
             .expect("test producer id should be nonzero")
+    }
+
+    #[test]
+    fn temporal_quality_evidence_profile_fingerprint_preserves_optional_fact_shape() {
+        let absent = temporal_quality_evidence_profile_fingerprint(
+            "vulkan",
+            "cpu",
+            "software",
+            "confirmed_not_fallback",
+            None,
+            None,
+            None,
+            None,
+            None,
+            "modern_portable",
+            true,
+        );
+        let present_empty = temporal_quality_evidence_profile_fingerprint(
+            "vulkan",
+            "cpu",
+            "software",
+            "confirmed_not_fallback",
+            Some(""),
+            Some(""),
+            Some(""),
+            None,
+            None,
+            "modern_portable",
+            true,
+        );
+
+        assert_ne!(absent, present_empty);
+        assert!(absent.starts_with("blake3:"));
+        assert!(present_empty.starts_with("blake3:"));
     }
 
     #[test]
