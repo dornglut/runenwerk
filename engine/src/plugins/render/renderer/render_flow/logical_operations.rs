@@ -61,7 +61,9 @@ pub(super) fn project_compute_operation(
 /// invented placeholder identities.
 pub(super) fn project_render_operation(
     runtime_resources: &FlowRuntimeResources,
-    dynamic_texture_targets: Option<&super::super::dynamic_targets::RendererDynamicTextureTargetCache>,
+    dynamic_texture_targets: Option<
+        &super::super::dynamic_targets::RendererDynamicTextureTargetCache,
+    >,
     pass: &CompiledPassExecutionPlan,
     pipeline: &PreparedPipelinePass,
     surface_color_view: Option<&GpuTextureViewHandle>,
@@ -100,7 +102,8 @@ pub(super) fn project_render_operation(
         raster.pass_id,
         &color_key,
         surface_color_view,
-    )? else {
+    )?
+    else {
         return Ok(None);
     };
     if color_target.is_depth {
@@ -137,7 +140,8 @@ pub(super) fn project_render_operation(
             raster.pass_id,
             &depth_key,
             None,
-        )? else {
+        )?
+        else {
             return Ok(None);
         };
         if !depth_target.is_depth {
