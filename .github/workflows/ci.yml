@@ -160,7 +160,7 @@ jobs:
             label="$1"
             internal="$2"
             output="${root}/${label}"
-            timeout 120s xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
+            timeout 30s xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
               cargo +stable run -p runenwerk_render_lab --locked -- \
                 --rl2-quality "${output}" \
                 --window-size-px 1920x1080 \
