@@ -2971,15 +2971,7 @@ mod tests {
             false,
         );
         let first = cache
-            .temporal_history(
-                12,
-                0,
-                first_signature,
-                (4, 4),
-                4,
-                first_observation,
-                false,
-            )
+            .temporal_history(12, 0, first_signature, (4, 4), 4, first_observation, false)
             .expect("sub-native history should allocate");
 
         let mut moved_signature = temporal_signature(7);
@@ -2988,15 +2980,7 @@ mod tests {
             false,
         );
         let moved = cache
-            .temporal_history(
-                12,
-                0,
-                moved_signature,
-                (4, 4),
-                4,
-                moved_observation,
-                false,
-            )
+            .temporal_history(12, 0, moved_signature, (4, 4), 4, moved_observation, false)
             .expect("sub-native moved history should recreate");
         assert!(moved.reset);
         assert_ne!(moved.generation, first.generation);
