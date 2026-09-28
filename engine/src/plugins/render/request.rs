@@ -117,11 +117,12 @@ fn validate_observation_frame(
     Ok(())
 }
 
-/// Semantic support around the ideal ray associated with one logical observation sample.
+/// Semantic support associated with one logical observation sample.
 ///
-/// This describes which angular region may contribute to requested meaning. It deliberately does
-/// not describe sample counts, sequences, adaptive policy, work distribution, or any other
-/// algorithmic sampling strategy.
+/// This describes which scene-space angular/image support may contribute to requested meaning. It
+/// deliberately does not describe sample counts, sequences, adaptive policy, work distribution, or
+/// any other algorithmic sampling strategy. Perspective lattice-cell support is resolved against
+/// the exact requested output lattice; it does not carry physical or internal render dimensions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RenderSamplingSupport {
     kind: RenderSamplingSupportKind,
@@ -130,6 +131,7 @@ pub struct RenderSamplingSupport {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum RenderSamplingSupportKind {
     IdealRay,
+    PerspectiveLatticeCell,
     Cone { half_angle_radians: CanonicalF64 },
 }
 
@@ -137,6 +139,18 @@ impl RenderSamplingSupport {
     pub const fn ideal_ray() -> Self {
         Self {
             kind: RenderSamplingSupportKind::IdealRay,
+        }
+    }
+
+    /// Requests the perspective lattice-cell / pixel-footprint support associated with each
+    /// logical sample of a perspective output lattice.
+    ///
+    /// The concrete footprint is derived from the unjittered observation plus the selected
+    /// output's requested lattice dimensions. Physical/internal extents and sample phase are not
+    /// semantic state.
+    pub const fn perspective_lattice_cell() -> Self {
+        Self {
+            kind: RenderSamplingSupportKind::PerspectiveLatticeCell,
         }
     }
 
@@ -156,9 +170,14 @@ impl RenderSamplingSupport {
         matches!(self.kind, RenderSamplingSupportKind::IdealRay)
     }
 
+    pub const fn is_perspective_lattice_cell(self) -> bool {
+        matches!(self.kind, RenderSamplingSupportKind::PerspectiveLatticeCell)
+    }
+
     pub fn cone_half_angle_radians(self) -> Option<f64> {
         match self.kind {
-            RenderSamplingSupportKind::IdealRay => None,
+            RenderSamplingSupportKind::IdealRay
+            | RenderSamplingSupportKind::PerspectiveLatticeCell => None,
             RenderSamplingSupportKind::Cone { half_angle_radians } => {
                 Some(half_angle_radians.get())
             }
@@ -662,6 +681,14 @@ mod tests {
             RenderSemanticTolerance::relative(0.01).expect("valid tolerance"),
         )
         .expect("valid radiance output")
+    }
+
+    #[test]
+    fn perspective_lattice_cell_support_is_semantic_and_non_algorithmic() {
+        let support = RenderSamplingSupport::perspective_lattice_cell();
+        assert!(support.is_perspective_lattice_cell());
+        assert!(!support.is_ideal_ray());
+        assert_eq!(support.cone_half_angle_radians(), None);
     }
 
     #[test]
