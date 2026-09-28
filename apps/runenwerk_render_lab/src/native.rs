@@ -664,13 +664,8 @@ fn publish_render_lab_frame_system(
     // T1 deliberately changes only source-generation evidence after one compatible reuse.
     // T2 instead holds source generations stable so pose-only camera motion is the sole
     // compatibility pressure under test.
-    let temporal_source_generation = if camera_motion_quality {
-        1
-    } else if history.len() >= 2 {
-        2
-    } else {
-        1
-    };
+    let temporal_source_generation =
+        temporal_quality_source_generation(measurement.temporal_quality_scenario, history.len());
     let scripted_camera = if camera_motion_quality {
         temporal_camera_motion_pose(history.len())
     } else {
@@ -792,6 +787,17 @@ fn publish_render_lab_frame_system(
         invocation,
         contribution,
     )
+}
+
+fn temporal_quality_source_generation(
+    scenario: RenderLabTemporalQualityScenario,
+    completed_submissions: usize,
+) -> u64 {
+    match scenario {
+        RenderLabTemporalQualityScenario::CameraMotionP100 => 1,
+        RenderLabTemporalQualityScenario::StaticFootprint if completed_submissions >= 2 => 2,
+        RenderLabTemporalQualityScenario::StaticFootprint => 1,
+    }
 }
 
 fn temporal_camera_motion_pose(completed_submissions: usize) -> RenderLabCamera {
@@ -1192,6 +1198,33 @@ mod tests {
         );
         assert_eq!(artifact.samples[1].gpu_composed_frame_ms, None);
         assert_eq!(artifact.samples[1].diagnostics.len(), 1);
+    }
+
+    #[test]
+    fn camera_motion_quality_holds_source_generation_constant() {
+        for completed in 0..8 {
+            assert_eq!(
+                temporal_quality_source_generation(
+                    RenderLabTemporalQualityScenario::CameraMotionP100,
+                    completed
+                ),
+                1
+            );
+        }
+        assert_eq!(
+            temporal_quality_source_generation(
+                RenderLabTemporalQualityScenario::StaticFootprint,
+                1
+            ),
+            1
+        );
+        assert_eq!(
+            temporal_quality_source_generation(
+                RenderLabTemporalQualityScenario::StaticFootprint,
+                2
+            ),
+            2
+        );
     }
 
     #[test]
