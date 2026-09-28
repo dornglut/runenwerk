@@ -83,7 +83,7 @@ struct RenderLabTemporalReconstructionEvidence {
     frame_index: u64,
     requested_size_px: [u32; 2],
     evaluation_size_px: [u32; 2],
-    semantic_input_generations: Vec<u64>,
+    semantic_input_generation_classes: Vec<u64>,
     sequence_revision: u32,
     reconstruction_revision: u32,
     phase: u32,
@@ -109,9 +109,9 @@ struct RenderLabTemporalQualityArtifact {
     capture: RenderLabTemporalQualityCaptureEvidence,
 }
 
-const RL2_QUALITY_SCHEMA_VERSION: u32 = 4;
+const RL2_QUALITY_SCHEMA_VERSION: u32 = 5;
 const RL2_QUALITY_SCENARIO_ID: &str = "runenwerk.render_lab.rl2.temporal_quality";
-const RL2_QUALITY_SCENARIO_REVISION: u32 = 4;
+const RL2_QUALITY_SCENARIO_REVISION: u32 = 5;
 pub(super) const RL2_QUALITY_FLOW_ID: &str = "runenwerk.render_lab.rl2.fixed_quality";
 pub(super) const RL2_QUALITY_PASS_ID: &str = "runenwerk.render_lab.rl2.fixed_quality.compose";
 pub(super) const RL2_QUALITY_COLOR_ALIAS: &str = "runenwerk.render_lab.rl2.fixed_quality.color";
@@ -398,33 +398,60 @@ pub(super) fn write_temporal_quality_artifact(
             expected_capture_ordinal
         );
     }
-    let temporal_reconstruction = history
-        .observations()
-        .take(capture_submission_ordinal)
-        .flat_map(|observation| {
-            gfx.deterministic_temporal_evidence(observation.key.frame_index)
+    // Source-owner generation tokens are intentionally opaque. For persisted Render Lab evidence,
+    // assign only per-representation, run-local equivalence classes in first-seen order. This proves
+    // "same generation" versus "changed generation" without exposing source numbering or comparing
+    // numeric tokens across distinct representation/source contracts.
+    let mut generation_classes = Vec::new();
+    let mut temporal_reconstruction = Vec::new();
+    for observation in history.observations().take(capture_submission_ordinal) {
+        for evidence in gfx.deterministic_temporal_evidence(observation.key.frame_index) {
+            let semantic_input_generation_classes = evidence
+                .semantic_input_generations
                 .iter()
-                .map(move |evidence| RenderLabTemporalReconstructionEvidence {
-                    frame_index: observation.key.frame_index,
-                    requested_size_px: [evidence.requested_extent.0, evidence.requested_extent.1],
-                    evaluation_size_px: [
-                        evidence.evaluation_extent.0,
-                        evidence.evaluation_extent.1,
-                    ],
-                    semantic_input_generations: evidence
-                        .semantic_input_generations
-                        .iter()
-                        .map(|(_, generation)| generation.raw())
-                        .collect(),
-                    sequence_revision: evidence.sequence_revision,
-                    reconstruction_revision: evidence.reconstruction_revision,
-                    phase: evidence.phase,
-                    history_generation: evidence.history_generation,
-                    history_age: evidence.history_age,
-                    history_reset: evidence.history_reset,
+                .map(|(representation_id, generation)| {
+                    let seen = if let Some((_, seen)) = generation_classes
+                        .iter_mut()
+                        .find(|(known_id, _)| known_id == representation_id)
+                    {
+                        seen
+                    } else {
+                        generation_classes.push((*representation_id, Vec::new()));
+                        &mut generation_classes
+                            .last_mut()
+                            .expect("generation class inserted")
+                            .1
+                    };
+                    let class_index = if let Some(index) =
+                        seen.iter().position(|known| known == generation)
+                    {
+                        index
+                    } else {
+                        seen.push(*generation);
+                        seen.len() - 1
+                    };
+                    u64::try_from(class_index + 1)
+                        .expect("bounded temporal quality generation class fits u64")
                 })
-        })
-        .collect::<Vec<_>>();
+                .collect();
+
+            temporal_reconstruction.push(RenderLabTemporalReconstructionEvidence {
+                frame_index: observation.key.frame_index,
+                requested_size_px: [evidence.requested_extent.0, evidence.requested_extent.1],
+                evaluation_size_px: [
+                    evidence.evaluation_extent.0,
+                    evidence.evaluation_extent.1,
+                ],
+                semantic_input_generation_classes,
+                sequence_revision: evidence.sequence_revision,
+                reconstruction_revision: evidence.reconstruction_revision,
+                phase: evidence.phase,
+                history_generation: evidence.history_generation,
+                history_age: evidence.history_age,
+                history_reset: evidence.history_reset,
+            });
+        }
+    }
     if temporal_reconstruction.len() != capture_submission_ordinal {
         bail!(
             "temporal quality expected one renderer reconstruction record for each of {} submitted frames, found {}",
