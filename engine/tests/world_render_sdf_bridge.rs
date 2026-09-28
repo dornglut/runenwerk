@@ -4,13 +4,13 @@ use engine::plugins::render::features::world::{
 };
 use engine::plugins::render::frame::PreparedRenderProductSelectionResource;
 use engine::plugins::render::{RenderFrameProducerId, RenderPlugin};
+use engine::plugins::world::WorldPlugin;
 use engine::plugins::world::adapters::SdfChunkStoreResource;
 use engine::plugins::world::build::{
     WorldCompletedBuildQueueResource, WorldRuntimeSdfProductCatalogResource,
     WorldSdfRuntimePayloadPackage, enqueue_ratified_world_sdf_payload_package,
 };
 use engine::plugins::world::chunks::lifecycle::WorldChunkRuntimeMapResource;
-use engine::plugins::world::WorldPlugin;
 use engine::plugins::{FixedStepPlugin, SimulationPlugin, TimePlugin};
 use engine::prelude::*;
 use product::{
@@ -60,7 +60,9 @@ fn descriptor(product_id: u64, payload: &SdfChunkPayload) -> FieldProductDescrip
         FieldProductLineage::new(5, "tests.world_render_sdf_bridge"),
     );
     descriptor.consumer_class = FieldProductConsumerClass::RuntimeRead;
-    descriptor.payload_refs.push(WorldSdfPayloadRef::from(payload));
+    descriptor
+        .payload_refs
+        .push(WorldSdfPayloadRef::from(payload));
     descriptor
 }
 

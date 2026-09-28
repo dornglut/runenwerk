@@ -70,7 +70,9 @@ fn runtime_sdf_descriptor(product_id: u64, payload: &SdfChunkPayload) -> FieldPr
         FieldProductLineage::new(1, "tests.world_runtime"),
     );
     descriptor.consumer_class = FieldProductConsumerClass::RuntimeRead;
-    descriptor.payload_refs.push(WorldSdfPayloadRef::from(payload));
+    descriptor
+        .payload_refs
+        .push(WorldSdfPayloadRef::from(payload));
     descriptor
 }
 
@@ -133,12 +135,7 @@ fn ratified_world_sdf_payload_package_flows_through_runtime_intake() {
             .world_mut()
             .remove_resource::<WorldRuntimeSdfProductCatalogResource>()
             .expect("runtime SDF product catalog should exist");
-        let payload = sdf_chunk_payload(
-            chunk_id,
-            ChunkRevision(11),
-            ChunkGeneration(12),
-            99,
-        );
+        let payload = sdf_chunk_payload(chunk_id, ChunkRevision(11), ChunkGeneration(12), 99);
         let descriptor = runtime_sdf_descriptor(7001, &payload);
         let enqueued = {
             let chunks = app
@@ -177,7 +174,6 @@ fn ratified_world_sdf_payload_package_flows_through_runtime_intake() {
     assert_eq!(payload.checksum, 99);
     assert_eq!(payload.chunk_revision, ChunkRevision(11));
 }
-
 
 #[test]
 fn malformed_runtime_sdf_product_is_rejected_before_intake_mutation() {

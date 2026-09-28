@@ -70,9 +70,8 @@ impl std::fmt::Display for WorldSdfRuntimePayloadPackageError {
                 formatter,
                 "runtime SDF product descriptor must contain exactly one payload ref, found {count}"
             ),
-            Self::ScopeMismatch => formatter.write_str(
-                "runtime SDF product scope must identify exactly the packaged chunk",
-            ),
+            Self::ScopeMismatch => formatter
+                .write_str("runtime SDF product scope must identify exactly the packaged chunk"),
             Self::PayloadRefMismatch => formatter.write_str(
                 "runtime SDF product payload ref must match packaged chunk, revision, and checksum",
             ),
@@ -146,9 +145,8 @@ fn validate_runtime_sdf_payload_package(
         return Err(WorldSdfRuntimePayloadPackageError::PayloadRefMismatch);
     }
 
-    let report = ratify_field_product_candidate(&FieldProductCandidate::new(
-        package.descriptor.clone(),
-    ));
+    let report =
+        ratify_field_product_candidate(&FieldProductCandidate::new(package.descriptor.clone()));
     if report.has_blocking_issues() {
         return Err(
             WorldSdfRuntimePayloadPackageError::ProductRatificationRejected {

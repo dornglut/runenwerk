@@ -40,7 +40,9 @@ pub fn prepare_world_sdf_render_bridge_system(mut world: WorldMut) {
         Ok(budget) => *budget,
         Err(_) => return,
     };
-    if world.resource::<RenderSdfResidencySourceResource>().is_err()
+    if world
+        .resource::<RenderSdfResidencySourceResource>()
+        .is_err()
         || world.resource::<RenderSdfResidencyResource>().is_err()
         || world
             .resource::<RenderSdfRaymarchAccelerationResource>()
@@ -117,10 +119,8 @@ pub fn prepare_world_sdf_render_bridge_system(mut world: WorldMut) {
         Err(_) => return,
     };
     if let Ok(acceleration) = world.resource_mut::<RenderSdfRaymarchAccelerationResource>() {
-        acceleration.derive_from_residency(
-            &residency,
-            RenderSdfRaymarchAccelerationConfig::default(),
-        );
+        acceleration
+            .derive_from_residency(&residency, RenderSdfRaymarchAccelerationConfig::default());
     }
 }
 
