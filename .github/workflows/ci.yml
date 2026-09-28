@@ -4,6 +4,11 @@ on:
   pull_request:
     branches:
       - main
+  merge_group:
+    types:
+      - checks_requested
+    branches:
+      - main
   push:
     branches:
       - main
@@ -19,7 +24,7 @@ concurrency:
 jobs:
   validate:
     name: Runenwerk validation
-    uses: dornglut/github-workflows/.github/workflows/reusable-rust-cargo-validate.yml@572f0681429c43c5bf586f3d89a908e853cb3ab9
+    uses: dornglut/github-workflows/.github/workflows/reusable-rust-cargo-validate.yml@72103b957ed506b843c2db2f87d663af7413c646
 
   runenrender-r6-vulkan-execution:
     name: RunenRender Vulkan execution proofs
@@ -36,6 +41,7 @@ jobs:
           set -euo pipefail
           case "$EVENT_NAME" in
             pull_request) expected_revision="$PULL_REQUEST_HEAD_SHA" ;;
+            merge_group) expected_revision="$EVENT_SHA" ;;
             push|workflow_dispatch) expected_revision="$EVENT_SHA" ;;
             *) echo "Unsupported event: $EVENT_NAME" >&2; exit 1 ;;
           esac
