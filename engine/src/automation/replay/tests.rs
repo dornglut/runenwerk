@@ -101,23 +101,6 @@ fn replay_preflight_rejects_invalid_mapping_trailing_and_unsupported_shapes_with
         AutomationInputReplayOutcome::UnframedTrailingGroups
     );
 
-    let unsupported = one_frame_trace(vec![InputObservationGroup::single(
-        InputContext::new(InputSourceId::new(2_001), None),
-        InputObservation::AbsolutePointerPosition {
-            position: Point2::new(1.0, 2.0, CoordinateSpace::WindowPhysicalPixels),
-        },
-    )]);
-    let unsupported_report = app.replay_automation_input_trace(
-        &unsupported,
-        &source_map([(2_001, 9_001)]),
-        AutomationInputReplayStateAssumption::RecordedAndReplaySourcesPristine,
-    );
-    assert_eq!(
-        unsupported_report.outcome(),
-        AutomationInputReplayOutcome::UnsupportedTraceShape
-    );
-    assert_eq!(unsupported_report.completed_frames(), 0);
-
     let release_first = one_frame_trace(vec![InputObservationGroup::single(
         InputContext::new(InputSourceId::new(2_003), Some(InputDeviceId::new(5))),
         InputObservation::PointerButton(PointerButtonInput {
@@ -160,12 +143,6 @@ fn replay_preflight_rejects_every_unsupported_first_slice_group_shape_before_mut
                 repeat: false,
                 origin: ObservationOrigin::SourceReport,
             }),
-        ),
-        InputObservationGroup::single(
-            context,
-            InputObservation::AbsolutePointerPosition {
-                position: Point2::new(1.0, 2.0, CoordinateSpace::WindowPhysicalPixels),
-            },
         ),
         InputObservationGroup::single(
             context,
@@ -672,5 +649,71 @@ fn replay_reports_rejected_input_with_partial_progress_and_cleans_replay_sources
     assert!(
         input.frame_projection_is_quiescent(),
         "failed admission must not leave replay-owned partial-frame projection behind"
+    );
+}
+
+#[test]
+fn replay_absolute_pointer_uses_cursor_projection_and_teardown_cleans_retained_state() {
+    let recorded_source = InputSourceId::new(2_016);
+    let replay_source = InputSourceId::new(9_016);
+    let context = InputContext::new(recorded_source, None);
+    let trace = AutomationInputTrace {
+        frames: vec![
+            AutomationInputTraceFrame {
+                frame_ordinal: 0,
+                groups: vec![InputObservationGroup::single(
+                    context,
+                    InputObservation::AbsolutePointerPosition {
+                        position: Point2::new(10.0, 20.0, CoordinateSpace::WindowPhysicalPixels),
+                    },
+                )],
+            },
+            AutomationInputTraceFrame {
+                frame_ordinal: 1,
+                groups: vec![InputObservationGroup::single(
+                    context,
+                    InputObservation::AbsolutePointerPosition {
+                        position: Point2::new(13.0, 26.0, CoordinateSpace::WindowPhysicalPixels),
+                    },
+                )],
+            },
+        ],
+        trailing_groups: Vec::new(),
+    };
+    let mapping = AutomationInputReplaySourceMap::new([(recorded_source, replay_source)]);
+    let mut app = replay_app();
+
+    let report = app.replay_automation_input_trace(
+        &trace,
+        &mapping,
+        AutomationInputReplayStateAssumption::RecordedAndReplaySourcesPristine,
+    );
+    assert_eq!(report.outcome(), AutomationInputReplayOutcome::Completed);
+    assert_eq!(report.completed_frames(), 2);
+
+    {
+        let input = app.world().resource::<InputState>().unwrap();
+        assert_eq!(
+            input.absolute_pointer_position_for_source(replay_source),
+            Some(Point2::new(
+                13.0,
+                26.0,
+                CoordinateSpace::WindowPhysicalPixels,
+            ))
+        );
+        assert_eq!(input.mouse_position, (13.0, 26.0));
+        assert!(
+            input.mouse_motion_samples().is_empty(),
+            "completed replay frames must clear frame-local cursor motion samples normally"
+        );
+    }
+
+    app.teardown_automation_input_replay().unwrap();
+    assert_eq!(
+        app.world()
+            .resource::<InputState>()
+            .unwrap()
+            .absolute_pointer_position_for_source(replay_source),
+        None
     );
 }
