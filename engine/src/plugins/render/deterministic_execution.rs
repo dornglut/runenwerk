@@ -22,9 +22,11 @@ use super::deterministic_carrier;
 use super::lowering::RenderWorkSet;
 use super::render_result::RenderResult;
 use super::representation::RenderRepresentationId;
-use super::request::{RenderDistanceConvention, RenderObservationSpec, RenderOutputValue};
-use super::scene::RenderObjectId;
-use super::surface_input::RenderSurfaceSemanticInputView;
+use super::request::{
+    RenderDistanceConvention, RenderObservationSpec, RenderOutputSpec, RenderOutputValue,
+};
+use super::scene::{RenderObjectId, RenderSceneRevision};
+use super::surface_input::{RenderSurfaceSemanticInputBinding, RenderSurfaceSemanticInputView};
 use runen_gpu::{
     GpuAdmittedProgramSource, GpuBufferDescriptor, GpuBufferHandle, GpuBufferInitialization,
     GpuBufferRegion, GpuBufferTextureLayout, GpuBufferUsage, GpuClearOperation,
@@ -52,6 +54,9 @@ const OUTPUT_OBJECT_IDENTITY: u32 = 3;
 const OBSERVATION_PERSPECTIVE: u32 = 1;
 const OBSERVATION_PROBE: u32 = 2;
 const OBSERVATION_PERSPECTIVE_FOOTPRINT: u32 = 3;
+const TEMPORAL_SEQUENCE_REVISION: u32 = 1;
+const TEMPORAL_RECONSTRUCTION_REVISION: u32 = 1;
+const TEMPORAL_PHASE_COUNT: u32 = 4;
 const SHAPE_SPHERE: u32 = 1;
 const SHAPE_PLANE: u32 = 2;
 const MAINTAINED_WGSL: &str = include_str!("deterministic_execution.wgsl");
@@ -62,6 +67,34 @@ enum DeterministicBufferKind {
     CanonicalOutput,
     Definedness,
     Status,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DeterministicTemporalSignature {
+    scene_revision: RenderSceneRevision,
+    observation: RenderObservationSpec,
+    output: RenderOutputSpec,
+    semantic_inputs: Vec<RenderSurfaceSemanticInputBinding>,
+    evaluation_extent: (u32, u32),
+    sequence_revision: u32,
+    reconstruction_revision: u32,
+}
+
+#[derive(Debug)]
+struct DeterministicTemporalHistory {
+    signature: DeterministicTemporalSignature,
+    handle: GpuBufferHandle,
+    row_stride_words: u32,
+    phase: u32,
+    age: u32,
+}
+
+#[derive(Debug, Clone)]
+struct DeterministicTemporalHistoryUse {
+    handle: GpuBufferHandle,
+    row_stride_words: u32,
+    phase: u32,
+    age: u32,
 }
 
 /// Renderer-owned logical buffer identities reused by ordinary composed frames.
@@ -76,6 +109,9 @@ pub(crate) struct DeterministicResourceCache {
     identities: GpuWorkResourceIdAllocator,
     buffers: BTreeMap<(u64, usize, DeterministicBufferKind), GpuBufferHandle>,
     maintained_source: Option<GpuAdmittedProgramSource>,
+    reconstruction_source: Option<GpuAdmittedProgramSource>,
+    temporal_histories: BTreeMap<(u64, usize), DeterministicTemporalHistory>,
+    prepared_temporal_outputs: BTreeMap<u64, BTreeSet<usize>>,
     // Keep the latest accepted graph correlated with every producer namespace whose mutable
     // intermediates it used. A peer surface's submission must not stall this producer's cache.
     producer_submissions: BTreeMap<u64, GpuSubmission>,
@@ -105,6 +141,34 @@ impl DeterministicResourceCache {
     }
 
     pub(crate) fn retain_in_flight_submissions(&mut self) {
+        let terminal = self
+            .producer_submissions
+            .iter()
+            .filter_map(|(scope, submission)| match submission.status() {
+                GpuSubmissionStatus::Accepted => None,
+                GpuSubmissionStatus::Completed => Some((*scope, true)),
+                GpuSubmissionStatus::Failed(_) => Some((*scope, false)),
+            })
+            .collect::<Vec<_>>();
+
+        for (scope, completed) in terminal {
+            let outputs = self
+                .prepared_temporal_outputs
+                .remove(&scope)
+                .unwrap_or_default();
+            if completed {
+                for output_index in outputs {
+                    if let Some(history) = self.temporal_histories.get_mut(&(scope, output_index)) {
+                        history.phase = (history.phase + 1) % TEMPORAL_PHASE_COUNT;
+                        history.age = history.age.saturating_add(1);
+                    }
+                }
+            } else {
+                self.temporal_histories
+                    .retain(|(history_scope, _), _| *history_scope != scope);
+            }
+        }
+
         // Completed and failed submissions are terminal; only an Accepted handle can still be
         // using a producer's reusable intermediates.
         self.producer_submissions
@@ -125,6 +189,87 @@ impl DeterministicResourceCache {
         .map_err(|error| gpu_authoring("maintained WGSL admission", error))?;
         self.maintained_source = Some(source.clone());
         Ok(source)
+    }
+
+    fn temporal_history(
+        &mut self,
+        scope: u64,
+        output_index: usize,
+        signature: DeterministicTemporalSignature,
+        requested_extent: (u32, u32),
+        bytes_per_row_alignment: u32,
+    ) -> Result<DeterministicTemporalHistoryUse, RenderDeterministicLoweringError> {
+        let logical_row_bytes = u64::from(requested_extent.0)
+            .checked_mul(WORD_BYTES)
+            .ok_or(RenderDeterministicLoweringError::SizeOverflow {
+                field: "temporal history logical row bytes",
+            })?;
+        let row_bytes = align_up(logical_row_bytes, bytes_per_row_alignment)?;
+        if row_bytes % WORD_BYTES != 0 {
+            return Err(RenderDeterministicLoweringError::InvalidBytesPerRowAlignment {
+                alignment: bytes_per_row_alignment,
+            });
+        }
+        let row_stride_words = u32::try_from(row_bytes / WORD_BYTES).map_err(|_| {
+            RenderDeterministicLoweringError::SizeOverflow {
+                field: "temporal history row stride",
+            }
+        })?;
+        let words = row_stride_words
+            .checked_mul(requested_extent.1)
+            .ok_or(RenderDeterministicLoweringError::SizeOverflow {
+                field: "temporal history word count",
+            })?;
+        let byte_len = u64::from(words)
+            .checked_mul(WORD_BYTES)
+            .ok_or(RenderDeterministicLoweringError::SizeOverflow {
+                field: "temporal history byte length",
+            })?;
+
+        let key = (scope, output_index);
+        let recreate = self
+            .temporal_histories
+            .get(&key)
+            .is_none_or(|history| history.signature != signature || history.row_stride_words != row_stride_words);
+        if recreate {
+            let descriptor = GpuBufferDescriptor::ordinary_owned(
+                format!("RunenRender output {output_index} temporal history"),
+                GpuResourceLifetime::Retained,
+                GpuReconstruction::SourceBacked,
+                byte_len,
+                [GpuBufferUsage::Storage, GpuBufferUsage::CopySource],
+                GpuBufferInitialization::Zeroed,
+            )
+            .map_err(|error| gpu_authoring("temporal-history descriptor", error))?;
+            let handle = self
+                .identities
+                .allocate_buffer_handle(descriptor)
+                .map_err(|error| gpu_authoring("temporal-history allocation", error))?;
+            self.temporal_histories.insert(
+                key,
+                DeterministicTemporalHistory {
+                    signature,
+                    handle,
+                    row_stride_words,
+                    phase: 0,
+                    age: 0,
+                },
+            );
+        }
+        self.prepared_temporal_outputs
+            .entry(scope)
+            .or_default()
+            .insert(output_index);
+        let history = self
+            .temporal_histories
+            .get(&key)
+            .expect("temporal history inserted before use");
+        Ok(DeterministicTemporalHistoryUse {
+            handle: history.handle.clone(),
+            row_stride_words: history.row_stride_words,
+            phase: history.phase,
+            age: history.age,
+        })
     }
 
     fn buffer(
