@@ -36,7 +36,7 @@ fn signed_distance(app: &App, position: [f32; 3]) -> f32 {
         .resource::<CollisionQueryServiceResource>()
         .expect("WorldPlugin should install collision queries");
     collision
-        .sample_signed_distance(&partition, &store, WorldId::new(0), position)
+        .sample_signed_distance(partition, store, WorldId::new(0), position)
         .expect("arena sample position should be valid")
         .expect("arena chunk payload should exist")
         .distance
