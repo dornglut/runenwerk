@@ -73,7 +73,7 @@ impl Renderer {
             product_surface_pass_format: None,
             glyph_atlas_gpu: std::collections::BTreeMap::new(),
             deterministic_resources: Default::default(),
-            deterministic_temporal_evidence: BTreeMap::new(),
+            deterministic_temporal_evidence: std::collections::BTreeMap::new(),
             dynamic_texture_targets:
                 super::dynamic_targets::RendererDynamicTextureTargetCache::default(),
             flow_runtime_cache: std::collections::BTreeMap::new(),
