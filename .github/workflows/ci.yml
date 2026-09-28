@@ -19,7 +19,7 @@ concurrency:
 jobs:
   validate:
     name: Runenwerk validation
-    uses: dornglut/github-workflows/.github/workflows/reusable-rust-cargo-validate.yml@d74b34121339a15dc352b5b702501f8e7bdd20a2
+    uses: dornglut/github-workflows/.github/workflows/reusable-rust-cargo-validate.yml@572f0681429c43c5bf586f3d89a908e853cb3ab9
 
   runenrender-r6-vulkan-execution:
     name: RunenRender Vulkan execution proofs
