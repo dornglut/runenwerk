@@ -14,7 +14,7 @@ use temporal_quality::{
     inspect_render_lab_temporal_quality_execution_system, render_lab_fixed_quality_flow,
     render_lab_quality_present_flow, stage_render_lab_native_quality_publication,
     temporal_quality_capture_evidence, temporal_quality_capture_selector,
-    write_temporal_quality_artifact,
+    write_camera_motion_quality_artifact, write_temporal_quality_artifact,
 };
 
 #[derive(Debug, Clone, Copy, runen_ecs::Resource)]
@@ -471,7 +471,26 @@ fn complete_render_lab_measurement_if_requested(
             let gfx = gfx.ok_or_else(|| {
                 anyhow::anyhow!("temporal quality renderer evidence is unavailable")
             })?;
-            write_temporal_quality_artifact(measurement, history, quality_execution, capture, gfx)?;
+            match measurement.temporal_quality_scenario {
+                RenderLabTemporalQualityScenario::StaticFootprint => {
+                    write_temporal_quality_artifact(
+                        measurement,
+                        history,
+                        quality_execution,
+                        capture,
+                        gfx,
+                    )?;
+                }
+                RenderLabTemporalQualityScenario::CameraMotionP100 => {
+                    write_camera_motion_quality_artifact(
+                        measurement,
+                        history,
+                        quality_execution,
+                        capture,
+                        gfx,
+                    )?;
+                }
+            }
         }
         measurement.completed = true;
     }
@@ -1164,6 +1183,20 @@ mod tests {
         );
         assert_eq!(artifact.samples[1].gpu_composed_frame_ms, None);
         assert_eq!(artifact.samples[1].diagnostics.len(), 1);
+    }
+
+    #[test]
+    fn camera_motion_quality_pose_is_static_then_moves_deterministically() {
+        assert_eq!(
+            temporal_camera_motion_pose(0),
+            temporal_camera_motion_pose(1)
+        );
+        let small = temporal_camera_motion_pose(2);
+        let large = temporal_camera_motion_pose(3);
+        assert_ne!(small, RenderLabCamera::default());
+        assert_ne!(large, small);
+        assert_eq!(small.yaw_radians, 0.08);
+        assert_eq!(large.yaw_radians, 0.24);
     }
 
     #[test]
