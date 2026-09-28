@@ -229,6 +229,8 @@ mod persistence;
 pub use persistence::*;
 mod replay;
 pub use replay::*;
+mod scenario_persistence;
+pub use scenario_persistence::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AutomationSessionId(u64);
