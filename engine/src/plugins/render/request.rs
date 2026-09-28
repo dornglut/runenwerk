@@ -12,6 +12,7 @@ pub enum RenderRequestValidationError {
     DegenerateObservationFrame,
     PerspectiveFieldOfViewOutOfRange,
     SamplingConeOutOfRange,
+    PerspectiveLatticeCellRequiresPerspectiveObservation,
     InvalidLatticeDimensions,
     IdentityToleranceMustBeExact,
     EmptyObservations,
@@ -50,6 +51,10 @@ impl fmt::Display for RenderRequestValidationError {
                     "sampling cone half-angle must be greater than zero and less than pi/2 radians"
                 )
             }
+            Self::PerspectiveLatticeCellRequiresPerspectiveObservation => write!(
+                f,
+                "perspective lattice-cell sampling support requires a perspective observation"
+            ),
             Self::InvalidLatticeDimensions => {
                 write!(f, "sample lattice dimensions must both be non-zero")
             }
@@ -274,6 +279,11 @@ impl RenderProbeObservation {
         sampling_support: RenderSamplingSupport,
     ) -> Result<Self, RenderRequestValidationError> {
         validate_observation_frame(observation_to_scene)?;
+        if sampling_support.is_perspective_lattice_cell() {
+            return Err(
+                RenderRequestValidationError::PerspectiveLatticeCellRequiresPerspectiveObservation,
+            );
+        }
         Ok(Self {
             observation_to_scene,
             shutter,
@@ -689,6 +699,20 @@ mod tests {
         assert!(support.is_perspective_lattice_cell());
         assert!(!support.is_ideal_ray());
         assert_eq!(support.cone_half_angle_radians(), None);
+    }
+
+    #[test]
+    fn probe_rejects_perspective_lattice_cell_support() {
+        assert_eq!(
+            RenderProbeObservation::new(
+                RenderAffineTransform3::identity(),
+                interval(0.0, 0.0),
+                RenderSamplingSupport::perspective_lattice_cell(),
+            ),
+            Err(
+                RenderRequestValidationError::PerspectiveLatticeCellRequiresPerspectiveObservation
+            )
+        );
     }
 
     #[test]
