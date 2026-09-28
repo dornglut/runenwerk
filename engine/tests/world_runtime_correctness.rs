@@ -13,7 +13,7 @@ use engine::plugins::world::{
     build::integration::{
         WorldCompletedBuildOutput, WorldCompletedBuildQueueResource,
         WorldRuntimeSdfProductCatalogResource, WorldSdfRuntimePayloadPackage,
-        enqueue_ratified_world_sdf_payload_package,
+        WorldSdfRuntimePayloadPackageError, enqueue_ratified_world_sdf_payload_package,
     },
     build::jobs::WorldBuildStaleness,
 };
@@ -216,6 +216,161 @@ fn malformed_runtime_sdf_product_is_rejected_before_intake_mutation() {
         .expect("chunk runtime should exist");
     assert!(!chunks.by_chunk_id.contains_key(&chunk_id));
     assert!(error.to_string().contains("ratification"));
+}
+
+#[test]
+fn wrong_runtime_sdf_product_kind_is_rejected_before_intake_mutation() {
+    let mut app = fixed_world_app();
+    let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 5, y: 0, z: 0 });
+    let payload = sdf_chunk_payload(chunk_id, ChunkRevision(2), ChunkGeneration(3), 45);
+    let mut descriptor = runtime_sdf_descriptor(7002, &payload);
+    descriptor.kind = FieldProductKind::ScalarDistance;
+
+    let mut completed = app
+        .world_mut()
+        .remove_resource::<WorldCompletedBuildQueueResource>()
+        .expect("completed build queue should exist");
+    let mut products = app
+        .world_mut()
+        .remove_resource::<WorldRuntimeSdfProductCatalogResource>()
+        .expect("runtime SDF product catalog should exist");
+    let error = {
+        let chunks = app
+            .world_mut()
+            .resource_mut::<WorldChunkRuntimeMapResource>()
+            .expect("chunk runtime should exist");
+        enqueue_ratified_world_sdf_payload_package(
+            &mut completed,
+            chunks,
+            &mut products,
+            WorldSdfRuntimePayloadPackage::new(
+                descriptor,
+                vec![payload],
+                RegionSdfSummary::default(),
+            ),
+        )
+        .expect_err("non-WorldSdfChunkPages products must be rejected")
+    };
+
+    assert!(matches!(
+        error,
+        WorldSdfRuntimePayloadPackageError::UnsupportedProductKind { .. }
+    ));
+    assert!(completed.outputs.is_empty());
+    assert!(products.products().is_empty());
+    let chunks = app
+        .world()
+        .resource::<WorldChunkRuntimeMapResource>()
+        .expect("chunk runtime should exist");
+    assert!(!chunks.by_chunk_id.contains_key(&chunk_id));
+}
+
+#[test]
+fn runtime_sdf_package_rejects_zero_or_multiple_payloads_before_intake_mutation() {
+    for payload_count in [0_usize, 2] {
+        let mut app = fixed_world_app();
+        let chunk_id = ChunkId::new(
+            WorldId::new(0),
+            ChunkCoord3 {
+                x: 6 + payload_count as i32,
+                y: 0,
+                z: 0,
+            },
+        );
+        let payload = sdf_chunk_payload(chunk_id, ChunkRevision(2), ChunkGeneration(3), 46);
+        let descriptor = runtime_sdf_descriptor(7003 + payload_count as u64, &payload);
+        let payloads = match payload_count {
+            0 => Vec::new(),
+            2 => vec![payload.clone(), payload],
+            _ => unreachable!(),
+        };
+
+        let mut completed = app
+            .world_mut()
+            .remove_resource::<WorldCompletedBuildQueueResource>()
+            .expect("completed build queue should exist");
+        let mut products = app
+            .world_mut()
+            .remove_resource::<WorldRuntimeSdfProductCatalogResource>()
+            .expect("runtime SDF product catalog should exist");
+        let error = {
+            let chunks = app
+                .world_mut()
+                .resource_mut::<WorldChunkRuntimeMapResource>()
+                .expect("chunk runtime should exist");
+            enqueue_ratified_world_sdf_payload_package(
+                &mut completed,
+                chunks,
+                &mut products,
+                WorldSdfRuntimePayloadPackage::new(
+                    descriptor,
+                    payloads,
+                    RegionSdfSummary::default(),
+                ),
+            )
+            .expect_err("runtime SDF package cardinality must be exactly one")
+        };
+
+        assert!(matches!(
+            error,
+            WorldSdfRuntimePayloadPackageError::PayloadCount { count }
+                if count == payload_count
+        ));
+        assert!(completed.outputs.is_empty());
+        assert!(products.products().is_empty());
+        let chunks = app
+            .world()
+            .resource::<WorldChunkRuntimeMapResource>()
+            .expect("chunk runtime should exist");
+        assert!(!chunks.by_chunk_id.contains_key(&chunk_id));
+    }
+}
+
+#[test]
+fn runtime_sdf_payload_ref_mismatch_is_rejected_before_intake_mutation() {
+    let mut app = fixed_world_app();
+    let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 9, y: 0, z: 0 });
+    let payload = sdf_chunk_payload(chunk_id, ChunkRevision(2), ChunkGeneration(3), 47);
+    let mut descriptor = runtime_sdf_descriptor(7006, &payload);
+    descriptor.payload_refs[0].checksum = payload.checksum + 1;
+
+    let mut completed = app
+        .world_mut()
+        .remove_resource::<WorldCompletedBuildQueueResource>()
+        .expect("completed build queue should exist");
+    let mut products = app
+        .world_mut()
+        .remove_resource::<WorldRuntimeSdfProductCatalogResource>()
+        .expect("runtime SDF product catalog should exist");
+    let error = {
+        let chunks = app
+            .world_mut()
+            .resource_mut::<WorldChunkRuntimeMapResource>()
+            .expect("chunk runtime should exist");
+        enqueue_ratified_world_sdf_payload_package(
+            &mut completed,
+            chunks,
+            &mut products,
+            WorldSdfRuntimePayloadPackage::new(
+                descriptor,
+                vec![payload],
+                RegionSdfSummary::default(),
+            ),
+        )
+        .expect_err("descriptor payload ref mismatch must be rejected")
+    };
+
+    assert!(matches!(
+        error,
+        WorldSdfRuntimePayloadPackageError::PayloadRefMismatch
+    ));
+    assert!(completed.outputs.is_empty());
+    assert!(products.products().is_empty());
+    let chunks = app
+        .world()
+        .resource::<WorldChunkRuntimeMapResource>()
+        .expect("chunk runtime should exist");
+    assert!(!chunks.by_chunk_id.contains_key(&chunk_id));
 }
 
 #[test]

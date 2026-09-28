@@ -206,6 +206,11 @@ fn matching_selection_bridges_integrated_world_payload_into_residency_and_accele
     let entry = residency
         .entry(product_id)
         .expect("matching selection should become renderer resident");
+    assert_eq!(entry.product_id, product_id);
+    assert_eq!(
+        entry.product_generation,
+        descriptor.product_core().lineage.generation
+    );
     assert_eq!(entry.chunk_id, payload.chunk_id);
     assert_eq!(entry.chunk_revision, payload.chunk_revision.0);
     assert_eq!(entry.chunk_generation, payload.chunk_generation.0);
@@ -216,6 +221,8 @@ fn matching_selection_bridges_integrated_world_payload_into_residency_and_accele
         .expect("Render should own SDF raymarch acceleration");
     assert!(acceleration.last_report().is_acceleration_ready());
     assert_eq!(acceleration.last_report().resident_product_count, 1);
+    assert!(acceleration.last_report().resident_page_count > 0);
+    assert!(acceleration.last_report().resident_brick_count > 0);
 }
 
 #[test]
