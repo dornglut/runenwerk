@@ -60,6 +60,8 @@ const TEMPORAL_PHASE_COUNT: u32 = 4;
 const SHAPE_SPHERE: u32 = 1;
 const SHAPE_PLANE: u32 = 2;
 const MAINTAINED_WGSL: &str = include_str!("deterministic_execution.wgsl");
+const TEMPORAL_RECONSTRUCTION_WGSL: &str =
+    include_str!("deterministic_temporal_reconstruction.wgsl");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum DeterministicBufferKind {
@@ -188,6 +190,22 @@ impl DeterministicResourceCache {
         )])
         .map_err(|error| gpu_authoring("maintained WGSL admission", error))?;
         self.maintained_source = Some(source.clone());
+        Ok(source)
+    }
+
+    fn reconstruction_source(
+        &mut self,
+    ) -> Result<GpuAdmittedProgramSource, RenderDeterministicLoweringError> {
+        if let Some(source) = self.reconstruction_source.as_ref() {
+            return Ok(source.clone());
+        }
+        let [source] = admit_static_wgsl_sources([(
+            "runenrender.maintained.temporal_reconstruction",
+            TEMPORAL_RECONSTRUCTION_REVISION,
+            TEMPORAL_RECONSTRUCTION_WGSL,
+        )])
+        .map_err(|error| gpu_authoring("temporal reconstruction WGSL admission", error))?;
+        self.reconstruction_source = Some(source.clone());
         Ok(source)
     }
 
