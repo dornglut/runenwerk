@@ -188,7 +188,9 @@ fn run_native_temporal_quality_scenario(
         RenderLabTemporalQualityScenario::CameraMotionP100
     ) && internal_size_px != primary_window_size_px
     {
-        bail!("camera-motion temporal quality is P100-only and requires matching internal/output extents");
+        bail!(
+            "camera-motion temporal quality is P100-only and requires matching internal/output extents"
+        );
     }
 
     let output_root = output_root.into();
