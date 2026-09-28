@@ -146,7 +146,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Run Render Lab fixed-quality evidence matrix
+      - name: Run Render Lab static-footprint quality evidence matrix
         env:
           RUST_BACKTRACE: '1'
           RUNENWERK_SOURCE_REVISION: ${{ steps.revision.outputs.expected_revision }}
@@ -173,8 +173,8 @@ jobs:
               --arg revision "${RUNENWERK_SOURCE_REVISION}" \
               --arg internal "${internal}" \
               '
-                .schema_version == 2
-                and .scenario_revision == 2
+                .schema_version == 3
+                and .scenario_revision == 3
                 and .source_git_revision == $revision
                 and .requested_output_size_px == [1920,1080]
                 and .capture_submission_ordinal == 2
@@ -184,28 +184,15 @@ jobs:
                 and .gpu.backend == "vulkan"
                 and .gpu.software_status == "software"
                 and (.gpu.evidence_profile_fingerprint | startswith("blake3:"))
-                and (
-                  if $internal == "1920x1080" then
-                    .execution.policy == "native"
-                    and .execution.native_fallback_active == false
-                    and .execution.target_key == null
-                    and .execution.internal_view_id == null
-                    and .execution.resolve_invocation_id == null
-                    and .capture_route == "native_scene"
-                    and (.capture.flow_id | length) > 0
-                    and (.capture.pass_id | length) > 0
-                  else
-                    .execution.policy == "fixed"
-                    and .execution.native_fallback_active == false
-                    and .execution.target_key != null
-                    and .execution.internal_view_id != null
-                    and .execution.scene_invocation_id != null
-                    and .execution.resolve_invocation_id != null
-                    and .capture_route == "fixed_resolve"
-                    and (.capture.flow_id | length) > 0
-                    and (.capture.pass_id | length) > 0
-                  end
-                )
+                and .execution.policy == "static_footprint"
+                and .execution.native_fallback_active == false
+                and .execution.target_key == null
+                and .execution.internal_view_id == null
+                and .execution.scene_invocation_id != null
+                and .execution.resolve_invocation_id == null
+                and .capture_route == "native_scene"
+                and (.capture.flow_id | length) > 0
+                and (.capture.pass_id | length) > 0
               ' "${output}/quality-evidence.json"
           }
 
@@ -235,7 +222,7 @@ jobs:
             fi
           done
 
-      - name: Upload Render Lab fixed-quality evidence
+      - name: Upload Render Lab static-footprint quality evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
         with:
