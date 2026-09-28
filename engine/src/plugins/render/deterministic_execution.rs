@@ -87,6 +87,7 @@ struct DeterministicTemporalHistory {
     signature: DeterministicTemporalSignature,
     handle: GpuBufferHandle,
     row_stride_words: u32,
+    generation: u64,
     phase: u32,
     age: u32,
 }
@@ -95,6 +96,8 @@ struct DeterministicTemporalHistory {
 struct DeterministicTemporalHistoryUse {
     handle: GpuBufferHandle,
     row_stride_words: u32,
+    generation: u64,
+    reset: bool,
     phase: u32,
     age: u32,
 }
@@ -113,6 +116,7 @@ pub(crate) struct DeterministicResourceCache {
     maintained_source: Option<GpuAdmittedProgramSource>,
     reconstruction_source: Option<GpuAdmittedProgramSource>,
     temporal_histories: BTreeMap<(u64, usize), DeterministicTemporalHistory>,
+    next_temporal_generation: u64,
     prepared_temporal_outputs: BTreeMap<u64, BTreeSet<usize>>,
     // Keep the latest accepted graph correlated with every producer namespace whose mutable
     // intermediates it used. A peer surface's submission must not stall this producer's cache.
@@ -264,12 +268,14 @@ impl DeterministicResourceCache {
                 .identities
                 .allocate_buffer_handle(descriptor)
                 .map_err(|error| gpu_authoring("temporal-history allocation", error))?;
+            self.next_temporal_generation = self.next_temporal_generation.saturating_add(1);
             self.temporal_histories.insert(
                 key,
                 DeterministicTemporalHistory {
                     signature,
                     handle,
                     row_stride_words,
+                    generation: self.next_temporal_generation,
                     phase: 0,
                     age: 0,
                 },
@@ -286,6 +292,8 @@ impl DeterministicResourceCache {
         Ok(DeterministicTemporalHistoryUse {
             handle: history.handle.clone(),
             row_stride_words: history.row_stride_words,
+            generation: history.generation,
+            reset: recreate,
             phase: history.phase,
             age: history.age,
         })
@@ -372,6 +380,19 @@ impl PreparedDeterministicRender {
     }
 }
 
+/// Bounded renderer-owned evidence for one static footprint-reconstruction preparation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RenderDeterministicTemporalExecutionEvidence {
+    pub requested_extent: (u32, u32),
+    pub evaluation_extent: (u32, u32),
+    pub sequence_revision: u32,
+    pub reconstruction_revision: u32,
+    pub phase: u32,
+    pub history_generation: u64,
+    pub history_age: u32,
+    pub history_reset: bool,
+}
+
 /// Renderer-owned correlation for one ordinary composable radiance output.
 ///
 /// The correlation carries the exact admitted destination and typed RunenGPU export relationship.
@@ -381,6 +402,7 @@ impl PreparedDeterministicRender {
 pub struct PreparedDeterministicRadianceOutput {
     output_index: usize,
     relationship: GpuExportRelationship,
+    temporal_evidence: Option<RenderDeterministicTemporalExecutionEvidence>,
 }
 
 impl PreparedDeterministicRadianceOutput {
@@ -401,6 +423,12 @@ impl PreparedDeterministicRadianceOutput {
 
     pub fn export_relationship(&self) -> &GpuExportRelationship {
         &self.relationship
+    }
+
+    pub const fn temporal_execution_evidence(
+        &self,
+    ) -> Option<RenderDeterministicTemporalExecutionEvidence> {
+        self.temporal_evidence
     }
 
     pub fn import(&self, provenance: GpuResourceProvenance) -> GpuWorkImport {
@@ -1510,6 +1538,23 @@ fn lower_output(
                         PreparedDeterministicRadianceOutput {
                             output_index,
                             relationship,
+                            temporal_evidence: temporal_history.as_ref().map(|history| {
+                                RenderDeterministicTemporalExecutionEvidence {
+                                    requested_extent: requested
+                                        .spec()
+                                        .topology()
+                                        .sample_lattice_dimensions()
+                                        .expect("temporal radiance output is a sample lattice"),
+                                    evaluation_extent: finite_evaluation_extent
+                                        .expect("temporal history requires finite evaluation"),
+                                    sequence_revision: TEMPORAL_SEQUENCE_REVISION,
+                                    reconstruction_revision: TEMPORAL_RECONSTRUCTION_REVISION,
+                                    phase: history.phase,
+                                    history_generation: history.generation,
+                                    history_age: history.age,
+                                    history_reset: history.reset,
+                                }
+                            }),
                         },
                     ))
                 } else {
