@@ -344,8 +344,7 @@ fn runtime_sdf_package_rejects_zero_or_multiple_payload_refs_before_intake_mutat
             },
         );
         let payload = sdf_chunk_payload(chunk_id, ChunkRevision(2), ChunkGeneration(3), 47);
-        let mut descriptor =
-            runtime_sdf_descriptor(7006 + payload_ref_count as u64, &payload);
+        let mut descriptor = runtime_sdf_descriptor(7006 + payload_ref_count as u64, &payload);
         descriptor.payload_refs = match payload_ref_count {
             0 => Vec::new(),
             2 => {
@@ -447,7 +446,8 @@ fn runtime_sdf_scope_mismatch_is_rejected_before_intake_mutation() {
 }
 
 #[test]
-fn runtime_sdf_payload_ref_chunk_revision_and_checksum_mismatches_are_rejected_before_intake_mutation() {
+fn runtime_sdf_payload_ref_chunk_revision_and_checksum_mismatches_are_rejected_before_intake_mutation()
+ {
     for mismatch in 0_u8..3 {
         let mut app = fixed_world_app();
         let chunk_id = ChunkId::new(
