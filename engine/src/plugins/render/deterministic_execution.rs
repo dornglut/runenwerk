@@ -3236,7 +3236,7 @@ mod tests {
 
         let moved = temporal_test_observation(
             RenderAffineTransform3::from_row_major_3x4([
-                1.0, 0.0, 0.0, 0.25, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+                1.0, 0.0, 0.0, 0.25, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
             ])
             .expect("valid moved observation"),
         );
