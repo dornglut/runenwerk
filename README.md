@@ -52,3 +52,5 @@ Until reviewed inbound contribution terms exist that preserve the intended comme
 ## License
 
 Runenwerk is available under the GNU General Public License v3.0 only (`GPL-3.0-only`). A separate commercial license may be available from copyright holder(s) authorized to grant it. See [LICENSE](LICENSE) and [LICENSING.md](LICENSING.md).
+
+<!-- merge-queue canary for issue #1065; intentionally non-semantic -->
