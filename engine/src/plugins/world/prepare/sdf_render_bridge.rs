@@ -92,10 +92,23 @@ pub fn prepare_world_sdf_render_bridge_system(mut world: WorldMut) {
         state.published_product_ids = currently_published;
     }
 
+    let sources = match world.resource::<RenderSdfResidencySourceResource>() {
+        Ok(sources) => sources.clone(),
+        Err(_) => return,
+    };
+    let source_product_ids = sources
+        .products()
+        .keys()
+        .copied()
+        .collect::<BTreeSet<_>>();
     let filtered_selections = selections
         .into_iter()
         .filter_map(|mut selection| {
-            filter_selection_to_world_sdf_products(&mut selection, &catalog_ids);
+            filter_selection_to_sdf_products(
+                &mut selection,
+                &catalog_ids,
+                &source_product_ids,
+            );
             if selection.selected_products.is_empty() && selection.residency_requests.is_empty() {
                 None
             } else {
@@ -104,10 +117,6 @@ pub fn prepare_world_sdf_render_bridge_system(mut world: WorldMut) {
         })
         .collect::<Vec<_>>();
 
-    let sources = match world.resource::<RenderSdfResidencySourceResource>() {
-        Ok(sources) => sources.clone(),
-        Err(_) => return,
-    };
     if let Ok(residency) = world.resource_mut::<RenderSdfResidencyResource>() {
         residency.derive_from_sources(&filtered_selections, &sources, &budget);
     } else {
@@ -124,14 +133,92 @@ pub fn prepare_world_sdf_render_bridge_system(mut world: WorldMut) {
     }
 }
 
-fn filter_selection_to_world_sdf_products(
+fn filter_selection_to_sdf_products(
     selection: &mut RenderProductSelection,
-    product_ids: &BTreeSet<ProductIdentity>,
+    world_product_ids: &BTreeSet<ProductIdentity>,
+    source_product_ids: &BTreeSet<ProductIdentity>,
 ) {
-    selection
-        .selected_products
-        .retain(|selected| product_ids.contains(&selected.product_id));
-    selection
-        .residency_requests
-        .retain(|request| product_ids.contains(&request.product_id));
+    selection.selected_products.retain(|selected| {
+        world_product_ids.contains(&selected.product_id)
+            || source_product_ids.contains(&selected.product_id)
+    });
+    selection.residency_requests.retain(|request| {
+        world_product_ids.contains(&request.product_id)
+            || source_product_ids.contains(&request.product_id)
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use product::{
+        ProductAuthorityClass, ProductFreshness, ProductQueryPolicy, ProductResidency,
+        ProductScaleBand, RenderResidencyRequest, RenderSelectedProduct,
+    };
+
+    fn selected_product(product_id: ProductIdentity) -> RenderSelectedProduct {
+        RenderSelectedProduct {
+            product_id,
+            scale_band: ProductScaleBand::Preview,
+            generation: 1,
+            freshness: ProductFreshness::Current,
+            residency: ProductResidency::Resident,
+            authority_class: ProductAuthorityClass::DeterministicDerived,
+            query_policy: ProductQueryPolicy::StrictCurrentOnly,
+        }
+    }
+
+    #[test]
+    fn selection_filter_preserves_unrelated_sdf_sources_and_drops_non_sdf_products() {
+        let world_product_id = ProductIdentity::new(1);
+        let unrelated_sdf_product_id = ProductIdentity::new(2);
+        let non_sdf_product_id = ProductIdentity::new(3);
+        let mut selection = RenderProductSelection::new("mixed-sdf-selection");
+
+        for product_id in [
+            world_product_id,
+            unrelated_sdf_product_id,
+            non_sdf_product_id,
+        ] {
+            selection
+                .selected_products
+                .push(selected_product(product_id));
+            selection
+                .residency_requests
+                .push(RenderResidencyRequest::new(
+                    product_id,
+                    ProductResidency::Resident,
+                    0,
+                    false,
+                ));
+        }
+
+        let world_product_ids = [world_product_id].into_iter().collect::<BTreeSet<_>>();
+        let source_product_ids = [unrelated_sdf_product_id]
+            .into_iter()
+            .collect::<BTreeSet<_>>();
+
+        filter_selection_to_sdf_products(
+            &mut selection,
+            &world_product_ids,
+            &source_product_ids,
+        );
+
+        let selected_product_ids = selection
+            .selected_products
+            .iter()
+            .map(|selected| selected.product_id)
+            .collect::<BTreeSet<_>>();
+        let residency_product_ids = selection
+            .residency_requests
+            .iter()
+            .map(|request| request.product_id)
+            .collect::<BTreeSet<_>>();
+        let expected_product_ids = [world_product_id, unrelated_sdf_product_id]
+            .into_iter()
+            .collect::<BTreeSet<_>>();
+
+        assert_eq!(selected_product_ids, expected_product_ids);
+        assert_eq!(residency_product_ids, expected_product_ids);
+    }
 }
