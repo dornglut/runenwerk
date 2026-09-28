@@ -402,6 +402,11 @@ fn duplicate_current_retries_failed_replay_restoration_before_ack() {
             frontier: runen_net::identity::SimulationTick::new(0),
         })
     );
+    assert_eq!(
+        *client.world().resource::<SimulationTick>().unwrap(),
+        SimulationTick(0),
+        "successful replay-failure recovery must restore Engine simulation identity to the committed authoritative tick"
+    );
 }
 
 #[test]
