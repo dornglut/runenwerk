@@ -242,12 +242,29 @@ fn descriptor_store_mismatch_removes_world_owned_source_without_touching_unrelat
         .resource_mut::<RenderSdfResidencySourceResource>()
         .expect("Render should own source registry")
         .upsert_payload(unrelated_id, 1, payload.clone());
+    let mut mixed_selection = selection(&descriptor);
+    let mut unrelated_selected = mixed_selection
+        .selected_products
+        .first()
+        .expect("world selection should contain one selected product")
+        .clone();
+    unrelated_selected.product_id = unrelated_id;
+    unrelated_selected.generation = 1;
+    mixed_selection.selected_products.push(unrelated_selected);
+    mixed_selection
+        .residency_requests
+        .push(RenderResidencyRequest::new(
+            unrelated_id,
+            ProductResidency::Resident,
+            90,
+            false,
+        ));
     app.world_mut()
         .resource_mut::<PreparedRenderProductSelectionResource>()
         .expect("Render should own prepared product selections")
         .replace_contribution(
             RenderFrameProducerId::try_from_raw(9002).expect("producer id should be nonzero"),
-            [selection(&descriptor)],
+            [mixed_selection],
         )
         .expect("selection should ratify");
 
@@ -260,6 +277,14 @@ fn descriptor_store_mismatch_removes_world_owned_source_without_touching_unrelat
             .unwrap()
             .product(product_id)
             .is_some()
+    );
+    assert!(
+        app.world()
+            .resource::<RenderSdfResidencyResource>()
+            .unwrap()
+            .entry(unrelated_id)
+            .is_some(),
+        "World bridge derivation must preserve residency selected for an unrelated SDF source"
     );
 
     app.world_mut()
@@ -280,11 +305,13 @@ fn descriptor_store_mismatch_removes_world_owned_source_without_touching_unrelat
         .unwrap();
     assert!(sources.product(product_id).is_none());
     assert!(sources.product(unrelated_id).is_some());
+    let residency = app
+        .world()
+        .resource::<RenderSdfResidencyResource>()
+        .unwrap();
+    assert!(residency.entry(product_id).is_none());
     assert!(
-        app.world()
-            .resource::<RenderSdfResidencyResource>()
-            .unwrap()
-            .entry(product_id)
-            .is_none()
+        residency.entry(unrelated_id).is_some(),
+        "invalidating a World-owned SDF source must not evict unrelated selected SDF residency"
     );
 }
