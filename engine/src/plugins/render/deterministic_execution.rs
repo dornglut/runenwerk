@@ -1405,6 +1405,48 @@ fn lower_output(
     )
     .map_err(|error| gpu_authoring("compute operation", error))?;
 
+    let reconstruction_compute = if let Some(history) = temporal_history.as_ref() {
+        let requested_extent = requested
+            .spec()
+            .topology()
+            .sample_lattice_dimensions()
+            .ok_or(RenderDeterministicLoweringError::UnsupportedOutput { output_index })?;
+        let requested_count = requested_extent.0.checked_mul(requested_extent.1).ok_or(
+            RenderDeterministicLoweringError::SizeOverflow {
+                field: "temporal reconstruction sample count",
+            },
+        )?;
+        let source = resources.reconstruction_source()?;
+        let pipeline = GpuComputePipelineDescriptor::ordinary(source, "main")
+            .map_err(|error| gpu_authoring("temporal reconstruction pipeline", error))?;
+        let runtime_bindings = pipeline
+            .runtime_bindings([
+                GpuRuntimeBindingValue::whole_buffer(0, 0, &input),
+                GpuRuntimeBindingValue::whole_buffer(0, 1, &canonical_output),
+                GpuRuntimeBindingValue::whole_buffer(0, 2, &definedness),
+                GpuRuntimeBindingValue::whole_buffer(0, 3, &history.handle),
+            ])
+            .map_err(|error| gpu_authoring("temporal reconstruction runtime bindings", error))?;
+        let dispatch_size = deterministic_dispatch_size(
+            requested_count,
+            context
+                .device_facts()
+                .workload_budget()
+                .limits()
+                .max_compute_workgroups_per_dimension(),
+        )?;
+        Some(
+            GpuComputeOperation::new(
+                pipeline,
+                runtime_bindings,
+                GpuDispatchIntent::direct(dispatch_size),
+            )
+            .map_err(|error| gpu_authoring("temporal reconstruction operation", error))?,
+        )
+    } else {
+        None
+    };
+
     let (destination_copy, composable_gpu_output, composable_radiance_output) =
         match admitted_output.binding().destination() {
             RenderOutputDestination::ScalarBuffer(destination) => {
@@ -1418,10 +1460,21 @@ fn lower_output(
                 .map_err(|error| gpu_authoring("scalar destination copy", error))?
             }
             RenderOutputDestination::SampleLatticeTexture(destination) => {
-                let row_bytes = packed.texture_row_bytes.ok_or(
-                    RenderDeterministicLoweringError::OutputCorrelationChanged { output_index },
-                )?;
-                let source = GpuBufferTextureLayout::new(&canonical_output, 0, row_bytes, 0)
+                let (copy_source, row_bytes) = if let Some(history) = temporal_history.as_ref() {
+                    let row_bytes = history
+                        .row_stride_words
+                        .checked_mul(u32::try_from(WORD_BYTES).expect("word bytes fit u32"))
+                        .ok_or(RenderDeterministicLoweringError::SizeOverflow {
+                            field: "temporal history row bytes",
+                        })?;
+                    (&history.handle, row_bytes)
+                } else {
+                    let row_bytes = packed.texture_row_bytes.ok_or(
+                        RenderDeterministicLoweringError::OutputCorrelationChanged { output_index },
+                    )?;
+                    (&canonical_output, row_bytes)
+                };
+                let source = GpuBufferTextureLayout::new(copy_source, 0, row_bytes, 0)
                     .map_err(|error| gpu_authoring("lattice source layout", error))?;
                 let destination_region = GpuTextureCopyRegion::whole_base_mip(destination)
                     .map_err(|error| gpu_authoring("lattice destination region", error))?;
@@ -1513,8 +1566,11 @@ fn lower_output(
             work.operation("clear semantic definedness", definedness_clear)?;
             work.operation("clear evaluator status", status_clear)?;
             work.compute("evaluate deterministic output", compute)?;
+            if let Some(reconstruction) = reconstruction_compute {
+                work.compute("reconstruct deterministic footprint output", reconstruction)?;
+            }
             work.operation(
-                "copy canonical output to admitted destination",
+                "copy reconstructed output to admitted destination",
                 destination_copy,
             )?;
             if let Some(output) = composable_gpu_output {
