@@ -73,6 +73,7 @@ impl Renderer {
             product_surface_pass_format: None,
             glyph_atlas_gpu: std::collections::BTreeMap::new(),
             deterministic_resources: Default::default(),
+            deterministic_temporal_evidence: BTreeMap::new(),
             dynamic_texture_targets:
                 super::dynamic_targets::RendererDynamicTextureTargetCache::default(),
             flow_runtime_cache: std::collections::BTreeMap::new(),
@@ -97,6 +98,16 @@ impl Renderer {
             pending_gpu_observation_output:
                 super::render_flow::RendererGpuObservationOutput::default(),
         }
+    }
+
+    pub fn deterministic_temporal_evidence(
+        &self,
+        frame_index: u64,
+    ) -> &[crate::plugins::render::deterministic_execution::RenderDeterministicTemporalExecutionEvidence] {
+        self.deterministic_temporal_evidence
+            .get(&frame_index)
+            .map(Vec::as_slice)
+            .unwrap_or_default()
     }
 
     pub(super) fn begin_frame_gpu_observation(&mut self, context: &GpuContext) {
