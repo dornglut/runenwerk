@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-09-25
+last_reviewed: 2026-09-27
 publication: repository-current
 draft: true
 pagefind: false
@@ -53,6 +53,7 @@ Dependency direction, peer-framework ownership, and clean-cutover rules live in 
 | `product` | `domain/product` | domain | Formed-product descriptors, jobs, query snapshots, diagnostics, policies, and ratification contracts. |
 | `world_ops` | `domain/world_ops` | domain | World-operation logs, quantization policy, dirty tracking, build queues, invalidation, and replication deltas. |
 | `world_sdf` | `domain/world_sdf` | domain | SDF world-product payloads and collision/query integration contracts. |
+| `physics` | `domain/physics` | domain | Reusable SDF-first kinematic character state, motion, contact response, support, and diagnostics. |
 | `scene` | `domain/scene` | domain | Scene-domain data contracts. |
 | `graph` | `domain/graph` | domain | Runenwerk-local authored port-graph definitions, typed ports, validation, traversal, and cycle policy. |
 | `texture` | `domain/texture` | domain | Texture product, sampler, color-space, compression, preview, ratification, and lineage contracts. |

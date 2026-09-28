@@ -1,4 +1,4 @@
-use engine::plugins::{ActionState, AppActionBindingsExt};
+use engine::plugins::{ActionState, AppActionBindingsExt, WorldRuntimeSet};
 use engine::prelude::{
     App, Commands, CoreSet, FixedUpdate, Plugin, PreUpdate, Res, ResMut, SimulationTick,
     SystemConfigExt, SystemMobilityExt, WorldMut,
@@ -10,7 +10,10 @@ use crate::input::{
     ACTION_INTERACT, ACTION_JUMP, ACTION_MOVE_DOWN, ACTION_MOVE_LEFT, ACTION_MOVE_RIGHT,
     ACTION_MOVE_UP, GameActionSnapshot, GameInputAccumulator,
 };
-use crate::player::{ArenaPlayer, LOCAL_PARTICIPANT_ID, ParticipantId, PlayerControlState};
+use crate::player::{
+    ArenaMovementConfig, ArenaPlayer, LOCAL_PARTICIPANT_ID, ParticipantId, PlayerControlState,
+    PlayerPhysicalHistory,
+};
 
 #[derive(
     Debug, Clone, Default, PartialEq, Eq, engine::prelude::Component, engine::prelude::Resource,
@@ -23,6 +26,7 @@ impl Plugin for ArenaGamePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<GameInputAccumulator>();
         app.init_resource::<LastLocalCommandBatch>();
+        app.init_resource::<ArenaMovementConfig>();
         app.add_input_bindings([
             (ACTION_MOVE_LEFT, PhysicalKeyIdentity::code("KeyA")),
             (ACTION_MOVE_RIGHT, PhysicalKeyIdentity::code("KeyD")),
@@ -37,7 +41,8 @@ impl Plugin for ArenaGamePlugin {
             FixedUpdate,
             run_local_game_tick
                 .on_invoker_thread()
-                .in_set(CoreSet::Simulation),
+                .in_set(CoreSet::Simulation)
+                .after(WorldRuntimeSet::BuildIntegrate),
         );
     }
 }
@@ -48,6 +53,7 @@ fn spawn_local_player(mut commands: Commands) {
             participant: LOCAL_PARTICIPANT_ID,
         },
         PlayerControlState::default(),
+        PlayerPhysicalHistory::spawned([0.25, 0.5, 0.25]),
     ));
 }
 
@@ -80,6 +86,16 @@ pub fn player_state_for(
     participant: ParticipantId,
 ) -> Option<PlayerControlState> {
     let query = world.query::<(&ArenaPlayer, &PlayerControlState)>();
+    query
+        .iter(world)
+        .find_map(|(player, state)| (player.participant == participant).then_some(*state))
+}
+
+pub fn player_physical_history_for(
+    world: &engine::prelude::World,
+    participant: ParticipantId,
+) -> Option<PlayerPhysicalHistory> {
+    let query = world.query::<(&ArenaPlayer, &PlayerPhysicalHistory)>();
     query
         .iter(world)
         .find_map(|(player, state)| (player.participant == participant).then_some(*state))
