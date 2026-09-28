@@ -40,6 +40,7 @@ const CERTIFIED_MAX_FULL_FOV_RADIANS: f64 = std::f64::consts::FRAC_PI_2;
 pub(super) enum RenderDeterministicVerificationEligibilityError {
     SelectedObservationMissing { observation_index: usize },
     PerspectiveFieldOfViewUnsupported { observation_index: usize },
+    SamplingSupportUnsupported { observation_index: usize },
     ObservationLinearBasisUnsupported { observation_index: usize },
     SelectedObjectStateMissing { object_id: RenderObjectId },
     ObjectLocalScaleUnsupported { object_id: RenderObjectId },
@@ -57,6 +58,10 @@ impl fmt::Display for RenderDeterministicVerificationEligibilityError {
             Self::PerspectiveFieldOfViewUnsupported { observation_index } => write!(
                 formatter,
                 "observation {observation_index} lies outside the certified perspective field-of-view domain"
+            ),
+            Self::SamplingSupportUnsupported { observation_index } => write!(
+                formatter,
+                "observation {observation_index} requires ideal-ray sampling support for verified result formation"
             ),
             Self::ObservationLinearBasisUnsupported { observation_index } => write!(
                 formatter,
@@ -444,6 +449,18 @@ fn validate_observation(
     observation_index: usize,
     observation: RenderObservationSpec,
 ) -> Result<(), RenderDeterministicVerificationEligibilityError> {
+    let sampling_support = match observation {
+        RenderObservationSpec::Perspective(perspective) => perspective.sampling_support(),
+        RenderObservationSpec::Probe(probe) => probe.sampling_support(),
+    };
+    if !sampling_support.is_ideal_ray() {
+        return Err(
+            RenderDeterministicVerificationEligibilityError::SamplingSupportUnsupported {
+                observation_index,
+            },
+        );
+    }
+
     let transform = match observation {
         RenderObservationSpec::Perspective(perspective) => {
             if perspective.vertical_field_of_view_radians() > CERTIFIED_MAX_FULL_FOV_RADIANS {
@@ -563,6 +580,26 @@ mod tests {
                     observation_index: 2,
                 }
             )
+        );
+    }
+
+    #[test]
+    fn observation_gate_rejects_non_ideal_sampling_support() {
+        let perspective = RenderObservationSpec::Perspective(
+            RenderPerspectiveObservation::new(
+                RenderAffineTransform3::identity(),
+                std::f64::consts::FRAC_PI_4,
+                1.0,
+                instant(),
+                RenderSamplingSupport::perspective_lattice_cell(),
+            )
+            .expect("semantically valid footprint perspective"),
+        );
+        assert_eq!(
+            validate_observation(3, perspective),
+            Err(RenderDeterministicVerificationEligibilityError::SamplingSupportUnsupported {
+                observation_index: 3,
+            })
         );
     }
 
