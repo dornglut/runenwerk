@@ -24,6 +24,7 @@ pub mod lowering;
 mod maintained_method;
 pub mod material_compiler;
 pub mod method;
+pub(crate) mod native_host;
 pub mod output_result;
 pub mod params;
 pub mod participation;
