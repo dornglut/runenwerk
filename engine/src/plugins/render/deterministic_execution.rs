@@ -125,7 +125,7 @@ enum DeterministicTemporalStorage {
         sample_counts: GpuBufferHandle,
         row_stride_words: u32,
     },
-    Camera(DeterministicCameraTemporalStorage),
+    Camera(Box<DeterministicCameraTemporalStorage>),
 }
 
 #[derive(Debug)]
@@ -171,6 +171,12 @@ struct DeterministicOutputExecutionSelection {
 struct DeterministicOutputPackingState<'a> {
     finite_evaluation_extent: Option<(u32, u32)>,
     temporal_history: Option<&'a DeterministicTemporalHistoryUse>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct DeterministicTemporalHistorySelection {
+    current_observation: RenderPerspectiveObservation,
+    camera_capable: bool,
 }
 
 /// Renderer-owned logical buffer identities reused by ordinary composed frames.
@@ -320,9 +326,12 @@ impl DeterministicResourceCache {
         signature: DeterministicTemporalSignature,
         requested_extent: (u32, u32),
         bytes_per_row_alignment: u64,
-        current_observation: RenderPerspectiveObservation,
-        camera_capable: bool,
+        selection: DeterministicTemporalHistorySelection,
     ) -> Result<DeterministicTemporalHistoryUse, RenderDeterministicLoweringError> {
+        let DeterministicTemporalHistorySelection {
+            current_observation,
+            camera_capable,
+        } = selection;
         let logical_row_bytes = u64::from(requested_extent.0)
             .checked_mul(WORD_BYTES)
             .ok_or(RenderDeterministicLoweringError::SizeOverflow {
@@ -403,13 +412,15 @@ impl DeterministicResourceCache {
                     .identities
                     .allocate_buffer_handle(descriptor(1)?)
                     .map_err(|error| gpu_authoring("camera temporal-history allocation", error))?;
-                DeterministicTemporalStorage::Camera(DeterministicCameraTemporalStorage {
-                    slots: [first, second],
-                    completed_slot: 0,
-                    completed_observation: None,
-                    pending_slot: None,
-                    pending_observation: None,
-                })
+                DeterministicTemporalStorage::Camera(Box::new(
+                    DeterministicCameraTemporalStorage {
+                        slots: [first, second],
+                        completed_slot: 0,
+                        completed_observation: None,
+                        pending_slot: None,
+                        pending_observation: None,
+                    },
+                ))
             } else {
                 let descriptor = GpuBufferDescriptor::ordinary_owned(
                     format!("RunenRender output {output_index} temporal history"),
@@ -1587,8 +1598,10 @@ fn lower_output(
             signature,
             requested_extent,
             alignment,
-            perspective,
-            camera_capable,
+            DeterministicTemporalHistorySelection {
+                current_observation: perspective,
+                camera_capable,
+            },
         )?)
     } else {
         None
@@ -2909,8 +2922,10 @@ mod tests {
                 baseline_signature,
                 (4, 4),
                 4,
-                baseline_observation,
-                true,
+                DeterministicTemporalHistorySelection {
+                    current_observation: baseline_observation,
+                    camera_capable: true,
+                },
             )
             .expect("baseline camera history");
         let changed = cache
@@ -2920,8 +2935,10 @@ mod tests {
                 changed_signature,
                 (4, 4),
                 4,
-                changed_observation,
-                true,
+                DeterministicTemporalHistorySelection {
+                    current_observation: changed_observation,
+                    camera_capable: true,
+                },
             )
             .expect("changed camera history");
         assert!(changed.reset);
@@ -2938,8 +2955,12 @@ mod tests {
                 temporal_signature(7),
                 (4, 4),
                 4,
-                temporal_test_observation(RenderAffineTransform3::identity()),
-                false,
+                DeterministicTemporalHistorySelection {
+                    current_observation: temporal_test_observation(
+                        RenderAffineTransform3::identity(),
+                    ),
+                    camera_capable: false,
+                },
             )
             .expect("initial temporal history should allocate");
         assert!(first.reset);
@@ -2953,8 +2974,12 @@ mod tests {
                 temporal_signature(7),
                 (4, 4),
                 4,
-                temporal_test_observation(RenderAffineTransform3::identity()),
-                false,
+                DeterministicTemporalHistorySelection {
+                    current_observation: temporal_test_observation(
+                        RenderAffineTransform3::identity(),
+                    ),
+                    camera_capable: false,
+                },
             )
             .expect("uncompleted temporal history retry should remain bootstrap");
         assert!(retry_before_completion.reset);
@@ -2976,8 +3001,12 @@ mod tests {
                 temporal_signature(7),
                 (4, 4),
                 4,
-                temporal_test_observation(RenderAffineTransform3::identity()),
-                false,
+                DeterministicTemporalHistorySelection {
+                    current_observation: temporal_test_observation(
+                        RenderAffineTransform3::identity(),
+                    ),
+                    camera_capable: false,
+                },
             )
             .expect("compatible temporal history should reuse");
         assert!(!reused.reset);
@@ -2992,8 +3021,12 @@ mod tests {
                 temporal_signature(8),
                 (4, 4),
                 4,
-                temporal_test_observation(RenderAffineTransform3::identity()),
-                false,
+                DeterministicTemporalHistorySelection {
+                    current_observation: temporal_test_observation(
+                        RenderAffineTransform3::identity(),
+                    ),
+                    camera_capable: false,
+                },
             )
             .expect("changed source generation should recreate history");
         assert!(reset.reset);
@@ -3147,7 +3180,17 @@ mod tests {
             false,
         );
         let first = cache
-            .temporal_history(12, 0, first_signature, (4, 4), 4, first_observation, false)
+            .temporal_history(
+                12,
+                0,
+                first_signature,
+                (4, 4),
+                4,
+                DeterministicTemporalHistorySelection {
+                    current_observation: first_observation,
+                    camera_capable: false,
+                },
+            )
             .expect("sub-native history should allocate");
 
         let mut moved_signature = temporal_signature(7);
@@ -3156,7 +3199,17 @@ mod tests {
             false,
         );
         let moved = cache
-            .temporal_history(12, 0, moved_signature, (4, 4), 4, moved_observation, false)
+            .temporal_history(
+                12,
+                0,
+                moved_signature,
+                (4, 4),
+                4,
+                DeterministicTemporalHistorySelection {
+                    current_observation: moved_observation,
+                    camera_capable: false,
+                },
+            )
             .expect("sub-native moved history should recreate");
         assert!(moved.reset);
         assert_ne!(moved.generation, first.generation);
@@ -3182,7 +3235,17 @@ mod tests {
         signature.depth_policy_revision = Some(CAMERA_DEPTH_POLICY_REVISION);
 
         let first = cache
-            .temporal_history(11, 0, signature.clone(), (4, 4), 4, observation, true)
+            .temporal_history(
+                11,
+                0,
+                signature.clone(),
+                (4, 4),
+                4,
+                DeterministicTemporalHistorySelection {
+                    current_observation: observation,
+                    camera_capable: true,
+                },
+            )
             .expect("camera history should allocate");
         assert!(first.reset);
         let (first_previous_identity, first_current_identity, first_previous_observation) =
@@ -3206,7 +3269,17 @@ mod tests {
         assert_eq!(first_previous_observation, None);
 
         let retry = cache
-            .temporal_history(11, 0, signature.clone(), (4, 4), 4, observation, true)
+            .temporal_history(
+                11,
+                0,
+                signature.clone(),
+                (4, 4),
+                4,
+                DeterministicTemporalHistorySelection {
+                    current_observation: observation,
+                    camera_capable: true,
+                },
+            )
             .expect("pre-acceptance retry should preserve bootstrap state");
         assert!(retry.reset);
         assert_eq!(retry.generation, first.generation);
@@ -3241,7 +3314,17 @@ mod tests {
             .expect("valid moved observation"),
         );
         let reused = cache
-            .temporal_history(11, 0, signature, (4, 4), 4, moved, true)
+            .temporal_history(
+                11,
+                0,
+                signature,
+                (4, 4),
+                4,
+                DeterministicTemporalHistorySelection {
+                    current_observation: moved,
+                    camera_capable: true,
+                },
+            )
             .expect("pose-only motion should reuse camera history generation");
         assert_eq!(reused.generation, first.generation);
         assert!(!reused.reset);
