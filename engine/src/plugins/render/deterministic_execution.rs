@@ -224,31 +224,32 @@ impl DeterministicResourceCache {
             })?;
         let row_bytes = align_up(logical_row_bytes, u64::from(bytes_per_row_alignment))?;
         if row_bytes % WORD_BYTES != 0 {
-            return Err(RenderDeterministicLoweringError::InvalidBytesPerRowAlignment {
-                alignment: u64::from(bytes_per_row_alignment),
-            });
+            return Err(
+                RenderDeterministicLoweringError::InvalidBytesPerRowAlignment {
+                    alignment: u64::from(bytes_per_row_alignment),
+                },
+            );
         }
         let row_stride_words = u32::try_from(row_bytes / WORD_BYTES).map_err(|_| {
             RenderDeterministicLoweringError::SizeOverflow {
                 field: "temporal history row stride",
             }
         })?;
-        let words = row_stride_words
-            .checked_mul(requested_extent.1)
-            .ok_or(RenderDeterministicLoweringError::SizeOverflow {
+        let words = row_stride_words.checked_mul(requested_extent.1).ok_or(
+            RenderDeterministicLoweringError::SizeOverflow {
                 field: "temporal history word count",
-            })?;
-        let byte_len = u64::from(words)
-            .checked_mul(WORD_BYTES)
-            .ok_or(RenderDeterministicLoweringError::SizeOverflow {
+            },
+        )?;
+        let byte_len = u64::from(words).checked_mul(WORD_BYTES).ok_or(
+            RenderDeterministicLoweringError::SizeOverflow {
                 field: "temporal history byte length",
-            })?;
+            },
+        )?;
 
         let key = (scope, output_index);
-        let recreate = self
-            .temporal_histories
-            .get(&key)
-            .is_none_or(|history| history.signature != signature || history.row_stride_words != row_stride_words);
+        let recreate = self.temporal_histories.get(&key).is_none_or(|history| {
+            history.signature != signature || history.row_stride_words != row_stride_words
+        });
         if recreate {
             let descriptor = GpuBufferDescriptor::ordinary_owned(
                 format!("RunenRender output {output_index} temporal history"),
@@ -975,11 +976,7 @@ pub(crate) fn prepare_deterministic_render_with_cache_in_scope(
     scope: u64,
 ) -> Result<PreparedDeterministicRender, RenderDeterministicExecutionError> {
     prepare_deterministic_render_with_cache_in_scope_and_evaluation(
-        admitted,
-        context,
-        resources,
-        scope,
-        None,
+        admitted, context, resources, scope, None,
     )
 }
 
