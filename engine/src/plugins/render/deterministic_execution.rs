@@ -148,7 +148,6 @@ enum DeterministicTemporalHistoryUseStorage {
         previous_history: GpuBufferHandle,
         current_history: GpuBufferHandle,
         previous_observation: Option<RenderPerspectiveObservation>,
-        current_observation: RenderPerspectiveObservation,
         pose_changed: bool,
     },
 }
@@ -482,7 +481,6 @@ impl DeterministicResourceCache {
                     previous_history: camera.slots[camera.completed_slot].clone(),
                     current_history: camera.slots[write_slot].clone(),
                     previous_observation,
-                    current_observation,
                     pose_changed,
                 }
             }
@@ -1812,7 +1810,6 @@ fn lower_output(
                 previous_history,
                 current_history,
                 previous_observation,
-                current_observation,
                 pose_changed,
             } => {
                 let parameter_words =
@@ -2305,7 +2302,13 @@ fn pack_output(
     words[24] = temporal_history.map_or(0, |history| history.phase);
     words[25] = TEMPORAL_SEQUENCE_REVISION;
     words[26] = temporal_history.map_or(0, |history| history.age);
-    words[27] = temporal_history.map_or(row_stride_words, |history| history.row_stride_words);
+    words[27] = temporal_history.map_or(row_stride_words, |history| match &history.storage {
+        DeterministicTemporalHistoryUseStorage::Static {
+            row_stride_words,
+            ..
+        } => *row_stride_words,
+        DeterministicTemporalHistoryUseStorage::Camera { .. } => row_stride_words,
+    });
     words[28] = TEMPORAL_RECONSTRUCTION_REVISION;
     words[29] = u32::try_from(emitter_offset).map_err(|_| {
         RenderDeterministicLoweringError::SizeOverflow {
