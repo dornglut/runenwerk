@@ -24,6 +24,35 @@ pub struct PreparedRenderFrameResource {
     next_prepare_epoch: u64,
 }
 
+/// Product-requested finite-evaluation extent for the maintained deterministic method.
+///
+/// This is execution policy, not `RenderRequest` semantics. The renderer owns sample phase,
+/// sequence, reconstruction, and retained-state compatibility. Width and height are only the
+/// bounded finite work lattice selected for one ordinary execution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RenderDeterministicFiniteEvaluationExtent {
+    width: u32,
+    height: u32,
+}
+
+impl RenderDeterministicFiniteEvaluationExtent {
+    pub fn new(width: u32, height: u32) -> Option<Self> {
+        (width > 0 && height > 0).then_some(Self { width, height })
+    }
+
+    pub const fn width(self) -> u32 {
+        self.width
+    }
+
+    pub const fn height(self) -> u32 {
+        self.height
+    }
+
+    pub const fn dimensions(self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+}
+
 /// Product-owned semantic work published for exactly one native render frame.
 ///
 /// This is intentionally free of GPU objects and maintained-carrier details. The renderer admits
@@ -39,6 +68,7 @@ pub struct RenderDeterministicFrameContribution {
     pub availability: Vec<RenderRepresentationAvailabilityFact>,
     pub output_index: usize,
     pub target_key: RenderDynamicTextureTargetKey,
+    pub finite_evaluation_extent: Option<RenderDeterministicFiniteEvaluationExtent>,
 }
 
 /// Frame-scoped semantic contributions keyed by their owning producer.
@@ -125,6 +155,7 @@ mod deterministic_contribution_tests {
             availability: Vec::new(),
             output_index: 0,
             target_key: RenderDynamicTextureTargetKey::new("test", "radiance"),
+            finite_evaluation_extent: None,
         }
     }
 
