@@ -42,7 +42,7 @@ use std::error::Error;
 use std::fmt;
 
 const WORD_BYTES: u64 = deterministic_carrier::WORD_BYTES as u64;
-const HEADER_WORDS: usize = 24;
+const HEADER_WORDS: usize = 30;
 const GEOMETRY_WORDS: usize = 32;
 const EMITTER_WORDS: usize = 4;
 const WORKGROUP_SIZE: u32 = 64;
@@ -51,6 +51,7 @@ const OUTPUT_FORWARD_DEPTH: u32 = 2;
 const OUTPUT_OBJECT_IDENTITY: u32 = 3;
 const OBSERVATION_PERSPECTIVE: u32 = 1;
 const OBSERVATION_PROBE: u32 = 2;
+const OBSERVATION_PERSPECTIVE_FOOTPRINT: u32 = 3;
 const SHAPE_SPHERE: u32 = 1;
 const SHAPE_PLANE: u32 = 2;
 const MAINTAINED_WGSL: &str = include_str!("deterministic_execution.wgsl");
@@ -1398,7 +1399,11 @@ fn pack_output(
 
     let (observation_kind, transform, tan_half_fov, aspect_ratio) = match observation {
         RenderObservationSpec::Perspective(observation) => (
-            OBSERVATION_PERSPECTIVE,
+            if observation.sampling_support().is_perspective_lattice_cell() {
+                OBSERVATION_PERSPECTIVE_FOOTPRINT
+            } else {
+                OBSERVATION_PERSPECTIVE
+            },
             observation.observation_to_scene(),
             Some((observation.vertical_field_of_view_radians() * 0.5).tan()),
             Some(observation.aspect_ratio()),
@@ -1482,7 +1487,14 @@ fn pack_output(
     words[6] = output_kind;
     words[7] = observation_kind;
     pack_observation(&mut words, transform, tan_half_fov, aspect_ratio)?;
-    words[23] = u32::try_from(emitter_offset).map_err(|_| {
+    words[22] = width;
+    words[23] = height;
+    words[24] = 0;
+    words[25] = 0;
+    words[26] = 0;
+    words[27] = row_stride_words;
+    words[28] = 1;
+    words[29] = u32::try_from(emitter_offset).map_err(|_| {
         RenderDeterministicLoweringError::SizeOverflow {
             field: "emitter input offset",
         }
