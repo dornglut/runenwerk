@@ -813,6 +813,10 @@ pub struct Renderer {
     glyph_atlas_gpu: BTreeMap<u64, UiGlyphAtlasGpu>,
     deterministic_resources:
         crate::plugins::render::deterministic_execution::DeterministicResourceCache,
+    deterministic_temporal_evidence: BTreeMap<
+        u64,
+        Vec<crate::plugins::render::deterministic_execution::RenderDeterministicTemporalExecutionEvidence>,
+    >,
     dynamic_texture_targets: dynamic_targets::RendererDynamicTextureTargetCache,
     flow_runtime_cache: BTreeMap<RenderFlowId, render_flow::FlowRuntimeResources>,
     flow_pipeline_cache: pipeline_cache::FlowPipelineArtifactCache,
@@ -861,6 +865,13 @@ impl Gfx {
     /// These are observation facts, not persistent hardware identity.
     pub fn adapter_facts(&self) -> &runen_gpu::GpuAdapterFacts {
         self.ctx.context().adapter_facts()
+    }
+
+    pub fn deterministic_temporal_evidence(
+        &self,
+        frame_index: u64,
+    ) -> &[crate::plugins::render::deterministic_execution::RenderDeterministicTemporalExecutionEvidence]{
+        self.renderer.deterministic_temporal_evidence(frame_index)
     }
 
     pub fn attach_surface(

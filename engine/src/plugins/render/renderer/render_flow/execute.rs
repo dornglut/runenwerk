@@ -769,6 +769,9 @@ impl Renderer {
         prepared_frame: &PreparedRenderFrame,
         contributions: &[crate::plugins::render::RenderDeterministicFrameContribution],
     ) -> Result<(Vec<GpuWorkFragment>, Vec<GpuWorkImport>)> {
+        const TEMPORAL_EVIDENCE_FRAME_CAPACITY: usize = 16;
+        self.deterministic_temporal_evidence
+            .remove(&prepared_frame.context.frame_index);
         let mut fragments = Vec::new();
         let mut imports = Vec::new();
         for contribution in contributions.iter().filter(|contribution| {
@@ -795,12 +798,16 @@ impl Renderer {
                 .map_err(|error| {
                     anyhow::anyhow!("deterministic render admission failed: {error}")
                 })?;
+            let finite_evaluation = contribution
+                .finite_evaluation_extent
+                .map(|extent| (contribution.output_index, extent.dimensions()));
             let prepared =
-                crate::plugins::render::deterministic_execution::prepare_deterministic_render_with_cache_in_scope(
+                crate::plugins::render::deterministic_execution::prepare_deterministic_render_with_cache_in_scope_and_evaluation(
                     admitted,
                     context,
                     &mut self.deterministic_resources,
                     contribution.producer_id.raw(),
+                    finite_evaluation,
                 )
                 .map_err(|error| {
                     anyhow::anyhow!("deterministic render preparation failed: {error}")
@@ -813,6 +820,12 @@ impl Renderer {
                         contribution.output_index
                     )
                 })?;
+            if let Some(evidence) = output.temporal_execution_evidence() {
+                self.deterministic_temporal_evidence
+                    .entry(prepared_frame.context.frame_index)
+                    .or_default()
+                    .push(evidence.clone());
+            }
             fragments.extend(prepared.work_set().fragments().iter().cloned());
             imports.push(output.import(GpuResourceProvenance::new(
                 GpuResourceLabel::new(format!(
@@ -822,6 +835,12 @@ impl Renderer {
                 None,
                 None,
             )));
+        }
+        while self.deterministic_temporal_evidence.len() > TEMPORAL_EVIDENCE_FRAME_CAPACITY {
+            let Some(oldest) = self.deterministic_temporal_evidence.keys().next().copied() else {
+                break;
+            };
+            self.deterministic_temporal_evidence.remove(&oldest);
         }
         Ok((fragments, imports))
     }

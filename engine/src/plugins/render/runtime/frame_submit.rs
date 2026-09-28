@@ -129,6 +129,7 @@ mod contribution_deferral_tests {
             availability: Vec::new(),
             output_index: 0,
             target_key: RenderDynamicTextureTargetKey::new("test", "radiance"),
+            finite_evaluation_extent: None,
         }
     }
 

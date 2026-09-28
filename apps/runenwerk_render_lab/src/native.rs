@@ -12,9 +12,9 @@ use temporal_quality::{
     RL2_QUALITY_COLOR_ALIAS, RL2_QUALITY_FLOW_ID, RenderLabFixedQualityPlans,
     RenderLabNativeQualityPublication, RenderLabTemporalQualityExecutionState,
     inspect_render_lab_temporal_quality_execution_system, render_lab_fixed_quality_flow,
-    render_lab_quality_present_flow, stage_render_lab_fixed_quality_publication,
-    stage_render_lab_native_quality_publication, temporal_quality_capture_evidence,
-    temporal_quality_capture_selector, write_temporal_quality_artifact,
+    render_lab_quality_present_flow, stage_render_lab_native_quality_publication,
+    temporal_quality_capture_evidence, temporal_quality_capture_selector,
+    write_temporal_quality_artifact,
 };
 
 #[derive(Debug, Clone, Copy, runen_ecs::Resource)]
@@ -388,7 +388,7 @@ fn complete_render_lab_measurement_if_requested(
     history: &RenderFrameHistoryState,
     quality_execution: &RenderLabTemporalQualityExecutionState,
     debug_report: &RenderDebugFrameReportState,
-    adapter_facts: Option<&runen_gpu::GpuAdapterFacts>,
+    gfx: Option<&engine::plugins::render::Gfx>,
 ) -> Result<()> {
     let Some(primary_window_id) = windows.primary_window_id() else {
         return Ok(());
@@ -422,16 +422,10 @@ fn complete_render_lab_measurement_if_requested(
             write_measurement_artifact(output_path, history, measurement)?;
         }
         if let Some(capture) = quality_capture {
-            let adapter_facts = adapter_facts.ok_or_else(|| {
-                anyhow::anyhow!("temporal quality runtime adapter facts are unavailable")
+            let gfx = gfx.ok_or_else(|| {
+                anyhow::anyhow!("temporal quality renderer evidence is unavailable")
             })?;
-            write_temporal_quality_artifact(
-                measurement,
-                history,
-                quality_execution,
-                capture,
-                adapter_facts,
-            )?;
+            write_temporal_quality_artifact(measurement, history, quality_execution, capture, gfx)?;
         }
         measurement.completed = true;
     }
@@ -459,8 +453,66 @@ fn approve_render_lab_close_system(
         &history,
         &quality_execution,
         &debug_report,
-        Some(gfx.adapter_facts()),
+        Some(&gfx),
     )
+}
+
+fn build_render_lab_temporal_radiance_publication(
+    camera: &RenderLabCamera,
+    producer_id: engine::plugins::render::RenderFrameProducerId,
+    output_extent: (u32, u32),
+    evaluation_extent: (u32, u32),
+    source_generation: u64,
+) -> Result<(
+    RenderDynamicTextureTargetKey,
+    RenderDynamicTextureTargetDescriptor,
+    RenderDeterministicFrameContribution,
+)> {
+    let target_key = RenderDynamicTextureTargetKey::new(RL2_TARGET_NAMESPACE, RL2_TARGET_ID);
+    let target = RenderDynamicTextureTargetDescriptor::new(
+        target_key.clone(),
+        output_extent.0,
+        output_extent.1,
+        RenderTextureTargetFormat::R32Float,
+        RenderTextureTargetUsage {
+            color_attachment: false,
+            depth_attachment: false,
+            sampled: true,
+            storage: false,
+            copy_src: false,
+            copy_dst: true,
+        },
+        RenderTextureSampleMode::NonFilterableFloat,
+        RenderDynamicTextureRetention::RetainWhileRequested,
+    );
+    let mut fixture = founding_footprint_fixture_with_observation_and_extent(
+        camera.observation_to_scene(),
+        output_extent.0,
+        output_extent.1,
+    )?;
+    for binding in &mut fixture.semantic_inputs {
+        *binding = binding
+            .clone()
+            .with_generation(RenderSurfaceSemanticInputGeneration::new(source_generation));
+    }
+    let finite_evaluation_extent =
+        engine::plugins::render::RenderDeterministicFiniteEvaluationExtent::new(
+            evaluation_extent.0,
+            evaluation_extent.1,
+        )
+        .ok_or_else(|| anyhow::anyhow!("temporal finite-evaluation extent must be non-zero"))?;
+    let contribution = RenderDeterministicFrameContribution {
+        producer_id,
+        render_surface_id: RenderSurfaceId::primary(),
+        scene: fixture.scene,
+        request: fixture.request,
+        semantic_inputs: fixture.semantic_inputs,
+        availability: fixture.availability,
+        output_index: 0,
+        target_key: target_key.clone(),
+        finite_evaluation_extent: Some(finite_evaluation_extent),
+    };
+    Ok((target_key, target, contribution))
 }
 
 fn build_render_lab_radiance_publication(
@@ -503,6 +555,7 @@ fn build_render_lab_radiance_publication(
         availability: fixture.availability,
         output_index: 0,
         target_key: target_key.clone(),
+        finite_evaluation_extent: None,
     };
     Ok((target_key, target, contribution))
 }
@@ -530,6 +583,9 @@ fn publish_render_lab_frame_system(
         .expect("Render Lab producer id is non-zero");
 
     let quality_mode = measurement.quality_capture_output_dir.is_some();
+    // T1 deliberately changes only source-generation evidence after one compatible reuse.
+    // Frames 1-2 use generation 1; frame 3+ uses generation 2 with identical semantic payload.
+    let temporal_source_generation = if history.len() >= 2 { 2 } else { 1 };
     let capture_armed = temporal_quality_capture_should_arm(&measurement, &history);
     if quality_mode {
         quality_execution.pending_admission = None;
@@ -546,87 +602,54 @@ fn publish_render_lab_frame_system(
             .scene
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("temporal quality scene plan is unavailable"))?;
-        let resolve_plan = fixed_quality_plans
-            .resolve
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("temporal quality resolve plan is unavailable"))?;
-        let admission = engine::plugins::render::RenderFixedResolutionExecutionRequest::new(
+        let (target_key, target, contribution) = build_render_lab_temporal_radiance_publication(
+            &camera,
             producer_id,
-            RenderSurfaceId::primary(),
-            flow_id.0,
-            engine::plugins::render::RenderTargetAliasKey::new(RL2_QUALITY_COLOR_ALIAS)?,
+            output_size,
             requested_internal_size,
-        )
-        .admit_against_compiled_flows(output_size, scene_plan, resolve_plan);
+            temporal_source_generation,
+        )?;
         debug_config.capture_selectors = if capture_armed {
             vec![temporal_quality_capture_selector(
-                Some(&admission),
-                scene_plan,
-                resolve_plan,
+                None, scene_plan, scene_plan,
             )?]
         } else {
             Vec::new()
         };
-
-        match &admission {
-            engine::plugins::render::RenderFixedResolutionExecutionAdmission::Fixed(prepared) => {
-                let mut fixed = prepared.clone();
-                let (target_key, target, contribution) = build_render_lab_radiance_publication(
-                    &camera,
-                    producer_id,
-                    requested_internal_size,
-                )?;
-                fixed.scene_invocation = fixed
-                    .scene_invocation
-                    .clone()
-                    .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, target_key)?;
-                stage_render_lab_fixed_quality_publication(
-                    &mut targets,
-                    &mut frame_requests,
-                    &mut contributions,
-                    producer_id,
-                    target,
-                    fixed,
-                    contribution,
-                )?;
-            }
-            engine::plugins::render::RenderFixedResolutionExecutionAdmission::NativeFallback(
-                fallback,
-            ) => {
-                let native_scene_invocation = fallback
-                    .native_scene_invocation
-                    .clone()
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "temporal quality fixed admission rejected without a valid native scene fallback: {}",
-                            fallback.reason
-                        )
-                    })?;
-                let (target_key, target, contribution) =
-                    build_render_lab_radiance_publication(&camera, producer_id, output_size)?;
-                let native_scene_invocation = native_scene_invocation
-                    .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, target_key)?;
-                stage_render_lab_native_quality_publication(
-                    &mut targets,
-                    &mut frame_requests,
-                    &mut contributions,
-                    RenderLabNativeQualityPublication {
-                        producer_id,
-                        render_surface_id: fallback.render_surface_id,
-                        radiance_target: target,
-                        native_scene_invocation,
-                        contribution,
-                    },
-                )?;
-            }
-        }
-
-        quality_execution.pending_admission = Some(admission);
+        let invocation = PreparedFlowInvocationRequest::new(
+            format!("{RL2_QUALITY_FLOW_ID}.temporal"),
+            flow_id.0,
+            "main",
+        )
+        .bind_dynamic_texture_alias(RL2_RADIANCE_ALIAS, target_key)?
+        .bind_surface_color_alias(RL2_QUALITY_COLOR_ALIAS)?;
+        stage_render_lab_native_quality_publication(
+            &mut targets,
+            &mut frame_requests,
+            &mut contributions,
+            RenderLabNativeQualityPublication {
+                producer_id,
+                render_surface_id: RenderSurfaceId::primary(),
+                radiance_target: target,
+                native_scene_invocation: invocation,
+                contribution,
+            },
+        )?;
+        quality_execution.pending_admission = None;
         return Ok(());
     }
 
-    let (target_key, target, contribution) =
-        build_render_lab_radiance_publication(&camera, producer_id, requested_internal_size)?;
+    let (target_key, target, contribution) = if quality_mode {
+        build_render_lab_temporal_radiance_publication(
+            &camera,
+            producer_id,
+            output_size,
+            requested_internal_size,
+            temporal_source_generation,
+        )?
+    } else {
+        build_render_lab_radiance_publication(&camera, producer_id, requested_internal_size)?
+    };
     if quality_mode {
         let scene_plan = fixed_quality_plans
             .scene
@@ -1157,6 +1180,7 @@ mod tests {
             availability: fixture.availability,
             output_index: 0,
             target_key: old_key.clone(),
+            finite_evaluation_extent: None,
         };
         let new_fixture =
             founding_fixture_with_observation_and_extent(RenderAffineTransform3::identity(), 8, 8)
@@ -1170,6 +1194,7 @@ mod tests {
             availability: new_fixture.availability,
             output_index: 0,
             target_key: new_key,
+            finite_evaluation_extent: None,
         };
 
         let mut targets = RenderDynamicTextureTargetRequestRegistryResource::default();
@@ -1236,6 +1261,7 @@ mod tests {
             availability: fixture.availability,
             output_index: 0,
             target_key,
+            finite_evaluation_extent: None,
         };
         let mut targets = RenderDynamicTextureTargetRequestRegistryResource::default();
         let mut frame_requests = PreparedRenderFrameRequestResource::default();

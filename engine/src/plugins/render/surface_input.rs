@@ -127,12 +127,31 @@ impl RenderSurfaceSemanticInput {
     }
 }
 
+/// Opaque source-owner generation correlated with one request-scoped semantic input binding.
+///
+/// The number is meaningful only within the source contract that publishes the binding for one
+/// representation identity. RunenRender compares it for dependency validity but does not interpret
+/// ordering, synthesize it from scene/frame/GPU state, or treat it as renderer-owned revision truth.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct RenderSurfaceSemanticInputGeneration(u64);
+
+impl RenderSurfaceSemanticInputGeneration {
+    pub const fn new(raw: u64) -> Self {
+        Self(raw)
+    }
+}
+
 /// Invocation-local correlation between one exact representation identity and one immutable current
 /// semantic surface value.
+///
+/// Existing consumers may omit source-generation evidence when they do not retain derived state
+/// across invocations. Consumers whose correctness depends on retained semantic-input validity must
+/// require an explicit generation and fail closed when it is absent.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RenderSurfaceSemanticInputBinding {
     representation_id: RenderRepresentationId,
     input: RenderSurfaceSemanticInput,
+    generation: Option<RenderSurfaceSemanticInputGeneration>,
 }
 
 impl RenderSurfaceSemanticInputBinding {
@@ -143,7 +162,16 @@ impl RenderSurfaceSemanticInputBinding {
         Self {
             representation_id,
             input,
+            generation: None,
         }
+    }
+
+    pub const fn with_generation(
+        mut self,
+        generation: RenderSurfaceSemanticInputGeneration,
+    ) -> Self {
+        self.generation = Some(generation);
+        self
     }
 
     pub const fn representation_id(&self) -> RenderRepresentationId {
@@ -152,6 +180,10 @@ impl RenderSurfaceSemanticInputBinding {
 
     pub const fn input(&self) -> &RenderSurfaceSemanticInput {
         &self.input
+    }
+
+    pub const fn generation(&self) -> Option<RenderSurfaceSemanticInputGeneration> {
+        self.generation
     }
 
     pub fn into_input(self) -> RenderSurfaceSemanticInput {

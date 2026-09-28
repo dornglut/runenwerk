@@ -78,6 +78,20 @@ struct RenderLabTemporalQualityGpuEvidence {
     evidence_profile_fingerprint: String,
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+struct RenderLabTemporalReconstructionEvidence {
+    frame_index: u64,
+    requested_size_px: [u32; 2],
+    evaluation_size_px: [u32; 2],
+    semantic_input_generation_classes: Vec<u64>,
+    sequence_revision: u32,
+    reconstruction_revision: u32,
+    phase: u32,
+    history_generation: u64,
+    history_age: u32,
+    history_reset: bool,
+}
+
 #[derive(Debug, serde::Serialize)]
 struct RenderLabTemporalQualityArtifact {
     schema_version: u32,
@@ -90,13 +104,14 @@ struct RenderLabTemporalQualityArtifact {
     total_submitted_frames: usize,
     gpu: RenderLabTemporalQualityGpuEvidence,
     execution: RenderLabTemporalQualityExecutionEvidence,
+    temporal_reconstruction: Vec<RenderLabTemporalReconstructionEvidence>,
     capture_route: &'static str,
     capture: RenderLabTemporalQualityCaptureEvidence,
 }
 
-const RL2_QUALITY_SCHEMA_VERSION: u32 = 2;
+const RL2_QUALITY_SCHEMA_VERSION: u32 = 5;
 const RL2_QUALITY_SCENARIO_ID: &str = "runenwerk.render_lab.rl2.temporal_quality";
-const RL2_QUALITY_SCENARIO_REVISION: u32 = 2;
+const RL2_QUALITY_SCENARIO_REVISION: u32 = 5;
 pub(super) const RL2_QUALITY_FLOW_ID: &str = "runenwerk.render_lab.rl2.fixed_quality";
 pub(super) const RL2_QUALITY_PASS_ID: &str = "runenwerk.render_lab.rl2.fixed_quality.compose";
 pub(super) const RL2_QUALITY_COLOR_ALIAS: &str = "runenwerk.render_lab.rl2.fixed_quality.color";
@@ -334,7 +349,7 @@ pub(super) fn write_temporal_quality_artifact(
     history: &RenderFrameHistoryState,
     quality_execution: &RenderLabTemporalQualityExecutionState,
     capture: RenderLabTemporalQualityCaptureEvidence,
-    adapter_facts: &runen_gpu::GpuAdapterFacts,
+    gfx: &engine::plugins::render::Gfx,
 ) -> Result<()> {
     let capture_root = measurement
         .quality_capture_output_dir
@@ -383,6 +398,62 @@ pub(super) fn write_temporal_quality_artifact(
             expected_capture_ordinal
         );
     }
+    // Source-owner generation tokens are intentionally opaque. For persisted Render Lab evidence,
+    // assign only per-representation, run-local equivalence classes in first-seen order. This proves
+    // "same generation" versus "changed generation" without exposing source numbering or comparing
+    // numeric tokens across distinct representation/source contracts.
+    let mut generation_classes = Vec::new();
+    let mut temporal_reconstruction = Vec::new();
+    for observation in history.observations().take(capture_submission_ordinal) {
+        for evidence in gfx.deterministic_temporal_evidence(observation.key.frame_index) {
+            let semantic_input_generation_classes = evidence
+                .semantic_input_generations
+                .iter()
+                .map(|(representation_id, generation)| {
+                    let representation_index = if let Some(index) = generation_classes
+                        .iter()
+                        .position(|(known_id, _)| known_id == representation_id)
+                    {
+                        index
+                    } else {
+                        generation_classes.push((*representation_id, Vec::new()));
+                        generation_classes.len() - 1
+                    };
+                    let seen = &mut generation_classes[representation_index].1;
+                    let class_index =
+                        if let Some(index) = seen.iter().position(|known| known == generation) {
+                            index
+                        } else {
+                            seen.push(*generation);
+                            seen.len() - 1
+                        };
+                    u64::try_from(class_index + 1)
+                        .expect("bounded temporal quality generation class fits u64")
+                })
+                .collect();
+
+            temporal_reconstruction.push(RenderLabTemporalReconstructionEvidence {
+                frame_index: observation.key.frame_index,
+                requested_size_px: [evidence.requested_extent.0, evidence.requested_extent.1],
+                evaluation_size_px: [evidence.evaluation_extent.0, evidence.evaluation_extent.1],
+                semantic_input_generation_classes,
+                sequence_revision: evidence.sequence_revision,
+                reconstruction_revision: evidence.reconstruction_revision,
+                phase: evidence.phase,
+                history_generation: evidence.history_generation,
+                history_age: evidence.history_age,
+                history_reset: evidence.history_reset,
+            });
+        }
+    }
+    if temporal_reconstruction.len() != capture_submission_ordinal {
+        bail!(
+            "temporal quality expected one renderer reconstruction record for each of {} submitted frames, found {}",
+            capture_submission_ordinal,
+            temporal_reconstruction.len()
+        );
+    }
+
     let artifact = RenderLabTemporalQualityArtifact {
         schema_version: RL2_QUALITY_SCHEMA_VERSION,
         scenario_id: RL2_QUALITY_SCENARIO_ID,
@@ -392,9 +463,10 @@ pub(super) fn write_temporal_quality_artifact(
         requested_output_size_px: [requested_output.0, requested_output.1],
         capture_submission_ordinal,
         total_submitted_frames: history.len(),
-        gpu: temporal_quality_gpu_evidence(adapter_facts),
+        gpu: temporal_quality_gpu_evidence(gfx.adapter_facts()),
+        temporal_reconstruction,
         capture_route: match execution.policy {
-            "native" => "native_scene",
+            "native" | "static_footprint" => "native_scene",
             "fixed" => "fixed_resolve",
             _ => "unexpected",
         },
@@ -457,15 +529,6 @@ pub(super) fn inspect_render_lab_temporal_quality_execution_system(
             resolve_invocation_id: fixed.resolve_invocation_id.map(|id| id.to_string()),
         }
     } else {
-        if internal_size != output_size {
-            bail!(
-                "temporal quality requested {}x{} -> {}x{} without a retained fixed admission",
-                internal_size.0,
-                internal_size.1,
-                output_size.0,
-                output_size.1
-            );
-        }
         if frame.surface.target_size_px != output_size {
             bail!(
                 "temporal quality native frame output {}x{} does not match requested {}x{}",
@@ -497,7 +560,7 @@ pub(super) fn inspect_render_lab_temporal_quality_execution_system(
         RenderLabTemporalQualityExecutionEvidence {
             frame_index: frame.context.frame_index,
             prepare_epoch: frame.context.prepare_epoch,
-            policy: "native",
+            policy: "static_footprint",
             internal_size_px: [internal_size.0, internal_size.1],
             output_size_px: [output_size.0, output_size.1],
             native_fallback_active: false,
@@ -513,6 +576,7 @@ pub(super) fn inspect_render_lab_temporal_quality_execution_system(
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn stage_render_lab_fixed_quality_publication(
     targets: &mut RenderDynamicTextureTargetRequestRegistryResource,
     frame_requests: &mut PreparedRenderFrameRequestResource,
@@ -982,6 +1046,7 @@ mod tests {
             availability: fixture.availability,
             output_index: 0,
             target_key: radiance_key,
+            finite_evaluation_extent: None,
         };
         let fixed_target_key = fixed.target_key.clone();
         let fixed_view_id = fixed.internal_view.view_id.clone();
