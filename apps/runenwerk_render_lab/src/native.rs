@@ -13,8 +13,8 @@ use temporal_quality::{
     RenderLabNativeQualityPublication, RenderLabTemporalQualityExecutionState,
     inspect_render_lab_temporal_quality_execution_system, render_lab_fixed_quality_flow,
     render_lab_quality_present_flow, stage_render_lab_native_quality_publication,
-    temporal_quality_capture_evidence,
-    temporal_quality_capture_selector, write_temporal_quality_artifact,
+    temporal_quality_capture_evidence, temporal_quality_capture_selector,
+    write_temporal_quality_artifact,
 };
 
 #[derive(Debug, Clone, Copy, runen_ecs::Resource)]
