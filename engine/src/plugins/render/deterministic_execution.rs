@@ -1534,11 +1534,6 @@ fn lower_output(
     .map_err(|error| gpu_authoring("compute operation", error))?;
 
     let reconstruction_compute = if let Some(history) = temporal_history.as_ref() {
-        let requested_extent = requested
-            .spec()
-            .topology()
-            .sample_lattice_dimensions()
-            .ok_or(RenderDeterministicLoweringError::UnsupportedOutput { output_index })?;
         let source = resources.reconstruction_source()?;
         let pipeline = GpuComputePipelineDescriptor::ordinary(source, "main")
             .map_err(|error| gpu_authoring("temporal reconstruction pipeline", error))?;
