@@ -3260,6 +3260,98 @@ mod tests {
         );
     }
 
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum CameraReferenceDecision {
+        Accept,
+        CurrentBackground,
+        BehindPreviousCamera,
+        OutOfBounds,
+        MissingPreviousHistory,
+        DepthInconsistent,
+    }
+
+    fn camera_reference_decision(
+        current_hit: bool,
+        previous_hit: bool,
+        previous_local: [f32; 3],
+        tan_half_fov: f32,
+        aspect: f32,
+        projected_depth: f32,
+        previous_depth: f32,
+    ) -> CameraReferenceDecision {
+        if !current_hit {
+            return CameraReferenceDecision::CurrentBackground;
+        }
+        if previous_local.iter().any(|value| !value.is_finite()) || previous_local[2] >= 0.0 {
+            return CameraReferenceDecision::BehindPreviousCamera;
+        }
+        let projected_x =
+            previous_local[0] / (-previous_local[2] * tan_half_fov * aspect);
+        let projected_y = previous_local[1] / (-previous_local[2] * tan_half_fov);
+        let u = projected_x * 0.5 + 0.5;
+        let v = 0.5 - projected_y * 0.5;
+        if !u.is_finite() || !v.is_finite() || !(0.0..1.0).contains(&u) || !(0.0..1.0).contains(&v)
+        {
+            return CameraReferenceDecision::OutOfBounds;
+        }
+        if !previous_hit {
+            return CameraReferenceDecision::MissingPreviousHistory;
+        }
+        let tolerance =
+            0.001_f32 + 0.001_f32 * projected_depth.abs().max(previous_depth.abs());
+        if !projected_depth.is_finite()
+            || !previous_depth.is_finite()
+            || (projected_depth - previous_depth).abs() > tolerance
+        {
+            return CameraReferenceDecision::DepthInconsistent;
+        }
+        CameraReferenceDecision::Accept
+    }
+
+    #[test]
+    fn camera_reprojection_reference_rejects_background_bounds_missing_and_depth_mismatch() {
+        assert_eq!(
+            camera_reference_decision(false, true, [0.0, 0.0, -2.0], 1.0, 1.0, 2.0, 2.0),
+            CameraReferenceDecision::CurrentBackground
+        );
+        assert_eq!(
+            camera_reference_decision(true, true, [0.0, 0.0, 0.1], 1.0, 1.0, 2.0, 2.0),
+            CameraReferenceDecision::BehindPreviousCamera
+        );
+        assert_eq!(
+            camera_reference_decision(true, true, [3.0, 0.0, -1.0], 1.0, 1.0, 2.0, 2.0),
+            CameraReferenceDecision::OutOfBounds
+        );
+        assert_eq!(
+            camera_reference_decision(true, false, [0.0, 0.0, -2.0], 1.0, 1.0, 2.0, 2.0),
+            CameraReferenceDecision::MissingPreviousHistory
+        );
+        assert_eq!(
+            camera_reference_decision(true, true, [0.0, 0.0, -2.0], 1.0, 1.0, 2.02, 2.0),
+            CameraReferenceDecision::DepthInconsistent
+        );
+        assert_eq!(
+            camera_reference_decision(true, true, [0.0, 0.0, -2.0], 1.0, 1.0, 2.001, 2.0),
+            CameraReferenceDecision::Accept
+        );
+    }
+
+    #[test]
+    fn camera_reprojection_shader_matches_the_reference_rejection_contract() {
+        for source_law in [
+            "if current_hit_words[output_index] == 0u",
+            "local.z >= 0.0",
+            "u < 0.0 || u >= 1.0 || v < 0.0 || v >= 1.0",
+            "previous_history_words[previous_base + 3u] == 0u",
+            "abs(projected_depth - previous_depth) > tolerance",
+        ] {
+            assert!(
+                CAMERA_REPROJECTION_WGSL.contains(source_law),
+                "camera reprojection shader is missing reference law: {source_law}"
+            );
+        }
+    }
+
     #[test]
     fn camera_reprojection_shader_carries_versioned_depth_policy() {
         assert!(CAMERA_REPROJECTION_WGSL.contains("CAMERA_DEPTH_ABSOLUTE_EPSILON: f32 = 0.001"));
