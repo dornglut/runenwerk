@@ -601,10 +601,7 @@ impl RenderResourceDeclaration {
 
     /// Declares invocation-scoped retained history whose first realized generation has defined
     /// zero contents. Ordinary history remains uninitialized by default.
-    pub fn declare_zeroed_history_texture(
-        id: GpuWorkResourceId,
-        label: impl Into<String>,
-    ) -> Self {
+    pub fn declare_zeroed_history_texture(id: GpuWorkResourceId, label: impl Into<String>) -> Self {
         Self::History(texture_intent_with_initialization(
             id,
             label,
