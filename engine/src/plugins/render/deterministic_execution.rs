@@ -26,7 +26,10 @@ use super::request::{
     RenderDistanceConvention, RenderObservationSpec, RenderOutputSpec, RenderOutputValue,
 };
 use super::scene::{RenderObjectId, RenderSceneRevision};
-use super::surface_input::{RenderSurfaceSemanticInputBinding, RenderSurfaceSemanticInputView};
+use super::surface_input::{
+    RenderSurfaceSemanticInputBinding, RenderSurfaceSemanticInputGeneration,
+    RenderSurfaceSemanticInputView,
+};
 use runen_gpu::{
     GpuAdmittedProgramSource, GpuBufferDescriptor, GpuBufferHandle, GpuBufferInitialization,
     GpuBufferRegion, GpuBufferTextureLayout, GpuBufferUsage, GpuClearOperation,
@@ -381,10 +384,12 @@ impl PreparedDeterministicRender {
 }
 
 /// Bounded renderer-owned evidence for one static footprint-reconstruction preparation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderDeterministicTemporalExecutionEvidence {
     pub requested_extent: (u32, u32),
     pub evaluation_extent: (u32, u32),
+    pub semantic_input_generations:
+        Vec<(RenderRepresentationId, RenderSurfaceSemanticInputGeneration)>,
     pub sequence_revision: u32,
     pub reconstruction_revision: u32,
     pub phase: u32,
@@ -425,10 +430,10 @@ impl PreparedDeterministicRadianceOutput {
         &self.relationship
     }
 
-    pub const fn temporal_execution_evidence(
+    pub fn temporal_execution_evidence(
         &self,
-    ) -> Option<RenderDeterministicTemporalExecutionEvidence> {
-        self.temporal_evidence
+    ) -> Option<&RenderDeterministicTemporalExecutionEvidence> {
+        self.temporal_evidence.as_ref()
     }
 
     pub fn import(&self, provenance: GpuResourceProvenance) -> GpuWorkImport {
@@ -1568,6 +1573,18 @@ fn lower_output(
                                         .expect("temporal radiance output is a sample lattice"),
                                     evaluation_extent: finite_evaluation_extent
                                         .expect("temporal history requires finite evaluation"),
+                                    semantic_input_generations: admitted
+                                        .surface_semantic_inputs()
+                                        .iter()
+                                        .map(|binding| {
+                                            (
+                                                binding.representation_id(),
+                                                binding.generation().expect(
+                                                    "temporal lowering required source generation",
+                                                ),
+                                            )
+                                        })
+                                        .collect(),
                                     sequence_revision: TEMPORAL_SEQUENCE_REVISION,
                                     reconstruction_revision: TEMPORAL_RECONSTRUCTION_REVISION,
                                     phase: history.phase,
