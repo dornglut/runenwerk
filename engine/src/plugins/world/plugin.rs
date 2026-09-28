@@ -200,7 +200,7 @@ impl Plugin for WorldPlugin {
                 .on_invoker_thread()
                 .in_set(WorldRuntimeSet::RenderSdfBridge)
                 .in_set(RenderRuntimeSet::GpuResidency)
-                .before(RenderRuntimeSet::FramePrepare),
+                .before_if_present(RenderRuntimeSet::FramePrepare),
         );
         app.add_systems(
             RenderPrepare,
