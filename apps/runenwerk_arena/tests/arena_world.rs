@@ -103,7 +103,6 @@ fn maintained_startup_enqueues_arena_through_world_runtime_intake() {
         .expect("maintained arena should retain its field product identity");
     assert_eq!(descriptor.payload_refs.len(), 1);
     assert_eq!(descriptor.payload_refs[0].chunk_id, arena_chunk_id());
-
 }
 
 #[test]

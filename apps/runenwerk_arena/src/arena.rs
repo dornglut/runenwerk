@@ -74,7 +74,9 @@ pub fn arena_field_product_descriptor(payload: &SdfChunkPayload) -> FieldProduct
         FieldProductLineage::new(1, "runenwerk_arena.runtime_sdf"),
     );
     descriptor.consumer_class = FieldProductConsumerClass::RuntimeRead;
-    descriptor.payload_refs.push(WorldSdfPayloadRef::from(payload));
+    descriptor
+        .payload_refs
+        .push(WorldSdfPayloadRef::from(payload));
     descriptor
 }
 
