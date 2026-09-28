@@ -410,18 +410,16 @@ pub(super) fn write_temporal_quality_artifact(
                 .semantic_input_generations
                 .iter()
                 .map(|(representation_id, generation)| {
-                    let seen = if let Some((_, seen)) = generation_classes
-                        .iter_mut()
-                        .find(|(known_id, _)| known_id == representation_id)
+                    let representation_index = if let Some(index) = generation_classes
+                        .iter()
+                        .position(|(known_id, _)| known_id == representation_id)
                     {
-                        seen
+                        index
                     } else {
                         generation_classes.push((*representation_id, Vec::new()));
-                        &mut generation_classes
-                            .last_mut()
-                            .expect("generation class inserted")
-                            .1
+                        generation_classes.len() - 1
                     };
+                    let seen = &mut generation_classes[representation_index].1;
                     let class_index = if let Some(index) =
                         seen.iter().position(|known| known == generation)
                     {
