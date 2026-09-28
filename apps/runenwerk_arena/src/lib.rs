@@ -1,3 +1,4 @@
+pub mod arena;
 pub mod command;
 pub mod input;
 pub mod player;
@@ -9,6 +10,7 @@ use engine::plugins::{
 use engine::prelude::App;
 use engine::prelude::{AppSimulationExt, AuthorityRole, SimulationProfile};
 
+pub use arena::*;
 pub use command::*;
 pub use input::*;
 pub use player::*;
@@ -26,6 +28,7 @@ pub fn build_game_app(headless: bool) -> App {
         SimulationPlugin,
         InputFinalizePlugin,
         WorldPlugin,
+        ArenaWorldPlugin,
         ArenaGamePlugin,
     ));
     app.set_simulation_profile(SimulationProfile::LocalSinglePlayer);

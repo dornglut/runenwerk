@@ -11,8 +11,8 @@ physics.workspace = true
 runen-input.workspace = true
 runen-spatial.workspace = true
 runen_ecs.workspace = true
+world_sdf.workspace = true
 
 [dev-dependencies]
 world_ops.workspace = true
-world_sdf.workspace = true
 winit = "0.30.9"
