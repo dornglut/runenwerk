@@ -488,11 +488,7 @@ pub(super) fn inspect_render_lab_temporal_quality_execution_system(
         RenderLabTemporalQualityExecutionEvidence {
             frame_index: frame.context.frame_index,
             prepare_epoch: frame.context.prepare_epoch,
-            policy: if internal_size == output_size {
-                "native"
-            } else {
-                "static_footprint"
-            },
+            policy: "static_footprint",
             internal_size_px: [internal_size.0, internal_size.1],
             output_size_px: [output_size.0, output_size.1],
             native_fallback_active: false,
