@@ -633,8 +633,16 @@ fn publish_render_lab_frame_system(
         return Ok(());
     }
 
-    let (target_key, target, contribution) =
-        build_render_lab_radiance_publication(&camera, producer_id, requested_internal_size)?;
+    let (target_key, target, contribution) = if quality_mode {
+        build_render_lab_temporal_radiance_publication(
+            &camera,
+            producer_id,
+            output_size,
+            requested_internal_size,
+        )?
+    } else {
+        build_render_lab_radiance_publication(&camera, producer_id, requested_internal_size)?
+    };
     if quality_mode {
         let scene_plan = fixed_quality_plans
             .scene
