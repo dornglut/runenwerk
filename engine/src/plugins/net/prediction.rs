@@ -142,7 +142,11 @@ where
             let commands = TDriver::decode_input(payload)
                 .map_err(anyhow::Error::new)
                 .context("decode RunenNet retained prediction batch")?;
-            TDriver::apply_input(world, SimulationTick(target.get()), &commands)
+            let target_tick = SimulationTick(target.get());
+            if let Ok(tick) = world.resource_mut::<SimulationTick>() {
+                *tick = target_tick;
+            }
+            TDriver::apply_input(world, target_tick, &commands)
                 .map_err(anyhow::Error::new)
                 .context("replay RunenNet retained prediction batch")?;
             replayed_commands = replayed_commands.saturating_add(commands.len() as u64);
