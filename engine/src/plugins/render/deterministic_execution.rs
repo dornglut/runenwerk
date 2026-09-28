@@ -215,18 +215,18 @@ impl DeterministicResourceCache {
         output_index: usize,
         signature: DeterministicTemporalSignature,
         requested_extent: (u32, u32),
-        bytes_per_row_alignment: u32,
+        bytes_per_row_alignment: u64,
     ) -> Result<DeterministicTemporalHistoryUse, RenderDeterministicLoweringError> {
         let logical_row_bytes = u64::from(requested_extent.0)
             .checked_mul(WORD_BYTES)
             .ok_or(RenderDeterministicLoweringError::SizeOverflow {
                 field: "temporal history logical row bytes",
             })?;
-        let row_bytes = align_up(logical_row_bytes, u64::from(bytes_per_row_alignment))?;
+        let row_bytes = align_up(logical_row_bytes, bytes_per_row_alignment)?;
         if row_bytes % WORD_BYTES != 0 {
             return Err(
                 RenderDeterministicLoweringError::InvalidBytesPerRowAlignment {
-                    alignment: u64::from(bytes_per_row_alignment),
+                    alignment: bytes_per_row_alignment,
                 },
             );
         }
@@ -1508,13 +1508,25 @@ fn pack_output(
     observation: RenderObservationSpec,
     object_codes: &BTreeMap<RenderObjectId, u32>,
     context: &GpuContext,
+    finite_evaluation_extent: Option<(u32, u32)>,
+    temporal_history: Option<&DeterministicTemporalHistoryUse>,
 ) -> Result<PackedOutput, RenderDeterministicLoweringError> {
     let output_index = admitted_output.output_index();
     let topology = admitted.plan().request().outputs()[output_index]
         .spec()
         .topology();
+    let requested_extent = topology.sample_lattice_dimensions();
+    let physical_extent = match (requested_extent, finite_evaluation_extent) {
+        (Some(_), Some(extent)) => extent,
+        (Some(extent), None) => extent,
+        (None, Some(_)) => {
+            return Err(RenderDeterministicLoweringError::UnsupportedOutput { output_index });
+        }
+        (None, None) => (1, 1),
+    };
     let (sample_count, width, height, row_stride_words, output_byte_len, texture_row_bytes) =
-        if let Some((width, height)) = topology.sample_lattice_dimensions() {
+        if requested_extent.is_some() {
+            let (width, height) = physical_extent;
             let sample_count = width.checked_mul(height).ok_or(
                 RenderDeterministicLoweringError::SizeOverflow {
                     field: "lattice sample count",
@@ -1672,13 +1684,14 @@ fn pack_output(
     words[6] = output_kind;
     words[7] = observation_kind;
     pack_observation(&mut words, transform, tan_half_fov, aspect_ratio)?;
-    words[22] = width;
-    words[23] = height;
-    words[24] = 0;
-    words[25] = 0;
-    words[26] = 0;
-    words[27] = row_stride_words;
-    words[28] = 1;
+    let requested_extent = requested_extent.unwrap_or((1, 1));
+    words[22] = requested_extent.0;
+    words[23] = requested_extent.1;
+    words[24] = temporal_history.map_or(0, |history| history.phase);
+    words[25] = TEMPORAL_SEQUENCE_REVISION;
+    words[26] = temporal_history.map_or(0, |history| history.age);
+    words[27] = temporal_history.map_or(row_stride_words, |history| history.row_stride_words);
+    words[28] = TEMPORAL_RECONSTRUCTION_REVISION;
     words[29] = u32::try_from(emitter_offset).map_err(|_| {
         RenderDeterministicLoweringError::SizeOverflow {
             field: "emitter input offset",
