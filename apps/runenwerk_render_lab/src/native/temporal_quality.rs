@@ -557,6 +557,17 @@ fn validate_camera_motion_evidence(
                 first_generation
             );
         }
+        let expected_age = u32::try_from(index)
+            .map_err(|_| anyhow::anyhow!("camera-motion frame index exceeds u32 history age"))?;
+        if frame.history_age != expected_age || frame.phase != expected_age % 4 {
+            bail!(
+                "camera-motion frame {index} has phase/age {}/{}; expected {}/{}",
+                frame.phase,
+                frame.history_age,
+                expected_age % 4,
+                expected_age
+            );
+        }
         if &frame.semantic_input_generation_classes != first_input_generations {
             bail!("camera-motion frame {index} changed semantic-input source generations");
         }
