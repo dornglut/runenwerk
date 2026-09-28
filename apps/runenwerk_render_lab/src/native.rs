@@ -1030,6 +1030,7 @@ mod tests {
             primary_window_size_px: None,
             radiance_target_size_px: None,
             quality_capture_output_dir: None,
+            temporal_quality_scenario: RenderLabTemporalQualityScenario::StaticFootprint,
             completed: false,
         };
         assert!(!bounded_measurement_complete(&measurement, &history));
@@ -1079,6 +1080,7 @@ mod tests {
             primary_window_size_px: None,
             radiance_target_size_px: None,
             quality_capture_output_dir: None,
+            temporal_quality_scenario: RenderLabTemporalQualityScenario::StaticFootprint,
             completed: false,
         };
         let mut windows = WindowStateRegistryResource::default();
