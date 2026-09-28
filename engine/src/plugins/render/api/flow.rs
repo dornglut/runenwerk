@@ -121,7 +121,20 @@ impl RenderFlow {
         mut self,
         label: impl Into<String>,
     ) -> Result<Self, RenderFlowAuthoringError> {
-        self.register_history_texture(label.into())?;
+        self.register_history_texture(label.into(), false)?;
+        Ok(self)
+    }
+
+    /// Declares invocation-scoped retained history with explicit zero initialization.
+    ///
+    /// Use this only when the owning algorithm has a truthful bootstrap contract for a fresh
+    /// history generation. Ordinary history remains uninitialized and therefore cannot be read
+    /// before an explicit write.
+    pub fn with_zeroed_history_texture(
+        mut self,
+        label: impl Into<String>,
+    ) -> Result<Self, RenderFlowAuthoringError> {
+        self.register_history_texture(label.into(), true)?;
         Ok(self)
     }
 
@@ -588,17 +601,19 @@ impl RenderFlow {
     fn register_history_texture(
         &mut self,
         label: String,
+        zero_initialize: bool,
     ) -> Result<GpuWorkResourceId, RenderFlowAuthoringError> {
         if let Some(id) = self.resolve_resource_id(label.as_str()) {
             return Ok(id);
         }
 
         let id = self.allocate_resource_id()?;
-        self.upsert_labeled_resource(
-            label.clone(),
-            id,
-            RenderResourceDeclaration::declare_history_texture(id, label),
-        );
+        let declaration = if zero_initialize {
+            RenderResourceDeclaration::declare_zeroed_history_texture(id, label.clone())
+        } else {
+            RenderResourceDeclaration::declare_history_texture(id, label.clone())
+        };
+        self.upsert_labeled_resource(label, id, declaration);
         Ok(id)
     }
 
