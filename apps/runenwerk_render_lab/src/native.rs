@@ -462,6 +462,7 @@ fn build_render_lab_temporal_radiance_publication(
     producer_id: engine::plugins::render::RenderFrameProducerId,
     output_extent: (u32, u32),
     evaluation_extent: (u32, u32),
+    source_generation: u64,
 ) -> Result<(
     RenderDynamicTextureTargetKey,
     RenderDynamicTextureTargetDescriptor,
@@ -484,11 +485,16 @@ fn build_render_lab_temporal_radiance_publication(
         RenderTextureSampleMode::NonFilterableFloat,
         RenderDynamicTextureRetention::RetainWhileRequested,
     );
-    let fixture = founding_footprint_fixture_with_observation_and_extent(
+    let mut fixture = founding_footprint_fixture_with_observation_and_extent(
         camera.observation_to_scene(),
         output_extent.0,
         output_extent.1,
     )?;
+    for binding in &mut fixture.semantic_inputs {
+        *binding = binding
+            .clone()
+            .with_generation(RenderSurfaceSemanticInputGeneration::new(source_generation));
+    }
     let finite_evaluation_extent =
         engine::plugins::render::RenderDeterministicFiniteEvaluationExtent::new(
             evaluation_extent.0,
@@ -577,6 +583,9 @@ fn publish_render_lab_frame_system(
         .expect("Render Lab producer id is non-zero");
 
     let quality_mode = measurement.quality_capture_output_dir.is_some();
+    // T1 deliberately changes only source-generation evidence after one compatible reuse.
+    // Frames 1-2 use generation 1; frame 3+ uses generation 2 with identical semantic payload.
+    let temporal_source_generation = if history.len() >= 2 { 2 } else { 1 };
     let capture_armed = temporal_quality_capture_should_arm(&measurement, &history);
     if quality_mode {
         quality_execution.pending_admission = None;
@@ -598,6 +607,7 @@ fn publish_render_lab_frame_system(
             producer_id,
             output_size,
             requested_internal_size,
+            temporal_source_generation,
         )?;
         debug_config.capture_selectors = if capture_armed {
             vec![temporal_quality_capture_selector(
@@ -635,6 +645,7 @@ fn publish_render_lab_frame_system(
             producer_id,
             output_size,
             requested_internal_size,
+            temporal_source_generation,
         )?
     } else {
         build_render_lab_radiance_publication(&camera, producer_id, requested_internal_size)?
