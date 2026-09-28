@@ -156,9 +156,15 @@ pub fn run_native_temporal_camera_quality(
     submitted_frame_limit: Option<usize>,
     output_size_px: (u32, u32),
 ) -> Result<()> {
+    let submitted_frame_limit = submitted_frame_limit.unwrap_or(4);
+    if submitted_frame_limit < 4 {
+        bail!(
+            "camera-motion temporal quality requires at least four submitted frames; got {submitted_frame_limit}"
+        );
+    }
     run_native_temporal_quality_scenario(
         output_root,
-        submitted_frame_limit,
+        Some(submitted_frame_limit),
         output_size_px,
         output_size_px,
         RenderLabTemporalQualityScenario::CameraMotionP100,
@@ -1184,6 +1190,18 @@ mod tests {
         );
         assert_eq!(artifact.samples[1].gpu_composed_frame_ms, None);
         assert_eq!(artifact.samples[1].diagnostics.len(), 1);
+    }
+
+    #[test]
+    fn camera_motion_quality_requires_a_complete_motion_sequence() {
+        assert!(
+            run_native_temporal_camera_quality(
+                PathBuf::from("unused"),
+                Some(3),
+                (1920, 1080)
+            )
+            .is_err()
+        );
     }
 
     #[test]
