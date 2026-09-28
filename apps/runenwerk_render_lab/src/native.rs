@@ -503,6 +503,7 @@ fn build_render_lab_radiance_publication(
         availability: fixture.availability,
         output_index: 0,
         target_key: target_key.clone(),
+            finite_evaluation_extent: None,
     };
     Ok((target_key, target, contribution))
 }
@@ -1157,6 +1158,7 @@ mod tests {
             availability: fixture.availability,
             output_index: 0,
             target_key: old_key.clone(),
+            finite_evaluation_extent: None,
         };
         let new_fixture =
             founding_fixture_with_observation_and_extent(RenderAffineTransform3::identity(), 8, 8)
@@ -1170,6 +1172,7 @@ mod tests {
             availability: new_fixture.availability,
             output_index: 0,
             target_key: new_key,
+            finite_evaluation_extent: None,
         };
 
         let mut targets = RenderDynamicTextureTargetRequestRegistryResource::default();
