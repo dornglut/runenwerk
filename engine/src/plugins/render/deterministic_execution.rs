@@ -3025,6 +3025,108 @@ mod tests {
     }
 
     #[test]
+    fn camera_compatibility_key_retains_every_non_pose_dependency() {
+        use super::super::request::{
+            RenderOutputSpec, RenderOutputValue, RenderRadiometricRepresentation,
+            RenderResultTopology, RenderSamplingSupport, RenderSemanticTolerance,
+        };
+        use super::super::scene::{RenderSceneStore, RenderSceneUpdate};
+        use super::super::space_time::{RenderTimeInterval, RenderTimePoint};
+
+        let baseline_observation = temporal_test_observation(RenderAffineTransform3::identity());
+        let baseline = camera_temporal_signature(7, baseline_observation, (4, 4));
+
+        let changed_fov = temporal_test_observation_with(
+            std::f64::consts::FRAC_PI_4,
+            1.0,
+            baseline_observation.shutter(),
+            RenderSamplingSupport::perspective_lattice_cell(),
+        );
+        let changed_aspect = temporal_test_observation_with(
+            std::f64::consts::FRAC_PI_3,
+            1.25,
+            baseline_observation.shutter(),
+            RenderSamplingSupport::perspective_lattice_cell(),
+        );
+        let changed_shutter = temporal_test_observation_with(
+            std::f64::consts::FRAC_PI_3,
+            1.0,
+            RenderTimeInterval::instant(
+                RenderTimePoint::from_seconds(1.0).expect("finite changed shutter"),
+            ),
+            RenderSamplingSupport::perspective_lattice_cell(),
+        );
+        let changed_support = temporal_test_observation_with(
+            std::f64::consts::FRAC_PI_3,
+            1.0,
+            baseline_observation.shutter(),
+            RenderSamplingSupport::ideal_ray(),
+        );
+
+        for changed_observation in [changed_fov, changed_aspect, changed_shutter, changed_support] {
+            assert_ne!(
+                camera_temporal_signature(7, changed_observation, (4, 4)),
+                baseline,
+                "projection/shutter/support changes must remain in the camera compatibility key"
+            );
+        }
+
+        assert_ne!(
+            camera_temporal_signature(8, baseline_observation, (4, 4)),
+            baseline,
+            "source generation must remain in the camera compatibility key"
+        );
+        assert_ne!(
+            camera_temporal_signature(7, baseline_observation, (3, 4)),
+            baseline,
+            "finite evaluation extent must remain in the camera compatibility key"
+        );
+
+        let mut changed_topology = baseline.clone();
+        changed_topology.output = RenderOutputSpec::new(
+            RenderOutputValue::Radiance {
+                representation: RenderRadiometricRepresentation::spectral_at_wavelength_meters(
+                    550.0e-9,
+                )
+                .expect("valid wavelength"),
+            },
+            RenderResultTopology::sample_lattice_2d(8, 4).expect("changed topology"),
+            RenderSemanticTolerance::absolute(0.001).expect("valid tolerance"),
+        )
+        .expect("valid changed output");
+        assert_ne!(changed_topology, baseline);
+
+        let mut store = RenderSceneStore::new();
+        let object = store.allocate_object_id().expect("test object id");
+        let mut update = RenderSceneUpdate::new();
+        update.insert(object);
+        store.commit(update).expect("advance test scene revision");
+        let mut changed_scene = baseline.clone();
+        changed_scene.scene_revision = store.snapshot().revision();
+        assert_ne!(changed_scene, baseline);
+    }
+
+    #[test]
+    fn camera_non_pose_signature_change_recreates_history_generation() {
+        let observation = temporal_test_observation(RenderAffineTransform3::identity());
+        assert_camera_signature_recreates(
+            camera_temporal_signature(8, observation, (4, 4)),
+            observation,
+        );
+
+        let changed_fov = temporal_test_observation_with(
+            std::f64::consts::FRAC_PI_4,
+            1.0,
+            observation.shutter(),
+            super::super::request::RenderSamplingSupport::perspective_lattice_cell(),
+        );
+        assert_camera_signature_recreates(
+            camera_temporal_signature(7, changed_fov, (4, 4)),
+            changed_fov,
+        );
+    }
+
+    #[test]
     fn sub_native_camera_pose_change_recreates_temporal_history() {
         let mut cache = DeterministicResourceCache::default();
         let first_observation = temporal_test_observation(RenderAffineTransform3::identity());
