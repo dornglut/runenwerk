@@ -597,9 +597,11 @@ mod tests {
         );
         assert_eq!(
             validate_observation(3, perspective),
-            Err(RenderDeterministicVerificationEligibilityError::SamplingSupportUnsupported {
-                observation_index: 3,
-            })
+            Err(
+                RenderDeterministicVerificationEligibilityError::SamplingSupportUnsupported {
+                    observation_index: 3,
+                }
+            )
         );
     }
 
