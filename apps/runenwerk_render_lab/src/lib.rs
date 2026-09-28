@@ -416,6 +416,33 @@ fn founding_fixture_with_observation_and_extent(
     width: u32,
     height: u32,
 ) -> Result<FoundingFixture> {
+    founding_fixture_with_observation_extent_and_support(
+        observation_to_scene,
+        width,
+        height,
+        RenderSamplingSupport::ideal_ray(),
+    )
+}
+
+fn founding_footprint_fixture_with_observation_and_extent(
+    observation_to_scene: RenderAffineTransform3,
+    width: u32,
+    height: u32,
+) -> Result<FoundingFixture> {
+    founding_fixture_with_observation_extent_and_support(
+        observation_to_scene,
+        width,
+        height,
+        RenderSamplingSupport::perspective_lattice_cell(),
+    )
+}
+
+fn founding_fixture_with_observation_extent_and_support(
+    observation_to_scene: RenderAffineTransform3,
+    width: u32,
+    height: u32,
+    sampling_support: RenderSamplingSupport,
+) -> Result<FoundingFixture> {
     let mut store = RenderSceneStore::new();
     let sphere_id = store.allocate_object_id()?;
     let plane_id = store.allocate_object_id()?;
@@ -514,7 +541,7 @@ fn founding_fixture_with_observation_and_extent(
         std::f64::consts::FRAC_PI_3,
         f64::from(width) / f64::from(height.max(1)),
         shutter,
-        RenderSamplingSupport::ideal_ray(),
+        sampling_support,
     )?);
     let representation =
         RenderRadiometricRepresentation::spectral_at_wavelength_meters(WAVELENGTH_METERS)?;
