@@ -1250,6 +1250,41 @@ mod tests {
     }
 
     #[test]
+    fn camera_motion_quality_strong_transition_forces_out_of_bounds_reprojection_pressure() {
+        fn project(camera: RenderLabCamera, point: [f64; 3]) -> [f64; 2] {
+            let matrix = camera.observation_to_scene().row_major_3x4();
+            let origin = [matrix[3], matrix[7], matrix[11]];
+            let relative = [
+                point[0] - origin[0],
+                point[1] - origin[1],
+                point[2] - origin[2],
+            ];
+            // The scripted Render Lab camera basis is orthonormal. The transform columns are
+            // right/up/backward, so projection into camera-local space is their dot product.
+            let local = [
+                matrix[0] * relative[0] + matrix[4] * relative[1] + matrix[8] * relative[2],
+                matrix[1] * relative[0] + matrix[5] * relative[1] + matrix[9] * relative[2],
+                matrix[2] * relative[0] + matrix[6] * relative[1] + matrix[10] * relative[2],
+            ];
+            assert!(local[2] < 0.0, "controlled point must remain in front of the camera");
+            let tan_half_fov = (std::f64::consts::FRAC_PI_3 * 0.5).tan();
+            let aspect = 1920.0 / 1080.0;
+            let projected_x = local[0] / (-local[2] * tan_half_fov * aspect);
+            let projected_y = local[1] / (-local[2] * tan_half_fov);
+            [projected_x * 0.5 + 0.5, 0.5 - projected_y * 0.5]
+        }
+
+        // This point lies on the maintained unbounded plane (y = -1). It is visible after the
+        // strong frame-4 camera move but projects beyond the right edge of frame 3, guaranteeing
+        // that the controlled motion capture exercises the shader's out-of-bounds rejection law.
+        let point = [150.0, -1.0, -114.0];
+        let previous = project(temporal_camera_motion_pose(2), point);
+        let current = project(temporal_camera_motion_pose(3), point);
+        assert!((0.0..1.0).contains(&current[0]) && (0.0..1.0).contains(&current[1]));
+        assert!(previous[0] >= 1.0 || previous[1] < 0.0 || previous[1] >= 1.0);
+    }
+
+    #[test]
     fn render_lab_extent_uses_primary_presentation_metrics() {
         let presentation = engine::PrimaryPresentationMetricsResource::new((901, 577), 1.25);
         assert_eq!(render_lab_extent(&presentation), (901, 577));
