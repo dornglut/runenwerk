@@ -795,12 +795,16 @@ impl Renderer {
                 .map_err(|error| {
                     anyhow::anyhow!("deterministic render admission failed: {error}")
                 })?;
+            let finite_evaluation = contribution
+                .finite_evaluation_extent
+                .map(|extent| (contribution.output_index, extent.dimensions()));
             let prepared =
-                crate::plugins::render::deterministic_execution::prepare_deterministic_render_with_cache_in_scope(
+                crate::plugins::render::deterministic_execution::prepare_deterministic_render_with_cache_in_scope_and_evaluation(
                     admitted,
                     context,
                     &mut self.deterministic_resources,
                     contribution.producer_id.raw(),
+                    finite_evaluation,
                 )
                 .map_err(|error| {
                     anyhow::anyhow!("deterministic render preparation failed: {error}")
