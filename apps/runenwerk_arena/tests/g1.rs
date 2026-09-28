@@ -1,15 +1,65 @@
 use engine::plugins::InputState;
+use engine::plugins::world::adapters::{
+    CollisionQueryServiceResource, PartitionConfigResource, SdfChunkStoreResource,
+};
 use engine::prelude::*;
+use runen_spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, WorldId};
 use runenwerk_arena::{
-    ArenaPlayer, GameActionSnapshot, GameInputAccumulator, LOCAL_PARTICIPANT_ID,
-    LastLocalCommandBatch, ParticipantCommand, ParticipantId, PlayerCommand, PlayerControlState,
-    TickCommandBatch, apply_game_commands, build_headless_game_app, player_state_for,
+    ArenaMovementConfig, ArenaPlayer, GameActionSnapshot, GameInputAccumulator,
+    LOCAL_PARTICIPANT_ID, LastLocalCommandBatch, ParticipantCommand, ParticipantId, PlayerCommand,
+    PlayerControlState, PlayerPhysicalHistory, TickCommandBatch, apply_game_commands,
+    build_headless_game_app, player_state_for,
 };
 use winit::event::ElementState;
 use winit::keyboard::KeyCode;
+use world_sdf::{SdfChunkPayload, SdfChunkStore};
 
 #[derive(Debug, Copy, Clone, Component)]
 struct Filler;
+
+fn direct_test_world() -> World {
+    let mut world = World::new();
+    world.insert_resource(FixedTimeConfig { step_seconds: 0.1 });
+    world.insert_resource(ArenaMovementConfig::default());
+    world.insert_resource(CollisionQueryServiceResource::default());
+
+    let partition =
+        GridPartitionConfig::try_new(1.0, [8, 8, 8]).expect("test partition should be valid");
+    world.insert_resource(PartitionConfigResource(partition));
+
+    let world_id = WorldId::new(0);
+    let mut store = SdfChunkStore::default();
+    for x in -2..=2 {
+        for y in -1..=2 {
+            for z in -2..=2 {
+                let chunk_id = ChunkId::new(world_id, ChunkCoord3 { x, y, z });
+                store.chunks.insert(
+                    chunk_id,
+                    SdfChunkPayload {
+                        chunk_id,
+                        chunk_revision: Default::default(),
+                        chunk_generation: Default::default(),
+                        page_table: Default::default(),
+                        hierarchy_revision: 0,
+                        checksum: 0,
+                    },
+                );
+            }
+        }
+    }
+    world.insert_resource(SdfChunkStoreResource(store));
+    world
+}
+
+fn spawn_test_player(world: &mut World, participant: ParticipantId) {
+    world
+        .spawn((
+            ArenaPlayer { participant },
+            PlayerControlState::default(),
+            PlayerPhysicalHistory::spawned([0.25, 0.5, 0.25]),
+        ))
+        .unwrap();
+}
 
 #[derive(Debug, Default, Component, Resource)]
 struct ScriptFrame(u8);
@@ -180,15 +230,8 @@ fn local_single_player_applies_commands_without_net_plugin() {
 
 #[test]
 fn command_application_is_directly_callable_for_an_explicit_tick() {
-    let mut world = World::new();
-    world
-        .spawn((
-            ArenaPlayer {
-                participant: ParticipantId(7),
-            },
-            PlayerControlState::default(),
-        ))
-        .unwrap();
+    let mut world = direct_test_world();
+    spawn_test_player(&mut world, ParticipantId(7));
     let batch = TickCommandBatch {
         tick: SimulationTick(9),
         commands: vec![ParticipantCommand {
@@ -214,18 +257,11 @@ fn command_application_is_directly_callable_for_an_explicit_tick() {
 #[test]
 fn identical_tick_command_sequences_produce_identical_game_state() {
     fn world_with_player(filler_first: bool) -> World {
-        let mut world = World::new();
+        let mut world = direct_test_world();
         if filler_first {
             world.spawn(Filler).unwrap();
         }
-        world
-            .spawn((
-                ArenaPlayer {
-                    participant: ParticipantId(12),
-                },
-                PlayerControlState::default(),
-            ))
-            .unwrap();
+        spawn_test_player(&mut world, ParticipantId(12));
         if !filler_first {
             world.spawn(Filler).unwrap();
         }
@@ -274,26 +310,12 @@ fn identical_tick_command_sequences_produce_identical_game_state() {
 
 #[test]
 fn participant_identity_does_not_depend_on_ecs_spawn_order() {
-    let mut first = World::new();
+    let mut first = direct_test_world();
     first.spawn(Filler).unwrap();
-    first
-        .spawn((
-            ArenaPlayer {
-                participant: ParticipantId(44),
-            },
-            PlayerControlState::default(),
-        ))
-        .unwrap();
+    spawn_test_player(&mut first, ParticipantId(44));
 
-    let mut second = World::new();
-    second
-        .spawn((
-            ArenaPlayer {
-                participant: ParticipantId(44),
-            },
-            PlayerControlState::default(),
-        ))
-        .unwrap();
+    let mut second = direct_test_world();
+    spawn_test_player(&mut second, ParticipantId(44));
     second.spawn(Filler).unwrap();
 
     let batch = TickCommandBatch {
@@ -340,15 +362,8 @@ fn accumulator_separates_held_intent_from_latched_edges() {
 
 #[test]
 fn rejected_command_batch_does_not_partially_mutate_game_state() {
-    let mut world = World::new();
-    world
-        .spawn((
-            ArenaPlayer {
-                participant: ParticipantId(1),
-            },
-            PlayerControlState::default(),
-        ))
-        .unwrap();
+    let mut world = direct_test_world();
+    spawn_test_player(&mut world, ParticipantId(1));
 
     let batch = TickCommandBatch {
         tick: SimulationTick(4),

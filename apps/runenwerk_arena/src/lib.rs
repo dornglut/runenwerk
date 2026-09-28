@@ -3,7 +3,9 @@ pub mod input;
 pub mod player;
 pub mod plugin;
 
-use engine::plugins::{FixedStepPlugin, InputFinalizePlugin, SimulationPlugin, TimePlugin};
+use engine::plugins::{
+    FixedStepPlugin, InputFinalizePlugin, SimulationPlugin, TimePlugin, WorldPlugin,
+};
 use engine::prelude::App;
 use engine::prelude::{AppSimulationExt, AuthorityRole, SimulationProfile};
 
@@ -23,6 +25,7 @@ pub fn build_game_app(headless: bool) -> App {
         FixedStepPlugin,
         SimulationPlugin,
         InputFinalizePlugin,
+        WorldPlugin,
         ArenaGamePlugin,
     ));
     app.set_simulation_profile(SimulationProfile::LocalSinglePlayer);

@@ -1,0 +1,13 @@
+[package]
+name = "physics"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license.workspace = true
+
+[dependencies]
+runen-spatial.workspace = true
+world_sdf.workspace = true
+
+[dev-dependencies]
+world_ops.workspace = true

@@ -6,6 +6,7 @@ members = [
     "domain/product",
     "domain/world_ops",
     "domain/world_sdf",
+    "domain/physics",
     "domain/scene",
     "domain/graph",
     "domain/texture",
@@ -89,6 +90,7 @@ ktx2 = "0.5.0"
 scene = { path = "domain/scene" }
 asset = { path = "domain/asset" }
 product = { path = "domain/product" }
+physics = { path = "domain/physics" }
 runen-net = { git = "https://github.com/dornglut/runen-net", rev = "e8dce38b2578eb3559356968beb2351cc03c6758" }
 runen-net-quic = { git = "https://github.com/dornglut/runen-net", rev = "e8dce38b2578eb3559356968beb2351cc03c6758" }
 runen-spatial = { git = "https://github.com/dornglut/runen-spatial", rev = "2bb6b2ed89894aefaa39bf0e39d296b703916821" }

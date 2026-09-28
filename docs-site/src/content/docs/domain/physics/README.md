@@ -21,9 +21,9 @@ Runenwerk reserves `domain/physics` as the owner of reusable physics semantics t
 signed-distance-field query truth, runtime scheduling, renderer state, or game-specific movement
 feel.
 
-No `domain/physics` crate is implemented yet. This document establishes the owner contract and
-the deliberately narrow first implementation boundary required by the maintained small-game gold
-path.
+`domain/physics` now implements the deliberately narrow first SDF-character slice required by the
+maintained small-game gold path. This document is the owner contract for that implementation and
+for later physics capabilities only when separately activated.
 
 ## Ownership
 
@@ -62,7 +62,7 @@ Physics must not copy SDF storage or redefine missing payload as empty space.
 
 ### `domain/physics`
 
-The future physics domain owns reusable semantics for:
+The physics domain owns reusable semantics for:
 
 - physical body and collider meaning when those capabilities are activated;
 - kinematic-character motion and contact-response rules;
@@ -101,8 +101,7 @@ The physics domain must not become a gameplay framework.
 
 ## First Implementation Contract
 
-The first implementation after the game command spine exists is one **SDF-first kinematic
-character motion** slice.
+The implemented first slice is one **SDF-first kinematic character motion** contract.
 
 It is not a general physics engine.
 
