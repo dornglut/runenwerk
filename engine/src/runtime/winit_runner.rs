@@ -12,7 +12,9 @@ use crate::runtime::platform::{
     apply_native_window_event, apply_platform_input_event,
 };
 use crate::runtime::presentation::ensure_primary_presentation_metrics;
-use crate::runtime::window::{NativeWindowCreationRequest, NativeWindowId, WindowStateRegistryResource};
+use crate::runtime::window::{
+    NativeWindowCreationRequest, NativeWindowId, WindowStateRegistryResource,
+};
 use crate::runtime::winit_input::{
     WinitInputAdapter, contact_input, cursor_position, keyboard_input, pointer_button_input,
     scroll_input, text_input,
@@ -80,7 +82,8 @@ impl WinitRunner {
                 .world
                 .resource_mut::<WindowStateRegistryResource>()
                 .context("native Host window registry is unavailable")?;
-            self.window_realizer.project_primary_window(registry, window)
+            self.window_realizer
+                .project_primary_window(registry, window)
         };
         self.sync_primary_presentation_and_surface_extent(size_px, scale_factor)
     }
@@ -269,10 +272,7 @@ impl WinitRunner {
         event_loop: &ActiveEventLoop,
         request: NativeWindowCreationRequest,
     ) -> Result<()> {
-        let window = match self
-            .window_realizer
-            .realize_secondary(event_loop, &request)
-        {
+        let window = match self.window_realizer.realize_secondary(event_loop, &request) {
             Ok(window) => window,
             Err(err) => {
                 self.mark_window_creation_failed(request.native_window_id, format!("{err:#}"));
@@ -306,10 +306,7 @@ impl WinitRunner {
                 );
             });
         if let Err(err) = logical_commit {
-            render_native_host::rollback_secondary(
-                &mut self.state.world,
-                request.native_window_id,
-            );
+            render_native_host::rollback_secondary(&mut self.state.world, request.native_window_id);
             return Err(err);
         }
 

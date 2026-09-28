@@ -86,10 +86,8 @@ pub(crate) fn project_primary_extent(
         .resource_mut::<RenderSurfaceRegistryResource>()
         .ok()
         .is_some_and(|registry| {
-            registry.update_surface_extent_for_native_window(
-                NativeWindowId::primary(),
-                target_size_px,
-            )
+            registry
+                .update_surface_extent_for_native_window(NativeWindowId::primary(), target_size_px)
         })
 }
 
@@ -166,10 +164,7 @@ mod tests {
 
         assert!(!project_primary_extent(app.world_mut(), (1440, 900)));
         assert!(!app.world().has_resource::<Gfx>());
-        assert!(
-            !app.world()
-                .has_resource::<RenderSurfaceRegistryResource>()
-        );
+        assert!(!app.world().has_resource::<RenderSurfaceRegistryResource>());
     }
 
     #[test]
@@ -217,7 +212,9 @@ mod tests {
             .unwrap();
         assert_eq!(registry.surface_for_native_window(secondary), None);
         assert_eq!(
-            registry.record(surface).map(|record| record.lifecycle_state),
+            registry
+                .record(surface)
+                .map(|record| record.lifecycle_state),
             Some(RenderSurfaceLifecycleState::Retired)
         );
     }
@@ -257,7 +254,9 @@ mod tests {
             .unwrap();
         assert_eq!(registry.primary_surface_id(), Some(primary));
         assert_eq!(
-            registry.record(primary).map(|record| record.lifecycle_state),
+            registry
+                .record(primary)
+                .map(|record| record.lifecycle_state),
             Some(RenderSurfaceLifecycleState::Attached)
         );
         assert_eq!(

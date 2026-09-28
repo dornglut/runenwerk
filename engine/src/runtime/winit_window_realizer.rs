@@ -117,11 +117,7 @@ impl WinitWindowRealizer {
         }
     }
 
-    pub(crate) fn publish_window(
-        &mut self,
-        native_window_id: NativeWindowId,
-        window: Arc<Window>,
-    ) {
+    pub(crate) fn publish_window(&mut self, native_window_id: NativeWindowId, window: Arc<Window>) {
         let window_id = window.id();
         self.publish_mapping(window_id, native_window_id);
         self.windows.insert(window_id, Arc::clone(&window));
