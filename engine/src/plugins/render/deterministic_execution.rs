@@ -72,8 +72,7 @@ const SHAPE_PLANE: u32 = 2;
 const MAINTAINED_WGSL: &str = include_str!("deterministic_execution.wgsl");
 const TEMPORAL_RECONSTRUCTION_WGSL: &str =
     include_str!("deterministic_temporal_reconstruction.wgsl");
-const CAMERA_REPROJECTION_WGSL: &str =
-    include_str!("deterministic_camera_reprojection.wgsl");
+const CAMERA_REPROJECTION_WGSL: &str = include_str!("deterministic_camera_reprojection.wgsl");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum DeterministicBufferKind {
@@ -1822,7 +1821,9 @@ fn lower_output(
                     format!("RunenRender output {output_index} camera reprojection parameters"),
                     &parameter_words,
                 )
-                .map_err(|error| gpu_authoring("camera-reprojection parameter preparation", error))?;
+                .map_err(|error| {
+                    gpu_authoring("camera-reprojection parameter preparation", error)
+                })?;
                 let parameters = resources.buffer(
                     scope,
                     output_index,
@@ -1835,11 +1836,14 @@ fn lower_output(
                         [GpuBufferUsage::Storage, GpuBufferUsage::CopyDestination],
                         GpuBufferInitialization::Uninitialized,
                     )
-                    .map_err(|error| gpu_authoring("camera-reprojection parameter descriptor", error))?,
+                    .map_err(|error| {
+                        gpu_authoring("camera-reprojection parameter descriptor", error)
+                    })?,
                 )?;
                 camera_parameter_upload = Some(
-                    GpuUploadOperation::whole_buffer(&parameters, payload)
-                        .map_err(|error| gpu_authoring("camera-reprojection parameter upload", error))?,
+                    GpuUploadOperation::whole_buffer(&parameters, payload).map_err(|error| {
+                        gpu_authoring("camera-reprojection parameter upload", error)
+                    })?,
                 );
                 let source = resources.camera_reprojection_source()?;
                 let pipeline = GpuComputePipelineDescriptor::ordinary(source, "main")
@@ -1855,7 +1859,9 @@ fn lower_output(
                         GpuRuntimeBindingValue::whole_buffer(0, 6, current_history),
                         GpuRuntimeBindingValue::whole_buffer(0, 7, &parameters),
                     ])
-                    .map_err(|error| gpu_authoring("camera-reprojection runtime bindings", error))?;
+                    .map_err(|error| {
+                        gpu_authoring("camera-reprojection runtime bindings", error)
+                    })?;
                 let dispatch_size = deterministic_dispatch_size(
                     packed.sample_count,
                     context
@@ -2467,7 +2473,8 @@ fn camera_reprojection_parameter_words(
             (previous.vertical_field_of_view_radians() * 0.5).tan(),
             "previous perspective tangent half field of view",
         )?;
-        words[22] = positive_f32_bits(previous.aspect_ratio(), "previous perspective aspect ratio")?;
+        words[22] =
+            positive_f32_bits(previous.aspect_ratio(), "previous perspective aspect ratio")?;
     }
     Ok(words)
 }
