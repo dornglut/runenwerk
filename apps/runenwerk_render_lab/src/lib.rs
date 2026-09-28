@@ -46,7 +46,7 @@ use engine::plugins::render::space_time::{
 };
 use engine::plugins::render::surface_input::{
     RenderSurfaceSemanticInput, RenderSurfaceSemanticInputBinding,
-    RenderSurfaceSemanticInputRequirement,
+    RenderSurfaceSemanticInputGeneration, RenderSurfaceSemanticInputRequirement,
 };
 use engine::plugins::render::{
     RenderDynamicTextureRetention, RenderDynamicTextureTargetDescriptor,
@@ -566,7 +566,8 @@ fn founding_fixture_with_observation_extent_and_support(
                     SPHERE_RADIUS,
                     RenderTemporalSupport::unbounded(),
                 )?,
-            ),
+            )
+            .with_generation(RenderSurfaceSemanticInputGeneration::new(1)),
             RenderSurfaceSemanticInputBinding::new(
                 plane_representation_id,
                 RenderSurfaceSemanticInput::plane(
@@ -574,7 +575,8 @@ fn founding_fixture_with_observation_extent_and_support(
                     PLANE_NORMAL,
                     RenderTemporalSupport::unbounded(),
                 )?,
-            ),
+            )
+            .with_generation(RenderSurfaceSemanticInputGeneration::new(1)),
         ],
         availability: vec![
             RenderRepresentationAvailabilityFact::new(
