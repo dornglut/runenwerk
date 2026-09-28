@@ -5,7 +5,7 @@ status: accepted
 owner: engine
 layer: engine-runtime / renderer / postprocess
 canonical: true
-last_reviewed: 2026-05-23
+last_reviewed: 2026-09-27
 publication: reference
 pagefind: false
 related_designs:
@@ -31,12 +31,56 @@ reconstruction mode, timing, capability diagnostics, and adapter invocation reco
 scene, camera, material, SDF, ray-query, and exposure producers remain the
 source of semantic truth for their inputs.
 
+## RunenRender Semantic Sampling Boundary
+
+Temporal reconstruction preserves the RunenRender distinction between requested semantic
+support and the algorithm used to evaluate it.
+
+For an image-like request, the unjittered renderer observation remains semantic truth.
+When the requested sampling policy represents a perspective lattice-cell / pixel
+footprint, the concrete support of one logical sample is derived from that observation
+and the exact requested output lattice. Physical output pixels, the current internal
+resolution, and a GPU viewport do not define that semantic footprint.
+
+A temporal jitter phase is therefore renderer method/evaluation state:
+
+```text
+unjittered semantic observation
++ requested lattice/support
+    -> semantic logical-sample support
+
+semantic support
++ method-owned sample sequence / phase
+    -> finite temporal samples
+
+finite temporal samples
++ valid retained history
++ method-specific reconstruction evidence
+    -> reconstructed finite estimate
+```
+
+Jitter must not be implemented by mutating source-owned camera truth or by silently
+changing `observation_to_scene`. One offset finite sample does not by itself complete a
+non-point footprint result. Any reconstructed semantic result must satisfy the owning
+RunenRender method's finite-evaluation/result-formation contract.
+
+The first portable temporal implementation may be **static-first**: a static scene and
+unchanged semantic observation may reuse bounded retained color history while sampling
+different admitted subpixel phases. Any incompatible scene, observation, requested
+topology/support, reconstruction-method, sample-sequence, or consumed-input-generation
+change invalidates that history and restarts evaluation.
+
+That static-first proof establishes sampling/history/reconstruction mechanics only. It
+does not establish moving-camera or moving-object reprojection, disocclusion handling,
+motion-aware TAA, or TAAU. Those claims require truthful depth/motion/reprojection inputs
+in a later accepted slice.
+
 ## Scope
 
 This track covers:
 
 - TAA and TAAU history workflows;
-- jittered projection and history invalidation;
+- renderer-applied temporal sample phase/jitter and history invalidation;
 - motion vectors, depth, exposure, luminance, transparency/reactive masks, and
   disocclusion diagnostics;
 - fixed or dynamically adapted internal render resolution separate from output resolution;
@@ -59,8 +103,9 @@ resource ownership into the renderer.
   authority class, fallback legality, and semantic availability of motion,
   depth, exposure, reactive, SDF, and ray-query inputs.
 - Camera/scene producers own view/projection source truth. The renderer may
-  consume prepared matrices and jitter offsets but must not become the canonical
-  camera system.
+  consume prepared unjittered matrices or equivalent observation facts and owns
+  application of method/evaluation jitter within admitted semantic support; it
+  must not become the canonical camera system.
 - Optional adapter integrations own only adapter invocation and capability
   translation. Unsupported adapters must report typed diagnostics and fall back
   to portable native/TAA/TAAU behavior.
@@ -83,10 +128,14 @@ Temporal implementation rows must introduce explicit typed evidence for:
 - artifact paths, benchmark commands, and visible evidence for production
   closeout.
 
-History validity is signature-keyed. A history sample is invalid when viewport
-identity, output resolution, internal resolution, camera projection, jitter
-sequence, reconstruction mode, input-product generation, or adapter capability
-state no longer matches the prepared frame contract.
+History validity is signature-keyed. A history sample is invalid when the retained
+state's dependencies no longer match the prepared frame contract. For temporal
+reconstruction those dependencies include the relevant scene state, unjittered
+semantic observation, exact requested output topology and sampling support,
+reconstruction method/revision, sample-sequence identity, and consumed input-product
+generations. Internal/output extent and adapter capability are included whenever the
+chosen realization depends on them. These derived compatibility facts do not become
+semantic camera or product identity.
 
 ## Invariants
 
@@ -114,10 +163,14 @@ state no longer matches the prepared frame contract.
   native `SurfaceColor`; execution evidence must reject retained fixed
   target/view/resolve state. A simple spatial resolve proves portable plumbing
   only and is not TAAU reconstruction-quality evidence.
-- Missing motion vectors, depth, exposure, reactive masks, SDF, ray-query, or
-  adapter capability must produce typed diagnostics, not silent reconstruction.
-- History reuse must fail closed on signature mismatch, missing inputs,
-  disocclusion risk, or invalidated producer generations.
+- A reconstruction mode must explicitly declare the temporal inputs it requires.
+  Missing required motion vectors, depth, exposure, reactive masks, SDF, ray-query,
+  or adapter capability produces typed diagnostics rather than silent reconstruction.
+  A bounded static-first mode may explicitly make motion/reprojection inputs
+  inapplicable only while scene and semantic observation remain unchanged; any such
+  change invalidates its history and it must not claim motion-aware TAA/TAAU.
+- History reuse must fail closed on signature mismatch, missing required inputs,
+  disocclusion risk where applicable, or invalidated producer generations.
 - Temporal output cannot claim product freshness or scene authority beyond the
   prepared input evidence it consumed.
 
