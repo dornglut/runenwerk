@@ -1250,6 +1250,7 @@ mod tests {
             availability: fixture.availability,
             output_index: 0,
             target_key,
+            finite_evaluation_extent: None,
         };
         let mut targets = RenderDynamicTextureTargetRequestRegistryResource::default();
         let mut frame_requests = PreparedRenderFrameRequestResource::default();
