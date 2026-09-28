@@ -3,8 +3,59 @@
 use engine::automation::AutomationOwnerAdapter;
 use engine::plugins::default_plugins;
 use engine::prelude::{App, Update};
+use serde::{Deserialize, Serialize};
 
 use crate::camera::{RenderLabCamera, update_render_lab_camera_system};
+
+pub const RENDER_LAB_AUTOMATION_SCENARIO_PRODUCT_ID: &str = "runenwerk.render-lab.automation";
+pub const RENDER_LAB_AUTOMATION_SCENARIO_PRODUCT_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RenderLabCameraExpectationV1 {
+    pub yaw_radians: f64,
+    pub pitch_radians: f64,
+    pub distance: f64,
+    pub pan: [f64; 2],
+    pub absolute_tolerance: f64,
+}
+
+impl RenderLabCameraExpectationV1 {
+    pub fn matches(self, observation: RenderLabCameraObservation) -> bool {
+        (observation.yaw_radians - self.yaw_radians).abs() <= self.absolute_tolerance
+            && (observation.pitch_radians - self.pitch_radians).abs() <= self.absolute_tolerance
+            && (observation.distance - self.distance).abs() <= self.absolute_tolerance
+            && (observation.pan[0] - self.pan[0]).abs() <= self.absolute_tolerance
+            && (observation.pan[1] - self.pan[1]).abs() <= self.absolute_tolerance
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub enum RenderLabAutomationScenarioStepV1 {
+    AssertCamera {
+        expected: RenderLabCameraExpectationV1,
+    },
+}
+
+pub fn validate_render_lab_automation_scenario_step_v1(
+    step: &RenderLabAutomationScenarioStepV1,
+) -> Result<(), String> {
+    match step {
+        RenderLabAutomationScenarioStepV1::AssertCamera { expected } => {
+            if !expected.yaw_radians.is_finite()
+                || !expected.pitch_radians.is_finite()
+                || !expected.distance.is_finite()
+                || !expected.pan.iter().all(|value| value.is_finite())
+                || !expected.absolute_tolerance.is_finite()
+                || expected.absolute_tolerance < 0.0
+            {
+                return Err("Render Lab camera expectation must contain finite values and a nonnegative tolerance".to_owned());
+            }
+        }
+    }
+    Ok(())
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RenderLabAutomationTarget;
