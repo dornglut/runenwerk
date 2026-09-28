@@ -175,8 +175,8 @@ jobs:
               --argjson evaluation_width "${internal%x*}" \
               --argjson evaluation_height "${internal#*x}" \
               '
-                .schema_version == 4
-                and .scenario_revision == 4
+                .schema_version == 5
+                and .scenario_revision == 5
                 and .source_git_revision == $revision
                 and .requested_output_size_px == [1920,1080]
                 and .capture_submission_ordinal == 4
@@ -194,23 +194,23 @@ jobs:
                   and .sequence_revision == 1
                   and .reconstruction_revision == 1
                 )
-                and .temporal_reconstruction[0].semantic_input_generations == [1,1]
+                and .temporal_reconstruction[0].semantic_input_generation_classes == [1,1]
                 and .temporal_reconstruction[0].phase == 0
                 and .temporal_reconstruction[0].history_age == 0
                 and .temporal_reconstruction[0].history_reset == true
-                and .temporal_reconstruction[1].semantic_input_generations == [1,1]
+                and .temporal_reconstruction[1].semantic_input_generation_classes == [1,1]
                 and .temporal_reconstruction[1].phase == 1
                 and .temporal_reconstruction[1].history_age == 1
                 and .temporal_reconstruction[1].history_reset == false
                 and .temporal_reconstruction[1].history_generation
                     == .temporal_reconstruction[0].history_generation
-                and .temporal_reconstruction[2].semantic_input_generations == [2,2]
+                and .temporal_reconstruction[2].semantic_input_generation_classes == [2,2]
                 and .temporal_reconstruction[2].phase == 0
                 and .temporal_reconstruction[2].history_age == 0
                 and .temporal_reconstruction[2].history_reset == true
                 and .temporal_reconstruction[2].history_generation
                     != .temporal_reconstruction[0].history_generation
-                and .temporal_reconstruction[3].semantic_input_generations == [2,2]
+                and .temporal_reconstruction[3].semantic_input_generation_classes == [2,2]
                 and .temporal_reconstruction[3].phase == 1
                 and .temporal_reconstruction[3].history_age == 1
                 and .temporal_reconstruction[3].history_reset == false
