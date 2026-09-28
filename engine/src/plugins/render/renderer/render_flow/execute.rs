@@ -824,7 +824,7 @@ impl Renderer {
                 self.deterministic_temporal_evidence
                     .entry(prepared_frame.context.frame_index)
                     .or_default()
-                    .push(evidence);
+                    .push(evidence.clone());
             }
             fragments.extend(prepared.work_set().fragments().iter().cloned());
             imports.push(output.import(GpuResourceProvenance::new(
