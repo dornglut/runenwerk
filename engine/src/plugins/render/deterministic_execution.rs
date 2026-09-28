@@ -2273,9 +2273,7 @@ mod tests {
         assert_eq!(cache.buffers.len(), 1, "the cache retains one live slot");
     }
 
-    fn temporal_signature(
-        source_generation: u64,
-    ) -> DeterministicTemporalSignature {
+    fn temporal_signature(source_generation: u64) -> DeterministicTemporalSignature {
         use super::super::request::{
             RenderOutputSpec, RenderOutputValue, RenderPerspectiveObservation,
             RenderRadiometricRepresentation, RenderResultTopology, RenderSamplingSupport,
@@ -2304,9 +2302,10 @@ mod tests {
         );
         let output = RenderOutputSpec::new(
             RenderOutputValue::Radiance {
-                representation:
-                    RenderRadiometricRepresentation::spectral_at_wavelength_meters(550.0e-9)
-                        .expect("valid wavelength"),
+                representation: RenderRadiometricRepresentation::spectral_at_wavelength_meters(
+                    550.0e-9,
+                )
+                .expect("valid wavelength"),
             },
             RenderResultTopology::sample_lattice_2d(4, 4).expect("valid requested lattice"),
             RenderSemanticTolerance::absolute(0.001).expect("valid tolerance"),
