@@ -653,7 +653,7 @@ impl AutomationSession {
             return Err(AutomationPersistedReplayError::ReplayLeasePending);
         }
 
-        let imported = match import_automation_input_trace_v1(bytes) {
+        let imported = match import_automation_input_trace(bytes) {
             Ok(imported) => imported,
             Err(error) => {
                 let outcome = import_error_step_outcome(&error);

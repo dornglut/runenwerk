@@ -244,9 +244,10 @@ fn input_replay_preflight(
                         pointer_buttons.push(input.button);
                     }
                 }
-                InputObservation::RelativeMotion { .. } | InputObservation::Scroll(_) => {}
-                InputObservation::Keyboard(_)
+                InputObservation::RelativeMotion { .. }
                 | InputObservation::AbsolutePointerPosition { .. }
+                | InputObservation::Scroll(_) => {}
+                InputObservation::Keyboard(_)
                 | InputObservation::Contact(_)
                 | InputObservation::ContinuityLoss(_)
                 | InputObservation::Tablet(_) => {

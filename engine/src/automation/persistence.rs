@@ -23,6 +23,7 @@ use super::{AutomationInputTrace, AutomationInputTraceFrame};
 pub const AUTOMATION_INPUT_TRACE_V1_ARTIFACT_KIND: &str =
     "runenwerk.automation.normalized-replay-trace";
 pub const AUTOMATION_INPUT_TRACE_V1_SCHEMA_VERSION: u32 = 1;
+pub const AUTOMATION_INPUT_TRACE_V2_SCHEMA_VERSION: u32 = 2;
 
 pub const MAX_ARTIFACT_BYTES: usize = 8 * 1024 * 1024;
 pub const MAX_RON_RECURSION_DEPTH: usize = 64;
@@ -65,6 +66,37 @@ pub struct ImportedAutomationInputTraceV1 {
 }
 
 impl ImportedAutomationInputTraceV1 {
+    pub fn trace(&self) -> &AutomationInputTrace {
+        &self.trace
+    }
+
+    pub fn into_trace(self) -> AutomationInputTrace {
+        self.trace
+    }
+
+    pub fn recording_witness(&self) -> AutomationInputTraceRecordingWitness {
+        self.recording_witness
+    }
+
+    pub fn provenance(&self) -> Option<&AutomationInputTraceProvenance> {
+        self.provenance.as_ref()
+    }
+}
+
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImportedAutomationInputTrace {
+    schema_version: u32,
+    trace: AutomationInputTrace,
+    recording_witness: AutomationInputTraceRecordingWitness,
+    provenance: Option<AutomationInputTraceProvenance>,
+}
+
+impl ImportedAutomationInputTrace {
+    pub fn schema_version(&self) -> u32 {
+        self.schema_version
+    }
+
     pub fn trace(&self) -> &AutomationInputTrace {
         &self.trace
     }
@@ -220,6 +252,42 @@ struct PersistedGroupV1 {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 enum PersistedObservationV1 {
     PointerButton(PersistedPointerButtonInputV1),
+    RelativeMotion(PersistedRelativeMotionV1),
+    Scroll(PersistedScrollInputV1),
+    Tablet(PersistedTabletObservationV1),
+}
+
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PersistedTraceV2 {
+    artifact_kind: String,
+    schema_version: u32,
+    recorded_sources_pristine_at_capture_start: bool,
+    #[serde(default)]
+    provenance: Option<AutomationInputTraceProvenance>,
+    frames: Vec<PersistedFrameV2>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PersistedFrameV2 {
+    frame_ordinal: u64,
+    groups: Vec<PersistedGroupV2>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PersistedGroupV2 {
+    source_slot: u32,
+    device_slot: Option<u32>,
+    observations: Vec<PersistedObservationV2>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+enum PersistedObservationV2 {
+    PointerButton(PersistedPointerButtonInputV1),
+    AbsolutePointerPosition { position: PersistedPoint2V1 },
     RelativeMotion(PersistedRelativeMotionV1),
     Scroll(PersistedScrollInputV1),
     Tablet(PersistedTabletObservationV1),
@@ -454,9 +522,29 @@ pub fn export_automation_input_trace_v1(
     validate_export_normalized_input(trace)?;
     validate_provenance_export(provenance)?;
     let persisted = ExportBuilder::new().build(trace, recording_witness, provenance.cloned())?;
+    serialize_persisted_trace(&persisted)
+}
+
+pub fn export_automation_input_trace_v2(
+    trace: &AutomationInputTrace,
+    recording_witness: AutomationInputTraceRecordingWitness,
+    provenance: Option<&AutomationInputTraceProvenance>,
+) -> Result<String, AutomationInputTraceExportError> {
+    if !trace.trailing_groups.is_empty() {
+        return Err(AutomationInputTraceExportError::UnframedTrailingGroups);
+    }
+    validate_export_normalized_input(trace)?;
+    validate_provenance_export(provenance)?;
+    let persisted = ExportBuilder::new().build_v2(trace, recording_witness, provenance.cloned())?;
+    serialize_persisted_trace(&persisted)
+}
+
+fn serialize_persisted_trace<T: Serialize>(
+    persisted: &T,
+) -> Result<String, AutomationInputTraceExportError> {
     let options = ron_options();
     let encoded = options
-        .to_string_pretty(&persisted, ron::ser::PrettyConfig::new())
+        .to_string_pretty(persisted, ron::ser::PrettyConfig::new())
         .map_err(|error| {
             AutomationInputTraceExportError::SerializationFailure(error.to_string())
         })?;
@@ -468,9 +556,54 @@ pub fn export_automation_input_trace_v1(
     Ok(encoded)
 }
 
+pub fn import_automation_input_trace(
+    bytes: &[u8],
+) -> Result<ImportedAutomationInputTrace, AutomationInputTraceImportError> {
+    let (source, probe) = probe_persisted_trace(bytes)?;
+    match probe.schema_version {
+        AUTOMATION_INPUT_TRACE_V1_SCHEMA_VERSION => {
+            let imported = import_automation_input_trace_v1_source(source)?;
+            Ok(ImportedAutomationInputTrace {
+                schema_version: AUTOMATION_INPUT_TRACE_V1_SCHEMA_VERSION,
+                trace: imported.trace,
+                recording_witness: imported.recording_witness,
+                provenance: imported.provenance,
+            })
+        }
+        AUTOMATION_INPUT_TRACE_V2_SCHEMA_VERSION => import_automation_input_trace_v2_source(source),
+        version => Err(AutomationInputTraceImportError::UnsupportedSchemaVersion(
+            version,
+        )),
+    }
+}
+
 pub fn import_automation_input_trace_v1(
     bytes: &[u8],
 ) -> Result<ImportedAutomationInputTraceV1, AutomationInputTraceImportError> {
+    let (source, probe) = probe_persisted_trace(bytes)?;
+    if probe.schema_version != AUTOMATION_INPUT_TRACE_V1_SCHEMA_VERSION {
+        return Err(AutomationInputTraceImportError::UnsupportedSchemaVersion(
+            probe.schema_version,
+        ));
+    }
+    import_automation_input_trace_v1_source(source)
+}
+
+pub fn import_automation_input_trace_v2(
+    bytes: &[u8],
+) -> Result<ImportedAutomationInputTrace, AutomationInputTraceImportError> {
+    let (source, probe) = probe_persisted_trace(bytes)?;
+    if probe.schema_version != AUTOMATION_INPUT_TRACE_V2_SCHEMA_VERSION {
+        return Err(AutomationInputTraceImportError::UnsupportedSchemaVersion(
+            probe.schema_version,
+        ));
+    }
+    import_automation_input_trace_v2_source(source)
+}
+
+fn probe_persisted_trace(
+    bytes: &[u8],
+) -> Result<(&str, EnvelopeProbe), AutomationInputTraceImportError> {
     if bytes.len() > MAX_ARTIFACT_BYTES {
         return Err(AutomationInputTraceImportError::ArtifactTooLarge);
     }
@@ -484,12 +617,13 @@ pub fn import_automation_input_trace_v1(
             probe.artifact_kind,
         ));
     }
-    if probe.schema_version != AUTOMATION_INPUT_TRACE_V1_SCHEMA_VERSION {
-        return Err(AutomationInputTraceImportError::UnsupportedSchemaVersion(
-            probe.schema_version,
-        ));
-    }
+    Ok((source, probe))
+}
 
+fn import_automation_input_trace_v1_source(
+    source: &str,
+) -> Result<ImportedAutomationInputTraceV1, AutomationInputTraceImportError> {
+    let options = ron_options();
     let persisted: PersistedTraceV1 = options.from_str(source).map_err(classify_ron_error)?;
     validate_persisted_header(&persisted)?;
     validate_provenance_import(persisted.provenance.as_ref())?;
@@ -503,6 +637,30 @@ pub fn import_automation_input_trace_v1(
     validate_imported_normalized_input(&trace)?;
 
     Ok(ImportedAutomationInputTraceV1 {
+        trace,
+        recording_witness,
+        provenance: persisted.provenance,
+    })
+}
+
+fn import_automation_input_trace_v2_source(
+    source: &str,
+) -> Result<ImportedAutomationInputTrace, AutomationInputTraceImportError> {
+    let options = ron_options();
+    let persisted: PersistedTraceV2 = options.from_str(source).map_err(classify_ron_error)?;
+    validate_persisted_header_v2(&persisted)?;
+    validate_provenance_import(persisted.provenance.as_ref())?;
+    if !persisted.recorded_sources_pristine_at_capture_start {
+        return Err(AutomationInputTraceImportError::UnsupportedRecordingWitness);
+    }
+    let recording_witness =
+        AutomationInputTraceRecordingWitness::RecordedSourcesPristineAtCaptureStart;
+
+    let trace = ImportBuilder::new().build_v2(&persisted)?;
+    validate_imported_normalized_input(&trace)?;
+
+    Ok(ImportedAutomationInputTrace {
+        schema_version: AUTOMATION_INPUT_TRACE_V2_SCHEMA_VERSION,
         trace,
         recording_witness,
         provenance: persisted.provenance,
@@ -539,6 +697,23 @@ fn validate_persisted_header(
         ));
     }
     if persisted.schema_version != AUTOMATION_INPUT_TRACE_V1_SCHEMA_VERSION {
+        return Err(AutomationInputTraceImportError::UnsupportedSchemaVersion(
+            persisted.schema_version,
+        ));
+    }
+    Ok(())
+}
+
+
+fn validate_persisted_header_v2(
+    persisted: &PersistedTraceV2,
+) -> Result<(), AutomationInputTraceImportError> {
+    if persisted.artifact_kind != AUTOMATION_INPUT_TRACE_V1_ARTIFACT_KIND {
+        return Err(AutomationInputTraceImportError::WrongArtifactKind(
+            persisted.artifact_kind.clone(),
+        ));
+    }
+    if persisted.schema_version != AUTOMATION_INPUT_TRACE_V2_SCHEMA_VERSION {
         return Err(AutomationInputTraceImportError::UnsupportedSchemaVersion(
             persisted.schema_version,
         ));
@@ -704,6 +879,108 @@ impl ExportBuilder {
         })
     }
 
+    fn build_v2(
+        mut self,
+        trace: &AutomationInputTrace,
+        recording_witness: AutomationInputTraceRecordingWitness,
+        provenance: Option<AutomationInputTraceProvenance>,
+    ) -> Result<PersistedTraceV2, AutomationInputTraceExportError> {
+        if trace.frames.len() > MAX_FRAMES {
+            return Err(AutomationInputTraceExportError::ResourceLimitExceeded(
+                "frames",
+            ));
+        }
+
+        let mut frames = Vec::with_capacity(trace.frames.len());
+        for (frame_index, frame) in trace.frames.iter().enumerate() {
+            if frame.frame_ordinal != frame_index as u64 {
+                return Err(AutomationInputTraceExportError::UnsupportedTraceShape(
+                    "frame ordinals must be contiguous from zero".to_owned(),
+                ));
+            }
+            if frame.groups.len() > MAX_GROUPS_PER_FRAME {
+                return Err(AutomationInputTraceExportError::ResourceLimitExceeded(
+                    "groups_per_frame",
+                ));
+            }
+            self.total_groups = self.total_groups.checked_add(frame.groups.len()).ok_or(
+                AutomationInputTraceExportError::ResourceLimitExceeded("total_groups"),
+            )?;
+            if self.total_groups > MAX_TOTAL_GROUPS {
+                return Err(AutomationInputTraceExportError::ResourceLimitExceeded(
+                    "total_groups",
+                ));
+            }
+
+            let mut groups = Vec::with_capacity(frame.groups.len());
+            for group in &frame.groups {
+                groups.push(self.convert_group_v2(group)?);
+            }
+            frames.push(PersistedFrameV2 {
+                frame_ordinal: frame.frame_ordinal,
+                groups,
+            });
+        }
+
+        Ok(PersistedTraceV2 {
+            artifact_kind: AUTOMATION_INPUT_TRACE_V1_ARTIFACT_KIND.to_owned(),
+            schema_version: AUTOMATION_INPUT_TRACE_V2_SCHEMA_VERSION,
+            recorded_sources_pristine_at_capture_start: match recording_witness {
+                AutomationInputTraceRecordingWitness::RecordedSourcesPristineAtCaptureStart => true,
+            },
+            provenance,
+            frames,
+        })
+    }
+
+    fn convert_group_v2(
+        &mut self,
+        group: &InputObservationGroup,
+    ) -> Result<PersistedGroupV2, AutomationInputTraceExportError> {
+        if group.observations.is_empty() {
+            return Err(AutomationInputTraceExportError::UnsupportedTraceShape(
+                "empty observation groups are not persisted".to_owned(),
+            ));
+        }
+        if group.observations.len() > MAX_OBSERVATIONS_PER_GROUP {
+            return Err(AutomationInputTraceExportError::ResourceLimitExceeded(
+                "observations_per_group",
+            ));
+        }
+
+        let source_slot = self.source_slot(group.context.source)?;
+        let device_slot = group
+            .context
+            .device
+            .map(|device| self.device_slot(group.context.source, device))
+            .transpose()?;
+
+        let all_tablet = group
+            .observations
+            .iter()
+            .all(|observation| matches!(observation, InputObservation::Tablet(_)));
+        if !all_tablet && group.observations.len() != 1 {
+            return Err(AutomationInputTraceExportError::UnsupportedTraceShape(
+                "multi-observation non-tablet groups are not persisted".to_owned(),
+            ));
+        }
+
+        let mut observations = Vec::with_capacity(group.observations.len());
+        for observation in &group.observations {
+            observations.push(self.convert_observation_v2(
+                group.context,
+                observation,
+                all_tablet,
+            )?);
+        }
+
+        Ok(PersistedGroupV2 {
+            source_slot,
+            device_slot,
+            observations,
+        })
+    }
+
     fn source_slot(
         &mut self,
         source: InputSourceId,
@@ -818,6 +1095,51 @@ impl ExportBuilder {
             )),
             _ => Err(AutomationInputTraceExportError::UnsupportedTraceShape(
                 "trace contains an observation outside persisted V1 replay scope".to_owned(),
+            )),
+        }
+    }
+
+    fn convert_observation_v2(
+        &mut self,
+        context: InputContext,
+        observation: &InputObservation,
+        all_tablet: bool,
+    ) -> Result<PersistedObservationV2, AutomationInputTraceExportError> {
+        match observation {
+            InputObservation::PointerButton(input) if !all_tablet => {
+                if self.first_pointer_state.insert((context, input.button))
+                    && input.state != DigitalState::Pressed
+                {
+                    return Err(AutomationInputTraceExportError::UnsupportedTraceShape(
+                        "first pointer-button state must establish a press".to_owned(),
+                    ));
+                }
+                Ok(PersistedObservationV2::PointerButton(
+                    PersistedPointerButtonInputV1 {
+                        button: pointer_button_to_persisted(input.button),
+                        state: digital_state_to_persisted(input.state),
+                    },
+                ))
+            }
+            InputObservation::AbsolutePointerPosition { position } if !all_tablet => {
+                Ok(PersistedObservationV2::AbsolutePointerPosition {
+                    position: point_to_persisted(*position),
+                })
+            }
+            InputObservation::RelativeMotion { delta, unit } if !all_tablet => Ok(
+                PersistedObservationV2::RelativeMotion(PersistedRelativeMotionV1 {
+                    delta: vector_to_persisted(*delta),
+                    unit: relative_unit_to_persisted(*unit),
+                }),
+            ),
+            InputObservation::Scroll(input) if !all_tablet => {
+                Ok(PersistedObservationV2::Scroll(scroll_to_persisted(*input)))
+            }
+            InputObservation::Tablet(tablet) if all_tablet => Ok(PersistedObservationV2::Tablet(
+                self.tablet_to_persisted(context, tablet)?,
+            )),
+            _ => Err(AutomationInputTraceExportError::UnsupportedTraceShape(
+                "trace contains an observation outside persisted V2 replay scope".to_owned(),
             )),
         }
     }
@@ -964,6 +1286,99 @@ impl ImportBuilder {
         Ok(InputObservationGroup::new(context, observations))
     }
 
+    fn build_v2(
+        mut self,
+        persisted: &PersistedTraceV2,
+    ) -> Result<AutomationInputTrace, AutomationInputTraceImportError> {
+        if persisted.frames.len() > MAX_FRAMES {
+            return Err(AutomationInputTraceImportError::ResourceLimitExceeded(
+                "frames",
+            ));
+        }
+
+        let mut frames = Vec::with_capacity(persisted.frames.len());
+        for (frame_index, frame) in persisted.frames.iter().enumerate() {
+            if frame.frame_ordinal != frame_index as u64 {
+                return Err(AutomationInputTraceImportError::UnsupportedTraceShape(
+                    "frame ordinals must be contiguous from zero".to_owned(),
+                ));
+            }
+            if frame.groups.len() > MAX_GROUPS_PER_FRAME {
+                return Err(AutomationInputTraceImportError::ResourceLimitExceeded(
+                    "groups_per_frame",
+                ));
+            }
+            self.total_groups = self.total_groups.checked_add(frame.groups.len()).ok_or(
+                AutomationInputTraceImportError::ResourceLimitExceeded("total_groups"),
+            )?;
+            if self.total_groups > MAX_TOTAL_GROUPS {
+                return Err(AutomationInputTraceImportError::ResourceLimitExceeded(
+                    "total_groups",
+                ));
+            }
+
+            let mut groups = Vec::with_capacity(frame.groups.len());
+            for group in &frame.groups {
+                groups.push(self.convert_group_v2(group)?);
+            }
+            frames.push(AutomationInputTraceFrame {
+                frame_ordinal: frame.frame_ordinal,
+                groups,
+            });
+        }
+
+        Ok(AutomationInputTrace {
+            frames,
+            trailing_groups: Vec::new(),
+        })
+    }
+
+    fn convert_group_v2(
+        &mut self,
+        group: &PersistedGroupV2,
+    ) -> Result<InputObservationGroup, AutomationInputTraceImportError> {
+        if group.observations.is_empty() {
+            return Err(AutomationInputTraceImportError::UnsupportedTraceShape(
+                "empty observation groups are not replayable".to_owned(),
+            ));
+        }
+        if group.observations.len() > MAX_OBSERVATIONS_PER_GROUP {
+            return Err(AutomationInputTraceImportError::ResourceLimitExceeded(
+                "observations_per_group",
+            ));
+        }
+
+        let source = self.materialize_source(group.source_slot)?;
+        let device = group
+            .device_slot
+            .map(|slot| self.materialize_device(group.source_slot, slot))
+            .transpose()?;
+        let context = InputContext::new(source, device);
+
+        let all_tablet = group
+            .observations
+            .iter()
+            .all(|observation| matches!(observation, PersistedObservationV2::Tablet(_)));
+        if !all_tablet && group.observations.len() != 1 {
+            return Err(AutomationInputTraceImportError::UnsupportedTraceShape(
+                "multi-observation non-tablet groups are not replayable".to_owned(),
+            ));
+        }
+
+        let mut observations = Vec::with_capacity(group.observations.len());
+        for observation in &group.observations {
+            observations.push(self.convert_observation_v2(
+                group.source_slot,
+                group.device_slot,
+                context,
+                observation,
+                all_tablet,
+            )?);
+        }
+
+        Ok(InputObservationGroup::new(context, observations))
+    }
+
     fn materialize_source(
         &mut self,
         slot: u32,
@@ -1099,6 +1514,53 @@ impl ImportBuilder {
             )),
             _ => Err(AutomationInputTraceImportError::UnsupportedTraceShape(
                 "artifact contains an observation outside persisted V1 replay scope".to_owned(),
+            )),
+        }
+    }
+
+    fn convert_observation_v2(
+        &mut self,
+        source_slot: u32,
+        device_slot: Option<u32>,
+        context: InputContext,
+        observation: &PersistedObservationV2,
+        all_tablet: bool,
+    ) -> Result<InputObservation, AutomationInputTraceImportError> {
+        match observation {
+            PersistedObservationV2::PointerButton(input) if !all_tablet => {
+                let button = pointer_button_from_persisted(input.button);
+                let state = digital_state_from_persisted(input.state);
+                if self.first_pointer_state.insert((context, button))
+                    && state != DigitalState::Pressed
+                {
+                    return Err(AutomationInputTraceImportError::UnsupportedTraceShape(
+                        "first pointer-button state must establish a press".to_owned(),
+                    ));
+                }
+                Ok(InputObservation::PointerButton(PointerButtonInput {
+                    button,
+                    state,
+                }))
+            }
+            PersistedObservationV2::AbsolutePointerPosition { position } if !all_tablet => {
+                Ok(InputObservation::AbsolutePointerPosition {
+                    position: point_from_persisted(*position),
+                })
+            }
+            PersistedObservationV2::RelativeMotion(input) if !all_tablet => {
+                Ok(InputObservation::RelativeMotion {
+                    delta: vector_from_persisted(input.delta),
+                    unit: relative_unit_from_persisted(input.unit),
+                })
+            }
+            PersistedObservationV2::Scroll(input) if !all_tablet => {
+                Ok(InputObservation::Scroll(scroll_from_persisted(*input)))
+            }
+            PersistedObservationV2::Tablet(tablet) if all_tablet => Ok(InputObservation::Tablet(
+                self.tablet_from_persisted(source_slot, device_slot, context, tablet)?,
+            )),
+            _ => Err(AutomationInputTraceImportError::UnsupportedTraceShape(
+                "artifact contains an observation outside persisted V2 replay scope".to_owned(),
             )),
         }
     }
