@@ -285,15 +285,15 @@ fn prediction_replay_preserves_runennet_target_tick_and_updates_diagnostics() {
     let diagnostics = client.world().resource::<PredictionDiagnostics>().unwrap();
     assert_eq!(diagnostics.replayed, 1);
     assert_eq!(client_prediction_pending_count(client.world()), Some(1));
-    assert!(
-        client
-            .world()
-            .resource::<AppliedInputLog>()
-            .unwrap()
-            .ticks
-            .iter()
-            .all(|tick| *tick == SimulationTick(1)),
-        "ordinary prediction and RunenNet replay must preserve the semantic target tick"
+    let applied = client.world().resource::<AppliedInputLog>().unwrap();
+    assert_eq!(
+        applied.ticks,
+        vec![SimulationTick(1), SimulationTick(1)],
+        "ordinary prediction and RunenNet replay must both preserve the semantic target tick"
+    );
+    assert_eq!(
+        applied.world_ticks, applied.ticks,
+        "the host driver must observe Engine SimulationTick equal to each explicit input target, including replay"
     );
     assert_eq!(
         *client.world().resource::<SimulationTick>().unwrap(),

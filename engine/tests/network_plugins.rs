@@ -84,6 +84,7 @@ impl PlayerCommandBuffer {
 struct AppliedInputLog {
     inputs: Vec<ClientCommandEnvelope>,
     ticks: Vec<engine_sim::SimulationTick>,
+    world_ticks: Vec<engine_sim::SimulationTick>,
 }
 
 #[derive(Debug, Clone, Copy, Default, runen_ecs::Resource)]
@@ -223,6 +224,10 @@ impl InputDriver for TestReplicationDriver {
             ));
         }
 
+        let world_tick = world
+            .resource::<engine_sim::SimulationTick>()
+            .copied()
+            .unwrap_or_default();
         if world.resource::<AppliedInputLog>().is_err() {
             world.insert_resource(AppliedInputLog::default());
         }
@@ -231,6 +236,7 @@ impl InputDriver for TestReplicationDriver {
             .expect("applied-input log should exist after initialization");
         log.inputs.extend_from_slice(input);
         log.ticks.push(tick);
+        log.world_ticks.push(world_tick);
         Ok(())
     }
 }
