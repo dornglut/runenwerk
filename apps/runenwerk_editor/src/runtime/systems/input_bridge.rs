@@ -11,6 +11,7 @@ use ui_input::{
 };
 use ui_math::{UiPoint, UiRect};
 
+use super::picking::{clear_editor_picking_for_target, update_editor_picking_for_target};
 use crate::editor_features::viewport::ViewportInteractionCommand;
 use crate::runtime::app::{
     ACTION_EDITOR_REDO, ACTION_EDITOR_TOOL_ROTATE, ACTION_EDITOR_TOOL_SCALE,
@@ -26,7 +27,8 @@ use crate::runtime::viewport::{
     ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
     ViewportInstanceRegistryResource, ViewportPickingResultsResource,
     ViewportPresentationStateResource, ViewportRenderStateCommand,
-    ViewportRenderStateCommandQueueResource, resolve_structural_viewport_products,
+    ViewportRenderStateCommandQueueResource, ViewportRenderStateResource,
+    resolve_structural_viewport_products,
 };
 use crate::runtime::{build_viewport_picking_product_frame, viewport_hit_from_picking_product};
 use crate::shell::dispatch_shell_command;
@@ -54,7 +56,8 @@ pub fn dispatch_editor_input_system(
     mut windows: ResMut<WindowStateRegistryResource>,
     mut host: ResMut<EditorHostResource>,
     mut bridge: ResMut<EditorInputBridgeState>,
-    picking_results: Res<ViewportPickingResultsResource>,
+    mut picking_results: ResMut<ViewportPickingResultsResource>,
+    viewport_render_states: Res<ViewportRenderStateResource>,
     mut viewport_presentations: ResMut<ViewportPresentationStateResource>,
     viewport_observations: Res<ViewportArtifactObservationResource>,
     viewport_instances: Res<ViewportInstanceRegistryResource>,
@@ -64,6 +67,7 @@ pub fn dispatch_editor_input_system(
     sync_active_editor_shortcut_bindings(&input, &mut actions, &host, &mut bridge);
 
     let primary_window_id = NativeWindowId::primary();
+    let primary_target_id = host.shell_state.primary_composition_target_id();
     let mut primary_ui_events = Vec::new();
     let mut retained_events = Vec::new();
     for window_event in platform_events.drain() {
@@ -75,20 +79,20 @@ pub fn dispatch_editor_input_system(
             &window_event.event,
             PlatformEvent::Focused { focused: false }
         );
-        let viewport_scroll_delta = match &window_event.event {
-            PlatformEvent::MouseWheel { input, .. } => input.delta.vertical,
-            _ => None,
-        };
-        primary_ui_events.extend(
-            translate_platform_event(&mut target_input, primary_window_id, window_event.event)
-                .into_iter()
-                .map(|event| (event, viewport_scroll_delta)),
-        );
+        primary_ui_events.extend(translate_platform_event(
+            &mut target_input,
+            primary_window_id,
+            window_event.event,
+        ));
         if focus_lost {
             host.shell_state.runtime_mut().set_focused_widget(None);
             host.shell_state.clear_tab_drag();
-            bridge.pointer_owner = EditorPointerOwner::None;
-            bridge.active_camera_viewport = None;
+            clear_editor_viewport_interaction_for_target(
+                primary_target_id,
+                &mut bridge,
+                &mut picking_results,
+                &tool_surface_bindings,
+            );
         }
     }
     for event in retained_events {
@@ -99,13 +103,16 @@ pub fn dispatch_editor_input_system(
         target_input.clear_window(primary_window_id);
         host.shell_state.runtime_mut().set_focused_widget(None);
         host.shell_state.clear_tab_drag();
-        bridge.pointer_owner = EditorPointerOwner::None;
-        bridge.active_camera_viewport = None;
+        clear_editor_viewport_interaction_for_target(
+            primary_target_id,
+            &mut bridge,
+            &mut picking_results,
+            &tool_surface_bindings,
+        );
         return;
     }
 
     let bounds = presentation_bounds(&presentation);
-    let primary_target_id = host.shell_state.primary_composition_target_id();
     let shell_theme = scaled_shell_theme(&host.theme, presentation.scale_factor());
     let viewport_products = resolve_structural_viewport_products(
         &host.shell_state,
@@ -113,13 +120,16 @@ pub fn dispatch_editor_input_system(
         &tool_surface_bindings,
     );
     let position = UiPoint::new(input.mouse_position.0, input.mouse_position.1);
-    let previous = UiPoint::new(bridge.last_mouse_position.0, bridge.last_mouse_position.1);
     if let Some(binding) =
         tool_surface_bindings.binding_containing_cursor_for_target(primary_target_id, position)
     {
-        bridge.last_target_viewport = Some(binding.viewport_id);
+        bridge
+            .interaction_for_target_mut(primary_target_id)
+            .last_target_viewport = Some(binding.viewport_id);
     }
-    let preferred_viewport_id = bridge.last_target_viewport;
+    let preferred_viewport_id = bridge
+        .interaction_for_target(primary_target_id)
+        .last_target_viewport;
     let authored_viewport_shortcuts_blocked =
         shell_focus_captures_viewport_shortcuts(&host.shell_state);
 
@@ -139,15 +149,7 @@ pub fn dispatch_editor_input_system(
         bridge.last_logged_picking_revision = picking_results.global_revision();
     }
 
-    for (event, viewport_scroll_delta) in primary_ui_events {
-        let pointer = match &event {
-            UiInputEvent::Pointer(pointer)
-                if pointer.packet.source_kind == PointerSourceKind::Mouse =>
-            {
-                Some(pointer)
-            }
-            _ => None,
-        };
+    for event in primary_ui_events {
         let outcome = dispatch_ui_event(
             &mut host,
             &shell_theme,
@@ -160,227 +162,19 @@ pub fn dispatch_editor_input_system(
             Some(&viewport_instances),
             Some(&mut *viewport_render_commands),
         );
-
-        let Some(pointer) = pointer else {
-            continue;
-        };
-        if let Some(binding) = tool_surface_bindings
-            .binding_containing_cursor_for_target(primary_target_id, pointer.position)
-        {
-            bridge.last_target_viewport = Some(binding.viewport_id);
-        }
-
-        match (pointer.kind, pointer.button) {
-            (PointerEventKind::Scroll, _) => {
-                if !pointer_event_consumed_by_ui(&outcome)
-                    && let Some(scroll_delta) = viewport_scroll_delta
-                    && scroll_delta.abs() > f32::EPSILON
-                    && let Some(binding) = fallback_viewport_binding(
-                        &tool_surface_bindings,
-                        primary_target_id,
-                        pointer.position,
-                    )
-                {
-                    bridge.last_target_viewport = Some(binding.viewport_id);
-                    viewport_render_commands.push(ViewportRenderStateCommand::ZoomCamera {
-                        viewport_id: binding.viewport_id,
-                        scroll_delta,
-                    });
-                }
-            }
-            (PointerEventKind::Down, Some(PointerButton::Primary)) => {
-                let pointer_route = outcome.as_ref().and_then(|value| {
-                    viewport_pointer_route(
-                        &host.shell_state,
-                        &tool_surface_bindings,
-                        &value.dispatch,
-                        pointer.position,
-                    )
-                });
-                if let Some(route) = pointer_route {
-                    bridge.pointer_owner = EditorPointerOwner::ViewportTool {
-                        tool_surface_id: route.tool_surface_id,
-                    };
-                    dispatch_viewport_pointer_down(
-                        &mut host,
-                        &picking_results,
-                        pointer.position,
-                        route,
-                    );
-                } else {
-                    bridge.pointer_owner = EditorPointerOwner::None;
-                    if host.app.debug_logs_enabled() {
-                        host.app.append_console_input(format!(
-                            "[input] pointer-down routed to shell only: cursor=({:.1},{:.1})",
-                            pointer.position.x, pointer.position.y
-                        ));
-                    }
-                }
-            }
-            (PointerEventKind::Down, Some(PointerButton::Middle)) => {
-                if let Some(route) = outcome.as_ref().and_then(|value| {
-                    viewport_pointer_route(
-                        &host.shell_state,
-                        &tool_surface_bindings,
-                        &value.dispatch,
-                        pointer.position,
-                    )
-                }) {
-                    bridge.active_camera_viewport = Some(route.viewport_id);
-                    bridge.last_target_viewport = Some(route.viewport_id);
-                    bridge.pointer_owner = EditorPointerOwner::ViewportCamera {
-                        viewport_id: route.viewport_id,
-                        button: EditorCameraPointerButton::Middle,
-                    };
-                } else if outcome
-                    .as_ref()
-                    .and_then(|value| value.dispatch.target)
-                    .is_some()
-                {
-                    bridge.active_camera_viewport = None;
-                    bridge.pointer_owner = EditorPointerOwner::UiMiddleScroll;
-                } else {
-                    bridge.active_camera_viewport = None;
-                    bridge.pointer_owner = EditorPointerOwner::None;
-                }
-            }
-            (PointerEventKind::Down, Some(PointerButton::Secondary)) => {
-                if let Some(route) = outcome.as_ref().and_then(|value| {
-                    viewport_pointer_route(
-                        &host.shell_state,
-                        &tool_surface_bindings,
-                        &value.dispatch,
-                        pointer.position,
-                    )
-                }) {
-                    bridge.active_camera_viewport = Some(route.viewport_id);
-                    bridge.last_target_viewport = Some(route.viewport_id);
-                    bridge.pointer_owner = EditorPointerOwner::ViewportCamera {
-                        viewport_id: route.viewport_id,
-                        button: EditorCameraPointerButton::Secondary,
-                    };
-                } else {
-                    bridge.active_camera_viewport = None;
-                    bridge.pointer_owner = EditorPointerOwner::None;
-                }
-            }
-            (PointerEventKind::Up, Some(PointerButton::Primary)) => {
-                let captured_mounted_unit = host
-                    .app
-                    .surface_sessions()
-                    .active_viewport_drag_mounted_unit();
-                let routed_release_surface = outcome
-                    .as_ref()
-                    .and_then(|value| {
-                        viewport_pointer_route(
-                            &host.shell_state,
-                            &tool_surface_bindings,
-                            &value.dispatch,
-                            pointer.position,
-                        )
-                    })
-                    .map(|route| route.tool_surface_id);
-
-                if let Some(mounted_unit_id) = captured_mounted_unit
-                    && let Some(tool_surface_id) = host
-                        .shell_state
-                        .tool_surface_id_for_mounted_unit(mounted_unit_id)
-                    && routed_release_surface
-                        .map(|release_surface| release_surface == tool_surface_id)
-                        .unwrap_or_else(|| {
-                            tool_surface_bindings
-                                .binding_for_tool_surface(tool_surface_id)
-                                .is_some()
-                        })
-                    && let Err(error) = host.app.dispatch_viewport_interaction_for_mounted_unit(
-                        mounted_unit_id,
-                        ViewportInteractionCommand::PointerUp,
-                    )
-                {
-                    eprintln!("viewport pointer-up failed: {error}");
-                }
-                bridge.pointer_owner = EditorPointerOwner::None;
-            }
-            (PointerEventKind::Up, Some(PointerButton::Middle | PointerButton::Secondary)) => {
-                bridge.active_camera_viewport = None;
-                bridge.pointer_owner = EditorPointerOwner::None;
-            }
-            _ => {}
-        }
-    }
-
-    if input.left_mouse_down()
-        && let Some(mounted_unit_id) = host
-            .app
-            .surface_sessions()
-            .active_viewport_drag_mounted_unit()
-        && let Some(tool_surface_id) = host
-            .shell_state
-            .tool_surface_id_for_mounted_unit(mounted_unit_id)
-        && matches!(
-            bridge.pointer_owner,
-            EditorPointerOwner::ViewportTool {
-                tool_surface_id: owner_surface
-            } if owner_surface == tool_surface_id
-        )
-        && position != previous
-        && viewport_capture_active_for_surface(
-            &host.shell_state,
+        let ui_consumed = pointer_event_consumed_by_ui(&outcome);
+        dispatch_editor_viewport_input_for_target(
+            primary_target_id,
+            &event,
+            outcome.as_ref().map(|value| &value.dispatch),
+            ui_consumed,
+            &mut host,
+            &mut bridge,
+            &mut picking_results,
+            &viewport_render_states,
             &tool_surface_bindings,
-            tool_surface_id,
-        )
-    {
-        let amount = position.x - previous.x;
-        if amount != 0.0
-            && let Err(error) = host.app.dispatch_viewport_interaction_for_mounted_unit(
-                mounted_unit_id,
-                ViewportInteractionCommand::PointerDragAxis { amount },
-            )
-        {
-            eprintln!("viewport axis drag failed: {error}");
-        }
-    }
-
-    if input.middle_mouse_down()
-        && position != previous
-        && matches!(
-            bridge.pointer_owner,
-            EditorPointerOwner::ViewportCamera {
-                button: EditorCameraPointerButton::Middle,
-                ..
-            }
-        )
-        && let Some(binding) = active_camera_viewport_binding(
-            &tool_surface_bindings,
-            bridge.active_camera_viewport,
-            position,
-        )
-    {
-        viewport_render_commands.push(ViewportRenderStateCommand::PanCamera {
-            viewport_id: binding.viewport_id,
-            delta: position - previous,
-        });
-    }
-
-    if input.right_mouse_down()
-        && position != previous
-        && matches!(
-            bridge.pointer_owner,
-            EditorPointerOwner::ViewportCamera {
-                button: EditorCameraPointerButton::Secondary,
-                ..
-            }
-        )
-        && let Some(binding) = active_camera_viewport_binding(
-            &tool_surface_bindings,
-            bridge.active_camera_viewport,
-            position,
-        )
-    {
-        viewport_render_commands.push(ViewportRenderStateCommand::OrbitCamera {
-            viewport_id: binding.viewport_id,
-            delta: position - previous,
-        });
+            &mut viewport_render_commands,
+        );
     }
 
     let viewport_shortcuts_blocked = shell_focus_captures_viewport_shortcuts(&host.shell_state);
@@ -420,7 +214,259 @@ pub fn dispatch_editor_input_system(
     let cursor_intent =
         RunenwerkEditorShellController::cursor_intent_for_pointer(&host.shell_state, position);
     set_primary_cursor_intent(&mut windows, primary_window_id, cursor_intent);
-    bridge.last_mouse_position = (position.x, position.y);
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn dispatch_editor_viewport_input_for_target(
+    target_id: ui_composition::PresentationTargetId,
+    event: &UiInputEvent,
+    dispatch: Option<&editor_shell::UiInputDispatchResult>,
+    ui_consumed: bool,
+    host: &mut EditorHostResource,
+    bridge: &mut EditorInputBridgeState,
+    picking_results: &mut ViewportPickingResultsResource,
+    viewport_render_states: &ViewportRenderStateResource,
+    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    viewport_render_commands: &mut ViewportRenderStateCommandQueueResource,
+) {
+    let UiInputEvent::Pointer(pointer) = event else {
+        return;
+    };
+    if pointer.packet.source_kind != PointerSourceKind::Mouse {
+        return;
+    }
+
+    let position = pointer.position;
+    if let Some(binding) =
+        tool_surface_bindings.binding_containing_cursor_for_target(target_id, position)
+    {
+        bridge
+            .interaction_for_target_mut(target_id)
+            .last_target_viewport = Some(binding.viewport_id);
+    }
+
+    match (pointer.kind, pointer.button) {
+        (PointerEventKind::Move, _) => {
+            let interaction = bridge.interaction_for_target(target_id);
+            let captured_scene_interaction = matches!(
+                interaction.pointer_owner,
+                EditorPointerOwner::ViewportTool { .. } | EditorPointerOwner::ViewportCamera { .. }
+            );
+            let pointer_routes_to_scene = viewport_pointer_route(
+                &host.shell_state,
+                tool_surface_bindings,
+                target_id,
+                dispatch,
+                position,
+            )
+            .is_some();
+            if captured_scene_interaction || pointer_routes_to_scene || !ui_consumed {
+                update_editor_picking_for_target(
+                    target_id,
+                    position,
+                    host,
+                    picking_results,
+                    tool_surface_bindings,
+                    viewport_render_states,
+                );
+            } else {
+                clear_editor_picking_for_target(
+                    target_id,
+                    position,
+                    picking_results,
+                    tool_surface_bindings,
+                );
+            }
+            match interaction.pointer_owner {
+                EditorPointerOwner::ViewportTool { tool_surface_id } => {
+                    if pointer.delta.x != 0.0
+                        && viewport_capture_active_for_surface(
+                            &host.shell_state,
+                            tool_surface_bindings,
+                            target_id,
+                            tool_surface_id,
+                        )
+                        && let Some(mounted_unit_id) = host
+                            .shell_state
+                            .mounted_unit_id_for_tool_surface(tool_surface_id)
+                        && let Err(error) = host.app.dispatch_viewport_interaction_for_mounted_unit(
+                            mounted_unit_id,
+                            ViewportInteractionCommand::PointerDragAxis {
+                                amount: pointer.delta.x,
+                            },
+                        )
+                    {
+                        eprintln!("viewport axis drag failed: {error}");
+                    }
+                }
+                EditorPointerOwner::ViewportCamera {
+                    viewport_id,
+                    button,
+                } if pointer.delta != ui_math::UiVector::ZERO => {
+                    if let Some(binding) = active_camera_viewport_binding(
+                        tool_surface_bindings,
+                        target_id,
+                        Some(viewport_id),
+                    ) {
+                        let command = match button {
+                            EditorCameraPointerButton::Middle => {
+                                ViewportRenderStateCommand::PanCamera {
+                                    viewport_id: binding.viewport_id,
+                                    delta: pointer.delta,
+                                }
+                            }
+                            EditorCameraPointerButton::Secondary => {
+                                ViewportRenderStateCommand::OrbitCamera {
+                                    viewport_id: binding.viewport_id,
+                                    delta: pointer.delta,
+                                }
+                            }
+                        };
+                        viewport_render_commands.push(command);
+                    }
+                }
+                _ => {}
+            }
+        }
+        (PointerEventKind::Scroll, _) if !ui_consumed => {
+            let scroll_delta = pointer.delta.y;
+            if scroll_delta.abs() > f32::EPSILON
+                && let Some(binding) =
+                    fallback_viewport_binding(tool_surface_bindings, target_id, position)
+            {
+                bridge
+                    .interaction_for_target_mut(target_id)
+                    .last_target_viewport = Some(binding.viewport_id);
+                viewport_render_commands.push(ViewportRenderStateCommand::ZoomCamera {
+                    viewport_id: binding.viewport_id,
+                    scroll_delta,
+                });
+            }
+        }
+        (PointerEventKind::Down, Some(PointerButton::Primary)) => {
+            if let Some(route) = viewport_pointer_route(
+                &host.shell_state,
+                tool_surface_bindings,
+                target_id,
+                dispatch,
+                position,
+            ) {
+                update_editor_picking_for_target(
+                    target_id,
+                    position,
+                    host,
+                    picking_results,
+                    tool_surface_bindings,
+                    viewport_render_states,
+                );
+                bridge.interaction_for_target_mut(target_id).pointer_owner =
+                    EditorPointerOwner::ViewportTool {
+                        tool_surface_id: route.tool_surface_id,
+                    };
+                dispatch_viewport_pointer_down(host, picking_results, position, route);
+            } else {
+                bridge.interaction_for_target_mut(target_id).pointer_owner =
+                    EditorPointerOwner::None;
+                if host.app.debug_logs_enabled() {
+                    host.app.append_console_input(format!(
+                        "[input] pointer-down routed to shell only: target={} cursor=({:.1},{:.1})",
+                        target_id.raw(),
+                        position.x,
+                        position.y
+                    ));
+                }
+            }
+        }
+        (PointerEventKind::Down, Some(PointerButton::Middle)) => {
+            if let Some(route) = viewport_pointer_route(
+                &host.shell_state,
+                tool_surface_bindings,
+                target_id,
+                dispatch,
+                position,
+            ) {
+                let interaction = bridge.interaction_for_target_mut(target_id);
+                interaction.active_camera_viewport = Some(route.viewport_id);
+                interaction.last_target_viewport = Some(route.viewport_id);
+                interaction.pointer_owner = EditorPointerOwner::ViewportCamera {
+                    viewport_id: route.viewport_id,
+                    button: EditorCameraPointerButton::Middle,
+                };
+            } else if dispatch.and_then(|value| value.target).is_some() {
+                let interaction = bridge.interaction_for_target_mut(target_id);
+                interaction.active_camera_viewport = None;
+                interaction.pointer_owner = EditorPointerOwner::UiMiddleScroll;
+            } else {
+                let interaction = bridge.interaction_for_target_mut(target_id);
+                interaction.active_camera_viewport = None;
+                interaction.pointer_owner = EditorPointerOwner::None;
+            }
+        }
+        (PointerEventKind::Down, Some(PointerButton::Secondary)) => {
+            if let Some(route) = viewport_pointer_route(
+                &host.shell_state,
+                tool_surface_bindings,
+                target_id,
+                dispatch,
+                position,
+            ) {
+                let interaction = bridge.interaction_for_target_mut(target_id);
+                interaction.active_camera_viewport = Some(route.viewport_id);
+                interaction.last_target_viewport = Some(route.viewport_id);
+                interaction.pointer_owner = EditorPointerOwner::ViewportCamera {
+                    viewport_id: route.viewport_id,
+                    button: EditorCameraPointerButton::Secondary,
+                };
+            } else {
+                let interaction = bridge.interaction_for_target_mut(target_id);
+                interaction.active_camera_viewport = None;
+                interaction.pointer_owner = EditorPointerOwner::None;
+            }
+        }
+        (PointerEventKind::Up, Some(PointerButton::Primary)) => {
+            let interaction = bridge.interaction_for_target(target_id);
+            if let EditorPointerOwner::ViewportTool { tool_surface_id } = interaction.pointer_owner
+                && let Some(mounted_unit_id) = host
+                    .shell_state
+                    .mounted_unit_id_for_tool_surface(tool_surface_id)
+                && let Err(error) = host.app.dispatch_viewport_interaction_for_mounted_unit(
+                    mounted_unit_id,
+                    ViewportInteractionCommand::PointerUp,
+                )
+            {
+                eprintln!("viewport pointer-up failed: {error}");
+            }
+            bridge.interaction_for_target_mut(target_id).pointer_owner = EditorPointerOwner::None;
+        }
+        (PointerEventKind::Up, Some(PointerButton::Middle | PointerButton::Secondary)) => {
+            let interaction = bridge.interaction_for_target_mut(target_id);
+            interaction.active_camera_viewport = None;
+            interaction.pointer_owner = EditorPointerOwner::None;
+        }
+        _ => {}
+    }
+
+    bridge
+        .interaction_for_target_mut(target_id)
+        .last_pointer_position = (position.x, position.y);
+}
+
+pub(crate) fn clear_editor_viewport_interaction_for_target(
+    target_id: ui_composition::PresentationTargetId,
+    bridge: &mut EditorInputBridgeState,
+    picking_results: &mut ViewportPickingResultsResource,
+    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+) {
+    let last_pointer = bridge
+        .interaction_for_target(target_id)
+        .last_pointer_position;
+    clear_editor_picking_for_target(
+        target_id,
+        UiPoint::new(last_pointer.0, last_pointer.1),
+        picking_results,
+        tool_surface_bindings,
+    );
+    bridge.clear_interaction_for_target(target_id);
 }
 
 fn sync_active_editor_shortcut_bindings(
@@ -657,8 +703,13 @@ fn dispatch_viewport_tool_activation(
         cursor,
     )
     .or_else(|| {
-        preferred_viewport_id
-            .and_then(|viewport_id| viewport_binding_by_id(tool_surface_bindings, viewport_id))
+        preferred_viewport_id.and_then(|viewport_id| {
+            viewport_binding_by_id_for_target(
+                tool_surface_bindings,
+                host.shell_state.primary_composition_target_id(),
+                viewport_id,
+            )
+        })
     }) else {
         return Ok(());
     };
@@ -904,17 +955,23 @@ fn handle_viewport_tool_radial_shortcut(
 fn viewport_pointer_route(
     shell_state: &RunenwerkEditorShellState,
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
-    dispatch: &editor_shell::UiInputDispatchResult,
+    target_id: ui_composition::PresentationTargetId,
+    dispatch: Option<&editor_shell::UiInputDispatchResult>,
     position: UiPoint,
 ) -> Option<ViewportPointerRoute> {
-    if let Some(host_widget_id) = dispatch.target {
-        let binding =
-            viewport_scene_binding_for_widget(shell_state, tool_surface_bindings, host_widget_id)?;
+    if let Some(host_widget_id) = dispatch.and_then(|value| value.target) {
+        let binding = viewport_scene_binding_for_widget(
+            shell_state,
+            tool_surface_bindings,
+            target_id,
+            host_widget_id,
+        )?;
         if !binding.bounds.contains(position) {
             return None;
         }
 
-        let structural_context = structural_context_for_widget(shell_state, host_widget_id)?;
+        let structural_context =
+            structural_context_for_widget(shell_state, target_id, host_widget_id)?;
         return Some(ViewportPointerRoute {
             tool_surface_id: binding.tool_surface_id,
             viewport_id: binding.viewport_id,
@@ -927,20 +984,15 @@ fn viewport_pointer_route(
         });
     }
 
-    let binding = fallback_viewport_binding(
-        tool_surface_bindings,
-        shell_state.primary_composition_target_id(),
-        position,
-    )?;
+    let binding = fallback_viewport_binding(tool_surface_bindings, target_id, position)?;
     let host_widget_id = binding.host_widget_id;
-    let structural_context = structural_context_for_widget(shell_state, host_widget_id).unwrap_or(
-        editor_shell::StructuralWidgetRoutingContext {
+    let structural_context = structural_context_for_widget(shell_state, target_id, host_widget_id)
+        .unwrap_or(editor_shell::StructuralWidgetRoutingContext {
             mounted_unit_id: shell_state.mounted_unit_id_for_tool_surface(binding.tool_surface_id),
             panel_instance_id: binding.panel_instance_id,
             active_tool_surface: Some(binding.tool_surface_id),
             tab_stack_id: binding.tab_stack_id,
-        },
-    );
+        });
     Some(ViewportPointerRoute {
         tool_surface_id: binding.tool_surface_id,
         viewport_id: binding.viewport_id,
@@ -953,12 +1005,17 @@ fn viewport_pointer_route(
 fn viewport_capture_active_for_surface(
     shell_state: &RunenwerkEditorShellState,
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    target_id: ui_composition::PresentationTargetId,
     tool_surface_id: editor_shell::ToolSurfaceInstanceId,
 ) -> bool {
-    if let Some(captured_widget) = shell_state.runtime().state().captured_widget {
+    if let Some(captured_widget) = shell_state
+        .runtime_for_target(target_id)
+        .and_then(|runtime| runtime.state().captured_widget)
+    {
         return viewport_scene_binding_for_widget(
             shell_state,
             tool_surface_bindings,
+            target_id,
             captured_widget,
         )
         .map(|binding| binding.tool_surface_id == tool_surface_id)
@@ -967,7 +1024,7 @@ fn viewport_capture_active_for_surface(
 
     tool_surface_bindings
         .binding_for_tool_surface(tool_surface_id)
-        .is_some()
+        .is_some_and(|binding| binding.presentation_target_id == target_id)
 }
 
 fn fallback_viewport_binding(
@@ -980,11 +1037,12 @@ fn fallback_viewport_binding(
 
 fn active_camera_viewport_binding(
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    target_id: ui_composition::PresentationTargetId,
     active_viewport_id: Option<ViewportId>,
-    _cursor: UiPoint,
 ) -> Option<crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord> {
-    active_viewport_id
-        .and_then(|viewport_id| viewport_binding_by_id(tool_surface_bindings, viewport_id))
+    active_viewport_id.and_then(|viewport_id| {
+        viewport_binding_by_id_for_target(tool_surface_bindings, target_id, viewport_id)
+    })
 }
 
 fn viewport_binding_for_focus(
@@ -995,8 +1053,13 @@ fn viewport_binding_for_focus(
 ) -> Option<crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord> {
     fallback_viewport_binding(tool_surface_bindings, presentation_target_id, cursor)
         .or_else(|| {
-            preferred_viewport_id
-                .and_then(|viewport_id| viewport_binding_by_id(tool_surface_bindings, viewport_id))
+            preferred_viewport_id.and_then(|viewport_id| {
+                viewport_binding_by_id_for_target(
+                    tool_surface_bindings,
+                    presentation_target_id,
+                    viewport_id,
+                )
+            })
         })
         .or_else(|| {
             tool_surface_bindings
@@ -1005,31 +1068,40 @@ fn viewport_binding_for_focus(
         })
 }
 
-fn viewport_binding_by_id(
+fn viewport_binding_by_id_for_target(
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    target_id: ui_composition::PresentationTargetId,
     viewport_id: ViewportId,
 ) -> Option<crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord> {
-    tool_surface_bindings
-        .bindings()
-        .find(|binding| binding.viewport_id == viewport_id)
+    tool_surface_bindings.bindings().find(|binding| {
+        binding.presentation_target_id == target_id && binding.viewport_id == viewport_id
+    })
 }
 
 fn viewport_scene_binding_for_widget(
     shell_state: &RunenwerkEditorShellState,
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    target_id: ui_composition::PresentationTargetId,
     widget_id: editor_shell::WidgetId,
 ) -> Option<crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord> {
-    let context = structural_context_for_widget(shell_state, widget_id)?;
+    let context = structural_context_for_widget(shell_state, target_id, widget_id)?;
     let binding = tool_surface_bindings.resolve_structural_context(context)?;
-    (binding.host_widget_id == widget_id).then_some(binding)
+    (binding.presentation_target_id == target_id && binding.host_widget_id == widget_id)
+        .then_some(binding)
 }
 
 fn structural_context_for_widget(
     shell_state: &RunenwerkEditorShellState,
+    target_id: ui_composition::PresentationTargetId,
     widget_id: editor_shell::WidgetId,
 ) -> Option<editor_shell::StructuralWidgetRoutingContext> {
     shell_state
-        .last_projection_artifacts()
+        .last_projection_artifacts_for_target(target_id)
+        .or_else(|| {
+            (target_id == shell_state.primary_composition_target_id())
+                .then(|| shell_state.last_projection_artifacts())
+                .flatten()
+        })
         .and_then(|artifacts| artifacts.widget_structural_context_by_id.get(&widget_id))
         .copied()
 }
@@ -1129,7 +1201,8 @@ mod tests {
     use editor_viewport::ViewportId;
     use engine::plugins::render::UiFontAtlasResource;
     use engine::plugins::{ActionState, InputState};
-    use ui_input::InputResponse;
+    use ui_input::{InputResponse, Modifiers, PointerEvent, PointerPacket, PointerToolKind};
+    use ui_math::UiVector;
     use ui_theme::ThemeTokens;
     use winit::event::ElementState;
     use winit::keyboard::KeyCode;
@@ -1333,8 +1406,22 @@ mod tests {
         viewport_id: ViewportId,
         bounds: UiRect,
     ) -> crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord {
+        manual_binding_for_target(
+            raw_id,
+            ui_composition::PresentationTargetId::try_from_raw(1).unwrap(),
+            viewport_id,
+            bounds,
+        )
+    }
+
+    fn manual_binding_for_target(
+        raw_id: u64,
+        target_id: ui_composition::PresentationTargetId,
+        viewport_id: ViewportId,
+        bounds: UiRect,
+    ) -> crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord {
         crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord {
-            presentation_target_id: ui_composition::PresentationTargetId::try_from_raw(1).unwrap(),
+            presentation_target_id: target_id,
             tool_surface_id: editor_shell::ToolSurfaceInstanceId::try_from_raw(raw_id).unwrap(),
             panel_instance_id: editor_shell::PanelInstanceId::try_from_raw(raw_id).unwrap(),
             tab_stack_id: editor_shell::TabStackId::try_from_raw(raw_id).unwrap(),
@@ -1344,6 +1431,27 @@ mod tests {
             effective_shell_scale: 1.0,
             generation: 1,
         }
+    }
+
+    fn mouse_pointer_event(
+        kind: PointerEventKind,
+        position: UiPoint,
+        delta: UiVector,
+        button: Option<PointerButton>,
+    ) -> UiInputEvent {
+        UiInputEvent::Pointer(PointerEvent {
+            kind,
+            position,
+            delta,
+            button,
+            modifiers: Modifiers::default(),
+            click_count: 0,
+            packet: PointerPacket {
+                source_kind: PointerSourceKind::Mouse,
+                tool_kind: PointerToolKind::Mouse,
+                ..PointerPacket::default()
+            },
+        })
     }
 
     fn dual_viewport_bindings() -> ToolSurfaceRuntimeBindingRegistryResource {
@@ -1374,7 +1482,8 @@ mod tests {
         let route = viewport_pointer_route(
             &shell_state,
             &bindings,
-            &dispatch,
+            shell_state.primary_composition_target_id(),
+            Some(&dispatch),
             UiPoint::new(220.0, 300.0),
         )
         .expect("fallback routing should resolve viewport route");
@@ -1399,8 +1508,13 @@ mod tests {
             response: InputResponse::ignored(),
         };
 
-        let route =
-            viewport_pointer_route(&shell_state, &bindings, &dispatch, UiPoint::new(20.0, 20.0));
+        let route = viewport_pointer_route(
+            &shell_state,
+            &bindings,
+            shell_state.primary_composition_target_id(),
+            Some(&dispatch),
+            UiPoint::new(20.0, 20.0),
+        );
 
         assert!(
             route.is_none(),
@@ -1424,7 +1538,8 @@ mod tests {
         let route = viewport_pointer_route(
             &shell_state,
             &bindings,
-            &dispatch,
+            shell_state.primary_composition_target_id(),
+            Some(&dispatch),
             UiPoint::new(220.0, 300.0),
         );
 
@@ -1450,7 +1565,8 @@ mod tests {
         let route = viewport_pointer_route(
             &shell_state,
             &bindings,
-            &dispatch,
+            shell_state.primary_composition_target_id(),
+            Some(&dispatch),
             UiPoint::new(220.0, 300.0),
         );
 
@@ -1468,10 +1584,11 @@ mod tests {
         let route = viewport_pointer_route(
             &shell_state,
             &bindings,
-            &editor_shell::UiInputDispatchResult {
+            shell_state.primary_composition_target_id(),
+            Some(&editor_shell::UiInputDispatchResult {
                 target: None,
                 response: InputResponse::ignored(),
-            },
+            }),
             UiPoint::new(220.0, 300.0),
         )
         .expect("viewport route should resolve");
@@ -1479,11 +1596,13 @@ mod tests {
         assert!(viewport_capture_active_for_surface(
             &shell_state,
             &bindings,
+            shell_state.primary_composition_target_id(),
             route.tool_surface_id
         ));
         assert!(!viewport_capture_active_for_surface(
             &shell_state,
             &bindings,
+            shell_state.primary_composition_target_id(),
             editor_shell::ToolSurfaceInstanceId::try_from_raw(999).unwrap()
         ));
 
@@ -1495,6 +1614,7 @@ mod tests {
         assert!(!viewport_capture_active_for_surface(
             &shell_state,
             &bindings,
+            shell_state.primary_composition_target_id(),
             route.tool_surface_id
         ));
 
@@ -1503,6 +1623,7 @@ mod tests {
         assert!(viewport_capture_active_for_surface(
             &shell_state,
             &bindings,
+            shell_state.primary_composition_target_id(),
             route.tool_surface_id
         ));
     }
@@ -1513,12 +1634,471 @@ mod tests {
 
         let binding = active_camera_viewport_binding(
             &bindings,
+            ui_composition::PresentationTargetId::try_from_raw(1).unwrap(),
             Some(ViewportId(8)),
-            UiPoint::new(900.0, 900.0),
         )
         .expect("captured camera viewport should resolve outside its bounds");
 
         assert_eq!(binding.viewport_id, ViewportId(8));
+    }
+
+    #[test]
+    fn viewport_pointer_route_scopes_overlapping_coordinates_by_target() {
+        let shell_state = seeded_shell_state_with_projection();
+        let primary_target = ui_composition::PresentationTargetId::try_from_raw(1).unwrap();
+        let secondary_target = ui_composition::PresentationTargetId::try_from_raw(2).unwrap();
+        let shared_bounds = UiRect::new(0.0, 0.0, 200.0, 120.0);
+        let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
+        bindings.upsert_binding(manual_binding_for_target(
+            1,
+            primary_target,
+            ViewportId(5),
+            shared_bounds,
+        ));
+        bindings.upsert_binding(manual_binding_for_target(
+            2,
+            secondary_target,
+            ViewportId(8),
+            shared_bounds,
+        ));
+        let dispatch = editor_shell::UiInputDispatchResult {
+            target: None,
+            response: InputResponse::ignored(),
+        };
+
+        let route = viewport_pointer_route(
+            &shell_state,
+            &bindings,
+            secondary_target,
+            Some(&dispatch),
+            UiPoint::new(40.0, 50.0),
+        )
+        .expect("secondary target route should resolve");
+
+        assert_eq!(route.viewport_id, ViewportId(8));
+    }
+
+    #[test]
+    fn target_local_scroll_routes_only_to_secondary_viewport() {
+        let primary_target = ui_composition::PresentationTargetId::try_from_raw(1).unwrap();
+        let secondary_target = ui_composition::PresentationTargetId::try_from_raw(2).unwrap();
+        let shared_bounds = UiRect::new(0.0, 0.0, 200.0, 120.0);
+        let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
+        bindings.upsert_binding(manual_binding_for_target(
+            1,
+            primary_target,
+            ViewportId(5),
+            shared_bounds,
+        ));
+        bindings.upsert_binding(manual_binding_for_target(
+            2,
+            secondary_target,
+            ViewportId(8),
+            shared_bounds,
+        ));
+        let mut host = EditorHostResource::default();
+        let mut bridge = EditorInputBridgeState::default();
+        let mut picking = ViewportPickingResultsResource::default();
+        let render_states = ViewportRenderStateResource::default();
+        let mut commands = ViewportRenderStateCommandQueueResource::default();
+        let event = mouse_pointer_event(
+            PointerEventKind::Scroll,
+            UiPoint::new(40.0, 50.0),
+            UiVector::new(0.0, 2.0),
+            None,
+        );
+
+        dispatch_editor_viewport_input_for_target(
+            secondary_target,
+            &event,
+            None,
+            false,
+            &mut host,
+            &mut bridge,
+            &mut picking,
+            &render_states,
+            &bindings,
+            &mut commands,
+        );
+
+        assert_eq!(
+            commands.drain().collect::<Vec<_>>(),
+            vec![ViewportRenderStateCommand::ZoomCamera {
+                viewport_id: ViewportId(8),
+                scroll_delta: 2.0,
+            }]
+        );
+    }
+
+    #[test]
+    fn ui_consumption_suppresses_target_local_scene_scroll() {
+        let secondary_target = ui_composition::PresentationTargetId::try_from_raw(2).unwrap();
+        let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
+        bindings.upsert_binding(manual_binding_for_target(
+            2,
+            secondary_target,
+            ViewportId(8),
+            UiRect::new(0.0, 0.0, 200.0, 120.0),
+        ));
+        let mut host = EditorHostResource::default();
+        let mut bridge = EditorInputBridgeState::default();
+        let mut picking = ViewportPickingResultsResource::default();
+        let render_states = ViewportRenderStateResource::default();
+        let mut commands = ViewportRenderStateCommandQueueResource::default();
+
+        dispatch_editor_viewport_input_for_target(
+            secondary_target,
+            &mouse_pointer_event(
+                PointerEventKind::Scroll,
+                UiPoint::new(40.0, 50.0),
+                UiVector::new(0.0, 2.0),
+                None,
+            ),
+            None,
+            true,
+            &mut host,
+            &mut bridge,
+            &mut picking,
+            &render_states,
+            &bindings,
+            &mut commands,
+        );
+
+        assert_eq!(commands.len(), 0);
+    }
+
+    #[test]
+    fn secondary_camera_capture_survives_pointer_leaving_viewport() {
+        let secondary_target = ui_composition::PresentationTargetId::try_from_raw(2).unwrap();
+        let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
+        bindings.upsert_binding(manual_binding_for_target(
+            2,
+            secondary_target,
+            ViewportId(8),
+            UiRect::new(0.0, 0.0, 200.0, 120.0),
+        ));
+        let mut host = EditorHostResource::default();
+        let mut bridge = EditorInputBridgeState::default();
+        let mut picking = ViewportPickingResultsResource::default();
+        let render_states = ViewportRenderStateResource::default();
+        let mut commands = ViewportRenderStateCommandQueueResource::default();
+
+        dispatch_editor_viewport_input_for_target(
+            secondary_target,
+            &mouse_pointer_event(
+                PointerEventKind::Down,
+                UiPoint::new(40.0, 50.0),
+                UiVector::ZERO,
+                Some(PointerButton::Middle),
+            ),
+            None,
+            false,
+            &mut host,
+            &mut bridge,
+            &mut picking,
+            &render_states,
+            &bindings,
+            &mut commands,
+        );
+        dispatch_editor_viewport_input_for_target(
+            secondary_target,
+            &mouse_pointer_event(
+                PointerEventKind::Move,
+                UiPoint::new(900.0, 900.0),
+                UiVector::new(6.0, -3.0),
+                None,
+            ),
+            None,
+            false,
+            &mut host,
+            &mut bridge,
+            &mut picking,
+            &render_states,
+            &bindings,
+            &mut commands,
+        );
+
+        assert_eq!(
+            commands.drain().collect::<Vec<_>>(),
+            vec![ViewportRenderStateCommand::PanCamera {
+                viewport_id: ViewportId(8),
+                delta: UiVector::new(6.0, -3.0),
+            }]
+        );
+    }
+
+    #[test]
+    fn secondary_right_drag_orbits_only_captured_secondary_viewport() {
+        let secondary_target = ui_composition::PresentationTargetId::try_from_raw(2).unwrap();
+        let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
+        bindings.upsert_binding(manual_binding_for_target(
+            2,
+            secondary_target,
+            ViewportId(8),
+            UiRect::new(0.0, 0.0, 200.0, 120.0),
+        ));
+        let mut host = EditorHostResource::default();
+        let mut bridge = EditorInputBridgeState::default();
+        let mut picking = ViewportPickingResultsResource::default();
+        let render_states = ViewportRenderStateResource::default();
+        let mut commands = ViewportRenderStateCommandQueueResource::default();
+
+        dispatch_editor_viewport_input_for_target(
+            secondary_target,
+            &mouse_pointer_event(
+                PointerEventKind::Down,
+                UiPoint::new(40.0, 50.0),
+                UiVector::ZERO,
+                Some(PointerButton::Secondary),
+            ),
+            None,
+            false,
+            &mut host,
+            &mut bridge,
+            &mut picking,
+            &render_states,
+            &bindings,
+            &mut commands,
+        );
+        dispatch_editor_viewport_input_for_target(
+            secondary_target,
+            &mouse_pointer_event(
+                PointerEventKind::Move,
+                UiPoint::new(900.0, 900.0),
+                UiVector::new(4.0, 5.0),
+                None,
+            ),
+            None,
+            false,
+            &mut host,
+            &mut bridge,
+            &mut picking,
+            &render_states,
+            &bindings,
+            &mut commands,
+        );
+
+        assert_eq!(
+            commands.drain().collect::<Vec<_>>(),
+            vec![ViewportRenderStateCommand::OrbitCamera {
+                viewport_id: ViewportId(8),
+                delta: UiVector::new(4.0, 5.0),
+            }]
+        );
+    }
+
+    #[test]
+    fn secondary_primary_down_refreshes_picking_before_scene_interaction() {
+        let secondary_target = ui_composition::PresentationTargetId::try_from_raw(2).unwrap();
+        let mut host = EditorHostResource::default();
+        let tool_surface_id = viewport_surface_id(&host.shell_state);
+        let viewport_id = ViewportId(8);
+        let bounds = UiRect::new(0.0, 0.0, 200.0, 120.0);
+        let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
+        bindings.upsert_binding(manual_binding_for_target(
+            tool_surface_id.raw(),
+            secondary_target,
+            viewport_id,
+            bounds,
+        ));
+        let mut bridge = EditorInputBridgeState::default();
+        let mut picking = ViewportPickingResultsResource::default();
+        picking.set_viewport_result(
+            viewport_id,
+            (40.0, 50.0),
+            (bounds.x, bounds.y, bounds.width, bounds.height),
+            engine::plugins::render::EditorPickingHit {
+                target: EditorPickingTarget::Entity(999),
+                distance: 1.0,
+            },
+        );
+        let stale_revision = picking.global_revision();
+        let render_states = ViewportRenderStateResource::default();
+        let mut commands = ViewportRenderStateCommandQueueResource::default();
+
+        dispatch_editor_viewport_input_for_target(
+            secondary_target,
+            &mouse_pointer_event(
+                PointerEventKind::Down,
+                UiPoint::new(40.0, 50.0),
+                UiVector::ZERO,
+                Some(PointerButton::Primary),
+            ),
+            None,
+            false,
+            &mut host,
+            &mut bridge,
+            &mut picking,
+            &render_states,
+            &bindings,
+            &mut commands,
+        );
+
+        assert!(
+            picking.global_revision() > stale_revision,
+            "secondary pointer down must recompute target-local picking before selection",
+        );
+        assert_eq!(
+            picking.result_for(viewport_id).unwrap().hit.target,
+            EditorPickingTarget::None,
+            "stale secondary hit must be replaced by the freshly computed result",
+        );
+    }
+
+    #[test]
+    fn target_local_cleanup_preserves_other_target_capture_and_picking() {
+        let primary_target = ui_composition::PresentationTargetId::try_from_raw(1).unwrap();
+        let secondary_target = ui_composition::PresentationTargetId::try_from_raw(2).unwrap();
+        let primary_viewport = ViewportId(5);
+        let secondary_viewport = ViewportId(8);
+        let bounds = UiRect::new(0.0, 0.0, 200.0, 120.0);
+        let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
+        bindings.upsert_binding(manual_binding_for_target(
+            1,
+            primary_target,
+            primary_viewport,
+            bounds,
+        ));
+        bindings.upsert_binding(manual_binding_for_target(
+            2,
+            secondary_target,
+            secondary_viewport,
+            bounds,
+        ));
+        let mut bridge = EditorInputBridgeState::default();
+        bridge
+            .interaction_for_target_mut(primary_target)
+            .pointer_owner = EditorPointerOwner::ViewportCamera {
+            viewport_id: primary_viewport,
+            button: EditorCameraPointerButton::Middle,
+        };
+        bridge
+            .interaction_for_target_mut(secondary_target)
+            .pointer_owner = EditorPointerOwner::ViewportCamera {
+            viewport_id: secondary_viewport,
+            button: EditorCameraPointerButton::Secondary,
+        };
+        let mut picking = ViewportPickingResultsResource::default();
+        for (viewport_id, entity) in [(primary_viewport, 5), (secondary_viewport, 8)] {
+            picking.set_viewport_result(
+                viewport_id,
+                (40.0, 50.0),
+                (bounds.x, bounds.y, bounds.width, bounds.height),
+                engine::plugins::render::EditorPickingHit {
+                    target: EditorPickingTarget::Entity(entity),
+                    distance: 1.0,
+                },
+            );
+        }
+
+        clear_editor_viewport_interaction_for_target(
+            secondary_target,
+            &mut bridge,
+            &mut picking,
+            &bindings,
+        );
+
+        assert!(matches!(
+            bridge.interaction_for_target(primary_target).pointer_owner,
+            EditorPointerOwner::ViewportCamera {
+                viewport_id: ViewportId(5),
+                ..
+            }
+        ));
+        assert_eq!(
+            bridge
+                .interaction_for_target(secondary_target)
+                .pointer_owner,
+            EditorPointerOwner::None,
+        );
+        assert_eq!(
+            picking.result_for(primary_viewport).unwrap().hit.target,
+            EditorPickingTarget::Entity(5),
+        );
+        assert_eq!(
+            picking.result_for(secondary_viewport).unwrap().hit.target,
+            EditorPickingTarget::None,
+        );
+    }
+
+    #[test]
+    fn primary_and_secondary_camera_captures_remain_independent() {
+        let primary_target = ui_composition::PresentationTargetId::try_from_raw(1).unwrap();
+        let secondary_target = ui_composition::PresentationTargetId::try_from_raw(2).unwrap();
+        let shared_bounds = UiRect::new(0.0, 0.0, 200.0, 120.0);
+        let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
+        bindings.upsert_binding(manual_binding_for_target(
+            1,
+            primary_target,
+            ViewportId(5),
+            shared_bounds,
+        ));
+        bindings.upsert_binding(manual_binding_for_target(
+            2,
+            secondary_target,
+            ViewportId(8),
+            shared_bounds,
+        ));
+        let mut host = EditorHostResource::default();
+        let mut bridge = EditorInputBridgeState::default();
+        let mut picking = ViewportPickingResultsResource::default();
+        let render_states = ViewportRenderStateResource::default();
+        let mut commands = ViewportRenderStateCommandQueueResource::default();
+
+        for (target_id, button) in [
+            (primary_target, PointerButton::Middle),
+            (secondary_target, PointerButton::Secondary),
+        ] {
+            dispatch_editor_viewport_input_for_target(
+                target_id,
+                &mouse_pointer_event(
+                    PointerEventKind::Down,
+                    UiPoint::new(40.0, 50.0),
+                    UiVector::ZERO,
+                    Some(button),
+                ),
+                None,
+                false,
+                &mut host,
+                &mut bridge,
+                &mut picking,
+                &render_states,
+                &bindings,
+                &mut commands,
+            );
+        }
+
+        assert!(matches!(
+            bridge.interaction_for_target(primary_target).pointer_owner,
+            EditorPointerOwner::ViewportCamera {
+                viewport_id: ViewportId(5),
+                button: EditorCameraPointerButton::Middle,
+            }
+        ));
+        assert!(matches!(
+            bridge
+                .interaction_for_target(secondary_target)
+                .pointer_owner,
+            EditorPointerOwner::ViewportCamera {
+                viewport_id: ViewportId(8),
+                button: EditorCameraPointerButton::Secondary,
+            }
+        ));
+
+        bridge.clear_interaction_for_target(secondary_target);
+        assert!(matches!(
+            bridge.interaction_for_target(primary_target).pointer_owner,
+            EditorPointerOwner::ViewportCamera {
+                viewport_id: ViewportId(5),
+                ..
+            }
+        ));
+        assert_eq!(
+            bridge
+                .interaction_for_target(secondary_target)
+                .pointer_owner,
+            EditorPointerOwner::None,
+        );
     }
 
     #[test]
