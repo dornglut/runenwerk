@@ -606,7 +606,9 @@ fn publish_render_lab_frame_system(
             requested_internal_size,
         )?;
         debug_config.capture_selectors = if capture_armed {
-            vec![temporal_quality_capture_selector(None, scene_plan, scene_plan)?]
+            vec![temporal_quality_capture_selector(
+                None, scene_plan, scene_plan,
+            )?]
         } else {
             Vec::new()
         };
