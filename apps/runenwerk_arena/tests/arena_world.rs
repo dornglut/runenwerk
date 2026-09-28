@@ -6,9 +6,8 @@ use engine::plugins::world::chunks::lifecycle::WorldChunkRuntimeMapResource;
 use engine::prelude::*;
 use runen_spatial::WorldId;
 use runenwerk_arena::{
-    ARENA_PLAYER_SPAWN, LOCAL_PARTICIPANT_ID, ParticipantCommand, PlayerCommand,
-    TickCommandBatch, apply_game_commands, arena_chunk_id, build_headless_game_app,
-    player_physical_history_for,
+    ARENA_PLAYER_SPAWN, LOCAL_PARTICIPANT_ID, ParticipantCommand, PlayerCommand, TickCommandBatch,
+    apply_game_commands, arena_chunk_id, build_headless_game_app, player_physical_history_for,
 };
 
 fn started_app() -> App {

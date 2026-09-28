@@ -81,8 +81,7 @@ pub fn build_arena_chunk_payload() -> SdfChunkPayload {
                             max_distance,
                             occupancy_mask,
                             material_channel_mask: u16::from(occupancy_mask != 0),
-                            surface_band_present: occupancy_mask != 0
-                                && occupancy_mask != u8::MAX,
+                            surface_band_present: occupancy_mask != 0 && occupancy_mask != u8::MAX,
                             ..SdfBrickMetadata::default()
                         },
                         samples: SdfBrickSamples::default(),
