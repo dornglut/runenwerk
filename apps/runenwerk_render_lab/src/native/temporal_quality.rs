@@ -94,9 +94,9 @@ struct RenderLabTemporalQualityArtifact {
     capture: RenderLabTemporalQualityCaptureEvidence,
 }
 
-const RL2_QUALITY_SCHEMA_VERSION: u32 = 2;
+const RL2_QUALITY_SCHEMA_VERSION: u32 = 3;
 const RL2_QUALITY_SCENARIO_ID: &str = "runenwerk.render_lab.rl2.temporal_quality";
-const RL2_QUALITY_SCENARIO_REVISION: u32 = 2;
+const RL2_QUALITY_SCENARIO_REVISION: u32 = 3;
 pub(super) const RL2_QUALITY_FLOW_ID: &str = "runenwerk.render_lab.rl2.fixed_quality";
 pub(super) const RL2_QUALITY_PASS_ID: &str = "runenwerk.render_lab.rl2.fixed_quality.compose";
 pub(super) const RL2_QUALITY_COLOR_ALIAS: &str = "runenwerk.render_lab.rl2.fixed_quality.color";
@@ -394,7 +394,7 @@ pub(super) fn write_temporal_quality_artifact(
         total_submitted_frames: history.len(),
         gpu: temporal_quality_gpu_evidence(adapter_facts),
         capture_route: match execution.policy {
-            "native" => "native_scene",
+            "native" | "static_footprint" => "native_scene",
             "fixed" => "fixed_resolve",
             _ => "unexpected",
         },
@@ -457,15 +457,6 @@ pub(super) fn inspect_render_lab_temporal_quality_execution_system(
             resolve_invocation_id: fixed.resolve_invocation_id.map(|id| id.to_string()),
         }
     } else {
-        if internal_size != output_size {
-            bail!(
-                "temporal quality requested {}x{} -> {}x{} without a retained fixed admission",
-                internal_size.0,
-                internal_size.1,
-                output_size.0,
-                output_size.1
-            );
-        }
         if frame.surface.target_size_px != output_size {
             bail!(
                 "temporal quality native frame output {}x{} does not match requested {}x{}",
@@ -497,7 +488,11 @@ pub(super) fn inspect_render_lab_temporal_quality_execution_system(
         RenderLabTemporalQualityExecutionEvidence {
             frame_index: frame.context.frame_index,
             prepare_epoch: frame.context.prepare_epoch,
-            policy: "native",
+            policy: if internal_size == output_size {
+                "native"
+            } else {
+                "static_footprint"
+            },
             internal_size_px: [internal_size.0, internal_size.1],
             output_size_px: [output_size.0, output_size.1],
             native_fallback_active: false,
