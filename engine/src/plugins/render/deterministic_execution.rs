@@ -799,10 +799,7 @@ impl fmt::Display for RenderDeterministicLoweringError {
             } => write!(
                 formatter,
                 "output {output_index} temporal evaluation extent {}x{} cannot cover requested lattice {}x{} with the maintained four-phase footprint sequence",
-                evaluation_extent.0,
-                evaluation_extent.1,
-                requested_extent.0,
-                requested_extent.1
+                evaluation_extent.0, evaluation_extent.1, requested_extent.0, requested_extent.1
             ),
             Self::NonInvertibleObjectTransform {
                 output_index,
@@ -2444,8 +2441,14 @@ mod tests {
         }
         assert!(!temporal_evaluation_extent_supported(requested, (959, 540)));
         assert!(!temporal_evaluation_extent_supported(requested, (960, 539)));
-        assert!(!temporal_evaluation_extent_supported(requested, (1921, 1080)));
-        assert!(!temporal_evaluation_extent_supported(requested, (1920, 1081)));
+        assert!(!temporal_evaluation_extent_supported(
+            requested,
+            (1921, 1080)
+        ));
+        assert!(!temporal_evaluation_extent_supported(
+            requested,
+            (1920, 1081)
+        ));
     }
 
     #[test]
