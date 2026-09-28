@@ -48,32 +48,13 @@ pub(super) fn texture_descriptor(
     usages: impl IntoIterator<Item = GpuTextureUsage>,
     lifetime: GpuResourceLifetime,
 ) -> Result<GpuTextureDescriptor> {
-    texture_descriptor_with_initialization(
-        label,
-        size,
-        format,
-        usages,
-        lifetime,
-        GpuTextureInitialization::Uninitialized,
-    )
-}
-
-pub(super) fn texture_descriptor_with_initialization(
-    label: impl Into<String>,
-    size: (u32, u32),
-    format: GpuTextureFormat,
-    usages: impl IntoIterator<Item = GpuTextureUsage>,
-    lifetime: GpuResourceLifetime,
-    initialization: GpuTextureInitialization,
-) -> Result<GpuTextureDescriptor> {
-    texture_descriptor_with_extent_and_initialization(
+    texture_descriptor_with_extent(
         label,
         GpuTextureDimension::D2,
         (size.0, size.1, 1),
         format,
         usages,
         lifetime,
-        initialization,
     )
 }
 
@@ -84,26 +65,6 @@ pub(super) fn texture_descriptor_with_extent(
     format: GpuTextureFormat,
     usages: impl IntoIterator<Item = GpuTextureUsage>,
     lifetime: GpuResourceLifetime,
-) -> Result<GpuTextureDescriptor> {
-    texture_descriptor_with_extent_and_initialization(
-        label,
-        dimension,
-        extent,
-        format,
-        usages,
-        lifetime,
-        GpuTextureInitialization::Uninitialized,
-    )
-}
-
-fn texture_descriptor_with_extent_and_initialization(
-    label: impl Into<String>,
-    dimension: GpuTextureDimension,
-    extent: (u32, u32, u32),
-    format: GpuTextureFormat,
-    usages: impl IntoIterator<Item = GpuTextureUsage>,
-    lifetime: GpuResourceLifetime,
-    initialization: GpuTextureInitialization,
 ) -> Result<GpuTextureDescriptor> {
     let common = owned_common(label, lifetime, GpuMemoryIntent::Device)?;
     let extent = GpuTextureExtent::new(
@@ -122,7 +83,7 @@ fn texture_descriptor_with_extent_and_initialization(
         1,
         format,
         usages,
-        initialization,
+        GpuTextureInitialization::Uninitialized,
     )?)
 }
 
