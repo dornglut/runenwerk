@@ -1230,12 +1230,8 @@ mod tests {
     #[test]
     fn camera_motion_quality_requires_a_complete_motion_sequence() {
         assert!(
-            run_native_temporal_camera_quality(
-                PathBuf::from("unused"),
-                Some(3),
-                (1920, 1080)
-            )
-            .is_err()
+            run_native_temporal_camera_quality(PathBuf::from("unused"), Some(3), (1920, 1080))
+                .is_err()
         );
     }
 
