@@ -503,7 +503,7 @@ fn build_render_lab_radiance_publication(
         availability: fixture.availability,
         output_index: 0,
         target_key: target_key.clone(),
-            finite_evaluation_extent: None,
+        finite_evaluation_extent: None,
     };
     Ok((target_key, target, contribution))
 }
