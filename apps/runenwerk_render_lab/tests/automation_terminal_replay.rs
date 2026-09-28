@@ -7,16 +7,19 @@ use engine::automation::{
     AppAutomationInputReplayExt, AppAutomationInputTraceExt, AutomationExecutionMode,
     AutomationInputReplayOutcome, AutomationInputReplaySourceMap,
     AutomationInputReplayStateAssumption, AutomationInputTracePlugin,
-    AutomationInputTraceRecordingWitness, AutomationOwnerAdapter, AutomationSession,
+    AutomationInputTraceRecordingWitness, AutomationOwnerAdapter,
+    AutomationScenarioRelativeArtifactRef, AutomationScenarioStepV1, AutomationSession,
     AutomationSessionId, AutomationStepResult, DigitalState, InputObservation, InputSourceId,
     MAX_ARTIFACT_BYTES, PointerButton, PointerButtonInput, RelativeMotionUnit, ScrollDelta,
     ScrollDomain, ScrollInput, Vector2, export_automation_input_trace_v1,
-    import_automation_input_trace_v1,
+    export_automation_scenario_v1, import_automation_input_trace_v1,
 };
 use engine::prelude::InputState;
 use runenwerk_render_lab::automation::{
-    RenderLabAutomationAdapter, RenderLabAutomationQuery, RenderLabAutomationTarget,
-    RenderLabCameraObservation, build_headless_automation_app,
+    RENDER_LAB_AUTOMATION_SCENARIO_PRODUCT_ID, RENDER_LAB_AUTOMATION_SCENARIO_PRODUCT_VERSION,
+    RenderLabAutomationAdapter, RenderLabAutomationQuery, RenderLabAutomationScenarioStepV1,
+    RenderLabAutomationTarget, RenderLabCameraExpectationV1, RenderLabCameraObservation,
+    build_headless_automation_app, validate_render_lab_automation_scenario_step_v1,
 };
 
 static NEXT_PATH: AtomicU64 = AtomicU64::new(0);
@@ -239,4 +242,186 @@ fn terminal_replay_fails_closed_for_invalid_artifacts() {
 
     let missing = run_binary(&temp_path("missing"));
     assert!(!missing.status.success());
+}
+
+fn scenario_directory(label: &str) -> PathBuf {
+    let sequence = NEXT_PATH.fetch_add(1, Ordering::Relaxed);
+    std::env::temp_dir().join(format!(
+        "runenwerk-render-lab-a15-{}-{sequence}-{label}",
+        std::process::id()
+    ))
+}
+
+fn run_scenario_binary(path: &PathBuf) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_runenwerk-render-lab"))
+        .arg("--automation-scenario")
+        .arg(path)
+        .output()
+        .expect("Render Lab scenario binary should launch")
+}
+
+fn camera_expectation(camera: RenderLabCameraObservation) -> RenderLabCameraExpectationV1 {
+    RenderLabCameraExpectationV1 {
+        yaw_radians: camera.yaw_radians,
+        pitch_radians: camera.pitch_radians,
+        distance: camera.distance,
+        pan: camera.pan,
+        absolute_tolerance: 1.0e-12,
+    }
+}
+
+#[test]
+fn persisted_scenario_replays_separate_trace_and_asserts_camera_through_terminal() {
+    let (trace, recorded_camera) = persisted_trace_fixture();
+    let direct_camera = direct_replay_camera(&trace);
+    assert_eq!(direct_camera, recorded_camera);
+
+    let root = scenario_directory("success");
+    let traces = root.join("traces");
+    fs::create_dir_all(&traces).expect("scenario trace directory should create");
+    fs::write(traces.join("orbit-pan-zoom.ron"), &trace).expect("trace should write");
+
+    let trace_ref = AutomationScenarioRelativeArtifactRef::new("traces/orbit-pan-zoom.ron")
+        .expect("trace reference should be valid");
+    let steps = vec![
+        AutomationScenarioStepV1::ReplayNormalizedTrace(trace_ref),
+        AutomationScenarioStepV1::Owner(RenderLabAutomationScenarioStepV1::AssertCamera {
+            expected: camera_expectation(recorded_camera),
+        }),
+    ];
+    let scenario = export_automation_scenario_v1(
+        RENDER_LAB_AUTOMATION_SCENARIO_PRODUCT_ID,
+        RENDER_LAB_AUTOMATION_SCENARIO_PRODUCT_VERSION,
+        &steps,
+        validate_render_lab_automation_scenario_step_v1,
+    )
+    .expect("Render Lab scenario should export");
+    let scenario_path = root.join("scenario.ron");
+    fs::write(&scenario_path, scenario).expect("scenario should write");
+
+    let output = run_scenario_binary(&scenario_path);
+    let _ = fs::remove_dir_all(&root);
+
+    assert!(
+        output.status.success(),
+        "Render Lab scenario failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains(
+            "automation scenario completed: product=runenwerk.render-lab.automation/v1 steps=2"
+        ),
+        "unexpected Render Lab scenario stdout: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn render_lab_scenario_missing_trace_and_assertion_mismatch_fail_closed() {
+    let root = scenario_directory("failures");
+    fs::create_dir_all(root.join("traces")).expect("scenario trace directory should create");
+    let trace_ref = AutomationScenarioRelativeArtifactRef::new("traces/missing.ron")
+        .expect("trace reference should be valid");
+    let missing = export_automation_scenario_v1::<RenderLabAutomationScenarioStepV1, _>(
+        RENDER_LAB_AUTOMATION_SCENARIO_PRODUCT_ID,
+        RENDER_LAB_AUTOMATION_SCENARIO_PRODUCT_VERSION,
+        &[AutomationScenarioStepV1::ReplayNormalizedTrace(trace_ref)],
+        validate_render_lab_automation_scenario_step_v1,
+    )
+    .expect("missing-trace scenario should export");
+    let missing_path = root.join("missing.ron");
+    fs::write(&missing_path, missing).expect("missing scenario should write");
+    assert!(!run_scenario_binary(&missing_path).status.success());
+
+    let (trace, camera) = persisted_trace_fixture();
+    fs::write(root.join("traces/input.ron"), &trace).expect("trace should write");
+    let trace_ref =
+        AutomationScenarioRelativeArtifactRef::new("traces/input.ron").expect("valid trace ref");
+    let mut wrong = camera_expectation(camera);
+    wrong.yaw_radians += 1.0;
+    let mismatch = export_automation_scenario_v1(
+        RENDER_LAB_AUTOMATION_SCENARIO_PRODUCT_ID,
+        RENDER_LAB_AUTOMATION_SCENARIO_PRODUCT_VERSION,
+        &[
+            AutomationScenarioStepV1::ReplayNormalizedTrace(trace_ref),
+            AutomationScenarioStepV1::Owner(RenderLabAutomationScenarioStepV1::AssertCamera {
+                expected: wrong,
+            }),
+        ],
+        validate_render_lab_automation_scenario_step_v1,
+    )
+    .expect("mismatch scenario should export");
+    let mismatch_path = root.join("mismatch.ron");
+    fs::write(&mismatch_path, mismatch).expect("mismatch scenario should write");
+    let mismatch_output = run_scenario_binary(&mismatch_path);
+    let _ = fs::remove_dir_all(&root);
+
+    assert!(!mismatch_output.status.success());
+    assert!(
+        String::from_utf8_lossy(&mismatch_output.stderr).contains("AssertionFailed"),
+        "unexpected mismatch stderr: {}",
+        String::from_utf8_lossy(&mismatch_output.stderr)
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn render_lab_scenario_rejects_symlink_escape_from_scenario_root() {
+    use std::os::unix::fs::symlink;
+
+    let (trace, camera) = persisted_trace_fixture();
+    let root = scenario_directory("symlink");
+    let outside = scenario_directory("outside");
+    fs::create_dir_all(root.join("traces")).expect("scenario trace directory should create");
+    fs::create_dir_all(&outside).expect("outside directory should create");
+    let outside_trace = outside.join("outside.ron");
+    fs::write(&outside_trace, trace).expect("outside trace should write");
+    symlink(&outside_trace, root.join("traces/link.ron")).expect("symlink should create");
+
+    let trace_ref =
+        AutomationScenarioRelativeArtifactRef::new("traces/link.ron").expect("valid trace ref");
+    let scenario = export_automation_scenario_v1(
+        RENDER_LAB_AUTOMATION_SCENARIO_PRODUCT_ID,
+        RENDER_LAB_AUTOMATION_SCENARIO_PRODUCT_VERSION,
+        &[
+            AutomationScenarioStepV1::ReplayNormalizedTrace(trace_ref),
+            AutomationScenarioStepV1::Owner(RenderLabAutomationScenarioStepV1::AssertCamera {
+                expected: camera_expectation(camera),
+            }),
+        ],
+        validate_render_lab_automation_scenario_step_v1,
+    )
+    .expect("symlink scenario should export");
+    let scenario_path = root.join("scenario.ron");
+    fs::write(&scenario_path, scenario).expect("scenario should write");
+
+    let output = run_scenario_binary(&scenario_path);
+    let _ = fs::remove_dir_all(&root);
+    let _ = fs::remove_dir_all(&outside);
+
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("escapes scenario root"),
+        "unexpected symlink escape stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn raw_trace_is_not_a_persisted_scenario() {
+    let (trace, _) = persisted_trace_fixture();
+    let root = scenario_directory("raw-trace");
+    fs::create_dir_all(&root).expect("scenario directory should create");
+    let path = root.join("trace.ron");
+    fs::write(&path, trace).expect("trace should write");
+
+    let output = run_scenario_binary(&path);
+    let _ = fs::remove_dir_all(&root);
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("wrong persisted automation artifact kind"),
+        "unexpected raw-trace stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }

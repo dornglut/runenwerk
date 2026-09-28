@@ -1,23 +1,28 @@
 use std::env;
 use std::ffi::OsString;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{Read, Take};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, bail};
 use engine::automation::{
-    AutomationExecutionMode, AutomationPersistedReplayError, AutomationSession,
-    AutomationSessionId, AutomationStepResult, InputSourceId, MAX_ARTIFACT_BYTES,
+    AutomationExecutionMode, AutomationPersistedReplayError, AutomationScenarioStepHistoryRange,
+    AutomationScenarioStepV1, AutomationSession, AutomationSessionId, AutomationStepResult,
+    InputSourceId, MAX_ARTIFACT_BYTES, MAX_AUTOMATION_SCENARIO_BYTES,
+    import_automation_scenario_v1,
 };
 use runenwerk_render_lab::automation::{
-    RenderLabAutomationAdapter, RenderLabAutomationQuery, RenderLabAutomationTarget,
-    RenderLabCameraObservation, build_headless_automation_app,
+    RENDER_LAB_AUTOMATION_SCENARIO_PRODUCT_ID, RENDER_LAB_AUTOMATION_SCENARIO_PRODUCT_VERSION,
+    RenderLabAutomationAdapter, RenderLabAutomationQuery, RenderLabAutomationScenarioStepV1,
+    RenderLabAutomationTarget, RenderLabCameraObservation, build_headless_automation_app,
+    validate_render_lab_automation_scenario_step_v1,
 };
 
 fn main() -> anyhow::Result<()> {
     match parse_command(env::args_os().skip(1))? {
         Command::Native => runenwerk_render_lab::run_native(),
         Command::ReplayTrace(path) => run_replay_trace(&path),
+        Command::AutomationScenario(path) => run_automation_scenario(&path),
         Command::NativeMeasurement {
             output_path,
             submitted_frame_limit,
@@ -52,6 +57,7 @@ enum Command {
     FoundingDirect(PathBuf),
     Native,
     ReplayTrace(PathBuf),
+    AutomationScenario(PathBuf),
     NativeMeasurement {
         output_path: PathBuf,
         submitted_frame_limit: Option<usize>,
@@ -83,6 +89,18 @@ fn parse_command(args: impl IntoIterator<Item = OsString>) -> anyhow::Result<Com
             );
         }
         return Ok(Command::ReplayTrace(PathBuf::from(path)));
+    }
+    if matches!(first.as_deref(), Some(value) if value == "--automation-scenario") {
+        let Some(path) = args.next() else {
+            bail!("--automation-scenario requires a persisted scenario path");
+        };
+        if let Some(extra) = args.next() {
+            bail!(
+                "unexpected --automation-scenario argument '{}'",
+                extra.to_string_lossy()
+            );
+        }
+        return Ok(Command::AutomationScenario(PathBuf::from(path)));
     }
     if matches!(first.as_deref(), Some(value) if value == "--rl2-quality") {
         let default_output = PathBuf::from("render-lab/rl2-temporal-quality");
@@ -200,6 +218,167 @@ fn run_replay_trace(path: &Path) -> anyhow::Result<()> {
         summary.camera.pan[1],
     );
     Ok(())
+}
+
+fn run_automation_scenario(path: &Path) -> anyhow::Result<()> {
+    let canonical_scenario = fs::canonicalize(path)
+        .with_context(|| format!("resolve persisted automation scenario {}", path.display()))?;
+    let scenario_root = canonical_scenario
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("automation scenario has no parent directory"))?
+        .to_path_buf();
+    let scenario_bytes =
+        read_bounded_scenario(File::open(&canonical_scenario).with_context(|| {
+            format!(
+                "open persisted automation scenario {}",
+                canonical_scenario.display()
+            )
+        })?)?;
+    let scenario = import_automation_scenario_v1::<RenderLabAutomationScenarioStepV1, _>(
+        &scenario_bytes,
+        RENDER_LAB_AUTOMATION_SCENARIO_PRODUCT_ID,
+        RENDER_LAB_AUTOMATION_SCENARIO_PRODUCT_VERSION,
+        validate_render_lab_automation_scenario_step_v1,
+    )
+    .map_err(anyhow::Error::new)?;
+
+    let mut app = build_headless_automation_app();
+    let mut session =
+        AutomationSession::new(AutomationSessionId::new(1_015), InputSourceId::new(40_115));
+    let mut history_ranges = Vec::with_capacity(scenario.steps().len());
+
+    for (ordinal, step) in scenario.steps().iter().enumerate() {
+        let history_start = session.history().len();
+        let step_result = match step {
+            AutomationScenarioStepV1::ReplayNormalizedTrace(reference) => {
+                run_render_lab_scenario_replay_step(
+                    &mut session,
+                    &mut app,
+                    &scenario_root,
+                    reference.as_str(),
+                )
+            }
+            AutomationScenarioStepV1::Owner(step) => {
+                run_render_lab_scenario_owner_step(&mut session, &mut app, step)
+            }
+        };
+        let history_end = session.history().len();
+        history_ranges.push(AutomationScenarioStepHistoryRange::new(
+            ordinal,
+            history_start,
+            history_end,
+        ));
+
+        if let Err(primary) = step_result {
+            let cleanup = session.cancel(&mut app);
+            return match cleanup {
+                AutomationStepResult::Cancelled => Err(anyhow::anyhow!(
+                    "automation scenario step {ordinal} failed: {primary}"
+                )),
+                other => Err(anyhow::anyhow!(
+                    "automation scenario step {ordinal} failed: {primary}; cleanup failed: {other:?}"
+                )),
+            };
+        }
+    }
+
+    match session.finish(&mut app) {
+        AutomationStepResult::EffectConfirmed(()) => {}
+        other => bail!("finish Render Lab automation scenario failed: {other:?}"),
+    }
+    debug_assert_eq!(history_ranges.len(), scenario.steps().len());
+
+    println!(
+        "automation scenario completed: product={}/v{} steps={}",
+        scenario.product_contract_id(),
+        scenario.product_contract_version(),
+        scenario.steps().len(),
+    );
+    Ok(())
+}
+
+fn run_render_lab_scenario_replay_step(
+    session: &mut AutomationSession,
+    app: &mut engine::prelude::App,
+    scenario_root: &Path,
+    reference: &str,
+) -> Result<(), String> {
+    let trace_path = resolve_scenario_artifact_path(scenario_root, reference)
+        .map_err(|error| error.to_string())?;
+    let trace_bytes = read_trace_file(&trace_path).map_err(|error| error.to_string())?;
+    session
+        .replay_persisted_normalized_trace(
+            AutomationExecutionMode::NormalizedInput,
+            app,
+            &trace_bytes,
+            engine::automation::AutomationInputReplayStateAssumption::RecordedAndReplaySourcesPristine,
+        )
+        .map(|_| ())
+        .map_err(|error| error.to_string())
+}
+
+fn run_render_lab_scenario_owner_step(
+    session: &mut AutomationSession,
+    app: &mut engine::prelude::App,
+    step: &RenderLabAutomationScenarioStepV1,
+) -> Result<(), String> {
+    match step {
+        RenderLabAutomationScenarioStepV1::AssertCamera { expected } => {
+            let observed = {
+                let mut adapter = RenderLabAutomationAdapter::new(app);
+                match session.query_owner(
+                    &mut adapter,
+                    &RenderLabAutomationTarget,
+                    RenderLabAutomationQuery::Camera,
+                ) {
+                    AutomationStepResult::EffectConfirmed(observation) => observation,
+                    other => return Err(format!("query Render Lab camera failed: {other:?}")),
+                }
+            };
+            match session
+                .assert_observation(&observed, |observation| expected.matches(*observation))
+            {
+                AutomationStepResult::AssertionPassed => Ok(()),
+                other => Err(format!("assert Render Lab camera failed: {other:?}")),
+            }
+        }
+    }
+}
+
+fn read_bounded_scenario(reader: impl Read) -> anyhow::Result<Vec<u8>> {
+    let limit = u64::try_from(MAX_AUTOMATION_SCENARIO_BYTES)
+        .expect("scenario byte limit fits u64")
+        .checked_add(1)
+        .expect("scenario byte limit leaves room for sentinel byte");
+    let mut reader: Take<_> = reader.take(limit);
+    let mut bytes = Vec::new();
+    reader
+        .read_to_end(&mut bytes)
+        .context("read persisted automation scenario bytes")?;
+    if bytes.len() > MAX_AUTOMATION_SCENARIO_BYTES {
+        bail!(
+            "persisted automation scenario exceeds the {} byte limit",
+            MAX_AUTOMATION_SCENARIO_BYTES
+        );
+    }
+    Ok(bytes)
+}
+
+fn resolve_scenario_artifact_path(root: &Path, reference: &str) -> anyhow::Result<PathBuf> {
+    let candidate = root.join(reference);
+    let resolved = fs::canonicalize(&candidate).with_context(|| {
+        format!(
+            "resolve automation scenario artifact {}",
+            candidate.display()
+        )
+    })?;
+    if !resolved.starts_with(root) {
+        bail!(
+            "automation scenario artifact escapes scenario root: {}",
+            resolved.display()
+        );
+    }
+    Ok(resolved)
 }
 
 fn read_trace_file(path: &Path) -> anyhow::Result<Vec<u8>> {
