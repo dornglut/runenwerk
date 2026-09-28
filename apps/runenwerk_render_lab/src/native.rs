@@ -425,13 +425,7 @@ fn complete_render_lab_measurement_if_requested(
             let gfx = gfx.ok_or_else(|| {
                 anyhow::anyhow!("temporal quality renderer evidence is unavailable")
             })?;
-            write_temporal_quality_artifact(
-                measurement,
-                history,
-                quality_execution,
-                capture,
-                gfx,
-            )?;
+            write_temporal_quality_artifact(measurement, history, quality_execution, capture, gfx)?;
         }
         measurement.completed = true;
     }
