@@ -165,7 +165,7 @@ jobs:
                 --rl2-quality "${output}" \
                 --window-size-px 1920x1080 \
                 --internal-size-px "${internal}" \
-                --submitted-frames 2
+                --submitted-frames 3
 
             test -s "${output}/quality-evidence.json"
             test -s "${output}/captures/run_manifest.json"
@@ -175,33 +175,41 @@ jobs:
               --argjson evaluation_width "${internal%x*}" \
               --argjson evaluation_height "${internal#*x}" \
               '
-                .schema_version == 3
-                and .scenario_revision == 3
+                .schema_version == 4
+                and .scenario_revision == 4
                 and .source_git_revision == $revision
                 and .requested_output_size_px == [1920,1080]
-                and .capture_submission_ordinal == 2
-                and .total_submitted_frames >= 2
+                and .capture_submission_ordinal == 3
+                and .total_submitted_frames >= 3
                 and .capture.terminal == "completed"
                 and (.capture.artifact_blake3 | startswith("blake3:"))
                 and .gpu.backend == "vulkan"
                 and .gpu.software_status == "software"
                 and (.gpu.evidence_profile_fingerprint | startswith("blake3:"))
                 and .execution.policy == "static_footprint"
-                and (.temporal_reconstruction | length) == 2
+                and (.temporal_reconstruction | length) == 3
                 and all(.temporal_reconstruction[];
                   .requested_size_px == [1920,1080]
                   and .evaluation_size_px == [$evaluation_width,$evaluation_height]
                   and .sequence_revision == 1
                   and .reconstruction_revision == 1
                 )
+                and .temporal_reconstruction[0].semantic_input_generations == [1,1]
                 and .temporal_reconstruction[0].phase == 0
                 and .temporal_reconstruction[0].history_age == 0
                 and .temporal_reconstruction[0].history_reset == true
+                and .temporal_reconstruction[1].semantic_input_generations == [1,1]
                 and .temporal_reconstruction[1].phase == 1
                 and .temporal_reconstruction[1].history_age == 1
                 and .temporal_reconstruction[1].history_reset == false
                 and .temporal_reconstruction[1].history_generation
                     == .temporal_reconstruction[0].history_generation
+                and .temporal_reconstruction[2].semantic_input_generations == [2,2]
+                and .temporal_reconstruction[2].phase == 0
+                and .temporal_reconstruction[2].history_age == 0
+                and .temporal_reconstruction[2].history_reset == true
+                and .temporal_reconstruction[2].history_generation
+                    != .temporal_reconstruction[0].history_generation
                 and .execution.native_fallback_active == false
                 and .execution.target_key == null
                 and .execution.internal_view_id == null
