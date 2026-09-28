@@ -2995,7 +2995,7 @@ mod tests {
     }
 
     #[test]
-    fn camera_history_promotes_only_after_completed_submission_reconciliation() {
+    fn camera_history_completion_retry_failure_and_ping_pong_are_fail_closed() {
         use super::super::space_time::RenderAffineTransform3;
 
         let mut cache = DeterministicResourceCache::default();
@@ -3005,41 +3005,69 @@ mod tests {
             RenderObservationSpec::Perspective(observation),
             true,
         );
+        signature.evaluation_extent = (4, 4);
         signature.camera_reprojection_revision = Some(CAMERA_REPROJECTION_REVISION);
         signature.depth_policy_revision = Some(CAMERA_DEPTH_POLICY_REVISION);
+
         let first = cache
             .temporal_history(11, 0, signature.clone(), (4, 4), 4, observation, true)
             .expect("camera history should allocate");
         assert!(first.reset);
+        let (
+            first_previous_identity,
+            first_current_identity,
+            first_previous_observation,
+        ) = match &first.storage {
+            DeterministicTemporalHistoryUseStorage::Camera {
+                previous_history,
+                current_history,
+                previous_observation,
+                ..
+            } => (
+                previous_history.diagnostic_identity(),
+                current_history.diagnostic_identity(),
+                *previous_observation,
+            ),
+            _ => panic!("P100 history must use camera storage"),
+        };
+        assert_ne!(
+            first_previous_identity, first_current_identity,
+            "camera reprojection must never read and write one retained slot in place"
+        );
+        assert_eq!(first_previous_observation, None);
+
+        let retry = cache
+            .temporal_history(11, 0, signature.clone(), (4, 4), 4, observation, true)
+            .expect("pre-acceptance retry should preserve bootstrap state");
+        assert!(retry.reset);
+        assert_eq!(retry.generation, first.generation);
+        assert_eq!(retry.age, 0);
         assert!(matches!(
-            first.storage,
+            retry.storage,
             DeterministicTemporalHistoryUseStorage::Camera {
                 previous_observation: None,
                 ..
             }
         ));
 
-        let history = cache
+        cache.reconcile_temporal_outputs(11, true);
+        let retained = cache
             .temporal_histories
-            .get_mut(&(11, 0))
-            .expect("camera history retained");
-        let DeterministicTemporalStorage::Camera(camera) = &mut history.storage else {
-            panic!("P100 history must use camera storage");
+            .get(&(11, 0))
+            .expect("completed camera history retained");
+        assert_eq!(retained.age, 1);
+        assert_eq!(retained.phase, 1);
+        let DeterministicTemporalStorage::Camera(camera) = &retained.storage else {
+            panic!("P100 history must remain camera storage");
         };
-        let pending_slot = camera.pending_slot.expect("camera write slot pending");
-        let pending_observation = camera
-            .pending_observation
-            .expect("camera observation pending");
-        camera.completed_slot = pending_slot;
-        camera.completed_observation = Some(pending_observation);
-        camera.pending_slot = None;
-        camera.pending_observation = None;
-        history.age = 1;
-        history.phase = 1;
+        assert_eq!(camera.completed_slot, 1);
+        assert_eq!(camera.completed_observation, Some(observation));
+        assert_eq!(camera.pending_slot, None);
+        assert_eq!(camera.pending_observation, None);
 
         let moved = temporal_test_observation(
             RenderAffineTransform3::from_row_major_3x4([
-                1.0, 0.0, 0.0, 0.25, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+                1.0, 0.0, 0.0, 0.25, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0,
             ])
             .expect("valid moved observation"),
         );
@@ -3051,11 +3079,17 @@ mod tests {
         assert!(matches!(
             reused.storage,
             DeterministicTemporalHistoryUseStorage::Camera {
-                previous_observation: Some(_),
+                previous_observation: Some(previous),
                 pose_changed: true,
                 ..
-            }
+            } if previous == observation
         ));
+
+        cache.reconcile_temporal_outputs(11, false);
+        assert!(
+            !cache.temporal_histories.contains_key(&(11, 0)),
+            "failed accepted execution must discard affected camera history"
+        );
     }
 
     #[test]
