@@ -10,6 +10,9 @@ var<storage, read> defined_words: array<u32>;
 @group(0) @binding(3)
 var<storage, read_write> history_words: array<u32>;
 
+@group(0) @binding(4)
+var<storage, read_write> history_sample_counts: array<u32>;
+
 @compute @workgroup_size(64)
 fn main(
     @builtin(workgroup_id) workgroup: vec3<u32>,
@@ -17,51 +20,53 @@ fn main(
     @builtin(local_invocation_index) local_index: u32,
 ) {
     let group_index = workgroup.y * workgroups.x + workgroup.x;
-    let output_index = group_index * 64u + local_index;
-
-    let requested_width = input_words[22u];
-    let requested_height = input_words[23u];
-    let requested_count = requested_width * requested_height;
-    if output_index >= requested_count {
+    let evaluation_index = group_index * 64u + local_index;
+    let evaluation_count = input_words[0u];
+    if evaluation_index >= evaluation_count {
         return;
     }
 
-    let output_x = output_index % requested_width;
-    let output_y = output_index / requested_width;
     let evaluation_width = input_words[1u];
     let evaluation_height = input_words[2u];
     let evaluation_stride = input_words[3u];
-    let history_stride = input_words[27u];
+    let evaluation_x = evaluation_index % evaluation_width;
+    let evaluation_y = evaluation_index / evaluation_width;
 
-    let evaluation_x = min(
-        u32(floor((f32(output_x) + 0.5) * f32(evaluation_width) / f32(requested_width))),
-        evaluation_width - 1u,
+    let requested_width = input_words[22u];
+    let requested_height = input_words[23u];
+    let phase = input_words[24u] % 4u;
+    let phase_x = select(0.25, 0.75, phase == 1u || phase == 3u);
+    let phase_y = select(0.25, 0.75, phase >= 2u);
+    let requested_x = min(
+        u32(floor((f32(evaluation_x) + phase_x) * f32(requested_width) / f32(evaluation_width))),
+        requested_width - 1u,
     );
-    let evaluation_y = min(
-        u32(floor((f32(output_y) + 0.5) * f32(evaluation_height) / f32(requested_height))),
-        evaluation_height - 1u,
+    let requested_y = min(
+        u32(floor((f32(evaluation_y) + phase_y) * f32(requested_height) / f32(evaluation_height))),
+        requested_height - 1u,
     );
-    let evaluation_index = evaluation_y * evaluation_width + evaluation_x;
-    let history_index = output_y * history_stride + output_x;
+
+    let history_stride = input_words[27u];
+    let history_index = requested_y * history_stride + requested_x;
     if defined_words[evaluation_index] == 0u {
-        // Do not preserve apparently valid prior radiance when the current finite evaluator
-        // explicitly reports this contributing sample as undefined. T1 does not form a semantic
-        // RenderResult, but its product-visible reconstruction must still fail closed rather than
-        // turning evaluator failure into stale imagery.
+        // This finite ray belongs only to this exact requested lattice-cell footprint. If its
+        // current evaluation is undefined, invalidate only that retained cell rather than
+        // broadcasting stale or invalid evidence to neighboring semantic footprints.
         history_words[history_index] = 0u;
+        history_sample_counts[history_index] = 0u;
         return;
     }
 
     let current_index = evaluation_y * evaluation_stride + evaluation_x;
     let current = bitcast<f32>(current_words[current_index]);
-    let age = min(input_words[26u], 4u);
-    if age == 0u {
+    let sample_count = min(history_sample_counts[history_index], 4u);
+    if sample_count == 0u {
         history_words[history_index] = bitcast<u32>(current);
-        return;
+    } else {
+        let previous = bitcast<f32>(history_words[history_index]);
+        let weight = f32(sample_count);
+        let reconstructed = (previous * weight + current) / (weight + 1.0);
+        history_words[history_index] = bitcast<u32>(reconstructed);
     }
-
-    let previous = bitcast<f32>(history_words[history_index]);
-    let weight = f32(age);
-    let reconstructed = (previous * weight + current) / (weight + 1.0);
-    history_words[history_index] = bitcast<u32>(reconstructed);
+    history_sample_counts[history_index] = min(sample_count + 1u, 4u);
 }
