@@ -22,9 +22,14 @@ use super::deterministic_carrier;
 use super::lowering::RenderWorkSet;
 use super::render_result::RenderResult;
 use super::representation::RenderRepresentationId;
-use super::request::{RenderDistanceConvention, RenderObservationSpec, RenderOutputValue};
-use super::scene::RenderObjectId;
-use super::surface_input::RenderSurfaceSemanticInputView;
+use super::request::{
+    RenderDistanceConvention, RenderObservationSpec, RenderOutputSpec, RenderOutputValue,
+};
+use super::scene::{RenderObjectId, RenderSceneRevision};
+use super::surface_input::{
+    RenderSurfaceSemanticInputBinding, RenderSurfaceSemanticInputGeneration,
+    RenderSurfaceSemanticInputView,
+};
 use runen_gpu::{
     GpuAdmittedProgramSource, GpuBufferDescriptor, GpuBufferHandle, GpuBufferInitialization,
     GpuBufferRegion, GpuBufferTextureLayout, GpuBufferUsage, GpuClearOperation,
@@ -42,7 +47,7 @@ use std::error::Error;
 use std::fmt;
 
 const WORD_BYTES: u64 = deterministic_carrier::WORD_BYTES as u64;
-const HEADER_WORDS: usize = 24;
+const HEADER_WORDS: usize = 30;
 const GEOMETRY_WORDS: usize = 32;
 const EMITTER_WORDS: usize = 4;
 const WORKGROUP_SIZE: u32 = 64;
@@ -51,9 +56,15 @@ const OUTPUT_FORWARD_DEPTH: u32 = 2;
 const OUTPUT_OBJECT_IDENTITY: u32 = 3;
 const OBSERVATION_PERSPECTIVE: u32 = 1;
 const OBSERVATION_PROBE: u32 = 2;
+const OBSERVATION_PERSPECTIVE_FOOTPRINT: u32 = 3;
+const TEMPORAL_SEQUENCE_REVISION: u32 = 1;
+const TEMPORAL_RECONSTRUCTION_REVISION: u32 = 1;
+const TEMPORAL_PHASE_COUNT: u32 = 4;
 const SHAPE_SPHERE: u32 = 1;
 const SHAPE_PLANE: u32 = 2;
 const MAINTAINED_WGSL: &str = include_str!("deterministic_execution.wgsl");
+const TEMPORAL_RECONSTRUCTION_WGSL: &str =
+    include_str!("deterministic_temporal_reconstruction.wgsl");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum DeterministicBufferKind {
@@ -61,6 +72,51 @@ enum DeterministicBufferKind {
     CanonicalOutput,
     Definedness,
     Status,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DeterministicTemporalSignature {
+    scene_revision: RenderSceneRevision,
+    observation: RenderObservationSpec,
+    output: RenderOutputSpec,
+    semantic_inputs: Vec<RenderSurfaceSemanticInputBinding>,
+    evaluation_extent: (u32, u32),
+    sequence_revision: u32,
+    reconstruction_revision: u32,
+}
+
+#[derive(Debug)]
+struct DeterministicTemporalHistory {
+    signature: DeterministicTemporalSignature,
+    handle: GpuBufferHandle,
+    sample_counts: GpuBufferHandle,
+    row_stride_words: u32,
+    generation: u64,
+    phase: u32,
+    age: u32,
+}
+
+#[derive(Debug, Clone)]
+struct DeterministicTemporalHistoryUse {
+    handle: GpuBufferHandle,
+    sample_counts: GpuBufferHandle,
+    row_stride_words: u32,
+    generation: u64,
+    reset: bool,
+    phase: u32,
+    age: u32,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct DeterministicOutputExecutionSelection {
+    scope: u64,
+    finite_evaluation_extent: Option<(u32, u32)>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct DeterministicOutputPackingState<'a> {
+    finite_evaluation_extent: Option<(u32, u32)>,
+    temporal_history: Option<&'a DeterministicTemporalHistoryUse>,
 }
 
 /// Renderer-owned logical buffer identities reused by ordinary composed frames.
@@ -75,6 +131,10 @@ pub(crate) struct DeterministicResourceCache {
     identities: GpuWorkResourceIdAllocator,
     buffers: BTreeMap<(u64, usize, DeterministicBufferKind), GpuBufferHandle>,
     maintained_source: Option<GpuAdmittedProgramSource>,
+    reconstruction_source: Option<GpuAdmittedProgramSource>,
+    temporal_histories: BTreeMap<(u64, usize), DeterministicTemporalHistory>,
+    next_temporal_generation: u64,
+    prepared_temporal_outputs: BTreeMap<u64, BTreeSet<usize>>,
     // Keep the latest accepted graph correlated with every producer namespace whose mutable
     // intermediates it used. A peer surface's submission must not stall this producer's cache.
     producer_submissions: BTreeMap<u64, GpuSubmission>,
@@ -104,6 +164,34 @@ impl DeterministicResourceCache {
     }
 
     pub(crate) fn retain_in_flight_submissions(&mut self) {
+        let terminal = self
+            .producer_submissions
+            .iter()
+            .filter_map(|(scope, submission)| match submission.status() {
+                GpuSubmissionStatus::Accepted => None,
+                GpuSubmissionStatus::Completed => Some((*scope, true)),
+                GpuSubmissionStatus::Failed(_) => Some((*scope, false)),
+            })
+            .collect::<Vec<_>>();
+
+        for (scope, completed) in terminal {
+            let outputs = self
+                .prepared_temporal_outputs
+                .remove(&scope)
+                .unwrap_or_default();
+            if completed {
+                for output_index in outputs {
+                    if let Some(history) = self.temporal_histories.get_mut(&(scope, output_index)) {
+                        history.phase = (history.phase + 1) % TEMPORAL_PHASE_COUNT;
+                        history.age = history.age.saturating_add(1);
+                    }
+                }
+            } else {
+                self.temporal_histories
+                    .retain(|(history_scope, _), _| *history_scope != scope);
+            }
+        }
+
         // Completed and failed submissions are terminal; only an Accepted handle can still be
         // using a producer's reusable intermediates.
         self.producer_submissions
@@ -126,6 +214,123 @@ impl DeterministicResourceCache {
         Ok(source)
     }
 
+    fn reconstruction_source(
+        &mut self,
+    ) -> Result<GpuAdmittedProgramSource, RenderDeterministicLoweringError> {
+        if let Some(source) = self.reconstruction_source.as_ref() {
+            return Ok(source.clone());
+        }
+        let [source] = admit_static_wgsl_sources([(
+            "runenrender.maintained.temporal_reconstruction",
+            u64::from(TEMPORAL_RECONSTRUCTION_REVISION),
+            TEMPORAL_RECONSTRUCTION_WGSL,
+        )])
+        .map_err(|error| gpu_authoring("temporal reconstruction WGSL admission", error))?;
+        self.reconstruction_source = Some(source.clone());
+        Ok(source)
+    }
+
+    fn temporal_history(
+        &mut self,
+        scope: u64,
+        output_index: usize,
+        signature: DeterministicTemporalSignature,
+        requested_extent: (u32, u32),
+        bytes_per_row_alignment: u64,
+    ) -> Result<DeterministicTemporalHistoryUse, RenderDeterministicLoweringError> {
+        let logical_row_bytes = u64::from(requested_extent.0)
+            .checked_mul(WORD_BYTES)
+            .ok_or(RenderDeterministicLoweringError::SizeOverflow {
+                field: "temporal history logical row bytes",
+            })?;
+        let row_bytes = align_up(logical_row_bytes, bytes_per_row_alignment)?;
+        if row_bytes % WORD_BYTES != 0 {
+            return Err(
+                RenderDeterministicLoweringError::InvalidBytesPerRowAlignment {
+                    alignment: bytes_per_row_alignment,
+                },
+            );
+        }
+        let row_stride_words = u32::try_from(row_bytes / WORD_BYTES).map_err(|_| {
+            RenderDeterministicLoweringError::SizeOverflow {
+                field: "temporal history row stride",
+            }
+        })?;
+        let words = row_stride_words.checked_mul(requested_extent.1).ok_or(
+            RenderDeterministicLoweringError::SizeOverflow {
+                field: "temporal history word count",
+            },
+        )?;
+        let byte_len = u64::from(words).checked_mul(WORD_BYTES).ok_or(
+            RenderDeterministicLoweringError::SizeOverflow {
+                field: "temporal history byte length",
+            },
+        )?;
+
+        let key = (scope, output_index);
+        let recreate = self.temporal_histories.get(&key).is_none_or(|history| {
+            history.signature != signature || history.row_stride_words != row_stride_words
+        });
+        if recreate {
+            let descriptor = GpuBufferDescriptor::ordinary_owned(
+                format!("RunenRender output {output_index} temporal history"),
+                GpuResourceLifetime::Retained,
+                GpuReconstruction::SourceBacked,
+                byte_len,
+                [GpuBufferUsage::Storage, GpuBufferUsage::CopySource],
+                GpuBufferInitialization::Zeroed,
+            )
+            .map_err(|error| gpu_authoring("temporal-history descriptor", error))?;
+            let handle = self
+                .identities
+                .allocate_buffer_handle(descriptor)
+                .map_err(|error| gpu_authoring("temporal-history allocation", error))?;
+            let count_descriptor = GpuBufferDescriptor::ordinary_owned(
+                format!("RunenRender output {output_index} temporal sample counts"),
+                GpuResourceLifetime::Retained,
+                GpuReconstruction::SourceBacked,
+                byte_len,
+                [GpuBufferUsage::Storage],
+                GpuBufferInitialization::Zeroed,
+            )
+            .map_err(|error| gpu_authoring("temporal sample-count descriptor", error))?;
+            let sample_counts = self
+                .identities
+                .allocate_buffer_handle(count_descriptor)
+                .map_err(|error| gpu_authoring("temporal sample-count allocation", error))?;
+            self.next_temporal_generation = self.next_temporal_generation.saturating_add(1);
+            self.temporal_histories.insert(
+                key,
+                DeterministicTemporalHistory {
+                    signature,
+                    handle,
+                    sample_counts,
+                    row_stride_words,
+                    generation: self.next_temporal_generation,
+                    phase: 0,
+                    age: 0,
+                },
+            );
+        }
+        self.prepared_temporal_outputs
+            .entry(scope)
+            .or_default()
+            .insert(output_index);
+        let history = self
+            .temporal_histories
+            .get(&key)
+            .expect("temporal history inserted before use");
+        Ok(DeterministicTemporalHistoryUse {
+            handle: history.handle.clone(),
+            sample_counts: history.sample_counts.clone(),
+            row_stride_words: history.row_stride_words,
+            generation: history.generation,
+            reset: recreate,
+            phase: history.phase,
+            age: history.age,
+        })
+    }
+
     fn buffer(
         &mut self,
         scope: u64,
@@ -146,6 +351,16 @@ impl DeterministicResourceCache {
         self.buffers.insert(key, handle.clone());
         Ok(handle)
     }
+}
+
+fn temporal_evaluation_extent_supported(
+    requested_extent: (u32, u32),
+    evaluation_extent: (u32, u32),
+) -> bool {
+    evaluation_extent.0 <= requested_extent.0
+        && evaluation_extent.1 <= requested_extent.1
+        && u64::from(evaluation_extent.0) * 2 >= u64::from(requested_extent.0)
+        && u64::from(evaluation_extent.1) * 2 >= u64::from(requested_extent.1)
 }
 
 fn any_producer_scope_in_flight(
@@ -207,6 +422,21 @@ impl PreparedDeterministicRender {
     }
 }
 
+/// Bounded renderer-owned evidence for one static footprint-reconstruction preparation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderDeterministicTemporalExecutionEvidence {
+    pub requested_extent: (u32, u32),
+    pub evaluation_extent: (u32, u32),
+    pub semantic_input_generations:
+        Vec<(RenderRepresentationId, RenderSurfaceSemanticInputGeneration)>,
+    pub sequence_revision: u32,
+    pub reconstruction_revision: u32,
+    pub phase: u32,
+    pub history_generation: u64,
+    pub history_age: u32,
+    pub history_reset: bool,
+}
+
 /// Renderer-owned correlation for one ordinary composable radiance output.
 ///
 /// The correlation carries the exact admitted destination and typed RunenGPU export relationship.
@@ -216,6 +446,7 @@ impl PreparedDeterministicRender {
 pub struct PreparedDeterministicRadianceOutput {
     output_index: usize,
     relationship: GpuExportRelationship,
+    temporal_evidence: Option<RenderDeterministicTemporalExecutionEvidence>,
 }
 
 impl PreparedDeterministicRadianceOutput {
@@ -236,6 +467,12 @@ impl PreparedDeterministicRadianceOutput {
 
     pub fn export_relationship(&self) -> &GpuExportRelationship {
         &self.relationship
+    }
+
+    pub fn temporal_execution_evidence(
+        &self,
+    ) -> Option<&RenderDeterministicTemporalExecutionEvidence> {
+        self.temporal_evidence.as_ref()
     }
 
     pub fn import(&self, provenance: GpuResourceProvenance) -> GpuWorkImport {
@@ -484,6 +721,15 @@ pub enum RenderDeterministicLoweringError {
         object_id: RenderObjectId,
         representation_id: RenderRepresentationId,
     },
+    MissingTemporalSurfaceInputGeneration {
+        output_index: usize,
+        representation_id: RenderRepresentationId,
+    },
+    UnsupportedTemporalEvaluationExtent {
+        output_index: usize,
+        requested_extent: (u32, u32),
+        evaluation_extent: (u32, u32),
+    },
     NonInvertibleObjectTransform {
         output_index: usize,
         object_id: RenderObjectId,
@@ -538,6 +784,22 @@ impl fmt::Display for RenderDeterministicLoweringError {
             } => write!(
                 formatter,
                 "output {output_index} object {object_id:?} representation {representation_id:?} has no maintained surface input"
+            ),
+            Self::MissingTemporalSurfaceInputGeneration {
+                output_index,
+                representation_id,
+            } => write!(
+                formatter,
+                "output {output_index} representation {representation_id:?} has no source generation required for retained temporal history"
+            ),
+            Self::UnsupportedTemporalEvaluationExtent {
+                output_index,
+                requested_extent,
+                evaluation_extent,
+            } => write!(
+                formatter,
+                "output {output_index} temporal evaluation extent {}x{} cannot cover requested lattice {}x{} with the maintained four-phase footprint sequence",
+                evaluation_extent.0, evaluation_extent.1, requested_extent.0, requested_extent.1
             ),
             Self::NonInvertibleObjectTransform {
                 output_index,
@@ -810,12 +1072,25 @@ pub(crate) fn prepare_deterministic_render_with_cache_in_scope(
     resources: &mut DeterministicResourceCache,
     scope: u64,
 ) -> Result<PreparedDeterministicRender, RenderDeterministicExecutionError> {
+    prepare_deterministic_render_with_cache_in_scope_and_evaluation(
+        admitted, context, resources, scope, None,
+    )
+}
+
+pub(crate) fn prepare_deterministic_render_with_cache_in_scope_and_evaluation(
+    admitted: AdmittedDeterministicRender,
+    context: &GpuContext,
+    resources: &mut DeterministicResourceCache,
+    scope: u64,
+    finite_evaluation: Option<(usize, (u32, u32))>,
+) -> Result<PreparedDeterministicRender, RenderDeterministicExecutionError> {
     let lowered = lower_deterministic_render(
         &admitted,
         context,
         DeterministicObservationIntent::Ordinary,
         resources,
         scope,
+        finite_evaluation,
     )?;
     debug_assert!(lowered.verification_readbacks.is_empty());
     Ok(PreparedDeterministicRender {
@@ -862,6 +1137,7 @@ pub(super) async fn submit_deterministic_render_for_verification(
         DeterministicObservationIntent::Verify,
         &mut DeterministicResourceCache::default(),
         0,
+        None,
     )?;
     let verification_readbacks = lowered.verification_readbacks;
     let submitted = submit_lowered_deterministic_render(
@@ -922,6 +1198,7 @@ fn lower_deterministic_render(
     intent: DeterministicObservationIntent,
     resources: &mut DeterministicResourceCache,
     scope: u64,
+    finite_evaluation: Option<(usize, (u32, u32))>,
 ) -> Result<LoweredDeterministicRender, RenderDeterministicLoweringError> {
     let admitted = maintained.admitted();
     if admitted.environment().affinity() != context.affinity() {
@@ -947,6 +1224,8 @@ fn lower_deterministic_render(
         })
         .collect::<Result<BTreeMap<_, _>, _>>()?;
 
+    resources.prepared_temporal_outputs.remove(&scope);
+
     let mut fragments = Vec::new();
     fragments
         .try_reserve_exact(admitted.outputs().len())
@@ -970,7 +1249,14 @@ fn lower_deterministic_render(
             context,
             resources,
             intent,
-            scope,
+            DeterministicOutputExecutionSelection {
+                scope,
+                finite_evaluation_extent: finite_evaluation.and_then(
+                    |(selected_output, extent)| {
+                        (selected_output == output.output_index()).then_some(extent)
+                    },
+                ),
+            },
         )?;
         fragments.push(lowered.fragment);
         if let Some(readbacks) = lowered.verification_readbacks {
@@ -1020,8 +1306,12 @@ fn lower_output(
     context: &GpuContext,
     resources: &mut DeterministicResourceCache,
     intent: DeterministicObservationIntent,
-    scope: u64,
+    execution: DeterministicOutputExecutionSelection,
 ) -> Result<LoweredDeterministicOutput, RenderDeterministicLoweringError> {
+    let DeterministicOutputExecutionSelection {
+        scope,
+        finite_evaluation_extent,
+    } = execution;
     let admitted_output = admitted
         .outputs()
         .iter()
@@ -1045,6 +1335,65 @@ fn lower_output(
         .copied()
         .ok_or(RenderDeterministicLoweringError::OutputCorrelationChanged { output_index })?;
 
+    let temporal_history = if let Some(evaluation_extent) = finite_evaluation_extent {
+        let RenderObservationSpec::Perspective(perspective) = observation else {
+            return Err(RenderDeterministicLoweringError::UnsupportedOutput { output_index });
+        };
+        if !perspective.sampling_support().is_perspective_lattice_cell()
+            || !matches!(requested.spec().value(), RenderOutputValue::Radiance { .. })
+        {
+            return Err(RenderDeterministicLoweringError::UnsupportedOutput { output_index });
+        }
+        let requested_extent = requested
+            .spec()
+            .topology()
+            .sample_lattice_dimensions()
+            .ok_or(RenderDeterministicLoweringError::UnsupportedOutput { output_index })?;
+        if !temporal_evaluation_extent_supported(requested_extent, evaluation_extent) {
+            return Err(
+                RenderDeterministicLoweringError::UnsupportedTemporalEvaluationExtent {
+                    output_index,
+                    requested_extent,
+                    evaluation_extent,
+                },
+            );
+        }
+        let alignment = context
+            .device_facts()
+            .device_limits()
+            .alignments()
+            .bytes_per_row
+            .ok_or(RenderDeterministicLoweringError::MissingBytesPerRowAlignment)?;
+        for binding in admitted.surface_semantic_inputs() {
+            if binding.generation().is_none() {
+                return Err(
+                    RenderDeterministicLoweringError::MissingTemporalSurfaceInputGeneration {
+                        output_index,
+                        representation_id: binding.representation_id(),
+                    },
+                );
+            }
+        }
+        let signature = DeterministicTemporalSignature {
+            scene_revision: admitted.scene_revision(),
+            observation,
+            output: requested.spec(),
+            semantic_inputs: admitted.surface_semantic_inputs().to_vec(),
+            evaluation_extent,
+            sequence_revision: TEMPORAL_SEQUENCE_REVISION,
+            reconstruction_revision: TEMPORAL_RECONSTRUCTION_REVISION,
+        };
+        Some(resources.temporal_history(
+            scope,
+            output_index,
+            signature,
+            requested_extent,
+            alignment,
+        )?)
+    } else {
+        None
+    };
+
     let packed = pack_output(
         admitted,
         admitted_output,
@@ -1052,6 +1401,10 @@ fn lower_output(
         observation,
         object_codes,
         context,
+        DeterministicOutputPackingState {
+            finite_evaluation_extent,
+            temporal_history: temporal_history.as_ref(),
+        },
     )?;
     let sample_byte_len = u64::from(packed.sample_count)
         .checked_mul(WORD_BYTES)
@@ -1177,6 +1530,39 @@ fn lower_output(
     )
     .map_err(|error| gpu_authoring("compute operation", error))?;
 
+    let reconstruction_compute = if let Some(history) = temporal_history.as_ref() {
+        let source = resources.reconstruction_source()?;
+        let pipeline = GpuComputePipelineDescriptor::ordinary(source, "main")
+            .map_err(|error| gpu_authoring("temporal reconstruction pipeline", error))?;
+        let runtime_bindings = pipeline
+            .runtime_bindings([
+                GpuRuntimeBindingValue::whole_buffer(0, 0, &input),
+                GpuRuntimeBindingValue::whole_buffer(0, 1, &canonical_output),
+                GpuRuntimeBindingValue::whole_buffer(0, 2, &definedness),
+                GpuRuntimeBindingValue::whole_buffer(0, 3, &history.handle),
+                GpuRuntimeBindingValue::whole_buffer(0, 4, &history.sample_counts),
+            ])
+            .map_err(|error| gpu_authoring("temporal reconstruction runtime bindings", error))?;
+        let dispatch_size = deterministic_dispatch_size(
+            packed.sample_count,
+            context
+                .device_facts()
+                .workload_budget()
+                .limits()
+                .max_compute_workgroups_per_dimension(),
+        )?;
+        Some(
+            GpuComputeOperation::new(
+                pipeline,
+                runtime_bindings,
+                GpuDispatchIntent::direct(dispatch_size),
+            )
+            .map_err(|error| gpu_authoring("temporal reconstruction operation", error))?,
+        )
+    } else {
+        None
+    };
+
     let (destination_copy, composable_gpu_output, composable_radiance_output) =
         match admitted_output.binding().destination() {
             RenderOutputDestination::ScalarBuffer(destination) => {
@@ -1190,10 +1576,21 @@ fn lower_output(
                 .map_err(|error| gpu_authoring("scalar destination copy", error))?
             }
             RenderOutputDestination::SampleLatticeTexture(destination) => {
-                let row_bytes = packed.texture_row_bytes.ok_or(
-                    RenderDeterministicLoweringError::OutputCorrelationChanged { output_index },
-                )?;
-                let source = GpuBufferTextureLayout::new(&canonical_output, 0, row_bytes, 0)
+                let (copy_source, row_bytes) = if let Some(history) = temporal_history.as_ref() {
+                    let row_bytes = history
+                        .row_stride_words
+                        .checked_mul(u32::try_from(WORD_BYTES).expect("word bytes fit u32"))
+                        .ok_or(RenderDeterministicLoweringError::SizeOverflow {
+                            field: "temporal history row bytes",
+                        })?;
+                    (&history.handle, row_bytes)
+                } else {
+                    let row_bytes = packed.texture_row_bytes.ok_or(
+                        RenderDeterministicLoweringError::OutputCorrelationChanged { output_index },
+                    )?;
+                    (&canonical_output, row_bytes)
+                };
+                let source = GpuBufferTextureLayout::new(copy_source, 0, row_bytes, 0)
                     .map_err(|error| gpu_authoring("lattice source layout", error))?;
                 let destination_region = GpuTextureCopyRegion::whole_base_mip(destination)
                     .map_err(|error| gpu_authoring("lattice destination region", error))?;
@@ -1229,6 +1626,35 @@ fn lower_output(
                         PreparedDeterministicRadianceOutput {
                             output_index,
                             relationship,
+                            temporal_evidence: temporal_history.as_ref().map(|history| {
+                                RenderDeterministicTemporalExecutionEvidence {
+                                    requested_extent: requested
+                                        .spec()
+                                        .topology()
+                                        .sample_lattice_dimensions()
+                                        .expect("temporal radiance output is a sample lattice"),
+                                    evaluation_extent: finite_evaluation_extent
+                                        .expect("temporal history requires finite evaluation"),
+                                    semantic_input_generations: admitted
+                                        .surface_semantic_inputs()
+                                        .iter()
+                                        .map(|binding| {
+                                            (
+                                                binding.representation_id(),
+                                                binding.generation().expect(
+                                                    "temporal lowering required source generation",
+                                                ),
+                                            )
+                                        })
+                                        .collect(),
+                                    sequence_revision: TEMPORAL_SEQUENCE_REVISION,
+                                    reconstruction_revision: TEMPORAL_RECONSTRUCTION_REVISION,
+                                    phase: history.phase,
+                                    history_generation: history.generation,
+                                    history_age: history.age,
+                                    history_reset: history.reset,
+                                }
+                            }),
                         },
                     ))
                 } else {
@@ -1285,8 +1711,11 @@ fn lower_output(
             work.operation("clear semantic definedness", definedness_clear)?;
             work.operation("clear evaluator status", status_clear)?;
             work.compute("evaluate deterministic output", compute)?;
+            if let Some(reconstruction) = reconstruction_compute {
+                work.compute("reconstruct deterministic footprint output", reconstruction)?;
+            }
             work.operation(
-                "copy canonical output to admitted destination",
+                "copy reconstructed output to admitted destination",
                 destination_copy,
             )?;
             if let Some(output) = composable_gpu_output {
@@ -1322,13 +1751,28 @@ fn pack_output(
     observation: RenderObservationSpec,
     object_codes: &BTreeMap<RenderObjectId, u32>,
     context: &GpuContext,
+    packing: DeterministicOutputPackingState<'_>,
 ) -> Result<PackedOutput, RenderDeterministicLoweringError> {
+    let DeterministicOutputPackingState {
+        finite_evaluation_extent,
+        temporal_history,
+    } = packing;
     let output_index = admitted_output.output_index();
     let topology = admitted.plan().request().outputs()[output_index]
         .spec()
         .topology();
+    let requested_extent = topology.sample_lattice_dimensions();
+    let physical_extent = match (requested_extent, finite_evaluation_extent) {
+        (Some(_), Some(extent)) => extent,
+        (Some(extent), None) => extent,
+        (None, Some(_)) => {
+            return Err(RenderDeterministicLoweringError::UnsupportedOutput { output_index });
+        }
+        (None, None) => (1, 1),
+    };
     let (sample_count, width, height, row_stride_words, output_byte_len, texture_row_bytes) =
-        if let Some((width, height)) = topology.sample_lattice_dimensions() {
+        if requested_extent.is_some() {
+            let (width, height) = physical_extent;
             let sample_count = width.checked_mul(height).ok_or(
                 RenderDeterministicLoweringError::SizeOverflow {
                     field: "lattice sample count",
@@ -1398,7 +1842,11 @@ fn pack_output(
 
     let (observation_kind, transform, tan_half_fov, aspect_ratio) = match observation {
         RenderObservationSpec::Perspective(observation) => (
-            OBSERVATION_PERSPECTIVE,
+            if observation.sampling_support().is_perspective_lattice_cell() {
+                OBSERVATION_PERSPECTIVE_FOOTPRINT
+            } else {
+                OBSERVATION_PERSPECTIVE
+            },
             observation.observation_to_scene(),
             Some((observation.vertical_field_of_view_radians() * 0.5).tan()),
             Some(observation.aspect_ratio()),
@@ -1482,7 +1930,15 @@ fn pack_output(
     words[6] = output_kind;
     words[7] = observation_kind;
     pack_observation(&mut words, transform, tan_half_fov, aspect_ratio)?;
-    words[23] = u32::try_from(emitter_offset).map_err(|_| {
+    let requested_extent = requested_extent.unwrap_or((1, 1));
+    words[22] = requested_extent.0;
+    words[23] = requested_extent.1;
+    words[24] = temporal_history.map_or(0, |history| history.phase);
+    words[25] = TEMPORAL_SEQUENCE_REVISION;
+    words[26] = temporal_history.map_or(0, |history| history.age);
+    words[27] = temporal_history.map_or(row_stride_words, |history| history.row_stride_words);
+    words[28] = TEMPORAL_RECONSTRUCTION_REVISION;
+    words[29] = u32::try_from(emitter_offset).map_err(|_| {
         RenderDeterministicLoweringError::SizeOverflow {
             field: "emitter input offset",
         }
@@ -1880,6 +2336,119 @@ mod tests {
             "one replacement is expected for the resize"
         );
         assert_eq!(cache.buffers.len(), 1, "the cache retains one live slot");
+    }
+
+    fn temporal_signature(source_generation: u64) -> DeterministicTemporalSignature {
+        use super::super::request::{
+            RenderOutputSpec, RenderOutputValue, RenderPerspectiveObservation,
+            RenderRadiometricRepresentation, RenderResultTopology, RenderSamplingSupport,
+            RenderSemanticTolerance,
+        };
+        use super::super::space_time::{
+            RenderAffineTransform3, RenderTemporalSupport, RenderTimeInterval, RenderTimePoint,
+        };
+        use super::super::surface_input::{
+            RenderSurfaceSemanticInput, RenderSurfaceSemanticInputBinding,
+            RenderSurfaceSemanticInputGeneration,
+        };
+
+        let shutter = RenderTimeInterval::instant(
+            RenderTimePoint::from_seconds(0.0).expect("finite test time"),
+        );
+        let observation = RenderObservationSpec::Perspective(
+            RenderPerspectiveObservation::new(
+                RenderAffineTransform3::identity(),
+                std::f64::consts::FRAC_PI_3,
+                1.0,
+                shutter,
+                RenderSamplingSupport::perspective_lattice_cell(),
+            )
+            .expect("valid temporal test observation"),
+        );
+        let output = RenderOutputSpec::new(
+            RenderOutputValue::Radiance {
+                representation: RenderRadiometricRepresentation::spectral_at_wavelength_meters(
+                    550.0e-9,
+                )
+                .expect("valid wavelength"),
+            },
+            RenderResultTopology::sample_lattice_2d(4, 4).expect("valid requested lattice"),
+            RenderSemanticTolerance::absolute(0.001).expect("valid tolerance"),
+        )
+        .expect("valid temporal test output");
+        let input = RenderSurfaceSemanticInput::sphere(
+            [0.0, 0.0, -3.0],
+            1.0,
+            RenderTemporalSupport::unbounded(),
+        )
+        .expect("valid temporal test input");
+        let binding = RenderSurfaceSemanticInputBinding::new(
+            RenderRepresentationId::from_raw(1).expect("non-zero representation id"),
+            input,
+        )
+        .with_generation(RenderSurfaceSemanticInputGeneration::new(source_generation));
+
+        DeterministicTemporalSignature {
+            scene_revision: RenderSceneRevision::INITIAL,
+            observation,
+            output,
+            semantic_inputs: vec![binding],
+            evaluation_extent: (2, 2),
+            sequence_revision: TEMPORAL_SEQUENCE_REVISION,
+            reconstruction_revision: TEMPORAL_RECONSTRUCTION_REVISION,
+        }
+    }
+
+    #[test]
+    fn temporal_history_reuses_compatible_generation_and_resets_on_source_generation_change() {
+        let mut cache = DeterministicResourceCache::default();
+        let first = cache
+            .temporal_history(11, 0, temporal_signature(7), (4, 4), 4)
+            .expect("initial temporal history should allocate");
+        assert!(first.reset);
+        assert_eq!(first.phase, 0);
+        assert_eq!(first.age, 0);
+
+        let state = cache
+            .temporal_histories
+            .get_mut(&(11, 0))
+            .expect("initial temporal history should be retained");
+        state.phase = 1;
+        state.age = 1;
+
+        let reused = cache
+            .temporal_history(11, 0, temporal_signature(7), (4, 4), 4)
+            .expect("compatible temporal history should reuse");
+        assert!(!reused.reset);
+        assert_eq!(reused.generation, first.generation);
+        assert_eq!(reused.phase, 1);
+        assert_eq!(reused.age, 1);
+
+        let reset = cache
+            .temporal_history(11, 0, temporal_signature(8), (4, 4), 4)
+            .expect("changed source generation should recreate history");
+        assert!(reset.reset);
+        assert_ne!(reset.generation, first.generation);
+        assert_eq!(reset.phase, 0);
+        assert_eq!(reset.age, 0);
+    }
+
+    #[test]
+    fn temporal_four_phase_extent_requires_half_to_native_coverage() {
+        let requested = (1920, 1080);
+        for supported in [(1920, 1080), (1440, 810), (1280, 720), (960, 540)] {
+            assert!(temporal_evaluation_extent_supported(requested, supported));
+        }
+        assert!(!temporal_evaluation_extent_supported(requested, (959, 540)));
+        assert!(!temporal_evaluation_extent_supported(requested, (960, 539)));
+        assert!(!temporal_evaluation_extent_supported(
+            requested,
+            (1921, 1080)
+        ));
+        assert!(!temporal_evaluation_extent_supported(
+            requested,
+            (1920, 1081)
+        ));
     }
 
     #[test]

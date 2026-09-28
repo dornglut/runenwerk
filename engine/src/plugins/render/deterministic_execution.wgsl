@@ -69,11 +69,11 @@ fn mul3(base: u32, value: vec3<f32>) -> vec3<f32> {
 }
 
 fn geometry_base(index: u32) -> u32 {
-    return 24u + index * 32u;
+    return 30u + index * 32u;
 }
 
 fn emitter_base(index: u32) -> u32 {
-    return input_words[23u] + index * 4u;
+    return input_words[29u] + index * 4u;
 }
 
 fn to_local_point(base: u32, point_scene: vec3<f32>) -> vec3<f32> {
@@ -297,8 +297,25 @@ fn sample_direction(index: u32) -> NormalizedDirection {
     let height = f32(input_words[2u]);
     let x = index % input_words[1u];
     let y = index / input_words[1u];
-    let u = (f32(x) + 0.5) / width;
-    let v = (f32(y) + 0.5) / height;
+    var u = (f32(x) + 0.5) / width;
+    var v = (f32(y) + 0.5) / height;
+    if input_words[7u] == 3u {
+        let phase = input_words[24u] % 4u;
+        let phase_x = select(0.25, 0.75, phase == 1u || phase == 3u);
+        let phase_y = select(0.25, 0.75, phase >= 2u);
+        let requested_width = input_words[22u];
+        let requested_height = input_words[23u];
+        let requested_x = min(
+            u32(floor((f32(x) + phase_x) * f32(requested_width) / width)),
+            requested_width - 1u,
+        );
+        let requested_y = min(
+            u32(floor((f32(y) + phase_y) * f32(requested_height) / height)),
+            requested_height - 1u,
+        );
+        u = (f32(requested_x) + phase_x) / f32(requested_width);
+        v = (f32(requested_y) + phase_y) / f32(requested_height);
+    }
     let local = vec3<f32>(
         (2.0 * u - 1.0) * load_f32(20u) * load_f32(21u),
         (1.0 - 2.0 * v) * load_f32(20u),
