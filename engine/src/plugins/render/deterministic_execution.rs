@@ -974,12 +974,29 @@ pub(crate) fn prepare_deterministic_render_with_cache_in_scope(
     resources: &mut DeterministicResourceCache,
     scope: u64,
 ) -> Result<PreparedDeterministicRender, RenderDeterministicExecutionError> {
+    prepare_deterministic_render_with_cache_in_scope_and_evaluation(
+        admitted,
+        context,
+        resources,
+        scope,
+        None,
+    )
+}
+
+pub(crate) fn prepare_deterministic_render_with_cache_in_scope_and_evaluation(
+    admitted: AdmittedDeterministicRender,
+    context: &GpuContext,
+    resources: &mut DeterministicResourceCache,
+    scope: u64,
+    finite_evaluation: Option<(usize, (u32, u32))>,
+) -> Result<PreparedDeterministicRender, RenderDeterministicExecutionError> {
     let lowered = lower_deterministic_render(
         &admitted,
         context,
         DeterministicObservationIntent::Ordinary,
         resources,
         scope,
+        finite_evaluation,
     )?;
     debug_assert!(lowered.verification_readbacks.is_empty());
     Ok(PreparedDeterministicRender {
@@ -1026,6 +1043,7 @@ pub(super) async fn submit_deterministic_render_for_verification(
         DeterministicObservationIntent::Verify,
         &mut DeterministicResourceCache::default(),
         0,
+        None,
     )?;
     let verification_readbacks = lowered.verification_readbacks;
     let submitted = submit_lowered_deterministic_render(
@@ -1086,6 +1104,7 @@ fn lower_deterministic_render(
     intent: DeterministicObservationIntent,
     resources: &mut DeterministicResourceCache,
     scope: u64,
+    finite_evaluation: Option<(usize, (u32, u32))>,
 ) -> Result<LoweredDeterministicRender, RenderDeterministicLoweringError> {
     let admitted = maintained.admitted();
     if admitted.environment().affinity() != context.affinity() {
@@ -1111,6 +1130,8 @@ fn lower_deterministic_render(
         })
         .collect::<Result<BTreeMap<_, _>, _>>()?;
 
+    resources.prepared_temporal_outputs.remove(&scope);
+
     let mut fragments = Vec::new();
     fragments
         .try_reserve_exact(admitted.outputs().len())
@@ -1135,6 +1156,9 @@ fn lower_deterministic_render(
             resources,
             intent,
             scope,
+            finite_evaluation.and_then(|(selected_output, extent)| {
+                (selected_output == output.output_index()).then_some(extent)
+            }),
         )?;
         fragments.push(lowered.fragment);
         if let Some(readbacks) = lowered.verification_readbacks {
@@ -1185,6 +1209,7 @@ fn lower_output(
     resources: &mut DeterministicResourceCache,
     intent: DeterministicObservationIntent,
     scope: u64,
+    finite_evaluation_extent: Option<(u32, u32)>,
 ) -> Result<LoweredDeterministicOutput, RenderDeterministicLoweringError> {
     let admitted_output = admitted
         .outputs()
