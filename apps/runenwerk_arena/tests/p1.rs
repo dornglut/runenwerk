@@ -3,8 +3,8 @@ use engine::prelude::*;
 use runen_spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, WorldId};
 use runenwerk_arena::{
     ARENA_PLAYER_SPAWN, ArenaMovementConfig, ArenaPlayer, GameCommandError, LOCAL_PARTICIPANT_ID,
-    ParticipantCommand, PlayerCommand, PlayerPhysicalHistory, TickCommandBatch, apply_game_commands,
-    build_headless_game_app, player_physical_history_for, player_state_for,
+    ParticipantCommand, PlayerCommand, PlayerPhysicalHistory, TickCommandBatch,
+    apply_game_commands, build_headless_game_app, player_physical_history_for, player_state_for,
 };
 use world_ops::{ChunkGeneration, ChunkRevision};
 use world_sdf::SdfChunkPayload;
