@@ -1,7 +1,8 @@
 use super::*;
 use crate::plugins::render::RenderGpuResourceLowering;
 use crate::plugins::render::renderer::resource_descriptors::{
-    buffer_descriptor, texture_descriptor, whole_texture_view_descriptor,
+    buffer_descriptor, texture_descriptor, texture_descriptor_with_initialization,
+    whole_texture_view_descriptor,
 };
 use runen_gpu::{
     GpuContext, GpuMemoryIntent, GpuResourceDescriptor, GpuResourceLifetime, GpuTextureDimension,
@@ -259,12 +260,13 @@ impl FlowRuntimeResources {
 
             if should_recreate {
                 let label = format!("engine_invocation_history_{invocation_id}_{resource_id}");
-                let descriptor = texture_descriptor(
+                let descriptor = texture_descriptor_with_initialization(
                     label.clone(),
                     texture_spec.size,
                     texture_spec.descriptor.format(),
                     texture_spec.descriptor.usages().iter(),
                     GpuResourceLifetime::Retained,
+                    texture_spec.descriptor.initialization().clone(),
                 )?;
                 let handle = self.resource_ids.allocate_texture_handle(descriptor)?;
                 let view_handle = self.resource_ids.allocate_texture_view_handle(
