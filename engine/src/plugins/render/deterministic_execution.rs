@@ -1265,7 +1265,7 @@ fn lower_output(
             output_index,
             signature,
             requested_extent,
-            alignment,
+            u64::from(alignment),
         )?)
     } else {
         None
