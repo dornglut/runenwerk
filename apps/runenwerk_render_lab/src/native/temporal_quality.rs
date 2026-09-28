@@ -420,14 +420,13 @@ pub(super) fn write_temporal_quality_artifact(
                         generation_classes.len() - 1
                     };
                     let seen = &mut generation_classes[representation_index].1;
-                    let class_index = if let Some(index) =
-                        seen.iter().position(|known| known == generation)
-                    {
-                        index
-                    } else {
-                        seen.push(*generation);
-                        seen.len() - 1
-                    };
+                    let class_index =
+                        if let Some(index) = seen.iter().position(|known| known == generation) {
+                            index
+                        } else {
+                            seen.push(*generation);
+                            seen.len() - 1
+                        };
                     u64::try_from(class_index + 1)
                         .expect("bounded temporal quality generation class fits u64")
                 })
@@ -436,10 +435,7 @@ pub(super) fn write_temporal_quality_artifact(
             temporal_reconstruction.push(RenderLabTemporalReconstructionEvidence {
                 frame_index: observation.key.frame_index,
                 requested_size_px: [evidence.requested_extent.0, evidence.requested_extent.1],
-                evaluation_size_px: [
-                    evidence.evaluation_extent.0,
-                    evidence.evaluation_extent.1,
-                ],
+                evaluation_size_px: [evidence.evaluation_extent.0, evidence.evaluation_extent.1],
                 semantic_input_generation_classes,
                 sequence_revision: evidence.sequence_revision,
                 reconstruction_revision: evidence.reconstruction_revision,
