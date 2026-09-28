@@ -21,6 +21,7 @@ pub mod schedules;
 pub mod system;
 pub mod window;
 pub(crate) mod winit_input;
+pub(crate) mod winit_window_realizer;
 pub mod winit_runner;
 
 pub use fixed_time::*;
