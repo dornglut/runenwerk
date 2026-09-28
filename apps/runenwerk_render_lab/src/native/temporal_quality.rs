@@ -522,6 +522,75 @@ pub(super) fn write_temporal_quality_artifact(
         .with_context(|| format!("write temporal quality evidence {}", path.display()))
 }
 
+fn validate_camera_motion_evidence(
+    frames: &[RenderLabCameraMotionFrameEvidence],
+    requested_output: (u32, u32),
+) -> Result<()> {
+    if frames.len() < 4 {
+        bail!(
+            "camera-motion proof requires at least four renderer evidence frames, found {}",
+            frames.len()
+        );
+    }
+    let expected_size = [requested_output.0, requested_output.1];
+    let first_generation = frames[0].history_generation;
+    let first_input_generations = &frames[0].semantic_input_generation_classes;
+
+    for (index, frame) in frames.iter().enumerate() {
+        if frame.requested_size_px != expected_size || frame.evaluation_size_px != expected_size {
+            bail!(
+                "camera-motion frame {index} is not P100: requested={:?} evaluation={:?} expected={expected_size:?}",
+                frame.requested_size_px,
+                frame.evaluation_size_px
+            );
+        }
+        if !frame.camera_reprojection_eligible {
+            bail!("camera-motion frame {index} is not renderer-eligible for native reprojection");
+        }
+        if frame.camera_reprojection_revision.is_none() || frame.depth_policy_revision.is_none() {
+            bail!("camera-motion frame {index} lacks reprojection/depth-policy revision evidence");
+        }
+        if frame.history_generation != first_generation {
+            bail!(
+                "camera-motion frame {index} recreated history generation {} instead of reusing {}",
+                frame.history_generation,
+                first_generation
+            );
+        }
+        if &frame.semantic_input_generation_classes != first_input_generations {
+            bail!("camera-motion frame {index} changed semantic-input source generations");
+        }
+    }
+
+    let bootstrap = &frames[0];
+    if !bootstrap.history_reset
+        || bootstrap.history_age != 0
+        || bootstrap.previous_observation_available
+        || bootstrap.camera_pose_changed
+    {
+        bail!("camera-motion bootstrap frame does not carry bootstrap-only evidence");
+    }
+
+    let compatible = &frames[1];
+    if compatible.history_reset
+        || compatible.history_age != 1
+        || !compatible.previous_observation_available
+        || compatible.camera_pose_changed
+    {
+        bail!("camera-motion second frame does not prove same-pose compatible reuse");
+    }
+
+    for (index, frame) in frames.iter().enumerate().skip(2) {
+        if frame.history_reset
+            || !frame.previous_observation_available
+            || !frame.camera_pose_changed
+        {
+            bail!("camera-motion frame {index} does not prove pose-only retained-history reuse");
+        }
+    }
+    Ok(())
+}
+
 pub(super) fn write_camera_motion_quality_artifact(
     measurement: &RenderLabMeasurementConfig,
     history: &RenderFrameHistoryState,
@@ -639,6 +708,7 @@ pub(super) fn write_camera_motion_quality_artifact(
             frames.len()
         );
     }
+    validate_camera_motion_evidence(&frames, requested_output)?;
 
     let artifact = RenderLabCameraMotionArtifact {
         schema_version: RL2_CAMERA_MOTION_SCHEMA_VERSION,
@@ -855,6 +925,49 @@ mod tests {
     fn producer(raw: u64) -> engine::plugins::render::RenderFrameProducerId {
         engine::plugins::render::RenderFrameProducerId::try_from_raw(raw)
             .expect("test producer id should be nonzero")
+    }
+
+    fn camera_frame(
+        frame_index: u64,
+        history_age: u32,
+        history_reset: bool,
+        previous_observation_available: bool,
+        camera_pose_changed: bool,
+    ) -> RenderLabCameraMotionFrameEvidence {
+        RenderLabCameraMotionFrameEvidence {
+            frame_index,
+            requested_size_px: [1920, 1080],
+            evaluation_size_px: [1920, 1080],
+            semantic_input_generation_classes: vec![1, 1],
+            phase: history_age % 4,
+            history_generation: 7,
+            history_age,
+            history_reset,
+            camera_reprojection_eligible: true,
+            previous_observation_available,
+            camera_pose_changed,
+            camera_reprojection_revision: Some(1),
+            depth_policy_revision: Some(1),
+        }
+    }
+
+    #[test]
+    fn camera_motion_evidence_requires_pose_only_reuse_without_history_reset() {
+        let frames = vec![
+            camera_frame(1, 0, true, false, false),
+            camera_frame(2, 1, false, true, false),
+            camera_frame(3, 2, false, true, true),
+            camera_frame(4, 3, false, true, true),
+        ];
+        validate_camera_motion_evidence(&frames, (1920, 1080)).unwrap();
+
+        let mut reset_on_motion = frames.clone();
+        reset_on_motion[2].history_reset = true;
+        assert!(validate_camera_motion_evidence(&reset_on_motion, (1920, 1080)).is_err());
+
+        let mut sub_native = frames;
+        sub_native[3].evaluation_size_px = [960, 540];
+        assert!(validate_camera_motion_evidence(&sub_native, (1920, 1080)).is_err());
     }
 
     #[test]
