@@ -1,19 +1,21 @@
 use engine::plugins::world::adapters::PartitionConfigResource;
 use engine::plugins::world::build::{
-    WorldCompletedBuildQueueResource, WorldSdfRuntimePayloadPackage,
-    enqueue_ratified_world_sdf_payload_package,
+    WorldCompletedBuildQueueResource, WorldRuntimeSdfProductCatalogResource,
+    WorldSdfRuntimePayloadPackage, enqueue_ratified_world_sdf_payload_package,
 };
 use engine::plugins::world::chunks::lifecycle::WorldChunkRuntimeMapResource;
 use engine::prelude::{App, Plugin, ResMut, Startup};
 use runen_spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, WorldId};
 use world_sdf::{
-    RegionSdfSummary, SdfBrickMetadata, SdfBrickRecord, SdfBrickSamples, SdfChunkPayload,
-    SdfPageCoord3, SdfPageRecord,
+    FieldProductConsumerClass, FieldProductDescriptor, FieldProductId, FieldProductKind,
+    FieldProductLineage, FieldProductScope, RegionSdfSummary, SdfBrickMetadata, SdfBrickRecord,
+    SdfBrickSamples, SdfChunkPayload, SdfPageCoord3, SdfPageRecord, WorldSdfPayloadRef,
 };
 
 pub const ARENA_WORLD_ID: WorldId = WorldId::new(0);
 pub const ARENA_CHUNK_EDGE_METERS: f64 = 4.0;
 pub const ARENA_PLAYER_SPAWN: [f32; 3] = [1.0, 0.5, 1.0];
+pub const ARENA_FIELD_PRODUCT_ID: FieldProductId = FieldProductId(1);
 
 const ARENA_PAGE_COORD: SdfPageCoord3 = SdfPageCoord3 { x: 0, y: 0, z: 0 };
 const ARENA_CELL_COUNT_PER_AXIS: u8 = 8;
@@ -30,14 +32,19 @@ fn install_arena_world(
     mut partition: ResMut<PartitionConfigResource>,
     mut completed: ResMut<WorldCompletedBuildQueueResource>,
     mut chunks: ResMut<WorldChunkRuntimeMapResource>,
+    mut products: ResMut<WorldRuntimeSdfProductCatalogResource>,
 ) {
     *partition = PartitionConfigResource(arena_partition_config());
 
+    let payload = build_arena_chunk_payload();
+    let descriptor = arena_field_product_descriptor(&payload);
     let enqueued = enqueue_ratified_world_sdf_payload_package(
         &mut completed,
         &mut chunks,
+        &mut products,
         WorldSdfRuntimePayloadPackage::new(
-            vec![build_arena_chunk_payload()],
+            descriptor,
+            vec![payload],
             RegionSdfSummary {
                 min_distance: -1,
                 max_distance: 1,
@@ -45,7 +52,8 @@ fn install_arena_world(
                 surface_chunk_count: 1,
             },
         ),
-    );
+    )
+    .expect("maintained arena field product should satisfy runtime SDF intake");
     debug_assert_eq!(enqueued, 1);
 }
 
@@ -56,6 +64,20 @@ pub fn arena_partition_config() -> GridPartitionConfig {
 
 pub fn arena_chunk_id() -> ChunkId {
     ChunkId::new(ARENA_WORLD_ID, ChunkCoord3::default())
+}
+
+pub fn arena_field_product_descriptor(payload: &SdfChunkPayload) -> FieldProductDescriptor {
+    let mut descriptor = FieldProductDescriptor::new(
+        ARENA_FIELD_PRODUCT_ID,
+        FieldProductKind::WorldSdfChunkPages,
+        FieldProductScope::from_chunks([payload.chunk_id]),
+        FieldProductLineage::new(1, "runenwerk_arena.runtime_sdf"),
+    );
+    descriptor.consumer_class = FieldProductConsumerClass::RuntimeRead;
+    descriptor
+        .payload_refs
+        .push(WorldSdfPayloadRef::from(payload));
+    descriptor
 }
 
 pub fn build_arena_chunk_payload() -> SdfChunkPayload {
