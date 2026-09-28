@@ -7,7 +7,7 @@ use engine::plugins::render::{
 };
 use runen_gpu::{
     GpuBufferInitialization, GpuResourceDescriptor, GpuResourceLifetime, GpuTextureFormat,
-    GpuWorkResourceId, GpuWorkResourceIdAllocator,
+    GpuTextureInitialization, GpuWorkResourceId, GpuWorkResourceIdAllocator,
 };
 
 #[derive(Debug, Clone, Copy, GpuUniform)]
@@ -164,6 +164,41 @@ fn owned_texture_lowering_returns_normalized_texture() {
             if texture.extent().width() == 320
                 && texture.extent().height() == 180
                 && texture.format() == GpuTextureFormat::Bgra8UnormSrgb
+    ));
+}
+
+#[test]
+fn history_initialization_is_explicit_and_opt_in() {
+    let ids = test_resource_ids(2);
+    let ordinary =
+        RenderResourceDeclaration::declare_history_texture(ids[0], "ordinary history");
+    let zeroed =
+        RenderResourceDeclaration::declare_zeroed_history_texture(ids[1], "temporal bootstrap");
+
+    let ordinary = ordinary
+        .lower_gpu_resource((320, 180), GpuTextureFormat::Rgba8Unorm)
+        .expect("ordinary history should lower");
+    let zeroed = zeroed
+        .lower_gpu_resource((320, 180), GpuTextureFormat::Rgba8Unorm)
+        .expect("zeroed history should lower");
+
+    assert!(matches!(
+        ordinary,
+        RenderGpuResourceLowering::Normalized(ref normalized)
+            if matches!(
+                normalized.as_ref(),
+                GpuResourceDescriptor::Texture(texture)
+                    if texture.initialization() == &GpuTextureInitialization::Uninitialized
+            )
+    ));
+    assert!(matches!(
+        zeroed,
+        RenderGpuResourceLowering::Normalized(ref normalized)
+            if matches!(
+                normalized.as_ref(),
+                GpuResourceDescriptor::Texture(texture)
+                    if texture.initialization() == &GpuTextureInitialization::Zeroed
+            )
     ));
 }
 
