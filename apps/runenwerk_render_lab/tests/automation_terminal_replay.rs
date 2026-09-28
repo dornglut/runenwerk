@@ -12,7 +12,8 @@ use engine::automation::{
     AutomationSessionId, AutomationStepResult, DigitalState, InputObservation, InputSourceId,
     MAX_ARTIFACT_BYTES, PointerButton, PointerButtonInput, RelativeMotionUnit, ScrollDelta,
     ScrollDomain, ScrollInput, Vector2, export_automation_input_trace_v1,
-    export_automation_scenario_v1, import_automation_input_trace_v1,
+    export_automation_input_trace_v2, export_automation_scenario_v1,
+    import_automation_input_trace_v1,
 };
 use engine::prelude::InputState;
 use runenwerk_render_lab::automation::{
@@ -142,6 +143,49 @@ fn persisted_trace_fixture() -> (String, RenderLabCameraObservation) {
     (encoded, recorded_camera)
 }
 
+fn persisted_absolute_trace_v2_fixture() -> (String, RenderLabCameraObservation) {
+    let mut app = build_headless_automation_app();
+    app.add_plugin(AutomationInputTracePlugin);
+    app.start_automation_input_trace()
+        .expect("V2 trace should start");
+
+    {
+        let input = app
+            .world_mut()
+            .resource_mut::<InputState>()
+            .expect("headless automation fixture should install InputState");
+        input.handle_cursor_moved(0.0, 0.0);
+        input.handle_mouse_input(
+            winit::event::ElementState::Pressed,
+            winit::event::MouseButton::Left,
+        );
+        input.handle_cursor_moved(10.0, -5.0);
+    }
+
+    app = app
+        .run_for_frames(1)
+        .expect("absolute-pointer orbit frame should run");
+    let recorded_camera = query_camera(&mut app);
+    assert_eq!(recorded_camera.yaw_radians, 0.1);
+    assert_eq!(recorded_camera.pitch_radians, 0.05);
+
+    let trace = app
+        .stop_automation_input_trace()
+        .expect("V2 trace should stop");
+    assert_eq!(trace.frames().len(), 1);
+    assert_eq!(trace.frames()[0].groups().len(), 3);
+    assert!(trace.trailing_groups().is_empty());
+
+    let encoded = export_automation_input_trace_v2(
+        &trace,
+        AutomationInputTraceRecordingWitness::RecordedSourcesPristineAtCaptureStart,
+        None,
+    )
+    .expect("absolute-pointer trace should persist as V2");
+
+    (encoded, recorded_camera)
+}
+
 fn direct_replay_camera(encoded: &str) -> RenderLabCameraObservation {
     let imported = import_automation_input_trace_v1(encoded.as_bytes())
         .expect("persisted trace should import");
@@ -212,6 +256,29 @@ fn persisted_trace_replays_through_the_terminal_binary() {
 }
 
 #[test]
+fn persisted_v2_absolute_pointer_trace_replays_through_terminal_binary() {
+    let (encoded, recorded_camera) = persisted_absolute_trace_v2_fixture();
+
+    let output = write_and_run("v2-absolute", encoded.as_bytes());
+    assert!(
+        output.status.success(),
+        "V2 terminal replay failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("terminal output should be UTF-8");
+    let expected = format!(
+        "replay completed: frames=1 camera_yaw_radians={} camera_pitch_radians={} camera_distance={} camera_pan_x={} camera_pan_y={}",
+        recorded_camera.yaw_radians,
+        recorded_camera.pitch_radians,
+        recorded_camera.distance,
+        recorded_camera.pan[0],
+        recorded_camera.pan[1],
+    );
+    assert_eq!(stdout.trim(), expected);
+}
+
+#[test]
 fn terminal_replay_fails_closed_for_invalid_artifacts() {
     let (encoded, _) = persisted_trace_fixture();
 
@@ -226,7 +293,7 @@ fn terminal_replay_fails_closed_for_invalid_artifacts() {
     let wrong_kind = write_and_run("wrong-kind", wrong_kind_text.as_bytes());
     assert!(!wrong_kind.status.success());
 
-    let future_version_text = encoded.replace("schema_version: 1", "schema_version: 2");
+    let future_version_text = encoded.replace("schema_version: 1", "schema_version: 3");
     assert_ne!(future_version_text, encoded);
     let future_version = write_and_run("future-version", future_version_text.as_bytes());
     assert!(!future_version.status.success());
