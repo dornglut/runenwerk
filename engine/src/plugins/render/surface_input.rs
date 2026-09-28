@@ -132,7 +132,7 @@ impl RenderSurfaceSemanticInput {
 /// The number is meaningful only within the source contract that publishes the binding for one
 /// representation identity. RunenRender compares it for dependency validity but does not interpret
 /// ordering, synthesize it from scene/frame/GPU state, or treat it as renderer-owned revision truth.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RenderSurfaceSemanticInputGeneration(u64);
 
 impl RenderSurfaceSemanticInputGeneration {
