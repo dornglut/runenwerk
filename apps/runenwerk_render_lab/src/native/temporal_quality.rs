@@ -539,9 +539,9 @@ pub(super) fn write_camera_motion_quality_artifact(
             capture_root.display()
         )
     })?;
-    let requested_output = measurement.primary_window_size_px.ok_or_else(|| {
-        anyhow::anyhow!("camera-motion requested output extent is unavailable")
-    })?;
+    let requested_output = measurement
+        .primary_window_size_px
+        .ok_or_else(|| anyhow::anyhow!("camera-motion requested output extent is unavailable"))?;
     let requested_internal = measurement.radiance_target_size_px.ok_or_else(|| {
         anyhow::anyhow!("camera-motion requested evaluation extent is unavailable")
     })?;
@@ -661,8 +661,7 @@ pub(super) fn write_camera_motion_quality_artifact(
             output_root.display()
         )
     })?;
-    let bytes =
-        serde_json::to_vec_pretty(&artifact).context("serialize camera-motion evidence")?;
+    let bytes = serde_json::to_vec_pretty(&artifact).context("serialize camera-motion evidence")?;
     fs::write(&path, bytes)
         .with_context(|| format!("write camera-motion evidence {}", path.display()))
 }
