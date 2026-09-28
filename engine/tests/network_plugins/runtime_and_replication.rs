@@ -236,6 +236,7 @@ fn prediction_replay_preserves_runennet_target_tick_and_updates_diagnostics() {
     let mut client = App::headless();
     client.add_plugins(default_plugins());
     client.add_plugins((ScenePlugin, NetworkClientPlugin));
+    install_backpressure_test_clock(&mut client);
 
     let baseline_payload = TestReplicationDriver::encode_snapshot(&TestSnapshot::default())
         .expect("baseline snapshot payload should encode");
@@ -250,18 +251,17 @@ fn prediction_replay_preserves_runennet_target_tick_and_updates_diagnostics() {
         }),
     )
     .expect("baseline should stage");
-    let mut client = client
-        .run_for_frames(1)
-        .expect("baseline should activate prediction");
+    let mut client = run_backpressure_protocol_frame(
+        client,
+        "baseline should activate prediction without fixed advancement",
+    );
 
     client
         .world_mut()
         .resource_mut::<PlayerCommandBuffer>()
         .unwrap()
         .push(ClientCommandEnvelope::Move(MoveCommand { x: 1.0, y: 0.0 }));
-    client = client
-        .run_for_fixed_steps(1)
-        .expect("predicted fixed step should run");
+    client = run_backpressure_fixed_step(client, "predicted fixed step should run");
     assert_eq!(client_prediction_pending_count(client.world()), Some(1));
 
     let correction_payload = TestReplicationDriver::encode_snapshot(&TestSnapshot::default())
@@ -277,9 +277,10 @@ fn prediction_replay_preserves_runennet_target_tick_and_updates_diagnostics() {
         }),
     )
     .expect("correction should stage");
-    let client = client
-        .run_for_frames(1)
-        .expect("authoritative correction frame should run");
+    let mut client = run_backpressure_protocol_frame(
+        client,
+        "authoritative correction should replay without ordinary fixed advancement",
+    );
 
     let diagnostics = client.world().resource::<PredictionDiagnostics>().unwrap();
     assert_eq!(diagnostics.replayed, 1);
@@ -293,6 +294,21 @@ fn prediction_replay_preserves_runennet_target_tick_and_updates_diagnostics() {
             .iter()
             .all(|tick| *tick == SimulationTick(1)),
         "ordinary prediction and RunenNet replay must preserve the semantic target tick"
+    );
+    assert_eq!(
+        *client.world().resource::<SimulationTick>().unwrap(),
+        SimulationTick(1),
+        "successful replay must advance Engine simulation identity to the replayed target tick"
+    );
+
+    client = run_backpressure_fixed_step(
+        client,
+        "the next ordinary fixed step must advance beyond the replayed prediction frontier",
+    );
+    assert_eq!(
+        *client.world().resource::<SimulationTick>().unwrap(),
+        SimulationTick(2),
+        "ordinary cadence must not re-enter a logical tick already completed by prediction replay"
     );
 }
 
