@@ -175,11 +175,15 @@ pub struct RenderTextureIntent {
     pub label: String,
     pub lifetime: GpuResourceLifetime,
     pub texture: RenderTextureDescriptor,
+    pub initialization: GpuTextureInitialization,
 }
 
 impl PartialEq for RenderTextureIntent {
     fn eq(&self, other: &Self) -> bool {
-        self.id == other.id && self.lifetime == other.lifetime && self.texture == other.texture
+        self.id == other.id
+            && self.lifetime == other.lifetime
+            && self.texture == other.texture
+            && self.initialization == other.initialization
     }
 }
 
@@ -200,6 +204,10 @@ impl RenderTextureIntent {
 
     pub const fn texture(&self) -> RenderTextureDescriptor {
         self.texture
+    }
+
+    pub fn initialization(&self) -> &GpuTextureInitialization {
+        &self.initialization
     }
 }
 
@@ -591,6 +599,21 @@ impl RenderResourceDeclaration {
         ))
     }
 
+    /// Declares invocation-scoped retained history whose first realized generation has defined
+    /// zero contents. Ordinary history remains uninitialized by default.
+    pub fn declare_zeroed_history_texture(
+        id: GpuWorkResourceId,
+        label: impl Into<String>,
+    ) -> Self {
+        Self::History(texture_intent_with_initialization(
+            id,
+            label,
+            GpuResourceLifetime::Retained,
+            RenderTextureDescriptor::surface_color(),
+            GpuTextureInitialization::Zeroed,
+        ))
+    }
+
     pub fn declare_target_alias(
         id: GpuWorkResourceId,
         binding_key: impl Into<String>,
@@ -797,11 +820,28 @@ fn texture_intent(
     lifetime: GpuResourceLifetime,
     texture: RenderTextureDescriptor,
 ) -> RenderTextureIntent {
+    texture_intent_with_initialization(
+        id,
+        label,
+        lifetime,
+        texture,
+        GpuTextureInitialization::Uninitialized,
+    )
+}
+
+fn texture_intent_with_initialization(
+    id: GpuWorkResourceId,
+    label: impl Into<String>,
+    lifetime: GpuResourceLifetime,
+    texture: RenderTextureDescriptor,
+    initialization: GpuTextureInitialization,
+) -> RenderTextureIntent {
     RenderTextureIntent {
         id,
         label: label.into(),
         lifetime,
         texture,
+        initialization,
     }
 }
 
@@ -844,7 +884,7 @@ fn lower_texture_intent(
         1,
         format,
         usages,
-        GpuTextureInitialization::Uninitialized,
+        intent.initialization.clone(),
     )?)
 }
 
