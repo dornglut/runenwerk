@@ -1231,6 +1231,46 @@ fn lower_output(
         .copied()
         .ok_or(RenderDeterministicLoweringError::OutputCorrelationChanged { output_index })?;
 
+    let temporal_history = if let Some(evaluation_extent) = finite_evaluation_extent {
+        let RenderObservationSpec::Perspective(perspective) = observation else {
+            return Err(RenderDeterministicLoweringError::UnsupportedOutput { output_index });
+        };
+        if !perspective.sampling_support().is_perspective_lattice_cell()
+            || !matches!(requested.spec().value(), RenderOutputValue::Radiance { .. })
+        {
+            return Err(RenderDeterministicLoweringError::UnsupportedOutput { output_index });
+        }
+        let requested_extent = requested
+            .spec()
+            .topology()
+            .sample_lattice_dimensions()
+            .ok_or(RenderDeterministicLoweringError::UnsupportedOutput { output_index })?;
+        let alignment = context
+            .device_facts()
+            .device_limits()
+            .alignments()
+            .bytes_per_row
+            .ok_or(RenderDeterministicLoweringError::MissingBytesPerRowAlignment)?;
+        let signature = DeterministicTemporalSignature {
+            scene_revision: admitted.scene_revision(),
+            observation,
+            output: requested.spec(),
+            semantic_inputs: admitted.surface_semantic_inputs().to_vec(),
+            evaluation_extent,
+            sequence_revision: TEMPORAL_SEQUENCE_REVISION,
+            reconstruction_revision: TEMPORAL_RECONSTRUCTION_REVISION,
+        };
+        Some(resources.temporal_history(
+            scope,
+            output_index,
+            signature,
+            requested_extent,
+            alignment,
+        )?)
+    } else {
+        None
+    };
+
     let packed = pack_output(
         admitted,
         admitted_output,
@@ -1238,6 +1278,8 @@ fn lower_output(
         observation,
         object_codes,
         context,
+        finite_evaluation_extent,
+        temporal_history.as_ref(),
     )?;
     let sample_byte_len = u64::from(packed.sample_count)
         .checked_mul(WORD_BYTES)
