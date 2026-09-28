@@ -12,8 +12,8 @@ use engine::automation::{
     AutomationSessionId, AutomationStepResult, DigitalState, InputObservation, InputSourceId,
     MAX_ARTIFACT_BYTES, PointerButton, PointerButtonInput, RelativeMotionUnit, ScrollDelta,
     ScrollDomain, ScrollInput, Vector2, export_automation_input_trace_v1,
-    export_automation_input_trace_v2,
-    export_automation_scenario_v1, import_automation_input_trace_v1,
+    export_automation_input_trace_v2, export_automation_scenario_v1,
+    import_automation_input_trace_v1,
 };
 use engine::prelude::InputState;
 use runenwerk_render_lab::automation::{
