@@ -325,7 +325,10 @@ impl DeterministicResourceCache {
             sample_counts: history.sample_counts.clone(),
             row_stride_words: history.row_stride_words,
             generation: history.generation,
-            reset: recreate,
+            // A freshly allocated history remains bootstrap/current-only until one compatible
+            // submission has completed. Preparation or submission rejection before acceptance must
+            // not turn a zeroed, never-completed generation into apparent compatible reuse.
+            reset: recreate || history.age == 0,
             phase: history.phase,
             age: history.age,
         })
@@ -2408,6 +2411,14 @@ mod tests {
         assert!(first.reset);
         assert_eq!(first.phase, 0);
         assert_eq!(first.age, 0);
+
+        let retry_before_completion = cache
+            .temporal_history(11, 0, temporal_signature(7), (4, 4), 4)
+            .expect("uncompleted temporal history retry should remain bootstrap");
+        assert!(retry_before_completion.reset);
+        assert_eq!(retry_before_completion.generation, first.generation);
+        assert_eq!(retry_before_completion.phase, 0);
+        assert_eq!(retry_before_completion.age, 0);
 
         let state = cache
             .temporal_histories
