@@ -45,6 +45,15 @@ fn main() -> anyhow::Result<()> {
             window_size_px,
             internal_size_px,
         ),
+        Command::TemporalCameraQuality {
+            output_root,
+            submitted_frame_limit,
+            window_size_px,
+        } => runenwerk_render_lab::run_native_temporal_camera_quality(
+            output_root,
+            submitted_frame_limit,
+            window_size_px,
+        ),
         Command::FoundingDirect(output_root) => {
             runenwerk_render_lab::run_founding_direct(output_root)?;
             Ok(())
@@ -69,6 +78,11 @@ enum Command {
         submitted_frame_limit: Option<usize>,
         window_size_px: (u32, u32),
         internal_size_px: (u32, u32),
+    },
+    TemporalCameraQuality {
+        output_root: PathBuf,
+        submitted_frame_limit: Option<usize>,
+        window_size_px: (u32, u32),
     },
 }
 
@@ -101,6 +115,44 @@ fn parse_command(args: impl IntoIterator<Item = OsString>) -> anyhow::Result<Com
             );
         }
         return Ok(Command::AutomationScenario(PathBuf::from(path)));
+    }
+    if matches!(first.as_deref(), Some(value) if value == "--rl2-camera-quality") {
+        let default_output = PathBuf::from("render-lab/rl2-camera-motion-quality");
+        let mut args = args.peekable();
+        let output_root = match args.peek() {
+            Some(value) if !value.to_string_lossy().starts_with("--") => {
+                PathBuf::from(args.next().expect("peeked camera quality output root"))
+            }
+            _ => default_output,
+        };
+        let mut submitted_frame_limit = None;
+        let mut window_size_px = None;
+        while let Some(flag) = args.next() {
+            if flag == "--submitted-frames" {
+                if submitted_frame_limit.is_some() {
+                    bail!("duplicate --submitted-frames argument");
+                }
+                submitted_frame_limit = Some(parse_frame_limit(args.next())?);
+            } else if flag == "--window-size-px" {
+                if window_size_px.is_some() {
+                    bail!("duplicate --window-size-px argument");
+                }
+                window_size_px = Some(parse_window_size_px(args.next())?);
+            } else {
+                bail!(
+                    "unexpected RL2 camera-motion quality argument '{}'",
+                    flag.to_string_lossy()
+                );
+            }
+        }
+        let window_size_px = window_size_px.ok_or_else(|| {
+            anyhow::anyhow!("--rl2-camera-quality requires --window-size-px WIDTHxHEIGHT")
+        })?;
+        return Ok(Command::TemporalCameraQuality {
+            output_root,
+            submitted_frame_limit,
+            window_size_px,
+        });
     }
     if matches!(first.as_deref(), Some(value) if value == "--rl2-quality") {
         let default_output = PathBuf::from("render-lab/rl2-temporal-quality");
@@ -593,6 +645,37 @@ mod tests {
             error
                 .downcast_ref::<engine::automation::AutomationInputTraceImportError>()
                 .is_some()
+        );
+    }
+
+    #[test]
+    fn camera_motion_quality_mode_is_explicit_and_p100_by_construction() {
+        assert_eq!(
+            parse_command(args(&[
+                "--rl2-camera-quality",
+                "evidence/camera",
+                "--window-size-px",
+                "1920x1080",
+                "--submitted-frames",
+                "4"
+            ]))
+            .unwrap(),
+            Command::TemporalCameraQuality {
+                output_root: PathBuf::from("evidence/camera"),
+                submitted_frame_limit: Some(4),
+                window_size_px: (1920, 1080),
+            }
+        );
+        assert!(parse_command(args(&["--rl2-camera-quality"])).is_err());
+        assert!(
+            parse_command(args(&[
+                "--rl2-camera-quality",
+                "--window-size-px",
+                "1920x1080",
+                "--internal-size-px",
+                "960x540"
+            ]))
+            .is_err()
         );
     }
 
