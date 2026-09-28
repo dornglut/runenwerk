@@ -677,6 +677,10 @@ pub enum RenderDeterministicLoweringError {
         object_id: RenderObjectId,
         representation_id: RenderRepresentationId,
     },
+    MissingTemporalSurfaceInputGeneration {
+        output_index: usize,
+        representation_id: RenderRepresentationId,
+    },
     NonInvertibleObjectTransform {
         output_index: usize,
         object_id: RenderObjectId,
@@ -731,6 +735,13 @@ impl fmt::Display for RenderDeterministicLoweringError {
             } => write!(
                 formatter,
                 "output {output_index} object {object_id:?} representation {representation_id:?} has no maintained surface input"
+            ),
+            Self::MissingTemporalSurfaceInputGeneration {
+                output_index,
+                representation_id,
+            } => write!(
+                formatter,
+                "output {output_index} representation {representation_id:?} has no source generation required for retained temporal history"
             ),
             Self::NonInvertibleObjectTransform {
                 output_index,
@@ -1279,6 +1290,16 @@ fn lower_output(
             .alignments()
             .bytes_per_row
             .ok_or(RenderDeterministicLoweringError::MissingBytesPerRowAlignment)?;
+        for binding in admitted.surface_semantic_inputs() {
+            if binding.generation().is_none() {
+                return Err(
+                    RenderDeterministicLoweringError::MissingTemporalSurfaceInputGeneration {
+                        output_index,
+                        representation_id: binding.representation_id(),
+                    },
+                );
+            }
+        }
         let signature = DeterministicTemporalSignature {
             scene_revision: admitted.scene_revision(),
             observation,
@@ -2233,6 +2254,102 @@ mod tests {
             "one replacement is expected for the resize"
         );
         assert_eq!(cache.buffers.len(), 1, "the cache retains one live slot");
+    }
+
+    fn temporal_signature(
+        source_generation: u64,
+    ) -> DeterministicTemporalSignature {
+        use super::super::request::{
+            RenderOutputSpec, RenderOutputValue, RenderPerspectiveObservation,
+            RenderRadiometricRepresentation, RenderResultTopology, RenderSamplingSupport,
+            RenderSemanticTolerance,
+        };
+        use super::super::space_time::{
+            RenderAffineTransform3, RenderTemporalSupport, RenderTimeInterval, RenderTimePoint,
+        };
+        use super::super::surface_input::{
+            RenderSurfaceSemanticInput, RenderSurfaceSemanticInputBinding,
+            RenderSurfaceSemanticInputGeneration,
+        };
+
+        let shutter = RenderTimeInterval::instant(
+            RenderTimePoint::from_seconds(0.0).expect("finite test time"),
+        );
+        let observation = RenderObservationSpec::Perspective(
+            RenderPerspectiveObservation::new(
+                RenderAffineTransform3::identity(),
+                std::f64::consts::FRAC_PI_3,
+                1.0,
+                shutter,
+                RenderSamplingSupport::perspective_lattice_cell(),
+            )
+            .expect("valid temporal test observation"),
+        );
+        let output = RenderOutputSpec::new(
+            RenderOutputValue::Radiance {
+                representation:
+                    RenderRadiometricRepresentation::spectral_at_wavelength_meters(550.0e-9)
+                        .expect("valid wavelength"),
+            },
+            RenderResultTopology::sample_lattice_2d(4, 4).expect("valid requested lattice"),
+            RenderSemanticTolerance::absolute(0.001).expect("valid tolerance"),
+        )
+        .expect("valid temporal test output");
+        let input = RenderSurfaceSemanticInput::sphere(
+            [0.0, 0.0, -3.0],
+            1.0,
+            RenderTemporalSupport::unbounded(),
+        )
+        .expect("valid temporal test input");
+        let binding = RenderSurfaceSemanticInputBinding::new(
+            RenderRepresentationId::from_raw(1).expect("non-zero representation id"),
+            input,
+        )
+        .with_generation(RenderSurfaceSemanticInputGeneration::new(source_generation));
+
+        DeterministicTemporalSignature {
+            scene_revision: RenderSceneRevision::INITIAL,
+            observation,
+            output,
+            semantic_inputs: vec![binding],
+            evaluation_extent: (2, 2),
+            sequence_revision: TEMPORAL_SEQUENCE_REVISION,
+            reconstruction_revision: TEMPORAL_RECONSTRUCTION_REVISION,
+        }
+    }
+
+    #[test]
+    fn temporal_history_reuses_compatible_generation_and_resets_on_source_generation_change() {
+        let mut cache = DeterministicResourceCache::default();
+        let first = cache
+            .temporal_history(11, 0, temporal_signature(7), (4, 4), 4)
+            .expect("initial temporal history should allocate");
+        assert!(first.reset);
+        assert_eq!(first.phase, 0);
+        assert_eq!(first.age, 0);
+
+        let state = cache
+            .temporal_histories
+            .get_mut(&(11, 0))
+            .expect("initial temporal history should be retained");
+        state.phase = 1;
+        state.age = 1;
+
+        let reused = cache
+            .temporal_history(11, 0, temporal_signature(7), (4, 4), 4)
+            .expect("compatible temporal history should reuse");
+        assert!(!reused.reset);
+        assert_eq!(reused.generation, first.generation);
+        assert_eq!(reused.phase, 1);
+        assert_eq!(reused.age, 1);
+
+        let reset = cache
+            .temporal_history(11, 0, temporal_signature(8), (4, 4), 4)
+            .expect("changed source generation should recreate history");
+        assert!(reset.reset);
+        assert_ne!(reset.generation, first.generation);
+        assert_eq!(reset.phase, 0);
+        assert_eq!(reset.age, 0);
     }
 
     #[test]
