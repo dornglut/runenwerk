@@ -165,7 +165,7 @@ jobs:
                 --rl2-quality "${output}" \
                 --window-size-px 1920x1080 \
                 --internal-size-px "${internal}" \
-                --submitted-frames 4
+                --submitted-frames 6
 
             test -s "${output}/quality-evidence.json"
             test -s "${output}/captures/run_manifest.json"
@@ -179,15 +179,15 @@ jobs:
                 and .scenario_revision == 5
                 and .source_git_revision == $revision
                 and .requested_output_size_px == [1920,1080]
-                and .capture_submission_ordinal == 4
-                and .total_submitted_frames >= 4
+                and .capture_submission_ordinal == 6
+                and .total_submitted_frames >= 6
                 and .capture.terminal == "completed"
                 and (.capture.artifact_blake3 | startswith("blake3:"))
                 and .gpu.backend == "vulkan"
                 and .gpu.software_status == "software"
                 and (.gpu.evidence_profile_fingerprint | startswith("blake3:"))
                 and .execution.policy == "static_footprint"
-                and (.temporal_reconstruction | length) == 4
+                and (.temporal_reconstruction | length) == 6
                 and all(.temporal_reconstruction[];
                   .requested_size_px == [1920,1080]
                   and .evaluation_size_px == [$evaluation_width,$evaluation_height]
@@ -215,6 +215,18 @@ jobs:
                 and .temporal_reconstruction[3].history_age == 1
                 and .temporal_reconstruction[3].history_reset == false
                 and .temporal_reconstruction[3].history_generation
+                    == .temporal_reconstruction[2].history_generation
+                and .temporal_reconstruction[4].semantic_input_generation_classes == [2,2]
+                and .temporal_reconstruction[4].phase == 2
+                and .temporal_reconstruction[4].history_age == 2
+                and .temporal_reconstruction[4].history_reset == false
+                and .temporal_reconstruction[4].history_generation
+                    == .temporal_reconstruction[2].history_generation
+                and .temporal_reconstruction[5].semantic_input_generation_classes == [2,2]
+                and .temporal_reconstruction[5].phase == 3
+                and .temporal_reconstruction[5].history_age == 3
+                and .temporal_reconstruction[5].history_reset == false
+                and .temporal_reconstruction[5].history_generation
                     == .temporal_reconstruction[2].history_generation
                 and .execution.native_fallback_active == false
                 and .execution.target_key == null
