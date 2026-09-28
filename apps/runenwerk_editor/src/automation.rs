@@ -4,10 +4,68 @@ use editor_shell::{
     ShellCommand, SurfaceSessionMutation, ViewportSessionMutation, ViewportToolKind,
 };
 use engine::automation::AutomationOwnerAdapter;
+use serde::{Deserialize, Serialize};
 use ui_composition::MountedUnitId;
 
 use crate::runtime::resources::EditorHostResource;
 use crate::shell::dispatch_shell_command;
+
+pub const EDITOR_AUTOMATION_SCENARIO_PRODUCT_ID: &str = "runenwerk.editor.automation";
+pub const EDITOR_AUTOMATION_SCENARIO_PRODUCT_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EditorAutomationScenarioTargetV1 {
+    UniqueSceneViewport,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EditorAutomationViewportToolV1 {
+    Select,
+    Translate,
+    Rotate,
+    Scale,
+}
+
+impl From<EditorAutomationViewportToolV1> for ViewportToolKind {
+    fn from(value: EditorAutomationViewportToolV1) -> Self {
+        match value {
+            EditorAutomationViewportToolV1::Select => Self::Select,
+            EditorAutomationViewportToolV1::Translate => Self::Translate,
+            EditorAutomationViewportToolV1::Rotate => Self::Rotate,
+            EditorAutomationViewportToolV1::Scale => Self::Scale,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub enum EditorAutomationScenarioStepV1 {
+    ActivateViewportTool {
+        target: EditorAutomationScenarioTargetV1,
+        tool: EditorAutomationViewportToolV1,
+    },
+    AssertViewportTool {
+        target: EditorAutomationScenarioTargetV1,
+        tool: EditorAutomationViewportToolV1,
+    },
+}
+
+pub fn validate_editor_automation_scenario_step_v1(
+    _step: &EditorAutomationScenarioStepV1,
+) -> Result<(), String> {
+    Ok(())
+}
+
+pub fn resolve_editor_automation_scenario_target_v1(
+    host: &EditorHostResource,
+    target: EditorAutomationScenarioTargetV1,
+) -> Result<EditorAutomationTarget, String> {
+    match target {
+        EditorAutomationScenarioTargetV1::UniqueSceneViewport => {
+            resolve_unique_scene_viewport_target(host)
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EditorAutomationTarget {
