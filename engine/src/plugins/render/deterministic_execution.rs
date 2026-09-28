@@ -201,7 +201,7 @@ impl DeterministicResourceCache {
         }
         let [source] = admit_static_wgsl_sources([(
             "runenrender.maintained.temporal_reconstruction",
-            TEMPORAL_RECONSTRUCTION_REVISION,
+            u64::from(TEMPORAL_RECONSTRUCTION_REVISION),
             TEMPORAL_RECONSTRUCTION_WGSL,
         )])
         .map_err(|error| gpu_authoring("temporal reconstruction WGSL admission", error))?;
@@ -222,10 +222,10 @@ impl DeterministicResourceCache {
             .ok_or(RenderDeterministicLoweringError::SizeOverflow {
                 field: "temporal history logical row bytes",
             })?;
-        let row_bytes = align_up(logical_row_bytes, bytes_per_row_alignment)?;
+        let row_bytes = align_up(logical_row_bytes, u64::from(bytes_per_row_alignment))?;
         if row_bytes % WORD_BYTES != 0 {
             return Err(RenderDeterministicLoweringError::InvalidBytesPerRowAlignment {
-                alignment: bytes_per_row_alignment,
+                alignment: u64::from(bytes_per_row_alignment),
             });
         }
         let row_stride_words = u32::try_from(row_bytes / WORD_BYTES).map_err(|_| {
