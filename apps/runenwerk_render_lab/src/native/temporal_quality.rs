@@ -78,6 +78,19 @@ struct RenderLabTemporalQualityGpuEvidence {
     evidence_profile_fingerprint: String,
 }
 
+#[derive(Debug, Clone, Copy, serde::Serialize)]
+struct RenderLabTemporalReconstructionEvidence {
+    frame_index: u64,
+    requested_size_px: [u32; 2],
+    evaluation_size_px: [u32; 2],
+    sequence_revision: u32,
+    reconstruction_revision: u32,
+    phase: u32,
+    history_generation: u64,
+    history_age: u32,
+    history_reset: bool,
+}
+
 #[derive(Debug, serde::Serialize)]
 struct RenderLabTemporalQualityArtifact {
     schema_version: u32,
@@ -90,6 +103,7 @@ struct RenderLabTemporalQualityArtifact {
     total_submitted_frames: usize,
     gpu: RenderLabTemporalQualityGpuEvidence,
     execution: RenderLabTemporalQualityExecutionEvidence,
+    temporal_reconstruction: Vec<RenderLabTemporalReconstructionEvidence>,
     capture_route: &'static str,
     capture: RenderLabTemporalQualityCaptureEvidence,
 }
@@ -334,7 +348,7 @@ pub(super) fn write_temporal_quality_artifact(
     history: &RenderFrameHistoryState,
     quality_execution: &RenderLabTemporalQualityExecutionState,
     capture: RenderLabTemporalQualityCaptureEvidence,
-    adapter_facts: &runen_gpu::GpuAdapterFacts,
+    gfx: &engine::plugins::render::Gfx,
 ) -> Result<()> {
     let capture_root = measurement
         .quality_capture_output_dir
@@ -383,6 +397,39 @@ pub(super) fn write_temporal_quality_artifact(
             expected_capture_ordinal
         );
     }
+    let temporal_reconstruction = history
+        .observations()
+        .take(capture_submission_ordinal)
+        .flat_map(|observation| {
+            gfx.deterministic_temporal_evidence(observation.key.frame_index)
+                .iter()
+                .map(move |evidence| RenderLabTemporalReconstructionEvidence {
+                    frame_index: observation.key.frame_index,
+                    requested_size_px: [
+                        evidence.requested_extent.0,
+                        evidence.requested_extent.1,
+                    ],
+                    evaluation_size_px: [
+                        evidence.evaluation_extent.0,
+                        evidence.evaluation_extent.1,
+                    ],
+                    sequence_revision: evidence.sequence_revision,
+                    reconstruction_revision: evidence.reconstruction_revision,
+                    phase: evidence.phase,
+                    history_generation: evidence.history_generation,
+                    history_age: evidence.history_age,
+                    history_reset: evidence.history_reset,
+                })
+        })
+        .collect::<Vec<_>>();
+    if temporal_reconstruction.len() != capture_submission_ordinal {
+        bail!(
+            "temporal quality expected one renderer reconstruction record for each of {} submitted frames, found {}",
+            capture_submission_ordinal,
+            temporal_reconstruction.len()
+        );
+    }
+
     let artifact = RenderLabTemporalQualityArtifact {
         schema_version: RL2_QUALITY_SCHEMA_VERSION,
         scenario_id: RL2_QUALITY_SCENARIO_ID,
@@ -392,7 +439,8 @@ pub(super) fn write_temporal_quality_artifact(
         requested_output_size_px: [requested_output.0, requested_output.1],
         capture_submission_ordinal,
         total_submitted_frames: history.len(),
-        gpu: temporal_quality_gpu_evidence(adapter_facts),
+        gpu: temporal_quality_gpu_evidence(gfx.adapter_facts()),
+        temporal_reconstruction,
         capture_route: match execution.policy {
             "native" | "static_footprint" => "native_scene",
             "fixed" => "fixed_resolve",
