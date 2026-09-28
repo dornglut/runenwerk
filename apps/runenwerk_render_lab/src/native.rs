@@ -388,7 +388,7 @@ fn complete_render_lab_measurement_if_requested(
     history: &RenderFrameHistoryState,
     quality_execution: &RenderLabTemporalQualityExecutionState,
     debug_report: &RenderDebugFrameReportState,
-    adapter_facts: Option<&runen_gpu::GpuAdapterFacts>,
+    gfx: Option<&engine::plugins::render::Gfx>,
 ) -> Result<()> {
     let Some(primary_window_id) = windows.primary_window_id() else {
         return Ok(());
@@ -422,15 +422,15 @@ fn complete_render_lab_measurement_if_requested(
             write_measurement_artifact(output_path, history, measurement)?;
         }
         if let Some(capture) = quality_capture {
-            let adapter_facts = adapter_facts.ok_or_else(|| {
-                anyhow::anyhow!("temporal quality runtime adapter facts are unavailable")
+            let gfx = gfx.ok_or_else(|| {
+                anyhow::anyhow!("temporal quality renderer evidence is unavailable")
             })?;
             write_temporal_quality_artifact(
                 measurement,
                 history,
                 quality_execution,
                 capture,
-                adapter_facts,
+                gfx,
             )?;
         }
         measurement.completed = true;
@@ -459,7 +459,7 @@ fn approve_render_lab_close_system(
         &history,
         &quality_execution,
         &debug_report,
-        Some(gfx.adapter_facts()),
+        Some(&gfx),
     )
 }
 
