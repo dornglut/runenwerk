@@ -709,9 +709,7 @@ mod tests {
                 interval(0.0, 0.0),
                 RenderSamplingSupport::perspective_lattice_cell(),
             ),
-            Err(
-                RenderRequestValidationError::PerspectiveLatticeCellRequiresPerspectiveObservation
-            )
+            Err(RenderRequestValidationError::PerspectiveLatticeCellRequiresPerspectiveObservation)
         );
     }
 
