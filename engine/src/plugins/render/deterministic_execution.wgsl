@@ -29,6 +29,12 @@ var<storage, read_write> defined_words: array<u32>;
 @group(0) @binding(3)
 var<storage, read_write> status_words: array<u32>;
 
+@group(0) @binding(4)
+var<storage, read_write> current_depth_words: array<u32>;
+
+@group(0) @binding(5)
+var<storage, read_write> current_hit_words: array<u32>;
+
 const F32_EXPONENT_MASK: u32 = 2139095040u;
 
 fn finite_f32(value: f32) -> bool {
@@ -341,6 +347,8 @@ fn invalidate(output_index: u32, sample_index: u32) {
     output_words[output_index] = 0u;
     defined_words[sample_index] = 0u;
     status_words[sample_index] = 1u;
+    current_depth_words[output_index] = 0u;
+    current_hit_words[output_index] = 0u;
 }
 
 @compute @workgroup_size(64)
@@ -374,10 +382,14 @@ fn main(
         if !hit.found {
             output_words[output_index] = bitcast<u32>(0.0);
             defined_words[sample_index] = 1u;
+            current_depth_words[output_index] = 0u;
+            current_hit_words[output_index] = 0u;
             return;
         }
         let position = origin + direction.value * hit.t;
-        if !finite_vec3(position) {
+        let forward = observation_forward();
+        let depth = dot(position - origin, forward.value);
+        if !finite_vec3(position) || !forward.valid || !finite_f32(depth) {
             invalidate(output_index, sample_index);
             return;
         }
@@ -388,6 +400,8 @@ fn main(
         }
         output_words[output_index] = bitcast<u32>(radiance.value);
         defined_words[sample_index] = 1u;
+        current_depth_words[output_index] = bitcast<u32>(depth);
+        current_hit_words[output_index] = 1u;
         return;
     }
 

@@ -279,3 +279,85 @@ jobs:
           path: render-lab/temporal-quality
           if-no-files-found: error
           retention-days: 7
+
+      - name: Run Render Lab P100 camera-motion reprojection proof
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENWERK_SOURCE_REVISION: ${{ steps.revision.outputs.expected_revision }}
+        run: |
+          set -euo pipefail
+          output="render-lab/temporal-camera-quality"
+          rm -rf "${output}"
+
+          timeout 30s xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
+            cargo +stable run -p runenwerk_render_lab --locked -- \
+              --rl2-camera-quality "${output}" \
+              --window-size-px 1920x1080 \
+              --submitted-frames 4
+
+          evidence="${output}/camera-motion-evidence.json"
+          test -s "${evidence}"
+          test -s "${output}/captures/run_manifest.json"
+          jq -e \
+            --arg revision "${RUNENWERK_SOURCE_REVISION}" \
+            '
+              .schema_version == 1
+              and .scenario_id == "runenwerk.render_lab.rl2.camera_motion_p100"
+              and .scenario_revision == 1
+              and .source_git_revision == $revision
+              and .requested_output_size_px == [1920,1080]
+              and .capture_submission_ordinal == 4
+              and .total_submitted_frames >= 4
+              and .gpu.backend == "vulkan"
+              and .gpu.software_status == "software"
+              and (.gpu.evidence_profile_fingerprint | startswith("blake3:"))
+              and .execution.policy == "static_footprint"
+              and .execution.internal_size_px == [1920,1080]
+              and .execution.output_size_px == [1920,1080]
+              and .execution.native_fallback_active == false
+              and .execution.resolve_invocation_id == null
+              and .capture_route == "native_scene"
+              and .capture.terminal == "completed"
+              and (.capture.artifact_blake3 | startswith("blake3:"))
+              and (.frames | length) == 4
+              and all(.frames[];
+                .requested_size_px == [1920,1080]
+                and .evaluation_size_px == [1920,1080]
+                and .semantic_input_generation_classes == [1,1]
+                and .camera_reprojection_eligible == true
+                and .camera_reprojection_revision == 1
+                and .depth_policy_revision == 1
+              )
+              and .frames[0].phase == 0
+              and .frames[0].history_age == 0
+              and .frames[0].history_reset == true
+              and .frames[0].previous_observation_available == false
+              and .frames[0].camera_pose_changed == false
+              and .frames[1].phase == 1
+              and .frames[1].history_age == 1
+              and .frames[1].history_reset == false
+              and .frames[1].previous_observation_available == true
+              and .frames[1].camera_pose_changed == false
+              and .frames[1].history_generation == .frames[0].history_generation
+              and .frames[2].phase == 2
+              and .frames[2].history_age == 2
+              and .frames[2].history_reset == false
+              and .frames[2].previous_observation_available == true
+              and .frames[2].camera_pose_changed == true
+              and .frames[2].history_generation == .frames[0].history_generation
+              and .frames[3].phase == 3
+              and .frames[3].history_age == 3
+              and .frames[3].history_reset == false
+              and .frames[3].previous_observation_available == true
+              and .frames[3].camera_pose_changed == true
+              and .frames[3].history_generation == .frames[0].history_generation
+            ' "${evidence}"
+
+      - name: Upload Render Lab P100 camera-motion reprojection evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        with:
+          name: runenwerk-render-lab-camera-motion
+          path: render-lab/temporal-camera-quality
+          if-no-files-found: error
+          retention-days: 7

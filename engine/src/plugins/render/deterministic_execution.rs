@@ -24,8 +24,10 @@ use super::render_result::RenderResult;
 use super::representation::RenderRepresentationId;
 use super::request::{
     RenderDistanceConvention, RenderObservationSpec, RenderOutputSpec, RenderOutputValue,
+    RenderPerspectiveObservation, RenderSamplingSupport,
 };
 use super::scene::{RenderObjectId, RenderSceneRevision};
+use super::space_time::RenderTimeInterval;
 use super::surface_input::{
     RenderSurfaceSemanticInputBinding, RenderSurfaceSemanticInputGeneration,
     RenderSurfaceSemanticInputView,
@@ -59,12 +61,18 @@ const OBSERVATION_PROBE: u32 = 2;
 const OBSERVATION_PERSPECTIVE_FOOTPRINT: u32 = 3;
 const TEMPORAL_SEQUENCE_REVISION: u32 = 1;
 const TEMPORAL_RECONSTRUCTION_REVISION: u32 = 1;
+const CAMERA_REPROJECTION_REVISION: u32 = 1;
+const CAMERA_DEPTH_POLICY_REVISION: u32 = 1;
+const CAMERA_HISTORY_WORDS_PER_SAMPLE: u64 = 4;
+const CAMERA_DEPTH_ABSOLUTE_EPSILON: f32 = 0.001;
+const CAMERA_DEPTH_RELATIVE_EPSILON: f32 = 0.001;
 const TEMPORAL_PHASE_COUNT: u32 = 4;
 const SHAPE_SPHERE: u32 = 1;
 const SHAPE_PLANE: u32 = 2;
 const MAINTAINED_WGSL: &str = include_str!("deterministic_execution.wgsl");
 const TEMPORAL_RECONSTRUCTION_WGSL: &str =
     include_str!("deterministic_temporal_reconstruction.wgsl");
+const CAMERA_REPROJECTION_WGSL: &str = include_str!("deterministic_camera_reprojection.wgsl");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum DeterministicBufferKind {
@@ -72,35 +80,81 @@ enum DeterministicBufferKind {
     CanonicalOutput,
     Definedness,
     Status,
+    CurrentDepth,
+    CurrentHit,
+    CameraParameters,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum DeterministicTemporalObservationCompatibility {
+    Exact(RenderObservationSpec),
+    CameraPerspective {
+        vertical_field_of_view_bits: u64,
+        aspect_ratio_bits: u64,
+        shutter: RenderTimeInterval,
+        sampling_support: RenderSamplingSupport,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct DeterministicTemporalSignature {
     scene_revision: RenderSceneRevision,
-    observation: RenderObservationSpec,
+    observation: DeterministicTemporalObservationCompatibility,
     output: RenderOutputSpec,
     semantic_inputs: Vec<RenderSurfaceSemanticInputBinding>,
     evaluation_extent: (u32, u32),
     sequence_revision: u32,
     reconstruction_revision: u32,
+    camera_reprojection_revision: Option<u32>,
+    depth_policy_revision: Option<u32>,
+}
+
+#[derive(Debug)]
+struct DeterministicCameraTemporalStorage {
+    slots: [GpuBufferHandle; 2],
+    completed_slot: usize,
+    completed_observation: Option<RenderPerspectiveObservation>,
+    pending_slot: Option<usize>,
+    pending_observation: Option<RenderPerspectiveObservation>,
+}
+
+#[derive(Debug)]
+enum DeterministicTemporalStorage {
+    Static {
+        handle: GpuBufferHandle,
+        sample_counts: GpuBufferHandle,
+        row_stride_words: u32,
+    },
+    Camera(DeterministicCameraTemporalStorage),
 }
 
 #[derive(Debug)]
 struct DeterministicTemporalHistory {
     signature: DeterministicTemporalSignature,
-    handle: GpuBufferHandle,
-    sample_counts: GpuBufferHandle,
-    row_stride_words: u32,
+    storage: DeterministicTemporalStorage,
     generation: u64,
     phase: u32,
     age: u32,
 }
 
 #[derive(Debug, Clone)]
+enum DeterministicTemporalHistoryUseStorage {
+    Static {
+        handle: GpuBufferHandle,
+        sample_counts: GpuBufferHandle,
+        row_stride_words: u32,
+    },
+    Camera {
+        previous_history: GpuBufferHandle,
+        current_history: GpuBufferHandle,
+        previous_observation: Option<RenderPerspectiveObservation>,
+        pose_changed: bool,
+    },
+}
+
+#[derive(Debug, Clone)]
 struct DeterministicTemporalHistoryUse {
-    handle: GpuBufferHandle,
-    sample_counts: GpuBufferHandle,
-    row_stride_words: u32,
+    storage: DeterministicTemporalHistoryUseStorage,
     generation: u64,
     reset: bool,
     phase: u32,
@@ -132,6 +186,7 @@ pub(crate) struct DeterministicResourceCache {
     buffers: BTreeMap<(u64, usize, DeterministicBufferKind), GpuBufferHandle>,
     maintained_source: Option<GpuAdmittedProgramSource>,
     reconstruction_source: Option<GpuAdmittedProgramSource>,
+    camera_reprojection_source: Option<GpuAdmittedProgramSource>,
     temporal_histories: BTreeMap<(u64, usize), DeterministicTemporalHistory>,
     next_temporal_generation: u64,
     prepared_temporal_outputs: BTreeMap<u64, BTreeSet<usize>>,
@@ -175,27 +230,39 @@ impl DeterministicResourceCache {
             .collect::<Vec<_>>();
 
         for (scope, completed) in terminal {
-            let outputs = self
-                .prepared_temporal_outputs
-                .remove(&scope)
-                .unwrap_or_default();
-            if completed {
-                for output_index in outputs {
-                    if let Some(history) = self.temporal_histories.get_mut(&(scope, output_index)) {
-                        history.phase = (history.phase + 1) % TEMPORAL_PHASE_COUNT;
-                        history.age = history.age.saturating_add(1);
-                    }
-                }
-            } else {
-                self.temporal_histories
-                    .retain(|(history_scope, _), _| *history_scope != scope);
-            }
+            self.reconcile_temporal_outputs(scope, completed);
         }
 
         // Completed and failed submissions are terminal; only an Accepted handle can still be
         // using a producer's reusable intermediates.
         self.producer_submissions
             .retain(|_, submission| matches!(submission.status(), GpuSubmissionStatus::Accepted));
+    }
+
+    fn reconcile_temporal_outputs(&mut self, scope: u64, completed: bool) {
+        let outputs = self
+            .prepared_temporal_outputs
+            .remove(&scope)
+            .unwrap_or_default();
+        if completed {
+            for output_index in outputs {
+                if let Some(history) = self.temporal_histories.get_mut(&(scope, output_index)) {
+                    if let DeterministicTemporalStorage::Camera(camera) = &mut history.storage {
+                        if let Some(slot) = camera.pending_slot.take() {
+                            camera.completed_slot = slot;
+                        }
+                        if let Some(observation) = camera.pending_observation.take() {
+                            camera.completed_observation = Some(observation);
+                        }
+                    }
+                    history.phase = (history.phase + 1) % TEMPORAL_PHASE_COUNT;
+                    history.age = history.age.saturating_add(1);
+                }
+            }
+        } else {
+            self.temporal_histories
+                .retain(|(history_scope, _), _| *history_scope != scope);
+        }
     }
 
     fn maintained_source(
@@ -230,6 +297,22 @@ impl DeterministicResourceCache {
         Ok(source)
     }
 
+    fn camera_reprojection_source(
+        &mut self,
+    ) -> Result<GpuAdmittedProgramSource, RenderDeterministicLoweringError> {
+        if let Some(source) = self.camera_reprojection_source.as_ref() {
+            return Ok(source.clone());
+        }
+        let [source] = admit_static_wgsl_sources([(
+            "runenrender.maintained.camera_reprojection",
+            u64::from(CAMERA_REPROJECTION_REVISION),
+            CAMERA_REPROJECTION_WGSL,
+        )])
+        .map_err(|error| gpu_authoring("camera-reprojection WGSL admission", error))?;
+        self.camera_reprojection_source = Some(source.clone());
+        Ok(source)
+    }
+
     fn temporal_history(
         &mut self,
         scope: u64,
@@ -237,6 +320,8 @@ impl DeterministicResourceCache {
         signature: DeterministicTemporalSignature,
         requested_extent: (u32, u32),
         bytes_per_row_alignment: u64,
+        current_observation: RenderPerspectiveObservation,
+        camera_capable: bool,
     ) -> Result<DeterministicTemporalHistoryUse, RenderDeterministicLoweringError> {
         let logical_row_bytes = u64::from(requested_extent.0)
             .checked_mul(WORD_BYTES)
@@ -266,46 +351,104 @@ impl DeterministicResourceCache {
                 field: "temporal history byte length",
             },
         )?;
+        let camera_sample_count = u64::from(requested_extent.0)
+            .checked_mul(u64::from(requested_extent.1))
+            .ok_or(RenderDeterministicLoweringError::SizeOverflow {
+                field: "camera history sample count",
+            })?;
+        let camera_byte_len = camera_sample_count
+            .checked_mul(CAMERA_HISTORY_WORDS_PER_SAMPLE)
+            .and_then(|words| words.checked_mul(WORD_BYTES))
+            .ok_or(RenderDeterministicLoweringError::SizeOverflow {
+                field: "camera history byte length",
+            })?;
 
         let key = (scope, output_index);
         let recreate = self.temporal_histories.get(&key).is_none_or(|history| {
-            history.signature != signature || history.row_stride_words != row_stride_words
+            if history.signature != signature {
+                return true;
+            }
+            match (&history.storage, camera_capable) {
+                (DeterministicTemporalStorage::Camera(_), true) => false,
+                (
+                    DeterministicTemporalStorage::Static {
+                        row_stride_words: retained,
+                        ..
+                    },
+                    false,
+                ) => *retained != row_stride_words,
+                _ => true,
+            }
         });
         if recreate {
-            let descriptor = GpuBufferDescriptor::ordinary_owned(
-                format!("RunenRender output {output_index} temporal history"),
-                GpuResourceLifetime::Retained,
-                GpuReconstruction::SourceBacked,
-                byte_len,
-                [GpuBufferUsage::Storage, GpuBufferUsage::CopySource],
-                GpuBufferInitialization::Zeroed,
-            )
-            .map_err(|error| gpu_authoring("temporal-history descriptor", error))?;
-            let handle = self
-                .identities
-                .allocate_buffer_handle(descriptor)
-                .map_err(|error| gpu_authoring("temporal-history allocation", error))?;
-            let count_descriptor = GpuBufferDescriptor::ordinary_owned(
-                format!("RunenRender output {output_index} temporal sample counts"),
-                GpuResourceLifetime::Retained,
-                GpuReconstruction::SourceBacked,
-                byte_len,
-                [GpuBufferUsage::Storage],
-                GpuBufferInitialization::Zeroed,
-            )
-            .map_err(|error| gpu_authoring("temporal sample-count descriptor", error))?;
-            let sample_counts = self
-                .identities
-                .allocate_buffer_handle(count_descriptor)
-                .map_err(|error| gpu_authoring("temporal sample-count allocation", error))?;
+            let storage = if camera_capable {
+                let descriptor = |slot: usize| {
+                    GpuBufferDescriptor::ordinary_owned(
+                        format!(
+                            "RunenRender output {output_index} camera temporal history slot {slot}"
+                        ),
+                        GpuResourceLifetime::Retained,
+                        GpuReconstruction::SourceBacked,
+                        camera_byte_len,
+                        [GpuBufferUsage::Storage],
+                        GpuBufferInitialization::Zeroed,
+                    )
+                    .map_err(|error| gpu_authoring("camera temporal-history descriptor", error))
+                };
+                let first = self
+                    .identities
+                    .allocate_buffer_handle(descriptor(0)?)
+                    .map_err(|error| gpu_authoring("camera temporal-history allocation", error))?;
+                let second = self
+                    .identities
+                    .allocate_buffer_handle(descriptor(1)?)
+                    .map_err(|error| gpu_authoring("camera temporal-history allocation", error))?;
+                DeterministicTemporalStorage::Camera(DeterministicCameraTemporalStorage {
+                    slots: [first, second],
+                    completed_slot: 0,
+                    completed_observation: None,
+                    pending_slot: None,
+                    pending_observation: None,
+                })
+            } else {
+                let descriptor = GpuBufferDescriptor::ordinary_owned(
+                    format!("RunenRender output {output_index} temporal history"),
+                    GpuResourceLifetime::Retained,
+                    GpuReconstruction::SourceBacked,
+                    byte_len,
+                    [GpuBufferUsage::Storage, GpuBufferUsage::CopySource],
+                    GpuBufferInitialization::Zeroed,
+                )
+                .map_err(|error| gpu_authoring("temporal-history descriptor", error))?;
+                let handle = self
+                    .identities
+                    .allocate_buffer_handle(descriptor)
+                    .map_err(|error| gpu_authoring("temporal-history allocation", error))?;
+                let count_descriptor = GpuBufferDescriptor::ordinary_owned(
+                    format!("RunenRender output {output_index} temporal sample counts"),
+                    GpuResourceLifetime::Retained,
+                    GpuReconstruction::SourceBacked,
+                    byte_len,
+                    [GpuBufferUsage::Storage],
+                    GpuBufferInitialization::Zeroed,
+                )
+                .map_err(|error| gpu_authoring("temporal sample-count descriptor", error))?;
+                let sample_counts = self
+                    .identities
+                    .allocate_buffer_handle(count_descriptor)
+                    .map_err(|error| gpu_authoring("temporal sample-count allocation", error))?;
+                DeterministicTemporalStorage::Static {
+                    handle,
+                    sample_counts,
+                    row_stride_words,
+                }
+            };
             self.next_temporal_generation = self.next_temporal_generation.saturating_add(1);
             self.temporal_histories.insert(
                 key,
                 DeterministicTemporalHistory {
                     signature,
-                    handle,
-                    sample_counts,
-                    row_stride_words,
+                    storage,
                     generation: self.next_temporal_generation,
                     phase: 0,
                     age: 0,
@@ -318,12 +461,36 @@ impl DeterministicResourceCache {
             .insert(output_index);
         let history = self
             .temporal_histories
-            .get(&key)
+            .get_mut(&key)
             .expect("temporal history inserted before use");
+        let storage = match &mut history.storage {
+            DeterministicTemporalStorage::Static {
+                handle,
+                sample_counts,
+                row_stride_words,
+            } => DeterministicTemporalHistoryUseStorage::Static {
+                handle: handle.clone(),
+                sample_counts: sample_counts.clone(),
+                row_stride_words: *row_stride_words,
+            },
+            DeterministicTemporalStorage::Camera(camera) => {
+                let write_slot = 1 - camera.completed_slot;
+                let previous_observation = camera.completed_observation;
+                let pose_changed = previous_observation.is_some_and(|previous| {
+                    previous.observation_to_scene() != current_observation.observation_to_scene()
+                });
+                camera.pending_slot = Some(write_slot);
+                camera.pending_observation = Some(current_observation);
+                DeterministicTemporalHistoryUseStorage::Camera {
+                    previous_history: camera.slots[camera.completed_slot].clone(),
+                    current_history: camera.slots[write_slot].clone(),
+                    previous_observation,
+                    pose_changed,
+                }
+            }
+        };
         Ok(DeterministicTemporalHistoryUse {
-            handle: history.handle.clone(),
-            sample_counts: history.sample_counts.clone(),
-            row_stride_words: history.row_stride_words,
+            storage,
             generation: history.generation,
             // A freshly allocated history remains bootstrap/current-only until one compatible
             // submission has completed. Preparation or submission rejection before acceptance must
@@ -364,6 +531,26 @@ fn temporal_evaluation_extent_supported(
         && evaluation_extent.1 <= requested_extent.1
         && u64::from(evaluation_extent.0) * 2 >= u64::from(requested_extent.0)
         && u64::from(evaluation_extent.1) * 2 >= u64::from(requested_extent.1)
+}
+
+fn temporal_observation_compatibility(
+    observation: RenderObservationSpec,
+    camera_capable: bool,
+) -> DeterministicTemporalObservationCompatibility {
+    match (observation, camera_capable) {
+        (RenderObservationSpec::Perspective(perspective), true) => {
+            DeterministicTemporalObservationCompatibility::CameraPerspective {
+                vertical_field_of_view_bits: perspective.vertical_field_of_view_radians().to_bits(),
+                aspect_ratio_bits: perspective.aspect_ratio().to_bits(),
+                shutter: perspective.shutter(),
+                sampling_support: perspective.sampling_support(),
+            }
+        }
+        (observation, false) => DeterministicTemporalObservationCompatibility::Exact(observation),
+        (RenderObservationSpec::Probe(_), true) => {
+            DeterministicTemporalObservationCompatibility::Exact(observation)
+        }
+    }
 }
 
 fn any_producer_scope_in_flight(
@@ -438,6 +625,11 @@ pub struct RenderDeterministicTemporalExecutionEvidence {
     pub history_generation: u64,
     pub history_age: u32,
     pub history_reset: bool,
+    pub camera_reprojection_eligible: bool,
+    pub previous_observation_available: bool,
+    pub camera_pose_changed: bool,
+    pub camera_reprojection_revision: Option<u32>,
+    pub depth_policy_revision: Option<u32>,
 }
 
 /// Renderer-owned correlation for one ordinary composable radiance output.
@@ -1377,14 +1569,17 @@ fn lower_output(
                 );
             }
         }
+        let camera_capable = evaluation_extent == requested_extent;
         let signature = DeterministicTemporalSignature {
             scene_revision: admitted.scene_revision(),
-            observation,
+            observation: temporal_observation_compatibility(observation, camera_capable),
             output: requested.spec(),
             semantic_inputs: admitted.surface_semantic_inputs().to_vec(),
             evaluation_extent,
             sequence_revision: TEMPORAL_SEQUENCE_REVISION,
             reconstruction_revision: TEMPORAL_RECONSTRUCTION_REVISION,
+            camera_reprojection_revision: camera_capable.then_some(CAMERA_REPROJECTION_REVISION),
+            depth_policy_revision: camera_capable.then_some(CAMERA_DEPTH_POLICY_REVISION),
         };
         Some(resources.temporal_history(
             scope,
@@ -1392,6 +1587,8 @@ fn lower_output(
             signature,
             requested_extent,
             alignment,
+            perspective,
+            camera_capable,
         )?)
     } else {
         None
@@ -1489,6 +1686,35 @@ fn lower_output(
         .map_err(|error| gpu_authoring("status descriptor", error))?,
     )?;
 
+    let current_depth = resources.buffer(
+        scope,
+        output_index,
+        DeterministicBufferKind::CurrentDepth,
+        GpuBufferDescriptor::ordinary_owned(
+            format!("RunenRender output {output_index} current hit depth"),
+            GpuResourceLifetime::Transient,
+            GpuReconstruction::SourceBacked,
+            packed.output_byte_len,
+            [GpuBufferUsage::Storage, GpuBufferUsage::CopyDestination],
+            GpuBufferInitialization::Uninitialized,
+        )
+        .map_err(|error| gpu_authoring("current-depth descriptor", error))?,
+    )?;
+    let current_hit = resources.buffer(
+        scope,
+        output_index,
+        DeterministicBufferKind::CurrentHit,
+        GpuBufferDescriptor::ordinary_owned(
+            format!("RunenRender output {output_index} current hit validity"),
+            GpuResourceLifetime::Transient,
+            GpuReconstruction::SourceBacked,
+            packed.output_byte_len,
+            [GpuBufferUsage::Storage, GpuBufferUsage::CopyDestination],
+            GpuBufferInitialization::Uninitialized,
+        )
+        .map_err(|error| gpu_authoring("current-hit descriptor", error))?,
+    )?;
+
     let input_upload = GpuUploadOperation::whole_buffer(&input, input_payload)
         .map_err(|error| gpu_authoring("input upload", error))?;
     let output_clear = GpuClearOperation::buffer_zero(
@@ -1506,6 +1732,16 @@ fn lower_output(
             .map_err(|error| gpu_authoring("status clear region", error))?,
     )
     .map_err(|error| gpu_authoring("status clear", error))?;
+    let current_depth_clear = GpuClearOperation::buffer_zero(
+        GpuBufferRegion::whole(&current_depth)
+            .map_err(|error| gpu_authoring("current-depth clear region", error))?,
+    )
+    .map_err(|error| gpu_authoring("current-depth clear", error))?;
+    let current_hit_clear = GpuClearOperation::buffer_zero(
+        GpuBufferRegion::whole(&current_hit)
+            .map_err(|error| gpu_authoring("current-hit clear region", error))?,
+    )
+    .map_err(|error| gpu_authoring("current-hit clear", error))?;
 
     let source = resources.maintained_source()?;
     let pipeline = GpuComputePipelineDescriptor::ordinary(source, "main")
@@ -1516,6 +1752,8 @@ fn lower_output(
             GpuRuntimeBindingValue::whole_buffer(0, 1, &canonical_output),
             GpuRuntimeBindingValue::whole_buffer(0, 2, &definedness),
             GpuRuntimeBindingValue::whole_buffer(0, 3, &status),
+            GpuRuntimeBindingValue::whole_buffer(0, 4, &current_depth),
+            GpuRuntimeBindingValue::whole_buffer(0, 5, &current_hit),
         ])
         .map_err(|error| gpu_authoring("compute runtime bindings", error))?;
     let dispatch_size = deterministic_dispatch_size(
@@ -1533,35 +1771,116 @@ fn lower_output(
     )
     .map_err(|error| gpu_authoring("compute operation", error))?;
 
+    let mut camera_parameter_upload = None;
     let reconstruction_compute = if let Some(history) = temporal_history.as_ref() {
-        let source = resources.reconstruction_source()?;
-        let pipeline = GpuComputePipelineDescriptor::ordinary(source, "main")
-            .map_err(|error| gpu_authoring("temporal reconstruction pipeline", error))?;
-        let runtime_bindings = pipeline
-            .runtime_bindings([
-                GpuRuntimeBindingValue::whole_buffer(0, 0, &input),
-                GpuRuntimeBindingValue::whole_buffer(0, 1, &canonical_output),
-                GpuRuntimeBindingValue::whole_buffer(0, 2, &definedness),
-                GpuRuntimeBindingValue::whole_buffer(0, 3, &history.handle),
-                GpuRuntimeBindingValue::whole_buffer(0, 4, &history.sample_counts),
-            ])
-            .map_err(|error| gpu_authoring("temporal reconstruction runtime bindings", error))?;
-        let dispatch_size = deterministic_dispatch_size(
-            packed.sample_count,
-            context
-                .device_facts()
-                .workload_budget()
-                .limits()
-                .max_compute_workgroups_per_dimension(),
-        )?;
-        Some(
-            GpuComputeOperation::new(
-                pipeline,
-                runtime_bindings,
-                GpuDispatchIntent::direct(dispatch_size),
-            )
-            .map_err(|error| gpu_authoring("temporal reconstruction operation", error))?,
-        )
+        match &history.storage {
+            DeterministicTemporalHistoryUseStorage::Static {
+                handle,
+                sample_counts,
+                ..
+            } => {
+                let source = resources.reconstruction_source()?;
+                let pipeline = GpuComputePipelineDescriptor::ordinary(source, "main")
+                    .map_err(|error| gpu_authoring("temporal reconstruction pipeline", error))?;
+                let runtime_bindings = pipeline
+                    .runtime_bindings([
+                        GpuRuntimeBindingValue::whole_buffer(0, 0, &input),
+                        GpuRuntimeBindingValue::whole_buffer(0, 1, &canonical_output),
+                        GpuRuntimeBindingValue::whole_buffer(0, 2, &definedness),
+                        GpuRuntimeBindingValue::whole_buffer(0, 3, handle),
+                        GpuRuntimeBindingValue::whole_buffer(0, 4, sample_counts),
+                    ])
+                    .map_err(|error| {
+                        gpu_authoring("temporal reconstruction runtime bindings", error)
+                    })?;
+                let dispatch_size = deterministic_dispatch_size(
+                    packed.sample_count,
+                    context
+                        .device_facts()
+                        .workload_budget()
+                        .limits()
+                        .max_compute_workgroups_per_dimension(),
+                )?;
+                Some(
+                    GpuComputeOperation::new(
+                        pipeline,
+                        runtime_bindings,
+                        GpuDispatchIntent::direct(dispatch_size),
+                    )
+                    .map_err(|error| gpu_authoring("temporal reconstruction operation", error))?,
+                )
+            }
+            DeterministicTemporalHistoryUseStorage::Camera {
+                previous_history,
+                current_history,
+                previous_observation,
+                pose_changed,
+            } => {
+                let parameter_words =
+                    camera_reprojection_parameter_words(*previous_observation, *pose_changed)?;
+                let payload = PreparedGpuData::<TransferData>::ordinary_pod_transfer(
+                    format!("RunenRender output {output_index} camera reprojection parameters"),
+                    &parameter_words,
+                )
+                .map_err(|error| {
+                    gpu_authoring("camera-reprojection parameter preparation", error)
+                })?;
+                let parameters = resources.buffer(
+                    scope,
+                    output_index,
+                    DeterministicBufferKind::CameraParameters,
+                    GpuBufferDescriptor::ordinary_owned(
+                        format!("RunenRender output {output_index} camera reprojection parameters"),
+                        GpuResourceLifetime::Transient,
+                        GpuReconstruction::SourceBacked,
+                        payload.layout().byte_len(),
+                        [GpuBufferUsage::Storage, GpuBufferUsage::CopyDestination],
+                        GpuBufferInitialization::Uninitialized,
+                    )
+                    .map_err(|error| {
+                        gpu_authoring("camera-reprojection parameter descriptor", error)
+                    })?,
+                )?;
+                camera_parameter_upload = Some(
+                    GpuUploadOperation::whole_buffer(&parameters, payload).map_err(|error| {
+                        gpu_authoring("camera-reprojection parameter upload", error)
+                    })?,
+                );
+                let source = resources.camera_reprojection_source()?;
+                let pipeline = GpuComputePipelineDescriptor::ordinary(source, "main")
+                    .map_err(|error| gpu_authoring("camera-reprojection pipeline", error))?;
+                let runtime_bindings = pipeline
+                    .runtime_bindings([
+                        GpuRuntimeBindingValue::whole_buffer(0, 0, &input),
+                        GpuRuntimeBindingValue::whole_buffer(0, 1, &canonical_output),
+                        GpuRuntimeBindingValue::whole_buffer(0, 2, &definedness),
+                        GpuRuntimeBindingValue::whole_buffer(0, 3, &current_depth),
+                        GpuRuntimeBindingValue::whole_buffer(0, 4, &current_hit),
+                        GpuRuntimeBindingValue::whole_buffer(0, 5, previous_history),
+                        GpuRuntimeBindingValue::whole_buffer(0, 6, current_history),
+                        GpuRuntimeBindingValue::whole_buffer(0, 7, &parameters),
+                    ])
+                    .map_err(|error| {
+                        gpu_authoring("camera-reprojection runtime bindings", error)
+                    })?;
+                let dispatch_size = deterministic_dispatch_size(
+                    packed.sample_count,
+                    context
+                        .device_facts()
+                        .workload_budget()
+                        .limits()
+                        .max_compute_workgroups_per_dimension(),
+                )?;
+                Some(
+                    GpuComputeOperation::new(
+                        pipeline,
+                        runtime_bindings,
+                        GpuDispatchIntent::direct(dispatch_size),
+                    )
+                    .map_err(|error| gpu_authoring("camera-reprojection operation", error))?,
+                )
+            }
+        }
     } else {
         None
     };
@@ -1580,13 +1899,28 @@ fn lower_output(
             }
             RenderOutputDestination::SampleLatticeTexture(destination) => {
                 let (copy_source, row_bytes) = if let Some(history) = temporal_history.as_ref() {
-                    let row_bytes = history
-                        .row_stride_words
-                        .checked_mul(u32::try_from(WORD_BYTES).expect("word bytes fit u32"))
-                        .ok_or(RenderDeterministicLoweringError::SizeOverflow {
-                            field: "temporal history row bytes",
-                        })?;
-                    (&history.handle, row_bytes)
+                    match &history.storage {
+                        DeterministicTemporalHistoryUseStorage::Static {
+                            handle,
+                            row_stride_words,
+                            ..
+                        } => {
+                            let row_bytes = row_stride_words
+                                .checked_mul(u32::try_from(WORD_BYTES).expect("word bytes fit u32"))
+                                .ok_or(RenderDeterministicLoweringError::SizeOverflow {
+                                    field: "temporal history row bytes",
+                                })?;
+                            (handle, row_bytes)
+                        }
+                        DeterministicTemporalHistoryUseStorage::Camera { .. } => {
+                            let row_bytes = packed.texture_row_bytes.ok_or(
+                                RenderDeterministicLoweringError::OutputCorrelationChanged {
+                                    output_index,
+                                },
+                            )?;
+                            (&canonical_output, row_bytes)
+                        }
+                    }
                 } else {
                     let row_bytes = packed.texture_row_bytes.ok_or(
                         RenderDeterministicLoweringError::OutputCorrelationChanged { output_index },
@@ -1656,6 +1990,34 @@ fn lower_output(
                                     history_generation: history.generation,
                                     history_age: history.age,
                                     history_reset: history.reset,
+                                    camera_reprojection_eligible: matches!(
+                                        &history.storage,
+                                        DeterministicTemporalHistoryUseStorage::Camera { .. }
+                                    ),
+                                    previous_observation_available: matches!(
+                                        &history.storage,
+                                        DeterministicTemporalHistoryUseStorage::Camera {
+                                            previous_observation: Some(_),
+                                            ..
+                                        }
+                                    ),
+                                    camera_pose_changed: matches!(
+                                        &history.storage,
+                                        DeterministicTemporalHistoryUseStorage::Camera {
+                                            pose_changed: true,
+                                            ..
+                                        }
+                                    ),
+                                    camera_reprojection_revision: matches!(
+                                        &history.storage,
+                                        DeterministicTemporalHistoryUseStorage::Camera { .. }
+                                    )
+                                    .then_some(CAMERA_REPROJECTION_REVISION),
+                                    depth_policy_revision: matches!(
+                                        &history.storage,
+                                        DeterministicTemporalHistoryUseStorage::Camera { .. }
+                                    )
+                                    .then_some(CAMERA_DEPTH_POLICY_REVISION),
                                 }
                             }),
                         },
@@ -1713,7 +2075,12 @@ fn lower_output(
             work.operation("clear canonical output", output_clear)?;
             work.operation("clear semantic definedness", definedness_clear)?;
             work.operation("clear evaluator status", status_clear)?;
+            work.operation("clear current hit depth", current_depth_clear)?;
+            work.operation("clear current hit validity", current_hit_clear)?;
             work.compute("evaluate deterministic output", compute)?;
+            if let Some(upload) = camera_parameter_upload {
+                work.operation("upload camera reprojection parameters", upload)?;
+            }
             if let Some(reconstruction) = reconstruction_compute {
                 work.compute("reconstruct deterministic footprint output", reconstruction)?;
             }
@@ -1939,7 +2306,12 @@ fn pack_output(
     words[24] = temporal_history.map_or(0, |history| history.phase);
     words[25] = TEMPORAL_SEQUENCE_REVISION;
     words[26] = temporal_history.map_or(0, |history| history.age);
-    words[27] = temporal_history.map_or(row_stride_words, |history| history.row_stride_words);
+    words[27] = temporal_history.map_or(row_stride_words, |history| match &history.storage {
+        DeterministicTemporalHistoryUseStorage::Static {
+            row_stride_words, ..
+        } => *row_stride_words,
+        DeterministicTemporalHistoryUseStorage::Camera { .. } => row_stride_words,
+    });
     words[28] = TEMPORAL_RECONSTRUCTION_REVISION;
     words[29] = u32::try_from(emitter_offset).map_err(|_| {
         RenderDeterministicLoweringError::SizeOverflow {
@@ -2074,6 +2446,86 @@ fn matching_emitters(
     })?;
     let _ = f32_bits(total, "summed directional-emitter irradiance")?;
     Ok(emitters)
+}
+
+fn camera_reprojection_parameter_words(
+    previous: Option<RenderPerspectiveObservation>,
+    pose_changed: bool,
+) -> Result<[u32; 23], RenderDeterministicLoweringError> {
+    let mut words = [0_u32; 23];
+    words[0] = if previous.is_some() { 1 } else { 0 };
+    words[1] = if pose_changed { 1 } else { 0 };
+    words[2] = CAMERA_DEPTH_POLICY_REVISION;
+    words[3] = CAMERA_REPROJECTION_REVISION;
+    words[4] = CAMERA_DEPTH_ABSOLUTE_EPSILON.to_bits();
+    words[5] = CAMERA_DEPTH_RELATIVE_EPSILON.to_bits();
+    if let Some(previous) = previous {
+        let matrix = previous.observation_to_scene().row_major_3x4();
+        pack_vec3(&mut words, 6, [matrix[3], matrix[7], matrix[11]])?;
+        let inverse = invert_matrix3(
+            [
+                matrix[0], matrix[1], matrix[2], matrix[4], matrix[5], matrix[6], matrix[8],
+                matrix[9], matrix[10],
+            ],
+            "previous observation linear transform",
+        )?;
+        pack_matrix3(&mut words, 9, inverse)?;
+        let forward = normalize_private_vec3(
+            [-matrix[2], -matrix[6], -matrix[10]],
+            "previous observation forward",
+        )?;
+        pack_vec3(&mut words, 18, forward)?;
+        words[21] = positive_f32_bits(
+            (previous.vertical_field_of_view_radians() * 0.5).tan(),
+            "previous perspective tangent half field of view",
+        )?;
+        words[22] =
+            positive_f32_bits(previous.aspect_ratio(), "previous perspective aspect ratio")?;
+    }
+    Ok(words)
+}
+
+fn normalize_private_vec3(
+    values: [f64; 3],
+    field: &'static str,
+) -> Result<[f64; 3], RenderDeterministicLoweringError> {
+    let magnitude_squared = values.iter().map(|value| value * value).sum::<f64>();
+    if !magnitude_squared.is_finite() || magnitude_squared <= 0.0 {
+        return Err(RenderDeterministicLoweringError::NumericRealization { field });
+    }
+    let reciprocal = magnitude_squared.sqrt().recip();
+    let normalized = values.map(|value| value * reciprocal);
+    if normalized.iter().any(|value| !value.is_finite()) {
+        return Err(RenderDeterministicLoweringError::NumericRealization { field });
+    }
+    Ok(normalized)
+}
+
+fn invert_matrix3(
+    values: [f64; 9],
+    field: &'static str,
+) -> Result<[f64; 9], RenderDeterministicLoweringError> {
+    let [a, b, c, d, e, f, g, h, i] = values;
+    let determinant = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
+    if !determinant.is_finite() || determinant == 0.0 {
+        return Err(RenderDeterministicLoweringError::NumericRealization { field });
+    }
+    let reciprocal = determinant.recip();
+    let inverse = [
+        (e * i - f * h) * reciprocal,
+        (c * h - b * i) * reciprocal,
+        (b * f - c * e) * reciprocal,
+        (f * g - d * i) * reciprocal,
+        (a * i - c * g) * reciprocal,
+        (c * d - a * f) * reciprocal,
+        (d * h - e * g) * reciprocal,
+        (b * g - a * h) * reciprocal,
+        (a * e - b * d) * reciprocal,
+    ];
+    if inverse.iter().any(|value| !value.is_finite()) {
+        return Err(RenderDeterministicLoweringError::NumericRealization { field });
+    }
+    Ok(inverse)
 }
 
 fn pack_observation(
@@ -2253,6 +2705,7 @@ fn gpu_authoring(
 
 #[cfg(test)]
 mod tests {
+    use super::super::space_time::RenderAffineTransform3;
     use super::*;
 
     fn assert_dispatch(sample_count: u32, maximum: u32, expected: [u32; 3]) {
@@ -2341,33 +2794,39 @@ mod tests {
         assert_eq!(cache.buffers.len(), 1, "the cache retains one live slot");
     }
 
+    fn temporal_test_observation(
+        transform: super::super::space_time::RenderAffineTransform3,
+    ) -> RenderPerspectiveObservation {
+        use super::super::request::{RenderPerspectiveObservation, RenderSamplingSupport};
+        use super::super::space_time::{RenderTimeInterval, RenderTimePoint};
+
+        let shutter = RenderTimeInterval::instant(
+            RenderTimePoint::from_seconds(0.0).expect("finite test time"),
+        );
+        RenderPerspectiveObservation::new(
+            transform,
+            std::f64::consts::FRAC_PI_3,
+            1.0,
+            shutter,
+            RenderSamplingSupport::perspective_lattice_cell(),
+        )
+        .expect("valid temporal test observation")
+    }
+
     fn temporal_signature(source_generation: u64) -> DeterministicTemporalSignature {
         use super::super::request::{
-            RenderOutputSpec, RenderOutputValue, RenderPerspectiveObservation,
-            RenderRadiometricRepresentation, RenderResultTopology, RenderSamplingSupport,
-            RenderSemanticTolerance,
+            RenderOutputSpec, RenderOutputValue, RenderRadiometricRepresentation,
+            RenderResultTopology, RenderSemanticTolerance,
         };
-        use super::super::space_time::{
-            RenderAffineTransform3, RenderTemporalSupport, RenderTimeInterval, RenderTimePoint,
-        };
+        use super::super::space_time::{RenderAffineTransform3, RenderTemporalSupport};
         use super::super::surface_input::{
             RenderSurfaceSemanticInput, RenderSurfaceSemanticInputBinding,
             RenderSurfaceSemanticInputGeneration,
         };
 
-        let shutter = RenderTimeInterval::instant(
-            RenderTimePoint::from_seconds(0.0).expect("finite test time"),
-        );
-        let observation = RenderObservationSpec::Perspective(
-            RenderPerspectiveObservation::new(
-                RenderAffineTransform3::identity(),
-                std::f64::consts::FRAC_PI_3,
-                1.0,
-                shutter,
-                RenderSamplingSupport::perspective_lattice_cell(),
-            )
-            .expect("valid temporal test observation"),
-        );
+        let observation = RenderObservationSpec::Perspective(temporal_test_observation(
+            RenderAffineTransform3::identity(),
+        ));
         let output = RenderOutputSpec::new(
             RenderOutputValue::Radiance {
                 representation: RenderRadiometricRepresentation::spectral_at_wavelength_meters(
@@ -2393,27 +2852,110 @@ mod tests {
 
         DeterministicTemporalSignature {
             scene_revision: RenderSceneRevision::INITIAL,
-            observation,
+            observation: temporal_observation_compatibility(observation, false),
             output,
             semantic_inputs: vec![binding],
             evaluation_extent: (2, 2),
             sequence_revision: TEMPORAL_SEQUENCE_REVISION,
             reconstruction_revision: TEMPORAL_RECONSTRUCTION_REVISION,
+            camera_reprojection_revision: None,
+            depth_policy_revision: None,
         }
+    }
+
+    fn camera_temporal_signature(
+        source_generation: u64,
+        observation: RenderPerspectiveObservation,
+        evaluation_extent: (u32, u32),
+    ) -> DeterministicTemporalSignature {
+        let mut signature = temporal_signature(source_generation);
+        signature.observation = temporal_observation_compatibility(
+            RenderObservationSpec::Perspective(observation),
+            true,
+        );
+        signature.evaluation_extent = evaluation_extent;
+        signature.camera_reprojection_revision = Some(CAMERA_REPROJECTION_REVISION);
+        signature.depth_policy_revision = Some(CAMERA_DEPTH_POLICY_REVISION);
+        signature
+    }
+
+    fn temporal_test_observation_with(
+        vertical_fov: f64,
+        aspect_ratio: f64,
+        shutter: super::super::space_time::RenderTimeInterval,
+        sampling_support: super::super::request::RenderSamplingSupport,
+    ) -> RenderPerspectiveObservation {
+        RenderPerspectiveObservation::new(
+            RenderAffineTransform3::identity(),
+            vertical_fov,
+            aspect_ratio,
+            shutter,
+            sampling_support,
+        )
+        .expect("valid varied temporal test observation")
+    }
+
+    fn assert_camera_signature_recreates(
+        changed_signature: DeterministicTemporalSignature,
+        changed_observation: RenderPerspectiveObservation,
+    ) {
+        let baseline_observation = temporal_test_observation(RenderAffineTransform3::identity());
+        let baseline_signature = camera_temporal_signature(7, baseline_observation, (4, 4));
+        let mut cache = DeterministicResourceCache::default();
+        let baseline = cache
+            .temporal_history(
+                41,
+                0,
+                baseline_signature,
+                (4, 4),
+                4,
+                baseline_observation,
+                true,
+            )
+            .expect("baseline camera history");
+        let changed = cache
+            .temporal_history(
+                41,
+                0,
+                changed_signature,
+                (4, 4),
+                4,
+                changed_observation,
+                true,
+            )
+            .expect("changed camera history");
+        assert!(changed.reset);
+        assert_ne!(changed.generation, baseline.generation);
     }
 
     #[test]
     fn temporal_history_reuses_compatible_generation_and_resets_on_source_generation_change() {
         let mut cache = DeterministicResourceCache::default();
         let first = cache
-            .temporal_history(11, 0, temporal_signature(7), (4, 4), 4)
+            .temporal_history(
+                11,
+                0,
+                temporal_signature(7),
+                (4, 4),
+                4,
+                temporal_test_observation(RenderAffineTransform3::identity()),
+                false,
+            )
             .expect("initial temporal history should allocate");
         assert!(first.reset);
         assert_eq!(first.phase, 0);
         assert_eq!(first.age, 0);
 
         let retry_before_completion = cache
-            .temporal_history(11, 0, temporal_signature(7), (4, 4), 4)
+            .temporal_history(
+                11,
+                0,
+                temporal_signature(7),
+                (4, 4),
+                4,
+                temporal_test_observation(RenderAffineTransform3::identity()),
+                false,
+            )
             .expect("uncompleted temporal history retry should remain bootstrap");
         assert!(retry_before_completion.reset);
         assert_eq!(retry_before_completion.generation, first.generation);
@@ -2428,7 +2970,15 @@ mod tests {
         state.age = 1;
 
         let reused = cache
-            .temporal_history(11, 0, temporal_signature(7), (4, 4), 4)
+            .temporal_history(
+                11,
+                0,
+                temporal_signature(7),
+                (4, 4),
+                4,
+                temporal_test_observation(RenderAffineTransform3::identity()),
+                false,
+            )
             .expect("compatible temporal history should reuse");
         assert!(!reused.reset);
         assert_eq!(reused.generation, first.generation);
@@ -2436,12 +2986,377 @@ mod tests {
         assert_eq!(reused.age, 1);
 
         let reset = cache
-            .temporal_history(11, 0, temporal_signature(8), (4, 4), 4)
+            .temporal_history(
+                11,
+                0,
+                temporal_signature(8),
+                (4, 4),
+                4,
+                temporal_test_observation(RenderAffineTransform3::identity()),
+                false,
+            )
             .expect("changed source generation should recreate history");
         assert!(reset.reset);
         assert_ne!(reset.generation, first.generation);
         assert_eq!(reset.phase, 0);
         assert_eq!(reset.age, 0);
+    }
+
+    #[test]
+    fn p100_camera_compatibility_excludes_pose_but_retains_projection_semantics() {
+        use super::super::space_time::RenderAffineTransform3;
+
+        let first = temporal_test_observation(RenderAffineTransform3::identity());
+        let moved = temporal_test_observation(
+            RenderAffineTransform3::from_row_major_3x4([
+                1.0, 0.0, 0.0, 0.25, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+            ])
+            .expect("valid moved observation"),
+        );
+        assert_eq!(
+            temporal_observation_compatibility(RenderObservationSpec::Perspective(first), true),
+            temporal_observation_compatibility(RenderObservationSpec::Perspective(moved), true),
+        );
+        assert_ne!(
+            temporal_observation_compatibility(RenderObservationSpec::Perspective(first), false),
+            temporal_observation_compatibility(RenderObservationSpec::Perspective(moved), false),
+        );
+    }
+
+    #[test]
+    fn camera_compatibility_key_retains_every_non_pose_dependency() {
+        use super::super::request::{
+            RenderOutputSpec, RenderOutputValue, RenderRadiometricRepresentation,
+            RenderResultTopology, RenderSamplingSupport, RenderSemanticTolerance,
+        };
+        use super::super::scene::{RenderSceneStore, RenderSceneUpdate};
+        use super::super::space_time::{RenderTimeInterval, RenderTimePoint};
+
+        let baseline_observation = temporal_test_observation(RenderAffineTransform3::identity());
+        let baseline = camera_temporal_signature(7, baseline_observation, (4, 4));
+
+        let changed_fov = temporal_test_observation_with(
+            std::f64::consts::FRAC_PI_4,
+            1.0,
+            baseline_observation.shutter(),
+            RenderSamplingSupport::perspective_lattice_cell(),
+        );
+        let changed_aspect = temporal_test_observation_with(
+            std::f64::consts::FRAC_PI_3,
+            1.25,
+            baseline_observation.shutter(),
+            RenderSamplingSupport::perspective_lattice_cell(),
+        );
+        let changed_shutter = temporal_test_observation_with(
+            std::f64::consts::FRAC_PI_3,
+            1.0,
+            RenderTimeInterval::instant(
+                RenderTimePoint::from_seconds(1.0).expect("finite changed shutter"),
+            ),
+            RenderSamplingSupport::perspective_lattice_cell(),
+        );
+        let changed_support = temporal_test_observation_with(
+            std::f64::consts::FRAC_PI_3,
+            1.0,
+            baseline_observation.shutter(),
+            RenderSamplingSupport::ideal_ray(),
+        );
+
+        for changed_observation in [
+            changed_fov,
+            changed_aspect,
+            changed_shutter,
+            changed_support,
+        ] {
+            assert_ne!(
+                camera_temporal_signature(7, changed_observation, (4, 4)),
+                baseline,
+                "projection/shutter/support changes must remain in the camera compatibility key"
+            );
+        }
+
+        assert_ne!(
+            camera_temporal_signature(8, baseline_observation, (4, 4)),
+            baseline,
+            "source generation must remain in the camera compatibility key"
+        );
+        assert_ne!(
+            camera_temporal_signature(7, baseline_observation, (3, 4)),
+            baseline,
+            "finite evaluation extent must remain in the camera compatibility key"
+        );
+
+        let mut changed_topology = baseline.clone();
+        changed_topology.output = RenderOutputSpec::new(
+            RenderOutputValue::Radiance {
+                representation: RenderRadiometricRepresentation::spectral_at_wavelength_meters(
+                    550.0e-9,
+                )
+                .expect("valid wavelength"),
+            },
+            RenderResultTopology::sample_lattice_2d(8, 4).expect("changed topology"),
+            RenderSemanticTolerance::absolute(0.001).expect("valid tolerance"),
+        )
+        .expect("valid changed output");
+        assert_ne!(changed_topology, baseline);
+
+        let mut store = RenderSceneStore::new();
+        let object = store.allocate_object_id().expect("test object id");
+        let mut update = RenderSceneUpdate::new();
+        update.insert(object);
+        store.commit(update).expect("advance test scene revision");
+        let mut changed_scene = baseline.clone();
+        changed_scene.scene_revision = store.snapshot().revision();
+        assert_ne!(changed_scene, baseline);
+    }
+
+    #[test]
+    fn camera_non_pose_signature_change_recreates_history_generation() {
+        let observation = temporal_test_observation(RenderAffineTransform3::identity());
+        assert_camera_signature_recreates(
+            camera_temporal_signature(8, observation, (4, 4)),
+            observation,
+        );
+
+        let changed_fov = temporal_test_observation_with(
+            std::f64::consts::FRAC_PI_4,
+            1.0,
+            observation.shutter(),
+            super::super::request::RenderSamplingSupport::perspective_lattice_cell(),
+        );
+        assert_camera_signature_recreates(
+            camera_temporal_signature(7, changed_fov, (4, 4)),
+            changed_fov,
+        );
+    }
+
+    #[test]
+    fn sub_native_camera_pose_change_recreates_temporal_history() {
+        let mut cache = DeterministicResourceCache::default();
+        let first_observation = temporal_test_observation(RenderAffineTransform3::identity());
+        let moved_observation = temporal_test_observation(
+            RenderAffineTransform3::from_row_major_3x4([
+                1.0, 0.0, 0.0, 0.25, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+            ])
+            .expect("valid moved observation"),
+        );
+
+        let mut first_signature = temporal_signature(7);
+        first_signature.observation = temporal_observation_compatibility(
+            RenderObservationSpec::Perspective(first_observation),
+            false,
+        );
+        let first = cache
+            .temporal_history(12, 0, first_signature, (4, 4), 4, first_observation, false)
+            .expect("sub-native history should allocate");
+
+        let mut moved_signature = temporal_signature(7);
+        moved_signature.observation = temporal_observation_compatibility(
+            RenderObservationSpec::Perspective(moved_observation),
+            false,
+        );
+        let moved = cache
+            .temporal_history(12, 0, moved_signature, (4, 4), 4, moved_observation, false)
+            .expect("sub-native moved history should recreate");
+        assert!(moved.reset);
+        assert_ne!(moved.generation, first.generation);
+        assert!(matches!(
+            moved.storage,
+            DeterministicTemporalHistoryUseStorage::Static { .. }
+        ));
+    }
+
+    #[test]
+    fn camera_history_completion_retry_failure_and_ping_pong_are_fail_closed() {
+        use super::super::space_time::RenderAffineTransform3;
+
+        let mut cache = DeterministicResourceCache::default();
+        let observation = temporal_test_observation(RenderAffineTransform3::identity());
+        let mut signature = temporal_signature(7);
+        signature.observation = temporal_observation_compatibility(
+            RenderObservationSpec::Perspective(observation),
+            true,
+        );
+        signature.evaluation_extent = (4, 4);
+        signature.camera_reprojection_revision = Some(CAMERA_REPROJECTION_REVISION);
+        signature.depth_policy_revision = Some(CAMERA_DEPTH_POLICY_REVISION);
+
+        let first = cache
+            .temporal_history(11, 0, signature.clone(), (4, 4), 4, observation, true)
+            .expect("camera history should allocate");
+        assert!(first.reset);
+        let (first_previous_identity, first_current_identity, first_previous_observation) =
+            match &first.storage {
+                DeterministicTemporalHistoryUseStorage::Camera {
+                    previous_history,
+                    current_history,
+                    previous_observation,
+                    ..
+                } => (
+                    previous_history.diagnostic_identity(),
+                    current_history.diagnostic_identity(),
+                    *previous_observation,
+                ),
+                _ => panic!("P100 history must use camera storage"),
+            };
+        assert_ne!(
+            first_previous_identity, first_current_identity,
+            "camera reprojection must never read and write one retained slot in place"
+        );
+        assert_eq!(first_previous_observation, None);
+
+        let retry = cache
+            .temporal_history(11, 0, signature.clone(), (4, 4), 4, observation, true)
+            .expect("pre-acceptance retry should preserve bootstrap state");
+        assert!(retry.reset);
+        assert_eq!(retry.generation, first.generation);
+        assert_eq!(retry.age, 0);
+        assert!(matches!(
+            retry.storage,
+            DeterministicTemporalHistoryUseStorage::Camera {
+                previous_observation: None,
+                ..
+            }
+        ));
+
+        cache.reconcile_temporal_outputs(11, true);
+        let retained = cache
+            .temporal_histories
+            .get(&(11, 0))
+            .expect("completed camera history retained");
+        assert_eq!(retained.age, 1);
+        assert_eq!(retained.phase, 1);
+        let DeterministicTemporalStorage::Camera(camera) = &retained.storage else {
+            panic!("P100 history must remain camera storage");
+        };
+        assert_eq!(camera.completed_slot, 1);
+        assert_eq!(camera.completed_observation, Some(observation));
+        assert_eq!(camera.pending_slot, None);
+        assert_eq!(camera.pending_observation, None);
+
+        let moved = temporal_test_observation(
+            RenderAffineTransform3::from_row_major_3x4([
+                1.0, 0.0, 0.0, 0.25, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+            ])
+            .expect("valid moved observation"),
+        );
+        let reused = cache
+            .temporal_history(11, 0, signature, (4, 4), 4, moved, true)
+            .expect("pose-only motion should reuse camera history generation");
+        assert_eq!(reused.generation, first.generation);
+        assert!(!reused.reset);
+        assert!(matches!(
+            reused.storage,
+            DeterministicTemporalHistoryUseStorage::Camera {
+                previous_observation: Some(previous),
+                pose_changed: true,
+                ..
+            } if previous == observation
+        ));
+
+        cache.reconcile_temporal_outputs(11, false);
+        assert!(
+            !cache.temporal_histories.contains_key(&(11, 0)),
+            "failed accepted execution must discard affected camera history"
+        );
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum CameraReferenceDecision {
+        Accept,
+        CurrentBackground,
+        BehindPreviousCamera,
+        OutOfBounds,
+        MissingPreviousHistory,
+        DepthInconsistent,
+    }
+
+    fn camera_reference_decision(
+        current_hit: bool,
+        previous_hit: bool,
+        previous_local: [f32; 3],
+        tan_half_fov: f32,
+        aspect: f32,
+        projected_depth: f32,
+        previous_depth: f32,
+    ) -> CameraReferenceDecision {
+        if !current_hit {
+            return CameraReferenceDecision::CurrentBackground;
+        }
+        if previous_local.iter().any(|value| !value.is_finite()) || previous_local[2] >= 0.0 {
+            return CameraReferenceDecision::BehindPreviousCamera;
+        }
+        let projected_x = previous_local[0] / (-previous_local[2] * tan_half_fov * aspect);
+        let projected_y = previous_local[1] / (-previous_local[2] * tan_half_fov);
+        let u = projected_x * 0.5 + 0.5;
+        let v = 0.5 - projected_y * 0.5;
+        if !u.is_finite() || !v.is_finite() || !(0.0..1.0).contains(&u) || !(0.0..1.0).contains(&v)
+        {
+            return CameraReferenceDecision::OutOfBounds;
+        }
+        if !previous_hit {
+            return CameraReferenceDecision::MissingPreviousHistory;
+        }
+        let tolerance = 0.001_f32 + 0.001_f32 * projected_depth.abs().max(previous_depth.abs());
+        if !projected_depth.is_finite()
+            || !previous_depth.is_finite()
+            || (projected_depth - previous_depth).abs() > tolerance
+        {
+            return CameraReferenceDecision::DepthInconsistent;
+        }
+        CameraReferenceDecision::Accept
+    }
+
+    #[test]
+    fn camera_reprojection_reference_rejects_background_bounds_missing_and_depth_mismatch() {
+        assert_eq!(
+            camera_reference_decision(false, true, [0.0, 0.0, -2.0], 1.0, 1.0, 2.0, 2.0),
+            CameraReferenceDecision::CurrentBackground
+        );
+        assert_eq!(
+            camera_reference_decision(true, true, [0.0, 0.0, 0.1], 1.0, 1.0, 2.0, 2.0),
+            CameraReferenceDecision::BehindPreviousCamera
+        );
+        assert_eq!(
+            camera_reference_decision(true, true, [3.0, 0.0, -1.0], 1.0, 1.0, 2.0, 2.0),
+            CameraReferenceDecision::OutOfBounds
+        );
+        assert_eq!(
+            camera_reference_decision(true, false, [0.0, 0.0, -2.0], 1.0, 1.0, 2.0, 2.0),
+            CameraReferenceDecision::MissingPreviousHistory
+        );
+        assert_eq!(
+            camera_reference_decision(true, true, [0.0, 0.0, -2.0], 1.0, 1.0, 2.02, 2.0),
+            CameraReferenceDecision::DepthInconsistent
+        );
+        assert_eq!(
+            camera_reference_decision(true, true, [0.0, 0.0, -2.0], 1.0, 1.0, 2.001, 2.0),
+            CameraReferenceDecision::Accept
+        );
+    }
+
+    #[test]
+    fn camera_reprojection_shader_matches_the_reference_rejection_contract() {
+        for source_law in [
+            "if current_hit_words[output_index] == 0u",
+            "local.z >= 0.0",
+            "u < 0.0 || u >= 1.0 || v < 0.0 || v >= 1.0",
+            "previous_history_words[previous_base + 3u] == 0u",
+            "abs(projected_depth - previous_depth) > tolerance",
+        ] {
+            assert!(
+                CAMERA_REPROJECTION_WGSL.contains(source_law),
+                "camera reprojection shader is missing reference law: {source_law}"
+            );
+        }
+    }
+
+    #[test]
+    fn camera_reprojection_shader_carries_versioned_depth_policy() {
+        assert!(CAMERA_REPROJECTION_WGSL.contains("CAMERA_DEPTH_ABSOLUTE_EPSILON: f32 = 0.001"));
+        assert!(CAMERA_REPROJECTION_WGSL.contains("CAMERA_DEPTH_RELATIVE_EPSILON: f32 = 0.001"));
+        assert_eq!(CAMERA_DEPTH_POLICY_REVISION, 1);
+        assert_eq!(CAMERA_REPROJECTION_REVISION, 1);
     }
 
     #[test]

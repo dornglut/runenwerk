@@ -14,7 +14,7 @@ use temporal_quality::{
     inspect_render_lab_temporal_quality_execution_system, render_lab_fixed_quality_flow,
     render_lab_quality_present_flow, stage_render_lab_native_quality_publication,
     temporal_quality_capture_evidence, temporal_quality_capture_selector,
-    write_temporal_quality_artifact,
+    write_camera_motion_quality_artifact, write_temporal_quality_artifact,
 };
 
 #[derive(Debug, Clone, Copy, runen_ecs::Resource)]
@@ -23,6 +23,13 @@ struct RenderLabFlowId(engine::plugins::render::RenderFlowId);
 const RL2_MEASUREMENT_HISTORY_CAPACITY: usize = 4096;
 const RL2_MEASUREMENT_SCHEMA_VERSION: u32 = 2;
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+enum RenderLabTemporalQualityScenario {
+    #[default]
+    StaticFootprint,
+    CameraMotionP100,
+}
+
 #[derive(Debug, Clone, Default, runen_ecs::Resource)]
 struct RenderLabMeasurementConfig {
     output_path: Option<PathBuf>,
@@ -30,6 +37,7 @@ struct RenderLabMeasurementConfig {
     primary_window_size_px: Option<(u32, u32)>,
     radiance_target_size_px: Option<(u32, u32)>,
     quality_capture_output_dir: Option<PathBuf>,
+    temporal_quality_scenario: RenderLabTemporalQualityScenario,
     completed: bool,
 }
 
@@ -123,6 +131,7 @@ pub fn run_native_measurement(
         primary_window_size_px,
         radiance_target_size_px,
         quality_capture_output_dir: None,
+        temporal_quality_scenario: RenderLabTemporalQualityScenario::StaticFootprint,
         completed: false,
     }))
 }
@@ -133,11 +142,56 @@ pub fn run_native_temporal_quality(
     primary_window_size_px: (u32, u32),
     internal_size_px: (u32, u32),
 ) -> Result<()> {
+    run_native_temporal_quality_scenario(
+        output_root,
+        submitted_frame_limit,
+        primary_window_size_px,
+        internal_size_px,
+        RenderLabTemporalQualityScenario::StaticFootprint,
+    )
+}
+
+pub fn run_native_temporal_camera_quality(
+    output_root: impl Into<PathBuf>,
+    submitted_frame_limit: Option<usize>,
+    output_size_px: (u32, u32),
+) -> Result<()> {
+    let submitted_frame_limit = submitted_frame_limit.unwrap_or(4);
+    if submitted_frame_limit < 4 {
+        bail!(
+            "camera-motion temporal quality requires at least four submitted frames; got {submitted_frame_limit}"
+        );
+    }
+    run_native_temporal_quality_scenario(
+        output_root,
+        Some(submitted_frame_limit),
+        output_size_px,
+        output_size_px,
+        RenderLabTemporalQualityScenario::CameraMotionP100,
+    )
+}
+
+fn run_native_temporal_quality_scenario(
+    output_root: impl Into<PathBuf>,
+    submitted_frame_limit: Option<usize>,
+    primary_window_size_px: (u32, u32),
+    internal_size_px: (u32, u32),
+    temporal_quality_scenario: RenderLabTemporalQualityScenario,
+) -> Result<()> {
     let submitted_frame_limit = validate_measurement_frame_limit(submitted_frame_limit)?;
     let primary_window_size_px = validate_measurement_window_size(Some(primary_window_size_px))?
         .expect("validated explicit quality output extent");
     let internal_size_px = validate_measurement_radiance_size(Some(internal_size_px))?
         .expect("validated explicit quality internal extent");
+    if matches!(
+        temporal_quality_scenario,
+        RenderLabTemporalQualityScenario::CameraMotionP100
+    ) && internal_size_px != primary_window_size_px
+    {
+        bail!(
+            "camera-motion temporal quality is P100-only and requires matching internal/output extents"
+        );
+    }
 
     let output_root = output_root.into();
     run_native_with_measurement(Some(RenderLabMeasurementConfig {
@@ -146,6 +200,7 @@ pub fn run_native_temporal_quality(
         primary_window_size_px: Some(primary_window_size_px),
         radiance_target_size_px: Some(internal_size_px),
         quality_capture_output_dir: Some(output_root.join("captures")),
+        temporal_quality_scenario,
         completed: false,
     }))
 }
@@ -425,7 +480,26 @@ fn complete_render_lab_measurement_if_requested(
             let gfx = gfx.ok_or_else(|| {
                 anyhow::anyhow!("temporal quality renderer evidence is unavailable")
             })?;
-            write_temporal_quality_artifact(measurement, history, quality_execution, capture, gfx)?;
+            match measurement.temporal_quality_scenario {
+                RenderLabTemporalQualityScenario::StaticFootprint => {
+                    write_temporal_quality_artifact(
+                        measurement,
+                        history,
+                        quality_execution,
+                        capture,
+                        gfx,
+                    )?;
+                }
+                RenderLabTemporalQualityScenario::CameraMotionP100 => {
+                    write_camera_motion_quality_artifact(
+                        measurement,
+                        history,
+                        quality_execution,
+                        capture,
+                        gfx,
+                    )?;
+                }
+            }
         }
         measurement.completed = true;
     }
@@ -583,9 +657,20 @@ fn publish_render_lab_frame_system(
         .expect("Render Lab producer id is non-zero");
 
     let quality_mode = measurement.quality_capture_output_dir.is_some();
+    let camera_motion_quality = matches!(
+        measurement.temporal_quality_scenario,
+        RenderLabTemporalQualityScenario::CameraMotionP100
+    );
     // T1 deliberately changes only source-generation evidence after one compatible reuse.
-    // Frames 1-2 use generation 1; frame 3+ uses generation 2 with identical semantic payload.
-    let temporal_source_generation = if history.len() >= 2 { 2 } else { 1 };
+    // T2 instead holds source generations stable so pose-only camera motion is the sole
+    // compatibility pressure under test.
+    let temporal_source_generation =
+        temporal_quality_source_generation(measurement.temporal_quality_scenario, history.len());
+    let scripted_camera = if camera_motion_quality {
+        temporal_camera_motion_pose(history.len())
+    } else {
+        *camera
+    };
     let capture_armed = temporal_quality_capture_should_arm(&measurement, &history);
     if quality_mode {
         quality_execution.pending_admission = None;
@@ -603,7 +688,7 @@ fn publish_render_lab_frame_system(
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("temporal quality scene plan is unavailable"))?;
         let (target_key, target, contribution) = build_render_lab_temporal_radiance_publication(
-            &camera,
+            &scripted_camera,
             producer_id,
             output_size,
             requested_internal_size,
@@ -641,7 +726,7 @@ fn publish_render_lab_frame_system(
 
     let (target_key, target, contribution) = if quality_mode {
         build_render_lab_temporal_radiance_publication(
-            &camera,
+            &scripted_camera,
             producer_id,
             output_size,
             requested_internal_size,
@@ -702,6 +787,34 @@ fn publish_render_lab_frame_system(
         invocation,
         contribution,
     )
+}
+
+fn temporal_quality_source_generation(
+    scenario: RenderLabTemporalQualityScenario,
+    completed_submissions: usize,
+) -> u64 {
+    match scenario {
+        RenderLabTemporalQualityScenario::CameraMotionP100 => 1,
+        RenderLabTemporalQualityScenario::StaticFootprint if completed_submissions >= 2 => 2,
+        RenderLabTemporalQualityScenario::StaticFootprint => 1,
+    }
+}
+
+fn temporal_camera_motion_pose(completed_submissions: usize) -> RenderLabCamera {
+    let mut camera = RenderLabCamera::default();
+    match completed_submissions {
+        0 | 1 => {}
+        2 => {
+            camera.yaw_radians = 0.08;
+            camera.pan[0] = 0.05;
+        }
+        _ => {
+            camera.yaw_radians = 0.24;
+            camera.pitch_radians = -0.06;
+            camera.pan[0] = 0.12;
+        }
+    }
+    camera
 }
 
 fn render_lab_extent(presentation: &engine::PrimaryPresentationMetricsResource) -> (u32, u32) {
@@ -917,6 +1030,7 @@ mod tests {
             primary_window_size_px: None,
             radiance_target_size_px: None,
             quality_capture_output_dir: None,
+            temporal_quality_scenario: RenderLabTemporalQualityScenario::StaticFootprint,
             completed: false,
         };
         assert!(!bounded_measurement_complete(&measurement, &history));
@@ -966,6 +1080,7 @@ mod tests {
             primary_window_size_px: None,
             radiance_target_size_px: None,
             quality_capture_output_dir: None,
+            temporal_quality_scenario: RenderLabTemporalQualityScenario::StaticFootprint,
             completed: false,
         };
         let mut windows = WindowStateRegistryResource::default();
@@ -1085,6 +1200,93 @@ mod tests {
         );
         assert_eq!(artifact.samples[1].gpu_composed_frame_ms, None);
         assert_eq!(artifact.samples[1].diagnostics.len(), 1);
+    }
+
+    #[test]
+    fn camera_motion_quality_holds_source_generation_constant() {
+        for completed in 0..8 {
+            assert_eq!(
+                temporal_quality_source_generation(
+                    RenderLabTemporalQualityScenario::CameraMotionP100,
+                    completed
+                ),
+                1
+            );
+        }
+        assert_eq!(
+            temporal_quality_source_generation(
+                RenderLabTemporalQualityScenario::StaticFootprint,
+                1
+            ),
+            1
+        );
+        assert_eq!(
+            temporal_quality_source_generation(
+                RenderLabTemporalQualityScenario::StaticFootprint,
+                2
+            ),
+            2
+        );
+    }
+
+    #[test]
+    fn camera_motion_quality_requires_a_complete_motion_sequence() {
+        assert!(
+            run_native_temporal_camera_quality(PathBuf::from("unused"), Some(3), (1920, 1080))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn camera_motion_quality_pose_is_static_then_moves_deterministically() {
+        assert_eq!(
+            temporal_camera_motion_pose(0),
+            temporal_camera_motion_pose(1)
+        );
+        let small = temporal_camera_motion_pose(2);
+        let large = temporal_camera_motion_pose(3);
+        assert_ne!(small, RenderLabCamera::default());
+        assert_ne!(large, small);
+        assert_eq!(small.yaw_radians, 0.08);
+        assert_eq!(large.yaw_radians, 0.24);
+    }
+
+    #[test]
+    fn camera_motion_quality_strong_transition_forces_out_of_bounds_reprojection_pressure() {
+        fn project(camera: RenderLabCamera, point: [f64; 3]) -> [f64; 2] {
+            let matrix = camera.observation_to_scene().row_major_3x4();
+            let origin = [matrix[3], matrix[7], matrix[11]];
+            let relative = [
+                point[0] - origin[0],
+                point[1] - origin[1],
+                point[2] - origin[2],
+            ];
+            // The scripted Render Lab camera basis is orthonormal. The transform columns are
+            // right/up/backward, so projection into camera-local space is their dot product.
+            let local = [
+                matrix[0] * relative[0] + matrix[4] * relative[1] + matrix[8] * relative[2],
+                matrix[1] * relative[0] + matrix[5] * relative[1] + matrix[9] * relative[2],
+                matrix[2] * relative[0] + matrix[6] * relative[1] + matrix[10] * relative[2],
+            ];
+            assert!(
+                local[2] < 0.0,
+                "controlled point must remain in front of the camera"
+            );
+            let tan_half_fov = (std::f64::consts::FRAC_PI_3 * 0.5).tan();
+            let aspect = 1920.0 / 1080.0;
+            let projected_x = local[0] / (-local[2] * tan_half_fov * aspect);
+            let projected_y = local[1] / (-local[2] * tan_half_fov);
+            [projected_x * 0.5 + 0.5, 0.5 - projected_y * 0.5]
+        }
+
+        // This point lies on the maintained unbounded plane (y = -1). It is visible after the
+        // strong frame-4 camera move but projects beyond the right edge of frame 3, guaranteeing
+        // that the controlled motion capture exercises the shader's out-of-bounds rejection law.
+        let point = [150.0, -1.0, -114.0];
+        let previous = project(temporal_camera_motion_pose(2), point);
+        let current = project(temporal_camera_motion_pose(3), point);
+        assert!((0.0..1.0).contains(&current[0]) && (0.0..1.0).contains(&current[1]));
+        assert!(previous[0] >= 1.0 || previous[1] < 0.0 || previous[1] >= 1.0);
     }
 
     #[test]
