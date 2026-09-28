@@ -2,9 +2,9 @@ use engine::plugins::world::adapters::{PartitionConfigResource, SdfChunkStoreRes
 use engine::prelude::*;
 use runen_spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, WorldId};
 use runenwerk_arena::{
-    ArenaMovementConfig, ArenaPlayer, GameCommandError, LOCAL_PARTICIPANT_ID, ParticipantCommand,
-    PlayerCommand, PlayerPhysicalHistory, TickCommandBatch, apply_game_commands,
-    build_headless_game_app, player_physical_history_for, player_state_for,
+    ARENA_PLAYER_SPAWN, ArenaMovementConfig, ArenaPlayer, GameCommandError, LOCAL_PARTICIPANT_ID,
+    ParticipantCommand, PlayerCommand, PlayerPhysicalHistory, TickCommandBatch,
+    apply_game_commands, build_headless_game_app, player_physical_history_for, player_state_for,
 };
 use world_ops::{ChunkGeneration, ChunkRevision};
 use world_sdf::SdfChunkPayload;
@@ -56,16 +56,16 @@ fn local_batch(tick: u64, command: PlayerCommand) -> TickCommandBatch {
 
 #[test]
 fn maintained_fixed_tick_updates_previous_and_current_physical_state_headlessly() {
-    let mut app = build_headless_game_app();
-    configure_clear_chunk(&mut app);
-    let app = app
+    let app = build_headless_game_app()
         .run_for_fixed_steps(1)
         .expect("maintained headless game should execute its physical command path");
 
     let history = player_physical_history_for(app.world(), LOCAL_PARTICIPANT_ID)
         .expect("maintained player should own physical history");
-    assert_eq!(history.previous.position, [0.25, 0.5, 0.25]);
-    assert!(history.current.position[1] < history.previous.position[1]);
+    assert_eq!(history.previous.position, ARENA_PLAYER_SPAWN);
+    assert!(!history.previous.grounded);
+    assert!(history.current.grounded);
+    assert!(history.current.support_normal.is_some());
     assert_eq!(app.registered_scene_count(), 0);
     assert!(app.world().resource::<NetworkInboundQueue>().is_err());
 }
@@ -73,24 +73,14 @@ fn maintained_fixed_tick_updates_previous_and_current_physical_state_headlessly(
 #[test]
 fn game_owned_jump_policy_flows_through_shared_command_application() {
     let mut app = build_headless_game_app()
-        .run_for_frames(0)
-        .expect("startup should spawn the maintained player");
-    configure_clear_chunk(&mut app);
-
-    {
-        let world = app.world_mut();
-        let query = world.query::<(&ArenaPlayer, &mut PlayerPhysicalHistory)>();
-        let (_, history) = query
-            .iter(world)
-            .find(|(player, _)| player.participant == LOCAL_PARTICIPANT_ID)
-            .expect("local player should have physical state");
-        history.current.grounded = true;
-        history.current.support_normal = Some([0.0, 1.0, 0.0]);
-        history.previous = history.current;
-    }
+        .run_for_fixed_steps(1)
+        .expect("maintained arena should integrate and ground the player before jump");
+    let before = player_physical_history_for(app.world(), LOCAL_PARTICIPANT_ID)
+        .expect("maintained player should have physical state");
+    assert!(before.current.grounded);
 
     let batch = local_batch(
-        1,
+        2,
         PlayerCommand {
             jump: true,
             ..PlayerCommand::default()

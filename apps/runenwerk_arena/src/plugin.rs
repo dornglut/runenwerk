@@ -5,6 +5,7 @@ use engine::prelude::{
 };
 use runen_input::PhysicalKeyIdentity;
 
+use crate::arena::ARENA_PLAYER_SPAWN;
 use crate::command::{TickCommandBatch, apply_game_commands};
 use crate::input::{
     ACTION_INTERACT, ACTION_JUMP, ACTION_MOVE_DOWN, ACTION_MOVE_LEFT, ACTION_MOVE_RIGHT,
@@ -53,7 +54,7 @@ fn spawn_local_player(mut commands: Commands) {
             participant: LOCAL_PARTICIPANT_ID,
         },
         PlayerControlState::default(),
-        PlayerPhysicalHistory::spawned([0.25, 0.5, 0.25]),
+        PlayerPhysicalHistory::spawned(ARENA_PLAYER_SPAWN),
     ));
 }
 
