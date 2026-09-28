@@ -1,6 +1,6 @@
 mod bootstrap;
 mod frame_submit;
-mod input_bridge;
+pub(crate) mod input_bridge;
 mod material_preview;
 mod picking;
 mod texture_preview;
