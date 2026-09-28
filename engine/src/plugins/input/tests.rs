@@ -661,3 +661,47 @@ fn continuity_loss_is_captured_as_continuity_without_fabricated_release() {
     assert!(!input.left_mouse_released());
     assert!(input.mouse_button_transitions().is_empty());
 }
+
+#[test]
+fn automation_absolute_pointer_uses_same_cursor_projection_as_native_path() {
+    let mut state = InputState::new();
+    let context = InputContext::new(InputSourceId::new(310), None);
+
+    assert_eq!(
+        state
+            .admit_automation_observation(
+                context,
+                InputObservation::AbsolutePointerPosition {
+                    position: Point2::new(10.0, 20.0, CoordinateSpace::WindowPhysicalPixels,),
+                },
+            )
+            .unwrap(),
+        true
+    );
+    assert_eq!(
+        state
+            .admit_automation_observation(
+                context,
+                InputObservation::AbsolutePointerPosition {
+                    position: Point2::new(13.0, 26.0, CoordinateSpace::WindowPhysicalPixels,),
+                },
+            )
+            .unwrap(),
+        true
+    );
+
+    assert_eq!(state.mouse_position, (13.0, 26.0));
+    assert_eq!(
+        state.mouse_motion_samples(),
+        &[
+            crate::plugins::MouseMotionSample {
+                position: (10.0, 20.0),
+                delta: (10.0, 20.0),
+            },
+            crate::plugins::MouseMotionSample {
+                position: (13.0, 26.0),
+                delta: (3.0, 6.0),
+            },
+        ]
+    );
+}

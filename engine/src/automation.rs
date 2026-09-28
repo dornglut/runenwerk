@@ -653,7 +653,7 @@ impl AutomationSession {
             return Err(AutomationPersistedReplayError::ReplayLeasePending);
         }
 
-        let imported = match import_automation_input_trace_v1(bytes) {
+        let imported = match import_automation_input_trace(bytes) {
             Ok(imported) => imported,
             Err(error) => {
                 let outcome = import_error_step_outcome(&error);
@@ -1913,5 +1913,54 @@ mod tests {
                 AutomationStepKind::ProductDispatch,
             ]
         );
+    }
+
+    #[test]
+    fn session_version_aware_persisted_replay_accepts_v2_absolute_pointer() {
+        let trace = AutomationInputTrace {
+            frames: vec![AutomationInputTraceFrame {
+                frame_ordinal: 0,
+                groups: vec![InputObservationGroup::single(
+                    InputContext::new(InputSourceId::new(1), None),
+                    InputObservation::AbsolutePointerPosition {
+                        position: Point2::new(18.0, 27.0, CoordinateSpace::WindowPhysicalPixels),
+                    },
+                )],
+            }],
+            trailing_groups: Vec::new(),
+        };
+        let encoded = export_automation_input_trace_v2(
+            &trace,
+            AutomationInputTraceRecordingWitness::RecordedSourcesPristineAtCaptureStart,
+            None,
+        )
+        .expect("V2 absolute pointer trace should persist");
+
+        let mut replay = App::headless();
+        replay.add_plugin(InputFinalizePlugin);
+        let mut session =
+            AutomationSession::new(AutomationSessionId::new(55), InputSourceId::new(2_108));
+
+        let report = session
+            .replay_persisted_normalized_trace(
+                AutomationExecutionMode::NormalizedInput,
+                &mut replay,
+                encoded.as_bytes(),
+                AutomationInputReplayStateAssumption::RecordedAndReplaySourcesPristine,
+            )
+            .expect("A12 version-aware persisted replay should accept V2");
+        assert_eq!(report.outcome(), AutomationInputReplayOutcome::Completed);
+        assert!(session.replay_teardown_pending());
+        assert_eq!(
+            session.history()[0].outcome(),
+            AutomationStepOutcome::AdmittedOrDelivered
+        );
+
+        assert_eq!(
+            session.finish(&mut replay),
+            AutomationStepResult::EffectConfirmed(())
+        );
+        assert!(!session.replay_teardown_pending());
+        assert!(!session.is_active());
     }
 }

@@ -471,14 +471,7 @@ pub fn export_automation_input_trace_v1(
 pub fn import_automation_input_trace_v1(
     bytes: &[u8],
 ) -> Result<ImportedAutomationInputTraceV1, AutomationInputTraceImportError> {
-    if bytes.len() > MAX_ARTIFACT_BYTES {
-        return Err(AutomationInputTraceImportError::ArtifactTooLarge);
-    }
-    let source = std::str::from_utf8(bytes)
-        .map_err(|error| AutomationInputTraceImportError::ParseFailure(error.to_string()))?;
-
-    let options = ron_options();
-    let probe: EnvelopeProbe = options.from_str(source).map_err(classify_ron_error)?;
+    let (source, probe) = probe_persisted_trace(bytes)?;
     if probe.artifact_kind != AUTOMATION_INPUT_TRACE_V1_ARTIFACT_KIND {
         return Err(AutomationInputTraceImportError::WrongArtifactKind(
             probe.artifact_kind,
@@ -489,8 +482,25 @@ pub fn import_automation_input_trace_v1(
             probe.schema_version,
         ));
     }
+    import_automation_input_trace_v1_from_source(source)
+}
 
-    let persisted: PersistedTraceV1 = options.from_str(source).map_err(classify_ron_error)?;
+fn probe_persisted_trace(
+    bytes: &[u8],
+) -> Result<(&str, EnvelopeProbe), AutomationInputTraceImportError> {
+    if bytes.len() > MAX_ARTIFACT_BYTES {
+        return Err(AutomationInputTraceImportError::ArtifactTooLarge);
+    }
+    let source = std::str::from_utf8(bytes)
+        .map_err(|error| AutomationInputTraceImportError::ParseFailure(error.to_string()))?;
+    let probe: EnvelopeProbe = ron_options().from_str(source).map_err(classify_ron_error)?;
+    Ok((source, probe))
+}
+
+fn import_automation_input_trace_v1_from_source(
+    source: &str,
+) -> Result<ImportedAutomationInputTraceV1, AutomationInputTraceImportError> {
+    let persisted: PersistedTraceV1 = ron_options().from_str(source).map_err(classify_ron_error)?;
     validate_persisted_header(&persisted)?;
     validate_provenance_import(persisted.provenance.as_ref())?;
     if !persisted.recorded_sources_pristine_at_capture_start {
@@ -1546,6 +1556,9 @@ fn contact_presence_from_persisted(value: PersistedContactPresenceV1) -> Contact
         PersistedContactPresenceV1::OutOfRange => ContactPresence::OutOfRange,
     }
 }
+
+mod v2;
+pub use v2::*;
 
 #[cfg(test)]
 mod tests;

@@ -352,27 +352,31 @@ impl InputState {
         );
     }
 
-    pub(crate) fn handle_cursor_position(&mut self, context: InputContext, position: Point2) {
+    fn admit_cursor_position(
+        &mut self,
+        context: InputContext,
+        position: Point2,
+    ) -> Result<(), InputError> {
         let previous = self
             .neutral
             .absolute_pointer_position(context.source)
             .map(|point| (point.x, point.y))
             .unwrap_or((0.0, 0.0));
-        if self
-            .admit_group(&InputObservationGroup::single(
-                context,
-                InputObservation::AbsolutePointerPosition { position },
-            ))
-            .is_err()
-        {
-            return;
-        }
+        self.admit_group(&InputObservationGroup::single(
+            context,
+            InputObservation::AbsolutePointerPosition { position },
+        ))?;
 
         self.mouse_position = (position.x, position.y);
         self.mouse_motion_samples.push(MouseMotionSample {
             position: (position.x, position.y),
             delta: (position.x - previous.0, position.y - previous.1),
         });
+        Ok(())
+    }
+
+    pub(crate) fn handle_cursor_position(&mut self, context: InputContext, position: Point2) {
+        let _ = self.admit_cursor_position(context, position);
     }
 
     pub fn handle_cursor_moved(&mut self, x: f32, y: f32) {
@@ -570,6 +574,10 @@ impl InputState {
             }
             InputObservation::Scroll(input) => {
                 self.admit_scroll_input(context, input)?;
+                Ok(true)
+            }
+            InputObservation::AbsolutePointerPosition { position } => {
+                self.admit_cursor_position(context, position)?;
                 Ok(true)
             }
             _ => Ok(false),
