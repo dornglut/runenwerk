@@ -170,8 +170,7 @@ fn owned_texture_lowering_returns_normalized_texture() {
 #[test]
 fn history_initialization_is_explicit_and_opt_in() {
     let ids = test_resource_ids(2);
-    let ordinary =
-        RenderResourceDeclaration::declare_history_texture(ids[0], "ordinary history");
+    let ordinary = RenderResourceDeclaration::declare_history_texture(ids[0], "ordinary history");
     let zeroed =
         RenderResourceDeclaration::declare_zeroed_history_texture(ids[1], "temporal bootstrap");
 
