@@ -1266,7 +1266,10 @@ mod tests {
                 matrix[1] * relative[0] + matrix[5] * relative[1] + matrix[9] * relative[2],
                 matrix[2] * relative[0] + matrix[6] * relative[1] + matrix[10] * relative[2],
             ];
-            assert!(local[2] < 0.0, "controlled point must remain in front of the camera");
+            assert!(
+                local[2] < 0.0,
+                "controlled point must remain in front of the camera"
+            );
             let tan_half_fov = (std::f64::consts::FRAC_PI_3 * 0.5).tan();
             let aspect = 1920.0 / 1080.0;
             let projected_x = local[0] / (-local[2] * tan_half_fov * aspect);
