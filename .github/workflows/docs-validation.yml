@@ -4,9 +4,11 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-      - 'docs-site/**'
-      - '.github/workflows/docs-validation.yml'
+  merge_group:
+    types:
+      - checks_requested
+    branches:
+      - main
   push:
     branches:
       - main
@@ -24,7 +26,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build documentation site
+    name: Documentation site validation
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -39,6 +41,7 @@ jobs:
           set -euo pipefail
           case "$EVENT_NAME" in
             pull_request) expected_revision="$PULL_REQUEST_HEAD_SHA" ;;
+            merge_group) expected_revision="$EVENT_SHA" ;;
             push|workflow_dispatch) expected_revision="$EVENT_SHA" ;;
             *) echo "Unsupported event: $EVENT_NAME" >&2; exit 1 ;;
           esac
