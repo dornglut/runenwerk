@@ -96,19 +96,11 @@ pub fn prepare_world_sdf_render_bridge_system(mut world: WorldMut) {
         Ok(sources) => sources.clone(),
         Err(_) => return,
     };
-    let source_product_ids = sources
-        .products()
-        .keys()
-        .copied()
-        .collect::<BTreeSet<_>>();
+    let source_product_ids = sources.products().keys().copied().collect::<BTreeSet<_>>();
     let filtered_selections = selections
         .into_iter()
         .filter_map(|mut selection| {
-            filter_selection_to_sdf_products(
-                &mut selection,
-                &catalog_ids,
-                &source_product_ids,
-            );
+            filter_selection_to_sdf_products(&mut selection, &catalog_ids, &source_product_ids);
             if selection.selected_products.is_empty() && selection.residency_requests.is_empty() {
                 None
             } else {
@@ -198,11 +190,7 @@ mod tests {
             .into_iter()
             .collect::<BTreeSet<_>>();
 
-        filter_selection_to_sdf_products(
-            &mut selection,
-            &world_product_ids,
-            &source_product_ids,
-        );
+        filter_selection_to_sdf_products(&mut selection, &world_product_ids, &source_product_ids);
 
         let selected_product_ids = selection
             .selected_products
