@@ -317,6 +317,7 @@ fn duplicate_current_retries_failed_replay_restoration_before_ack() {
     let mut client = App::headless();
     client.add_plugins(default_plugins());
     client.add_plugins((ScenePlugin, NetworkClientPlugin));
+    install_backpressure_test_clock(&mut client);
 
     let baseline_payload = TestReplicationDriver::encode_snapshot(&TestSnapshot::default())
         .expect("baseline snapshot should encode");
@@ -331,9 +332,10 @@ fn duplicate_current_retries_failed_replay_restoration_before_ack() {
         }),
     )
     .expect("baseline should stage");
-    let mut client = client
-        .run_for_frames(1)
-        .expect("baseline should activate prediction");
+    let mut client = run_backpressure_protocol_frame(
+        client,
+        "baseline should activate prediction without fixed advancement",
+    );
     clear_client_outbound(client.world_mut());
 
     client
@@ -341,9 +343,7 @@ fn duplicate_current_retries_failed_replay_restoration_before_ack() {
         .resource_mut::<PlayerCommandBuffer>()
         .unwrap()
         .push(ClientCommandEnvelope::Ability(AbilityCommand { slot: 19 }));
-    client = client
-        .run_for_fixed_steps(1)
-        .expect("local predicted input should apply");
+    client = run_backpressure_fixed_step(client, "local predicted input should apply");
     assert_eq!(client_prediction_pending_count(client.world()), Some(1));
     clear_client_outbound(client.world_mut());
 
@@ -361,9 +361,10 @@ fn duplicate_current_retries_failed_replay_restoration_before_ack() {
     });
     enqueue_client_inbox(client.world_mut(), correction.clone())
         .expect("correction should stage");
-    client = client
-        .run_for_frames(1)
-        .expect("replay/restoration failure should remain contained by receive processing");
+    client = run_backpressure_protocol_frame(
+        client,
+        "replay/restoration failure should remain contained without fixed advancement",
+    );
 
     assert_eq!(outbound_ack(client.world()), None);
     assert_eq!(
@@ -387,9 +388,10 @@ fn duplicate_current_retries_failed_replay_restoration_before_ack() {
     clear_client_outbound(client.world_mut());
     enqueue_client_inbox(client.world_mut(), correction)
         .expect("duplicate-current correction should stage");
-    let client = client
-        .run_for_frames(1)
-        .expect("duplicate current should retry authoritative restoration");
+    let client = run_backpressure_protocol_frame(
+        client,
+        "duplicate current should retry authoritative restoration without fixed advancement",
+    );
 
     assert_eq!(
         outbound_ack(client.world()).map(|ack| ack.cursor),
