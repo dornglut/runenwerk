@@ -2863,6 +2863,72 @@ mod tests {
         }
     }
 
+    fn camera_temporal_signature(
+        source_generation: u64,
+        observation: RenderPerspectiveObservation,
+        evaluation_extent: (u32, u32),
+    ) -> DeterministicTemporalSignature {
+        let mut signature = temporal_signature(source_generation);
+        signature.observation = temporal_observation_compatibility(
+            RenderObservationSpec::Perspective(observation),
+            true,
+        );
+        signature.evaluation_extent = evaluation_extent;
+        signature.camera_reprojection_revision = Some(CAMERA_REPROJECTION_REVISION);
+        signature.depth_policy_revision = Some(CAMERA_DEPTH_POLICY_REVISION);
+        signature
+    }
+
+    fn temporal_test_observation_with(
+        vertical_fov: f64,
+        aspect_ratio: f64,
+        shutter: super::super::space_time::RenderTimeInterval,
+        sampling_support: super::super::request::RenderSamplingSupport,
+    ) -> RenderPerspectiveObservation {
+        RenderPerspectiveObservation::new(
+            RenderAffineTransform3::identity(),
+            vertical_fov,
+            aspect_ratio,
+            shutter,
+            sampling_support,
+        )
+        .expect("valid varied temporal test observation")
+    }
+
+    fn assert_camera_signature_recreates(
+        changed_signature: DeterministicTemporalSignature,
+        changed_observation: RenderPerspectiveObservation,
+    ) {
+        let baseline_observation = temporal_test_observation(RenderAffineTransform3::identity());
+        let baseline_signature =
+            camera_temporal_signature(7, baseline_observation, (4, 4));
+        let mut cache = DeterministicResourceCache::default();
+        let baseline = cache
+            .temporal_history(
+                41,
+                0,
+                baseline_signature,
+                (4, 4),
+                4,
+                baseline_observation,
+                true,
+            )
+            .expect("baseline camera history");
+        let changed = cache
+            .temporal_history(
+                41,
+                0,
+                changed_signature,
+                (4, 4),
+                4,
+                changed_observation,
+                true,
+            )
+            .expect("changed camera history");
+        assert!(changed.reset);
+        assert_ne!(changed.generation, baseline.generation);
+    }
+
     #[test]
     fn temporal_history_reuses_compatible_generation_and_resets_on_source_generation_change() {
         let mut cache = DeterministicResourceCache::default();
