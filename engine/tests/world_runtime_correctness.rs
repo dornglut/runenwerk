@@ -11,7 +11,8 @@ use engine::plugins::world::plugin::{
 };
 use engine::plugins::world::{
     build::integration::{
-        WorldCompletedBuildOutput, WorldCompletedBuildQueueResource, WorldSdfRuntimePayloadPackage,
+        WorldCompletedBuildOutput, WorldCompletedBuildQueueResource,
+        WorldRuntimeSdfProductCatalogResource, WorldSdfRuntimePayloadPackage,
         enqueue_ratified_world_sdf_payload_package,
     },
     build::jobs::WorldBuildStaleness,
@@ -23,7 +24,10 @@ use world_ops::{
     BrushShape, BuildGeneration, ChunkGeneration, ChunkRevision, DirtyReason, Operation,
     WorldQuantizationScale, quantize_aabb, quantize_position,
 };
-use world_sdf::{RegionSdfSummary, SdfChunkPayload};
+use world_sdf::{
+    FieldProductConsumerClass, FieldProductDescriptor, FieldProductId, FieldProductKind,
+    FieldProductLineage, FieldProductScope, RegionSdfSummary, SdfChunkPayload, WorldSdfPayloadRef,
+};
 
 fn world_app() -> App {
     let mut app = App::headless();
@@ -56,6 +60,18 @@ fn sdf_chunk_payload(
         hierarchy_revision: 0,
         checksum,
     }
+}
+
+fn runtime_sdf_descriptor(product_id: u64, payload: &SdfChunkPayload) -> FieldProductDescriptor {
+    let mut descriptor = FieldProductDescriptor::new(
+        FieldProductId(product_id),
+        FieldProductKind::WorldSdfChunkPages,
+        FieldProductScope::from_chunks([payload.chunk_id]),
+        FieldProductLineage::new(1, "tests.world_runtime"),
+    );
+    descriptor.consumer_class = FieldProductConsumerClass::RuntimeRead;
+    descriptor.payload_refs.push(WorldSdfPayloadRef::from(payload));
+    descriptor
 }
 
 #[test]
@@ -113,6 +129,17 @@ fn ratified_world_sdf_payload_package_flows_through_runtime_intake() {
             .world_mut()
             .remove_resource::<WorldCompletedBuildQueueResource>()
             .expect("completed build queue should exist");
+        let mut products = app
+            .world_mut()
+            .remove_resource::<WorldRuntimeSdfProductCatalogResource>()
+            .expect("runtime SDF product catalog should exist");
+        let payload = sdf_chunk_payload(
+            chunk_id,
+            ChunkRevision(11),
+            ChunkGeneration(12),
+            99,
+        );
+        let descriptor = runtime_sdf_descriptor(7001, &payload);
         let enqueued = {
             let chunks = app
                 .world_mut()
@@ -121,19 +148,18 @@ fn ratified_world_sdf_payload_package_flows_through_runtime_intake() {
             enqueue_ratified_world_sdf_payload_package(
                 &mut completed,
                 chunks,
+                &mut products,
                 WorldSdfRuntimePayloadPackage::new(
-                    vec![sdf_chunk_payload(
-                        chunk_id,
-                        ChunkRevision(11),
-                        ChunkGeneration(12),
-                        99,
-                    )],
+                    descriptor,
+                    vec![payload],
                     RegionSdfSummary::default(),
                 ),
             )
+            .expect("valid runtime SDF product should enqueue")
         };
         assert_eq!(enqueued, 1);
         app.world_mut().insert_resource(completed);
+        app.world_mut().insert_resource(products);
     }
 
     let app = app
@@ -150,6 +176,50 @@ fn ratified_world_sdf_payload_package_flows_through_runtime_intake() {
 
     assert_eq!(payload.checksum, 99);
     assert_eq!(payload.chunk_revision, ChunkRevision(11));
+}
+
+
+#[test]
+fn malformed_runtime_sdf_product_is_rejected_before_intake_mutation() {
+    let mut app = fixed_world_app();
+    let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 4, y: 0, z: 0 });
+    let payload = sdf_chunk_payload(chunk_id, ChunkRevision(2), ChunkGeneration(3), 44);
+    let descriptor = runtime_sdf_descriptor(0, &payload);
+
+    let mut completed = app
+        .world_mut()
+        .remove_resource::<WorldCompletedBuildQueueResource>()
+        .expect("completed build queue should exist");
+    let mut products = app
+        .world_mut()
+        .remove_resource::<WorldRuntimeSdfProductCatalogResource>()
+        .expect("runtime SDF product catalog should exist");
+    let error = {
+        let chunks = app
+            .world_mut()
+            .resource_mut::<WorldChunkRuntimeMapResource>()
+            .expect("chunk runtime should exist");
+        enqueue_ratified_world_sdf_payload_package(
+            &mut completed,
+            chunks,
+            &mut products,
+            WorldSdfRuntimePayloadPackage::new(
+                descriptor,
+                vec![payload],
+                RegionSdfSummary::default(),
+            ),
+        )
+        .expect_err("zero product identity must be rejected")
+    };
+
+    assert!(completed.outputs.is_empty());
+    assert!(products.products().is_empty());
+    let chunks = app
+        .world()
+        .resource::<WorldChunkRuntimeMapResource>()
+        .expect("chunk runtime should exist");
+    assert!(!chunks.by_chunk_id.contains_key(&chunk_id));
+    assert!(error.to_string().contains("ratification"));
 }
 
 #[test]
