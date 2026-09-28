@@ -131,6 +131,7 @@ pub fn run_native_measurement(
         primary_window_size_px,
         radiance_target_size_px,
         quality_capture_output_dir: None,
+        temporal_quality_scenario: RenderLabTemporalQualityScenario::StaticFootprint,
         completed: false,
     }))
 }
