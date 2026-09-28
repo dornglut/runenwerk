@@ -78,11 +78,12 @@ struct RenderLabTemporalQualityGpuEvidence {
     evidence_profile_fingerprint: String,
 }
 
-#[derive(Debug, Clone, Copy, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 struct RenderLabTemporalReconstructionEvidence {
     frame_index: u64,
     requested_size_px: [u32; 2],
     evaluation_size_px: [u32; 2],
+    semantic_input_generations: Vec<u64>,
     sequence_revision: u32,
     reconstruction_revision: u32,
     phase: u32,
@@ -108,9 +109,9 @@ struct RenderLabTemporalQualityArtifact {
     capture: RenderLabTemporalQualityCaptureEvidence,
 }
 
-const RL2_QUALITY_SCHEMA_VERSION: u32 = 3;
+const RL2_QUALITY_SCHEMA_VERSION: u32 = 4;
 const RL2_QUALITY_SCENARIO_ID: &str = "runenwerk.render_lab.rl2.temporal_quality";
-const RL2_QUALITY_SCENARIO_REVISION: u32 = 3;
+const RL2_QUALITY_SCENARIO_REVISION: u32 = 4;
 pub(super) const RL2_QUALITY_FLOW_ID: &str = "runenwerk.render_lab.rl2.fixed_quality";
 pub(super) const RL2_QUALITY_PASS_ID: &str = "runenwerk.render_lab.rl2.fixed_quality.compose";
 pub(super) const RL2_QUALITY_COLOR_ALIAS: &str = "runenwerk.render_lab.rl2.fixed_quality.color";
@@ -410,6 +411,11 @@ pub(super) fn write_temporal_quality_artifact(
                         evidence.evaluation_extent.0,
                         evidence.evaluation_extent.1,
                     ],
+                    semantic_input_generations: evidence
+                        .semantic_input_generations
+                        .iter()
+                        .map(|(_, generation)| generation.raw())
+                        .collect(),
                     sequence_revision: evidence.sequence_revision,
                     reconstruction_revision: evidence.reconstruction_revision,
                     phase: evidence.phase,
@@ -549,6 +555,7 @@ pub(super) fn inspect_render_lab_temporal_quality_execution_system(
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn stage_render_lab_fixed_quality_publication(
     targets: &mut RenderDynamicTextureTargetRequestRegistryResource,
     frame_requests: &mut PreparedRenderFrameRequestResource,
@@ -1018,6 +1025,7 @@ mod tests {
             availability: fixture.availability,
             output_index: 0,
             target_key: radiance_key,
+            finite_evaluation_extent: None,
         };
         let fixed_target_key = fixed.target_key.clone();
         let fixed_view_id = fixed.internal_view.view_id.clone();
