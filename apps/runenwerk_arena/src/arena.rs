@@ -1,9 +1,14 @@
-use engine::plugins::world::adapters::{PartitionConfigResource, SdfChunkStoreResource};
+use engine::plugins::world::adapters::PartitionConfigResource;
+use engine::plugins::world::build::{
+    WorldCompletedBuildQueueResource, WorldSdfRuntimePayloadPackage,
+    enqueue_ratified_world_sdf_payload_package,
+};
+use engine::plugins::world::chunks::lifecycle::WorldChunkRuntimeMapResource;
 use engine::prelude::{App, Plugin, ResMut, Startup};
 use runen_spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, WorldId};
 use world_sdf::{
-    SdfBrickMetadata, SdfBrickRecord, SdfBrickSamples, SdfChunkPayload, SdfPageCoord3,
-    SdfPageRecord,
+    RegionSdfSummary, SdfBrickMetadata, SdfBrickRecord, SdfBrickSamples, SdfChunkPayload,
+    SdfPageCoord3, SdfPageRecord,
 };
 
 pub const ARENA_WORLD_ID: WorldId = WorldId::new(0);
@@ -23,14 +28,25 @@ impl Plugin for ArenaWorldPlugin {
 
 fn install_arena_world(
     mut partition: ResMut<PartitionConfigResource>,
-    mut store: ResMut<SdfChunkStoreResource>,
+    mut completed: ResMut<WorldCompletedBuildQueueResource>,
+    mut chunks: ResMut<WorldChunkRuntimeMapResource>,
 ) {
     *partition = PartitionConfigResource(arena_partition_config());
-    store.chunks.clear();
-    store.region_summaries.clear();
 
-    let payload = build_arena_chunk_payload();
-    store.chunks.insert(payload.chunk_id, payload);
+    let enqueued = enqueue_ratified_world_sdf_payload_package(
+        &mut completed,
+        &mut chunks,
+        WorldSdfRuntimePayloadPackage::new(
+            vec![build_arena_chunk_payload()],
+            RegionSdfSummary {
+                min_distance: -1,
+                max_distance: 1,
+                occupied_chunk_count: 1,
+                surface_chunk_count: 1,
+            },
+        ),
+    );
+    debug_assert_eq!(enqueued, 1);
 }
 
 pub fn arena_partition_config() -> GridPartitionConfig {
