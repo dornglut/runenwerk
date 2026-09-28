@@ -2701,8 +2701,8 @@ fn gpu_authoring(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::space_time::RenderAffineTransform3;
+    use super::*;
 
     fn assert_dispatch(sample_count: u32, maximum: u32, expected: [u32; 3]) {
         assert_eq!(
