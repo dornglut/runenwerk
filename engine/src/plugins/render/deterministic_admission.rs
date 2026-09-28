@@ -79,7 +79,7 @@ impl fmt::Display for RenderDeterministicCompatibilityError {
             ),
             Self::ObservationSamplingSupportUnsupported { observation_index } => write!(
                 formatter,
-                "observation {observation_index} requires ideal-ray sampling support"
+                "observation {observation_index} requires ideal-ray or perspective lattice-cell sampling support"
             ),
             Self::SelectedRepresentationSurfaceInputUnsupported {
                 output_index,
@@ -310,7 +310,7 @@ fn validate_observation(
         RenderObservationSpec::Perspective(observation) => observation.sampling_support(),
         RenderObservationSpec::Probe(observation) => observation.sampling_support(),
     };
-    if !sampling_support.is_ideal_ray() {
+    if !sampling_support.is_ideal_ray() && !sampling_support.is_perspective_lattice_cell() {
         return Err(
             RenderDeterministicCompatibilityError::ObservationSamplingSupportUnsupported {
                 observation_index,
