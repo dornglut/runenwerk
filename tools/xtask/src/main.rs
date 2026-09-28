@@ -260,7 +260,7 @@ fn audit_repository(root: &Path) -> Result<(), String> {
     require_text(
         root,
         ".github/workflows/ci.yml",
-        "uses: dornglut/github-workflows/.github/workflows/reusable-rust-cargo-validate.yml@572f0681429c43c5bf586f3d89a908e853cb3ab9",
+        "uses: dornglut/github-workflows/.github/workflows/reusable-rust-cargo-validate.yml@72103b957ed506b843c2db2f87d663af7413c646",
         "CI must invoke the accepted shared orchestration through an immutable revision",
     )?;
     require_text(
@@ -269,19 +269,55 @@ fn audit_repository(root: &Path) -> Result<(), String> {
         "  pull_request:\n    branches:\n      - main",
         "CI should run for pull requests targeting main",
     )?;
+    require_text(
+        root,
+        ".github/workflows/ci.yml",
+        "  merge_group:\n    types:\n      - checks_requested\n    branches:\n      - main",
+        "CI must validate merge-queue integration revisions targeting main",
+    )?;
+    require_text(
+        root,
+        ".github/workflows/ci.yml",
+        "merge_group) expected_revision=\"$EVENT_SHA\" ;;",
+        "RunenRender evidence must select the merge-group integration revision",
+    )?;
     require_text_count(
         root,
         ".github/workflows/docs-validation.yml",
         "      - 'docs-site/**'",
-        2,
-        "the documentation build must be path-scoped for pull requests and main pushes",
+        1,
+        "documentation main pushes must remain path-scoped while pull requests and merge groups always validate",
     )?;
     require_text_count(
         root,
         ".github/workflows/docs-validation.yml",
         "      - '.github/workflows/docs-validation.yml'",
-        2,
-        "the documentation workflow must validate changes to itself",
+        1,
+        "documentation main pushes must validate changes to the validation workflow itself",
+    )?;
+    require_text(
+        root,
+        ".github/workflows/docs-validation.yml",
+        "  pull_request:\n    branches:\n      - main\n  merge_group:",
+        "documentation validation must run for every pull request targeting main",
+    )?;
+    require_text(
+        root,
+        ".github/workflows/docs-validation.yml",
+        "  merge_group:\n    types:\n      - checks_requested\n    branches:\n      - main",
+        "documentation validation must run for merge-queue integration revisions targeting main",
+    )?;
+    require_text(
+        root,
+        ".github/workflows/docs-validation.yml",
+        "name: Documentation site validation",
+        "documentation validation must expose a unique required-check context",
+    )?;
+    require_text(
+        root,
+        ".github/workflows/docs-validation.yml",
+        "merge_group) expected_revision=\"$EVENT_SHA\" ;;",
+        "documentation validation must select the merge-group integration revision",
     )?;
     require_text(
         root,
@@ -304,8 +340,8 @@ fn audit_repository(root: &Path) -> Result<(), String> {
     require_text(
         root,
         "TESTING.md",
-        "Root-only documentation changes outside that path scope do not automatically trigger Documentation Build",
-        "the local validation map must state the maintained documentation-build trigger scope",
+        "Pull requests targeting `main` and merge-group integration revisions always run `Documentation site validation`",
+        "the local validation map must state queue-safe documentation-build evidence",
     )?;
     require_text(
         root,

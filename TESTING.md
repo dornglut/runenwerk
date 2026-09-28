@@ -31,15 +31,17 @@ git diff --check
 
 `cargo validate` is read-only and lockfile-safe. It validates the repository tooling, formats the workspace, runs locked workspace tests, runs strict Clippy, validates documentation, and checks durable repository invariants.
 
-Rust CI resolves, explicitly checks out, and validates the reviewed feature head for pull requests; push and dispatch use `github.sha`. That exact-head result is the merge authority for the baseline.
+Rust CI resolves and validates the reviewed feature head for pull requests, the exact `github.sha` integration revision for `merge_group`, and `github.sha` for push and dispatch. Each selected revision is explicitly checked out and proved before validation.
+
+Pull-request feature-head evidence and merge-group integration evidence are distinct. When the repository merge queue is enabled, required merge-group checks validate the queue's exact latest-base integration state before GitHub may squash it; neither result is the eventual squash-merge revision.
 
 ## Documentation build
 
-Pull requests and pushes that change `docs-site/**` or `.github/workflows/docs-validation.yml` also run the Astro/Starlight production build through the path-scoped documentation workflow. Root-only documentation changes outside that path scope do not automatically trigger Documentation Build. The workflow independently selects and proves the same event-derived repository revision; its workflow-definition ref may be a synthetic merge ref, distinct from the checked-out contents.
+Pull requests targeting `main` and merge-group integration revisions always run `Documentation site validation`, which builds the Astro/Starlight production site and validates its publication projection. Main pushes remain path-scoped to changes under `docs-site/**` or `.github/workflows/docs-validation.yml`; root-only documentation changes outside that path scope do not trigger the production build on push. The workflow independently selects and proves the pull-request feature head, merge-group `github.sha`, or push/dispatch `github.sha`; its workflow-definition ref may be a synthetic merge ref, distinct from the checked-out contents.
 
 ## Supplemental RunenRender GPU execution proof
 
-Current Runenwerk CI also runs the `RunenRender R6 Vulkan execution proof`. It resolves and proves the selected repository revision, restricts Vulkan loading to the installed Mesa software Vulkan implementation, and runs the complete R6 public-RunenGPU execution proof module.
+Current Runenwerk CI also runs `RunenRender Vulkan execution proofs` for pull-request feature heads, merge-group integration revisions, accepted-main pushes, and manual dispatch. It resolves and proves the selected repository revision, restricts Vulkan loading to the installed Mesa software Vulkan implementation, and runs the maintained native, R6, R7, founding-direct, and static-footprint temporal-quality evidence.
 
 This is Runenwerk-owned consumer and render-integration evidence. It does not make Runenwerk the owner of RunenGPU implementation or standalone framework conformance. RunenGPU implementation and conformance are owned by the external `dornglut/runen-gpu` repository and its repository-owned validation/conformance workflows.
 
@@ -49,6 +51,6 @@ Runenwerk validates its exact-revision RunenGPU dependency, public-API consumpti
 
 Report focused checks, `cargo validate`, exact-head CI, and anything not run. Do not convert source inspection or user-reported output into a stronger validation claim.
 
-The accepted base, reviewed feature head, synthetic merge result, squash commit, and accepted-main push result are separate evidence objects.
+The accepted base, reviewed feature head, merge-group integration revision, squash commit, and accepted-main push result are separate evidence objects.
 
 This file owns Runenwerk-local validation semantics. Organization-wide GitHub, review, and validation-evidence rules are owned by [`dornglut/engineering`](https://github.com/dornglut/engineering).
