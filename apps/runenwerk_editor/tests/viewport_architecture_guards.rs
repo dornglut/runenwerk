@@ -621,8 +621,13 @@ fn production_input_bridge_routes_viewport_interaction_by_tool_surface_session()
         "viewport input must dispatch interaction commands to a mounted-unit targeted surface session",
     );
     assert!(
-        input_bridge.contains("active_viewport_drag_mounted_unit"),
-        "viewport drag continuation must resolve captured mounted-unit session state",
+        !input_bridge.contains("active_viewport_drag_mounted_unit"),
+        "viewport drag continuation must not collapse independent target-local captures into one global active drag",
+    );
+    assert!(
+        input_bridge.contains("interaction_for_target")
+            && input_bridge.contains("presentation_target_id == target_id"),
+        "viewport drag continuation must keep capture and routing scoped to PresentationTargetId",
     );
     assert!(
         input_bridge.contains("viewport_scene_binding_for_widget"),
@@ -648,8 +653,8 @@ fn production_input_bridge_allows_viewport_scroll_only_after_ui_declines_ownersh
     );
     assert!(
         input_bridge.contains("ViewportRenderStateCommand::ZoomCamera")
-            && input_bridge.contains("!pointer_event_consumed_by_ui(&outcome)"),
-        "camera zoom should be enqueued only after UI scroll ownership declines the wheel event",
+            && input_bridge.contains("(PointerEventKind::Scroll, _) if !ui_consumed"),
+        "camera zoom should be enqueued only after UI scroll ownership declines the translated target-local wheel event",
     );
 }
 
@@ -692,16 +697,47 @@ fn production_picking_routes_only_through_viewport_scene_region() {
         !picking.contains("runtime_state.hovered_widget.and_then"),
         "picking must not resolve arbitrary hovered viewport-surface widgets as scene input",
     );
+    assert!(
+        picking.contains("last_projection_artifacts_for_target(target_id)")
+            && !picking.contains("clear_all_hits("),
+        "picking must use target-local shell artifacts and must never clear unrelated targets on a no-route result",
+    );
 }
 
 #[test]
-fn editor_frame_submission_runs_after_input_bridge() {
+fn viewport_scene_interaction_is_presentation_target_local() {
+    let resources = include_str!("../src/runtime/resources.rs");
+    let input_bridge = include_str!("../src/runtime/systems/input_bridge.rs");
+    let target_input = include_str!("../src/runtime/composition/input.rs");
+
+    assert!(
+        resources.contains("interaction_by_target: BTreeMap<PresentationTargetId")
+            && resources.contains("EditorTargetViewportInteractionState"),
+        "direct viewport interaction state must be keyed by PresentationTargetId",
+    );
+    assert!(
+        input_bridge.contains("dispatch_editor_viewport_input_for_target")
+            && input_bridge.contains("last_projection_artifacts_for_target(target_id)")
+            && input_bridge.contains("binding_containing_cursor_for_target(target_id"),
+        "primary scene interaction must use the shared target-explicit viewport path",
+    );
+    assert!(
+        target_input.contains("dispatch_editor_viewport_input_for_target")
+            && target_input.contains("clear_editor_viewport_interaction_for_target"),
+        "secondary target input and target-local cleanup must reuse the shared viewport interaction path",
+    );
+}
+
+#[test]
+fn editor_frame_submission_runs_after_all_target_input() {
     let plugin = include_str!("../src/runtime/plugin.rs");
 
     assert!(
-        plugin.contains("sync_viewport_instances_system")
-            && plugin.contains(".after(EditorRuntimeSet::InputBridge)"),
-        "viewport lifecycle must consume the same-frame split/input layout mutations before frame projection",
+        plugin.contains("apply_viewport_render_state_commands_system")
+            && plugin.contains(".after_if_present(EditorRuntimeSet::TargetInput)")
+            && plugin.contains("sync_viewport_instances_system")
+            && plugin.contains(".after(EditorRuntimeSet::ViewportRenderStateCommands)"),
+        "viewport lifecycle must consume camera commands from primary and secondary target input before frame projection",
     );
     assert!(
         plugin.contains("submit_editor_frame_system")
@@ -1180,16 +1216,17 @@ fn self_authoring_live_activation_uses_domain_workspace_formation_and_versioned_
         "workspace layout definitions should produce a non-theme live activation contract",
     );
     assert!(
-        resources.contains("form_workspace_state_from_definition_with_registry")
-            && resources.contains("install_composition_runtime"),
-        "app runtime should apply authored workspace layouts through editor_shell formation",
+        resources.contains("form_editor_profile_composition")
+            && resources.contains("install_composition_runtime")
+            && !resources.contains("form_workspace_state_from_definition"),
+        "app runtime should apply authored workspace layouts through composition-native editor_shell formation",
     );
     assert!(
-        shell_workspace.contains("WorkspaceDefinitionFormationError")
+        shell_workspace.contains("resolve_authored_tool_surface_reference")
             && shell_workspace.contains("tool_surface_kind_from_definition_key")
             && shell_surface_contract.contains("panel_kind_definition_key")
             && shell_surface_contract.contains("tool_surface_kind_definition_key"),
-        "workspace definition formation and authored panel/tool-surface key mapping must live in editor_shell",
+        "authored panel/tool-surface reference resolution must live in editor_shell",
     );
     assert!(
         self_authoring.contains("EditorDefinitionExportPackage")
@@ -1554,9 +1591,9 @@ fn production_workspace_layout_readers_are_registry_aware() {
         "production shell workspace load paths must use composition layout readers",
     );
     assert!(
-        persistence.contains("read_workspace_layout_legacy_no_registry")
-            && persistence.contains("Legacy/test compatibility reader"),
-        "no-registry readers must be explicitly named and documented as legacy/test compatibility",
+        !persistence.contains("read_workspace_layout_legacy_no_registry")
+            && !persistence.contains("read_workspace_layout_with_metadata_legacy_no_registry"),
+        "removed no-registry predecessor readers must not return to composition persistence",
     );
 }
 

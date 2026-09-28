@@ -6,9 +6,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, bail};
 use engine::automation::{
-    AppAutomationInputReplayExt, AutomationInputReplayOutcome, AutomationInputReplaySourceMap,
-    AutomationInputReplayStateAssumption, AutomationInputTraceRecordingWitness,
-    AutomationOwnerAdapter, InputSourceId, MAX_ARTIFACT_BYTES, import_automation_input_trace_v1,
+    AutomationExecutionMode, AutomationPersistedReplayError, AutomationSession,
+    AutomationSessionId, AutomationStepResult, InputSourceId, MAX_ARTIFACT_BYTES,
 };
 use runenwerk_render_lab::automation::{
     RenderLabAutomationAdapter, RenderLabAutomationQuery, RenderLabAutomationTarget,
@@ -230,90 +229,46 @@ fn read_bounded_trace(reader: impl Read) -> anyhow::Result<Vec<u8>> {
 }
 
 fn replay_trace_bytes(bytes: &[u8]) -> anyhow::Result<ReplayTraceSummary> {
-    let imported = import_automation_input_trace_v1(bytes)
-        .context("import persisted normalized replay trace V1")?;
-    if imported.recording_witness()
-        != AutomationInputTraceRecordingWitness::RecordedSourcesPristineAtCaptureStart
-    {
-        bail!("persisted automation trace has an unsupported recording-state witness");
-    }
-
-    let recorded_sources = recorded_sources(imported.trace());
-    let source_map = fresh_replay_source_map(&recorded_sources)?;
-
     let mut app = build_headless_automation_app();
-    let report = app.replay_automation_input_trace(
-        imported.trace(),
-        &source_map,
-        AutomationInputReplayStateAssumption::RecordedAndReplaySourcesPristine,
-    );
-    if report.outcome() != AutomationInputReplayOutcome::Completed {
-        bail!(
-            "normalized replay failed: outcome={:?}, completed_frames={}, failing_frame={:?}, failing_group={:?}, detail={}",
-            report.outcome(),
-            report.completed_frames(),
-            report.failing_frame_ordinal(),
-            report.failing_group_index(),
-            report.detail().unwrap_or("none"),
-        );
-    }
+    let mut session =
+        AutomationSession::new(AutomationSessionId::new(900), InputSourceId::new(40_100));
+
+    let report = match session.replay_persisted_normalized_trace(
+        AutomationExecutionMode::NormalizedInput,
+        &mut app,
+        bytes,
+        engine::automation::AutomationInputReplayStateAssumption::RecordedAndReplaySourcesPristine,
+    ) {
+        Ok(report) => report,
+        Err(AutomationPersistedReplayError::Import(error)) => {
+            return Err(anyhow::Error::new(error));
+        }
+        Err(error) => return Err(anyhow::Error::new(error)),
+    };
 
     let camera_result = {
         let mut adapter = RenderLabAutomationAdapter::new(&mut app);
-        adapter
-            .query(&RenderLabAutomationTarget, RenderLabAutomationQuery::Camera)
-            .map_err(anyhow::Error::msg)
-            .context("query Render Lab camera after replay")
+        session.query_owner(
+            &mut adapter,
+            &RenderLabAutomationTarget,
+            RenderLabAutomationQuery::Camera,
+        )
     };
-    let teardown_result = app
-        .teardown_automation_input_replay()
-        .context("tear down replay-owned normalized input state");
+    let finish_result = session.finish(&mut app);
 
-    let camera = camera_result?;
-    teardown_result?;
+    let camera = match camera_result {
+        AutomationStepResult::EffectConfirmed(camera) => camera,
+        other => bail!("query Render Lab camera after replay failed: {other:?}"),
+    };
+    match finish_result {
+        AutomationStepResult::EffectConfirmed(()) => {}
+        other => bail!("finish Render Lab automation replay failed: {other:?}"),
+    }
 
     Ok(ReplayTraceSummary {
         completed_frames: report.completed_frames(),
         camera,
     })
-}
-
-fn recorded_sources(trace: &engine::automation::AutomationInputTrace) -> Vec<InputSourceId> {
-    let mut sources = Vec::new();
-    for frame in trace.frames() {
-        for group in frame.groups() {
-            if !sources.contains(&group.context.source) {
-                sources.push(group.context.source);
-            }
-        }
-    }
-    sources
-}
-
-fn fresh_replay_source_map(
-    recorded_sources: &[InputSourceId],
-) -> anyhow::Result<AutomationInputReplaySourceMap> {
-    let mut entries = Vec::with_capacity(recorded_sources.len());
-    let mut next_raw = u64::MAX;
-
-    for recorded in recorded_sources {
-        let replay_source = loop {
-            let candidate = InputSourceId::new(next_raw);
-            next_raw = next_raw
-                .checked_sub(1)
-                .ok_or_else(|| anyhow::anyhow!("exhausted replay-owned input source identity"))?;
-            if !recorded_sources.contains(&candidate)
-                && !entries
-                    .iter()
-                    .any(|(_, replay): &(InputSourceId, InputSourceId)| *replay == candidate)
-            {
-                break candidate;
-            }
-        };
-        entries.push((*recorded, replay_source));
-    }
-
-    Ok(AutomationInputReplaySourceMap::new(entries))
 }
 
 fn parse_frame_limit(value: Option<OsString>) -> anyhow::Result<usize> {

@@ -1,7 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-#[cfg(test)]
-use editor_shell::ToolSurfaceStableKey;
 use editor_shell::{EditorCompositionRuntime, ToolSurfaceInstanceId, ViewportToolKind};
 use editor_viewport::ViewportId;
 use ui_composition::MountedUnitId;
@@ -223,23 +221,6 @@ impl SurfaceSessionStore {
     }
 
     #[cfg(test)]
-    pub fn prune_for_workspace(&mut self, workspace: &editor_shell::WorkspaceState) {
-        let live = workspace
-            .tool_surfaces()
-            .filter(|surface| retains_live_session_key(surface.stable_surface_key()))
-            .filter(|surface| {
-                matches!(
-                    surface.mount,
-                    editor_shell::ToolSurfaceMount::Mounted { .. }
-                )
-            })
-            .filter_map(|surface| MountedUnitId::try_from_raw(surface.id.raw()).ok())
-            .collect::<BTreeSet<_>>();
-        self.sessions_by_mounted_unit
-            .retain(|mounted_unit_id, _| live.contains(mounted_unit_id));
-    }
-
-    #[cfg(test)]
     pub fn active_viewport_drag_surface(&self) -> Option<ToolSurfaceInstanceId> {
         self.active_viewport_drag_mounted_unit()
             .and_then(|id| ToolSurfaceInstanceId::try_from_raw(id.raw()).ok())
@@ -304,11 +285,6 @@ impl SurfaceSessionStore {
     }
 }
 
-#[cfg(test)]
-fn retains_live_session_key(key: &ToolSurfaceStableKey) -> bool {
-    retains_live_session_key_str(key.as_str())
-}
-
 fn retains_live_session_key_str(key: &str) -> bool {
     matches!(
         key,
@@ -328,54 +304,89 @@ fn retains_live_session_key_str(key: &str) -> bool {
 mod tests {
     use super::*;
     use editor_shell::{
-        WorkspaceId, WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceState,
+        MATERIAL_WORKSPACE_PROFILE_ID, SCENE_WORKSPACE_PROFILE_ID,
+        form_editor_profile_layout_source,
     };
 
+    fn scene_to_material_compositions() -> (EditorCompositionRuntime, EditorCompositionRuntime) {
+        let app = crate::editor_app::RunenwerkEditorApp::new();
+        let host = app.workbench_host();
+        let mut shell_state =
+            crate::shell::RunenwerkEditorShellState::new_with_workspace_profile_registry_and_tool_surface_registry(
+                host.workspace_profile_registry(),
+                host.tool_surface_registry(),
+            )
+            .expect("scene profile should form as the live composition");
+        let scene = shell_state.composition_runtime().clone();
+        let material = host
+            .workspace_profile_registry()
+            .profile(MATERIAL_WORKSPACE_PROFILE_ID)
+            .expect("material profile should be installed");
+        shell_state
+            .activate_workspace_profile_ref_with_registry(
+                &material.profile_ref,
+                host.workspace_profile_registry(),
+                host.tool_surface_registry(),
+            )
+            .expect("material profile should activate through the live profile path");
+        (scene, shell_state.composition_runtime().clone())
+    }
+
+    fn composition(profile_id: editor_shell::WorkspaceProfileId) -> EditorCompositionRuntime {
+        let app = crate::editor_app::RunenwerkEditorApp::new();
+        let host = app.workbench_host();
+        let profile = host
+            .workspace_profile_registry()
+            .profile(profile_id)
+            .expect("test profile should be installed");
+        form_editor_profile_layout_source(
+            profile.id,
+            &profile.layout_source,
+            host.tool_surface_registry(),
+        )
+        .expect("test profile should form as composition")
+    }
+
+    fn mounted_surface(
+        runtime: &EditorCompositionRuntime,
+        stable_key: &str,
+    ) -> (MountedUnitId, ToolSurfaceInstanceId) {
+        let unit = runtime
+            .extension()
+            .mounted_units()
+            .iter()
+            .find(|unit| unit.stable_content_key == stable_key)
+            .expect("test composition should contain requested surface");
+        (
+            unit.mounted_unit_id,
+            ToolSurfaceInstanceId::try_from_raw(unit.compatibility_surface_raw)
+                .expect("compatibility surface identity should be valid"),
+        )
+    }
+
     #[test]
-    fn prune_for_workspace_removes_unmounted_surface_sessions() {
-        let mut allocator = WorkspaceIdentityAllocator::new();
-        let workspace_id = WorkspaceId::try_from_raw(1).unwrap();
-        let workspace = WorkspaceState::bootstrap_current_layout(workspace_id, &mut allocator);
-        let surface_id = workspace
-            .tool_surfaces()
-            .find(|surface| surface.stable_surface_key().as_str() == SCENE_ENTITY_TABLE_SURFACE_KEY)
-            .expect("entity table surface should exist")
-            .id;
+    fn prune_for_composition_removes_surface_missing_from_candidate() {
+        let (scene, material) = scene_to_material_compositions();
+        let (_, surface_id) = mounted_surface(&scene, SCENE_ENTITY_TABLE_SURFACE_KEY);
         let mut store = SurfaceSessionStore::default();
         store
             .session_mut(surface_id)
             .entity_table_ui_state
             .append_search_text("abc");
 
-        let panel_id = workspace
-            .panels()
-            .find(|panel| panel.active_tool_surface == Some(surface_id))
-            .expect("surface should be mounted")
-            .id;
-        let workspace = editor_shell::reduce_workspace(
-            &workspace,
-            WorkspaceMutation::DetachToolSurfaceFromPanel { panel_id },
-        )
-        .expect("surface should unmount");
-        store.prune_for_workspace(&workspace);
+        store.prune_for_composition(&material);
 
         assert!(store.session(surface_id).is_none());
     }
 
     #[test]
-    fn prune_for_workspace_retains_mounted_console_surface_session() {
-        let mut allocator = WorkspaceIdentityAllocator::new();
-        let workspace_id = WorkspaceId::try_from_raw(1).unwrap();
-        let workspace = WorkspaceState::bootstrap_current_layout(workspace_id, &mut allocator);
-        let surface_id = workspace
-            .tool_surfaces()
-            .find(|surface| surface.stable_surface_key().as_str() == EDITOR_CONSOLE_SURFACE_KEY)
-            .expect("editor console surface should exist")
-            .id;
+    fn prune_for_composition_retains_mounted_console_surface_session() {
+        let scene = composition(SCENE_WORKSPACE_PROFILE_ID);
+        let (_, surface_id) = mounted_surface(&scene, EDITOR_CONSOLE_SURFACE_KEY);
         let mut store = SurfaceSessionStore::default();
         store.session_mut(surface_id).console_follow_enabled = false;
 
-        store.prune_for_workspace(&workspace);
+        store.prune_for_composition(&scene);
 
         assert!(
             !store
@@ -400,15 +411,8 @@ mod tests {
 
     #[test]
     fn viewport_tool_defaults_to_select_and_prunes_with_mounted_unit() {
-        let mut allocator = WorkspaceIdentityAllocator::new();
-        let workspace_id = WorkspaceId::try_from_raw(1).unwrap();
-        let workspace = WorkspaceState::bootstrap_current_layout(workspace_id, &mut allocator);
-        let surface_id = workspace
-            .tool_surfaces()
-            .find(|surface| surface.stable_surface_key().as_str() == SCENE_VIEWPORT_SURFACE_KEY)
-            .expect("viewport surface should exist")
-            .id;
-        let mounted_unit_id = MountedUnitId::try_from_raw(surface_id.raw()).unwrap();
+        let (scene, material) = scene_to_material_compositions();
+        let (mounted_unit_id, surface_id) = mounted_surface(&scene, SCENE_VIEWPORT_SURFACE_KEY);
         let mut store = SurfaceSessionStore::default();
 
         assert_eq!(
@@ -421,17 +425,7 @@ mod tests {
             ViewportToolKind::Rotate
         );
 
-        let panel_id = workspace
-            .panels()
-            .find(|panel| panel.active_tool_surface == Some(surface_id))
-            .expect("viewport surface should be mounted")
-            .id;
-        let workspace = editor_shell::reduce_workspace(
-            &workspace,
-            WorkspaceMutation::DetachToolSurfaceFromPanel { panel_id },
-        )
-        .expect("viewport surface should unmount");
-        store.prune_for_workspace(&workspace);
+        store.prune_for_composition(&material);
 
         assert!(store.session(surface_id).is_none());
         assert_eq!(

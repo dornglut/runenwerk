@@ -128,7 +128,7 @@ impl Plugin for EditorAppPlugin {
             Update,
             apply_viewport_render_state_commands_system
                 .in_set(EditorRuntimeSet::ViewportRenderStateCommands)
-                .after_if_present(EditorRuntimeSet::InputBridge),
+                .after_if_present(EditorRuntimeSet::TargetInput),
         );
         app.add_systems(
             Update,

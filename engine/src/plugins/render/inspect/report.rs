@@ -4,6 +4,7 @@ use super::{
     RenderPixelSampleMode, RenderTextureDiffRequest, ResolvedRenderCapturePlan,
     validate_selector_terminal_invariant,
 };
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -70,11 +71,43 @@ pub struct RenderTextureDiffResult {
 #[derive(Debug, Clone, Default, runen_ecs::Component, runen_ecs::Resource)]
 pub struct RenderDebugFrameReportState {
     pub latest: Option<RenderDebugFrameReport>,
+    capture_results_by_frame: BTreeMap<u64, (Vec<RenderCaptureSelectorResult>, Option<PathBuf>)>,
 }
 
 impl RenderDebugFrameReportState {
     pub fn observe_frame(&mut self, report: RenderDebugFrameReport) {
+        if !report.capture_results.is_empty() {
+            self.capture_results_by_frame.insert(
+                report.frame_index,
+                (
+                    report.capture_results.clone(),
+                    report.artifact_manifest_path.clone(),
+                ),
+            );
+            while self.capture_results_by_frame.len() > super::DEFAULT_RENDER_FRAME_HISTORY_CAPACITY
+            {
+                let Some(oldest) = self.capture_results_by_frame.keys().next().copied() else {
+                    break;
+                };
+                self.capture_results_by_frame.remove(&oldest);
+            }
+        }
         self.latest = Some(report);
+    }
+
+    pub fn capture_results_for_frame(
+        &self,
+        frame_index: u64,
+    ) -> Option<&[RenderCaptureSelectorResult]> {
+        self.capture_results_by_frame
+            .get(&frame_index)
+            .map(|(results, _)| results.as_slice())
+    }
+
+    pub fn capture_artifact_manifest_for_frame(&self, frame_index: u64) -> Option<&PathBuf> {
+        self.capture_results_by_frame
+            .get(&frame_index)
+            .and_then(|(_, manifest)| manifest.as_ref())
     }
 }
 
@@ -130,7 +163,7 @@ mod tests {
     }
 
     #[test]
-    fn frame_report_state_keeps_latest_only_by_default() {
+    fn frame_report_state_keeps_capture_history_after_capture_free_latest_report() {
         let selector = RenderCaptureSelector {
             flow_id: Some("flow".to_string()),
             pass_id: Some("pass".to_string()),
@@ -138,16 +171,17 @@ mod tests {
             resource_id: "surface.color".to_string(),
             texture_class: CaptureTextureClass::ImportedTexture,
         };
+        let manifest = PathBuf::from("captures/frame-1.json");
         let mut state = RenderDebugFrameReportState::default();
 
         state.observe_frame(RenderDebugFrameReport {
             frame_index: 1,
-            capture_results: vec![selector_result(0, selector.clone())],
+            capture_results: vec![selector_result(0, selector)],
+            artifact_manifest_path: Some(manifest.clone()),
             ..RenderDebugFrameReport::default()
         });
         state.observe_frame(RenderDebugFrameReport {
             frame_index: 2,
-            capture_results: vec![selector_result(0, selector.clone())],
             ..RenderDebugFrameReport::default()
         });
 
@@ -156,6 +190,12 @@ mod tests {
             .as_ref()
             .expect("latest report should be present");
         assert_eq!(latest.frame_index, 2);
-        assert_eq!(latest.capture_results.len(), 1);
+        assert!(latest.capture_results.is_empty());
+        assert_eq!(state.capture_results_for_frame(1).map(<[_]>::len), Some(1));
+        assert_eq!(state.capture_results_for_frame(2), None);
+        assert_eq!(
+            state.capture_artifact_manifest_for_frame(1),
+            Some(&manifest)
+        );
     }
 }

@@ -19,7 +19,7 @@ concurrency:
 jobs:
   validate:
     name: Runenwerk validation
-    uses: dornglut/github-workflows/.github/workflows/reusable-rust-cargo-validate.yml@d74b34121339a15dc352b5b702501f8e7bdd20a2
+    uses: dornglut/github-workflows/.github/workflows/reusable-rust-cargo-validate.yml@572f0681429c43c5bf586f3d89a908e853cb3ab9
 
   runenrender-r6-vulkan-execution:
     name: RunenRender Vulkan execution proofs
@@ -143,5 +143,103 @@ jobs:
         with:
           name: runenwerk-render-lab-founding-direct
           path: render-lab/founding-direct
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Run Render Lab fixed-quality evidence matrix
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENWERK_SOURCE_REVISION: ${{ steps.revision.outputs.expected_revision }}
+        run: |
+          set -euo pipefail
+          root="render-lab/temporal-quality"
+          rm -rf "${root}"
+          mkdir -p "${root}"
+
+          run_quality() {
+            label="$1"
+            internal="$2"
+            output="${root}/${label}"
+            timeout 30s xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
+              cargo +stable run -p runenwerk_render_lab --locked -- \
+                --rl2-quality "${output}" \
+                --window-size-px 1920x1080 \
+                --internal-size-px "${internal}" \
+                --submitted-frames 2
+
+            test -s "${output}/quality-evidence.json"
+            test -s "${output}/captures/run_manifest.json"
+            jq -e \
+              --arg revision "${RUNENWERK_SOURCE_REVISION}" \
+              --arg internal "${internal}" \
+              '
+                .schema_version == 2
+                and .scenario_revision == 2
+                and .source_git_revision == $revision
+                and .requested_output_size_px == [1920,1080]
+                and .capture_submission_ordinal == 2
+                and .total_submitted_frames >= 2
+                and .capture.terminal == "completed"
+                and (.capture.artifact_blake3 | startswith("blake3:"))
+                and .gpu.backend == "vulkan"
+                and .gpu.software_status == "software"
+                and (.gpu.evidence_profile_fingerprint | startswith("blake3:"))
+                and (
+                  if $internal == "1920x1080" then
+                    .execution.policy == "native"
+                    and .execution.native_fallback_active == false
+                    and .execution.target_key == null
+                    and .execution.internal_view_id == null
+                    and .execution.resolve_invocation_id == null
+                    and .capture_route == "native_scene"
+                    and (.capture.flow_id | length) > 0
+                    and (.capture.pass_id | length) > 0
+                  else
+                    .execution.policy == "fixed"
+                    and .execution.native_fallback_active == false
+                    and .execution.target_key != null
+                    and .execution.internal_view_id != null
+                    and .execution.scene_invocation_id != null
+                    and .execution.resolve_invocation_id != null
+                    and .capture_route == "fixed_resolve"
+                    and (.capture.flow_id | length) > 0
+                    and (.capture.pass_id | length) > 0
+                  end
+                )
+              ' "${output}/quality-evidence.json"
+          }
+
+          run_quality P100 1920x1080
+          run_quality P075 1440x810
+          run_quality P067 1280x720
+          run_quality P050 960x540
+
+          reference_format=""
+          for label in P100 P075 P067 P050; do
+            manifest="$(jq -r '.frame_manifests[0]' "${root}/${label}/captures/run_manifest.json")"
+            test -n "${manifest}"
+            test -s "${manifest}"
+            capture_count="$(jq '.captures | length' "${manifest}")"
+            test "${capture_count}" -eq 1
+            format="$(jq -r '.captures[0].format' "${manifest}")"
+            width="$(jq -r '.captures[0].width' "${manifest}")"
+            height="$(jq -r '.captures[0].height' "${manifest}")"
+            terminal="$(jq -r '.captures[0].terminal_code' "${manifest}")"
+            test "${width}" -eq 1920
+            test "${height}" -eq 1080
+            test "${terminal}" = "completed"
+            if [[ -z "${reference_format}" ]]; then
+              reference_format="${format}"
+            else
+              test "${format}" = "${reference_format}"
+            fi
+          done
+
+      - name: Upload Render Lab fixed-quality evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        with:
+          name: runenwerk-render-lab-temporal-quality
+          path: render-lab/temporal-quality
           if-no-files-found: error
           retention-days: 7

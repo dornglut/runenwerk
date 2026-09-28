@@ -1,7 +1,7 @@
 use super::*;
 use engine::plugins::render::inspect::{
-    RenderDebugConfigResource, RenderDebugFrameReportState, RenderFrameHistoryState,
-    RenderFrameObservationPolicyResource,
+    RenderDebugConfigResource, RenderDebugControlResource, RenderDebugFrameReportState,
+    RenderFrameHistoryState, RenderFrameObservationPolicyResource,
 };
 use engine::prelude::FrameEnd;
 use std::path::{Path, PathBuf};
@@ -76,6 +76,8 @@ struct RenderLabFramePublicationResources<'w> {
     frame_requests: ResMut<'w, PreparedRenderFrameRequestResource>,
     contributions: ResMut<'w, RenderDeterministicFrameContributionResource>,
     debug_config: ResMut<'w, RenderDebugConfigResource>,
+    debug_control: ResMut<'w, RenderDebugControlResource>,
+    history: Res<'w, RenderFrameHistoryState>,
     fixed_quality_plans: Res<'w, RenderLabFixedQualityPlans>,
     quality_execution: ResMut<'w, RenderLabTemporalQualityExecutionState>,
 }
@@ -215,9 +217,9 @@ fn run_native_with_measurement(measurement: Option<RenderLabMeasurementConfig>) 
     }
     if quality_mode.is_some() {
         app.update_render_debug_control(|control| {
-            control.capture_enabled = true;
-            control.readback_enabled = true;
-            control.artifact_export_enabled = true;
+            control.capture_enabled = false;
+            control.readback_enabled = false;
+            control.artifact_export_enabled = false;
             control.artifact_output_dir = quality_capture_output_dir
                 .clone()
                 .expect("quality mode requires capture output directory");
@@ -356,12 +358,37 @@ fn bounded_measurement_complete(
             .is_some_and(|limit| history.len() >= limit)
 }
 
+fn temporal_quality_capture_should_arm(
+    measurement: &RenderLabMeasurementConfig,
+    history: &RenderFrameHistoryState,
+) -> bool {
+    if measurement.completed || measurement.quality_capture_output_dir.is_none() {
+        return false;
+    }
+    match measurement.submitted_frame_limit {
+        Some(limit) => history.len().saturating_add(1) == limit,
+        None => history.is_empty(),
+    }
+}
+
+fn temporal_quality_capture_target_frame(
+    measurement: &RenderLabMeasurementConfig,
+    history: &RenderFrameHistoryState,
+) -> Option<u64> {
+    let target_ordinal = measurement.submitted_frame_limit.unwrap_or(1);
+    history
+        .observations()
+        .nth(target_ordinal.saturating_sub(1))
+        .map(|observation| observation.key.frame_index)
+}
+
 fn complete_render_lab_measurement_if_requested(
     windows: &mut WindowStateRegistryResource,
     measurement: &mut RenderLabMeasurementConfig,
     history: &RenderFrameHistoryState,
     quality_execution: &RenderLabTemporalQualityExecutionState,
     debug_report: &RenderDebugFrameReportState,
+    adapter_facts: Option<&runen_gpu::GpuAdapterFacts>,
 ) -> Result<()> {
     let Some(primary_window_id) = windows.primary_window_id() else {
         return Ok(());
@@ -373,7 +400,10 @@ fn complete_render_lab_measurement_if_requested(
     let quality_capture = if measurement.quality_capture_output_dir.is_some()
         && (bounded_frames_complete || close_intent_pending)
     {
-        temporal_quality_capture_evidence(debug_report)?
+        temporal_quality_capture_target_frame(measurement, history)
+            .map(|frame_index| temporal_quality_capture_evidence(debug_report, frame_index))
+            .transpose()?
+            .flatten()
     } else {
         None
     };
@@ -392,7 +422,16 @@ fn complete_render_lab_measurement_if_requested(
             write_measurement_artifact(output_path, history, measurement)?;
         }
         if let Some(capture) = quality_capture {
-            write_temporal_quality_artifact(measurement, quality_execution, capture)?;
+            let adapter_facts = adapter_facts.ok_or_else(|| {
+                anyhow::anyhow!("temporal quality runtime adapter facts are unavailable")
+            })?;
+            write_temporal_quality_artifact(
+                measurement,
+                history,
+                quality_execution,
+                capture,
+                adapter_facts,
+            )?;
         }
         measurement.completed = true;
     }
@@ -412,6 +451,7 @@ fn approve_render_lab_close_system(
     history: Res<RenderFrameHistoryState>,
     quality_execution: Res<RenderLabTemporalQualityExecutionState>,
     debug_report: Res<RenderDebugFrameReportState>,
+    gfx: Res<engine::plugins::render::Gfx>,
 ) -> Result<()> {
     complete_render_lab_measurement_if_requested(
         &mut windows,
@@ -419,6 +459,7 @@ fn approve_render_lab_close_system(
         &history,
         &quality_execution,
         &debug_report,
+        Some(gfx.adapter_facts()),
     )
 }
 
@@ -478,6 +519,8 @@ fn publish_render_lab_frame_system(
         mut frame_requests,
         mut contributions,
         mut debug_config,
+        mut debug_control,
+        history,
         fixed_quality_plans,
         mut quality_execution,
     } = publication;
@@ -486,11 +529,19 @@ fn publish_render_lab_frame_system(
     let producer_id = engine::plugins::render::RenderFrameProducerId::try_from_raw(RL2_PRODUCER_ID)
         .expect("Render Lab producer id is non-zero");
 
-    if measurement.quality_capture_output_dir.is_some() {
+    let quality_mode = measurement.quality_capture_output_dir.is_some();
+    let capture_armed = temporal_quality_capture_should_arm(&measurement, &history);
+    if quality_mode {
         quality_execution.pending_admission = None;
+        debug_control.capture_enabled = capture_armed;
+        debug_control.readback_enabled = capture_armed;
+        debug_control.artifact_export_enabled = capture_armed;
+        if !capture_armed {
+            debug_config.capture_selectors.clear();
+        }
     }
 
-    if measurement.quality_capture_output_dir.is_some() && requested_internal_size != output_size {
+    if quality_mode && requested_internal_size != output_size {
         let scene_plan = fixed_quality_plans
             .scene
             .as_ref()
@@ -507,7 +558,15 @@ fn publish_render_lab_frame_system(
             requested_internal_size,
         )
         .admit_against_compiled_flows(output_size, scene_plan, resolve_plan);
-        debug_config.capture_selectors = vec![temporal_quality_capture_selector(Some(&admission))];
+        debug_config.capture_selectors = if capture_armed {
+            vec![temporal_quality_capture_selector(
+                Some(&admission),
+                scene_plan,
+                resolve_plan,
+            )?]
+        } else {
+            Vec::new()
+        };
 
         match &admission {
             engine::plugins::render::RenderFixedResolutionExecutionAdmission::Fixed(prepared) => {
@@ -568,8 +627,24 @@ fn publish_render_lab_frame_system(
 
     let (target_key, target, contribution) =
         build_render_lab_radiance_publication(&camera, producer_id, requested_internal_size)?;
-    if measurement.quality_capture_output_dir.is_some() {
-        debug_config.capture_selectors = vec![temporal_quality_capture_selector(None)];
+    if quality_mode {
+        let scene_plan = fixed_quality_plans
+            .scene
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("temporal quality scene plan is unavailable"))?;
+        let resolve_plan = fixed_quality_plans
+            .resolve
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("temporal quality resolve plan is unavailable"))?;
+        debug_config.capture_selectors = if capture_armed {
+            vec![temporal_quality_capture_selector(
+                None,
+                scene_plan,
+                resolve_plan,
+            )?]
+        } else {
+            Vec::new()
+        };
         let invocation = PreparedFlowInvocationRequest::new(
             format!("{RL2_QUALITY_FLOW_ID}.native"),
             flow_id.0,
@@ -708,6 +783,45 @@ mod tests {
     }
 
     #[test]
+    fn temporal_quality_capture_arms_only_for_the_requested_submission() {
+        use engine::plugins::render::inspect::RenderGpuTimingCapability;
+
+        let policy = rl2_measurement_policy();
+        let mut history = RenderFrameHistoryState::default();
+        let measurement = RenderLabMeasurementConfig {
+            submitted_frame_limit: Some(2),
+            quality_capture_output_dir: Some(PathBuf::from("quality-captures")),
+            ..Default::default()
+        };
+
+        assert!(!temporal_quality_capture_should_arm(&measurement, &history));
+        history.observe_submitted_frame(
+            policy,
+            11,
+            RenderSurfaceId::primary().raw(),
+            101,
+            (1920, 1080),
+            0.0,
+            Default::default(),
+            &[],
+            RenderGpuTimingCapability::Unsupported,
+        );
+        assert!(temporal_quality_capture_should_arm(&measurement, &history));
+        history.observe_submitted_frame(
+            policy,
+            12,
+            RenderSurfaceId::primary().raw(),
+            102,
+            (1920, 1080),
+            0.0,
+            Default::default(),
+            &[],
+            RenderGpuTimingCapability::Unsupported,
+        );
+        assert!(!temporal_quality_capture_should_arm(&measurement, &history));
+    }
+
+    #[test]
     fn measurement_window_size_must_be_positive_when_requested() {
         assert_eq!(validate_measurement_window_size(None).unwrap(), None);
         assert_eq!(
@@ -727,6 +841,45 @@ mod tests {
         );
         assert!(validate_measurement_radiance_size(Some((0, 720))).is_err());
         assert!(validate_measurement_radiance_size(Some((1280, 0))).is_err());
+    }
+
+    #[test]
+    fn temporal_quality_capture_target_uses_submitted_ordinal() {
+        use engine::plugins::render::inspect::RenderGpuTimingCapability;
+
+        let policy = rl2_measurement_policy();
+        let mut history = RenderFrameHistoryState::default();
+        for frame_index in [7, 11, 19] {
+            history.observe_submitted_frame(
+                policy,
+                frame_index,
+                RenderSurfaceId::primary().raw(),
+                frame_index + 100,
+                (1920, 1080),
+                0.0,
+                Default::default(),
+                &[],
+                RenderGpuTimingCapability::Unsupported,
+            );
+        }
+        let bounded = RenderLabMeasurementConfig {
+            submitted_frame_limit: Some(2),
+            quality_capture_output_dir: Some(PathBuf::from("quality-captures")),
+            ..Default::default()
+        };
+        assert_eq!(
+            temporal_quality_capture_target_frame(&bounded, &history),
+            Some(11)
+        );
+
+        let unbounded = RenderLabMeasurementConfig {
+            quality_capture_output_dir: Some(PathBuf::from("quality-captures")),
+            ..Default::default()
+        };
+        assert_eq!(
+            temporal_quality_capture_target_frame(&unbounded, &history),
+            Some(7)
+        );
     }
 
     #[test]
@@ -803,6 +956,7 @@ mod tests {
             &history,
             &quality_execution,
             &debug_report,
+            None,
         )
         .unwrap();
 
@@ -818,6 +972,7 @@ mod tests {
             &history,
             &quality_execution,
             &debug_report,
+            None,
         )
         .unwrap();
         assert!(measurement.completed);

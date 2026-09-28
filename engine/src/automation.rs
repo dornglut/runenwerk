@@ -250,16 +250,191 @@ pub enum AutomationExecutionMode {
     NativeOs,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AutomationStepKind {
+    ProductDispatch,
+    OwnerQuery,
+    OwnerAssertion,
+    NormalizedInjection,
+    PersistedTraceReplay,
+    ConditionWait,
+    ReplayCleanup,
+    Finish,
+    Cancel,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AutomationStepOutcome {
+    Dispatched,
+    AdmittedOrDelivered,
+    EffectConfirmed,
+    AssertionPassed,
+    AssertionFailed,
+    Unsupported,
+    Rejected,
+    Inconclusive,
+    Cancelled,
+    InfrastructureFailure,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum AutomationStepResult<T> {
     Dispatched,
     AdmittedOrDelivered,
     EffectConfirmed(T),
     AssertionPassed,
+    AssertionFailed,
     Unsupported,
     Inconclusive,
     Cancelled,
     InfrastructureFailure(String),
+}
+
+impl<T> AutomationStepResult<T> {
+    pub const fn outcome(&self) -> AutomationStepOutcome {
+        match self {
+            Self::Dispatched => AutomationStepOutcome::Dispatched,
+            Self::AdmittedOrDelivered => AutomationStepOutcome::AdmittedOrDelivered,
+            Self::EffectConfirmed(_) => AutomationStepOutcome::EffectConfirmed,
+            Self::AssertionPassed => AutomationStepOutcome::AssertionPassed,
+            Self::AssertionFailed => AutomationStepOutcome::AssertionFailed,
+            Self::Unsupported => AutomationStepOutcome::Unsupported,
+            Self::Inconclusive => AutomationStepOutcome::Inconclusive,
+            Self::Cancelled => AutomationStepOutcome::Cancelled,
+            Self::InfrastructureFailure(_) => AutomationStepOutcome::InfrastructureFailure,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AutomationReplayProgress {
+    outcome: AutomationInputReplayOutcome,
+    completed_frames: u64,
+    failing_frame_ordinal: Option<u64>,
+    failing_group_index: Option<usize>,
+}
+
+impl AutomationReplayProgress {
+    fn from_report(report: &AutomationInputReplayReport) -> Self {
+        Self {
+            outcome: report.outcome(),
+            completed_frames: report.completed_frames(),
+            failing_frame_ordinal: report.failing_frame_ordinal(),
+            failing_group_index: report.failing_group_index(),
+        }
+    }
+
+    pub const fn outcome(&self) -> AutomationInputReplayOutcome {
+        self.outcome
+    }
+
+    pub const fn completed_frames(&self) -> u64 {
+        self.completed_frames
+    }
+
+    pub const fn failing_frame_ordinal(&self) -> Option<u64> {
+        self.failing_frame_ordinal
+    }
+
+    pub const fn failing_group_index(&self) -> Option<usize> {
+        self.failing_group_index
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AutomationStepRecord {
+    sequence: u64,
+    kind: AutomationStepKind,
+    execution_mode: Option<AutomationExecutionMode>,
+    outcome: AutomationStepOutcome,
+    replay_progress: Option<AutomationReplayProgress>,
+    diagnostic_detail: Option<String>,
+}
+
+impl AutomationStepRecord {
+    pub const fn sequence(&self) -> u64 {
+        self.sequence
+    }
+
+    pub const fn kind(&self) -> AutomationStepKind {
+        self.kind
+    }
+
+    pub const fn execution_mode(&self) -> Option<AutomationExecutionMode> {
+        self.execution_mode
+    }
+
+    pub const fn outcome(&self) -> AutomationStepOutcome {
+        self.outcome
+    }
+
+    pub fn replay_progress(&self) -> Option<&AutomationReplayProgress> {
+        self.replay_progress.as_ref()
+    }
+
+    pub fn diagnostic_detail(&self) -> Option<&str> {
+        self.diagnostic_detail.as_deref()
+    }
+}
+
+pub const MAX_AUTOMATION_STEP_DIAGNOSTIC_BYTES: usize = 2_048;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AutomationPersistedReplayError {
+    SessionClosed { cancelled: bool },
+    UnsupportedMode(AutomationExecutionMode),
+    ReplayLeasePending,
+    Import(AutomationInputTraceImportError),
+    SourceIdentityExhausted,
+    Replay(AutomationInputReplayReport),
+}
+
+impl fmt::Display for AutomationPersistedReplayError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::SessionClosed { cancelled: true } => {
+                formatter.write_str("automation session is cancelled")
+            }
+            Self::SessionClosed { cancelled: false } => {
+                formatter.write_str("automation session is already closed")
+            }
+            Self::UnsupportedMode(mode) => write!(
+                formatter,
+                "persisted normalized replay is unsupported in execution mode {mode:?}"
+            ),
+            Self::ReplayLeasePending => formatter
+                .write_str("automation session already owns a completed replay awaiting teardown"),
+            Self::Import(error) => write!(
+                formatter,
+                "persisted normalized replay import failed: {error}"
+            ),
+            Self::SourceIdentityExhausted => {
+                formatter.write_str("exhausted replay-owned input source identity")
+            }
+            Self::Replay(report) => write!(
+                formatter,
+                "normalized replay failed: outcome={:?}, completed_frames={}, failing_frame={:?}, failing_group={:?}, detail={}",
+                report.outcome(),
+                report.completed_frames(),
+                report.failing_frame_ordinal(),
+                report.failing_group_index(),
+                report.detail().unwrap_or("none"),
+            ),
+        }
+    }
+}
+
+impl std::error::Error for AutomationPersistedReplayError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Import(error) => Some(error),
+            Self::SessionClosed { .. }
+            | Self::UnsupportedMode(_)
+            | Self::ReplayLeasePending
+            | Self::SourceIdentityExhausted
+            | Self::Replay(_) => None,
+        }
+    }
 }
 
 pub trait AutomationOwnerAdapter {
@@ -288,6 +463,9 @@ pub struct AutomationSession {
     source: InputSourceId,
     active: bool,
     cancelled: bool,
+    next_step_sequence: u64,
+    history: Vec<AutomationStepRecord>,
+    replay_teardown_pending: bool,
 }
 
 impl AutomationSession {
@@ -297,6 +475,9 @@ impl AutomationSession {
             source,
             active: true,
             cancelled: false,
+            next_step_sequence: 0,
+            history: Vec::new(),
+            replay_teardown_pending: false,
         }
     }
 
@@ -316,6 +497,14 @@ impl AutomationSession {
         self.cancelled
     }
 
+    pub fn history(&self) -> &[AutomationStepRecord] {
+        &self.history
+    }
+
+    pub const fn replay_teardown_pending(&self) -> bool {
+        self.replay_teardown_pending
+    }
+
     pub fn dispatch_product<A: AutomationOwnerAdapter>(
         &mut self,
         mode: AutomationExecutionMode,
@@ -323,16 +512,23 @@ impl AutomationSession {
         target: &A::Target,
         command: A::Command,
     ) -> AutomationStepResult<()> {
-        if !self.active {
-            return self.inactive_result();
-        }
-        if mode != AutomationExecutionMode::ProductSemantic {
-            return AutomationStepResult::Unsupported;
-        }
-        match adapter.dispatch(target, command) {
-            Ok(()) => AutomationStepResult::Dispatched,
-            Err(error) => AutomationStepResult::InfrastructureFailure(error.to_string()),
-        }
+        let result = if !self.active {
+            self.inactive_result()
+        } else if mode != AutomationExecutionMode::ProductSemantic {
+            AutomationStepResult::Unsupported
+        } else {
+            match adapter.dispatch(target, command) {
+                Ok(()) => AutomationStepResult::Dispatched,
+                Err(error) => AutomationStepResult::InfrastructureFailure(error.to_string()),
+            }
+        };
+        self.record_step_result(
+            AutomationStepKind::ProductDispatch,
+            Some(mode),
+            &result,
+            None,
+        );
+        result
     }
 
     pub fn query_owner<A: AutomationOwnerAdapter>(
@@ -341,13 +537,35 @@ impl AutomationSession {
         target: &A::Target,
         query: A::Query,
     ) -> AutomationStepResult<A::Observation> {
-        if !self.active {
-            return self.inactive_result();
-        }
-        match adapter.query(target, query) {
-            Ok(observation) => AutomationStepResult::EffectConfirmed(observation),
-            Err(error) => AutomationStepResult::InfrastructureFailure(error.to_string()),
-        }
+        let result = if !self.active {
+            self.inactive_result()
+        } else {
+            match adapter.query(target, query) {
+                Ok(observation) => AutomationStepResult::EffectConfirmed(observation),
+                Err(error) => AutomationStepResult::InfrastructureFailure(error.to_string()),
+            }
+        };
+        self.record_step_result(AutomationStepKind::OwnerQuery, None, &result, None);
+        result
+    }
+
+    pub fn assert_observation<T, P>(
+        &mut self,
+        observation: &T,
+        predicate: P,
+    ) -> AutomationStepResult<()>
+    where
+        P: FnOnce(&T) -> bool,
+    {
+        let result = if !self.active {
+            self.inactive_result()
+        } else if predicate(observation) {
+            AutomationStepResult::AssertionPassed
+        } else {
+            AutomationStepResult::AssertionFailed
+        };
+        self.record_step_result(AutomationStepKind::OwnerAssertion, None, &result, None);
+        result
     }
 
     pub fn inject_normalized(
@@ -356,20 +574,139 @@ impl AutomationSession {
         input: &mut InputState,
         observation: InputObservation,
     ) -> AutomationStepResult<()> {
+        let result = if !self.active {
+            self.inactive_result()
+        } else if mode != AutomationExecutionMode::NormalizedInput {
+            AutomationStepResult::Unsupported
+        } else {
+            let context = InputContext::new(self.source, None);
+            match input.admit_automation_observation(context, observation) {
+                Ok(true) => AutomationStepResult::AdmittedOrDelivered,
+                Ok(false) => AutomationStepResult::Unsupported,
+                Err(error) => AutomationStepResult::InfrastructureFailure(format!(
+                    "normalized automation input rejected: {error:?}"
+                )),
+            }
+        };
+        self.record_step_result(
+            AutomationStepKind::NormalizedInjection,
+            Some(mode),
+            &result,
+            None,
+        );
+        result
+    }
+
+    pub fn replay_persisted_normalized_trace(
+        &mut self,
+        mode: AutomationExecutionMode,
+        app: &mut App,
+        bytes: &[u8],
+        state_assumption: AutomationInputReplayStateAssumption,
+    ) -> Result<AutomationInputReplayReport, AutomationPersistedReplayError> {
         if !self.active {
-            return self.inactive_result();
+            let outcome = if self.cancelled {
+                AutomationStepOutcome::Cancelled
+            } else {
+                AutomationStepOutcome::InfrastructureFailure
+            };
+            self.record_step(
+                AutomationStepKind::PersistedTraceReplay,
+                Some(mode),
+                outcome,
+                None,
+                Some(if self.cancelled {
+                    "automation session is cancelled".to_owned()
+                } else {
+                    "automation session is already closed".to_owned()
+                }),
+            );
+            return Err(AutomationPersistedReplayError::SessionClosed {
+                cancelled: self.cancelled,
+            });
         }
         if mode != AutomationExecutionMode::NormalizedInput {
-            return AutomationStepResult::Unsupported;
+            self.record_step(
+                AutomationStepKind::PersistedTraceReplay,
+                Some(mode),
+                AutomationStepOutcome::Unsupported,
+                None,
+                Some(format!(
+                    "persisted normalized replay is unsupported in execution mode {mode:?}"
+                )),
+            );
+            return Err(AutomationPersistedReplayError::UnsupportedMode(mode));
+        }
+        if self.replay_teardown_pending {
+            self.record_step(
+                AutomationStepKind::PersistedTraceReplay,
+                Some(mode),
+                AutomationStepOutcome::Rejected,
+                None,
+                Some(
+                    "automation session already owns a completed replay awaiting teardown"
+                        .to_owned(),
+                ),
+            );
+            return Err(AutomationPersistedReplayError::ReplayLeasePending);
         }
 
-        let context = InputContext::new(self.source, None);
-        match input.admit_automation_observation(context, observation) {
-            Ok(true) => AutomationStepResult::AdmittedOrDelivered,
-            Ok(false) => AutomationStepResult::Unsupported,
-            Err(error) => AutomationStepResult::InfrastructureFailure(format!(
-                "normalized automation input rejected: {error:?}"
-            )),
+        let imported = match import_automation_input_trace_v1(bytes) {
+            Ok(imported) => imported,
+            Err(error) => {
+                let outcome = import_error_step_outcome(&error);
+                let detail = error.to_string();
+                self.record_step(
+                    AutomationStepKind::PersistedTraceReplay,
+                    Some(mode),
+                    outcome,
+                    None,
+                    Some(detail),
+                );
+                return Err(AutomationPersistedReplayError::Import(error));
+            }
+        };
+        let source_map = match self.fresh_replay_source_map(imported.trace()) {
+            Ok(source_map) => source_map,
+            Err(error) => {
+                self.record_step(
+                    AutomationStepKind::PersistedTraceReplay,
+                    Some(mode),
+                    AutomationStepOutcome::InfrastructureFailure,
+                    None,
+                    Some(error.to_string()),
+                );
+                return Err(error);
+            }
+        };
+
+        let report =
+            app.replay_automation_input_trace(imported.trace(), &source_map, state_assumption);
+        let progress = Some(AutomationReplayProgress::from_report(&report));
+        let outcome = replay_step_outcome(report.outcome());
+        let detail = if report.outcome() == AutomationInputReplayOutcome::Completed {
+            None
+        } else {
+            Some(
+                report
+                    .detail()
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| format!("normalized replay failed: {:?}", report.outcome())),
+            )
+        };
+        self.record_step(
+            AutomationStepKind::PersistedTraceReplay,
+            Some(mode),
+            outcome,
+            progress,
+            detail,
+        );
+
+        if report.outcome() == AutomationInputReplayOutcome::Completed {
+            self.replay_teardown_pending = true;
+            Ok(report)
+        } else {
+            Err(AutomationPersistedReplayError::Replay(report))
         }
     }
 
@@ -387,52 +724,176 @@ impl AutomationSession {
         P: Fn(&A::Observation) -> bool,
         E: FnMut() -> Duration,
     {
-        if !self.active {
-            return self.inactive_result();
+        let result = if !self.active {
+            self.inactive_result()
+        } else {
+            let start = elapsed();
+            loop {
+                if !self.active {
+                    break self.inactive_result();
+                }
+                let observation = match adapter.query(target, query.clone()) {
+                    Ok(observation) => observation,
+                    Err(error) => {
+                        break AutomationStepResult::InfrastructureFailure(error.to_string());
+                    }
+                };
+                if predicate(&observation) {
+                    break AutomationStepResult::EffectConfirmed(observation);
+                }
+                if elapsed().saturating_sub(start) >= timeout {
+                    break AutomationStepResult::Inconclusive;
+                }
+                std::thread::yield_now();
+            }
+        };
+        self.record_step_result(AutomationStepKind::ConditionWait, None, &result, None);
+        result
+    }
+
+    pub fn finish(&mut self, app: &mut App) -> AutomationStepResult<()> {
+        let result = if !self.active {
+            self.inactive_result()
+        } else if let Err(detail) = self.cleanup_owned_state(app) {
+            AutomationStepResult::InfrastructureFailure(detail)
+        } else {
+            self.active = false;
+            AutomationStepResult::EffectConfirmed(())
+        };
+        self.record_step_result(AutomationStepKind::Finish, None, &result, None);
+        result
+    }
+
+    pub fn cancel(&mut self, app: &mut App) -> AutomationStepResult<()> {
+        let result = if !self.active {
+            self.inactive_result()
+        } else if let Err(detail) = self.cleanup_owned_state(app) {
+            AutomationStepResult::InfrastructureFailure(detail)
+        } else {
+            self.cancelled = true;
+            self.active = false;
+            AutomationStepResult::Cancelled
+        };
+        self.record_step_result(AutomationStepKind::Cancel, None, &result, None);
+        result
+    }
+
+    fn cleanup_owned_state(&mut self, app: &mut App) -> Result<(), String> {
+        self.cleanup_completed_replay(app)?;
+
+        let input = app
+            .world_mut()
+            .resource_mut::<InputState>()
+            .map_err(|_| "Runenwerk input integration is unavailable".to_owned())?;
+        input.handle_continuity_loss(InputContext::new(self.source, None), ContinuityLoss::Source);
+        Ok(())
+    }
+
+    fn cleanup_completed_replay(&mut self, app: &mut App) -> Result<(), String> {
+        if !self.replay_teardown_pending {
+            return Ok(());
         }
 
-        let start = elapsed();
-        loop {
-            if !self.active {
-                return self.inactive_result();
+        match app.teardown_automation_input_replay() {
+            Ok(_) => {
+                self.replay_teardown_pending = false;
+                let result = AutomationStepResult::EffectConfirmed(());
+                self.record_step_result(
+                    AutomationStepKind::ReplayCleanup,
+                    Some(AutomationExecutionMode::NormalizedInput),
+                    &result,
+                    None,
+                );
+                Ok(())
             }
-            let observation = match adapter.query(target, query.clone()) {
-                Ok(observation) => observation,
-                Err(error) => {
-                    return AutomationStepResult::InfrastructureFailure(error.to_string());
+            Err(error) => {
+                let detail = error.to_string();
+                let result = AutomationStepResult::<()>::InfrastructureFailure(detail.clone());
+                self.record_step_result(
+                    AutomationStepKind::ReplayCleanup,
+                    Some(AutomationExecutionMode::NormalizedInput),
+                    &result,
+                    None,
+                );
+                Err(detail)
+            }
+        }
+    }
+
+    fn fresh_replay_source_map(
+        &self,
+        trace: &AutomationInputTrace,
+    ) -> Result<AutomationInputReplaySourceMap, AutomationPersistedReplayError> {
+        let mut recorded_sources = Vec::new();
+        for frame in trace.frames() {
+            for group in frame.groups() {
+                if !recorded_sources.contains(&group.context.source) {
+                    recorded_sources.push(group.context.source);
+                }
+            }
+        }
+
+        let mut entries = Vec::with_capacity(recorded_sources.len());
+        let mut next_raw = u64::MAX;
+        for recorded in &recorded_sources {
+            let replay_source = loop {
+                let candidate = InputSourceId::new(next_raw);
+                next_raw = next_raw
+                    .checked_sub(1)
+                    .ok_or(AutomationPersistedReplayError::SourceIdentityExhausted)?;
+                if candidate != self.source
+                    && !recorded_sources.contains(&candidate)
+                    && !entries
+                        .iter()
+                        .any(|(_, replay): &(InputSourceId, InputSourceId)| *replay == candidate)
+                {
+                    break candidate;
                 }
             };
-            if predicate(&observation) {
-                return AutomationStepResult::EffectConfirmed(observation);
-            }
-            if elapsed().saturating_sub(start) >= timeout {
-                return AutomationStepResult::Inconclusive;
-            }
-            std::thread::yield_now();
+            entries.push((*recorded, replay_source));
         }
+
+        Ok(AutomationInputReplaySourceMap::new(entries))
     }
 
-    pub fn finish(&mut self, input: &mut InputState) -> AutomationStepResult<()> {
-        if !self.active {
-            return self.inactive_result();
-        }
-        self.cleanup_input(input);
-        self.active = false;
-        AutomationStepResult::EffectConfirmed(())
+    fn record_step_result<T>(
+        &mut self,
+        kind: AutomationStepKind,
+        execution_mode: Option<AutomationExecutionMode>,
+        result: &AutomationStepResult<T>,
+        replay_progress: Option<AutomationReplayProgress>,
+    ) {
+        let detail = match result {
+            AutomationStepResult::InfrastructureFailure(detail) => Some(detail.clone()),
+            _ => None,
+        };
+        self.record_step(
+            kind,
+            execution_mode,
+            result.outcome(),
+            replay_progress,
+            detail,
+        );
     }
 
-    pub fn cancel(&mut self, input: &mut InputState) -> AutomationStepResult<()> {
-        if !self.active {
-            return self.inactive_result();
-        }
-        self.cleanup_input(input);
-        self.cancelled = true;
-        self.active = false;
-        AutomationStepResult::Cancelled
-    }
-
-    fn cleanup_input(&self, input: &mut InputState) {
-        input.handle_continuity_loss(InputContext::new(self.source, None), ContinuityLoss::Source);
+    fn record_step(
+        &mut self,
+        kind: AutomationStepKind,
+        execution_mode: Option<AutomationExecutionMode>,
+        outcome: AutomationStepOutcome,
+        replay_progress: Option<AutomationReplayProgress>,
+        diagnostic_detail: Option<String>,
+    ) {
+        let sequence = self.next_step_sequence;
+        self.next_step_sequence = self.next_step_sequence.saturating_add(1);
+        self.history.push(AutomationStepRecord {
+            sequence,
+            kind,
+            execution_mode,
+            outcome,
+            replay_progress,
+            diagnostic_detail: diagnostic_detail.map(bounded_diagnostic_detail),
+        });
     }
 
     fn inactive_result<T>(&self) -> AutomationStepResult<T> {
@@ -442,6 +903,53 @@ impl AutomationSession {
             AutomationStepResult::InfrastructureFailure(
                 "automation session is already closed".to_owned(),
             )
+        }
+    }
+}
+
+fn bounded_diagnostic_detail(detail: String) -> String {
+    if detail.len() <= MAX_AUTOMATION_STEP_DIAGNOSTIC_BYTES {
+        return detail;
+    }
+
+    let mut end = MAX_AUTOMATION_STEP_DIAGNOSTIC_BYTES;
+    while !detail.is_char_boundary(end) {
+        end -= 1;
+    }
+    detail[..end].to_owned()
+}
+
+fn import_error_step_outcome(error: &AutomationInputTraceImportError) -> AutomationStepOutcome {
+    match error {
+        AutomationInputTraceImportError::WrongArtifactKind(_)
+        | AutomationInputTraceImportError::UnsupportedSchemaVersion(_)
+        | AutomationInputTraceImportError::UnsupportedTraceShape(_)
+        | AutomationInputTraceImportError::UnsupportedRecordingWitness => {
+            AutomationStepOutcome::Unsupported
+        }
+        AutomationInputTraceImportError::ArtifactTooLarge
+        | AutomationInputTraceImportError::ParseFailure(_)
+        | AutomationInputTraceImportError::MalformedArtifact(_)
+        | AutomationInputTraceImportError::UnknownField(_)
+        | AutomationInputTraceImportError::UnknownVariant(_)
+        | AutomationInputTraceImportError::ResourceLimitExceeded(_)
+        | AutomationInputTraceImportError::InvalidIdentityReference(_)
+        | AutomationInputTraceImportError::InvalidNormalizedInput(_) => {
+            AutomationStepOutcome::Rejected
+        }
+    }
+}
+
+const fn replay_step_outcome(outcome: AutomationInputReplayOutcome) -> AutomationStepOutcome {
+    match outcome {
+        AutomationInputReplayOutcome::Completed => AutomationStepOutcome::AdmittedOrDelivered,
+        AutomationInputReplayOutcome::UnsupportedTraceShape => AutomationStepOutcome::Unsupported,
+        AutomationInputReplayOutcome::InvalidSourceMapping
+        | AutomationInputReplayOutcome::InvalidOrRejectedInput
+        | AutomationInputReplayOutcome::UnframedTrailingGroups
+        | AutomationInputReplayOutcome::TargetStateConflict => AutomationStepOutcome::Rejected,
+        AutomationInputReplayOutcome::InfrastructureFailure => {
+            AutomationStepOutcome::InfrastructureFailure
         }
     }
 }
@@ -531,33 +1039,44 @@ mod tests {
     fn cleanup_invalidates_only_automation_owned_state_without_release_edges() {
         let mut session =
             AutomationSession::new(AutomationSessionId::new(43), InputSourceId::new(903));
-        let mut input = InputState::new();
+        let mut app = App::headless();
+        app.add_plugin(InputFinalizePlugin);
+
+        {
+            let input = app
+                .world_mut()
+                .resource_mut::<InputState>()
+                .expect("input fixture should install InputState");
+            assert_eq!(
+                session.inject_normalized(
+                    AutomationExecutionMode::NormalizedInput,
+                    input,
+                    InputObservation::PointerButton(PointerButtonInput {
+                        button: PointerButton::Left,
+                        state: DigitalState::Pressed,
+                    }),
+                ),
+                AutomationStepResult::AdmittedOrDelivered
+            );
+            input.handle_mouse_input(
+                winit::event::ElementState::Pressed,
+                winit::event::MouseButton::Right,
+            );
+            input.clear_frame();
+
+            assert!(input.left_mouse_down());
+            assert!(input.right_mouse_down());
+        }
 
         assert_eq!(
-            session.inject_normalized(
-                AutomationExecutionMode::NormalizedInput,
-                &mut input,
-                InputObservation::PointerButton(PointerButtonInput {
-                    button: PointerButton::Left,
-                    state: DigitalState::Pressed,
-                }),
-            ),
-            AutomationStepResult::AdmittedOrDelivered
-        );
-        input.handle_mouse_input(
-            winit::event::ElementState::Pressed,
-            winit::event::MouseButton::Right,
-        );
-        input.clear_frame();
-
-        assert!(input.left_mouse_down());
-        assert!(input.right_mouse_down());
-
-        assert_eq!(
-            session.finish(&mut input),
+            session.finish(&mut app),
             AutomationStepResult::EffectConfirmed(())
         );
 
+        let input = app
+            .world()
+            .resource::<InputState>()
+            .expect("input fixture should retain InputState");
         assert!(!input.left_mouse_down());
         assert!(input.right_mouse_down());
         assert!(!input.left_mouse_released());
@@ -891,25 +1410,484 @@ mod tests {
     }
 
     #[test]
-    fn cancellation_prevents_later_mutation_and_cleans_owned_input() {
+    fn session_history_distinguishes_query_assertion_pass_and_failure() {
         let mut session =
-            AutomationSession::new(AutomationSessionId::new(45), InputSourceId::new(905));
-        let mut input = InputState::new();
+            AutomationSession::new(AutomationSessionId::new(48), InputSourceId::new(907));
         let mut adapter = DummyAdapter::default();
 
         assert_eq!(
-            session.inject_normalized(
-                AutomationExecutionMode::NormalizedInput,
-                &mut input,
-                InputObservation::PointerButton(PointerButtonInput {
-                    button: PointerButton::Left,
-                    state: DigitalState::Pressed,
-                }),
+            session.dispatch_product(
+                AutomationExecutionMode::ProductSemantic,
+                &mut adapter,
+                &(),
+                DummyCommand::Increment,
             ),
-            AutomationStepResult::AdmittedOrDelivered
+            AutomationStepResult::Dispatched
         );
-        assert_eq!(session.cancel(&mut input), AutomationStepResult::Cancelled);
-        assert!(!input.left_mouse_down());
+        let observed = match session.query_owner(&mut adapter, &(), DummyQuery::Value) {
+            AutomationStepResult::EffectConfirmed(value) => value,
+            other => panic!("owner query should confirm value, got {other:?}"),
+        };
+        assert_eq!(
+            session.assert_observation(&observed, |value| *value == 2),
+            AutomationStepResult::AssertionFailed
+        );
+        assert_eq!(
+            session.assert_observation(&observed, |value| *value == 1),
+            AutomationStepResult::AssertionPassed
+        );
+
+        assert_eq!(
+            session
+                .history()
+                .iter()
+                .map(AutomationStepRecord::sequence)
+                .collect::<Vec<_>>(),
+            vec![0, 1, 2, 3]
+        );
+        assert_eq!(
+            session
+                .history()
+                .iter()
+                .map(AutomationStepRecord::kind)
+                .collect::<Vec<_>>(),
+            vec![
+                AutomationStepKind::ProductDispatch,
+                AutomationStepKind::OwnerQuery,
+                AutomationStepKind::OwnerAssertion,
+                AutomationStepKind::OwnerAssertion,
+            ]
+        );
+        assert_eq!(
+            session
+                .history()
+                .iter()
+                .map(AutomationStepRecord::outcome)
+                .collect::<Vec<_>>(),
+            vec![
+                AutomationStepOutcome::Dispatched,
+                AutomationStepOutcome::EffectConfirmed,
+                AutomationStepOutcome::AssertionFailed,
+                AutomationStepOutcome::AssertionPassed,
+            ]
+        );
+    }
+
+    #[test]
+    fn session_persisted_replay_keeps_state_until_finish_then_cleans_it() {
+        let mut recording = trace_app();
+        recording
+            .start_automation_input_trace()
+            .expect("trace should start");
+        admit_left_press(&mut recording, 2_001);
+        recording = recording
+            .run_for_frames(1)
+            .expect("recorded press frame should run");
+        let trace = recording
+            .stop_automation_input_trace()
+            .expect("trace should stop");
+        let encoded = export_automation_input_trace_v1(
+            &trace,
+            AutomationInputTraceRecordingWitness::RecordedSourcesPristineAtCaptureStart,
+            None,
+        )
+        .expect("press trace should persist");
+
+        let mut replay = trace_app();
+        let mut session =
+            AutomationSession::new(AutomationSessionId::new(49), InputSourceId::new(2_100));
+        let report = session
+            .replay_persisted_normalized_trace(
+                AutomationExecutionMode::NormalizedInput,
+                &mut replay,
+                encoded.as_bytes(),
+                AutomationInputReplayStateAssumption::RecordedAndReplaySourcesPristine,
+            )
+            .expect("persisted press trace should replay");
+        assert_eq!(report.outcome(), AutomationInputReplayOutcome::Completed);
+        assert!(session.replay_teardown_pending());
+
+        let held = replay
+            .world()
+            .resource::<InputState>()
+            .expect("replay target should retain InputState")
+            .left_mouse_down();
+        assert!(
+            held,
+            "completed replay state must remain observable before finish"
+        );
+        assert_eq!(
+            session.assert_observation(&held, |value| *value),
+            AutomationStepResult::AssertionPassed
+        );
+
+        assert_eq!(
+            session.finish(&mut replay),
+            AutomationStepResult::EffectConfirmed(())
+        );
+        assert!(!session.replay_teardown_pending());
+        assert!(
+            !replay
+                .world()
+                .resource::<InputState>()
+                .expect("replay target should retain InputState")
+                .left_mouse_down()
+        );
+
+        assert_eq!(
+            session
+                .history()
+                .iter()
+                .map(AutomationStepRecord::kind)
+                .collect::<Vec<_>>(),
+            vec![
+                AutomationStepKind::PersistedTraceReplay,
+                AutomationStepKind::OwnerAssertion,
+                AutomationStepKind::ReplayCleanup,
+                AutomationStepKind::Finish,
+            ]
+        );
+        assert_eq!(
+            session.history()[0].outcome(),
+            AutomationStepOutcome::AdmittedOrDelivered,
+            "completed normalized replay confirms delivery, not product semantic effect"
+        );
+        assert_eq!(
+            session.history()[0]
+                .replay_progress()
+                .expect("replay step should retain progress")
+                .completed_frames(),
+            1
+        );
+    }
+
+    #[test]
+    fn malformed_persisted_replay_keeps_typed_error_and_schedules_no_teardown() {
+        let mut replay = trace_app();
+        let mut session =
+            AutomationSession::new(AutomationSessionId::new(50), InputSourceId::new(2_101));
+
+        let error = session
+            .replay_persisted_normalized_trace(
+                AutomationExecutionMode::NormalizedInput,
+                &mut replay,
+                b"this is not RON",
+                AutomationInputReplayStateAssumption::RecordedAndReplaySourcesPristine,
+            )
+            .expect_err("malformed persisted trace should fail");
+        let AutomationPersistedReplayError::Import(import_error) = error else {
+            panic!("malformed persisted trace should preserve the typed A8 import error");
+        };
+        assert!(
+            !import_error.to_string().is_empty(),
+            "typed A8 import error should retain diagnostic detail"
+        );
+        assert!(!session.replay_teardown_pending());
+        assert_eq!(
+            session.finish(&mut replay),
+            AutomationStepResult::EffectConfirmed(())
+        );
+        assert_eq!(
+            session
+                .history()
+                .iter()
+                .map(AutomationStepRecord::kind)
+                .collect::<Vec<_>>(),
+            vec![
+                AutomationStepKind::PersistedTraceReplay,
+                AutomationStepKind::Finish,
+            ],
+            "failed import must not fabricate replay cleanup"
+        );
+        assert_eq!(
+            session.history()[0].outcome(),
+            AutomationStepOutcome::Rejected
+        );
+    }
+
+    #[test]
+    fn native_os_persisted_replay_is_unsupported_without_fallback() {
+        let mut replay = trace_app();
+        let mut session =
+            AutomationSession::new(AutomationSessionId::new(51), InputSourceId::new(2_102));
+
+        assert_eq!(
+            session
+                .replay_persisted_normalized_trace(
+                    AutomationExecutionMode::NativeOs,
+                    &mut replay,
+                    b"unused because mode is rejected first",
+                    AutomationInputReplayStateAssumption::RecordedAndReplaySourcesPristine,
+                )
+                .expect_err("NativeOs replay must be unsupported"),
+            AutomationPersistedReplayError::UnsupportedMode(AutomationExecutionMode::NativeOs)
+        );
+        assert_eq!(session.history().len(), 1);
+        assert_eq!(
+            session.history()[0].outcome(),
+            AutomationStepOutcome::Unsupported
+        );
+        assert!(!session.replay_teardown_pending());
+    }
+
+    #[test]
+    fn history_bounds_infrastructure_diagnostic_detail() {
+        struct LongErrorAdapter;
+
+        impl AutomationOwnerAdapter for LongErrorAdapter {
+            type Target = ();
+            type Command = ();
+            type Query = ();
+            type Observation = ();
+            type Error = String;
+
+            fn dispatch(
+                &mut self,
+                _target: &Self::Target,
+                _command: Self::Command,
+            ) -> Result<(), Self::Error> {
+                Err("x".repeat(MAX_AUTOMATION_STEP_DIAGNOSTIC_BYTES + 128))
+            }
+
+            fn query(
+                &mut self,
+                _target: &Self::Target,
+                _query: Self::Query,
+            ) -> Result<Self::Observation, Self::Error> {
+                Ok(())
+            }
+        }
+
+        let mut session =
+            AutomationSession::new(AutomationSessionId::new(52), InputSourceId::new(2_103));
+        let mut adapter = LongErrorAdapter;
+        assert!(matches!(
+            session.dispatch_product(
+                AutomationExecutionMode::ProductSemantic,
+                &mut adapter,
+                &(),
+                (),
+            ),
+            AutomationStepResult::InfrastructureFailure(_)
+        ));
+        assert!(
+            session.history()[0]
+                .diagnostic_detail()
+                .expect("failure history should retain bounded detail")
+                .len()
+                <= MAX_AUTOMATION_STEP_DIAGNOSTIC_BYTES
+        );
+    }
+
+    #[test]
+    fn replay_target_rejection_schedules_no_teardown() {
+        let mut recording = trace_app();
+        recording
+            .start_automation_input_trace()
+            .expect("recording trace should start");
+        admit_left_press(&mut recording, 2_106);
+        recording = recording
+            .run_for_frames(1)
+            .expect("recording frame should run");
+        let trace = recording
+            .stop_automation_input_trace()
+            .expect("recording trace should stop");
+        let encoded = export_automation_input_trace_v1(
+            &trace,
+            AutomationInputTraceRecordingWitness::RecordedSourcesPristineAtCaptureStart,
+            None,
+        )
+        .expect("trace should persist");
+
+        let mut replay = trace_app();
+        replay
+            .world_mut()
+            .resource_mut::<InputState>()
+            .expect("replay fixture should install InputState")
+            .handle_mouse_motion(3.0, 4.0);
+
+        let mut session =
+            AutomationSession::new(AutomationSessionId::new(54), InputSourceId::new(2_107));
+        let error = session
+            .replay_persisted_normalized_trace(
+                AutomationExecutionMode::NormalizedInput,
+                &mut replay,
+                encoded.as_bytes(),
+                AutomationInputReplayStateAssumption::RecordedAndReplaySourcesPristine,
+            )
+            .expect_err("dirty replay target should be rejected");
+        let AutomationPersistedReplayError::Replay(report) = error else {
+            panic!("target-state rejection should remain an A6 replay report");
+        };
+        assert_eq!(
+            report.outcome(),
+            AutomationInputReplayOutcome::TargetStateConflict
+        );
+        assert_eq!(report.completed_frames(), 0);
+        assert!(!session.replay_teardown_pending());
+        assert_eq!(session.history().len(), 1);
+        assert_eq!(
+            session.history()[0].kind(),
+            AutomationStepKind::PersistedTraceReplay
+        );
+        assert_eq!(
+            session.history()[0].outcome(),
+            AutomationStepOutcome::Rejected
+        );
+        assert_eq!(
+            session.history()[0]
+                .replay_progress()
+                .expect("A6 rejection should retain replay progress")
+                .outcome(),
+            AutomationInputReplayOutcome::TargetStateConflict
+        );
+
+        assert_eq!(
+            session.finish(&mut replay),
+            AutomationStepResult::EffectConfirmed(())
+        );
+        assert_eq!(
+            session
+                .history()
+                .iter()
+                .map(AutomationStepRecord::kind)
+                .collect::<Vec<_>>(),
+            vec![
+                AutomationStepKind::PersistedTraceReplay,
+                AutomationStepKind::Finish,
+            ],
+            "rejected replay must not fabricate replay cleanup"
+        );
+    }
+
+    #[test]
+    fn replay_teardown_failure_remains_visible_and_retryable() {
+        let mut recording = trace_app();
+        recording
+            .start_automation_input_trace()
+            .expect("recording trace should start");
+        admit_left_press(&mut recording, 2_104);
+        recording = recording
+            .run_for_frames(1)
+            .expect("recording frame should run");
+        let trace = recording
+            .stop_automation_input_trace()
+            .expect("recording trace should stop");
+        let encoded = export_automation_input_trace_v1(
+            &trace,
+            AutomationInputTraceRecordingWitness::RecordedSourcesPristineAtCaptureStart,
+            None,
+        )
+        .expect("trace should persist");
+
+        let mut replay = trace_app();
+        let mut session =
+            AutomationSession::new(AutomationSessionId::new(53), InputSourceId::new(2_105));
+        let report = session
+            .replay_persisted_normalized_trace(
+                AutomationExecutionMode::NormalizedInput,
+                &mut replay,
+                encoded.as_bytes(),
+                AutomationInputReplayStateAssumption::RecordedAndReplaySourcesPristine,
+            )
+            .expect("persisted replay should complete");
+        assert_eq!(report.outcome(), AutomationInputReplayOutcome::Completed);
+        assert!(session.replay_teardown_pending());
+
+        replay
+            .start_automation_input_trace()
+            .expect("active evidence capture should block replay teardown");
+        assert!(matches!(
+            session.finish(&mut replay),
+            AutomationStepResult::InfrastructureFailure(_)
+        ));
+        assert!(session.is_active());
+        assert!(session.replay_teardown_pending());
+        assert_eq!(
+            session.history()[1].kind(),
+            AutomationStepKind::ReplayCleanup
+        );
+        assert_eq!(
+            session.history()[1].outcome(),
+            AutomationStepOutcome::InfrastructureFailure
+        );
+        assert_eq!(session.history()[2].kind(), AutomationStepKind::Finish);
+        assert_eq!(
+            session.history()[2].outcome(),
+            AutomationStepOutcome::InfrastructureFailure
+        );
+
+        let _ = replay
+            .stop_automation_input_trace()
+            .expect("evidence capture should stop");
+        assert_eq!(
+            session.finish(&mut replay),
+            AutomationStepResult::EffectConfirmed(())
+        );
+        assert!(!session.is_active());
+        assert!(!session.replay_teardown_pending());
+        assert_eq!(
+            session
+                .history()
+                .iter()
+                .map(AutomationStepRecord::kind)
+                .collect::<Vec<_>>(),
+            vec![
+                AutomationStepKind::PersistedTraceReplay,
+                AutomationStepKind::ReplayCleanup,
+                AutomationStepKind::Finish,
+                AutomationStepKind::ReplayCleanup,
+                AutomationStepKind::Finish,
+            ]
+        );
+        assert_eq!(
+            session
+                .history()
+                .iter()
+                .map(AutomationStepRecord::outcome)
+                .collect::<Vec<_>>(),
+            vec![
+                AutomationStepOutcome::AdmittedOrDelivered,
+                AutomationStepOutcome::InfrastructureFailure,
+                AutomationStepOutcome::InfrastructureFailure,
+                AutomationStepOutcome::EffectConfirmed,
+                AutomationStepOutcome::EffectConfirmed,
+            ]
+        );
+    }
+
+    #[test]
+    fn cancellation_prevents_later_mutation_and_cleans_owned_input() {
+        let mut session =
+            AutomationSession::new(AutomationSessionId::new(45), InputSourceId::new(905));
+        let mut app = App::headless();
+        app.add_plugin(InputFinalizePlugin);
+        let mut adapter = DummyAdapter::default();
+
+        {
+            let input = app
+                .world_mut()
+                .resource_mut::<InputState>()
+                .expect("input fixture should install InputState");
+            assert_eq!(
+                session.inject_normalized(
+                    AutomationExecutionMode::NormalizedInput,
+                    input,
+                    InputObservation::PointerButton(PointerButtonInput {
+                        button: PointerButton::Left,
+                        state: DigitalState::Pressed,
+                    }),
+                ),
+                AutomationStepResult::AdmittedOrDelivered
+            );
+        }
+        assert_eq!(session.cancel(&mut app), AutomationStepResult::Cancelled);
+        assert!(
+            !app.world()
+                .resource::<InputState>()
+                .expect("input fixture should retain InputState")
+                .left_mouse_down()
+        );
 
         assert_eq!(
             session.dispatch_product(
@@ -921,5 +1899,17 @@ mod tests {
             AutomationStepResult::Cancelled
         );
         assert_eq!(adapter.value, 0);
+        assert_eq!(
+            session
+                .history()
+                .iter()
+                .map(AutomationStepRecord::kind)
+                .collect::<Vec<_>>(),
+            vec![
+                AutomationStepKind::NormalizedInjection,
+                AutomationStepKind::Cancel,
+                AutomationStepKind::ProductDispatch,
+            ]
+        );
     }
 }
