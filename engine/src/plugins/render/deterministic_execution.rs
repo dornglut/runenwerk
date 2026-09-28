@@ -2900,8 +2900,7 @@ mod tests {
         changed_observation: RenderPerspectiveObservation,
     ) {
         let baseline_observation = temporal_test_observation(RenderAffineTransform3::identity());
-        let baseline_signature =
-            camera_temporal_signature(7, baseline_observation, (4, 4));
+        let baseline_signature = camera_temporal_signature(7, baseline_observation, (4, 4));
         let mut cache = DeterministicResourceCache::default();
         let baseline = cache
             .temporal_history(
@@ -3063,7 +3062,12 @@ mod tests {
             RenderSamplingSupport::ideal_ray(),
         );
 
-        for changed_observation in [changed_fov, changed_aspect, changed_shutter, changed_support] {
+        for changed_observation in [
+            changed_fov,
+            changed_aspect,
+            changed_shutter,
+            changed_support,
+        ] {
             assert_ne!(
                 camera_temporal_signature(7, changed_observation, (4, 4)),
                 baseline,
@@ -3181,23 +3185,20 @@ mod tests {
             .temporal_history(11, 0, signature.clone(), (4, 4), 4, observation, true)
             .expect("camera history should allocate");
         assert!(first.reset);
-        let (
-            first_previous_identity,
-            first_current_identity,
-            first_previous_observation,
-        ) = match &first.storage {
-            DeterministicTemporalHistoryUseStorage::Camera {
-                previous_history,
-                current_history,
-                previous_observation,
-                ..
-            } => (
-                previous_history.diagnostic_identity(),
-                current_history.diagnostic_identity(),
-                *previous_observation,
-            ),
-            _ => panic!("P100 history must use camera storage"),
-        };
+        let (first_previous_identity, first_current_identity, first_previous_observation) =
+            match &first.storage {
+                DeterministicTemporalHistoryUseStorage::Camera {
+                    previous_history,
+                    current_history,
+                    previous_observation,
+                    ..
+                } => (
+                    previous_history.diagnostic_identity(),
+                    current_history.diagnostic_identity(),
+                    *previous_observation,
+                ),
+                _ => panic!("P100 history must use camera storage"),
+            };
         assert_ne!(
             first_previous_identity, first_current_identity,
             "camera reprojection must never read and write one retained slot in place"
@@ -3285,8 +3286,7 @@ mod tests {
         if previous_local.iter().any(|value| !value.is_finite()) || previous_local[2] >= 0.0 {
             return CameraReferenceDecision::BehindPreviousCamera;
         }
-        let projected_x =
-            previous_local[0] / (-previous_local[2] * tan_half_fov * aspect);
+        let projected_x = previous_local[0] / (-previous_local[2] * tan_half_fov * aspect);
         let projected_y = previous_local[1] / (-previous_local[2] * tan_half_fov);
         let u = projected_x * 0.5 + 0.5;
         let v = 0.5 - projected_y * 0.5;
@@ -3297,8 +3297,7 @@ mod tests {
         if !previous_hit {
             return CameraReferenceDecision::MissingPreviousHistory;
         }
-        let tolerance =
-            0.001_f32 + 0.001_f32 * projected_depth.abs().max(previous_depth.abs());
+        let tolerance = 0.001_f32 + 0.001_f32 * projected_depth.abs().max(previous_depth.abs());
         if !projected_depth.is_finite()
             || !previous_depth.is_finite()
             || (projected_depth - previous_depth).abs() > tolerance
