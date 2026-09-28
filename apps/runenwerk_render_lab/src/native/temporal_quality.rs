@@ -405,10 +405,7 @@ pub(super) fn write_temporal_quality_artifact(
                 .iter()
                 .map(move |evidence| RenderLabTemporalReconstructionEvidence {
                     frame_index: observation.key.frame_index,
-                    requested_size_px: [
-                        evidence.requested_extent.0,
-                        evidence.requested_extent.1,
-                    ],
+                    requested_size_px: [evidence.requested_extent.0, evidence.requested_extent.1],
                     evaluation_size_px: [
                         evidence.evaluation_extent.0,
                         evidence.evaluation_extent.1,
