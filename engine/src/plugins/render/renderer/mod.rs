@@ -870,7 +870,7 @@ impl Gfx {
     pub fn deterministic_temporal_evidence(
         &self,
         frame_index: u64,
-    ) -> &[crate::plugins::render::deterministic_execution::RenderDeterministicTemporalExecutionEvidence] {
+    ) -> &[crate::plugins::render::deterministic_execution::RenderDeterministicTemporalExecutionEvidence]{
         self.renderer.deterministic_temporal_evidence(frame_index)
     }
 
