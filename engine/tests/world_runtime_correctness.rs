@@ -272,7 +272,7 @@ fn runtime_sdf_package_rejects_zero_or_multiple_payloads_before_intake_mutation(
         let chunk_id = ChunkId::new(
             WorldId::new(0),
             ChunkCoord3 {
-                x: 6 + payload_count as i32,
+                x: 6 + payload_count as i64,
                 y: 0,
                 z: 0,
             },
