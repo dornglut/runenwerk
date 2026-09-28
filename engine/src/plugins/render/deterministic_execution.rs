@@ -412,15 +412,13 @@ impl DeterministicResourceCache {
                     .identities
                     .allocate_buffer_handle(descriptor(1)?)
                     .map_err(|error| gpu_authoring("camera temporal-history allocation", error))?;
-                DeterministicTemporalStorage::Camera(Box::new(
-                    DeterministicCameraTemporalStorage {
-                        slots: [first, second],
-                        completed_slot: 0,
-                        completed_observation: None,
-                        pending_slot: None,
-                        pending_observation: None,
-                    },
-                ))
+                DeterministicTemporalStorage::Camera(Box::new(DeterministicCameraTemporalStorage {
+                    slots: [first, second],
+                    completed_slot: 0,
+                    completed_observation: None,
+                    pending_slot: None,
+                    pending_observation: None,
+                }))
             } else {
                 let descriptor = GpuBufferDescriptor::ordinary_owned(
                     format!("RunenRender output {output_index} temporal history"),
