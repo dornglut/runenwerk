@@ -230,35 +230,39 @@ impl DeterministicResourceCache {
             .collect::<Vec<_>>();
 
         for (scope, completed) in terminal {
-            let outputs = self
-                .prepared_temporal_outputs
-                .remove(&scope)
-                .unwrap_or_default();
-            if completed {
-                for output_index in outputs {
-                    if let Some(history) = self.temporal_histories.get_mut(&(scope, output_index)) {
-                        if let DeterministicTemporalStorage::Camera(camera) = &mut history.storage {
-                            if let Some(slot) = camera.pending_slot.take() {
-                                camera.completed_slot = slot;
-                            }
-                            if let Some(observation) = camera.pending_observation.take() {
-                                camera.completed_observation = Some(observation);
-                            }
-                        }
-                        history.phase = (history.phase + 1) % TEMPORAL_PHASE_COUNT;
-                        history.age = history.age.saturating_add(1);
-                    }
-                }
-            } else {
-                self.temporal_histories
-                    .retain(|(history_scope, _), _| *history_scope != scope);
-            }
+            self.reconcile_temporal_outputs(scope, completed);
         }
 
         // Completed and failed submissions are terminal; only an Accepted handle can still be
         // using a producer's reusable intermediates.
         self.producer_submissions
             .retain(|_, submission| matches!(submission.status(), GpuSubmissionStatus::Accepted));
+    }
+
+    fn reconcile_temporal_outputs(&mut self, scope: u64, completed: bool) {
+        let outputs = self
+            .prepared_temporal_outputs
+            .remove(&scope)
+            .unwrap_or_default();
+        if completed {
+            for output_index in outputs {
+                if let Some(history) = self.temporal_histories.get_mut(&(scope, output_index)) {
+                    if let DeterministicTemporalStorage::Camera(camera) = &mut history.storage {
+                        if let Some(slot) = camera.pending_slot.take() {
+                            camera.completed_slot = slot;
+                        }
+                        if let Some(observation) = camera.pending_observation.take() {
+                            camera.completed_observation = Some(observation);
+                        }
+                    }
+                    history.phase = (history.phase + 1) % TEMPORAL_PHASE_COUNT;
+                    history.age = history.age.saturating_add(1);
+                }
+            }
+        } else {
+            self.temporal_histories
+                .retain(|(history_scope, _), _| *history_scope != scope);
+        }
     }
 
     fn maintained_source(
