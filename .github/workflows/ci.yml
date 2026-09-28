@@ -172,6 +172,8 @@ jobs:
             jq -e \
               --arg revision "${RUNENWERK_SOURCE_REVISION}" \
               --arg internal "${internal}" \
+              --argjson evaluation_width "${internal%x*}" \
+              --argjson evaluation_height "${internal#*x}" \
               '
                 .schema_version == 3
                 and .scenario_revision == 3
@@ -185,6 +187,21 @@ jobs:
                 and .gpu.software_status == "software"
                 and (.gpu.evidence_profile_fingerprint | startswith("blake3:"))
                 and .execution.policy == "static_footprint"
+                and (.temporal_reconstruction | length) == 2
+                and all(.temporal_reconstruction[];
+                  .requested_size_px == [1920,1080]
+                  and .evaluation_size_px == [$evaluation_width,$evaluation_height]
+                  and .sequence_revision == 1
+                  and .reconstruction_revision == 1
+                )
+                and .temporal_reconstruction[0].phase == 0
+                and .temporal_reconstruction[0].history_age == 0
+                and .temporal_reconstruction[0].history_reset == true
+                and .temporal_reconstruction[1].phase == 1
+                and .temporal_reconstruction[1].history_age == 1
+                and .temporal_reconstruction[1].history_reset == false
+                and .temporal_reconstruction[1].history_generation
+                    == .temporal_reconstruction[0].history_generation
                 and .execution.native_fallback_active == false
                 and .execution.target_key == null
                 and .execution.internal_view_id == null
