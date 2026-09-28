@@ -2304,8 +2304,7 @@ fn pack_output(
     words[26] = temporal_history.map_or(0, |history| history.age);
     words[27] = temporal_history.map_or(row_stride_words, |history| match &history.storage {
         DeterministicTemporalHistoryUseStorage::Static {
-            row_stride_words,
-            ..
+            row_stride_words, ..
         } => *row_stride_words,
         DeterministicTemporalHistoryUseStorage::Camera { .. } => row_stride_words,
     });
