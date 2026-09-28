@@ -105,6 +105,18 @@ struct DeterministicTemporalHistoryUse {
     age: u32,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct DeterministicOutputExecutionSelection {
+    scope: u64,
+    finite_evaluation_extent: Option<(u32, u32)>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct DeterministicOutputPackingState<'a> {
+    finite_evaluation_extent: Option<(u32, u32)>,
+    temporal_history: Option<&'a DeterministicTemporalHistoryUse>,
+}
+
 /// Renderer-owned logical buffer identities reused by ordinary composed frames.
 ///
 /// RunenGPU's bind-group realization retains the resource dependencies of each realized binding.
@@ -1196,10 +1208,14 @@ fn lower_deterministic_render(
             context,
             resources,
             intent,
-            scope,
-            finite_evaluation.and_then(|(selected_output, extent)| {
-                (selected_output == output.output_index()).then_some(extent)
-            }),
+            DeterministicOutputExecutionSelection {
+                scope,
+                finite_evaluation_extent: finite_evaluation.and_then(
+                    |(selected_output, extent)| {
+                        (selected_output == output.output_index()).then_some(extent)
+                    },
+                ),
+            },
         )?;
         fragments.push(lowered.fragment);
         if let Some(readbacks) = lowered.verification_readbacks {
@@ -1249,9 +1265,12 @@ fn lower_output(
     context: &GpuContext,
     resources: &mut DeterministicResourceCache,
     intent: DeterministicObservationIntent,
-    scope: u64,
-    finite_evaluation_extent: Option<(u32, u32)>,
+    execution: DeterministicOutputExecutionSelection,
 ) -> Result<LoweredDeterministicOutput, RenderDeterministicLoweringError> {
+    let DeterministicOutputExecutionSelection {
+        scope,
+        finite_evaluation_extent,
+    } = execution;
     let admitted_output = admitted
         .outputs()
         .iter()
@@ -1319,7 +1338,7 @@ fn lower_output(
             output_index,
             signature,
             requested_extent,
-            u64::from(alignment),
+            alignment,
         )?)
     } else {
         None
@@ -1332,8 +1351,10 @@ fn lower_output(
         observation,
         object_codes,
         context,
-        finite_evaluation_extent,
-        temporal_history.as_ref(),
+        DeterministicOutputPackingState {
+            finite_evaluation_extent,
+            temporal_history: temporal_history.as_ref(),
+        },
     )?;
     let sample_byte_len = u64::from(packed.sample_count)
         .checked_mul(WORD_BYTES)
@@ -1689,9 +1710,12 @@ fn pack_output(
     observation: RenderObservationSpec,
     object_codes: &BTreeMap<RenderObjectId, u32>,
     context: &GpuContext,
-    finite_evaluation_extent: Option<(u32, u32)>,
-    temporal_history: Option<&DeterministicTemporalHistoryUse>,
+    packing: DeterministicOutputPackingState<'_>,
 ) -> Result<PackedOutput, RenderDeterministicLoweringError> {
+    let DeterministicOutputPackingState {
+        finite_evaluation_extent,
+        temporal_history,
+    } = packing;
     let output_index = admitted_output.output_index();
     let topology = admitted.plan().request().outputs()[output_index]
         .spec()
