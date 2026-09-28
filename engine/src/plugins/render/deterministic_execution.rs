@@ -2955,6 +2955,58 @@ mod tests {
     }
 
     #[test]
+    fn sub_native_camera_pose_change_recreates_temporal_history() {
+        let mut cache = DeterministicResourceCache::default();
+        let first_observation = temporal_test_observation(RenderAffineTransform3::identity());
+        let moved_observation = temporal_test_observation(
+            RenderAffineTransform3::from_row_major_3x4([
+                1.0, 0.0, 0.0, 0.25, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+            ])
+            .expect("valid moved observation"),
+        );
+
+        let mut first_signature = temporal_signature(7);
+        first_signature.observation = temporal_observation_compatibility(
+            RenderObservationSpec::Perspective(first_observation),
+            false,
+        );
+        let first = cache
+            .temporal_history(
+                12,
+                0,
+                first_signature,
+                (4, 4),
+                4,
+                first_observation,
+                false,
+            )
+            .expect("sub-native history should allocate");
+
+        let mut moved_signature = temporal_signature(7);
+        moved_signature.observation = temporal_observation_compatibility(
+            RenderObservationSpec::Perspective(moved_observation),
+            false,
+        );
+        let moved = cache
+            .temporal_history(
+                12,
+                0,
+                moved_signature,
+                (4, 4),
+                4,
+                moved_observation,
+                false,
+            )
+            .expect("sub-native moved history should recreate");
+        assert!(moved.reset);
+        assert_ne!(moved.generation, first.generation);
+        assert!(matches!(
+            moved.storage,
+            DeterministicTemporalHistoryUseStorage::Static { .. }
+        ));
+    }
+
+    #[test]
     fn camera_history_promotes_only_after_completed_submission_reconciliation() {
         use super::super::space_time::RenderAffineTransform3;
 
