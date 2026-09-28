@@ -42,12 +42,17 @@ fn main(
         evaluation_height - 1u,
     );
     let evaluation_index = evaluation_y * evaluation_width + evaluation_x;
+    let history_index = output_y * history_stride + output_x;
     if defined_words[evaluation_index] == 0u {
+        // Do not preserve apparently valid prior radiance when the current finite evaluator
+        // explicitly reports this contributing sample as undefined. T1 does not form a semantic
+        // RenderResult, but its product-visible reconstruction must still fail closed rather than
+        // turning evaluator failure into stale imagery.
+        history_words[history_index] = 0u;
         return;
     }
 
     let current_index = evaluation_y * evaluation_stride + evaluation_x;
-    let history_index = output_y * history_stride + output_x;
     let current = bitcast<f32>(current_words[current_index]);
     let age = min(input_words[26u], 4u);
     if age == 0u {
