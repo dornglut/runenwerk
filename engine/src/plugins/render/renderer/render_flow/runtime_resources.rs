@@ -384,6 +384,7 @@ mod tests {
                 },
                 sample_mode: crate::plugins::render::RenderTextureSampleMode::Uint,
             },
+            initialization: runen_gpu::GpuTextureInitialization::Uninitialized,
         });
 
         let disposition = FlowRuntimeResources::current_runtime_resource_disposition(
