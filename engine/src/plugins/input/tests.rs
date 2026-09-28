@@ -667,7 +667,7 @@ fn automation_absolute_pointer_uses_same_cursor_projection_as_native_path() {
     let mut state = InputState::new();
     let context = InputContext::new(InputSourceId::new(310), None);
 
-    assert_eq!(
+    assert!(
         state
             .admit_automation_observation(
                 context,
@@ -675,10 +675,9 @@ fn automation_absolute_pointer_uses_same_cursor_projection_as_native_path() {
                     position: Point2::new(10.0, 20.0, CoordinateSpace::WindowPhysicalPixels,),
                 },
             )
-            .unwrap(),
-        true
+            .unwrap()
     );
-    assert_eq!(
+    assert!(
         state
             .admit_automation_observation(
                 context,
@@ -686,8 +685,7 @@ fn automation_absolute_pointer_uses_same_cursor_projection_as_native_path() {
                     position: Point2::new(13.0, 26.0, CoordinateSpace::WindowPhysicalPixels,),
                 },
             )
-            .unwrap(),
-        true
+            .unwrap()
     );
 
     assert_eq!(state.mouse_position, (13.0, 26.0));
