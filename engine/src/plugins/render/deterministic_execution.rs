@@ -89,6 +89,7 @@ struct DeterministicTemporalSignature {
 struct DeterministicTemporalHistory {
     signature: DeterministicTemporalSignature,
     handle: GpuBufferHandle,
+    sample_counts: GpuBufferHandle,
     row_stride_words: u32,
     generation: u64,
     phase: u32,
@@ -98,6 +99,7 @@ struct DeterministicTemporalHistory {
 #[derive(Debug, Clone)]
 struct DeterministicTemporalHistoryUse {
     handle: GpuBufferHandle,
+    sample_counts: GpuBufferHandle,
     row_stride_words: u32,
     generation: u64,
     reset: bool,
@@ -283,12 +285,26 @@ impl DeterministicResourceCache {
                 .identities
                 .allocate_buffer_handle(descriptor)
                 .map_err(|error| gpu_authoring("temporal-history allocation", error))?;
+            let count_descriptor = GpuBufferDescriptor::ordinary_owned(
+                format!("RunenRender output {output_index} temporal sample counts"),
+                GpuResourceLifetime::Retained,
+                GpuReconstruction::SourceBacked,
+                byte_len,
+                [GpuBufferUsage::Storage],
+                GpuBufferInitialization::Zeroed,
+            )
+            .map_err(|error| gpu_authoring("temporal sample-count descriptor", error))?;
+            let sample_counts = self
+                .identities
+                .allocate_buffer_handle(count_descriptor)
+                .map_err(|error| gpu_authoring("temporal sample-count allocation", error))?;
             self.next_temporal_generation = self.next_temporal_generation.saturating_add(1);
             self.temporal_histories.insert(
                 key,
                 DeterministicTemporalHistory {
                     signature,
                     handle,
+                    sample_counts,
                     row_stride_words,
                     generation: self.next_temporal_generation,
                     phase: 0,
@@ -306,6 +322,7 @@ impl DeterministicResourceCache {
             .expect("temporal history inserted before use");
         Ok(DeterministicTemporalHistoryUse {
             handle: history.handle.clone(),
+            sample_counts: history.sample_counts.clone(),
             row_stride_words: history.row_stride_words,
             generation: history.generation,
             reset: recreate,
@@ -334,6 +351,16 @@ impl DeterministicResourceCache {
         self.buffers.insert(key, handle.clone());
         Ok(handle)
     }
+}
+
+fn temporal_evaluation_extent_supported(
+    requested_extent: (u32, u32),
+    evaluation_extent: (u32, u32),
+) -> bool {
+    evaluation_extent.0 <= requested_extent.0
+        && evaluation_extent.1 <= requested_extent.1
+        && u64::from(evaluation_extent.0) * 2 >= u64::from(requested_extent.0)
+        && u64::from(evaluation_extent.1) * 2 >= u64::from(requested_extent.1)
 }
 
 fn any_producer_scope_in_flight(
@@ -698,6 +725,11 @@ pub enum RenderDeterministicLoweringError {
         output_index: usize,
         representation_id: RenderRepresentationId,
     },
+    UnsupportedTemporalEvaluationExtent {
+        output_index: usize,
+        requested_extent: (u32, u32),
+        evaluation_extent: (u32, u32),
+    },
     NonInvertibleObjectTransform {
         output_index: usize,
         object_id: RenderObjectId,
@@ -759,6 +791,18 @@ impl fmt::Display for RenderDeterministicLoweringError {
             } => write!(
                 formatter,
                 "output {output_index} representation {representation_id:?} has no source generation required for retained temporal history"
+            ),
+            Self::UnsupportedTemporalEvaluationExtent {
+                output_index,
+                requested_extent,
+                evaluation_extent,
+            } => write!(
+                formatter,
+                "output {output_index} temporal evaluation extent {}x{} cannot cover requested lattice {}x{} with the maintained four-phase footprint sequence",
+                evaluation_extent.0,
+                evaluation_extent.1,
+                requested_extent.0,
+                requested_extent.1
             ),
             Self::NonInvertibleObjectTransform {
                 output_index,
@@ -1308,6 +1352,15 @@ fn lower_output(
             .topology()
             .sample_lattice_dimensions()
             .ok_or(RenderDeterministicLoweringError::UnsupportedOutput { output_index })?;
+        if !temporal_evaluation_extent_supported(requested_extent, evaluation_extent) {
+            return Err(
+                RenderDeterministicLoweringError::UnsupportedTemporalEvaluationExtent {
+                    output_index,
+                    requested_extent,
+                    evaluation_extent,
+                },
+            );
+        }
         let alignment = context
             .device_facts()
             .device_limits()
@@ -1486,11 +1539,6 @@ fn lower_output(
             .topology()
             .sample_lattice_dimensions()
             .ok_or(RenderDeterministicLoweringError::UnsupportedOutput { output_index })?;
-        let requested_count = requested_extent.0.checked_mul(requested_extent.1).ok_or(
-            RenderDeterministicLoweringError::SizeOverflow {
-                field: "temporal reconstruction sample count",
-            },
-        )?;
         let source = resources.reconstruction_source()?;
         let pipeline = GpuComputePipelineDescriptor::ordinary(source, "main")
             .map_err(|error| gpu_authoring("temporal reconstruction pipeline", error))?;
@@ -1500,10 +1548,11 @@ fn lower_output(
                 GpuRuntimeBindingValue::whole_buffer(0, 1, &canonical_output),
                 GpuRuntimeBindingValue::whole_buffer(0, 2, &definedness),
                 GpuRuntimeBindingValue::whole_buffer(0, 3, &history.handle),
+                GpuRuntimeBindingValue::whole_buffer(0, 4, &history.sample_counts),
             ])
             .map_err(|error| gpu_authoring("temporal reconstruction runtime bindings", error))?;
         let dispatch_size = deterministic_dispatch_size(
-            requested_count,
+            packed.sample_count,
             context
                 .device_facts()
                 .workload_budget()
@@ -2390,6 +2439,18 @@ mod tests {
         assert_ne!(reset.generation, first.generation);
         assert_eq!(reset.phase, 0);
         assert_eq!(reset.age, 0);
+    }
+
+    #[test]
+    fn temporal_four_phase_extent_requires_half_to_native_coverage() {
+        let requested = (1920, 1080);
+        for supported in [(1920, 1080), (1440, 810), (1280, 720), (960, 540)] {
+            assert!(temporal_evaluation_extent_supported(requested, supported));
+        }
+        assert!(!temporal_evaluation_extent_supported(requested, (959, 540)));
+        assert!(!temporal_evaluation_extent_supported(requested, (960, 539)));
+        assert!(!temporal_evaluation_extent_supported(requested, (1921, 1080)));
+        assert!(!temporal_evaluation_extent_supported(requested, (1920, 1081)));
     }
 
     #[test]
