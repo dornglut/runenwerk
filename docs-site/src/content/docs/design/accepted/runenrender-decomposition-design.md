@@ -35,7 +35,7 @@ into the long-term framework model and proof constraints.
 Fixed decisions include:
 
 - repository identity and one-package initial shape;
-- dependency `RunenRender -> RunenGPU`;
+- dependencies on standalone RunenShader and RunenGPU through explicit sibling-framework composition;
 - no direct/private WGPU ownership;
 - semantic-rendering ownership rather than image-topology ownership;
 - one immutable renderer-local scene lineage;
@@ -127,7 +127,8 @@ RunenRender does not own:
 - windows, event loops, tracking/XR runtime lifecycle, or product presentation policy;
 - generic GPU resources, work validation, access/hazards, realization, allocation,
   submission, progress/completion, readback mechanics, surfaces, or device outcomes;
-- shader filesystem discovery/watching, authoring compiler policy, or product
+- reusable shader-source/toolchain semantics, canonical shader-artifact formation,
+  source-facing provenance/diagnostics, product filesystem watching, or product
   last-known-good policy;
 - MaterialX, USD, glTF, OCIO, ACES, or another interchange/configuration standard as
   source authority;
@@ -135,8 +136,9 @@ RunenRender does not own:
 - image, dataset, or video encoding;
 - product recovery, severity, quality presets, or application lifecycle.
 
-Runenwerk owns cross-framework adapters and host/product policy. RunenGPU owns generic
-physical GPU execution.
+Runenwerk owns cross-framework adapters and host/product policy. RunenShader owns reusable
+shader-source/toolchain semantics and canonical shader-artifact formation. RunenGPU owns
+generic physical GPU execution and canonical program admission.
 
 ## Repository and package
 
@@ -144,7 +146,7 @@ physical GPU execution.
 repository: dornglut/runen-render
 package: runen-render
 crate: runen_render
-depends on: runen-gpu
+depends on: runen-shader, runen-gpu
 ```
 
 RunenRender initially contains one public package. Internal modules carry responsibility
@@ -913,16 +915,28 @@ rule.
 
 ## Shader/program boundary
 
-RunenRender owns renderer shader/kernel meaning, semantic variants, and method-specific
-program families.
+RunenRender owns renderer shader/kernel meaning, semantic variants, method-specific
+program families, and the explicit consumer bridge from an accepted canonical shader
+artifact into GPU program admission when both sibling frameworks are used.
 
-Runenwerk owns authoring source roots, package/source policy, compiler selection where
-applicable, canonical artifact generation/source maps, watching/reload scheduling, and
-product last-known-good policy.
+RunenShader owns reusable shader-source identity/composition, frontend compilation,
+canonical shader-artifact formation, source provenance/mapping, and source-facing
+diagnostics. RunenRender may consume those artifacts without becoming the shader
+toolchain authority.
 
 RunenGPU owns canonical program admission, explicit interfaces/layouts,
 specialization/binding compatibility, backend realization, and physical cache
-compatibility.
+compatibility. RunenShader artifact metadata must not become a second authority for
+RunenGPU program-interface facts.
+
+Runenwerk owns product source-root/package policy, filesystem watching/reload scheduling,
+integration, recovery, and product last-known-good policy. Those product concerns do not
+transfer reusable shader-toolchain semantics back into Runenwerk.
+
+RunenShader and RunenGPU remain sibling standalone frameworks. Neither requires the other
+to define its semantic core; future RunenRender may depend on both and own the explicit
+artifact-to-program-admission integration without transferring either framework's
+authority.
 
 Shader-language interfaces are implementation tools rather than representation/query
 semantic protocol authority. Variant count and cold/warm compilation/cache pressure
