@@ -113,6 +113,31 @@ pub(super) struct KeyboardPressSample {
     pub(super) modifiers: ModifiersSnapshot,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct AdmittedInputCaptureLimits {
+    pub(crate) max_groups_per_frame: usize,
+    pub(crate) max_observations_per_group: usize,
+    pub(crate) max_total_groups: usize,
+    pub(crate) max_total_observations: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AdmittedInputCaptureLimit {
+    GroupsPerFrame,
+    ObservationsPerGroup,
+    TotalGroups,
+    TotalObservations,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct AdmittedInputCaptureCounters {
+    pub(crate) total_groups: usize,
+    pub(crate) total_observations: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct AdmittedInputCaptureLease(u64);
+
 #[derive(Debug, runen_ecs::Component, runen_ecs::Resource)]
 pub struct InputState {
     neutral: NeutralInputState,
@@ -127,6 +152,11 @@ pub struct InputState {
     device_observation_groups: Vec<InputObservationGroup>,
     admitted_input_capture_active: bool,
     captured_admitted_groups: Vec<InputObservationGroup>,
+    admitted_input_capture_limits: Option<AdmittedInputCaptureLimits>,
+    admitted_input_capture_failure: Option<AdmittedInputCaptureLimit>,
+    admitted_input_capture_counters: AdmittedInputCaptureCounters,
+    admitted_input_capture_lease: Option<AdmittedInputCaptureLease>,
+    next_admitted_input_capture_lease: u64,
     primary_touch: Option<(InputContext, ContactId)>,
     pub scroll_delta: f32,
     left_mouse_pressed: bool,
@@ -152,6 +182,11 @@ impl Default for InputState {
             device_observation_groups: Vec::new(),
             admitted_input_capture_active: false,
             captured_admitted_groups: Vec::new(),
+            admitted_input_capture_limits: None,
+            admitted_input_capture_failure: None,
+            admitted_input_capture_counters: AdmittedInputCaptureCounters::default(),
+            admitted_input_capture_lease: None,
+            next_admitted_input_capture_lease: 0,
             primary_touch: None,
             scroll_delta: 0.0,
             left_mouse_pressed: false,
@@ -171,19 +206,102 @@ impl InputState {
 
     fn admit_group(&mut self, group: &InputObservationGroup) -> Result<(), InputError> {
         self.neutral.admit(group)?;
-        if self.admitted_input_capture_active {
-            self.captured_admitted_groups.push(group.clone());
-        }
+        self.capture_admitted_group(group);
         Ok(())
     }
 
+    fn capture_admitted_group(&mut self, group: &InputObservationGroup) {
+        if !self.admitted_input_capture_active {
+            return;
+        }
+
+        if let Some(limits) = self.admitted_input_capture_limits {
+            let observations = group.observations.len();
+            let limit = if observations > limits.max_observations_per_group {
+                Some(AdmittedInputCaptureLimit::ObservationsPerGroup)
+            } else if self.captured_admitted_groups.len() >= limits.max_groups_per_frame {
+                Some(AdmittedInputCaptureLimit::GroupsPerFrame)
+            } else if self.admitted_input_capture_counters.total_groups >= limits.max_total_groups {
+                Some(AdmittedInputCaptureLimit::TotalGroups)
+            } else if self
+                .admitted_input_capture_counters
+                .total_observations
+                .checked_add(observations)
+                .is_none_or(|total| total > limits.max_total_observations)
+            {
+                Some(AdmittedInputCaptureLimit::TotalObservations)
+            } else {
+                None
+            };
+            if let Some(limit) = limit {
+                self.admitted_input_capture_active = false;
+                self.captured_admitted_groups.clear();
+                self.admitted_input_capture_failure = Some(limit);
+                return;
+            }
+        }
+
+        self.admitted_input_capture_counters.total_groups = self
+            .admitted_input_capture_counters
+            .total_groups
+            .saturating_add(1);
+        self.admitted_input_capture_counters.total_observations = self
+            .admitted_input_capture_counters
+            .total_observations
+            .saturating_add(group.observations.len());
+        self.captured_admitted_groups.push(group.clone());
+    }
+
     pub fn start_admitted_input_capture(&mut self) {
+        let _ = self.start_admitted_input_capture_with_limits(None);
+    }
+
+    pub(crate) fn start_bounded_admitted_input_capture(
+        &mut self,
+        limits: AdmittedInputCaptureLimits,
+    ) -> AdmittedInputCaptureLease {
+        self.start_admitted_input_capture_with_limits(Some(limits))
+    }
+
+    fn start_admitted_input_capture_with_limits(
+        &mut self,
+        limits: Option<AdmittedInputCaptureLimits>,
+    ) -> AdmittedInputCaptureLease {
+        let lease = AdmittedInputCaptureLease(self.next_admitted_input_capture_lease);
+        self.next_admitted_input_capture_lease = self
+            .next_admitted_input_capture_lease
+            .checked_add(1)
+            .expect("admitted-input capture lease identity space exhausted");
         self.captured_admitted_groups.clear();
+        self.admitted_input_capture_limits = limits;
+        self.admitted_input_capture_failure = None;
+        self.admitted_input_capture_counters = AdmittedInputCaptureCounters::default();
+        self.admitted_input_capture_lease = Some(lease);
         self.admitted_input_capture_active = true;
+        lease
     }
 
     pub fn admitted_input_capture_active(&self) -> bool {
         self.admitted_input_capture_active
+    }
+
+    pub(crate) fn admitted_input_capture_lease_is(&self, lease: AdmittedInputCaptureLease) -> bool {
+        self.admitted_input_capture_lease == Some(lease)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn admitted_input_capture_failure(&self) -> Option<AdmittedInputCaptureLimit> {
+        self.admitted_input_capture_failure
+    }
+
+    pub(crate) fn take_admitted_input_capture_failure(
+        &mut self,
+    ) -> Option<AdmittedInputCaptureLimit> {
+        self.admitted_input_capture_failure.take()
+    }
+
+    pub(crate) fn admitted_input_capture_counters(&self) -> AdmittedInputCaptureCounters {
+        self.admitted_input_capture_counters
     }
 
     pub(crate) fn pointer_button_down_anywhere(&self, button: PointerButton) -> bool {
@@ -225,7 +343,19 @@ impl InputState {
 
     pub fn stop_admitted_input_capture(&mut self) -> Vec<InputObservationGroup> {
         self.admitted_input_capture_active = false;
+        self.admitted_input_capture_limits = None;
+        self.admitted_input_capture_lease = None;
         self.drain_admitted_input_capture()
+    }
+
+    pub(crate) fn stop_admitted_input_capture_if_owned(
+        &mut self,
+        lease: AdmittedInputCaptureLease,
+    ) -> Option<Vec<InputObservationGroup>> {
+        if !self.admitted_input_capture_lease_is(lease) {
+            return None;
+        }
+        Some(self.stop_admitted_input_capture())
     }
 
     pub fn admit_device_observation_group(

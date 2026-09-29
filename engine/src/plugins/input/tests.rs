@@ -4,10 +4,12 @@ use crate::plugins::{
     TouchInputPhase, action,
 };
 use runen_input::{
-    ContactId, ContactInput, ContactPhase, ContinuityLoss, CoordinateSpace, DigitalState,
-    InputContext, InputDeviceId, InputObservation, InputObservationGroup, InputSourceId,
-    KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey, ObservationOrigin,
-    PhysicalKeyIdentity, Point2, PointerButton, PointerButtonInput, RelativeMotionUnit, Vector2,
+    ContactId, ContactInput, ContactPhase, ContactPresence, ContinuityLoss, CoordinateSpace,
+    DeliveryRole, DigitalState, EvidenceStatus, InputContext, InputDeviceId, InputObservation,
+    InputObservationGroup, InputSourceId, InputToolKind, KeyLocation, KeyboardInput, LogicalKey,
+    NativeLogicalKey, ObservationOrigin, PhysicalKeyIdentity, PhysicalTabletControls, Point2,
+    PointerButton, PointerButtonInput, RelativeMotionUnit, TabletCapabilities, TabletObservation,
+    Vector2,
 };
 use winit::event::{ElementState, MouseButton};
 use winit::keyboard::KeyCode;
@@ -702,4 +704,150 @@ fn automation_absolute_pointer_uses_same_cursor_projection_as_native_path() {
             },
         ]
     );
+}
+
+#[test]
+fn bounded_admitted_capture_failure_does_not_reject_product_input() {
+    let mut input = InputState::new();
+    input.start_bounded_admitted_input_capture(crate::plugins::AdmittedInputCaptureLimits {
+        max_groups_per_frame: 1,
+        max_observations_per_group: 4,
+        max_total_groups: 8,
+        max_total_observations: 8,
+    });
+
+    input.handle_mouse_input(ElementState::Pressed, MouseButton::Left);
+    input.handle_mouse_input(ElementState::Pressed, MouseButton::Right);
+
+    assert!(input.right_mouse_down());
+    assert!(!input.admitted_input_capture_active());
+    assert_eq!(
+        input.admitted_input_capture_failure(),
+        Some(crate::plugins::AdmittedInputCaptureLimit::GroupsPerFrame)
+    );
+    assert!(input.drain_admitted_input_capture().is_empty());
+    assert_eq!(
+        input.admitted_input_capture_counters(),
+        crate::plugins::AdmittedInputCaptureCounters {
+            total_groups: 1,
+            total_observations: 1,
+        }
+    );
+}
+
+#[test]
+fn bounded_admitted_capture_total_budget_survives_frame_drains() {
+    let mut input = InputState::new();
+    input.start_bounded_admitted_input_capture(crate::plugins::AdmittedInputCaptureLimits {
+        max_groups_per_frame: 4,
+        max_observations_per_group: 4,
+        max_total_groups: 1,
+        max_total_observations: 8,
+    });
+
+    input.handle_mouse_motion(1.0, 2.0);
+    assert_eq!(input.drain_admitted_input_capture().len(), 1);
+    input.handle_mouse_wheel_delta(2.5);
+
+    assert_eq!(input.scroll_delta, 2.5);
+    assert!(!input.admitted_input_capture_active());
+    assert_eq!(
+        input.admitted_input_capture_failure(),
+        Some(crate::plugins::AdmittedInputCaptureLimit::TotalGroups)
+    );
+    assert!(input.drain_admitted_input_capture().is_empty());
+}
+
+#[test]
+fn bounded_admitted_capture_rejects_oversized_atomic_group_before_cloning() {
+    let mut input = InputState::new();
+    input.start_bounded_admitted_input_capture(crate::plugins::AdmittedInputCaptureLimits {
+        max_groups_per_frame: 4,
+        max_observations_per_group: 1,
+        max_total_groups: 8,
+        max_total_observations: 8,
+    });
+
+    let context = InputContext::new(InputSourceId::new(713), Some(InputDeviceId::new(11)));
+    let tablet = |contact, delivery| {
+        InputObservation::Tablet(TabletObservation {
+            contact: ContactId::new(contact),
+            tool: None,
+            tool_kind: InputToolKind::Pen,
+            phase: ContactPhase::Update,
+            presence: ContactPresence::Contact,
+            position: Point2::new(contact as f32, 4.0, CoordinateSpace::WindowPhysicalPixels),
+            delta: Vector2::new(1.0, 0.0),
+            pressure: None,
+            tangential_pressure: None,
+            tilt: None,
+            twist: None,
+            controls: PhysicalTabletControls::default(),
+            capabilities: TabletCapabilities::default(),
+            source_time: None,
+            evidence: EvidenceStatus::ObservedConfirmed,
+            delivery,
+            origin: ObservationOrigin::SourceReport,
+        })
+    };
+    let group = InputObservationGroup::new(
+        context,
+        vec![
+            tablet(1, DeliveryRole::HistoricalCoalesced),
+            tablet(2, DeliveryRole::OrdinaryCurrent),
+        ],
+    );
+
+    input
+        .admit_device_observation_group(group)
+        .expect("valid product input group should still admit");
+
+    assert!(!input.admitted_input_capture_active());
+    assert_eq!(
+        input.admitted_input_capture_failure(),
+        Some(crate::plugins::AdmittedInputCaptureLimit::ObservationsPerGroup)
+    );
+    assert_eq!(
+        input.admitted_input_capture_counters(),
+        crate::plugins::AdmittedInputCaptureCounters::default(),
+        "the violating group must not enter automation capture counters"
+    );
+    assert!(input.drain_admitted_input_capture().is_empty());
+    let staged = input.drain_device_observation_groups();
+    assert_eq!(
+        staged.len(),
+        1,
+        "product staging must survive capture failure"
+    );
+    assert_eq!(staged[0].observations.len(), 2);
+}
+
+#[test]
+fn bounded_admitted_capture_total_observation_limit_preserves_product_input() {
+    let mut input = InputState::new();
+    input.start_bounded_admitted_input_capture(crate::plugins::AdmittedInputCaptureLimits {
+        max_groups_per_frame: 4,
+        max_observations_per_group: 4,
+        max_total_groups: 8,
+        max_total_observations: 1,
+    });
+
+    input.handle_mouse_motion(1.0, 2.0);
+    input.handle_mouse_wheel_delta(2.5);
+
+    assert_eq!(input.scroll_delta, 2.5);
+    assert!(!input.admitted_input_capture_active());
+    assert_eq!(
+        input.admitted_input_capture_failure(),
+        Some(crate::plugins::AdmittedInputCaptureLimit::TotalObservations)
+    );
+    assert_eq!(
+        input.admitted_input_capture_counters(),
+        crate::plugins::AdmittedInputCaptureCounters {
+            total_groups: 1,
+            total_observations: 1,
+        },
+        "the violating observation must not enter capture counters"
+    );
+    assert!(input.drain_admitted_input_capture().is_empty());
 }

@@ -8,9 +8,13 @@ use std::time::Duration;
 
 use crate::app::App;
 use crate::plugin::Plugin;
-use crate::plugins::InputState;
 use crate::plugins::input::input_integration_is_active;
+use crate::plugins::{
+    AdmittedInputCaptureCounters, AdmittedInputCaptureLease, AdmittedInputCaptureLimit,
+    AdmittedInputCaptureLimits, InputState,
+};
 use crate::runtime::{CoreSet, FrameEnd, ResMut, SystemConfigExt};
+use runen_ecs::SystemSet;
 use runen_input::{ContinuityLoss, InputContext};
 pub use runen_input::{
     DigitalState, InputObservation, InputObservationGroup, InputSourceId, PointerButton,
@@ -80,11 +84,177 @@ impl fmt::Display for AutomationInputTraceControlError {
 
 impl std::error::Error for AutomationInputTraceControlError {}
 
+pub const PRODUCTION_TRACE_MAX_RETAINED_FRAMES: usize = 16_384;
+pub const PRODUCTION_TRACE_MAX_TOTAL_GROUPS: usize = 65_536;
+pub const PRODUCTION_TRACE_MAX_GROUPS_PER_FRAME: usize = 4_096;
+pub const PRODUCTION_TRACE_MAX_OBSERVATIONS_PER_GROUP: usize = 256;
+pub const PRODUCTION_TRACE_MAX_TOTAL_OBSERVATIONS: usize = 262_144;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AutomationInputTraceProductionPolicy {
+    max_retained_frames: usize,
+    max_total_groups: usize,
+    max_groups_per_frame: usize,
+    max_observations_per_group: usize,
+    max_total_observations: usize,
+}
+
+impl Default for AutomationInputTraceProductionPolicy {
+    fn default() -> Self {
+        Self {
+            max_retained_frames: PRODUCTION_TRACE_MAX_RETAINED_FRAMES,
+            max_total_groups: PRODUCTION_TRACE_MAX_TOTAL_GROUPS,
+            max_groups_per_frame: PRODUCTION_TRACE_MAX_GROUPS_PER_FRAME,
+            max_observations_per_group: PRODUCTION_TRACE_MAX_OBSERVATIONS_PER_GROUP,
+            max_total_observations: PRODUCTION_TRACE_MAX_TOTAL_OBSERVATIONS,
+        }
+    }
+}
+
+impl AutomationInputTraceProductionPolicy {
+    fn admitted_limits(self) -> AdmittedInputCaptureLimits {
+        AdmittedInputCaptureLimits {
+            max_groups_per_frame: self.max_groups_per_frame,
+            max_observations_per_group: self.max_observations_per_group,
+            max_total_groups: self.max_total_groups,
+            max_total_observations: self.max_total_observations,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct AutomationInputTraceRecordingCounters {
+    pub retained_frames: usize,
+    pub total_groups: usize,
+    pub total_observations: usize,
+}
+
+impl AutomationInputTraceRecordingCounters {
+    fn from_capture(retained_frames: usize, captured: AdmittedInputCaptureCounters) -> Self {
+        Self {
+            retained_frames,
+            total_groups: captured.total_groups,
+            total_observations: captured.total_observations,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AutomationInputTraceRecordingFailure {
+    CaptureLimit(AdmittedInputCaptureLimit),
+    RetainedFrames,
+    CaptureLeaseLost,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum AutomationInputTraceRecordingStatus {
+    #[default]
+    Idle,
+    Recording(AutomationInputTraceRecordingCounters),
+    StopRequested(AutomationInputTraceRecordingCounters),
+    Completed(AutomationInputTraceRecordingCounters),
+    Failed {
+        counters: AutomationInputTraceRecordingCounters,
+        failure: AutomationInputTraceRecordingFailure,
+    },
+}
+
+#[derive(Debug, Default, runen_ecs::Resource)]
+pub struct AutomationInputTraceControl {
+    status: AutomationInputTraceRecordingStatus,
+    completed_trace: Option<AutomationInputTrace>,
+}
+
+impl AutomationInputTraceControl {
+    pub fn status(&self) -> &AutomationInputTraceRecordingStatus {
+        &self.status
+    }
+
+    pub fn request_stop(&mut self) -> bool {
+        match self.status {
+            AutomationInputTraceRecordingStatus::Recording(counters) => {
+                self.status = AutomationInputTraceRecordingStatus::StopRequested(counters);
+                true
+            }
+            AutomationInputTraceRecordingStatus::StopRequested(_) => true,
+            AutomationInputTraceRecordingStatus::Idle
+            | AutomationInputTraceRecordingStatus::Completed(_)
+            | AutomationInputTraceRecordingStatus::Failed { .. } => false,
+        }
+    }
+
+    pub fn take_completed_trace(&mut self) -> Option<AutomationInputTrace> {
+        let trace = self.completed_trace.take()?;
+        self.status = AutomationInputTraceRecordingStatus::Idle;
+        Some(trace)
+    }
+
+    fn begin(&mut self) -> bool {
+        if !matches!(self.status, AutomationInputTraceRecordingStatus::Idle) {
+            return false;
+        }
+        self.completed_trace = None;
+        self.status = AutomationInputTraceRecordingStatus::Recording(
+            AutomationInputTraceRecordingCounters::default(),
+        );
+        true
+    }
+
+    fn update_counters(&mut self, counters: AutomationInputTraceRecordingCounters) {
+        self.status = match self.status {
+            AutomationInputTraceRecordingStatus::Recording(_) => {
+                AutomationInputTraceRecordingStatus::Recording(counters)
+            }
+            AutomationInputTraceRecordingStatus::StopRequested(_) => {
+                AutomationInputTraceRecordingStatus::StopRequested(counters)
+            }
+            _ => return,
+        };
+    }
+
+    fn complete(
+        &mut self,
+        trace: AutomationInputTrace,
+        counters: AutomationInputTraceRecordingCounters,
+    ) {
+        self.completed_trace = Some(trace);
+        self.status = AutomationInputTraceRecordingStatus::Completed(counters);
+    }
+
+    fn fail(
+        &mut self,
+        counters: AutomationInputTraceRecordingCounters,
+        failure: AutomationInputTraceRecordingFailure,
+    ) {
+        self.completed_trace = None;
+        self.status = AutomationInputTraceRecordingStatus::Failed { counters, failure };
+    }
+
+    fn known_counters(&self) -> AutomationInputTraceRecordingCounters {
+        match self.status {
+            AutomationInputTraceRecordingStatus::Idle => {
+                AutomationInputTraceRecordingCounters::default()
+            }
+            AutomationInputTraceRecordingStatus::Recording(counters)
+            | AutomationInputTraceRecordingStatus::StopRequested(counters)
+            | AutomationInputTraceRecordingStatus::Completed(counters) => counters,
+            AutomationInputTraceRecordingStatus::Failed { counters, .. } => counters,
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, SystemSet)]
+pub enum AutomationInputTraceSet {
+    CaptureAndFinalize,
+}
+
 #[derive(Debug, Default, runen_ecs::Resource)]
 struct AutomationInputTraceRecorder {
     active: bool,
     next_frame_ordinal: u64,
     frames: Vec<AutomationInputTraceFrame>,
+    production_policy: Option<AutomationInputTraceProductionPolicy>,
+    production_capture_lease: Option<AdmittedInputCaptureLease>,
 }
 
 impl AutomationInputTraceRecorder {
@@ -92,15 +262,37 @@ impl AutomationInputTraceRecorder {
         self.active = true;
         self.next_frame_ordinal = 0;
         self.frames.clear();
+        self.production_policy = None;
+        self.production_capture_lease = None;
+    }
+
+    fn start_production(
+        &mut self,
+        policy: AutomationInputTraceProductionPolicy,
+        capture_lease: AdmittedInputCaptureLease,
+    ) {
+        self.start();
+        self.production_policy = Some(policy);
+        self.production_capture_lease = Some(capture_lease);
     }
 
     fn finish(&mut self, trailing_groups: Vec<InputObservationGroup>) -> AutomationInputTrace {
         self.active = false;
         self.next_frame_ordinal = 0;
+        self.production_policy = None;
+        self.production_capture_lease = None;
         AutomationInputTrace {
             frames: std::mem::take(&mut self.frames),
             trailing_groups,
         }
+    }
+
+    fn abort(&mut self) {
+        self.active = false;
+        self.next_frame_ordinal = 0;
+        self.production_policy = None;
+        self.production_capture_lease = None;
+        self.frames.clear();
     }
 
     fn close_frame(&mut self, groups: Vec<InputObservationGroup>) {
@@ -126,9 +318,12 @@ impl Plugin for AutomationInputTracePlugin {
         }
 
         app.init_resource::<AutomationInputTraceRecorder>();
+        app.init_resource::<AutomationInputTraceControl>();
         app.add_systems(
             FrameEnd,
-            automation_input_trace_frame_end_system.after(CoreSet::FrameEnd),
+            automation_input_trace_frame_end_system
+                .after(CoreSet::FrameEnd)
+                .in_set(AutomationInputTraceSet::CaptureAndFinalize),
         );
     }
 }
@@ -136,11 +331,95 @@ impl Plugin for AutomationInputTracePlugin {
 fn automation_input_trace_frame_end_system(
     mut input: ResMut<InputState>,
     mut recorder: ResMut<AutomationInputTraceRecorder>,
+    mut control: ResMut<AutomationInputTraceControl>,
 ) {
     if !recorder.active {
         return;
     }
-    recorder.close_frame(input.drain_admitted_input_capture());
+
+    let Some(policy) = recorder.production_policy else {
+        recorder.close_frame(input.drain_admitted_input_capture());
+        return;
+    };
+    let Some(capture_lease) = recorder.production_capture_lease else {
+        let counters = control.known_counters();
+        recorder.abort();
+        control.fail(
+            counters,
+            AutomationInputTraceRecordingFailure::CaptureLeaseLost,
+        );
+        return;
+    };
+
+    if !input.admitted_input_capture_lease_is(capture_lease) {
+        let counters = control.known_counters();
+        recorder.abort();
+        control.fail(
+            counters,
+            AutomationInputTraceRecordingFailure::CaptureLeaseLost,
+        );
+        return;
+    }
+
+    let captured = input.admitted_input_capture_counters();
+    if let Some(limit) = input.take_admitted_input_capture_failure() {
+        let counters =
+            AutomationInputTraceRecordingCounters::from_capture(recorder.frames.len(), captured);
+        let _ = input.stop_admitted_input_capture_if_owned(capture_lease);
+        recorder.abort();
+        control.fail(
+            counters,
+            AutomationInputTraceRecordingFailure::CaptureLimit(limit),
+        );
+        return;
+    }
+    if !input.admitted_input_capture_active() {
+        let counters =
+            AutomationInputTraceRecordingCounters::from_capture(recorder.frames.len(), captured);
+        let _ = input.stop_admitted_input_capture_if_owned(capture_lease);
+        recorder.abort();
+        control.fail(
+            counters,
+            AutomationInputTraceRecordingFailure::CaptureLeaseLost,
+        );
+        return;
+    }
+
+    let groups = input.drain_admitted_input_capture();
+    if recorder.frames.len() >= policy.max_retained_frames {
+        let counters =
+            AutomationInputTraceRecordingCounters::from_capture(recorder.frames.len(), captured);
+        let _ = input.stop_admitted_input_capture_if_owned(capture_lease);
+        recorder.abort();
+        control.fail(
+            counters,
+            AutomationInputTraceRecordingFailure::RetainedFrames,
+        );
+        return;
+    }
+
+    recorder.close_frame(groups);
+    let counters =
+        AutomationInputTraceRecordingCounters::from_capture(recorder.frames.len(), captured);
+    control.update_counters(counters);
+
+    if matches!(
+        control.status(),
+        AutomationInputTraceRecordingStatus::StopRequested(_)
+    ) {
+        let Some(trailing_groups) = input.stop_admitted_input_capture_if_owned(capture_lease)
+        else {
+            recorder.abort();
+            control.fail(
+                counters,
+                AutomationInputTraceRecordingFailure::CaptureLeaseLost,
+            );
+            return;
+        };
+        debug_assert!(trailing_groups.is_empty());
+        let trace = recorder.finish(trailing_groups);
+        control.complete(trace, counters);
+    }
 }
 
 pub trait AppAutomationInputTraceExt {
@@ -151,6 +430,11 @@ pub trait AppAutomationInputTraceExt {
     fn stop_automation_input_trace(
         &mut self,
     ) -> Result<AutomationInputTrace, AutomationInputTraceControlError>;
+
+    fn start_bounded_automation_input_trace(
+        &mut self,
+        policy: AutomationInputTraceProductionPolicy,
+    ) -> Result<&mut Self, AutomationInputTraceControlError>;
 
     fn automation_input_trace_active(&self) -> bool;
 }
@@ -216,6 +500,46 @@ impl AppAutomationInputTraceExt for App {
             .resource_mut::<AutomationInputTraceRecorder>()
             .expect("trace integration presence was checked")
             .finish(trailing_groups))
+    }
+
+    fn start_bounded_automation_input_trace(
+        &mut self,
+        policy: AutomationInputTraceProductionPolicy,
+    ) -> Result<&mut Self, AutomationInputTraceControlError> {
+        let recorder = self
+            .world()
+            .resource::<AutomationInputTraceRecorder>()
+            .map_err(|_| AutomationInputTraceControlError::TraceIntegrationUnavailable)?;
+        if recorder.active {
+            return Err(AutomationInputTraceControlError::TraceAlreadyActive);
+        }
+
+        let input = self
+            .world()
+            .resource::<InputState>()
+            .map_err(|_| AutomationInputTraceControlError::InputIntegrationUnavailable)?;
+        if input.admitted_input_capture_active() {
+            return Err(AutomationInputTraceControlError::AdmittedInputCaptureAlreadyActive);
+        }
+
+        let control = self
+            .world_mut()
+            .resource_mut::<AutomationInputTraceControl>()
+            .map_err(|_| AutomationInputTraceControlError::TraceIntegrationUnavailable)?;
+        if !control.begin() {
+            return Err(AutomationInputTraceControlError::TraceAlreadyActive);
+        }
+
+        let capture_lease = self
+            .world_mut()
+            .resource_mut::<InputState>()
+            .expect("input integration presence was checked")
+            .start_bounded_admitted_input_capture(policy.admitted_limits());
+        self.world_mut()
+            .resource_mut::<AutomationInputTraceRecorder>()
+            .expect("trace integration presence was checked")
+            .start_production(policy, capture_lease);
+        Ok(self)
     }
 
     fn automation_input_trace_active(&self) -> bool {
@@ -1962,5 +2286,417 @@ mod tests {
         );
         assert!(!session.replay_teardown_pending());
         assert!(!session.is_active());
+    }
+    #[test]
+    fn bounded_recording_stop_completes_after_final_frame_capture() {
+        let mut app = App::headless();
+        app.add_plugin(InputFinalizePlugin);
+        app.add_plugin(AutomationInputTracePlugin);
+        app.start_bounded_automation_input_trace(AutomationInputTraceProductionPolicy {
+            max_retained_frames: 4,
+            max_total_groups: 8,
+            max_groups_per_frame: 4,
+            max_observations_per_group: 4,
+            max_total_observations: 8,
+        })
+        .expect("bounded recording should start");
+
+        app.world_mut()
+            .resource_mut::<InputState>()
+            .expect("input should exist")
+            .handle_mouse_input(
+                winit::event::ElementState::Pressed,
+                winit::event::MouseButton::Left,
+            );
+        assert!(
+            app.world_mut()
+                .resource_mut::<AutomationInputTraceControl>()
+                .expect("trace control should exist")
+                .request_stop()
+        );
+
+        app = app
+            .run_for_frames(1)
+            .expect("final recording frame should run");
+
+        let control = app
+            .world_mut()
+            .resource_mut::<AutomationInputTraceControl>()
+            .expect("trace control should exist");
+        assert!(matches!(
+            control.status(),
+            AutomationInputTraceRecordingStatus::Completed(AutomationInputTraceRecordingCounters {
+                retained_frames: 1,
+                total_groups: 1,
+                total_observations: 1,
+            })
+        ));
+        let trace = control
+            .take_completed_trace()
+            .expect("completed trace should be one-shot available");
+        assert_eq!(trace.frames().len(), 1);
+        assert_eq!(trace.frames()[0].groups().len(), 1);
+        assert!(trace.trailing_groups().is_empty());
+        assert!(matches!(
+            control.status(),
+            AutomationInputTraceRecordingStatus::Idle
+        ));
+        assert!(control.take_completed_trace().is_none());
+    }
+
+    #[test]
+    fn retained_frame_limit_fails_and_releases_capture_ownership() {
+        let mut app = App::headless();
+        app.add_plugin(InputFinalizePlugin);
+        app.add_plugin(AutomationInputTracePlugin);
+        app.start_bounded_automation_input_trace(AutomationInputTraceProductionPolicy {
+            max_retained_frames: 1,
+            max_total_groups: 8,
+            max_groups_per_frame: 4,
+            max_observations_per_group: 4,
+            max_total_observations: 8,
+        })
+        .expect("bounded recording should start");
+
+        app = app.run_for_frames(1).expect("first frame should run");
+        app = app.run_for_frames(1).expect("overflow frame should run");
+
+        assert!(matches!(
+            app.world()
+                .resource::<AutomationInputTraceControl>()
+                .expect("trace control should exist")
+                .status(),
+            AutomationInputTraceRecordingStatus::Failed {
+                failure: AutomationInputTraceRecordingFailure::RetainedFrames,
+                ..
+            }
+        ));
+        assert!(
+            !app.world()
+                .resource::<InputState>()
+                .expect("input should exist")
+                .admitted_input_capture_active()
+        );
+        assert!(!app.automation_input_trace_active());
+    }
+
+    #[test]
+    fn bounded_recording_requires_unowned_capture_before_start() {
+        let mut app = trace_app();
+        app.world_mut()
+            .resource_mut::<InputState>()
+            .expect("input should exist")
+            .start_admitted_input_capture();
+
+        assert!(matches!(
+            app.start_bounded_automation_input_trace(
+                AutomationInputTraceProductionPolicy::default()
+            ),
+            Err(AutomationInputTraceControlError::AdmittedInputCaptureAlreadyActive)
+        ));
+
+        let trailing = app
+            .world_mut()
+            .resource_mut::<InputState>()
+            .expect("input should exist")
+            .stop_admitted_input_capture();
+        assert!(trailing.is_empty());
+
+        app.start_bounded_automation_input_trace(AutomationInputTraceProductionPolicy::default())
+            .expect("bounded recording should start after capture ownership is released");
+    }
+
+    #[test]
+    fn bounded_recording_stop_after_capture_point_completes_on_next_frame() {
+        let mut app = trace_app();
+        app.start_bounded_automation_input_trace(AutomationInputTraceProductionPolicy {
+            max_retained_frames: 4,
+            max_total_groups: 8,
+            max_groups_per_frame: 4,
+            max_observations_per_group: 4,
+            max_total_observations: 8,
+        })
+        .expect("bounded recording should start");
+
+        app.world_mut()
+            .resource_mut::<InputState>()
+            .expect("input should exist")
+            .handle_mouse_input(
+                winit::event::ElementState::Pressed,
+                winit::event::MouseButton::Left,
+            );
+        app = app
+            .run_for_frames(1)
+            .expect("first recording frame should run");
+
+        assert!(matches!(
+            app.world()
+                .resource::<AutomationInputTraceControl>()
+                .expect("trace control should exist")
+                .status(),
+            AutomationInputTraceRecordingStatus::Recording(AutomationInputTraceRecordingCounters {
+                retained_frames: 1,
+                total_groups: 1,
+                total_observations: 1,
+            })
+        ));
+        assert!(
+            app.world_mut()
+                .resource_mut::<AutomationInputTraceControl>()
+                .expect("trace control should exist")
+                .request_stop()
+        );
+
+        app = app
+            .run_for_frames(1)
+            .expect("post-request finalization frame should run");
+
+        let control = app
+            .world_mut()
+            .resource_mut::<AutomationInputTraceControl>()
+            .expect("trace control should exist");
+        assert!(matches!(
+            control.status(),
+            AutomationInputTraceRecordingStatus::Completed(AutomationInputTraceRecordingCounters {
+                retained_frames: 2,
+                total_groups: 1,
+                total_observations: 1,
+            })
+        ));
+        let trace = control
+            .take_completed_trace()
+            .expect("completed trace should be available exactly once");
+        assert_eq!(trace.frames().len(), 2);
+        assert_eq!(trace.frames()[0].groups().len(), 1);
+        assert!(
+            trace.frames()[1].groups().is_empty(),
+            "a stop after the prior capture point must finalize through a framed idle tick"
+        );
+        assert!(trace.trailing_groups().is_empty());
+    }
+
+    #[test]
+    fn bounded_recording_capture_failure_discards_prefix_and_stays_failed() {
+        let mut app = trace_app();
+        let policy = AutomationInputTraceProductionPolicy {
+            max_retained_frames: 4,
+            max_total_groups: 1,
+            max_groups_per_frame: 4,
+            max_observations_per_group: 4,
+            max_total_observations: 8,
+        };
+        app.start_bounded_automation_input_trace(policy)
+            .expect("bounded recording should start");
+
+        app.world_mut()
+            .resource_mut::<InputState>()
+            .expect("input should exist")
+            .handle_mouse_input(
+                winit::event::ElementState::Pressed,
+                winit::event::MouseButton::Left,
+            );
+        app = app
+            .run_for_frames(1)
+            .expect("first recording frame should run");
+
+        app.world_mut()
+            .resource_mut::<InputState>()
+            .expect("input should exist")
+            .handle_mouse_input(
+                winit::event::ElementState::Pressed,
+                winit::event::MouseButton::Right,
+            );
+        assert!(
+            app.world()
+                .resource::<InputState>()
+                .expect("input should exist")
+                .right_mouse_down(),
+            "capture exhaustion must not reject product input"
+        );
+        assert!(
+            !app.world()
+                .resource::<InputState>()
+                .expect("input should exist")
+                .admitted_input_capture_active(),
+            "capture ownership must be released at the failing admission"
+        );
+
+        app = app
+            .run_for_frames(1)
+            .expect("failure observation frame should run");
+
+        {
+            let control = app
+                .world_mut()
+                .resource_mut::<AutomationInputTraceControl>()
+                .expect("trace control should exist");
+            assert!(matches!(
+                control.status(),
+                AutomationInputTraceRecordingStatus::Failed {
+                    counters: AutomationInputTraceRecordingCounters {
+                        retained_frames: 1,
+                        total_groups: 1,
+                        total_observations: 1,
+                    },
+                    failure: AutomationInputTraceRecordingFailure::CaptureLimit(
+                        AdmittedInputCaptureLimit::TotalGroups
+                    ),
+                }
+            ));
+            assert!(!control.request_stop());
+            assert!(
+                control.take_completed_trace().is_none(),
+                "an incomplete retained prefix must never become a completed trace"
+            );
+        }
+        assert!(!app.automation_input_trace_active());
+        assert!(matches!(
+            app.start_bounded_automation_input_trace(policy),
+            Err(AutomationInputTraceControlError::TraceAlreadyActive)
+        ));
+
+        app = app
+            .run_for_frames(1)
+            .expect("failed recorder should remain inert on later frames");
+        assert!(matches!(
+            app.world()
+                .resource::<AutomationInputTraceControl>()
+                .expect("trace control should exist")
+                .status(),
+            AutomationInputTraceRecordingStatus::Failed {
+                failure: AutomationInputTraceRecordingFailure::CaptureLimit(
+                    AdmittedInputCaptureLimit::TotalGroups
+                ),
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn bounded_recording_detects_replaced_capture_lease_without_stopping_new_owner() {
+        let mut app = trace_app();
+        app.start_bounded_automation_input_trace(AutomationInputTraceProductionPolicy::default())
+            .expect("bounded recording should start");
+
+        app.world_mut()
+            .resource_mut::<InputState>()
+            .expect("input should exist")
+            .handle_mouse_input(
+                winit::event::ElementState::Pressed,
+                winit::event::MouseButton::Left,
+            );
+        app = app
+            .run_for_frames(1)
+            .expect("first recording frame should run");
+
+        {
+            let input = app
+                .world_mut()
+                .resource_mut::<InputState>()
+                .expect("input should exist");
+            let displaced = input.stop_admitted_input_capture();
+            assert!(displaced.is_empty());
+            input.start_admitted_input_capture();
+            input.handle_mouse_motion(3.0, 2.0);
+        }
+
+        app = app
+            .run_for_frames(1)
+            .expect("lease-loss detection frame should run");
+
+        assert!(matches!(
+            app.world()
+                .resource::<AutomationInputTraceControl>()
+                .expect("trace control should exist")
+                .status(),
+            AutomationInputTraceRecordingStatus::Failed {
+                counters: AutomationInputTraceRecordingCounters {
+                    retained_frames: 1,
+                    total_groups: 1,
+                    total_observations: 1,
+                },
+                failure: AutomationInputTraceRecordingFailure::CaptureLeaseLost,
+            }
+        ));
+        assert!(!app.automation_input_trace_active());
+
+        let input = app
+            .world_mut()
+            .resource_mut::<InputState>()
+            .expect("input should exist");
+        assert!(
+            input.admitted_input_capture_active(),
+            "automation must not stop a replacement capture owner"
+        );
+        let replacement = input.stop_admitted_input_capture();
+        assert_eq!(
+            replacement.len(),
+            1,
+            "replacement-owner evidence must not be drained by automation"
+        );
+    }
+
+    #[test]
+    fn bounded_recording_v2_round_trip_replays_through_shared_session() {
+        let mut recording = trace_app();
+        recording
+            .start_bounded_automation_input_trace(AutomationInputTraceProductionPolicy::default())
+            .expect("bounded recording should start");
+        recording
+            .world_mut()
+            .resource_mut::<InputState>()
+            .expect("input should exist")
+            .handle_cursor_moved(18.0, 27.0);
+        assert!(
+            recording
+                .world_mut()
+                .resource_mut::<AutomationInputTraceControl>()
+                .expect("trace control should exist")
+                .request_stop()
+        );
+        recording = recording
+            .run_for_frames(1)
+            .expect("recording finalization frame should run");
+        let trace = recording
+            .world_mut()
+            .resource_mut::<AutomationInputTraceControl>()
+            .expect("trace control should exist")
+            .take_completed_trace()
+            .expect("bounded recording should complete");
+
+        let encoded = export_automation_input_trace_v2(
+            &trace,
+            AutomationInputTraceRecordingWitness::RecordedSourcesPristineAtCaptureStart,
+            None,
+        )
+        .expect("bounded completed trace should export as strict V2");
+
+        let mut replay = App::headless();
+        replay.add_plugin(InputFinalizePlugin);
+        let mut session =
+            AutomationSession::new(AutomationSessionId::new(56), InputSourceId::new(2_109));
+        let report = session
+            .replay_persisted_normalized_trace(
+                AutomationExecutionMode::NormalizedInput,
+                &mut replay,
+                encoded.as_bytes(),
+                AutomationInputReplayStateAssumption::RecordedAndReplaySourcesPristine,
+            )
+            .expect("shared session should replay bounded V2 recording");
+        assert_eq!(report.outcome(), AutomationInputReplayOutcome::Completed);
+        assert_eq!(
+            replay
+                .world()
+                .resource::<InputState>()
+                .expect("replay input should exist")
+                .mouse_position,
+            (18.0, 27.0)
+        );
+        assert!(session.replay_teardown_pending());
+        assert_eq!(
+            session.finish(&mut replay),
+            AutomationStepResult::EffectConfirmed(())
+        );
+        assert!(!session.replay_teardown_pending());
     }
 }
