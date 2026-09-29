@@ -555,6 +555,7 @@ fn validate_field_input_guarantee(
                 )
             }
         }
+        RenderFieldDistanceInputRequirement::Conservative => Ok(()),
         RenderFieldDistanceInputRequirement::Bounded {
             max_absolute_error_meters,
         } => {
