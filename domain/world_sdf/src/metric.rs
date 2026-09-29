@@ -30,7 +30,7 @@ impl WorldSdfMetricSample {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WorldSdfMetricQueryError {
+pub enum WorldSdfMetricError {
     MissingMetricEncoding,
     UnsupportedMetricEncoding,
     PayloadReferenceMismatch,
@@ -43,7 +43,7 @@ pub enum WorldSdfMetricQueryError {
     InvalidMetricSampleCount { actual: usize },
 }
 
-impl fmt::Display for WorldSdfMetricQueryError {
+impl fmt::Display for WorldSdfMetricError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::MissingMetricEncoding => {
@@ -96,16 +96,16 @@ impl fmt::Display for WorldSdfMetricQueryError {
     }
 }
 
-impl Error for WorldSdfMetricQueryError {}
+impl Error for WorldSdfMetricError {}
 
 pub fn validate_world_sdf_metric_payload(
     payload_ref: &WorldSdfPayloadRef,
     payload: &SdfChunkPayload,
-) -> Result<(), WorldSdfMetricQueryError> {
+) -> Result<(), WorldSdfMetricError> {
     validate_metric_reference(payload_ref, payload)?;
 
     if payload.page_table.len() != 1 {
-        return Err(WorldSdfMetricQueryError::InvalidMetricPageCount {
+        return Err(WorldSdfMetricError::InvalidMetricPageCount {
             actual: payload.page_table.len(),
         });
     }
@@ -116,12 +116,12 @@ pub fn validate_world_sdf_metric_payload(
         .next()
         .expect("one-page metric payload was checked above");
     if *page_coord != SdfPageCoord3::default() {
-        return Err(WorldSdfMetricQueryError::InvalidMetricPageCoord {
+        return Err(WorldSdfMetricError::InvalidMetricPageCoord {
             actual: *page_coord,
         });
     }
     if page.bricks.len() != SDF_METRIC_PAGE_BRICK_COUNT {
-        return Err(WorldSdfMetricQueryError::InvalidMetricBrickCount {
+        return Err(WorldSdfMetricError::InvalidMetricBrickCount {
             actual: page.bricks.len(),
         });
     }
@@ -133,7 +133,7 @@ pub fn validate_world_sdf_metric_payload(
                 let brick = page
                     .bricks
                     .get(&brick_coord)
-                    .ok_or(WorldSdfMetricQueryError::MissingMetricBrick { brick_coord })?;
+                    .ok_or(WorldSdfMetricError::MissingMetricBrick { brick_coord })?;
                 validate_metric_brick(brick)?;
             }
         }
@@ -147,7 +147,7 @@ pub fn sample_world_sdf_metric_distance(
     payload: &SdfChunkPayload,
     partition: &GridPartitionConfig,
     world_position_meters: [f64; 3],
-) -> Result<WorldSdfMetricSample, WorldSdfMetricQueryError> {
+) -> Result<WorldSdfMetricSample, WorldSdfMetricError> {
     validate_world_sdf_metric_payload(payload_ref, payload)?;
     let encoding = payload_ref
         .metric_encoding
@@ -155,12 +155,12 @@ pub fn sample_world_sdf_metric_distance(
 
     let world_position =
         WorldPosition::try_new(payload_ref.chunk_id.world_id, world_position_meters)
-            .map_err(|_| WorldSdfMetricQueryError::InvalidWorldPosition)?;
+            .map_err(|_| WorldSdfMetricError::InvalidWorldPosition)?;
     let query_chunk = partition
         .chunk_id_from_world_position(world_position)
-        .map_err(|_| WorldSdfMetricQueryError::InvalidWorldPosition)?;
+        .map_err(|_| WorldSdfMetricError::InvalidWorldPosition)?;
     if query_chunk != payload_ref.chunk_id {
-        return Err(WorldSdfMetricQueryError::PositionOutsidePayload);
+        return Err(WorldSdfMetricError::PositionOutsidePayload);
     }
 
     let local = chunk_local_position(partition, payload_ref.chunk_id, world_position_meters)?;
@@ -185,25 +185,25 @@ pub fn sample_world_sdf_metric_distance(
 fn validate_metric_reference(
     payload_ref: &WorldSdfPayloadRef,
     payload: &SdfChunkPayload,
-) -> Result<(), WorldSdfMetricQueryError> {
+) -> Result<(), WorldSdfMetricError> {
     let encoding = payload_ref
         .metric_encoding
-        .ok_or(WorldSdfMetricQueryError::MissingMetricEncoding)?;
+        .ok_or(WorldSdfMetricError::MissingMetricEncoding)?;
     if !encoding.is_supported() {
-        return Err(WorldSdfMetricQueryError::UnsupportedMetricEncoding);
+        return Err(WorldSdfMetricError::UnsupportedMetricEncoding);
     }
     if payload_ref.chunk_id != payload.chunk_id
         || payload_ref.chunk_revision != payload.chunk_revision
         || payload_ref.checksum != payload.checksum
     {
-        return Err(WorldSdfMetricQueryError::PayloadReferenceMismatch);
+        return Err(WorldSdfMetricError::PayloadReferenceMismatch);
     }
     Ok(())
 }
 
-fn validate_metric_brick(brick: &SdfBrickRecord) -> Result<(), WorldSdfMetricQueryError> {
+fn validate_metric_brick(brick: &SdfBrickRecord) -> Result<(), WorldSdfMetricError> {
     if brick.samples.distances.len() != SDF_METRIC_BRICK_SAMPLE_COUNT {
-        return Err(WorldSdfMetricQueryError::InvalidMetricSampleCount {
+        return Err(WorldSdfMetricError::InvalidMetricSampleCount {
             actual: brick.samples.distances.len(),
         });
     }
@@ -214,10 +214,10 @@ fn chunk_local_position(
     partition: &GridPartitionConfig,
     chunk_id: runen_spatial::ChunkId,
     world_position_meters: [f64; 3],
-) -> Result<[f64; 3], WorldSdfMetricQueryError> {
+) -> Result<[f64; 3], WorldSdfMetricError> {
     let origin = partition
         .chunk_origin_world_position(chunk_id.world_id, chunk_id.coord)
-        .map_err(|_| WorldSdfMetricQueryError::InvalidWorldPosition)?;
+        .map_err(|_| WorldSdfMetricError::InvalidWorldPosition)?;
     let origin = origin.meters();
     Ok([
         world_position_meters[0] - origin[0],
@@ -251,7 +251,7 @@ fn quantize_metric_axis(local_axis: f64, edge: f64) -> (u8, f64) {
 fn sample_metric_brick(
     brick: &SdfBrickRecord,
     local_in_brick: [f64; 3],
-) -> Result<f64, WorldSdfMetricQueryError> {
+) -> Result<f64, WorldSdfMetricError> {
     validate_metric_brick(brick)?;
     debug_assert_eq!(SDF_METRIC_BRICK_EDGE_SAMPLES, 2);
 
@@ -286,7 +286,7 @@ mod tests {
     use super::*;
     use crate::{
         SdfBrickMetadata, SdfBrickSamples, SdfPageCoord3, SdfPageRecord,
-        WORLD_SDF_METRIC_SAMPLE_LAYOUT_REVISION, WorldSdfMetricEncoding,
+        WORLD_SDF_METRIC_LAYOUT_REVISION, WorldSdfMetricEncoding,
     };
     use runen_spatial::{ChunkCoord3, ChunkId, WorldId};
     use std::collections::BTreeMap;
@@ -386,7 +386,7 @@ mod tests {
             [0.25, 0.5, 0.5],
         )
         .expect_err("occupancy-only ref must fail closed");
-        assert_eq!(error, WorldSdfMetricQueryError::MissingMetricEncoding);
+        assert_eq!(error, WorldSdfMetricError::MissingMetricEncoding);
     }
 
     #[test]
@@ -396,7 +396,7 @@ mod tests {
         payload_ref.checksum = payload_ref.checksum.saturating_add(1);
         let error = validate_world_sdf_metric_payload(&payload_ref, &payload)
             .expect_err("mismatched exact ref must fail");
-        assert_eq!(error, WorldSdfMetricQueryError::PayloadReferenceMismatch);
+        assert_eq!(error, WorldSdfMetricError::PayloadReferenceMismatch);
     }
 
     #[test]
@@ -407,10 +407,10 @@ mod tests {
             .metric_encoding
             .as_mut()
             .expect("metric encoding exists")
-            .sample_layout_revision = WORLD_SDF_METRIC_SAMPLE_LAYOUT_REVISION + 1;
+            .layout_revision = WORLD_SDF_METRIC_LAYOUT_REVISION + 1;
         let error = validate_world_sdf_metric_payload(&payload_ref, &payload)
             .expect_err("unsupported layout must fail");
-        assert_eq!(error, WorldSdfMetricQueryError::UnsupportedMetricEncoding);
+        assert_eq!(error, WorldSdfMetricError::UnsupportedMetricEncoding);
     }
 
     #[test]
@@ -430,7 +430,7 @@ mod tests {
             .expect_err("revision one must remain one-page");
         assert_eq!(
             error,
-            WorldSdfMetricQueryError::InvalidMetricPageCount { actual: 2 }
+            WorldSdfMetricError::InvalidMetricPageCount { actual: 2 }
         );
     }
 
@@ -448,7 +448,7 @@ mod tests {
             .expect_err("revision one must not reinterpret a noncanonical page coordinate");
         assert_eq!(
             error,
-            WorldSdfMetricQueryError::InvalidMetricPageCoord {
+            WorldSdfMetricError::InvalidMetricPageCoord {
                 actual: noncanonical
             }
         );
@@ -468,7 +468,7 @@ mod tests {
             .expect_err("revision one must cover all canonical brick coordinates");
         assert_eq!(
             error,
-            WorldSdfMetricQueryError::InvalidMetricBrickCount { actual: 63 }
+            WorldSdfMetricError::InvalidMetricBrickCount { actual: 63 }
         );
     }
 
@@ -494,7 +494,7 @@ mod tests {
         .expect_err("one malformed brick must invalidate the whole metric payload");
         assert_eq!(
             error,
-            WorldSdfMetricQueryError::InvalidMetricSampleCount { actual: 27 }
+            WorldSdfMetricError::InvalidMetricSampleCount { actual: 27 }
         );
     }
 

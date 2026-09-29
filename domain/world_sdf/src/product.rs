@@ -86,11 +86,11 @@ impl FieldProductLineage {
     }
 }
 
-pub const WORLD_SDF_METRIC_SAMPLE_LAYOUT_REVISION: u16 = 1;
+pub const WORLD_SDF_METRIC_LAYOUT_REVISION: u16 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorldSdfMetricEncoding {
-    pub sample_layout_revision: u16,
+    pub layout_revision: u16,
     pub distance_units_per_meter: u32,
     pub max_absolute_error_units: u32,
 }
@@ -104,14 +104,14 @@ impl WorldSdfMetricEncoding {
             return None;
         }
         Some(Self {
-            sample_layout_revision: WORLD_SDF_METRIC_SAMPLE_LAYOUT_REVISION,
+            layout_revision: WORLD_SDF_METRIC_LAYOUT_REVISION,
             distance_units_per_meter,
             max_absolute_error_units,
         })
     }
 
     pub const fn is_supported(self) -> bool {
-        self.sample_layout_revision == WORLD_SDF_METRIC_SAMPLE_LAYOUT_REVISION
+        self.layout_revision == WORLD_SDF_METRIC_LAYOUT_REVISION
             && self.distance_units_per_meter > 0
     }
 
@@ -254,7 +254,7 @@ impl FieldProductDescriptor {
             if let Some(metric_encoding) = payload_ref.metric_encoding {
                 lineage = lineage.with_source_key(format!(
                     "world_sdf_metric:{chunk_key}:{}:{}:{}",
-                    metric_encoding.sample_layout_revision,
+                    metric_encoding.layout_revision,
                     metric_encoding.distance_units_per_meter,
                     metric_encoding.max_absolute_error_units
                 ));

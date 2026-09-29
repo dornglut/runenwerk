@@ -211,7 +211,7 @@ mod tests {
         );
         let mut payload_ref = WorldSdfPayloadRef::from(&payload);
         payload_ref.metric_encoding = Some(crate::WorldSdfMetricEncoding {
-            sample_layout_revision: crate::WORLD_SDF_METRIC_SAMPLE_LAYOUT_REVISION,
+            layout_revision: crate::WORLD_SDF_METRIC_LAYOUT_REVISION,
             distance_units_per_meter: 0,
             max_absolute_error_units: 0,
         });
