@@ -8,6 +8,13 @@ use std::path::{Path, PathBuf};
 
 mod temporal_quality;
 
+use crate::comparison::{
+    RenderLabComparisonState, build_render_lab_comparison_publication,
+    install_render_lab_comparison_bindings, render_lab_comparison_flow,
+    stage_render_lab_comparison_publication, update_render_lab_comparison_system,
+    validate_comparison_extents,
+};
+
 use temporal_quality::{
     RL2_QUALITY_COLOR_ALIAS, RL2_QUALITY_FLOW_ID, RenderLabFixedQualityPlans,
     RenderLabNativeQualityPublication, RenderLabTemporalQualityExecutionState,
@@ -88,6 +95,7 @@ struct RenderLabFramePublicationResources<'w> {
     history: Res<'w, RenderFrameHistoryState>,
     fixed_quality_plans: Res<'w, RenderLabFixedQualityPlans>,
     quality_execution: ResMut<'w, RenderLabTemporalQualityExecutionState>,
+    comparison: Res<'w, RenderLabComparisonState>,
 }
 
 struct RenderLabPlugin;
@@ -95,9 +103,14 @@ struct RenderLabPlugin;
 impl Plugin for RenderLabPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<RenderLabCamera>();
+        app.init_resource::<RenderLabComparisonState>();
         app.init_resource::<RenderLabMeasurementConfig>();
         app.init_resource::<RenderLabFixedQualityPlans>();
         app.init_resource::<RenderLabTemporalQualityExecutionState>();
+        app.add_systems(
+            Update,
+            update_render_lab_comparison_system.before(camera::update_render_lab_camera_system),
+        );
         app.add_systems(Update, camera::update_render_lab_camera_system);
         app.add_systems(FrameEnd, approve_render_lab_close_system);
         app.add_systems(
@@ -113,7 +126,21 @@ impl Plugin for RenderLabPlugin {
 }
 
 pub fn run_native() -> Result<()> {
-    run_native_with_measurement(None)
+    run_native_with_configuration(None, None)
+}
+
+pub fn run_native_comparison(
+    primary_window_size_px: (u32, u32),
+    candidate_size_px: (u32, u32),
+) -> Result<()> {
+    validate_comparison_extents(primary_window_size_px, candidate_size_px)?;
+    run_native_with_configuration(
+        None,
+        Some((
+            RenderLabComparisonState::active(candidate_size_px),
+            primary_window_size_px,
+        )),
+    )
 }
 
 pub fn run_native_measurement(
@@ -238,6 +265,13 @@ fn validate_measurement_frame_limit(limit: Option<usize>) -> Result<Option<usize
 }
 
 fn run_native_with_measurement(measurement: Option<RenderLabMeasurementConfig>) -> Result<()> {
+    run_native_with_configuration(measurement, None)
+}
+
+fn run_native_with_configuration(
+    measurement: Option<RenderLabMeasurementConfig>,
+    comparison: Option<(RenderLabComparisonState, (u32, u32))>,
+) -> Result<()> {
     let quality_mode = measurement.as_ref().and_then(|measurement| {
         measurement.quality_capture_output_dir.as_ref().map(|_| {
             (
@@ -253,24 +287,38 @@ fn run_native_with_measurement(measurement: Option<RenderLabMeasurementConfig>) 
     let quality_capture_output_dir = measurement
         .as_ref()
         .and_then(|measurement| measurement.quality_capture_output_dir.clone());
+    let comparison_window_size = comparison.map(|(_, size_px)| size_px);
     let mut app = App::new();
-    app.set_title("Runenwerk Render Lab — RL2 native interaction");
+    app.set_title(if comparison.is_some() {
+        "Runenwerk Render Lab — RL2 synchronized A/B comparison"
+    } else {
+        "Runenwerk Render Lab — RL2 native interaction"
+    });
     app.with_frame_pacing(FramePacingPolicyResource::continuous_capped(60));
-    if let Some(size_px) = measurement
-        .as_ref()
-        .and_then(|measurement| measurement.primary_window_size_px)
-    {
+    if let Some(size_px) = comparison_window_size.or_else(|| {
+        measurement
+            .as_ref()
+            .and_then(|measurement| measurement.primary_window_size_px)
+    }) {
         app.with_primary_window_size_px(size_px);
     }
     app.add_plugins(default_plugins());
     app.add_plugin(ScenePlugin);
     app.add_plugin(RenderPlugin);
     app.add_plugin(RenderLabPlugin);
+    if let Some((comparison_state, _)) = comparison {
+        app.insert_resource(comparison_state);
+        install_render_lab_comparison_bindings(&mut app);
+    }
     if let Some(measurement) = measurement {
         app.insert_resource(measurement);
         app.insert_resource(rl2_measurement_policy());
     }
-    if quality_mode.is_some() {
+    if comparison.is_some() {
+        let flow = render_lab_comparison_flow()?;
+        app.insert_resource(RenderLabFlowId(flow.id()));
+        app.add_render_flow(flow);
+    } else if quality_mode.is_some() {
         app.update_render_debug_control(|control| {
             control.capture_enabled = false;
             control.readback_enabled = false;
@@ -650,11 +698,28 @@ fn publish_render_lab_frame_system(
         history,
         fixed_quality_plans,
         mut quality_execution,
+        comparison,
     } = publication;
     let requested_internal_size = render_lab_radiance_extent(&presentation, &measurement)?;
     let output_size = render_lab_extent(&presentation);
     let producer_id = engine::plugins::render::RenderFrameProducerId::try_from_raw(RL2_PRODUCER_ID)
         .expect("Render Lab producer id is non-zero");
+
+    if comparison.is_active() {
+        let comparison_publication = build_render_lab_comparison_publication(
+            &camera,
+            flow_id.0,
+            output_size,
+            comparison.candidate_size_px(),
+        )?;
+        stage_render_lab_comparison_publication(
+            &mut targets,
+            &mut frame_requests,
+            &mut contributions,
+            comparison_publication,
+        )?;
+        return Ok(());
+    }
 
     let quality_mode = measurement.quality_capture_output_dir.is_some();
     let camera_motion_quality = matches!(
