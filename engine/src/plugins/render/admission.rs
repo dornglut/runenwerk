@@ -378,11 +378,12 @@ impl CurrentExecutionFacts {
     }
 }
 
-/// Admit one accepted R4 plan that declares no request-scoped surface semantic prerequisite.
+/// Admit one accepted R4 plan that declares no request-scoped semantic-input prerequisite.
 ///
 /// This preserves the pre-#566 zero-prerequisite call shape. A plan containing a representation use
-/// that declares a current surface semantic prerequisite cannot select that use through this entry;
-/// use [`admit_render_plan_with_surface_inputs`] to supply the required invocation-local values.
+/// that declares a current surface or field semantic prerequisite cannot select that use through
+/// this entry. Use [`admit_render_plan_with_surface_inputs`] for the legacy surface-only shape or
+/// [`admit_render_plan_with_semantic_inputs`] when typed field bindings are required.
 pub fn admit_render_plan(
     plan: &RenderPlan,
     availability: &[RenderRepresentationAvailabilityFact],
