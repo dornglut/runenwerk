@@ -25,6 +25,17 @@ fn main() -> anyhow::Result<()> {
             window_size_px,
             candidate_size_px,
         } => runenwerk_render_lab::run_native_comparison(window_size_px, candidate_size_px),
+        Command::ComparisonEvidence {
+            output_root,
+            submitted_frame_limit,
+            window_size_px,
+            candidate_size_px,
+        } => runenwerk_render_lab::run_native_comparison_evidence(
+            output_root,
+            submitted_frame_limit,
+            window_size_px,
+            candidate_size_px,
+        ),
         Command::ReplayTrace(path) => run_replay_trace(&path),
         Command::AutomationScenario(path) => run_automation_scenario(&path),
         Command::NativeMeasurement {
@@ -73,6 +84,12 @@ enum Command {
         window_size_px: (u32, u32),
         candidate_size_px: (u32, u32),
     },
+    ComparisonEvidence {
+        output_root: PathBuf,
+        submitted_frame_limit: usize,
+        window_size_px: (u32, u32),
+        candidate_size_px: (u32, u32),
+    },
     ReplayTrace(PathBuf),
     AutomationScenario(PathBuf),
     NativeMeasurement {
@@ -99,6 +116,54 @@ fn parse_command(args: impl IntoIterator<Item = OsString>) -> anyhow::Result<Com
     let first = args.next();
     if matches!(first.as_deref(), Some(value) if value == "--rl2" || value == "--native") {
         return Ok(Command::Native);
+    }
+    if matches!(first.as_deref(), Some(value) if value == "--rl2-compare-evidence") {
+        let default_output = PathBuf::from("render-lab/rl2-comparison");
+        let mut args = args.peekable();
+        let output_root = match args.peek() {
+            Some(value) if !value.to_string_lossy().starts_with("--") => {
+                PathBuf::from(args.next().expect("peeked comparison evidence output root"))
+            }
+            _ => default_output,
+        };
+        let mut submitted_frame_limit = None;
+        let mut window_size_px = None;
+        let mut candidate_size_px = None;
+        while let Some(flag) = args.next() {
+            if flag == "--submitted-frames" {
+                if submitted_frame_limit.is_some() {
+                    bail!("duplicate --submitted-frames argument");
+                }
+                submitted_frame_limit = Some(parse_frame_limit(args.next())?);
+            } else if flag == "--window-size-px" {
+                if window_size_px.is_some() {
+                    bail!("duplicate --window-size-px argument");
+                }
+                window_size_px = Some(parse_window_size_px(args.next())?);
+            } else if flag == "--candidate-size-px" {
+                if candidate_size_px.is_some() {
+                    bail!("duplicate --candidate-size-px argument");
+                }
+                candidate_size_px = Some(parse_candidate_size_px(args.next())?);
+            } else {
+                bail!(
+                    "unexpected RL2 comparison evidence argument '{}'",
+                    flag.to_string_lossy()
+                );
+            }
+        }
+        let window_size_px = window_size_px.ok_or_else(|| {
+            anyhow::anyhow!("--rl2-compare-evidence requires --window-size-px WIDTHxHEIGHT")
+        })?;
+        let candidate_size_px = candidate_size_px.ok_or_else(|| {
+            anyhow::anyhow!("--rl2-compare-evidence requires --candidate-size-px WIDTHxHEIGHT")
+        })?;
+        return Ok(Command::ComparisonEvidence {
+            output_root,
+            submitted_frame_limit: submitted_frame_limit.unwrap_or(6),
+            window_size_px,
+            candidate_size_px,
+        });
     }
     if matches!(first.as_deref(), Some(value) if value == "--rl2-compare") {
         let mut window_size_px = None;
@@ -677,6 +742,58 @@ mod tests {
     fn native_mode_is_explicit() {
         assert_eq!(parse_command(args(&["--rl2"])).unwrap(), Command::Native);
         assert_eq!(parse_command(args(&["--native"])).unwrap(), Command::Native);
+    }
+
+    #[test]
+    fn comparison_evidence_mode_is_bounded_and_explicit() {
+        assert_eq!(
+            parse_command(args(&[
+                "--rl2-compare-evidence",
+                "evidence/compare",
+                "--window-size-px",
+                "1920x1080",
+                "--candidate-size-px",
+                "960x540",
+                "--submitted-frames",
+                "8",
+            ]))
+            .unwrap(),
+            Command::ComparisonEvidence {
+                output_root: PathBuf::from("evidence/compare"),
+                submitted_frame_limit: 8,
+                window_size_px: (1920, 1080),
+                candidate_size_px: (960, 540),
+            }
+        );
+        assert_eq!(
+            parse_command(args(&[
+                "--rl2-compare-evidence",
+                "--window-size-px",
+                "1920x1080",
+                "--candidate-size-px",
+                "1280x720",
+            ]))
+            .unwrap(),
+            Command::ComparisonEvidence {
+                output_root: PathBuf::from("render-lab/rl2-comparison"),
+                submitted_frame_limit: 6,
+                window_size_px: (1920, 1080),
+                candidate_size_px: (1280, 720),
+            }
+        );
+        assert!(parse_command(args(&["--rl2-compare-evidence"])).is_err());
+        assert!(
+            parse_command(args(&[
+                "--rl2-compare-evidence",
+                "--window-size-px",
+                "1920x1080",
+                "--candidate-size-px",
+                "960x540",
+                "--submitted-frames",
+                "0",
+            ]))
+            .is_err()
+        );
     }
 
     #[test]
