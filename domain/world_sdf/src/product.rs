@@ -419,6 +419,31 @@ mod tests {
         }
     }
 
+    #[derive(Serialize)]
+    struct LegacyWorldSdfPayloadRef {
+        chunk_id: ChunkId,
+        chunk_revision: world_ops::ChunkRevision,
+        checksum: u64,
+    }
+
+    #[test]
+    fn payload_ref_decodes_legacy_non_metric_postcard() {
+        let chunk_id = ChunkId::new(WorldId::new(1), ChunkCoord3 { x: 2, y: -1, z: 3 });
+        let legacy = LegacyWorldSdfPayloadRef {
+            chunk_id,
+            chunk_revision: world_ops::ChunkRevision(5),
+            checksum: 91,
+        };
+        let bytes = postcard::to_allocvec(&legacy).expect("legacy payload ref should serialize");
+        let decoded = postcard::from_bytes::<WorldSdfPayloadRef>(&bytes)
+            .expect("new payload ref should decode legacy non-metric bytes");
+
+        assert_eq!(decoded.chunk_id, chunk_id);
+        assert_eq!(decoded.chunk_revision, world_ops::ChunkRevision(5));
+        assert_eq!(decoded.checksum, 91);
+        assert_eq!(decoded.metric_encoding, None);
+    }
+
     #[test]
     fn product_cache_identity_tracks_exact_payload_checksum() {
         let first = descriptor_with_ref(payload_ref(10))
