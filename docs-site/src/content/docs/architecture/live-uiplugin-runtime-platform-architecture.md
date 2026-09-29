@@ -1,11 +1,11 @@
 ---
 title: Live UiPlugin Runtime Platform Architecture
-description: Architecture and implementation-handoff model for the engine-owned Live UiPlugin runtime, render publication, agent-controllable Counter product, trace history, source reload, and state persistence boundaries.
+description: Architecture and implementation-handoff model for Runenwerk's Engine integration with standalone RunenUI, retained source/program/host ownership, isolated predecessor render publication, and historical runtime-platform context.
 status: active
 owner: ui
 layer: architecture
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-09-28
 publication: reference
 pagefind: false
 related_docs:
@@ -20,17 +20,19 @@ related_docs:
 
 ID: `PT-UI-RUNTIME-PLATFORM-002` architecture handoff support.
 
-This document preserves the app/engine/render architecture and the landed Runenwerk-local runtime boundary that should not live only in historical planning records.
+This document preserves the app/engine/render integration architecture and the current Runenwerk-to-RunenUI boundary that should not live only in historical planning records.
 
 ## Authority boundary
 
-Current source/tests and the sections explicitly describing current code facts are Runenwerk-local implementation authority. The accepted tree already contains the engine-owned `UiPlugin`, typed mounting/action contracts, runtime evaluation, producer-generic surface-frame publication, and the scene/debug producer migration described below.
+Current source/tests and the sections explicitly describing current code facts are Runenwerk-local integration authority. Runenwerk retains typed screen/source formation, UiProgram/artifact provenance, binding/state evaluation, route/capability/domain authorization, renderer adaptation, diagnostics, and product policy. Standalone RunenUI owns reusable mounted runtime, widget tree, layout, text, semantics, interaction, and action execution for migrated consumers.
 
-Proposal-era language about the old "cutover", Counter product, source reload, persistence, phase numbers, future SDF work, or phase-spec sequencing is retained only as historical/deferred design context. It does **not** authorize continuation of the archived phase program or new Runenwerk-local reusable-framework expansion.
+The ordinary Engine `UiPlugin` path installs Engine-owned integration/diagnostic/report resources plus RunenUI runtime slots. It does not create the predecessor `ui_surface` mounted/session registry, local `UiRuntimeEvaluationResource`, or schedule the predecessor frame-publication runtime as ordinary mounted UI authority.
 
-Any future Runenwerk consumer integration with standalone RunenUI must be
-re-derived from an exact accepted standalone RunenUI revision and activated by
-a new owning issue.
+The old evaluator/frame-publication implementation remains only as an explicitly isolated unmigrated renderer fixture/consumer until its own clean cut. Its existence does not make it the mounted runtime authority for consumers already migrated to RunenUI.
+
+Proposal-era language about the old runtime-platform phases, Counter product, source reload, persistence, phase numbers, future SDF work, or phase-spec sequencing is retained only as historical/deferred design context. It does **not** authorize continuation of the archived phase program or new Runenwerk-local reusable-framework expansion.
+
+Further RunenUI adoption proceeds under the accepted consumer-by-consumer program (#994). Each later cut must re-resolve current Runenwerk and RunenUI authority and delete the predecessor path it replaces.
 
 ## Current code facts inspected for this architecture
 
@@ -43,7 +45,9 @@ a new owning issue.
 | Frame pacing | Default policy is `ContinuousCapped { target_fps: 60 }`; `OnDemand` exists and has no continuous deadline. | `engine/src/runtime/frame_pacing.rs` |
 | Render plugin ownership today | `RenderPlugin` initializes generic surface-frame submission resources and runs `prepare_ui_feature_resource_system`, frame prepare, and frame submit. It no longer imports, exports, or schedules a scene/debug UI semantic collector after Phase 011. | `engine/src/plugins/render/plugin.rs` |
 | Scene/debug producer path today | Scene and debug owners publish their overlay UI frames through `SurfaceFrameSubmissionRegistryResource`; the prior render-owned `ui_submission.rs` collector is deleted and guarded by tests. | `engine/src/plugins/scene/lifecycle/overlay_update.rs`, `engine/src/plugins/debug_metrics/mod.rs`, `engine/tests/runtime_surface_guard.rs` |
-| UiPlugin publication today | `UiPlugin` publishes evaluated runtime frames through `SurfaceFrameSubmissionRegistryResource` with `RenderFrameProducerId` and `RenderSurfaceId`; `RenderPlugin` consumes the prepared packet without querying screens, sources, actions, host mutation, or route policy. | `engine/src/plugins/ui/render_publish.rs` |
+| UiPlugin mounted-runtime ownership today | `UiPlugin` installs `UiRuntimeSlotsResource`; `app.mount_ui(S)` and `app.ui().mount(S)` lower typed `UiScreen` source, validate the compiled artifact, and create standalone RunenUI `AppRuntime` slots. Engine slot IDs are integration lookup identities only; mounted widget/runtime identity remains RunenUI-owned. | `engine/src/plugins/ui/app_ext.rs`, `engine/src/plugins/ui/runenui_adapter.rs`, `engine/src/plugins/ui/plugin.rs` |
+| UiPlugin state/action integration today | Host-backed Runenwerk state is resolved through retained UiProgram/evaluator binding semantics and enters RunenUI through public action ingress. For the bounded CounterScreen cut, the retained `selected` binding remains boolean state; because the accepted RunenUI Button has no selected-state authoring API, U3 does not reinterpret that state as label or presentation semantics. RunenUI control activation exits through a public host request carrying the retained Runenwerk `UiEventPacket`; that request remains pending until existing Runenwerk typed action/host/domain contracts decide authorization/mutation, after which Engine completes the RunenUI request with the accepted/rejected decision. | `engine/src/plugins/ui/runenui_adapter.rs`, `engine/src/plugins/ui/host.rs` |
+| Predecessor UI frame publication today | `engine/src/plugins/ui/render_publish.rs` and `UiRuntimeEvaluationResource` remain available only for explicitly isolated unmigrated renderer evidence. `UiPlugin` no longer initializes or schedules them as the normal mounted UI runtime path. | `engine/src/plugins/ui/render_publish.rs`, `engine/tests/ui_render_publication.rs` |
 | Frame publication today | `SurfaceFrameSubmissionRegistryResource` stores whole `SurfaceFrameSubmission` values keyed by producer/surface; replacement is per producer/surface, not per element. | `engine/src/plugins/render/features/ui/submission.rs` |
 | Frame preparation today | Frame prepare builds `PreparedRenderFrame` packets per render surface and applies UI contribution per surface. | `engine/src/plugins/render/runtime/frame_prepare.rs` |
 | Frame submit today | Frame submit pulls the prepared frame, selects UI rect shader/font atlas inputs, and calls `gfx.render(...)`. | `engine/src/plugins/render/runtime/frame_submit.rs` |
@@ -88,8 +92,9 @@ Current boundary shape:
 
 | Concept | Current owner | Rule |
 |---|---|---|
-| Source/program/action/session semantics | `domain/ui` plus `engine::plugins::ui` integration | Must not move into render. |
-| Producer identity | Engine/runtime producer contract | UI, debug overlays, scene overlays, product surfaces, and future producers publish as producers. |
+| Source/program/action/product semantics | retained Runenwerk `domain/ui` plus `engine::plugins::ui` integration | Must not move into RunenUI runtime or render. |
+| Mounted UI runtime identity | standalone RunenUI | Engine integration may retain slot lookup identity, but must not recreate mounted widget/runtime identity. |
+| Producer identity | Engine/render producer contract | UI adapters, debug overlays, scene overlays, product surfaces, and future producers publish as producers. |
 | Surface/frame packet | Render-facing producer-generic contract | Must not encode `UiPlugin` as the owner of the generic frame model. |
 | Render preparation/submission | `RenderPlugin` | Consumes packets; does not query screens, source, route, host state, or actions. |
 

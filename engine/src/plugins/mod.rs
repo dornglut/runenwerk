@@ -42,9 +42,9 @@ pub use scheduler_diagnostics::*;
 pub use simulation::SimulationPlugin;
 pub use time::TimePlugin;
 pub use ui::{
-    UiPlugin, UiRuntimeDiagnostic, UiRuntimeDiagnosticCode, UiRuntimeDiagnosticSeverity,
-    UiRuntimeDiagnosticsResource, UiRuntimeInstallState, UiRuntimeReport, UiRuntimeReportResource,
-    UiRuntimeResource, UiRuntimeSet,
+    UiPlugin, UiPluginStateResource, UiRuntimeDiagnostic, UiRuntimeDiagnosticCode,
+    UiRuntimeDiagnosticSeverity, UiRuntimeDiagnosticsResource, UiRuntimeInstallState,
+    UiRuntimeReport, UiRuntimeReportResource, UiRuntimeSet,
 };
 pub use world::plugin::{
     WorldAuthorityState, WorldPlugin, WorldRuntimeConfig, WorldRuntimeMode, WorldRuntimeSet,

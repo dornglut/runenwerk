@@ -43,6 +43,8 @@ runen-net.workspace = true
 runen-spatial.workspace = true
 world_ops = { path = "../domain/world_ops" }
 world_sdf = { path = "../domain/world_sdf" }
+runenui_core.workspace = true
+runenui_runtime.workspace = true
 ui_math = { path = "../domain/ui/ui_math" }
 ui_controls = { workspace = true }
 ui_definition = { workspace = true }

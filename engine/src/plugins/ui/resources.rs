@@ -1,15 +1,16 @@
-use ui_surface::{
-    MountedSurfaceInstance, MountedSurfaceRegistry, SessionScopeHandle, SurfaceDefinitionId,
-    SurfaceHostInstanceId, SurfaceInstanceId,
-};
+use ui_surface::{MountedSurfaceInstance, MountedSurfaceRegistry, SurfaceInstanceId};
+#[cfg(test)]
+use ui_surface::{SessionScopeHandle, SurfaceDefinitionId, SurfaceHostInstanceId};
 
 use super::{
-    UiMountRecord, UiMountReport, UiMountRequest, UiMountSource, UiMountedSessionRecord,
-    UiRuntimeDiagnostic, UiRuntimeDiagnosticsResource, UiRuntimeDirtyCause, UiRuntimeDirtyRecord,
+    UiMountRecord, UiMountReport, UiMountedSessionRecord, UiRuntimeDiagnostic,
+    UiRuntimeDiagnosticsResource, UiRuntimeDirtyCause, UiRuntimeDirtyRecord,
     UiRuntimeEvaluationFailureReason, UiRuntimeEvaluationInput, UiRuntimeEvaluationReport,
     UiRuntimeFramePayload, UiRuntimeOutputFacts, UiRuntimeSessionSnapshot, UiRuntimeTraceEvent,
     UiRuntimeTraceResource, UiRuntimeViewFacts, UiUnmountReport,
 };
+#[cfg(test)]
+use super::{UiMountRequest, UiMountSource};
 use ui_artifacts::UiRuntimeArtifactDiagnosticSeverity;
 use ui_evaluator::{UiEvaluationContext, UiEvaluator};
 use ui_runtime_view::UiRuntimeView;
@@ -22,13 +23,13 @@ pub enum UiRuntimeInstallState {
     Installed,
 }
 
-/// Foundation resource for UI runtime plugin installation state.
+/// Engine integration resource for UI plugin installation state.
 #[derive(Debug, Clone, PartialEq, Eq, runen_ecs::Resource)]
-pub struct UiRuntimeResource {
+pub struct UiPluginStateResource {
     install_state: UiRuntimeInstallState,
 }
 
-impl Default for UiRuntimeResource {
+impl Default for UiPluginStateResource {
     fn default() -> Self {
         Self {
             install_state: UiRuntimeInstallState::Uninstalled,
@@ -36,7 +37,7 @@ impl Default for UiRuntimeResource {
     }
 }
 
-impl UiRuntimeResource {
+impl UiPluginStateResource {
     pub fn install_state(&self) -> UiRuntimeInstallState {
         self.install_state
     }
@@ -127,6 +128,7 @@ impl UiMountRequestsResource {
         self.records.is_empty()
     }
 
+    #[cfg(test)]
     pub(crate) fn record_mount_request(
         &mut self,
         request: UiMountRequest,
@@ -166,6 +168,7 @@ impl UiMountRequestsResource {
         report
     }
 
+    #[cfg(test)]
     fn mount_session_for_record(&mut self, record: &UiMountRecord) -> UiMountedSessionRecord {
         let surface_instance_id = self.next_surface_instance_id();
         let mounted_surface = MountedSurfaceInstance::new(
@@ -207,24 +210,28 @@ impl UiMountRequestsResource {
         }
     }
 
+    #[cfg(test)]
     fn next_surface_instance_id(&mut self) -> SurfaceInstanceId {
         let id = SurfaceInstanceId::new(self.next_surface_instance_id);
         self.next_surface_instance_id = self.next_surface_instance_id.saturating_add(1);
         id
     }
 
+    #[cfg(test)]
     fn next_definition_id(&mut self) -> SurfaceDefinitionId {
         let id = SurfaceDefinitionId::new(self.next_definition_id);
         self.next_definition_id = self.next_definition_id.saturating_add(1);
         id
     }
 
+    #[cfg(test)]
     fn next_host_instance_id(&mut self) -> SurfaceHostInstanceId {
         let id = SurfaceHostInstanceId::new(self.next_host_instance_id);
         self.next_host_instance_id = self.next_host_instance_id.saturating_add(1);
         id
     }
 
+    #[cfg(test)]
     fn next_session_scope_id(&mut self) -> u64 {
         let id = self.next_session_scope_id;
         self.next_session_scope_id = self.next_session_scope_id.saturating_add(1);

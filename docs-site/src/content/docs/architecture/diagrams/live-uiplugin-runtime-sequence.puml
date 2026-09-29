@@ -1,51 +1,51 @@
 @startuml
-title Live UiPlugin Runtime Product Sequence
+title Live UiPlugin / RunenUI Integration Sequence
 
-actor Human
-actor Agent
-participant "ui_counter_runtime" as AppBin
+actor "Engine proof / automation" as Automation
 participant "App" as App
-participant "UiPlugin" as Ui
-participant "CounterPlugin" as CounterPlugin
-participant "CounterScreen" as Screen
-participant "ui_definition / ui_program" as Program
-participant "ui_hosts" as Host
-participant "Trace / History" as Trace
-participant "ui_evaluator / runtime_view" as Eval
-participant "Render Publisher" as Publisher
+participant "UiPlugin / AppUiExt" as Ui
+participant "UiScreen" as Screen
+participant "Runenwerk source / UiProgram" as Program
+participant "Runenwerk binding/state" as State
+participant "RunenUI AppRuntime" as RunenUI
+participant "RunenUI HostRequest" as HostRequest
+participant "Runenwerk action/host/domain policy" as Host
+participant "Render adapter (later cut)" as RenderAdapter
 participant "RenderPlugin" as Render
-participant "Console / JSONL" as Console
 
-AppBin -> App: App::new().add_plugins((RenderPlugin, UiPlugin, CounterPlugin))
-CounterPlugin -> App: app.mount_ui(CounterScreen)
-App -> Ui: record mount request
-Ui -> Screen: IntoUi
-Screen -> Program: source + routes + capability facts
-Ui -> Trace: UiSourceLowered / UiProgramFormed
+App -> Ui: app.mount_ui(CounterScreen)
+Ui -> Screen: build_source()
+Screen -> Program: UiTypedSource
+Ui -> Program: lower + validate artifact
+Ui -> RunenUI: mount public View/Element projection
+RunenUI --> Ui: runtime slot mounted
 
-alt human pointer or keyboard input
-  Human -> Ui: input event from window runtime
-else agent script
-  Agent -> Ui: semantic action or scripted pointer event
-end
+App -> Ui: host data/state update
+Ui -> State: UiEvaluator binding/state resolution
+State --> Ui: UiStateModel
+Ui -> RunenUI: submit public ReplaceResolvedState action
+RunenUI -> RunenUI: pump + rebuild/publication
 
-Ui -> Host: route + capability + payload validation
-Host -> Trace: UiCapabilityChecked
-alt accepted
-  Host -> CounterPlugin: mutate Counter resource
-  Host -> Trace: UiHostMutationApplied
-else rejected
-  Host -> Trace: UiHostMutationRejected
-end
+Automation -> RunenUI: public automation SemanticCommand::Activate
 
-Ui -> Eval: evaluate source/program/session/host snapshot
-Eval -> Trace: UiRuntimeEvaluated
-Eval -> Publisher: frame payload + report facts
-Publisher -> Trace: UiFramePublished
-Publisher -> Render: producer surface-frame submission
-Render -> Trace: UiFramePresented
-Trace -> Console: bounded history + JSONL export
-Render -> Human: visible updated UI
-Agent -> Console: read JSONL / assert state and frame facts
+note over Automation,RunenUI
+U3 proves semantic activation through public automation ingress.
+Native pointer/keyboard/winit translation is a later consumer cut.
+end note
+RunenUI -> HostRequest: host request(route intent)
+Ui -> HostRequest: inspect pending public request
+HostRequest --> Ui: retained UiEventPacket (still pending)
+Ui -> Host: typed route/capability/domain authorization
+Host -> App: authorized owner mutation only
+Host --> Ui: accepted / rejected decision
+Ui -> RunenUI: complete host request with decision
+
+note over RenderAdapter,Render
+U3 does not migrate renderer publication.
+The predecessor evaluator/frame publisher remains
+explicitly isolated until a later consumer cut.
+end note
+
+RenderAdapter -> Render: future neutral RunenUI publication adapter
 
 @enduml

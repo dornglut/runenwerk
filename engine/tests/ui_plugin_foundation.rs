@@ -1,6 +1,6 @@
 use engine::plugins::ui::{
-    UiPlugin, UiRuntimeDiagnosticsResource, UiRuntimeInstallState, UiRuntimeReport,
-    UiRuntimeReportResource, UiRuntimeResource, UiRuntimeSet,
+    UiPlugin, UiPluginStateResource, UiRuntimeDiagnosticsResource, UiRuntimeInstallState,
+    UiRuntimeReport, UiRuntimeReportResource, UiRuntimeSet,
 };
 use engine::prelude::{App, SystemSet};
 
@@ -10,7 +10,7 @@ fn ui_plugin_installs_foundation_resources_without_panicking() {
 
     app.add_plugin(UiPlugin);
 
-    let runtime = app.world().resource::<UiRuntimeResource>().unwrap();
+    let runtime = app.world().resource::<UiPluginStateResource>().unwrap();
     assert!(runtime.is_installed());
     assert_eq!(runtime.install_state(), UiRuntimeInstallState::Installed);
 
@@ -35,7 +35,11 @@ fn ui_plugin_install_is_idempotent_for_foundation_resources() {
     let mut app = App::headless();
 
     app.add_plugin(UiPlugin);
-    let runtime_after_first = app.world().resource::<UiRuntimeResource>().unwrap().clone();
+    let runtime_after_first = app
+        .world()
+        .resource::<UiPluginStateResource>()
+        .unwrap()
+        .clone();
     let diagnostics_after_first = app
         .world()
         .resource::<UiRuntimeDiagnosticsResource>()
@@ -50,7 +54,7 @@ fn ui_plugin_install_is_idempotent_for_foundation_resources() {
     app.add_plugin(UiPlugin);
 
     assert_eq!(
-        app.world().resource::<UiRuntimeResource>().unwrap(),
+        app.world().resource::<UiPluginStateResource>().unwrap(),
         &runtime_after_first
     );
     assert_eq!(
@@ -68,7 +72,7 @@ fn ui_plugin_install_is_idempotent_for_foundation_resources() {
 #[test]
 fn ui_plugin_default_resources_are_stable() {
     assert_eq!(
-        UiRuntimeResource::default().install_state(),
+        UiPluginStateResource::default().install_state(),
         UiRuntimeInstallState::Uninstalled
     );
     assert_eq!(UiRuntimeDiagnosticsResource::default().entries(), &[]);

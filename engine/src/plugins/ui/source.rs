@@ -1,3 +1,4 @@
+use super::action::UiTypedActionDescriptor;
 use super::screen::UiTypedScreenId;
 
 use ui_artifacts::UiRuntimeArtifact;
@@ -13,6 +14,7 @@ pub struct UiTypedSource {
     screen_id: UiTypedScreenId,
     source_id: UiProgramSourceId,
     root: UiNodeDefinition,
+    action_descriptors: Vec<UiTypedActionDescriptor>,
 }
 
 impl UiTypedSource {
@@ -25,6 +27,7 @@ impl UiTypedSource {
             screen_id,
             source_id,
             root,
+            action_descriptors: Vec::new(),
         }
     }
 
@@ -38,6 +41,15 @@ impl UiTypedSource {
 
     pub fn root(&self) -> &UiNodeDefinition {
         &self.root
+    }
+
+    pub fn with_action_descriptor(mut self, descriptor: UiTypedActionDescriptor) -> Self {
+        self.action_descriptors.push(descriptor);
+        self
+    }
+
+    pub fn action_descriptors(&self) -> &[UiTypedActionDescriptor] {
+        &self.action_descriptors
     }
 
     pub fn into_root(self) -> UiNodeDefinition {

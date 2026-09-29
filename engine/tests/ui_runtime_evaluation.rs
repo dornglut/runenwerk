@@ -1,179 +1,139 @@
 use std::collections::BTreeMap;
 
 use engine::plugins::ui::{
-    IntoUi, UiMountRequestsResource, UiPlugin, UiRuntimeDirtyCause, UiRuntimeEvaluationInput,
-    UiRuntimeEvaluationResource, UiRuntimeTraceEventKind, UiRuntimeTraceResource, UiScreen,
-    UiTypedScreenId, UiTypedSource,
+    UiAction, UiActionDispatchOutputs, UiActionDispatchReportsResource, UiActionEvent,
+    UiActionHandler, UiHostActionExecutor, UiHostMutationIntent, UiHostMutationReceipt,
+    UiHostMutationRejection, UiPlugin, UiRuntimeDiagnosticsResource, UiRuntimeSlotsResource,
+    UiRuntimeTraceResource, UiScreen, UiTypedActionDescriptor, UiTypedActionId, UiTypedScreenId,
+    UiTypedSource, dispatch_ui_action,
 };
 use engine::prelude::{App, AppUiExt};
 use ui_binding::HostDataSnapshot;
-use ui_controls::{BUTTON_CONTROL_KIND_ID, ControlPackageRegistry, runenwerk_control_package};
+use ui_controls::BUTTON_CONTROL_KIND_ID;
 use ui_definition::{
     AuthoredBindingRef, AuthoredControlAccessibilityDefinition, AuthoredControlKindId,
     AuthoredControlValue, AuthoredId, AuthoredRouteId, UiNodeDefinition, UiValueBinding,
 };
 use ui_evaluator::UiEvaluationContext;
-use ui_program::UiProgramSourceId;
-use ui_schema::UiSchemaValue;
-
-const COUNTER_TEXT_KEY: &str = "state.counter.output.selected";
-
-#[test]
-fn ui_runtime_evaluation_uses_source_program_evaluator_view_and_frame_payload() {
-    let input = counter_evaluation_input();
-    let mounted_session = mounted_counter_session();
-    let mut runtime = UiRuntimeEvaluationResource::default();
-    let mut trace = UiRuntimeTraceResource::default();
-    let mut diagnostics = Default::default();
-
-    let report = runtime.evaluate(
-        &input,
-        Some(&mounted_session),
-        counter_context("Clicked 1 / 5", 1),
-        &mut trace,
-        &mut diagnostics,
-    );
-
-    assert_eq!(report.source().screen_id(), "counter.screen");
-    assert_eq!(report.source().source_id(), "counter.screen.source");
-    assert_eq!(report.source().program_id(), "counter.screen.program");
-    assert!(report.source().source_count() > 0);
-    assert!(report.source().source_map_count() > 0);
-    assert!(report.source().control_count() > 0);
-    assert_eq!(report.source().binding_count(), 1);
-    assert_eq!(report.source().state_requirement_count(), 1);
-
-    assert!(report.runtime_view().passed());
-    assert_eq!(
-        report.output().state_value(COUNTER_TEXT_KEY),
-        Some(&UiSchemaValue::string("Clicked 1 / 5"))
-    );
-    assert_eq!(report.output().dirty_binding_count(), 1);
-    assert_eq!(
-        report.frame_payload().text_layout_request_count(),
-        report.output().text_layout_request_count()
-    );
-    assert_eq!(
-        report.frame_payload().visual_operator_count(),
-        report.output().visual_operator_count()
-    );
-    assert!(report.frame_payload().primitive_count() > 0);
-    assert!(diagnostics.is_empty());
-
-    assert_trace_contains(
-        &trace,
-        &[
-            UiRuntimeTraceEventKind::RuntimeEvaluation,
-            UiRuntimeTraceEventKind::StateSnapshot,
-            UiRuntimeTraceEventKind::Invalidation,
-        ],
-    );
-}
+use ui_hosts::{
+    DomainCommand, HeadlessHost, HostCommand, HostKind, HostRouteMapVersion, HostRouteMapping,
+};
+use ui_program::{RouteCapability, RouteId, RouteSchemaVersion, UiProgramSourceId};
+use ui_schema::{UiSchemaRef, UiSchemaValue};
 
 #[test]
-fn ui_runtime_evaluation_snapshot_replay_dirty_causes_and_host_text_change_are_stable() {
-    let input = counter_evaluation_input();
-    let mounted_session = mounted_counter_session();
-    let mut runtime = UiRuntimeEvaluationResource::default();
-    let mut trace = UiRuntimeTraceResource::default();
-    let mut diagnostics = Default::default();
-
-    let first = runtime.evaluate(
-        &input,
-        Some(&mounted_session),
-        counter_context("Clicked 0 / 5", 1),
-        &mut trace,
-        &mut diagnostics,
-    );
-    let second = runtime.evaluate(
-        &input,
-        Some(&mounted_session),
-        counter_context("Clicked 1 / 5", 2),
-        &mut trace,
-        &mut diagnostics,
-    );
-
-    assert_eq!(
-        first.output().state_value(COUNTER_TEXT_KEY),
-        Some(&UiSchemaValue::string("Clicked 0 / 5"))
-    );
-    assert_eq!(
-        second.output().state_value(COUNTER_TEXT_KEY),
-        Some(&UiSchemaValue::string("Clicked 1 / 5"))
-    );
-    assert_ne!(
-        first.output().state_value(COUNTER_TEXT_KEY),
-        second.output().state_value(COUNTER_TEXT_KEY)
-    );
-
-    assert_eq!(
-        runtime.replay_snapshot(second.runtime_id(), second.source().source_id()),
-        Some(second.snapshot())
-    );
-    assert_eq!(second.snapshot().source_id(), "counter.screen.source");
-    assert_eq!(second.snapshot().program_id(), "counter.screen.program");
-    assert!(second.snapshot().surface_instance_id().is_some());
-    assert!(second.snapshot().session_scope_id().is_some());
-
-    let causes = second.dirty_causes().collect::<Vec<_>>();
-    for required in [
-        UiRuntimeDirtyCause::Source,
-        UiRuntimeDirtyCause::HostData,
-        UiRuntimeDirtyCause::Session,
-        UiRuntimeDirtyCause::Layout,
-        UiRuntimeDirtyCause::Text,
-        UiRuntimeDirtyCause::Theme,
-        UiRuntimeDirtyCause::Primitive,
-        UiRuntimeDirtyCause::Surface,
-        UiRuntimeDirtyCause::RenderPublication,
-    ] {
-        assert!(
-            causes.contains(&required),
-            "missing dirty cause {required:?}: {causes:?}"
-        );
-    }
-    assert!(diagnostics.is_empty());
-}
-
-fn counter_evaluation_input() -> UiRuntimeEvaluationInput {
-    let registry = ControlPackageRegistry::new()
-        .with_package(runenwerk_control_package())
-        .expect("runenwerk controls package should register");
-    let source = CounterScreen.into_ui_source();
-    let lowering = source.lower_with_registry_snapshot(&registry.snapshot());
-
-    assert!(lowering.passed(), "{:?}", lowering.formation().diagnostics);
-    UiRuntimeEvaluationInput::from_lowering_report(&lowering)
-}
-
-fn mounted_counter_session() -> engine::plugins::ui::UiMountedSessionRecord {
+fn ui_runtime_button_activation_egresses_as_runenwerk_route_intent() {
     let mut app = App::headless();
     app.add_plugin(UiPlugin);
-    app.ui().mount("CounterScreen");
+    let report = app.ui().mount(CounterScreen);
+    let slot_id = report.slot_id().expect("CounterScreen should mount");
 
-    app.world()
-        .resource::<UiMountRequestsResource>()
-        .expect("UI mount requests should exist")
-        .mounted_sessions()[0]
-        .clone()
+    let slots = app
+        .world_mut()
+        .resource_mut::<UiRuntimeSlotsResource>()
+        .expect("UiPlugin should install RunenUI runtime slots");
+    slots
+        .update_state(slot_id, counter_context(false, 1))
+        .expect("resolved Runenwerk state should update the runtime");
+    slots
+        .activate_authored(slot_id, "counter.output")
+        .expect("RunenUI semantic activation should be admitted");
+
+    let mut requests = slots
+        .pending_event_requests(slot_id)
+        .expect("Engine integration should observe the pending RunenUI host request");
+    assert_eq!(requests.len(), 1);
+    let request = requests.pop().expect("one pending CounterScreen request");
+    let packet = request.packet().clone();
+    assert_eq!(packet.route, RouteId::new("counter.increment"));
+    assert_eq!(packet.schema_version, RouteSchemaVersion::new(1));
+    assert_eq!(
+        packet.payload_schema(),
+        &UiSchemaRef::new("runenwerk.ui.controls.button.event", 1)
+    );
+    assert!(packet.requires_capability(&RouteCapability::new("counter.action.increment")));
+    assert_eq!(
+        packet.source_control.as_ref().map(|id| id.as_str()),
+        Some("control.counter.output")
+    );
+    assert_eq!(
+        packet.payload.value,
+        UiSchemaValue::object([
+            ("route", UiSchemaValue::route_ref("counter.increment")),
+            ("activated", UiSchemaValue::bool(true)),
+        ])
+    );
+    let action = CounterIncrementAction;
+    let handler = CounterIncrementHandler;
+    let intent = handler.host_intent(&action);
+    assert_eq!(intent.action().route(), &packet.route);
+    assert_eq!(
+        intent.required_capabilities()[0].as_str(),
+        "counter.action.increment"
+    );
+    assert_eq!(
+        intent
+            .domain_command()
+            .expect("Runenwerk handler should retain domain authorization intent")
+            .command_id,
+        "increment"
+    );
+
+    let route_map_version = HostRouteMapVersion::new(1);
+    let host = HeadlessHost::new(route_map_version)
+        .with_mapping(intent.to_host_route_mapping(route_map_version));
+    let mut executor = CounterHostExecutor::default();
+    let mut reports = UiActionDispatchReportsResource::default();
+    let mut trace = UiRuntimeTraceResource::default();
+    let mut diagnostics = UiRuntimeDiagnosticsResource::default();
+    let dispatch = dispatch_ui_action(
+        &action,
+        &handler,
+        &UiActionEvent::new(packet.clone()),
+        &host,
+        &mut executor,
+        UiActionDispatchOutputs::new(&mut reports, &mut trace, &mut diagnostics),
+    );
+
+    assert!(dispatch.is_accepted(), "{dispatch:?}");
+    assert_eq!(executor.count, 1);
+    assert!(diagnostics.is_empty());
+    assert_eq!(
+        dispatch
+            .domain_command()
+            .expect("accepted dispatch should preserve domain mutation intent")
+            .command_id,
+        "increment"
+    );
+
+    slots
+        .complete_event_request(
+            slot_id,
+            request,
+            if dispatch.is_accepted() {
+                engine::plugins::ui::UiRuntimeHostRequestDisposition::Accepted
+            } else {
+                engine::plugins::ui::UiRuntimeHostRequestDisposition::Rejected
+            },
+        )
+        .expect("RunenUI host request should complete only after Runenwerk authorization");
+    assert!(
+        slots
+            .pending_event_requests(slot_id)
+            .expect("completed requests should remain drained")
+            .is_empty()
+    );
+
+    assert!(slots.unmount(slot_id));
+    assert!(!slots.contains(slot_id));
 }
 
-fn counter_context(text: &str, revision: u64) -> UiEvaluationContext {
+fn counter_context(selected: bool, revision: u64) -> UiEvaluationContext {
     UiEvaluationContext::default().with_host_data(HostDataSnapshot::new(
-        "counter.output.text",
-        UiSchemaValue::string(text),
+        "counter.output.selected",
+        UiSchemaValue::bool(selected),
         revision,
     ))
-}
-
-fn assert_trace_contains(trace: &UiRuntimeTraceResource, kinds: &[UiRuntimeTraceEventKind]) {
-    for kind in kinds {
-        assert!(
-            trace.events().iter().any(|event| event.kind() == *kind),
-            "trace missing {kind:?}: {:?}",
-            trace.events()
-        );
-    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -200,6 +160,7 @@ impl UiScreen for CounterScreen {
                 ],
             },
         )
+        .with_action_descriptor(CounterIncrementAction.action_descriptor())
     }
 }
 
@@ -213,7 +174,7 @@ fn counter_output_control() -> UiNodeDefinition {
     let mut bindings = BTreeMap::new();
     bindings.insert(
         "selected".to_owned(),
-        AuthoredBindingRef::new("counter.output.text"),
+        AuthoredBindingRef::new("counter.output.selected"),
     );
 
     UiNodeDefinition::Control {
@@ -227,5 +188,48 @@ fn counter_output_control() -> UiNodeDefinition {
             label: Some("Counter output".to_owned()),
         }),
         children: Vec::new(),
+    }
+}
+
+struct CounterIncrementAction;
+
+impl UiAction for CounterIncrementAction {
+    fn action_descriptor(&self) -> UiTypedActionDescriptor {
+        UiTypedActionDescriptor::new(
+            UiTypedActionId::new("counter.increment.action"),
+            RouteId::new("counter.increment"),
+            RouteSchemaVersion::new(1),
+            UiSchemaRef::new("runenwerk.ui.controls.button.event", 1),
+            RouteCapability::new("counter.action.increment"),
+        )
+    }
+}
+
+struct CounterIncrementHandler;
+
+impl UiActionHandler<CounterIncrementAction> for CounterIncrementHandler {
+    fn host_intent(&self, action: &CounterIncrementAction) -> UiHostMutationIntent {
+        UiHostMutationIntent::new(
+            action.action_descriptor(),
+            HostCommand::new(HostKind::Headless, "counter.increment"),
+        )
+        .with_domain_command(DomainCommand::new("counter", "increment"))
+    }
+}
+
+#[derive(Default)]
+struct CounterHostExecutor {
+    count: u32,
+}
+
+impl UiHostActionExecutor for CounterHostExecutor {
+    fn apply(
+        &mut self,
+        intent: &UiHostMutationIntent,
+        _packet: &ui_program::UiEventPacket,
+        _mapping: &HostRouteMapping,
+    ) -> Result<UiHostMutationReceipt, UiHostMutationRejection> {
+        self.count += 1;
+        Ok(UiHostMutationReceipt::from_intent(intent))
     }
 }

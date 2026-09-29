@@ -866,6 +866,8 @@ dependencies = [
  "runen-input",
  "runen-net",
  "runen-spatial",
+ "runenui_core",
+ "runenui_runtime",
  "rusttype",
  "serde",
  "serde_json",

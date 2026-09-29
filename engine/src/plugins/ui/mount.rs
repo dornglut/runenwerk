@@ -15,6 +15,7 @@ impl UiMountScreenId {
         &self.0
     }
 
+    #[cfg(test)]
     pub(crate) fn is_blank(&self) -> bool {
         self.0.trim().is_empty()
     }
@@ -108,6 +109,7 @@ impl UiMountRequest {
         &self.config
     }
 
+    #[cfg(test)]
     pub(crate) fn failure_reason(&self) -> Option<UiMountFailureReason> {
         if self.screen_identity.is_blank() {
             Some(UiMountFailureReason::MissingScreenIdentity)
@@ -170,6 +172,7 @@ pub struct UiMountRecord {
 }
 
 impl UiMountRecord {
+    #[cfg(test)]
     pub(crate) fn new(request: UiMountRequest, mount_source: UiMountSource) -> Self {
         Self {
             request,
@@ -208,6 +211,7 @@ pub struct UiMountedSessionRecord {
 }
 
 impl UiMountedSessionRecord {
+    #[cfg(test)]
     pub(crate) fn new(
         record: &UiMountRecord,
         mounted_surface: MountedSurfaceInstance,
@@ -280,6 +284,7 @@ pub struct UiMountReport {
 }
 
 impl UiMountReport {
+    #[cfg(test)]
     pub(crate) fn accepted(
         record: &UiMountRecord,
         mounted_session: &UiMountedSessionRecord,
@@ -296,6 +301,7 @@ impl UiMountReport {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn rejected(
         request: &UiMountRequest,
         mount_source: UiMountSource,
