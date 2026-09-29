@@ -188,7 +188,6 @@ pub enum RenderMethodOutputGuarantee {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RenderFieldDistanceInputRequirement {
     Exact,
-    AnyBounded,
     Bounded {
         max_absolute_error_meters: RenderDistanceErrorBound,
     },
