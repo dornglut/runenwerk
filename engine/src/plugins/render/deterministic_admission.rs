@@ -569,6 +569,9 @@ mod tests {
         RenderDistanceConvention, RenderPerspectiveObservation, RenderProbeObservation,
         RenderSamplingSupport,
     };
+    use crate::plugins::render::representation::{
+        RENDER_FIELD_DISTANCE_PROTOCOL_REVISION, RenderFieldDistanceGuarantee,
+    };
     use crate::plugins::render::scene::{RenderSceneStore, RenderSceneUpdate};
     use crate::plugins::render::space_time::{
         RenderAffineTransform3, RenderHandedness, RenderObjectSpatialState,
@@ -823,6 +826,73 @@ mod tests {
                 RenderDeterministicCompatibilityError::SelectedObjectFieldTransformNotSimilarity {
                     output_index: 10,
                     object_id,
+                }
+            )
+        );
+    }
+
+    #[test]
+    fn sampled_field_error_is_scaled_to_scene_meters_before_protocol_validation() {
+        let object_id = RenderObjectId::from_raw(1).expect("object id");
+        let representation_id = RenderRepresentationId::from_raw(1).expect("representation id");
+        let scaled_state = object_state(
+            RenderAffineTransform3::from_row_major_3x4([
+                2.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0,
+            ])
+            .expect("finite uniform-scale transform"),
+        );
+        let transform = RenderCompiledMetricSimilarityTransform::compile(scaled_state.spatial())
+            .expect("uniform scale is an exact metric similarity");
+        let evidence = RenderFieldDistanceProtocolEvidence::new(
+            RENDER_FIELD_DISTANCE_PROTOCOL_REVISION,
+            RenderFieldDistanceGuarantee::conservative(0.2).expect("bounded field guarantee"),
+        )
+        .expect("field protocol evidence");
+
+        let accepted = RenderFieldSemanticInput::dense(
+            [-1.0; 3],
+            [1.0; 3],
+            [2, 2, 2],
+            vec![0.0; 8],
+            0.1,
+            RenderTemporalSupport::unbounded(),
+        )
+        .expect("bounded sampled field");
+        assert_eq!(
+            validate_selected_field_input_error_bound(
+                11,
+                object_id,
+                representation_id,
+                &accepted,
+                &transform,
+                evidence,
+            ),
+            Ok(())
+        );
+
+        let rejected = RenderFieldSemanticInput::dense(
+            [-1.0; 3],
+            [1.0; 3],
+            [2, 2, 2],
+            vec![0.0; 8],
+            0.11,
+            RenderTemporalSupport::unbounded(),
+        )
+        .expect("bounded sampled field");
+        assert_eq!(
+            validate_selected_field_input_error_bound(
+                12,
+                object_id,
+                representation_id,
+                &rejected,
+                &transform,
+                evidence,
+            ),
+            Err(
+                RenderDeterministicCompatibilityError::SelectedRepresentationFieldInputErrorExceedsGuarantee {
+                    output_index: 12,
+                    object_id,
+                    representation_id,
                 }
             )
         );
