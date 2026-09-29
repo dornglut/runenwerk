@@ -1,6 +1,7 @@
 mod caves;
 mod collision;
 mod hierarchy;
+mod metric;
 mod preview;
 mod product;
 mod ratification;
@@ -15,10 +16,12 @@ pub use collision::{
     CollisionSweepOutcome, SphereSweep,
 };
 pub use hierarchy::{ChunkHierarchyNode, ChunkHierarchySummary};
+pub use metric::*;
 pub use preview::*;
 pub use product::*;
 pub use ratification::*;
 pub use storage::{
-    RegionSdfSummary, SDF_BRICK_EDGE_SAMPLES, SDF_PAGE_EDGE_BRICKS, SdfBrickMetadata,
-    SdfBrickRecord, SdfBrickSamples, SdfChunkPayload, SdfChunkStore, SdfPageCoord3, SdfPageRecord,
+    RegionSdfSummary, SDF_BRICK_EDGE_SAMPLES, SDF_METRIC_BRICK_EDGE_SAMPLES,
+    SDF_METRIC_BRICK_SAMPLE_COUNT, SDF_PAGE_EDGE_BRICKS, SdfBrickMetadata, SdfBrickRecord,
+    SdfBrickSamples, SdfChunkPayload, SdfChunkStore, SdfPageCoord3, SdfPageRecord,
 };
