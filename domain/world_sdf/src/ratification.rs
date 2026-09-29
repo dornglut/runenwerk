@@ -2,9 +2,7 @@ use ::product::{ProductIssueCode, ratify_product_descriptor};
 use foundation_ratification::{RatificationIssue, RatificationReport, Ratifier};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    FieldProductCandidate, FieldProductFreshness, WorldSdfMetricProductCandidate,
-};
+use crate::{FieldProductCandidate, FieldProductFreshness, WorldSdfMetricProductCandidate};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FieldProductIssueCode {
@@ -128,8 +126,9 @@ impl Ratifier<WorldSdfMetricProductCandidate> for WorldSdfMetricProductRatifier 
         let subject = FieldProductSubject::Product(candidate.descriptor.product_id.0);
         let mut report = RatificationReport::accepted();
 
-        let base_report =
-            ratify_field_product_candidate(&FieldProductCandidate::new(candidate.descriptor.clone()));
+        let base_report = ratify_field_product_candidate(&FieldProductCandidate::new(
+            candidate.descriptor.clone(),
+        ));
         for issue in base_report.iter() {
             report.push(RatificationIssue::error(
                 *issue.code(),
@@ -249,7 +248,9 @@ mod tests {
             FieldProductScope::from_chunks([payload.chunk_id]),
             FieldProductLineage::new(1, "world_sdf.metric"),
         );
-        descriptor.payload_refs.push(WorldSdfPayloadRef::from(payload));
+        descriptor
+            .payload_refs
+            .push(WorldSdfPayloadRef::from(payload));
         descriptor
     }
 
