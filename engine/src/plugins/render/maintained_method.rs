@@ -108,26 +108,36 @@ mod tests {
             .iter()
             .filter(|contract| contract.observation_kind() == RenderObservationKind::Perspective)
         {
-            assert!(contract.representation_requirements().iter().any(|requirement| {
-                matches!(
-                    requirement.protocol(),
-                    RenderRepresentationProtocolRequirement::FieldDistance {
-                        input: RenderFieldDistanceInputRequirement::Exact,
-                        ..
-                    }
-                )
-            }));
+            assert!(
+                contract
+                    .representation_requirements()
+                    .iter()
+                    .any(|requirement| {
+                        matches!(
+                            requirement.protocol(),
+                            RenderRepresentationProtocolRequirement::FieldDistance {
+                                input: RenderFieldDistanceInputRequirement::Exact,
+                                ..
+                            }
+                        )
+                    })
+            );
         }
         let probe = method
             .output_contracts()
             .iter()
             .find(|contract| contract.observation_kind() == RenderObservationKind::Probe)
             .expect("maintained probe contract");
-        assert!(probe.representation_requirements().iter().all(|requirement| {
-            !matches!(
-                requirement.protocol(),
-                RenderRepresentationProtocolRequirement::FieldDistance { .. }
-            )
-        }));
+        assert!(
+            probe
+                .representation_requirements()
+                .iter()
+                .all(|requirement| {
+                    !matches!(
+                        requirement.protocol(),
+                        RenderRepresentationProtocolRequirement::FieldDistance { .. }
+                    )
+                })
+        );
     }
 }
