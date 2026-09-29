@@ -40,6 +40,12 @@ pub enum WorldSdfMetricError {
     InvalidMetricBrickCount { actual: usize },
     MissingMetricBrick { brick_coord: [u8; 3] },
     InvalidMetricSampleCount { actual: usize },
+    InconsistentMetricBoundarySample {
+        left_brick: [u8; 3],
+        right_brick: [u8; 3],
+        difference_units: u32,
+        maximum_difference_units: u64,
+    },
 }
 
 impl fmt::Display for WorldSdfMetricError {
@@ -84,6 +90,15 @@ impl fmt::Display for WorldSdfMetricError {
             Self::InvalidMetricSampleCount { actual } => write!(
                 f,
                 "metric SDF brick must contain exactly {SDF_METRIC_BRICK_SAMPLE_COUNT} canonical samples, found {actual}"
+            ),
+            Self::InconsistentMetricBoundarySample {
+                left_brick,
+                right_brick,
+                difference_units,
+                maximum_difference_units,
+            } => write!(
+                f,
+                "metric SDF neighboring bricks {left_brick:?} and {right_brick:?} disagree at one shared sample by {difference_units} units, exceeding the declared two-sided error allowance of {maximum_difference_units} units"
             ),
         }
     }
@@ -131,6 +146,8 @@ pub fn validate_world_sdf_metric_payload(
             }
         }
     }
+
+    validate_metric_brick_boundaries(page, metric_payload_ref.encoding)?;
 
     Ok(())
 }
@@ -196,6 +213,121 @@ fn validate_metric_brick(brick: &SdfBrickRecord) -> Result<(), WorldSdfMetricErr
         return Err(WorldSdfMetricError::InvalidMetricSampleCount {
             actual: brick.samples.distances.len(),
         });
+    }
+    Ok(())
+}
+
+fn validate_metric_brick_boundaries(
+    page: &crate::SdfPageRecord,
+    encoding: crate::WorldSdfMetricEncoding,
+) -> Result<(), WorldSdfMetricError> {
+    let maximum_difference_units = u64::from(encoding.max_absolute_error_units).saturating_mul(2);
+
+    for z in 0..SDF_PAGE_EDGE_BRICKS as u8 {
+        for y in 0..SDF_PAGE_EDGE_BRICKS as u8 {
+            for x in 0..SDF_PAGE_EDGE_BRICKS as u8 {
+                let left_coord = [x, y, z];
+                let left = page
+                    .bricks
+                    .get(&left_coord)
+                    .expect("complete metric brick coverage was validated");
+
+                if x + 1 < SDF_PAGE_EDGE_BRICKS as u8 {
+                    let right_coord = [x + 1, y, z];
+                    let right = page
+                        .bricks
+                        .get(&right_coord)
+                        .expect("complete metric brick coverage was validated");
+                    validate_shared_metric_face(
+                        left_coord,
+                        right_coord,
+                        left,
+                        right,
+                        MetricBoundaryAxis::X,
+                        maximum_difference_units,
+                    )?;
+                }
+                if y + 1 < SDF_PAGE_EDGE_BRICKS as u8 {
+                    let right_coord = [x, y + 1, z];
+                    let right = page
+                        .bricks
+                        .get(&right_coord)
+                        .expect("complete metric brick coverage was validated");
+                    validate_shared_metric_face(
+                        left_coord,
+                        right_coord,
+                        left,
+                        right,
+                        MetricBoundaryAxis::Y,
+                        maximum_difference_units,
+                    )?;
+                }
+                if z + 1 < SDF_PAGE_EDGE_BRICKS as u8 {
+                    let right_coord = [x, y, z + 1];
+                    let right = page
+                        .bricks
+                        .get(&right_coord)
+                        .expect("complete metric brick coverage was validated");
+                    validate_shared_metric_face(
+                        left_coord,
+                        right_coord,
+                        left,
+                        right,
+                        MetricBoundaryAxis::Z,
+                        maximum_difference_units,
+                    )?;
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[derive(Debug, Clone, Copy)]
+enum MetricBoundaryAxis {
+    X,
+    Y,
+    Z,
+}
+
+fn validate_shared_metric_face(
+    left_coord: [u8; 3],
+    right_coord: [u8; 3],
+    left: &SdfBrickRecord,
+    right: &SdfBrickRecord,
+    axis: MetricBoundaryAxis,
+    maximum_difference_units: u64,
+) -> Result<(), WorldSdfMetricError> {
+    let last = SDF_METRIC_BRICK_EDGE_SAMPLES - 1;
+    for v in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
+        for u in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
+            let (left_index, right_index) = match axis {
+                MetricBoundaryAxis::X => (
+                    cube_sample_index(last, u, v),
+                    cube_sample_index(0, u, v),
+                ),
+                MetricBoundaryAxis::Y => (
+                    cube_sample_index(u, last, v),
+                    cube_sample_index(u, 0, v),
+                ),
+                MetricBoundaryAxis::Z => (
+                    cube_sample_index(u, v, last),
+                    cube_sample_index(u, v, 0),
+                ),
+            };
+            let left_value = i32::from(left.samples.distances[left_index]);
+            let right_value = i32::from(right.samples.distances[right_index]);
+            let difference_units = left_value.abs_diff(right_value);
+            if u64::from(difference_units) > maximum_difference_units {
+                return Err(WorldSdfMetricError::InconsistentMetricBoundarySample {
+                    left_brick: left_coord,
+                    right_brick: right_coord,
+                    difference_units,
+                    maximum_difference_units,
+                });
+            }
+        }
     }
     Ok(())
 }
@@ -521,6 +653,65 @@ mod tests {
                 }
             );
         }
+    }
+
+    #[test]
+    fn shared_metric_boundary_may_differ_within_two_sided_error_allowance() {
+        let mut payload = affine_field_payload();
+        let page = payload
+            .page_table
+            .get_mut(&SdfPageCoord3::default())
+            .expect("page exists");
+        let shared_left_index = cube_sample_index(SDF_METRIC_BRICK_EDGE_SAMPLES - 1, 1, 1);
+        let shared_right_index = cube_sample_index(0, 1, 1);
+        let left_value = page
+            .bricks
+            .get(&[0, 0, 0])
+            .expect("left brick exists")
+            .samples
+            .distances[shared_left_index];
+        page.bricks
+            .get_mut(&[1, 0, 0])
+            .expect("right brick exists")
+            .samples
+            .distances[shared_right_index] = left_value.saturating_add(2);
+
+        validate_world_sdf_metric_payload(&metric_ref(&payload), &payload)
+            .expect("difference equal to twice the declared one-unit error remains possible");
+    }
+
+    #[test]
+    fn shared_metric_boundary_rejects_impossible_two_sided_error_claim() {
+        let mut payload = affine_field_payload();
+        let page = payload
+            .page_table
+            .get_mut(&SdfPageCoord3::default())
+            .expect("page exists");
+        let shared_left_index = cube_sample_index(SDF_METRIC_BRICK_EDGE_SAMPLES - 1, 1, 1);
+        let shared_right_index = cube_sample_index(0, 1, 1);
+        let left_value = page
+            .bricks
+            .get(&[0, 0, 0])
+            .expect("left brick exists")
+            .samples
+            .distances[shared_left_index];
+        page.bricks
+            .get_mut(&[1, 0, 0])
+            .expect("right brick exists")
+            .samples
+            .distances[shared_right_index] = left_value.saturating_add(3);
+
+        let error = validate_world_sdf_metric_payload(&metric_ref(&payload), &payload)
+            .expect_err("difference greater than twice the declared error cannot describe one field");
+        assert!(matches!(
+            error,
+            WorldSdfMetricError::InconsistentMetricBoundarySample {
+                left_brick: [0, 0, 0],
+                right_brick: [1, 0, 0],
+                difference_units: 3,
+                maximum_difference_units: 2,
+            }
+        ));
     }
 
     #[test]
