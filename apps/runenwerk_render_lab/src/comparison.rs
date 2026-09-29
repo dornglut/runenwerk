@@ -238,22 +238,10 @@ pub(super) fn install_render_lab_comparison_bindings(app: &mut App) {
     use engine::prelude::AppActionBindingsExt;
 
     app.add_input_bindings([
-        (
-            ACTION_COMPARISON_SPLIT,
-            PhysicalKeyIdentity::code("F6"),
-        ),
-        (
-            ACTION_COMPARISON_FULL_A,
-            PhysicalKeyIdentity::code("F7"),
-        ),
-        (
-            ACTION_COMPARISON_FULL_B,
-            PhysicalKeyIdentity::code("F8"),
-        ),
-        (
-            ACTION_COMPARISON_FLIP,
-            PhysicalKeyIdentity::code("F9"),
-        ),
+        (ACTION_COMPARISON_SPLIT, PhysicalKeyIdentity::code("F6")),
+        (ACTION_COMPARISON_FULL_A, PhysicalKeyIdentity::code("F7")),
+        (ACTION_COMPARISON_FULL_B, PhysicalKeyIdentity::code("F8")),
+        (ACTION_COMPARISON_FLIP, PhysicalKeyIdentity::code("F9")),
     ]);
 }
 
@@ -342,14 +330,8 @@ pub(super) fn render_lab_comparison_flow() -> Result<RenderFlow> {
     RenderFlow::new(RL2_COMPARISON_FLOW_ID)
         .explicit_invocations_only()
         .with_state::<RenderLabComparisonState>()
-        .with_target_alias(
-            RL2_COMPARISON_RAW_A_ALIAS,
-            RenderTargetAliasKind::Texture,
-        )?
-        .with_target_alias(
-            RL2_COMPARISON_RAW_B_ALIAS,
-            RenderTargetAliasKind::Texture,
-        )?
+        .with_target_alias(RL2_COMPARISON_RAW_A_ALIAS, RenderTargetAliasKind::Texture)?
+        .with_target_alias(RL2_COMPARISON_RAW_B_ALIAS, RenderTargetAliasKind::Texture)?
         .with_color_target_alias(RL2_COMPARISON_DISPLAY_A_ALIAS)?
         .with_color_target_alias(RL2_COMPARISON_DISPLAY_B_ALIAS)?
         .with_surface_color()?
@@ -462,16 +444,14 @@ pub(super) fn build_render_lab_comparison_publication(
         output_size_px.0,
         output_size_px.1,
     )?;
-    let evaluation_a = RenderDeterministicFiniteEvaluationExtent::new(
-        output_size_px.0,
-        output_size_px.1,
-    )
-    .ok_or_else(|| anyhow::anyhow!("comparison P100 evaluation extent must be non-zero"))?;
-    let evaluation_b = RenderDeterministicFiniteEvaluationExtent::new(
-        candidate_size_px.0,
-        candidate_size_px.1,
-    )
-    .ok_or_else(|| anyhow::anyhow!("comparison candidate evaluation extent must be non-zero"))?;
+    let evaluation_a =
+        RenderDeterministicFiniteEvaluationExtent::new(output_size_px.0, output_size_px.1)
+            .ok_or_else(|| anyhow::anyhow!("comparison P100 evaluation extent must be non-zero"))?;
+    let evaluation_b =
+        RenderDeterministicFiniteEvaluationExtent::new(candidate_size_px.0, candidate_size_px.1)
+            .ok_or_else(|| {
+                anyhow::anyhow!("comparison candidate evaluation extent must be non-zero")
+            })?;
 
     let contribution_a = RenderDeterministicFrameContribution {
         producer_id: producer_a,
@@ -634,12 +614,8 @@ mod tests {
     #[test]
     fn comparison_evidence_targets_distinct_visualization_outputs() {
         let flow = render_lab_comparison_flow().expect("comparison flow should author");
-        let config = RenderLabComparisonEvidenceConfig::bounded(
-            "evidence/compare",
-            6,
-            &flow,
-        )
-        .expect("comparison evidence config should build");
+        let config = RenderLabComparisonEvidenceConfig::bounded("evidence/compare", 6, &flow)
+            .expect("comparison evidence config should build");
         assert!(config.is_active());
         assert_eq!(config.submitted_frame_limit(), Some(6));
         assert_eq!(config.capture_selectors().len(), 2);
@@ -678,7 +654,9 @@ mod tests {
             flow.invocation_policy(),
             engine::plugins::render::RenderFlowInvocationPolicy::ExplicitOnly
         );
-        let lexical = flow.lexical_pass_order().expect("comparison flow should compile");
+        let lexical = flow
+            .lexical_pass_order()
+            .expect("comparison flow should compile");
         assert_eq!(lexical.len(), 4);
         let compiled = engine::plugins::render::compile_flow_plan(&flow)
             .expect("comparison flow should compile");
@@ -710,7 +688,10 @@ mod tests {
         )
         .expect("comparison publication");
 
-        assert_eq!(publication.contribution_a.scene, publication.contribution_b.scene);
+        assert_eq!(
+            publication.contribution_a.scene,
+            publication.contribution_b.scene
+        );
         assert_eq!(
             publication.contribution_a.request,
             publication.contribution_b.request
