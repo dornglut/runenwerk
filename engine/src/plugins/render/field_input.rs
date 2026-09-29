@@ -50,6 +50,7 @@ impl RenderFieldSemanticInput {
             "field_input_sample_spacing_meters",
         )?;
         let expected_sample_count = checked_sample_count(dimensions)?;
+        validate_finite_bounds(origin_local_meters, sample_spacing_meters, dimensions)?;
         if signed_distance_samples_meters.len() != expected_sample_count {
             return Err(RenderFieldSemanticInputError::SampleCountMismatch {
                 expected: expected_sample_count,
@@ -205,6 +206,19 @@ fn checked_sample_count(dimensions: [u32; 3]) -> Result<usize, RenderFieldSemant
         .ok_or(RenderFieldSemanticInputError::SampleCountOverflow)
 }
 
+fn validate_finite_bounds(
+    origin_local_meters: [CanonicalF64; 3],
+    sample_spacing_meters: [CanonicalF64; 3],
+    dimensions: [u32; 3],
+) -> Result<(), RenderFieldSemanticInputError> {
+    for axis in 0..3 {
+        let max_local_meters = origin_local_meters[axis].get()
+            + sample_spacing_meters[axis].get() * f64::from(dimensions[axis] - 1);
+        CanonicalF64::new(max_local_meters, "field_input_max_local_meters")?;
+    }
+    Ok(())
+}
+
 fn canonical_vector(
     values: [f64; 3],
     field: &'static str,
@@ -255,6 +269,21 @@ mod tests {
                 validity,
             ),
             Err(RenderFieldSemanticInputError::NonPositiveSampleSpacing)
+        ));
+    }
+
+    #[test]
+    fn dense_field_rejects_non_finite_derived_bounds() {
+        let validity = RenderTemporalSupport::unbounded();
+        assert!(matches!(
+            RenderFieldSemanticInput::dense(
+                [f64::MAX, 0.0, 0.0],
+                [f64::MAX, 1.0, 1.0],
+                [2, 2, 2],
+                vec![0.0; 8],
+                validity,
+            ),
+            Err(RenderFieldSemanticInputError::SemanticValue(_))
         ));
     }
 
