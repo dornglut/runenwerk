@@ -12,9 +12,8 @@ pub const SDF_PAGE_EDGE_BRICKS: usize = 4;
 
 /// Canonical metric-field corner lattice used by `WorldSdfMetricEncoding` revision 1.
 pub const SDF_METRIC_BRICK_EDGE_SAMPLES: usize = 2;
-pub const SDF_METRIC_BRICK_SAMPLE_COUNT: usize = SDF_METRIC_BRICK_EDGE_SAMPLES
-    * SDF_METRIC_BRICK_EDGE_SAMPLES
-    * SDF_METRIC_BRICK_EDGE_SAMPLES;
+pub const SDF_METRIC_BRICK_SAMPLE_COUNT: usize =
+    SDF_METRIC_BRICK_EDGE_SAMPLES * SDF_METRIC_BRICK_EDGE_SAMPLES * SDF_METRIC_BRICK_EDGE_SAMPLES;
 
 #[derive(
     Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,

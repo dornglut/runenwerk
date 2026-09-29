@@ -1,7 +1,6 @@
 use crate::{
     SDF_METRIC_BRICK_EDGE_SAMPLES, SDF_METRIC_BRICK_SAMPLE_COUNT, SDF_PAGE_EDGE_BRICKS,
-    SdfBrickRecord,
-    SdfChunkPayload, SdfPageCoord3, WorldSdfPayloadRef,
+    SdfBrickRecord, SdfChunkPayload, SdfPageCoord3, WorldSdfPayloadRef,
 };
 use runen_spatial::{GridPartitionConfig, WorldPosition};
 use std::error::Error;
@@ -44,17 +43,29 @@ impl fmt::Display for WorldSdfMetricQueryError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::MissingMetricEncoding => {
-                write!(f, "world SDF payload reference has no metric-field capability")
+                write!(
+                    f,
+                    "world SDF payload reference has no metric-field capability"
+                )
             }
             Self::UnsupportedMetricEncoding => {
-                write!(f, "world SDF metric-field encoding is unsupported or invalid")
+                write!(
+                    f,
+                    "world SDF metric-field encoding is unsupported or invalid"
+                )
             }
             Self::PayloadReferenceMismatch => {
-                write!(f, "world SDF payload does not match the exact referenced chunk revision/checksum")
+                write!(
+                    f,
+                    "world SDF payload does not match the exact referenced chunk revision/checksum"
+                )
             }
             Self::InvalidWorldPosition => write!(f, "metric field query position is invalid"),
             Self::PositionOutsidePayload => {
-                write!(f, "metric field query position lies outside the referenced chunk")
+                write!(
+                    f,
+                    "metric field query position lies outside the referenced chunk"
+                )
             }
             Self::MissingPageData => write!(f, "metric field payload contains no SDF page data"),
             Self::MissingPage => write!(f, "metric field query resolved to a missing SDF page"),
@@ -88,8 +99,9 @@ pub fn sample_world_sdf_metric_distance(
         return Err(WorldSdfMetricQueryError::PayloadReferenceMismatch);
     }
 
-    let world_position = WorldPosition::try_new(payload_ref.chunk_id.world_id, world_position_meters)
-        .map_err(|_| WorldSdfMetricQueryError::InvalidWorldPosition)?;
+    let world_position =
+        WorldPosition::try_new(payload_ref.chunk_id.world_id, world_position_meters)
+            .map_err(|_| WorldSdfMetricQueryError::InvalidWorldPosition)?;
     let query_chunk = partition
         .chunk_id_from_world_position(world_position)
         .map_err(|_| WorldSdfMetricQueryError::InvalidWorldPosition)?;
@@ -170,16 +182,13 @@ fn payload_brick_lookup(
 fn quantize_payload_axis(local_axis: f64, edge: f64, page_span: i32) -> (i32, u8, f64) {
     let span = page_span.max(1);
     let page_coord_f = (local_axis / edge) * f64::from(span);
-    let page_offset = page_coord_f
-        .floor()
-        .clamp(0.0, f64::from(span - 1)) as i32;
+    let page_offset = page_coord_f.floor().clamp(0.0, f64::from(span - 1)) as i32;
     let page_local = page_coord_f - f64::from(page_offset);
     let brick_coord_f = page_local * SDF_PAGE_EDGE_BRICKS as f64;
     let brick_index = brick_coord_f
         .floor()
         .clamp(0.0, (SDF_PAGE_EDGE_BRICKS - 1) as f64) as u8;
-    let brick_local =
-        (brick_coord_f - f64::from(brick_index)).clamp(0.0, 1.0 - 1.0e-12);
+    let brick_local = (brick_coord_f - f64::from(brick_index)).clamp(0.0, 1.0 - 1.0e-12);
     (page_offset, brick_index, brick_local)
 }
 
@@ -240,8 +249,8 @@ fn lerp(a: f64, b: f64, t: f64) -> f64 {
 mod tests {
     use super::*;
     use crate::{
-        SdfBrickMetadata, SdfBrickSamples, SdfPageRecord, WorldSdfMetricEncoding,
-        WORLD_SDF_METRIC_SAMPLE_LAYOUT_REVISION,
+        SdfBrickMetadata, SdfBrickSamples, SdfPageRecord, WORLD_SDF_METRIC_SAMPLE_LAYOUT_REVISION,
+        WorldSdfMetricEncoding,
     };
     use runen_spatial::{ChunkCoord3, ChunkId, WorldId};
     use std::collections::BTreeMap;
@@ -270,13 +279,11 @@ mod tests {
                     for sample_z in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
                         for sample_y in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
                             for sample_x in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
-                                let point_x =
-                                    (f64::from(brick_x) + sample_x as f64) / edge;
+                                let point_x = (f64::from(brick_x) + sample_x as f64) / edge;
                                 let distance = point_x - 0.5;
-                                distances.push(
-                                    (distance * f64::from(DISTANCE_UNITS_PER_METER)).round()
-                                        as i16,
-                                );
+                                distances
+                                    .push((distance * f64::from(DISTANCE_UNITS_PER_METER)).round()
+                                        as i16);
                             }
                         }
                     }
