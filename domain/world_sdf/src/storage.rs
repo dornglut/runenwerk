@@ -3,8 +3,20 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use world_ops::{ChunkGeneration, ChunkRevision, OperationId};
 
+/// Existing nominal SDF brick storage vocabulary.
+///
+/// This legacy constant predates the metric runtime contract and does not define the sample layout
+/// used by `WorldSdfMetricEncoding`.
 pub const SDF_BRICK_EDGE_SAMPLES: usize = 8;
 pub const SDF_PAGE_EDGE_BRICKS: usize = 4;
+
+/// Canonical metric-field lattice used by `WorldSdfMetricEncoding` revision 1.
+///
+/// Three samples per axis place sample planes at local brick coordinates 0, 0.5, and 1.0,
+/// matching the first maintained consumer's half-brick geometry boundaries.
+pub const SDF_METRIC_BRICK_EDGE_SAMPLES: usize = 3;
+pub const SDF_METRIC_BRICK_SAMPLE_COUNT: usize =
+    SDF_METRIC_BRICK_EDGE_SAMPLES * SDF_METRIC_BRICK_EDGE_SAMPLES * SDF_METRIC_BRICK_EDGE_SAMPLES;
 
 #[derive(
     Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
