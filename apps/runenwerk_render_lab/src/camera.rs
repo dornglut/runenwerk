@@ -53,11 +53,30 @@ impl RenderLabCamera {
 
 pub(super) fn update_render_lab_camera_system(
     input: Res<InputState>,
+    mut camera: ResMut<RenderLabCamera>,
+) {
+    update_render_lab_camera(&input, &mut camera, false);
+}
+
+pub(super) fn update_render_lab_comparison_camera_system(
+    input: Res<InputState>,
     comparison: Res<RenderLabComparisonState>,
     mut camera: ResMut<RenderLabCamera>,
 ) {
+    update_render_lab_camera(
+        &input,
+        &mut camera,
+        comparison.suppress_left_camera_drag(),
+    );
+}
+
+fn update_render_lab_camera(
+    input: &InputState,
+    camera: &mut RenderLabCamera,
+    suppress_left_drag: bool,
+) {
     let before = *camera;
-    apply_render_lab_input(&mut camera, &input, comparison.suppress_left_camera_drag());
+    apply_render_lab_input(camera, input, suppress_left_drag);
     if before != *camera && std::env::var("GROTTO_RENDER_CAMERA_LOG").is_ok() {
         eprintln!(
             "runenwerk_render_lab_camera yaw={:.4} pitch={:.4} distance={:.4} pan=({:.4},{:.4})",
