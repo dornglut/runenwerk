@@ -2368,8 +2368,9 @@ mod tests {
             );
 
         assert_eq!(
-            app.stop_automation_input_trace()
-                .expect_err("bounded recording must not synchronously bypass FrameEnd finalization"),
+            app.stop_automation_input_trace().expect_err(
+                "bounded recording must not synchronously bypass FrameEnd finalization"
+            ),
             AutomationInputTraceControlError::ProductionTraceRequiresControlFinalization
         );
         assert!(app.automation_input_trace_active());
