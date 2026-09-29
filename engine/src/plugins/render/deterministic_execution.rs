@@ -19,6 +19,9 @@ pub use super::deterministic_capture::{
     RenderDeterministicRadianceCaptureRequest, RenderDeterministicRadianceCaptureRequestError,
 };
 use super::deterministic_carrier;
+use super::field_input::{
+    RenderFieldSemanticInputBinding, RenderFieldSemanticInputGeneration,
+};
 use super::lowering::RenderWorkSet;
 use super::render_result::RenderResult;
 use super::representation::RenderRepresentationId;
@@ -102,6 +105,7 @@ struct DeterministicTemporalSignature {
     observation: DeterministicTemporalObservationCompatibility,
     output: RenderOutputSpec,
     semantic_inputs: Vec<RenderSurfaceSemanticInputBinding>,
+    field_semantic_inputs: Vec<RenderFieldSemanticInputBinding>,
     evaluation_extent: (u32, u32),
     sequence_revision: u32,
     reconstruction_revision: u32,
@@ -628,6 +632,8 @@ pub struct RenderDeterministicTemporalExecutionEvidence {
     pub evaluation_extent: (u32, u32),
     pub semantic_input_generations:
         Vec<(RenderRepresentationId, RenderSurfaceSemanticInputGeneration)>,
+    pub field_semantic_input_generations:
+        Vec<(RenderRepresentationId, RenderFieldSemanticInputGeneration)>,
     pub sequence_revision: u32,
     pub reconstruction_revision: u32,
     pub phase: u32,
@@ -929,6 +935,10 @@ pub enum RenderDeterministicLoweringError {
         output_index: usize,
         representation_id: RenderRepresentationId,
     },
+    MissingTemporalFieldInputGeneration {
+        output_index: usize,
+        representation_id: RenderRepresentationId,
+    },
     UnsupportedTemporalEvaluationExtent {
         output_index: usize,
         requested_extent: (u32, u32),
@@ -995,6 +1005,13 @@ impl fmt::Display for RenderDeterministicLoweringError {
             } => write!(
                 formatter,
                 "output {output_index} representation {representation_id:?} has no source generation required for retained temporal history"
+            ),
+            Self::MissingTemporalFieldInputGeneration {
+                output_index,
+                representation_id,
+            } => write!(
+                formatter,
+                "output {output_index} field representation {representation_id:?} has no source generation required for retained temporal history"
             ),
             Self::UnsupportedTemporalEvaluationExtent {
                 output_index,
@@ -1578,12 +1595,23 @@ fn lower_output(
                 );
             }
         }
+        for binding in admitted.field_semantic_inputs() {
+            if binding.generation().is_none() {
+                return Err(
+                    RenderDeterministicLoweringError::MissingTemporalFieldInputGeneration {
+                        output_index,
+                        representation_id: binding.representation_id(),
+                    },
+                );
+            }
+        }
         let camera_capable = evaluation_extent == requested_extent;
         let signature = DeterministicTemporalSignature {
             scene_revision: admitted.scene_revision(),
             observation: temporal_observation_compatibility(observation, camera_capable),
             output: requested.spec(),
             semantic_inputs: admitted.surface_semantic_inputs().to_vec(),
+            field_semantic_inputs: admitted.field_semantic_inputs().to_vec(),
             evaluation_extent,
             sequence_revision: TEMPORAL_SEQUENCE_REVISION,
             reconstruction_revision: TEMPORAL_RECONSTRUCTION_REVISION,
@@ -1991,6 +2019,18 @@ fn lower_output(
                                                 binding.representation_id(),
                                                 binding.generation().expect(
                                                     "temporal lowering required source generation",
+                                                ),
+                                            )
+                                        })
+                                        .collect(),
+                                    field_semantic_input_generations: admitted
+                                        .field_semantic_inputs()
+                                        .iter()
+                                        .map(|binding| {
+                                            (
+                                                binding.representation_id(),
+                                                binding.generation().expect(
+                                                    "temporal lowering required field source generation",
                                                 ),
                                             )
                                         })
