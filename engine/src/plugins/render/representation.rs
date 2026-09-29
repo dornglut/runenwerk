@@ -325,9 +325,7 @@ impl RenderFieldDistanceProtocolEvidence {
         self
     }
 
-    pub const fn semantic_input_requirement(
-        self,
-    ) -> Option<RenderFieldSemanticInputRequirement> {
+    pub const fn semantic_input_requirement(self) -> Option<RenderFieldSemanticInputRequirement> {
         self.semantic_input_requirement
     }
 
