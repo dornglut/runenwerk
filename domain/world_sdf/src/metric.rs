@@ -1,6 +1,6 @@
 use crate::{
     SDF_METRIC_BRICK_EDGE_SAMPLES, SDF_METRIC_BRICK_SAMPLE_COUNT, SDF_PAGE_EDGE_BRICKS,
-    SdfBrickRecord, SdfChunkPayload, SdfPageCoord3, WorldSdfPayloadRef,
+    SdfBrickRecord, SdfChunkPayload, SdfPageCoord3, WorldSdfMetricPayloadRef,
 };
 use runen_spatial::{GridPartitionConfig, WorldPosition};
 use std::error::Error;
@@ -31,7 +31,6 @@ impl WorldSdfMetricSample {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorldSdfMetricError {
-    MissingMetricEncoding,
     UnsupportedMetricEncoding,
     PayloadReferenceMismatch,
     InvalidWorldPosition,
@@ -46,12 +45,6 @@ pub enum WorldSdfMetricError {
 impl fmt::Display for WorldSdfMetricError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::MissingMetricEncoding => {
-                write!(
-                    f,
-                    "world SDF payload reference has no metric-field capability"
-                )
-            }
             Self::UnsupportedMetricEncoding => {
                 write!(
                     f,
@@ -90,7 +83,7 @@ impl fmt::Display for WorldSdfMetricError {
             ),
             Self::InvalidMetricSampleCount { actual } => write!(
                 f,
-                "metric SDF brick must contain exactly {SDF_METRIC_BRICK_SAMPLE_COUNT} canonical corner samples, found {actual}"
+                "metric SDF brick must contain exactly {SDF_METRIC_BRICK_SAMPLE_COUNT} canonical samples, found {actual}"
             ),
         }
     }
@@ -99,10 +92,10 @@ impl fmt::Display for WorldSdfMetricError {
 impl Error for WorldSdfMetricError {}
 
 pub fn validate_world_sdf_metric_payload(
-    payload_ref: &WorldSdfPayloadRef,
+    metric_payload_ref: &WorldSdfMetricPayloadRef,
     payload: &SdfChunkPayload,
 ) -> Result<(), WorldSdfMetricError> {
-    validate_metric_reference(payload_ref, payload)?;
+    validate_metric_reference(metric_payload_ref, payload)?;
 
     if payload.page_table.len() != 1 {
         return Err(WorldSdfMetricError::InvalidMetricPageCount {
@@ -143,19 +136,17 @@ pub fn validate_world_sdf_metric_payload(
 }
 
 pub fn sample_world_sdf_metric_distance(
-    payload_ref: &WorldSdfPayloadRef,
+    metric_payload_ref: &WorldSdfMetricPayloadRef,
     payload: &SdfChunkPayload,
     partition: &GridPartitionConfig,
     world_position_meters: [f64; 3],
 ) -> Result<WorldSdfMetricSample, WorldSdfMetricError> {
-    validate_world_sdf_metric_payload(payload_ref, payload)?;
-    let encoding = payload_ref
-        .metric_encoding
-        .expect("metric encoding was validated above");
+    validate_world_sdf_metric_payload(metric_payload_ref, payload)?;
+    let payload_ref = metric_payload_ref.payload_ref;
+    let encoding = metric_payload_ref.encoding;
 
-    let world_position =
-        WorldPosition::try_new(payload_ref.chunk_id.world_id, world_position_meters)
-            .map_err(|_| WorldSdfMetricError::InvalidWorldPosition)?;
+    let world_position = WorldPosition::try_new(payload_ref.chunk_id.world_id, world_position_meters)
+        .map_err(|_| WorldSdfMetricError::InvalidWorldPosition)?;
     let query_chunk = partition
         .chunk_id_from_world_position(world_position)
         .map_err(|_| WorldSdfMetricError::InvalidWorldPosition)?;
@@ -183,15 +174,13 @@ pub fn sample_world_sdf_metric_distance(
 }
 
 fn validate_metric_reference(
-    payload_ref: &WorldSdfPayloadRef,
+    metric_payload_ref: &WorldSdfMetricPayloadRef,
     payload: &SdfChunkPayload,
 ) -> Result<(), WorldSdfMetricError> {
-    let encoding = payload_ref
-        .metric_encoding
-        .ok_or(WorldSdfMetricError::MissingMetricEncoding)?;
-    if !encoding.is_supported() {
+    if !metric_payload_ref.encoding.is_supported() {
         return Err(WorldSdfMetricError::UnsupportedMetricEncoding);
     }
+    let payload_ref = metric_payload_ref.payload_ref;
     if payload_ref.chunk_id != payload.chunk_id
         || payload_ref.chunk_revision != payload.chunk_revision
         || payload_ref.checksum != payload.checksum
@@ -364,11 +353,13 @@ mod tests {
         }
     }
 
-    fn metric_ref(payload: &SdfChunkPayload) -> WorldSdfPayloadRef {
-        WorldSdfPayloadRef::from(payload).with_metric_encoding(
+    fn metric_ref(payload: &SdfChunkPayload) -> WorldSdfMetricPayloadRef {
+        WorldSdfMetricPayloadRef::try_new(
+            crate::WorldSdfPayloadRef::from(payload),
             WorldSdfMetricEncoding::try_new(DISTANCE_UNITS_PER_METER, 1)
                 .expect("positive metric scale is valid"),
         )
+        .expect("supported metric capability should be valid")
     }
 
     #[test]
@@ -401,23 +392,10 @@ mod tests {
     }
 
     #[test]
-    fn occupancy_only_payload_ref_cannot_satisfy_metric_query() {
-        let payload = affine_field_payload();
-        let error = sample_world_sdf_metric_distance(
-            &WorldSdfPayloadRef::from(&payload),
-            &payload,
-            &partition(),
-            [0.25, 0.5, 0.5],
-        )
-        .expect_err("occupancy-only ref must fail closed");
-        assert_eq!(error, WorldSdfMetricError::MissingMetricEncoding);
-    }
-
-    #[test]
     fn exact_payload_reference_mismatch_fails_closed() {
         let payload = affine_field_payload();
         let mut payload_ref = metric_ref(&payload);
-        payload_ref.checksum = payload_ref.checksum.saturating_add(1);
+        payload_ref.payload_ref.checksum = payload_ref.payload_ref.checksum.saturating_add(1);
         let error = validate_world_sdf_metric_payload(&payload_ref, &payload)
             .expect_err("mismatched exact ref must fail");
         assert_eq!(error, WorldSdfMetricError::PayloadReferenceMismatch);
@@ -427,11 +405,7 @@ mod tests {
     fn unsupported_metric_layout_revision_fails_closed() {
         let payload = affine_field_payload();
         let mut payload_ref = metric_ref(&payload);
-        payload_ref
-            .metric_encoding
-            .as_mut()
-            .expect("metric encoding exists")
-            .layout_revision = WORLD_SDF_METRIC_LAYOUT_REVISION + 1;
+        payload_ref.encoding.layout_revision = WORLD_SDF_METRIC_LAYOUT_REVISION + 1;
         let error = validate_world_sdf_metric_payload(&payload_ref, &payload)
             .expect_err("unsupported layout must fail");
         assert_eq!(error, WorldSdfMetricError::UnsupportedMetricEncoding);
@@ -552,13 +526,24 @@ mod tests {
         let payload = affine_field_payload();
         let payload_ref = metric_ref(&payload);
         let bytes = postcard::to_allocvec(&payload_ref).expect("serialize metric payload ref");
-        let decoded =
-            postcard::from_bytes::<WorldSdfPayloadRef>(&bytes).expect("deserialize metric ref");
+        let decoded = postcard::from_bytes::<WorldSdfMetricPayloadRef>(&bytes)
+            .expect("deserialize metric capability");
         assert_eq!(decoded, payload_ref);
     }
 
     #[test]
     fn invalid_metric_scale_is_rejected_by_constructor() {
         assert!(WorldSdfMetricEncoding::try_new(0, 0).is_none());
+
+        let payload = affine_field_payload();
+        let unsupported = WorldSdfMetricEncoding {
+            layout_revision: WORLD_SDF_METRIC_LAYOUT_REVISION + 1,
+            distance_units_per_meter: DISTANCE_UNITS_PER_METER,
+            max_absolute_error_units: 1,
+        };
+        assert!(
+            WorldSdfMetricPayloadRef::try_new(crate::WorldSdfPayloadRef::from(&payload), unsupported)
+                .is_none()
+        );
     }
 }
