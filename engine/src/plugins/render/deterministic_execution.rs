@@ -1952,7 +1952,7 @@ fn lower_output(
                     let relationship = GpuExportRelationship::new(
                         GpuResourceRef::Texture(destination.clone()),
                         GpuExportKey::new(format!(
-                            "runenrender.maintained.radiance.output.{output_index}"
+                            "runenrender.maintained.radiance.scope.{scope}.output.{output_index}"
                         ))
                         .map_err(|error| gpu_authoring("radiance export key", error))?,
                         GpuResourceAccessIntent::Write,
