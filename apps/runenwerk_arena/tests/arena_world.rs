@@ -1,13 +1,16 @@
 use engine::plugins::world::adapters::{
     CollisionQueryServiceResource, PartitionConfigResource, SdfChunkStoreResource,
 };
-use engine::plugins::world::build::WorldCompletedBuildQueueResource;
+use engine::plugins::world::build::{
+    WorldCompletedBuildQueueResource, WorldRuntimeSdfProductCatalogResource,
+};
 use engine::plugins::world::chunks::lifecycle::WorldChunkRuntimeMapResource;
 use engine::prelude::*;
 use runen_spatial::WorldId;
 use runenwerk_arena::{
-    ARENA_PLAYER_SPAWN, LOCAL_PARTICIPANT_ID, ParticipantCommand, PlayerCommand, TickCommandBatch,
-    apply_game_commands, arena_chunk_id, build_headless_game_app, player_physical_history_for,
+    ARENA_FIELD_PRODUCT_ID, ARENA_PLAYER_SPAWN, LOCAL_PARTICIPANT_ID, ParticipantCommand,
+    PlayerCommand, TickCommandBatch, apply_game_commands, arena_chunk_id, build_headless_game_app,
+    player_physical_history_for,
 };
 
 fn started_app() -> App {
@@ -88,6 +91,18 @@ fn maintained_startup_enqueues_arena_through_world_runtime_intake() {
         store.chunks.is_empty(),
         "startup must not bypass World BuildIntegrate by writing the SDF store directly"
     );
+
+    let products = app
+        .world()
+        .resource::<WorldRuntimeSdfProductCatalogResource>()
+        .expect("runtime SDF product catalog should exist");
+    let descriptor = products
+        .products()
+        .values()
+        .find(|descriptor| descriptor.product_id == ARENA_FIELD_PRODUCT_ID)
+        .expect("maintained arena should retain its field product identity");
+    assert_eq!(descriptor.payload_refs.len(), 1);
+    assert_eq!(descriptor.payload_refs[0].chunk_id, arena_chunk_id());
 }
 
 #[test]

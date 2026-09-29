@@ -7,10 +7,14 @@ use super::super::debug::metrics::WorldDebugMetricsResource;
 use super::super::plugin::{WorldAuthorityState, WorldRuntimeState};
 use super::jobs::WorldBuildStaleness;
 use crate::runtime::{Res, ResMut};
+use product::ProductIdentity;
 use runen_spatial::ChunkId;
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use world_ops::{BuildGeneration, ChunkGeneration, ChunkRevision};
-use world_sdf::{RegionSdfSummary, SdfChunkPayload};
+use world_sdf::{
+    FieldProductCandidate, FieldProductDescriptor, FieldProductKind, RegionSdfSummary,
+    SdfChunkPayload, ratify_field_product_candidate,
+};
 
 #[derive(Debug, Clone, runen_ecs::Resource)]
 pub struct WorldCompletedBuildOutput {
@@ -27,26 +31,142 @@ pub struct WorldCompletedBuildQueueResource {
     pub outputs: VecDeque<WorldCompletedBuildOutput>,
 }
 
+#[derive(Debug, Clone, Default, runen_ecs::Component, runen_ecs::Resource)]
+pub struct WorldRuntimeSdfProductCatalogResource {
+    products: BTreeMap<ProductIdentity, FieldProductDescriptor>,
+}
+
+impl WorldRuntimeSdfProductCatalogResource {
+    pub fn products(&self) -> &BTreeMap<ProductIdentity, FieldProductDescriptor> {
+        &self.products
+    }
+
+    pub fn product(&self, product_id: ProductIdentity) -> Option<&FieldProductDescriptor> {
+        self.products.get(&product_id)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WorldSdfRuntimePayloadPackageError {
+    UnsupportedProductKind { kind: FieldProductKind },
+    PayloadCount { count: usize },
+    PayloadRefCount { count: usize },
+    ScopeMismatch,
+    PayloadRefMismatch,
+    ProductRatificationRejected { issue_count: usize },
+}
+
+impl std::fmt::Display for WorldSdfRuntimePayloadPackageError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnsupportedProductKind { kind } => {
+                write!(formatter, "unsupported runtime SDF product kind: {kind:?}")
+            }
+            Self::PayloadCount { count } => write!(
+                formatter,
+                "runtime SDF product must contain exactly one payload, found {count}"
+            ),
+            Self::PayloadRefCount { count } => write!(
+                formatter,
+                "runtime SDF product descriptor must contain exactly one payload ref, found {count}"
+            ),
+            Self::ScopeMismatch => formatter
+                .write_str("runtime SDF product scope must identify exactly the packaged chunk"),
+            Self::PayloadRefMismatch => formatter.write_str(
+                "runtime SDF product payload ref must match packaged chunk, revision, and checksum",
+            ),
+            Self::ProductRatificationRejected { issue_count } => write!(
+                formatter,
+                "runtime SDF product descriptor failed ratification with {issue_count} issue(s)"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for WorldSdfRuntimePayloadPackageError {}
+
 #[derive(Debug, Clone)]
 pub struct WorldSdfRuntimePayloadPackage {
+    pub descriptor: FieldProductDescriptor,
     pub payloads: Vec<SdfChunkPayload>,
     pub region_summary: RegionSdfSummary,
 }
 
 impl WorldSdfRuntimePayloadPackage {
-    pub fn new(payloads: Vec<SdfChunkPayload>, region_summary: RegionSdfSummary) -> Self {
+    pub fn new(
+        descriptor: FieldProductDescriptor,
+        payloads: Vec<SdfChunkPayload>,
+        region_summary: RegionSdfSummary,
+    ) -> Self {
         Self {
+            descriptor,
             payloads,
             region_summary,
         }
     }
 }
 
+fn validate_runtime_sdf_payload_package(
+    package: &WorldSdfRuntimePayloadPackage,
+) -> Result<(), WorldSdfRuntimePayloadPackageError> {
+    if package.descriptor.kind != FieldProductKind::WorldSdfChunkPages {
+        return Err(WorldSdfRuntimePayloadPackageError::UnsupportedProductKind {
+            kind: package.descriptor.kind,
+        });
+    }
+    if package.payloads.len() != 1 {
+        return Err(WorldSdfRuntimePayloadPackageError::PayloadCount {
+            count: package.payloads.len(),
+        });
+    }
+    if package.descriptor.payload_refs.len() != 1 {
+        return Err(WorldSdfRuntimePayloadPackageError::PayloadRefCount {
+            count: package.descriptor.payload_refs.len(),
+        });
+    }
+
+    let payload = &package.payloads[0];
+    if package.descriptor.scope.chunk_ids.len() != 1
+        || !package.descriptor.scope.region_ids.is_empty()
+        || !package
+            .descriptor
+            .scope
+            .chunk_ids
+            .contains(&payload.chunk_id)
+    {
+        return Err(WorldSdfRuntimePayloadPackageError::ScopeMismatch);
+    }
+
+    let payload_ref = &package.descriptor.payload_refs[0];
+    if payload_ref.chunk_id != payload.chunk_id
+        || payload_ref.chunk_revision != payload.chunk_revision
+        || payload_ref.checksum != payload.checksum
+    {
+        return Err(WorldSdfRuntimePayloadPackageError::PayloadRefMismatch);
+    }
+
+    let report =
+        ratify_field_product_candidate(&FieldProductCandidate::new(package.descriptor.clone()));
+    if report.has_blocking_issues() {
+        return Err(
+            WorldSdfRuntimePayloadPackageError::ProductRatificationRejected {
+                issue_count: report.len(),
+            },
+        );
+    }
+    Ok(())
+}
+
 pub fn enqueue_ratified_world_sdf_payload_package(
     completed: &mut WorldCompletedBuildQueueResource,
     chunks: &mut WorldChunkRuntimeMapResource,
+    products: &mut WorldRuntimeSdfProductCatalogResource,
     package: WorldSdfRuntimePayloadPackage,
-) -> usize {
+) -> Result<usize, WorldSdfRuntimePayloadPackageError> {
+    validate_runtime_sdf_payload_package(&package)?;
+
+    let product_id = package.descriptor.product_core().identity;
+    let descriptor = package.descriptor.clone();
     let mut enqueued = 0usize;
     for payload in package.payloads {
         let chunk_id = payload.chunk_id;
@@ -63,7 +183,8 @@ pub fn enqueue_ratified_world_sdf_payload_package(
         });
         enqueued = enqueued.saturating_add(1);
     }
-    enqueued
+    products.products.insert(product_id, descriptor);
+    Ok(enqueued)
 }
 
 #[allow(clippy::too_many_arguments)]
