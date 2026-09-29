@@ -5,7 +5,10 @@
 //! representation alternatives without inspecting availability, GPU state, or physical outputs.
 
 use super::field_input::RenderFieldSemanticInputBinding;
-use super::representation::{RenderRepresentationId, RenderRepresentationProtocol};
+use super::representation::{
+    RenderFieldDistanceSample, RenderRepresentationId, RenderRepresentationProtocol,
+    classify_field_distance_transform,
+};
 use super::scene::RenderObjectId;
 use super::semantic_plan::{
     RenderApplicableRepresentationUse, RenderOutputApproximation, RenderPlan, RenderPlanCandidate,
@@ -342,15 +345,56 @@ impl RenderNormalizedSemanticInputs {
                 else {
                     return false;
                 };
-                self.binding_valid_for_output(
+                if !self.binding_valid_for_output(
                     plan,
                     output,
                     object_id,
                     record.temporal_support(),
                     binding.input().validity(),
+                ) {
+                    return false;
+                }
+                self.field_binding_satisfies_protocol_guarantee(
+                    plan,
+                    object_id,
+                    record,
+                    representation,
+                    binding,
                 )
             }
         }
+    }
+
+    fn field_binding_satisfies_protocol_guarantee(
+        &self,
+        plan: &RenderPlan,
+        object_id: RenderObjectId,
+        record: &super::representation::RenderRepresentationRecord,
+        representation: RenderApplicableRepresentationUse,
+        binding: &RenderFieldSemanticInputBinding,
+    ) -> bool {
+        let Some(state) = plan.scene().object_state(object_id) else {
+            return false;
+        };
+        let Some(distance_scale) =
+            classify_field_distance_transform(state.spatial().local_to_scene()).exact_distance_scale()
+        else {
+            return false;
+        };
+        let scene_error_meters =
+            binding.input().max_absolute_query_error_local_meters() * distance_scale;
+        if !scene_error_meters.is_finite() {
+            return false;
+        }
+        let Ok(evidence) = record.field_distance_protocol(
+            representation.requirement().protocol().revision(),
+        ) else {
+            return false;
+        };
+        let Ok(sample) = RenderFieldDistanceSample::new(0.0, scene_error_meters) else {
+            return false;
+        };
+        evidence.validate_sample(sample).is_ok()
     }
 
     fn binding_valid_for_output(
