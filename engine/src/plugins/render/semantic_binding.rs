@@ -324,7 +324,13 @@ impl RenderNormalizedSemanticInputs {
                 else {
                     return false;
                 };
-                self.binding_valid_for_output(plan, output, object_id, record.temporal_support(), binding.input().validity())
+                self.binding_valid_for_output(
+                    plan,
+                    output,
+                    object_id,
+                    record.temporal_support(),
+                    binding.input().validity(),
+                )
             }
             RenderRepresentationProtocol::FieldDistance => {
                 if record.field_semantic_input_requirement().is_none() {
@@ -336,7 +342,13 @@ impl RenderNormalizedSemanticInputs {
                 else {
                     return false;
                 };
-                self.binding_valid_for_output(plan, output, object_id, record.temporal_support(), binding.input().validity())
+                self.binding_valid_for_output(
+                    plan,
+                    output,
+                    object_id,
+                    record.temporal_support(),
+                    binding.input().validity(),
+                )
             }
         }
     }
