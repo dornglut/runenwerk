@@ -45,10 +45,8 @@ impl RenderFieldSemanticInput {
     ) -> Result<Self, RenderFieldSemanticInputError> {
         let origin_local_meters =
             canonical_vector(origin_local_meters, "field_input_origin_local_meters")?;
-        let sample_spacing_meters = positive_vector(
-            sample_spacing_meters,
-            "field_input_sample_spacing_meters",
-        )?;
+        let sample_spacing_meters =
+            positive_vector(sample_spacing_meters, "field_input_sample_spacing_meters")?;
         let expected_sample_count = checked_sample_count(dimensions)?;
         validate_finite_bounds(origin_local_meters, sample_spacing_meters, dimensions)?;
         if signed_distance_samples_meters.len() != expected_sample_count {
