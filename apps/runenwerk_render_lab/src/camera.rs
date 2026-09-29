@@ -1,5 +1,5 @@
-use crate::comparison::RenderLabComparisonState;
 use super::*;
+use crate::comparison::RenderLabComparisonState;
 
 #[derive(Debug, Clone, Copy, PartialEq, runen_ecs::Resource)]
 pub(super) struct RenderLabCamera {
@@ -57,11 +57,7 @@ pub(super) fn update_render_lab_camera_system(
     mut camera: ResMut<RenderLabCamera>,
 ) {
     let before = *camera;
-    apply_render_lab_input(
-        &mut camera,
-        &input,
-        comparison.suppress_left_camera_drag(),
-    );
+    apply_render_lab_input(&mut camera, &input, comparison.suppress_left_camera_drag());
     if before != *camera && std::env::var("GROTTO_RENDER_CAMERA_LOG").is_ok() {
         eprintln!(
             "runenwerk_render_lab_camera yaw={:.4} pitch={:.4} distance={:.4} pan=({:.4},{:.4})",
