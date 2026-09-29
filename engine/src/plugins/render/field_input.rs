@@ -120,10 +120,7 @@ pub struct RenderFieldSemanticInputBinding {
 }
 
 impl RenderFieldSemanticInputBinding {
-    pub fn new(
-        representation_id: RenderRepresentationId,
-        input: RenderFieldSemanticInput,
-    ) -> Self {
+    pub fn new(representation_id: RenderRepresentationId, input: RenderFieldSemanticInput) -> Self {
         Self {
             representation_id,
             input,
@@ -131,10 +128,7 @@ impl RenderFieldSemanticInputBinding {
         }
     }
 
-    pub const fn with_generation(
-        mut self,
-        generation: RenderFieldSemanticInputGeneration,
-    ) -> Self {
+    pub const fn with_generation(mut self, generation: RenderFieldSemanticInputGeneration) -> Self {
         self.generation = Some(generation);
         self
     }
@@ -235,13 +229,7 @@ mod tests {
             Err(RenderFieldSemanticInputError::ZeroDimension)
         ));
         assert!(matches!(
-            RenderFieldSemanticInput::dense(
-                [0.0; 3],
-                [1.0; 3],
-                [2, 2, 2],
-                vec![0.0; 7],
-                validity,
-            ),
+            RenderFieldSemanticInput::dense([0.0; 3], [1.0; 3], [2, 2, 2], vec![0.0; 7], validity,),
             Err(RenderFieldSemanticInputError::SampleCountMismatch {
                 expected: 8,
                 actual: 7,
