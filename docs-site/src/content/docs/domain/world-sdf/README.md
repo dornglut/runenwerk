@@ -5,7 +5,7 @@ status: active
 owner: world-sdf
 layer: domain
 canonical: true
-last_reviewed: 2026-08-30
+last_reviewed: 2026-09-29
 publication: primary
 ---
 
