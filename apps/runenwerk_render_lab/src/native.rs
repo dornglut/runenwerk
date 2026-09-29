@@ -121,7 +121,7 @@ impl Plugin for RenderLabPlugin {
         );
         app.add_systems(
             Update,
-            camera::update_render_lab_camera_system
+            camera::update_render_lab_comparison_camera_system
                 .in_set(RenderLabUpdateSet::Camera)
                 .after(RenderLabUpdateSet::ComparisonInput),
         );
