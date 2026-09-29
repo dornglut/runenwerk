@@ -61,8 +61,10 @@ impl RenderFieldSemanticInput {
             .into_iter()
             .map(|value| CanonicalF64::new(value, "field_input_signed_distance_sample_meters"))
             .collect::<Result<Vec<_>, _>>()?;
-        let max_absolute_error_meters =
-            CanonicalF64::new(max_absolute_error_meters, "field_input_max_absolute_error_meters")?;
+        let max_absolute_error_meters = CanonicalF64::new(
+            max_absolute_error_meters,
+            "field_input_max_absolute_error_meters",
+        )?;
         if max_absolute_error_meters.get() < 0.0 {
             return Err(RenderFieldSemanticInputError::NegativeErrorBound);
         }
@@ -126,7 +128,6 @@ impl RenderFieldSemanticInputGeneration {
     pub const fn new(raw: u64) -> Self {
         Self(raw)
     }
-
 }
 
 /// Invocation-local correlation between one exact representation and one immutable sampled field.
