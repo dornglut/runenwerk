@@ -302,7 +302,7 @@ mod tests {
         ChunkId::new(WorldId::new(0), ChunkCoord3::default())
     }
 
-    fn plane_payload() -> SdfChunkPayload {
+    fn affine_field_payload() -> SdfChunkPayload {
         let mut page = SdfPageRecord {
             page_generation: 0,
             bricks: BTreeMap::new(),
@@ -316,7 +316,10 @@ mod tests {
                         for sample_y in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
                             for sample_x in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
                                 let point_x = (f64::from(brick_x) + sample_x as f64) / edge;
-                                let distance = point_x - 0.5;
+                                let point_y = (f64::from(brick_y) + sample_y as f64) / edge;
+                                let point_z = (f64::from(brick_z) + sample_z as f64) / edge;
+                                let distance =
+                                    0.25 * point_x + 0.5 * point_y + 0.75 * point_z - 0.5;
                                 distances
                                     .push((distance * f64::from(DISTANCE_UNITS_PER_METER)).round()
                                         as i16);
@@ -359,26 +362,26 @@ mod tests {
     }
 
     #[test]
-    fn metric_plane_sampling_decodes_meters_and_trilinearly_interpolates() {
-        let payload = plane_payload();
+    fn metric_affine_field_sampling_respects_xyz_corner_order_and_decodes_meters() {
+        let payload = affine_field_payload();
         validate_world_sdf_metric_payload(&metric_ref(&payload), &payload)
             .expect("complete plane payload should satisfy metric layout revision 1");
         let sample = sample_world_sdf_metric_distance(
             &metric_ref(&payload),
             &payload,
             &partition(),
-            [0.375, 0.5, 0.5],
+            [0.375, 0.5, 0.625],
         )
-        .expect("metric plane sample should succeed");
+        .expect("metric affine-field sample should succeed");
 
-        assert!((sample.signed_distance_estimate_meters() + 0.125).abs() < 1.0e-12);
+        assert!((sample.signed_distance_estimate_meters() - 0.3125).abs() < 1.0e-12);
         assert!((sample.max_absolute_error_meters() - 0.0001).abs() < 1.0e-12);
-        assert!((sample.safe_distance_lower_bound_meters() - 0.1249).abs() < 1.0e-12);
+        assert!((sample.safe_distance_lower_bound_meters() - 0.3124).abs() < 1.0e-12);
     }
 
     #[test]
     fn occupancy_only_payload_ref_cannot_satisfy_metric_query() {
-        let payload = plane_payload();
+        let payload = affine_field_payload();
         let error = sample_world_sdf_metric_distance(
             &WorldSdfPayloadRef::from(&payload),
             &payload,
@@ -391,7 +394,7 @@ mod tests {
 
     #[test]
     fn exact_payload_reference_mismatch_fails_closed() {
-        let payload = plane_payload();
+        let payload = affine_field_payload();
         let mut payload_ref = metric_ref(&payload);
         payload_ref.checksum = payload_ref.checksum.saturating_add(1);
         let error = validate_world_sdf_metric_payload(&payload_ref, &payload)
@@ -401,7 +404,7 @@ mod tests {
 
     #[test]
     fn unsupported_metric_layout_revision_fails_closed() {
-        let payload = plane_payload();
+        let payload = affine_field_payload();
         let mut payload_ref = metric_ref(&payload);
         payload_ref
             .metric_encoding
@@ -415,12 +418,12 @@ mod tests {
 
     #[test]
     fn metric_layout_revision_one_rejects_multiple_pages() {
-        let mut payload = plane_payload();
+        let mut payload = affine_field_payload();
         let page = payload
             .page_table
             .values()
             .next()
-            .expect("plane page exists")
+            .expect("affine field page exists")
             .clone();
         payload
             .page_table
@@ -436,7 +439,7 @@ mod tests {
 
     #[test]
     fn metric_layout_revision_one_requires_canonical_origin_page() {
-        let mut payload = plane_payload();
+        let mut payload = affine_field_payload();
         let page = payload
             .page_table
             .remove(&SdfPageCoord3::default())
@@ -456,7 +459,7 @@ mod tests {
 
     #[test]
     fn metric_layout_revision_one_requires_complete_brick_coverage() {
-        let mut payload = plane_payload();
+        let mut payload = affine_field_payload();
         payload
             .page_table
             .get_mut(&SdfPageCoord3::default())
@@ -474,7 +477,7 @@ mod tests {
 
     #[test]
     fn malformed_unqueried_brick_invalidates_metric_payload() {
-        let mut payload = plane_payload();
+        let mut payload = affine_field_payload();
         payload
             .page_table
             .get_mut(&SdfPageCoord3::default())
@@ -500,7 +503,7 @@ mod tests {
 
     #[test]
     fn metric_payload_ref_roundtrip_preserves_encoding() {
-        let payload = plane_payload();
+        let payload = affine_field_payload();
         let payload_ref = metric_ref(&payload);
         let bytes = postcard::to_allocvec(&payload_ref).expect("serialize metric payload ref");
         let decoded =
