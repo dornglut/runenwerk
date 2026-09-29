@@ -109,9 +109,45 @@ struct RenderLabTemporalQualityArtifact {
     capture: RenderLabTemporalQualityCaptureEvidence,
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+struct RenderLabCameraMotionFrameEvidence {
+    frame_index: u64,
+    requested_size_px: [u32; 2],
+    evaluation_size_px: [u32; 2],
+    semantic_input_generation_classes: Vec<u64>,
+    phase: u32,
+    history_generation: u64,
+    history_age: u32,
+    history_reset: bool,
+    camera_reprojection_eligible: bool,
+    previous_observation_available: bool,
+    camera_pose_changed: bool,
+    camera_reprojection_revision: Option<u32>,
+    depth_policy_revision: Option<u32>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct RenderLabCameraMotionArtifact {
+    schema_version: u32,
+    scenario_id: &'static str,
+    scenario_revision: u32,
+    source_git_revision: Option<String>,
+    requested_output_size_px: [u32; 2],
+    capture_submission_ordinal: usize,
+    total_submitted_frames: usize,
+    gpu: RenderLabTemporalQualityGpuEvidence,
+    execution: RenderLabTemporalQualityExecutionEvidence,
+    frames: Vec<RenderLabCameraMotionFrameEvidence>,
+    capture_route: &'static str,
+    capture: RenderLabTemporalQualityCaptureEvidence,
+}
+
 const RL2_QUALITY_SCHEMA_VERSION: u32 = 5;
 const RL2_QUALITY_SCENARIO_ID: &str = "runenwerk.render_lab.rl2.temporal_quality";
 const RL2_QUALITY_SCENARIO_REVISION: u32 = 5;
+const RL2_CAMERA_MOTION_SCHEMA_VERSION: u32 = 1;
+const RL2_CAMERA_MOTION_SCENARIO_ID: &str = "runenwerk.render_lab.rl2.camera_motion_p100";
+const RL2_CAMERA_MOTION_SCENARIO_REVISION: u32 = 1;
 pub(super) const RL2_QUALITY_FLOW_ID: &str = "runenwerk.render_lab.rl2.fixed_quality";
 pub(super) const RL2_QUALITY_PASS_ID: &str = "runenwerk.render_lab.rl2.fixed_quality.compose";
 pub(super) const RL2_QUALITY_COLOR_ALIAS: &str = "runenwerk.render_lab.rl2.fixed_quality.color";
@@ -486,6 +522,231 @@ pub(super) fn write_temporal_quality_artifact(
         .with_context(|| format!("write temporal quality evidence {}", path.display()))
 }
 
+fn validate_camera_motion_evidence(
+    frames: &[RenderLabCameraMotionFrameEvidence],
+    requested_output: (u32, u32),
+) -> Result<()> {
+    if frames.len() < 4 {
+        bail!(
+            "camera-motion proof requires at least four renderer evidence frames, found {}",
+            frames.len()
+        );
+    }
+    let expected_size = [requested_output.0, requested_output.1];
+    let first_generation = frames[0].history_generation;
+    let first_input_generations = &frames[0].semantic_input_generation_classes;
+
+    for (index, frame) in frames.iter().enumerate() {
+        if frame.requested_size_px != expected_size || frame.evaluation_size_px != expected_size {
+            bail!(
+                "camera-motion frame {index} is not P100: requested={:?} evaluation={:?} expected={expected_size:?}",
+                frame.requested_size_px,
+                frame.evaluation_size_px
+            );
+        }
+        if !frame.camera_reprojection_eligible {
+            bail!("camera-motion frame {index} is not renderer-eligible for native reprojection");
+        }
+        if frame.camera_reprojection_revision.is_none() || frame.depth_policy_revision.is_none() {
+            bail!("camera-motion frame {index} lacks reprojection/depth-policy revision evidence");
+        }
+        if frame.history_generation != first_generation {
+            bail!(
+                "camera-motion frame {index} recreated history generation {} instead of reusing {}",
+                frame.history_generation,
+                first_generation
+            );
+        }
+        let expected_age = u32::try_from(index)
+            .map_err(|_| anyhow::anyhow!("camera-motion frame index exceeds u32 history age"))?;
+        if frame.history_age != expected_age || frame.phase != expected_age % 4 {
+            bail!(
+                "camera-motion frame {index} has phase/age {}/{}; expected {}/{}",
+                frame.phase,
+                frame.history_age,
+                expected_age % 4,
+                expected_age
+            );
+        }
+        if &frame.semantic_input_generation_classes != first_input_generations {
+            bail!("camera-motion frame {index} changed semantic-input source generations");
+        }
+    }
+
+    let bootstrap = &frames[0];
+    if !bootstrap.history_reset
+        || bootstrap.history_age != 0
+        || bootstrap.previous_observation_available
+        || bootstrap.camera_pose_changed
+    {
+        bail!("camera-motion bootstrap frame does not carry bootstrap-only evidence");
+    }
+
+    let compatible = &frames[1];
+    if compatible.history_reset
+        || compatible.history_age != 1
+        || !compatible.previous_observation_available
+        || compatible.camera_pose_changed
+    {
+        bail!("camera-motion second frame does not prove same-pose compatible reuse");
+    }
+
+    for (index, frame) in frames.iter().enumerate().skip(2) {
+        if frame.history_reset
+            || !frame.previous_observation_available
+            || !frame.camera_pose_changed
+        {
+            bail!("camera-motion frame {index} does not prove pose-only retained-history reuse");
+        }
+    }
+    Ok(())
+}
+
+pub(super) fn write_camera_motion_quality_artifact(
+    measurement: &RenderLabMeasurementConfig,
+    history: &RenderFrameHistoryState,
+    quality_execution: &RenderLabTemporalQualityExecutionState,
+    capture: RenderLabTemporalQualityCaptureEvidence,
+    gfx: &engine::plugins::render::Gfx,
+) -> Result<()> {
+    let capture_root = measurement
+        .quality_capture_output_dir
+        .as_deref()
+        .ok_or_else(|| anyhow::anyhow!("camera-motion capture output directory is unavailable"))?;
+    let output_root = capture_root.parent().ok_or_else(|| {
+        anyhow::anyhow!(
+            "camera-motion capture directory {} has no evidence output parent",
+            capture_root.display()
+        )
+    })?;
+    let requested_output = measurement
+        .primary_window_size_px
+        .ok_or_else(|| anyhow::anyhow!("camera-motion requested output extent is unavailable"))?;
+    let requested_internal = measurement.radiance_target_size_px.ok_or_else(|| {
+        anyhow::anyhow!("camera-motion requested evaluation extent is unavailable")
+    })?;
+    if requested_internal != requested_output {
+        bail!(
+            "camera-motion evidence is P100-only: evaluation {}x{} != requested {}x{}",
+            requested_internal.0,
+            requested_internal.1,
+            requested_output.0,
+            requested_output.1
+        );
+    }
+
+    let execution = quality_execution
+        .frame(capture.frame_index)
+        .cloned()
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "camera-motion capture frame {} has no correlated execution evidence",
+                capture.frame_index
+            )
+        })?;
+    let capture_submission_ordinal = history
+        .observations()
+        .enumerate()
+        .find_map(|(index, observation)| {
+            (observation.key.frame_index == capture.frame_index).then_some(index + 1)
+        })
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "camera-motion capture frame {} is absent from submitted-frame history",
+                capture.frame_index
+            )
+        })?;
+    let expected_capture_ordinal = measurement.submitted_frame_limit.unwrap_or(1);
+    if capture_submission_ordinal != expected_capture_ordinal {
+        bail!(
+            "camera-motion capture submission ordinal {} does not match configured target {}",
+            capture_submission_ordinal,
+            expected_capture_ordinal
+        );
+    }
+
+    let mut generation_classes = Vec::new();
+    let mut frames = Vec::new();
+    for observation in history.observations().take(capture_submission_ordinal) {
+        for evidence in gfx.deterministic_temporal_evidence(observation.key.frame_index) {
+            let semantic_input_generation_classes = evidence
+                .semantic_input_generations
+                .iter()
+                .map(|(representation_id, generation)| {
+                    let representation_index = if let Some(index) = generation_classes
+                        .iter()
+                        .position(|(known_id, _)| known_id == representation_id)
+                    {
+                        index
+                    } else {
+                        generation_classes.push((*representation_id, Vec::new()));
+                        generation_classes.len() - 1
+                    };
+                    let seen = &mut generation_classes[representation_index].1;
+                    let class_index =
+                        if let Some(index) = seen.iter().position(|known| known == generation) {
+                            index
+                        } else {
+                            seen.push(*generation);
+                            seen.len() - 1
+                        };
+                    u64::try_from(class_index + 1)
+                        .expect("bounded camera-motion generation class fits u64")
+                })
+                .collect();
+
+            frames.push(RenderLabCameraMotionFrameEvidence {
+                frame_index: observation.key.frame_index,
+                requested_size_px: [evidence.requested_extent.0, evidence.requested_extent.1],
+                evaluation_size_px: [evidence.evaluation_extent.0, evidence.evaluation_extent.1],
+                semantic_input_generation_classes,
+                phase: evidence.phase,
+                history_generation: evidence.history_generation,
+                history_age: evidence.history_age,
+                history_reset: evidence.history_reset,
+                camera_reprojection_eligible: evidence.camera_reprojection_eligible,
+                previous_observation_available: evidence.previous_observation_available,
+                camera_pose_changed: evidence.camera_pose_changed,
+                camera_reprojection_revision: evidence.camera_reprojection_revision,
+                depth_policy_revision: evidence.depth_policy_revision,
+            });
+        }
+    }
+    if frames.len() != capture_submission_ordinal {
+        bail!(
+            "camera-motion quality expected one reconstruction record for each of {} submitted frames, found {}",
+            capture_submission_ordinal,
+            frames.len()
+        );
+    }
+    validate_camera_motion_evidence(&frames, requested_output)?;
+
+    let artifact = RenderLabCameraMotionArtifact {
+        schema_version: RL2_CAMERA_MOTION_SCHEMA_VERSION,
+        scenario_id: RL2_CAMERA_MOTION_SCENARIO_ID,
+        scenario_revision: RL2_CAMERA_MOTION_SCENARIO_REVISION,
+        source_git_revision: std::env::var("RUNENWERK_SOURCE_REVISION").ok(),
+        requested_output_size_px: [requested_output.0, requested_output.1],
+        capture_submission_ordinal,
+        total_submitted_frames: history.len(),
+        gpu: temporal_quality_gpu_evidence(gfx.adapter_facts()),
+        execution,
+        frames,
+        capture_route: "native_scene",
+        capture,
+    };
+    let path = output_root.join("camera-motion-evidence.json");
+    fs::create_dir_all(output_root).with_context(|| {
+        format!(
+            "create camera-motion evidence directory {}",
+            output_root.display()
+        )
+    })?;
+    let bytes = serde_json::to_vec_pretty(&artifact).context("serialize camera-motion evidence")?;
+    fs::write(&path, bytes)
+        .with_context(|| format!("write camera-motion evidence {}", path.display()))
+}
+
 pub(super) fn inspect_render_lab_temporal_quality_execution_system(
     measurement: Res<RenderLabMeasurementConfig>,
     flow_id: Res<RenderLabFlowId>,
@@ -675,6 +936,49 @@ mod tests {
     fn producer(raw: u64) -> engine::plugins::render::RenderFrameProducerId {
         engine::plugins::render::RenderFrameProducerId::try_from_raw(raw)
             .expect("test producer id should be nonzero")
+    }
+
+    fn camera_frame(
+        frame_index: u64,
+        history_age: u32,
+        history_reset: bool,
+        previous_observation_available: bool,
+        camera_pose_changed: bool,
+    ) -> RenderLabCameraMotionFrameEvidence {
+        RenderLabCameraMotionFrameEvidence {
+            frame_index,
+            requested_size_px: [1920, 1080],
+            evaluation_size_px: [1920, 1080],
+            semantic_input_generation_classes: vec![1, 1],
+            phase: history_age % 4,
+            history_generation: 7,
+            history_age,
+            history_reset,
+            camera_reprojection_eligible: true,
+            previous_observation_available,
+            camera_pose_changed,
+            camera_reprojection_revision: Some(1),
+            depth_policy_revision: Some(1),
+        }
+    }
+
+    #[test]
+    fn camera_motion_evidence_requires_pose_only_reuse_without_history_reset() {
+        let frames = vec![
+            camera_frame(1, 0, true, false, false),
+            camera_frame(2, 1, false, true, false),
+            camera_frame(3, 2, false, true, true),
+            camera_frame(4, 3, false, true, true),
+        ];
+        validate_camera_motion_evidence(&frames, (1920, 1080)).unwrap();
+
+        let mut reset_on_motion = frames.clone();
+        reset_on_motion[2].history_reset = true;
+        assert!(validate_camera_motion_evidence(&reset_on_motion, (1920, 1080)).is_err());
+
+        let mut sub_native = frames;
+        sub_native[3].evaluation_size_px = [960, 540];
+        assert!(validate_camera_motion_evidence(&sub_native, (1920, 1080)).is_err());
     }
 
     #[test]
