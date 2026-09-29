@@ -336,15 +336,6 @@ impl RenderNormalizedSemanticInputs {
                 else {
                     return false;
                 };
-                let revision = representation.requirement().protocol().revision();
-                let Ok(evidence) = record.field_distance_protocol(revision) else {
-                    return false;
-                };
-                if binding.input().max_absolute_error_meters()
-                    > evidence.guarantee().max_absolute_error_meters()
-                {
-                    return false;
-                }
                 self.binding_valid_for_output(plan, output, object_id, record.temporal_support(), binding.input().validity())
             }
         }
