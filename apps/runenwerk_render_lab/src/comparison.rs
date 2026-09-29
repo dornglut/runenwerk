@@ -55,6 +55,13 @@ impl RenderLabComparisonMode {
             Self::FullB => 2.0,
         }
     }
+
+    const fn flipped(self) -> Self {
+        match self {
+            Self::Split | Self::FullB => Self::FullA,
+            Self::FullA => Self::FullB,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, runen_ecs::Resource)]
@@ -273,12 +280,7 @@ pub(super) fn update_render_lab_comparison_system(
         state.divider_drag_active = false;
     }
     if actions.action_pressed(ACTION_COMPARISON_FLIP) {
-        state.mode = match state.mode {
-            RenderLabComparisonMode::Split | RenderLabComparisonMode::FullB => {
-                RenderLabComparisonMode::FullA
-            }
-            RenderLabComparisonMode::FullA => RenderLabComparisonMode::FullB,
-        };
+        state.mode = state.mode.flipped();
         state.divider_drag_active = false;
     }
 
@@ -814,20 +816,10 @@ mod tests {
         let mut state = RenderLabComparisonState::active((960, 540));
         state.mode = RenderLabComparisonMode::FullA;
         let divider = state.divider_normalized;
-        state.mode = match state.mode {
-            RenderLabComparisonMode::Split | RenderLabComparisonMode::FullB => {
-                RenderLabComparisonMode::FullA
-            }
-            RenderLabComparisonMode::FullA => RenderLabComparisonMode::FullB,
-        };
+        state.mode = state.mode.flipped();
         assert_eq!(state.mode, RenderLabComparisonMode::FullB);
         assert_eq!(state.divider_normalized, divider);
-        state.mode = match state.mode {
-            RenderLabComparisonMode::Split | RenderLabComparisonMode::FullB => {
-                RenderLabComparisonMode::FullA
-            }
-            RenderLabComparisonMode::FullA => RenderLabComparisonMode::FullB,
-        };
+        state.mode = state.mode.flipped();
         assert_eq!(state.mode, RenderLabComparisonMode::FullA);
         assert_eq!(state.divider_normalized, divider);
     }
