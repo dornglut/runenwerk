@@ -99,6 +99,12 @@ struct RenderLabFramePublicationResources<'w> {
     comparison_evidence: ResMut<'w, RenderLabComparisonEvidenceConfig>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, runen_ecs::SystemSet)]
+enum RenderLabUpdateSet {
+    ComparisonInput,
+    Camera,
+}
+
 struct RenderLabPlugin;
 
 impl Plugin for RenderLabPlugin {
@@ -111,9 +117,14 @@ impl Plugin for RenderLabPlugin {
         app.init_resource::<RenderLabTemporalQualityExecutionState>();
         app.add_systems(
             Update,
-            update_render_lab_comparison_system.before(camera::update_render_lab_camera_system),
+            update_render_lab_comparison_system.in_set(RenderLabUpdateSet::ComparisonInput),
         );
-        app.add_systems(Update, camera::update_render_lab_camera_system);
+        app.add_systems(
+            Update,
+            camera::update_render_lab_camera_system
+                .in_set(RenderLabUpdateSet::Camera)
+                .after(RenderLabUpdateSet::ComparisonInput),
+        );
         app.add_systems(FrameEnd, approve_render_lab_close_system);
         app.add_systems(
             RenderPrepare,
@@ -862,7 +873,7 @@ fn publish_render_lab_frame_system(
         fixed_quality_plans,
         mut quality_execution,
         comparison,
-        mut comparison_evidence,
+        comparison_evidence,
     } = publication;
     let requested_internal_size = render_lab_radiance_extent(&presentation, &measurement)?;
     let output_size = render_lab_extent(&presentation);
