@@ -1,10 +1,13 @@
 use crate::{
     SDF_METRIC_BRICK_EDGE_SAMPLES, SDF_METRIC_BRICK_SAMPLE_COUNT, SDF_PAGE_EDGE_BRICKS,
-    SdfBrickRecord, SdfChunkPayload, SdfPageCoord3, WorldSdfPayloadRef,
+    SdfBrickRecord, SdfChunkPayload, WorldSdfPayloadRef,
 };
 use runen_spatial::{GridPartitionConfig, WorldPosition};
 use std::error::Error;
 use std::fmt;
+
+const SDF_METRIC_PAGE_BRICK_COUNT: usize =
+    SDF_PAGE_EDGE_BRICKS * SDF_PAGE_EDGE_BRICKS * SDF_PAGE_EDGE_BRICKS;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct WorldSdfMetricSample {
@@ -33,9 +36,9 @@ pub enum WorldSdfMetricQueryError {
     PayloadReferenceMismatch,
     InvalidWorldPosition,
     PositionOutsidePayload,
-    MissingPageData,
-    MissingPage,
-    MissingBrick,
+    InvalidMetricPageCount { actual: usize },
+    InvalidMetricBrickCount { actual: usize },
+    MissingMetricBrick { brick_coord: [u8; 3] },
     InvalidMetricSampleCount { actual: usize },
 }
 
@@ -67,9 +70,18 @@ impl fmt::Display for WorldSdfMetricQueryError {
                     "metric field query position lies outside the referenced chunk"
                 )
             }
-            Self::MissingPageData => write!(f, "metric field payload contains no SDF page data"),
-            Self::MissingPage => write!(f, "metric field query resolved to a missing SDF page"),
-            Self::MissingBrick => write!(f, "metric field query resolved to a missing SDF brick"),
+            Self::InvalidMetricPageCount { actual } => write!(
+                f,
+                "metric SDF layout revision 1 requires exactly one page, found {actual}"
+            ),
+            Self::InvalidMetricBrickCount { actual } => write!(
+                f,
+                "metric SDF page requires exactly {SDF_METRIC_PAGE_BRICK_COUNT} bricks, found {actual}"
+            ),
+            Self::MissingMetricBrick { brick_coord } => write!(
+                f,
+                "metric SDF page is missing canonical brick coordinate {brick_coord:?}"
+            ),
             Self::InvalidMetricSampleCount { actual } => write!(
                 f,
                 "metric SDF brick must contain exactly {SDF_METRIC_BRICK_SAMPLE_COUNT} canonical corner samples, found {actual}"
@@ -80,24 +92,55 @@ impl fmt::Display for WorldSdfMetricQueryError {
 
 impl Error for WorldSdfMetricQueryError {}
 
+pub fn validate_world_sdf_metric_payload(
+    payload_ref: &WorldSdfPayloadRef,
+    payload: &SdfChunkPayload,
+) -> Result<(), WorldSdfMetricQueryError> {
+    validate_metric_reference(payload_ref, payload)?;
+
+    if payload.page_table.len() != 1 {
+        return Err(WorldSdfMetricQueryError::InvalidMetricPageCount {
+            actual: payload.page_table.len(),
+        });
+    }
+
+    let page = payload
+        .page_table
+        .values()
+        .next()
+        .expect("one-page metric payload was checked above");
+    if page.bricks.len() != SDF_METRIC_PAGE_BRICK_COUNT {
+        return Err(WorldSdfMetricQueryError::InvalidMetricBrickCount {
+            actual: page.bricks.len(),
+        });
+    }
+
+    for z in 0..SDF_PAGE_EDGE_BRICKS as u8 {
+        for y in 0..SDF_PAGE_EDGE_BRICKS as u8 {
+            for x in 0..SDF_PAGE_EDGE_BRICKS as u8 {
+                let brick_coord = [x, y, z];
+                let brick = page
+                    .bricks
+                    .get(&brick_coord)
+                    .ok_or(WorldSdfMetricQueryError::MissingMetricBrick { brick_coord })?;
+                validate_metric_brick(brick)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
 pub fn sample_world_sdf_metric_distance(
     payload_ref: &WorldSdfPayloadRef,
     payload: &SdfChunkPayload,
     partition: &GridPartitionConfig,
     world_position_meters: [f64; 3],
 ) -> Result<WorldSdfMetricSample, WorldSdfMetricQueryError> {
+    validate_world_sdf_metric_payload(payload_ref, payload)?;
     let encoding = payload_ref
         .metric_encoding
-        .ok_or(WorldSdfMetricQueryError::MissingMetricEncoding)?;
-    if !encoding.is_supported() {
-        return Err(WorldSdfMetricQueryError::UnsupportedMetricEncoding);
-    }
-    if payload_ref.chunk_id != payload.chunk_id
-        || payload_ref.chunk_revision != payload.chunk_revision
-        || payload_ref.checksum != payload.checksum
-    {
-        return Err(WorldSdfMetricQueryError::PayloadReferenceMismatch);
-    }
+        .expect("metric encoding was validated above");
 
     let world_position =
         WorldPosition::try_new(payload_ref.chunk_id.world_id, world_position_meters)
@@ -110,22 +153,50 @@ pub fn sample_world_sdf_metric_distance(
     }
 
     let local = chunk_local_position(partition, payload_ref.chunk_id, world_position_meters)?;
-    let (page_coord, brick_coord, local_in_brick) =
-        payload_brick_lookup(partition, payload, local)?;
+    let (brick_coord, local_in_brick) = metric_brick_lookup(partition, local);
     let page = payload
         .page_table
-        .get(&page_coord)
-        .ok_or(WorldSdfMetricQueryError::MissingPage)?;
+        .values()
+        .next()
+        .expect("one-page metric payload was validated above");
     let brick = page
         .bricks
         .get(&brick_coord)
-        .ok_or(WorldSdfMetricQueryError::MissingBrick)?;
+        .expect("complete metric brick coverage was validated above");
     let encoded_distance = sample_metric_brick(brick, local_in_brick)?;
 
     Ok(WorldSdfMetricSample {
         signed_distance_estimate_meters: encoding.decode_distance_meters(encoded_distance),
         max_absolute_error_meters: encoding.max_absolute_error_meters(),
     })
+}
+
+fn validate_metric_reference(
+    payload_ref: &WorldSdfPayloadRef,
+    payload: &SdfChunkPayload,
+) -> Result<(), WorldSdfMetricQueryError> {
+    let encoding = payload_ref
+        .metric_encoding
+        .ok_or(WorldSdfMetricQueryError::MissingMetricEncoding)?;
+    if !encoding.is_supported() {
+        return Err(WorldSdfMetricQueryError::UnsupportedMetricEncoding);
+    }
+    if payload_ref.chunk_id != payload.chunk_id
+        || payload_ref.chunk_revision != payload.chunk_revision
+        || payload_ref.checksum != payload.checksum
+    {
+        return Err(WorldSdfMetricQueryError::PayloadReferenceMismatch);
+    }
+    Ok(())
+}
+
+fn validate_metric_brick(brick: &SdfBrickRecord) -> Result<(), WorldSdfMetricQueryError> {
+    if brick.samples.distances.len() != SDF_METRIC_BRICK_SAMPLE_COUNT {
+        return Err(WorldSdfMetricQueryError::InvalidMetricSampleCount {
+            actual: brick.samples.distances.len(),
+        });
+    }
+    Ok(())
 }
 
 fn chunk_local_position(
@@ -144,79 +215,36 @@ fn chunk_local_position(
     ])
 }
 
-fn payload_brick_lookup(
+fn metric_brick_lookup(
     partition: &GridPartitionConfig,
-    payload: &SdfChunkPayload,
     local: [f64; 3],
-) -> Result<(SdfPageCoord3, [u8; 3], [f64; 3]), WorldSdfMetricQueryError> {
-    let (min_page, max_page) =
-        payload_page_bounds(payload).ok_or(WorldSdfMetricQueryError::MissingPageData)?;
+) -> ([u8; 3], [f64; 3]) {
     let edge = partition.chunk_edge_meters();
     let local_clamped = [
         local[0].clamp(0.0, edge * (1.0 - 1.0e-12)),
         local[1].clamp(0.0, edge * (1.0 - 1.0e-12)),
         local[2].clamp(0.0, edge * (1.0 - 1.0e-12)),
     ];
-    let page_span = [
-        i32::from(max_page.x - min_page.x + 1).max(1),
-        i32::from(max_page.y - min_page.y + 1).max(1),
-        i32::from(max_page.z - min_page.z + 1).max(1),
-    ];
-    let (page_offset_x, brick_x, local_x) =
-        quantize_payload_axis(local_clamped[0], edge, page_span[0]);
-    let (page_offset_y, brick_y, local_y) =
-        quantize_payload_axis(local_clamped[1], edge, page_span[1]);
-    let (page_offset_z, brick_z, local_z) =
-        quantize_payload_axis(local_clamped[2], edge, page_span[2]);
-    Ok((
-        SdfPageCoord3 {
-            x: min_page.x + page_offset_x as i16,
-            y: min_page.y + page_offset_y as i16,
-            z: min_page.z + page_offset_z as i16,
-        },
-        [brick_x, brick_y, brick_z],
-        [local_x, local_y, local_z],
-    ))
+    let (brick_x, local_x) = quantize_metric_axis(local_clamped[0], edge);
+    let (brick_y, local_y) = quantize_metric_axis(local_clamped[1], edge);
+    let (brick_z, local_z) = quantize_metric_axis(local_clamped[2], edge);
+    ([brick_x, brick_y, brick_z], [local_x, local_y, local_z])
 }
 
-fn quantize_payload_axis(local_axis: f64, edge: f64, page_span: i32) -> (i32, u8, f64) {
-    let span = page_span.max(1);
-    let page_coord_f = (local_axis / edge) * f64::from(span);
-    let page_offset = page_coord_f.floor().clamp(0.0, f64::from(span - 1)) as i32;
-    let page_local = page_coord_f - f64::from(page_offset);
-    let brick_coord_f = page_local * SDF_PAGE_EDGE_BRICKS as f64;
+fn quantize_metric_axis(local_axis: f64, edge: f64) -> (u8, f64) {
+    let brick_coord_f = (local_axis / edge) * SDF_PAGE_EDGE_BRICKS as f64;
     let brick_index = brick_coord_f
         .floor()
         .clamp(0.0, (SDF_PAGE_EDGE_BRICKS - 1) as f64) as u8;
     let brick_local = (brick_coord_f - f64::from(brick_index)).clamp(0.0, 1.0 - 1.0e-12);
-    (page_offset, brick_index, brick_local)
-}
-
-fn payload_page_bounds(payload: &SdfChunkPayload) -> Option<(SdfPageCoord3, SdfPageCoord3)> {
-    let mut pages = payload.page_table.keys().copied();
-    let first = pages.next()?;
-    let mut min = first;
-    let mut max = first;
-    for page in pages {
-        min.x = min.x.min(page.x);
-        min.y = min.y.min(page.y);
-        min.z = min.z.min(page.z);
-        max.x = max.x.max(page.x);
-        max.y = max.y.max(page.y);
-        max.z = max.z.max(page.z);
-    }
-    Some((min, max))
+    (brick_index, brick_local)
 }
 
 fn sample_metric_brick(
     brick: &SdfBrickRecord,
     local_in_brick: [f64; 3],
 ) -> Result<f64, WorldSdfMetricQueryError> {
-    if brick.samples.distances.len() != SDF_METRIC_BRICK_SAMPLE_COUNT {
-        return Err(WorldSdfMetricQueryError::InvalidMetricSampleCount {
-            actual: brick.samples.distances.len(),
-        });
-    }
+    validate_metric_brick(brick)?;
     debug_assert_eq!(SDF_METRIC_BRICK_EDGE_SAMPLES, 2);
 
     let sample_at = |x: usize, y: usize, z: usize| -> f64 {
@@ -249,8 +277,8 @@ fn lerp(a: f64, b: f64, t: f64) -> f64 {
 mod tests {
     use super::*;
     use crate::{
-        SdfBrickMetadata, SdfBrickSamples, SdfPageRecord, WORLD_SDF_METRIC_SAMPLE_LAYOUT_REVISION,
-        WorldSdfMetricEncoding,
+        SdfBrickMetadata, SdfBrickSamples, SdfPageCoord3, SdfPageRecord,
+        WORLD_SDF_METRIC_SAMPLE_LAYOUT_REVISION, WorldSdfMetricEncoding,
     };
     use runen_spatial::{ChunkCoord3, ChunkId, WorldId};
     use std::collections::BTreeMap;
@@ -319,11 +347,14 @@ mod tests {
     fn canonical_metric_topology_is_two_samples_per_edge() {
         assert_eq!(SDF_METRIC_BRICK_EDGE_SAMPLES, 2);
         assert_eq!(SDF_METRIC_BRICK_SAMPLE_COUNT, 8);
+        assert_eq!(SDF_METRIC_PAGE_BRICK_COUNT, 64);
     }
 
     #[test]
     fn metric_plane_sampling_decodes_meters_and_trilinearly_interpolates() {
         let payload = plane_payload();
+        validate_world_sdf_metric_payload(&metric_ref(&payload), &payload)
+            .expect("complete plane payload should satisfy metric layout revision 1");
         let sample = sample_world_sdf_metric_distance(
             &metric_ref(&payload),
             &payload,
@@ -355,13 +386,8 @@ mod tests {
         let payload = plane_payload();
         let mut payload_ref = metric_ref(&payload);
         payload_ref.checksum = payload_ref.checksum.saturating_add(1);
-        let error = sample_world_sdf_metric_distance(
-            &payload_ref,
-            &payload,
-            &partition(),
-            [0.25, 0.5, 0.5],
-        )
-        .expect_err("mismatched exact ref must fail");
+        let error = validate_world_sdf_metric_payload(&payload_ref, &payload)
+            .expect_err("mismatched exact ref must fail");
         assert_eq!(error, WorldSdfMetricQueryError::PayloadReferenceMismatch);
     }
 
@@ -374,25 +400,59 @@ mod tests {
             .as_mut()
             .expect("metric encoding exists")
             .sample_layout_revision = WORLD_SDF_METRIC_SAMPLE_LAYOUT_REVISION + 1;
-        let error = sample_world_sdf_metric_distance(
-            &payload_ref,
-            &payload,
-            &partition(),
-            [0.25, 0.5, 0.5],
-        )
-        .expect_err("unsupported layout must fail");
+        let error = validate_world_sdf_metric_payload(&payload_ref, &payload)
+            .expect_err("unsupported layout must fail");
         assert_eq!(error, WorldSdfMetricQueryError::UnsupportedMetricEncoding);
     }
 
     #[test]
-    fn another_perfect_cube_sample_count_is_not_an_implicit_metric_topology() {
+    fn metric_layout_revision_one_rejects_multiple_pages() {
+        let mut payload = plane_payload();
+        let page = payload
+            .page_table
+            .values()
+            .next()
+            .expect("plane page exists")
+            .clone();
+        payload
+            .page_table
+            .insert(SdfPageCoord3 { x: 1, y: 0, z: 0 }, page);
+
+        let error = validate_world_sdf_metric_payload(&metric_ref(&payload), &payload)
+            .expect_err("revision one must remain one-page");
+        assert_eq!(
+            error,
+            WorldSdfMetricQueryError::InvalidMetricPageCount { actual: 2 }
+        );
+    }
+
+    #[test]
+    fn metric_layout_revision_one_requires_complete_brick_coverage() {
         let mut payload = plane_payload();
         payload
             .page_table
             .get_mut(&SdfPageCoord3::default())
             .expect("page exists")
             .bricks
-            .get_mut(&[0, 0, 0])
+            .remove(&[3, 3, 3]);
+
+        let error = validate_world_sdf_metric_payload(&metric_ref(&payload), &payload)
+            .expect_err("revision one must cover all canonical brick coordinates");
+        assert_eq!(
+            error,
+            WorldSdfMetricQueryError::InvalidMetricBrickCount { actual: 63 }
+        );
+    }
+
+    #[test]
+    fn malformed_unqueried_brick_invalidates_metric_payload() {
+        let mut payload = plane_payload();
+        payload
+            .page_table
+            .get_mut(&SdfPageCoord3::default())
+            .expect("page exists")
+            .bricks
+            .get_mut(&[3, 3, 3])
             .expect("brick exists")
             .samples
             .distances = vec![0; 27];
@@ -403,7 +463,7 @@ mod tests {
             &partition(),
             [0.1, 0.1, 0.1],
         )
-        .expect_err("27 values must not select an implicit 3x3x3 metric layout");
+        .expect_err("one malformed brick must invalidate the whole metric payload");
         assert_eq!(
             error,
             WorldSdfMetricQueryError::InvalidMetricSampleCount { actual: 27 }
