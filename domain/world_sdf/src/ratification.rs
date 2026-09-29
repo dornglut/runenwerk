@@ -2,7 +2,9 @@ use ::product::{ProductIssueCode, ratify_product_descriptor};
 use foundation_ratification::{RatificationIssue, RatificationReport, Ratifier};
 use serde::{Deserialize, Serialize};
 
-use crate::{FieldProductCandidate, FieldProductFreshness};
+use crate::{
+    FieldProductCandidate, FieldProductFreshness, WorldSdfMetricProductCandidate,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FieldProductIssueCode {
@@ -13,6 +15,7 @@ pub enum FieldProductIssueCode {
     RejectedFreshness,
     MissingPayloadRefs,
     MetricCapabilityKindMismatch,
+    MetricPayloadRefMismatch,
     InvalidMetricEncoding,
     PreviewKindMismatch,
     PreviewInvalidGridDimensions,
@@ -86,25 +89,6 @@ impl Ratifier<FieldProductCandidate> for FieldProductRatifier {
                 "world_sdf field products must reference payloads",
             ));
         }
-        for payload_ref in &descriptor.payload_refs {
-            let Some(metric_encoding) = payload_ref.metric_encoding else {
-                continue;
-            };
-            if descriptor.kind != crate::FieldProductKind::WorldSdfChunkPages {
-                report.push(RatificationIssue::error(
-                    FieldProductIssueCode::MetricCapabilityKindMismatch,
-                    subject.clone(),
-                    "metric SDF payload capability is supported only by WorldSdfChunkPages products",
-                ));
-            }
-            if !metric_encoding.is_supported() {
-                report.push(RatificationIssue::error(
-                    FieldProductIssueCode::InvalidMetricEncoding,
-                    subject.clone(),
-                    "metric SDF payload encoding must use the supported layout revision and a positive distance scale",
-                ));
-            }
-        }
         let product_report = ratify_product_descriptor(&descriptor.product_core());
         for issue in product_report.iter() {
             let code = match issue.code() {
@@ -128,6 +112,68 @@ pub fn ratify_field_product_candidate(
     candidate: &FieldProductCandidate,
 ) -> RatificationReport<FieldProductIssueCode, FieldProductSubject> {
     FieldProductRatifier.ratify(candidate)
+}
+
+
+pub struct WorldSdfMetricProductRatifier;
+
+impl Ratifier<WorldSdfMetricProductCandidate> for WorldSdfMetricProductRatifier {
+    type Code = FieldProductIssueCode;
+    type Subject = FieldProductSubject;
+
+    fn ratify(
+        &self,
+        candidate: &WorldSdfMetricProductCandidate,
+    ) -> RatificationReport<Self::Code, Self::Subject> {
+        let subject = FieldProductSubject::Product(candidate.descriptor.product_id.0);
+        let mut report = RatificationReport::accepted();
+
+        let base_report =
+            ratify_field_product_candidate(&FieldProductCandidate::new(candidate.descriptor.clone()));
+        for issue in base_report.iter() {
+            report.push(RatificationIssue::error(
+                *issue.code(),
+                subject.clone(),
+                issue.message().to_string(),
+            ));
+        }
+
+        if candidate.descriptor.kind != crate::FieldProductKind::WorldSdfChunkPages {
+            report.push(RatificationIssue::error(
+                FieldProductIssueCode::MetricCapabilityKindMismatch,
+                subject.clone(),
+                "metric SDF capability requires a WorldSdfChunkPages product",
+            ));
+        }
+
+        if !candidate
+            .descriptor
+            .payload_refs
+            .contains(&candidate.metric_payload_ref.payload_ref)
+        {
+            report.push(RatificationIssue::error(
+                FieldProductIssueCode::MetricPayloadRefMismatch,
+                subject.clone(),
+                "metric SDF capability must wrap an exact payload reference owned by the product descriptor",
+            ));
+        }
+
+        if !candidate.metric_payload_ref.encoding.is_supported() {
+            report.push(RatificationIssue::error(
+                FieldProductIssueCode::InvalidMetricEncoding,
+                subject,
+                "metric SDF payload encoding must use the supported layout revision and a positive distance scale",
+            ));
+        }
+
+        report
+    }
+}
+
+pub fn ratify_world_sdf_metric_product_candidate(
+    candidate: &WorldSdfMetricProductCandidate,
+) -> RatificationReport<FieldProductIssueCode, FieldProductSubject> {
+    WorldSdfMetricProductRatifier.ratify(candidate)
 }
 
 #[cfg(test)]
@@ -192,8 +238,37 @@ mod tests {
         assert_eq!(core.consumer_class, ProductConsumerClass::Editor);
     }
 
+    fn runtime_descriptor(
+        product_id: u64,
+        kind: FieldProductKind,
+        payload: &SdfChunkPayload,
+    ) -> FieldProductDescriptor {
+        let mut descriptor = FieldProductDescriptor::new(
+            FieldProductId(product_id),
+            kind,
+            FieldProductScope::from_chunks([payload.chunk_id]),
+            FieldProductLineage::new(1, "world_sdf.metric"),
+        );
+        descriptor.payload_refs.push(WorldSdfPayloadRef::from(payload));
+        descriptor
+    }
+
+    fn metric_candidate(
+        descriptor: FieldProductDescriptor,
+        payload_ref: WorldSdfPayloadRef,
+    ) -> WorldSdfMetricProductCandidate {
+        WorldSdfMetricProductCandidate::new(
+            descriptor,
+            crate::WorldSdfMetricPayloadRef {
+                payload_ref,
+                encoding: crate::WorldSdfMetricEncoding::try_new(1024, 1)
+                    .expect("positive metric encoding should be valid"),
+            },
+        )
+    }
+
     #[test]
-    fn field_product_ratifier_rejects_invalid_metric_encoding() {
+    fn metric_product_ratifier_rejects_invalid_metric_encoding() {
         let chunk = ChunkId::new(WorldId::new(1), ChunkCoord3 { x: 0, y: 0, z: 0 });
         let payload = SdfChunkPayload {
             chunk_id: chunk,
@@ -203,28 +278,24 @@ mod tests {
             hierarchy_revision: 0,
             checksum: 7,
         };
-        let mut descriptor = FieldProductDescriptor::new(
-            FieldProductId(8),
-            FieldProductKind::WorldSdfChunkPages,
-            FieldProductScope::from_chunks([chunk]),
-            FieldProductLineage::new(1, "world_sdf.metric"),
+        let descriptor = runtime_descriptor(8, FieldProductKind::WorldSdfChunkPages, &payload);
+        let candidate = WorldSdfMetricProductCandidate::new(
+            descriptor,
+            crate::WorldSdfMetricPayloadRef {
+                payload_ref: WorldSdfPayloadRef::from(&payload),
+                encoding: crate::WorldSdfMetricEncoding {
+                    layout_revision: crate::WORLD_SDF_METRIC_LAYOUT_REVISION,
+                    distance_units_per_meter: 0,
+                    max_absolute_error_units: 0,
+                },
+            },
         );
-        let mut payload_ref = WorldSdfPayloadRef::from(&payload);
-        payload_ref.metric_encoding = Some(crate::WorldSdfMetricEncoding {
-            layout_revision: crate::WORLD_SDF_METRIC_LAYOUT_REVISION,
-            distance_units_per_meter: 0,
-            max_absolute_error_units: 0,
-        });
-        descriptor.payload_refs.push(payload_ref);
 
-        assert!(
-            ratify_field_product_candidate(&FieldProductCandidate::new(descriptor))
-                .has_blocking_issues()
-        );
+        assert!(ratify_world_sdf_metric_product_candidate(&candidate).has_blocking_issues());
     }
 
     #[test]
-    fn field_product_ratifier_rejects_metric_capability_on_debug_product() {
+    fn metric_product_ratifier_rejects_incompatible_kind() {
         let chunk = ChunkId::new(WorldId::new(1), ChunkCoord3 { x: 0, y: 0, z: 0 });
         let payload = SdfChunkPayload {
             chunk_id: chunk,
@@ -234,23 +305,29 @@ mod tests {
             hierarchy_revision: 0,
             checksum: 8,
         };
-        let mut descriptor = FieldProductDescriptor::new(
-            FieldProductId(10),
-            FieldProductKind::BrickmapDebug,
-            FieldProductScope::from_chunks([chunk]),
-            FieldProductLineage::new(1, "world_sdf.debug"),
-        );
-        descriptor.payload_refs.push(
-            WorldSdfPayloadRef::from(&payload).with_metric_encoding(
-                crate::WorldSdfMetricEncoding::try_new(1024, 1)
-                    .expect("positive metric scale should be valid"),
-            ),
-        );
+        let descriptor = runtime_descriptor(10, FieldProductKind::BrickmapDebug, &payload);
+        let candidate = metric_candidate(descriptor, WorldSdfPayloadRef::from(&payload));
 
-        assert!(
-            ratify_field_product_candidate(&FieldProductCandidate::new(descriptor))
-                .has_blocking_issues()
-        );
+        assert!(ratify_world_sdf_metric_product_candidate(&candidate).has_blocking_issues());
+    }
+
+    #[test]
+    fn metric_product_ratifier_rejects_payload_ref_not_owned_by_descriptor() {
+        let chunk = ChunkId::new(WorldId::new(1), ChunkCoord3 { x: 0, y: 0, z: 0 });
+        let payload = SdfChunkPayload {
+            chunk_id: chunk,
+            chunk_revision: world_ops::ChunkRevision(1),
+            chunk_generation: world_ops::ChunkGeneration(1),
+            page_table: Default::default(),
+            hierarchy_revision: 0,
+            checksum: 9,
+        };
+        let descriptor = runtime_descriptor(11, FieldProductKind::WorldSdfChunkPages, &payload);
+        let mut different_ref = WorldSdfPayloadRef::from(&payload);
+        different_ref.checksum = different_ref.checksum.saturating_add(1);
+        let candidate = metric_candidate(descriptor, different_ref);
+
+        assert!(ratify_world_sdf_metric_product_candidate(&candidate).has_blocking_issues());
     }
 
     #[test]
