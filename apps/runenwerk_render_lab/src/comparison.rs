@@ -1,9 +1,13 @@
 use super::*;
 
 use engine::plugins::ActionState;
+use engine::plugins::render::inspect::{
+    CaptureStage, CaptureTextureClass, RenderCaptureSelector, RenderTextureDiffRequest,
+};
 use engine::plugins::render::{GpuUniform, RenderDeterministicFiniteEvaluationExtent};
 use runen_gpu::GpuBindingKey;
 use runen_input::PhysicalKeyIdentity;
+use std::path::{Path, PathBuf};
 
 pub(super) const RL2_COMPARISON_FLOW_ID: &str = "runenwerk.render_lab.rl2.compare";
 pub(super) const RL2_COMPARISON_VISUALIZE_A_PASS_ID: &str =
@@ -70,6 +74,108 @@ impl Default for RenderLabComparisonState {
             divider_normalized: 0.5,
             divider_drag_active: false,
         }
+    }
+}
+
+#[derive(Debug, Clone, Default, runen_ecs::Resource)]
+pub(super) struct RenderLabComparisonEvidenceConfig {
+    output_root: Option<PathBuf>,
+    submitted_frame_limit: Option<usize>,
+    capture_selectors: Vec<RenderCaptureSelector>,
+    texture_diff: Option<RenderTextureDiffRequest>,
+    completed: bool,
+}
+
+impl RenderLabComparisonEvidenceConfig {
+    pub(super) fn bounded(
+        output_root: impl Into<PathBuf>,
+        submitted_frame_limit: usize,
+        flow: &RenderFlow,
+    ) -> Result<Self> {
+        if submitted_frame_limit == 0 {
+            bail!("Render Lab comparison evidence requires a positive submitted-frame limit");
+        }
+        let flow_id = flow.id().to_string();
+        let selector = |pass_label: &str, resource_id: &str| -> Result<RenderCaptureSelector> {
+            let pass_id = flow.pass_id(pass_label).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "comparison evidence pass '{pass_label}' is absent from flow '{}'",
+                    flow.label()
+                )
+            })?;
+            Ok(RenderCaptureSelector {
+                flow_id: Some(flow_id.clone()),
+                pass_id: Some(pass_id.to_string()),
+                stage: CaptureStage::After,
+                resource_id: resource_id.to_string(),
+                texture_class: CaptureTextureClass::ImportedTexture,
+            })
+        };
+        let left = selector(
+            RL2_COMPARISON_VISUALIZE_A_PASS_ID,
+            RL2_COMPARISON_DISPLAY_A_ALIAS,
+        )?;
+        let right = selector(
+            RL2_COMPARISON_VISUALIZE_B_PASS_ID,
+            RL2_COMPARISON_DISPLAY_B_ALIAS,
+        )?;
+        Ok(Self {
+            output_root: Some(output_root.into()),
+            submitted_frame_limit: Some(submitted_frame_limit),
+            capture_selectors: vec![left.clone(), right.clone()],
+            texture_diff: Some(RenderTextureDiffRequest::new(
+                "runenwerk.render_lab.rl2.compare.a_vs_b",
+                left,
+                right,
+            )),
+            completed: false,
+        })
+    }
+
+    pub(super) fn is_active(&self) -> bool {
+        self.output_root.is_some()
+    }
+
+    pub(super) fn capture_should_arm(&self, completed_submissions: usize) -> bool {
+        self.is_active()
+            && !self.completed
+            && self
+                .submitted_frame_limit
+                .is_some_and(|limit| completed_submissions.saturating_add(1) == limit)
+    }
+
+    pub(super) fn awaiting_capture_completion(&self, completed_submissions: usize) -> bool {
+        self.is_active()
+            && !self.completed
+            && self
+                .submitted_frame_limit
+                .is_some_and(|limit| completed_submissions >= limit)
+    }
+
+    pub(super) fn submitted_frame_limit(&self) -> Option<usize> {
+        self.submitted_frame_limit
+    }
+
+    pub(super) fn capture_selectors(&self) -> &[RenderCaptureSelector] {
+        &self.capture_selectors
+    }
+
+    pub(super) fn texture_diff(&self) -> Option<&RenderTextureDiffRequest> {
+        self.texture_diff.as_ref()
+    }
+
+    pub(super) fn artifact_output_dir(&self) -> Option<PathBuf> {
+        self.output_root
+            .as_deref()
+            .map(|root| root.join("captures"))
+    }
+
+    pub(super) fn output_root(&self) -> Option<&Path> {
+        self.output_root.as_deref()
+    }
+
+    pub(super) fn mark_completed(&mut self) {
+        self.completed = true;
     }
 }
 
@@ -512,6 +618,36 @@ pub(super) fn validate_comparison_extents(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn comparison_evidence_targets_distinct_visualization_outputs() {
+        let flow = render_lab_comparison_flow().expect("comparison flow should author");
+        let config = RenderLabComparisonEvidenceConfig::bounded(
+            "evidence/compare",
+            6,
+            &flow,
+        )
+        .expect("comparison evidence config should build");
+        assert!(config.is_active());
+        assert_eq!(config.submitted_frame_limit(), Some(6));
+        assert_eq!(config.capture_selectors().len(), 2);
+        assert_ne!(
+            config.capture_selectors()[0].pass_id,
+            config.capture_selectors()[1].pass_id
+        );
+        assert_eq!(
+            config.capture_selectors()[0].resource_id,
+            RL2_COMPARISON_DISPLAY_A_ALIAS
+        );
+        assert_eq!(
+            config.capture_selectors()[1].resource_id,
+            RL2_COMPARISON_DISPLAY_B_ALIAS
+        );
+        assert!(config.texture_diff().is_some());
+        assert!(!config.capture_should_arm(4));
+        assert!(config.capture_should_arm(5));
+        assert!(config.awaiting_capture_completion(6));
+    }
 
     #[test]
     fn comparison_extent_accepts_supported_sub_native_sizes() {
