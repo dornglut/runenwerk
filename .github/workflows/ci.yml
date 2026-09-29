@@ -385,16 +385,17 @@ jobs:
           test -s "${frame_manifest}"
 
           jq -e '
-            .captures | length == 2
-            and all(.[];
-              .frame_index == .[0].frame_index
-              and .width == 1920
-              and .height == 1080
-              and .terminal_code == "completed"
-              and (.file | type == "string" and length > 0)
-            )
-            and ([.[].resource_id] | sort)
-              == ["rl2.compare.display_a","rl2.compare.display_b"]
+            .frame_index as $frame
+            | (.captures | length == 2)
+              and all(.captures[];
+                .frame_index == $frame
+                and .width == 1920
+                and .height == 1080
+                and .terminal_code == "completed"
+                and (.file | type == "string" and length > 0)
+              )
+              and ([.captures[].resource_id] | sort)
+                == ["rl2.compare.display_a","rl2.compare.display_b"]
           ' "${frame_manifest}"
 
           while IFS= read -r capture_file; do
