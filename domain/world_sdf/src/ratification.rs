@@ -112,7 +112,6 @@ pub fn ratify_field_product_candidate(
     FieldProductRatifier.ratify(candidate)
 }
 
-
 pub struct WorldSdfMetricProductRatifier;
 
 impl Ratifier<WorldSdfMetricProductCandidate> for WorldSdfMetricProductRatifier {
