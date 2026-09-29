@@ -7,7 +7,7 @@ use engine::plugins::render::inspect::{
 use engine::plugins::render::{GpuUniform, RenderDeterministicFiniteEvaluationExtent};
 use runen_gpu::GpuBindingKey;
 use runen_input::PhysicalKeyIdentity;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 pub(super) const RL2_COMPARISON_FLOW_ID: &str = "runenwerk.render_lab.rl2.compare";
 pub(super) const RL2_COMPARISON_VISUALIZE_A_PASS_ID: &str =
@@ -168,10 +168,6 @@ impl RenderLabComparisonEvidenceConfig {
         self.output_root
             .as_deref()
             .map(|root| root.join("captures"))
-    }
-
-    pub(super) fn output_root(&self) -> Option<&Path> {
-        self.output_root.as_deref()
     }
 
     pub(super) fn mark_completed(&mut self) {
