@@ -145,8 +145,9 @@ pub fn sample_world_sdf_metric_distance(
     let payload_ref = metric_payload_ref.payload_ref;
     let encoding = metric_payload_ref.encoding;
 
-    let world_position = WorldPosition::try_new(payload_ref.chunk_id.world_id, world_position_meters)
-        .map_err(|_| WorldSdfMetricError::InvalidWorldPosition)?;
+    let world_position =
+        WorldPosition::try_new(payload_ref.chunk_id.world_id, world_position_meters)
+            .map_err(|_| WorldSdfMetricError::InvalidWorldPosition)?;
     let query_chunk = partition
         .chunk_id_from_world_position(world_position)
         .map_err(|_| WorldSdfMetricError::InvalidWorldPosition)?;
@@ -313,17 +314,16 @@ mod tests {
                     for sample_z in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
                         for sample_y in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
                             for sample_x in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
-                                let sample_denominator =
-                                    (SDF_METRIC_BRICK_EDGE_SAMPLES - 1) as f64;
-                                let point_x =
-                                    (f64::from(brick_x) + sample_x as f64 / sample_denominator)
-                                        / edge;
-                                let point_y =
-                                    (f64::from(brick_y) + sample_y as f64 / sample_denominator)
-                                        / edge;
-                                let point_z =
-                                    (f64::from(brick_z) + sample_z as f64 / sample_denominator)
-                                        / edge;
+                                let sample_denominator = (SDF_METRIC_BRICK_EDGE_SAMPLES - 1) as f64;
+                                let point_x = (f64::from(brick_x)
+                                    + sample_x as f64 / sample_denominator)
+                                    / edge;
+                                let point_y = (f64::from(brick_y)
+                                    + sample_y as f64 / sample_denominator)
+                                    / edge;
+                                let point_z = (f64::from(brick_z)
+                                    + sample_z as f64 / sample_denominator)
+                                    / edge;
                                 let distance =
                                     0.25 * point_x + 0.5 * point_y + 0.75 * point_z - 0.5;
                                 distances
@@ -511,7 +511,9 @@ mod tests {
                 .distances = vec![0; sample_count];
 
             let error = validate_world_sdf_metric_payload(&metric_ref(&payload), &payload)
-                .expect_err("another perfect-cube topology must not select metric layout revision one");
+                .expect_err(
+                    "another perfect-cube topology must not select metric layout revision one",
+                );
             assert_eq!(
                 error,
                 WorldSdfMetricError::InvalidMetricSampleCount {
@@ -542,8 +544,11 @@ mod tests {
             max_absolute_error_units: 1,
         };
         assert!(
-            WorldSdfMetricPayloadRef::try_new(crate::WorldSdfPayloadRef::from(&payload), unsupported)
-                .is_none()
+            WorldSdfMetricPayloadRef::try_new(
+                crate::WorldSdfPayloadRef::from(&payload),
+                unsupported
+            )
+            .is_none()
         );
     }
 }
