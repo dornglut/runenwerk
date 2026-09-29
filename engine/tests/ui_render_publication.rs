@@ -7,14 +7,13 @@ use engine::plugins::render::{
     SurfaceFrameSubmissionRegistryResource,
 };
 use engine::plugins::ui::{
-    IntoUi, UI_RUNTIME_FRAME_PRODUCER_ID, UiMountRequestsResource, UiPlugin,
-    UiRuntimeDiagnosticCode, UiRuntimeDiagnosticsResource, UiRuntimeEvaluationInput,
-    UiRuntimeEvaluationResource, UiRuntimeFramePublicationFailureReason,
+    IntoUi, UI_RUNTIME_FRAME_PRODUCER_ID, UiRuntimeDiagnosticCode, UiRuntimeDiagnosticsResource,
+    UiRuntimeEvaluationInput, UiRuntimeEvaluationResource, UiRuntimeFramePublicationFailureReason,
     UiRuntimeFramePublicationResource, UiRuntimeFramePublicationStatus,
     UiRuntimeFramePublicationTarget, UiRuntimeTraceEventKind, UiRuntimeTraceResource, UiScreen,
     UiTypedScreenId, UiTypedSource, publish_latest_ui_runtime_frame,
 };
-use engine::prelude::{App, AppUiExt};
+use engine::prelude::App;
 use ui_binding::HostDataSnapshot;
 use ui_controls::{BUTTON_CONTROL_KIND_ID, ControlPackageRegistry, runenwerk_control_package};
 use ui_definition::{
@@ -157,25 +156,31 @@ fn ui_render_publication_missing_evaluation_records_report_and_diagnostic() {
 }
 
 #[test]
-fn ui_render_publication_prepares_payload_when_plugins_run_render_prepare() {
+fn explicit_predecessor_renderer_fixture_can_feed_render_prepare() {
+    let runtime = evaluated_counter_runtime("Clicked 3 / 5", 3);
+    let mut submissions = SurfaceFrameSubmissionRegistryResource::default();
+    let mut publications = UiRuntimeFramePublicationResource::default();
+    let mut trace = UiRuntimeTraceResource::default();
+    let mut diagnostics = UiRuntimeDiagnosticsResource::default();
+    let target = UiRuntimeFramePublicationTarget::default();
+
+    let report = publish_latest_ui_runtime_frame(
+        &runtime,
+        &target,
+        &mut submissions,
+        &mut publications,
+        &mut trace,
+        &mut diagnostics,
+    );
+    assert!(report.is_published());
+
     let mut app = App::headless();
     app.add_plugin(TimePlugin);
     app.add_plugin(RenderPlugin);
-    app.add_plugin(UiPlugin);
-    app.insert_resource(evaluated_counter_runtime("Clicked 3 / 5", 3));
-
+    app.insert_resource(submissions);
     let app = app
         .run_for_frames(1)
-        .expect("headless frame should run render prepare systems");
-
-    let publications = app
-        .world()
-        .resource::<UiRuntimeFramePublicationResource>()
-        .expect("publication resource should exist");
-    let report = publications
-        .latest_report()
-        .expect("publication system should record report");
-    assert!(report.is_published(), "{report:?}");
+        .expect("explicit predecessor renderer fixture should reach render prepare");
 
     let prepared = app
         .world()
@@ -190,11 +195,7 @@ fn ui_render_publication_prepares_payload_when_plugins_run_render_prepare() {
         .submissions
         .iter()
         .find(|submission| submission.producer_id == UI_RUNTIME_FRAME_PRODUCER_ID)
-        .expect("prepared UI payload should include UiPlugin publication producer");
-    assert_eq!(
-        prepared_submission.producer_id,
-        UI_RUNTIME_FRAME_PRODUCER_ID
-    );
+        .expect("explicit predecessor submission should remain isolated and consumable");
     assert_eq!(
         prepared_submission.primitive_count_hint(),
         report.primitive_count()
@@ -245,14 +246,13 @@ fn ui_render_publication_can_feed_prepare_resource_directly() {
 
 fn evaluated_counter_runtime(text: &str, revision: u64) -> UiRuntimeEvaluationResource {
     let input = counter_evaluation_input();
-    let mounted_session = mounted_counter_session();
     let mut runtime = UiRuntimeEvaluationResource::default();
     let mut trace = UiRuntimeTraceResource::default();
     let mut diagnostics = UiRuntimeDiagnosticsResource::default();
 
     let report = runtime.evaluate(
         &input,
-        Some(&mounted_session),
+        None,
         counter_context(text, revision),
         &mut trace,
         &mut diagnostics,
@@ -271,18 +271,6 @@ fn counter_evaluation_input() -> UiRuntimeEvaluationInput {
 
     assert!(lowering.passed(), "{:?}", lowering.formation().diagnostics);
     UiRuntimeEvaluationInput::from_lowering_report(&lowering)
-}
-
-fn mounted_counter_session() -> engine::plugins::ui::UiMountedSessionRecord {
-    let mut app = App::headless();
-    app.add_plugin(UiPlugin);
-    app.ui().mount("CounterScreen");
-
-    app.world()
-        .resource::<UiMountRequestsResource>()
-        .expect("UI mount requests should exist")
-        .mounted_sessions()[0]
-        .clone()
 }
 
 fn counter_context(text: &str, revision: u64) -> UiEvaluationContext {

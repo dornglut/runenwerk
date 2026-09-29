@@ -1,14 +1,16 @@
 use crate::app::App;
 
+use ui_controls::{ControlPackageRegistry, runenwerk_control_package};
+
 use super::{
-    UiMountReport, UiMountRequest, UiMountRequestsResource, UiMountSource, UiRuntimeDiagnostic,
-    UiRuntimeDiagnosticsResource,
+    UiRuntimeDiagnostic, UiRuntimeDiagnosticsResource, UiRuntimeSlotMountFailure,
+    UiRuntimeSlotMountReport, UiRuntimeSlotsResource, UiScreen,
 };
 
 pub trait AppUiExt {
     fn mount_ui<S>(&mut self, screen: S) -> &mut Self
     where
-        S: Into<UiMountRequest>;
+        S: UiScreen;
 
     fn ui(&mut self) -> UiAppMounting<'_>;
 }
@@ -16,9 +18,9 @@ pub trait AppUiExt {
 impl AppUiExt for App {
     fn mount_ui<S>(&mut self, screen: S) -> &mut Self
     where
-        S: Into<UiMountRequest>,
+        S: UiScreen,
     {
-        record_ui_mount(self, screen.into(), UiMountSource::AppMountUi);
+        let _ = mount_typed_ui(self, screen);
         self
     }
 
@@ -32,41 +34,59 @@ pub struct UiAppMounting<'a> {
 }
 
 impl UiAppMounting<'_> {
-    pub fn mount<S>(&mut self, screen: S) -> UiMountReport
+    pub fn mount<S>(&mut self, screen: S) -> UiRuntimeSlotMountReport
     where
-        S: Into<UiMountRequest>,
+        S: UiScreen,
     {
-        record_ui_mount(self.app, screen.into(), UiMountSource::AppUiMount)
+        mount_typed_ui(self.app, screen)
     }
 }
 
-fn record_ui_mount(
-    app: &mut App,
-    request: UiMountRequest,
-    mount_source: UiMountSource,
-) -> UiMountReport {
-    app.init_resource::<UiMountRequestsResource>();
+fn mount_typed_ui<S>(app: &mut App, screen: S) -> UiRuntimeSlotMountReport
+where
+    S: UiScreen,
+{
+    let source = screen.build_source();
+    let screen_id = source.screen_id().clone();
+
     app.init_resource::<UiRuntimeDiagnosticsResource>();
 
-    let report = {
-        let mount_requests = app
-            .world_mut()
-            .resource_mut::<UiMountRequestsResource>()
-            .expect("UiMountRequestsResource was initialized before recording a UI mount");
-        mount_requests.record_mount_request(request, mount_source)
+    let registry = match ControlPackageRegistry::new().with_package(runenwerk_control_package()) {
+        Ok(registry) => registry,
+        Err(_) => {
+            let report = UiRuntimeSlotMountReport::rejected(
+                screen_id,
+                UiRuntimeSlotMountFailure::ControlRegistry,
+            );
+            record_slot_mount_diagnostic(app, &report);
+            return report;
+        }
     };
+    let snapshot = registry.snapshot();
 
-    if let Some(reason) = report.failure_reason()
-        && let Ok(diagnostics) = app
+    app.init_resource::<UiRuntimeSlotsResource>();
+    let report = {
+        let slots = app
             .world_mut()
-            .resource_mut::<UiRuntimeDiagnosticsResource>()
+            .resource_mut::<UiRuntimeSlotsResource>()
+            .expect("UiRuntimeSlotsResource was initialized before typed UI mounting");
+        slots.mount(source, &snapshot)
+    };
+    record_slot_mount_diagnostic(app, &report);
+    report
+}
+
+fn record_slot_mount_diagnostic(app: &mut App, report: &UiRuntimeSlotMountReport) {
+    let Some(failure) = report.failure() else {
+        return;
+    };
+    if let Ok(diagnostics) = app
+        .world_mut()
+        .resource_mut::<UiRuntimeDiagnosticsResource>()
     {
-        diagnostics.push(UiRuntimeDiagnostic::mount_rejected(
-            report.screen_identity().to_string(),
-            report.mount_source(),
-            reason,
+        diagnostics.push(UiRuntimeDiagnostic::runtime_slot_mount_rejected(
+            report.screen_id().as_str(),
+            failure,
         ));
     }
-
-    report
 }

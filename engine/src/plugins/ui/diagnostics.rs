@@ -1,5 +1,6 @@
 use super::{
-    UiActionDispatchFailureReason, UiMountFailureReason, UiMountSource, UiTypedIdentityError,
+    UiActionDispatchFailureReason, UiMountFailureReason, UiMountSource, UiRuntimeSlotMountFailure,
+    UiTypedIdentityError,
 };
 
 use crate::plugins::render::RenderFrameProducerId;
@@ -18,6 +19,7 @@ pub enum UiRuntimeDiagnosticCode {
     PluginInstall,
     ResourceInitialization,
     MountRequestRejected,
+    RuntimeSlotMountRejected,
     TypedContractRejected,
     ActionDispatchRejected,
     RuntimeEvaluationRejected,
@@ -29,6 +31,12 @@ pub struct UiMountDiagnostic {
     pub screen_identity: String,
     pub mount_source: UiMountSource,
     pub failure_reason: UiMountFailureReason,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UiRuntimeSlotMountDiagnostic {
+    pub screen_id: String,
+    pub failure_reason: UiRuntimeSlotMountFailure,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -124,6 +132,7 @@ pub struct UiRuntimeDiagnostic {
     pub severity: UiRuntimeDiagnosticSeverity,
     pub message: &'static str,
     pub mount: Option<UiMountDiagnostic>,
+    pub runtime_slot_mount: Option<UiRuntimeSlotMountDiagnostic>,
     pub typed_contract: Option<UiTypedContractDiagnostic>,
     pub action_dispatch: Option<UiActionDispatchDiagnostic>,
     pub runtime_evaluation: Option<UiRuntimeEvaluationDiagnostic>,
@@ -141,6 +150,7 @@ impl UiRuntimeDiagnostic {
             severity,
             message,
             mount: None,
+            runtime_slot_mount: None,
             typed_contract: None,
             action_dispatch: None,
             runtime_evaluation: None,
@@ -162,6 +172,27 @@ impl UiRuntimeDiagnostic {
                 mount_source,
                 failure_reason,
             }),
+            runtime_slot_mount: None,
+            typed_contract: None,
+            action_dispatch: None,
+            runtime_evaluation: None,
+            frame_publication: None,
+        }
+    }
+
+    pub fn runtime_slot_mount_rejected(
+        screen_id: impl Into<String>,
+        failure_reason: UiRuntimeSlotMountFailure,
+    ) -> Self {
+        Self {
+            code: UiRuntimeDiagnosticCode::RuntimeSlotMountRejected,
+            severity: UiRuntimeDiagnosticSeverity::Error,
+            message: failure_reason.message(),
+            mount: None,
+            runtime_slot_mount: Some(UiRuntimeSlotMountDiagnostic {
+                screen_id: screen_id.into(),
+                failure_reason,
+            }),
             typed_contract: None,
             action_dispatch: None,
             runtime_evaluation: None,
@@ -179,6 +210,7 @@ impl UiRuntimeDiagnostic {
             severity: UiRuntimeDiagnosticSeverity::Error,
             message: failure_reason.message(),
             mount: None,
+            runtime_slot_mount: None,
             typed_contract: Some(UiTypedContractDiagnostic {
                 contract,
                 identity: identity.into(),
@@ -201,6 +233,7 @@ impl UiRuntimeDiagnostic {
             severity: UiRuntimeDiagnosticSeverity::Error,
             message: failure_reason.message(),
             mount: None,
+            runtime_slot_mount: None,
             typed_contract: None,
             action_dispatch: Some(UiActionDispatchDiagnostic {
                 action_id: action_id.into(),
@@ -224,6 +257,7 @@ impl UiRuntimeDiagnostic {
             severity: UiRuntimeDiagnosticSeverity::Error,
             message: failure_reason.message(),
             mount: None,
+            runtime_slot_mount: None,
             typed_contract: None,
             action_dispatch: None,
             runtime_evaluation: Some(UiRuntimeEvaluationDiagnostic {
@@ -246,6 +280,7 @@ impl UiRuntimeDiagnostic {
             severity: UiRuntimeDiagnosticSeverity::Error,
             message: failure_reason.message(),
             mount: None,
+            runtime_slot_mount: None,
             typed_contract: None,
             action_dispatch: None,
             runtime_evaluation: None,
