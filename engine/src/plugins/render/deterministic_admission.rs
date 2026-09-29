@@ -730,9 +730,7 @@ mod tests {
 
         let non_uniform = object_state(
             RenderAffineTransform3::from_row_major_3x4([
-                1.0, 0.0, 0.0, 0.0,
-                0.0, 2.0, 0.0, 0.0,
-                0.0, 0.0, 1.0, 0.0,
+                1.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
             ])
             .expect("finite non-uniform transform"),
         );
