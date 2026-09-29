@@ -376,33 +376,44 @@ fn distinct_producer_scopes_compose_same_output_index_in_one_consumer_graph() {
         GpuBufferTextureLayout::new(&buffer_b, 0, 8, 2).expect("consumer B layout"),
     )
     .expect("consumer B copy");
-    let provenance = GpuResourceProvenance::new(
-        GpuResourceLabel::new("R7 scoped multi-producer consumer").expect("consumer label"),
+    let consumer_a = ResolvedRenderGpuWorkNode::pass(
+        RenderGpuWorkOccurrenceId::new(40),
+        GpuResourceLabel::new("R7 scoped consumer A").expect("consumer A label"),
+        GpuWorkOperation::Copy(copy_a),
+        GpuExecutionPreference::TransferPreferred,
+        [],
+    );
+    let consumer_b = ResolvedRenderGpuWorkNode::pass(
+        RenderGpuWorkOccurrenceId::new(41),
+        GpuResourceLabel::new("R7 scoped consumer B").expect("consumer B label"),
+        GpuWorkOperation::Copy(copy_b),
+        GpuExecutionPreference::TransferPreferred,
+        [],
+    );
+    let provenance_a = GpuResourceProvenance::new(
+        GpuResourceLabel::new("R7 scoped import A").expect("import A label"),
         None,
         None,
     );
-    let consumer = GpuWorkFragment::build_with_provenance(
-        GpuResourceLabel::new("R7 scoped multi-producer consumer").expect("fragment label"),
-        provenance.clone(),
-        |work| {
-            work.operation("consume producer A", copy_a)?;
-            work.operation("consume producer B", copy_b)?;
-            work.add_import(output_a.import(provenance.clone()))?;
-            work.add_import(output_b.import(provenance.clone()))?;
-            Ok(())
-        },
-    )
-    .expect("two scoped radiance imports should coexist in one consumer fragment");
+    let provenance_b = GpuResourceProvenance::new(
+        GpuResourceLabel::new("R7 scoped import B").expect("import B label"),
+        None,
+        None,
+    );
 
-    let graph = GpuPreparedWorkGraph::prepare(
+    let graph = prepare_render_gpu_frame_work_with_composition_for_test(
         GpuResourceLabel::new("R7 scoped multi-producer composition").expect("graph label"),
-        [
-            consumer,
+        [consumer_a, consumer_b],
+        &[
             prepared_a.work_set().fragments()[0].clone(),
             prepared_b.work_set().fragments()[0].clone(),
         ],
+        &[
+            output_a.import(provenance_a),
+            output_b.import(provenance_b),
+        ],
     )
-    .expect("two scoped deterministic producers should compose into one graph");
+    .expect("canonical renderer composition should accept both scoped producer imports");
 
     for output in [output_a, output_b] {
         assert!(
