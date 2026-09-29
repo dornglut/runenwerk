@@ -565,12 +565,12 @@ mod tests {
         RenderMethodOutputContract, RenderMethodOutputGuarantee, RenderMethodOutputKind,
         RenderObservationKind, RenderSpectralRadianceSupport,
     };
+    use crate::plugins::render::representation::{
+        RENDER_FIELD_DISTANCE_PROTOCOL_REVISION, RenderFieldDistanceGuarantee,
+    };
     use crate::plugins::render::request::{
         RenderDistanceConvention, RenderPerspectiveObservation, RenderProbeObservation,
         RenderSamplingSupport,
-    };
-    use crate::plugins::render::representation::{
-        RENDER_FIELD_DISTANCE_PROTOCOL_REVISION, RenderFieldDistanceGuarantee,
     };
     use crate::plugins::render::scene::{RenderSceneStore, RenderSceneUpdate};
     use crate::plugins::render::space_time::{
