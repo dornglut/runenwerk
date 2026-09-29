@@ -10,8 +10,11 @@ use world_ops::{ChunkGeneration, ChunkRevision, OperationId};
 pub const SDF_BRICK_EDGE_SAMPLES: usize = 8;
 pub const SDF_PAGE_EDGE_BRICKS: usize = 4;
 
-/// Canonical metric-field corner lattice used by `WorldSdfMetricEncoding` revision 1.
-pub const SDF_METRIC_BRICK_EDGE_SAMPLES: usize = 2;
+/// Canonical metric-field lattice used by `WorldSdfMetricEncoding` revision 1.
+///
+/// Three samples per axis place sample planes at local brick coordinates 0, 0.5, and 1.0,
+/// matching the first maintained consumer's half-brick geometry boundaries.
+pub const SDF_METRIC_BRICK_EDGE_SAMPLES: usize = 3;
 pub const SDF_METRIC_BRICK_SAMPLE_COUNT: usize =
     SDF_METRIC_BRICK_EDGE_SAMPLES * SDF_METRIC_BRICK_EDGE_SAMPLES * SDF_METRIC_BRICK_EDGE_SAMPLES;
 
