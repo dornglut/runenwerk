@@ -198,9 +198,9 @@ impl fmt::Display for RenderFieldSemanticInputError {
             Self::NonPositiveSampleSpacing => {
                 formatter.write_str("field-input sample spacing must be positive on every axis")
             }
-            Self::NegativeQueryErrorBound => formatter.write_str(
-                "field-input maximum absolute query error must be non-negative",
-            ),
+            Self::NegativeQueryErrorBound => {
+                formatter.write_str("field-input maximum absolute query error must be non-negative")
+            }
         }
     }
 }
@@ -267,7 +267,7 @@ mod tests {
             Err(RenderFieldSemanticInputError::DegenerateDimensions)
         ));
         assert!(matches!(
-            RenderFieldSemanticInput::dense([0.0; 3], [1.0; 3], [2, 2, 2], vec![0.0; 7], validity,),
+            RenderFieldSemanticInput::dense([0.0; 3], [1.0; 3], [2, 2, 2], vec![0.0; 7], 0.0, validity),
             Err(RenderFieldSemanticInputError::SampleCountMismatch {
                 expected: 8,
                 actual: 7,
