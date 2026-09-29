@@ -32,7 +32,6 @@ pub struct RenderFieldSemanticInput {
     sample_spacing_meters: [CanonicalF64; 3],
     dimensions: [u32; 3],
     signed_distance_samples_meters: Vec<CanonicalF64>,
-    max_absolute_error_meters: CanonicalF64,
     validity: RenderTemporalSupport,
 }
 
@@ -42,7 +41,6 @@ impl RenderFieldSemanticInput {
         sample_spacing_meters: [f64; 3],
         dimensions: [u32; 3],
         signed_distance_samples_meters: Vec<f64>,
-        max_absolute_error_meters: f64,
         validity: RenderTemporalSupport,
     ) -> Result<Self, RenderFieldSemanticInputError> {
         let origin_local_meters =
@@ -61,19 +59,11 @@ impl RenderFieldSemanticInput {
             .into_iter()
             .map(|value| CanonicalF64::new(value, "field_input_signed_distance_sample_meters"))
             .collect::<Result<Vec<_>, _>>()?;
-        let max_absolute_error_meters = CanonicalF64::new(
-            max_absolute_error_meters,
-            "field_input_max_absolute_error_meters",
-        )?;
-        if max_absolute_error_meters.get() < 0.0 {
-            return Err(RenderFieldSemanticInputError::NegativeErrorBound);
-        }
         Ok(Self {
             origin_local_meters,
             sample_spacing_meters,
             dimensions,
             signed_distance_samples_meters,
-            max_absolute_error_meters,
             validity,
         })
     }
@@ -111,10 +101,6 @@ impl RenderFieldSemanticInput {
             .map(CanonicalF64::get)
     }
 
-    pub fn max_absolute_error_meters(&self) -> f64 {
-        self.max_absolute_error_meters.get()
-    }
-
     pub const fn validity(&self) -> RenderTemporalSupport {
         self.validity
     }
@@ -128,6 +114,7 @@ impl RenderFieldSemanticInputGeneration {
     pub const fn new(raw: u64) -> Self {
         Self(raw)
     }
+
 }
 
 /// Invocation-local correlation between one exact representation and one immutable sampled field.
@@ -172,7 +159,6 @@ pub enum RenderFieldSemanticInputError {
     SampleCountOverflow,
     SampleCountMismatch { expected: usize, actual: usize },
     NonPositiveSampleSpacing,
-    NegativeErrorBound,
 }
 
 impl From<RenderSemanticValueError> for RenderFieldSemanticInputError {
@@ -196,9 +182,6 @@ impl fmt::Display for RenderFieldSemanticInputError {
             ),
             Self::NonPositiveSampleSpacing => {
                 formatter.write_str("field-input sample spacing must be positive on every axis")
-            }
-            Self::NegativeErrorBound => {
-                formatter.write_str("field-input maximum absolute error must be non-negative")
             }
         }
     }
@@ -262,18 +245,11 @@ mod tests {
     fn dense_field_rejects_degenerate_shape_and_invalid_spacing() {
         let validity = RenderTemporalSupport::unbounded();
         assert!(matches!(
-            RenderFieldSemanticInput::dense([0.0; 3], [1.0; 3], [1, 2, 2], vec![], 0.0, validity),
+            RenderFieldSemanticInput::dense([0.0; 3], [1.0; 3], [1, 2, 2], vec![], validity),
             Err(RenderFieldSemanticInputError::DegenerateDimensions)
         ));
         assert!(matches!(
-            RenderFieldSemanticInput::dense(
-                [0.0; 3],
-                [1.0; 3],
-                [2, 2, 2],
-                vec![0.0; 7],
-                0.0,
-                validity,
-            ),
+            RenderFieldSemanticInput::dense([0.0; 3], [1.0; 3], [2, 2, 2], vec![0.0; 7], validity,),
             Err(RenderFieldSemanticInputError::SampleCountMismatch {
                 expected: 8,
                 actual: 7,
@@ -285,7 +261,6 @@ mod tests {
                 [1.0, 0.0, 1.0],
                 [2, 2, 2],
                 vec![0.0; 8],
-                0.0,
                 validity,
             ),
             Err(RenderFieldSemanticInputError::NonPositiveSampleSpacing)
@@ -301,25 +276,9 @@ mod tests {
                 [f64::MAX, 1.0, 1.0],
                 [2, 2, 2],
                 vec![0.0; 8],
-                0.0,
                 validity,
             ),
             Err(RenderFieldSemanticInputError::SemanticValue(_))
-        ));
-    }
-
-    #[test]
-    fn dense_field_rejects_negative_error_bound() {
-        assert!(matches!(
-            RenderFieldSemanticInput::dense(
-                [0.0; 3],
-                [1.0; 3],
-                [2, 2, 2],
-                vec![0.0; 8],
-                -0.001,
-                RenderTemporalSupport::unbounded(),
-            ),
-            Err(RenderFieldSemanticInputError::NegativeErrorBound)
         ));
     }
 
@@ -330,7 +289,6 @@ mod tests {
             [0.5, 1.0, 2.0],
             [2, 2, 2],
             (0..8).map(|value| f64::from(value) * 0.25).collect(),
-            0.125,
             RenderTemporalSupport::unbounded(),
         )
         .expect("valid sampled field");
@@ -338,6 +296,5 @@ mod tests {
         assert_eq!(input.max_local_meters(), [-0.5, -1.0, -1.0]);
         assert_eq!(input.sample_count(), 8);
         assert_eq!(input.signed_distance_sample_meters(7), Some(1.75));
-        assert_eq!(input.max_absolute_error_meters(), 0.125);
     }
 }
