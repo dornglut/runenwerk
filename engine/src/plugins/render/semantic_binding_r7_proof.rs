@@ -26,7 +26,7 @@ use super::request::{
     RenderSamplingSupport, RenderSemanticTolerance,
 };
 use super::scene::{RenderObjectId, RenderObjectState, RenderSceneStore, RenderSceneUpdate};
-use super::semantic_binding::RenderNormalizedSemanticInputs;
+use super::semantic_binding::{RenderNormalizedSemanticInputs, RenderSemanticBindingInputError};
 use super::semantic_plan::{RenderPlan, plan_render};
 use super::space_time::{
     RenderAffineTransform3, RenderHandedness, RenderObjectSpatialState, RenderObjectTemporalState,
