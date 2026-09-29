@@ -21,6 +21,10 @@ use runenwerk_render_lab::automation::{
 fn main() -> anyhow::Result<()> {
     match parse_command(env::args_os().skip(1))? {
         Command::Native => runenwerk_render_lab::run_native(),
+        Command::Comparison {
+            window_size_px,
+            candidate_size_px,
+        } => runenwerk_render_lab::run_native_comparison(window_size_px, candidate_size_px),
         Command::ReplayTrace(path) => run_replay_trace(&path),
         Command::AutomationScenario(path) => run_automation_scenario(&path),
         Command::NativeMeasurement {
@@ -65,6 +69,10 @@ fn main() -> anyhow::Result<()> {
 enum Command {
     FoundingDirect(PathBuf),
     Native,
+    Comparison {
+        window_size_px: (u32, u32),
+        candidate_size_px: (u32, u32),
+    },
     ReplayTrace(PathBuf),
     AutomationScenario(PathBuf),
     NativeMeasurement {
@@ -91,6 +99,38 @@ fn parse_command(args: impl IntoIterator<Item = OsString>) -> anyhow::Result<Com
     let first = args.next();
     if matches!(first.as_deref(), Some(value) if value == "--rl2" || value == "--native") {
         return Ok(Command::Native);
+    }
+    if matches!(first.as_deref(), Some(value) if value == "--rl2-compare") {
+        let mut window_size_px = None;
+        let mut candidate_size_px = None;
+        while let Some(flag) = args.next() {
+            if flag == "--window-size-px" {
+                if window_size_px.is_some() {
+                    bail!("duplicate --window-size-px argument");
+                }
+                window_size_px = Some(parse_window_size_px(args.next())?);
+            } else if flag == "--candidate-size-px" {
+                if candidate_size_px.is_some() {
+                    bail!("duplicate --candidate-size-px argument");
+                }
+                candidate_size_px = Some(parse_candidate_size_px(args.next())?);
+            } else {
+                bail!(
+                    "unexpected RL2 comparison argument '{}'",
+                    flag.to_string_lossy()
+                );
+            }
+        }
+        let window_size_px = window_size_px.ok_or_else(|| {
+            anyhow::anyhow!("--rl2-compare requires --window-size-px WIDTHxHEIGHT")
+        })?;
+        let candidate_size_px = candidate_size_px.ok_or_else(|| {
+            anyhow::anyhow!("--rl2-compare requires --candidate-size-px WIDTHxHEIGHT")
+        })?;
+        return Ok(Command::Comparison {
+            window_size_px,
+            candidate_size_px,
+        });
     }
     if matches!(first.as_deref(), Some(value) if value == "--replay-trace") {
         let Some(path) = args.next() else {
@@ -557,6 +597,28 @@ fn parse_internal_size_px(value: Option<OsString>) -> anyhow::Result<(u32, u32)>
     Ok((width, height))
 }
 
+fn parse_candidate_size_px(value: Option<OsString>) -> anyhow::Result<(u32, u32)> {
+    let Some(value) = value else {
+        bail!("--candidate-size-px requires WIDTHxHEIGHT");
+    };
+    let Some(value) = value.to_str() else {
+        bail!("--candidate-size-px requires a UTF-8 WIDTHxHEIGHT value");
+    };
+    let Some((width, height)) = value.split_once('x') else {
+        bail!("invalid --candidate-size-px value '{value}'; expected WIDTHxHEIGHT");
+    };
+    let width = width
+        .parse::<u32>()
+        .map_err(|_| anyhow::anyhow!("invalid --candidate-size-px width in '{value}'"))?;
+    let height = height
+        .parse::<u32>()
+        .map_err(|_| anyhow::anyhow!("invalid --candidate-size-px height in '{value}'"))?;
+    if width == 0 || height == 0 {
+        bail!("--candidate-size-px requires positive WIDTHxHEIGHT");
+    }
+    Ok((width, height))
+}
+
 fn parse_radiance_size_px(value: Option<OsString>) -> anyhow::Result<(u32, u32)> {
     let Some(value) = value else {
         anyhow::bail!("--radiance-size-px requires WIDTHxHEIGHT");
@@ -615,6 +677,55 @@ mod tests {
     fn native_mode_is_explicit() {
         assert_eq!(parse_command(args(&["--rl2"])).unwrap(), Command::Native);
         assert_eq!(parse_command(args(&["--native"])).unwrap(), Command::Native);
+    }
+
+    #[test]
+    fn comparison_mode_requires_explicit_reference_and_candidate_extents() {
+        assert_eq!(
+            parse_command(args(&[
+                "--rl2-compare",
+                "--window-size-px",
+                "1920x1080",
+                "--candidate-size-px",
+                "960x540",
+            ]))
+            .unwrap(),
+            Command::Comparison {
+                window_size_px: (1920, 1080),
+                candidate_size_px: (960, 540),
+            }
+        );
+
+        for values in [
+            vec!["--rl2-compare"],
+            vec!["--rl2-compare", "--window-size-px", "1920x1080"],
+            vec!["--rl2-compare", "--candidate-size-px", "960x540"],
+            vec![
+                "--rl2-compare",
+                "--window-size-px",
+                "1920x1080",
+                "--candidate-size-px",
+                "960X540",
+            ],
+            vec![
+                "--rl2-compare",
+                "--window-size-px",
+                "1920x1080",
+                "--candidate-size-px",
+                "0x540",
+            ],
+            vec![
+                "--rl2-compare",
+                "--window-size-px",
+                "1920x1080",
+                "--candidate-size-px",
+                "960x540",
+                "--candidate-size-px",
+                "1280x720",
+            ],
+        ] {
+            assert!(parse_command(args(&values)).is_err(), "{values:?}");
+        }
     }
 
     #[test]
