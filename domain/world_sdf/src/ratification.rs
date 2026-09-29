@@ -130,9 +130,10 @@ impl Ratifier<WorldSdfMetricProductCandidate> for WorldSdfMetricProductRatifier 
             candidate.descriptor.clone(),
         ));
         for issue in base_report.iter() {
-            report.push(RatificationIssue::error(
+            report.push(RatificationIssue::new(
                 *issue.code(),
                 subject.clone(),
+                issue.severity(),
                 issue.message().to_string(),
             ));
         }
