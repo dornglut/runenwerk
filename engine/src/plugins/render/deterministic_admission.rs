@@ -618,6 +618,8 @@ mod tests {
                 5,
                 object_id,
                 representation_id,
+                RenderRepresentationProtocol::SurfaceQuery,
+                None,
                 None,
                 Some(&valid_state),
             ),
@@ -647,7 +649,9 @@ mod tests {
                 6,
                 object_id,
                 representation_id,
+                RenderRepresentationProtocol::SurfaceQuery,
                 Some(&input),
+                None,
                 Some(&singular_state),
             ),
             Err(
@@ -662,10 +666,92 @@ mod tests {
                 7,
                 object_id,
                 representation_id,
+                RenderRepresentationProtocol::SurfaceQuery,
                 Some(&input),
+                None,
                 Some(&valid_state),
             ),
             Ok(())
+        );
+    }
+
+    #[test]
+    fn maintained_evaluator_requires_field_input_and_exact_similarity_transform() {
+        let valid_state = object_state(RenderAffineTransform3::identity());
+        let mut store = RenderSceneStore::new();
+        let object_id = store.allocate_object_id().expect("object id");
+        let mut insert = RenderSceneUpdate::new();
+        insert.insert_with_state(object_id, valid_state.clone());
+        store.commit(insert).expect("insert object");
+        let representation_id = store
+            .allocate_representation_id(object_id)
+            .expect("representation id");
+
+        assert_eq!(
+            validate_selected_evaluator_object(
+                8,
+                object_id,
+                representation_id,
+                RenderRepresentationProtocol::FieldDistance,
+                None,
+                None,
+                Some(&valid_state),
+            ),
+            Err(
+                RenderDeterministicCompatibilityError::SelectedRepresentationFieldInputUnsupported {
+                    output_index: 8,
+                    object_id,
+                    representation_id,
+                }
+            )
+        );
+
+        let field = RenderFieldSemanticInput::dense(
+            [-1.0; 3],
+            [1.0; 3],
+            [3, 3, 3],
+            vec![0.0; 27],
+            RenderTemporalSupport::unbounded(),
+        )
+        .expect("finite exact sampled field");
+
+        assert_eq!(
+            validate_selected_evaluator_object(
+                9,
+                object_id,
+                representation_id,
+                RenderRepresentationProtocol::FieldDistance,
+                None,
+                Some(&field),
+                Some(&valid_state),
+            ),
+            Ok(())
+        );
+
+        let non_uniform = object_state(
+            RenderAffineTransform3::from_row_major_3x4([
+                1.0, 0.0, 0.0, 0.0,
+                0.0, 2.0, 0.0, 0.0,
+                0.0, 0.0, 1.0, 0.0,
+            ])
+            .expect("finite non-uniform transform"),
+        );
+        assert_eq!(
+            validate_selected_evaluator_object(
+                10,
+                object_id,
+                representation_id,
+                RenderRepresentationProtocol::FieldDistance,
+                None,
+                Some(&field),
+                Some(&non_uniform),
+            ),
+            Err(
+                RenderDeterministicCompatibilityError::SelectedObjectFieldTransformNotSimilarity {
+                    output_index: 10,
+                    object_id,
+                }
+            )
         );
     }
 
