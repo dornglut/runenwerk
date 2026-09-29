@@ -1,6 +1,6 @@
 use crate::{
     SDF_METRIC_BRICK_EDGE_SAMPLES, SDF_METRIC_BRICK_SAMPLE_COUNT, SDF_PAGE_EDGE_BRICKS,
-    SdfBrickRecord, SdfChunkPayload, WorldSdfPayloadRef,
+    SdfBrickRecord, SdfChunkPayload, SdfPageCoord3, WorldSdfPayloadRef,
 };
 use runen_spatial::{GridPartitionConfig, WorldPosition};
 use std::error::Error;
@@ -37,6 +37,7 @@ pub enum WorldSdfMetricQueryError {
     InvalidWorldPosition,
     PositionOutsidePayload,
     InvalidMetricPageCount { actual: usize },
+    InvalidMetricPageCoord { actual: SdfPageCoord3 },
     InvalidMetricBrickCount { actual: usize },
     MissingMetricBrick { brick_coord: [u8; 3] },
     InvalidMetricSampleCount { actual: usize },
@@ -74,6 +75,11 @@ impl fmt::Display for WorldSdfMetricQueryError {
                 f,
                 "metric SDF layout revision 1 requires exactly one page, found {actual}"
             ),
+            Self::InvalidMetricPageCoord { actual } => write!(
+                f,
+                "metric SDF layout revision 1 requires canonical page coordinate [0, 0, 0], found [{}, {}, {}]",
+                actual.x, actual.y, actual.z
+            ),
             Self::InvalidMetricBrickCount { actual } => write!(
                 f,
                 "metric SDF page requires exactly {SDF_METRIC_PAGE_BRICK_COUNT} bricks, found {actual}"
@@ -104,11 +110,16 @@ pub fn validate_world_sdf_metric_payload(
         });
     }
 
-    let page = payload
+    let (page_coord, page) = payload
         .page_table
-        .values()
+        .iter()
         .next()
         .expect("one-page metric payload was checked above");
+    if *page_coord != SdfPageCoord3::default() {
+        return Err(WorldSdfMetricQueryError::InvalidMetricPageCoord {
+            actual: *page_coord,
+        });
+    }
     if page.bricks.len() != SDF_METRIC_PAGE_BRICK_COUNT {
         return Err(WorldSdfMetricQueryError::InvalidMetricBrickCount {
             actual: page.bricks.len(),
@@ -423,6 +434,26 @@ mod tests {
         assert_eq!(
             error,
             WorldSdfMetricQueryError::InvalidMetricPageCount { actual: 2 }
+        );
+    }
+
+    #[test]
+    fn metric_layout_revision_one_requires_canonical_origin_page() {
+        let mut payload = plane_payload();
+        let page = payload
+            .page_table
+            .remove(&SdfPageCoord3::default())
+            .expect("origin page exists");
+        let noncanonical = SdfPageCoord3 { x: 1, y: 0, z: 0 };
+        payload.page_table.insert(noncanonical, page);
+
+        let error = validate_world_sdf_metric_payload(&metric_ref(&payload), &payload)
+            .expect_err("revision one must not reinterpret a noncanonical page coordinate");
+        assert_eq!(
+            error,
+            WorldSdfMetricQueryError::InvalidMetricPageCoord {
+                actual: noncanonical
+            }
         );
     }
 
