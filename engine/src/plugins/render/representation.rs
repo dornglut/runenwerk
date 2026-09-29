@@ -5,6 +5,7 @@
 //! it supports. Request-relative applicability, current availability/residency, dispatch strategy,
 //! and physical realization remain later concerns.
 
+use super::field_input::RenderFieldSemanticInputRequirement;
 use super::space_time::{
     CanonicalF64, RenderAffineTransform3, RenderSemanticValueError, RenderSpatialCoverage,
     RenderTemporalSupport, RenderTimePoint,
@@ -292,6 +293,7 @@ impl RenderRefinementEvidence {
 pub struct RenderFieldDistanceProtocolEvidence {
     revision: u32,
     guarantee: RenderFieldDistanceGuarantee,
+    semantic_input_requirement: Option<RenderFieldSemanticInputRequirement>,
 }
 
 impl RenderFieldDistanceProtocolEvidence {
@@ -303,6 +305,7 @@ impl RenderFieldDistanceProtocolEvidence {
         Ok(Self {
             revision,
             guarantee,
+            semantic_input_requirement: None,
         })
     }
 
@@ -312,6 +315,20 @@ impl RenderFieldDistanceProtocolEvidence {
 
     pub const fn guarantee(self) -> RenderFieldDistanceGuarantee {
         self.guarantee
+    }
+
+    pub const fn with_semantic_input_requirement(
+        mut self,
+        requirement: RenderFieldSemanticInputRequirement,
+    ) -> Self {
+        self.semantic_input_requirement = Some(requirement);
+        self
+    }
+
+    pub const fn semantic_input_requirement(
+        self,
+    ) -> Option<RenderFieldSemanticInputRequirement> {
+        self.semantic_input_requirement
     }
 
     pub fn validate_sample(
@@ -400,6 +417,15 @@ impl RenderRepresentationRecord {
         &self,
     ) -> Option<RenderSurfaceSemanticInputRequirement> {
         match self.surface_query {
+            Some(evidence) => evidence.semantic_input_requirement(),
+            None => None,
+        }
+    }
+
+    pub const fn field_semantic_input_requirement(
+        &self,
+    ) -> Option<RenderFieldSemanticInputRequirement> {
+        match self.field_distance {
             Some(evidence) => evidence.semantic_input_requirement(),
             None => None,
         }

@@ -23,7 +23,7 @@ use super::request::{
     RenderSamplingSupport, RenderSemanticTolerance,
 };
 use super::scene::{RenderObjectId, RenderObjectState, RenderSceneStore, RenderSceneUpdate};
-use super::semantic_binding::RenderNormalizedSurfaceSemanticInputs;
+use super::semantic_binding::RenderNormalizedSemanticInputs;
 use super::semantic_plan::{RenderPlan, plan_render};
 use super::space_time::{
     RenderAffineTransform3, RenderHandedness, RenderObjectSpatialState, RenderObjectTemporalState,
@@ -209,7 +209,7 @@ fn surface_prerequisite_does_not_apply_to_field_use_on_same_representation() {
         Some(exact_field_evidence()),
         vec![field_requirement()],
     );
-    let inputs = RenderNormalizedSurfaceSemanticInputs::normalize(&plan, &[])
+    let inputs = RenderNormalizedSemanticInputs::normalize(&plan, &[], &[])
         .expect("field-only use needs no surface binding");
     let candidate = inputs
         .specialize_candidate(&plan, &plan.candidates()[0])
@@ -235,7 +235,7 @@ fn surface_and_oriented_uses_share_one_canonical_binding() {
         representation_id,
         sphere(RenderTemporalSupport::unbounded()),
     );
-    let inputs = RenderNormalizedSurfaceSemanticInputs::normalize(&plan, &[binding])
+    let inputs = RenderNormalizedSemanticInputs::normalize(&plan, &[binding], &[])
         .expect("one canonical surface binding");
     let candidate = inputs
         .specialize_candidate(&plan, &plan.candidates()[0])
@@ -260,7 +260,7 @@ fn one_binding_must_cover_every_selected_observation_shutter() {
         None,
         vec![surface_requirement()],
     );
-    let only_first = RenderNormalizedSurfaceSemanticInputs::normalize(
+    let only_first = RenderNormalizedSemanticInputs::normalize(
         &plan,
         &[RenderSurfaceSemanticInputBinding::new(
             representation_id,
@@ -273,7 +273,7 @@ fn one_binding_must_cover_every_selected_observation_shutter() {
         .expect_err("the one canonical value must cover every selected shutter");
     assert_eq!(rejection.output_index(), 1);
 
-    let covers_both = RenderNormalizedSurfaceSemanticInputs::normalize(
+    let covers_both = RenderNormalizedSemanticInputs::normalize(
         &plan,
         &[RenderSurfaceSemanticInputBinding::new(
             representation_id,

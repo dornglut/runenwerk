@@ -15,6 +15,7 @@ pub mod deterministic_execution;
 #[allow(dead_code)]
 mod deterministic_verification;
 pub mod features;
+pub mod field_input;
 pub mod frame;
 mod gpu_context_policy;
 pub mod gpu_primitives;

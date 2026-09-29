@@ -6,11 +6,12 @@
 //! availability, GPU state, and physical destinations. None of these invocation-local facts become
 //! R1-R4 semantic authority.
 
+use super::field_input::{RenderFieldSemanticInput, RenderFieldSemanticInputBinding};
 use super::method::RenderAbstractExecutionRequirement;
 use super::representation::RenderRepresentationId;
 use super::scene::{RenderObjectId, RenderSceneRevision};
 use super::semantic_binding::{
-    RenderNormalizedSurfaceSemanticInputs, RenderSemanticBindingInputError,
+    RenderNormalizedSemanticInputs, RenderSemanticBindingInputError,
     RenderSemanticCandidateRejection, RenderSemanticallyAdmittedCandidate,
 };
 use super::semantic_plan::{
@@ -294,6 +295,7 @@ pub struct AdmittedRenderPlan {
     candidate_index: usize,
     outputs: Vec<RenderAdmittedOutput>,
     surface_semantic_inputs: Vec<RenderSurfaceSemanticInputBinding>,
+    field_semantic_inputs: Vec<RenderFieldSemanticInputBinding>,
     environment: RenderExecutionAdmissionEvidence,
     skipped_candidates: Vec<RenderCandidateAdmissionRejection>,
 }
@@ -329,6 +331,20 @@ impl AdmittedRenderPlan {
             .binary_search_by_key(&representation_id, |binding| binding.representation_id())
             .ok()
             .map(|index| self.surface_semantic_inputs[index].input())
+    }
+
+    pub fn field_semantic_inputs(&self) -> &[RenderFieldSemanticInputBinding] {
+        &self.field_semantic_inputs
+    }
+
+    pub fn field_semantic_input(
+        &self,
+        representation_id: RenderRepresentationId,
+    ) -> Option<&RenderFieldSemanticInput> {
+        self.field_semantic_inputs
+            .binary_search_by_key(&representation_id, |binding| binding.representation_id())
+            .ok()
+            .map(|index| self.field_semantic_inputs[index].input())
     }
 
     pub const fn environment(&self) -> RenderExecutionAdmissionEvidence {
@@ -373,27 +389,51 @@ pub fn admit_render_plan(
     output_bindings: &[RenderOutputBinding],
     context: &GpuContext,
 ) -> Result<AdmittedRenderPlan, RenderExecutionAdmissionFailure> {
-    admit_render_plan_with_surface_inputs(plan, &[], availability, output_bindings, context)
+    admit_render_plan_with_semantic_inputs(
+        plan,
+        &[],
+        &[],
+        availability,
+        output_bindings,
+        context,
+    )
 }
 
-/// Admit one accepted R4 plan against current semantic bindings and operational facts.
-///
-/// Semantic binding admission completes for every candidate before current availability, physical
-/// output bindings, or GPU execution facts are inspected. The function does not reserve RunenGPU
-/// capacity, create work, submit operations, or alter the retained semantic scene/request/plan.
+/// Preserve the existing surface-only R5 entry point.
 pub fn admit_render_plan_with_surface_inputs(
     plan: &RenderPlan,
-    semantic_inputs: &[RenderSurfaceSemanticInputBinding],
+    surface_inputs: &[RenderSurfaceSemanticInputBinding],
     availability: &[RenderRepresentationAvailabilityFact],
     output_bindings: &[RenderOutputBinding],
     context: &GpuContext,
 ) -> Result<AdmittedRenderPlan, RenderExecutionAdmissionFailure> {
-    let semantic_inputs = RenderNormalizedSurfaceSemanticInputs::normalize(plan, semantic_inputs)
-        .map_err(|error| {
-        RenderExecutionAdmissionFailure::InvalidInput(RenderAdmissionInputError::SemanticBinding(
-            error,
-        ))
-    })?;
+    admit_render_plan_with_semantic_inputs(
+        plan,
+        surface_inputs,
+        &[],
+        availability,
+        output_bindings,
+        context,
+    )
+}
+
+/// Admit one accepted R4 plan against current typed semantic bindings and operational facts.
+pub fn admit_render_plan_with_semantic_inputs(
+    plan: &RenderPlan,
+    surface_inputs: &[RenderSurfaceSemanticInputBinding],
+    field_inputs: &[RenderFieldSemanticInputBinding],
+    availability: &[RenderRepresentationAvailabilityFact],
+    output_bindings: &[RenderOutputBinding],
+    context: &GpuContext,
+) -> Result<AdmittedRenderPlan, RenderExecutionAdmissionFailure> {
+    let semantic_inputs =
+        RenderNormalizedSemanticInputs::normalize(plan, surface_inputs, field_inputs).map_err(
+            |error| {
+                RenderExecutionAdmissionFailure::InvalidInput(
+                    RenderAdmissionInputError::SemanticBinding(error),
+                )
+            },
+        )?;
     let semantic_candidates = plan
         .candidates()
         .iter()
@@ -446,13 +486,16 @@ pub fn admit_render_plan_with_surface_inputs(
             current,
         ) {
             Ok(outputs) => {
-                let selected_semantic_inputs =
+                let surface_semantic_inputs =
                     selected_surface_semantic_inputs(plan, &outputs, &semantic_inputs);
+                let field_semantic_inputs =
+                    selected_field_semantic_inputs(plan, &outputs, &semantic_inputs);
                 return Ok(AdmittedRenderPlan {
                     plan: plan.clone(),
                     candidate_index,
                     outputs,
-                    surface_semantic_inputs: selected_semantic_inputs,
+                    surface_semantic_inputs,
+                    field_semantic_inputs,
                     environment: RenderExecutionAdmissionEvidence {
                         affinity: context.affinity(),
                         lifecycle: current.lifecycle,
@@ -487,12 +530,34 @@ fn semantic_rejection(
 fn selected_surface_semantic_inputs(
     plan: &RenderPlan,
     outputs: &[RenderAdmittedOutput],
-    semantic_inputs: &RenderNormalizedSurfaceSemanticInputs,
+    semantic_inputs: &RenderNormalizedSemanticInputs,
 ) -> Vec<RenderSurfaceSemanticInputBinding> {
     let mut selected = BTreeMap::new();
     for output in outputs {
         for object in output.object_representations() {
-            if let Some(binding) = semantic_inputs.binding_for_selected_use(
+            if let Some(binding) = semantic_inputs.surface_binding_for_selected_use(
+                plan,
+                object.object_id(),
+                object.representation(),
+            ) {
+                selected
+                    .entry(binding.representation_id())
+                    .or_insert_with(|| binding.clone());
+            }
+        }
+    }
+    selected.into_values().collect()
+}
+
+fn selected_field_semantic_inputs(
+    plan: &RenderPlan,
+    outputs: &[RenderAdmittedOutput],
+    semantic_inputs: &RenderNormalizedSemanticInputs,
+) -> Vec<RenderFieldSemanticInputBinding> {
+    let mut selected = BTreeMap::new();
+    for output in outputs {
+        for object in output.object_representations() {
+            if let Some(binding) = semantic_inputs.field_binding_for_selected_use(
                 plan,
                 object.object_id(),
                 object.representation(),
@@ -1284,7 +1349,7 @@ mod tests {
                 true,
                 false,
             );
-        let missing = RenderNormalizedSurfaceSemanticInputs::normalize(&plan, &[])
+        let missing = RenderNormalizedSemanticInputs::normalize(&plan, &[])
             .expect("missing semantic input is absence, not malformed caller input");
         let semantic_candidate = missing
             .specialize_candidate(&plan, &plan.candidates()[0])
@@ -1325,7 +1390,7 @@ mod tests {
         let input =
             RenderSurfaceSemanticInput::sphere([0.0; 3], 1.0, RenderTemporalSupport::unbounded())
                 .expect("surface input");
-        let supplied = RenderNormalizedSurfaceSemanticInputs::normalize(
+        let supplied = RenderNormalizedSemanticInputs::normalize(
             &plan,
             &[RenderSurfaceSemanticInputBinding::new(required_id, input)],
         )
@@ -1358,7 +1423,7 @@ mod tests {
         let expected =
             RenderSurfaceSemanticInput::sphere([0.0; 3], 1.0, RenderTemporalSupport::unbounded())
                 .expect("surface input");
-        let semantic_inputs = RenderNormalizedSurfaceSemanticInputs::normalize(
+        let semantic_inputs = RenderNormalizedSemanticInputs::normalize(
             &plan,
             &[RenderSurfaceSemanticInputBinding::new(
                 representation_id,
