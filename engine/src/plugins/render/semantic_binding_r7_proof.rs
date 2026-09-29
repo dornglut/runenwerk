@@ -3,6 +3,9 @@
 //! This module proves protocol locality and one-binding temporal validity around the maintained R5
 //! semantic-binding implementation. It does not create a second planning or binding authority.
 
+use super::field_input::{
+    RenderFieldSemanticInput, RenderFieldSemanticInputBinding, RenderFieldSemanticInputRequirement,
+};
 use super::method::{
     RenderAbstractExecutionRequirement, RenderFieldDistanceInputRequirement, RenderMethodContract,
     RenderMethodId, RenderMethodOutputContract, RenderMethodOutputGuarantee,
@@ -197,6 +200,47 @@ fn exact_field_evidence() -> RenderFieldDistanceProtocolEvidence {
     .expect("field protocol")
 }
 
+fn bound_field_evidence(max_error_meters: f64) -> RenderFieldDistanceProtocolEvidence {
+    RenderFieldDistanceProtocolEvidence::new(
+        RENDER_FIELD_DISTANCE_PROTOCOL_REVISION,
+        RenderFieldDistanceGuarantee::conservative(max_error_meters)
+            .expect("bounded field guarantee"),
+    )
+    .expect("field protocol")
+    .with_semantic_input_requirement(RenderFieldSemanticInputRequirement::current())
+}
+
+fn bounded_field_requirement(max_error_meters: f64) -> RenderMethodRepresentationRequirement {
+    RenderMethodRepresentationRequirement::new(
+        RenderRepresentationProtocolRequirement::FieldDistance {
+            revision: RENDER_FIELD_DISTANCE_PROTOCOL_REVISION,
+            input: RenderFieldDistanceInputRequirement::Bounded {
+                max_absolute_error_meters: super::method::RenderDistanceErrorBound::new(
+                    max_error_meters,
+                )
+                .expect("bounded field requirement"),
+            },
+        },
+        None,
+    )
+    .expect("bounded field requirement")
+}
+
+fn sampled_field(
+    max_error_meters: f64,
+    validity: RenderTemporalSupport,
+) -> RenderFieldSemanticInput {
+    RenderFieldSemanticInput::dense(
+        [-1.0; 3],
+        [1.0; 3],
+        [3, 3, 3],
+        vec![0.0; 27],
+        max_error_meters,
+        validity,
+    )
+    .expect("field semantic input")
+}
+
 fn sphere(validity: RenderTemporalSupport) -> RenderSurfaceSemanticInput {
     RenderSurfaceSemanticInput::sphere([0.0; 3], 1.0, validity).expect("surface semantic input")
 }
@@ -243,13 +287,58 @@ fn surface_and_oriented_uses_share_one_canonical_binding() {
     let uses = candidate.outputs()[0].objects()[0].uses();
     assert_eq!(uses.len(), 2);
     let first = inputs
-        .binding_for_selected_use(&plan, object_id, uses[0])
+        .surface_binding_for_selected_use(&plan, object_id, uses[0])
         .expect("first use binding");
     let second = inputs
-        .binding_for_selected_use(&plan, object_id, uses[1])
+        .surface_binding_for_selected_use(&plan, object_id, uses[1])
         .expect("second use binding");
     assert!(std::ptr::eq(first, second));
     assert_eq!(first.representation_id(), representation_id);
+}
+
+#[test]
+fn field_prerequisite_requires_matching_typed_binding() {
+    let (plan, representation_id, _) = plan_for(
+        request_at_times(&[0.0]),
+        None,
+        Some(bound_field_evidence(0.1)),
+        vec![bounded_field_requirement(0.1)],
+    );
+
+    let missing = RenderNormalizedSemanticInputs::normalize(&plan, &[], &[])
+        .expect("missing binding is absence, not malformed input");
+    missing
+        .specialize_candidate(&plan, &plan.candidates()[0])
+        .expect_err("required field binding must fail closed when absent");
+
+    let binding = RenderFieldSemanticInputBinding::new(
+        representation_id,
+        sampled_field(0.1, RenderTemporalSupport::unbounded()),
+    );
+    let supplied = RenderNormalizedSemanticInputs::normalize(&plan, &[], &[binding])
+        .expect("matching typed field binding");
+    supplied
+        .specialize_candidate(&plan, &plan.candidates()[0])
+        .expect("matching field binding should admit the field representation");
+}
+
+#[test]
+fn field_binding_error_must_fit_representation_guarantee() {
+    let (plan, representation_id, _) = plan_for(
+        request_at_times(&[0.0]),
+        None,
+        Some(bound_field_evidence(0.1)),
+        vec![bounded_field_requirement(0.1)],
+    );
+    let binding = RenderFieldSemanticInputBinding::new(
+        representation_id,
+        sampled_field(0.2, RenderTemporalSupport::unbounded()),
+    );
+    let supplied = RenderNormalizedSemanticInputs::normalize(&plan, &[], &[binding])
+        .expect("binding shape is valid");
+    supplied
+        .specialize_candidate(&plan, &plan.candidates()[0])
+        .expect_err("field input error larger than intrinsic guarantee must fail closed");
 }
 
 #[test]
@@ -266,6 +355,7 @@ fn one_binding_must_cover_every_selected_observation_shutter() {
             representation_id,
             sphere(RenderTemporalSupport::interval(interval(0.0, 0.0))),
         )],
+        &[],
     )
     .expect("binding shape");
     let rejection = only_first
@@ -279,6 +369,7 @@ fn one_binding_must_cover_every_selected_observation_shutter() {
             representation_id,
             sphere(RenderTemporalSupport::interval(interval(0.0, 1.0))),
         )],
+        &[],
     )
     .expect("binding shape");
     let candidate = covers_both
