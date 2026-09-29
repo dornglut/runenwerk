@@ -35,11 +35,21 @@ pub enum WorldSdfMetricError {
     PayloadReferenceMismatch,
     InvalidWorldPosition,
     PositionOutsidePayload,
-    InvalidMetricPageCount { actual: usize },
-    InvalidMetricPageCoord { actual: SdfPageCoord3 },
-    InvalidMetricBrickCount { actual: usize },
-    MissingMetricBrick { brick_coord: [u8; 3] },
-    InvalidMetricSampleCount { actual: usize },
+    InvalidMetricPageCount {
+        actual: usize,
+    },
+    InvalidMetricPageCoord {
+        actual: SdfPageCoord3,
+    },
+    InvalidMetricBrickCount {
+        actual: usize,
+    },
+    MissingMetricBrick {
+        brick_coord: [u8; 3],
+    },
+    InvalidMetricSampleCount {
+        actual: usize,
+    },
     InconsistentMetricBoundarySample {
         left_brick: [u8; 3],
         right_brick: [u8; 3],
@@ -303,18 +313,15 @@ fn validate_shared_metric_face(
     for v in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
         for u in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
             let (left_index, right_index) = match axis {
-                MetricBoundaryAxis::X => (
-                    cube_sample_index(last, u, v),
-                    cube_sample_index(0, u, v),
-                ),
-                MetricBoundaryAxis::Y => (
-                    cube_sample_index(u, last, v),
-                    cube_sample_index(u, 0, v),
-                ),
-                MetricBoundaryAxis::Z => (
-                    cube_sample_index(u, v, last),
-                    cube_sample_index(u, v, 0),
-                ),
+                MetricBoundaryAxis::X => {
+                    (cube_sample_index(last, u, v), cube_sample_index(0, u, v))
+                }
+                MetricBoundaryAxis::Y => {
+                    (cube_sample_index(u, last, v), cube_sample_index(u, 0, v))
+                }
+                MetricBoundaryAxis::Z => {
+                    (cube_sample_index(u, v, last), cube_sample_index(u, v, 0))
+                }
             };
             let left_value = i32::from(left.samples.distances[left_index]);
             let right_value = i32::from(right.samples.distances[right_index]);
@@ -701,8 +708,9 @@ mod tests {
             .samples
             .distances[shared_right_index] = left_value.saturating_add(3);
 
-        let error = validate_world_sdf_metric_payload(&metric_ref(&payload), &payload)
-            .expect_err("difference greater than twice the declared error cannot describe one field");
+        let error = validate_world_sdf_metric_payload(&metric_ref(&payload), &payload).expect_err(
+            "difference greater than twice the declared error cannot describe one field",
+        );
         assert!(matches!(
             error,
             WorldSdfMetricError::InconsistentMetricBoundarySample {
