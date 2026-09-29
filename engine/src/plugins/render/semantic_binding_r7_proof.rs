@@ -217,14 +217,8 @@ fn exact_bound_field_requirement() -> RenderMethodRepresentationRequirement {
 }
 
 fn sampled_field(validity: RenderTemporalSupport) -> RenderFieldSemanticInput {
-    RenderFieldSemanticInput::dense(
-        [-1.0; 3],
-        [1.0; 3],
-        [3, 3, 3],
-        vec![0.0; 27],
-        validity,
-    )
-    .expect("field semantic input")
+    RenderFieldSemanticInput::dense([-1.0; 3], [1.0; 3], [3, 3, 3], vec![0.0; 27], validity)
+        .expect("field semantic input")
 }
 
 fn sphere(validity: RenderTemporalSupport) -> RenderSurfaceSemanticInput {
