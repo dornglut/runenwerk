@@ -40,11 +40,11 @@ pub(super) fn maintained_deterministic_method() -> RenderMethodContract {
         RenderMethodRepresentationRequirement::new(
             RenderRepresentationProtocolRequirement::FieldDistance {
                 revision: RENDER_FIELD_DISTANCE_PROTOCOL_REVISION,
-                input: RenderFieldDistanceInputRequirement::AnyBounded,
+                input: RenderFieldDistanceInputRequirement::Exact,
             },
             None,
         )
-        .expect("maintained bounded field-distance requirement is valid")
+        .expect("maintained exact field-distance requirement is valid")
     };
     let outputs = vec![
         RenderMethodOutputContract::new(
@@ -112,7 +112,7 @@ mod tests {
                 matches!(
                     requirement.protocol(),
                     RenderRepresentationProtocolRequirement::FieldDistance {
-                        input: RenderFieldDistanceInputRequirement::AnyBounded,
+                        input: RenderFieldDistanceInputRequirement::Exact,
                         ..
                     }
                 )
