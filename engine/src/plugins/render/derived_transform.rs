@@ -433,9 +433,7 @@ mod tests {
         let spatial = RenderObjectSpatialState::new(
             RenderSpaceSpec::new(0.01, RenderHandedness::Right).expect("proof local space"),
             RenderAffineTransform3::from_row_major_3x4([
-                0.0, -2.0, 0.0, 3.0,
-                2.0, 0.0, 0.0, 4.0,
-                0.0, 0.0, -2.0, 5.0,
+                0.0, -2.0, 0.0, 3.0, 2.0, 0.0, 0.0, 4.0, 0.0, 0.0, -2.0, 5.0,
             ])
             .expect("exact rotation/reflection/uniform-scale transform"),
             RenderSpatialCoverage::unbounded(),
@@ -453,16 +451,8 @@ mod tests {
     #[test]
     fn metric_field_similarity_rejects_non_uniform_scale_and_shear() {
         for values in [
-            [
-                1.0, 0.0, 0.0, 0.0,
-                0.0, 2.0, 0.0, 0.0,
-                0.0, 0.0, 1.0, 0.0,
-            ],
-            [
-                1.0, 0.5, 0.0, 0.0,
-                0.0, 1.0, 0.0, 0.0,
-                0.0, 0.0, 1.0, 0.0,
-            ],
+            [1.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+            [1.0, 0.5, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
         ] {
             let spatial = RenderObjectSpatialState::new(
                 RenderSpaceSpec::new(1.0, RenderHandedness::Right).expect("proof local space"),
