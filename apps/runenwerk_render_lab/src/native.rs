@@ -10,10 +10,9 @@ mod temporal_quality;
 
 use crate::comparison::{
     RenderLabComparisonEvidenceConfig, RenderLabComparisonState,
-    build_render_lab_comparison_publication,
-    install_render_lab_comparison_bindings, render_lab_comparison_flow,
-    stage_render_lab_comparison_publication, update_render_lab_comparison_system,
-    validate_comparison_extents,
+    build_render_lab_comparison_publication, install_render_lab_comparison_bindings,
+    render_lab_comparison_flow, stage_render_lab_comparison_publication,
+    update_render_lab_comparison_system, validate_comparison_extents,
 };
 
 use temporal_quality::{
@@ -877,8 +876,7 @@ fn publish_render_lab_frame_system(
             debug_control.readback_enabled = capture_armed;
             debug_control.artifact_export_enabled = capture_armed;
             if capture_armed {
-                debug_config.capture_selectors =
-                    comparison_evidence.capture_selectors().to_vec();
+                debug_config.capture_selectors = comparison_evidence.capture_selectors().to_vec();
                 debug_config.pixel_probes.clear();
                 debug_config.texture_diffs = comparison_evidence
                     .texture_diff()
