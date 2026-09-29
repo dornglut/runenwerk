@@ -471,4 +471,23 @@ mod tests {
     fn metric_capability_identity_tracks_decoding_contract() {
         assert_ne!(metric_ref(10, 1024), metric_ref(10, 2048));
     }
+
+    #[test]
+    fn metric_capability_identity_tracks_declared_error_contract() {
+        let payload = payload_ref(10);
+        let first = WorldSdfMetricPayloadRef::try_new(
+            payload,
+            WorldSdfMetricEncoding::try_new(1024, 1)
+                .expect("positive metric encoding should be valid"),
+        )
+        .expect("supported metric capability should be valid");
+        let second = WorldSdfMetricPayloadRef::try_new(
+            payload,
+            WorldSdfMetricEncoding::try_new(1024, 2)
+                .expect("positive metric encoding should be valid"),
+        )
+        .expect("supported metric capability should be valid");
+
+        assert_ne!(first, second);
+    }
 }
