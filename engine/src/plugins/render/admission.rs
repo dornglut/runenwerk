@@ -1349,7 +1349,7 @@ mod tests {
                 true,
                 false,
             );
-        let missing = RenderNormalizedSemanticInputs::normalize(&plan, &[])
+        let missing = RenderNormalizedSemanticInputs::normalize(&plan, &[], &[])
             .expect("missing semantic input is absence, not malformed caller input");
         let semantic_candidate = missing
             .specialize_candidate(&plan, &plan.candidates()[0])
@@ -1393,6 +1393,7 @@ mod tests {
         let supplied = RenderNormalizedSemanticInputs::normalize(
             &plan,
             &[RenderSurfaceSemanticInputBinding::new(required_id, input)],
+            &[],
         )
         .expect("semantic input");
         let semantic_candidate = supplied
@@ -1429,6 +1430,7 @@ mod tests {
                 representation_id,
                 expected.clone(),
             )],
+            &[],
         )
         .expect("semantic input");
         let semantic_candidate = semantic_inputs
