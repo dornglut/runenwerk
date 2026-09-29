@@ -3,6 +3,7 @@ use crate::{
     SdfBrickRecord, SdfChunkPayload, SdfPageCoord3, WorldSdfMetricPayloadRef,
 };
 use runen_spatial::{GridPartitionConfig, WorldPosition};
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
 
@@ -50,7 +51,7 @@ pub enum WorldSdfMetricError {
     InvalidMetricSampleCount {
         actual: usize,
     },
-    InconsistentMetricBoundarySample {
+    InconsistentMetricSharedSample {
         left_brick: [u8; 3],
         right_brick: [u8; 3],
         difference_units: u32,
@@ -101,14 +102,14 @@ impl fmt::Display for WorldSdfMetricError {
                 f,
                 "metric SDF brick must contain exactly {SDF_METRIC_BRICK_SAMPLE_COUNT} canonical samples, found {actual}"
             ),
-            Self::InconsistentMetricBoundarySample {
+            Self::InconsistentMetricSharedSample {
                 left_brick,
                 right_brick,
                 difference_units,
                 maximum_difference_units,
             } => write!(
                 f,
-                "metric SDF neighboring bricks {left_brick:?} and {right_brick:?} disagree at one shared sample by {difference_units} units, exceeding the declared two-sided error allowance of {maximum_difference_units} units"
+                "metric SDF bricks {left_brick:?} and {right_brick:?} disagree at one duplicated world-space sample by {difference_units} units, exceeding the declared two-sided error allowance of {maximum_difference_units} units"
             ),
         }
     }
@@ -157,7 +158,7 @@ pub fn validate_world_sdf_metric_payload(
         }
     }
 
-    validate_metric_brick_boundaries(page, metric_payload_ref.encoding)?;
+    validate_metric_shared_samples(page, metric_payload_ref.encoding)?;
 
     Ok(())
 }
@@ -227,115 +228,70 @@ fn validate_metric_brick(brick: &SdfBrickRecord) -> Result<(), WorldSdfMetricErr
     Ok(())
 }
 
-fn validate_metric_brick_boundaries(
+fn validate_metric_shared_samples(
     page: &crate::SdfPageRecord,
     encoding: crate::WorldSdfMetricEncoding,
 ) -> Result<(), WorldSdfMetricError> {
     let maximum_difference_units = u64::from(encoding.max_absolute_error_units).saturating_mul(2);
+    let mut ranges =
+        BTreeMap::<[u8; 3], ([u8; 3], i16, [u8; 3], i16)>::new();
 
-    for z in 0..SDF_PAGE_EDGE_BRICKS as u8 {
-        for y in 0..SDF_PAGE_EDGE_BRICKS as u8 {
-            for x in 0..SDF_PAGE_EDGE_BRICKS as u8 {
-                let left_coord = [x, y, z];
-                let left = page
+    for brick_z in 0..SDF_PAGE_EDGE_BRICKS as u8 {
+        for brick_y in 0..SDF_PAGE_EDGE_BRICKS as u8 {
+            for brick_x in 0..SDF_PAGE_EDGE_BRICKS as u8 {
+                let brick_coord = [brick_x, brick_y, brick_z];
+                let brick = page
                     .bricks
-                    .get(&left_coord)
+                    .get(&brick_coord)
                     .expect("complete metric brick coverage was validated");
 
-                if x + 1 < SDF_PAGE_EDGE_BRICKS as u8 {
-                    let right_coord = [x + 1, y, z];
-                    let right = page
-                        .bricks
-                        .get(&right_coord)
-                        .expect("complete metric brick coverage was validated");
-                    validate_shared_metric_face(
-                        left_coord,
-                        right_coord,
-                        left,
-                        right,
-                        MetricBoundaryAxis::X,
-                        maximum_difference_units,
-                    )?;
-                }
-                if y + 1 < SDF_PAGE_EDGE_BRICKS as u8 {
-                    let right_coord = [x, y + 1, z];
-                    let right = page
-                        .bricks
-                        .get(&right_coord)
-                        .expect("complete metric brick coverage was validated");
-                    validate_shared_metric_face(
-                        left_coord,
-                        right_coord,
-                        left,
-                        right,
-                        MetricBoundaryAxis::Y,
-                        maximum_difference_units,
-                    )?;
-                }
-                if z + 1 < SDF_PAGE_EDGE_BRICKS as u8 {
-                    let right_coord = [x, y, z + 1];
-                    let right = page
-                        .bricks
-                        .get(&right_coord)
-                        .expect("complete metric brick coverage was validated");
-                    validate_shared_metric_face(
-                        left_coord,
-                        right_coord,
-                        left,
-                        right,
-                        MetricBoundaryAxis::Z,
-                        maximum_difference_units,
-                    )?;
+                for sample_z in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
+                    for sample_y in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
+                        for sample_x in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
+                            let global_sample = [
+                                brick_x
+                                    .saturating_mul((SDF_METRIC_BRICK_EDGE_SAMPLES - 1) as u8)
+                                    .saturating_add(sample_x as u8),
+                                brick_y
+                                    .saturating_mul((SDF_METRIC_BRICK_EDGE_SAMPLES - 1) as u8)
+                                    .saturating_add(sample_y as u8),
+                                brick_z
+                                    .saturating_mul((SDF_METRIC_BRICK_EDGE_SAMPLES - 1) as u8)
+                                    .saturating_add(sample_z as u8),
+                            ];
+                            let value = brick.samples.distances
+                                [cube_sample_index(sample_x, sample_y, sample_z)];
+                            let range = ranges.entry(global_sample).or_insert((
+                                brick_coord,
+                                value,
+                                brick_coord,
+                                value,
+                            ));
+                            if value < range.1 {
+                                range.0 = brick_coord;
+                                range.1 = value;
+                            }
+                            if value > range.3 {
+                                range.2 = brick_coord;
+                                range.3 = value;
+                            }
+                            let difference_units =
+                                i32::from(range.1).abs_diff(i32::from(range.3));
+                            if u64::from(difference_units) > maximum_difference_units {
+                                return Err(WorldSdfMetricError::InconsistentMetricSharedSample {
+                                    left_brick: range.0,
+                                    right_brick: range.2,
+                                    difference_units,
+                                    maximum_difference_units,
+                                });
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 
-    Ok(())
-}
-
-#[derive(Debug, Clone, Copy)]
-enum MetricBoundaryAxis {
-    X,
-    Y,
-    Z,
-}
-
-fn validate_shared_metric_face(
-    left_coord: [u8; 3],
-    right_coord: [u8; 3],
-    left: &SdfBrickRecord,
-    right: &SdfBrickRecord,
-    axis: MetricBoundaryAxis,
-    maximum_difference_units: u64,
-) -> Result<(), WorldSdfMetricError> {
-    let last = SDF_METRIC_BRICK_EDGE_SAMPLES - 1;
-    for v in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
-        for u in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
-            let (left_index, right_index) = match axis {
-                MetricBoundaryAxis::X => {
-                    (cube_sample_index(last, u, v), cube_sample_index(0, u, v))
-                }
-                MetricBoundaryAxis::Y => {
-                    (cube_sample_index(u, last, v), cube_sample_index(u, 0, v))
-                }
-                MetricBoundaryAxis::Z => {
-                    (cube_sample_index(u, v, last), cube_sample_index(u, v, 0))
-                }
-            };
-            let left_value = i32::from(left.samples.distances[left_index]);
-            let right_value = i32::from(right.samples.distances[right_index]);
-            let difference_units = left_value.abs_diff(right_value);
-            if u64::from(difference_units) > maximum_difference_units {
-                return Err(WorldSdfMetricError::InconsistentMetricBoundarySample {
-                    left_brick: left_coord,
-                    right_brick: right_coord,
-                    difference_units,
-                    maximum_difference_units,
-                });
-            }
-        }
-    }
     Ok(())
 }
 
@@ -770,7 +726,7 @@ mod tests {
                 );
             assert!(matches!(
                 error,
-                WorldSdfMetricError::InconsistentMetricBoundarySample {
+                WorldSdfMetricError::InconsistentMetricSharedSample {
                     left_brick,
                     right_brick,
                     difference_units: 3,
@@ -778,6 +734,52 @@ mod tests {
                 } if left_brick == left_coord && right_brick == right_coord
             ));
         }
+    }
+
+    #[test]
+    fn duplicated_edge_sample_rejects_diagonal_spread_beyond_two_sided_error() {
+        let mut payload = affine_field_payload();
+        let page = payload
+            .page_table
+            .get_mut(&SdfPageCoord3::default())
+            .expect("page exists");
+        let last = SDF_METRIC_BRICK_EDGE_SAMPLES - 1;
+        let z = 1;
+        let base = page
+            .bricks
+            .get(&[0, 0, 0])
+            .expect("base brick exists")
+            .samples
+            .distances[cube_sample_index(last, last, z)];
+
+        page.bricks
+            .get_mut(&[1, 0, 0])
+            .expect("x neighbor exists")
+            .samples
+            .distances[cube_sample_index(0, last, z)] = base.saturating_add(2);
+        page.bricks
+            .get_mut(&[0, 1, 0])
+            .expect("y neighbor exists")
+            .samples
+            .distances[cube_sample_index(last, 0, z)] = base.saturating_add(2);
+        page.bricks
+            .get_mut(&[1, 1, 0])
+            .expect("diagonal neighbor exists")
+            .samples
+            .distances[cube_sample_index(0, 0, z)] = base.saturating_add(4);
+
+        let error = validate_world_sdf_metric_payload(&metric_ref(&payload), &payload)
+            .expect_err(
+                "all estimates at one duplicated world-space sample must fit one two-sided error interval",
+            );
+        assert!(matches!(
+            error,
+            WorldSdfMetricError::InconsistentMetricSharedSample {
+                difference_units: 4,
+                maximum_difference_units: 2,
+                ..
+            }
+        ));
     }
 
     #[test]
