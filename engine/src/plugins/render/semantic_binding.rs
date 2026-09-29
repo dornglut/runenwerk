@@ -377,7 +377,8 @@ impl RenderNormalizedSemanticInputs {
             return false;
         };
         let Some(distance_scale) =
-            classify_field_distance_transform(state.spatial().local_to_scene()).exact_distance_scale()
+            classify_field_distance_transform(state.spatial().local_to_scene())
+                .exact_distance_scale()
         else {
             return false;
         };
@@ -386,9 +387,9 @@ impl RenderNormalizedSemanticInputs {
         if !scene_error_meters.is_finite() {
             return false;
         }
-        let Ok(evidence) = record.field_distance_protocol(
-            representation.requirement().protocol().revision(),
-        ) else {
+        let Ok(evidence) =
+            record.field_distance_protocol(representation.requirement().protocol().revision())
+        else {
             return false;
         };
         let Ok(sample) = RenderFieldDistanceSample::new(0.0, scene_error_meters) else {
