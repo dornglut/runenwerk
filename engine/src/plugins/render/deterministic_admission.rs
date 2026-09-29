@@ -711,6 +711,7 @@ mod tests {
             [1.0; 3],
             [3, 3, 3],
             vec![0.0; 27],
+            0.0,
             RenderTemporalSupport::unbounded(),
         )
         .expect("finite exact sampled field");
