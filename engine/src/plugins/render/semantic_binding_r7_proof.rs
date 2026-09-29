@@ -200,42 +200,28 @@ fn exact_field_evidence() -> RenderFieldDistanceProtocolEvidence {
     .expect("field protocol")
 }
 
-fn bound_field_evidence(max_error_meters: f64) -> RenderFieldDistanceProtocolEvidence {
-    RenderFieldDistanceProtocolEvidence::new(
-        RENDER_FIELD_DISTANCE_PROTOCOL_REVISION,
-        RenderFieldDistanceGuarantee::conservative(max_error_meters)
-            .expect("bounded field guarantee"),
-    )
-    .expect("field protocol")
-    .with_semantic_input_requirement(RenderFieldSemanticInputRequirement::current())
+fn exact_bound_field_evidence() -> RenderFieldDistanceProtocolEvidence {
+    exact_field_evidence()
+        .with_semantic_input_requirement(RenderFieldSemanticInputRequirement::current())
 }
 
-fn bounded_field_requirement(max_error_meters: f64) -> RenderMethodRepresentationRequirement {
+fn exact_bound_field_requirement() -> RenderMethodRepresentationRequirement {
     RenderMethodRepresentationRequirement::new(
         RenderRepresentationProtocolRequirement::FieldDistance {
             revision: RENDER_FIELD_DISTANCE_PROTOCOL_REVISION,
-            input: RenderFieldDistanceInputRequirement::Bounded {
-                max_absolute_error_meters: super::method::RenderDistanceErrorBound::new(
-                    max_error_meters,
-                )
-                .expect("bounded field requirement"),
-            },
+            input: RenderFieldDistanceInputRequirement::Exact,
         },
         None,
     )
-    .expect("bounded field requirement")
+    .expect("exact field requirement")
 }
 
-fn sampled_field(
-    max_error_meters: f64,
-    validity: RenderTemporalSupport,
-) -> RenderFieldSemanticInput {
+fn sampled_field(validity: RenderTemporalSupport) -> RenderFieldSemanticInput {
     RenderFieldSemanticInput::dense(
         [-1.0; 3],
         [1.0; 3],
         [3, 3, 3],
         vec![0.0; 27],
-        max_error_meters,
         validity,
     )
     .expect("field semantic input")
@@ -301,8 +287,8 @@ fn field_prerequisite_requires_matching_typed_binding() {
     let (plan, representation_id, _) = plan_for(
         request_at_times(&[0.0]),
         None,
-        Some(bound_field_evidence(0.1)),
-        vec![bounded_field_requirement(0.1)],
+        Some(exact_bound_field_evidence()),
+        vec![exact_bound_field_requirement()],
     );
 
     let missing = RenderNormalizedSemanticInputs::normalize(&plan, &[], &[])
@@ -313,7 +299,7 @@ fn field_prerequisite_requires_matching_typed_binding() {
 
     let binding = RenderFieldSemanticInputBinding::new(
         representation_id,
-        sampled_field(0.1, RenderTemporalSupport::unbounded()),
+        sampled_field(RenderTemporalSupport::unbounded()),
     );
     let supplied = RenderNormalizedSemanticInputs::normalize(&plan, &[], &[binding])
         .expect("matching typed field binding");
@@ -323,22 +309,26 @@ fn field_prerequisite_requires_matching_typed_binding() {
 }
 
 #[test]
-fn field_binding_error_must_fit_representation_guarantee() {
-    let (plan, representation_id, _) = plan_for(
+fn field_binding_for_foreign_representation_fails_closed() {
+    let (plan, _, _) = plan_for(
         request_at_times(&[0.0]),
         None,
-        Some(bound_field_evidence(0.1)),
-        vec![bounded_field_requirement(0.1)],
+        Some(exact_bound_field_evidence()),
+        vec![exact_bound_field_requirement()],
     );
+    let foreign = RenderRepresentationId::from_raw(999).expect("foreign representation id");
     let binding = RenderFieldSemanticInputBinding::new(
-        representation_id,
-        sampled_field(0.2, RenderTemporalSupport::unbounded()),
+        foreign,
+        sampled_field(RenderTemporalSupport::unbounded()),
     );
-    let supplied = RenderNormalizedSemanticInputs::normalize(&plan, &[], &[binding])
-        .expect("binding shape is valid");
-    supplied
-        .specialize_candidate(&plan, &plan.candidates()[0])
-        .expect_err("field input error larger than intrinsic guarantee must fail closed");
+    let error = RenderNormalizedSemanticInputs::normalize(&plan, &[], &[binding])
+        .expect_err("foreign field binding must fail closed");
+    assert_eq!(
+        error,
+        RenderSemanticBindingInputError::ForeignFieldBinding {
+            representation_id: foreign,
+        }
+    );
 }
 
 #[test]
