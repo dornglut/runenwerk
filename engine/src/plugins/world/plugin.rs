@@ -1,5 +1,6 @@
 use crate::app::App;
 use crate::plugin::Plugin;
+use crate::plugins::render::runtime::RenderRuntimeSet;
 use crate::runtime::{
     CoreSet, FixedUpdate, RenderPrepare, Res, ResMut, SystemConfigExt, SystemMobilityExt,
 };
@@ -15,7 +16,10 @@ use super::chunks::render_cache_bridge::{
     WorldRenderCacheInvalidationQueueResource, flush_world_render_cache_invalidations_system,
 };
 use super::debug::metrics::WorldDebugMetricsResource;
-use super::prepare::contributions::prepare_world_feature_contributions_system;
+use super::prepare::{
+    WorldSdfRenderBridgeStateResource, prepare_world_feature_contributions_system,
+    prepare_world_sdf_render_bridge_system,
+};
 use super::streaming::replication::{
     WorldReplicationExtractionCursor, rebuild_world_replication_state_system,
 };
@@ -73,6 +77,7 @@ pub enum WorldRuntimeSet {
     BuildIntegrate,
     RenderCacheSync,
     ReplicationState,
+    RenderSdfBridge,
 }
 
 pub fn world_runtime_mode_for_authority(authority: AuthorityRole) -> WorldRuntimeMode {
@@ -108,6 +113,8 @@ impl Plugin for WorldPlugin {
         app.init_resource::<BuildQueueResource>();
         app.init_resource::<super::build::jobs::WorldBuildJobRuntimeResource>();
         app.init_resource::<super::build::integration::WorldCompletedBuildQueueResource>();
+        app.init_resource::<super::build::integration::WorldRuntimeSdfProductCatalogResource>();
+        app.init_resource::<WorldSdfRenderBridgeStateResource>();
         app.init_resource::<CollisionQueryServiceResource>();
         app.init_resource::<WorldNavSummaryResource>();
         app.init_resource::<ReplicationStateResource>();
@@ -186,6 +193,14 @@ impl Plugin for WorldPlugin {
                 .in_set(WorldRuntimeSet::ReplicationState)
                 .in_set(CoreSet::Simulation)
                 .after(WorldRuntimeSet::RenderCacheSync),
+        );
+        app.add_systems(
+            RenderPrepare,
+            prepare_world_sdf_render_bridge_system
+                .on_invoker_thread()
+                .in_set(WorldRuntimeSet::RenderSdfBridge)
+                .in_set(RenderRuntimeSet::GpuResidency)
+                .before_if_present(RenderRuntimeSet::FramePrepare),
         );
         app.add_systems(
             RenderPrepare,
