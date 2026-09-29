@@ -541,6 +541,29 @@ mod tests {
     }
 
     #[test]
+    fn exact_payload_reference_chunk_and_revision_mismatch_fail_closed() {
+        let payload = affine_field_payload();
+
+        let mut wrong_chunk = metric_ref(&payload);
+        wrong_chunk.payload_ref.chunk_id =
+            ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 1, y: 0, z: 0 });
+        assert_eq!(
+            validate_world_sdf_metric_payload(&wrong_chunk, &payload)
+                .expect_err("mismatched chunk identity must fail"),
+            WorldSdfMetricError::PayloadReferenceMismatch
+        );
+
+        let mut wrong_revision = metric_ref(&payload);
+        wrong_revision.payload_ref.chunk_revision =
+            ChunkRevision(payload.chunk_revision.0.saturating_add(1));
+        assert_eq!(
+            validate_world_sdf_metric_payload(&wrong_revision, &payload)
+                .expect_err("mismatched chunk revision must fail"),
+            WorldSdfMetricError::PayloadReferenceMismatch
+        );
+    }
+
+    #[test]
     fn unsupported_metric_layout_revision_fails_closed() {
         let payload = affine_field_payload();
         let mut payload_ref = metric_ref(&payload);
