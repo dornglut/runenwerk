@@ -3,7 +3,13 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use world_ops::{ChunkGeneration, ChunkRevision, OperationId};
 
-pub const SDF_BRICK_EDGE_SAMPLES: usize = 8;
+/// Canonical dense sample count along one SDF brick edge.
+///
+/// The current runtime/collision representation samples the eight brick corners: two samples on
+/// each axis, shared by neighboring bricks.
+pub const SDF_BRICK_EDGE_SAMPLES: usize = 2;
+pub const SDF_BRICK_SAMPLE_COUNT: usize =
+    SDF_BRICK_EDGE_SAMPLES * SDF_BRICK_EDGE_SAMPLES * SDF_BRICK_EDGE_SAMPLES;
 pub const SDF_PAGE_EDGE_BRICKS: usize = 4;
 
 #[derive(

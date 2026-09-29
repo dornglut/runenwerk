@@ -86,11 +86,58 @@ impl FieldProductLineage {
     }
 }
 
+pub const WORLD_SDF_METRIC_SAMPLE_LAYOUT_REVISION: u16 = 1;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorldSdfMetricEncoding {
+    pub sample_layout_revision: u16,
+    pub distance_units_per_meter: u32,
+    pub max_absolute_error_units: u32,
+}
+
+impl WorldSdfMetricEncoding {
+    pub const fn try_new(
+        distance_units_per_meter: u32,
+        max_absolute_error_units: u32,
+    ) -> Option<Self> {
+        if distance_units_per_meter == 0 {
+            return None;
+        }
+        Some(Self {
+            sample_layout_revision: WORLD_SDF_METRIC_SAMPLE_LAYOUT_REVISION,
+            distance_units_per_meter,
+            max_absolute_error_units,
+        })
+    }
+
+    pub const fn is_supported(self) -> bool {
+        self.sample_layout_revision == WORLD_SDF_METRIC_SAMPLE_LAYOUT_REVISION
+            && self.distance_units_per_meter > 0
+    }
+
+    pub fn decode_distance_meters(self, encoded_distance: f64) -> f64 {
+        encoded_distance / f64::from(self.distance_units_per_meter)
+    }
+
+    pub fn max_absolute_error_meters(self) -> f64 {
+        f64::from(self.max_absolute_error_units) / f64::from(self.distance_units_per_meter)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorldSdfPayloadRef {
     pub chunk_id: ChunkId,
     pub chunk_revision: world_ops::ChunkRevision,
     pub checksum: u64,
+    #[serde(default)]
+    pub metric_encoding: Option<WorldSdfMetricEncoding>,
+}
+
+impl WorldSdfPayloadRef {
+    pub fn with_metric_encoding(mut self, metric_encoding: WorldSdfMetricEncoding) -> Self {
+        self.metric_encoding = Some(metric_encoding);
+        self
+    }
 }
 
 impl From<&SdfChunkPayload> for WorldSdfPayloadRef {
@@ -99,6 +146,7 @@ impl From<&SdfChunkPayload> for WorldSdfPayloadRef {
             chunk_id: payload.chunk_id,
             chunk_revision: payload.chunk_revision,
             checksum: payload.checksum,
+            metric_encoding: None,
         }
     }
 }

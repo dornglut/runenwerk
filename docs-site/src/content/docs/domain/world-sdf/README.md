@@ -23,11 +23,16 @@ summaries for chunked world data.
 ## Public Surface
 
 - `SdfChunkStore`, `SdfChunkPayload`, `SdfPageRecord`, `SdfBrickRecord`.
-- `SDF_PAGE_EDGE_BRICKS`, `SDF_BRICK_EDGE_SAMPLES`, and brick/page metadata.
+- `SDF_PAGE_EDGE_BRICKS`, `SDF_BRICK_EDGE_SAMPLES`, `SDF_BRICK_SAMPLE_COUNT`, and brick/page metadata.
+  The current dense brick topology is two corner samples per axis (eight samples total), shared at
+  neighboring brick boundaries.
 - `CaveSectorStore`, `CavePortalGraph`, cave light/volume scope summaries.
 - `ChunkHierarchyNode` and `ChunkHierarchySummary`.
 - `CollisionQueryService`, `SphereSweep`, `CollisionHit`, and readiness/result
   types.
+- `WorldSdfMetricEncoding`, metric-capable exact `WorldSdfPayloadRef` values, and
+  `sample_world_sdf_metric_distance` for opt-in bounded signed-distance estimates in meters.
+  Occupancy/sign payloads remain valid without metric capability and fail closed for metric queries.
 - `FieldPreviewGrid`, `FieldPreviewPayload`, `FieldPreviewProduct`, and
   `ratify_field_preview_product` for CPU-formed scalar distance, vector
   gradient, occupancy, and material-channel preview products.

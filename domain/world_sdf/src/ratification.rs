@@ -12,6 +12,8 @@ pub enum FieldProductIssueCode {
     EmptyProducer,
     RejectedFreshness,
     MissingPayloadRefs,
+    MetricCapabilityKindMismatch,
+    InvalidMetricEncoding,
     PreviewKindMismatch,
     PreviewInvalidGridDimensions,
     PreviewSampleCountMismatch,
@@ -83,6 +85,25 @@ impl Ratifier<FieldProductCandidate> for FieldProductRatifier {
                 subject.clone(),
                 "world_sdf field products must reference payloads",
             ));
+        }
+        for payload_ref in &descriptor.payload_refs {
+            let Some(metric_encoding) = payload_ref.metric_encoding else {
+                continue;
+            };
+            if descriptor.kind != crate::FieldProductKind::WorldSdfChunkPages {
+                report.push(RatificationIssue::error(
+                    FieldProductIssueCode::MetricCapabilityKindMismatch,
+                    subject.clone(),
+                    "metric SDF payload capability is supported only by WorldSdfChunkPages products",
+                ));
+            }
+            if !metric_encoding.is_supported() {
+                report.push(RatificationIssue::error(
+                    FieldProductIssueCode::InvalidMetricEncoding,
+                    subject.clone(),
+                    "metric SDF payload encoding must use the supported layout revision and a positive distance scale",
+                ));
+            }
         }
         let product_report = ratify_product_descriptor(&descriptor.product_core());
         for issue in product_report.iter() {
@@ -169,6 +190,67 @@ mod tests {
         assert_eq!(core.scale_band, ProductScaleBand::Preview);
         assert_eq!(core.query_policy, ProductQueryPolicy::VisualFallbackAllowed);
         assert_eq!(core.consumer_class, ProductConsumerClass::Editor);
+    }
+
+    #[test]
+    fn field_product_ratifier_rejects_invalid_metric_encoding() {
+        let chunk = ChunkId::new(WorldId::new(1), ChunkCoord3 { x: 0, y: 0, z: 0 });
+        let payload = SdfChunkPayload {
+            chunk_id: chunk,
+            chunk_revision: world_ops::ChunkRevision(1),
+            chunk_generation: world_ops::ChunkGeneration(1),
+            page_table: Default::default(),
+            hierarchy_revision: 0,
+            checksum: 7,
+        };
+        let mut descriptor = FieldProductDescriptor::new(
+            FieldProductId(8),
+            FieldProductKind::WorldSdfChunkPages,
+            FieldProductScope::from_chunks([chunk]),
+            FieldProductLineage::new(1, "world_sdf.metric"),
+        );
+        let mut payload_ref = WorldSdfPayloadRef::from(&payload);
+        payload_ref.metric_encoding = Some(crate::WorldSdfMetricEncoding {
+            sample_layout_revision: crate::WORLD_SDF_METRIC_SAMPLE_LAYOUT_REVISION,
+            distance_units_per_meter: 0,
+            max_absolute_error_units: 0,
+        });
+        descriptor.payload_refs.push(payload_ref);
+
+        assert!(
+            ratify_field_product_candidate(&FieldProductCandidate::new(descriptor))
+                .has_blocking_issues()
+        );
+    }
+
+    #[test]
+    fn field_product_ratifier_rejects_metric_capability_on_debug_product() {
+        let chunk = ChunkId::new(WorldId::new(1), ChunkCoord3 { x: 0, y: 0, z: 0 });
+        let payload = SdfChunkPayload {
+            chunk_id: chunk,
+            chunk_revision: world_ops::ChunkRevision(1),
+            chunk_generation: world_ops::ChunkGeneration(1),
+            page_table: Default::default(),
+            hierarchy_revision: 0,
+            checksum: 8,
+        };
+        let mut descriptor = FieldProductDescriptor::new(
+            FieldProductId(10),
+            FieldProductKind::BrickmapDebug,
+            FieldProductScope::from_chunks([chunk]),
+            FieldProductLineage::new(1, "world_sdf.debug"),
+        );
+        descriptor.payload_refs.push(
+            WorldSdfPayloadRef::from(&payload).with_metric_encoding(
+                crate::WorldSdfMetricEncoding::try_new(1024, 1)
+                    .expect("positive metric scale should be valid"),
+            ),
+        );
+
+        assert!(
+            ratify_field_product_candidate(&FieldProductCandidate::new(descriptor))
+                .has_blocking_issues()
+        );
     }
 
     #[test]
