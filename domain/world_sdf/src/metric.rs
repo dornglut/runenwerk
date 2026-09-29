@@ -572,6 +572,19 @@ mod tests {
     }
 
     #[test]
+    fn metric_layout_revision_one_rejects_zero_pages() {
+        let mut payload = affine_field_payload();
+        payload.page_table.clear();
+
+        let error = validate_world_sdf_metric_payload(&metric_ref(&payload), &payload)
+            .expect_err("revision one requires one complete canonical page");
+        assert_eq!(
+            error,
+            WorldSdfMetricError::InvalidMetricPageCount { actual: 0 }
+        );
+    }
+
+    #[test]
     fn metric_layout_revision_one_requires_canonical_origin_page() {
         let mut payload = affine_field_payload();
         let page = payload
@@ -662,64 +675,86 @@ mod tests {
         }
     }
 
-    #[test]
-    fn shared_metric_boundary_may_differ_within_two_sided_error_allowance() {
+    fn payload_with_shared_metric_boundary_delta(
+        axis: MetricBoundaryAxis,
+        difference_units: i16,
+    ) -> (SdfChunkPayload, [u8; 3], [u8; 3]) {
         let mut payload = affine_field_payload();
         let page = payload
             .page_table
             .get_mut(&SdfPageCoord3::default())
             .expect("page exists");
-        let shared_left_index = cube_sample_index(SDF_METRIC_BRICK_EDGE_SAMPLES - 1, 1, 1);
-        let shared_right_index = cube_sample_index(0, 1, 1);
+        let last = SDF_METRIC_BRICK_EDGE_SAMPLES - 1;
+        let (left_coord, right_coord, left_index, right_index) = match axis {
+            MetricBoundaryAxis::X => (
+                [0, 0, 0],
+                [1, 0, 0],
+                cube_sample_index(last, 1, 1),
+                cube_sample_index(0, 1, 1),
+            ),
+            MetricBoundaryAxis::Y => (
+                [0, 0, 0],
+                [0, 1, 0],
+                cube_sample_index(1, last, 1),
+                cube_sample_index(1, 0, 1),
+            ),
+            MetricBoundaryAxis::Z => (
+                [0, 0, 0],
+                [0, 0, 1],
+                cube_sample_index(1, 1, last),
+                cube_sample_index(1, 1, 0),
+            ),
+        };
         let left_value = page
             .bricks
-            .get(&[0, 0, 0])
+            .get(&left_coord)
             .expect("left brick exists")
             .samples
-            .distances[shared_left_index];
+            .distances[left_index];
         page.bricks
-            .get_mut(&[1, 0, 0])
+            .get_mut(&right_coord)
             .expect("right brick exists")
             .samples
-            .distances[shared_right_index] = left_value.saturating_add(2);
-
-        validate_world_sdf_metric_payload(&metric_ref(&payload), &payload)
-            .expect("difference equal to twice the declared one-unit error remains possible");
+            .distances[right_index] = left_value.saturating_add(difference_units);
+        (payload, left_coord, right_coord)
     }
 
     #[test]
-    fn shared_metric_boundary_rejects_impossible_two_sided_error_claim() {
-        let mut payload = affine_field_payload();
-        let page = payload
-            .page_table
-            .get_mut(&SdfPageCoord3::default())
-            .expect("page exists");
-        let shared_left_index = cube_sample_index(SDF_METRIC_BRICK_EDGE_SAMPLES - 1, 1, 1);
-        let shared_right_index = cube_sample_index(0, 1, 1);
-        let left_value = page
-            .bricks
-            .get(&[0, 0, 0])
-            .expect("left brick exists")
-            .samples
-            .distances[shared_left_index];
-        page.bricks
-            .get_mut(&[1, 0, 0])
-            .expect("right brick exists")
-            .samples
-            .distances[shared_right_index] = left_value.saturating_add(3);
+    fn shared_metric_boundaries_on_all_axes_accept_two_sided_error_allowance() {
+        for axis in [
+            MetricBoundaryAxis::X,
+            MetricBoundaryAxis::Y,
+            MetricBoundaryAxis::Z,
+        ] {
+            let (payload, _, _) = payload_with_shared_metric_boundary_delta(axis, 2);
+            validate_world_sdf_metric_payload(&metric_ref(&payload), &payload)
+                .expect("difference equal to twice the declared one-unit error remains possible");
+        }
+    }
 
-        let error = validate_world_sdf_metric_payload(&metric_ref(&payload), &payload).expect_err(
-            "difference greater than twice the declared error cannot describe one field",
-        );
-        assert!(matches!(
-            error,
-            WorldSdfMetricError::InconsistentMetricBoundarySample {
-                left_brick: [0, 0, 0],
-                right_brick: [1, 0, 0],
-                difference_units: 3,
-                maximum_difference_units: 2,
-            }
-        ));
+    #[test]
+    fn shared_metric_boundaries_on_all_axes_reject_impossible_error_claim() {
+        for axis in [
+            MetricBoundaryAxis::X,
+            MetricBoundaryAxis::Y,
+            MetricBoundaryAxis::Z,
+        ] {
+            let (payload, left_coord, right_coord) =
+                payload_with_shared_metric_boundary_delta(axis, 3);
+            let error = validate_world_sdf_metric_payload(&metric_ref(&payload), &payload)
+                .expect_err(
+                    "difference greater than twice the declared error cannot describe one field",
+                );
+            assert!(matches!(
+                error,
+                WorldSdfMetricError::InconsistentMetricBoundarySample {
+                    left_brick,
+                    right_brick,
+                    difference_units: 3,
+                    maximum_difference_units: 2,
+                } if left_brick == left_coord && right_brick == right_coord
+            ));
+        }
     }
 
     #[test]
