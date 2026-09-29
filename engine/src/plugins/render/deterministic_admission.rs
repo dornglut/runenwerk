@@ -15,10 +15,7 @@ use super::derived_transform::{
 };
 use super::field_input::{RenderFieldSemanticInput, RenderFieldSemanticInputBinding};
 use super::maintained_method::maintained_deterministic_method;
-use super::representation::{
-    RenderFieldDistanceProtocolEvidence, RenderFieldDistanceSample, RenderRepresentationId,
-    RenderRepresentationProtocol,
-};
+use super::representation::{RenderRepresentationId, RenderRepresentationProtocol};
 use super::request::{RenderObservationSpec, RenderOutputValue, RenderRequest};
 use super::scene::{RenderObjectId, RenderObjectState, RenderSceneSnapshot};
 use super::semantic_plan::{RenderPlanningFailure, plan_render};
@@ -45,11 +42,6 @@ pub enum RenderDeterministicCompatibilityError {
         representation_id: RenderRepresentationId,
     },
     SelectedRepresentationFieldInputUnsupported {
-        output_index: usize,
-        object_id: RenderObjectId,
-        representation_id: RenderRepresentationId,
-    },
-    SelectedRepresentationFieldInputErrorExceedsGuarantee {
         output_index: usize,
         object_id: RenderObjectId,
         representation_id: RenderRepresentationId,
@@ -117,14 +109,6 @@ impl fmt::Display for RenderDeterministicCompatibilityError {
             } => write!(
                 formatter,
                 "output {output_index} object {object_id:?} representation {representation_id:?} has no sampled field semantic input supported by the maintained evaluator"
-            ),
-            Self::SelectedRepresentationFieldInputErrorExceedsGuarantee {
-                output_index,
-                object_id,
-                representation_id,
-            } => write!(
-                formatter,
-                "output {output_index} object {object_id:?} representation {representation_id:?} sampled-field error exceeds its admitted FieldDistance guarantee after scene scaling"
             ),
             Self::SelectedObjectFieldTransformNotSimilarity {
                 output_index,
@@ -322,38 +306,6 @@ fn validate_selected_evaluator_inputs(
                 admitted.field_semantic_input(representation_id),
                 admitted.plan().scene().object_state(object_id),
             )?;
-            if object.representation().requirement().protocol().protocol()
-                == RenderRepresentationProtocol::FieldDistance
-            {
-                let field_input = admitted
-                    .field_semantic_input(representation_id)
-                    .expect("selected maintained field use was validated above");
-                let state = admitted
-                    .plan()
-                    .scene()
-                    .object_state(object_id)
-                    .expect("selected maintained field object state was validated above");
-                let transform = RenderCompiledMetricSimilarityTransform::compile(state.spatial())
-                    .expect("selected maintained field transform was validated above");
-                let representation = admitted
-                    .plan()
-                    .scene()
-                    .object_participation(object_id)
-                    .and_then(|participation| participation.representation(representation_id))
-                    .expect("admitted field use references retained representation evidence");
-                let protocol = object.representation().requirement().protocol();
-                let evidence = representation
-                    .field_distance_protocol(protocol.revision())
-                    .expect("R4 planning admitted this exact field protocol revision");
-                validate_selected_field_input_error_bound(
-                    output.output_index(),
-                    object_id,
-                    representation_id,
-                    field_input,
-                    &transform,
-                    evidence,
-                )?;
-            }
         }
     }
     Ok(())
@@ -417,32 +369,6 @@ fn validate_selected_evaluator_object(
         }
     }
     Ok(())
-}
-
-fn validate_selected_field_input_error_bound(
-    output_index: usize,
-    object_id: RenderObjectId,
-    representation_id: RenderRepresentationId,
-    field_input: &RenderFieldSemanticInput,
-    transform: &RenderCompiledMetricSimilarityTransform,
-    evidence: RenderFieldDistanceProtocolEvidence,
-) -> Result<(), RenderDeterministicCompatibilityError> {
-    let scene_error_meters =
-        field_input.max_absolute_error_meters() * transform.scene_meters_per_local_meter();
-    let sample = RenderFieldDistanceSample::new(0.0, scene_error_meters).map_err(|_| {
-        RenderDeterministicCompatibilityError::SelectedRepresentationFieldInputErrorExceedsGuarantee {
-            output_index,
-            object_id,
-            representation_id,
-        }
-    })?;
-    evidence.validate_sample(sample).map_err(|_| {
-        RenderDeterministicCompatibilityError::SelectedRepresentationFieldInputErrorExceedsGuarantee {
-            output_index,
-            object_id,
-            representation_id,
-        }
-    })
 }
 
 fn validate_observation(
@@ -564,9 +490,6 @@ mod tests {
         RenderAbstractExecutionRequirement, RenderMethodContract, RenderMethodId,
         RenderMethodOutputContract, RenderMethodOutputGuarantee, RenderMethodOutputKind,
         RenderObservationKind, RenderSpectralRadianceSupport,
-    };
-    use crate::plugins::render::representation::{
-        RENDER_FIELD_DISTANCE_PROTOCOL_REVISION, RenderFieldDistanceGuarantee,
     };
     use crate::plugins::render::request::{
         RenderDistanceConvention, RenderPerspectiveObservation, RenderProbeObservation,
@@ -788,7 +711,6 @@ mod tests {
             [1.0; 3],
             [3, 3, 3],
             vec![0.0; 27],
-            0.0,
             RenderTemporalSupport::unbounded(),
         )
         .expect("finite exact sampled field");
@@ -826,73 +748,6 @@ mod tests {
                 RenderDeterministicCompatibilityError::SelectedObjectFieldTransformNotSimilarity {
                     output_index: 10,
                     object_id,
-                }
-            )
-        );
-    }
-
-    #[test]
-    fn sampled_field_error_is_scaled_to_scene_meters_before_protocol_validation() {
-        let object_id = RenderObjectId::from_raw(1).expect("object id");
-        let representation_id = RenderRepresentationId::from_raw(1).expect("representation id");
-        let scaled_state = object_state(
-            RenderAffineTransform3::from_row_major_3x4([
-                2.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0,
-            ])
-            .expect("finite uniform-scale transform"),
-        );
-        let transform = RenderCompiledMetricSimilarityTransform::compile(scaled_state.spatial())
-            .expect("uniform scale is an exact metric similarity");
-        let evidence = RenderFieldDistanceProtocolEvidence::new(
-            RENDER_FIELD_DISTANCE_PROTOCOL_REVISION,
-            RenderFieldDistanceGuarantee::conservative(0.2).expect("bounded field guarantee"),
-        )
-        .expect("field protocol evidence");
-
-        let accepted = RenderFieldSemanticInput::dense(
-            [-1.0; 3],
-            [1.0; 3],
-            [2, 2, 2],
-            vec![0.0; 8],
-            0.1,
-            RenderTemporalSupport::unbounded(),
-        )
-        .expect("bounded sampled field");
-        assert_eq!(
-            validate_selected_field_input_error_bound(
-                11,
-                object_id,
-                representation_id,
-                &accepted,
-                &transform,
-                evidence,
-            ),
-            Ok(())
-        );
-
-        let rejected = RenderFieldSemanticInput::dense(
-            [-1.0; 3],
-            [1.0; 3],
-            [2, 2, 2],
-            vec![0.0; 8],
-            0.11,
-            RenderTemporalSupport::unbounded(),
-        )
-        .expect("bounded sampled field");
-        assert_eq!(
-            validate_selected_field_input_error_bound(
-                12,
-                object_id,
-                representation_id,
-                &rejected,
-                &transform,
-                evidence,
-            ),
-            Err(
-                RenderDeterministicCompatibilityError::SelectedRepresentationFieldInputErrorExceedsGuarantee {
-                    output_index: 12,
-                    object_id,
-                    representation_id,
                 }
             )
         );
