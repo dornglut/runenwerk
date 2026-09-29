@@ -408,10 +408,7 @@ fn distinct_producer_scopes_compose_same_output_index_in_one_consumer_graph() {
             prepared_a.work_set().fragments()[0].clone(),
             prepared_b.work_set().fragments()[0].clone(),
         ],
-        &[
-            output_a.import(provenance_a),
-            output_b.import(provenance_b),
-        ],
+        &[output_a.import(provenance_a), output_b.import(provenance_b)],
     )
     .expect("canonical renderer composition should accept both scoped producer imports");
 
