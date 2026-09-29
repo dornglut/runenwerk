@@ -88,7 +88,7 @@ impl FieldProductLineage {
 
 pub const WORLD_SDF_METRIC_LAYOUT_REVISION: u16 = 1;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct WorldSdfMetricEncoding {
     pub layout_revision: u16,
     pub distance_units_per_meter: u32,
@@ -124,20 +124,11 @@ impl WorldSdfMetricEncoding {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct WorldSdfPayloadRef {
     pub chunk_id: ChunkId,
     pub chunk_revision: world_ops::ChunkRevision,
     pub checksum: u64,
-    #[serde(default)]
-    pub metric_encoding: Option<WorldSdfMetricEncoding>,
-}
-
-impl WorldSdfPayloadRef {
-    pub fn with_metric_encoding(mut self, metric_encoding: WorldSdfMetricEncoding) -> Self {
-        self.metric_encoding = Some(metric_encoding);
-        self
-    }
 }
 
 impl From<&SdfChunkPayload> for WorldSdfPayloadRef {
@@ -146,8 +137,28 @@ impl From<&SdfChunkPayload> for WorldSdfPayloadRef {
             chunk_id: payload.chunk_id,
             chunk_revision: payload.chunk_revision,
             checksum: payload.checksum,
-            metric_encoding: None,
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct WorldSdfMetricPayloadRef {
+    pub payload_ref: WorldSdfPayloadRef,
+    pub encoding: WorldSdfMetricEncoding,
+}
+
+impl WorldSdfMetricPayloadRef {
+    pub const fn try_new(
+        payload_ref: WorldSdfPayloadRef,
+        encoding: WorldSdfMetricEncoding,
+    ) -> Option<Self> {
+        if !encoding.is_supported() {
+            return None;
+        }
+        Some(Self {
+            payload_ref,
+            encoding,
+        })
     }
 }
 
@@ -251,14 +262,6 @@ impl FieldProductDescriptor {
                 "world_sdf_payload:{chunk_key}:{}:{}",
                 payload_ref.chunk_revision.0, payload_ref.checksum
             ));
-            if let Some(metric_encoding) = payload_ref.metric_encoding {
-                lineage = lineage.with_source_key(format!(
-                    "world_sdf_metric:{chunk_key}:{}:{}:{}",
-                    metric_encoding.layout_revision,
-                    metric_encoding.distance_units_per_meter,
-                    metric_encoding.max_absolute_error_units
-                ));
-            }
         }
         lineage
     }
@@ -373,6 +376,24 @@ impl FieldProductCandidate {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorldSdfMetricProductCandidate {
+    pub descriptor: FieldProductDescriptor,
+    pub metric_payload_ref: WorldSdfMetricPayloadRef,
+}
+
+impl WorldSdfMetricProductCandidate {
+    pub fn new(
+        descriptor: FieldProductDescriptor,
+        metric_payload_ref: WorldSdfMetricPayloadRef,
+    ) -> Self {
+        Self {
+            descriptor,
+            metric_payload_ref,
+        }
+    }
+}
+
 fn format_chunk_id(chunk_id: &ChunkId) -> String {
     format!(
         "world:{}:chunk:{},{},{}",
@@ -398,6 +419,13 @@ mod tests {
     use super::*;
     use runen_spatial::{ChunkCoord3, WorldId};
 
+    #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+    struct LegacyWorldSdfPayloadRef {
+        chunk_id: ChunkId,
+        chunk_revision: world_ops::ChunkRevision,
+        checksum: u64,
+    }
+
     fn descriptor_with_ref(payload_ref: WorldSdfPayloadRef) -> FieldProductDescriptor {
         let chunk_id = payload_ref.chunk_id;
         let mut descriptor = FieldProductDescriptor::new(
@@ -415,60 +443,39 @@ mod tests {
             chunk_id: ChunkId::new(WorldId::new(1), ChunkCoord3::default()),
             chunk_revision: world_ops::ChunkRevision(3),
             checksum,
-            metric_encoding: None,
         }
     }
 
-    #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-    struct LegacyWorldSdfPayloadRef {
-        chunk_id: ChunkId,
-        chunk_revision: world_ops::ChunkRevision,
-        checksum: u64,
-    }
-
-    #[test]
-    fn payload_ref_decodes_legacy_non_metric_postcard() {
-        let chunk_id = ChunkId::new(WorldId::new(1), ChunkCoord3 { x: 2, y: -1, z: 3 });
-        let legacy = LegacyWorldSdfPayloadRef {
-            chunk_id,
-            chunk_revision: world_ops::ChunkRevision(5),
-            checksum: 91,
-        };
-        let bytes = postcard::to_allocvec(&legacy).expect("legacy payload ref should serialize");
-        let decoded = postcard::from_bytes::<WorldSdfPayloadRef>(&bytes)
-            .expect("new payload ref should decode legacy non-metric bytes");
-
-        assert_eq!(decoded.chunk_id, chunk_id);
-        assert_eq!(decoded.chunk_revision, world_ops::ChunkRevision(5));
-        assert_eq!(decoded.checksum, 91);
-        assert_eq!(decoded.metric_encoding, None);
-    }
-
-    #[test]
-    fn current_non_metric_payload_ref_remains_decodable_by_legacy_postcard_shape() {
-        let current = payload_ref(92);
-        let bytes = postcard::to_allocvec(&current).expect("current payload ref should serialize");
-        let decoded = postcard::from_bytes::<LegacyWorldSdfPayloadRef>(&bytes)
-            .expect("legacy payload-ref shape should decode current non-metric bytes");
-
-        assert_eq!(decoded.chunk_id, current.chunk_id);
-        assert_eq!(decoded.chunk_revision, current.chunk_revision);
-        assert_eq!(decoded.checksum, current.checksum);
-    }
-
-    #[test]
-    fn metric_payload_ref_degrades_to_legacy_exact_payload_identity() {
-        let current = payload_ref(93).with_metric_encoding(
-            WorldSdfMetricEncoding::try_new(1024, 2)
+    fn metric_ref(checksum: u64, units_per_meter: u32) -> WorldSdfMetricPayloadRef {
+        WorldSdfMetricPayloadRef::try_new(
+            payload_ref(checksum),
+            WorldSdfMetricEncoding::try_new(units_per_meter, 1)
                 .expect("positive metric encoding should be valid"),
-        );
-        let bytes = postcard::to_allocvec(&current).expect("metric payload ref should serialize");
-        let decoded = postcard::from_bytes::<LegacyWorldSdfPayloadRef>(&bytes)
-            .expect("legacy payload-ref shape should decode the exact payload identity");
+        )
+        .expect("supported metric capability should be valid")
+    }
 
-        assert_eq!(decoded.chunk_id, current.chunk_id);
-        assert_eq!(decoded.chunk_revision, current.chunk_revision);
-        assert_eq!(decoded.checksum, current.checksum);
+    #[test]
+    fn payload_ref_postcard_shape_remains_legacy_compatible() {
+        let current = payload_ref(92);
+        let legacy = LegacyWorldSdfPayloadRef {
+            chunk_id: current.chunk_id,
+            chunk_revision: current.chunk_revision,
+            checksum: current.checksum,
+        };
+
+        let current_bytes =
+            postcard::to_allocvec(&current).expect("current payload ref should serialize");
+        let legacy_bytes =
+            postcard::to_allocvec(&legacy).expect("legacy payload ref should serialize");
+        assert_eq!(current_bytes, legacy_bytes);
+
+        let decoded_current = postcard::from_bytes::<WorldSdfPayloadRef>(&legacy_bytes)
+            .expect("unchanged payload-ref shape should decode legacy bytes");
+        let decoded_legacy = postcard::from_bytes::<LegacyWorldSdfPayloadRef>(&current_bytes)
+            .expect("legacy payload-ref shape should decode current bytes");
+        assert_eq!(decoded_current, current);
+        assert_eq!(decoded_legacy, legacy);
     }
 
     #[test]
@@ -486,26 +493,12 @@ mod tests {
     }
 
     #[test]
-    fn product_cache_identity_tracks_metric_decoding_contract() {
-        let first = descriptor_with_ref(
-            payload_ref(10).with_metric_encoding(
-                WorldSdfMetricEncoding::try_new(1024, 1)
-                    .expect("positive metric encoding should be valid"),
-            ),
-        )
-        .product_core()
-        .cache_identity()
-        .cache_key();
-        let second = descriptor_with_ref(
-            payload_ref(10).with_metric_encoding(
-                WorldSdfMetricEncoding::try_new(2048, 1)
-                    .expect("positive metric encoding should be valid"),
-            ),
-        )
-        .product_core()
-        .cache_identity()
-        .cache_key();
+    fn metric_capability_identity_tracks_exact_payload_checksum() {
+        assert_ne!(metric_ref(10, 1024), metric_ref(11, 1024));
+    }
 
-        assert_ne!(first, second);
+    #[test]
+    fn metric_capability_identity_tracks_decoding_contract() {
+        assert_ne!(metric_ref(10, 1024), metric_ref(10, 2048));
     }
 }
