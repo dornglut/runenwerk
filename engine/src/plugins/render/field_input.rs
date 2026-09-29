@@ -81,6 +81,16 @@ impl RenderFieldSemanticInput {
         self.dimensions
     }
 
+    pub fn max_local_meters(&self) -> [f64; 3] {
+        let origin = self.origin_local_meters();
+        let spacing = self.sample_spacing_meters();
+        [
+            origin[0] + spacing[0] * f64::from(self.dimensions[0] - 1),
+            origin[1] + spacing[1] * f64::from(self.dimensions[1] - 1),
+            origin[2] + spacing[2] * f64::from(self.dimensions[2] - 1),
+        ]
+    }
+
     pub fn sample_count(&self) -> usize {
         self.signed_distance_samples_meters.len()
     }
@@ -149,7 +159,7 @@ impl RenderFieldSemanticInputBinding {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RenderFieldSemanticInputError {
     SemanticValue(RenderSemanticValueError),
-    ZeroDimension,
+    DegenerateDimensions,
     SampleCountOverflow,
     SampleCountMismatch { expected: usize, actual: usize },
     NonPositiveSampleSpacing,
@@ -165,7 +175,8 @@ impl fmt::Display for RenderFieldSemanticInputError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::SemanticValue(error) => fmt::Display::fmt(error, formatter),
-            Self::ZeroDimension => formatter.write_str("field-input dimensions must be non-zero"),
+            Self::DegenerateDimensions => formatter
+                .write_str("field-input dimensions must contain at least two samples per axis"),
             Self::SampleCountOverflow => {
                 formatter.write_str("field-input dimensions overflow the addressable sample count")
             }
@@ -183,8 +194,8 @@ impl fmt::Display for RenderFieldSemanticInputError {
 impl Error for RenderFieldSemanticInputError {}
 
 fn checked_sample_count(dimensions: [u32; 3]) -> Result<usize, RenderFieldSemanticInputError> {
-    if dimensions.contains(&0) {
-        return Err(RenderFieldSemanticInputError::ZeroDimension);
+    if dimensions.iter().any(|dimension| *dimension < 2) {
+        return Err(RenderFieldSemanticInputError::DegenerateDimensions);
     }
     dimensions
         .into_iter()
@@ -222,11 +233,11 @@ mod tests {
     use crate::plugins::render::space_time::RenderTemporalSupport;
 
     #[test]
-    fn dense_field_rejects_invalid_shape_and_error() {
+    fn dense_field_rejects_degenerate_shape_and_invalid_spacing() {
         let validity = RenderTemporalSupport::unbounded();
         assert!(matches!(
-            RenderFieldSemanticInput::dense([0.0; 3], [1.0; 3], [0, 2, 2], vec![], validity),
-            Err(RenderFieldSemanticInputError::ZeroDimension)
+            RenderFieldSemanticInput::dense([0.0; 3], [1.0; 3], [1, 2, 2], vec![], validity),
+            Err(RenderFieldSemanticInputError::DegenerateDimensions)
         ));
         assert!(matches!(
             RenderFieldSemanticInput::dense([0.0; 3], [1.0; 3], [2, 2, 2], vec![0.0; 7], validity,),
@@ -239,8 +250,8 @@ mod tests {
             RenderFieldSemanticInput::dense(
                 [0.0; 3],
                 [1.0, 0.0, 1.0],
-                [1, 1, 1],
-                vec![0.0],
+                [2, 2, 2],
+                vec![0.0; 8],
                 validity,
             ),
             Err(RenderFieldSemanticInputError::NonPositiveSampleSpacing)
@@ -258,6 +269,7 @@ mod tests {
         )
         .expect("valid sampled field");
         assert_eq!(input.dimensions(), [2, 2, 2]);
+        assert_eq!(input.max_local_meters(), [-0.5, -1.0, -1.0]);
         assert_eq!(input.sample_count(), 8);
         assert_eq!(input.signed_distance_sample_meters(7), Some(1.75));
     }
