@@ -84,15 +84,14 @@ fn radiance_fixture() -> MaintainedExecutionFixture {
     fixture
 }
 
-fn admit_r32float_radiance(
-    fixture: &MaintainedExecutionFixture,
-    context: &GpuContext,
-) -> super::deterministic_admission::AdmittedDeterministicRender {
-    let mut allocator = GpuWorkResourceIdAllocator::new();
-    let destination = allocator
+fn r32float_radiance_destination(
+    allocator: &mut GpuWorkResourceIdAllocator,
+    label: &str,
+) -> runen_gpu::GpuTextureHandle {
+    allocator
         .allocate_texture_handle(
             GpuTextureDescriptor::ordinary_owned_2d(
-                "R7 composition radiance destination",
+                label,
                 GpuResourceLifetime::Retained,
                 GpuReconstruction::SourceBacked,
                 2,
@@ -107,7 +106,14 @@ fn admit_r32float_radiance(
             )
             .expect("R7 composition R32Float destination descriptor"),
         )
-        .expect("R7 composition R32Float destination handle");
+        .expect("R7 composition R32Float destination handle")
+}
+
+fn admit_r32float_radiance_to(
+    fixture: &MaintainedExecutionFixture,
+    context: &GpuContext,
+    destination: runen_gpu::GpuTextureHandle,
+) -> super::deterministic_admission::AdmittedDeterministicRender {
     let output_bindings = [RenderOutputBinding::new(
         0,
         RenderOutputDestination::SampleLatticeTexture(destination),
@@ -121,6 +127,16 @@ fn admit_r32float_radiance(
         context,
     )
     .expect("R7 composition R32Float radiance must be admitted")
+}
+
+fn admit_r32float_radiance(
+    fixture: &MaintainedExecutionFixture,
+    context: &GpuContext,
+) -> super::deterministic_admission::AdmittedDeterministicRender {
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let destination =
+        r32float_radiance_destination(&mut allocator, "R7 composition radiance destination");
+    admit_r32float_radiance_to(fixture, context, destination)
 }
 
 fn surface_color_view(
@@ -274,6 +290,136 @@ fn maintained_r32float_radiance_is_a_typed_producer_for_consumer_first_graphs() 
         1,
         "consumer-first authoring must still prepare the producer before the consumer"
     );
+}
+
+#[test]
+fn distinct_producer_scopes_compose_same_output_index_in_one_consumer_graph() {
+    let Some(context) = request_composition_context() else {
+        return;
+    };
+    let fixture = radiance_fixture();
+    let mut resources = DeterministicResourceCache::default();
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let destination_a =
+        r32float_radiance_destination(&mut allocator, "R7 scoped radiance destination A");
+    let destination_b =
+        r32float_radiance_destination(&mut allocator, "R7 scoped radiance destination B");
+
+    let prepared_a = prepare_deterministic_render_with_cache_in_scope(
+        admit_r32float_radiance_to(&fixture, &context, destination_a),
+        &context,
+        &mut resources,
+        11,
+    )
+    .expect("producer A should prepare");
+    let prepared_b = prepare_deterministic_render_with_cache_in_scope(
+        admit_r32float_radiance_to(&fixture, &context, destination_b),
+        &context,
+        &mut resources,
+        12,
+    )
+    .expect("producer B should prepare");
+
+    let output_a = prepared_a
+        .radiance_output(0)
+        .expect("producer A radiance correlation");
+    let output_b = prepared_b
+        .radiance_output(0)
+        .expect("producer B radiance correlation");
+    assert_ne!(
+        output_a.export_relationship().export_key(),
+        output_b.export_relationship().export_key(),
+        "distinct producer scopes must produce distinct private export keys"
+    );
+    assert_ne!(
+        output_a.resource().diagnostic_identity(),
+        output_b.resource().diagnostic_identity(),
+        "distinct producer scopes must retain distinct admitted destinations"
+    );
+
+    let texture_a = output_a.texture().expect("producer A texture").clone();
+    let texture_b = output_b.texture().expect("producer B texture").clone();
+    let buffer_a = allocator
+        .allocate_buffer_handle(
+            GpuBufferDescriptor::ordinary_owned(
+                "R7 scoped consumer buffer A",
+                GpuResourceLifetime::Transient,
+                GpuReconstruction::SourceBacked,
+                16,
+                [GpuBufferUsage::CopyDestination],
+                GpuBufferInitialization::Uninitialized,
+            )
+            .expect("consumer buffer A descriptor"),
+        )
+        .expect("consumer buffer A");
+    let buffer_b = allocator
+        .allocate_buffer_handle(
+            GpuBufferDescriptor::ordinary_owned(
+                "R7 scoped consumer buffer B",
+                GpuResourceLifetime::Transient,
+                GpuReconstruction::SourceBacked,
+                16,
+                [GpuBufferUsage::CopyDestination],
+                GpuBufferInitialization::Uninitialized,
+            )
+            .expect("consumer buffer B descriptor"),
+        )
+        .expect("consumer buffer B");
+
+    let copy_a = GpuCopyOperation::texture_to_buffer(
+        GpuTextureCopyRegion::whole_base_mip(&texture_a).expect("producer A region"),
+        GpuBufferTextureLayout::new(&buffer_a, 0, 8, 2).expect("consumer A layout"),
+    )
+    .expect("consumer A copy");
+    let copy_b = GpuCopyOperation::texture_to_buffer(
+        GpuTextureCopyRegion::whole_base_mip(&texture_b).expect("producer B region"),
+        GpuBufferTextureLayout::new(&buffer_b, 0, 8, 2).expect("consumer B layout"),
+    )
+    .expect("consumer B copy");
+    let provenance = GpuResourceProvenance::new(
+        GpuResourceLabel::new("R7 scoped multi-producer consumer").expect("consumer label"),
+        None,
+        None,
+    );
+    let consumer = GpuWorkFragment::build_with_provenance(
+        GpuResourceLabel::new("R7 scoped multi-producer consumer").expect("fragment label"),
+        provenance.clone(),
+        |work| {
+            work.operation("consume producer A", copy_a)?;
+            work.operation("consume producer B", copy_b)?;
+            work.add_import(output_a.import(provenance.clone()))?;
+            work.add_import(output_b.import(provenance.clone()))?;
+            Ok(())
+        },
+    )
+    .expect("two scoped radiance imports should coexist in one consumer fragment");
+
+    let graph = GpuPreparedWorkGraph::prepare(
+        GpuResourceLabel::new("R7 scoped multi-producer composition").expect("graph label"),
+        [
+            consumer,
+            prepared_a.work_set().fragments()[0].clone(),
+            prepared_b.work_set().fragments()[0].clone(),
+        ],
+    )
+    .expect("two scoped deterministic producers should compose into one graph");
+
+    for output in [output_a, output_b] {
+        assert!(
+            graph
+                .dependencies()
+                .iter()
+                .flat_map(|dependency| dependency.reasons())
+                .any(|reason| {
+                    matches!(
+                        reason,
+                        GpuDependencyReason::ReadAfterWrite { resource, .. }
+                            if *resource == output.resource().diagnostic_identity()
+                    )
+                }),
+            "each scoped radiance producer must order before its consumer through typed import"
+        );
+    }
 }
 
 #[test]
