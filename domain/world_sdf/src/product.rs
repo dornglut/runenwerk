@@ -419,7 +419,7 @@ mod tests {
         }
     }
 
-    #[derive(Serialize)]
+    #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
     struct LegacyWorldSdfPayloadRef {
         chunk_id: ChunkId,
         chunk_revision: world_ops::ChunkRevision,
@@ -442,6 +442,33 @@ mod tests {
         assert_eq!(decoded.chunk_revision, world_ops::ChunkRevision(5));
         assert_eq!(decoded.checksum, 91);
         assert_eq!(decoded.metric_encoding, None);
+    }
+
+    #[test]
+    fn current_non_metric_payload_ref_remains_decodable_by_legacy_postcard_shape() {
+        let current = payload_ref(92);
+        let bytes = postcard::to_allocvec(&current).expect("current payload ref should serialize");
+        let decoded = postcard::from_bytes::<LegacyWorldSdfPayloadRef>(&bytes)
+            .expect("legacy payload-ref shape should decode current non-metric bytes");
+
+        assert_eq!(decoded.chunk_id, current.chunk_id);
+        assert_eq!(decoded.chunk_revision, current.chunk_revision);
+        assert_eq!(decoded.checksum, current.checksum);
+    }
+
+    #[test]
+    fn metric_payload_ref_degrades_to_legacy_exact_payload_identity() {
+        let current = payload_ref(93).with_metric_encoding(
+            WorldSdfMetricEncoding::try_new(1024, 2)
+                .expect("positive metric encoding should be valid"),
+        );
+        let bytes = postcard::to_allocvec(&current).expect("metric payload ref should serialize");
+        let decoded = postcard::from_bytes::<LegacyWorldSdfPayloadRef>(&bytes)
+            .expect("legacy payload-ref shape should decode the exact payload identity");
+
+        assert_eq!(decoded.chunk_id, current.chunk_id);
+        assert_eq!(decoded.chunk_revision, current.chunk_revision);
+        assert_eq!(decoded.checksum, current.checksum);
     }
 
     #[test]
