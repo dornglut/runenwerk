@@ -32,9 +32,10 @@ summaries for chunked world data.
 - `ChunkHierarchyNode` and `ChunkHierarchySummary`.
 - `CollisionQueryService`, `SphereSweep`, `CollisionHit`, and readiness/result
   types.
-- `WorldSdfMetricEncoding`, metric-capable exact `WorldSdfPayloadRef` values, and
-  `sample_world_sdf_metric_distance` for opt-in bounded signed-distance estimates in meters.
-  Occupancy/sign payloads remain valid without metric capability and fail closed for metric queries.
+- `WorldSdfMetricEncoding`, `WorldSdfMetricPayloadRef`, and
+  `sample_world_sdf_metric_distance` define the opt-in bounded signed-distance capability in
+  meters. The metric wrapper binds encoding/error semantics to an unchanged exact
+  `WorldSdfPayloadRef`; plain payload refs remain wire-stable and non-metric.
 - `FieldPreviewGrid`, `FieldPreviewPayload`, `FieldPreviewProduct`, and
   `ratify_field_preview_product` for CPU-formed scalar distance, vector
   gradient, occupancy, and material-channel preview products.
