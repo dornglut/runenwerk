@@ -390,14 +390,7 @@ pub fn admit_render_plan(
     output_bindings: &[RenderOutputBinding],
     context: &GpuContext,
 ) -> Result<AdmittedRenderPlan, RenderExecutionAdmissionFailure> {
-    admit_render_plan_with_semantic_inputs(
-        plan,
-        &[],
-        &[],
-        availability,
-        output_bindings,
-        context,
-    )
+    admit_render_plan_with_semantic_inputs(plan, &[], &[], availability, output_bindings, context)
 }
 
 /// Preserve the existing surface-only R5 entry point.
