@@ -233,8 +233,7 @@ fn validate_metric_shared_samples(
     encoding: crate::WorldSdfMetricEncoding,
 ) -> Result<(), WorldSdfMetricError> {
     let maximum_difference_units = u64::from(encoding.max_absolute_error_units).saturating_mul(2);
-    let mut ranges =
-        BTreeMap::<[u8; 3], ([u8; 3], i16, [u8; 3], i16)>::new();
+    let mut ranges = BTreeMap::<[u8; 3], ([u8; 3], i16, [u8; 3], i16)>::new();
 
     for brick_z in 0..SDF_PAGE_EDGE_BRICKS as u8 {
         for brick_y in 0..SDF_PAGE_EDGE_BRICKS as u8 {
@@ -275,8 +274,7 @@ fn validate_metric_shared_samples(
                                 range.2 = brick_coord;
                                 range.3 = value;
                             }
-                            let difference_units =
-                                i32::from(range.1).abs_diff(i32::from(range.3));
+                            let difference_units = i32::from(range.1).abs_diff(i32::from(range.3));
                             if u64::from(difference_units) > maximum_difference_units {
                                 return Err(WorldSdfMetricError::InconsistentMetricSharedSample {
                                     left_brick: range.0,
