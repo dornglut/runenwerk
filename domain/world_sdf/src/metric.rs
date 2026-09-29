@@ -253,22 +253,31 @@ fn sample_metric_brick(
     local_in_brick: [f64; 3],
 ) -> Result<f64, WorldSdfMetricError> {
     validate_metric_brick(brick)?;
-    debug_assert_eq!(SDF_METRIC_BRICK_EDGE_SAMPLES, 2);
+    debug_assert_eq!(SDF_METRIC_BRICK_EDGE_SAMPLES, 3);
 
     let sample_at = |x: usize, y: usize, z: usize| -> f64 {
         f64::from(brick.samples.distances[cube_sample_index(x, y, z)])
     };
-    let tx = local_in_brick[0].clamp(0.0, 1.0);
-    let ty = local_in_brick[1].clamp(0.0, 1.0);
-    let tz = local_in_brick[2].clamp(0.0, 1.0);
+    let (x0, x1, tx) = metric_sample_axis(local_in_brick[0]);
+    let (y0, y1, ty) = metric_sample_axis(local_in_brick[1]);
+    let (z0, z1, tz) = metric_sample_axis(local_in_brick[2]);
 
-    let c00 = lerp(sample_at(0, 0, 0), sample_at(1, 0, 0), tx);
-    let c10 = lerp(sample_at(0, 1, 0), sample_at(1, 1, 0), tx);
-    let c01 = lerp(sample_at(0, 0, 1), sample_at(1, 0, 1), tx);
-    let c11 = lerp(sample_at(0, 1, 1), sample_at(1, 1, 1), tx);
+    let c00 = lerp(sample_at(x0, y0, z0), sample_at(x1, y0, z0), tx);
+    let c10 = lerp(sample_at(x0, y1, z0), sample_at(x1, y1, z0), tx);
+    let c01 = lerp(sample_at(x0, y0, z1), sample_at(x1, y0, z1), tx);
+    let c11 = lerp(sample_at(x0, y1, z1), sample_at(x1, y1, z1), tx);
     let c0 = lerp(c00, c10, ty);
     let c1 = lerp(c01, c11, ty);
     Ok(lerp(c0, c1, tz))
+}
+
+fn metric_sample_axis(local_axis: f64) -> (usize, usize, f64) {
+    let last = SDF_METRIC_BRICK_EDGE_SAMPLES - 1;
+    let scaled = local_axis.clamp(0.0, 1.0) * last as f64;
+    let lower = (scaled.floor() as usize).min(last - 1);
+    let upper = lower + 1;
+    let t = scaled - lower as f64;
+    (lower, upper, t)
 }
 
 fn cube_sample_index(x: usize, y: usize, z: usize) -> usize {
@@ -315,9 +324,17 @@ mod tests {
                     for sample_z in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
                         for sample_y in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
                             for sample_x in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
-                                let point_x = (f64::from(brick_x) + sample_x as f64) / edge;
-                                let point_y = (f64::from(brick_y) + sample_y as f64) / edge;
-                                let point_z = (f64::from(brick_z) + sample_z as f64) / edge;
+                                let sample_denominator =
+                                    (SDF_METRIC_BRICK_EDGE_SAMPLES - 1) as f64;
+                                let point_x =
+                                    (f64::from(brick_x) + sample_x as f64 / sample_denominator)
+                                        / edge;
+                                let point_y =
+                                    (f64::from(brick_y) + sample_y as f64 / sample_denominator)
+                                        / edge;
+                                let point_z =
+                                    (f64::from(brick_z) + sample_z as f64 / sample_denominator)
+                                        / edge;
                                 let distance =
                                     0.25 * point_x + 0.5 * point_y + 0.75 * point_z - 0.5;
                                 distances
@@ -355,10 +372,14 @@ mod tests {
     }
 
     #[test]
-    fn canonical_metric_topology_is_two_samples_per_edge() {
-        assert_eq!(SDF_METRIC_BRICK_EDGE_SAMPLES, 2);
-        assert_eq!(SDF_METRIC_BRICK_SAMPLE_COUNT, 8);
+    fn canonical_metric_topology_aligns_half_brick_sample_planes() {
+        assert_eq!(SDF_METRIC_BRICK_EDGE_SAMPLES, 3);
+        assert_eq!(SDF_METRIC_BRICK_SAMPLE_COUNT, 27);
         assert_eq!(SDF_METRIC_PAGE_BRICK_COUNT, 64);
+
+        let (lower, upper, t) = metric_sample_axis(0.5);
+        assert_eq!((lower, upper), (1, 2));
+        assert_eq!(t, 0.0);
     }
 
     #[test]
@@ -486,7 +507,7 @@ mod tests {
             .get_mut(&[3, 3, 3])
             .expect("brick exists")
             .samples
-            .distances = vec![0; 27];
+            .distances = vec![0; 8];
 
         let error = sample_world_sdf_metric_distance(
             &metric_ref(&payload),
@@ -497,8 +518,33 @@ mod tests {
         .expect_err("one malformed brick must invalidate the whole metric payload");
         assert_eq!(
             error,
-            WorldSdfMetricError::InvalidMetricSampleCount { actual: 27 }
+            WorldSdfMetricError::InvalidMetricSampleCount { actual: 8 }
         );
+    }
+
+    #[test]
+    fn other_perfect_cube_topologies_do_not_select_metric_layout_revision_one() {
+        for sample_count in [8_usize, 64] {
+            let mut payload = affine_field_payload();
+            payload
+                .page_table
+                .get_mut(&SdfPageCoord3::default())
+                .expect("page exists")
+                .bricks
+                .get_mut(&[0, 0, 0])
+                .expect("brick exists")
+                .samples
+                .distances = vec![0; sample_count];
+
+            let error = validate_world_sdf_metric_payload(&metric_ref(&payload), &payload)
+                .expect_err("another perfect-cube topology must not select metric layout revision one");
+            assert_eq!(
+                error,
+                WorldSdfMetricError::InvalidMetricSampleCount {
+                    actual: sample_count
+                }
+            );
+        }
     }
 
     #[test]
