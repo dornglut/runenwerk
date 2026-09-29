@@ -555,6 +555,7 @@ fn validate_field_input_guarantee(
                 )
             }
         }
+        RenderFieldDistanceInputRequirement::AnyBounded => Ok(()),
         RenderFieldDistanceInputRequirement::Bounded {
             max_absolute_error_meters,
         } => {
@@ -829,6 +830,19 @@ mod tests {
             refinement.map(|value| RenderDistanceErrorBound::new(value).expect("refinement")),
         )
         .expect("exact field requirement")
+    }
+
+    fn field_requirement_any_bounded(
+        refinement: Option<f64>,
+    ) -> RenderMethodRepresentationRequirement {
+        RenderMethodRepresentationRequirement::new(
+            RenderRepresentationProtocolRequirement::FieldDistance {
+                revision: RENDER_FIELD_DISTANCE_PROTOCOL_REVISION,
+                input: RenderFieldDistanceInputRequirement::AnyBounded,
+            },
+            refinement.map(|value| RenderDistanceErrorBound::new(value).expect("refinement")),
+        )
+        .expect("any-bounded field requirement")
     }
 
     fn field_requirement_bounded(
@@ -1357,6 +1371,39 @@ mod tests {
                 .approximation()
                 .max_absolute_distance_error_meters(),
             Some(0.05)
+        );
+    }
+
+    #[test]
+    fn any_bounded_field_requirement_does_not_invent_a_global_source_error_threshold() {
+        let mut store = RenderSceneStore::new();
+        insert_field_only(
+            &mut store,
+            RenderTemporalSupport::unbounded(),
+            RenderRefinementEvidence::none(),
+            RenderFieldDistanceGuarantee::conservative(25.0).expect("finite field guarantee"),
+            RenderTemporalSupport::unbounded(),
+        );
+        let plan = plan_render(
+            &store.snapshot(),
+            &distance_request(RenderSemanticTolerance::exact(), instant(0.0)),
+            &[method(
+                1,
+                vec![probe_distance_contract(
+                    RenderMethodOutputGuarantee::Exact,
+                    vec![field_requirement_any_bounded(None)],
+                )],
+            )],
+        )
+        .expect("any finite declared field error remains semantically admissible");
+
+        assert_eq!(plan.candidates().len(), 1);
+        assert_eq!(
+            plan.candidates()[0].outputs()[0].object_representations()[0].uses()[0]
+                .requirement()
+                .protocol()
+                .protocol(),
+            RenderRepresentationProtocol::FieldDistance
         );
     }
 
