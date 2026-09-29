@@ -6,6 +6,7 @@
 //! whether that transform may be reused across accepted commits.
 
 use super::derived_state::{RenderDerivedSceneDependencies, RenderDerivedSceneDependency};
+use super::representation::classify_field_distance_transform;
 use super::scene::{
     RenderObjectId, RenderSceneCommit, RenderSceneContinuity, RenderSceneResync,
     RenderSceneRevision, RenderSceneSnapshot,
@@ -112,6 +113,13 @@ impl RenderCompiledMetricSimilarityTransform {
     pub(super) fn compile(
         spatial: &RenderObjectSpatialState,
     ) -> Result<Self, RenderCompiledMetricSimilarityTransformError> {
+        // R3 representation semantics own field-transform classification. This derived layer only
+        // materializes the accepted exact-similarity case for execution.
+        let classification = classify_field_distance_transform(spatial.local_to_scene());
+        let Some(scene_meters_per_local_meter) = classification.exact_distance_scale() else {
+            return Err(RenderCompiledMetricSimilarityTransformError::NotPositiveSimilarity);
+        };
+
         // RenderObjectSpatialState::local_to_scene consumes metre-normalized local coordinates.
         // Field semantic inputs are already expressed in those local metres, so unlike
         // RenderCompiledObjectTransform this path must not apply local_space.meters_per_unit.
@@ -121,40 +129,6 @@ impl RenderCompiledMetricSimilarityTransform {
             [source[4], source[5], source[6]],
             [source[8], source[9], source[10]],
         ];
-
-        let columns = [
-            [
-                local_meters_to_scene[0][0],
-                local_meters_to_scene[1][0],
-                local_meters_to_scene[2][0],
-            ],
-            [
-                local_meters_to_scene[0][1],
-                local_meters_to_scene[1][1],
-                local_meters_to_scene[2][1],
-            ],
-            [
-                local_meters_to_scene[0][2],
-                local_meters_to_scene[1][2],
-                local_meters_to_scene[2][2],
-            ],
-        ];
-        let scale_squared = dot(columns[0], columns[0]);
-        if scale_squared <= 0.0
-            || !scale_squared.is_finite()
-            || dot(columns[1], columns[1]) != scale_squared
-            || dot(columns[2], columns[2]) != scale_squared
-            || dot(columns[0], columns[1]) != 0.0
-            || dot(columns[0], columns[2]) != 0.0
-            || dot(columns[1], columns[2]) != 0.0
-        {
-            return Err(RenderCompiledMetricSimilarityTransformError::NotPositiveSimilarity);
-        }
-
-        let scene_meters_per_local_meter = scale_squared.sqrt();
-        if scene_meters_per_local_meter <= 0.0 || !scene_meters_per_local_meter.is_finite() {
-            return Err(RenderCompiledMetricSimilarityTransformError::NotPositiveSimilarity);
-        }
         let Some(scene_to_local_meters) = inverse_3x3(local_meters_to_scene) else {
             return Err(RenderCompiledMetricSimilarityTransformError::NotPositiveSimilarity);
         };
