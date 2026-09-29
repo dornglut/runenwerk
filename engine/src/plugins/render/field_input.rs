@@ -114,7 +114,6 @@ impl RenderFieldSemanticInputGeneration {
     pub const fn new(raw: u64) -> Self {
         Self(raw)
     }
-
 }
 
 /// Invocation-local correlation between one exact representation and one immutable sampled field.
