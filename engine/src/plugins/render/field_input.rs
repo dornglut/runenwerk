@@ -22,9 +22,10 @@ impl RenderFieldSemanticInputRequirement {
     }
 }
 
-/// Finite sampled field in representation-local metric space whose deterministic trilinear reconstruction defines the renderer-semantic field.
+/// Finite sampled signed-distance estimates in representation-local metric space.
 ///
-/// Samples use x-fastest dense ordering:
+/// The current binding carries one conservative pointwise query-error bound for deterministic
+/// trilinear reconstruction. Samples use x-fastest dense ordering:
 /// `index = z * (width * height) + y * width + x`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RenderFieldSemanticInput {
@@ -32,6 +33,7 @@ pub struct RenderFieldSemanticInput {
     sample_spacing_meters: [CanonicalF64; 3],
     dimensions: [u32; 3],
     signed_distance_samples_meters: Vec<CanonicalF64>,
+    max_absolute_query_error_local_meters: CanonicalF64,
     validity: RenderTemporalSupport,
 }
 
@@ -41,6 +43,7 @@ impl RenderFieldSemanticInput {
         sample_spacing_meters: [f64; 3],
         dimensions: [u32; 3],
         signed_distance_samples_meters: Vec<f64>,
+        max_absolute_query_error_local_meters: f64,
         validity: RenderTemporalSupport,
     ) -> Result<Self, RenderFieldSemanticInputError> {
         let origin_local_meters =
@@ -59,11 +62,19 @@ impl RenderFieldSemanticInput {
             .into_iter()
             .map(|value| CanonicalF64::new(value, "field_input_signed_distance_sample_meters"))
             .collect::<Result<Vec<_>, _>>()?;
+        let max_absolute_query_error_local_meters = CanonicalF64::new(
+            max_absolute_query_error_local_meters,
+            "field_input_max_absolute_query_error_local_meters",
+        )?;
+        if max_absolute_query_error_local_meters.get() < 0.0 {
+            return Err(RenderFieldSemanticInputError::NegativeQueryErrorBound);
+        }
         Ok(Self {
             origin_local_meters,
             sample_spacing_meters,
             dimensions,
             signed_distance_samples_meters,
+            max_absolute_query_error_local_meters,
             validity,
         })
     }
@@ -99,6 +110,10 @@ impl RenderFieldSemanticInput {
             .get(index)
             .copied()
             .map(CanonicalF64::get)
+    }
+
+    pub fn max_absolute_query_error_local_meters(&self) -> f64 {
+        self.max_absolute_query_error_local_meters.get()
     }
 
     pub const fn validity(&self) -> RenderTemporalSupport {
@@ -158,6 +173,7 @@ pub enum RenderFieldSemanticInputError {
     SampleCountOverflow,
     SampleCountMismatch { expected: usize, actual: usize },
     NonPositiveSampleSpacing,
+    NegativeQueryErrorBound,
 }
 
 impl From<RenderSemanticValueError> for RenderFieldSemanticInputError {
@@ -182,6 +198,9 @@ impl fmt::Display for RenderFieldSemanticInputError {
             Self::NonPositiveSampleSpacing => {
                 formatter.write_str("field-input sample spacing must be positive on every axis")
             }
+            Self::NegativeQueryErrorBound => formatter.write_str(
+                "field-input maximum absolute query error must be non-negative",
+            ),
         }
     }
 }
@@ -244,7 +263,7 @@ mod tests {
     fn dense_field_rejects_degenerate_shape_and_invalid_spacing() {
         let validity = RenderTemporalSupport::unbounded();
         assert!(matches!(
-            RenderFieldSemanticInput::dense([0.0; 3], [1.0; 3], [1, 2, 2], vec![], validity),
+            RenderFieldSemanticInput::dense([0.0; 3], [1.0; 3], [1, 2, 2], vec![], 0.0, validity),
             Err(RenderFieldSemanticInputError::DegenerateDimensions)
         ));
         assert!(matches!(
@@ -260,6 +279,7 @@ mod tests {
                 [1.0, 0.0, 1.0],
                 [2, 2, 2],
                 vec![0.0; 8],
+                0.0,
                 validity,
             ),
             Err(RenderFieldSemanticInputError::NonPositiveSampleSpacing)
@@ -275,9 +295,25 @@ mod tests {
                 [f64::MAX, 1.0, 1.0],
                 [2, 2, 2],
                 vec![0.0; 8],
+                0.0,
                 validity,
             ),
             Err(RenderFieldSemanticInputError::SemanticValue(_))
+        ));
+    }
+
+    #[test]
+    fn dense_field_rejects_negative_query_error_bound() {
+        assert!(matches!(
+            RenderFieldSemanticInput::dense(
+                [0.0; 3],
+                [1.0; 3],
+                [2, 2, 2],
+                vec![0.0; 8],
+                -0.001,
+                RenderTemporalSupport::unbounded(),
+            ),
+            Err(RenderFieldSemanticInputError::NegativeQueryErrorBound)
         ));
     }
 
@@ -288,6 +324,7 @@ mod tests {
             [0.5, 1.0, 2.0],
             [2, 2, 2],
             (0..8).map(|value| f64::from(value) * 0.25).collect(),
+            0.125,
             RenderTemporalSupport::unbounded(),
         )
         .expect("valid sampled field");
@@ -295,5 +332,6 @@ mod tests {
         assert_eq!(input.max_local_meters(), [-0.5, -1.0, -1.0]);
         assert_eq!(input.sample_count(), 8);
         assert_eq!(input.signed_distance_sample_meters(7), Some(1.75));
+        assert_eq!(input.max_absolute_query_error_local_meters(), 0.125);
     }
 }
