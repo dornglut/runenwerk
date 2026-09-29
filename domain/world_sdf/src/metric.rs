@@ -226,10 +226,7 @@ fn chunk_local_position(
     ])
 }
 
-fn metric_brick_lookup(
-    partition: &GridPartitionConfig,
-    local: [f64; 3],
-) -> ([u8; 3], [f64; 3]) {
+fn metric_brick_lookup(partition: &GridPartitionConfig, local: [f64; 3]) -> ([u8; 3], [f64; 3]) {
     let edge = partition.chunk_edge_meters();
     let local_clamped = [
         local[0].clamp(0.0, edge * (1.0 - 1.0e-12)),

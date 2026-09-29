@@ -393,7 +393,6 @@ fn format_region_id(region_id: &RegionId) -> String {
     )
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
