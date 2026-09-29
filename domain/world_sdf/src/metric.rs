@@ -318,8 +318,7 @@ mod tests {
                                 let point_x = (f64::from(brick_x) + sample_x as f64) / edge;
                                 let point_y = (f64::from(brick_y) + sample_y as f64) / edge;
                                 let point_z = (f64::from(brick_z) + sample_z as f64) / edge;
-                                let distance =
-                                    0.25 * point_x + 0.5 * point_y + 0.75 * point_z - 0.5;
+                                let distance = 0.25 * point_x + 0.5 * point_y + 0.75 * point_z - 0.5;
                                 distances
                                     .push((distance * f64::from(DISTANCE_UNITS_PER_METER)).round()
                                         as i16);
