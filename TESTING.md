@@ -33,7 +33,7 @@ git diff --check
 
 Rust CI resolves and validates the reviewed feature head for pull requests, the exact `github.sha` integration revision for `merge_group`, and `github.sha` for push and dispatch. Each selected revision is explicitly checked out and proved before validation.
 
-Pull-request feature-head evidence and merge-group integration evidence are distinct. When the repository merge queue is enabled, required merge-group checks validate the queue's exact latest-base integration state before GitHub may squash it; neither result is the eventual squash-merge revision.
+Feature-head, merge-group integration, and accepted-main validation are separate evidence stages. When the repository merge queue is enabled, required merge-group checks validate the queue's exact latest-base integration revision before GitHub may merge it. Do not assume SHA equality or inequality between that merge-group revision and the eventual accepted-main commit; accepted-main push evidence independently proves the default-branch state that GitHub accepted.
 
 ## Documentation build
 
@@ -51,6 +51,6 @@ Runenwerk validates its exact-revision RunenGPU dependency, public-API consumpti
 
 Report focused checks, `cargo validate`, exact-head CI, and anything not run. Do not convert source inspection or user-reported output into a stronger validation claim.
 
-The accepted base, reviewed feature head, merge-group integration revision, squash commit, and accepted-main push result are separate evidence objects.
+The accepted base, reviewed feature head, merge-group integration revision, queue/squash transition, and accepted-main push result are separate evidence stages or records. Separate stages may reference the same commit object, so each transition is verified explicitly rather than inferred from SHA equality or inequality.
 
 This file owns Runenwerk-local validation semantics. Organization-wide GitHub, review, and validation-evidence rules are owned by [`dornglut/engineering`](https://github.com/dornglut/engineering).
