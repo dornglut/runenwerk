@@ -253,14 +253,10 @@ impl FieldProductDescriptor {
             lineage = lineage.with_source_key(format!("asset:{source_asset_id}"));
         }
         for payload_ref in &self.payload_refs {
-            let chunk_key = format_chunk_id(&payload_ref.chunk_id);
             lineage = lineage.with_source_key(format!(
-                "world_sdf_chunk:{chunk_key}:{}",
+                "world_sdf_chunk:{}:{}",
+                format_chunk_id(&payload_ref.chunk_id),
                 payload_ref.chunk_revision.0
-            ));
-            lineage = lineage.with_source_key(format!(
-                "world_sdf_payload:{chunk_key}:{}:{}",
-                payload_ref.chunk_revision.0, payload_ref.checksum
             ));
         }
         lineage
@@ -426,18 +422,6 @@ mod tests {
         checksum: u64,
     }
 
-    fn descriptor_with_ref(payload_ref: WorldSdfPayloadRef) -> FieldProductDescriptor {
-        let chunk_id = payload_ref.chunk_id;
-        let mut descriptor = FieldProductDescriptor::new(
-            FieldProductId(1),
-            FieldProductKind::WorldSdfChunkPages,
-            FieldProductScope::from_chunks([chunk_id]),
-            FieldProductLineage::new(7, "world_sdf.metric.test"),
-        );
-        descriptor.payload_refs.push(payload_ref);
-        descriptor
-    }
-
     fn payload_ref(checksum: u64) -> WorldSdfPayloadRef {
         WorldSdfPayloadRef {
             chunk_id: ChunkId::new(WorldId::new(1), ChunkCoord3::default()),
@@ -476,20 +460,6 @@ mod tests {
             .expect("legacy payload-ref shape should decode current bytes");
         assert_eq!(decoded_current, current);
         assert_eq!(decoded_legacy, legacy);
-    }
-
-    #[test]
-    fn product_cache_identity_tracks_exact_payload_checksum() {
-        let first = descriptor_with_ref(payload_ref(10))
-            .product_core()
-            .cache_identity()
-            .cache_key();
-        let second = descriptor_with_ref(payload_ref(11))
-            .product_core()
-            .cache_identity()
-            .cache_key();
-
-        assert_ne!(first, second);
     }
 
     #[test]
