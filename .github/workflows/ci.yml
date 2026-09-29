@@ -361,3 +361,51 @@ jobs:
           path: render-lab/temporal-camera-quality
           if-no-files-found: error
           retention-days: 7
+
+      - name: Run Render Lab synchronized A/B comparison proof
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENWERK_SOURCE_REVISION: ${{ steps.revision.outputs.expected_revision }}
+        run: |
+          set -euo pipefail
+          output="render-lab/comparison"
+          rm -rf "${output}"
+
+          timeout 30s xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
+            cargo +stable run -p runenwerk_render_lab --locked -- \
+              --rl2-compare-evidence "${output}" \
+              --window-size-px 1920x1080 \
+              --candidate-size-px 960x540 \
+              --submitted-frames 6
+
+          run_manifest="${output}/captures/run_manifest.json"
+          test -s "${run_manifest}"
+          frame_manifest="$(jq -r '.frame_manifests[0]' "${run_manifest}")"
+          test -n "${frame_manifest}"
+          test -s "${frame_manifest}"
+
+          jq -e '
+            .captures | length == 2
+            and all(.[];
+              .frame_index == .[0].frame_index
+              and .width == 1920
+              and .height == 1080
+              and .terminal_code == "completed"
+              and (.file | type == "string" and length > 0)
+            )
+            and ([.[].resource_id] | sort)
+              == ["rl2.compare.display_a","rl2.compare.display_b"]
+          ' "${frame_manifest}"
+
+          while IFS= read -r capture_file; do
+            test -s "${capture_file}"
+          done < <(jq -r '.captures[].file' "${frame_manifest}")
+
+      - name: Upload Render Lab synchronized A/B comparison evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        with:
+          name: runenwerk-render-lab-comparison
+          path: render-lab/comparison
+          if-no-files-found: error
+          retention-days: 7
