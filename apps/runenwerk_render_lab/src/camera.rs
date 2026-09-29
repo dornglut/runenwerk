@@ -1,3 +1,4 @@
+use crate::comparison::RenderLabComparisonState;
 use super::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, runen_ecs::Resource)]
@@ -52,10 +53,15 @@ impl RenderLabCamera {
 
 pub(super) fn update_render_lab_camera_system(
     input: Res<InputState>,
+    comparison: Res<RenderLabComparisonState>,
     mut camera: ResMut<RenderLabCamera>,
 ) {
     let before = *camera;
-    apply_render_lab_input(&mut camera, &input);
+    apply_render_lab_input(
+        &mut camera,
+        &input,
+        comparison.suppress_left_camera_drag(),
+    );
     if before != *camera && std::env::var("GROTTO_RENDER_CAMERA_LOG").is_ok() {
         eprintln!(
             "runenwerk_render_lab_camera yaw={:.4} pitch={:.4} distance={:.4} pan=({:.4},{:.4})",
@@ -64,7 +70,11 @@ pub(super) fn update_render_lab_camera_system(
     }
 }
 
-fn apply_render_lab_input(camera: &mut RenderLabCamera, input: &InputState) {
+fn apply_render_lab_input(
+    camera: &mut RenderLabCamera,
+    input: &InputState,
+    suppress_left_drag: bool,
+) {
     if input.mouse_delta != (0.0, 0.0) {
         // Raw relative motion and absolute cursor samples are separate observations. Prefer raw
         // motion when available, and never add the absolute fallback a second time.
@@ -73,9 +83,10 @@ fn apply_render_lab_input(camera: &mut RenderLabCamera, input: &InputState) {
             input.left_mouse_down(),
             input.middle_mouse_down(),
             input.mouse_delta,
+            suppress_left_drag,
         );
     } else {
-        replay_cursor_motion(camera, input);
+        replay_cursor_motion(camera, input, suppress_left_drag);
     }
 
     let scroll_delta = input.scroll_delta;
@@ -85,7 +96,11 @@ fn apply_render_lab_input(camera: &mut RenderLabCamera, input: &InputState) {
     }
 }
 
-fn replay_cursor_motion(camera: &mut RenderLabCamera, input: &InputState) {
+fn replay_cursor_motion(
+    camera: &mut RenderLabCamera,
+    input: &InputState,
+    suppress_left_drag: bool,
+) {
     let mut left_mouse_down = input.left_mouse_down();
     let mut middle_mouse_down = input.middle_mouse_down();
 
@@ -120,7 +135,13 @@ fn replay_cursor_motion(camera: &mut RenderLabCamera, input: &InputState) {
         }
 
         if let Some(motion) = motions.get(motion_index) {
-            apply_camera_motion(camera, left_mouse_down, middle_mouse_down, motion.delta);
+            apply_camera_motion(
+                camera,
+                left_mouse_down,
+                middle_mouse_down,
+                motion.delta,
+                suppress_left_drag,
+            );
         }
     }
 }
@@ -130,8 +151,9 @@ fn apply_camera_motion(
     left_mouse_down: bool,
     middle_mouse_down: bool,
     (delta_x, delta_y): (f32, f32),
+    suppress_left_drag: bool,
 ) {
-    if left_mouse_down {
+    if left_mouse_down && !suppress_left_drag {
         camera.yaw_radians += f64::from(delta_x) * 0.01;
         camera.pitch_radians =
             (camera.pitch_radians - f64::from(delta_y) * 0.01).clamp(-1.45, 1.45);
@@ -147,7 +169,7 @@ mod tests {
     use super::*;
 
     fn apply(camera: &mut RenderLabCamera, input: &InputState) {
-        apply_render_lab_input(camera, input);
+        apply_render_lab_input(camera, input, false);
     }
 
     fn baseline_cursor(input: &mut InputState) {
@@ -211,6 +233,29 @@ mod tests {
         assert_eq!(camera.yaw_radians, 0.1);
         assert_eq!(camera.pitch_radians, 0.05);
         assert_eq!(camera.pan, [0.2, 0.1]);
+        assert_eq!(camera.distance, 3.0);
+    }
+
+    #[test]
+    fn comparison_divider_suppresses_only_left_orbit() {
+        let mut input = InputState::new();
+        baseline_cursor(&mut input);
+        input.handle_mouse_input(
+            winit::event::ElementState::Pressed,
+            winit::event::MouseButton::Left,
+        );
+        input.handle_mouse_input(
+            winit::event::ElementState::Pressed,
+            winit::event::MouseButton::Middle,
+        );
+        input.handle_cursor_moved(10.0, -5.0);
+
+        let mut camera = RenderLabCamera::default();
+        apply_render_lab_input(&mut camera, &input, true);
+
+        assert_eq!(camera.yaw_radians, 0.0);
+        assert_eq!(camera.pitch_radians, 0.0);
+        assert_eq!(camera.pan, [0.1, 0.05]);
         assert_eq!(camera.distance, 3.0);
     }
 
