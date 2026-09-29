@@ -216,13 +216,43 @@ fn exact_bound_field_requirement() -> RenderMethodRepresentationRequirement {
     .expect("exact field requirement")
 }
 
+fn conservative_field_requirement() -> RenderMethodRepresentationRequirement {
+    RenderMethodRepresentationRequirement::new(
+        RenderRepresentationProtocolRequirement::FieldDistance {
+            revision: RENDER_FIELD_DISTANCE_PROTOCOL_REVISION,
+            input: RenderFieldDistanceInputRequirement::Conservative,
+        },
+        None,
+    )
+    .expect("conservative field requirement")
+}
+
+fn conservative_bound_field_evidence(
+    max_absolute_error_meters: f64,
+) -> RenderFieldDistanceProtocolEvidence {
+    RenderFieldDistanceProtocolEvidence::new(
+        RENDER_FIELD_DISTANCE_PROTOCOL_REVISION,
+        RenderFieldDistanceGuarantee::conservative(max_absolute_error_meters)
+            .expect("finite conservative field guarantee"),
+    )
+    .expect("field protocol")
+    .with_semantic_input_requirement(RenderFieldSemanticInputRequirement::current())
+}
+
 fn sampled_field(validity: RenderTemporalSupport) -> RenderFieldSemanticInput {
+    sampled_field_with_error(0.0, validity)
+}
+
+fn sampled_field_with_error(
+    max_absolute_query_error_local_meters: f64,
+    validity: RenderTemporalSupport,
+) -> RenderFieldSemanticInput {
     RenderFieldSemanticInput::dense(
         [-1.0; 3],
         [1.0; 3],
         [3, 3, 3],
         vec![0.0; 27],
-        0.0,
+        max_absolute_query_error_local_meters,
         validity,
     )
     .expect("field semantic input")
@@ -307,6 +337,82 @@ fn field_prerequisite_requires_matching_typed_binding() {
     supplied
         .specialize_candidate(&plan, &plan.candidates()[0])
         .expect("matching field binding should admit the field representation");
+}
+
+#[test]
+fn exact_field_representation_rejects_nonzero_current_query_error() {
+    let (plan, representation_id, _) = plan_for(
+        request_at_times(&[0.0]),
+        None,
+        Some(exact_bound_field_evidence()),
+        vec![exact_bound_field_requirement()],
+    );
+    let binding = RenderFieldSemanticInputBinding::new(
+        representation_id,
+        sampled_field_with_error(0.001, RenderTemporalSupport::unbounded()),
+    );
+    let inputs = RenderNormalizedSemanticInputs::normalize(&plan, &[], &[binding])
+        .expect("field binding shape");
+
+    inputs
+        .specialize_candidate(&plan, &plan.candidates()[0])
+        .expect_err("exact field guarantee must reject a non-zero current query error");
+}
+
+#[test]
+fn conservative_field_representation_accepts_only_within_current_query_error_bound() {
+    let (plan, representation_id, _) = plan_for(
+        request_at_times(&[0.0]),
+        None,
+        Some(conservative_bound_field_evidence(0.25)),
+        vec![conservative_field_requirement()],
+    );
+
+    let within = RenderNormalizedSemanticInputs::normalize(
+        &plan,
+        &[],
+        &[RenderFieldSemanticInputBinding::new(
+            representation_id,
+            sampled_field_with_error(0.25, RenderTemporalSupport::unbounded()),
+        )],
+    )
+    .expect("bounded field binding shape");
+    within
+        .specialize_candidate(&plan, &plan.candidates()[0])
+        .expect("query error equal to the declared field guarantee should remain admissible");
+
+    let exceeds = RenderNormalizedSemanticInputs::normalize(
+        &plan,
+        &[],
+        &[RenderFieldSemanticInputBinding::new(
+            representation_id,
+            sampled_field_with_error(0.250_001, RenderTemporalSupport::unbounded()),
+        )],
+    )
+    .expect("bounded field binding shape");
+    exceeds
+        .specialize_candidate(&plan, &plan.candidates()[0])
+        .expect_err("current query error above the representation guarantee must fail closed");
+}
+
+#[test]
+fn field_query_error_admission_does_not_require_refinement_evidence() {
+    let (plan, representation_id, _) = plan_for(
+        request_at_times(&[0.0]),
+        None,
+        Some(conservative_bound_field_evidence(0.1)),
+        vec![conservative_field_requirement()],
+    );
+    let binding = RenderFieldSemanticInputBinding::new(
+        representation_id,
+        sampled_field_with_error(0.05, RenderTemporalSupport::unbounded()),
+    );
+    let inputs = RenderNormalizedSemanticInputs::normalize(&plan, &[], &[binding])
+        .expect("field binding shape");
+
+    inputs
+        .specialize_candidate(&plan, &plan.candidates()[0])
+        .expect("query-error admission is independent from absent refinement evidence");
 }
 
 #[test]
