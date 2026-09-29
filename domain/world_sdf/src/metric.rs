@@ -1,5 +1,6 @@
 use crate::{
-    SDF_BRICK_EDGE_SAMPLES, SDF_BRICK_SAMPLE_COUNT, SDF_PAGE_EDGE_BRICKS, SdfBrickRecord,
+    SDF_METRIC_BRICK_EDGE_SAMPLES, SDF_METRIC_BRICK_SAMPLE_COUNT, SDF_PAGE_EDGE_BRICKS,
+    SdfBrickRecord,
     SdfChunkPayload, SdfPageCoord3, WorldSdfPayloadRef,
 };
 use runen_spatial::{GridPartitionConfig, WorldPosition};
@@ -60,7 +61,7 @@ impl fmt::Display for WorldSdfMetricQueryError {
             Self::MissingBrick => write!(f, "metric field query resolved to a missing SDF brick"),
             Self::InvalidMetricSampleCount { actual } => write!(
                 f,
-                "metric SDF brick must contain exactly {SDF_BRICK_SAMPLE_COUNT} canonical corner samples, found {actual}"
+                "metric SDF brick must contain exactly {SDF_METRIC_BRICK_SAMPLE_COUNT} canonical corner samples, found {actual}"
             ),
         }
     }
@@ -202,12 +203,12 @@ fn sample_metric_brick(
     brick: &SdfBrickRecord,
     local_in_brick: [f64; 3],
 ) -> Result<f64, WorldSdfMetricQueryError> {
-    if brick.samples.distances.len() != SDF_BRICK_SAMPLE_COUNT {
+    if brick.samples.distances.len() != SDF_METRIC_BRICK_SAMPLE_COUNT {
         return Err(WorldSdfMetricQueryError::InvalidMetricSampleCount {
             actual: brick.samples.distances.len(),
         });
     }
-    debug_assert_eq!(SDF_BRICK_EDGE_SAMPLES, 2);
+    debug_assert_eq!(SDF_METRIC_BRICK_EDGE_SAMPLES, 2);
 
     let sample_at = |x: usize, y: usize, z: usize| -> f64 {
         f64::from(brick.samples.distances[cube_sample_index(x, y, z)])
@@ -226,8 +227,8 @@ fn sample_metric_brick(
 }
 
 fn cube_sample_index(x: usize, y: usize, z: usize) -> usize {
-    z * SDF_BRICK_EDGE_SAMPLES * SDF_BRICK_EDGE_SAMPLES
-        + y * SDF_BRICK_EDGE_SAMPLES
+    z * SDF_METRIC_BRICK_EDGE_SAMPLES * SDF_METRIC_BRICK_EDGE_SAMPLES
+        + y * SDF_METRIC_BRICK_EDGE_SAMPLES
         + x
 }
 
@@ -265,10 +266,10 @@ mod tests {
         for brick_z in 0..SDF_PAGE_EDGE_BRICKS as u8 {
             for brick_y in 0..SDF_PAGE_EDGE_BRICKS as u8 {
                 for brick_x in 0..SDF_PAGE_EDGE_BRICKS as u8 {
-                    let mut distances = Vec::with_capacity(SDF_BRICK_SAMPLE_COUNT);
-                    for sample_z in 0..SDF_BRICK_EDGE_SAMPLES {
-                        for sample_y in 0..SDF_BRICK_EDGE_SAMPLES {
-                            for sample_x in 0..SDF_BRICK_EDGE_SAMPLES {
+                    let mut distances = Vec::with_capacity(SDF_METRIC_BRICK_SAMPLE_COUNT);
+                    for sample_z in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
+                        for sample_y in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
+                            for sample_x in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
                                 let point_x =
                                     (f64::from(brick_x) + sample_x as f64) / edge;
                                 let distance = point_x - 0.5;
@@ -309,8 +310,8 @@ mod tests {
 
     #[test]
     fn canonical_metric_topology_is_two_samples_per_edge() {
-        assert_eq!(SDF_BRICK_EDGE_SAMPLES, 2);
-        assert_eq!(SDF_BRICK_SAMPLE_COUNT, 8);
+        assert_eq!(SDF_METRIC_BRICK_EDGE_SAMPLES, 2);
+        assert_eq!(SDF_METRIC_BRICK_SAMPLE_COUNT, 8);
     }
 
     #[test]

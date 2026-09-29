@@ -23,9 +23,10 @@ summaries for chunked world data.
 ## Public Surface
 
 - `SdfChunkStore`, `SdfChunkPayload`, `SdfPageRecord`, `SdfBrickRecord`.
-- `SDF_PAGE_EDGE_BRICKS`, `SDF_BRICK_EDGE_SAMPLES`, `SDF_BRICK_SAMPLE_COUNT`, and brick/page metadata.
-  The current dense brick topology is two corner samples per axis (eight samples total), shared at
-  neighboring brick boundaries.
+- `SDF_PAGE_EDGE_BRICKS`, `SDF_BRICK_EDGE_SAMPLES`, and brick/page metadata.
+- `SDF_METRIC_BRICK_EDGE_SAMPLES` and `SDF_METRIC_BRICK_SAMPLE_COUNT` define the opt-in metric
+  contract's 2×2×2 corner lattice (eight samples total), shared at neighboring brick boundaries.
+  The older nominal `SDF_BRICK_EDGE_SAMPLES` constant is not used to infer metric layout.
 - `CaveSectorStore`, `CavePortalGraph`, cave light/volume scope summaries.
 - `ChunkHierarchyNode` and `ChunkHierarchySummary`.
 - `CollisionQueryService`, `SphereSweep`, `CollisionHit`, and readiness/result
