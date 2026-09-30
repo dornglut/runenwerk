@@ -56,7 +56,7 @@ impl RenderLabComparisonTemporalEvidenceState {
         frame_index: u64,
     ) -> Option<
         &[engine::plugins::render::deterministic_execution::RenderDeterministicTemporalExecutionEvidence],
-    > {
+    >{
         self.by_frame.get(&frame_index).map(Vec::as_slice)
     }
 }
@@ -109,9 +109,9 @@ fn temporal_frames(
     let mut frames = Vec::new();
     for observation in history.observations() {
         let frame = observation.key.frame_index;
-        let records = temporal_evidence
-            .frame(frame)
-            .ok_or_else(|| anyhow::anyhow!("comparison frame {frame} has no retained temporal evidence"))?;
+        let records = temporal_evidence.frame(frame).ok_or_else(|| {
+            anyhow::anyhow!("comparison frame {frame} has no retained temporal evidence")
+        })?;
         if records.len() != 2 {
             bail!(
                 "comparison frame {frame} requires exactly two temporal records, found {}",
@@ -227,7 +227,9 @@ pub(super) fn write_comparison_evidence(
         .expect("validated target capture results");
     let capture_manifest_path = debug_report
         .capture_artifact_manifest_for_frame(target_frame)
-        .ok_or_else(|| anyhow::anyhow!("comparison target frame has no retained capture manifest"))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!("comparison target frame has no retained capture manifest")
+        })?;
     let captures = config
         .capture_selectors()
         .iter()
@@ -235,8 +237,13 @@ pub(super) fn write_comparison_evidence(
             let result = results
                 .iter()
                 .find(|result| &result.selector == selector)
-                .ok_or_else(|| anyhow::anyhow!("comparison target report lost a capture selector"))?;
-            let artifact_path = result.artifact_path.as_ref().expect("validated capture path");
+                .ok_or_else(|| {
+                    anyhow::anyhow!("comparison target report lost a capture selector")
+                })?;
+            let artifact_path = result
+                .artifact_path
+                .as_ref()
+                .expect("validated capture path");
             let artifact_bytes = fs::read(artifact_path).with_context(|| {
                 format!(
                     "read comparison capture artifact {} for hashing",
@@ -308,7 +315,6 @@ pub(super) fn write_comparison_evidence(
     .context("write Render Lab comparison evidence")?;
     Ok(())
 }
-
 
 #[cfg(test)]
 mod tests {
