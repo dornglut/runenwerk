@@ -25,6 +25,7 @@ var<storage, read> camera_words: array<u32>;
 const F32_EXPONENT_MASK: u32 = 2139095040u;
 const CAMERA_DEPTH_ABSOLUTE_EPSILON: f32 = 0.001;
 const CAMERA_DEPTH_RELATIVE_EPSILON: f32 = 0.001;
+const INVALID_HISTORY_SAMPLE_COUNT: u32 = 4294967295u;
 
 fn finite_f32(value: f32) -> bool {
     return (bitcast<u32>(value) & F32_EXPONENT_MASK) != F32_EXPONENT_MASK;
@@ -129,7 +130,7 @@ fn main(
     let output_index = current_output_index(sample_index);
     if defined_words[sample_index] == 0u {
         current_radiance_words[output_index] = 0u;
-        write_current(sample_index, 0.0, 0.0, 0u, 0u);
+        write_current(sample_index, 0.0, 0.0, INVALID_HISTORY_SAMPLE_COUNT, 0u);
         return;
     }
 
@@ -230,8 +231,13 @@ fn main(
             return;
         }
 
+        let previous_raw_count = previous_history_words[previous_base + 2u];
+        if previous_raw_count == INVALID_HISTORY_SAMPLE_COUNT {
+            write_current(sample_index, current_radiance, current_depth, 1u, 1u);
+            return;
+        }
         let previous_radiance = bitcast<f32>(previous_history_words[previous_base]);
-        let previous_count = min(previous_history_words[previous_base + 2u], 4u);
+        let previous_count = min(previous_raw_count, 4u);
         if previous_count == 0u || !finite_f32(previous_radiance) {
             write_current(sample_index, current_radiance, current_depth, 1u, 1u);
             return;
@@ -266,8 +272,20 @@ fn main(
     }
 
     let previous_base = history_base(sample_index);
+    let previous_raw_count = previous_history_words[previous_base + 2u];
+    if previous_raw_count == INVALID_HISTORY_SAMPLE_COUNT {
+        current_radiance_words[output_index] = 0u;
+        write_current(
+            sample_index,
+            0.0,
+            current_depth,
+            INVALID_HISTORY_SAMPLE_COUNT,
+            current_hit_word,
+        );
+        return;
+    }
     let previous_radiance = bitcast<f32>(previous_history_words[previous_base]);
-    let previous_count = min(previous_history_words[previous_base + 2u], 4u);
+    let previous_count = min(previous_raw_count, 4u);
     if previous_count == 0u || !finite_f32(previous_radiance) {
         current_radiance_words[output_index] = bitcast<u32>(current_sample);
         write_current(
