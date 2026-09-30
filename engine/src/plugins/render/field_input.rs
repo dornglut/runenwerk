@@ -267,7 +267,14 @@ mod tests {
             Err(RenderFieldSemanticInputError::DegenerateDimensions)
         ));
         assert!(matches!(
-            RenderFieldSemanticInput::dense([0.0; 3], [1.0; 3], [2, 2, 2], vec![0.0; 7], 0.0, validity),
+            RenderFieldSemanticInput::dense(
+                [0.0; 3],
+                [1.0; 3],
+                [2, 2, 2],
+                vec![0.0; 7],
+                0.0,
+                validity,
+            ),
             Err(RenderFieldSemanticInputError::SampleCountMismatch {
                 expected: 8,
                 actual: 7,
