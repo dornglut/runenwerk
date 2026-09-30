@@ -3112,15 +3112,15 @@ mod tests {
         assert_eq!(cache.buffers.len(), 1, "the cache retains one live slot");
     }
 
-    fn bounded_cycle_mean(samples: [Option<f32>; 4]) -> Option<f32> {
-        let mut sum = 0.0_f32;
-        let mut count = 0_u32;
-        for sample in samples {
-            let sample = sample?;
-            sum += sample;
-            count += 1;
+    fn bounded_cycle_mean(samples: &[Option<f32>]) -> Option<f32> {
+        if samples.len() < TEMPORAL_PHASE_COUNT as usize {
+            return None;
         }
-        Some(sum / count as f32)
+        let mut sum = 0.0_f32;
+        for sample in samples.iter().take(TEMPORAL_PHASE_COUNT as usize) {
+            sum += (*sample)?;
+        }
+        Some(sum / TEMPORAL_PHASE_COUNT as f32)
     }
 
     fn requested_cell_sample_counts(
@@ -3157,32 +3157,33 @@ mod tests {
     #[test]
     fn bounded_cycle_forms_exact_first_cycle_mean_and_defined_miss_is_zero() {
         assert_eq!(
-            bounded_cycle_mean([Some(1.0), Some(3.0), Some(5.0), Some(7.0)]),
+            bounded_cycle_mean(&[Some(1.0), Some(3.0), Some(5.0), Some(7.0)]),
             Some(4.0)
         );
         assert_eq!(
-            bounded_cycle_mean([Some(8.0), Some(0.0), Some(4.0), Some(0.0)]),
+            bounded_cycle_mean(&[Some(8.0), Some(0.0), Some(4.0), Some(0.0)]),
             Some(3.0),
             "defined background phases contribute radiance zero to the finite estimate"
         );
         assert_eq!(
-            bounded_cycle_mean([Some(8.0), None, Some(4.0), Some(0.0)]),
+            bounded_cycle_mean(&[Some(8.0), None, Some(4.0), Some(0.0)]),
             None,
             "undefined evaluation must remain distinct from a defined background miss"
         );
-
-        let formed = bounded_cycle_mean([Some(1.0), Some(3.0), Some(5.0), Some(7.0)])
-            .expect("first compatible cycle forms");
-        for later_cycle in [
-            [100.0_f32, -100.0, 50.0, -50.0],
-            [7.0_f32, 5.0, 3.0, 1.0],
-        ] {
-            assert_eq!(
-                formed, 4.0,
-                "later repeated phases must not mutate the already formed bounded estimate"
-            );
-            let _ = later_cycle;
-        }
+        assert_eq!(
+            bounded_cycle_mean(&[
+                Some(1.0),
+                Some(3.0),
+                Some(5.0),
+                Some(7.0),
+                Some(100.0),
+                Some(-100.0),
+                Some(50.0),
+                Some(-50.0),
+            ]),
+            Some(4.0),
+            "later cycles must not mutate the already formed bounded estimate"
+        );
     }
 
     #[test]
