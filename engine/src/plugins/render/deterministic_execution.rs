@@ -2826,9 +2826,12 @@ fn conservative_nonnegative_f32_bits(
         return Err(RenderDeterministicLoweringError::NumericRealization { field });
     }
     if f64::from(physical) < value {
-        physical = f32::from_bits(physical.to_bits().checked_add(1).ok_or(
-            RenderDeterministicLoweringError::NumericRealization { field },
-        )?);
+        physical = f32::from_bits(
+            physical
+                .to_bits()
+                .checked_add(1)
+                .ok_or(RenderDeterministicLoweringError::NumericRealization { field })?,
+        );
         if !physical.is_finite() {
             return Err(RenderDeterministicLoweringError::NumericRealization { field });
         }
