@@ -3743,6 +3743,144 @@ mod tests {
         );
     }
 
+    #[test]
+    fn camera_same_pose_convergence_advances_only_on_completed_frames_and_resets_after_motion() {
+        let mut cache = DeterministicResourceCache::default();
+        let observation = temporal_test_observation(RenderAffineTransform3::identity());
+        let signature = camera_temporal_signature(7, observation, (4, 4));
+
+        let bootstrap = cache
+            .temporal_history(
+                23,
+                0,
+                signature.clone(),
+                (4, 4),
+                4,
+                DeterministicTemporalHistorySelection {
+                    current_observation: observation,
+                    camera_capable: true,
+                },
+            )
+            .expect("bootstrap camera history");
+        assert!(matches!(
+            bootstrap.storage,
+            DeterministicTemporalHistoryUseStorage::Camera {
+                same_pose_completed_frames: 0,
+                ..
+            }
+        ));
+
+        let retry = cache
+            .temporal_history(
+                23,
+                0,
+                signature.clone(),
+                (4, 4),
+                4,
+                DeterministicTemporalHistorySelection {
+                    current_observation: observation,
+                    camera_capable: true,
+                },
+            )
+            .expect("uncompleted bootstrap retry");
+        assert!(matches!(
+            retry.storage,
+            DeterministicTemporalHistoryUseStorage::Camera {
+                same_pose_completed_frames: 0,
+                ..
+            }
+        ));
+
+        cache.reconcile_temporal_outputs(23, true);
+        for expected_completed in 1..=TEMPORAL_PHASE_COUNT {
+            let use_state = cache
+                .temporal_history(
+                    23,
+                    0,
+                    signature.clone(),
+                    (4, 4),
+                    4,
+                    DeterministicTemporalHistorySelection {
+                        current_observation: observation,
+                        camera_capable: true,
+                    },
+                )
+                .expect("same-pose camera history");
+            assert!(matches!(
+                use_state.storage,
+                DeterministicTemporalHistoryUseStorage::Camera {
+                    pose_changed: false,
+                    same_pose_completed_frames,
+                    ..
+                } if same_pose_completed_frames == expected_completed
+            ));
+            if expected_completed < TEMPORAL_PHASE_COUNT {
+                cache.reconcile_temporal_outputs(23, true);
+            }
+        }
+
+        let moved = temporal_test_observation(
+            RenderAffineTransform3::from_row_major_3x4([
+                1.0, 0.0, 0.0, 0.25, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+            ])
+            .expect("valid moved observation"),
+        );
+        let moving = cache
+            .temporal_history(
+                23,
+                0,
+                signature,
+                (4, 4),
+                4,
+                DeterministicTemporalHistorySelection {
+                    current_observation: moved,
+                    camera_capable: true,
+                },
+            )
+            .expect("pose-only motion should reuse camera history");
+        assert!(matches!(
+            moving.storage,
+            DeterministicTemporalHistoryUseStorage::Camera {
+                pose_changed: true,
+                same_pose_completed_frames: 4,
+                ..
+            }
+        ));
+
+        cache.reconcile_temporal_outputs(23, true);
+        let after_motion = cache
+            .temporal_histories
+            .get(&(23, 0))
+            .expect("completed moving history retained");
+        let DeterministicTemporalStorage::Camera(camera) = &after_motion.storage else {
+            panic!("P100 history must remain camera storage");
+        };
+        assert_eq!(camera.same_pose_completed_frames, 0);
+        assert_eq!(camera.completed_observation, Some(moved));
+
+        let stopped = cache
+            .temporal_history(
+                23,
+                0,
+                camera_temporal_signature(7, moved, (4, 4)),
+                (4, 4),
+                4,
+                DeterministicTemporalHistorySelection {
+                    current_observation: moved,
+                    camera_capable: true,
+                },
+            )
+            .expect("same pose after motion should begin a fresh bounded estimate");
+        assert!(matches!(
+            stopped.storage,
+            DeterministicTemporalHistoryUseStorage::Camera {
+                pose_changed: false,
+                same_pose_completed_frames: 0,
+                ..
+            }
+        ));
+    }
+
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     enum CameraReferenceDecision {
         Accept,
