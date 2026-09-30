@@ -835,6 +835,7 @@ mod tests {
         let mut requests = PreparedRenderFrameRequestResource::default();
         let mut contributions = RenderDeterministicFrameContributionResource::default();
         let mut state = RenderLabComparisonState::active((960, 540));
+        let mut stable_identity = None;
         for mode in [
             RenderLabComparisonMode::Split,
             RenderLabComparisonMode::FullA,
@@ -853,6 +854,12 @@ mod tests {
             let b = publication.producer_b;
             let a_key = publication.contribution_a.target_key.clone();
             let b_key = publication.contribution_b.target_key.clone();
+            let identity = (a, b, a_key.clone(), b_key.clone());
+            if let Some(expected) = stable_identity.as_ref() {
+                assert_eq!(&identity, expected);
+            } else {
+                stable_identity = Some(identity);
+            }
             stage_render_lab_comparison_publication(
                 &mut targets,
                 &mut requests,
@@ -885,19 +892,27 @@ mod tests {
             )
             .expect("comparison publication")
         };
+        let initial = build();
+        let producer_a = initial.producer_a;
+        let producer_b = initial.producer_b;
         stage_render_lab_comparison_publication(
             &mut targets,
             &mut requests,
             &mut contributions,
-            build(),
+            initial,
         )
         .expect("initial complete state");
         let original_targets = targets.snapshot();
+        let original_contributions = contributions.clone().take_all();
+        assert_eq!(original_contributions.len(), 2);
+        assert_eq!(original_contributions[0].producer_id, producer_a);
+        assert_eq!(original_contributions[1].producer_id, producer_b);
         let original_invocations = requests
             .requested_flow_invocations()
             .into_iter()
             .cloned()
             .collect::<Vec<_>>();
+
         let mut collision = build();
         collision.raw_b_target.key = collision.raw_a_target.key.clone();
         assert!(
@@ -910,6 +925,10 @@ mod tests {
             .is_err()
         );
         assert_eq!(targets.snapshot(), original_targets);
+        assert_eq!(
+            contributions.clone().take_all(),
+            original_contributions
+        );
         assert_eq!(
             requests
                 .requested_flow_invocations()
@@ -948,6 +967,10 @@ mod tests {
             .is_err()
         );
         assert_eq!(targets.snapshot(), original_targets);
+        assert_eq!(
+            contributions.clone().take_all(),
+            original_contributions
+        );
         assert_eq!(
             requests
                 .requested_flow_invocations()
