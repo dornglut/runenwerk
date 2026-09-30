@@ -8,29 +8,49 @@ const COMPARISON_SCENARIO_REVISION: u32 = 1;
 const COMPARISON_DIFF_ID: &str = "runenwerk.render_lab.rl2.compare.a_vs_b";
 
 #[derive(Debug, Clone, Default, runen_ecs::Resource)]
-pub(super) struct RenderLabComparisonTemporalEvidenceState {
-    by_frame: BTreeMap<
+pub(super) struct RenderLabComparisonEvidenceState {
+    temporal_by_frame: BTreeMap<
         u64,
         Vec<
             engine::plugins::render::deterministic_execution::RenderDeterministicTemporalExecutionEvidence,
         >,
     >,
+    diff_by_frame: BTreeMap<u64, Vec<RenderTextureDiffResult>>,
 }
 
-impl RenderLabComparisonTemporalEvidenceState {
-    fn observe_frame(
+impl RenderLabComparisonEvidenceState {
+    fn observe_temporal_frame(
         &mut self,
         frame_index: u64,
         records: Vec<
             engine::plugins::render::deterministic_execution::RenderDeterministicTemporalExecutionEvidence,
         >,
     ) {
-        self.by_frame.insert(frame_index, records);
-        while self.by_frame.len() > RL2_MEASUREMENT_HISTORY_CAPACITY {
-            let Some(oldest) = self.by_frame.keys().next().copied() else {
+        self.temporal_by_frame.insert(frame_index, records);
+        while self.temporal_by_frame.len() > RL2_MEASUREMENT_HISTORY_CAPACITY {
+            let Some(oldest) = self.temporal_by_frame.keys().next().copied() else {
                 break;
             };
-            self.by_frame.remove(&oldest);
+            self.temporal_by_frame.remove(&oldest);
+        }
+    }
+
+    fn observe_latest_diff(&mut self, debug_report: &RenderDebugFrameReportState) {
+        let Some(report) = debug_report.latest.as_ref() else {
+            return;
+        };
+        if report.texture_diff_results.is_empty()
+            || self.diff_by_frame.contains_key(&report.frame_index)
+        {
+            return;
+        }
+        self.diff_by_frame
+            .insert(report.frame_index, report.texture_diff_results.clone());
+        while self.diff_by_frame.len() > RL2_MEASUREMENT_HISTORY_CAPACITY {
+            let Some(oldest) = self.diff_by_frame.keys().next().copied() else {
+                break;
+            };
+            self.diff_by_frame.remove(&oldest);
         }
     }
 
@@ -38,26 +58,32 @@ impl RenderLabComparisonTemporalEvidenceState {
         &mut self,
         history: &RenderFrameHistoryState,
         gfx: &engine::plugins::render::Gfx,
+        debug_report: &RenderDebugFrameReportState,
     ) {
         for observation in history.observations() {
             let frame_index = observation.key.frame_index;
-            if self.by_frame.contains_key(&frame_index) {
+            if self.temporal_by_frame.contains_key(&frame_index) {
                 continue;
             }
             let records = gfx.deterministic_temporal_evidence(frame_index);
             if !records.is_empty() {
-                self.observe_frame(frame_index, records.to_vec());
+                self.observe_temporal_frame(frame_index, records.to_vec());
             }
         }
+        self.observe_latest_diff(debug_report);
     }
 
-    fn frame(
+    fn temporal_frame(
         &self,
         frame_index: u64,
     ) -> Option<
         &[engine::plugins::render::deterministic_execution::RenderDeterministicTemporalExecutionEvidence],
-    >{
-        self.by_frame.get(&frame_index).map(Vec::as_slice)
+    > {
+        self.temporal_by_frame.get(&frame_index).map(Vec::as_slice)
+    }
+
+    fn diff_results(&self, frame_index: u64) -> Option<&[RenderTextureDiffResult]> {
+        self.diff_by_frame.get(&frame_index).map(Vec::as_slice)
     }
 }
 
@@ -100,7 +126,7 @@ fn compared_diff(
 
 fn temporal_frames(
     history: &RenderFrameHistoryState,
-    temporal_evidence: &RenderLabComparisonTemporalEvidenceState,
+    evidence_state: &RenderLabComparisonEvidenceState,
     target_frame: u64,
     output_size_px: (u32, u32),
     candidate_size_px: (u32, u32),
@@ -109,7 +135,7 @@ fn temporal_frames(
     let mut frames = Vec::new();
     for observation in history.observations() {
         let frame = observation.key.frame_index;
-        let records = temporal_evidence.frame(frame).ok_or_else(|| {
+        let records = evidence_state.temporal_frame(frame).ok_or_else(|| {
             anyhow::anyhow!("comparison frame {frame} has no retained temporal evidence")
         })?;
         if records.len() != 2 {
@@ -197,20 +223,20 @@ fn temporal_frames(
 pub(super) fn write_comparison_evidence(
     config: &RenderLabComparisonEvidenceConfig,
     history: &RenderFrameHistoryState,
-    temporal_evidence: &RenderLabComparisonTemporalEvidenceState,
+    evidence_state: &RenderLabComparisonEvidenceState,
     debug_report: &RenderDebugFrameReportState,
     gfx: &engine::plugins::render::Gfx,
     target_frame: u64,
     output_size_px: (u32, u32),
     candidate_size_px: (u32, u32),
 ) -> Result<()> {
-    let diffs = debug_report
-        .texture_diff_results_for_frame(target_frame)
+    let diffs = evidence_state
+        .diff_results(target_frame)
         .ok_or_else(|| anyhow::anyhow!("comparison target frame has no retained texture diff"))?;
     let diff = compared_diff(diffs, target_frame, output_size_px)?;
     let temporal = temporal_frames(
         history,
-        temporal_evidence,
+        evidence_state,
         target_frame,
         output_size_px,
         candidate_size_px,
@@ -319,20 +345,81 @@ pub(super) fn write_comparison_evidence(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use engine::plugins::render::inspect::{
+        CaptureStage, CaptureTextureClass, RenderCaptureSelector, RenderDebugFrameReport,
+        RenderTextureDiffMetrics, RenderTextureDiffRequest,
+    };
 
     #[test]
     fn comparison_temporal_evidence_state_retains_the_full_product_bound() {
-        let mut state = RenderLabComparisonTemporalEvidenceState::default();
+        let mut state = RenderLabComparisonEvidenceState::default();
         for frame_index in 0..=RL2_MEASUREMENT_HISTORY_CAPACITY as u64 {
-            state.observe_frame(frame_index, Vec::new());
+            state.observe_temporal_frame(frame_index, Vec::new());
         }
 
-        assert!(state.frame(0).is_none());
+        assert!(state.temporal_frame(0).is_none());
         assert!(
             state
-                .frame(RL2_MEASUREMENT_HISTORY_CAPACITY as u64)
+                .temporal_frame(RL2_MEASUREMENT_HISTORY_CAPACITY as u64)
                 .is_some()
         );
-        assert_eq!(state.by_frame.len(), RL2_MEASUREMENT_HISTORY_CAPACITY);
+        assert_eq!(
+            state.temporal_by_frame.len(),
+            RL2_MEASUREMENT_HISTORY_CAPACITY
+        );
+    }
+
+    #[test]
+    fn comparison_diff_evidence_is_product_local_and_survives_later_latest_reports() {
+        let selector = RenderCaptureSelector {
+            flow_id: Some("flow".to_string()),
+            pass_id: Some("pass".to_string()),
+            stage: CaptureStage::After,
+            resource_id: "display".to_string(),
+            texture_class: CaptureTextureClass::ColorTarget,
+        };
+        let request =
+            RenderTextureDiffRequest::new(COMPARISON_DIFF_ID, selector.clone(), selector.clone());
+        let point = selector.stable_point_fallback();
+        let diff = RenderTextureDiffResult {
+            diff_id: COMPARISON_DIFF_ID.to_string(),
+            request,
+            left_capture_point: point.clone(),
+            right_capture_point: point,
+            left_frame_identity: None,
+            right_frame_identity: None,
+            status: RenderTextureDiffStatus::Compared,
+            metrics: Some(RenderTextureDiffMetrics {
+                total_pixel_count: 4,
+                changed_pixel_count: 1,
+                changed_pixel_ratio: 0.25,
+                max_delta: 1,
+                mean_delta: 0.25,
+            }),
+            mismatch_samples: Vec::new(),
+            diff_image_path: None,
+            message: None,
+        };
+
+        let mut reports = RenderDebugFrameReportState::default();
+        let mut state = RenderLabComparisonEvidenceState::default();
+        reports.observe_frame(RenderDebugFrameReport {
+            frame_index: 5,
+            texture_diff_results: vec![diff.clone()],
+            ..RenderDebugFrameReport::default()
+        });
+        state.observe_latest_diff(&reports);
+        reports.observe_frame(RenderDebugFrameReport {
+            frame_index: 6,
+            ..RenderDebugFrameReport::default()
+        });
+        state.observe_latest_diff(&reports);
+
+        assert_eq!(state.diff_results(5), Some([diff].as_slice()));
+        assert_eq!(state.diff_results(6), None);
+        assert_eq!(
+            reports.latest.as_ref().map(|report| report.frame_index),
+            Some(6)
+        );
     }
 }

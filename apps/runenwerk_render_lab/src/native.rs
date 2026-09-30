@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 mod comparison_evidence;
 mod temporal_quality;
 
-use comparison_evidence::RenderLabComparisonTemporalEvidenceState;
+use comparison_evidence::RenderLabComparisonEvidenceState;
 
 use crate::comparison::{
     RenderLabComparisonEvidenceConfig, RenderLabComparisonState,
@@ -105,7 +105,7 @@ struct RenderLabFramePublicationResources<'w> {
 #[derive(runen_ecs::SystemParam)]
 struct RenderLabComparisonCompletionResources<'w> {
     evidence: ResMut<'w, RenderLabComparisonEvidenceConfig>,
-    temporal_evidence: ResMut<'w, RenderLabComparisonTemporalEvidenceState>,
+    evidence_state: ResMut<'w, RenderLabComparisonEvidenceState>,
     presentation: Res<'w, engine::PrimaryPresentationMetricsResource>,
     comparison: Res<'w, RenderLabComparisonState>,
 }
@@ -123,7 +123,7 @@ impl Plugin for RenderLabPlugin {
         app.init_resource::<RenderLabCamera>();
         app.init_resource::<RenderLabComparisonState>();
         app.init_resource::<RenderLabComparisonEvidenceConfig>();
-        app.init_resource::<RenderLabComparisonTemporalEvidenceState>();
+        app.init_resource::<RenderLabComparisonEvidenceState>();
         app.init_resource::<RenderLabMeasurementConfig>();
         app.init_resource::<RenderLabFixedQualityPlans>();
         app.init_resource::<RenderLabTemporalQualityExecutionState>();
@@ -630,7 +630,7 @@ fn complete_render_lab_comparison_evidence_if_requested(
     windows: &mut WindowStateRegistryResource,
     evidence: &mut RenderLabComparisonEvidenceConfig,
     history: &RenderFrameHistoryState,
-    temporal_evidence: &RenderLabComparisonTemporalEvidenceState,
+    evidence_state: &RenderLabComparisonEvidenceState,
     debug_report: &RenderDebugFrameReportState,
     gfx: &engine::plugins::render::Gfx,
     output_size_px: (u32, u32),
@@ -738,7 +738,7 @@ fn complete_render_lab_comparison_evidence_if_requested(
     comparison_evidence::write_comparison_evidence(
         evidence,
         history,
-        temporal_evidence,
+        evidence_state,
         debug_report,
         gfx,
         target_frame_index,
@@ -764,14 +764,14 @@ fn approve_render_lab_close_system(
 ) -> Result<()> {
     if comparison_resources.evidence.is_active() {
         comparison_resources
-            .temporal_evidence
-            .observe_available(&history, &gfx);
+            .evidence_state
+            .observe_available(&history, &gfx, &debug_report);
     }
     if complete_render_lab_comparison_evidence_if_requested(
         &mut windows,
         &mut comparison_resources.evidence,
         &history,
-        &comparison_resources.temporal_evidence,
+        &comparison_resources.evidence_state,
         &debug_report,
         &gfx,
         comparison_resources.presentation.size_px(),
