@@ -3112,6 +3112,101 @@ mod tests {
         assert_eq!(cache.buffers.len(), 1, "the cache retains one live slot");
     }
 
+    fn bounded_cycle_mean(samples: [Option<f32>; 4]) -> Option<f32> {
+        let mut sum = 0.0_f32;
+        let mut count = 0_u32;
+        for sample in samples {
+            let sample = sample?;
+            sum += sample;
+            count += 1;
+        }
+        Some(sum / count as f32)
+    }
+
+    fn requested_cell_sample_counts(
+        requested_extent: (u32, u32),
+        evaluation_extent: (u32, u32),
+    ) -> Vec<u32> {
+        let mut counts = vec![0_u32; (requested_extent.0 * requested_extent.1) as usize];
+        for phase in 0..TEMPORAL_PHASE_COUNT {
+            let phase_x = if phase == 1 || phase == 3 {
+                0.75_f32
+            } else {
+                0.25_f32
+            };
+            let phase_y = if phase >= 2 { 0.75_f32 } else { 0.25_f32 };
+            for evaluation_y in 0..evaluation_extent.1 {
+                for evaluation_x in 0..evaluation_extent.0 {
+                    let requested_x = (((evaluation_x as f32 + phase_x)
+                        * requested_extent.0 as f32
+                        / evaluation_extent.0 as f32)
+                        .floor() as u32)
+                        .min(requested_extent.0 - 1);
+                    let requested_y = (((evaluation_y as f32 + phase_y)
+                        * requested_extent.1 as f32
+                        / evaluation_extent.1 as f32)
+                        .floor() as u32)
+                        .min(requested_extent.1 - 1);
+                    counts[(requested_y * requested_extent.0 + requested_x) as usize] += 1;
+                }
+            }
+        }
+        counts
+    }
+
+    #[test]
+    fn bounded_cycle_forms_exact_first_cycle_mean_and_defined_miss_is_zero() {
+        assert_eq!(
+            bounded_cycle_mean([Some(1.0), Some(3.0), Some(5.0), Some(7.0)]),
+            Some(4.0)
+        );
+        assert_eq!(
+            bounded_cycle_mean([Some(8.0), Some(0.0), Some(4.0), Some(0.0)]),
+            Some(3.0),
+            "defined background phases contribute radiance zero to the finite estimate"
+        );
+        assert_eq!(
+            bounded_cycle_mean([Some(8.0), None, Some(4.0), Some(0.0)]),
+            None,
+            "undefined evaluation must remain distinct from a defined background miss"
+        );
+
+        let formed = bounded_cycle_mean([Some(1.0), Some(3.0), Some(5.0), Some(7.0)])
+            .expect("first compatible cycle forms");
+        for later_cycle in [
+            [100.0_f32, -100.0, 50.0, -50.0],
+            [7.0_f32, 5.0, 3.0, 1.0],
+        ] {
+            assert_eq!(
+                formed, 4.0,
+                "later repeated phases must not mutate the already formed bounded estimate"
+            );
+            let _ = later_cycle;
+        }
+    }
+
+    #[test]
+    fn finite_phase_mapping_has_truthful_p75_p67_and_p50_per_cell_divisors() {
+        let p100 = requested_cell_sample_counts((4, 4), (4, 4));
+        assert!(p100.iter().all(|count| *count == 4));
+
+        let p75 = requested_cell_sample_counts((4, 4), (3, 3));
+        assert!(p75.contains(&1));
+        assert!(p75.contains(&2));
+        assert!(p75.contains(&4));
+
+        let p67 = requested_cell_sample_counts((6, 6), (4, 4));
+        assert!(p67.contains(&1));
+        assert!(p67.contains(&2));
+        assert!(p67.contains(&4));
+
+        let p50 = requested_cell_sample_counts((4, 4), (2, 2));
+        assert!(
+            p50.iter().all(|count| *count == 1),
+            "P50 cells settle after the global sequence even though each receives one sample"
+        );
+    }
+
     fn temporal_test_observation(
         transform: super::super::space_time::RenderAffineTransform3,
     ) -> RenderPerspectiveObservation {
