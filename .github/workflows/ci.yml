@@ -171,7 +171,7 @@ jobs:
                 --rl2-quality "${output}" \
                 --window-size-px 1920x1080 \
                 --internal-size-px "${internal}" \
-                --submitted-frames 6
+                --submitted-frames 10
 
             test -s "${output}/quality-evidence.json"
             test -s "${output}/captures/run_manifest.json"
@@ -185,20 +185,20 @@ jobs:
                 and .scenario_revision == 5
                 and .source_git_revision == $revision
                 and .requested_output_size_px == [1920,1080]
-                and .capture_submission_ordinal == 6
-                and .total_submitted_frames >= 6
+                and .capture_submission_ordinal == 10
+                and .total_submitted_frames >= 10
                 and .capture.terminal == "completed"
                 and (.capture.artifact_blake3 | startswith("blake3:"))
                 and .gpu.backend == "vulkan"
                 and .gpu.software_status == "software"
                 and (.gpu.evidence_profile_fingerprint | startswith("blake3:"))
                 and .execution.policy == "static_footprint"
-                and (.temporal_reconstruction | length) == 6
+                and (.temporal_reconstruction | length) == 10
                 and all(.temporal_reconstruction[];
                   .requested_size_px == [1920,1080]
                   and .evaluation_size_px == [$evaluation_width,$evaluation_height]
                   and .sequence_revision == 1
-                  and .reconstruction_revision == 1
+                  and .reconstruction_revision == 2
                 )
                 and .temporal_reconstruction[0].semantic_input_generation_classes == [1,1]
                 and .temporal_reconstruction[0].phase == 0
@@ -234,6 +234,30 @@ jobs:
                 and .temporal_reconstruction[5].history_reset == false
                 and .temporal_reconstruction[5].history_generation
                     == .temporal_reconstruction[2].history_generation
+                and .temporal_reconstruction[6].semantic_input_generation_classes == [2,2]
+                and .temporal_reconstruction[6].phase == 0
+                and .temporal_reconstruction[6].history_age == 4
+                and .temporal_reconstruction[6].history_reset == false
+                and .temporal_reconstruction[6].history_generation
+                    == .temporal_reconstruction[2].history_generation
+                and .temporal_reconstruction[7].semantic_input_generation_classes == [2,2]
+                and .temporal_reconstruction[7].phase == 1
+                and .temporal_reconstruction[7].history_age == 5
+                and .temporal_reconstruction[7].history_reset == false
+                and .temporal_reconstruction[7].history_generation
+                    == .temporal_reconstruction[2].history_generation
+                and .temporal_reconstruction[8].semantic_input_generation_classes == [2,2]
+                and .temporal_reconstruction[8].phase == 2
+                and .temporal_reconstruction[8].history_age == 6
+                and .temporal_reconstruction[8].history_reset == false
+                and .temporal_reconstruction[8].history_generation
+                    == .temporal_reconstruction[2].history_generation
+                and .temporal_reconstruction[9].semantic_input_generation_classes == [2,2]
+                and .temporal_reconstruction[9].phase == 3
+                and .temporal_reconstruction[9].history_age == 7
+                and .temporal_reconstruction[9].history_reset == false
+                and .temporal_reconstruction[9].history_generation
+                    == .temporal_reconstruction[2].history_generation
                 and .execution.native_fallback_active == false
                 and .execution.target_key == null
                 and .execution.internal_view_id == null
@@ -249,6 +273,33 @@ jobs:
           run_quality P075 1440x810
           run_quality P067 1280x720
           run_quality P050 960x540
+
+          # Retain one complete post-settle phase cycle for native P100 and one
+          # multi-sample sub-native mapping. Each bounded run starts from identical
+          # deterministic truth; ordinals 7..10 correspond to history ages 4..7
+          # after the intentional source-generation reset at ordinal 3.
+          for spec in "P100 1920x1080" "P067 1280x720"; do
+            read -r label internal <<<"${spec}"
+            stable_hash="$(jq -r '.capture.artifact_blake3' "${root}/${label}/quality-evidence.json")"
+            for ordinal in 7 8 9; do
+              settle_output="${root}/${label}-settle-${ordinal}"
+              timeout 30s xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
+                cargo +stable run -p runenwerk_render_lab --locked -- \
+                  --rl2-quality "${settle_output}" \
+                  --window-size-px 1920x1080 \
+                  --internal-size-px "${internal}" \
+                  --submitted-frames "${ordinal}"
+              jq -e \
+                --arg hash "${stable_hash}" \
+                --argjson ordinal "${ordinal}" \
+                '
+                  .capture_submission_ordinal == $ordinal
+                  and .capture.artifact_blake3 == $hash
+                  and .temporal_reconstruction[-1].reconstruction_revision == 2
+                  and .temporal_reconstruction[-1].history_age == ($ordinal - 3)
+                ' "${settle_output}/quality-evidence.json"
+            done
+          done
 
           reference_format=""
           for label in P100 P075 P067 P050; do
@@ -293,7 +344,7 @@ jobs:
             cargo +stable run -p runenwerk_render_lab --locked -- \
               --rl2-camera-quality "${output}" \
               --window-size-px 1920x1080 \
-              --submitted-frames 4
+              --submitted-frames 12
 
           evidence="${output}/camera-motion-evidence.json"
           test -s "${evidence}"
@@ -301,13 +352,13 @@ jobs:
           jq -e \
             --arg revision "${RUNENWERK_SOURCE_REVISION}" \
             '
-              .schema_version == 1
+              .schema_version == 2
               and .scenario_id == "runenwerk.render_lab.rl2.camera_motion_p100"
-              and .scenario_revision == 1
+              and .scenario_revision == 2
               and .source_git_revision == $revision
               and .requested_output_size_px == [1920,1080]
-              and .capture_submission_ordinal == 4
-              and .total_submitted_frames >= 4
+              and .capture_submission_ordinal == 12
+              and .total_submitted_frames >= 12
               and .gpu.backend == "vulkan"
               and .gpu.software_status == "software"
               and (.gpu.evidence_profile_fingerprint | startswith("blake3:"))
@@ -319,39 +370,51 @@ jobs:
               and .capture_route == "native_scene"
               and .capture.terminal == "completed"
               and (.capture.artifact_blake3 | startswith("blake3:"))
-              and (.frames | length) == 4
+              and (.frames | length) == 12
               and all(.frames[];
                 .requested_size_px == [1920,1080]
                 and .evaluation_size_px == [1920,1080]
+                and .sequence_revision == 1
+                and .reconstruction_revision == 2
                 and .semantic_input_generation_classes == [1,1]
                 and .camera_reprojection_eligible == true
-                and .camera_reprojection_revision == 1
+                and .camera_reprojection_revision == 2
                 and .depth_policy_revision == 1
               )
-              and .frames[0].phase == 0
-              and .frames[0].history_age == 0
-              and .frames[0].history_reset == true
-              and .frames[0].previous_observation_available == false
-              and .frames[0].camera_pose_changed == false
-              and .frames[1].phase == 1
-              and .frames[1].history_age == 1
-              and .frames[1].history_reset == false
-              and .frames[1].previous_observation_available == true
-              and .frames[1].camera_pose_changed == false
-              and .frames[1].history_generation == .frames[0].history_generation
-              and .frames[2].phase == 2
-              and .frames[2].history_age == 2
-              and .frames[2].history_reset == false
-              and .frames[2].previous_observation_available == true
-              and .frames[2].camera_pose_changed == true
-              and .frames[2].history_generation == .frames[0].history_generation
-              and .frames[3].phase == 3
-              and .frames[3].history_age == 3
-              and .frames[3].history_reset == false
-              and .frames[3].previous_observation_available == true
-              and .frames[3].camera_pose_changed == true
-              and .frames[3].history_generation == .frames[0].history_generation
+              and ([.frames[].history_generation] | unique | length) == 1
+              and [.frames[].phase] == [0,1,2,3,0,1,2,3,0,1,2,3]
+              and [.frames[].history_age] == [0,1,2,3,4,5,6,7,8,9,10,11]
+              and [.frames[].history_reset]
+                  == [true,false,false,false,false,false,false,false,false,false,false,false]
+              and [.frames[].previous_observation_available]
+                  == [false,true,true,true,true,true,true,true,true,true,true,true]
+              and [.frames[].camera_pose_changed]
+                  == [false,false,true,true,false,false,false,false,false,false,false,false]
+              and [.frames[].camera_same_pose_completed_frames]
+                  == [0,1,2,0,0,1,2,3,4,4,4,4]
             ' "${evidence}"
+          # Retain the other three frames of the first complete post-settle phase
+          # cycle. Ordinals 9..12 all observe the same formed radiance estimate.
+          stable_hash="$(jq -r '.capture.artifact_blake3' "${evidence}")"
+          for ordinal in 9 10 11; do
+            settle_output="${output}/settle-${ordinal}"
+            timeout 30s xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
+              cargo +stable run -p runenwerk_render_lab --locked -- \
+                --rl2-camera-quality "${settle_output}" \
+                --window-size-px 1920x1080 \
+                --submitted-frames "${ordinal}"
+            jq -e \
+              --arg hash "${stable_hash}" \
+              --argjson ordinal "${ordinal}" \
+              '
+                .schema_version == 2
+                and .scenario_revision == 2
+                and .capture_submission_ordinal == $ordinal
+                and .capture.artifact_blake3 == $hash
+                and .frames[-1].camera_same_pose_completed_frames == 4
+                and .frames[-1].reconstruction_revision == 2
+              ' "${settle_output}/camera-motion-evidence.json"
+          done
 
       - name: Upload Render Lab P100 camera-motion reprojection evidence
         if: always()
