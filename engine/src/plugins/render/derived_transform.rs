@@ -148,15 +148,6 @@ impl RenderCompiledMetricSimilarityTransform {
         )
     }
 
-    pub(super) fn local_direction_per_scene_meter(&self, direction: [f64; 3]) -> [f64; 3] {
-        mul_matrix_vector(self.scene_to_local_meters, direction)
-    }
-
-    pub(super) fn scene_normal_from_local(&self, normal: [f64; 3]) -> [f64; 3] {
-        normalize(mul_matrix_vector(self.normal_local_to_scene, normal))
-            .expect("similarity transform cannot map a non-zero normal to zero")
-    }
-
     pub(super) fn scene_to_local_meters_row_major(&self) -> [f64; 9] {
         flatten_3x3(self.scene_to_local_meters)
     }
