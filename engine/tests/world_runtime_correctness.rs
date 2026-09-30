@@ -349,7 +349,14 @@ fn runtime_sdf_package_rejects_zero_or_multiple_payload_refs_before_intake_mutat
             0 => Vec::new(),
             2 => {
                 let payload_ref = WorldSdfPayloadRef::from(&payload);
-                vec![payload_ref, payload_ref]
+                vec![
+                    WorldSdfPayloadRef {
+                        chunk_id: payload_ref.chunk_id,
+                        chunk_revision: payload_ref.chunk_revision,
+                        checksum: payload_ref.checksum,
+                    },
+                    payload_ref,
+                ]
             }
             _ => unreachable!(),
         };
