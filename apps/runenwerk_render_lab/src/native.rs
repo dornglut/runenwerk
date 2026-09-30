@@ -626,16 +626,28 @@ fn complete_render_lab_measurement_if_requested(
     Ok(())
 }
 
+struct RenderLabComparisonCompletionInputs<'a> {
+    history: &'a RenderFrameHistoryState,
+    evidence_state: &'a RenderLabComparisonEvidenceState,
+    debug_report: &'a RenderDebugFrameReportState,
+    gfx: &'a engine::plugins::render::Gfx,
+    output_size_px: (u32, u32),
+    candidate_size_px: (u32, u32),
+}
+
 fn complete_render_lab_comparison_evidence_if_requested(
     windows: &mut WindowStateRegistryResource,
     evidence: &mut RenderLabComparisonEvidenceConfig,
-    history: &RenderFrameHistoryState,
-    evidence_state: &RenderLabComparisonEvidenceState,
-    debug_report: &RenderDebugFrameReportState,
-    gfx: &engine::plugins::render::Gfx,
-    output_size_px: (u32, u32),
-    candidate_size_px: (u32, u32),
+    inputs: RenderLabComparisonCompletionInputs<'_>,
 ) -> Result<bool> {
+    let RenderLabComparisonCompletionInputs {
+        history,
+        evidence_state,
+        debug_report,
+        gfx,
+        output_size_px,
+        candidate_size_px,
+    } = inputs;
     if !evidence.is_active() {
         return Ok(false);
     }
@@ -736,14 +748,16 @@ fn complete_render_lab_comparison_evidence_if_requested(
     }
 
     comparison_evidence::write_comparison_evidence(
-        evidence,
-        history,
-        evidence_state,
-        debug_report,
-        gfx,
-        target_frame_index,
-        output_size_px,
-        candidate_size_px,
+        comparison_evidence::RenderLabComparisonEvidenceInputs {
+            config: evidence,
+            history,
+            evidence_state,
+            debug_report,
+            gfx,
+            target_frame: target_frame_index,
+            output_size_px,
+            candidate_size_px,
+        },
     )?;
 
     evidence.mark_completed();
@@ -765,17 +779,19 @@ fn approve_render_lab_close_system(
     if comparison_resources.evidence.is_active() {
         comparison_resources
             .evidence_state
-            .observe_available(&history, &gfx, &debug_report);
+            .observe_available(&history, &gfx);
     }
     if complete_render_lab_comparison_evidence_if_requested(
         &mut windows,
         &mut comparison_resources.evidence,
-        &history,
-        &comparison_resources.evidence_state,
-        &debug_report,
-        &gfx,
-        comparison_resources.presentation.size_px(),
-        comparison_resources.comparison.candidate_size_px(),
+        RenderLabComparisonCompletionInputs {
+            history: &history,
+            evidence_state: &comparison_resources.evidence_state,
+            debug_report: &debug_report,
+            gfx: &gfx,
+            output_size_px: comparison_resources.presentation.size_px(),
+            candidate_size_px: comparison_resources.comparison.candidate_size_px(),
+        },
     )? {
         return Ok(());
     }
