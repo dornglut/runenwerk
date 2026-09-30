@@ -59,7 +59,6 @@ impl RenderLabComparisonEvidenceState {
     >{
         self.temporal_by_frame.get(&frame_index).map(Vec::as_slice)
     }
-
 }
 
 fn compared_diff(
