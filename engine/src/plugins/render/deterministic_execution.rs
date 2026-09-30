@@ -4067,7 +4067,7 @@ mod tests {
         assert!(CAMERA_REPROJECTION_WGSL.contains("CAMERA_DEPTH_ABSOLUTE_EPSILON: f32 = 0.001"));
         assert!(CAMERA_REPROJECTION_WGSL.contains("CAMERA_DEPTH_RELATIVE_EPSILON: f32 = 0.001"));
         assert_eq!(CAMERA_DEPTH_POLICY_REVISION, 1);
-        assert_eq!(CAMERA_REPROJECTION_REVISION, 1);
+        assert_eq!(CAMERA_REPROJECTION_REVISION, 2);
     }
 
     #[test]
