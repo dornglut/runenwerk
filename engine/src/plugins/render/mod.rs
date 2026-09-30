@@ -15,6 +15,7 @@ pub mod deterministic_execution;
 #[allow(dead_code)]
 mod deterministic_verification;
 pub mod features;
+pub mod field_input;
 pub mod frame;
 mod gpu_context_policy;
 pub mod gpu_primitives;
@@ -55,6 +56,8 @@ mod deterministic_composition_r7_proof;
 mod deterministic_execution_r7_proof;
 #[cfg(test)]
 mod deterministic_execution_r7_proof_edges;
+#[cfg(test)]
+mod deterministic_execution_r7_proof_field;
 #[cfg(test)]
 mod r6_proof;
 #[cfg(test)]

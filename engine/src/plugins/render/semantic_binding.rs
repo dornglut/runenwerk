@@ -1,10 +1,14 @@
-//! R5 request-scoped semantic binding admission for surface representations.
+//! R5 request-scoped semantic binding admission for typed surface and field representations.
 //!
-//! This module is deliberately narrower than a dynamic-input registry or second planning graph. It
-//! normalizes one invocation's concrete surface bindings and specializes already-planned R4
+//! This module remains narrower than a dynamic-input registry or second planning graph. It
+//! normalizes one invocation's concrete typed bindings and specializes already-planned R4
 //! representation alternatives without inspecting availability, GPU state, or physical outputs.
 
-use super::representation::{RenderRepresentationId, RenderRepresentationProtocol};
+use super::field_input::RenderFieldSemanticInputBinding;
+use super::representation::{
+    RenderFieldDistanceSample, RenderRepresentationId, RenderRepresentationProtocol,
+    classify_field_distance_transform,
+};
 use super::scene::RenderObjectId;
 use super::semantic_plan::{
     RenderApplicableRepresentationUse, RenderOutputApproximation, RenderPlan, RenderPlanCandidate,
@@ -26,6 +30,15 @@ pub enum RenderSemanticBindingInputError {
     UndeclaredSurfaceBinding {
         representation_id: RenderRepresentationId,
     },
+    DuplicateFieldBinding {
+        representation_id: RenderRepresentationId,
+    },
+    ForeignFieldBinding {
+        representation_id: RenderRepresentationId,
+    },
+    UndeclaredFieldBinding {
+        representation_id: RenderRepresentationId,
+    },
 }
 
 impl fmt::Display for RenderSemanticBindingInputError {
@@ -43,6 +56,18 @@ impl fmt::Display for RenderSemanticBindingInputError {
                 formatter,
                 "surface binding {representation_id:?} was supplied for no planned surface-protocol use that declares the prerequisite"
             ),
+            Self::DuplicateFieldBinding { representation_id } => write!(
+                formatter,
+                "duplicate request-scoped field binding for {representation_id:?}"
+            ),
+            Self::ForeignFieldBinding { representation_id } => write!(
+                formatter,
+                "field binding {representation_id:?} is not referenced by this render plan"
+            ),
+            Self::UndeclaredFieldBinding { representation_id } => write!(
+                formatter,
+                "field binding {representation_id:?} was supplied for no planned field-distance use that declares the prerequisite"
+            ),
         }
     }
 }
@@ -50,8 +75,9 @@ impl fmt::Display for RenderSemanticBindingInputError {
 impl Error for RenderSemanticBindingInputError {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct RenderNormalizedSurfaceSemanticInputs {
-    by_representation: BTreeMap<RenderRepresentationId, RenderSurfaceSemanticInputBinding>,
+pub(super) struct RenderNormalizedSemanticInputs {
+    surface_by_representation: BTreeMap<RenderRepresentationId, RenderSurfaceSemanticInputBinding>,
+    field_by_representation: BTreeMap<RenderRepresentationId, RenderFieldSemanticInputBinding>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -151,13 +177,15 @@ impl RenderSemanticCandidateRejection {
     }
 }
 
-impl RenderNormalizedSurfaceSemanticInputs {
+impl RenderNormalizedSemanticInputs {
     pub(super) fn normalize(
         plan: &RenderPlan,
-        bindings: &[RenderSurfaceSemanticInputBinding],
+        surface_bindings: &[RenderSurfaceSemanticInputBinding],
+        field_bindings: &[RenderFieldSemanticInputBinding],
     ) -> Result<Self, RenderSemanticBindingInputError> {
         let mut planned_representations = BTreeSet::new();
-        let mut declared_prerequisites = BTreeSet::new();
+        let mut declared_surface_prerequisites = BTreeSet::new();
+        let mut declared_field_prerequisites = BTreeSet::new();
         for candidate in plan.candidates() {
             for output in candidate.outputs() {
                 for object in output.object_representations() {
@@ -165,17 +193,20 @@ impl RenderNormalizedSurfaceSemanticInputs {
                         let representation_id = representation.representation_id();
                         planned_representations.insert(representation_id);
                         if use_declares_surface_input(plan, object.object_id(), representation) {
-                            declared_prerequisites.insert(representation_id);
+                            declared_surface_prerequisites.insert(representation_id);
+                        }
+                        if use_declares_field_input(plan, object.object_id(), representation) {
+                            declared_field_prerequisites.insert(representation_id);
                         }
                     }
                 }
             }
         }
 
-        let mut by_representation = BTreeMap::new();
-        for binding in bindings.iter().cloned() {
+        let mut surface_by_representation = BTreeMap::new();
+        for binding in surface_bindings.iter().cloned() {
             let representation_id = binding.representation_id();
-            if by_representation
+            if surface_by_representation
                 .insert(representation_id, binding)
                 .is_some()
             {
@@ -188,14 +219,40 @@ impl RenderNormalizedSurfaceSemanticInputs {
                     representation_id,
                 });
             }
-            if !declared_prerequisites.contains(&representation_id) {
+            if !declared_surface_prerequisites.contains(&representation_id) {
                 return Err(RenderSemanticBindingInputError::UndeclaredSurfaceBinding {
                     representation_id,
                 });
             }
         }
 
-        Ok(Self { by_representation })
+        let mut field_by_representation = BTreeMap::new();
+        for binding in field_bindings.iter().cloned() {
+            let representation_id = binding.representation_id();
+            if field_by_representation
+                .insert(representation_id, binding)
+                .is_some()
+            {
+                return Err(RenderSemanticBindingInputError::DuplicateFieldBinding {
+                    representation_id,
+                });
+            }
+            if !planned_representations.contains(&representation_id) {
+                return Err(RenderSemanticBindingInputError::ForeignFieldBinding {
+                    representation_id,
+                });
+            }
+            if !declared_field_prerequisites.contains(&representation_id) {
+                return Err(RenderSemanticBindingInputError::UndeclaredFieldBinding {
+                    representation_id,
+                });
+            }
+        }
+
+        Ok(Self {
+            surface_by_representation,
+            field_by_representation,
+        })
     }
 
     pub(super) fn specialize_candidate(
@@ -248,10 +305,6 @@ impl RenderNormalizedSurfaceSemanticInputs {
         object_id: RenderObjectId,
         representation: RenderApplicableRepresentationUse,
     ) -> bool {
-        if !is_surface_protocol(representation) {
-            return true;
-        }
-
         let Some(record) = plan
             .scene()
             .object_participation(object_id)
@@ -262,33 +315,120 @@ impl RenderNormalizedSurfaceSemanticInputs {
             return false;
         };
 
-        if record.surface_semantic_input_requirement().is_none() {
-            return true;
+        match representation.requirement().protocol().protocol() {
+            RenderRepresentationProtocol::SurfaceQuery
+            | RenderRepresentationProtocol::OrientedSurfaceQuery => {
+                if record.surface_semantic_input_requirement().is_none() {
+                    return true;
+                }
+                let Some(binding) = self
+                    .surface_by_representation
+                    .get(&representation.representation_id())
+                else {
+                    return false;
+                };
+                self.binding_valid_for_output(
+                    plan,
+                    output,
+                    object_id,
+                    record.temporal_support(),
+                    binding.input().validity(),
+                )
+            }
+            RenderRepresentationProtocol::FieldDistance => {
+                if record.field_semantic_input_requirement().is_none() {
+                    return true;
+                }
+                let Some(binding) = self
+                    .field_by_representation
+                    .get(&representation.representation_id())
+                else {
+                    return false;
+                };
+                if !self.binding_valid_for_output(
+                    plan,
+                    output,
+                    object_id,
+                    record.temporal_support(),
+                    binding.input().validity(),
+                ) {
+                    return false;
+                }
+                self.field_binding_satisfies_protocol_guarantee(
+                    plan,
+                    object_id,
+                    record,
+                    representation,
+                    binding,
+                )
+            }
         }
+    }
 
-        let Some(binding) = self
-            .by_representation
-            .get(&representation.representation_id())
+    fn field_binding_satisfies_protocol_guarantee(
+        &self,
+        plan: &RenderPlan,
+        object_id: RenderObjectId,
+        record: &super::representation::RenderRepresentationRecord,
+        representation: RenderApplicableRepresentationUse,
+        binding: &RenderFieldSemanticInputBinding,
+    ) -> bool {
+        let Some((coverage_min, coverage_max)) =
+            record.spatial_coverage().axis_aligned_bounds_value()
         else {
             return false;
         };
-        let shutter = plan.request().observations()[output.observation_index()].shutter();
-        if !record.temporal_support().contains_interval(shutter)
-            || !binding.input().validity().contains_interval(shutter)
+        if coverage_min != binding.input().origin_local_meters()
+            || coverage_max != binding.input().max_local_meters()
         {
             return false;
         }
 
-        let Some(object_state) = plan.scene().object_state(object_id) else {
+        let Some(state) = plan.scene().object_state(object_id) else {
             return false;
         };
-        object_state
-            .temporal()
-            .validity()
-            .contains_interval(shutter)
+        let Some(distance_scale) =
+            classify_field_distance_transform(state.spatial().local_to_scene())
+                .exact_distance_scale()
+        else {
+            return false;
+        };
+        let scene_error_meters =
+            binding.input().max_absolute_query_error_local_meters() * distance_scale;
+        if !scene_error_meters.is_finite() {
+            return false;
+        }
+        let Ok(evidence) =
+            record.field_distance_protocol(representation.requirement().protocol().revision())
+        else {
+            return false;
+        };
+        let Ok(sample) = RenderFieldDistanceSample::new(0.0, scene_error_meters) else {
+            return false;
+        };
+        evidence.validate_sample(sample).is_ok()
     }
 
-    pub(super) fn binding_for_selected_use(
+    fn binding_valid_for_output(
+        &self,
+        plan: &RenderPlan,
+        output: &RenderPlannedOutput,
+        object_id: RenderObjectId,
+        representation_validity: super::space_time::RenderTemporalSupport,
+        input_validity: super::space_time::RenderTemporalSupport,
+    ) -> bool {
+        let shutter = plan.request().observations()[output.observation_index()].shutter();
+        if !representation_validity.contains_interval(shutter)
+            || !input_validity.contains_interval(shutter)
+        {
+            return false;
+        }
+        plan.scene()
+            .object_state(object_id)
+            .is_some_and(|state| state.temporal().validity().contains_interval(shutter))
+    }
+
+    pub(super) fn surface_binding_for_selected_use(
         &self,
         plan: &RenderPlan,
         object_id: RenderObjectId,
@@ -296,7 +436,21 @@ impl RenderNormalizedSurfaceSemanticInputs {
     ) -> Option<&RenderSurfaceSemanticInputBinding> {
         use_declares_surface_input(plan, object_id, representation)
             .then(|| {
-                self.by_representation
+                self.surface_by_representation
+                    .get(&representation.representation_id())
+            })
+            .flatten()
+    }
+
+    pub(super) fn field_binding_for_selected_use(
+        &self,
+        plan: &RenderPlan,
+        object_id: RenderObjectId,
+        representation: RenderApplicableRepresentationUse,
+    ) -> Option<&RenderFieldSemanticInputBinding> {
+        use_declares_field_input(plan, object_id, representation)
+            .then(|| {
+                self.field_by_representation
                     .get(&representation.representation_id())
             })
             .flatten()
@@ -323,5 +477,23 @@ fn use_declares_surface_input(
         .object_participation(object_id)
         .and_then(|participation| participation.representation(representation.representation_id()))
         .and_then(|record| record.surface_semantic_input_requirement())
+        .is_some()
+}
+
+fn use_declares_field_input(
+    plan: &RenderPlan,
+    object_id: RenderObjectId,
+    representation: RenderApplicableRepresentationUse,
+) -> bool {
+    if !matches!(
+        representation.requirement().protocol().protocol(),
+        RenderRepresentationProtocol::FieldDistance
+    ) {
+        return false;
+    }
+    plan.scene()
+        .object_participation(object_id)
+        .and_then(|participation| participation.representation(representation.representation_id()))
+        .and_then(|record| record.field_semantic_input_requirement())
         .is_some()
 }

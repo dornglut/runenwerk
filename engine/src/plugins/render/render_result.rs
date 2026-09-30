@@ -1,5 +1,6 @@
 use super::admission::AdmittedRenderPlan;
 use super::deterministic_verification::VerifiedDeterministicRender;
+use super::field_input::RenderFieldSemanticInputBinding;
 use super::method::RenderMethodId;
 use super::request::RenderRequest;
 use super::scene::{RenderObjectId, RenderSceneRevision, RenderSceneSnapshot};
@@ -80,13 +81,15 @@ impl RenderResultOutputEvidence {
 /// This is intentionally not a value container. Output values may remain in physical bindings,
 /// retained renderer products, readback results, or presentation destinations. The result retains
 /// only immutable semantic provenance projected from the exact admitted plan that produced the work,
-/// including the exact selected request-scoped semantic surface inputs once at result level.
+/// including the exact selected request-scoped semantic surface and field inputs once at result
+/// level.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderResult {
     scene: RenderSceneSnapshot,
     request: RenderRequest,
     method_id: RenderMethodId,
     surface_semantic_inputs: Vec<RenderSurfaceSemanticInputBinding>,
+    field_semantic_inputs: Vec<RenderFieldSemanticInputBinding>,
     outputs: Vec<RenderResultOutputEvidence>,
 }
 
@@ -202,6 +205,7 @@ impl RenderResult {
             request: admitted.plan().request().clone(),
             method_id: admitted.selected_candidate().method_id(),
             surface_semantic_inputs: admitted.surface_semantic_inputs().to_vec(),
+            field_semantic_inputs: admitted.field_semantic_inputs().to_vec(),
             outputs,
         })
     }
@@ -224,6 +228,10 @@ impl RenderResult {
 
     pub fn surface_semantic_inputs(&self) -> &[RenderSurfaceSemanticInputBinding] {
         &self.surface_semantic_inputs
+    }
+
+    pub fn field_semantic_inputs(&self) -> &[RenderFieldSemanticInputBinding] {
+        &self.field_semantic_inputs
     }
 
     pub fn outputs(&self) -> &[RenderResultOutputEvidence] {
