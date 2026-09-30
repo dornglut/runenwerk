@@ -361,3 +361,84 @@ jobs:
           path: render-lab/temporal-camera-quality
           if-no-files-found: error
           retention-days: 7
+
+      - name: Run Render Lab synchronized A/B comparison proof
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENWERK_SOURCE_REVISION: ${{ steps.revision.outputs.expected_revision }}
+        run: |
+          set -euo pipefail
+          output="render-lab/comparison"
+          rm -rf "${output}"
+
+          timeout 30s xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
+            cargo +stable run -p runenwerk_render_lab --locked -- \
+              --rl2-compare-evidence "${output}" \
+              --window-size-px 1920x1080 \
+              --candidate-size-px 960x540 \
+              --submitted-frames 6
+
+          run_manifest="${output}/captures/run_manifest.json"
+          test -s "${run_manifest}"
+          frame_manifest="$(jq -r '.frame_manifests[0]' "${run_manifest}")"
+          test -n "${frame_manifest}"
+          test -s "${frame_manifest}"
+
+          jq -e '
+            .frame_index as $frame
+            | (.captures | length == 2)
+              and all(.captures[];
+                .frame_index == $frame
+                and .width == 1920
+                and .height == 1080
+                and .terminal_code == "completed"
+                and (.file | type == "string" and length > 0)
+              )
+              and ([.captures[].resource_id] | sort)
+                == ["rl2.compare.display_a","rl2.compare.display_b"]
+          ' "${frame_manifest}"
+
+          while IFS= read -r capture_file; do
+            test -s "${capture_file}"
+          done < <(jq -r '.captures[].file' "${frame_manifest}")
+
+          evidence="${output}/comparison-evidence.json"
+          test -s "${evidence}"
+          jq -e --arg revision "${RUNENWERK_SOURCE_REVISION}" '
+            .schema_version == 1
+            and .scenario_id == "rl2-native-comparison"
+            and .source_git_revision == $revision
+            and .output_size_px == [1920,1080]
+            and .reference == {"identity":"native/P100","internal_size_px":[1920,1080]}
+            and .candidate == {"identity":"accepted-static-footprint-temporal","internal_size_px":[960,540]}
+            and .capture_submission_ordinal == 6
+            and .gpu.backend == "vulkan"
+            and .gpu.software_status == "software"
+            and ([.captures[].resource_id] | sort) == ["rl2.compare.display_a","rl2.compare.display_b"]
+            and (.target_frame_index as $frame | all(.captures[]; .frame_index == $frame))
+            and .diff.id == "runenwerk.render_lab.rl2.compare.a_vs_b"
+            and .diff.status == "compared"
+            and .diff.left_frame_index == .target_frame_index
+            and .diff.right_frame_index == .target_frame_index
+            and .diff.metrics.total_pixel_count == 2073600
+            and (.diff.mismatch_samples | type) == "array"
+            and (.temporal_reconstruction | length) == 6
+            and all(.temporal_reconstruction[];
+              .reference.requested_size_px == [1920,1080]
+              and .candidate.requested_size_px == [1920,1080]
+              and .reference.evaluation_size_px == [1920,1080]
+              and .candidate.evaluation_size_px == [960,540]
+              and .reference.semantic_input_generation_classes == .candidate.semantic_input_generation_classes
+              and .reference.sequence_revision == .candidate.sequence_revision
+              and .reference.reconstruction_revision == .candidate.reconstruction_revision
+            )
+          ' "${evidence}"
+
+      - name: Upload Render Lab synchronized A/B comparison evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        with:
+          name: runenwerk-render-lab-comparison
+          path: render-lab/comparison
+          if-no-files-found: error
+          retention-days: 7
