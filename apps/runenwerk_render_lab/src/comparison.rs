@@ -695,6 +695,52 @@ mod tests {
             compiled.render_passes[2].pass_id(),
             flow.pass_id(RL2_COMPARISON_PASS_ID).expect("compare pass")
         );
+
+        let visualize_a = compiled.render_passes[0].node();
+        let visualize_b = compiled.render_passes[1].node();
+        assert_eq!(visualize_a.shader, visualize_b.shader);
+        assert_eq!(visualize_a.sampled_textures.len(), 1);
+        assert_eq!(visualize_b.sampled_textures.len(), 1);
+        assert_eq!(
+            compiled
+                .resource_label(visualize_a.sampled_textures[0])
+                .expect("visualize A sampled resource"),
+            RL2_COMPARISON_RAW_A_ALIAS
+        );
+        assert_eq!(
+            compiled
+                .resource_label(visualize_b.sampled_textures[0])
+                .expect("visualize B sampled resource"),
+            RL2_COMPARISON_RAW_B_ALIAS
+        );
+
+        let compare = compiled.render_passes[2].node();
+        assert_eq!(compare.sampled_textures.len(), 2);
+        assert_eq!(
+            compare
+                .sampled_textures
+                .iter()
+                .map(|resource| compiled.resource_label(*resource).expect("sampled resource"))
+                .collect::<Vec<_>>(),
+            vec![
+                RL2_COMPARISON_DISPLAY_A_ALIAS.to_string(),
+                RL2_COMPARISON_DISPLAY_B_ALIAS.to_string(),
+            ]
+        );
+        assert_eq!(compare.shader_bindings.len(), 3);
+        assert!(matches!(
+            compare.shader_bindings[0].resource(),
+            engine::plugins::render::RenderShaderBindingResource::UniformBuffer(_)
+        ));
+        for binding in &compare.shader_bindings[1..] {
+            assert!(matches!(
+                binding.resource(),
+                engine::plugins::render::RenderShaderBindingResource::SampledTexture {
+                    sample_class: runen_gpu::GpuTextureSampleClass::FloatUnfilterable,
+                    ..
+                }
+            ));
+        }
     }
 
     #[test]
@@ -737,6 +783,14 @@ mod tests {
             publication.contribution_b.target_key
         );
         assert_eq!(
+            publication.contribution_a.render_surface_id,
+            publication.contribution_b.render_surface_id
+        );
+        assert_eq!(
+            publication.contribution_a.render_surface_id,
+            RenderSurfaceId::primary()
+        );
+        assert_eq!(
             publication
                 .contribution_a
                 .finite_evaluation_extent
@@ -752,13 +806,29 @@ mod tests {
                 .dimensions(),
             (960, 540)
         );
+        assert_ne!(
+            publication.display_a_target.key,
+            publication.display_b_target.key
+        );
+        for display in [
+            &publication.display_a_target,
+            &publication.display_b_target,
+        ] {
+            assert_eq!((display.width, display.height), (1920, 1080));
+            assert_eq!(display.format, RenderTextureTargetFormat::Rgba8UnormSrgb);
+            assert_eq!(display.usage, RenderTextureTargetUsage::color_sampled());
+            assert_eq!(
+                display.sample_mode,
+                RenderTextureSampleMode::NonFilterableFloat
+            );
+        }
         assert_eq!(
-            publication.display_a_target.format,
-            RenderTextureTargetFormat::Rgba8UnormSrgb
+            publication.raw_a_target.format,
+            RenderTextureTargetFormat::R32Float
         );
         assert_eq!(
-            publication.display_b_target.format,
-            RenderTextureTargetFormat::Rgba8UnormSrgb
+            publication.raw_b_target.format,
+            RenderTextureTargetFormat::R32Float
         );
     }
 
