@@ -4049,7 +4049,7 @@ mod tests {
     #[test]
     fn camera_reprojection_shader_matches_the_reference_rejection_contract() {
         for source_law in [
-            "if current_hit_words[output_index] == 0u",
+            "if !current_hit {",
             "local.z >= 0.0",
             "u < 0.0 || u >= 1.0 || v < 0.0 || v >= 1.0",
             "previous_history_words[previous_base + 3u] == 0u",
