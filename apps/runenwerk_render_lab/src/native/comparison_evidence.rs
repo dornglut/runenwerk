@@ -1,8 +1,65 @@
 use super::*;
 use engine::plugins::render::inspect::{RenderTextureDiffResult, RenderTextureDiffStatus};
 use serde_json::{Value, json};
+use std::collections::BTreeMap;
 
+const COMPARISON_SCENARIO_ID: &str = "rl2-native-comparison";
+const COMPARISON_SCENARIO_REVISION: u32 = 1;
 const COMPARISON_DIFF_ID: &str = "runenwerk.render_lab.rl2.compare.a_vs_b";
+
+#[derive(Debug, Clone, Default, runen_ecs::Resource)]
+pub(super) struct RenderLabComparisonTemporalEvidenceState {
+    by_frame: BTreeMap<
+        u64,
+        Vec<
+            engine::plugins::render::deterministic_execution::RenderDeterministicTemporalExecutionEvidence,
+        >,
+    >,
+}
+
+impl RenderLabComparisonTemporalEvidenceState {
+    fn observe_frame(
+        &mut self,
+        frame_index: u64,
+        records: Vec<
+            engine::plugins::render::deterministic_execution::RenderDeterministicTemporalExecutionEvidence,
+        >,
+    ) {
+        self.by_frame.insert(frame_index, records);
+        while self.by_frame.len() > RL2_MEASUREMENT_HISTORY_CAPACITY {
+            let Some(oldest) = self.by_frame.keys().next().copied() else {
+                break;
+            };
+            self.by_frame.remove(&oldest);
+        }
+    }
+
+    pub(super) fn observe_available(
+        &mut self,
+        history: &RenderFrameHistoryState,
+        gfx: &engine::plugins::render::Gfx,
+    ) {
+        for observation in history.observations() {
+            let frame_index = observation.key.frame_index;
+            if self.by_frame.contains_key(&frame_index) {
+                continue;
+            }
+            let records = gfx.deterministic_temporal_evidence(frame_index);
+            if !records.is_empty() {
+                self.observe_frame(frame_index, records.to_vec());
+            }
+        }
+    }
+
+    fn frame(
+        &self,
+        frame_index: u64,
+    ) -> Option<
+        &[engine::plugins::render::deterministic_execution::RenderDeterministicTemporalExecutionEvidence],
+    > {
+        self.by_frame.get(&frame_index).map(Vec::as_slice)
+    }
+}
 
 fn compared_diff(
     diffs: &[RenderTextureDiffResult],
@@ -43,7 +100,7 @@ fn compared_diff(
 
 fn temporal_frames(
     history: &RenderFrameHistoryState,
-    gfx: &engine::plugins::render::Gfx,
+    temporal_evidence: &RenderLabComparisonTemporalEvidenceState,
     target_frame: u64,
     output_size_px: (u32, u32),
     candidate_size_px: (u32, u32),
@@ -52,7 +109,9 @@ fn temporal_frames(
     let mut frames = Vec::new();
     for observation in history.observations() {
         let frame = observation.key.frame_index;
-        let records = gfx.deterministic_temporal_evidence(frame);
+        let records = temporal_evidence
+            .frame(frame)
+            .ok_or_else(|| anyhow::anyhow!("comparison frame {frame} has no retained temporal evidence"))?;
         if records.len() != 2 {
             bail!(
                 "comparison frame {frame} requires exactly two temporal records, found {}",
@@ -138,6 +197,7 @@ fn temporal_frames(
 pub(super) fn write_comparison_evidence(
     config: &RenderLabComparisonEvidenceConfig,
     history: &RenderFrameHistoryState,
+    temporal_evidence: &RenderLabComparisonTemporalEvidenceState,
     debug_report: &RenderDebugFrameReportState,
     gfx: &engine::plugins::render::Gfx,
     target_frame: u64,
@@ -150,7 +210,7 @@ pub(super) fn write_comparison_evidence(
     let diff = compared_diff(diffs, target_frame, output_size_px)?;
     let temporal = temporal_frames(
         history,
-        gfx,
+        temporal_evidence,
         target_frame,
         output_size_px,
         candidate_size_px,
@@ -165,15 +225,34 @@ pub(super) fn write_comparison_evidence(
     let results = debug_report
         .capture_results_for_frame(target_frame)
         .expect("validated target capture results");
-    let captures = config.capture_selectors().iter().map(|selector| {
-        let result = results.iter().find(|result| &result.selector == selector)
-            .ok_or_else(|| anyhow::anyhow!("comparison target report lost a capture selector"))?;
-        Ok(json!({
-            "resource_id": selector.resource_id,
-            "frame_index": target_frame,
-            "artifact_path": result.artifact_path.as_ref().expect("validated capture path").display().to_string(),
-        }))
-    }).collect::<Result<Vec<Value>>>()?;
+    let capture_manifest_path = debug_report
+        .capture_artifact_manifest_for_frame(target_frame)
+        .ok_or_else(|| anyhow::anyhow!("comparison target frame has no retained capture manifest"))?;
+    let captures = config
+        .capture_selectors()
+        .iter()
+        .map(|selector| {
+            let result = results
+                .iter()
+                .find(|result| &result.selector == selector)
+                .ok_or_else(|| anyhow::anyhow!("comparison target report lost a capture selector"))?;
+            let artifact_path = result.artifact_path.as_ref().expect("validated capture path");
+            let artifact_bytes = fs::read(artifact_path).with_context(|| {
+                format!(
+                    "read comparison capture artifact {} for hashing",
+                    artifact_path.display()
+                )
+            })?;
+            Ok(json!({
+                "flow_id": selector.flow_id.as_deref(),
+                "pass_id": selector.pass_id.as_deref(),
+                "resource_id": selector.resource_id,
+                "frame_index": target_frame,
+                "artifact_path": artifact_path.display().to_string(),
+                "artifact_blake3": format!("blake3:{}", blake3::hash(&artifact_bytes).to_hex()),
+            }))
+        })
+        .collect::<Result<Vec<Value>>>()?;
     let metrics = diff.metrics.expect("validated comparison metrics");
     let mismatch_samples: Vec<Value> = diff
         .mismatch_samples
@@ -189,13 +268,16 @@ pub(super) fn write_comparison_evidence(
         .collect();
     let evidence = json!({
         "schema_version": 1,
-        "scenario_id": "rl2-native-comparison",
+        "scenario_id": COMPARISON_SCENARIO_ID,
+        "scenario_revision": COMPARISON_SCENARIO_REVISION,
         "source_git_revision": std::env::var("RUNENWERK_SOURCE_REVISION").ok(),
         "output_size_px": [output_size_px.0, output_size_px.1],
+        "candidate_size_px": [candidate_size_px.0, candidate_size_px.1],
         "reference": {"identity": "native/P100", "internal_size_px": [output_size_px.0, output_size_px.1]},
         "candidate": {"identity": "accepted-static-footprint-temporal", "internal_size_px": [candidate_size_px.0, candidate_size_px.1]},
         "target_frame_index": target_frame,
         "capture_submission_ordinal": temporal.len(),
+        "capture_manifest_path": capture_manifest_path.display().to_string(),
         "captures": captures,
         "diff": {
             "id": diff.diff_id,
@@ -225,4 +307,26 @@ pub(super) fn write_comparison_evidence(
     )
     .context("write Render Lab comparison evidence")?;
     Ok(())
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn comparison_temporal_evidence_state_retains_the_full_product_bound() {
+        let mut state = RenderLabComparisonTemporalEvidenceState::default();
+        for frame_index in 0..=RL2_MEASUREMENT_HISTORY_CAPACITY as u64 {
+            state.observe_frame(frame_index, Vec::new());
+        }
+
+        assert!(state.frame(0).is_none());
+        assert!(
+            state
+                .frame(RL2_MEASUREMENT_HISTORY_CAPACITY as u64)
+                .is_some()
+        );
+        assert_eq!(state.by_frame.len(), RL2_MEASUREMENT_HISTORY_CAPACITY);
+    }
 }

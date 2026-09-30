@@ -407,14 +407,23 @@ jobs:
           jq -e --arg revision "${RUNENWERK_SOURCE_REVISION}" '
             .schema_version == 1
             and .scenario_id == "rl2-native-comparison"
+            and .scenario_revision == 1
             and .source_git_revision == $revision
             and .output_size_px == [1920,1080]
+            and .candidate_size_px == [960,540]
             and .reference == {"identity":"native/P100","internal_size_px":[1920,1080]}
             and .candidate == {"identity":"accepted-static-footprint-temporal","internal_size_px":[960,540]}
             and .capture_submission_ordinal == 6
             and .gpu.backend == "vulkan"
             and .gpu.software_status == "software"
+            and (.capture_manifest_path | type == "string" and length > 0)
             and ([.captures[].resource_id] | sort) == ["rl2.compare.display_a","rl2.compare.display_b"]
+            and all(.captures[];
+              (.flow_id | type == "string" and length > 0)
+              and (.pass_id | type == "string" and length > 0)
+              and (.artifact_path | type == "string" and length > 0)
+              and (.artifact_blake3 | startswith("blake3:"))
+            )
             and (.target_frame_index as $frame | all(.captures[]; .frame_index == $frame))
             and .diff.id == "runenwerk.render_lab.rl2.compare.a_vs_b"
             and .diff.status == "compared"
