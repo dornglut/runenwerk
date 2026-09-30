@@ -4071,6 +4071,25 @@ mod tests {
     }
 
     #[test]
+    fn temporal_reconstruction_shaders_keep_undefined_samples_fail_closed() {
+        assert!(TEMPORAL_RECONSTRUCTION_WGSL.contains("INVALID_HISTORY_SAMPLE_COUNT"));
+        assert!(TEMPORAL_RECONSTRUCTION_WGSL.contains(
+            "history_sample_counts[history_index] = INVALID_HISTORY_SAMPLE_COUNT"
+        ));
+        assert!(TEMPORAL_RECONSTRUCTION_WGSL.contains(
+            "retained_sample_count == INVALID_HISTORY_SAMPLE_COUNT"
+        ));
+
+        assert!(CAMERA_REPROJECTION_WGSL.contains("INVALID_HISTORY_SAMPLE_COUNT"));
+        assert!(CAMERA_REPROJECTION_WGSL.contains(
+            "write_current(sample_index, 0.0, 0.0, INVALID_HISTORY_SAMPLE_COUNT, 0u)"
+        ));
+        assert!(CAMERA_REPROJECTION_WGSL.contains(
+            "previous_raw_count == INVALID_HISTORY_SAMPLE_COUNT"
+        ));
+    }
+
+    #[test]
     fn temporal_four_phase_extent_requires_half_to_native_coverage() {
         let requested = (1920, 1080);
         for supported in [(1920, 1080), (1440, 810), (1280, 720), (960, 540)] {
