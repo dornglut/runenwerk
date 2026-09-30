@@ -78,7 +78,7 @@ impl RenderLabComparisonEvidenceState {
         frame_index: u64,
     ) -> Option<
         &[engine::plugins::render::deterministic_execution::RenderDeterministicTemporalExecutionEvidence],
-    > {
+    >{
         self.temporal_by_frame.get(&frame_index).map(Vec::as_slice)
     }
 
