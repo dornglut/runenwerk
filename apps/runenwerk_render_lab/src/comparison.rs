@@ -720,7 +720,11 @@ mod tests {
             compare
                 .sampled_textures
                 .iter()
-                .map(|resource| compiled.resource_label(*resource).expect("sampled resource"))
+                .map(|resource| {
+                    compiled
+                        .resource_label(*resource)
+                        .expect("sampled resource")
+                })
                 .collect::<Vec<_>>(),
             vec![
                 RL2_COMPARISON_DISPLAY_A_ALIAS.to_string(),
@@ -810,10 +814,7 @@ mod tests {
             publication.display_a_target.key,
             publication.display_b_target.key
         );
-        for display in [
-            &publication.display_a_target,
-            &publication.display_b_target,
-        ] {
+        for display in [&publication.display_a_target, &publication.display_b_target] {
             assert_eq!((display.width, display.height), (1920, 1080));
             assert_eq!(display.format, RenderTextureTargetFormat::Rgba8UnormSrgb);
             assert_eq!(display.usage, RenderTextureTargetUsage::color_sampled());
@@ -995,10 +996,7 @@ mod tests {
             .is_err()
         );
         assert_eq!(targets.snapshot(), original_targets);
-        assert_eq!(
-            contributions.clone().take_all(),
-            original_contributions
-        );
+        assert_eq!(contributions.clone().take_all(), original_contributions);
         assert_eq!(
             requests
                 .requested_flow_invocations()
@@ -1037,10 +1035,7 @@ mod tests {
             .is_err()
         );
         assert_eq!(targets.snapshot(), original_targets);
-        assert_eq!(
-            contributions.clone().take_all(),
-            original_contributions
-        );
+        assert_eq!(contributions.clone().take_all(), original_contributions);
         assert_eq!(
             requests
                 .requested_flow_invocations()
