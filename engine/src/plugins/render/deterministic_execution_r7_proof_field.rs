@@ -528,8 +528,8 @@ fn sampled_field_executes_identity_depth_and_radiance_on_public_runengpu() {
     );
     let depth = f32::from_bits(first_word(&verification, 1, "canonical"));
     assert!(
-        (1.8..=2.1).contains(&depth),
-        "sampled sphere front depth should remain near two scene metres, got {depth}"
+        (1.8..=2.0001).contains(&depth),
+        "conservative sampled-field stepping must not advance past the analytic sphere front at two scene metres; got {depth}"
     );
     let radiance = f32::from_bits(first_word(&verification, 2, "canonical"));
     assert!(
@@ -582,8 +582,8 @@ fn sampled_field_executes_through_rotation_and_uniform_scale() {
     assert_eq!(first_word(&verification, 0, "defined"), 1);
     let depth = f32::from_bits(first_word(&verification, 0, "canonical"));
     assert!(
-        (2.8..=3.2).contains(&depth),
-        "rotated 2x-scale offset sphere should hit near three scene metres, got {depth}"
+        (2.8..=3.0002).contains(&depth),
+        "conservative sampled-field stepping through the 2x similarity transform must not advance past the analytic front at three scene metres; got {depth}"
     );
 }
 
