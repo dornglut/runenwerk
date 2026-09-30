@@ -5,7 +5,7 @@ status: active
 owner: world-sdf
 layer: domain
 canonical: true
-last_reviewed: 2026-08-30
+last_reviewed: 2026-09-29
 publication: primary
 ---
 
@@ -24,10 +24,18 @@ summaries for chunked world data.
 
 - `SdfChunkStore`, `SdfChunkPayload`, `SdfPageRecord`, `SdfBrickRecord`.
 - `SDF_PAGE_EDGE_BRICKS`, `SDF_BRICK_EDGE_SAMPLES`, and brick/page metadata.
+- `SDF_METRIC_BRICK_EDGE_SAMPLES` and `SDF_METRIC_BRICK_SAMPLE_COUNT` define metric layout
+  revision 1 as a 3×3×3 lattice (27 samples total) at local brick-axis positions 0, 0.5, and 1.
+  This first layout is qualified by the maintained arena's half-brick boundary pressure. The older
+  nominal `SDF_BRICK_EDGE_SAMPLES` constant is not used to infer metric layout.
 - `CaveSectorStore`, `CavePortalGraph`, cave light/volume scope summaries.
 - `ChunkHierarchyNode` and `ChunkHierarchySummary`.
 - `CollisionQueryService`, `SphereSweep`, `CollisionHit`, and readiness/result
   types.
+- `WorldSdfMetricEncoding`, `WorldSdfMetricPayloadRef`, and
+  `sample_world_sdf_metric_distance` define the opt-in bounded signed-distance capability in
+  meters. The metric wrapper binds encoding/error semantics to an unchanged exact
+  `WorldSdfPayloadRef`; plain payload refs remain wire-stable and non-metric.
 - `FieldPreviewGrid`, `FieldPreviewPayload`, `FieldPreviewProduct`, and
   `ratify_field_preview_product` for CPU-formed scalar distance, vector
   gradient, occupancy, and material-channel preview products.
