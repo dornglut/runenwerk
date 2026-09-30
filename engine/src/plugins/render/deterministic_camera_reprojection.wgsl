@@ -142,7 +142,7 @@ fn main(
         current_depth = bitcast<f32>(current_depth_words[output_index]);
         if !finite_f32(current_depth) {
             current_radiance_words[output_index] = 0u;
-            write_current(sample_index, 0.0, 0.0, 0u, 0u);
+            write_current(sample_index, 0.0, 0.0, INVALID_HISTORY_SAMPLE_COUNT, 0u);
             return;
         }
     }
