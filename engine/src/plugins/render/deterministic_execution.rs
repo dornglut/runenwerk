@@ -268,20 +268,19 @@ impl DeterministicResourceCache {
                             camera.completed_slot = slot;
                         }
                         if let Some(observation) = camera.pending_observation.take() {
-                            camera.same_pose_completed_frames =
-                                match camera.completed_observation {
-                                    None => 1,
-                                    Some(previous)
-                                        if previous.observation_to_scene()
-                                            != observation.observation_to_scene() =>
-                                    {
-                                        0
-                                    }
-                                    Some(_) => camera
-                                        .same_pose_completed_frames
-                                        .saturating_add(1)
-                                        .min(TEMPORAL_PHASE_COUNT),
-                                };
+                            camera.same_pose_completed_frames = match camera.completed_observation {
+                                None => 1,
+                                Some(previous)
+                                    if previous.observation_to_scene()
+                                        != observation.observation_to_scene() =>
+                                {
+                                    0
+                                }
+                                Some(_) => camera
+                                    .same_pose_completed_frames
+                                    .saturating_add(1)
+                                    .min(TEMPORAL_PHASE_COUNT),
+                            };
                             camera.completed_observation = Some(observation);
                         }
                     }
