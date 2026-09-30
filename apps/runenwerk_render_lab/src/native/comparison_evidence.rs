@@ -5,14 +5,14 @@ use serde_json::{Value, json};
 const COMPARISON_DIFF_ID: &str = "runenwerk.render_lab.rl2.compare.a_vs_b";
 
 fn compared_diff(
-    report: &engine::plugins::render::inspect::RenderDebugFrameReport,
+    diffs: &[RenderTextureDiffResult],
     target_frame: u64,
     output_size_px: (u32, u32),
 ) -> Result<&RenderTextureDiffResult> {
-    if report.frame_index != target_frame || report.texture_diff_results.len() != 1 {
+    if diffs.len() != 1 {
         bail!("comparison evidence requires exactly one diff on target frame {target_frame}");
     }
-    let diff = &report.texture_diff_results[0];
+    let diff = &diffs[0];
     if diff.diff_id != COMPARISON_DIFF_ID || diff.status != RenderTextureDiffStatus::Compared {
         bail!("comparison evidence requires a Compared {COMPARISON_DIFF_ID} diff");
     }
@@ -144,10 +144,10 @@ pub(super) fn write_comparison_evidence(
     output_size_px: (u32, u32),
     candidate_size_px: (u32, u32),
 ) -> Result<()> {
-    let report = debug_report.latest.as_ref().ok_or_else(|| {
-        anyhow::anyhow!("comparison target frame has no completed diagnostic report")
-    })?;
-    let diff = compared_diff(report, target_frame, output_size_px)?;
+    let diffs = debug_report
+        .texture_diff_results_for_frame(target_frame)
+        .ok_or_else(|| anyhow::anyhow!("comparison target frame has no retained texture diff"))?;
+    let diff = compared_diff(diffs, target_frame, output_size_px)?;
     let temporal = temporal_frames(
         history,
         gfx,
@@ -162,8 +162,11 @@ pub(super) fn write_comparison_evidence(
     {
         bail!("comparison temporal evidence does not cover every submitted frame");
     }
+    let results = debug_report
+        .capture_results_for_frame(target_frame)
+        .expect("validated target capture results");
     let captures = config.capture_selectors().iter().map(|selector| {
-        let result = report.capture_results.iter().find(|result| &result.selector == selector)
+        let result = results.iter().find(|result| &result.selector == selector)
             .ok_or_else(|| anyhow::anyhow!("comparison target report lost a capture selector"))?;
         Ok(json!({
             "resource_id": selector.resource_id,
@@ -214,7 +217,7 @@ pub(super) fn write_comparison_evidence(
     let root = config
         .output_root()
         .expect("active comparison has output root");
-    fs::create_dir_all(&root)
+    fs::create_dir_all(root)
         .with_context(|| format!("create comparison evidence directory {}", root.display()))?;
     fs::write(
         root.join("comparison-evidence.json"),

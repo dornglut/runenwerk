@@ -72,10 +72,23 @@ pub struct RenderTextureDiffResult {
 pub struct RenderDebugFrameReportState {
     pub latest: Option<RenderDebugFrameReport>,
     capture_results_by_frame: BTreeMap<u64, (Vec<RenderCaptureSelectorResult>, Option<PathBuf>)>,
+    texture_diff_results_by_frame: BTreeMap<u64, Vec<RenderTextureDiffResult>>,
 }
 
 impl RenderDebugFrameReportState {
     pub fn observe_frame(&mut self, report: RenderDebugFrameReport) {
+        if !report.texture_diff_results.is_empty() {
+            self.texture_diff_results_by_frame
+                .insert(report.frame_index, report.texture_diff_results.clone());
+            while self.texture_diff_results_by_frame.len()
+                > super::DEFAULT_RENDER_FRAME_HISTORY_CAPACITY
+            {
+                let Some(oldest) = self.texture_diff_results_by_frame.keys().next().copied() else {
+                    break;
+                };
+                self.texture_diff_results_by_frame.remove(&oldest);
+            }
+        }
         if !report.capture_results.is_empty() {
             self.capture_results_by_frame.insert(
                 report.frame_index,
@@ -108,6 +121,15 @@ impl RenderDebugFrameReportState {
         self.capture_results_by_frame
             .get(&frame_index)
             .and_then(|(_, manifest)| manifest.as_ref())
+    }
+
+    pub fn texture_diff_results_for_frame(
+        &self,
+        frame_index: u64,
+    ) -> Option<&[RenderTextureDiffResult]> {
+        self.texture_diff_results_by_frame
+            .get(&frame_index)
+            .map(Vec::as_slice)
     }
 }
 
@@ -196,6 +218,58 @@ mod tests {
         assert_eq!(
             state.capture_artifact_manifest_for_frame(1),
             Some(&manifest)
+        );
+    }
+
+    #[test]
+    fn frame_report_state_keeps_diff_results_after_a_later_report() {
+        let selector = RenderCaptureSelector {
+            flow_id: Some("flow".to_string()),
+            pass_id: Some("pass".to_string()),
+            stage: CaptureStage::After,
+            resource_id: "display".to_string(),
+            texture_class: CaptureTextureClass::ColorTarget,
+        };
+        let request =
+            RenderTextureDiffRequest::new("comparison", selector.clone(), selector.clone());
+        let point = selector.stable_point_fallback();
+        let diff = RenderTextureDiffResult {
+            diff_id: "comparison".to_string(),
+            request,
+            left_capture_point: point.clone(),
+            right_capture_point: point,
+            left_frame_identity: None,
+            right_frame_identity: None,
+            status: RenderTextureDiffStatus::Compared,
+            metrics: Some(RenderTextureDiffMetrics {
+                total_pixel_count: 4,
+                changed_pixel_count: 1,
+                changed_pixel_ratio: 0.25,
+                max_delta: 1,
+                mean_delta: 0.25,
+            }),
+            mismatch_samples: Vec::new(),
+            diff_image_path: None,
+            message: None,
+        };
+        let mut state = RenderDebugFrameReportState::default();
+        state.observe_frame(RenderDebugFrameReport {
+            frame_index: 5,
+            texture_diff_results: vec![diff.clone()],
+            ..RenderDebugFrameReport::default()
+        });
+        state.observe_frame(RenderDebugFrameReport {
+            frame_index: 6,
+            ..RenderDebugFrameReport::default()
+        });
+        assert_eq!(
+            state.texture_diff_results_for_frame(5),
+            Some([diff].as_slice())
+        );
+        assert_eq!(state.texture_diff_results_for_frame(6), None);
+        assert_eq!(
+            state.latest.as_ref().map(|report| report.frame_index),
+            Some(6)
         );
     }
 }
