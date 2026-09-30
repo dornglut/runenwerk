@@ -57,6 +57,14 @@ fn main(
         return;
     }
 
+    // One compatible global four-phase sequence is the finite estimator. History age is advanced
+    // only after correlated submission completion, so age >= 4 means this history generation has
+    // already formed its bounded estimate. Keep evaluating definedness above so invalid current
+    // evidence still fails closed instead of being hidden by the settled state.
+    if input_words[26u] >= 4u {
+        return;
+    }
+
     let current_index = evaluation_y * evaluation_stride + evaluation_x;
     let current = bitcast<f32>(current_words[current_index]);
     let sample_count = min(history_sample_counts[history_index], 4u);
