@@ -3814,9 +3814,7 @@ mod tests {
                     ..
                 } if same_pose_completed_frames == expected_completed
             ));
-            if expected_completed < TEMPORAL_PHASE_COUNT {
-                cache.reconcile_temporal_outputs(23, true);
-            }
+            cache.reconcile_temporal_outputs(23, true);
         }
 
         let moved = temporal_test_observation(
