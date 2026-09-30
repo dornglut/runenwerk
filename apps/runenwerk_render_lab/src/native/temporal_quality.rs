@@ -115,6 +115,8 @@ struct RenderLabCameraMotionFrameEvidence {
     requested_size_px: [u32; 2],
     evaluation_size_px: [u32; 2],
     semantic_input_generation_classes: Vec<u64>,
+    sequence_revision: u32,
+    reconstruction_revision: u32,
     phase: u32,
     history_generation: u64,
     history_age: u32,
@@ -122,6 +124,7 @@ struct RenderLabCameraMotionFrameEvidence {
     camera_reprojection_eligible: bool,
     previous_observation_available: bool,
     camera_pose_changed: bool,
+    camera_same_pose_completed_frames: Option<u32>,
     camera_reprojection_revision: Option<u32>,
     depth_policy_revision: Option<u32>,
 }
@@ -145,9 +148,9 @@ struct RenderLabCameraMotionArtifact {
 const RL2_QUALITY_SCHEMA_VERSION: u32 = 5;
 const RL2_QUALITY_SCENARIO_ID: &str = "runenwerk.render_lab.rl2.temporal_quality";
 const RL2_QUALITY_SCENARIO_REVISION: u32 = 5;
-const RL2_CAMERA_MOTION_SCHEMA_VERSION: u32 = 1;
+const RL2_CAMERA_MOTION_SCHEMA_VERSION: u32 = 2;
 const RL2_CAMERA_MOTION_SCENARIO_ID: &str = "runenwerk.render_lab.rl2.camera_motion_p100";
-const RL2_CAMERA_MOTION_SCENARIO_REVISION: u32 = 1;
+const RL2_CAMERA_MOTION_SCENARIO_REVISION: u32 = 2;
 pub(super) const RL2_QUALITY_FLOW_ID: &str = "runenwerk.render_lab.rl2.fixed_quality";
 pub(super) const RL2_QUALITY_PASS_ID: &str = "runenwerk.render_lab.rl2.fixed_quality.compose";
 pub(super) const RL2_QUALITY_COLOR_ALIAS: &str = "runenwerk.render_lab.rl2.fixed_quality.color";
@@ -522,6 +525,19 @@ pub(super) fn write_temporal_quality_artifact(
         .with_context(|| format!("write temporal quality evidence {}", path.display()))
 }
 
+fn expected_camera_same_pose_completed_frames(frame_index: usize) -> u32 {
+    match frame_index {
+        0 => 0,
+        1 => 1,
+        2 => 2,
+        3 | 4 => 0,
+        5 => 1,
+        6 => 2,
+        7 => 3,
+        _ => 4,
+    }
+}
+
 fn validate_camera_motion_evidence(
     frames: &[RenderLabCameraMotionFrameEvidence],
     requested_output: (u32, u32),
@@ -535,6 +551,10 @@ fn validate_camera_motion_evidence(
     let expected_size = [requested_output.0, requested_output.1];
     let first_generation = frames[0].history_generation;
     let first_input_generations = &frames[0].semantic_input_generation_classes;
+    let sequence_revision = frames[0].sequence_revision;
+    let reconstruction_revision = frames[0].reconstruction_revision;
+    let camera_reprojection_revision = frames[0].camera_reprojection_revision;
+    let depth_policy_revision = frames[0].depth_policy_revision;
 
     for (index, frame) in frames.iter().enumerate() {
         if frame.requested_size_px != expected_size || frame.evaluation_size_px != expected_size {
@@ -546,6 +566,13 @@ fn validate_camera_motion_evidence(
         }
         if !frame.camera_reprojection_eligible {
             bail!("camera-motion frame {index} is not renderer-eligible for native reprojection");
+        }
+        if frame.sequence_revision != sequence_revision
+            || frame.reconstruction_revision != reconstruction_revision
+            || frame.camera_reprojection_revision != camera_reprojection_revision
+            || frame.depth_policy_revision != depth_policy_revision
+        {
+            bail!("camera-motion frame {index} changed temporal reconstruction policy revisions");
         }
         if frame.camera_reprojection_revision.is_none() || frame.depth_policy_revision.is_none() {
             bail!("camera-motion frame {index} lacks reprojection/depth-policy revision evidence");
@@ -571,6 +598,14 @@ fn validate_camera_motion_evidence(
         if &frame.semantic_input_generation_classes != first_input_generations {
             bail!("camera-motion frame {index} changed semantic-input source generations");
         }
+        let expected_same_pose = expected_camera_same_pose_completed_frames(index);
+        if frame.camera_same_pose_completed_frames != Some(expected_same_pose) {
+            bail!(
+                "camera-motion frame {index} has same-pose completion state {:?}; expected {}",
+                frame.camera_same_pose_completed_frames,
+                expected_same_pose
+            );
+        }
     }
 
     let bootstrap = &frames[0];
@@ -592,11 +627,14 @@ fn validate_camera_motion_evidence(
     }
 
     for (index, frame) in frames.iter().enumerate().skip(2) {
+        let expected_pose_changed = index == 2 || index == 3;
         if frame.history_reset
             || !frame.previous_observation_available
-            || !frame.camera_pose_changed
+            || frame.camera_pose_changed != expected_pose_changed
         {
-            bail!("camera-motion frame {index} does not prove pose-only retained-history reuse");
+            bail!(
+                "camera-motion frame {index} does not match the scripted pose-change/reconvergence lifecycle"
+            );
         }
     }
     Ok(())
@@ -700,6 +738,8 @@ pub(super) fn write_camera_motion_quality_artifact(
                 requested_size_px: [evidence.requested_extent.0, evidence.requested_extent.1],
                 evaluation_size_px: [evidence.evaluation_extent.0, evidence.evaluation_extent.1],
                 semantic_input_generation_classes,
+                sequence_revision: evidence.sequence_revision,
+                reconstruction_revision: evidence.reconstruction_revision,
                 phase: evidence.phase,
                 history_generation: evidence.history_generation,
                 history_age: evidence.history_age,
@@ -707,6 +747,7 @@ pub(super) fn write_camera_motion_quality_artifact(
                 camera_reprojection_eligible: evidence.camera_reprojection_eligible,
                 previous_observation_available: evidence.previous_observation_available,
                 camera_pose_changed: evidence.camera_pose_changed,
+                camera_same_pose_completed_frames: evidence.camera_same_pose_completed_frames,
                 camera_reprojection_revision: evidence.camera_reprojection_revision,
                 depth_policy_revision: evidence.depth_policy_revision,
             });
@@ -944,12 +985,15 @@ mod tests {
         history_reset: bool,
         previous_observation_available: bool,
         camera_pose_changed: bool,
+        same_pose_completed_frames: u32,
     ) -> RenderLabCameraMotionFrameEvidence {
         RenderLabCameraMotionFrameEvidence {
             frame_index,
             requested_size_px: [1920, 1080],
             evaluation_size_px: [1920, 1080],
             semantic_input_generation_classes: vec![1, 1],
+            sequence_revision: 1,
+            reconstruction_revision: 2,
             phase: history_age % 4,
             history_generation: 7,
             history_age,
@@ -957,7 +1001,8 @@ mod tests {
             camera_reprojection_eligible: true,
             previous_observation_available,
             camera_pose_changed,
-            camera_reprojection_revision: Some(1),
+            camera_same_pose_completed_frames: Some(same_pose_completed_frames),
+            camera_reprojection_revision: Some(2),
             depth_policy_revision: Some(1),
         }
     }
@@ -965,10 +1010,10 @@ mod tests {
     #[test]
     fn camera_motion_evidence_requires_pose_only_reuse_without_history_reset() {
         let frames = vec![
-            camera_frame(1, 0, true, false, false),
-            camera_frame(2, 1, false, true, false),
-            camera_frame(3, 2, false, true, true),
-            camera_frame(4, 3, false, true, true),
+            camera_frame(1, 0, true, false, false, 0),
+            camera_frame(2, 1, false, true, false, 1),
+            camera_frame(3, 2, false, true, true, 2),
+            camera_frame(4, 3, false, true, true, 0),
         ];
         validate_camera_motion_evidence(&frames, (1920, 1080)).unwrap();
 
@@ -976,9 +1021,47 @@ mod tests {
         reset_on_motion[2].history_reset = true;
         assert!(validate_camera_motion_evidence(&reset_on_motion, (1920, 1080)).is_err());
 
-        let mut sub_native = frames;
+        let mut sub_native = frames.clone();
         sub_native[3].evaluation_size_px = [960, 540];
         assert!(validate_camera_motion_evidence(&sub_native, (1920, 1080)).is_err());
+
+        let mut bad_convergence = frames;
+        bad_convergence[3].camera_same_pose_completed_frames = Some(2);
+        assert!(validate_camera_motion_evidence(&bad_convergence, (1920, 1080)).is_err());
+    }
+
+    #[test]
+    fn camera_motion_evidence_accepts_move_stop_reconverge_and_post_settle_cycle() {
+        let frames = (0_usize..12)
+            .map(|index| {
+                camera_frame(
+                    index as u64 + 1,
+                    index as u32,
+                    index == 0,
+                    index != 0,
+                    index == 2 || index == 3,
+                    expected_camera_same_pose_completed_frames(index),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        validate_camera_motion_evidence(&frames, (1920, 1080)).unwrap();
+        assert_eq!(
+            frames[4..]
+                .iter()
+                .map(|frame| frame.camera_same_pose_completed_frames)
+                .collect::<Vec<_>>(),
+            vec![
+                Some(0),
+                Some(1),
+                Some(2),
+                Some(3),
+                Some(4),
+                Some(4),
+                Some(4),
+                Some(4),
+            ]
+        );
     }
 
     #[test]
