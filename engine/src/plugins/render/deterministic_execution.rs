@@ -66,8 +66,8 @@ const OBSERVATION_PERSPECTIVE: u32 = 1;
 const OBSERVATION_PROBE: u32 = 2;
 const OBSERVATION_PERSPECTIVE_FOOTPRINT: u32 = 3;
 const TEMPORAL_SEQUENCE_REVISION: u32 = 1;
-const TEMPORAL_RECONSTRUCTION_REVISION: u32 = 1;
-const CAMERA_REPROJECTION_REVISION: u32 = 1;
+const TEMPORAL_RECONSTRUCTION_REVISION: u32 = 2;
+const CAMERA_REPROJECTION_REVISION: u32 = 2;
 const CAMERA_DEPTH_POLICY_REVISION: u32 = 1;
 const CAMERA_HISTORY_WORDS_PER_SAMPLE: u64 = 4;
 const CAMERA_DEPTH_ABSOLUTE_EPSILON: f32 = 0.001;
@@ -122,6 +122,7 @@ struct DeterministicCameraTemporalStorage {
     slots: [GpuBufferHandle; 2],
     completed_slot: usize,
     completed_observation: Option<RenderPerspectiveObservation>,
+    same_pose_completed_frames: u32,
     pending_slot: Option<usize>,
     pending_observation: Option<RenderPerspectiveObservation>,
 }
@@ -157,6 +158,7 @@ enum DeterministicTemporalHistoryUseStorage {
         current_history: GpuBufferHandle,
         previous_observation: Option<RenderPerspectiveObservation>,
         pose_changed: bool,
+        same_pose_completed_frames: u32,
     },
 }
 
@@ -266,6 +268,20 @@ impl DeterministicResourceCache {
                             camera.completed_slot = slot;
                         }
                         if let Some(observation) = camera.pending_observation.take() {
+                            camera.same_pose_completed_frames =
+                                match camera.completed_observation {
+                                    None => 1,
+                                    Some(previous)
+                                        if previous.observation_to_scene()
+                                            != observation.observation_to_scene() =>
+                                    {
+                                        0
+                                    }
+                                    Some(_) => camera
+                                        .same_pose_completed_frames
+                                        .saturating_add(1)
+                                        .min(TEMPORAL_PHASE_COUNT),
+                                };
                             camera.completed_observation = Some(observation);
                         }
                     }
@@ -424,6 +440,7 @@ impl DeterministicResourceCache {
                     slots: [first, second],
                     completed_slot: 0,
                     completed_observation: None,
+                    same_pose_completed_frames: 0,
                     pending_slot: None,
                     pending_observation: None,
                 }))
@@ -503,6 +520,7 @@ impl DeterministicResourceCache {
                     current_history: camera.slots[write_slot].clone(),
                     previous_observation,
                     pose_changed,
+                    same_pose_completed_frames: camera.same_pose_completed_frames,
                 }
             }
         };
@@ -647,6 +665,7 @@ pub struct RenderDeterministicTemporalExecutionEvidence {
     pub camera_reprojection_eligible: bool,
     pub previous_observation_available: bool,
     pub camera_pose_changed: bool,
+    pub camera_same_pose_completed_frames: Option<u32>,
     pub camera_reprojection_revision: Option<u32>,
     pub depth_policy_revision: Option<u32>,
 }
@@ -1882,9 +1901,13 @@ fn lower_output(
                 current_history,
                 previous_observation,
                 pose_changed,
+                same_pose_completed_frames,
             } => {
-                let parameter_words =
-                    camera_reprojection_parameter_words(*previous_observation, *pose_changed)?;
+                let parameter_words = camera_reprojection_parameter_words(
+                    *previous_observation,
+                    *pose_changed,
+                    *same_pose_completed_frames,
+                )?;
                 let payload = PreparedGpuData::<TransferData>::ordinary_pod_transfer(
                     format!("RunenRender output {output_index} camera reprojection parameters"),
                     &parameter_words,
@@ -2087,6 +2110,15 @@ fn lower_output(
                                             ..
                                         }
                                     ),
+                                    camera_same_pose_completed_frames: match &history.storage {
+                                        DeterministicTemporalHistoryUseStorage::Camera {
+                                            same_pose_completed_frames,
+                                            ..
+                                        } => Some(*same_pose_completed_frames),
+                                        DeterministicTemporalHistoryUseStorage::Static { .. } => {
+                                            None
+                                        }
+                                    },
                                     camera_reprojection_revision: matches!(
                                         &history.storage,
                                         DeterministicTemporalHistoryUseStorage::Camera { .. }
@@ -2642,14 +2674,16 @@ fn matching_emitters(
 fn camera_reprojection_parameter_words(
     previous: Option<RenderPerspectiveObservation>,
     pose_changed: bool,
-) -> Result<[u32; 23], RenderDeterministicLoweringError> {
-    let mut words = [0_u32; 23];
+    same_pose_completed_frames: u32,
+) -> Result<[u32; 24], RenderDeterministicLoweringError> {
+    let mut words = [0_u32; 24];
     words[0] = if previous.is_some() { 1 } else { 0 };
     words[1] = if pose_changed { 1 } else { 0 };
     words[2] = CAMERA_DEPTH_POLICY_REVISION;
     words[3] = CAMERA_REPROJECTION_REVISION;
     words[4] = CAMERA_DEPTH_ABSOLUTE_EPSILON.to_bits();
     words[5] = CAMERA_DEPTH_RELATIVE_EPSILON.to_bits();
+    words[23] = same_pose_completed_frames.min(TEMPORAL_PHASE_COUNT);
     if let Some(previous) = previous {
         let matrix = previous.observation_to_scene().row_major_3x4();
         pack_vec3(&mut words, 6, [matrix[3], matrix[7], matrix[11]])?;
