@@ -2559,7 +2559,7 @@ fn pack_output(
                         field: "field sample input offset",
                     }
                 })?;
-                words[base + 35] = f32_bits(
+                words[base + 35] = conservative_nonnegative_f32_bits(
                     input.max_absolute_query_error_local_meters(),
                     "field maximum absolute query error",
                 )?;
@@ -2814,6 +2814,28 @@ fn positive_f32_bits(
     Ok(physical.to_bits())
 }
 
+fn conservative_nonnegative_f32_bits(
+    value: f64,
+    field: &'static str,
+) -> Result<u32, RenderDeterministicLoweringError> {
+    if !value.is_finite() || value < 0.0 {
+        return Err(RenderDeterministicLoweringError::NumericRealization { field });
+    }
+    let mut physical = value as f32;
+    if !physical.is_finite() || physical < 0.0 {
+        return Err(RenderDeterministicLoweringError::NumericRealization { field });
+    }
+    if f64::from(physical) < value {
+        physical = f32::from_bits(physical.to_bits().checked_add(1).ok_or(
+            RenderDeterministicLoweringError::NumericRealization { field },
+        )?);
+        if !physical.is_finite() {
+            return Err(RenderDeterministicLoweringError::NumericRealization { field });
+        }
+    }
+    Ok(physical.to_bits())
+}
+
 fn align_up(value: u64, alignment: u64) -> Result<u64, RenderDeterministicLoweringError> {
     if alignment == 0 {
         return Err(RenderDeterministicLoweringError::InvalidBytesPerRowAlignment { alignment });
@@ -2918,6 +2940,31 @@ mod tests {
             GpuBufferInitialization::Uninitialized,
         )
         .expect("deterministic cache test descriptor should be valid")
+    }
+
+    #[test]
+    fn conservative_nonnegative_f32_packing_never_rounds_a_bound_down() {
+        let source = 0.7_f64;
+        let ordinary = source as f32;
+        assert!(
+            f64::from(ordinary) < source,
+            "proof value must exercise a downward ordinary f32 rounding"
+        );
+
+        let conservative = f32::from_bits(
+            conservative_nonnegative_f32_bits(source, "conservative bound")
+                .expect("finite non-negative bound must pack"),
+        );
+        assert!(f64::from(conservative) >= source);
+        assert!(conservative > ordinary);
+
+        assert_eq!(
+            f32::from_bits(
+                conservative_nonnegative_f32_bits(0.5, "exact conservative bound")
+                    .expect("exact f32 bound must pack"),
+            ),
+            0.5
+        );
     }
 
     #[test]
