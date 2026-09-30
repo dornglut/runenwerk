@@ -14,10 +14,23 @@ fn rust_sources_below(root: &Path, output: &mut Vec<PathBuf>) {
 
 fn production_source(path: &Path) -> String {
     let source = fs::read_to_string(path).expect("Rust source should be readable");
+    production_only(&source)
+}
+
+fn production_only(source: &str) -> String {
+    let source = source.replace("\r\n", "\n").replace('\r', "\n");
     source
         .split_once("\n#[cfg(test)]\nmod ")
         .map_or(source.as_str(), |(production, _)| production)
         .to_owned()
+}
+
+#[test]
+fn production_source_boundary_excludes_test_module_with_crlf() {
+    let lf = "fn production() {}\n#[cfg(test)]\nmod tests {\n    fn only_for_tests() {}\n}";
+    let crlf = lf.replace('\n', "\r\n");
+    assert_eq!(production_only(lf), "fn production() {}");
+    assert_eq!(production_only(&crlf), "fn production() {}");
 }
 
 fn joined_sources(root: &Path) -> String {

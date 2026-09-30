@@ -2,7 +2,13 @@ use std::fs;
 use std::path::Path;
 
 fn read(path: &str) -> String {
-    fs::read_to_string(Path::new(path)).unwrap_or_else(|err| panic!("failed to read {path}: {err}"))
+    let source = fs::read_to_string(Path::new(path))
+        .unwrap_or_else(|err| panic!("failed to read {path}: {err}"));
+    normalize_source_line_endings(source)
+}
+
+fn normalize_source_line_endings(source: String) -> String {
+    source.replace("\r\n", "\n").replace('\r', "\n")
 }
 
 fn read_render_flow_sources() -> String {
@@ -17,10 +23,20 @@ fn read_render_flow_sources() -> String {
     for path in files {
         let source = fs::read_to_string(&path)
             .unwrap_or_else(|err| panic!("failed to read {}: {err}", path.display()));
-        combined.push_str(&strip_cfg_test_modules(&source));
+        combined.push_str(&strip_cfg_test_modules(&normalize_source_line_endings(
+            source,
+        )));
         combined.push('\n');
     }
     combined
+}
+
+#[test]
+fn source_guards_read_lf_and_crlf_equivalently() {
+    let lf = "struct RealizedFlowInvocation<'a> {\n}\n\nstruct RealizedScheduledPass";
+    assert_eq!(normalize_source_line_endings(lf.to_owned()), lf);
+    assert_eq!(normalize_source_line_endings(lf.replace('\n', "\r\n")), lf);
+    assert_eq!(normalize_source_line_endings(lf.replace('\n', "\r")), lf);
 }
 
 fn collect_source_files(root: &Path, files: &mut Vec<std::path::PathBuf>) {

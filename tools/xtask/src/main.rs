@@ -592,7 +592,12 @@ fn forbid_text(root: &Path, relative: &str, marker: &str, reason: &str) -> Resul
 
 fn read_text(root: &Path, relative: &str) -> Result<String, String> {
     fs::read_to_string(root.join(relative))
+        .map(normalize_source_line_endings)
         .map_err(|error| format!("repository audit: failed to read {relative}: {error}"))
+}
+
+fn normalize_source_line_endings(source: String) -> String {
+    source.replace("\r\n", "\n").replace('\r', "\n")
 }
 
 fn repository_root() -> Result<PathBuf, String> {
@@ -643,9 +648,16 @@ fn print_usage() {
 mod tests {
     use super::{
         ValidationTiming, format_validation_timings, is_product_rust_source, is_sdf_gitlink,
-        measure_validation_stage, sdf_manifest_violation,
+        measure_validation_stage, normalize_source_line_endings, sdf_manifest_violation,
     };
     use std::time::Duration;
+
+    #[test]
+    fn repository_audit_markers_match_lf_and_crlf_workflows() {
+        let marker = "  pull_request:\n    branches:\n      - main";
+        assert!(normalize_source_line_endings(marker.to_owned()).contains(marker));
+        assert!(normalize_source_line_endings(marker.replace('\n', "\r\n")).contains(marker));
+    }
 
     #[test]
     fn validation_timing_report_preserves_stage_order_and_total() {

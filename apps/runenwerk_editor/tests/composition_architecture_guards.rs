@@ -41,9 +41,11 @@ fn composition_is_the_only_live_editor_structural_authority() {
 
 #[test]
 fn predecessor_workspace_pipeline_is_not_public_editor_shell_authority() {
-    let lib = include_str!("../../../domain/editor/editor_shell/src/lib.rs");
+    let lib = normalized_source(include_str!(
+        "../../../domain/editor/editor_shell/src/lib.rs"
+    ));
     assert!(!lib.contains("pub mod workspace;"));
-    let public_workspace_exports = source_between(lib, "pub use workspace::{", "\n};");
+    let public_workspace_exports = source_between(&lib, "pub use workspace::{", "\n};");
     for retired in [
         "WorkspaceMutation",
         "WorkspaceState,",
@@ -78,7 +80,9 @@ fn predecessor_workspace_pipeline_is_not_public_editor_shell_authority() {
     }
     assert!(lib.contains("pub(crate) use workspace::{"));
 
-    let workspace_mod = include_str!("../../../domain/editor/editor_shell/src/workspace/mod.rs");
+    let workspace_mod = normalized_source(include_str!(
+        "../../../domain/editor/editor_shell/src/workspace/mod.rs"
+    ));
     assert!(workspace_mod.contains("#[cfg(test)]\nmod persisted;"));
     assert!(
         !workspace_mod.contains("use persisted::*;"),
@@ -87,12 +91,14 @@ fn predecessor_workspace_pipeline_is_not_public_editor_shell_authority() {
     assert!(workspace_mod.contains("#[cfg(test)]\npub mod projection;"));
     assert!(workspace_mod.contains("#[cfg(test)]\npub mod reducer;"));
 
-    let structural_mod =
-        include_str!("../../../domain/editor/editor_shell/src/composition/structural/mod.rs");
+    let structural_mod = normalized_source(include_str!(
+        "../../../domain/editor/editor_shell/src/composition/structural/mod.rs"
+    ));
     assert!(structural_mod.contains("#[cfg(test)]\nmod legacy_import;"));
 
-    let workspace_state =
-        include_str!("../../../domain/editor/editor_shell/src/workspace/state.rs");
+    let workspace_state = normalized_source(include_str!(
+        "../../../domain/editor/editor_shell/src/workspace/state.rs"
+    ));
     assert!(
         workspace_state.contains(
             "#[cfg(test)]\n#[derive(Debug, Clone, PartialEq)]\npub struct WorkspaceState"
@@ -103,8 +109,9 @@ fn predecessor_workspace_pipeline_is_not_public_editor_shell_authority() {
     assert!(reducer.contains("pub(crate) enum WorkspaceMutation"));
     assert!(reducer.contains("pub(crate) fn reduce_workspace"));
 
-    let formation =
-        include_str!("../../../domain/editor/editor_shell/src/workspace/definition_form.rs");
+    let formation = normalized_source(include_str!(
+        "../../../domain/editor/editor_shell/src/workspace/definition_form.rs"
+    ));
     assert!(
         formation.contains("#[cfg(test)]\npub(crate) fn form_workspace_state_from_definition(")
     );
@@ -407,6 +414,17 @@ fn composition_history_restores_paired_core_and_editor_extension_state() {
             .as_deref(),
         Some(stable_key.as_str())
     );
+}
+
+fn normalized_source(source: &str) -> String {
+    source.replace("\r\n", "\n").replace('\r', "\n")
+}
+
+#[test]
+fn architecture_source_markers_are_line_ending_independent() {
+    let lf = "#[cfg(test)]\nmod persisted;";
+    assert_eq!(normalized_source(lf), lf);
+    assert_eq!(normalized_source(&lf.replace('\n', "\r\n")), lf);
 }
 
 fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
