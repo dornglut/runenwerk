@@ -63,7 +63,7 @@ pub(super) struct RenderLabTemporalQualityCaptureEvidence {
 }
 
 #[derive(Debug, serde::Serialize)]
-struct RenderLabTemporalQualityGpuEvidence {
+pub(super) struct RenderLabTemporalQualityGpuEvidence {
     backend: &'static str,
     adapter_class: &'static str,
     software_status: &'static str,
@@ -294,7 +294,7 @@ fn temporal_quality_evidence_profile_fingerprint(
     format!("blake3:{}", blake3::hash(&canonical).to_hex())
 }
 
-fn temporal_quality_gpu_evidence(
+pub(super) fn temporal_quality_gpu_evidence(
     facts: &runen_gpu::GpuAdapterFacts,
 ) -> RenderLabTemporalQualityGpuEvidence {
     let backend = gpu_backend_token(facts.backend());

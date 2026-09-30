@@ -3073,6 +3073,7 @@ dependencies = [
  "pollster",
  "runen-ecs",
  "runen-gpu",
+ "runen-input",
  "serde",
  "serde_json",
  "winit",

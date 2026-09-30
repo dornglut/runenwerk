@@ -6,7 +6,17 @@ use engine::plugins::render::inspect::{
 use engine::prelude::FrameEnd;
 use std::path::{Path, PathBuf};
 
+mod comparison_evidence;
 mod temporal_quality;
+
+use comparison_evidence::RenderLabComparisonEvidenceState;
+
+use crate::comparison::{
+    RenderLabComparisonEvidenceConfig, RenderLabComparisonState,
+    build_render_lab_comparison_publication, install_render_lab_comparison_bindings,
+    render_lab_comparison_flow, stage_render_lab_comparison_publication,
+    update_render_lab_comparison_system, validate_comparison_extents,
+};
 
 use temporal_quality::{
     RL2_QUALITY_COLOR_ALIAS, RL2_QUALITY_FLOW_ID, RenderLabFixedQualityPlans,
@@ -88,6 +98,22 @@ struct RenderLabFramePublicationResources<'w> {
     history: Res<'w, RenderFrameHistoryState>,
     fixed_quality_plans: Res<'w, RenderLabFixedQualityPlans>,
     quality_execution: ResMut<'w, RenderLabTemporalQualityExecutionState>,
+    comparison: Res<'w, RenderLabComparisonState>,
+    comparison_evidence: ResMut<'w, RenderLabComparisonEvidenceConfig>,
+}
+
+#[derive(runen_ecs::SystemParam)]
+struct RenderLabComparisonCompletionResources<'w> {
+    evidence: ResMut<'w, RenderLabComparisonEvidenceConfig>,
+    evidence_state: ResMut<'w, RenderLabComparisonEvidenceState>,
+    presentation: Res<'w, engine::PrimaryPresentationMetricsResource>,
+    comparison: Res<'w, RenderLabComparisonState>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, runen_ecs::SystemSet)]
+enum RenderLabUpdateSet {
+    ComparisonInput,
+    Camera,
 }
 
 struct RenderLabPlugin;
@@ -95,10 +121,22 @@ struct RenderLabPlugin;
 impl Plugin for RenderLabPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<RenderLabCamera>();
+        app.init_resource::<RenderLabComparisonState>();
+        app.init_resource::<RenderLabComparisonEvidenceConfig>();
+        app.init_resource::<RenderLabComparisonEvidenceState>();
         app.init_resource::<RenderLabMeasurementConfig>();
         app.init_resource::<RenderLabFixedQualityPlans>();
         app.init_resource::<RenderLabTemporalQualityExecutionState>();
-        app.add_systems(Update, camera::update_render_lab_camera_system);
+        app.add_systems(
+            Update,
+            update_render_lab_comparison_system.in_set(RenderLabUpdateSet::ComparisonInput),
+        );
+        app.add_systems(
+            Update,
+            camera::update_render_lab_comparison_camera_system
+                .in_set(RenderLabUpdateSet::Camera)
+                .after(RenderLabUpdateSet::ComparisonInput),
+        );
         app.add_systems(FrameEnd, approve_render_lab_close_system);
         app.add_systems(
             RenderPrepare,
@@ -113,7 +151,41 @@ impl Plugin for RenderLabPlugin {
 }
 
 pub fn run_native() -> Result<()> {
-    run_native_with_measurement(None)
+    run_native_with_configuration(None, None, None)
+}
+
+pub fn run_native_comparison(
+    primary_window_size_px: (u32, u32),
+    candidate_size_px: (u32, u32),
+) -> Result<()> {
+    validate_comparison_extents(primary_window_size_px, candidate_size_px)?;
+    run_native_with_configuration(
+        None,
+        Some((
+            RenderLabComparisonState::active(candidate_size_px),
+            primary_window_size_px,
+        )),
+        None,
+    )
+}
+
+pub fn run_native_comparison_evidence(
+    output_root: impl Into<PathBuf>,
+    submitted_frame_limit: usize,
+    primary_window_size_px: (u32, u32),
+    candidate_size_px: (u32, u32),
+) -> Result<()> {
+    validate_comparison_extents(primary_window_size_px, candidate_size_px)?;
+    let submitted_frame_limit = validate_measurement_frame_limit(Some(submitted_frame_limit))?
+        .expect("validated explicit comparison evidence frame limit");
+    run_native_with_configuration(
+        None,
+        Some((
+            RenderLabComparisonState::active(candidate_size_px),
+            primary_window_size_px,
+        )),
+        Some((output_root.into(), submitted_frame_limit)),
+    )
 }
 
 pub fn run_native_measurement(
@@ -238,6 +310,14 @@ fn validate_measurement_frame_limit(limit: Option<usize>) -> Result<Option<usize
 }
 
 fn run_native_with_measurement(measurement: Option<RenderLabMeasurementConfig>) -> Result<()> {
+    run_native_with_configuration(measurement, None, None)
+}
+
+fn run_native_with_configuration(
+    measurement: Option<RenderLabMeasurementConfig>,
+    comparison: Option<(RenderLabComparisonState, (u32, u32))>,
+    comparison_evidence_request: Option<(PathBuf, usize)>,
+) -> Result<()> {
     let quality_mode = measurement.as_ref().and_then(|measurement| {
         measurement.quality_capture_output_dir.as_ref().map(|_| {
             (
@@ -253,24 +333,57 @@ fn run_native_with_measurement(measurement: Option<RenderLabMeasurementConfig>) 
     let quality_capture_output_dir = measurement
         .as_ref()
         .and_then(|measurement| measurement.quality_capture_output_dir.clone());
+    let comparison_window_size = comparison.map(|(_, size_px)| size_px);
     let mut app = App::new();
-    app.set_title("Runenwerk Render Lab — RL2 native interaction");
+    app.set_title(if comparison.is_some() {
+        "Runenwerk Render Lab — RL2 synchronized A/B comparison"
+    } else {
+        "Runenwerk Render Lab — RL2 native interaction"
+    });
     app.with_frame_pacing(FramePacingPolicyResource::continuous_capped(60));
-    if let Some(size_px) = measurement
-        .as_ref()
-        .and_then(|measurement| measurement.primary_window_size_px)
-    {
+    if let Some(size_px) = comparison_window_size.or_else(|| {
+        measurement
+            .as_ref()
+            .and_then(|measurement| measurement.primary_window_size_px)
+    }) {
         app.with_primary_window_size_px(size_px);
     }
     app.add_plugins(default_plugins());
     app.add_plugin(ScenePlugin);
     app.add_plugin(RenderPlugin);
     app.add_plugin(RenderLabPlugin);
+    if let Some((comparison_state, _)) = comparison {
+        app.insert_resource(comparison_state);
+        install_render_lab_comparison_bindings(&mut app);
+    }
     if let Some(measurement) = measurement {
         app.insert_resource(measurement);
         app.insert_resource(rl2_measurement_policy());
     }
-    if quality_mode.is_some() {
+    if comparison.is_some() {
+        let flow = render_lab_comparison_flow()?;
+        if let Some((output_root, submitted_frame_limit)) = comparison_evidence_request {
+            let evidence = RenderLabComparisonEvidenceConfig::bounded(
+                output_root,
+                submitted_frame_limit,
+                &flow,
+            )?;
+            let artifact_output_dir = evidence
+                .artifact_output_dir()
+                .expect("active comparison evidence has an artifact directory");
+            app.update_render_debug_control(|control| {
+                control.capture_enabled = false;
+                control.readback_enabled = false;
+                control.artifact_export_enabled = false;
+                control.artifact_output_dir = artifact_output_dir.clone();
+            });
+            app.update_render_debug_config(|config| config.clear());
+            app.insert_resource(evidence);
+            app.insert_resource(rl2_measurement_policy());
+        }
+        app.insert_resource(RenderLabFlowId(flow.id()));
+        app.add_render_flow(flow);
+    } else if quality_mode.is_some() {
         app.update_render_debug_control(|control| {
             control.capture_enabled = false;
             control.readback_enabled = false;
@@ -513,14 +626,175 @@ fn complete_render_lab_measurement_if_requested(
     Ok(())
 }
 
+struct RenderLabComparisonCompletionInputs<'a> {
+    history: &'a RenderFrameHistoryState,
+    evidence_state: &'a RenderLabComparisonEvidenceState,
+    debug_report: &'a RenderDebugFrameReportState,
+    gfx: &'a engine::plugins::render::Gfx,
+    output_size_px: (u32, u32),
+    candidate_size_px: (u32, u32),
+}
+
+fn complete_render_lab_comparison_evidence_if_requested(
+    windows: &mut WindowStateRegistryResource,
+    evidence: &mut RenderLabComparisonEvidenceConfig,
+    inputs: RenderLabComparisonCompletionInputs<'_>,
+) -> Result<bool> {
+    let RenderLabComparisonCompletionInputs {
+        history,
+        evidence_state,
+        debug_report,
+        gfx,
+        output_size_px,
+        candidate_size_px,
+    } = inputs;
+    if !evidence.is_active() {
+        return Ok(false);
+    }
+    let Some(primary_window_id) = windows.primary_window_id() else {
+        return Ok(true);
+    };
+    let close_intent_pending = windows
+        .record(primary_window_id)
+        .is_some_and(|window| window.close_intent_pending);
+    let target_ordinal = evidence
+        .submitted_frame_limit()
+        .expect("active comparison evidence has a submitted-frame limit");
+    let Some(target_frame_index) = history
+        .observations()
+        .nth(target_ordinal.saturating_sub(1))
+        .map(|observation| observation.key.frame_index)
+    else {
+        if close_intent_pending {
+            bail!(
+                "comparison evidence run cannot close before submitted frame {} exists",
+                target_ordinal
+            );
+        }
+        return Ok(true);
+    };
+
+    let Some(results) = debug_report.capture_results_for_frame(target_frame_index) else {
+        if close_intent_pending {
+            bail!(
+                "comparison evidence run cannot close before frame {} capture results complete",
+                target_frame_index
+            );
+        }
+        return Ok(true);
+    };
+
+    for selector in evidence.capture_selectors() {
+        let result = results
+            .iter()
+            .find(|result| &result.selector == selector)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "comparison evidence frame {} is missing selector '{}'",
+                    target_frame_index,
+                    selector.describe()
+                )
+            })?;
+        if result.terminal.code
+            != engine::plugins::render::inspect::RenderCaptureTerminalCode::Completed
+        {
+            let reason = result
+                .terminal
+                .reason
+                .as_ref()
+                .map(|reason| format!("{}: {}", reason.code, reason.detail))
+                .unwrap_or_else(|| "no terminal reason".to_string());
+            bail!(
+                "comparison evidence selector '{}' terminated as {} ({reason})",
+                selector.describe(),
+                result.terminal.code.as_str()
+            );
+        }
+        let frame_identity = result.frame_identity.as_ref().ok_or_else(|| {
+            anyhow::anyhow!(
+                "comparison evidence selector '{}' completed without frame identity",
+                selector.describe()
+            )
+        })?;
+        if frame_identity.frame_index != target_frame_index {
+            bail!(
+                "comparison evidence selector '{}' completed for frame {} instead of {}",
+                selector.describe(),
+                frame_identity.frame_index,
+                target_frame_index
+            );
+        }
+        if result.artifact_path.is_none() {
+            bail!(
+                "comparison evidence selector '{}' completed without exported artifact",
+                selector.describe()
+            );
+        }
+    }
+
+    let manifest = debug_report
+        .capture_artifact_manifest_for_frame(target_frame_index)
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "comparison evidence frame {} completed captures without exported manifest",
+                target_frame_index
+            )
+        })?;
+    if !manifest.exists() {
+        bail!(
+            "comparison evidence manifest {} is not present on disk",
+            manifest.display()
+        );
+    }
+
+    comparison_evidence::write_comparison_evidence(
+        comparison_evidence::RenderLabComparisonEvidenceInputs {
+            config: evidence,
+            history,
+            evidence_state,
+            debug_report,
+            gfx,
+            target_frame: target_frame_index,
+            output_size_px,
+            candidate_size_px,
+        },
+    )?;
+
+    evidence.mark_completed();
+    if let Some(primary_window) = windows.record_mut(primary_window_id) {
+        primary_window.request_close();
+    }
+    Ok(true)
+}
+
 fn approve_render_lab_close_system(
     mut windows: ResMut<WindowStateRegistryResource>,
     mut measurement: ResMut<RenderLabMeasurementConfig>,
+    mut comparison_resources: RenderLabComparisonCompletionResources<'_>,
     history: Res<RenderFrameHistoryState>,
     quality_execution: Res<RenderLabTemporalQualityExecutionState>,
     debug_report: Res<RenderDebugFrameReportState>,
     gfx: Res<engine::plugins::render::Gfx>,
 ) -> Result<()> {
+    if comparison_resources.evidence.is_active() {
+        comparison_resources
+            .evidence_state
+            .observe_available(&history, &gfx);
+    }
+    if complete_render_lab_comparison_evidence_if_requested(
+        &mut windows,
+        &mut comparison_resources.evidence,
+        RenderLabComparisonCompletionInputs {
+            history: &history,
+            evidence_state: &comparison_resources.evidence_state,
+            debug_report: &debug_report,
+            gfx: &gfx,
+            output_size_px: comparison_resources.presentation.size_px(),
+            candidate_size_px: comparison_resources.comparison.candidate_size_px(),
+        },
+    )? {
+        return Ok(());
+    }
     complete_render_lab_measurement_if_requested(
         &mut windows,
         &mut measurement,
@@ -650,11 +924,49 @@ fn publish_render_lab_frame_system(
         history,
         fixed_quality_plans,
         mut quality_execution,
+        comparison,
+        comparison_evidence,
     } = publication;
     let requested_internal_size = render_lab_radiance_extent(&presentation, &measurement)?;
     let output_size = render_lab_extent(&presentation);
     let producer_id = engine::plugins::render::RenderFrameProducerId::try_from_raw(RL2_PRODUCER_ID)
         .expect("Render Lab producer id is non-zero");
+
+    if comparison.is_active() {
+        if comparison_evidence.is_active() {
+            let capture_armed = comparison_evidence.capture_should_arm(history.len());
+            debug_control.capture_enabled = capture_armed;
+            debug_control.readback_enabled = capture_armed;
+            debug_control.artifact_export_enabled = capture_armed;
+            if capture_armed {
+                debug_config.capture_selectors = comparison_evidence.capture_selectors().to_vec();
+                debug_config.pixel_probes.clear();
+                debug_config.texture_diffs = comparison_evidence
+                    .texture_diff()
+                    .cloned()
+                    .into_iter()
+                    .collect();
+            } else {
+                debug_config.clear();
+            }
+            if comparison_evidence.awaiting_capture_completion(history.len()) {
+                return Ok(());
+            }
+        }
+        let comparison_publication = build_render_lab_comparison_publication(
+            &camera,
+            flow_id.0,
+            output_size,
+            comparison.candidate_size_px(),
+        )?;
+        stage_render_lab_comparison_publication(
+            &mut targets,
+            &mut frame_requests,
+            &mut contributions,
+            comparison_publication,
+        )?;
+        return Ok(());
+    }
 
     let quality_mode = measurement.quality_capture_output_dir.is_some();
     let camera_motion_quality = matches!(
