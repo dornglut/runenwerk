@@ -25,6 +25,7 @@ var<storage, read> camera_words: array<u32>;
 const F32_EXPONENT_MASK: u32 = 2139095040u;
 const CAMERA_DEPTH_ABSOLUTE_EPSILON: f32 = 0.001;
 const CAMERA_DEPTH_RELATIVE_EPSILON: f32 = 0.001;
+const INVALID_HISTORY_SAMPLE_COUNT: u32 = 4294967295u;
 
 fn finite_f32(value: f32) -> bool {
     return (bitcast<u32>(value) & F32_EXPONENT_MASK) != F32_EXPONENT_MASK;
@@ -129,33 +130,47 @@ fn main(
     let output_index = current_output_index(sample_index);
     if defined_words[sample_index] == 0u {
         current_radiance_words[output_index] = 0u;
-        write_current(sample_index, 0.0, 0.0, 0u, 0u);
+        write_current(sample_index, 0.0, 0.0, INVALID_HISTORY_SAMPLE_COUNT, 0u);
         return;
     }
 
     let current_radiance = bitcast<f32>(current_radiance_words[output_index]);
-    if current_hit_words[output_index] == 0u {
-        current_radiance_words[output_index] = bitcast<u32>(0.0);
-        write_current(sample_index, 0.0, 0.0, 1u, 0u);
-        return;
+    let current_hit_word = min(current_hit_words[output_index], 1u);
+    let current_hit = current_hit_word != 0u;
+    var current_depth = 0.0;
+    if current_hit {
+        current_depth = bitcast<f32>(current_depth_words[output_index]);
+        if !finite_f32(current_depth) {
+            current_radiance_words[output_index] = 0u;
+            write_current(sample_index, 0.0, 0.0, INVALID_HISTORY_SAMPLE_COUNT, 0u);
+            return;
+        }
     }
-
-    let current_depth = bitcast<f32>(current_depth_words[output_index]);
-    if !finite_f32(current_depth) {
-        current_radiance_words[output_index] = 0u;
-        write_current(sample_index, 0.0, 0.0, 0u, 0u);
-        return;
-    }
+    let current_sample = select(0.0, current_radiance, current_hit);
 
     let previous_available = camera_words[0u] != 0u;
     if !previous_available {
-        write_current(sample_index, current_radiance, current_depth, 1u, 1u);
+        current_radiance_words[output_index] = bitcast<u32>(current_sample);
+        write_current(
+            sample_index,
+            current_sample,
+            current_depth,
+            1u,
+            current_hit_word,
+        );
         return;
     }
 
-    var previous_index = sample_index;
     let pose_changed = camera_words[1u] != 0u;
     if pose_changed {
+        // Preserve the accepted T2 branch for actual camera motion. A current miss has no
+        // geometric point to reproject and therefore remains current-only background.
+        if !current_hit {
+            current_radiance_words[output_index] = bitcast<u32>(0.0);
+            write_current(sample_index, 0.0, 0.0, 1u, 0u);
+            return;
+        }
+
         let direction = current_direction(sample_index);
         let forward = current_forward();
         if direction.w == 0.0 || forward.w == 0.0 {
@@ -193,26 +208,14 @@ fn main(
         let height = input_words[23u];
         let previous_x = min(u32(floor(u * f32(width))), width - 1u);
         let previous_y = min(u32(floor(v * f32(height))), height - 1u);
-        previous_index = previous_y * width + previous_x;
-    }
+        let previous_index = previous_y * width + previous_x;
+        let previous_base = history_base(previous_index);
+        if previous_history_words[previous_base + 3u] == 0u {
+            write_current(sample_index, current_radiance, current_depth, 1u, 1u);
+            return;
+        }
 
-    let previous_base = history_base(previous_index);
-    if previous_history_words[previous_base + 3u] == 0u {
-        write_current(sample_index, current_radiance, current_depth, 1u, 1u);
-        return;
-    }
-    if pose_changed {
         let previous_depth = bitcast<f32>(previous_history_words[previous_base + 1u]);
-        let previous_origin = vec3<f32>(
-            load_camera_f32(6u),
-            load_camera_f32(7u),
-            load_camera_f32(8u),
-        );
-        let direction = current_direction(sample_index);
-        let forward = current_forward();
-        let denominator = dot(direction.xyz, forward.xyz);
-        let scene_point =
-            current_origin() + direction.xyz * (current_depth / denominator);
         let previous_forward = vec3<f32>(
             load_camera_f32(18u),
             load_camera_f32(19u),
@@ -227,22 +230,96 @@ fn main(
             write_current(sample_index, current_radiance, current_depth, 1u, 1u);
             return;
         }
-    }
 
-    let previous_radiance = bitcast<f32>(previous_history_words[previous_base]);
-    let previous_count = min(previous_history_words[previous_base + 2u], 4u);
-    if previous_count == 0u || !finite_f32(previous_radiance) {
-        write_current(sample_index, current_radiance, current_depth, 1u, 1u);
+        let previous_raw_count = previous_history_words[previous_base + 2u];
+        if previous_raw_count == INVALID_HISTORY_SAMPLE_COUNT {
+            write_current(sample_index, current_radiance, current_depth, 1u, 1u);
+            return;
+        }
+        let previous_radiance = bitcast<f32>(previous_history_words[previous_base]);
+        let previous_count = min(previous_raw_count, 4u);
+        if previous_count == 0u || !finite_f32(previous_radiance) {
+            write_current(sample_index, current_radiance, current_depth, 1u, 1u);
+            return;
+        }
+        let weight = f32(previous_count);
+        let reconstructed = (previous_radiance * weight + current_radiance) / (weight + 1.0);
+        current_radiance_words[output_index] = bitcast<u32>(reconstructed);
+        write_current(
+            sample_index,
+            reconstructed,
+            current_depth,
+            min(previous_count + 1u, 4u),
+            1u,
+        );
         return;
     }
+
+    // Same-pose reconstruction is a bounded four-phase estimator, separate from moving-camera
+    // reprojection. A defined miss contributes the real radiance sample zero instead of erasing
+    // foreground history from another phase.
+    let same_pose_completed_frames = min(camera_words[23u], 4u);
+    if same_pose_completed_frames == 0u {
+        current_radiance_words[output_index] = bitcast<u32>(current_sample);
+        write_current(
+            sample_index,
+            current_sample,
+            current_depth,
+            1u,
+            current_hit_word,
+        );
+        return;
+    }
+
+    let previous_base = history_base(sample_index);
+    let previous_raw_count = previous_history_words[previous_base + 2u];
+    if previous_raw_count == INVALID_HISTORY_SAMPLE_COUNT {
+        current_radiance_words[output_index] = 0u;
+        write_current(
+            sample_index,
+            0.0,
+            current_depth,
+            INVALID_HISTORY_SAMPLE_COUNT,
+            current_hit_word,
+        );
+        return;
+    }
+    let previous_radiance = bitcast<f32>(previous_history_words[previous_base]);
+    let previous_count = min(previous_raw_count, 4u);
+    if previous_count == 0u || !finite_f32(previous_radiance) {
+        current_radiance_words[output_index] = bitcast<u32>(current_sample);
+        write_current(
+            sample_index,
+            current_sample,
+            current_depth,
+            1u,
+            current_hit_word,
+        );
+        return;
+    }
+
+    if same_pose_completed_frames >= 4u && previous_count >= 4u {
+        // Radiance is formed and must remain invariant. Keep only the newest current geometric
+        // hit/depth as the private anchor a later T2 camera-motion frame may validate/reproject.
+        current_radiance_words[output_index] = bitcast<u32>(previous_radiance);
+        write_current(
+            sample_index,
+            previous_radiance,
+            current_depth,
+            previous_count,
+            current_hit_word,
+        );
+        return;
+    }
+
     let weight = f32(previous_count);
-    let reconstructed = (previous_radiance * weight + current_radiance) / (weight + 1.0);
+    let reconstructed = (previous_radiance * weight + current_sample) / (weight + 1.0);
     current_radiance_words[output_index] = bitcast<u32>(reconstructed);
     write_current(
         sample_index,
         reconstructed,
         current_depth,
         min(previous_count + 1u, 4u),
-        1u,
+        current_hit_word,
     );
 }

@@ -228,7 +228,7 @@ pub fn run_native_temporal_camera_quality(
     submitted_frame_limit: Option<usize>,
     output_size_px: (u32, u32),
 ) -> Result<()> {
-    let submitted_frame_limit = submitted_frame_limit.unwrap_or(4);
+    let submitted_frame_limit = submitted_frame_limit.unwrap_or(12);
     if submitted_frame_limit < 4 {
         bail!(
             "camera-motion temporal quality requires at least four submitted frames; got {submitted_frame_limit}"

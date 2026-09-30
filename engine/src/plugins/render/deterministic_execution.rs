@@ -66,8 +66,8 @@ const OBSERVATION_PERSPECTIVE: u32 = 1;
 const OBSERVATION_PROBE: u32 = 2;
 const OBSERVATION_PERSPECTIVE_FOOTPRINT: u32 = 3;
 const TEMPORAL_SEQUENCE_REVISION: u32 = 1;
-const TEMPORAL_RECONSTRUCTION_REVISION: u32 = 1;
-const CAMERA_REPROJECTION_REVISION: u32 = 1;
+const TEMPORAL_RECONSTRUCTION_REVISION: u32 = 2;
+const CAMERA_REPROJECTION_REVISION: u32 = 2;
 const CAMERA_DEPTH_POLICY_REVISION: u32 = 1;
 const CAMERA_HISTORY_WORDS_PER_SAMPLE: u64 = 4;
 const CAMERA_DEPTH_ABSOLUTE_EPSILON: f32 = 0.001;
@@ -122,6 +122,7 @@ struct DeterministicCameraTemporalStorage {
     slots: [GpuBufferHandle; 2],
     completed_slot: usize,
     completed_observation: Option<RenderPerspectiveObservation>,
+    same_pose_completed_frames: u32,
     pending_slot: Option<usize>,
     pending_observation: Option<RenderPerspectiveObservation>,
 }
@@ -157,6 +158,7 @@ enum DeterministicTemporalHistoryUseStorage {
         current_history: GpuBufferHandle,
         previous_observation: Option<RenderPerspectiveObservation>,
         pose_changed: bool,
+        same_pose_completed_frames: u32,
     },
 }
 
@@ -266,6 +268,19 @@ impl DeterministicResourceCache {
                             camera.completed_slot = slot;
                         }
                         if let Some(observation) = camera.pending_observation.take() {
+                            camera.same_pose_completed_frames = match camera.completed_observation {
+                                None => 1,
+                                Some(previous)
+                                    if previous.observation_to_scene()
+                                        != observation.observation_to_scene() =>
+                                {
+                                    0
+                                }
+                                Some(_) => camera
+                                    .same_pose_completed_frames
+                                    .saturating_add(1)
+                                    .min(TEMPORAL_PHASE_COUNT),
+                            };
                             camera.completed_observation = Some(observation);
                         }
                     }
@@ -424,6 +439,7 @@ impl DeterministicResourceCache {
                     slots: [first, second],
                     completed_slot: 0,
                     completed_observation: None,
+                    same_pose_completed_frames: 0,
                     pending_slot: None,
                     pending_observation: None,
                 }))
@@ -503,6 +519,7 @@ impl DeterministicResourceCache {
                     current_history: camera.slots[write_slot].clone(),
                     previous_observation,
                     pose_changed,
+                    same_pose_completed_frames: camera.same_pose_completed_frames,
                 }
             }
         };
@@ -647,6 +664,7 @@ pub struct RenderDeterministicTemporalExecutionEvidence {
     pub camera_reprojection_eligible: bool,
     pub previous_observation_available: bool,
     pub camera_pose_changed: bool,
+    pub camera_same_pose_completed_frames: Option<u32>,
     pub camera_reprojection_revision: Option<u32>,
     pub depth_policy_revision: Option<u32>,
 }
@@ -1882,9 +1900,13 @@ fn lower_output(
                 current_history,
                 previous_observation,
                 pose_changed,
+                same_pose_completed_frames,
             } => {
-                let parameter_words =
-                    camera_reprojection_parameter_words(*previous_observation, *pose_changed)?;
+                let parameter_words = camera_reprojection_parameter_words(
+                    *previous_observation,
+                    *pose_changed,
+                    *same_pose_completed_frames,
+                )?;
                 let payload = PreparedGpuData::<TransferData>::ordinary_pod_transfer(
                     format!("RunenRender output {output_index} camera reprojection parameters"),
                     &parameter_words,
@@ -2087,6 +2109,15 @@ fn lower_output(
                                             ..
                                         }
                                     ),
+                                    camera_same_pose_completed_frames: match &history.storage {
+                                        DeterministicTemporalHistoryUseStorage::Camera {
+                                            same_pose_completed_frames,
+                                            ..
+                                        } => Some(*same_pose_completed_frames),
+                                        DeterministicTemporalHistoryUseStorage::Static { .. } => {
+                                            None
+                                        }
+                                    },
                                     camera_reprojection_revision: matches!(
                                         &history.storage,
                                         DeterministicTemporalHistoryUseStorage::Camera { .. }
@@ -2642,14 +2673,16 @@ fn matching_emitters(
 fn camera_reprojection_parameter_words(
     previous: Option<RenderPerspectiveObservation>,
     pose_changed: bool,
-) -> Result<[u32; 23], RenderDeterministicLoweringError> {
-    let mut words = [0_u32; 23];
+    same_pose_completed_frames: u32,
+) -> Result<[u32; 24], RenderDeterministicLoweringError> {
+    let mut words = [0_u32; 24];
     words[0] = if previous.is_some() { 1 } else { 0 };
     words[1] = if pose_changed { 1 } else { 0 };
     words[2] = CAMERA_DEPTH_POLICY_REVISION;
     words[3] = CAMERA_REPROJECTION_REVISION;
     words[4] = CAMERA_DEPTH_ABSOLUTE_EPSILON.to_bits();
     words[5] = CAMERA_DEPTH_RELATIVE_EPSILON.to_bits();
+    words[23] = same_pose_completed_frames.min(TEMPORAL_PHASE_COUNT);
     if let Some(previous) = previous {
         let matrix = previous.observation_to_scene().row_major_3x4();
         pack_vec3(&mut words, 6, [matrix[3], matrix[7], matrix[11]])?;
@@ -3077,6 +3110,100 @@ mod tests {
             "one replacement is expected for the resize"
         );
         assert_eq!(cache.buffers.len(), 1, "the cache retains one live slot");
+    }
+
+    fn bounded_cycle_mean(samples: &[Option<f32>]) -> Option<f32> {
+        if samples.len() < TEMPORAL_PHASE_COUNT as usize {
+            return None;
+        }
+        let mut sum = 0.0_f32;
+        for sample in samples.iter().take(TEMPORAL_PHASE_COUNT as usize) {
+            sum += (*sample)?;
+        }
+        Some(sum / TEMPORAL_PHASE_COUNT as f32)
+    }
+
+    fn requested_cell_sample_counts(
+        requested_extent: (u32, u32),
+        evaluation_extent: (u32, u32),
+    ) -> Vec<u32> {
+        let mut counts = vec![0_u32; (requested_extent.0 * requested_extent.1) as usize];
+        for phase in 0..TEMPORAL_PHASE_COUNT {
+            let phase_x = if phase == 1 || phase == 3 {
+                0.75_f32
+            } else {
+                0.25_f32
+            };
+            let phase_y = if phase >= 2 { 0.75_f32 } else { 0.25_f32 };
+            for evaluation_y in 0..evaluation_extent.1 {
+                for evaluation_x in 0..evaluation_extent.0 {
+                    let requested_x = (((evaluation_x as f32 + phase_x) * requested_extent.0 as f32
+                        / evaluation_extent.0 as f32)
+                        .floor() as u32)
+                        .min(requested_extent.0 - 1);
+                    let requested_y = (((evaluation_y as f32 + phase_y) * requested_extent.1 as f32
+                        / evaluation_extent.1 as f32)
+                        .floor() as u32)
+                        .min(requested_extent.1 - 1);
+                    counts[(requested_y * requested_extent.0 + requested_x) as usize] += 1;
+                }
+            }
+        }
+        counts
+    }
+
+    #[test]
+    fn bounded_cycle_forms_exact_first_cycle_mean_and_defined_miss_is_zero() {
+        assert_eq!(
+            bounded_cycle_mean(&[Some(1.0), Some(3.0), Some(5.0), Some(7.0)]),
+            Some(4.0)
+        );
+        assert_eq!(
+            bounded_cycle_mean(&[Some(8.0), Some(0.0), Some(4.0), Some(0.0)]),
+            Some(3.0),
+            "defined background phases contribute radiance zero to the finite estimate"
+        );
+        assert_eq!(
+            bounded_cycle_mean(&[Some(8.0), None, Some(4.0), Some(0.0)]),
+            None,
+            "undefined evaluation must remain distinct from a defined background miss"
+        );
+        assert_eq!(
+            bounded_cycle_mean(&[
+                Some(1.0),
+                Some(3.0),
+                Some(5.0),
+                Some(7.0),
+                Some(100.0),
+                Some(-100.0),
+                Some(50.0),
+                Some(-50.0),
+            ]),
+            Some(4.0),
+            "later cycles must not mutate the already formed bounded estimate"
+        );
+    }
+
+    #[test]
+    fn finite_phase_mapping_has_truthful_p75_p67_and_p50_per_cell_divisors() {
+        let p100 = requested_cell_sample_counts((4, 4), (4, 4));
+        assert!(p100.iter().all(|count| *count == 4));
+
+        let p75 = requested_cell_sample_counts((4, 4), (3, 3));
+        assert!(p75.contains(&1));
+        assert!(p75.contains(&2));
+        assert!(p75.contains(&4));
+
+        let p67 = requested_cell_sample_counts((6, 6), (4, 4));
+        assert!(p67.contains(&1));
+        assert!(p67.contains(&2));
+        assert!(p67.contains(&4));
+
+        let p50 = requested_cell_sample_counts((4, 4), (2, 2));
+        assert!(
+            p50.iter().all(|count| *count == 1),
+            "P50 cells settle after the global sequence even though each receives one sample"
+        );
     }
 
     fn temporal_test_observation(
@@ -3709,6 +3836,142 @@ mod tests {
         );
     }
 
+    #[test]
+    fn camera_same_pose_convergence_advances_only_on_completed_frames_and_resets_after_motion() {
+        let mut cache = DeterministicResourceCache::default();
+        let observation = temporal_test_observation(RenderAffineTransform3::identity());
+        let signature = camera_temporal_signature(7, observation, (4, 4));
+
+        let bootstrap = cache
+            .temporal_history(
+                23,
+                0,
+                signature.clone(),
+                (4, 4),
+                4,
+                DeterministicTemporalHistorySelection {
+                    current_observation: observation,
+                    camera_capable: true,
+                },
+            )
+            .expect("bootstrap camera history");
+        assert!(matches!(
+            bootstrap.storage,
+            DeterministicTemporalHistoryUseStorage::Camera {
+                same_pose_completed_frames: 0,
+                ..
+            }
+        ));
+
+        let retry = cache
+            .temporal_history(
+                23,
+                0,
+                signature.clone(),
+                (4, 4),
+                4,
+                DeterministicTemporalHistorySelection {
+                    current_observation: observation,
+                    camera_capable: true,
+                },
+            )
+            .expect("uncompleted bootstrap retry");
+        assert!(matches!(
+            retry.storage,
+            DeterministicTemporalHistoryUseStorage::Camera {
+                same_pose_completed_frames: 0,
+                ..
+            }
+        ));
+
+        cache.reconcile_temporal_outputs(23, true);
+        for expected_completed in 1..=TEMPORAL_PHASE_COUNT {
+            let use_state = cache
+                .temporal_history(
+                    23,
+                    0,
+                    signature.clone(),
+                    (4, 4),
+                    4,
+                    DeterministicTemporalHistorySelection {
+                        current_observation: observation,
+                        camera_capable: true,
+                    },
+                )
+                .expect("same-pose camera history");
+            assert!(matches!(
+                use_state.storage,
+                DeterministicTemporalHistoryUseStorage::Camera {
+                    pose_changed: false,
+                    same_pose_completed_frames,
+                    ..
+                } if same_pose_completed_frames == expected_completed
+            ));
+            cache.reconcile_temporal_outputs(23, true);
+        }
+
+        let moved = temporal_test_observation(
+            RenderAffineTransform3::from_row_major_3x4([
+                1.0, 0.0, 0.0, 0.25, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+            ])
+            .expect("valid moved observation"),
+        );
+        let moving = cache
+            .temporal_history(
+                23,
+                0,
+                signature,
+                (4, 4),
+                4,
+                DeterministicTemporalHistorySelection {
+                    current_observation: moved,
+                    camera_capable: true,
+                },
+            )
+            .expect("pose-only motion should reuse camera history");
+        assert!(matches!(
+            moving.storage,
+            DeterministicTemporalHistoryUseStorage::Camera {
+                pose_changed: true,
+                same_pose_completed_frames: 4,
+                ..
+            }
+        ));
+
+        cache.reconcile_temporal_outputs(23, true);
+        let after_motion = cache
+            .temporal_histories
+            .get(&(23, 0))
+            .expect("completed moving history retained");
+        let DeterministicTemporalStorage::Camera(camera) = &after_motion.storage else {
+            panic!("P100 history must remain camera storage");
+        };
+        assert_eq!(camera.same_pose_completed_frames, 0);
+        assert_eq!(camera.completed_observation, Some(moved));
+
+        let stopped = cache
+            .temporal_history(
+                23,
+                0,
+                camera_temporal_signature(7, moved, (4, 4)),
+                (4, 4),
+                4,
+                DeterministicTemporalHistorySelection {
+                    current_observation: moved,
+                    camera_capable: true,
+                },
+            )
+            .expect("same pose after motion should begin a fresh bounded estimate");
+        assert!(matches!(
+            stopped.storage,
+            DeterministicTemporalHistoryUseStorage::Camera {
+                pose_changed: false,
+                same_pose_completed_frames: 0,
+                ..
+            }
+        ));
+    }
+
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     enum CameraReferenceDecision {
         Accept,
@@ -3786,7 +4049,7 @@ mod tests {
     #[test]
     fn camera_reprojection_shader_matches_the_reference_rejection_contract() {
         for source_law in [
-            "if current_hit_words[output_index] == 0u",
+            "if !current_hit {",
             "local.z >= 0.0",
             "u < 0.0 || u >= 1.0 || v < 0.0 || v >= 1.0",
             "previous_history_words[previous_base + 3u] == 0u",
@@ -3804,7 +4067,30 @@ mod tests {
         assert!(CAMERA_REPROJECTION_WGSL.contains("CAMERA_DEPTH_ABSOLUTE_EPSILON: f32 = 0.001"));
         assert!(CAMERA_REPROJECTION_WGSL.contains("CAMERA_DEPTH_RELATIVE_EPSILON: f32 = 0.001"));
         assert_eq!(CAMERA_DEPTH_POLICY_REVISION, 1);
-        assert_eq!(CAMERA_REPROJECTION_REVISION, 1);
+        assert_eq!(CAMERA_REPROJECTION_REVISION, 2);
+    }
+
+    #[test]
+    fn temporal_reconstruction_shaders_keep_undefined_samples_fail_closed() {
+        assert!(TEMPORAL_RECONSTRUCTION_WGSL.contains("INVALID_HISTORY_SAMPLE_COUNT"));
+        assert!(
+            TEMPORAL_RECONSTRUCTION_WGSL
+                .contains("history_sample_counts[history_index] = INVALID_HISTORY_SAMPLE_COUNT")
+        );
+        assert!(
+            TEMPORAL_RECONSTRUCTION_WGSL
+                .contains("retained_sample_count == INVALID_HISTORY_SAMPLE_COUNT")
+        );
+
+        assert!(CAMERA_REPROJECTION_WGSL.contains("INVALID_HISTORY_SAMPLE_COUNT"));
+        assert!(
+            CAMERA_REPROJECTION_WGSL.contains(
+                "write_current(sample_index, 0.0, 0.0, INVALID_HISTORY_SAMPLE_COUNT, 0u)"
+            )
+        );
+        assert!(
+            CAMERA_REPROJECTION_WGSL.contains("previous_raw_count == INVALID_HISTORY_SAMPLE_COUNT")
+        );
     }
 
     #[test]
