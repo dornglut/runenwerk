@@ -2544,7 +2544,7 @@ fn pack_output(
                         representation_id,
                     })?;
                 words[base] = SHAPE_FIELD;
-                words[base + 3] = positive_f32_bits(
+                words[base + 3] = conservative_positive_f32_bits(
                     transform.scene_meters_per_local_meter(),
                     "field scene metres per local metre",
                 )?;
@@ -2814,6 +2814,16 @@ fn positive_f32_bits(
     Ok(physical.to_bits())
 }
 
+fn conservative_positive_f32_bits(
+    value: f64,
+    field: &'static str,
+) -> Result<u32, RenderDeterministicLoweringError> {
+    if !value.is_finite() || value <= 0.0 {
+        return Err(RenderDeterministicLoweringError::NumericRealization { field });
+    }
+    conservative_nonnegative_f32_bits(value, field)
+}
+
 fn conservative_nonnegative_f32_bits(
     value: f64,
     field: &'static str,
@@ -2965,6 +2975,40 @@ mod tests {
             f32::from_bits(
                 conservative_nonnegative_f32_bits(0.5, "exact conservative bound")
                     .expect("exact f32 bound must pack"),
+            ),
+            0.5
+        );
+    }
+
+    #[test]
+    fn conservative_field_error_packing_never_narrows_scene_space_bound() {
+        let local_error = 0.5_f64;
+        let scene_scale = 0.7_f64;
+        let ordinary_scale = scene_scale as f32;
+        assert!(
+            f64::from(ordinary_scale) < scene_scale,
+            "proof scale must exercise downward ordinary f32 rounding"
+        );
+
+        let packed_error = f32::from_bits(
+            conservative_nonnegative_f32_bits(local_error, "field local query error")
+                .expect("finite local error must pack"),
+        );
+        let packed_scale = f32::from_bits(
+            conservative_positive_f32_bits(scene_scale, "field scene distance scale")
+                .expect("finite positive scale must pack"),
+        );
+        let admitted_scene_error = local_error * scene_scale;
+        let physical_scene_error = f64::from(packed_error) * f64::from(packed_scale);
+        assert!(
+            physical_scene_error >= admitted_scene_error,
+            "physical conservative error margin must not narrow the admitted scene-space bound"
+        );
+
+        assert_eq!(
+            f32::from_bits(
+                conservative_positive_f32_bits(0.5, "exact field scene distance scale")
+                    .expect("exact positive f32 scale must pack"),
             ),
             0.5
         );
