@@ -3137,13 +3137,11 @@ mod tests {
             let phase_y = if phase >= 2 { 0.75_f32 } else { 0.25_f32 };
             for evaluation_y in 0..evaluation_extent.1 {
                 for evaluation_x in 0..evaluation_extent.0 {
-                    let requested_x = (((evaluation_x as f32 + phase_x)
-                        * requested_extent.0 as f32
+                    let requested_x = (((evaluation_x as f32 + phase_x) * requested_extent.0 as f32
                         / evaluation_extent.0 as f32)
                         .floor() as u32)
                         .min(requested_extent.0 - 1);
-                    let requested_y = (((evaluation_y as f32 + phase_y)
-                        * requested_extent.1 as f32
+                    let requested_y = (((evaluation_y as f32 + phase_y) * requested_extent.1 as f32
                         / evaluation_extent.1 as f32)
                         .floor() as u32)
                         .min(requested_extent.1 - 1);
