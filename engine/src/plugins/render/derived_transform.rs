@@ -6,6 +6,7 @@
 //! whether that transform may be reused across accepted commits.
 
 use super::derived_state::{RenderDerivedSceneDependencies, RenderDerivedSceneDependency};
+use super::representation::classify_field_distance_transform;
 use super::scene::{
     RenderObjectId, RenderSceneCommit, RenderSceneContinuity, RenderSceneResync,
     RenderSceneRevision, RenderSceneSnapshot,
@@ -92,6 +93,75 @@ impl RenderCompiledObjectTransform {
 
     pub(super) fn normal_local_to_scene_row_major(&self) -> [f64; 9] {
         flatten_3x3(self.normal_local_to_scene)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum RenderCompiledMetricSimilarityTransformError {
+    NotPositiveSimilarity,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct RenderCompiledMetricSimilarityTransform {
+    scene_to_local_meters: [[f64; 3]; 3],
+    normal_local_to_scene: [[f64; 3]; 3],
+    translation_scene: [f64; 3],
+    scene_meters_per_local_meter: f64,
+}
+
+impl RenderCompiledMetricSimilarityTransform {
+    pub(super) fn compile(
+        spatial: &RenderObjectSpatialState,
+    ) -> Result<Self, RenderCompiledMetricSimilarityTransformError> {
+        // R3 representation semantics own field-transform classification. This derived layer only
+        // materializes the accepted exact-similarity case for execution.
+        let classification = classify_field_distance_transform(spatial.local_to_scene());
+        let Some(scene_meters_per_local_meter) = classification.exact_distance_scale() else {
+            return Err(RenderCompiledMetricSimilarityTransformError::NotPositiveSimilarity);
+        };
+
+        // RenderObjectSpatialState::local_to_scene consumes metre-normalized local coordinates.
+        // Field semantic inputs are already expressed in those local metres, so unlike
+        // RenderCompiledObjectTransform this path must not apply local_space.meters_per_unit.
+        let source = spatial.local_to_scene().row_major_3x4();
+        let local_meters_to_scene = [
+            [source[0], source[1], source[2]],
+            [source[4], source[5], source[6]],
+            [source[8], source[9], source[10]],
+        ];
+        let Some(scene_to_local_meters) = inverse_3x3(local_meters_to_scene) else {
+            return Err(RenderCompiledMetricSimilarityTransformError::NotPositiveSimilarity);
+        };
+
+        Ok(Self {
+            scene_to_local_meters,
+            normal_local_to_scene: transpose_3x3(scene_to_local_meters),
+            translation_scene: [source[3], source[7], source[11]],
+            scene_meters_per_local_meter,
+        })
+    }
+
+    pub(super) fn local_point_meters_from_scene(&self, point: [f64; 3]) -> [f64; 3] {
+        mul_matrix_vector(
+            self.scene_to_local_meters,
+            sub(point, self.translation_scene),
+        )
+    }
+
+    pub(super) fn scene_to_local_meters_row_major(&self) -> [f64; 9] {
+        flatten_3x3(self.scene_to_local_meters)
+    }
+
+    pub(super) fn normal_local_to_scene_row_major(&self) -> [f64; 9] {
+        flatten_3x3(self.normal_local_to_scene)
+    }
+
+    pub(super) const fn translation_scene(&self) -> [f64; 3] {
+        self.translation_scene
+    }
+
+    pub(super) const fn scene_meters_per_local_meter(&self) -> f64 {
+        self.scene_meters_per_local_meter
     }
 }
 
@@ -351,6 +421,44 @@ mod tests {
             compiled.normal_local_to_scene_row_major(),
             [1.0, 0.0, 0.0, 0.0, 2.0 / 3.0, 0.0, 0.0, 0.0, 0.5]
         );
+    }
+
+    #[test]
+    fn metric_field_similarity_uses_metre_normalized_transform_without_local_unit_scale() {
+        let spatial = RenderObjectSpatialState::new(
+            RenderSpaceSpec::new(0.01, RenderHandedness::Right).expect("proof local space"),
+            RenderAffineTransform3::from_row_major_3x4([
+                0.0, -2.0, 0.0, 3.0, 2.0, 0.0, 0.0, 4.0, 0.0, 0.0, -2.0, 5.0,
+            ])
+            .expect("exact rotation/reflection/uniform-scale transform"),
+            RenderSpatialCoverage::unbounded(),
+        );
+        let compiled = RenderCompiledMetricSimilarityTransform::compile(&spatial)
+            .expect("exact metric similarity");
+        assert_eq!(compiled.scene_meters_per_local_meter(), 2.0);
+        assert_eq!(
+            compiled.local_point_meters_from_scene([1.0, 6.0, 3.0]),
+            [1.0, 1.0, 1.0]
+        );
+        assert_eq!(compiled.translation_scene(), [3.0, 4.0, 5.0]);
+    }
+
+    #[test]
+    fn metric_field_similarity_rejects_non_uniform_scale_and_shear() {
+        for values in [
+            [1.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+            [1.0, 0.5, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+        ] {
+            let spatial = RenderObjectSpatialState::new(
+                RenderSpaceSpec::new(1.0, RenderHandedness::Right).expect("proof local space"),
+                RenderAffineTransform3::from_row_major_3x4(values).expect("finite affine"),
+                RenderSpatialCoverage::unbounded(),
+            );
+            assert_eq!(
+                RenderCompiledMetricSimilarityTransform::compile(&spatial),
+                Err(RenderCompiledMetricSimilarityTransformError::NotPositiveSimilarity)
+            );
+        }
     }
 
     #[test]

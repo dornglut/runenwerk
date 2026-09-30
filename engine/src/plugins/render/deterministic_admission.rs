@@ -7,11 +7,15 @@
 use super::admission::{
     AdmittedRenderPlan, RenderExecutionAdmissionFailure, RenderOutputBinding,
     RenderOutputDestination, RenderRepresentationAvailabilityFact,
-    admit_render_plan_with_surface_inputs,
+    admit_render_plan_with_semantic_inputs,
 };
-use super::derived_transform::{RenderCompiledObjectTransform, RenderCompiledObjectTransformError};
+use super::derived_transform::{
+    RenderCompiledMetricSimilarityTransform, RenderCompiledMetricSimilarityTransformError,
+    RenderCompiledObjectTransform, RenderCompiledObjectTransformError,
+};
+use super::field_input::{RenderFieldSemanticInput, RenderFieldSemanticInputBinding};
 use super::maintained_method::maintained_deterministic_method;
-use super::representation::RenderRepresentationId;
+use super::representation::{RenderRepresentationId, RenderRepresentationProtocol};
 use super::request::{RenderObservationSpec, RenderOutputValue, RenderRequest};
 use super::scene::{RenderObjectId, RenderObjectState, RenderSceneSnapshot};
 use super::semantic_plan::{RenderPlanningFailure, plan_render};
@@ -36,6 +40,15 @@ pub enum RenderDeterministicCompatibilityError {
         output_index: usize,
         object_id: RenderObjectId,
         representation_id: RenderRepresentationId,
+    },
+    SelectedRepresentationFieldInputUnsupported {
+        output_index: usize,
+        object_id: RenderObjectId,
+        representation_id: RenderRepresentationId,
+    },
+    SelectedObjectFieldTransformNotSimilarity {
+        output_index: usize,
+        object_id: RenderObjectId,
     },
     SelectedObjectStateMissing {
         output_index: usize,
@@ -88,6 +101,21 @@ impl fmt::Display for RenderDeterministicCompatibilityError {
             } => write!(
                 formatter,
                 "output {output_index} object {object_id:?} representation {representation_id:?} has no surface semantic input supported by the maintained evaluator"
+            ),
+            Self::SelectedRepresentationFieldInputUnsupported {
+                output_index,
+                object_id,
+                representation_id,
+            } => write!(
+                formatter,
+                "output {output_index} object {object_id:?} representation {representation_id:?} has no sampled field semantic input supported by the maintained evaluator"
+            ),
+            Self::SelectedObjectFieldTransformNotSimilarity {
+                output_index,
+                object_id,
+            } => write!(
+                formatter,
+                "output {output_index} object {object_id:?} field representation requires an exact positive similarity transform"
             ),
             Self::SelectedObjectStateMissing {
                 output_index,
@@ -199,12 +227,33 @@ pub fn admit_deterministic_render(
     output_bindings: &[RenderOutputBinding],
     context: &GpuContext,
 ) -> Result<AdmittedDeterministicRender, RenderDeterministicAdmissionFailure> {
+    admit_deterministic_render_with_semantic_inputs(
+        scene,
+        request,
+        semantic_inputs,
+        &[],
+        availability,
+        output_bindings,
+        context,
+    )
+}
+
+pub fn admit_deterministic_render_with_semantic_inputs(
+    scene: &RenderSceneSnapshot,
+    request: &RenderRequest,
+    surface_inputs: &[RenderSurfaceSemanticInputBinding],
+    field_inputs: &[RenderFieldSemanticInputBinding],
+    availability: &[RenderRepresentationAvailabilityFact],
+    output_bindings: &[RenderOutputBinding],
+    context: &GpuContext,
+) -> Result<AdmittedDeterministicRender, RenderDeterministicAdmissionFailure> {
     let method = maintained_deterministic_method();
     let plan = plan_render(scene, request, std::slice::from_ref(&method))
         .map_err(RenderDeterministicAdmissionFailure::Planning)?;
-    let admitted = admit_render_plan_with_surface_inputs(
+    let admitted = admit_render_plan_with_semantic_inputs(
         &plan,
-        semantic_inputs,
+        surface_inputs,
+        field_inputs,
         availability,
         output_bindings,
         context,
@@ -252,7 +301,9 @@ fn validate_selected_evaluator_inputs(
                 output.output_index(),
                 object_id,
                 representation_id,
+                object.representation().requirement().protocol().protocol(),
                 admitted.surface_semantic_input(representation_id),
+                admitted.field_semantic_input(representation_id),
                 admitted.plan().scene().object_state(object_id),
             )?;
         }
@@ -264,32 +315,59 @@ fn validate_selected_evaluator_object(
     output_index: usize,
     object_id: RenderObjectId,
     representation_id: RenderRepresentationId,
+    protocol: RenderRepresentationProtocol,
     surface_input: Option<&RenderSurfaceSemanticInput>,
+    field_input: Option<&RenderFieldSemanticInput>,
     state: Option<&RenderObjectState>,
 ) -> Result<(), RenderDeterministicCompatibilityError> {
-    if surface_input.is_none() {
-        return Err(
-            RenderDeterministicCompatibilityError::SelectedRepresentationSurfaceInputUnsupported {
-                output_index,
-                object_id,
-                representation_id,
-            },
-        );
-    }
     let state = state.ok_or(
         RenderDeterministicCompatibilityError::SelectedObjectStateMissing {
             output_index,
             object_id,
         },
     )?;
-    RenderCompiledObjectTransform::compile(state.spatial()).map_err(
-        |RenderCompiledObjectTransformError::NonInvertibleObjectTransform| {
-            RenderDeterministicCompatibilityError::SelectedObjectTransformNonInvertible {
-                output_index,
-                object_id,
+
+    match protocol {
+        RenderRepresentationProtocol::SurfaceQuery
+        | RenderRepresentationProtocol::OrientedSurfaceQuery => {
+            if surface_input.is_none() {
+                return Err(
+                    RenderDeterministicCompatibilityError::SelectedRepresentationSurfaceInputUnsupported {
+                        output_index,
+                        object_id,
+                        representation_id,
+                    },
+                );
             }
-        },
-    )?;
+            RenderCompiledObjectTransform::compile(state.spatial()).map_err(
+                |RenderCompiledObjectTransformError::NonInvertibleObjectTransform| {
+                    RenderDeterministicCompatibilityError::SelectedObjectTransformNonInvertible {
+                        output_index,
+                        object_id,
+                    }
+                },
+            )?;
+        }
+        RenderRepresentationProtocol::FieldDistance => {
+            if field_input.is_none() {
+                return Err(
+                    RenderDeterministicCompatibilityError::SelectedRepresentationFieldInputUnsupported {
+                        output_index,
+                        object_id,
+                        representation_id,
+                    },
+                );
+            }
+            RenderCompiledMetricSimilarityTransform::compile(state.spatial()).map_err(
+                |RenderCompiledMetricSimilarityTransformError::NotPositiveSimilarity| {
+                    RenderDeterministicCompatibilityError::SelectedObjectFieldTransformNotSimilarity {
+                        output_index,
+                        object_id,
+                    }
+                },
+            )?;
+        }
+    }
     Ok(())
 }
 
@@ -540,6 +618,8 @@ mod tests {
                 5,
                 object_id,
                 representation_id,
+                RenderRepresentationProtocol::SurfaceQuery,
+                None,
                 None,
                 Some(&valid_state),
             ),
@@ -569,7 +649,9 @@ mod tests {
                 6,
                 object_id,
                 representation_id,
+                RenderRepresentationProtocol::SurfaceQuery,
                 Some(&input),
+                None,
                 Some(&singular_state),
             ),
             Err(
@@ -584,10 +666,91 @@ mod tests {
                 7,
                 object_id,
                 representation_id,
+                RenderRepresentationProtocol::SurfaceQuery,
                 Some(&input),
+                None,
                 Some(&valid_state),
             ),
             Ok(())
+        );
+    }
+
+    #[test]
+    fn maintained_evaluator_requires_field_input_and_exact_similarity_transform() {
+        let valid_state = object_state(RenderAffineTransform3::identity());
+        let mut store = RenderSceneStore::new();
+        let object_id = store.allocate_object_id().expect("object id");
+        let mut insert = RenderSceneUpdate::new();
+        insert.insert_with_state(object_id, valid_state.clone());
+        store.commit(insert).expect("insert object");
+        let representation_id = store
+            .allocate_representation_id(object_id)
+            .expect("representation id");
+
+        assert_eq!(
+            validate_selected_evaluator_object(
+                8,
+                object_id,
+                representation_id,
+                RenderRepresentationProtocol::FieldDistance,
+                None,
+                None,
+                Some(&valid_state),
+            ),
+            Err(
+                RenderDeterministicCompatibilityError::SelectedRepresentationFieldInputUnsupported {
+                    output_index: 8,
+                    object_id,
+                    representation_id,
+                }
+            )
+        );
+
+        let field = RenderFieldSemanticInput::dense(
+            [-1.0; 3],
+            [1.0; 3],
+            [3, 3, 3],
+            vec![0.0; 27],
+            0.0,
+            RenderTemporalSupport::unbounded(),
+        )
+        .expect("finite exact sampled field");
+
+        assert_eq!(
+            validate_selected_evaluator_object(
+                9,
+                object_id,
+                representation_id,
+                RenderRepresentationProtocol::FieldDistance,
+                None,
+                Some(&field),
+                Some(&valid_state),
+            ),
+            Ok(())
+        );
+
+        let non_uniform = object_state(
+            RenderAffineTransform3::from_row_major_3x4([
+                1.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+            ])
+            .expect("finite non-uniform transform"),
+        );
+        assert_eq!(
+            validate_selected_evaluator_object(
+                10,
+                object_id,
+                representation_id,
+                RenderRepresentationProtocol::FieldDistance,
+                None,
+                Some(&field),
+                Some(&non_uniform),
+            ),
+            Err(
+                RenderDeterministicCompatibilityError::SelectedObjectFieldTransformNotSimilarity {
+                    output_index: 10,
+                    object_id,
+                }
+            )
         );
     }
 

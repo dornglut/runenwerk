@@ -17,6 +17,24 @@ struct ScalarEvaluation {
     value: f32,
 };
 
+struct FieldEvaluation {
+    valid: bool,
+    inside: bool,
+    value: f32,
+};
+
+struct RayInterval {
+    valid: bool,
+    found: bool,
+    t_min: f32,
+    t_max: f32,
+};
+
+const FIELD_MAX_STEPS: u32 = 128u;
+const FIELD_DIRECTION_EPSILON: f32 = 0.0000001;
+const FIELD_COORDINATE_EPSILON: f32 = 0.0001;
+const FIELD_NUMERIC_HIT_EPSILON: f32 = 0.00001;
+
 @group(0) @binding(0)
 var<storage, read> input_words: array<u32>;
 
@@ -75,7 +93,7 @@ fn mul3(base: u32, value: vec3<f32>) -> vec3<f32> {
 }
 
 fn geometry_base(index: u32) -> u32 {
-    return 30u + index * 32u;
+    return 30u + index * 40u;
 }
 
 fn emitter_base(index: u32) -> u32 {
@@ -218,11 +236,332 @@ fn intersect_plane(base: u32, origin_scene: vec3<f32>, direction_scene: vec3<f32
     );
 }
 
+fn field_origin(base: u32) -> vec3<f32> {
+    return vec3<f32>(
+        load_f32(base + 25u),
+        load_f32(base + 26u),
+        load_f32(base + 27u),
+    );
+}
+
+fn field_spacing(base: u32) -> vec3<f32> {
+    return vec3<f32>(
+        load_f32(base + 28u),
+        load_f32(base + 29u),
+        load_f32(base + 30u),
+    );
+}
+
+fn field_dimensions(base: u32) -> vec3<u32> {
+    return vec3<u32>(
+        input_words[base + 31u],
+        input_words[base + 32u],
+        input_words[base + 33u],
+    );
+}
+
+fn field_max_local(base: u32) -> vec3<f32> {
+    let origin = field_origin(base);
+    let spacing = field_spacing(base);
+    let dimensions = field_dimensions(base);
+    return origin + spacing * vec3<f32>(
+        f32(dimensions.x - 1u),
+        f32(dimensions.y - 1u),
+        f32(dimensions.z - 1u),
+    );
+}
+
+fn field_sample_index(base: u32, x: u32, y: u32, z: u32) -> u32 {
+    let dimensions = field_dimensions(base);
+    return input_words[base + 34u]
+        + z * dimensions.x * dimensions.y
+        + y * dimensions.x
+        + x;
+}
+
+fn field_sample(base: u32, point_local: vec3<f32>) -> FieldEvaluation {
+    let origin = field_origin(base);
+    let spacing = field_spacing(base);
+    let dimensions = field_dimensions(base);
+    if !finite_vec3(origin) || !finite_vec3(spacing)
+        || spacing.x <= 0.0 || spacing.y <= 0.0 || spacing.z <= 0.0
+        || dimensions.x < 2u || dimensions.y < 2u || dimensions.z < 2u
+        || !finite_vec3(point_local)
+    {
+        return FieldEvaluation(false, false, 0.0);
+    }
+
+    let grid = (point_local - origin) / spacing;
+    let grid_max = vec3<f32>(
+        f32(dimensions.x - 1u),
+        f32(dimensions.y - 1u),
+        f32(dimensions.z - 1u),
+    );
+    if any(grid < vec3<f32>(-FIELD_COORDINATE_EPSILON))
+        || any(grid > grid_max + vec3<f32>(FIELD_COORDINATE_EPSILON))
+    {
+        return FieldEvaluation(true, false, 0.0);
+    }
+    let clamped = clamp(grid, vec3<f32>(0.0), grid_max);
+    let lower = vec3<u32>(
+        u32(floor(clamped.x)),
+        u32(floor(clamped.y)),
+        u32(floor(clamped.z)),
+    );
+    let upper = min(lower + vec3<u32>(1u), dimensions - vec3<u32>(1u));
+    let weight = clamped - vec3<f32>(
+        f32(lower.x),
+        f32(lower.y),
+        f32(lower.z),
+    );
+
+    let c000 = load_f32(field_sample_index(base, lower.x, lower.y, lower.z));
+    let c100 = load_f32(field_sample_index(base, upper.x, lower.y, lower.z));
+    let c010 = load_f32(field_sample_index(base, lower.x, upper.y, lower.z));
+    let c110 = load_f32(field_sample_index(base, upper.x, upper.y, lower.z));
+    let c001 = load_f32(field_sample_index(base, lower.x, lower.y, upper.z));
+    let c101 = load_f32(field_sample_index(base, upper.x, lower.y, upper.z));
+    let c011 = load_f32(field_sample_index(base, lower.x, upper.y, upper.z));
+    let c111 = load_f32(field_sample_index(base, upper.x, upper.y, upper.z));
+    if !finite_f32(c000) || !finite_f32(c100) || !finite_f32(c010) || !finite_f32(c110)
+        || !finite_f32(c001) || !finite_f32(c101) || !finite_f32(c011) || !finite_f32(c111)
+    {
+        return FieldEvaluation(false, false, 0.0);
+    }
+
+    let c00 = mix(c000, c100, weight.x);
+    let c10 = mix(c010, c110, weight.x);
+    let c01 = mix(c001, c101, weight.x);
+    let c11 = mix(c011, c111, weight.x);
+    let c0 = mix(c00, c10, weight.y);
+    let c1 = mix(c01, c11, weight.y);
+    let value = mix(c0, c1, weight.z);
+    return FieldEvaluation(finite_f32(value), true, value);
+}
+
+fn field_interval(base: u32, origin_scene: vec3<f32>, direction_scene: vec3<f32>) -> RayInterval {
+    let origin = to_local_point(base, origin_scene);
+    let direction = to_local_direction(base, direction_scene);
+    let minimum = field_origin(base);
+    let maximum = field_max_local(base);
+    if !finite_vec3(origin) || !finite_vec3(direction)
+        || !finite_vec3(minimum) || !finite_vec3(maximum)
+    {
+        return RayInterval(false, false, 0.0, 0.0);
+    }
+
+    var t_min = 0.0;
+    var t_max = 1.0e30;
+
+    if abs(direction.x) <= FIELD_DIRECTION_EPSILON {
+        if origin.x < minimum.x || origin.x > maximum.x {
+            return RayInterval(true, false, 0.0, 0.0);
+        }
+    } else {
+        let first = (minimum.x - origin.x) / direction.x;
+        let second = (maximum.x - origin.x) / direction.x;
+        if !finite_f32(first) || !finite_f32(second) {
+            return RayInterval(false, false, 0.0, 0.0);
+        }
+        t_min = max(t_min, min(first, second));
+        t_max = min(t_max, max(first, second));
+        if t_max < t_min {
+            return RayInterval(true, false, 0.0, 0.0);
+        }
+    }
+
+    if abs(direction.y) <= FIELD_DIRECTION_EPSILON {
+        if origin.y < minimum.y || origin.y > maximum.y {
+            return RayInterval(true, false, 0.0, 0.0);
+        }
+    } else {
+        let first = (minimum.y - origin.y) / direction.y;
+        let second = (maximum.y - origin.y) / direction.y;
+        if !finite_f32(first) || !finite_f32(second) {
+            return RayInterval(false, false, 0.0, 0.0);
+        }
+        t_min = max(t_min, min(first, second));
+        t_max = min(t_max, max(first, second));
+        if t_max < t_min {
+            return RayInterval(true, false, 0.0, 0.0);
+        }
+    }
+
+    if abs(direction.z) <= FIELD_DIRECTION_EPSILON {
+        if origin.z < minimum.z || origin.z > maximum.z {
+            return RayInterval(true, false, 0.0, 0.0);
+        }
+    } else {
+        let first = (minimum.z - origin.z) / direction.z;
+        let second = (maximum.z - origin.z) / direction.z;
+        if !finite_f32(first) || !finite_f32(second) {
+            return RayInterval(false, false, 0.0, 0.0);
+        }
+        t_min = max(t_min, min(first, second));
+        t_max = min(t_max, max(first, second));
+        if t_max < t_min {
+            return RayInterval(true, false, 0.0, 0.0);
+        }
+    }
+
+    if !finite_f32(t_min) || !finite_f32(t_max) {
+        return RayInterval(false, false, 0.0, 0.0);
+    }
+    return RayInterval(true, true, t_min, t_max);
+}
+
+fn field_normal_local(base: u32, point_local: vec3<f32>) -> NormalizedDirection {
+    let minimum = field_origin(base);
+    let maximum = field_max_local(base);
+    let spacing = field_spacing(base);
+    var gradient = vec3<f32>(0.0);
+
+    let x0 = max(point_local.x - 0.5 * spacing.x, minimum.x);
+    let x1 = min(point_local.x + 0.5 * spacing.x, maximum.x);
+    if x1 <= x0 {
+        return NormalizedDirection(false, vec3<f32>(0.0));
+    }
+    let x_low = field_sample(base, vec3<f32>(x0, point_local.y, point_local.z));
+    let x_high = field_sample(base, vec3<f32>(x1, point_local.y, point_local.z));
+    if !x_low.valid || !x_low.inside || !x_high.valid || !x_high.inside {
+        return NormalizedDirection(false, vec3<f32>(0.0));
+    }
+    gradient.x = (x_high.value - x_low.value) / (x1 - x0);
+
+    let y0 = max(point_local.y - 0.5 * spacing.y, minimum.y);
+    let y1 = min(point_local.y + 0.5 * spacing.y, maximum.y);
+    if y1 <= y0 {
+        return NormalizedDirection(false, vec3<f32>(0.0));
+    }
+    let y_low = field_sample(base, vec3<f32>(point_local.x, y0, point_local.z));
+    let y_high = field_sample(base, vec3<f32>(point_local.x, y1, point_local.z));
+    if !y_low.valid || !y_low.inside || !y_high.valid || !y_high.inside {
+        return NormalizedDirection(false, vec3<f32>(0.0));
+    }
+    gradient.y = (y_high.value - y_low.value) / (y1 - y0);
+
+    let z0 = max(point_local.z - 0.5 * spacing.z, minimum.z);
+    let z1 = min(point_local.z + 0.5 * spacing.z, maximum.z);
+    if z1 <= z0 {
+        return NormalizedDirection(false, vec3<f32>(0.0));
+    }
+    let z_low = field_sample(base, vec3<f32>(point_local.x, point_local.y, z0));
+    let z_high = field_sample(base, vec3<f32>(point_local.x, point_local.y, z1));
+    if !z_low.valid || !z_low.inside || !z_high.valid || !z_high.inside {
+        return NormalizedDirection(false, vec3<f32>(0.0));
+    }
+    gradient.z = (z_high.value - z_low.value) / (z1 - z0);
+
+    return normalize_checked(gradient);
+}
+
+fn intersect_field(base: u32, origin_scene: vec3<f32>, direction_scene: vec3<f32>) -> Hit {
+    let interval = field_interval(base, origin_scene, direction_scene);
+    if !interval.valid {
+        return invalid_hit();
+    }
+    if !interval.found {
+        return miss();
+    }
+
+    let scene_scale = load_f32(base + 3u);
+    let query_error_local = load_f32(base + 35u);
+    let spacing = field_spacing(base);
+    if !finite_f32(scene_scale) || scene_scale <= 0.0
+        || !finite_f32(query_error_local) || query_error_local < 0.0
+        || !finite_vec3(spacing)
+    {
+        return invalid_hit();
+    }
+    let query_error_scene = query_error_local * scene_scale;
+    let minimum_spacing_scene = min(spacing.x, min(spacing.y, spacing.z)) * scene_scale;
+    if !finite_f32(query_error_scene) || !finite_f32(minimum_spacing_scene)
+        || minimum_spacing_scene <= 0.0
+    {
+        return invalid_hit();
+    }
+    let numeric_hit_epsilon =
+        max(FIELD_NUMERIC_HIT_EPSILON, minimum_spacing_scene * FIELD_NUMERIC_HIT_EPSILON);
+
+    var t = interval.t_min;
+    for (var step = 0u; step < FIELD_MAX_STEPS; step = step + 1u) {
+        if t > interval.t_max + numeric_hit_epsilon {
+            return miss();
+        }
+        let point_scene = origin_scene + direction_scene * t;
+        let point_local = to_local_point(base, point_scene);
+        let evaluation = field_sample(base, point_local);
+        if !evaluation.valid || !evaluation.inside {
+            return invalid_hit();
+        }
+
+        let estimate_scene = evaluation.value * scene_scale;
+        if !finite_f32(estimate_scene) {
+            return invalid_hit();
+        }
+        let absolute_estimate = abs(estimate_scene);
+        if absolute_estimate <= query_error_scene + numeric_hit_epsilon {
+            let normal_local = field_normal_local(base, point_local);
+            if !normal_local.valid {
+                return invalid_hit();
+            }
+            let normal_scene = normal_to_scene(base, normal_local.value);
+            if !normal_scene.valid {
+                return invalid_hit();
+            }
+            return Hit(
+                true,
+                true,
+                t,
+                input_words[base + 1u],
+                normal_scene.value,
+                load_f32(base + 2u),
+            );
+        }
+
+        let safe_step = max(0.0, absolute_estimate - query_error_scene);
+        if !finite_f32(safe_step) {
+            return invalid_hit();
+        }
+        if safe_step <= numeric_hit_epsilon {
+            let normal_local = field_normal_local(base, point_local);
+            if !normal_local.valid {
+                return invalid_hit();
+            }
+            let normal_scene = normal_to_scene(base, normal_local.value);
+            if !normal_scene.valid {
+                return invalid_hit();
+            }
+            return Hit(
+                true,
+                true,
+                t,
+                input_words[base + 1u],
+                normal_scene.value,
+                load_f32(base + 2u),
+            );
+        }
+
+        let next_t = t + safe_step;
+        if !finite_f32(next_t) || next_t <= t {
+            return invalid_hit();
+        }
+        t = next_t;
+    }
+    return invalid_hit();
+}
+
 fn intersect_geometry(base: u32, origin_scene: vec3<f32>, direction_scene: vec3<f32>) -> Hit {
     if input_words[base] == 2u {
         return intersect_plane(base, origin_scene, direction_scene);
     }
-    return intersect_sphere(base, origin_scene, direction_scene);
+    if input_words[base] == 3u {
+        return intersect_field(base, origin_scene, direction_scene);
+    }
+    if input_words[base] == 1u {
+        return intersect_sphere(base, origin_scene, direction_scene);
+    }
+    return invalid_hit();
 }
 
 fn nearest_hit(origin_scene: vec3<f32>, direction_scene: vec3<f32>, ignored_code: u32) -> Hit {

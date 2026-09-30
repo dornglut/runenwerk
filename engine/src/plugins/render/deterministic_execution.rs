@@ -12,16 +12,22 @@
 //! primary radiance miss is the defined value zero; generic R2 radiance-miss semantics remain wider.
 
 use super::admission::{AdmittedRenderPlan, RenderOutputDestination};
-use super::derived_transform::{RenderCompiledObjectTransform, RenderCompiledObjectTransformError};
+use super::derived_transform::{
+    RenderCompiledMetricSimilarityTransform, RenderCompiledMetricSimilarityTransformError,
+    RenderCompiledObjectTransform, RenderCompiledObjectTransformError,
+};
 use super::deterministic_admission::AdmittedDeterministicRender;
 pub use super::deterministic_capture::{
     RenderCapturedDeterministicRadiance, RenderDeterministicRadianceCaptureError,
     RenderDeterministicRadianceCaptureRequest, RenderDeterministicRadianceCaptureRequestError,
 };
 use super::deterministic_carrier;
+use super::field_input::{
+    RenderFieldSemanticInput, RenderFieldSemanticInputBinding, RenderFieldSemanticInputGeneration,
+};
 use super::lowering::RenderWorkSet;
 use super::render_result::RenderResult;
-use super::representation::RenderRepresentationId;
+use super::representation::{RenderRepresentationId, RenderRepresentationProtocol};
 use super::request::{
     RenderDistanceConvention, RenderObservationSpec, RenderOutputSpec, RenderOutputValue,
     RenderPerspectiveObservation, RenderSamplingSupport,
@@ -50,7 +56,7 @@ use std::fmt;
 
 const WORD_BYTES: u64 = deterministic_carrier::WORD_BYTES as u64;
 const HEADER_WORDS: usize = 30;
-const GEOMETRY_WORDS: usize = 32;
+const GEOMETRY_WORDS: usize = 40;
 const EMITTER_WORDS: usize = 4;
 const WORKGROUP_SIZE: u32 = 64;
 const OUTPUT_RADIANCE: u32 = 1;
@@ -69,6 +75,7 @@ const CAMERA_DEPTH_RELATIVE_EPSILON: f32 = 0.001;
 const TEMPORAL_PHASE_COUNT: u32 = 4;
 const SHAPE_SPHERE: u32 = 1;
 const SHAPE_PLANE: u32 = 2;
+const SHAPE_FIELD: u32 = 3;
 const MAINTAINED_WGSL: &str = include_str!("deterministic_execution.wgsl");
 const TEMPORAL_RECONSTRUCTION_WGSL: &str =
     include_str!("deterministic_temporal_reconstruction.wgsl");
@@ -102,6 +109,7 @@ struct DeterministicTemporalSignature {
     observation: DeterministicTemporalObservationCompatibility,
     output: RenderOutputSpec,
     semantic_inputs: Vec<RenderSurfaceSemanticInputBinding>,
+    field_semantic_inputs: Vec<RenderFieldSemanticInputBinding>,
     evaluation_extent: (u32, u32),
     sequence_revision: u32,
     reconstruction_revision: u32,
@@ -628,6 +636,8 @@ pub struct RenderDeterministicTemporalExecutionEvidence {
     pub evaluation_extent: (u32, u32),
     pub semantic_input_generations:
         Vec<(RenderRepresentationId, RenderSurfaceSemanticInputGeneration)>,
+    pub field_semantic_input_generations:
+        Vec<(RenderRepresentationId, RenderFieldSemanticInputGeneration)>,
     pub sequence_revision: u32,
     pub reconstruction_revision: u32,
     pub phase: u32,
@@ -925,7 +935,16 @@ pub enum RenderDeterministicLoweringError {
         object_id: RenderObjectId,
         representation_id: RenderRepresentationId,
     },
+    MissingFieldInput {
+        output_index: usize,
+        object_id: RenderObjectId,
+        representation_id: RenderRepresentationId,
+    },
     MissingTemporalSurfaceInputGeneration {
+        output_index: usize,
+        representation_id: RenderRepresentationId,
+    },
+    MissingTemporalFieldInputGeneration {
         output_index: usize,
         representation_id: RenderRepresentationId,
     },
@@ -935,6 +954,10 @@ pub enum RenderDeterministicLoweringError {
         evaluation_extent: (u32, u32),
     },
     NonInvertibleObjectTransform {
+        output_index: usize,
+        object_id: RenderObjectId,
+    },
+    NonSimilarityFieldTransform {
         output_index: usize,
         object_id: RenderObjectId,
     },
@@ -989,12 +1012,27 @@ impl fmt::Display for RenderDeterministicLoweringError {
                 formatter,
                 "output {output_index} object {object_id:?} representation {representation_id:?} has no maintained surface input"
             ),
+            Self::MissingFieldInput {
+                output_index,
+                object_id,
+                representation_id,
+            } => write!(
+                formatter,
+                "output {output_index} object {object_id:?} representation {representation_id:?} has no maintained field input"
+            ),
             Self::MissingTemporalSurfaceInputGeneration {
                 output_index,
                 representation_id,
             } => write!(
                 formatter,
-                "output {output_index} representation {representation_id:?} has no source generation required for retained temporal history"
+                "output {output_index} surface representation {representation_id:?} has no source generation required for retained temporal history"
+            ),
+            Self::MissingTemporalFieldInputGeneration {
+                output_index,
+                representation_id,
+            } => write!(
+                formatter,
+                "output {output_index} field representation {representation_id:?} has no source generation required for retained temporal history"
             ),
             Self::UnsupportedTemporalEvaluationExtent {
                 output_index,
@@ -1011,6 +1049,13 @@ impl fmt::Display for RenderDeterministicLoweringError {
             } => write!(
                 formatter,
                 "output {output_index} object {object_id:?} has no finite invertible evaluator transform"
+            ),
+            Self::NonSimilarityFieldTransform {
+                output_index,
+                object_id,
+            } => write!(
+                formatter,
+                "output {output_index} field object {object_id:?} has no accepted positive similarity transform"
             ),
             Self::MissingMaterial {
                 output_index,
@@ -1578,12 +1623,23 @@ fn lower_output(
                 );
             }
         }
+        for binding in admitted.field_semantic_inputs() {
+            if binding.generation().is_none() {
+                return Err(
+                    RenderDeterministicLoweringError::MissingTemporalFieldInputGeneration {
+                        output_index,
+                        representation_id: binding.representation_id(),
+                    },
+                );
+            }
+        }
         let camera_capable = evaluation_extent == requested_extent;
         let signature = DeterministicTemporalSignature {
             scene_revision: admitted.scene_revision(),
             observation: temporal_observation_compatibility(observation, camera_capable),
             output: requested.spec(),
             semantic_inputs: admitted.surface_semantic_inputs().to_vec(),
+            field_semantic_inputs: admitted.field_semantic_inputs().to_vec(),
             evaluation_extent,
             sequence_revision: TEMPORAL_SEQUENCE_REVISION,
             reconstruction_revision: TEMPORAL_RECONSTRUCTION_REVISION,
@@ -1990,7 +2046,19 @@ fn lower_output(
                                             (
                                                 binding.representation_id(),
                                                 binding.generation().expect(
-                                                    "temporal lowering required source generation",
+                                                    "temporal lowering required surface source generation",
+                                                ),
+                                            )
+                                        })
+                                        .collect(),
+                                    field_semantic_input_generations: admitted
+                                        .field_semantic_inputs()
+                                        .iter()
+                                        .map(|binding| {
+                                            (
+                                                binding.representation_id(),
+                                                binding.generation().expect(
+                                                    "temporal lowering required field source generation",
                                                 ),
                                             )
                                         })
@@ -2248,18 +2316,29 @@ fn pack_output(
         })?;
     for object in admitted_output.object_representations() {
         let representation_id = object.representation().representation_id();
-        let input = admitted.surface_semantic_input(representation_id).ok_or(
-            RenderDeterministicLoweringError::MissingSurfaceInput {
-                output_index,
-                object_id: object.object_id(),
-                representation_id,
-            },
-        )?;
-        geometry.push((
-            object.object_id(),
-            representation_id,
-            input.execution_view(),
-        ));
+        let protocol = object.representation().requirement().protocol().protocol();
+        match protocol {
+            RenderRepresentationProtocol::SurfaceQuery
+            | RenderRepresentationProtocol::OrientedSurfaceQuery => {
+                admitted.surface_semantic_input(representation_id).ok_or(
+                    RenderDeterministicLoweringError::MissingSurfaceInput {
+                        output_index,
+                        object_id: object.object_id(),
+                        representation_id,
+                    },
+                )?;
+            }
+            RenderRepresentationProtocol::FieldDistance => {
+                admitted.field_semantic_input(representation_id).ok_or(
+                    RenderDeterministicLoweringError::MissingFieldInput {
+                        output_index,
+                        object_id: object.object_id(),
+                        representation_id,
+                    },
+                )?;
+            }
+        }
+        geometry.push((object.object_id(), representation_id, protocol));
     }
     geometry.sort_by_key(|(object_id, representation_id, _)| (*object_id, *representation_id));
 
@@ -2277,15 +2356,41 @@ fn pack_output(
         .ok_or(RenderDeterministicLoweringError::SizeOverflow {
             field: "emitter input offset",
         })?;
-    let total_words = emitter_offset
-        .checked_add(emitters.len().checked_mul(EMITTER_WORDS).ok_or(
-            RenderDeterministicLoweringError::SizeOverflow {
-                field: "emitter input words",
-            },
-        )?)
-        .ok_or(RenderDeterministicLoweringError::SizeOverflow {
+    let emitter_words = emitters.len().checked_mul(EMITTER_WORDS).ok_or(
+        RenderDeterministicLoweringError::SizeOverflow {
+            field: "emitter input words",
+        },
+    )?;
+    let field_sample_offset = emitter_offset.checked_add(emitter_words).ok_or(
+        RenderDeterministicLoweringError::SizeOverflow {
+            field: "field sample input offset",
+        },
+    )?;
+    let field_sample_words = geometry.iter().try_fold(
+        0_usize,
+        |count, (object_id, representation_id, protocol)| {
+            if !matches!(protocol, RenderRepresentationProtocol::FieldDistance) {
+                return Ok(count);
+            }
+            let input = admitted.field_semantic_input(*representation_id).ok_or(
+                RenderDeterministicLoweringError::MissingFieldInput {
+                    output_index,
+                    object_id: *object_id,
+                    representation_id: *representation_id,
+                },
+            )?;
+            count.checked_add(input.sample_count()).ok_or(
+                RenderDeterministicLoweringError::SizeOverflow {
+                    field: "field sample input words",
+                },
+            )
+        },
+    )?;
+    let total_words = field_sample_offset.checked_add(field_sample_words).ok_or(
+        RenderDeterministicLoweringError::SizeOverflow {
             field: "packed input words",
-        })?;
+        },
+    )?;
     let mut words = Vec::new();
     words.try_reserve_exact(total_words).map_err(|_| {
         RenderDeterministicLoweringError::HostAllocation {
@@ -2330,20 +2435,13 @@ fn pack_output(
         }
     })?;
 
-    for (index, (object_id, _, input)) in geometry.into_iter().enumerate() {
+    let mut field_sample_cursor = field_sample_offset;
+    for (index, (object_id, representation_id, protocol)) in geometry.into_iter().enumerate() {
         let base = HEADER_WORDS + index * GEOMETRY_WORDS;
         let state = admitted.plan().scene().object_state(object_id).ok_or(
             RenderDeterministicLoweringError::MissingObjectState {
                 output_index,
                 object_id,
-            },
-        )?;
-        let transform = RenderCompiledObjectTransform::compile(state.spatial()).map_err(
-            |RenderCompiledObjectTransformError::NonInvertibleObjectTransform| {
-                RenderDeterministicLoweringError::NonInvertibleObjectTransform {
-                    output_index,
-                    object_id,
-                }
             },
         )?;
         words[base + 1] = *object_codes
@@ -2363,38 +2461,120 @@ fn pack_output(
         } else {
             0
         };
-        pack_invertible_matrix3(
-            &mut words,
-            base + 4,
-            transform.scene_to_local_units_row_major(),
-            "object scene-to-local transform",
-        )?;
-        pack_vec3(&mut words, base + 13, transform.translation_scene())?;
-        pack_matrix3(
-            &mut words,
-            base + 16,
-            transform.normal_local_to_scene_row_major(),
-        )?;
-        match input {
-            RenderSurfaceSemanticInputView::Sphere {
-                center_local_units,
-                radius_local_units,
-            } => {
-                words[base] = SHAPE_SPHERE;
-                pack_vec3(&mut words, base + 25, center_local_units)?;
-                words[base + 28] =
-                    positive_f32_bits(radius_local_units, "surface-input sphere radius")?;
+
+        match protocol {
+            RenderRepresentationProtocol::SurfaceQuery
+            | RenderRepresentationProtocol::OrientedSurfaceQuery => {
+                let transform = RenderCompiledObjectTransform::compile(state.spatial()).map_err(
+                    |RenderCompiledObjectTransformError::NonInvertibleObjectTransform| {
+                        RenderDeterministicLoweringError::NonInvertibleObjectTransform {
+                            output_index,
+                            object_id,
+                        }
+                    },
+                )?;
+                pack_invertible_matrix3(
+                    &mut words,
+                    base + 4,
+                    transform.scene_to_local_units_row_major(),
+                    "object scene-to-local transform",
+                )?;
+                pack_vec3(&mut words, base + 13, transform.translation_scene())?;
+                pack_matrix3(
+                    &mut words,
+                    base + 16,
+                    transform.normal_local_to_scene_row_major(),
+                )?;
+
+                let input = admitted.surface_semantic_input(representation_id).ok_or(
+                    RenderDeterministicLoweringError::MissingSurfaceInput {
+                        output_index,
+                        object_id,
+                        representation_id,
+                    },
+                )?;
+                match input.execution_view() {
+                    RenderSurfaceSemanticInputView::Sphere {
+                        center_local_units,
+                        radius_local_units,
+                    } => {
+                        words[base] = SHAPE_SPHERE;
+                        pack_vec3(&mut words, base + 25, center_local_units)?;
+                        words[base + 28] =
+                            positive_f32_bits(radius_local_units, "surface-input sphere radius")?;
+                    }
+                    RenderSurfaceSemanticInputView::Plane {
+                        point_local_units,
+                        normal_local,
+                    } => {
+                        words[base] = SHAPE_PLANE;
+                        pack_vec3(&mut words, base + 25, point_local_units)?;
+                        pack_vec3(&mut words, base + 28, normal_local)?;
+                    }
+                }
             }
-            RenderSurfaceSemanticInputView::Plane {
-                point_local_units,
-                normal_local,
-            } => {
-                words[base] = SHAPE_PLANE;
-                pack_vec3(&mut words, base + 25, point_local_units)?;
-                pack_vec3(&mut words, base + 28, normal_local)?;
+            RenderRepresentationProtocol::FieldDistance => {
+                let transform = RenderCompiledMetricSimilarityTransform::compile(state.spatial())
+                    .map_err(
+                    |RenderCompiledMetricSimilarityTransformError::NotPositiveSimilarity| {
+                        RenderDeterministicLoweringError::NonSimilarityFieldTransform {
+                            output_index,
+                            object_id,
+                        }
+                    },
+                )?;
+                pack_invertible_matrix3(
+                    &mut words,
+                    base + 4,
+                    transform.scene_to_local_meters_row_major(),
+                    "field scene-to-local metric transform",
+                )?;
+                pack_vec3(&mut words, base + 13, transform.translation_scene())?;
+                pack_matrix3(
+                    &mut words,
+                    base + 16,
+                    transform.normal_local_to_scene_row_major(),
+                )?;
+
+                let input: &RenderFieldSemanticInput = admitted
+                    .field_semantic_input(representation_id)
+                    .ok_or(RenderDeterministicLoweringError::MissingFieldInput {
+                        output_index,
+                        object_id,
+                        representation_id,
+                    })?;
+                words[base] = SHAPE_FIELD;
+                words[base + 3] = positive_f32_bits(
+                    transform.scene_meters_per_local_meter(),
+                    "field scene metres per local metre",
+                )?;
+                pack_vec3(&mut words, base + 25, input.origin_local_meters())?;
+                pack_vec3(&mut words, base + 28, input.sample_spacing_meters())?;
+                let dimensions = input.dimensions();
+                words[base + 31] = dimensions[0];
+                words[base + 32] = dimensions[1];
+                words[base + 33] = dimensions[2];
+                words[base + 34] = u32::try_from(field_sample_cursor).map_err(|_| {
+                    RenderDeterministicLoweringError::SizeOverflow {
+                        field: "field sample input offset",
+                    }
+                })?;
+                words[base + 35] = f32_bits(
+                    input.max_absolute_query_error_local_meters(),
+                    "field maximum absolute query error",
+                )?;
+
+                for sample_index in 0..input.sample_count() {
+                    let sample = input.signed_distance_sample_meters(sample_index).ok_or(
+                        RenderDeterministicLoweringError::OutputCorrelationChanged { output_index },
+                    )?;
+                    words[field_sample_cursor] = f32_bits(sample, "field signed-distance sample")?;
+                    field_sample_cursor += 1;
+                }
             }
         }
     }
+    debug_assert_eq!(field_sample_cursor, total_words);
 
     for (index, emitter) in emitters.into_iter().enumerate() {
         let base = emitter_offset + index * EMITTER_WORDS;
@@ -2866,12 +3046,43 @@ mod tests {
             observation: temporal_observation_compatibility(observation, false),
             output,
             semantic_inputs: vec![binding],
+            field_semantic_inputs: Vec::new(),
             evaluation_extent: (2, 2),
             sequence_revision: TEMPORAL_SEQUENCE_REVISION,
             reconstruction_revision: TEMPORAL_RECONSTRUCTION_REVISION,
             camera_reprojection_revision: None,
             depth_policy_revision: None,
         }
+    }
+
+    fn temporal_signature_with_field_generation(
+        surface_generation: u64,
+        field_generation: u64,
+    ) -> DeterministicTemporalSignature {
+        use super::super::field_input::{
+            RenderFieldSemanticInput, RenderFieldSemanticInputBinding,
+            RenderFieldSemanticInputGeneration,
+        };
+        use super::super::space_time::RenderTemporalSupport;
+
+        let mut signature = temporal_signature(surface_generation);
+        let input = RenderFieldSemanticInput::dense(
+            [-1.0; 3],
+            [1.0; 3],
+            [2, 2, 2],
+            vec![0.0; 8],
+            0.0,
+            RenderTemporalSupport::unbounded(),
+        )
+        .expect("valid temporal field input");
+        signature.field_semantic_inputs = vec![
+            RenderFieldSemanticInputBinding::new(
+                RenderRepresentationId::from_raw(2).expect("non-zero field representation id"),
+                input,
+            )
+            .with_generation(RenderFieldSemanticInputGeneration::new(field_generation)),
+        ];
+        signature
     }
 
     fn camera_temporal_signature(
@@ -3027,6 +3238,68 @@ mod tests {
                 },
             )
             .expect("changed source generation should recreate history");
+        assert!(reset.reset);
+        assert_ne!(reset.generation, first.generation);
+        assert_eq!(reset.phase, 0);
+        assert_eq!(reset.age, 0);
+    }
+
+    #[test]
+    fn temporal_history_resets_when_field_source_generation_changes() {
+        let observation = temporal_test_observation(RenderAffineTransform3::identity());
+        let mut cache = DeterministicResourceCache::default();
+
+        let first = cache
+            .temporal_history(
+                17,
+                0,
+                temporal_signature_with_field_generation(7, 11),
+                (4, 4),
+                4,
+                DeterministicTemporalHistorySelection {
+                    current_observation: observation,
+                    camera_capable: false,
+                },
+            )
+            .expect("initial mixed-input history should allocate");
+        assert!(first.reset);
+
+        let state = cache
+            .temporal_histories
+            .get_mut(&(17, 0))
+            .expect("mixed-input temporal history should be retained");
+        state.phase = 1;
+        state.age = 1;
+
+        let reused = cache
+            .temporal_history(
+                17,
+                0,
+                temporal_signature_with_field_generation(7, 11),
+                (4, 4),
+                4,
+                DeterministicTemporalHistorySelection {
+                    current_observation: observation,
+                    camera_capable: false,
+                },
+            )
+            .expect("unchanged field generation should reuse history");
+        assert!(!reused.reset);
+        assert_eq!(reused.generation, first.generation);
+
+        let reset = cache
+            .temporal_history(
+                17,
+                0,
+                temporal_signature_with_field_generation(7, 12),
+                (4, 4),
+                4,
+                DeterministicTemporalHistorySelection {
+                    current_observation: observation,
+                    camera_capable: false,
+                },
+            )
+            .expect("changed field generation should recreate history");
         assert!(reset.reset);
         assert_ne!(reset.generation, first.generation);
         assert_eq!(reset.phase, 0);

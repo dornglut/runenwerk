@@ -188,6 +188,11 @@ pub enum RenderMethodOutputGuarantee {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RenderFieldDistanceInputRequirement {
     Exact,
+    /// Accept any explicitly finite conservative FieldDistance guarantee.
+    ///
+    /// This is not unknown/unbounded error: the selected representation still carries one concrete
+    /// finite maximum absolute error and current request-scoped bindings must satisfy it.
+    Conservative,
     Bounded {
         max_absolute_error_meters: RenderDistanceErrorBound,
     },
