@@ -1256,54 +1256,92 @@ fn metric_runtime_sdf_capability_is_retained_and_bytes_integrate_only_in_build_i
 }
 
 #[test]
-fn metric_runtime_sdf_rejects_wrapper_descriptor_mismatch_before_any_mutation() {
-    let mut app = fixed_world_app();
-    let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 31, y: 0, z: 0 });
-    let payload = metric_sdf_payload(chunk_id, ChunkRevision(1), ChunkGeneration(1), 81);
-    let descriptor = runtime_sdf_descriptor(7101, &payload);
-    let product_id = descriptor.product_core().identity;
-    let mut metric_ref = metric_payload_ref(&payload, 1);
-    metric_ref.payload_ref.checksum = metric_ref.payload_ref.checksum.saturating_add(1);
+fn metric_runtime_sdf_rejects_wrapper_exact_ref_mismatches_before_any_mutation() {
+    for mismatch in 0_u8..3 {
+        let mut app = fixed_world_app();
+        let chunk_id = ChunkId::new(
+            WorldId::new(0),
+            ChunkCoord3 {
+                x: 31 + i64::from(mismatch),
+                y: 0,
+                z: 0,
+            },
+        );
+        let payload = metric_sdf_payload(
+            chunk_id,
+            ChunkRevision(1),
+            ChunkGeneration(1),
+            81 + u64::from(mismatch),
+        );
+        let descriptor = runtime_sdf_descriptor(7101 + u64::from(mismatch), &payload);
+        let product_id = descriptor.product_core().identity;
+        let mut metric_ref = metric_payload_ref(&payload, 1);
+        match mismatch {
+            0 => {
+                metric_ref.payload_ref.chunk_id = ChunkId::new(
+                    WorldId::new(0),
+                    ChunkCoord3 {
+                        x: chunk_id.coord.x + 1,
+                        y: chunk_id.coord.y,
+                        z: chunk_id.coord.z,
+                    },
+                );
+            }
+            1 => {
+                metric_ref.payload_ref.chunk_revision =
+                    ChunkRevision(payload.chunk_revision.0.saturating_add(1));
+            }
+            2 => {
+                metric_ref.payload_ref.checksum =
+                    metric_ref.payload_ref.checksum.saturating_add(1);
+            }
+            _ => unreachable!(),
+        }
 
-    let error = enqueue_runtime_sdf_package(
-        &mut app,
-        WorldSdfRuntimePayloadPackage::new(descriptor, vec![payload], RegionSdfSummary::default())
+        let error = enqueue_runtime_sdf_package(
+            &mut app,
+            WorldSdfRuntimePayloadPackage::new(
+                descriptor,
+                vec![payload],
+                RegionSdfSummary::default(),
+            )
             .with_metric_capability(metric_ref),
-    )
-    .expect_err("wrapper not owned by descriptor must fail before mutation");
+        )
+        .expect_err("wrapper exact ref mismatch must fail before mutation");
 
-    assert!(matches!(
-        error,
-        WorldSdfRuntimePayloadPackageError::MetricProductRatificationRejected { .. }
-    ));
-    assert!(
-        app.world()
-            .resource::<WorldRuntimeSdfProductCatalogResource>()
-            .unwrap()
-            .product(product_id)
-            .is_none()
-    );
-    assert!(
-        app.world()
-            .resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
-            .unwrap()
-            .capability(product_id)
-            .is_none()
-    );
-    assert!(
-        app.world()
-            .resource::<WorldCompletedBuildQueueResource>()
-            .unwrap()
-            .outputs
-            .is_empty()
-    );
-    assert!(
-        !app.world()
-            .resource::<WorldChunkRuntimeMapResource>()
-            .unwrap()
-            .by_chunk_id
-            .contains_key(&chunk_id)
-    );
+        assert!(matches!(
+            error,
+            WorldSdfRuntimePayloadPackageError::MetricProductRatificationRejected { .. }
+        ));
+        assert!(
+            app.world()
+                .resource::<WorldRuntimeSdfProductCatalogResource>()
+                .unwrap()
+                .product(product_id)
+                .is_none()
+        );
+        assert!(
+            app.world()
+                .resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
+                .unwrap()
+                .capability(product_id)
+                .is_none()
+        );
+        assert!(
+            app.world()
+                .resource::<WorldCompletedBuildQueueResource>()
+                .unwrap()
+                .outputs
+                .is_empty()
+        );
+        assert!(
+            !app.world()
+                .resource::<WorldChunkRuntimeMapResource>()
+                .unwrap()
+                .by_chunk_id
+                .contains_key(&chunk_id)
+        );
+    }
 }
 
 #[test]
@@ -1431,7 +1469,8 @@ fn non_metric_replacement_clears_only_that_products_metric_capability() {
     .unwrap();
 
     let replacement_a = sdf_chunk_payload(chunk_a, ChunkRevision(2), ChunkGeneration(2), 86);
-    let replacement_descriptor_a = runtime_sdf_descriptor(7104, &replacement_a);
+    let mut replacement_descriptor_a = runtime_sdf_descriptor(7104, &replacement_a);
+    replacement_descriptor_a.lineage.source_revision = 2;
     enqueue_runtime_sdf_package(
         &mut app,
         WorldSdfRuntimePayloadPackage::new(
@@ -1491,7 +1530,8 @@ fn valid_metric_replacement_updates_only_the_target_product() {
     .unwrap();
 
     let replacement_a = metric_sdf_payload(chunk_a, ChunkRevision(2), ChunkGeneration(2), 89);
-    let replacement_descriptor_a = runtime_sdf_descriptor(7106, &replacement_a);
+    let mut replacement_descriptor_a = runtime_sdf_descriptor(7106, &replacement_a);
+    replacement_descriptor_a.lineage.source_revision = 2;
     let replacement_metric_a = metric_payload_ref(&replacement_a, 2);
     enqueue_runtime_sdf_package(
         &mut app,
@@ -1554,7 +1594,8 @@ fn rejected_metric_replacement_preserves_prior_ordinary_and_metric_state() {
         .and_then(|record| record.pending_build_generation);
 
     let invalid_replacement = sdf_chunk_payload(chunk_id, ChunkRevision(2), ChunkGeneration(2), 91);
-    let invalid_descriptor = runtime_sdf_descriptor(7108, &invalid_replacement);
+    let mut invalid_descriptor = runtime_sdf_descriptor(7108, &invalid_replacement);
+    invalid_descriptor.lineage.source_revision = 2;
     let invalid_metric = metric_payload_ref(&invalid_replacement, 1);
     let error = enqueue_runtime_sdf_package(
         &mut app,
