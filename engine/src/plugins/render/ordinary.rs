@@ -35,6 +35,7 @@ use super::surface_input::RenderSurfaceSemanticInputBinding;
 use runen_gpu::{
     GpuContext, GpuExportRelationship, GpuReadbackId, GpuResourceProvenance, GpuResourceRef,
     GpuSubmission, GpuSubmissionStatus, GpuTextureHandle, GpuTransferRegion, GpuWorkImport,
+    GpuWorkSubmissionError,
 };
 use std::error::Error;
 use std::fmt;
@@ -118,6 +119,14 @@ impl RenderExecutionError {
             RenderDeterministicExecutionError::Submission(_) => {
                 RenderExecutionErrorKind::Submission
             }
+        }
+    }
+
+    /// Stable public RunenGPU submission failure when execution reached physical submission.
+    pub const fn submission_error(&self) -> Option<&GpuWorkSubmissionError> {
+        match &self.inner {
+            RenderDeterministicExecutionError::Submission(error) => Some(error),
+            RenderDeterministicExecutionError::Lowering(_) => None,
         }
     }
 }

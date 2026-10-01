@@ -1140,6 +1140,13 @@ pub enum RenderDeterministicLoweringError {
     NumericRealization {
         field: &'static str,
     },
+    DispatchCapacityExceeded {
+        sample_count: u32,
+        workgroup_size: u32,
+        required_workgroups: u64,
+        max_workgroups_per_dimension: u32,
+        capacity_workgroups: u64,
+    },
     RunenGpuAuthoring {
         stage: &'static str,
         detail: String,
@@ -1246,6 +1253,16 @@ impl fmt::Display for RenderDeterministicLoweringError {
             Self::NumericRealization { field } => write!(
                 formatter,
                 "{field} cannot be represented by the maintained finite f32 evaluator"
+            ),
+            Self::DispatchCapacityExceeded {
+                sample_count,
+                workgroup_size,
+                required_workgroups,
+                max_workgroups_per_dimension,
+                capacity_workgroups,
+            } => write!(
+                formatter,
+                "sample count {sample_count} with workgroup size {workgroup_size} requires {required_workgroups} workgroups, but the admitted maximum per dimension is {max_workgroups_per_dimension} and the 2D dispatch capacity is {capacity_workgroups} workgroups"
             ),
             Self::RunenGpuAuthoring { stage, detail } => {
                 write!(formatter, "RunenGPU {stage} authoring failed: {detail}")
@@ -3255,47 +3272,32 @@ fn deterministic_dispatch_size(
     sample_count: u32,
     max_workgroups_per_dimension: u32,
 ) -> Result<GpuDispatchSize, RenderDeterministicLoweringError> {
-    let sample_count = u64::from(sample_count);
+    let sample_count_u64 = u64::from(sample_count);
     let workgroup_size = u64::from(WORKGROUP_SIZE);
     let admitted_max = u64::from(max_workgroups_per_dimension);
-    let required_groups = sample_count.div_ceil(workgroup_size);
+    let required_groups = sample_count_u64.div_ceil(workgroup_size);
+    let capacity = admitted_max * admitted_max;
 
-    if admitted_max == 0 {
-        return Err(gpu_authoring(
-            "deterministic dispatch planning",
-            format!(
-                "sample count {sample_count} with workgroup size {WORKGROUP_SIZE} requires {required_groups} total workgroups, but admitted maximum per dimension is 0; 2D dispatch capacity is 0 workgroups",
-            ),
-        ));
-    }
-
-    let capacity = admitted_max.checked_mul(admitted_max).ok_or_else(|| {
-        gpu_authoring(
-            "deterministic dispatch planning",
-            format!(
-                "sample count {sample_count} with workgroup size {WORKGROUP_SIZE} requires {required_groups} total workgroups, but admitted maximum per dimension is {max_workgroups_per_dimension}; 2D dispatch capacity overflows u64",
-            ),
-        )
-    })?;
     if required_groups == 0 || required_groups > capacity {
-        return Err(gpu_authoring(
-            "deterministic dispatch planning",
-            format!(
-                "sample count {sample_count} with workgroup size {WORKGROUP_SIZE} requires {required_groups} total workgroups, but admitted maximum per dimension is {max_workgroups_per_dimension}; 2D dispatch capacity is {capacity} workgroups",
-            ),
-        ));
+        return Err(RenderDeterministicLoweringError::DispatchCapacityExceeded {
+            sample_count,
+            workgroup_size: WORKGROUP_SIZE,
+            required_workgroups: required_groups,
+            max_workgroups_per_dimension,
+            capacity_workgroups: capacity,
+        });
     }
 
     let groups_x = required_groups.min(admitted_max);
     let groups_y = required_groups.div_ceil(groups_x);
-    let dimensions = [groups_x, groups_y, 1];
-    if dimensions.iter().any(|dimension| *dimension > admitted_max) {
-        return Err(gpu_authoring(
-            "deterministic dispatch planning",
-            format!(
-                "sample count {sample_count} with workgroup size {WORKGROUP_SIZE} requires {required_groups} total workgroups, but admitted maximum per dimension is {max_workgroups_per_dimension}; planned 2D dispatch capacity is {capacity} workgroups but dimensions exceeded the admitted limit",
-            ),
-        ));
+    if groups_x > admitted_max || groups_y > admitted_max {
+        return Err(RenderDeterministicLoweringError::DispatchCapacityExceeded {
+            sample_count,
+            workgroup_size: WORKGROUP_SIZE,
+            required_workgroups: required_groups,
+            max_workgroups_per_dimension,
+            capacity_workgroups: capacity,
+        });
     }
 
     Ok(GpuDispatchSize::new(
