@@ -1,3 +1,5 @@
+use engine::plugins::render::frame::PreparedRenderProductSelectionResource;
+use engine::plugins::render::{RenderFrameProducerId, RenderPlugin};
 use engine::plugins::world::adapters::{
     CollisionQueryServiceResource, PartitionConfigResource, SdfChunkStoreResource,
 };
@@ -7,8 +9,6 @@ use engine::plugins::world::build::{
 };
 use engine::plugins::world::chunks::lifecycle::WorldChunkRuntimeMapResource;
 use engine::plugins::world::prepare::PreparedWorldSdfFieldSourceResource;
-use engine::plugins::render::frame::PreparedRenderProductSelectionResource;
-use engine::plugins::render::{RenderFrameProducerId, RenderPlugin};
 use engine::prelude::*;
 use product::{
     ProductResidency, RenderProductSelection, RenderResidencyRequest, RenderSelectedProduct,
@@ -483,7 +483,6 @@ fn collision_classification_is_preserved_immediately_on_both_sides_of_all_bounda
     }
 }
 
-
 fn sample_projected_arena_field(
     input: &engine::plugins::render::field_input::RenderFieldSemanticInput,
     point: [f64; 3],
@@ -496,7 +495,11 @@ fn sample_projected_arena_field(
             .clamp(0.0, f64::from(dimensions[axis] - 1));
         let lower = (coordinate.floor() as u32).min(dimensions[axis] - 2);
         let upper = lower + 1;
-        (lower as usize, upper as usize, coordinate - f64::from(lower))
+        (
+            lower as usize,
+            upper as usize,
+            coordinate - f64::from(lower),
+        )
     };
     let (x0, x1, tx) = axis(0);
     let (y0, y1, ty) = axis(1);

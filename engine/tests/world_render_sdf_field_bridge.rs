@@ -18,8 +18,8 @@ use engine::plugins::world::prepare::{
 use engine::plugins::{FixedStepPlugin, SimulationPlugin, TimePlugin};
 use engine::prelude::*;
 use product::{
-    ProductIdentity, ProductResidency, RenderProductSelection, RenderResidencyRequest,
-    RenderSelectedProduct,
+    ProductIdentity, ProductQueryPolicy, ProductResidency, RenderProductSelection,
+    RenderResidencyRequest, RenderSelectedProduct,
 };
 use runen_spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, WorldId};
 use world_ops::{ChunkGeneration, ChunkRevision};
@@ -358,6 +358,155 @@ fn selection_removal_removes_only_world_owned_projection() {
     assert!(
         projected.source(unrelated_id).is_some(),
         "World adapter must not globally clear unrelated prepared field sources"
+    );
+}
+
+#[test]
+fn residency_generation_mismatch_removes_previously_projected_source() {
+    let (mut app, descriptor, _) = selected_metric_app(607);
+    app = app.run_for_frames(1).expect("first projection frame");
+    let product_id = descriptor.product_core().identity;
+    assert!(
+        app.world()
+            .resource::<PreparedWorldSdfFieldSourceResource>()
+            .unwrap()
+            .source(product_id)
+            .is_some()
+    );
+
+    let mut mismatched_selection = selection(&descriptor);
+    mismatched_selection.selected_products[0].generation += 1;
+    publish_selection(&mut app, mismatched_selection);
+    app = app
+        .run_for_frames(1)
+        .expect("generation mismatch should fail closed");
+
+    assert!(
+        app.world()
+            .resource::<RenderSdfResidencyResource>()
+            .unwrap()
+            .entry(product_id)
+            .is_none(),
+        "GP1B0 must reject selection/source generation mismatch"
+    );
+    assert!(
+        app.world()
+            .resource::<PreparedWorldSdfFieldSourceResource>()
+            .unwrap()
+            .source(product_id)
+            .is_none(),
+        "GP1B3 must remove its stale projection when matching residency disappears"
+    );
+}
+
+#[test]
+fn disallowed_selection_query_policy_never_reaches_world_projection() {
+    let mut app = app_with_render();
+    let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3::default());
+    let payload = metric_payload(chunk_id, 78);
+    let descriptor = descriptor(608, &payload);
+    let product_id = descriptor.product_core().identity;
+    enqueue(&mut app, descriptor.clone(), payload, true);
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("payload should integrate");
+
+    let mut denied = selection(&descriptor);
+    denied.selected_products[0].query_policy = ProductQueryPolicy::DiagnosticOnly;
+    let error = app
+        .world_mut()
+        .resource_mut::<PreparedRenderProductSelectionResource>()
+        .expect("Render should own product selections")
+        .replace_contribution(
+            RenderFrameProducerId::try_from_raw(PRODUCER_RAW).expect("producer id"),
+            [denied],
+        )
+        .expect_err("selection policy must reject the exact current/resident deterministic state");
+    assert!(
+        error.to_string().contains("invalid view"),
+        "prepared-selection owner should reject policy-disallowed state"
+    );
+
+    app = app
+        .run_for_frames(1)
+        .expect("rejected selection should leave render preparation valid");
+    assert!(
+        app.world()
+            .resource::<RenderSdfResidencyResource>()
+            .unwrap()
+            .entry(product_id)
+            .is_none()
+    );
+    assert!(
+        app.world()
+            .resource::<PreparedWorldSdfFieldSourceResource>()
+            .unwrap()
+            .source(product_id)
+            .is_none()
+    );
+}
+
+#[test]
+fn source_generation_replacement_updates_only_that_projection() {
+    let (mut app, descriptor, payload) = selected_metric_app(609);
+    app = app.run_for_frames(1).expect("first projection frame");
+    let product_id = descriptor.product_core().identity;
+    let unrelated_id = ProductIdentity::new(9997);
+    let unrelated_input = RenderFieldSemanticInput::dense(
+        [0.0; 3],
+        [1.0; 3],
+        [2, 2, 2],
+        vec![1.0; 8],
+        0.0,
+        engine::plugins::render::space_time::RenderTemporalSupport::unbounded(),
+    )
+    .expect("unrelated field input");
+    app.world_mut()
+        .resource_mut::<PreparedWorldSdfFieldSourceResource>()
+        .unwrap()
+        .insert_source(PreparedWorldSdfFieldSource::new(
+            unrelated_id,
+            1,
+            WorldSdfPayloadRef::from(&payload),
+            unrelated_input,
+        ));
+
+    let mut replacement_payload = metric_payload(payload.chunk_id, 88);
+    replacement_payload.chunk_revision = ChunkRevision(4);
+    replacement_payload.chunk_generation = ChunkGeneration(6);
+    for page in replacement_payload.page_table.values_mut() {
+        page.page_generation = 6;
+    }
+    let mut replacement_descriptor = descriptor(609, &replacement_payload);
+    replacement_descriptor.lineage.source_revision = 6;
+    let replacement_ref = WorldSdfPayloadRef::from(&replacement_payload);
+
+    enqueue(
+        &mut app,
+        replacement_descriptor.clone(),
+        replacement_payload,
+        true,
+    );
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("replacement payload should integrate");
+    publish_selection(&mut app, selection(&replacement_descriptor));
+    app = app
+        .run_for_frames(1)
+        .expect("replacement projection frame");
+
+    let projected = app
+        .world()
+        .resource::<PreparedWorldSdfFieldSourceResource>()
+        .unwrap();
+    let replacement = projected
+        .source(product_id)
+        .expect("same product should be reprojected at its new generation");
+    assert_eq!(replacement.product_generation(), 6);
+    assert_eq!(replacement.payload_ref(), replacement_ref);
+    assert!(
+        projected.source(unrelated_id).is_some(),
+        "replacing one World projection must preserve unrelated prepared sources"
     );
 }
 
