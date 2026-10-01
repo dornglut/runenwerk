@@ -96,10 +96,9 @@ fn app_with_render() -> App {
     ));
     *app.world_mut()
         .resource_mut::<PartitionConfigResource>()
-        .expect("World should own partition") =
-        PartitionConfigResource(
-            GridPartitionConfig::try_new(4.0, [8, 8, 8]).expect("test partition"),
-        );
+        .expect("World should own partition") = PartitionConfigResource(
+        GridPartitionConfig::try_new(4.0, [8, 8, 8]).expect("test partition"),
+    );
     app
 }
 
@@ -187,7 +186,9 @@ fn selected_metric_app(product_raw: u64) -> (App, FieldProductDescriptor, SdfChu
     let payload = metric_payload(chunk_id, 77);
     let descriptor = descriptor(product_raw, &payload);
     enqueue(&mut app, descriptor.clone(), payload.clone(), true);
-    app = app.run_for_fixed_steps(1).expect("payload should integrate");
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("payload should integrate");
     publish_selection(&mut app, selection(&descriptor));
     (app, descriptor, payload)
 }
@@ -268,7 +269,10 @@ fn preserved_residency_remains_eligible_for_same_projection() {
     app = app.run_for_frames(1).expect("preserved projection frame");
     let product_id = descriptor.product_core().identity;
 
-    let residency = app.world().resource::<RenderSdfResidencyResource>().unwrap();
+    let residency = app
+        .world()
+        .resource::<RenderSdfResidencyResource>()
+        .unwrap();
     assert_eq!(
         residency.entry(product_id).unwrap().status,
         RenderSdfResidencyStatus::Preserved
@@ -290,7 +294,9 @@ fn non_metric_resident_product_fails_closed() {
     let descriptor = descriptor(604, &payload);
     let product_id = descriptor.product_core().identity;
     enqueue(&mut app, descriptor.clone(), payload, false);
-    app = app.run_for_fixed_steps(1).expect("payload should integrate");
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("payload should integrate");
     publish_selection(&mut app, selection(&descriptor));
     app = app.run_for_frames(1).expect("projection frame");
 

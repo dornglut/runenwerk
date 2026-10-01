@@ -4,10 +4,10 @@ use std::fmt;
 
 use product::{ProductIdentity, ProductResidency, RenderProductSelection, RenderSelectedProduct};
 use world_sdf::{
-    FieldProductDescriptor, FieldProductKind, SDF_METRIC_BRICK_EDGE_SAMPLES,
-    SDF_PAGE_EDGE_BRICKS, SdfChunkPayload, WorldSdfMetricError, WorldSdfMetricPayloadRef,
-    WorldSdfMetricProductCandidate, WorldSdfPayloadRef,
-    ratify_world_sdf_metric_product_candidate, validate_world_sdf_metric_payload,
+    FieldProductDescriptor, FieldProductKind, SDF_METRIC_BRICK_EDGE_SAMPLES, SDF_PAGE_EDGE_BRICKS,
+    SdfChunkPayload, WorldSdfMetricError, WorldSdfMetricPayloadRef, WorldSdfMetricProductCandidate,
+    WorldSdfPayloadRef, ratify_world_sdf_metric_product_candidate,
+    validate_world_sdf_metric_payload,
 };
 
 use super::super::adapters::resources::{PartitionConfigResource, SdfChunkStoreResource};
@@ -360,9 +360,8 @@ fn project_metric_payload(
                             ];
                             let global_index =
                                 dense_index(global_edge, global[0], global[1], global[2]);
-                            let value = brick.samples.distances[cube_sample_index(
-                                sample_x, sample_y, sample_z,
-                            )];
+                            let value = brick.samples.distances
+                                [cube_sample_index(sample_x, sample_y, sample_z)];
                             match &mut ranges[global_index] {
                                 Some((minimum, maximum)) => {
                                     *minimum = (*minimum).min(value);
@@ -390,8 +389,7 @@ fn project_metric_payload(
                 )?;
                 let spread = i32::from(minimum).abs_diff(i32::from(maximum));
                 max_duplicate_spread_units = max_duplicate_spread_units.max(spread);
-                let midrange_encoded =
-                    (f64::from(minimum) + f64::from(maximum)) * 0.5;
+                let midrange_encoded = (f64::from(minimum) + f64::from(maximum)) * 0.5;
                 samples.push(encoding.decode_distance_meters(midrange_encoded));
             }
         }
@@ -399,10 +397,8 @@ fn project_metric_payload(
 
     let source_error_meters = encoding.max_absolute_error_meters();
     let canonicalization_error_meters =
-        f64::from(max_duplicate_spread_units) * 0.5
-            / f64::from(encoding.distance_units_per_meter);
-    let max_absolute_query_error_local_meters =
-        source_error_meters + canonicalization_error_meters;
+        f64::from(max_duplicate_spread_units) * 0.5 / f64::from(encoding.distance_units_per_meter);
+    let max_absolute_query_error_local_meters = source_error_meters + canonicalization_error_meters;
     let spacing = partition.chunk_edge_meters() / (global_edge - 1) as f64;
     let dimension =
         u32::try_from(global_edge).expect("revision-1 metric lattice dimension fits u32");
@@ -450,8 +446,7 @@ mod tests {
     use world_ops::{ChunkGeneration, ChunkRevision};
     use world_sdf::{
         SDF_METRIC_BRICK_SAMPLE_COUNT, SdfBrickMetadata, SdfBrickRecord, SdfBrickSamples,
-        SdfPageCoord3, SdfPageRecord, WorldSdfMetricEncoding,
-        sample_world_sdf_metric_distance,
+        SdfPageCoord3, SdfPageRecord, WorldSdfMetricEncoding, sample_world_sdf_metric_distance,
     };
 
     fn partition() -> PartitionConfigResource {
@@ -530,7 +525,11 @@ mod tests {
                 .clamp(0.0, f64::from(dimensions[axis] - 1));
             let lower = (coordinate.floor() as u32).min(dimensions[axis] - 2);
             let upper = lower + 1;
-            (lower as usize, upper as usize, coordinate - f64::from(lower))
+            (
+                lower as usize,
+                upper as usize,
+                coordinate - f64::from(lower),
+            )
         };
         let (x0, x1, tx) = axis(0);
         let (y0, y1, ty) = axis(1);
@@ -562,7 +561,10 @@ mod tests {
         assert_eq!(projected.sample_spacing_meters(), [0.5; 3]);
         assert_eq!(projected.max_absolute_query_error_local_meters(), 0.08);
         let shared_index = dense_index(9, 2, 2, 2);
-        assert_eq!(projected.signed_distance_sample_meters(shared_index), Some(0.0));
+        assert_eq!(
+            projected.signed_distance_sample_meters(shared_index),
+            Some(0.0)
+        );
     }
 
     #[test]
@@ -575,14 +577,9 @@ mod tests {
 
         for coordinate in [0.75, 0.9, 0.99, 1.0, 1.01, 1.1, 1.25] {
             let point = [coordinate; 3];
-            let source = sample_world_sdf_metric_distance(
-                &metric_ref,
-                &payload,
-                &partition,
-                point,
-            )
-            .expect("source query should be valid")
-            .signed_distance_estimate_meters();
+            let source = sample_world_sdf_metric_distance(&metric_ref, &payload, &partition, point)
+                .expect("source query should be valid")
+                .signed_distance_estimate_meters();
             let rendered = sample_projected(&projected, point);
             assert!(
                 (rendered - source).abs() <= canonicalization_error_meters + 1.0e-12,
