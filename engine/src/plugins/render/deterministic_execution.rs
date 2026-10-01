@@ -1149,54 +1149,36 @@ impl RenderRunenGpuPreparationError {
             | Self::WorkAuthoring { stage, .. } => stage,
         }
     }
+
+    fn owner_source(&self) -> &(dyn Error + 'static) {
+        match self {
+            Self::Access { source, .. } => source,
+            Self::ProgramSource { source, .. } => source,
+            Self::ResourceDescriptor { source, .. } => source,
+            Self::ResourceAllocation { source, .. } => source,
+            Self::TransferPreparation { source, .. } => source,
+            Self::ProgramContract { source, .. } => source,
+            Self::WorkOperation { source, .. } => source,
+            Self::ReadbackRequest { source, .. } => source,
+            Self::WorkAuthoring { source, .. } => source,
+        }
+    }
 }
 
 impl fmt::Display for RenderRunenGpuPreparationError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let stage = self.stage();
-        match self {
-            Self::Access { source, .. } => write!(formatter, "RunenGPU {stage} failed: {source}"),
-            Self::ProgramSource { source, .. } => {
-                write!(formatter, "RunenGPU {stage} failed: {source}")
-            }
-            Self::ResourceDescriptor { source, .. } => {
-                write!(formatter, "RunenGPU {stage} failed: {source}")
-            }
-            Self::ResourceAllocation { source, .. } => {
-                write!(formatter, "RunenGPU {stage} failed: {source}")
-            }
-            Self::TransferPreparation { source, .. } => {
-                write!(formatter, "RunenGPU {stage} failed: {source}")
-            }
-            Self::ProgramContract { source, .. } => {
-                write!(formatter, "RunenGPU {stage} failed: {source}")
-            }
-            Self::WorkOperation { source, .. } => {
-                write!(formatter, "RunenGPU {stage} failed: {source}")
-            }
-            Self::ReadbackRequest { source, .. } => {
-                write!(formatter, "RunenGPU {stage} failed: {source}")
-            }
-            Self::WorkAuthoring { source, .. } => {
-                write!(formatter, "RunenGPU {stage} failed: {source}")
-            }
-        }
+        write!(
+            formatter,
+            "RunenGPU {} failed: {}",
+            self.stage(),
+            self.owner_source()
+        )
     }
 }
 
 impl Error for RenderRunenGpuPreparationError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            Self::Access { source, .. } => Some(source),
-            Self::ProgramSource { source, .. } => Some(source),
-            Self::ResourceDescriptor { source, .. } => Some(source),
-            Self::ResourceAllocation { source, .. } => Some(source),
-            Self::TransferPreparation { source, .. } => Some(source),
-            Self::ProgramContract { source, .. } => Some(source),
-            Self::WorkOperation { source, .. } => Some(source),
-            Self::ReadbackRequest { source, .. } => Some(source),
-            Self::WorkAuthoring { source, .. } => Some(source),
-        }
+        Some(self.owner_source())
     }
 }
 
