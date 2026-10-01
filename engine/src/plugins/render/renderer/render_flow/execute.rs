@@ -769,7 +769,7 @@ impl Renderer {
         prepared_frame: &PreparedRenderFrame,
         contributions: &[crate::plugins::render::RenderDeterministicFrameContribution],
     ) -> Result<(Vec<GpuWorkFragment>, Vec<GpuWorkImport>)> {
-        const TEMPORAL_EVIDENCE_FRAME_CAPACITY: usize = 16;
+        const TEMPORAL_EVIDENCE_FRAME_CAPACITY: usize = 32;
         self.deterministic_temporal_evidence
             .remove(&prepared_frame.context.frame_index);
         let mut fragments = Vec::new();

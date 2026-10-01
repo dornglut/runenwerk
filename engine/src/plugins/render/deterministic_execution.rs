@@ -53,6 +53,11 @@ use runen_gpu::{
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt;
+use std::sync::LazyLock;
+
+#[cfg(test)]
+#[path = "deterministic_camera_history_proof.rs"]
+mod camera_history_proof;
 
 const WORD_BYTES: u64 = deterministic_carrier::WORD_BYTES as u64;
 const HEADER_WORDS: usize = 30;
@@ -67,19 +72,32 @@ const OBSERVATION_PROBE: u32 = 2;
 const OBSERVATION_PERSPECTIVE_FOOTPRINT: u32 = 3;
 const TEMPORAL_SEQUENCE_REVISION: u32 = 1;
 const TEMPORAL_RECONSTRUCTION_REVISION: u32 = 2;
-const CAMERA_REPROJECTION_REVISION: u32 = 2;
+const CAMERA_REPROJECTION_REVISION: u32 = 3;
 const CAMERA_DEPTH_POLICY_REVISION: u32 = 1;
-const CAMERA_HISTORY_WORDS_PER_SAMPLE: u64 = 4;
+const CAMERA_HISTORY_WORDS_PER_SAMPLE: u64 = 8;
+const CURRENT_HIT_WORDS_PER_SAMPLE: u64 = 4;
+const MAINTAINED_EVALUATOR_REVISION: u64 = 2;
 const CAMERA_DEPTH_ABSOLUTE_EPSILON: f32 = 0.001;
 const CAMERA_DEPTH_RELATIVE_EPSILON: f32 = 0.001;
 const TEMPORAL_PHASE_COUNT: u32 = 4;
 const SHAPE_SPHERE: u32 = 1;
 const SHAPE_PLANE: u32 = 2;
 const SHAPE_FIELD: u32 = 3;
-const MAINTAINED_WGSL: &str = include_str!("deterministic_execution.wgsl");
+const SCENE_QUERY_WGSL: &str = include_str!("deterministic_scene_query.wgsl");
+static MAINTAINED_WGSL: LazyLock<String> = LazyLock::new(|| {
+    format!(
+        "{SCENE_QUERY_WGSL}\n{}",
+        include_str!("deterministic_execution.wgsl")
+    )
+});
 const TEMPORAL_RECONSTRUCTION_WGSL: &str =
     include_str!("deterministic_temporal_reconstruction.wgsl");
-const CAMERA_REPROJECTION_WGSL: &str = include_str!("deterministic_camera_reprojection.wgsl");
+static CAMERA_REPROJECTION_WGSL: LazyLock<String> = LazyLock::new(|| {
+    format!(
+        "{SCENE_QUERY_WGSL}\n{}",
+        include_str!("deterministic_camera_reprojection.wgsl")
+    )
+});
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum DeterministicBufferKind {
@@ -302,8 +320,8 @@ impl DeterministicResourceCache {
         }
         let [source] = admit_static_wgsl_sources([(
             "runenrender.maintained.deterministic",
-            1,
-            MAINTAINED_WGSL,
+            MAINTAINED_EVALUATOR_REVISION,
+            MAINTAINED_WGSL.as_str(),
         )])
         .map_err(|error| gpu_authoring("maintained WGSL admission", error))?;
         self.maintained_source = Some(source.clone());
@@ -335,7 +353,7 @@ impl DeterministicResourceCache {
         let [source] = admit_static_wgsl_sources([(
             "runenrender.maintained.camera_reprojection",
             u64::from(CAMERA_REPROJECTION_REVISION),
-            CAMERA_REPROJECTION_WGSL,
+            CAMERA_REPROJECTION_WGSL.as_str(),
         )])
         .map_err(|error| gpu_authoring("camera-reprojection WGSL admission", error))?;
         self.camera_reprojection_source = Some(source.clone());
@@ -1790,10 +1808,15 @@ fn lower_output(
         output_index,
         DeterministicBufferKind::CurrentHit,
         GpuBufferDescriptor::ordinary_owned(
-            format!("RunenRender output {output_index} current hit validity"),
+            format!("RunenRender output {output_index} current coherent hit point"),
             GpuResourceLifetime::Transient,
             GpuReconstruction::SourceBacked,
-            packed.output_byte_len,
+            packed
+                .output_byte_len
+                .checked_mul(CURRENT_HIT_WORDS_PER_SAMPLE)
+                .ok_or(RenderDeterministicLoweringError::SizeOverflow {
+                    field: "current coherent hit point byte length",
+                })?,
             [GpuBufferUsage::Storage, GpuBufferUsage::CopyDestination],
             GpuBufferInitialization::Uninitialized,
         )
@@ -1903,6 +1926,14 @@ fn lower_output(
                 same_pose_completed_frames,
             } => {
                 let parameter_words = camera_reprojection_parameter_words(
+                    match observation {
+                        RenderObservationSpec::Perspective(perspective) => perspective,
+                        _ => {
+                            return Err(RenderDeterministicLoweringError::UnsupportedOutput {
+                                output_index,
+                            });
+                        }
+                    },
                     *previous_observation,
                     *pose_changed,
                     *same_pose_completed_frames,
@@ -2671,11 +2702,21 @@ fn matching_emitters(
 }
 
 fn camera_reprojection_parameter_words(
+    current: RenderPerspectiveObservation,
     previous: Option<RenderPerspectiveObservation>,
     pose_changed: bool,
     same_pose_completed_frames: u32,
-) -> Result<[u32; 24], RenderDeterministicLoweringError> {
-    let mut words = [0_u32; 24];
+) -> Result<[u32; 33], RenderDeterministicLoweringError> {
+    let mut words = [0_u32; 33];
+    let matrix = current.observation_to_scene().row_major_3x4();
+    let inverse = invert_matrix3(
+        [
+            matrix[0], matrix[1], matrix[2], matrix[4], matrix[5], matrix[6], matrix[8], matrix[9],
+            matrix[10],
+        ],
+        "current observation linear transform",
+    )?;
+    pack_matrix3(&mut words, 24, inverse)?;
     words[0] = if previous.is_some() { 1 } else { 0 };
     words[1] = if pose_changed { 1 } else { 0 };
     words[2] = CAMERA_DEPTH_POLICY_REVISION;
@@ -3980,9 +4021,10 @@ mod tests {
         OutOfBounds,
         MissingPreviousHistory,
         DepthInconsistent,
+        GeometryInconsistent,
     }
 
-    fn camera_reference_decision(
+    struct CameraReferenceSample {
         current_hit: bool,
         previous_hit: bool,
         previous_local: [f32; 3],
@@ -3990,7 +4032,33 @@ mod tests {
         aspect: f32,
         projected_depth: f32,
         previous_depth: f32,
-    ) -> CameraReferenceDecision {
+        current_point: [f32; 3],
+        previous_point: [f32; 3],
+    }
+
+    fn matching_world_point(current: [f32; 3], previous: [f32; 3]) -> bool {
+        if current
+            .iter()
+            .chain(previous.iter())
+            .any(|value| !value.is_finite())
+        {
+            return false;
+        }
+        current == previous
+    }
+
+    fn camera_reference_decision(sample: CameraReferenceSample) -> CameraReferenceDecision {
+        let CameraReferenceSample {
+            current_hit,
+            previous_hit,
+            previous_local,
+            tan_half_fov,
+            aspect,
+            projected_depth,
+            previous_depth,
+            current_point,
+            previous_point,
+        } = sample;
         if !current_hit {
             return CameraReferenceDecision::CurrentBackground;
         }
@@ -4015,34 +4083,112 @@ mod tests {
         {
             return CameraReferenceDecision::DepthInconsistent;
         }
+        if !matching_world_point(current_point, previous_point) {
+            return CameraReferenceDecision::GeometryInconsistent;
+        }
         CameraReferenceDecision::Accept
     }
 
     #[test]
     fn camera_reprojection_reference_rejects_background_bounds_missing_and_depth_mismatch() {
         assert_eq!(
-            camera_reference_decision(false, true, [0.0, 0.0, -2.0], 1.0, 1.0, 2.0, 2.0),
+            camera_reference_decision(CameraReferenceSample {
+                current_hit: false,
+                previous_hit: true,
+                previous_local: [0.0, 0.0, -2.0],
+                tan_half_fov: 1.0,
+                aspect: 1.0,
+                projected_depth: 2.0,
+                previous_depth: 2.0,
+                current_point: [0.0; 3],
+                previous_point: [0.0; 3],
+            }),
             CameraReferenceDecision::CurrentBackground
         );
         assert_eq!(
-            camera_reference_decision(true, true, [0.0, 0.0, 0.1], 1.0, 1.0, 2.0, 2.0),
+            camera_reference_decision(CameraReferenceSample {
+                current_hit: true,
+                previous_hit: true,
+                previous_local: [0.0, 0.0, 0.1],
+                tan_half_fov: 1.0,
+                aspect: 1.0,
+                projected_depth: 2.0,
+                previous_depth: 2.0,
+                current_point: [0.0; 3],
+                previous_point: [0.0; 3],
+            }),
             CameraReferenceDecision::BehindPreviousCamera
         );
         assert_eq!(
-            camera_reference_decision(true, true, [3.0, 0.0, -1.0], 1.0, 1.0, 2.0, 2.0),
+            camera_reference_decision(CameraReferenceSample {
+                current_hit: true,
+                previous_hit: true,
+                previous_local: [3.0, 0.0, -1.0],
+                tan_half_fov: 1.0,
+                aspect: 1.0,
+                projected_depth: 2.0,
+                previous_depth: 2.0,
+                current_point: [0.0; 3],
+                previous_point: [0.0; 3],
+            }),
             CameraReferenceDecision::OutOfBounds
         );
         assert_eq!(
-            camera_reference_decision(true, false, [0.0, 0.0, -2.0], 1.0, 1.0, 2.0, 2.0),
+            camera_reference_decision(CameraReferenceSample {
+                current_hit: true,
+                previous_hit: false,
+                previous_local: [0.0, 0.0, -2.0],
+                tan_half_fov: 1.0,
+                aspect: 1.0,
+                projected_depth: 2.0,
+                previous_depth: 2.0,
+                current_point: [0.0; 3],
+                previous_point: [0.0; 3],
+            }),
             CameraReferenceDecision::MissingPreviousHistory
         );
         assert_eq!(
-            camera_reference_decision(true, true, [0.0, 0.0, -2.0], 1.0, 1.0, 2.02, 2.0),
+            camera_reference_decision(CameraReferenceSample {
+                current_hit: true,
+                previous_hit: true,
+                previous_local: [0.0, 0.0, -2.0],
+                tan_half_fov: 1.0,
+                aspect: 1.0,
+                projected_depth: 2.02,
+                previous_depth: 2.0,
+                current_point: [0.0; 3],
+                previous_point: [0.0; 3],
+            }),
             CameraReferenceDecision::DepthInconsistent
         );
         assert_eq!(
-            camera_reference_decision(true, true, [0.0, 0.0, -2.0], 1.0, 1.0, 2.001, 2.0),
+            camera_reference_decision(CameraReferenceSample {
+                current_hit: true,
+                previous_hit: true,
+                previous_local: [0.0, 0.0, -2.0],
+                tan_half_fov: 1.0,
+                aspect: 1.0,
+                projected_depth: 2.001,
+                previous_depth: 2.0,
+                current_point: [1.0, 2.0, 3.0],
+                previous_point: [1.0, 2.0, 3.0],
+            }),
             CameraReferenceDecision::Accept
+        );
+        assert_eq!(
+            camera_reference_decision(CameraReferenceSample {
+                current_hit: true,
+                previous_hit: true,
+                previous_local: [0.0, 0.0, -2.0],
+                tan_half_fov: 1.0,
+                aspect: 1.0,
+                projected_depth: 2.001,
+                previous_depth: 2.0,
+                current_point: [1.0, 2.0, 3.0],
+                previous_point: [1.002, 2.0, 3.0],
+            }),
+            CameraReferenceDecision::GeometryInconsistent,
+            "depth tolerance alone admits distinct points with opposite shading"
         );
     }
 
@@ -4054,6 +4200,11 @@ mod tests {
             "u < 0.0 || u >= 1.0 || v < 0.0 || v >= 1.0",
             "previous_history_words[previous_base + 3u] == 0u",
             "abs(projected_depth - previous_depth) > tolerance",
+            "retained_sample_valid(sample_index, previous_point, coherent_radiance)",
+            "matching_world_point(point, visible_point)",
+            "bitcast<u32>(validated.value) == bitcast<u32>(radiance)",
+            "previous_history_words[previous_base + 4u]",
+            "return index * 8u",
         ] {
             assert!(
                 CAMERA_REPROJECTION_WGSL.contains(source_law),
@@ -4063,11 +4214,23 @@ mod tests {
     }
 
     #[test]
+    fn camera_reprojection_wgsl_forms_a_canonical_compute_pipeline() {
+        let [source] = admit_static_wgsl_sources([(
+            "runenrender.maintained.camera_reprojection.test",
+            u64::from(CAMERA_REPROJECTION_REVISION),
+            CAMERA_REPROJECTION_WGSL.as_str(),
+        )])
+        .expect("camera reprojection source admission");
+        GpuComputePipelineDescriptor::ordinary(source, "main")
+            .expect("camera reprojection must form a canonical compute pipeline");
+    }
+
+    #[test]
     fn camera_reprojection_shader_carries_versioned_depth_policy() {
         assert!(CAMERA_REPROJECTION_WGSL.contains("CAMERA_DEPTH_ABSOLUTE_EPSILON: f32 = 0.001"));
         assert!(CAMERA_REPROJECTION_WGSL.contains("CAMERA_DEPTH_RELATIVE_EPSILON: f32 = 0.001"));
         assert_eq!(CAMERA_DEPTH_POLICY_REVISION, 1);
-        assert_eq!(CAMERA_REPROJECTION_REVISION, 2);
+        assert_eq!(CAMERA_REPROJECTION_REVISION, 3);
     }
 
     #[test]
@@ -4129,11 +4292,14 @@ mod tests {
     fn maintained_wgsl_forms_a_canonical_compute_pipeline() {
         let [source] = admit_static_wgsl_sources([(
             "runenrender.maintained.deterministic.test",
-            1,
-            MAINTAINED_WGSL,
+            MAINTAINED_EVALUATOR_REVISION,
+            MAINTAINED_WGSL.as_str(),
         )])
         .expect("maintained deterministic source admission");
-        assert_eq!(source.identity().revision().get(), 1);
+        assert_eq!(
+            source.identity().revision().get(),
+            MAINTAINED_EVALUATOR_REVISION
+        );
         let pipeline = GpuComputePipelineDescriptor::ordinary(source, "main")
             .expect("maintained deterministic WGSL must form a canonical compute pipeline");
         assert_eq!(pipeline.entry_point().as_str(), "main");

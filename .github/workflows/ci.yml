@@ -130,6 +130,9 @@ jobs:
           cargo +stable test -p engine \
             deterministic_composition_r7_proof \
             --locked -- --nocapture --test-threads=1
+          cargo +stable test -p engine \
+            camera_history_proof \
+            --locked -- --nocapture --test-threads=1
 
       - name: Run Render Lab founding-direct artifact proof
         env:
@@ -344,7 +347,7 @@ jobs:
             cargo +stable run -p runenwerk_render_lab --locked -- \
               --rl2-camera-quality "${output}" \
               --window-size-px 1920x1080 \
-              --submitted-frames 12
+              --submitted-frames 20
 
           evidence="${output}/camera-motion-evidence.json"
           test -s "${evidence}"
@@ -354,11 +357,11 @@ jobs:
             '
               .schema_version == 2
               and .scenario_id == "runenwerk.render_lab.rl2.camera_motion_p100"
-              and .scenario_revision == 2
+              and .scenario_revision == 3
               and .source_git_revision == $revision
               and .requested_output_size_px == [1920,1080]
-              and .capture_submission_ordinal == 12
-              and .total_submitted_frames >= 12
+              and .capture_submission_ordinal == 20
+              and .total_submitted_frames >= 20
               and .gpu.backend == "vulkan"
               and .gpu.software_status == "software"
               and (.gpu.evidence_profile_fingerprint | startswith("blake3:"))
@@ -370,7 +373,7 @@ jobs:
               and .capture_route == "native_scene"
               and .capture.terminal == "completed"
               and (.capture.artifact_blake3 | startswith("blake3:"))
-              and (.frames | length) == 12
+              and (.frames | length) == 20
               and all(.frames[];
                 .requested_size_px == [1920,1080]
                 and .evaluation_size_px == [1920,1080]
@@ -378,25 +381,25 @@ jobs:
                 and .reconstruction_revision == 2
                 and .semantic_input_generation_classes == [1,1]
                 and .camera_reprojection_eligible == true
-                and .camera_reprojection_revision == 2
+                and .camera_reprojection_revision == 3
                 and .depth_policy_revision == 1
               )
               and ([.frames[].history_generation] | unique | length) == 1
-              and [.frames[].phase] == [0,1,2,3,0,1,2,3,0,1,2,3]
-              and [.frames[].history_age] == [0,1,2,3,4,5,6,7,8,9,10,11]
+              and [.frames[].phase] == [0,1,2,3,0,1,2,3,0,1,2,3,0,1,2,3,0,1,2,3]
+              and [.frames[].history_age] == [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
               and [.frames[].history_reset]
-                  == [true,false,false,false,false,false,false,false,false,false,false,false]
+                  == [true,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
               and [.frames[].previous_observation_available]
-                  == [false,true,true,true,true,true,true,true,true,true,true,true]
+                  == [false,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true]
               and [.frames[].camera_pose_changed]
-                  == [false,false,true,true,false,false,false,false,false,false,false,false]
+                  == [false,false,false,false,false,false,false,false,true,true,true,false,false,false,false,false,false,false,false,false]
               and [.frames[].camera_same_pose_completed_frames]
-                  == [0,1,2,0,0,1,2,3,4,4,4,4]
+                  == [0,1,2,3,4,4,4,4,4,0,0,0,1,2,3,4,4,4,4,4]
             ' "${evidence}"
-          # Retain the other three frames of the first complete post-settle phase
-          # cycle. Ordinals 9..12 all observe the same formed radiance estimate.
+          # Keep exact captures for settled, first motion, continued motion, stop,
+          # each of four reconvergence frames, and stable post-settle.
           stable_hash="$(jq -r '.capture.artifact_blake3' "${evidence}")"
-          for ordinal in 9 10 11; do
+          for ordinal in 8 9 10 11 12 13 14 15 16 17 18 19; do
             settle_output="${output}/settle-${ordinal}"
             timeout 30s xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
               cargo +stable run -p runenwerk_render_lab --locked -- \
@@ -408,11 +411,13 @@ jobs:
               --argjson ordinal "${ordinal}" \
               '
                 .schema_version == 2
-                and .scenario_revision == 2
+                and .scenario_revision == 3
                 and .capture_submission_ordinal == $ordinal
-                and .capture.artifact_blake3 == $hash
-                and .frames[-1].camera_same_pose_completed_frames == 4
-                and .frames[-1].reconstruction_revision == 2
+                and (.capture.artifact_blake3 | startswith("blake3:"))
+                and .frames[($ordinal - 1)].camera_same_pose_completed_frames ==
+                    (if $ordinal <= 9 then 4 elif $ordinal <= 12 then 0 else ([4, ($ordinal - 12)] | min) end)
+                and .frames[($ordinal - 1)].reconstruction_revision == 2
+                and (if $ordinal >= 16 then .capture.artifact_blake3 == $hash else true end)
               ' "${settle_output}/camera-motion-evidence.json"
           done
 
