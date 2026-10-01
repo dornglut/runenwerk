@@ -595,10 +595,14 @@ dependency, stable format, or shared framework still requires its own accepted e
 
 ## Shader/program ownership
 
-RunenRender owns renderer shader/kernel meaning and semantic variants. RunenGPU owns
-canonical program admission, interfaces/layouts/binding compatibility, backend
-realization, and physical caches. Runenwerk owns source-root/compiler/artifact/watching
-and product last-known-good policy.
+RunenRender owns renderer shader/kernel meaning, semantic variants, method-specific
+program families, and the explicit consumer bridge from an accepted RunenShader artifact
+into RunenGPU program admission. RunenShader owns reusable shader-source
+identity/composition, frontend compilation, canonical artifact formation, source
+provenance/mapping, and source-facing diagnostics. RunenGPU owns canonical program
+admission, interfaces/layouts/binding compatibility, backend realization, and physical
+caches. Runenwerk owns product source-root/package policy, filesystem watching/reload
+scheduling, integration/recovery, and product last-known-good policy.
 
 ## Determinism and reproducibility
 
