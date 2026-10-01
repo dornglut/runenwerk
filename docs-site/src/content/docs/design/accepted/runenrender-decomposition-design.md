@@ -5,7 +5,7 @@ status: accepted
 owner: render
 layer: framework/render
 canonical: true
-last_reviewed: 2026-09-27
+last_reviewed: 2026-10-01
 publication: reference
 pagefind: false
 related_docs:
@@ -52,7 +52,8 @@ Fixed decisions include:
 - generic lowering through public RunenGPU contracts;
 - incremental/full semantic equivalence;
 - bounded pressure, diagnostics, variants, sessions, histories, and derived state;
-- clean internal proof followed by mechanical external cutover.
+- bounded predecessor-side public/source-boundary proof followed by independently validated
+  standalone acceptance and a clean external authority cutover.
 
 Future implementation decisions include exact Rust layouts and names below this semantic
 vocabulary, scene-storage structures, extension traits, shader code-generation strategy,
@@ -1083,7 +1084,7 @@ proofs against the same architecture.
 
 ## Conformance
 
-Internal RunenRender proof eventually requires:
+Long-term RunenRender framework conformance eventually requires:
 
 1. renderer scene commits/snapshots without Runenwerk/ECS/WGPU/RunenSDF/RunenUI types;
 2. no mandatory deep copy per commit;
@@ -1111,13 +1112,20 @@ Internal RunenRender proof eventually requires:
 23. reproducibility/provenance facts without owning persistence policy;
 24. no duplicate old renderer semantic path after accepted cutover.
 
-External proof additionally requires independent locked validation, public downstream
-consumption, exact accepted RunenGPU revision, provenance, operational conformance, and
-clean Runenwerk cutover.
+These are framework-maturity requirements, not all predecessor-side extraction gates.
+Before source-authority transfer, the predecessor must prove only the subset required to
+make the public/source boundary correct and independently useful. Requirements that need
+a second real method, GPU-produced input, broader sharing, or large-scale algorithmic
+pressure remain successor-owned conformance work after RX.
+
+External source-authority transfer additionally requires independently validated
+standalone packaging, public downstream consumption, exact accepted sibling-framework
+revisions, provenance, operational conformance of the transferred current capability,
+and clean Runenwerk cutover.
 
 ## Performance and scalability characterization
 
-R8 characterizes at least:
+Standalone RunenRender must characterize at least:
 
 ```text
 full versus incremental scene-update cost
@@ -1158,24 +1166,40 @@ Historical investigations are evidence, not permission to skip current-source re
 
 ## Definition of done
 
+### Source-authority extraction
+
 RunenRender extraction is complete only when:
 
 - one independently validated `runen-render` package exists in `dornglut/runen-render`;
-- it depends on an exact accepted RunenGPU revision and not WGPU;
-- Runenwerk consumes only public renderer semantic contracts/adapters;
+- the transferred framework core has a curated public boundary with no Runenwerk
+  App/ECS/Winit/UI/World/Editor/product dependency;
+- one ordinary public headless/offscreen path proves the transferred current capability;
+- the package composes exact accepted RunenShader and RunenGPU revisions through their
+  public contracts and does not depend on WGPU directly;
+- package-level downstream public-API conformance passes against the actual standalone
+  package;
+- Runenwerk consumes only the accepted standalone renderer contracts through explicit
+  integration/adapters;
 - RunenUI, RunenSDF, RunenSpatial, and RunenECS remain independently authoritative;
-- at least two representation/query families and two meaningfully distinct render methods
-  prove the shared boundaries;
-- non-image-grid observation and GPU-produced semantic input prove the broader model;
-- incremental scene lifecycle, request planning/admission, representation selection,
-  output semantics, and derived invalidation pass;
-- large-scene and bounded-work evidence passes;
-- operational/performance/reproducibility facts pass;
 - every active consumer is migrated;
-- exact provenance is recorded;
+- exact provenance and release/cutover evidence are recorded;
 - original Runenwerk semantic-rendering authority and temporary seams are deleted;
-- no mirror, compatibility package, forwarding namespace, duplicate renderer, or private
-  reach-through remains.
+- no mirror, compatibility package, forwarding namespace, source include, submodule,
+  moving dependency, duplicate renderer, or private backend reach-through remains.
+
+Extraction does not create a stable-1.0 API promise. One real maintained render method
+is sufficient for source-authority transfer when the framework is already independently
+useful; additional materially different methods remain required before broad
+method-extension contracts are treated as well-generalized or stable.
+
+### Framework maturity after extraction
+
+The long-term conformance requirements above remain active framework pressure after
+source-authority transfer. In particular, materially distinct methods, GPU-produced
+semantic inputs, large-scene planner/acceleration scaling, multi-observation/output
+sharing, and broader performance/generalization evidence must be proved as real
+standalone RunenRender needs arise. They are not deleted or weakened by moving source
+authority earlier; their implementation and roadmap authority move with the framework.
 
 ## Strategic reevaluation gates
 
