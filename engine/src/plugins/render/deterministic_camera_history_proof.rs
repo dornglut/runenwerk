@@ -332,7 +332,13 @@ fn stationary_aggregate_is_distinct_from_latest_phase_and_first_motion_uses_cohe
         previous,
         camera_words(false, false, 0),
     );
-    let moving = execute(&context, &pipelines, input, previous, camera_words(true, true, 4));
+    let moving = execute(
+        &context,
+        &pipelines,
+        input,
+        previous,
+        camera_words(true, true, 4),
+    );
     assert_eq!(
         moving[4], current_only[4],
         "the retained coherent lane remains raw current radiance"
@@ -396,7 +402,13 @@ fn matched_plane_reuses_one_sample_and_rejects_wrong_radiance_or_outside_current
     assert_eq!(f32::from_bits(rejected[0]), 1.0);
     let mut outside = previous;
     outside[5] = (-4.25_f32).to_bits();
-    let rejected = execute(&context, &pipelines, input, outside, axis_aligned_plane_motion_camera());
+    let rejected = execute(
+        &context,
+        &pipelines,
+        input,
+        outside,
+        axis_aligned_plane_motion_camera(),
+    );
     assert_eq!(
         rejected[2], 1,
         "previous depth alone must not admit a sample outside current support"
@@ -530,7 +542,13 @@ fn settled_hit_miss_boundary_and_invalid_inputs_fail_closed_on_first_motion() {
     );
     assert_eq!(moving[2], 1);
     input[8] = f32::NAN.to_bits();
-    let invalid = execute(&context, &pipelines, input, previous, camera_words(true, true, 4));
+    let invalid = execute(
+        &context,
+        &pipelines,
+        input,
+        previous,
+        camera_words(true, true, 4),
+    );
     assert_eq!(invalid[0], 0);
     assert_eq!(invalid[2], u32::MAX);
     assert_eq!(invalid[3], 0);
