@@ -448,9 +448,9 @@ fn disallowed_selection_query_policy_never_reaches_world_projection() {
 
 #[test]
 fn source_generation_replacement_updates_only_that_projection() {
-    let (mut app, descriptor, payload) = selected_metric_app(609);
+    let (mut app, initial_descriptor, payload) = selected_metric_app(609);
     app = app.run_for_frames(1).expect("first projection frame");
-    let product_id = descriptor.product_core().identity;
+    let product_id = initial_descriptor.product_core().identity;
     let unrelated_id = ProductIdentity::new(9997);
     let unrelated_input = RenderFieldSemanticInput::dense(
         [0.0; 3],
