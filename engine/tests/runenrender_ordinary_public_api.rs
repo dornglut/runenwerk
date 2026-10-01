@@ -1,8 +1,12 @@
 use engine::plugins::render::{
     AdmittedRender, PreparedRadianceOutput, PreparedRender, RenderAdmissionError,
-    RenderCapturedRadiance, RenderExecutionError, RenderRadianceCaptureError,
-    RenderRadianceCaptureRequest, RenderRadianceCaptureRequestError, RenderResultFormationError,
-    RenderResultSubmissionError, SubmittedRender, SubmittedRenderForResult, admit_render,
+    RenderCapturedRadiance, RenderEvaluationSelection, RenderExecutionError,
+    RenderExecutionErrorKind, RenderExecutionScope, RenderExecutionState,
+    RenderRadianceCaptureError, RenderRadianceCaptureErrorKind, RenderRadianceCaptureRequest,
+    RenderRadianceCaptureRequestError, RenderRadianceCaptureRequestErrorKind,
+    RenderRequestedCoveragePreparation, RenderResultFormationError,
+    RenderResultFormationErrorKind, RenderResultSubmissionError, RenderResultSubmissionErrorKind,
+    RenderTemporalExecutionEvidence, SubmittedRender, SubmittedRenderForResult, admit_render,
     prepare_render, submit_render, submit_render_for_result,
 };
 use runen_gpu::{GpuContext, GpuReadbackOperation, GpuSubmission};
@@ -18,6 +22,7 @@ fn ordinary_semantic_renderer_surface_is_public_to_downstream_consumers() {
     let _ = PreparedRender::work_set;
     let _ = PreparedRender::radiance_outputs;
     let _ = PreparedRender::radiance_output;
+    let _ = PreparedRadianceOutput::temporal_execution_evidence;
     let _ = PreparedRadianceOutput::import;
     let _ = SubmittedRender::admitted_plan;
     let _ = SubmittedRender::submission_status;
@@ -33,8 +38,40 @@ fn ordinary_semantic_renderer_surface_is_public_to_downstream_consumers() {
     let _ = GpuReadbackOperation::new;
     let _ = RenderAdmissionError::kind;
     let _ = RenderExecutionError::kind;
+    let _ = RenderExecutionError::submission_error;
     let _ = RenderResultSubmissionError::kind;
     let _ = RenderResultFormationError::kind;
+    let _ = RenderRadianceCaptureRequestError::kind;
+    let _ = RenderRadianceCaptureError::kind;
+    let _ = RenderRadianceCaptureError::gpu_failure_kind;
+    let _ = RenderExecutionState::new;
+    let _ = RenderExecutionState::retain_in_flight_submissions;
+    let _ = RenderExecutionState::record_submission;
+    let _ = RenderExecutionState::prepare;
+
+    let scope = RenderExecutionScope::new(7);
+    assert_eq!(scope.raw(), 7);
+    let selection = RenderEvaluationSelection::new(0, 64, 32).expect("non-zero extent");
+    assert_eq!(selection.output_index(), 0);
+    assert_eq!(selection.extent(), (64, 32));
+
+    fn assert_neutral_temporal_evidence(
+        evidence: &RenderTemporalExecutionEvidence,
+    ) -> Option<&RenderRequestedCoveragePreparation> {
+        evidence.current_coverage.as_ref()
+    }
+    let _ = assert_neutral_temporal_evidence;
+
+    fn assert_error_kinds(
+        execution: RenderExecutionErrorKind,
+        submission: RenderResultSubmissionErrorKind,
+        formation: RenderResultFormationErrorKind,
+        capture_request: RenderRadianceCaptureRequestErrorKind,
+        capture: RenderRadianceCaptureErrorKind,
+    ) {
+        let _ = (execution, submission, formation, capture_request, capture);
+    }
+    let _ = assert_error_kinds;
 
     fn assert_prepared_output_surface(output: &PreparedRadianceOutput<'_>) {
         let _ = output.output_index();
