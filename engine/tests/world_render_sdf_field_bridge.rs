@@ -491,9 +491,7 @@ fn source_generation_replacement_updates_only_that_projection() {
         .run_for_fixed_steps(1)
         .expect("replacement payload should integrate");
     publish_selection(&mut app, selection(&replacement_descriptor));
-    app = app
-        .run_for_frames(1)
-        .expect("replacement projection frame");
+    app = app.run_for_frames(1).expect("replacement projection frame");
 
     let projected = app
         .world()
