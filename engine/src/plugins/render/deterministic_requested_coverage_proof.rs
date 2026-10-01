@@ -826,14 +826,9 @@ fn requested_coverage_preserves_field_payload_generations_and_invalid_vs_backgro
                 }),
             ),
         );
-        let prepared = prepare_with_requested_coverage(
-            admitted,
-            &context,
-            &mut cache,
-            81,
-            Some((0, (4, 4))),
-        )
-        .unwrap();
+        let prepared =
+            prepare_with_requested_coverage(admitted, &context, &mut cache, 81, Some((0, (4, 4))))
+                .unwrap();
         let evidence = prepared
             .radiance_output(0)
             .unwrap()
