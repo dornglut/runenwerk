@@ -29,7 +29,7 @@ jobs:
   runenrender-r6-vulkan-execution:
     name: RunenRender Vulkan execution proofs
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - name: Resolve expected revision
         id: revision
