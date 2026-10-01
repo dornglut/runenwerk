@@ -14,7 +14,9 @@ mod numeric;
 mod observation;
 mod semantic;
 
-use observation::observe_completed_deterministic_verification;
+use observation::{
+    RenderDeterministicVerificationObservationError, observe_completed_deterministic_verification,
+};
 
 use super::deterministic_admission::AdmittedDeterministicRender;
 use super::deterministic_execution::{
@@ -182,15 +184,11 @@ impl From<RenderDeterministicExecutionError> for RenderDeterministicVerifiedSubm
 /// Static-domain rejection remains the eligibility error above. `Inconclusive` is reserved for a
 /// semantic branch the conservative interval proof cannot uniquely establish. Physical mismatch and
 /// tolerance mismatch mean the completed observation contradicts the certified semantic result.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum RenderDeterministicVerificationError {
-    ResultFormation {
-        detail: String,
-    },
+    ResultFormation(RenderResultFormationError),
     Eligibility(RenderDeterministicVerificationEligibilityError),
-    ObservationNormalization {
-        detail: String,
-    },
+    ObservationNormalization(RenderDeterministicVerificationObservationError),
     Correlation {
         output_index: usize,
         sample_index: Option<usize>,
@@ -218,14 +216,13 @@ impl fmt::Display for RenderDeterministicVerificationError {
             Self::Eligibility(error) => {
                 write!(formatter, "verification eligibility failed: {error}")
             }
-            Self::ResultFormation { detail } => write!(
+            Self::ResultFormation(error) => write!(
                 formatter,
-                "generic render result-formation evidence rejected verified execution: {detail}"
+                "generic render result-formation evidence rejected verified execution: {error}"
             ),
-            Self::ObservationNormalization { detail } => write!(
-                formatter,
-                "same-submission observation normalization failed: {detail}"
-            ),
+            Self::ObservationNormalization(error) => {
+                write!(formatter, "same-submission observation normalization failed: {error}")
+            }
             Self::Correlation {
                 output_index,
                 sample_index,
@@ -273,13 +270,52 @@ impl fmt::Display for RenderDeterministicVerificationError {
 impl Error for RenderDeterministicVerificationError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
+            Self::ResultFormation(error) => Some(error),
             Self::Eligibility(error) => Some(error),
-            Self::ResultFormation { .. }
-            | Self::ObservationNormalization { .. }
-            | Self::Correlation { .. }
+            Self::ObservationNormalization(error) => Some(error),
+            Self::Correlation { .. }
             | Self::Inconclusive { .. }
             | Self::PhysicalMismatch { .. }
             | Self::ToleranceMismatch { .. } => None,
+        }
+    }
+}
+
+impl RenderDeterministicVerificationError {
+    pub(super) const fn output_index(&self) -> Option<usize> {
+        match self {
+            Self::ObservationNormalization(error) => error.output_index(),
+            Self::Correlation { output_index, .. }
+            | Self::Inconclusive { output_index, .. }
+            | Self::PhysicalMismatch { output_index, .. }
+            | Self::ToleranceMismatch { output_index, .. } => Some(*output_index),
+            Self::ResultFormation(_) | Self::Eligibility(_) => None,
+        }
+    }
+
+    pub(super) const fn sample_index(&self) -> Option<usize> {
+        match self {
+            Self::Correlation { sample_index, .. }
+            | Self::Inconclusive { sample_index, .. }
+            | Self::PhysicalMismatch { sample_index, .. } => *sample_index,
+            Self::ToleranceMismatch { sample_index, .. } => Some(*sample_index),
+            Self::ResultFormation(_)
+            | Self::Eligibility(_)
+            | Self::ObservationNormalization(_) => None,
+        }
+    }
+
+    pub(super) const fn channel(&self) -> Option<&'static str> {
+        match self {
+            Self::ObservationNormalization(error) => error.channel(),
+            _ => None,
+        }
+    }
+
+    pub(super) const fn gpu_failure_kind(&self) -> Option<runen_gpu::GpuSubmissionFailureKind> {
+        match self {
+            Self::ObservationNormalization(error) => error.gpu_failure_kind(),
+            _ => None,
         }
     }
 }
@@ -426,12 +462,8 @@ pub(super) fn verify_completed_deterministic_render(
 ) -> Result<RenderResultFormationEvidence, RenderDeterministicVerificationError> {
     ensure_deterministic_verification_eligible(verification.submitted().admitted())
         .map_err(RenderDeterministicVerificationError::Eligibility)?;
-    let observations =
-        observe_completed_deterministic_verification(&verification).map_err(|error| {
-            RenderDeterministicVerificationError::ObservationNormalization {
-                detail: format!("{error:?}"),
-            }
-        })?;
+    let observations = observe_completed_deterministic_verification(&verification)
+        .map_err(RenderDeterministicVerificationError::ObservationNormalization)?;
     semantic::verify_completed_semantics(&verification, &observations)?;
     let admitted = verification.submitted().admitted().admitted();
     RenderResultFormationEvidence::complete(
@@ -441,11 +473,7 @@ pub(super) fn verify_completed_deterministic_render(
             .iter()
             .map(|output| output.output_index()),
     )
-    .map_err(|error: RenderResultFormationError| {
-        RenderDeterministicVerificationError::ResultFormation {
-            detail: error.to_string(),
-        }
-    })
+    .map_err(RenderDeterministicVerificationError::ResultFormation)
 }
 
 fn validate_observation(
@@ -767,4 +795,20 @@ mod tests {
             })
         );
     }
+    #[test]
+    fn observation_normalization_error_preserves_structured_location() {
+        let error = RenderDeterministicVerificationError::ObservationNormalization(
+            RenderDeterministicVerificationObservationError::InvalidPhysicalLayout {
+                output_index: 4,
+                channel: "canonical-output",
+                byte_len: 13,
+            },
+        );
+
+        assert_eq!(error.output_index(), Some(4));
+        assert_eq!(error.sample_index(), None);
+        assert_eq!(error.channel(), Some("canonical-output"));
+        assert!(Error::source(&error).is_some());
+    }
+
 }

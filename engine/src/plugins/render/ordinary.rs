@@ -20,18 +20,22 @@ pub use super::deterministic_execution::RenderObjectIdentityDecoder;
 use super::deterministic_execution::{
     DeterministicResourceCache, PreparedDeterministicRadianceOutput, PreparedDeterministicRender,
     RenderCameraDiagnosticRequest, RenderCameraDiagnosticSource, RenderDeterministicExecutionError,
-    RenderDeterministicResultFormationError, RenderDeterministicVerifiedSubmissionError,
+    RenderDeterministicResultFormationError, RenderRunenGpuPreparationError,
     RenderTemporalExecutionEvidence as DeterministicTemporalExecutionEvidence,
     SubmittedDeterministicRender, prepare_deterministic_render,
     prepare_deterministic_render_with_cache_in_scope_and_evaluation, submit_deterministic_render,
     submit_deterministic_render_for_verified_result,
+};
+use super::deterministic_verification::{
+    RenderDeterministicVerificationEligibilityError, RenderDeterministicVerificationError,
+    RenderDeterministicVerifiedSubmissionError,
 };
 use super::field_input::{RenderFieldSemanticInputBinding, RenderFieldSemanticInputGeneration};
 use super::lowering::RenderWorkSet;
 use super::render_result::RenderResult;
 use super::representation::RenderRepresentationId;
 use super::request::{RenderRadiometricRepresentation, RenderRequest, RenderResultTopology};
-use super::scene::RenderSceneSnapshot;
+use super::scene::{RenderObjectId, RenderSceneSnapshot};
 use super::surface_input::{
     RenderSurfaceSemanticInputBinding, RenderSurfaceSemanticInputGeneration,
 };
@@ -105,7 +109,22 @@ impl Error for RenderAdmissionError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RenderExecutionErrorKind {
     Lowering,
+    RunenGpuPreparation,
     Submission,
+}
+
+/// RunenGPU owner category preserved when maintained lowering fails during public GPU preparation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenderRunenGpuPreparationErrorKind {
+    Access,
+    ProgramSource,
+    ResourceDescriptor,
+    ResourceAllocation,
+    TransferPreparation,
+    ProgramContract,
+    WorkOperation,
+    ReadbackRequest,
+    WorkAuthoring,
 }
 
 /// Failure while lowering admitted renderer meaning or submitting it through public RunenGPU.
@@ -118,6 +137,11 @@ impl RenderExecutionError {
     /// Owner-oriented failure category.
     pub fn kind(&self) -> RenderExecutionErrorKind {
         match &self.inner {
+            RenderDeterministicExecutionError::Lowering(
+                super::deterministic_execution::RenderDeterministicLoweringError::RunenGpuPreparation(
+                    _,
+                ),
+            ) => RenderExecutionErrorKind::RunenGpuPreparation,
             RenderDeterministicExecutionError::Lowering(_) => RenderExecutionErrorKind::Lowering,
             RenderDeterministicExecutionError::Submission(_) => {
                 RenderExecutionErrorKind::Submission
@@ -125,11 +149,58 @@ impl RenderExecutionError {
         }
     }
 
+    /// Specific public RunenGPU owner category when failure happened before physical submission.
+    pub fn runen_gpu_preparation_kind(&self) -> Option<RenderRunenGpuPreparationErrorKind> {
+        let RenderDeterministicExecutionError::Lowering(
+            super::deterministic_execution::RenderDeterministicLoweringError::RunenGpuPreparation(
+                error,
+            ),
+        ) = &self.inner
+        else {
+            return None;
+        };
+        Some(runen_gpu_preparation_kind(error))
+    }
+
     /// Stable public RunenGPU submission failure when execution reached physical submission.
     pub const fn submission_error(&self) -> Option<&GpuWorkSubmissionError> {
         match &self.inner {
             RenderDeterministicExecutionError::Submission(error) => Some(error),
             RenderDeterministicExecutionError::Lowering(_) => None,
+        }
+    }
+}
+
+fn runen_gpu_preparation_kind(
+    error: &RenderRunenGpuPreparationError,
+) -> RenderRunenGpuPreparationErrorKind {
+    match error {
+        RenderRunenGpuPreparationError::Access { .. } => {
+            RenderRunenGpuPreparationErrorKind::Access
+        }
+        RenderRunenGpuPreparationError::ProgramSource { .. } => {
+            RenderRunenGpuPreparationErrorKind::ProgramSource
+        }
+        RenderRunenGpuPreparationError::ResourceDescriptor { .. } => {
+            RenderRunenGpuPreparationErrorKind::ResourceDescriptor
+        }
+        RenderRunenGpuPreparationError::ResourceAllocation { .. } => {
+            RenderRunenGpuPreparationErrorKind::ResourceAllocation
+        }
+        RenderRunenGpuPreparationError::TransferPreparation { .. } => {
+            RenderRunenGpuPreparationErrorKind::TransferPreparation
+        }
+        RenderRunenGpuPreparationError::ProgramContract { .. } => {
+            RenderRunenGpuPreparationErrorKind::ProgramContract
+        }
+        RenderRunenGpuPreparationError::WorkOperation { .. } => {
+            RenderRunenGpuPreparationErrorKind::WorkOperation
+        }
+        RenderRunenGpuPreparationError::ReadbackRequest { .. } => {
+            RenderRunenGpuPreparationErrorKind::ReadbackRequest
+        }
+        RenderRunenGpuPreparationError::WorkAuthoring { .. } => {
+            RenderRunenGpuPreparationErrorKind::WorkAuthoring
         }
     }
 }
@@ -156,12 +227,28 @@ impl Error for RenderExecutionError {
     }
 }
 
+/// Stable category for verifier-domain eligibility failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenderVerificationEligibilityErrorKind {
+    SelectedObservationMissing,
+    PerspectiveFieldOfViewUnsupported,
+    SamplingSupportUnsupported,
+    ObservationLinearBasisUnsupported,
+    SelectedObjectStateMissing,
+    ObjectLocalScaleUnsupported,
+    ObjectHandednessUnsupported,
+    ObjectLinearBasisUnsupported,
+}
+
 /// High-level category for a submission that requested semantic result formation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RenderResultSubmissionErrorKind {
     Eligibility,
     Execution,
-    Correlation,
+    ReadbackCardinality,
+    OutputCorrelationChanged,
+    DuplicateReadbackCorrelation,
+    MissingSubmissionReadback,
 }
 
 /// Failure while selecting result-verification intent or authoring its exact submission.
@@ -174,15 +261,155 @@ impl RenderResultSubmissionError {
     /// Owner-oriented failure category.
     pub fn kind(&self) -> RenderResultSubmissionErrorKind {
         match &self.inner {
-            RenderDeterministicVerifiedSubmissionError::Eligibility { .. } => {
+            RenderDeterministicVerifiedSubmissionError::Eligibility(_) => {
                 RenderResultSubmissionErrorKind::Eligibility
             }
             RenderDeterministicVerifiedSubmissionError::Execution(_) => {
                 RenderResultSubmissionErrorKind::Execution
             }
-            RenderDeterministicVerifiedSubmissionError::Correlation { .. } => {
-                RenderResultSubmissionErrorKind::Correlation
+            RenderDeterministicVerifiedSubmissionError::ReadbackCardinality { .. } => {
+                RenderResultSubmissionErrorKind::ReadbackCardinality
             }
+            RenderDeterministicVerifiedSubmissionError::OutputCorrelationChanged { .. } => {
+                RenderResultSubmissionErrorKind::OutputCorrelationChanged
+            }
+            RenderDeterministicVerifiedSubmissionError::DuplicateReadbackCorrelation { .. } => {
+                RenderResultSubmissionErrorKind::DuplicateReadbackCorrelation
+            }
+            RenderDeterministicVerifiedSubmissionError::MissingSubmissionReadback { .. } => {
+                RenderResultSubmissionErrorKind::MissingSubmissionReadback
+            }
+        }
+    }
+
+    /// Verifier-domain reason when submission was rejected before maintained execution.
+    pub fn verification_eligibility_kind(&self) -> Option<RenderVerificationEligibilityErrorKind> {
+        let RenderDeterministicVerifiedSubmissionError::Eligibility(error) = &self.inner else {
+            return None;
+        };
+        Some(verification_eligibility_kind(error))
+    }
+
+    /// Referenced observation index when eligibility failure is observation-scoped.
+    pub const fn observation_index(&self) -> Option<usize> {
+        match &self.inner {
+            RenderDeterministicVerifiedSubmissionError::Eligibility(
+                RenderDeterministicVerificationEligibilityError::SelectedObservationMissing {
+                    observation_index,
+                }
+                | RenderDeterministicVerificationEligibilityError::PerspectiveFieldOfViewUnsupported {
+                    observation_index,
+                }
+                | RenderDeterministicVerificationEligibilityError::SamplingSupportUnsupported {
+                    observation_index,
+                }
+                | RenderDeterministicVerificationEligibilityError::ObservationLinearBasisUnsupported {
+                    observation_index,
+                },
+            ) => Some(*observation_index),
+            _ => None,
+        }
+    }
+
+    /// Referenced renderer object when eligibility failure is object-scoped.
+    pub const fn object_id(&self) -> Option<RenderObjectId> {
+        match &self.inner {
+            RenderDeterministicVerifiedSubmissionError::Eligibility(
+                RenderDeterministicVerificationEligibilityError::SelectedObjectStateMissing {
+                    object_id,
+                }
+                | RenderDeterministicVerificationEligibilityError::ObjectLocalScaleUnsupported {
+                    object_id,
+                }
+                | RenderDeterministicVerificationEligibilityError::ObjectHandednessUnsupported {
+                    object_id,
+                }
+                | RenderDeterministicVerificationEligibilityError::ObjectLinearBasisUnsupported {
+                    object_id,
+                },
+            ) => Some(*object_id),
+            _ => None,
+        }
+    }
+
+    /// Expected and actual readback counts when exact-submission cardinality changed.
+    pub const fn readback_cardinality(&self) -> Option<(usize, usize)> {
+        match &self.inner {
+            RenderDeterministicVerifiedSubmissionError::ReadbackCardinality {
+                expected,
+                actual,
+            } => Some((*expected, *actual)),
+            _ => None,
+        }
+    }
+
+    /// Expected and actual output indices when readback/output correlation changed.
+    pub const fn output_correlation(&self) -> Option<(usize, usize)> {
+        match &self.inner {
+            RenderDeterministicVerifiedSubmissionError::OutputCorrelationChanged {
+                expected_output_index,
+                actual_output_index,
+            } => Some((*expected_output_index, *actual_output_index)),
+            _ => None,
+        }
+    }
+
+    /// Output index for channel-scoped exact-submission correlation failures.
+    pub const fn correlation_output_index(&self) -> Option<usize> {
+        match &self.inner {
+            RenderDeterministicVerifiedSubmissionError::DuplicateReadbackCorrelation {
+                output_index,
+                ..
+            }
+            | RenderDeterministicVerifiedSubmissionError::MissingSubmissionReadback {
+                output_index,
+                ..
+            } => Some(*output_index),
+            _ => None,
+        }
+    }
+
+    /// Verification channel for channel-scoped exact-submission correlation failures.
+    pub const fn correlation_channel(&self) -> Option<&'static str> {
+        match &self.inner {
+            RenderDeterministicVerifiedSubmissionError::DuplicateReadbackCorrelation {
+                channel, ..
+            }
+            | RenderDeterministicVerifiedSubmissionError::MissingSubmissionReadback {
+                channel, ..
+            } => Some(*channel),
+            _ => None,
+        }
+    }
+}
+
+fn verification_eligibility_kind(
+    error: &RenderDeterministicVerificationEligibilityError,
+) -> RenderVerificationEligibilityErrorKind {
+    match error {
+        RenderDeterministicVerificationEligibilityError::SelectedObservationMissing { .. } => {
+            RenderVerificationEligibilityErrorKind::SelectedObservationMissing
+        }
+        RenderDeterministicVerificationEligibilityError::PerspectiveFieldOfViewUnsupported {
+            ..
+        } => RenderVerificationEligibilityErrorKind::PerspectiveFieldOfViewUnsupported,
+        RenderDeterministicVerificationEligibilityError::SamplingSupportUnsupported { .. } => {
+            RenderVerificationEligibilityErrorKind::SamplingSupportUnsupported
+        }
+        RenderDeterministicVerificationEligibilityError::ObservationLinearBasisUnsupported {
+            ..
+        } => RenderVerificationEligibilityErrorKind::ObservationLinearBasisUnsupported,
+        RenderDeterministicVerificationEligibilityError::SelectedObjectStateMissing { .. } => {
+            RenderVerificationEligibilityErrorKind::SelectedObjectStateMissing
+        }
+        RenderDeterministicVerificationEligibilityError::ObjectLocalScaleUnsupported { .. } => {
+            RenderVerificationEligibilityErrorKind::ObjectLocalScaleUnsupported
+        }
+        RenderDeterministicVerificationEligibilityError::ObjectHandednessUnsupported { .. } => {
+            RenderVerificationEligibilityErrorKind::ObjectHandednessUnsupported
+        }
+        RenderDeterministicVerificationEligibilityError::ObjectLinearBasisUnsupported { .. } => {
+            RenderVerificationEligibilityErrorKind::ObjectLinearBasisUnsupported
         }
     }
 }
@@ -190,30 +417,45 @@ impl RenderResultSubmissionError {
 impl fmt::Display for RenderResultSubmissionError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.inner {
-            RenderDeterministicVerifiedSubmissionError::Eligibility { detail } => {
-                write!(
-                    formatter,
-                    "render result verification is outside the certified domain: {detail}"
-                )
+            RenderDeterministicVerifiedSubmissionError::Eligibility(error) => {
+                write!(formatter, "render result verification eligibility failed: {error}")
             }
             RenderDeterministicVerifiedSubmissionError::Execution(error) => error.fmt(formatter),
-            RenderDeterministicVerifiedSubmissionError::Correlation { detail } => {
-                write!(
-                    formatter,
-                    "render verification correlation failed: {detail}"
-                )
-            }
+            RenderDeterministicVerifiedSubmissionError::ReadbackCardinality {
+                expected,
+                actual,
+            } => write!(
+                formatter,
+                "render result verification retained {actual} readback sets for {expected} admitted outputs"
+            ),
+            RenderDeterministicVerifiedSubmissionError::OutputCorrelationChanged {
+                expected_output_index,
+                actual_output_index,
+            } => write!(
+                formatter,
+                "render result verification output correlation changed from {expected_output_index} to {actual_output_index}"
+            ),
+            RenderDeterministicVerifiedSubmissionError::DuplicateReadbackCorrelation {
+                output_index,
+                channel,
+            } => write!(
+                formatter,
+                "output {output_index} {channel} verification reused a readback correlation"
+            ),
+            RenderDeterministicVerifiedSubmissionError::MissingSubmissionReadback {
+                output_index,
+                channel,
+            } => write!(
+                formatter,
+                "output {output_index} {channel} verification readback is not owned by the exact RunenGPU submission"
+            ),
         }
     }
 }
 
 impl Error for RenderResultSubmissionError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match &self.inner {
-            RenderDeterministicVerifiedSubmissionError::Execution(error) => Some(error),
-            RenderDeterministicVerifiedSubmissionError::Eligibility { .. }
-            | RenderDeterministicVerifiedSubmissionError::Correlation { .. } => None,
-        }
+        Some(&self.inner)
     }
 }
 
@@ -225,7 +467,13 @@ pub enum RenderResultFormationErrorKind {
     SubmissionFailed,
     ReadbackCorrelationLost,
     ReadbackFailed,
-    VerificationRejected,
+    ResultEvidenceRejected,
+    VerificationEligibility,
+    ObservationNormalization,
+    VerificationCorrelation,
+    VerificationInconclusive,
+    PhysicalMismatch,
+    ToleranceMismatch,
 }
 
 /// Failure while forming semantic provenance from a result-capable submission.
@@ -253,9 +501,88 @@ impl RenderResultFormationError {
             RenderDeterministicResultFormationError::ReadbackFailed { .. } => {
                 RenderResultFormationErrorKind::ReadbackFailed
             }
-            RenderDeterministicResultFormationError::VerificationRejected { .. } => {
-                RenderResultFormationErrorKind::VerificationRejected
+            RenderDeterministicResultFormationError::Verification(error) => match error {
+                RenderDeterministicVerificationError::ResultFormation(_) => {
+                    RenderResultFormationErrorKind::ResultEvidenceRejected
+                }
+                RenderDeterministicVerificationError::Eligibility(_) => {
+                    RenderResultFormationErrorKind::VerificationEligibility
+                }
+                RenderDeterministicVerificationError::ObservationNormalization(_) => {
+                    RenderResultFormationErrorKind::ObservationNormalization
+                }
+                RenderDeterministicVerificationError::Correlation { .. } => {
+                    RenderResultFormationErrorKind::VerificationCorrelation
+                }
+                RenderDeterministicVerificationError::Inconclusive { .. } => {
+                    RenderResultFormationErrorKind::VerificationInconclusive
+                }
+                RenderDeterministicVerificationError::PhysicalMismatch { .. } => {
+                    RenderResultFormationErrorKind::PhysicalMismatch
+                }
+                RenderDeterministicVerificationError::ToleranceMismatch { .. } => {
+                    RenderResultFormationErrorKind::ToleranceMismatch
+                }
+            },
+        }
+    }
+
+    /// Verifier-domain eligibility reason when completion-time validation fails closed.
+    pub fn verification_eligibility_kind(&self) -> Option<RenderVerificationEligibilityErrorKind> {
+        let RenderDeterministicResultFormationError::Verification(
+            RenderDeterministicVerificationError::Eligibility(error),
+        ) = &self.inner
+        else {
+            return None;
+        };
+        Some(verification_eligibility_kind(error))
+    }
+
+    /// Output index associated with readback or semantic-verification failure.
+    pub const fn output_index(&self) -> Option<usize> {
+        match &self.inner {
+            RenderDeterministicResultFormationError::ReadbackCorrelationLost {
+                output_index, ..
             }
+            | RenderDeterministicResultFormationError::ReadbackFailed {
+                output_index, ..
+            } => Some(*output_index),
+            RenderDeterministicResultFormationError::Verification(error) => error.output_index(),
+            RenderDeterministicResultFormationError::VerificationNotRequested
+            | RenderDeterministicResultFormationError::ResultAlreadyFormed
+            | RenderDeterministicResultFormationError::SubmissionFailed { .. } => None,
+        }
+    }
+
+    /// Sample index associated with semantic-verification failure when one exists.
+    pub const fn sample_index(&self) -> Option<usize> {
+        match &self.inner {
+            RenderDeterministicResultFormationError::Verification(error) => error.sample_index(),
+            _ => None,
+        }
+    }
+
+    /// Physical observation channel associated with a readback/normalization failure.
+    pub const fn channel(&self) -> Option<&'static str> {
+        match &self.inner {
+            RenderDeterministicResultFormationError::ReadbackCorrelationLost { channel, .. }
+            | RenderDeterministicResultFormationError::ReadbackFailed { channel, .. } => {
+                Some(*channel)
+            }
+            RenderDeterministicResultFormationError::Verification(error) => error.channel(),
+            _ => None,
+        }
+    }
+
+    /// Public RunenGPU lifecycle failure kind when submission/readback failed physically.
+    pub const fn gpu_failure_kind(&self) -> Option<GpuSubmissionFailureKind> {
+        match &self.inner {
+            RenderDeterministicResultFormationError::SubmissionFailed { kind }
+            | RenderDeterministicResultFormationError::ReadbackFailed { kind, .. } => Some(*kind),
+            RenderDeterministicResultFormationError::Verification(error) => {
+                error.gpu_failure_kind()
+            }
+            _ => None,
         }
     }
 }
@@ -289,17 +616,18 @@ impl fmt::Display for RenderResultFormationError {
                 formatter,
                 "output {output_index} {channel} verification readback failed: {kind:?}"
             ),
-            RenderDeterministicResultFormationError::VerificationRejected { detail } => {
-                write!(
-                    formatter,
-                    "finite-evaluation verification rejected result formation: {detail}"
-                )
+            RenderDeterministicResultFormationError::Verification(error) => {
+                write!(formatter, "finite-evaluation verification failed: {error}")
             }
         }
     }
 }
 
-impl Error for RenderResultFormationError {}
+impl Error for RenderResultFormationError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(&self.inner)
+    }
+}
 
 /// Stable category for failure to mint one product-owned radiance readback correlation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -953,4 +1281,75 @@ pub async fn submit_render_for_result(
         .await
         .map(|inner| SubmittedRenderForResult { inner })
         .map_err(|inner| RenderResultSubmissionError { inner })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn result_submission_preserves_structured_eligibility_and_correlation() {
+        let eligibility = RenderResultSubmissionError {
+            inner: RenderDeterministicVerifiedSubmissionError::Eligibility(
+                RenderDeterministicVerificationEligibilityError::SamplingSupportUnsupported {
+                    observation_index: 3,
+                },
+            ),
+        };
+        assert_eq!(eligibility.kind(), RenderResultSubmissionErrorKind::Eligibility);
+        assert_eq!(
+            eligibility.verification_eligibility_kind(),
+            Some(RenderVerificationEligibilityErrorKind::SamplingSupportUnsupported)
+        );
+        assert_eq!(eligibility.observation_index(), Some(3));
+        assert!(Error::source(&eligibility).is_some());
+
+        let correlation = RenderResultSubmissionError {
+            inner: RenderDeterministicVerifiedSubmissionError::MissingSubmissionReadback {
+                output_index: 2,
+                channel: "canonical-output",
+            },
+        };
+        assert_eq!(
+            correlation.kind(),
+            RenderResultSubmissionErrorKind::MissingSubmissionReadback
+        );
+        assert_eq!(correlation.correlation_output_index(), Some(2));
+        assert_eq!(correlation.correlation_channel(), Some("canonical-output"));
+    }
+
+    #[test]
+    fn result_formation_preserves_semantic_verification_location() {
+        let correlation = RenderResultFormationError {
+            inner: RenderDeterministicResultFormationError::Verification(
+                RenderDeterministicVerificationError::Correlation {
+                    output_index: 2,
+                    sample_index: Some(7),
+                    detail: "semantic sample correlation changed",
+                },
+            ),
+        };
+        assert_eq!(
+            correlation.kind(),
+            RenderResultFormationErrorKind::VerificationCorrelation
+        );
+        assert_eq!(correlation.output_index(), Some(2));
+        assert_eq!(correlation.sample_index(), Some(7));
+        assert!(Error::source(&correlation).is_some());
+
+        let tolerance = RenderResultFormationError {
+            inner: RenderDeterministicResultFormationError::Verification(
+                RenderDeterministicVerificationError::ToleranceMismatch {
+                    output_index: 1,
+                    sample_index: 5,
+                },
+            ),
+        };
+        assert_eq!(
+            tolerance.kind(),
+            RenderResultFormationErrorKind::ToleranceMismatch
+        );
+        assert_eq!(tolerance.output_index(), Some(1));
+        assert_eq!(tolerance.sample_index(), Some(5));
+    }
 }
