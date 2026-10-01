@@ -4983,4 +4983,5 @@ mod tests {
             capacity_workgroups: 1,
         };
         assert!(Error::source(&error).is_none());
-    }}
+    }
+}
