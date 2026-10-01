@@ -28,8 +28,8 @@ use engine::plugins::render::{
     RenderExecutionErrorKind, RenderExecutionScope, RenderExecutionState,
     RenderRadianceCaptureError, RenderRadianceCaptureErrorKind, RenderRadianceCaptureRequest,
     RenderRadianceCaptureRequestError, RenderRadianceCaptureRequestErrorKind,
-    RenderRequestedCoveragePreparation, RenderResultFormationError, RenderResultFormationErrorKind,
-    RenderResultSubmissionError, RenderResultSubmissionErrorKind, RenderTemporalExecutionEvidence,
+    RenderResultFormationError, RenderResultFormationErrorKind, RenderResultSubmissionError,
+    RenderResultSubmissionErrorKind, RenderTemporalExecutionEvidence,
     SubmittedRender, SubmittedRenderForResult, admit_render, prepare_render, submit_render,
     submit_render_for_result,
 };
@@ -85,12 +85,20 @@ fn ordinary_semantic_renderer_surface_is_public_to_downstream_consumers() {
     assert_eq!(selection.output_index(), 0);
     assert_eq!(selection.extent(), (64, 32));
 
-    fn assert_neutral_temporal_evidence(
-        evidence: &RenderTemporalExecutionEvidence,
-    ) -> Option<&RenderRequestedCoveragePreparation> {
-        evidence.current_coverage.as_ref()
+    fn assert_temporal_evidence(evidence: &RenderTemporalExecutionEvidence) {
+        let _ = (
+            evidence.requested_extent,
+            evidence.evaluation_extent,
+            evidence.sequence_revision,
+            evidence.reconstruction_revision,
+            evidence.phase,
+            evidence.history_generation,
+            evidence.history_age,
+            evidence.history_reset,
+            evidence.camera_reprojection_eligible,
+        );
     }
-    let _ = assert_neutral_temporal_evidence;
+    let _ = assert_temporal_evidence;
 
     fn assert_error_kinds(
         execution: RenderExecutionErrorKind,

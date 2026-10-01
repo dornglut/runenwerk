@@ -19,21 +19,25 @@ use super::deterministic_capture::{
 use super::deterministic_execution::{
     DeterministicResourceCache, PreparedDeterministicRadianceOutput, PreparedDeterministicRender,
     RenderCameraDiagnosticRequest, RenderCameraDiagnosticSource, RenderDeterministicExecutionError,
-    RenderDeterministicResultFormationError, RenderDeterministicVerifiedSubmissionError,
+    RenderDeterministicResultFormationError,
+    RenderDeterministicVerifiedSubmissionError,
+    RenderTemporalExecutionEvidence as DeterministicTemporalExecutionEvidence,
     SubmittedDeterministicRender, prepare_deterministic_render,
     prepare_deterministic_render_with_cache_in_scope_and_evaluation, submit_deterministic_render,
     submit_deterministic_render_for_verified_result,
 };
-pub use super::deterministic_execution::{
-    RenderObjectIdentityDecoder, RenderRequestedCoveragePreparation,
-    RenderTemporalExecutionEvidence,
+pub use super::deterministic_execution::RenderObjectIdentityDecoder;
+use super::field_input::{
+    RenderFieldSemanticInputBinding, RenderFieldSemanticInputGeneration,
 };
-use super::field_input::RenderFieldSemanticInputBinding;
 use super::lowering::RenderWorkSet;
 use super::render_result::RenderResult;
+use super::representation::RenderRepresentationId;
 use super::request::{RenderRadiometricRepresentation, RenderRequest, RenderResultTopology};
 use super::scene::RenderSceneSnapshot;
-use super::surface_input::RenderSurfaceSemanticInputBinding;
+use super::surface_input::{
+    RenderSurfaceSemanticInputBinding, RenderSurfaceSemanticInputGeneration,
+};
 use runen_gpu::{
     GpuContext, GpuExportRelationship, GpuReadbackId, GpuResourceProvenance, GpuResourceRef,
     GpuSubmission, GpuSubmissionFailureKind, GpuSubmissionStatus, GpuTextureHandle,
@@ -524,6 +528,56 @@ impl RenderEvaluationSelection {
     }
 }
 
+/// Public renderer-semantic temporal execution evidence.
+///
+/// This deliberately excludes renderer-private requested-lattice coverage preparation. Coverage is
+/// an internal reconstruction prerequisite, not semantic depth/output authority and not part of the
+/// transferable ordinary API.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderTemporalExecutionEvidence {
+    pub requested_extent: (u32, u32),
+    pub evaluation_extent: (u32, u32),
+    pub semantic_input_generations:
+        Vec<(RenderRepresentationId, RenderSurfaceSemanticInputGeneration)>,
+    pub field_semantic_input_generations:
+        Vec<(RenderRepresentationId, RenderFieldSemanticInputGeneration)>,
+    pub sequence_revision: u32,
+    pub reconstruction_revision: u32,
+    pub phase: u32,
+    pub history_generation: u64,
+    pub history_age: u32,
+    pub history_reset: bool,
+    pub camera_reprojection_eligible: bool,
+    pub previous_observation_available: bool,
+    pub camera_pose_changed: bool,
+    pub camera_same_pose_completed_frames: Option<u32>,
+    pub camera_reprojection_revision: Option<u32>,
+    pub depth_policy_revision: Option<u32>,
+}
+
+impl RenderTemporalExecutionEvidence {
+    fn from_deterministic(evidence: &DeterministicTemporalExecutionEvidence) -> Self {
+        Self {
+            requested_extent: evidence.requested_extent,
+            evaluation_extent: evidence.evaluation_extent,
+            semantic_input_generations: evidence.semantic_input_generations.clone(),
+            field_semantic_input_generations: evidence.field_semantic_input_generations.clone(),
+            sequence_revision: evidence.sequence_revision,
+            reconstruction_revision: evidence.reconstruction_revision,
+            phase: evidence.phase,
+            history_generation: evidence.history_generation,
+            history_age: evidence.history_age,
+            history_reset: evidence.history_reset,
+            camera_reprojection_eligible: evidence.camera_reprojection_eligible,
+            previous_observation_available: evidence.previous_observation_available,
+            camera_pose_changed: evidence.camera_pose_changed,
+            camera_same_pose_completed_frames: evidence.camera_same_pose_completed_frames,
+            camera_reprojection_revision: evidence.camera_reprojection_revision,
+            depth_policy_revision: evidence.depth_policy_revision,
+        }
+    }
+}
+
 /// Stateful ordinary integration for hosts that compose renderer-authored work into a larger
 /// public RunenGPU submission.
 ///
@@ -693,8 +747,10 @@ impl PreparedRadianceOutput<'_> {
     }
 
     /// Renderer-semantic temporal execution evidence for this prepared output, when present.
-    pub fn temporal_execution_evidence(&self) -> Option<&RenderTemporalExecutionEvidence> {
-        self.inner.temporal_execution_evidence()
+    pub fn temporal_execution_evidence(&self) -> Option<RenderTemporalExecutionEvidence> {
+        self.inner
+            .temporal_execution_evidence()
+            .map(RenderTemporalExecutionEvidence::from_deterministic)
     }
 
     /// Form a public RunenGPU import of this renderer-authored output.
