@@ -96,6 +96,7 @@ struct RenderLabFramePublicationResources<'w> {
     debug_config: ResMut<'w, RenderDebugConfigResource>,
     debug_control: ResMut<'w, RenderDebugControlResource>,
     history: Res<'w, RenderFrameHistoryState>,
+    gfx: Res<'w, engine::plugins::render::Gfx>,
     fixed_quality_plans: Res<'w, RenderLabFixedQualityPlans>,
     quality_execution: ResMut<'w, RenderLabTemporalQualityExecutionState>,
     comparison: Res<'w, RenderLabComparisonState>,
@@ -228,10 +229,10 @@ pub fn run_native_temporal_camera_quality(
     submitted_frame_limit: Option<usize>,
     output_size_px: (u32, u32),
 ) -> Result<()> {
-    let submitted_frame_limit = submitted_frame_limit.unwrap_or(12);
-    if submitted_frame_limit < 4 {
+    let submitted_frame_limit = submitted_frame_limit.unwrap_or(20);
+    if submitted_frame_limit < 8 {
         bail!(
-            "camera-motion temporal quality requires at least four submitted frames; got {submitted_frame_limit}"
+            "camera-motion temporal quality requires at least eight submitted frames to retain a fully settled state; got {submitted_frame_limit}"
         );
     }
     run_native_temporal_quality_scenario(
@@ -518,36 +519,72 @@ pub(super) fn render_lab_flow() -> Result<RenderFlow> {
 
 fn bounded_measurement_complete(
     measurement: &RenderLabMeasurementConfig,
-    history: &RenderFrameHistoryState,
+    completed_submissions: usize,
 ) -> bool {
     !measurement.completed
         && measurement
             .submitted_frame_limit
-            .is_some_and(|limit| history.len() >= limit)
+            .is_some_and(|limit| completed_submissions >= limit)
 }
 
 fn temporal_quality_capture_should_arm(
     measurement: &RenderLabMeasurementConfig,
-    history: &RenderFrameHistoryState,
+    completed_submissions: usize,
 ) -> bool {
     if measurement.completed || measurement.quality_capture_output_dir.is_none() {
         return false;
     }
     match measurement.submitted_frame_limit {
-        Some(limit) => history.len().saturating_add(1) == limit,
-        None => history.is_empty(),
+        Some(limit) => completed_submissions.saturating_add(1) == limit,
+        None => completed_submissions == 0,
     }
+}
+
+fn camera_temporal_submission_frames<'a>(
+    history: &'a RenderFrameHistoryState,
+    gfx: &'a engine::plugins::render::Gfx,
+) -> impl Iterator<Item = u64> + 'a {
+    history.observations().filter_map(|observation| {
+        (!gfx
+            .deterministic_temporal_evidence(observation.key.frame_index)
+            .is_empty())
+        .then_some(observation.key.frame_index)
+    })
 }
 
 fn temporal_quality_capture_target_frame(
     measurement: &RenderLabMeasurementConfig,
     history: &RenderFrameHistoryState,
+    gfx: Option<&engine::plugins::render::Gfx>,
 ) -> Option<u64> {
+    if matches!(
+        measurement.temporal_quality_scenario,
+        RenderLabTemporalQualityScenario::CameraMotionP100
+    ) {
+        return camera_temporal_submission_frames(history, gfx?).nth(
+            measurement
+                .submitted_frame_limit
+                .unwrap_or(1)
+                .saturating_sub(1),
+        );
+    }
     let target_ordinal = measurement.submitted_frame_limit.unwrap_or(1);
     history
         .observations()
         .nth(target_ordinal.saturating_sub(1))
         .map(|observation| observation.key.frame_index)
+}
+
+fn camera_motion_diagnostics_path(measurement: &RenderLabMeasurementConfig) -> Option<PathBuf> {
+    if !matches!(
+        measurement.temporal_quality_scenario,
+        RenderLabTemporalQualityScenario::CameraMotionP100
+    ) || measurement.submitted_frame_limit.unwrap_or(1) < 9
+    {
+        return None;
+    }
+    std::env::var_os("RUNENWERK_CAMERA_HISTORY_DIAGNOSTICS_DIR")
+        .map(|directory| PathBuf::from(directory).join("camera-motion-cells.json"))
 }
 
 fn complete_render_lab_measurement_if_requested(
@@ -564,19 +601,30 @@ fn complete_render_lab_measurement_if_requested(
     let close_intent_pending = windows
         .record(primary_window_id)
         .is_some_and(|window| window.close_intent_pending);
-    let bounded_frames_complete = bounded_measurement_complete(measurement, history);
+    let completed_submissions = if matches!(
+        measurement.temporal_quality_scenario,
+        RenderLabTemporalQualityScenario::CameraMotionP100
+    ) {
+        gfx.map(|gfx| camera_temporal_submission_frames(history, gfx).count())
+            .unwrap_or_default()
+    } else {
+        history.len()
+    };
+    let bounded_frames_complete = bounded_measurement_complete(measurement, completed_submissions);
     let quality_capture = if measurement.quality_capture_output_dir.is_some()
         && (bounded_frames_complete || close_intent_pending)
     {
-        temporal_quality_capture_target_frame(measurement, history)
+        temporal_quality_capture_target_frame(measurement, history, gfx)
             .map(|frame_index| temporal_quality_capture_evidence(debug_report, frame_index))
             .transpose()?
             .flatten()
     } else {
         None
     };
-    let quality_ready =
-        measurement.quality_capture_output_dir.is_none() || quality_capture.is_some();
+    let diagnostics_ready =
+        camera_motion_diagnostics_path(measurement).is_none_or(|path| path.is_file());
+    let quality_ready = diagnostics_ready
+        && (measurement.quality_capture_output_dir.is_none() || quality_capture.is_some());
     let bounded_complete = bounded_frames_complete && quality_ready;
     if !close_intent_pending && !bounded_complete {
         return Ok(());
@@ -922,6 +970,7 @@ fn publish_render_lab_frame_system(
         mut debug_config,
         mut debug_control,
         history,
+        gfx,
         fixed_quality_plans,
         mut quality_execution,
         comparison,
@@ -978,12 +1027,25 @@ fn publish_render_lab_frame_system(
     // compatibility pressure under test.
     let temporal_source_generation =
         temporal_quality_source_generation(measurement.temporal_quality_scenario, history.len());
+    let completed_temporal_submissions = if camera_motion_quality {
+        camera_temporal_submission_frames(&history, &gfx).count()
+    } else {
+        history.len()
+    };
     let scripted_camera = if camera_motion_quality {
-        temporal_camera_motion_pose(history.len())
+        // Hold the exact target pose while its capture finishes, keeping the producer
+        // published so renderer continuity still gates any outstanding submission.
+        let pose_ordinal = measurement
+            .submitted_frame_limit
+            .map_or(completed_temporal_submissions, |limit| {
+                completed_temporal_submissions.min(limit.saturating_sub(1))
+            });
+        temporal_camera_motion_pose(pose_ordinal)
     } else {
         *camera
     };
-    let capture_armed = temporal_quality_capture_should_arm(&measurement, &history);
+    let capture_armed =
+        temporal_quality_capture_should_arm(&measurement, completed_temporal_submissions);
     if quality_mode {
         quality_execution.pending_admission = None;
         debug_control.capture_enabled = capture_armed;
@@ -1115,12 +1177,12 @@ fn temporal_quality_source_generation(
 fn temporal_camera_motion_pose(completed_submissions: usize) -> RenderLabCamera {
     let mut camera = RenderLabCamera::default();
     match completed_submissions {
-        0 | 1 => {}
-        2 => {
+        0..=7 => {}
+        8 => {
             camera.yaw_radians = 0.08;
             camera.pan[0] = 0.05;
         }
-        _ => {
+        9.. => {
             camera.yaw_radians = 0.24;
             camera.pitch_radians = -0.06;
             camera.pan[0] = 0.12;
@@ -1242,7 +1304,10 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(!temporal_quality_capture_should_arm(&measurement, &history));
+        assert!(!temporal_quality_capture_should_arm(
+            &measurement,
+            history.len()
+        ));
         history.observe_submitted_frame(
             policy,
             11,
@@ -1254,7 +1319,10 @@ mod tests {
             &[],
             RenderGpuTimingCapability::Unsupported,
         );
-        assert!(temporal_quality_capture_should_arm(&measurement, &history));
+        assert!(temporal_quality_capture_should_arm(
+            &measurement,
+            history.len()
+        ));
         history.observe_submitted_frame(
             policy,
             12,
@@ -1266,7 +1334,10 @@ mod tests {
             &[],
             RenderGpuTimingCapability::Unsupported,
         );
-        assert!(!temporal_quality_capture_should_arm(&measurement, &history));
+        assert!(!temporal_quality_capture_should_arm(
+            &measurement,
+            history.len()
+        ));
     }
 
     #[test]
@@ -1316,7 +1387,7 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            temporal_quality_capture_target_frame(&bounded, &history),
+            temporal_quality_capture_target_frame(&bounded, &history, None),
             Some(11)
         );
 
@@ -1325,7 +1396,7 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            temporal_quality_capture_target_frame(&unbounded, &history),
+            temporal_quality_capture_target_frame(&unbounded, &history, None),
             Some(7)
         );
     }
@@ -1345,7 +1416,7 @@ mod tests {
             temporal_quality_scenario: RenderLabTemporalQualityScenario::StaticFootprint,
             completed: false,
         };
-        assert!(!bounded_measurement_complete(&measurement, &history));
+        assert!(!bounded_measurement_complete(&measurement, history.len()));
 
         for frame_index in 1..=2 {
             history.observe_submitted_frame(
@@ -1360,13 +1431,13 @@ mod tests {
                 RenderGpuTimingCapability::Unsupported,
             );
             assert_eq!(
-                bounded_measurement_complete(&measurement, &history),
+                bounded_measurement_complete(&measurement, history.len()),
                 frame_index == 2
             );
         }
 
         measurement.completed = true;
-        assert!(!bounded_measurement_complete(&measurement, &history));
+        assert!(!bounded_measurement_complete(&measurement, history.len()));
     }
 
     #[test]
@@ -1414,7 +1485,7 @@ mod tests {
         let primary_record = windows.record(primary).expect("primary window");
         assert!(primary_record.close_requested);
         assert!(!primary_record.close_intent_pending);
-        assert!(!bounded_measurement_complete(&measurement, &history));
+        assert!(!bounded_measurement_complete(&measurement, history.len()));
 
         complete_render_lab_measurement_if_requested(
             &mut windows,
@@ -1555,12 +1626,21 @@ mod tests {
             temporal_camera_motion_pose(0),
             temporal_camera_motion_pose(1)
         );
-        let small = temporal_camera_motion_pose(2);
-        let large = temporal_camera_motion_pose(3);
+        for submission in 0..8 {
+            assert_eq!(
+                temporal_camera_motion_pose(submission),
+                RenderLabCamera::default()
+            );
+        }
+        let small = temporal_camera_motion_pose(8);
+        let large = temporal_camera_motion_pose(9);
         assert_ne!(small, RenderLabCamera::default());
         assert_ne!(large, small);
         assert_eq!(small.yaw_radians, 0.08);
         assert_eq!(large.yaw_radians, 0.24);
+        for submission in 10..20 {
+            assert_eq!(temporal_camera_motion_pose(submission), large);
+        }
     }
 
     #[test]
@@ -1592,11 +1672,11 @@ mod tests {
         }
 
         // This point lies on the maintained unbounded plane (y = -1). It is visible after the
-        // strong frame-4 camera move but projects beyond the right edge of frame 3, guaranteeing
+        // strong ordinal-10 camera move but projects beyond the right edge of ordinal 9, guaranteeing
         // that the controlled motion capture exercises the shader's out-of-bounds rejection law.
         let point = [150.0, -1.0, -114.0];
-        let previous = project(temporal_camera_motion_pose(2), point);
-        let current = project(temporal_camera_motion_pose(3), point);
+        let previous = project(temporal_camera_motion_pose(8), point);
+        let current = project(temporal_camera_motion_pose(9), point);
         assert!((0.0..1.0).contains(&current[0]) && (0.0..1.0).contains(&current[1]));
         assert!(previous[0] >= 1.0 || previous[1] < 0.0 || previous[1] >= 1.0);
     }

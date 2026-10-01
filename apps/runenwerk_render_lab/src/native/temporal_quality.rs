@@ -141,16 +141,26 @@ struct RenderLabCameraMotionArtifact {
     gpu: RenderLabTemporalQualityGpuEvidence,
     execution: RenderLabTemporalQualityExecutionEvidence,
     frames: Vec<RenderLabCameraMotionFrameEvidence>,
+    cell_diagnostics: Option<RenderLabCameraCellDiagnosticArtifact>,
     capture_route: &'static str,
     capture: RenderLabTemporalQualityCaptureEvidence,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct RenderLabCameraCellDiagnosticArtifact {
+    frame_index: u64,
+    artifact_path: String,
+    artifact_blake3: String,
+    cell_count: usize,
+    qualification_control: String,
 }
 
 const RL2_QUALITY_SCHEMA_VERSION: u32 = 5;
 const RL2_QUALITY_SCENARIO_ID: &str = "runenwerk.render_lab.rl2.temporal_quality";
 const RL2_QUALITY_SCENARIO_REVISION: u32 = 5;
-const RL2_CAMERA_MOTION_SCHEMA_VERSION: u32 = 2;
+const RL2_CAMERA_MOTION_SCHEMA_VERSION: u32 = 3;
 const RL2_CAMERA_MOTION_SCENARIO_ID: &str = "runenwerk.render_lab.rl2.camera_motion_p100";
-const RL2_CAMERA_MOTION_SCENARIO_REVISION: u32 = 2;
+const RL2_CAMERA_MOTION_SCENARIO_REVISION: u32 = 3;
 pub(super) const RL2_QUALITY_FLOW_ID: &str = "runenwerk.render_lab.rl2.fixed_quality";
 pub(super) const RL2_QUALITY_PASS_ID: &str = "runenwerk.render_lab.rl2.fixed_quality.compose";
 pub(super) const RL2_QUALITY_COLOR_ALIAS: &str = "runenwerk.render_lab.rl2.fixed_quality.color";
@@ -530,10 +540,12 @@ fn expected_camera_same_pose_completed_frames(frame_index: usize) -> u32 {
         0 => 0,
         1 => 1,
         2 => 2,
-        3 | 4 => 0,
-        5 => 1,
-        6 => 2,
-        7 => 3,
+        3 => 3,
+        4..=8 => 4,
+        9..=10 => 0,
+        11 => 1,
+        12 => 2,
+        13 => 3,
         _ => 4,
     }
 }
@@ -542,9 +554,9 @@ fn validate_camera_motion_evidence(
     frames: &[RenderLabCameraMotionFrameEvidence],
     requested_output: (u32, u32),
 ) -> Result<()> {
-    if frames.len() < 4 {
+    if frames.len() < 8 {
         bail!(
-            "camera-motion proof requires at least four renderer evidence frames, found {}",
+            "camera-motion proof requires at least eight renderer evidence frames for a fully settled state, found {}",
             frames.len()
         );
     }
@@ -626,14 +638,19 @@ fn validate_camera_motion_evidence(
         bail!("camera-motion second frame does not prove same-pose compatible reuse");
     }
 
+    let settled = &frames[7];
+    if settled.camera_same_pose_completed_frames != Some(4) || settled.camera_pose_changed {
+        bail!("camera-motion first transition is not preceded by a stable four-phase settlement");
+    }
+
     for (index, frame) in frames.iter().enumerate().skip(2) {
-        let expected_pose_changed = index == 2 || index == 3;
+        let expected_pose_changed = (8..=9).contains(&index);
         if frame.history_reset
             || !frame.previous_observation_available
             || frame.camera_pose_changed != expected_pose_changed
         {
             bail!(
-                "camera-motion frame {index} does not match the scripted pose-change/reconvergence lifecycle"
+                "camera-motion frame {index} does not match the settled/move/stop/reconvergence lifecycle"
             );
         }
     }
@@ -682,31 +699,50 @@ pub(super) fn write_camera_motion_quality_artifact(
                 capture.frame_index
             )
         })?;
-    let capture_submission_ordinal = history
+    let Some(capture_history_ordinal) = history
         .observations()
-        .enumerate()
-        .find_map(|(index, observation)| {
-            (observation.key.frame_index == capture.frame_index).then_some(index + 1)
-        })
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "camera-motion capture frame {} is absent from submitted-frame history",
-                capture.frame_index
-            )
-        })?;
+        .position(|observation| observation.key.frame_index == capture.frame_index)
+        .map(|index| index + 1)
+    else {
+        bail!(
+            "camera-motion capture frame {} is absent from observed frame history",
+            capture.frame_index
+        );
+    };
+    let capture_submission_ordinal = camera_temporal_submission_frames(history, gfx)
+        .position(|frame_index| frame_index == capture.frame_index)
+        .map(|index| index + 1)
+        .ok_or_else(|| anyhow::anyhow!("capture frame has no temporal submission"))?;
     let expected_capture_ordinal = measurement.submitted_frame_limit.unwrap_or(1);
     if capture_submission_ordinal != expected_capture_ordinal {
         bail!(
-            "camera-motion capture submission ordinal {} does not match configured target {}",
+            "camera-motion temporal execution ordinal {} does not match configured target {} (observed-frame ordinal {})",
             capture_submission_ordinal,
-            expected_capture_ordinal
+            expected_capture_ordinal,
+            capture_history_ordinal,
         );
     }
 
     let mut generation_classes = Vec::new();
     let mut frames = Vec::new();
-    for observation in history.observations().take(capture_submission_ordinal) {
-        for evidence in gfx.deterministic_temporal_evidence(observation.key.frame_index) {
+    let mut execution_started = false;
+    for observation in history.observations().take(capture_history_ordinal) {
+        let execution_evidence = gfx.deterministic_temporal_evidence(observation.key.frame_index);
+        if execution_evidence.is_empty() {
+            if execution_started {
+                bail!(
+                    "camera-motion temporal evidence is missing after renderer execution began at frame {}; frame {} has no reconstruction record",
+                    frames
+                        .first()
+                        .map(|frame: &RenderLabCameraMotionFrameEvidence| frame.frame_index)
+                        .unwrap_or_default(),
+                    observation.key.frame_index,
+                );
+            }
+            continue;
+        }
+        execution_started = true;
+        for evidence in execution_evidence {
             let semantic_input_generation_classes = evidence
                 .semantic_input_generations
                 .iter()
@@ -755,13 +791,53 @@ pub(super) fn write_camera_motion_quality_artifact(
     }
     if frames.len() != capture_submission_ordinal {
         bail!(
-            "camera-motion quality expected one reconstruction record for each of {} submitted frames, found {}",
+            "camera-motion quality expected one reconstruction record for each of {} temporal submissions, found {}",
             capture_submission_ordinal,
             frames.len()
         );
     }
     validate_camera_motion_evidence(&frames, requested_output)?;
 
+    let cell_diagnostics = if let Some(path) = camera_motion_diagnostics_path(measurement) {
+        let bytes = fs::read(&path)
+            .with_context(|| format!("read exact first-motion cells {}", path.display()))?;
+        let diagnostic: serde_json::Value = serde_json::from_slice(&bytes)?;
+        let first_motion = frames
+            .get(8)
+            .ok_or_else(|| anyhow::anyhow!("first-motion diagnostic has no renderer frame"))?;
+        let revision = std::env::var("RUNENWERK_SOURCE_REVISION").ok();
+        if diagnostic["source_git_revision"].as_str() != revision.as_deref()
+            || diagnostic["frame_index"].as_u64() != Some(first_motion.frame_index)
+            || diagnostic["phase"].as_u64() != Some(0)
+            || diagnostic["history_age"].as_u64() != Some(8)
+            || diagnostic["prior_same_pose_completed_frames"].as_u64() != Some(4)
+        {
+            bail!(
+                "camera cells do not correlate to the exact fully settled first-motion submission"
+            );
+        }
+        let cells = diagnostic["cells"]
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("camera diagnostic cells are missing"))?;
+        if cells.len() != 32 {
+            bail!(
+                "camera diagnostic cell count {} does not match the bounded set",
+                cells.len()
+            );
+        }
+        Some(RenderLabCameraCellDiagnosticArtifact {
+            frame_index: first_motion.frame_index,
+            artifact_path: path.to_string_lossy().into_owned(),
+            artifact_blake3: format!("blake3:{}", blake3::hash(&bytes).to_hex()),
+            cell_count: cells.len(),
+            qualification_control: diagnostic["qualification_control"]
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("camera diagnostic control is unavailable"))?
+                .to_owned(),
+        })
+    } else {
+        None
+    };
     let artifact = RenderLabCameraMotionArtifact {
         schema_version: RL2_CAMERA_MOTION_SCHEMA_VERSION,
         scenario_id: RL2_CAMERA_MOTION_SCENARIO_ID,
@@ -773,6 +849,7 @@ pub(super) fn write_camera_motion_quality_artifact(
         gpu: temporal_quality_gpu_evidence(gfx.adapter_facts()),
         execution,
         frames,
+        cell_diagnostics,
         capture_route: "native_scene",
         capture,
     };
@@ -1002,19 +1079,25 @@ mod tests {
             previous_observation_available,
             camera_pose_changed,
             camera_same_pose_completed_frames: Some(same_pose_completed_frames),
-            camera_reprojection_revision: Some(2),
+            camera_reprojection_revision: Some(3),
             depth_policy_revision: Some(1),
         }
     }
 
     #[test]
     fn camera_motion_evidence_requires_pose_only_reuse_without_history_reset() {
-        let frames = vec![
-            camera_frame(1, 0, true, false, false, 0),
-            camera_frame(2, 1, false, true, false, 1),
-            camera_frame(3, 2, false, true, true, 2),
-            camera_frame(4, 3, false, true, true, 0),
-        ];
+        let frames = (0_usize..16)
+            .map(|index| {
+                camera_frame(
+                    index as u64 + 1,
+                    index as u32,
+                    index == 0,
+                    index != 0,
+                    (8..=9).contains(&index),
+                    expected_camera_same_pose_completed_frames(index),
+                )
+            })
+            .collect::<Vec<_>>();
         validate_camera_motion_evidence(&frames, (1920, 1080)).unwrap();
 
         let mut reset_on_motion = frames.clone();
@@ -1022,24 +1105,24 @@ mod tests {
         assert!(validate_camera_motion_evidence(&reset_on_motion, (1920, 1080)).is_err());
 
         let mut sub_native = frames.clone();
-        sub_native[3].evaluation_size_px = [960, 540];
+        sub_native[9].evaluation_size_px = [960, 540];
         assert!(validate_camera_motion_evidence(&sub_native, (1920, 1080)).is_err());
 
         let mut bad_convergence = frames;
-        bad_convergence[3].camera_same_pose_completed_frames = Some(2);
+        bad_convergence[15].camera_same_pose_completed_frames = Some(2);
         assert!(validate_camera_motion_evidence(&bad_convergence, (1920, 1080)).is_err());
     }
 
     #[test]
     fn camera_motion_evidence_accepts_move_stop_reconverge_and_post_settle_cycle() {
-        let frames = (0_usize..12)
+        let frames = (0_usize..16)
             .map(|index| {
                 camera_frame(
                     index as u64 + 1,
                     index as u32,
                     index == 0,
                     index != 0,
-                    index == 2 || index == 3,
+                    (8..=9).contains(&index),
                     expected_camera_same_pose_completed_frames(index),
                 )
             })
@@ -1047,20 +1130,11 @@ mod tests {
 
         validate_camera_motion_evidence(&frames, (1920, 1080)).unwrap();
         assert_eq!(
-            frames[4..]
+            frames[10..15]
                 .iter()
                 .map(|frame| frame.camera_same_pose_completed_frames)
                 .collect::<Vec<_>>(),
-            vec![
-                Some(0),
-                Some(1),
-                Some(2),
-                Some(3),
-                Some(4),
-                Some(4),
-                Some(4),
-                Some(4),
-            ]
+            vec![Some(0), Some(1), Some(2), Some(3), Some(4)]
         );
     }
 

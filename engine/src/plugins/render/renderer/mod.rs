@@ -941,7 +941,7 @@ impl Gfx {
         ))?;
         let mut timings = GfxFrameTimings::default();
         self.renderer
-            .begin_frame_gpu_observation(self.ctx.context());
+            .begin_frame_gpu_observation(self.ctx.context())?;
         let surface_contributions = deterministic_contributions_for_surface(
             deterministic_contributions,
             prepared_frame.surface.render_surface_id,

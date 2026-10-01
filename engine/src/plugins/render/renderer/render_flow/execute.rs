@@ -263,8 +263,11 @@ impl Renderer {
             )
         })?;
         for contribution in deterministic_contributions {
-            self.deterministic_resources
-                .record_producer_submission(contribution.producer_id.raw(), &submission);
+            self.deterministic_resources.record_producer_submission(
+                contribution.producer_id.raw(),
+                prepared_frame.context.frame_index,
+                &submission,
+            );
         }
         // Once G5 accepts the submission, retain every renderer-observed readback before any
         // fallible product evidence work. An accepted lifecycle handle must never be dropped merely
@@ -769,7 +772,7 @@ impl Renderer {
         prepared_frame: &PreparedRenderFrame,
         contributions: &[crate::plugins::render::RenderDeterministicFrameContribution],
     ) -> Result<(Vec<GpuWorkFragment>, Vec<GpuWorkImport>)> {
-        const TEMPORAL_EVIDENCE_FRAME_CAPACITY: usize = 16;
+        const TEMPORAL_EVIDENCE_FRAME_CAPACITY: usize = 32;
         self.deterministic_temporal_evidence
             .remove(&prepared_frame.context.frame_index);
         let mut fragments = Vec::new();
