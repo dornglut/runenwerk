@@ -1292,8 +1292,7 @@ fn metric_runtime_sdf_rejects_wrapper_exact_ref_mismatches_before_any_mutation()
                     ChunkRevision(payload.chunk_revision.0.saturating_add(1));
             }
             2 => {
-                metric_ref.payload_ref.checksum =
-                    metric_ref.payload_ref.checksum.saturating_add(1);
+                metric_ref.payload_ref.checksum = metric_ref.payload_ref.checksum.saturating_add(1);
             }
             _ => unreachable!(),
         }
