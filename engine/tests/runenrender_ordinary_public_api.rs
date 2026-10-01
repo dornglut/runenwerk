@@ -29,8 +29,8 @@ use engine::plugins::render::{
     RenderRadianceCaptureError, RenderRadianceCaptureErrorKind, RenderRadianceCaptureRequest,
     RenderRadianceCaptureRequestError, RenderRadianceCaptureRequestErrorKind,
     RenderResultFormationError, RenderResultFormationErrorKind, RenderResultSubmissionError,
-    RenderResultSubmissionErrorKind, RenderRunenGpuPreparationErrorKind,
-    RenderTemporalExecutionEvidence, RenderVerificationEligibilityErrorKind, SubmittedRender,
+    RenderResultSubmissionErrorKind, RenderTemporalExecutionEvidence,
+    RenderVerificationEligibilityErrorKind, SubmittedRender,
     SubmittedRenderForResult, admit_render, prepare_render, submit_render,
     submit_render_for_result,
 };
@@ -69,7 +69,7 @@ fn ordinary_semantic_renderer_surface_is_public_to_downstream_consumers() {
     let _ = GpuReadbackOperation::new;
     let _ = RenderAdmissionError::kind;
     let _ = RenderExecutionError::kind;
-    let _ = RenderExecutionError::runen_gpu_preparation_kind;
+    let _ = RenderExecutionError::runen_gpu_preparation_source;
     let _ = RenderExecutionError::submission_error;
     let _ = RenderResultSubmissionError::kind;
     let _ = RenderResultSubmissionError::verification_eligibility_kind;
@@ -124,7 +124,6 @@ fn ordinary_semantic_renderer_surface_is_public_to_downstream_consumers() {
         let _ = (execution, submission, formation, capture_request, capture);
     }
     let _ = assert_error_kinds;
-    let _ = RenderRunenGpuPreparationErrorKind::ProgramSource;
     let _ = RenderVerificationEligibilityErrorKind::SamplingSupportUnsupported;
 
     fn assert_prepared_output_surface(output: &PreparedRadianceOutput<'_>) {
