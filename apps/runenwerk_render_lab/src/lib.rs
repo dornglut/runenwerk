@@ -43,7 +43,8 @@ use engine::plugins::render::surface_input::{
     RenderSurfaceSemanticInputGeneration, RenderSurfaceSemanticInputRequirement,
 };
 use engine::plugins::render::{
-    RenderCapturedRadiance, RenderResult, SubmittedRender, admit_render, submit_render_for_result,
+    RenderCapturedRadiance, RenderResult, SubmittedRenderForResult, admit_render,
+    submit_render_for_result,
 };
 use engine::plugins::render::{
     RenderDynamicTextureRetention, RenderDynamicTextureTargetDescriptor,
@@ -333,7 +334,7 @@ pub fn run_founding_direct(output_root: impl AsRef<Path>) -> Result<ArtifactPath
             output_topology: "128x128 row-major sample lattice",
             semantic_result_formed: true,
         },
-        execution_path: "ordinary-maintained",
+        execution_path: "maintained-deterministic",
         renderer_completion: "completed",
         retained_continuity: "established renderer write remains current",
         product_readback: "completed separate public RunenGPU submission",
@@ -591,7 +592,7 @@ fn founding_fixture_with_observation_extent_and_support(
     })
 }
 
-fn form_result(context: &GpuContext, submitted: &mut SubmittedRender) -> Result<RenderResult> {
+fn form_result(context: &GpuContext, submitted: &mut SubmittedRenderForResult) -> Result<RenderResult> {
     let deadline = Instant::now() + Duration::from_secs(30);
     loop {
         context.progress();
