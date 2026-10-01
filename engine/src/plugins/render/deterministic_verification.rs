@@ -273,7 +273,8 @@ impl Error for RenderDeterministicVerificationError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Eligibility(error) => Some(error),
-            Self::ObservationNormalization { .. }
+            Self::ResultFormation { .. }
+            | Self::ObservationNormalization { .. }
             | Self::Correlation { .. }
             | Self::Inconclusive { .. }
             | Self::PhysicalMismatch { .. }
