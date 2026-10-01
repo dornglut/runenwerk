@@ -62,6 +62,10 @@ mod camera_diagnostics;
 #[path = "deterministic_camera_history_proof.rs"]
 mod camera_history_proof;
 
+#[cfg(test)]
+#[path = "deterministic_requested_coverage_proof.rs"]
+mod deterministic_execution_r7_proof_coverage;
+
 const WORD_BYTES: u64 = deterministic_carrier::WORD_BYTES as u64;
 const HEADER_WORDS: usize = 30;
 const GEOMETRY_WORDS: usize = 40;
@@ -70,6 +74,8 @@ const WORKGROUP_SIZE: u32 = 64;
 const OUTPUT_RADIANCE: u32 = 1;
 const OUTPUT_FORWARD_DEPTH: u32 = 2;
 const OUTPUT_OBJECT_IDENTITY: u32 = 3;
+const EXECUTION_REQUESTED_COVERAGE: u32 = 4;
+const REQUESTED_COVERAGE_POLICY_REVISION: u32 = 1;
 const OBSERVATION_PERSPECTIVE: u32 = 1;
 const OBSERVATION_PROBE: u32 = 2;
 const OBSERVATION_PERSPECTIVE_FOOTPRINT: u32 = 3;
@@ -80,7 +86,7 @@ const CAMERA_DEPTH_POLICY_REVISION: u32 = 1;
 const CAMERA_HISTORY_WORDS_PER_SAMPLE: u64 = 8;
 const CURRENT_HIT_WORDS_PER_SAMPLE: u64 = 4;
 const CAMERA_DIAGNOSTIC_WORDS: u64 = 32 * 32;
-const MAINTAINED_EVALUATOR_REVISION: u64 = 2;
+const MAINTAINED_EVALUATOR_REVISION: u64 = 3;
 const CAMERA_DEPTH_ABSOLUTE_EPSILON: f32 = 0.001;
 const CAMERA_DEPTH_RELATIVE_EPSILON: f32 = 0.001;
 const TEMPORAL_PHASE_COUNT: u32 = 4;
@@ -112,6 +118,12 @@ enum DeterministicBufferKind {
     CurrentDepth,
     CurrentHit,
     CameraParameters,
+    CoverageInput,
+    CoverageDepth,
+    CoverageState,
+    CoverageStatusScratch,
+    CoverageDepthScratch,
+    CoverageHitScratch,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -197,6 +209,14 @@ struct DeterministicTemporalHistoryUse {
 struct DeterministicOutputExecutionSelection {
     scope: u64,
     finite_evaluation_extent: Option<(u32, u32)>,
+    produce_requested_coverage: bool,
+}
+
+/// Physical execution selection; private coverage is not a requested semantic depth output.
+#[derive(Debug, Clone, Copy)]
+enum MaintainedExecutionKind {
+    Semantic(RenderOutputValue),
+    RequestedCoverage,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -681,11 +701,23 @@ impl PreparedDeterministicRender {
     }
 }
 
-/// Bounded renderer-owned evidence for one static footprint-reconstruction preparation.
+/// Prepared current coverage work, correlated with the enclosing temporal contribution's inputs.
+///
+/// This records preparation, not GPU completion or CPU-observed coverage availability. The carrier
+/// becomes current execution evidence only after its owning producer submission completes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderDeterministicRequestedCoveragePreparation {
+    pub extent: (u32, u32),
+    pub policy_revision: u32,
+    pub evaluator_revision: u64,
+}
+
+/// Bounded renderer-owned evidence for one footprint-reconstruction preparation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderDeterministicTemporalExecutionEvidence {
     pub requested_extent: (u32, u32),
     pub evaluation_extent: (u32, u32),
+    pub current_coverage: Option<RenderDeterministicRequestedCoveragePreparation>,
     pub semantic_input_generations:
         Vec<(RenderRepresentationId, RenderSurfaceSemanticInputGeneration)>,
     pub field_semantic_input_generations:
@@ -1375,7 +1407,7 @@ pub(crate) fn prepare_deterministic_render_with_cache_in_scope(
     scope: u64,
 ) -> Result<PreparedDeterministicRender, RenderDeterministicExecutionError> {
     prepare_deterministic_render_with_cache_in_scope_and_evaluation(
-        admitted, context, resources, scope, None,
+        admitted, context, resources, scope, None, false,
     )
 }
 
@@ -1385,6 +1417,7 @@ pub(crate) fn prepare_deterministic_render_with_cache_in_scope_and_evaluation(
     resources: &mut DeterministicResourceCache,
     scope: u64,
     finite_evaluation: Option<(usize, (u32, u32))>,
+    produce_requested_coverage: bool,
 ) -> Result<PreparedDeterministicRender, RenderDeterministicExecutionError> {
     let lowered = lower_deterministic_render(
         &admitted,
@@ -1393,6 +1426,7 @@ pub(crate) fn prepare_deterministic_render_with_cache_in_scope_and_evaluation(
         resources,
         scope,
         finite_evaluation,
+        produce_requested_coverage,
     )?;
     debug_assert!(lowered.verification_readbacks.is_empty());
     Ok(PreparedDeterministicRender {
@@ -1440,6 +1474,7 @@ pub(super) async fn submit_deterministic_render_for_verification(
         &mut DeterministicResourceCache::default(),
         0,
         None,
+        false,
     )?;
     let verification_readbacks = lowered.verification_readbacks;
     let submitted = submit_lowered_deterministic_render(
@@ -1501,6 +1536,7 @@ fn lower_deterministic_render(
     resources: &mut DeterministicResourceCache,
     scope: u64,
     finite_evaluation: Option<(usize, (u32, u32))>,
+    produce_requested_coverage: bool,
 ) -> Result<LoweredDeterministicRender, RenderDeterministicLoweringError> {
     let admitted = maintained.admitted();
     if admitted.environment().affinity() != context.affinity() {
@@ -1558,6 +1594,7 @@ fn lower_deterministic_render(
                         (selected_output == output.output_index()).then_some(extent)
                     },
                 ),
+                produce_requested_coverage,
             },
         )?;
         fragments.push(lowered.fragment);
@@ -1613,6 +1650,7 @@ fn lower_output(
     let DeterministicOutputExecutionSelection {
         scope,
         finite_evaluation_extent,
+        produce_requested_coverage,
     } = execution;
     let admitted_output = admitted
         .outputs()
@@ -1717,7 +1755,7 @@ fn lower_output(
     let packed = pack_output(
         admitted,
         admitted_output,
-        requested.spec().value(),
+        MaintainedExecutionKind::Semantic(requested.spec().value()),
         observation,
         object_codes,
         context,
@@ -1726,6 +1764,32 @@ fn lower_output(
             temporal_history: temporal_history.as_ref(),
         },
     )?;
+    let requested_extent = requested.spec().topology().sample_lattice_dimensions();
+    let requested_coverage = if produce_requested_coverage
+        && finite_evaluation_extent.is_some_and(|extent| Some(extent) != requested_extent)
+    {
+        let coverage_packed = pack_output(
+            admitted,
+            admitted_output,
+            MaintainedExecutionKind::RequestedCoverage,
+            observation,
+            object_codes,
+            context,
+            DeterministicOutputPackingState {
+                finite_evaluation_extent: None,
+                temporal_history: temporal_history.as_ref(),
+            },
+        )?;
+        Some(prepare_requested_coverage(
+            coverage_packed,
+            context,
+            resources,
+            scope,
+            output_index,
+        )?)
+    } else {
+        None
+    };
     let sample_byte_len = u64::from(packed.sample_count)
         .checked_mul(WORD_BYTES)
         .ok_or(RenderDeterministicLoweringError::SizeOverflow {
@@ -2156,6 +2220,13 @@ fn lower_output(
                                         .expect("temporal radiance output is a sample lattice"),
                                     evaluation_extent: finite_evaluation_extent
                                         .expect("temporal history requires finite evaluation"),
+                                    current_coverage: requested_coverage.as_ref().map(|_| {
+                                        RenderDeterministicRequestedCoveragePreparation {
+                                            extent: requested_extent.expect("coverage lattice"),
+                                            policy_revision: REQUESTED_COVERAGE_POLICY_REVISION,
+                                            evaluator_revision: MAINTAINED_EVALUATOR_REVISION,
+                                        }
+                                    }),
                                     semantic_input_generations: admitted
                                         .surface_semantic_inputs()
                                         .iter()
@@ -2283,6 +2354,19 @@ fn lower_output(
             work.operation("clear current hit depth", current_depth_clear)?;
             work.operation("clear current hit validity", current_hit_clear)?;
             work.compute("evaluate deterministic output", compute)?;
+            if let Some(coverage) = requested_coverage {
+                work.operation(
+                    "upload current requested coverage input",
+                    coverage.input_upload,
+                )?;
+                for (index, clear) in coverage.clears.into_iter().enumerate() {
+                    work.operation(format!("clear requested coverage carrier {index}"), clear)?;
+                }
+                work.compute(
+                    "classify current requested lattice coverage",
+                    coverage.compute,
+                )?;
+            }
             if let Some(upload) = camera_parameter_upload {
                 work.operation("upload camera reprojection parameters", upload)?;
             }
@@ -2319,10 +2403,110 @@ fn lower_output(
     })
 }
 
+struct PreparedRequestedCoverage {
+    input_upload: GpuUploadOperation,
+    clears: Vec<GpuClearOperation>,
+    compute: GpuComputeOperation,
+}
+
+/// One current requested-extent dispatch, with no history storage or runtime readback. Bindings
+/// 1/2 carry padded depth and tightly packed Invalid=0 / Background=1 / Hit=2 states. The ordinary
+/// evaluator's other bindings are distinct one-word scratch resources: coverage returns before
+/// any access to them, including ordinary invalidation. No phase-sparse resource is reused.
+fn prepare_requested_coverage(
+    packed: PackedOutput,
+    context: &GpuContext,
+    resources: &mut DeterministicResourceCache,
+    scope: u64,
+    output_index: usize,
+) -> Result<PreparedRequestedCoverage, RenderDeterministicLoweringError> {
+    let payload = PreparedGpuData::<TransferData>::ordinary_pod_transfer(
+        "current requested coverage input",
+        &packed.input_words,
+    )
+    .map_err(|error| gpu_authoring("coverage input preparation", error))?;
+    let state_bytes = u64::from(packed.sample_count)
+        .checked_mul(WORD_BYTES)
+        .ok_or(RenderDeterministicLoweringError::SizeOverflow {
+            field: "requested coverage state bytes",
+        })?;
+    let descriptions = [
+        (
+            DeterministicBufferKind::CoverageInput,
+            payload.layout().byte_len(),
+        ),
+        (
+            DeterministicBufferKind::CoverageDepth,
+            packed.output_byte_len,
+        ),
+        (DeterministicBufferKind::CoverageState, state_bytes),
+        (DeterministicBufferKind::CoverageStatusScratch, WORD_BYTES),
+        (DeterministicBufferKind::CoverageDepthScratch, WORD_BYTES),
+        (DeterministicBufferKind::CoverageHitScratch, WORD_BYTES),
+    ];
+    let handles = descriptions
+        .into_iter()
+        .map(|(kind, bytes)| {
+            resources.buffer(
+                scope,
+                output_index,
+                kind,
+                GpuBufferDescriptor::ordinary_owned(
+                    format!("RunenRender output {output_index} {kind:?}"),
+                    GpuResourceLifetime::Transient,
+                    GpuReconstruction::SourceBacked,
+                    bytes,
+                    [
+                        GpuBufferUsage::Storage,
+                        GpuBufferUsage::CopyDestination,
+                        GpuBufferUsage::CopySource,
+                    ],
+                    GpuBufferInitialization::Uninitialized,
+                )
+                .map_err(|error| gpu_authoring("coverage buffer descriptor", error))?,
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let input_upload = GpuUploadOperation::whole_buffer(&handles[0], payload)
+        .map_err(|error| gpu_authoring("coverage input upload", error))?;
+    let clears = handles[1..]
+        .iter()
+        .map(|handle| {
+            GpuClearOperation::buffer_zero(
+                GpuBufferRegion::whole(handle)
+                    .map_err(|error| gpu_authoring("coverage clear region", error))?,
+            )
+            .map_err(|error| gpu_authoring("coverage clear", error))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let pipeline = GpuComputePipelineDescriptor::ordinary(resources.maintained_source()?, "main")
+        .map_err(|error| gpu_authoring("coverage pipeline", error))?;
+    let bindings = pipeline
+        .runtime_bindings(handles.iter().enumerate().map(|(binding, handle)| {
+            GpuRuntimeBindingValue::whole_buffer(0, binding as u32, handle)
+        }))
+        .map_err(|error| gpu_authoring("coverage runtime bindings", error))?;
+    let dispatch = deterministic_dispatch_size(
+        packed.sample_count,
+        context
+            .device_facts()
+            .workload_budget()
+            .limits()
+            .max_compute_workgroups_per_dimension(),
+    )?;
+    let compute = GpuComputeOperation::new(pipeline, bindings, GpuDispatchIntent::direct(dispatch))
+        .map_err(|error| gpu_authoring("coverage compute", error))?;
+    Ok(PreparedRequestedCoverage {
+        input_upload,
+        clears,
+        compute,
+    })
+}
+
 fn pack_output(
     admitted: &AdmittedRenderPlan,
     admitted_output: &super::admission::RenderAdmittedOutput,
-    value: RenderOutputValue,
+    execution_kind: MaintainedExecutionKind,
     observation: RenderObservationSpec,
     object_codes: &BTreeMap<RenderObjectId, u32>,
     context: &GpuContext,
@@ -2402,17 +2586,20 @@ fn pack_output(
             (1, 1, 1, 1, WORD_BYTES, None)
         };
 
-    let (output_kind, wavelength) = match value {
-        RenderOutputValue::Radiance { representation } => {
-            (OUTPUT_RADIANCE, Some(representation.wavelength_meters()))
-        }
-        RenderOutputValue::Distance {
-            convention: RenderDistanceConvention::ObservationForwardDepth,
-        } => (OUTPUT_FORWARD_DEPTH, None),
-        RenderOutputValue::ObjectIdentity => (OUTPUT_OBJECT_IDENTITY, None),
-        RenderOutputValue::Distance { .. } => {
-            return Err(RenderDeterministicLoweringError::UnsupportedOutput { output_index });
-        }
+    let (execution_mode, wavelength) = match execution_kind {
+        MaintainedExecutionKind::RequestedCoverage => (EXECUTION_REQUESTED_COVERAGE, None),
+        MaintainedExecutionKind::Semantic(value) => match value {
+            RenderOutputValue::Radiance { representation } => {
+                (OUTPUT_RADIANCE, Some(representation.wavelength_meters()))
+            }
+            RenderOutputValue::Distance {
+                convention: RenderDistanceConvention::ObservationForwardDepth,
+            } => (OUTPUT_FORWARD_DEPTH, None),
+            RenderOutputValue::ObjectIdentity => (OUTPUT_OBJECT_IDENTITY, None),
+            RenderOutputValue::Distance { .. } => {
+                return Err(RenderDeterministicLoweringError::UnsupportedOutput { output_index });
+            }
+        },
     };
 
     let (observation_kind, transform, tan_half_fov, aspect_ratio) = match observation {
@@ -2539,7 +2726,7 @@ fn pack_output(
             field: "emitter count",
         }
     })?;
-    words[6] = output_kind;
+    words[6] = execution_mode;
     words[7] = observation_kind;
     pack_observation(&mut words, transform, tan_half_fov, aspect_ratio)?;
     let requested_extent = requested_extent.unwrap_or((1, 1));
@@ -2573,7 +2760,7 @@ fn pack_output(
         words[base + 1] = *object_codes
             .get(&object_id)
             .ok_or(RenderDeterministicLoweringError::OutputCorrelationChanged { output_index })?;
-        words[base + 2] = if output_kind == OUTPUT_RADIANCE {
+        words[base + 2] = if execution_mode == OUTPUT_RADIANCE {
             let material = admitted
                 .plan()
                 .scene()

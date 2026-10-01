@@ -116,8 +116,34 @@ fn camera_words(previous_available: bool, changed: bool, completed: u32) -> Vec<
     words
 }
 
+struct CameraProofPipelines {
+    evaluation: GpuComputePipelineDescriptor,
+    reconstruction: GpuComputePipelineDescriptor,
+}
+
+fn camera_proof_pipelines() -> CameraProofPipelines {
+    let [evaluation_source, camera_source] = admit_static_wgsl_sources([
+        (
+            "camera-proof.evaluation",
+            MAINTAINED_EVALUATOR_REVISION,
+            MAINTAINED_WGSL.as_str(),
+        ),
+        (
+            "camera-proof.history",
+            u64::from(CAMERA_REPROJECTION_REVISION),
+            CAMERA_REPROJECTION_WGSL.as_str(),
+        ),
+    ])
+    .unwrap();
+    CameraProofPipelines {
+        evaluation: GpuComputePipelineDescriptor::ordinary(evaluation_source, "main").unwrap(),
+        reconstruction: GpuComputePipelineDescriptor::ordinary(camera_source, "main").unwrap(),
+    }
+}
+
 fn execute(
     context: &GpuContext,
+    pipelines: &CameraProofPipelines,
     input: Vec<u32>,
     previous: [u32; 8],
     mut camera: Vec<u32>,
@@ -159,21 +185,8 @@ fn execute(
                 .unwrap()
         })
         .collect::<Vec<_>>();
-    let [evaluation_source, camera_source] = admit_static_wgsl_sources([
-        (
-            "camera-proof.evaluation",
-            MAINTAINED_EVALUATOR_REVISION,
-            MAINTAINED_WGSL.as_str(),
-        ),
-        (
-            "camera-proof.history",
-            u64::from(CAMERA_REPROJECTION_REVISION),
-            CAMERA_REPROJECTION_WGSL.as_str(),
-        ),
-    ])
-    .unwrap();
-    let evaluation = GpuComputePipelineDescriptor::ordinary(evaluation_source, "main").unwrap();
-    let bindings = evaluation
+    let bindings = pipelines
+        .evaluation
         .runtime_bindings([
             GpuRuntimeBindingValue::whole_buffer(0, 0, &handles[0]),
             GpuRuntimeBindingValue::whole_buffer(0, 1, &handles[1]),
@@ -184,20 +197,20 @@ fn execute(
         ])
         .unwrap();
     let evaluation = GpuComputeOperation::new(
-        evaluation,
+        pipelines.evaluation.clone(),
         bindings,
         GpuDispatchIntent::direct(GpuDispatchSize::new(1, 1, 1)),
     )
     .unwrap();
-    let reconstruction = GpuComputePipelineDescriptor::ordinary(camera_source, "main").unwrap();
     let bindings =
-        reconstruction
+        pipelines
+            .reconstruction
             .runtime_bindings(handles[..8].iter().enumerate().map(|(index, handle)| {
                 GpuRuntimeBindingValue::whole_buffer(0, index as u32, handle)
             }))
             .unwrap();
     let reconstruction = GpuComputeOperation::new(
-        reconstruction,
+        pipelines.reconstruction.clone(),
         bindings,
         GpuDispatchIntent::direct(GpuDispatchSize::new(1, 1, 1)),
     )
@@ -286,6 +299,7 @@ fn stationary_aggregate_is_distinct_from_latest_phase_and_first_motion_uses_cohe
     let Some(context) = context() else {
         return;
     };
+    let pipelines = camera_proof_pipelines();
     let mut previous = [0; 8];
     let mut samples = Vec::new();
     for index in 0..8 {
@@ -293,6 +307,7 @@ fn stationary_aggregate_is_distinct_from_latest_phase_and_first_motion_uses_cohe
         input[24] = index % 4;
         let current = execute(
             &context,
+            &pipelines,
             input,
             previous,
             camera_words(index != 0, false, index.min(4)),
@@ -313,11 +328,18 @@ fn stationary_aggregate_is_distinct_from_latest_phase_and_first_motion_uses_cohe
     input[8] = 0.08_f32.to_bits();
     let current_only = execute(
         &context,
+        &pipelines,
         input.clone(),
         previous,
         camera_words(false, false, 0),
     );
-    let moving = execute(&context, input, previous, camera_words(true, true, 4));
+    let moving = execute(
+        &context,
+        &pipelines,
+        input,
+        previous,
+        camera_words(true, true, 4),
+    );
     assert_eq!(
         moving[4], current_only[4],
         "the retained coherent lane remains raw current radiance"
@@ -340,6 +362,7 @@ fn matched_plane_reuses_one_sample_and_rejects_wrong_radiance_or_outside_current
     let Some(context) = context() else {
         return;
     };
+    let pipelines = camera_proof_pipelines();
     let mut input = scene_input(false);
     input[10] = 0.125_f32.to_bits();
     let previous = [
@@ -354,6 +377,7 @@ fn matched_plane_reuses_one_sample_and_rejects_wrong_radiance_or_outside_current
     ];
     let accepted = execute(
         &context,
+        &pipelines,
         input.clone(),
         previous,
         axis_aligned_plane_motion_camera(),
@@ -367,6 +391,7 @@ fn matched_plane_reuses_one_sample_and_rejects_wrong_radiance_or_outside_current
     wrong_radiance[4] = 0;
     let rejected = execute(
         &context,
+        &pipelines,
         input.clone(),
         wrong_radiance,
         axis_aligned_plane_motion_camera(),
@@ -378,7 +403,13 @@ fn matched_plane_reuses_one_sample_and_rejects_wrong_radiance_or_outside_current
     assert_eq!(f32::from_bits(rejected[0]), 1.0);
     let mut outside = previous;
     outside[5] = (-4.25_f32).to_bits();
-    let rejected = execute(&context, input, outside, axis_aligned_plane_motion_camera());
+    let rejected = execute(
+        &context,
+        &pipelines,
+        input,
+        outside,
+        axis_aligned_plane_motion_camera(),
+    );
     assert_eq!(
         rejected[2], 1,
         "previous depth alone must not admit a sample outside current support"
@@ -391,6 +422,7 @@ fn hard_shadow_revalidation_distinguishes_depth_and_geometry_from_radiance() {
     let Some(context) = context() else {
         return;
     };
+    let pipelines = camera_proof_pipelines();
     let mut input = scene_input(true);
     let blocker = HEADER_WORDS + GEOMETRY_WORDS;
     pack_vec3(&mut input, blocker + 25, [2.0, 0.0, -2.0]).unwrap();
@@ -410,6 +442,7 @@ fn hard_shadow_revalidation_distinguishes_depth_and_geometry_from_radiance() {
     ];
     let current_only = execute(
         &context,
+        &pipelines,
         input.clone(),
         previous,
         camera_words(false, false, 0),
@@ -420,6 +453,7 @@ fn hard_shadow_revalidation_distinguishes_depth_and_geometry_from_radiance() {
     );
     let accepted = execute(
         &context,
+        &pipelines,
         input.clone(),
         previous,
         axis_aligned_plane_motion_camera(),
@@ -441,6 +475,7 @@ fn hard_shadow_revalidation_distinguishes_depth_and_geometry_from_radiance() {
     wrong_shadow[4] = 1.0_f32.to_bits();
     let rejected = execute(
         &context,
+        &pipelines,
         input.clone(),
         wrong_shadow,
         axis_aligned_plane_motion_camera(),
@@ -452,7 +487,7 @@ fn hard_shadow_revalidation_distinguishes_depth_and_geometry_from_radiance() {
     assert_eq!(rejected[0], current_only[0]);
     let mut control = axis_aligned_plane_motion_camera();
     control[34] = 1;
-    let oracle = execute(&context, input, previous, control);
+    let oracle = execute(&context, &pipelines, input, previous, control);
     assert_eq!(oracle[0], current_only[0]);
     assert_eq!(oracle[2], 1);
 }
@@ -462,6 +497,7 @@ fn settled_hit_miss_boundary_and_invalid_inputs_fail_closed_on_first_motion() {
     let Some(context) = context() else {
         return;
     };
+    let pipelines = camera_proof_pipelines();
     let mut input = scene_input(true);
     input[4] = 1;
     input[HEADER_WORDS] = SHAPE_SPHERE;
@@ -474,6 +510,7 @@ fn settled_hit_miss_boundary_and_invalid_inputs_fail_closed_on_first_motion() {
         input[24] = index % 4;
         previous = execute(
             &context,
+            &pipelines,
             input.clone(),
             previous,
             camera_words(index != 0, false, index.min(4)),
@@ -494,6 +531,7 @@ fn settled_hit_miss_boundary_and_invalid_inputs_fail_closed_on_first_motion() {
     input[8] = 0.08_f32.to_bits();
     let moving = execute(
         &context,
+        &pipelines,
         input.clone(),
         previous,
         camera_words(true, true, 4),
@@ -505,7 +543,13 @@ fn settled_hit_miss_boundary_and_invalid_inputs_fail_closed_on_first_motion() {
     );
     assert_eq!(moving[2], 1);
     input[8] = f32::NAN.to_bits();
-    let invalid = execute(&context, input, previous, camera_words(true, true, 4));
+    let invalid = execute(
+        &context,
+        &pipelines,
+        input,
+        previous,
+        camera_words(true, true, 4),
+    );
     assert_eq!(invalid[0], 0);
     assert_eq!(invalid[2], u32::MAX);
     assert_eq!(invalid[3], 0);
@@ -517,6 +561,7 @@ fn invalid_retained_coherent_inputs_cannot_authorize_motion_reuse() {
     let Some(context) = context() else {
         return;
     };
+    let pipelines = camera_proof_pipelines();
     let mut input = scene_input(false);
     input[10] = 0.125_f32.to_bits();
     let previous = [
@@ -532,6 +577,7 @@ fn invalid_retained_coherent_inputs_cannot_authorize_motion_reuse() {
     assert_eq!(
         execute(
             &context,
+            &pipelines,
             input.clone(),
             previous,
             axis_aligned_plane_motion_camera()
@@ -551,6 +597,7 @@ fn invalid_retained_coherent_inputs_cannot_authorize_motion_reuse() {
         invalid[slot] = value;
         let result = execute(
             &context,
+            &pipelines,
             input.clone(),
             invalid,
             axis_aligned_plane_motion_camera(),

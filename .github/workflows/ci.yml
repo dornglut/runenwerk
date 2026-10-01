@@ -29,7 +29,7 @@ jobs:
   runenrender-r6-vulkan-execution:
     name: RunenRender Vulkan execution proofs
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - name: Resolve expected revision
         id: revision
@@ -122,6 +122,7 @@ jobs:
         env:
           RUST_BACKTRACE: '1'
           RUNENRENDER_R7_REQUIRE_GPU: '1'
+          RUNENWERK_SOURCE_REVISION: ${{ steps.revision.outputs.expected_revision }}
         run: |
           set -euo pipefail
           cargo +stable test -p engine \

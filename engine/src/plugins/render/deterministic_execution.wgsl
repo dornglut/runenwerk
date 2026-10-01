@@ -89,10 +89,36 @@ fn main(
         return;
     }
 
-    let output_kind = input_words[6u];
+    let execution_mode = input_words[6u];
     let output_index = physical_output_index(sample_index);
     let origin = observation_origin();
     let direction = sample_direction(sample_index);
+    if execution_mode == 4u {
+        // Renderer-private requested coverage. Always write one explicit terminal state for this
+        // cell; padding is not a cell. Never access ordinary status/depth/hit scratch bindings.
+        output_words[output_index] = 0u;
+        defined_words[sample_index] = 0u; // Invalid
+        if !finite_vec3(origin) || !direction.valid {
+            return;
+        }
+        let primary = nearest_hit(origin, direction.value, 0u);
+        if !primary.valid {
+            return;
+        }
+        if !primary.found {
+            defined_words[sample_index] = 1u; // KnownBackground
+            return;
+        }
+        let forward = observation_forward();
+        let position = origin + direction.value * primary.t;
+        let depth = dot(position - origin, forward.value);
+        if !forward.valid || !finite_vec3(position) || !finite_f32(depth) {
+            return;
+        }
+        output_words[output_index] = bitcast<u32>(depth);
+        defined_words[sample_index] = 2u; // Hit(finite current observation-forward depth)
+        return;
+    }
     if !finite_vec3(origin) || !direction.valid {
         invalidate(output_index, sample_index);
         return;
@@ -104,7 +130,7 @@ fn main(
         return;
     }
 
-    if output_kind == 1u {
+    if execution_mode == 1u {
         if !hit.found {
             output_words[output_index] = bitcast<u32>(0.0);
             defined_words[sample_index] = 1u;
@@ -135,7 +161,7 @@ fn main(
         return;
     }
 
-    if output_kind == 2u {
+    if execution_mode == 2u {
         if !hit.found {
             return;
         }
@@ -155,7 +181,7 @@ fn main(
         return;
     }
 
-    if output_kind == 3u {
+    if execution_mode == 3u {
         if hit.found {
             output_words[output_index] = hit.code;
             defined_words[sample_index] = 1u;
