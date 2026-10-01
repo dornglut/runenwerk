@@ -172,7 +172,8 @@ impl RendererCameraDiagnostics {
                 .accepted
                 .remove(&scope)
                 .expect("collected camera diagnostic scope");
-            let operation = GpuReadbackOperation::ordinary(accepted.source.readback_source()?.into())?;
+            let operation =
+                GpuReadbackOperation::ordinary(accepted.source.readback_source()?.into())?;
             let readback = operation.id();
             let work = GpuWorkFragment::build("camera history cell diagnostics", |work| {
                 work.operation("read exact completed first-motion cells", operation)?;
