@@ -7,8 +7,9 @@ use engine::plugins::render::{RenderFrameProducerId, RenderPlugin};
 use engine::plugins::world::WorldPlugin;
 use engine::plugins::world::adapters::SdfChunkStoreResource;
 use engine::plugins::world::build::{
-    WorldCompletedBuildQueueResource, WorldRuntimeSdfProductCatalogResource,
-    WorldSdfRuntimePayloadPackage, enqueue_ratified_world_sdf_payload_package,
+    WorldCompletedBuildQueueResource, WorldRuntimeSdfMetricCapabilityCatalogResource,
+    WorldRuntimeSdfProductCatalogResource, WorldSdfRuntimePayloadPackage,
+    enqueue_ratified_world_sdf_payload_package,
 };
 use engine::plugins::world::chunks::lifecycle::WorldChunkRuntimeMapResource;
 use engine::plugins::{FixedStepPlugin, SimulationPlugin, TimePlugin};
@@ -87,6 +88,10 @@ fn enqueue(app: &mut App, descriptor: FieldProductDescriptor, payload: SdfChunkP
         .world_mut()
         .remove_resource::<WorldRuntimeSdfProductCatalogResource>()
         .expect("product catalog should exist");
+    let mut metric_capabilities = app
+        .world_mut()
+        .remove_resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
+        .expect("metric capability catalog should exist");
     {
         let chunks = app
             .world_mut()
@@ -96,6 +101,7 @@ fn enqueue(app: &mut App, descriptor: FieldProductDescriptor, payload: SdfChunkP
             &mut completed,
             chunks,
             &mut products,
+            &mut metric_capabilities,
             WorldSdfRuntimePayloadPackage::new(
                 descriptor,
                 vec![payload],
@@ -106,6 +112,7 @@ fn enqueue(app: &mut App, descriptor: FieldProductDescriptor, payload: SdfChunkP
     }
     app.world_mut().insert_resource(completed);
     app.world_mut().insert_resource(products);
+    app.world_mut().insert_resource(metric_capabilities);
 }
 
 fn selection(descriptor: &FieldProductDescriptor) -> RenderProductSelection {
@@ -135,6 +142,12 @@ fn headless_world_without_render_remains_valid() {
     let app = app
         .run_for_frames(1)
         .expect("World-only headless frame should not require Render resources");
+    assert!(
+        app.world()
+            .resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
+            .is_ok(),
+        "headless World should own the metric capability catalog without Render"
+    );
     assert!(
         app.world()
             .resource::<RenderSdfResidencySourceResource>()

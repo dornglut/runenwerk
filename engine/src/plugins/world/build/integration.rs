@@ -13,7 +13,9 @@ use std::collections::{BTreeMap, VecDeque};
 use world_ops::{BuildGeneration, ChunkGeneration, ChunkRevision};
 use world_sdf::{
     FieldProductCandidate, FieldProductDescriptor, FieldProductKind, RegionSdfSummary,
-    SdfChunkPayload, ratify_field_product_candidate,
+    SdfChunkPayload, WorldSdfMetricError, WorldSdfMetricPayloadRef,
+    WorldSdfMetricProductCandidate, ratify_field_product_candidate,
+    ratify_world_sdf_metric_product_candidate, validate_world_sdf_metric_payload,
 };
 
 #[derive(Debug, Clone, runen_ecs::Resource)]
@@ -46,6 +48,24 @@ impl WorldRuntimeSdfProductCatalogResource {
     }
 }
 
+#[derive(Debug, Clone, Default, runen_ecs::Component, runen_ecs::Resource)]
+pub struct WorldRuntimeSdfMetricCapabilityCatalogResource {
+    capabilities: BTreeMap<ProductIdentity, WorldSdfMetricPayloadRef>,
+}
+
+impl WorldRuntimeSdfMetricCapabilityCatalogResource {
+    pub fn capabilities(&self) -> &BTreeMap<ProductIdentity, WorldSdfMetricPayloadRef> {
+        &self.capabilities
+    }
+
+    pub fn capability(
+        &self,
+        product_id: ProductIdentity,
+    ) -> Option<&WorldSdfMetricPayloadRef> {
+        self.capabilities.get(&product_id)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WorldSdfRuntimePayloadPackageError {
     UnsupportedProductKind { kind: FieldProductKind },
@@ -54,6 +74,8 @@ pub enum WorldSdfRuntimePayloadPackageError {
     ScopeMismatch,
     PayloadRefMismatch,
     ProductRatificationRejected { issue_count: usize },
+    MetricProductRatificationRejected { issue_count: usize },
+    MetricPayloadRejected { error: WorldSdfMetricError },
 }
 
 impl std::fmt::Display for WorldSdfRuntimePayloadPackageError {
@@ -79,6 +101,13 @@ impl std::fmt::Display for WorldSdfRuntimePayloadPackageError {
                 formatter,
                 "runtime SDF product descriptor failed ratification with {issue_count} issue(s)"
             ),
+            Self::MetricProductRatificationRejected { issue_count } => write!(
+                formatter,
+                "runtime metric SDF capability failed ratification with {issue_count} issue(s)"
+            ),
+            Self::MetricPayloadRejected { error } => {
+                write!(formatter, "runtime metric SDF payload is invalid: {error}")
+            }
         }
     }
 }
@@ -90,6 +119,7 @@ pub struct WorldSdfRuntimePayloadPackage {
     pub descriptor: FieldProductDescriptor,
     pub payloads: Vec<SdfChunkPayload>,
     pub region_summary: RegionSdfSummary,
+    pub metric_payload_ref: Option<WorldSdfMetricPayloadRef>,
 }
 
 impl WorldSdfRuntimePayloadPackage {
@@ -102,7 +132,16 @@ impl WorldSdfRuntimePayloadPackage {
             descriptor,
             payloads,
             region_summary,
+            metric_payload_ref: None,
         }
+    }
+
+    pub fn with_metric_capability(
+        mut self,
+        metric_payload_ref: WorldSdfMetricPayloadRef,
+    ) -> Self {
+        self.metric_payload_ref = Some(metric_payload_ref);
+        self
     }
 }
 
@@ -154,6 +193,26 @@ fn validate_runtime_sdf_payload_package(
             },
         );
     }
+
+    if let Some(metric_payload_ref) = package.metric_payload_ref {
+        let metric_report = ratify_world_sdf_metric_product_candidate(
+            &WorldSdfMetricProductCandidate::new(
+                package.descriptor.clone(),
+                metric_payload_ref,
+            ),
+        );
+        if metric_report.has_blocking_issues() {
+            return Err(
+                WorldSdfRuntimePayloadPackageError::MetricProductRatificationRejected {
+                    issue_count: metric_report.len(),
+                },
+            );
+        }
+        validate_world_sdf_metric_payload(&metric_payload_ref, payload).map_err(|error| {
+            WorldSdfRuntimePayloadPackageError::MetricPayloadRejected { error }
+        })?;
+    }
+
     Ok(())
 }
 
@@ -161,12 +220,14 @@ pub fn enqueue_ratified_world_sdf_payload_package(
     completed: &mut WorldCompletedBuildQueueResource,
     chunks: &mut WorldChunkRuntimeMapResource,
     products: &mut WorldRuntimeSdfProductCatalogResource,
+    metric_capabilities: &mut WorldRuntimeSdfMetricCapabilityCatalogResource,
     package: WorldSdfRuntimePayloadPackage,
 ) -> Result<usize, WorldSdfRuntimePayloadPackageError> {
     validate_runtime_sdf_payload_package(&package)?;
 
     let product_id = package.descriptor.product_core().identity;
     let descriptor = package.descriptor.clone();
+    let metric_payload_ref = package.metric_payload_ref;
     let mut enqueued = 0usize;
     for payload in package.payloads {
         let chunk_id = payload.chunk_id;
@@ -184,6 +245,16 @@ pub fn enqueue_ratified_world_sdf_payload_package(
         enqueued = enqueued.saturating_add(1);
     }
     products.products.insert(product_id, descriptor);
+    match metric_payload_ref {
+        Some(metric_payload_ref) => {
+            metric_capabilities
+                .capabilities
+                .insert(product_id, metric_payload_ref);
+        }
+        None => {
+            metric_capabilities.capabilities.remove(&product_id);
+        }
+    }
     Ok(enqueued)
 }
 
