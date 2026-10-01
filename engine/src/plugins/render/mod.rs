@@ -8,10 +8,10 @@ pub mod composition;
 pub mod derived_state;
 #[cfg_attr(not(test), allow(dead_code))]
 mod derived_transform;
-pub mod deterministic_admission;
+mod deterministic_admission;
 mod deterministic_capture;
 mod deterministic_carrier;
-pub mod deterministic_execution;
+mod deterministic_execution;
 #[allow(dead_code)]
 mod deterministic_verification;
 pub mod features;
