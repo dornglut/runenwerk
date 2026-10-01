@@ -784,7 +784,7 @@ impl PreparedDeterministicRender {
 /// This records preparation, not GPU completion or CPU-observed coverage availability. The carrier
 /// becomes current execution evidence only after its owning producer submission completes.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RenderDeterministicRequestedCoveragePreparation {
+pub struct RenderRequestedCoveragePreparation {
     pub extent: (u32, u32),
     pub policy_revision: u32,
     pub evaluator_revision: u64,
@@ -792,10 +792,10 @@ pub struct RenderDeterministicRequestedCoveragePreparation {
 
 /// Bounded renderer-owned evidence for one footprint-reconstruction preparation.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RenderDeterministicTemporalExecutionEvidence {
+pub struct RenderTemporalExecutionEvidence {
     pub requested_extent: (u32, u32),
     pub evaluation_extent: (u32, u32),
-    pub current_coverage: Option<RenderDeterministicRequestedCoveragePreparation>,
+    pub current_coverage: Option<RenderRequestedCoveragePreparation>,
     pub semantic_input_generations:
         Vec<(RenderRepresentationId, RenderSurfaceSemanticInputGeneration)>,
     pub field_semantic_input_generations:
@@ -823,7 +823,7 @@ pub struct RenderDeterministicTemporalExecutionEvidence {
 pub struct PreparedDeterministicRadianceOutput {
     output_index: usize,
     relationship: GpuExportRelationship,
-    temporal_evidence: Option<RenderDeterministicTemporalExecutionEvidence>,
+    temporal_evidence: Option<RenderTemporalExecutionEvidence>,
 }
 
 impl PreparedDeterministicRadianceOutput {
@@ -848,7 +848,7 @@ impl PreparedDeterministicRadianceOutput {
 
     pub fn temporal_execution_evidence(
         &self,
-    ) -> Option<&RenderDeterministicTemporalExecutionEvidence> {
+    ) -> Option<&RenderTemporalExecutionEvidence> {
         self.temporal_evidence.as_ref()
     }
 
@@ -2273,7 +2273,7 @@ fn lower_output(
                             output_index,
                             relationship,
                             temporal_evidence: temporal_history.as_ref().map(|history| {
-                                RenderDeterministicTemporalExecutionEvidence {
+                                RenderTemporalExecutionEvidence {
                                     requested_extent: requested
                                         .spec()
                                         .topology()
@@ -2282,7 +2282,7 @@ fn lower_output(
                                     evaluation_extent: finite_evaluation_extent
                                         .expect("temporal history requires finite evaluation"),
                                     current_coverage: requested_coverage.as_ref().map(|_| {
-                                        RenderDeterministicRequestedCoveragePreparation {
+                                        RenderRequestedCoveragePreparation {
                                             extent: requested_extent.expect("coverage lattice"),
                                             policy_revision: REQUESTED_COVERAGE_POLICY_REVISION,
                                             evaluator_revision: MAINTAINED_EVALUATOR_REVISION,

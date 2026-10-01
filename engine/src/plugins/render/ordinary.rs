@@ -16,7 +16,9 @@ use super::deterministic_capture::{
     RenderCapturedDeterministicRadiance, RenderDeterministicRadianceCaptureError,
     RenderDeterministicRadianceCaptureRequest, RenderDeterministicRadianceCaptureRequestError,
 };
-pub use super::deterministic_execution::RenderObjectIdentityDecoder;
+pub use super::deterministic_execution::{
+    RenderObjectIdentityDecoder, RenderRequestedCoveragePreparation, RenderTemporalExecutionEvidence,
+};
 use super::deterministic_execution::{
     PreparedDeterministicRadianceOutput, PreparedDeterministicRender,
     RenderDeterministicExecutionError, RenderDeterministicResultFormationError,
