@@ -26,8 +26,8 @@ struct CameraDiagnosticArtifactConfig {
 
 impl CameraDiagnosticArtifactConfig {
     fn from_environment() -> Result<Option<Self>> {
-        let Some(directory) = std::env::var_os("RUNENWERK_CAMERA_HISTORY_DIAGNOSTICS_DIR")
-            .map(PathBuf::from)
+        let Some(directory) =
+            std::env::var_os("RUNENWERK_CAMERA_HISTORY_DIAGNOSTICS_DIR").map(PathBuf::from)
         else {
             return Ok(None);
         };
@@ -217,11 +217,7 @@ fn outcome(value: u32) -> &'static str {
     }
 }
 
-fn write_artifact(
-    context: &GpuContext,
-    readback: &DiagnosticReadback,
-    bytes: &[u8],
-) -> Result<()> {
+fn write_artifact(context: &GpuContext, readback: &DiagnosticReadback, bytes: &[u8]) -> Result<()> {
     let (chunks, remainder) = bytes.as_chunks::<4>();
     anyhow::ensure!(
         remainder.is_empty() && chunks.len() == 32 * 32,

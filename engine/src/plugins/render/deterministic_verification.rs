@@ -185,7 +185,9 @@ impl From<RenderDeterministicExecutionError> for RenderDeterministicVerifiedSubm
 /// tolerance mismatch mean the completed observation contradicts the certified semantic result.
 #[derive(Debug)]
 pub(super) enum RenderDeterministicVerificationError {
-    ResultFormation { detail: String },
+    ResultFormation {
+        detail: String,
+    },
     Eligibility(RenderDeterministicVerificationEligibilityError),
     ObservationNormalization {
         detail: String,
@@ -435,7 +437,10 @@ pub(super) fn verify_completed_deterministic_render(
     let admitted = verification.submitted().admitted().admitted();
     RenderResultFormationEvidence::complete(
         admitted,
-        admitted.outputs().iter().map(|output| output.output_index()),
+        admitted
+            .outputs()
+            .iter()
+            .map(|output| output.output_index()),
     )
     .map_err(|error: RenderResultFormationError| {
         RenderDeterministicVerificationError::ResultFormation {

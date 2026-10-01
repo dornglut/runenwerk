@@ -55,7 +55,6 @@ use std::error::Error;
 use std::fmt;
 use std::sync::LazyLock;
 
-
 #[cfg(test)]
 #[path = "deterministic_camera_history_proof.rs"]
 mod camera_history_proof;
@@ -149,11 +148,11 @@ impl RenderCameraDiagnosticSource {
             .ok_or(RenderDeterministicLoweringError::SizeOverflow {
                 field: "camera diagnostic readback offset",
             })?;
-        let byte_len = CAMERA_DIAGNOSTIC_WORDS
-            .checked_mul(WORD_BYTES)
-            .ok_or(RenderDeterministicLoweringError::SizeOverflow {
+        let byte_len = CAMERA_DIAGNOSTIC_WORDS.checked_mul(WORD_BYTES).ok_or(
+            RenderDeterministicLoweringError::SizeOverflow {
                 field: "camera diagnostic readback byte length",
-            })?;
+            },
+        )?;
         let range = GpuBufferRange::new(&self.history, offset, byte_len)
             .map_err(|error| gpu_authoring("camera diagnostic readback range", error))?;
         let region = GpuBufferRegion::new(&self.history, range)
