@@ -9,8 +9,8 @@ use crate::plugins::render::deterministic_execution::{
 };
 use anyhow::{Context, Result, bail};
 use runen_gpu::{
-    GpuContext, GpuReadbackId, GpuReadbackStatus, GpuSubmission, GpuSubmissionStatus,
-    GpuWorkFragment,
+    GpuContext, GpuReadbackId, GpuReadbackOperation, GpuReadbackStatus, GpuSubmission,
+    GpuSubmissionStatus, GpuWorkFragment,
 };
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -172,7 +172,7 @@ impl RendererCameraDiagnostics {
                 .accepted
                 .remove(&scope)
                 .expect("collected camera diagnostic scope");
-            let operation = accepted.source.readback_operation()?;
+            let operation = GpuReadbackOperation::ordinary(accepted.source.readback_source()?.into())?;
             let readback = operation.id();
             let work = GpuWorkFragment::build("camera history cell diagnostics", |work| {
                 work.operation("read exact completed first-motion cells", operation)?;
@@ -286,7 +286,7 @@ fn write_artifact(
         "phase": readback.source.phase(),
         "history_age": readback.source.history_age(),
         "prior_same_pose_completed_frames": readback.source.prior_same_pose_completed_frames(),
-        "camera_reprojection_revision": 3,
+        "camera_reprojection_revision": readback.source.camera_reprojection_revision(),
         "qualification_control": if readback.source.current_only_control() { "current_only_first_motion" } else { "canonical" },
         "backend": format!("{:?}", facts.backend()),
         "adapter": facts.diagnostic_name(),

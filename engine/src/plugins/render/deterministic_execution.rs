@@ -135,9 +135,13 @@ impl RenderCameraDiagnosticSource {
         self.current_only_control
     }
 
-    pub(crate) fn readback_operation(
+    pub(crate) const fn camera_reprojection_revision(&self) -> u32 {
+        CAMERA_REPROJECTION_REVISION
+    }
+
+    pub(crate) fn readback_source(
         &self,
-    ) -> Result<GpuReadbackOperation, RenderDeterministicLoweringError> {
+    ) -> Result<GpuBufferRegion, RenderDeterministicLoweringError> {
         let offset = u64::from(self.extent.0)
             .checked_mul(u64::from(self.extent.1))
             .and_then(|samples| samples.checked_mul(CAMERA_HISTORY_WORDS_PER_SAMPLE))
@@ -154,8 +158,7 @@ impl RenderCameraDiagnosticSource {
             .map_err(|error| gpu_authoring("camera diagnostic readback range", error))?;
         let region = GpuBufferRegion::new(&self.history, range)
             .map_err(|error| gpu_authoring("camera diagnostic readback region", error))?;
-        GpuReadbackOperation::ordinary(region.into())
-            .map_err(|error| gpu_authoring("camera diagnostic readback", error))
+        Ok(region)
     }
 }
 const CAMERA_DEPTH_RELATIVE_EPSILON: f32 = 0.001;
@@ -1664,6 +1667,7 @@ fn lower_deterministic_render(
             context,
             resources,
             intent,
+            camera_diagnostic_request,
             DeterministicOutputExecutionSelection {
                 scope,
                 finite_evaluation_extent: finite_evaluation.and_then(
@@ -1722,6 +1726,7 @@ fn lower_output(
     context: &GpuContext,
     resources: &mut DeterministicResourceCache,
     intent: DeterministicObservationIntent,
+    camera_diagnostic_request: Option<RenderCameraDiagnosticRequest>,
     execution: DeterministicOutputExecutionSelection,
 ) -> Result<LoweredDeterministicOutput, RenderDeterministicLoweringError> {
     let DeterministicOutputExecutionSelection {
