@@ -16,20 +16,17 @@ use super::deterministic_capture::{
     RenderCapturedDeterministicRadiance, RenderDeterministicRadianceCaptureError,
     RenderDeterministicRadianceCaptureRequest, RenderDeterministicRadianceCaptureRequestError,
 };
+pub use super::deterministic_execution::RenderObjectIdentityDecoder;
 use super::deterministic_execution::{
     DeterministicResourceCache, PreparedDeterministicRadianceOutput, PreparedDeterministicRender,
     RenderCameraDiagnosticRequest, RenderCameraDiagnosticSource, RenderDeterministicExecutionError,
-    RenderDeterministicResultFormationError,
-    RenderDeterministicVerifiedSubmissionError,
+    RenderDeterministicResultFormationError, RenderDeterministicVerifiedSubmissionError,
     RenderTemporalExecutionEvidence as DeterministicTemporalExecutionEvidence,
     SubmittedDeterministicRender, prepare_deterministic_render,
     prepare_deterministic_render_with_cache_in_scope_and_evaluation, submit_deterministic_render,
     submit_deterministic_render_for_verified_result,
 };
-pub use super::deterministic_execution::RenderObjectIdentityDecoder;
-use super::field_input::{
-    RenderFieldSemanticInputBinding, RenderFieldSemanticInputGeneration,
-};
+use super::field_input::{RenderFieldSemanticInputBinding, RenderFieldSemanticInputGeneration};
 use super::lowering::RenderWorkSet;
 use super::render_result::RenderResult;
 use super::representation::RenderRepresentationId;
