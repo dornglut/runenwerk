@@ -20,10 +20,11 @@ pub use super::deterministic_execution::{
     RenderObjectIdentityDecoder, RenderRequestedCoveragePreparation, RenderTemporalExecutionEvidence,
 };
 use super::deterministic_execution::{
-    PreparedDeterministicRadianceOutput, PreparedDeterministicRender,
-    RenderDeterministicExecutionError, RenderDeterministicResultFormationError,
-    RenderDeterministicVerifiedSubmissionError, SubmittedDeterministicRender,
-    prepare_deterministic_render, submit_deterministic_render,
+    DeterministicResourceCache, PreparedDeterministicRadianceOutput, PreparedDeterministicRender,
+    RenderCameraDiagnosticRequest, RenderCameraDiagnosticSource, RenderDeterministicExecutionError,
+    RenderDeterministicResultFormationError, RenderDeterministicVerifiedSubmissionError,
+    SubmittedDeterministicRender, prepare_deterministic_render,
+    prepare_deterministic_render_with_cache_in_scope_and_evaluation, submit_deterministic_render,
     submit_deterministic_render_for_verified_result,
 };
 use super::field_input::RenderFieldSemanticInputBinding;
@@ -489,6 +490,146 @@ impl fmt::Display for RenderRadianceCaptureError {
 
 impl Error for RenderRadianceCaptureError {}
 
+/// Stable renderer-owned namespace for retained execution state.
+///
+/// This scopes reusable renderer resources and temporal history. It is not a scene, object,
+/// RunenGPU resource, or submission identity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RenderExecutionScope(u64);
+
+impl RenderExecutionScope {
+    pub const fn new(raw: u64) -> Self {
+        Self(raw)
+    }
+
+    pub const fn raw(self) -> u64 {
+        self.0
+    }
+}
+
+/// Optional finite evaluation selection for one requested output.
+///
+/// This changes bounded physical work only; it does not change the semantic request topology.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RenderEvaluationSelection {
+    output_index: usize,
+    extent: (u32, u32),
+}
+
+impl RenderEvaluationSelection {
+    pub fn new(output_index: usize, width: u32, height: u32) -> Option<Self> {
+        (width > 0 && height > 0).then_some(Self {
+            output_index,
+            extent: (width, height),
+        })
+    }
+
+    pub const fn output_index(self) -> usize {
+        self.output_index
+    }
+
+    pub const fn extent(self) -> (u32, u32) {
+        self.extent
+    }
+}
+
+/// Stateful ordinary integration for hosts that compose renderer-authored work into a larger
+/// public RunenGPU submission.
+///
+/// It retains only renderer-derived reusable resources and temporal history. Planning, admission,
+/// compatibility, and lowering are the same authority used by the one-shot ordinary path.
+#[derive(Debug, Default)]
+pub struct RenderExecutionState {
+    inner: DeterministicResourceCache,
+}
+
+impl RenderExecutionState {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn has_in_flight_scopes(
+        &self,
+        scopes: impl IntoIterator<Item = RenderExecutionScope>,
+    ) -> bool {
+        self.inner
+            .any_producer_submission_in_flight(scopes.into_iter().map(RenderExecutionScope::raw))
+    }
+
+    pub fn retain_in_flight_submissions(&mut self) {
+        self.inner.retain_in_flight_submissions();
+    }
+
+    pub fn record_submission(
+        &mut self,
+        scope: RenderExecutionScope,
+        submission: &GpuSubmission,
+    ) {
+        self.inner
+            .record_producer_submission(scope.raw(), 0, submission);
+    }
+
+    pub fn prepare(
+        &mut self,
+        admitted: AdmittedRender,
+        context: &GpuContext,
+        scope: RenderExecutionScope,
+        evaluation: Option<RenderEvaluationSelection>,
+    ) -> Result<PreparedRender, RenderExecutionError> {
+        self.prepare_internal(admitted, context, scope, evaluation, None)
+    }
+
+    fn prepare_internal(
+        &mut self,
+        admitted: AdmittedRender,
+        context: &GpuContext,
+        scope: RenderExecutionScope,
+        evaluation: Option<RenderEvaluationSelection>,
+        camera_diagnostic: Option<RenderCameraDiagnosticRequest>,
+    ) -> Result<PreparedRender, RenderExecutionError> {
+        let finite_evaluation =
+            evaluation.map(|selection| (selection.output_index(), selection.extent()));
+        prepare_deterministic_render_with_cache_in_scope_and_evaluation(
+            admitted.inner,
+            context,
+            &mut self.inner,
+            scope.raw(),
+            finite_evaluation,
+            false,
+            camera_diagnostic,
+        )
+        .map(|inner| PreparedRender { inner })
+        .map_err(RenderExecutionError::from)
+    }
+
+    pub(crate) fn prepare_with_camera_diagnostic(
+        &mut self,
+        admitted: AdmittedRender,
+        context: &GpuContext,
+        scope: RenderExecutionScope,
+        evaluation: Option<RenderEvaluationSelection>,
+        request: RenderCameraDiagnosticRequest,
+    ) -> Result<PreparedRender, RenderExecutionError> {
+        self.prepare_internal(admitted, context, scope, evaluation, Some(request))
+    }
+
+    pub(crate) fn take_camera_diagnostic_source(
+        &mut self,
+        scope: RenderExecutionScope,
+    ) -> Option<RenderCameraDiagnosticSource> {
+        self.inner.take_camera_diagnostic_source(scope.raw())
+    }
+
+    pub(crate) fn retain_auxiliary_submission(
+        &mut self,
+        scope: RenderExecutionScope,
+        submission: &GpuSubmission,
+    ) {
+        self.inner
+            .retain_auxiliary_producer_submission(scope.raw(), submission);
+    }
+}
+
 /// Maintained invocation after semantic planning, binding, and execution admission.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AdmittedRender {
@@ -562,6 +703,11 @@ impl PreparedRadianceOutput<'_> {
     /// Exact producer/consumer relationship authored for composition.
     pub fn export_relationship(&self) -> &GpuExportRelationship {
         self.inner.export_relationship()
+    }
+
+    /// Renderer-semantic temporal execution evidence for this prepared output, when present.
+    pub fn temporal_execution_evidence(&self) -> Option<&RenderTemporalExecutionEvidence> {
+        self.inner.temporal_execution_evidence()
     }
 
     /// Form a public RunenGPU import of this renderer-authored output.
