@@ -681,7 +681,7 @@ fn independent_producer_submissions_progress_through_real_preparation_and_submis
         submission_a.status(),
         GpuSubmissionStatus::Accepted
     ));
-    resources.record_producer_submission(11, &submission_a);
+    resources.record_producer_submission(11, 1, &submission_a);
     assert_eq!(context.execution_stats().in_flight_submissions(), 1);
     assert!(resources.any_producer_submission_in_flight([11]));
 
@@ -710,7 +710,7 @@ fn independent_producer_submissions_progress_through_real_preparation_and_submis
         submission_b.status(),
         GpuSubmissionStatus::Accepted
     ));
-    resources.record_producer_submission(12, &submission_b);
+    resources.record_producer_submission(12, 1, &submission_b);
     assert_eq!(context.execution_stats().in_flight_submissions(), 2);
     assert!(resources.any_producer_submission_in_flight([11]));
     assert!(resources.any_producer_submission_in_flight([12]));
@@ -772,7 +772,7 @@ fn independent_producer_submissions_progress_through_real_preparation_and_submis
         prepared_a_next.work_set().fragments().iter().cloned(),
     ))
     .expect("producer A successive frame should submit");
-    resources.record_producer_submission(11, &submission_a_next);
+    resources.record_producer_submission(11, 2, &submission_a_next);
 
     let prepared_b_next = prepare_deterministic_render_with_cache_in_scope(
         admit_r32float_radiance(&fixture, &context),
@@ -790,7 +790,7 @@ fn independent_producer_submissions_progress_through_real_preparation_and_submis
         prepared_b_next.work_set().fragments().iter().cloned(),
     ))
     .expect("producer B successive frame should submit");
-    resources.record_producer_submission(12, &submission_b_next);
+    resources.record_producer_submission(12, 2, &submission_b_next);
     wait_for_gpu_submission(&context, &submission_a_next);
     wait_for_gpu_submission(&context, &submission_b_next);
 }

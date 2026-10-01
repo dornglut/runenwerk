@@ -575,6 +575,18 @@ fn temporal_quality_capture_target_frame(
         .map(|observation| observation.key.frame_index)
 }
 
+fn camera_motion_diagnostics_path(measurement: &RenderLabMeasurementConfig) -> Option<PathBuf> {
+    if !matches!(
+        measurement.temporal_quality_scenario,
+        RenderLabTemporalQualityScenario::CameraMotionP100
+    ) || measurement.submitted_frame_limit.unwrap_or(1) < 9
+    {
+        return None;
+    }
+    std::env::var_os("RUNENWERK_CAMERA_HISTORY_DIAGNOSTICS_DIR")
+        .map(|directory| PathBuf::from(directory).join("camera-motion-cells.json"))
+}
+
 fn complete_render_lab_measurement_if_requested(
     windows: &mut WindowStateRegistryResource,
     measurement: &mut RenderLabMeasurementConfig,
@@ -609,8 +621,10 @@ fn complete_render_lab_measurement_if_requested(
     } else {
         None
     };
-    let quality_ready =
-        measurement.quality_capture_output_dir.is_none() || quality_capture.is_some();
+    let diagnostics_ready =
+        camera_motion_diagnostics_path(measurement).is_none_or(|path| path.is_file());
+    let quality_ready = diagnostics_ready
+        && (measurement.quality_capture_output_dir.is_none() || quality_capture.is_some());
     let bounded_complete = bounded_frames_complete && quality_ready;
     if !close_intent_pending && !bounded_complete {
         return Ok(());

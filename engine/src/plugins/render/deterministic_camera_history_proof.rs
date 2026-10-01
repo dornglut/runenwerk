@@ -88,7 +88,7 @@ fn scene_input(sphere: bool) -> Vec<u32> {
 }
 
 fn camera_words(previous_available: bool, changed: bool, completed: u32) -> Vec<u32> {
-    let mut words = vec![0; 33];
+    let mut words = vec![0; 35];
     words[0] = u32::from(previous_available);
     words[1] = u32::from(changed);
     words[23] = completed;

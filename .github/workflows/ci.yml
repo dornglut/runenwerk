@@ -343,7 +343,7 @@ jobs:
           output="render-lab/temporal-camera-quality"
           rm -rf "${output}"
 
-          timeout 30s xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
+          RUNENWERK_CAMERA_HISTORY_DIAGNOSTICS_DIR="${output}" timeout 30s xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
             cargo +stable run -p runenwerk_render_lab --locked -- \
               --rl2-camera-quality "${output}" \
               --window-size-px 1920x1080 \
@@ -355,7 +355,7 @@ jobs:
           jq -e \
             --arg revision "${RUNENWERK_SOURCE_REVISION}" \
             '
-              .schema_version == 2
+              .schema_version == 3
               and .scenario_id == "runenwerk.render_lab.rl2.camera_motion_p100"
               and .scenario_revision == 3
               and .source_git_revision == $revision
@@ -370,6 +370,8 @@ jobs:
               and .execution.output_size_px == [1920,1080]
               and .execution.native_fallback_active == false
               and .execution.resolve_invocation_id == null
+              and .cell_diagnostics.frame_index == .frames[8].frame_index
+              and .cell_diagnostics.cell_count == 32
               and .capture_route == "native_scene"
               and .capture.terminal == "completed"
               and (.capture.artifact_blake3 | startswith("blake3:"))
@@ -401,7 +403,7 @@ jobs:
           stable_hash="$(jq -r '.capture.artifact_blake3' "${evidence}")"
           for ordinal in 8 9 10 11 12 13 14 15 16 17 18 19; do
             settle_output="${output}/settle-${ordinal}"
-            timeout 30s xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
+            RUNENWERK_CAMERA_HISTORY_DIAGNOSTICS_DIR="${settle_output}" timeout 30s xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
               cargo +stable run -p runenwerk_render_lab --locked -- \
                 --rl2-camera-quality "${settle_output}" \
                 --window-size-px 1920x1080 \
@@ -410,7 +412,7 @@ jobs:
               --arg hash "${stable_hash}" \
               --argjson ordinal "${ordinal}" \
               '
-                .schema_version == 2
+                .schema_version == 3
                 and .scenario_revision == 3
                 and .capture_submission_ordinal == $ordinal
                 and (.capture.artifact_blake3 | startswith("blake3:"))

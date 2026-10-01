@@ -110,12 +110,14 @@ impl Renderer {
             .unwrap_or_default()
     }
 
-    pub(super) fn begin_frame_gpu_observation(&mut self, context: &GpuContext) {
+    pub(super) fn begin_frame_gpu_observation(&mut self, context: &GpuContext) -> Result<()> {
         // Gfx owns one nonblocking progress point for its context/device generation. Timing and
         // capture consume the resulting public lifecycle facts; neither feature creates a poll
         // loop or reaches into the backend.
         context.progress();
         self.deterministic_resources.retain_in_flight_submissions();
+        self.deterministic_resources
+            .progress_camera_diagnostics(context)?;
         let super::render_flow::RendererGpuObservationOutput {
             timing_evidence,
             composed_timing_evidence,
@@ -134,6 +136,7 @@ impl Renderer {
         self.pending_gpu_observation_output
             .capture_results
             .extend(capture_results);
+        Ok(())
     }
 
     pub(super) fn has_in_flight_deterministic_producer(
