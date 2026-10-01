@@ -1312,5 +1312,38 @@ mod tests {
         );
         assert_eq!(tolerance.output_index(), Some(1));
         assert_eq!(tolerance.sample_index(), Some(5));
+
+
+        let inconclusive = RenderResultFormationError {
+            inner: RenderDeterministicResultFormationError::Verification(
+                RenderDeterministicVerificationError::Inconclusive {
+                    output_index: 3,
+                    sample_index: None,
+                    detail: "conservative interval did not select one semantic branch",
+                },
+            ),
+        };
+        assert_eq!(
+            inconclusive.kind(),
+            RenderResultFormationErrorKind::VerificationInconclusive
+        );
+        assert_eq!(inconclusive.output_index(), Some(3));
+        assert_eq!(inconclusive.sample_index(), None);
+
+        let physical = RenderResultFormationError {
+            inner: RenderDeterministicResultFormationError::Verification(
+                RenderDeterministicVerificationError::PhysicalMismatch {
+                    output_index: 4,
+                    sample_index: Some(2),
+                    detail: "physical observation contradicted the semantic result",
+                },
+            ),
+        };
+        assert_eq!(
+            physical.kind(),
+            RenderResultFormationErrorKind::PhysicalMismatch
+        );
+        assert_eq!(physical.output_index(), Some(4));
+        assert_eq!(physical.sample_index(), Some(2));
     }
 }
