@@ -144,11 +144,10 @@ impl Renderer {
         &self,
         contributions: &[crate::plugins::render::RenderDeterministicFrameContribution],
     ) -> bool {
-        self.render_execution.has_in_flight_scopes(
-            contributions.iter().map(|contribution| {
+        self.render_execution
+            .has_in_flight_scopes(contributions.iter().map(|contribution| {
                 crate::plugins::render::RenderExecutionScope::new(contribution.producer_id.raw())
-            }),
-        )
+            }))
     }
 
     pub(super) fn publish_progressed_gpu_observations(&mut self) {

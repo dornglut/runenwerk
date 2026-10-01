@@ -813,10 +813,8 @@ pub struct Renderer {
     glyph_atlas_gpu: BTreeMap<u64, UiGlyphAtlasGpu>,
     render_execution: crate::plugins::render::RenderExecutionState,
     camera_diagnostics: camera_diagnostics::RendererCameraDiagnostics,
-    temporal_execution_evidence: BTreeMap<
-        u64,
-        Vec<crate::plugins::render::RenderTemporalExecutionEvidence>,
-    >,
+    temporal_execution_evidence:
+        BTreeMap<u64, Vec<crate::plugins::render::RenderTemporalExecutionEvidence>>,
     dynamic_texture_targets: dynamic_targets::RendererDynamicTextureTargetCache,
     flow_runtime_cache: BTreeMap<RenderFlowId, render_flow::FlowRuntimeResources>,
     flow_pipeline_cache: pipeline_cache::FlowPipelineArtifactCache,
