@@ -474,9 +474,12 @@ Required evidence includes:
 
 - exact-current declaration, source, export, direct/transitive consumer, and writer
   census;
-- accepted RunenShader handoff for the maintained renderer source under #719-equivalent
-  authority: exact maintained WGSL -> RunenShader canonical artifact -> public RunenGPU
-  program-source admission, with shader and GPU diagnostics kept separately owned;
+- accepted RunenShader ownership/dependency disposition for the maintained renderer
+  source under #719-equivalent authority: exact shader-source transfer ownership, exact
+  accepted RunenShader/RunenGPU public dependency choice, and a RunenRender-owned
+  artifact-to-program bridge boundary. The maintained bridge is implemented during RX
+  in the standalone successor unless clean transfer is proven impossible without a
+  predecessor-side realization; shader and GPU diagnostics remain separately owned;
 - a curated future standalone public export surface rather than a copy of the mixed
   `engine::plugins::render` module tree;
 - proof-private constructors, witness types, and implementation vocabulary narrowed
