@@ -76,10 +76,6 @@ pub use api::*;
 pub use app_ext::AppRenderExt;
 pub use bytemuck;
 pub use composition::*;
-pub use deterministic_capture::{
-    RenderCapturedDeterministicRadiance, RenderDeterministicRadianceCaptureError,
-    RenderDeterministicRadianceCaptureRequest, RenderDeterministicRadianceCaptureRequestError,
-};
 pub use engine_render_macros::{GpuStorage, GpuUniform};
 pub use features::*;
 pub use frame::*;
