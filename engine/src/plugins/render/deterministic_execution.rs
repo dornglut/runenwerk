@@ -957,18 +957,14 @@ impl SubmittedDeterministicRender {
                 verification: DeterministicVerificationState::Requested(verification_readbacks),
             },
         };
-        let verified =
+        let formation_evidence =
             super::deterministic_verification::verify_completed_deterministic_render(verification)
                 .map_err(
                     |error| RenderDeterministicResultFormationError::VerificationRejected {
                         detail: error.to_string(),
                     },
                 )?;
-        let result = RenderResult::from_verified_deterministic(verified).map_err(|error| {
-            RenderDeterministicResultFormationError::ResultFormation {
-                detail: error.to_string(),
-            }
-        })?;
+        let result = RenderResult::from_formation_evidence(formation_evidence);
         self.verification = DeterministicVerificationState::Formed;
         Ok(Some(result))
     }

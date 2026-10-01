@@ -21,6 +21,7 @@ use super::deterministic_execution::{
     self, DeterministicVerificationSubmission, RenderDeterministicExecutionError,
     SubmittedDeterministicRender,
 };
+use super::render_result::{RenderResultFormationError, RenderResultFormationEvidence};
 use super::request::RenderObservationSpec;
 use super::scene::RenderObjectId;
 use super::space_time::{RenderAffineTransform3, RenderHandedness, RenderObjectSpatialState};
@@ -184,6 +185,7 @@ impl From<RenderDeterministicExecutionError> for RenderDeterministicVerifiedSubm
 /// tolerance mismatch mean the completed observation contradicts the certified semantic result.
 #[derive(Debug)]
 pub(super) enum RenderDeterministicVerificationError {
+    ResultFormation { detail: String },
     Eligibility(RenderDeterministicVerificationEligibilityError),
     ObservationNormalization {
         detail: String,
@@ -215,6 +217,10 @@ impl fmt::Display for RenderDeterministicVerificationError {
             Self::Eligibility(error) => {
                 write!(formatter, "verification eligibility failed: {error}")
             }
+            Self::ResultFormation { detail } => write!(
+                formatter,
+                "generic render result-formation evidence rejected verified execution: {detail}"
+            ),
             Self::ObservationNormalization { detail } => write!(
                 formatter,
                 "same-submission observation normalization failed: {detail}"
@@ -290,23 +296,6 @@ fn format_verification_location(
         )
     } else {
         write!(formatter, "output {output_index} {category}: {detail}")
-    }
-}
-
-/// Execution-scoped proof that one exact verified submission satisfied RR566-EVAL-001.
-///
-/// The private verification submission is owned, not projected into detached output-index tokens.
-/// This keeps later FORM-001 evidence bound to the exact admitted semantics, physical decoder, and
-/// RunenGPU submission that were actually observed. GPU/readback identity still does not become
-/// public `RenderResult` identity.
-#[derive(Debug)]
-pub(super) struct VerifiedDeterministicRender {
-    verification: DeterministicVerificationSubmission,
-}
-
-impl VerifiedDeterministicRender {
-    pub(super) const fn submitted(&self) -> &SubmittedDeterministicRender {
-        self.verification.submitted()
     }
 }
 
@@ -432,7 +421,7 @@ pub(super) async fn submit_deterministic_render_for_verified_formation(
 /// that later FORM-001 wiring can consume without accepting detached output-index assertions.
 pub(super) fn verify_completed_deterministic_render(
     verification: DeterministicVerificationSubmission,
-) -> Result<VerifiedDeterministicRender, RenderDeterministicVerificationError> {
+) -> Result<RenderResultFormationEvidence, RenderDeterministicVerificationError> {
     ensure_deterministic_verification_eligible(verification.submitted().admitted())
         .map_err(RenderDeterministicVerificationError::Eligibility)?;
     let observations =
@@ -442,7 +431,16 @@ pub(super) fn verify_completed_deterministic_render(
             }
         })?;
     semantic::verify_completed_semantics(&verification, &observations)?;
-    Ok(VerifiedDeterministicRender { verification })
+    let admitted = verification.submitted().admitted().admitted();
+    RenderResultFormationEvidence::complete(
+        admitted,
+        admitted.outputs().iter().map(|output| output.output_index()),
+    )
+    .map_err(|error: RenderResultFormationError| {
+        RenderDeterministicVerificationError::ResultFormation {
+            detail: error.to_string(),
+        }
+    })
 }
 
 fn validate_observation(
