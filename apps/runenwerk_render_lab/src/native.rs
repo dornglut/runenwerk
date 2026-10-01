@@ -1018,19 +1018,15 @@ fn publish_render_lab_frame_system(
     } else {
         history.len()
     };
-    if camera_motion_quality
-        && measurement
-            .submitted_frame_limit
-            .is_some_and(|limit| completed_temporal_submissions >= limit)
-    {
-        debug_control.capture_enabled = false;
-        debug_control.readback_enabled = false;
-        debug_control.artifact_export_enabled = false;
-        debug_config.capture_selectors.clear();
-        return Ok(());
-    }
     let scripted_camera = if camera_motion_quality {
-        temporal_camera_motion_pose(completed_temporal_submissions)
+        // Hold the exact target pose while its capture finishes, keeping the producer
+        // published so renderer continuity still gates any outstanding submission.
+        let pose_ordinal = measurement
+            .submitted_frame_limit
+            .map_or(completed_temporal_submissions, |limit| {
+                completed_temporal_submissions.min(limit.saturating_sub(1))
+            });
+        temporal_camera_motion_pose(pose_ordinal)
     } else {
         *camera
     };
