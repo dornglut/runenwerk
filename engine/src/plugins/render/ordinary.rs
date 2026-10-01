@@ -175,9 +175,7 @@ fn runen_gpu_preparation_kind(
     error: &RenderRunenGpuPreparationError,
 ) -> RenderRunenGpuPreparationErrorKind {
     match error {
-        RenderRunenGpuPreparationError::Access { .. } => {
-            RenderRunenGpuPreparationErrorKind::Access
-        }
+        RenderRunenGpuPreparationError::Access { .. } => RenderRunenGpuPreparationErrorKind::Access,
         RenderRunenGpuPreparationError::ProgramSource { .. } => {
             RenderRunenGpuPreparationErrorKind::ProgramSource
         }
@@ -373,10 +371,12 @@ impl RenderResultSubmissionError {
     pub const fn correlation_channel(&self) -> Option<&'static str> {
         match &self.inner {
             RenderDeterministicVerifiedSubmissionError::DuplicateReadbackCorrelation {
-                channel, ..
+                channel,
+                ..
             }
             | RenderDeterministicVerifiedSubmissionError::MissingSubmissionReadback {
-                channel, ..
+                channel,
+                ..
             } => Some(*channel),
             _ => None,
         }
@@ -408,9 +408,9 @@ fn verification_eligibility_kind(
         RenderDeterministicVerificationEligibilityError::ObjectHandednessUnsupported { .. } => {
             RenderVerificationEligibilityErrorKind::ObjectHandednessUnsupported
         }
-        RenderDeterministicVerificationEligibilityError::ObjectLinearBasisUnsupported { .. } => {
-            RenderVerificationEligibilityErrorKind::ObjectLinearBasisUnsupported
-        }
+        RenderDeterministicVerificationEligibilityError::ObjectLinearBasisUnsupported {
+            ..
+        } => RenderVerificationEligibilityErrorKind::ObjectLinearBasisUnsupported,
     }
 }
 
@@ -418,7 +418,10 @@ impl fmt::Display for RenderResultSubmissionError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.inner {
             RenderDeterministicVerifiedSubmissionError::Eligibility(error) => {
-                write!(formatter, "render result verification eligibility failed: {error}")
+                write!(
+                    formatter,
+                    "render result verification eligibility failed: {error}"
+                )
             }
             RenderDeterministicVerifiedSubmissionError::Execution(error) => error.fmt(formatter),
             RenderDeterministicVerifiedSubmissionError::ReadbackCardinality {
@@ -542,11 +545,12 @@ impl RenderResultFormationError {
     pub const fn output_index(&self) -> Option<usize> {
         match &self.inner {
             RenderDeterministicResultFormationError::ReadbackCorrelationLost {
-                output_index, ..
+                output_index,
+                ..
             }
-            | RenderDeterministicResultFormationError::ReadbackFailed {
-                output_index, ..
-            } => Some(*output_index),
+            | RenderDeterministicResultFormationError::ReadbackFailed { output_index, .. } => {
+                Some(*output_index)
+            }
             RenderDeterministicResultFormationError::Verification(error) => error.output_index(),
             RenderDeterministicResultFormationError::VerificationNotRequested
             | RenderDeterministicResultFormationError::ResultAlreadyFormed
@@ -565,7 +569,9 @@ impl RenderResultFormationError {
     /// Physical observation channel associated with a readback/normalization failure.
     pub const fn channel(&self) -> Option<&'static str> {
         match &self.inner {
-            RenderDeterministicResultFormationError::ReadbackCorrelationLost { channel, .. }
+            RenderDeterministicResultFormationError::ReadbackCorrelationLost {
+                channel, ..
+            }
             | RenderDeterministicResultFormationError::ReadbackFailed { channel, .. } => {
                 Some(*channel)
             }
@@ -1296,7 +1302,10 @@ mod tests {
                 },
             ),
         };
-        assert_eq!(eligibility.kind(), RenderResultSubmissionErrorKind::Eligibility);
+        assert_eq!(
+            eligibility.kind(),
+            RenderResultSubmissionErrorKind::Eligibility
+        );
         assert_eq!(
             eligibility.verification_eligibility_kind(),
             Some(RenderVerificationEligibilityErrorKind::SamplingSupportUnsupported)
