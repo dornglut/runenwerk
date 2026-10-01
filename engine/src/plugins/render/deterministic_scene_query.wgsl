@@ -611,4 +611,3 @@ fn direct_radiance(hit_position: vec3<f32>, hit: Hit) -> ScalarEvaluation {
     }
     return ScalarEvaluation(true, total);
 }
-
