@@ -811,6 +811,7 @@ impl Renderer {
                     &mut self.deterministic_resources,
                     contribution.producer_id.raw(),
                     finite_evaluation,
+                    false,
                 )
                 .map_err(|error| {
                     anyhow::anyhow!("deterministic render preparation failed: {error}")

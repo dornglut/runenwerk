@@ -140,6 +140,23 @@ fn admit_inputs(
     .unwrap()
 }
 
+fn prepare_with_requested_coverage(
+    admitted: AdmittedDeterministicRender,
+    context: &GpuContext,
+    resources: &mut DeterministicResourceCache,
+    scope: u64,
+    finite_evaluation: Option<(usize, (u32, u32))>,
+) -> Result<PreparedDeterministicRender, RenderDeterministicExecutionError> {
+    super::prepare_deterministic_render_with_cache_in_scope_and_evaluation(
+        admitted,
+        context,
+        resources,
+        scope,
+        finite_evaluation,
+        true,
+    )
+}
+
 fn words(context: &GpuContext, submission: &GpuSubmission, id: GpuReadbackId) -> Vec<u32> {
     let deadline = Instant::now() + Duration::from_secs(30);
     loop {
@@ -345,6 +362,43 @@ fn evaluate(context: &GpuContext, packed: PackedOutput) -> Vec<Vec<u32>> {
 }
 
 #[test]
+fn ordinary_sub_native_preparation_omits_unconsumed_requested_coverage() {
+    let Some(context) = context() else { return };
+    let fixture = fixture((8, 8), 0.0, 0.0, 1);
+    let mut cache = DeterministicResourceCache::default();
+    let prepared = super::prepare_deterministic_render_with_cache_in_scope_and_evaluation(
+        admit(&fixture, &context),
+        &context,
+        &mut cache,
+        6,
+        Some((0, (4, 4))),
+        false,
+    )
+    .unwrap();
+    let evidence = prepared
+        .radiance_output(0)
+        .unwrap()
+        .temporal_execution_evidence()
+        .unwrap();
+    assert_eq!(evidence.evaluation_extent, (4, 4));
+    assert_eq!(evidence.requested_extent, (8, 8));
+    assert_eq!(evidence.current_coverage, None);
+    for kind in [
+        DeterministicBufferKind::CoverageInput,
+        DeterministicBufferKind::CoverageDepth,
+        DeterministicBufferKind::CoverageState,
+        DeterministicBufferKind::CoverageStatusScratch,
+        DeterministicBufferKind::CoverageDepthScratch,
+        DeterministicBufferKind::CoverageHitScratch,
+    ] {
+        assert!(
+            !cache.buffers.contains_key(&(6, 0, kind)),
+            "ordinary runtime must not allocate unconsumed requested coverage {kind:?}"
+        );
+    }
+}
+
+#[test]
 fn requested_coverage_executes_all_profiles_phases_and_odd_extents_without_aliasing() {
     let Some(context) = context() else { return };
     for requested in [(8_u32, 8_u32), (7, 5)] {
@@ -357,7 +411,7 @@ fn requested_coverage_executes_all_profiles_phases_and_odd_extents_without_alias
             let fixture = fixture(requested, 0.0, 0.0, 7);
             let mut cache = DeterministicResourceCache::default();
             for phase in 0..4 {
-                let prepared = prepare_deterministic_render_with_cache_in_scope_and_evaluation(
+                let prepared = prepare_with_requested_coverage(
                     admit(&fixture, &context),
                     &context,
                     &mut cache,
@@ -484,7 +538,7 @@ fn requested_coverage_overwrites_camera_and_source_changes_and_keeps_subnative_r
         [(0.0, 0.0, 1), (0.5, 0.0, 1), (0.5, 40.0, 2), (0.0, 0.0, 3)]
     {
         let fixture = fixture((8, 8), camera_x, sphere_x, generation);
-        let prepared = prepare_deterministic_render_with_cache_in_scope_and_evaluation(
+        let prepared = prepare_with_requested_coverage(
             admit(&fixture, &context),
             &context,
             &mut cache,
@@ -534,7 +588,7 @@ fn requested_coverage_overwrites_camera_and_source_changes_and_keeps_subnative_r
         })
         .collect();
     assert!(matches!(
-        prepare_deterministic_render_with_cache_in_scope_and_evaluation(
+        prepare_with_requested_coverage(
             admit(&fixture, &context),
             &context,
             &mut cache,
@@ -772,7 +826,7 @@ fn requested_coverage_preserves_field_payload_generations_and_invalid_vs_backgro
                 }),
             ),
         );
-        let prepared = prepare_deterministic_render_with_cache_in_scope_and_evaluation(
+        let prepared = prepare_with_requested_coverage(
             admitted,
             &context,
             &mut cache,
@@ -841,7 +895,7 @@ fn requested_coverage_preserves_field_payload_generations_and_invalid_vs_backgro
     }
     let (fixture, fields) = field_fixture(sphere_field(), None);
     assert!(matches!(
-        prepare_deterministic_render_with_cache_in_scope_and_evaluation(
+        prepare_with_requested_coverage(
             admit_inputs(&fixture, &fields, &context),
             &context,
             &mut cache,
@@ -861,7 +915,7 @@ fn requested_coverage_resource_scopes_and_resize_are_independent() {
     let mut identities = Vec::new();
     for (scope, extent) in [(21, (8, 8)), (22, (8, 8)), (21, (7, 5))] {
         let fixture = fixture(extent, 0.0, 0.0, 1);
-        let prepared = prepare_deterministic_render_with_cache_in_scope_and_evaluation(
+        let prepared = prepare_with_requested_coverage(
             admit(&fixture, &context),
             &context,
             &mut cache,
@@ -936,7 +990,7 @@ fn requested_coverage_uses_current_scene_state_even_with_unchanged_surface_gener
     let Some(context) = context() else { return };
     let mut fixture = fixture((8, 8), 0.0, 0.0, 7);
     let mut cache = DeterministicResourceCache::default();
-    let prepared = prepare_deterministic_render_with_cache_in_scope_and_evaluation(
+    let prepared = prepare_with_requested_coverage(
         admit(&fixture, &context),
         &context,
         &mut cache,
@@ -988,7 +1042,7 @@ fn requested_coverage_uses_current_scene_state_even_with_unchanged_surface_gener
     store.commit(update).unwrap();
     fixture.scene = store.snapshot();
     assert_ne!(fixture.scene.revision(), old_revision);
-    let prepared = prepare_deterministic_render_with_cache_in_scope_and_evaluation(
+    let prepared = prepare_with_requested_coverage(
         admit(&fixture, &context),
         &context,
         &mut cache,

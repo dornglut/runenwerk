@@ -93,9 +93,11 @@ verify the checked-out revision and clean tree before running qualification.
 ## Requested-lattice current coverage qualification
 
 The renderer-private coverage proof is included in the existing hosted
-`deterministic_execution_r7_proof` filter. It executes the ordinary sub-native
-producer and adds bounded carrier observations to the same GPU fragment and
-submission for proof only. Ordinary runtime work contains no readback.
+`deterministic_execution_r7_proof` filter. The proof explicitly opts the same
+sub-native producer into requested-lattice coverage and adds bounded carrier
+observations to that GPU fragment and submission. Until an accepted reconstruction
+consumer exists, ordinary Render Flow preparation does not request coverage and
+therefore authors neither coverage dispatch/resources nor coverage readback.
 
 For clean, committed qualification:
 
