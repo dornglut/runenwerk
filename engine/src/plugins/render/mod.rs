@@ -27,6 +27,7 @@ pub mod material_compiler;
 pub mod method;
 pub(crate) mod native_host;
 pub mod output_result;
+mod ordinary;
 pub mod params;
 pub mod participation;
 pub mod pipelines;
@@ -88,6 +89,7 @@ pub use gpu_context_policy::{
 pub use gpu_primitives::*;
 pub use graph::*;
 pub use material_compiler::*;
+pub use ordinary::*;
 pub use params::*;
 pub use plugin::RenderPlugin;
 pub(crate) use plugin::render_integration_is_active;

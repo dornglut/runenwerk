@@ -5,7 +5,9 @@
 //! RunenRender and RunenGPU retain their respective semantic and physical authorities.
 
 use anyhow::{Context, Result, bail};
-use engine::plugins::render::RenderResult;
+use engine::plugins::render::{
+    RenderCapturedRadiance, RenderResult, SubmittedRender, admit_render, submit_render_for_result,
+};
 use engine::plugins::render::admission::{
     RenderOutputBinding, RenderOutputDestination, RenderRepresentationAvailabilityFact,
     RenderRepresentationAvailabilityState,
@@ -13,11 +15,6 @@ use engine::plugins::render::admission::{
 use engine::plugins::render::appearance::{RenderDiffuseMaterial, RenderDirectionalEmitter};
 use engine::plugins::render::apply_runenwerk_gpu_context_policy;
 use engine::plugins::render::backend::RenderSurfaceId;
-use engine::plugins::render::deterministic_admission::admit_deterministic_render;
-use engine::plugins::render::deterministic_execution::{
-    RenderCapturedDeterministicRadiance, SubmittedDeterministicRender,
-    submit_deterministic_render_for_verified_result,
-};
 use engine::plugins::render::frame::{
     PreparedFlowInvocationRequest, PreparedRenderFrameRequestResource,
     RenderDeterministicFrameContribution, RenderDeterministicFrameContributionResource,
@@ -237,23 +234,22 @@ pub fn run_founding_direct(output_root: impl AsRef<Path>) -> Result<ArtifactPath
         0,
         RenderOutputDestination::SampleLatticeTexture(destination),
     )];
-    let admitted = admit_deterministic_render(
+    let admitted = admit_render(
         &fixture.scene,
         &fixture.request,
         &fixture.semantic_inputs,
+        &[],
         &fixture.availability,
         &output_bindings,
         &context,
     )
-    .context("admit founding-direct through the maintained deterministic renderer")?;
-    let mut submitted = pollster::block_on(submit_deterministic_render_for_verified_result(
-        admitted, &context,
-    ))
+    .context("admit founding-direct through the ordinary maintained renderer")?;
+    let mut submitted = pollster::block_on(submit_render_for_result(admitted, &context))
     .context("submit founding-direct through public RunenRender and RunenGPU")?;
     let result = form_result(&context, &mut submitted)?;
 
     let capture_request = submitted
-        .request_deterministic_radiance_capture(0)
+        .request_radiance_capture(0)
         .context("mint the formed-result founding-direct radiance capture request")?;
     let readback = GpuReadbackOperation::new(
         capture_request.source().clone(),
@@ -270,7 +266,7 @@ pub fn run_founding_direct(output_root: impl AsRef<Path>) -> Result<ArtifactPath
             .context("submit the product-owned radiance readback")?;
     wait_for_readback(&context, &product_submission, capture_request.readback_id())?;
     let captured = submitted
-        .capture_deterministic_radiance(capture_request, &context, &product_submission)
+        .capture_radiance(capture_request, &context, &product_submission)
         .context("interpret the exact product readback through RunenRender #627")?;
     let field_backed_participation = field_participation(&result);
     if !field_backed_participation.participated {
@@ -337,7 +333,7 @@ pub fn run_founding_direct(output_root: impl AsRef<Path>) -> Result<ArtifactPath
             output_topology: "128x128 row-major sample lattice",
             semantic_result_formed: true,
         },
-        execution_path: "maintained-deterministic",
+        execution_path: "ordinary-maintained",
         renderer_completion: "completed",
         retained_continuity: "established renderer write remains current",
         product_readback: "completed separate public RunenGPU submission",
@@ -597,13 +593,13 @@ fn founding_fixture_with_observation_extent_and_support(
 
 fn form_result(
     context: &GpuContext,
-    submitted: &mut SubmittedDeterministicRender,
+    submitted: &mut SubmittedRender,
 ) -> Result<RenderResult> {
     let deadline = Instant::now() + Duration::from_secs(30);
     loop {
         context.progress();
         match submitted
-            .try_form_verified_result()
+            .try_form_result()
             .context("poll verified founding-direct result")?
         {
             Some(result) => return Ok(result),
@@ -713,7 +709,7 @@ fn write_png(path: &Path, pixels: &[u8]) -> Result<()> {
         .context("encode founding-direct PNG")
 }
 
-pub fn compare_with_oracle(captured: &RenderCapturedDeterministicRadiance) -> OracleSummary {
+pub fn compare_with_oracle(captured: &RenderCapturedRadiance) -> OracleSummary {
     let mut mismatches = 0;
     let mut maximum_absolute_error: f64 = 0.0;
     for (index, actual) in captured.samples().iter().copied().enumerate() {
