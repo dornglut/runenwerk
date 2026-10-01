@@ -34,8 +34,8 @@ use super::scene::RenderSceneSnapshot;
 use super::surface_input::RenderSurfaceSemanticInputBinding;
 use runen_gpu::{
     GpuContext, GpuExportRelationship, GpuReadbackId, GpuResourceProvenance, GpuResourceRef,
-    GpuSubmission, GpuSubmissionStatus, GpuTextureHandle, GpuTransferRegion, GpuWorkImport,
-    GpuWorkSubmissionError,
+    GpuSubmission, GpuSubmissionFailureKind, GpuSubmissionStatus, GpuTextureHandle,
+    GpuTransferRegion, GpuWorkImport, GpuWorkSubmissionError,
 };
 use std::error::Error;
 use std::fmt;
@@ -308,10 +308,62 @@ impl fmt::Display for RenderResultFormationError {
 
 impl Error for RenderResultFormationError {}
 
+/// Stable category for failure to mint one product-owned radiance readback correlation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenderRadianceCaptureRequestErrorKind {
+    VerificationNotFormed,
+    OutputIndexOutOfRange,
+    OutputNotRadiance,
+    OutputTopologyUnsupported,
+    OutputDestinationUnsupported,
+    DestinationNotRetained,
+    DestinationNotCopySource,
+    CarrierFormatUnsupported,
+    SourceUnavailable,
+    ReadbackIdAllocationExhausted,
+}
+
 /// Failure to mint a product-owned readback correlation for one formed radiance output.
 #[derive(Debug)]
 pub struct RenderRadianceCaptureRequestError {
     inner: RenderDeterministicRadianceCaptureRequestError,
+}
+
+impl RenderRadianceCaptureRequestError {
+    pub const fn kind(&self) -> RenderRadianceCaptureRequestErrorKind {
+        match &self.inner {
+            RenderDeterministicRadianceCaptureRequestError::VerificationNotFormed => {
+                RenderRadianceCaptureRequestErrorKind::VerificationNotFormed
+            }
+            RenderDeterministicRadianceCaptureRequestError::OutputIndexOutOfRange => {
+                RenderRadianceCaptureRequestErrorKind::OutputIndexOutOfRange
+            }
+            RenderDeterministicRadianceCaptureRequestError::OutputNotRadiance => {
+                RenderRadianceCaptureRequestErrorKind::OutputNotRadiance
+            }
+            RenderDeterministicRadianceCaptureRequestError::OutputTopologyUnsupported => {
+                RenderRadianceCaptureRequestErrorKind::OutputTopologyUnsupported
+            }
+            RenderDeterministicRadianceCaptureRequestError::OutputDestinationUnsupported => {
+                RenderRadianceCaptureRequestErrorKind::OutputDestinationUnsupported
+            }
+            RenderDeterministicRadianceCaptureRequestError::DestinationNotRetained => {
+                RenderRadianceCaptureRequestErrorKind::DestinationNotRetained
+            }
+            RenderDeterministicRadianceCaptureRequestError::DestinationNotCopySource => {
+                RenderRadianceCaptureRequestErrorKind::DestinationNotCopySource
+            }
+            RenderDeterministicRadianceCaptureRequestError::CarrierFormatUnsupported => {
+                RenderRadianceCaptureRequestErrorKind::CarrierFormatUnsupported
+            }
+            RenderDeterministicRadianceCaptureRequestError::SourceUnavailable => {
+                RenderRadianceCaptureRequestErrorKind::SourceUnavailable
+            }
+            RenderDeterministicRadianceCaptureRequestError::ReadbackIdAllocationExhausted => {
+                RenderRadianceCaptureRequestErrorKind::ReadbackIdAllocationExhausted
+            }
+        }
+    }
 }
 
 impl fmt::Display for RenderRadianceCaptureRequestError {
@@ -322,10 +374,111 @@ impl fmt::Display for RenderRadianceCaptureRequestError {
 
 impl Error for RenderRadianceCaptureRequestError {}
 
+/// Stable owner-oriented category for radiance readback correlation/interpretation failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenderRadianceCaptureErrorKind {
+    VerificationNotFormed,
+    RequestCorrelationMismatch,
+    ContextAffinityMismatch,
+    RetainedContinuityUnavailable,
+    RetainedContinuityAffinityMismatch,
+    RetainedContinuityResourceMismatch,
+    RetainedContinuityNotEstablished,
+    RendererWriteNoLongerCurrent,
+    ProductSubmissionAffinityMismatch,
+    ProductSubmissionPending,
+    ProductSubmissionFailed,
+    ReadbackCorrelationMissing,
+    ReadbackSourceMismatch,
+    ReadbackPending,
+    ReadbackFailed,
+    ReadbackFormatMismatch,
+    ReadbackLayoutMismatch,
+    ReadbackByteLengthMismatch,
+    NonFiniteSample,
+    HostAllocation,
+}
+
 /// Failure to correlate or interpret one completed product-owned radiance readback.
 #[derive(Debug)]
 pub struct RenderRadianceCaptureError {
     inner: RenderDeterministicRadianceCaptureError,
+}
+
+impl RenderRadianceCaptureError {
+    pub const fn kind(&self) -> RenderRadianceCaptureErrorKind {
+        match &self.inner {
+            RenderDeterministicRadianceCaptureError::VerificationNotFormed => {
+                RenderRadianceCaptureErrorKind::VerificationNotFormed
+            }
+            RenderDeterministicRadianceCaptureError::RequestCorrelationMismatch => {
+                RenderRadianceCaptureErrorKind::RequestCorrelationMismatch
+            }
+            RenderDeterministicRadianceCaptureError::ContextAffinityMismatch => {
+                RenderRadianceCaptureErrorKind::ContextAffinityMismatch
+            }
+            RenderDeterministicRadianceCaptureError::RetainedContinuityUnavailable => {
+                RenderRadianceCaptureErrorKind::RetainedContinuityUnavailable
+            }
+            RenderDeterministicRadianceCaptureError::RetainedContinuityAffinityMismatch => {
+                RenderRadianceCaptureErrorKind::RetainedContinuityAffinityMismatch
+            }
+            RenderDeterministicRadianceCaptureError::RetainedContinuityResourceMismatch => {
+                RenderRadianceCaptureErrorKind::RetainedContinuityResourceMismatch
+            }
+            RenderDeterministicRadianceCaptureError::RetainedContinuityNotEstablished => {
+                RenderRadianceCaptureErrorKind::RetainedContinuityNotEstablished
+            }
+            RenderDeterministicRadianceCaptureError::RendererWriteNoLongerCurrent => {
+                RenderRadianceCaptureErrorKind::RendererWriteNoLongerCurrent
+            }
+            RenderDeterministicRadianceCaptureError::ProductSubmissionAffinityMismatch => {
+                RenderRadianceCaptureErrorKind::ProductSubmissionAffinityMismatch
+            }
+            RenderDeterministicRadianceCaptureError::ProductSubmissionPending => {
+                RenderRadianceCaptureErrorKind::ProductSubmissionPending
+            }
+            RenderDeterministicRadianceCaptureError::ProductSubmissionFailed { .. } => {
+                RenderRadianceCaptureErrorKind::ProductSubmissionFailed
+            }
+            RenderDeterministicRadianceCaptureError::ReadbackCorrelationMissing => {
+                RenderRadianceCaptureErrorKind::ReadbackCorrelationMissing
+            }
+            RenderDeterministicRadianceCaptureError::ReadbackSourceMismatch => {
+                RenderRadianceCaptureErrorKind::ReadbackSourceMismatch
+            }
+            RenderDeterministicRadianceCaptureError::ReadbackPending => {
+                RenderRadianceCaptureErrorKind::ReadbackPending
+            }
+            RenderDeterministicRadianceCaptureError::ReadbackFailed { .. } => {
+                RenderRadianceCaptureErrorKind::ReadbackFailed
+            }
+            RenderDeterministicRadianceCaptureError::ReadbackFormatMismatch => {
+                RenderRadianceCaptureErrorKind::ReadbackFormatMismatch
+            }
+            RenderDeterministicRadianceCaptureError::ReadbackLayoutMismatch => {
+                RenderRadianceCaptureErrorKind::ReadbackLayoutMismatch
+            }
+            RenderDeterministicRadianceCaptureError::ReadbackByteLengthMismatch => {
+                RenderRadianceCaptureErrorKind::ReadbackByteLengthMismatch
+            }
+            RenderDeterministicRadianceCaptureError::NonFiniteSample => {
+                RenderRadianceCaptureErrorKind::NonFiniteSample
+            }
+            RenderDeterministicRadianceCaptureError::HostAllocation => {
+                RenderRadianceCaptureErrorKind::HostAllocation
+            }
+        }
+    }
+
+    /// RunenGPU lifecycle failure when the product submission or readback itself failed.
+    pub const fn gpu_failure_kind(&self) -> Option<GpuSubmissionFailureKind> {
+        match &self.inner {
+            RenderDeterministicRadianceCaptureError::ProductSubmissionFailed { kind }
+            | RenderDeterministicRadianceCaptureError::ReadbackFailed { kind } => Some(*kind),
+            _ => None,
+        }
+    }
 }
 
 impl fmt::Display for RenderRadianceCaptureError {
