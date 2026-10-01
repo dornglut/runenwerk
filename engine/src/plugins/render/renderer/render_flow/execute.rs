@@ -814,8 +814,9 @@ impl Renderer {
             });
             let producer_scope =
                 crate::plugins::render::RenderExecutionScope::new(contribution.producer_id.raw());
-            let camera_diagnostic_request =
-                self.camera_diagnostics.request_for_scope(producer_scope.raw())?;
+            let camera_diagnostic_request = self
+                .camera_diagnostics
+                .request_for_scope(producer_scope.raw())?;
             let prepared = match camera_diagnostic_request {
                 Some(request) => self.render_execution.prepare_with_camera_diagnostic(
                     admitted,
@@ -824,18 +825,23 @@ impl Renderer {
                     finite_evaluation,
                     request,
                 ),
-                None => self
-                    .render_execution
-                    .prepare(admitted, context, producer_scope, finite_evaluation),
+                None => self.render_execution.prepare(
+                    admitted,
+                    context,
+                    producer_scope,
+                    finite_evaluation,
+                ),
             }
             .map_err(|error| anyhow::anyhow!("render preparation failed: {error}"))?;
             if let Some(source) = self
                 .render_execution
                 .take_camera_diagnostic_source(producer_scope)
             {
-                self.camera_diagnostics.prepare(producer_scope.raw(), source);
+                self.camera_diagnostics
+                    .prepare(producer_scope.raw(), source);
             } else {
-                self.camera_diagnostics.discard_request(producer_scope.raw());
+                self.camera_diagnostics
+                    .discard_request(producer_scope.raw());
             }
             let output = prepared
                 .radiance_output(contribution.output_index)

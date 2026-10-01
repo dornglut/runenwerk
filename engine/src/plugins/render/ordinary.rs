@@ -599,7 +599,7 @@ impl RenderExecutionState {
             camera_diagnostic,
         )
         .map(|inner| PreparedRender { inner })
-        .map_err(RenderExecutionError::from)
+        .map_err(|inner| RenderExecutionError { inner })
     }
 
     pub(crate) fn prepare_with_camera_diagnostic(

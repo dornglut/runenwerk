@@ -870,7 +870,7 @@ impl Gfx {
     pub fn temporal_execution_evidence(
         &self,
         frame_index: u64,
-    ) -> &[crate::plugins::render::RenderTemporalExecutionEvidence]{
+    ) -> &[crate::plugins::render::RenderTemporalExecutionEvidence] {
         self.renderer.temporal_execution_evidence(frame_index)
     }
 

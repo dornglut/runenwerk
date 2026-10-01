@@ -19,7 +19,6 @@ use observation::observe_completed_deterministic_verification;
 use super::deterministic_admission::AdmittedDeterministicRender;
 use super::deterministic_execution::{
     self, DeterministicVerificationSubmission, RenderDeterministicExecutionError,
-    SubmittedDeterministicRender,
 };
 use super::render_result::{RenderResultFormationError, RenderResultFormationEvidence};
 use super::request::RenderObservationSpec;

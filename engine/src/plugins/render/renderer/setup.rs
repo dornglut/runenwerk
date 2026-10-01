@@ -104,7 +104,7 @@ impl Renderer {
     pub fn temporal_execution_evidence(
         &self,
         frame_index: u64,
-    ) -> &[crate::plugins::render::RenderTemporalExecutionEvidence]{
+    ) -> &[crate::plugins::render::RenderTemporalExecutionEvidence] {
         self.temporal_execution_evidence
             .get(&frame_index)
             .map(Vec::as_slice)
@@ -144,12 +144,11 @@ impl Renderer {
         &self,
         contributions: &[crate::plugins::render::RenderDeterministicFrameContribution],
     ) -> bool {
-        self.deterministic_resources
-            .any_producer_submission_in_flight(
-                contributions
-                    .iter()
-                    .map(|contribution| contribution.producer_id.raw()),
-            )
+        self.render_execution.has_in_flight_scopes(
+            contributions.iter().map(|contribution| {
+                crate::plugins::render::RenderExecutionScope::new(contribution.producer_id.raw())
+            }),
+        )
     }
 
     pub(super) fn publish_progressed_gpu_observations(&mut self) {
