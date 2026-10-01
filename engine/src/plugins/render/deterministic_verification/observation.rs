@@ -100,9 +100,9 @@ impl RenderDeterministicVerificationObservationError {
             | Self::ReadbackFailed { channel, .. }
             | Self::InvalidPhysicalLayout { channel, .. }
             | Self::HostAllocation { channel, .. } => Some(*channel),
-            Self::SubmissionPending
-            | Self::SubmissionFailed { .. }
-            | Self::SizeOverflow { .. } => None,
+            Self::SubmissionPending | Self::SubmissionFailed { .. } | Self::SizeOverflow { .. } => {
+                None
+            }
         }
     }
 
@@ -131,7 +131,10 @@ impl fmt::Display for RenderDeterministicVerificationObservationError {
             Self::ReadbackPending {
                 output_index,
                 channel,
-            } => write!(formatter, "output {output_index} {channel} readback is still pending"),
+            } => write!(
+                formatter,
+                "output {output_index} {channel} readback is still pending"
+            ),
             Self::ReadbackFailed {
                 output_index,
                 channel,
