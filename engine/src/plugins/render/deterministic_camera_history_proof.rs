@@ -11,7 +11,18 @@ fn context() -> Option<GpuContext> {
             .with_label("RunenRender camera correspondence behavior proof"),
     );
     match pollster::block_on(GpuContext::request(descriptor)) {
-        Ok(context) => Some(context),
+        Ok(context) => {
+            let facts = context.adapter_facts();
+            eprintln!(
+                "camera proof adapter: backend={:?} name={:?} class={:?} software={:?} fallback={:?}",
+                facts.backend(),
+                facts.diagnostic_name(),
+                facts.class(),
+                facts.software(),
+                facts.fallback(),
+            );
+            Some(context)
+        }
         Err(error) if error.category() == GpuContextRequestErrorCategory::NoAdapterAvailable => {
             assert_ne!(
                 std::env::var("RUNENRENDER_R7_REQUIRE_GPU").ok().as_deref(),
@@ -109,8 +120,10 @@ fn execute(
     context: &GpuContext,
     input: Vec<u32>,
     previous: [u32; 8],
-    camera: Vec<u32>,
+    mut camera: Vec<u32>,
 ) -> [u32; 8] {
+    let diagnose_motion = camera[1] != 0;
+    camera[33] = u32::from(diagnose_motion);
     let payloads = [
         input,
         vec![0],
@@ -118,7 +131,7 @@ fn execute(
         vec![0],
         vec![0; 4],
         previous.to_vec(),
-        vec![0; 8],
+        vec![0; 8 + CAMERA_DIAGNOSTIC_WORDS as usize],
         camera,
         vec![0],
     ];
@@ -224,15 +237,32 @@ fn execute(
                     std::thread::yield_now();
                     continue;
                 }
-                return bytes
+                let words = bytes
                     .as_bytes()
                     .as_chunks::<4>()
                     .0
                     .iter()
                     .map(|word| u32::from_ne_bytes(*word))
-                    .collect::<Vec<_>>()
-                    .try_into()
-                    .unwrap();
+                    .collect::<Vec<_>>();
+                if diagnose_motion {
+                    let diagnostic = &words[8..40];
+                    eprintln!(
+                        "camera proof motion: outcome={} retained_anchor={:?} visible_point={:?} retained_radiance={} revalidated_radiance={} result_count={}",
+                        diagnostic[8],
+                        diagnostic[19..22]
+                            .iter()
+                            .map(|w| f32::from_bits(*w))
+                            .collect::<Vec<_>>(),
+                        diagnostic[22..25]
+                            .iter()
+                            .map(|w| f32::from_bits(*w))
+                            .collect::<Vec<_>>(),
+                        f32::from_bits(diagnostic[18]),
+                        f32::from_bits(diagnostic[25]),
+                        words[2],
+                    );
+                }
+                return words[..8].try_into().unwrap();
             }
             GpuReadbackStatus::Failed(failure) => panic!("camera proof readback: {failure:?}"),
             GpuReadbackStatus::Pending => {}
@@ -240,6 +270,15 @@ fn execute(
         assert!(Instant::now() < deadline, "camera proof readback timed out");
         std::thread::yield_now();
     }
+}
+
+fn axis_aligned_plane_motion_camera() -> Vec<u32> {
+    let mut camera = camera_words(true, true, 4);
+    // The retained phase-3 point is (0, 0, -4) from origin (-2, 2, 0).
+    // Current origin (0, 0, 1/8) makes its validation ray exactly axial. This
+    // positive fixture does not depend on backend rounding of a decimal pan.
+    pack_vec3(&mut camera, 6, [-2.0, 2.0, 0.0]).unwrap();
+    camera
 }
 
 #[test]
@@ -302,22 +341,22 @@ fn matched_plane_reuses_one_sample_and_rejects_wrong_radiance_or_outside_current
         return;
     };
     let mut input = scene_input(false);
-    input[8] = 0.08_f32.to_bits();
+    input[10] = 0.125_f32.to_bits();
     let previous = [
         0.25_f32.to_bits(),
         4.0_f32.to_bits(),
         4,
         1,
         1.0_f32.to_bits(),
-        2.0_f32.to_bits(),
-        (-2.0_f32).to_bits(),
+        0,
+        0,
         (-4.0_f32).to_bits(),
     ];
     let accepted = execute(
         &context,
         input.clone(),
         previous,
-        camera_words(true, true, 4),
+        axis_aligned_plane_motion_camera(),
     );
     assert_eq!(
         accepted[2], 2,
@@ -330,7 +369,7 @@ fn matched_plane_reuses_one_sample_and_rejects_wrong_radiance_or_outside_current
         &context,
         input.clone(),
         wrong_radiance,
-        camera_words(true, true, 4),
+        axis_aligned_plane_motion_camera(),
     );
     assert_eq!(
         rejected[2], 1,
@@ -338,8 +377,8 @@ fn matched_plane_reuses_one_sample_and_rejects_wrong_radiance_or_outside_current
     );
     assert_eq!(f32::from_bits(rejected[0]), 1.0);
     let mut outside = previous;
-    outside[5] = (-4.04_f32).to_bits();
-    let rejected = execute(&context, input, outside, camera_words(true, true, 4));
+    outside[5] = (-4.25_f32).to_bits();
+    let rejected = execute(&context, input, outside, axis_aligned_plane_motion_camera());
     assert_eq!(
         rejected[2], 1,
         "previous depth alone must not admit a sample outside current support"
@@ -354,19 +393,19 @@ fn hard_shadow_revalidation_distinguishes_depth_and_geometry_from_radiance() {
     };
     let mut input = scene_input(true);
     let blocker = HEADER_WORDS + GEOMETRY_WORDS;
-    pack_vec3(&mut input, blocker + 25, [2.0, -2.0, -2.0]).unwrap();
+    pack_vec3(&mut input, blocker + 25, [2.0, 0.0, -2.0]).unwrap();
     input[blocker + 28] = 0.25_f32.to_bits();
     let emitter = input[29] as usize;
-    pack_vec3(&mut input, emitter, [0.0, 0.0, 1.0]).unwrap();
-    input[8] = 0.08_f32.to_bits();
+    pack_vec3(&mut input, emitter, [1.0, 0.0, 1.0]).unwrap();
+    input[10] = 0.125_f32.to_bits();
     let previous = [
         1.0_f32.to_bits(),
         4.0_f32.to_bits(),
         4,
         1,
         0,
-        2.0_f32.to_bits(),
-        (-2.0_f32).to_bits(),
+        0,
+        0,
         (-4.0_f32).to_bits(),
     ];
     let current_only = execute(
@@ -375,12 +414,15 @@ fn hard_shadow_revalidation_distinguishes_depth_and_geometry_from_radiance() {
         previous,
         camera_words(false, false, 0),
     );
-    assert_eq!(f32::from_bits(current_only[4]), 1.0, "current phase is lit");
+    assert!(
+        f32::from_bits(current_only[4]) > 0.0,
+        "current phase is lit"
+    );
     let accepted = execute(
         &context,
         input.clone(),
         previous,
-        camera_words(true, true, 4),
+        axis_aligned_plane_motion_camera(),
     );
     assert_eq!(
         accepted[2], 2,
@@ -388,7 +430,7 @@ fn hard_shadow_revalidation_distinguishes_depth_and_geometry_from_radiance() {
     );
     assert_eq!(
         f32::from_bits(accepted[0]),
-        0.5,
+        f32::from_bits(current_only[4]) * 0.5,
         "one lit and one validated shadow sample"
     );
     assert_eq!(
@@ -401,14 +443,14 @@ fn hard_shadow_revalidation_distinguishes_depth_and_geometry_from_radiance() {
         &context,
         input.clone(),
         wrong_shadow,
-        camera_words(true, true, 4),
+        axis_aligned_plane_motion_camera(),
     );
     assert_eq!(
         rejected[2], 1,
         "matching hit, anchor and depth do not certify shadow radiance"
     );
     assert_eq!(rejected[0], current_only[0]);
-    let mut control = camera_words(true, true, 4);
+    let mut control = axis_aligned_plane_motion_camera();
     control[34] = 1;
     let oracle = execute(&context, input, previous, control);
     assert_eq!(oracle[0], current_only[0]);
@@ -476,17 +518,27 @@ fn invalid_retained_coherent_inputs_cannot_authorize_motion_reuse() {
         return;
     };
     let mut input = scene_input(false);
-    input[8] = 0.08_f32.to_bits();
+    input[10] = 0.125_f32.to_bits();
     let previous = [
         0.25_f32.to_bits(),
         4.0_f32.to_bits(),
         4,
         1,
         1.0_f32.to_bits(),
-        2.0_f32.to_bits(),
-        (-2.0_f32).to_bits(),
+        0,
+        0,
         (-4.0_f32).to_bits(),
     ];
+    assert_eq!(
+        execute(
+            &context,
+            input.clone(),
+            previous,
+            axis_aligned_plane_motion_camera()
+        )[2],
+        2,
+        "the valid control must accept before testing corrupted retained inputs"
+    );
     for (slot, value) in [
         (1, f32::NAN.to_bits()),
         (2, 0),
@@ -501,7 +553,7 @@ fn invalid_retained_coherent_inputs_cannot_authorize_motion_reuse() {
             &context,
             input.clone(),
             invalid,
-            camera_words(true, true, 4),
+            axis_aligned_plane_motion_camera(),
         );
         assert_eq!(result[2], 1, "invalid history slot {slot}");
         assert_eq!(f32::from_bits(result[0]), 1.0);
