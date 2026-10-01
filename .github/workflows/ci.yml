@@ -122,6 +122,7 @@ jobs:
         env:
           RUST_BACKTRACE: '1'
           RUNENRENDER_R7_REQUIRE_GPU: '1'
+          RUNENWERK_SOURCE_REVISION: ${{ steps.revision.outputs.expected_revision }}
         run: |
           set -euo pipefail
           cargo +stable test -p engine \
