@@ -221,7 +221,10 @@ impl fmt::Display for RenderDeterministicVerificationError {
                 "generic render result-formation evidence rejected verified execution: {error}"
             ),
             Self::ObservationNormalization(error) => {
-                write!(formatter, "same-submission observation normalization failed: {error}")
+                write!(
+                    formatter,
+                    "same-submission observation normalization failed: {error}"
+                )
             }
             Self::Correlation {
                 output_index,
@@ -299,9 +302,9 @@ impl RenderDeterministicVerificationError {
             | Self::Inconclusive { sample_index, .. }
             | Self::PhysicalMismatch { sample_index, .. } => *sample_index,
             Self::ToleranceMismatch { sample_index, .. } => Some(*sample_index),
-            Self::ResultFormation(_)
-            | Self::Eligibility(_)
-            | Self::ObservationNormalization(_) => None,
+            Self::ResultFormation(_) | Self::Eligibility(_) | Self::ObservationNormalization(_) => {
+                None
+            }
         }
     }
 
@@ -810,5 +813,4 @@ mod tests {
         assert_eq!(error.channel(), Some("canonical-output"));
         assert!(Error::source(&error).is_some());
     }
-
 }
