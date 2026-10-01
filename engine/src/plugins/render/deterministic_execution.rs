@@ -1083,7 +1083,7 @@ impl DeterministicVerificationSubmission {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RenderRunenGpuPreparationError {
+pub(super) enum RenderRunenGpuPreparationError {
     Access {
         stage: &'static str,
         source: GpuAccessError,
@@ -1188,7 +1188,7 @@ impl Error for RenderRunenGpuPreparationError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RenderDeterministicLoweringError {
+pub(super) enum RenderDeterministicLoweringError {
     ContextAffinityChanged {
         admitted: GpuContextAffinity,
         actual: GpuContextAffinity,
@@ -1387,7 +1387,7 @@ impl Error for RenderDeterministicLoweringError {
 }
 
 #[derive(Debug)]
-pub enum RenderDeterministicExecutionError {
+pub(super) enum RenderDeterministicExecutionError {
     Lowering(RenderDeterministicLoweringError),
     Submission(GpuWorkSubmissionError),
 }
@@ -1418,7 +1418,7 @@ impl From<RenderDeterministicLoweringError> for RenderDeterministicExecutionErro
 
 /// Failure while polling one exact verified submission for semantic result formation.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RenderDeterministicResultFormationError {
+pub(super) enum RenderDeterministicResultFormationError {
     VerificationNotRequested,
     ResultAlreadyFormed,
     SubmissionFailed {
@@ -4795,6 +4795,152 @@ mod tests {
             }
         );
     }
+    #[test]
+    fn every_runengpu_preparation_owner_remains_a_typed_source() {
+        fn assert_owner<Owner>(
+            error: RenderRunenGpuPreparationError,
+            expected: &Owner,
+            expected_stage: &'static str,
+        ) where
+            Owner: Error + PartialEq + fmt::Debug + 'static,
+        {
+            assert_eq!(error.stage(), expected_stage);
+            let source = Error::source(&error).expect("typed RunenGPU owner source");
+            assert_eq!(source.downcast_ref::<Owner>(), Some(expected));
+        }
+
+        let mut resources = GpuWorkResourceIdAllocator::new();
+        let buffer = resources
+            .allocate_buffer_handle(
+                GpuBufferDescriptor::ordinary_owned(
+                    "typed error owner proof",
+                    GpuResourceLifetime::Transient,
+                    GpuReconstruction::SourceBacked,
+                    16,
+                    [GpuBufferUsage::Storage],
+                    GpuBufferInitialization::Uninitialized,
+                )
+                .expect("proof buffer descriptor"),
+            )
+            .expect("proof buffer allocation");
+
+        let access = GpuBufferRange::new(&buffer, 0, 0)
+            .expect_err("zero range must fail in RunenGPU access authority");
+        assert_owner(
+            RenderRunenGpuPreparationError::Access {
+                stage: "access",
+                source: access.clone(),
+            },
+            &access,
+            "access",
+        );
+
+        let program_source = admit_static_wgsl_sources([(
+            "",
+            1,
+            "@compute @workgroup_size(1) fn main() {}",
+        )])
+        .expect_err("empty source key must fail in RunenGPU source authority");
+        assert_owner(
+            RenderRunenGpuPreparationError::ProgramSource {
+                stage: "program-source",
+                source: program_source.clone(),
+            },
+            &program_source,
+            "program-source",
+        );
+
+        let resource_descriptor = GpuBufferDescriptor::ordinary_owned(
+            "",
+            GpuResourceLifetime::Transient,
+            GpuReconstruction::SourceBacked,
+            16,
+            [GpuBufferUsage::Storage],
+            GpuBufferInitialization::Uninitialized,
+        )
+        .expect_err("empty label must fail in RunenGPU descriptor authority");
+        assert_owner(
+            RenderRunenGpuPreparationError::ResourceDescriptor {
+                stage: "resource-descriptor",
+                source: resource_descriptor.clone(),
+            },
+            &resource_descriptor,
+            "resource-descriptor",
+        );
+
+        let resource_allocation = GpuWorkResourceIdAllocationError::Exhausted;
+        assert_owner(
+            RenderRunenGpuPreparationError::ResourceAllocation {
+                stage: "resource-allocation",
+                source: resource_allocation,
+            },
+            &resource_allocation,
+            "resource-allocation",
+        );
+
+        let transfer_preparation =
+            PreparedGpuData::<TransferData>::ordinary_pod_transfer("", &[1_u32])
+                .expect_err("empty label must fail in RunenGPU transfer preparation");
+        assert_owner(
+            RenderRunenGpuPreparationError::TransferPreparation {
+                stage: "transfer-preparation",
+                source: transfer_preparation.clone(),
+            },
+            &transfer_preparation,
+            "transfer-preparation",
+        );
+
+        let [source] = admit_static_wgsl_sources([(
+            "typed-error-program",
+            1,
+            "@compute @workgroup_size(1) fn main() {}",
+        )])
+        .expect("proof program source admission");
+        let program_contract = GpuComputePipelineDescriptor::ordinary(source, "")
+            .expect_err("empty entry point must fail in RunenGPU program authority");
+        assert_owner(
+            RenderRunenGpuPreparationError::ProgramContract {
+                stage: "program-contract",
+                source: program_contract.clone(),
+            },
+            &program_contract,
+            "program-contract",
+        );
+
+        let region = GpuBufferRegion::whole(&buffer).expect("whole proof buffer region");
+        let work_operation = GpuClearOperation::buffer_zero(region.clone())
+            .expect_err("buffer without copy-destination usage must reject clear");
+        assert_owner(
+            RenderRunenGpuPreparationError::WorkOperation {
+                stage: "work-operation",
+                source: work_operation.clone(),
+            },
+            &work_operation,
+            "work-operation",
+        );
+
+        let readback_request = GpuReadbackOperation::ordinary(region.into())
+            .expect_err("buffer without copy-source usage must reject readback");
+        assert_owner(
+            RenderRunenGpuPreparationError::ReadbackRequest {
+                stage: "readback-request",
+                source: readback_request.clone(),
+            },
+            &readback_request,
+            "readback-request",
+        );
+
+        let work_authoring = GpuWorkAuthoringError::from(access);
+        assert_owner(
+            RenderRunenGpuPreparationError::WorkAuthoring {
+                stage: "work-authoring",
+                source: work_authoring.clone(),
+            },
+            &work_authoring,
+            "work-authoring",
+        );
+    }
+
     #[test]
     fn runengpu_preparation_preserves_typed_source_chain() {
         let source = admit_static_wgsl_sources([(
