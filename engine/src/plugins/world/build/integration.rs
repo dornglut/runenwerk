@@ -13,8 +13,8 @@ use std::collections::{BTreeMap, VecDeque};
 use world_ops::{BuildGeneration, ChunkGeneration, ChunkRevision};
 use world_sdf::{
     FieldProductCandidate, FieldProductDescriptor, FieldProductKind, RegionSdfSummary,
-    SdfChunkPayload, WorldSdfMetricError, WorldSdfMetricPayloadRef,
-    WorldSdfMetricProductCandidate, ratify_field_product_candidate,
+    SdfChunkPayload, WorldSdfMetricError, WorldSdfMetricPayloadRef, WorldSdfMetricProductCandidate,
+    ratify_field_product_candidate,
     ratify_world_sdf_metric_product_candidate, validate_world_sdf_metric_payload,
 };
 
@@ -136,10 +136,7 @@ impl WorldSdfRuntimePayloadPackage {
         }
     }
 
-    pub fn with_metric_capability(
-        mut self,
-        metric_payload_ref: WorldSdfMetricPayloadRef,
-    ) -> Self {
+    pub fn with_metric_capability(mut self, metric_payload_ref: WorldSdfMetricPayloadRef) -> Self {
         self.metric_payload_ref = Some(metric_payload_ref);
         self
     }
@@ -196,10 +193,7 @@ fn validate_runtime_sdf_payload_package(
 
     if let Some(metric_payload_ref) = package.metric_payload_ref {
         let metric_report = ratify_world_sdf_metric_product_candidate(
-            &WorldSdfMetricProductCandidate::new(
-                package.descriptor.clone(),
-                metric_payload_ref,
-            ),
+            &WorldSdfMetricProductCandidate::new(package.descriptor.clone(), metric_payload_ref),
         );
         if metric_report.has_blocking_issues() {
             return Err(
@@ -208,9 +202,8 @@ fn validate_runtime_sdf_payload_package(
                 },
             );
         }
-        validate_world_sdf_metric_payload(&metric_payload_ref, payload).map_err(|error| {
-            WorldSdfRuntimePayloadPackageError::MetricPayloadRejected { error }
-        })?;
+        validate_world_sdf_metric_payload(&metric_payload_ref, payload)
+            .map_err(|error| WorldSdfRuntimePayloadPackageError::MetricPayloadRejected { error })?;
     }
 
     Ok(())

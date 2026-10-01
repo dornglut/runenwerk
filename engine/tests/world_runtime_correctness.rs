@@ -1192,7 +1192,6 @@ fn integration_drops_output_when_payload_chunk_id_contract_mismatches() {
     );
 }
 
-
 #[test]
 fn metric_runtime_sdf_capability_is_retained_and_bytes_integrate_only_in_build_integrate() {
     let mut app = fixed_world_app();
@@ -1223,7 +1222,10 @@ fn metric_runtime_sdf_capability_is_retained_and_bytes_integrate_only_in_build_i
         .world()
         .resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
         .expect("metric capability catalog should exist in headless World");
-    assert_eq!(metric_capabilities.capability(product_id), Some(&metric_ref));
+    assert_eq!(
+        metric_capabilities.capability(product_id),
+        Some(&metric_ref)
+    );
     assert!(
         !app.world()
             .resource::<SdfChunkStoreResource>()
@@ -1265,12 +1267,8 @@ fn metric_runtime_sdf_rejects_wrapper_descriptor_mismatch_before_any_mutation() 
 
     let error = enqueue_runtime_sdf_package(
         &mut app,
-        WorldSdfRuntimePayloadPackage::new(
-            descriptor,
-            vec![payload],
-            RegionSdfSummary::default(),
-        )
-        .with_metric_capability(metric_ref),
+        WorldSdfRuntimePayloadPackage::new(descriptor, vec![payload], RegionSdfSummary::default())
+            .with_metric_capability(metric_ref),
     )
     .expect_err("wrapper not owned by descriptor must fail before mutation");
 
@@ -1299,12 +1297,13 @@ fn metric_runtime_sdf_rejects_wrapper_descriptor_mismatch_before_any_mutation() 
             .outputs
             .is_empty()
     );
-    assert!(!app
-        .world()
-        .resource::<WorldChunkRuntimeMapResource>()
-        .unwrap()
-        .by_chunk_id
-        .contains_key(&chunk_id));
+    assert!(
+        !app.world()
+            .resource::<WorldChunkRuntimeMapResource>()
+            .unwrap()
+            .by_chunk_id
+            .contains_key(&chunk_id)
+    );
 }
 
 #[test]
@@ -1324,10 +1323,8 @@ fn metric_runtime_sdf_rejects_unsupported_encoding_and_invalid_topology_before_m
         } else {
             sdf_chunk_payload(chunk_id, ChunkRevision(1), ChunkGeneration(1), 83)
         };
-        let descriptor = runtime_sdf_descriptor(
-            if invalid_encoding { 7102 } else { 7103 },
-            &payload,
-        );
+        let descriptor =
+            runtime_sdf_descriptor(if invalid_encoding { 7102 } else { 7103 }, &payload);
         let product_id = descriptor.product_core().identity;
         let metric_ref = if invalid_encoding {
             WorldSdfMetricPayloadRef {
@@ -1387,12 +1384,13 @@ fn metric_runtime_sdf_rejects_unsupported_encoding_and_invalid_topology_before_m
                 .outputs
                 .is_empty()
         );
-        assert!(!app
-            .world()
-            .resource::<WorldChunkRuntimeMapResource>()
-            .unwrap()
-            .by_chunk_id
-            .contains_key(&chunk_id));
+        assert!(
+            !app.world()
+                .resource::<WorldChunkRuntimeMapResource>()
+                .unwrap()
+                .by_chunk_id
+                .contains_key(&chunk_id)
+        );
     }
 }
 
@@ -1432,8 +1430,7 @@ fn non_metric_replacement_clears_only_that_products_metric_capability() {
     )
     .unwrap();
 
-    let replacement_a =
-        sdf_chunk_payload(chunk_a, ChunkRevision(2), ChunkGeneration(2), 86);
+    let replacement_a = sdf_chunk_payload(chunk_a, ChunkRevision(2), ChunkGeneration(2), 86);
     let replacement_descriptor_a = runtime_sdf_descriptor(7104, &replacement_a);
     enqueue_runtime_sdf_package(
         &mut app,
@@ -1516,7 +1513,10 @@ fn valid_metric_replacement_updates_only_the_target_product() {
         .world()
         .resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
         .unwrap();
-    assert_eq!(capabilities.capability(product_a), Some(&replacement_metric_a));
+    assert_eq!(
+        capabilities.capability(product_a),
+        Some(&replacement_metric_a)
+    );
     assert_eq!(capabilities.capability(product_b), Some(&metric_b));
 }
 
@@ -1553,8 +1553,7 @@ fn rejected_metric_replacement_preserves_prior_ordinary_and_metric_state() {
         .get(&chunk_id)
         .and_then(|record| record.pending_build_generation);
 
-    let invalid_replacement =
-        sdf_chunk_payload(chunk_id, ChunkRevision(2), ChunkGeneration(2), 91);
+    let invalid_replacement = sdf_chunk_payload(chunk_id, ChunkRevision(2), ChunkGeneration(2), 91);
     let invalid_descriptor = runtime_sdf_descriptor(7108, &invalid_replacement);
     let invalid_metric = metric_payload_ref(&invalid_replacement, 1);
     let error = enqueue_runtime_sdf_package(
