@@ -4966,4 +4966,11 @@ mod tests {
         };
         assert!(Error::source(&error).is_none());
     }
+
+    #[test]
+    fn maintained_execution_has_no_string_flattening_gpu_authoring_bucket() {
+        let source = include_str!("deterministic_execution.rs");
+        assert!(!source.contains(concat!("gpu_", "authoring(")));
+        assert!(!source.contains(concat!("RunenGpu", "Authoring")));
+    }
 }
