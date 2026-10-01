@@ -10,7 +10,7 @@ use super::admission::{
 };
 use super::appearance::{RenderDiffuseMaterial, RenderDirectionalEmitter};
 use super::apply_runenwerk_gpu_context_policy;
-use super::deterministic_admission::admit_deterministic_render;
+use super::deterministic_admission::admit_deterministic_render_with_semantic_inputs;
 use super::deterministic_carrier::{decode_word, maintained_evaluation_value};
 use super::deterministic_execution::DeterministicVerificationSubmission;
 use super::deterministic_verification::{
@@ -351,10 +351,11 @@ fn submit_verified(
     output_bindings: &[RenderOutputBinding],
     context: &GpuContext,
 ) -> DeterministicVerificationSubmission {
-    let admitted = admit_deterministic_render(
+    let admitted = admit_deterministic_render_with_semantic_inputs(
         &fixture.scene,
         &fixture.request,
         &fixture.semantic_inputs,
+        &[],
         &fixture.availability,
         output_bindings,
         context,

@@ -1,5 +1,4 @@
 use super::admission::AdmittedRenderPlan;
-use super::deterministic_verification::VerifiedDeterministicRender;
 use super::field_input::RenderFieldSemanticInputBinding;
 use super::method::RenderMethodId;
 use super::request::RenderRequest;
@@ -10,23 +9,47 @@ use std::collections::BTreeSet;
 use std::error::Error;
 use std::fmt;
 
-/// Renderer-owned evidence that one deterministic finite output satisfied the requested tolerance.
+/// Private renderer-owned evidence that one exact admitted execution completed every requested
+/// output inside the result-formation contract.
 ///
-/// This witness is deliberately private to result formation. The only constructor is used while
-/// consuming one execution-scoped [`VerifiedDeterministicRender`], so an output-index token cannot
-/// be detached and reused across submissions or semantic-input substitutions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct RenderDeterministicOutputFormationEvidence {
-    output_index: usize,
+/// Method-specific verification owns when this witness may be minted. The semantic result layer
+/// consumes only this generic evidence and therefore does not depend on any maintained-method
+/// verifier type. The admitted plan is retained by value so output-completion evidence cannot be
+/// detached from the exact scene/request/binding authority that was verified.
+#[derive(Debug)]
+pub(super) struct RenderResultFormationEvidence {
+    admitted: AdmittedRenderPlan,
+    completed_outputs: BTreeSet<usize>,
 }
 
-impl RenderDeterministicOutputFormationEvidence {
-    const fn requested_tolerance_satisfied(output_index: usize) -> Self {
-        Self { output_index }
-    }
-
-    const fn output_index(self) -> usize {
-        self.output_index
+impl RenderResultFormationEvidence {
+    pub(super) fn complete(
+        admitted: &AdmittedRenderPlan,
+        output_indices: impl IntoIterator<Item = usize>,
+    ) -> Result<Self, RenderResultFormationError> {
+        let output_count = admitted.outputs().len();
+        let mut completed_outputs = BTreeSet::new();
+        for output_index in output_indices {
+            if output_index >= output_count {
+                return Err(RenderResultFormationError::OutputOutOfRange {
+                    output_index,
+                    output_count,
+                });
+            }
+            if !completed_outputs.insert(output_index) {
+                return Err(RenderResultFormationError::DuplicateOutput { output_index });
+            }
+        }
+        for output in admitted.outputs() {
+            let output_index = output.output_index();
+            if !completed_outputs.contains(&output_index) {
+                return Err(RenderResultFormationError::MissingOutput { output_index });
+            }
+        }
+        Ok(Self {
+            admitted: admitted.clone(),
+            completed_outputs,
+        })
     }
 }
 
@@ -133,55 +156,17 @@ impl fmt::Display for RenderResultFormationError {
 impl Error for RenderResultFormationError {}
 
 impl RenderResult {
-    /// Consume one exact execution-scoped EVAL-001 proof and form its semantic result evidence.
+    /// Form semantic result provenance from one private generic completion witness.
     ///
-    /// The verified execution is taken by value so its per-output finite-evaluation evidence cannot
-    /// be reused after formation. Private output witnesses are minted only inside this owner-controlled
-    /// flow from the exact admitted outputs already bound to the verified submission. GPU submission,
-    /// readback, decoder, and completion identities are consumed as proof context and remain outside
-    /// public `RenderResult` identity.
-    pub(super) fn from_verified_deterministic(
-        verified: VerifiedDeterministicRender,
-    ) -> Result<Self, RenderResultFormationError> {
-        let admitted = verified.submitted().admitted().admitted();
-        let output_evidence = admitted.outputs().iter().map(|output| {
-            RenderDeterministicOutputFormationEvidence::requested_tolerance_satisfied(
-                output.output_index(),
-            )
-        });
-        Self::complete_deterministic(admitted, output_evidence)
-    }
-
-    /// Form complete semantic result evidence from one internally correlated deterministic proof.
-    ///
-    /// This raw constructor is private to the module. Callers cannot combine an arbitrary admitted
-    /// plan with detached output-index assertions; the only owner-controlled entry above derives the
-    /// witness set while consuming the exact `VerifiedDeterministicRender` that established it.
-    fn complete_deterministic(
-        admitted: &AdmittedRenderPlan,
-        output_evidence: impl IntoIterator<Item = RenderDeterministicOutputFormationEvidence>,
-    ) -> Result<Self, RenderResultFormationError> {
-        let output_count = admitted.outputs().len();
-        let mut formed = BTreeSet::new();
-        for evidence in output_evidence {
-            let output_index = evidence.output_index();
-            if output_index >= output_count {
-                return Err(RenderResultFormationError::OutputOutOfRange {
-                    output_index,
-                    output_count,
-                });
-            }
-            if !formed.insert(output_index) {
-                return Err(RenderResultFormationError::DuplicateOutput { output_index });
-            }
-        }
-
-        for output in admitted.outputs() {
-            let output_index = output.output_index();
-            if !formed.contains(&output_index) {
-                return Err(RenderResultFormationError::MissingOutput { output_index });
-            }
-        }
+    /// Physical submission/readback identity and method-specific verification machinery have already
+    /// been consumed before this boundary. The witness retains the exact admitted semantic authority
+    /// by value and is not public or caller-mintable.
+    pub(super) fn from_formation_evidence(evidence: RenderResultFormationEvidence) -> Self {
+        let RenderResultFormationEvidence {
+            admitted,
+            completed_outputs,
+        } = evidence;
+        debug_assert_eq!(completed_outputs.len(), admitted.outputs().len());
 
         let outputs = admitted
             .outputs()
@@ -200,14 +185,14 @@ impl RenderResult {
             })
             .collect();
 
-        Ok(Self {
+        Self {
             scene: admitted.plan().scene().clone(),
             request: admitted.plan().request().clone(),
             method_id: admitted.selected_candidate().method_id(),
             surface_semantic_inputs: admitted.surface_semantic_inputs().to_vec(),
             field_semantic_inputs: admitted.field_semantic_inputs().to_vec(),
             outputs,
-        })
+        }
     }
 
     pub const fn scene_revision(&self) -> RenderSceneRevision {

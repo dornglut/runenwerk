@@ -118,6 +118,16 @@ jobs:
             r6_spine_proof::execution \
             --locked -- --nocapture --test-threads=1
 
+      - name: Run R8 ordinary public consumer proof
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENRENDER_R8_REQUIRE_GPU: '1'
+        run: |
+          set -euo pipefail
+          cargo +stable test -p engine \
+            --test runenrender_ordinary_public_api \
+            --locked -- --nocapture --test-threads=1
+
       - name: Run maintained R7 same-submission verification proof module
         env:
           RUST_BACKTRACE: '1'

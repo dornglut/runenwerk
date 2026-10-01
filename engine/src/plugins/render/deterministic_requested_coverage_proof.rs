@@ -154,6 +154,7 @@ fn prepare_with_requested_coverage(
         scope,
         finite_evaluation,
         true,
+        None,
     )
 }
 
@@ -373,6 +374,7 @@ fn ordinary_sub_native_preparation_omits_unconsumed_requested_coverage() {
         6,
         Some((0, (4, 4))),
         false,
+        None,
     )
     .unwrap();
     let evidence = prepared

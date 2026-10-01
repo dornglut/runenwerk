@@ -219,25 +219,6 @@ impl AdmittedDeterministicRender {
     }
 }
 
-pub fn admit_deterministic_render(
-    scene: &RenderSceneSnapshot,
-    request: &RenderRequest,
-    semantic_inputs: &[RenderSurfaceSemanticInputBinding],
-    availability: &[RenderRepresentationAvailabilityFact],
-    output_bindings: &[RenderOutputBinding],
-    context: &GpuContext,
-) -> Result<AdmittedDeterministicRender, RenderDeterministicAdmissionFailure> {
-    admit_deterministic_render_with_semantic_inputs(
-        scene,
-        request,
-        semantic_inputs,
-        &[],
-        availability,
-        output_bindings,
-        context,
-    )
-}
-
 pub fn admit_deterministic_render_with_semantic_inputs(
     scene: &RenderSceneSnapshot,
     request: &RenderRequest,

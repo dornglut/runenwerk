@@ -9,7 +9,7 @@ use super::adapters::{
 };
 use super::admission::{RenderOutputBinding, RenderOutputDestination};
 use super::apply_runenwerk_gpu_context_policy;
-use super::deterministic_admission::admit_deterministic_render;
+use super::deterministic_admission::admit_deterministic_render_with_semantic_inputs;
 use super::deterministic_execution::{
     DeterministicResourceCache, prepare_deterministic_render,
     prepare_deterministic_render_with_cache_in_scope,
@@ -118,10 +118,11 @@ fn admit_r32float_radiance_to(
         0,
         RenderOutputDestination::SampleLatticeTexture(destination),
     )];
-    admit_deterministic_render(
+    admit_deterministic_render_with_semantic_inputs(
         &fixture.scene,
         &fixture.request,
         &fixture.semantic_inputs,
+        &[],
         &fixture.availability,
         &output_bindings,
         context,

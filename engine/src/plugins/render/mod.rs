@@ -8,10 +8,10 @@ pub mod composition;
 pub mod derived_state;
 #[cfg_attr(not(test), allow(dead_code))]
 mod derived_transform;
-pub mod deterministic_admission;
+mod deterministic_admission;
 mod deterministic_capture;
 mod deterministic_carrier;
-pub mod deterministic_execution;
+mod deterministic_execution;
 #[allow(dead_code)]
 mod deterministic_verification;
 pub mod features;
@@ -26,6 +26,7 @@ mod maintained_method;
 pub mod material_compiler;
 pub mod method;
 pub(crate) mod native_host;
+mod ordinary;
 pub mod output_result;
 pub mod params;
 pub mod participation;
@@ -75,10 +76,6 @@ pub use api::*;
 pub use app_ext::AppRenderExt;
 pub use bytemuck;
 pub use composition::*;
-pub use deterministic_capture::{
-    RenderCapturedDeterministicRadiance, RenderDeterministicRadianceCaptureError,
-    RenderDeterministicRadianceCaptureRequest, RenderDeterministicRadianceCaptureRequestError,
-};
 pub use engine_render_macros::{GpuStorage, GpuUniform};
 pub use features::*;
 pub use frame::*;
@@ -88,6 +85,7 @@ pub use gpu_context_policy::{
 pub use gpu_primitives::*;
 pub use graph::*;
 pub use material_compiler::*;
+pub use ordinary::*;
 pub use params::*;
 pub use plugin::RenderPlugin;
 pub(crate) use plugin::render_integration_is_active;

@@ -263,8 +263,12 @@ impl Renderer {
             )
         })?;
         for contribution in deterministic_contributions {
-            self.deterministic_resources.record_producer_submission(
-                contribution.producer_id.raw(),
+            let producer_scope =
+                crate::plugins::render::RenderExecutionScope::new(contribution.producer_id.raw());
+            self.render_execution
+                .record_submission(producer_scope, &submission);
+            self.camera_diagnostics.accept(
+                producer_scope.raw(),
                 prepared_frame.context.frame_index,
                 &submission,
             );
@@ -773,7 +777,7 @@ impl Renderer {
         contributions: &[crate::plugins::render::RenderDeterministicFrameContribution],
     ) -> Result<(Vec<GpuWorkFragment>, Vec<GpuWorkImport>)> {
         const TEMPORAL_EVIDENCE_FRAME_CAPACITY: usize = 32;
-        self.deterministic_temporal_evidence
+        self.temporal_execution_evidence
             .remove(&prepared_frame.context.frame_index);
         let mut fragments = Vec::new();
         let mut imports = Vec::new();
@@ -789,33 +793,56 @@ impl Renderer {
                     target,
                 ),
             );
-            let admitted =
-                crate::plugins::render::deterministic_admission::admit_deterministic_render(
-                    &contribution.scene,
-                    &contribution.request,
-                    &contribution.semantic_inputs,
-                    &contribution.availability,
-                    std::slice::from_ref(&binding),
-                    context,
+            let admitted = crate::plugins::render::admit_render(
+                &contribution.scene,
+                &contribution.request,
+                &contribution.semantic_inputs,
+                &[],
+                &contribution.availability,
+                std::slice::from_ref(&binding),
+                context,
+            )
+            .map_err(|error| anyhow::anyhow!("render admission failed: {error}"))?;
+            let finite_evaluation = contribution.finite_evaluation_extent.map(|extent| {
+                let (width, height) = extent.dimensions();
+                crate::plugins::render::RenderEvaluationSelection::new(
+                    contribution.output_index,
+                    width,
+                    height,
                 )
-                .map_err(|error| {
-                    anyhow::anyhow!("deterministic render admission failed: {error}")
-                })?;
-            let finite_evaluation = contribution
-                .finite_evaluation_extent
-                .map(|extent| (contribution.output_index, extent.dimensions()));
-            let prepared =
-                crate::plugins::render::deterministic_execution::prepare_deterministic_render_with_cache_in_scope_and_evaluation(
+                .expect("frame finite evaluation extent is already non-zero")
+            });
+            let producer_scope =
+                crate::plugins::render::RenderExecutionScope::new(contribution.producer_id.raw());
+            let camera_diagnostic_request = self
+                .camera_diagnostics
+                .request_for_scope(producer_scope.raw())?;
+            let prepared = match camera_diagnostic_request {
+                Some(request) => self.render_execution.prepare_with_camera_diagnostic(
                     admitted,
                     context,
-                    &mut self.deterministic_resources,
-                    contribution.producer_id.raw(),
+                    producer_scope,
                     finite_evaluation,
-                    false,
-                )
-                .map_err(|error| {
-                    anyhow::anyhow!("deterministic render preparation failed: {error}")
-                })?;
+                    request,
+                ),
+                None => self.render_execution.prepare(
+                    admitted,
+                    context,
+                    producer_scope,
+                    finite_evaluation,
+                ),
+            }
+            .map_err(|error| anyhow::anyhow!("render preparation failed: {error}"))?;
+            if let Some(source) = self
+                .render_execution
+                .take_camera_diagnostic_source(producer_scope)
+            {
+                self.camera_diagnostics
+                    .prepare(producer_scope.raw(), source);
+            } else {
+                self.camera_diagnostics
+                    .discard_request(producer_scope.raw());
+            }
             let output = prepared
                 .radiance_output(contribution.output_index)
                 .ok_or_else(|| {
@@ -825,7 +852,7 @@ impl Renderer {
                     )
                 })?;
             if let Some(evidence) = output.temporal_execution_evidence() {
-                self.deterministic_temporal_evidence
+                self.temporal_execution_evidence
                     .entry(prepared_frame.context.frame_index)
                     .or_default()
                     .push(evidence.clone());
@@ -840,11 +867,11 @@ impl Renderer {
                 None,
             )));
         }
-        while self.deterministic_temporal_evidence.len() > TEMPORAL_EVIDENCE_FRAME_CAPACITY {
-            let Some(oldest) = self.deterministic_temporal_evidence.keys().next().copied() else {
+        while self.temporal_execution_evidence.len() > TEMPORAL_EVIDENCE_FRAME_CAPACITY {
+            let Some(oldest) = self.temporal_execution_evidence.keys().next().copied() else {
                 break;
             };
-            self.deterministic_temporal_evidence.remove(&oldest);
+            self.temporal_execution_evidence.remove(&oldest);
         }
         Ok((fragments, imports))
     }

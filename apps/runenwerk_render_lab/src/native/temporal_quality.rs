@@ -454,7 +454,7 @@ pub(super) fn write_temporal_quality_artifact(
     let mut generation_classes = Vec::new();
     let mut temporal_reconstruction = Vec::new();
     for observation in history.observations().take(capture_submission_ordinal) {
-        for evidence in gfx.deterministic_temporal_evidence(observation.key.frame_index) {
+        for evidence in gfx.temporal_execution_evidence(observation.key.frame_index) {
             let semantic_input_generation_classes = evidence
                 .semantic_input_generations
                 .iter()
@@ -727,7 +727,7 @@ pub(super) fn write_camera_motion_quality_artifact(
     let mut frames = Vec::new();
     let mut execution_started = false;
     for observation in history.observations().take(capture_history_ordinal) {
-        let execution_evidence = gfx.deterministic_temporal_evidence(observation.key.frame_index);
+        let execution_evidence = gfx.temporal_execution_evidence(observation.key.frame_index);
         if execution_evidence.is_empty() {
             if execution_started {
                 bail!(

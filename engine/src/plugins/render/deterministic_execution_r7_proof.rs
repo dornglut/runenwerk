@@ -1,7 +1,7 @@
 //! Focused Vulkan-capable proof for the maintained R7 deterministic execution seam.
 //!
 //! The fixture intentionally owns no method or evaluator authority. It reaches execution only
-//! through `admit_deterministic_render`, then proves the maintained ordinary and verified paths use
+//! through `admit_deterministic_render_with_semantic_inputs`, then proves the maintained ordinary and verified paths use
 //! their intended observation policy: ordinary execution authors no readback at all, while verified
 //! execution retains exactly the renderer-private canonical-output, definedness, and evaluator-status
 //! readbacks from the same exact `GpuSubmission`, can establish the private RR566-EVAL-001 witness,
@@ -13,7 +13,9 @@ use super::admission::{
 };
 use super::appearance::RenderDiffuseMaterial;
 use super::apply_runenwerk_gpu_context_policy;
-use super::deterministic_admission::{AdmittedDeterministicRender, admit_deterministic_render};
+use super::deterministic_admission::{
+    AdmittedDeterministicRender, admit_deterministic_render_with_semantic_inputs,
+};
 use super::deterministic_execution::{
     RenderDeterministicRadianceCaptureRequestError, RenderDeterministicResultFormationError,
     SubmittedDeterministicRender, submit_deterministic_render,
@@ -323,10 +325,11 @@ fn admit_with_writable_only_lattice(
         0,
         RenderOutputDestination::SampleLatticeTexture(destination),
     )];
-    admit_deterministic_render(
+    admit_deterministic_render_with_semantic_inputs(
         &fixture.scene,
         &fixture.request,
         &fixture.semantic_inputs,
+        &[],
         &fixture.availability,
         &output_bindings,
         context,
@@ -363,10 +366,11 @@ fn admit_with_retained_destination(
         0,
         RenderOutputDestination::SampleLatticeTexture(destination),
     )];
-    admit_deterministic_render(
+    admit_deterministic_render_with_semantic_inputs(
         &fixture.scene,
         &request,
         &fixture.semantic_inputs,
+        &[],
         &fixture.availability,
         &output_bindings,
         context,
@@ -632,12 +636,12 @@ fn maintained_execution_keeps_ordinary_unobserved_and_verified_same_submission_o
         "2x2 canonical observation must contain at least four one-word logical samples"
     );
 
-    let verified = verify_completed_deterministic_render(verified)
-        .expect("same-submission object-identity samples must satisfy RR566-EVAL-001");
     assert!(matches!(
         verified.submitted().submission().status(),
         GpuSubmissionStatus::Completed
     ));
+    let _formation = verify_completed_deterministic_render(verified)
+        .expect("same-submission object-identity samples must satisfy RR566-EVAL-001");
 }
 
 #[test]
@@ -920,10 +924,11 @@ fn admitted_dispatch_budget_tiles_large_lattice_through_verified_execution() {
 
     let mut fixture = maintained_fixture();
     fixture.request = object_identity_lattice_request(27, 19);
-    let admitted = admit_deterministic_render(
+    let admitted = admit_deterministic_render_with_semantic_inputs(
         &fixture.scene,
         &fixture.request,
         &fixture.semantic_inputs,
+        &[],
         &fixture.availability,
         &lattice_bindings(27, 19, fixture.request.outputs().len()),
         &context,
@@ -974,10 +979,11 @@ fn maintained_ordinary_execution_supports_reordered_8x6_subset_outside_verifier_
     let fixture = maintained_fixture();
     let request = reordered_8x6_request();
     let output_bindings = lattice_bindings(8, 6, request.outputs().len());
-    let admitted = admit_deterministic_render(
+    let admitted = admit_deterministic_render_with_semantic_inputs(
         &fixture.scene,
         &request,
         &fixture.semantic_inputs,
+        &[],
         &fixture.availability,
         &output_bindings,
         &context,

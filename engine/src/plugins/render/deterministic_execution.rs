@@ -40,7 +40,7 @@ use super::surface_input::{
 };
 use runen_gpu::{
     GpuAdmittedProgramSource, GpuBufferDescriptor, GpuBufferHandle, GpuBufferInitialization,
-    GpuBufferRegion, GpuBufferTextureLayout, GpuBufferUsage, GpuClearOperation,
+    GpuBufferRange, GpuBufferRegion, GpuBufferTextureLayout, GpuBufferUsage, GpuClearOperation,
     GpuComputeOperation, GpuComputePipelineDescriptor, GpuContext, GpuContextAffinity,
     GpuCopyOperation, GpuDispatchIntent, GpuDispatchSize, GpuExportKey, GpuExportRelationship,
     GpuInitialCoverage, GpuReadbackId, GpuReadbackOperation, GpuReadbackStatus, GpuReconstruction,
@@ -54,9 +54,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt;
 use std::sync::LazyLock;
-
-#[path = "deterministic_camera_diagnostics.rs"]
-mod camera_diagnostics;
 
 #[cfg(test)]
 #[path = "deterministic_camera_history_proof.rs"]
@@ -88,6 +85,81 @@ const CURRENT_HIT_WORDS_PER_SAMPLE: u64 = 4;
 const CAMERA_DIAGNOSTIC_WORDS: u64 = 32 * 32;
 const MAINTAINED_EVALUATOR_REVISION: u64 = 3;
 const CAMERA_DEPTH_ABSOLUTE_EPSILON: f32 = 0.001;
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct RenderCameraDiagnosticRequest {
+    current_only_control: bool,
+}
+
+impl RenderCameraDiagnosticRequest {
+    pub(crate) const fn new(current_only_control: bool) -> Self {
+        Self {
+            current_only_control,
+        }
+    }
+
+    pub(crate) const fn current_only_control(self) -> bool {
+        self.current_only_control
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct RenderCameraDiagnosticSource {
+    history: GpuBufferHandle,
+    extent: (u32, u32),
+    phase: u32,
+    history_age: u32,
+    prior_same_pose_completed_frames: u32,
+    current_only_control: bool,
+}
+
+impl RenderCameraDiagnosticSource {
+    pub(crate) const fn extent(&self) -> (u32, u32) {
+        self.extent
+    }
+
+    pub(crate) const fn phase(&self) -> u32 {
+        self.phase
+    }
+
+    pub(crate) const fn history_age(&self) -> u32 {
+        self.history_age
+    }
+
+    pub(crate) const fn prior_same_pose_completed_frames(&self) -> u32 {
+        self.prior_same_pose_completed_frames
+    }
+
+    pub(crate) const fn current_only_control(&self) -> bool {
+        self.current_only_control
+    }
+
+    pub(crate) const fn camera_reprojection_revision(&self) -> u32 {
+        CAMERA_REPROJECTION_REVISION
+    }
+
+    pub(crate) fn readback_source(
+        &self,
+    ) -> Result<GpuBufferRegion, RenderDeterministicLoweringError> {
+        let offset = u64::from(self.extent.0)
+            .checked_mul(u64::from(self.extent.1))
+            .and_then(|samples| samples.checked_mul(CAMERA_HISTORY_WORDS_PER_SAMPLE))
+            .and_then(|words| words.checked_mul(WORD_BYTES))
+            .ok_or(RenderDeterministicLoweringError::SizeOverflow {
+                field: "camera diagnostic readback offset",
+            })?;
+        let byte_len = CAMERA_DIAGNOSTIC_WORDS.checked_mul(WORD_BYTES).ok_or(
+            RenderDeterministicLoweringError::SizeOverflow {
+                field: "camera diagnostic readback byte length",
+            },
+        )?;
+        let range = GpuBufferRange::new(&self.history, offset, byte_len)
+            .map_err(|error| gpu_authoring("camera diagnostic readback range", error))?;
+        let region = GpuBufferRegion::new(&self.history, range)
+            .map_err(|error| gpu_authoring("camera diagnostic readback region", error))?;
+        Ok(region)
+    }
+}
 const CAMERA_DEPTH_RELATIVE_EPSILON: f32 = 0.001;
 const TEMPORAL_PHASE_COUNT: u32 = 4;
 const SHAPE_SPHERE: u32 = 1;
@@ -206,10 +278,19 @@ struct DeterministicTemporalHistoryUse {
 }
 
 #[derive(Debug, Clone, Copy)]
+struct DeterministicRenderExecutionSelection {
+    scope: u64,
+    finite_evaluation: Option<(usize, (u32, u32))>,
+    produce_requested_coverage: bool,
+    camera_diagnostic_request: Option<RenderCameraDiagnosticRequest>,
+}
+
+#[derive(Debug, Clone, Copy)]
 struct DeterministicOutputExecutionSelection {
     scope: u64,
     finite_evaluation_extent: Option<(u32, u32)>,
     produce_requested_coverage: bool,
+    camera_diagnostic_request: Option<RenderCameraDiagnosticRequest>,
 }
 
 /// Physical execution selection; private coverage is not a requested semantic depth output.
@@ -251,7 +332,7 @@ pub(crate) struct DeterministicResourceCache {
     // Keep the latest accepted graph correlated with every producer namespace whose mutable
     // intermediates it used. A peer surface's submission must not stall this producer's cache.
     producer_submissions: BTreeMap<u64, GpuSubmission>,
-    camera_diagnostics: camera_diagnostics::CameraDiagnostics,
+    prepared_camera_diagnostics: BTreeMap<u64, RenderCameraDiagnosticSource>,
 }
 
 impl DeterministicResourceCache {
@@ -271,11 +352,25 @@ impl DeterministicResourceCache {
     pub(crate) fn record_producer_submission(
         &mut self,
         producer_scope: u64,
-        frame_index: u64,
+        _frame_index: u64,
         submission: &GpuSubmission,
     ) {
-        self.camera_diagnostics
-            .accept(producer_scope, frame_index, submission);
+        self.producer_submissions
+            .insert(producer_scope, submission.clone());
+    }
+
+    pub(crate) fn take_camera_diagnostic_source(
+        &mut self,
+        producer_scope: u64,
+    ) -> Option<RenderCameraDiagnosticSource> {
+        self.prepared_camera_diagnostics.remove(&producer_scope)
+    }
+
+    pub(crate) fn retain_auxiliary_producer_submission(
+        &mut self,
+        producer_scope: u64,
+        submission: &GpuSubmission,
+    ) {
         self.producer_submissions
             .insert(producer_scope, submission.clone());
     }
@@ -299,14 +394,6 @@ impl DeterministicResourceCache {
         // using a producer's reusable intermediates.
         self.producer_submissions
             .retain(|_, submission| matches!(submission.status(), GpuSubmissionStatus::Accepted));
-    }
-
-    pub(crate) fn progress_camera_diagnostics(
-        &mut self,
-        context: &GpuContext,
-    ) -> anyhow::Result<()> {
-        self.camera_diagnostics
-            .progress(context, &mut self.producer_submissions)
     }
 
     fn reconcile_temporal_outputs(&mut self, scope: u64, completed: bool) {
@@ -706,7 +793,7 @@ impl PreparedDeterministicRender {
 /// This records preparation, not GPU completion or CPU-observed coverage availability. The carrier
 /// becomes current execution evidence only after its owning producer submission completes.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RenderDeterministicRequestedCoveragePreparation {
+pub struct RenderRequestedCoveragePreparation {
     pub extent: (u32, u32),
     pub policy_revision: u32,
     pub evaluator_revision: u64,
@@ -714,10 +801,10 @@ pub struct RenderDeterministicRequestedCoveragePreparation {
 
 /// Bounded renderer-owned evidence for one footprint-reconstruction preparation.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RenderDeterministicTemporalExecutionEvidence {
+pub struct RenderTemporalExecutionEvidence {
     pub requested_extent: (u32, u32),
     pub evaluation_extent: (u32, u32),
-    pub current_coverage: Option<RenderDeterministicRequestedCoveragePreparation>,
+    pub current_coverage: Option<RenderRequestedCoveragePreparation>,
     pub semantic_input_generations:
         Vec<(RenderRepresentationId, RenderSurfaceSemanticInputGeneration)>,
     pub field_semantic_input_generations:
@@ -745,7 +832,7 @@ pub struct RenderDeterministicTemporalExecutionEvidence {
 pub struct PreparedDeterministicRadianceOutput {
     output_index: usize,
     relationship: GpuExportRelationship,
-    temporal_evidence: Option<RenderDeterministicTemporalExecutionEvidence>,
+    temporal_evidence: Option<RenderTemporalExecutionEvidence>,
 }
 
 impl PreparedDeterministicRadianceOutput {
@@ -768,9 +855,7 @@ impl PreparedDeterministicRadianceOutput {
         &self.relationship
     }
 
-    pub fn temporal_execution_evidence(
-        &self,
-    ) -> Option<&RenderDeterministicTemporalExecutionEvidence> {
+    pub fn temporal_execution_evidence(&self) -> Option<&RenderTemporalExecutionEvidence> {
         self.temporal_evidence.as_ref()
     }
 
@@ -957,18 +1042,14 @@ impl SubmittedDeterministicRender {
                 verification: DeterministicVerificationState::Requested(verification_readbacks),
             },
         };
-        let verified =
+        let formation_evidence =
             super::deterministic_verification::verify_completed_deterministic_render(verification)
                 .map_err(
                     |error| RenderDeterministicResultFormationError::VerificationRejected {
                         detail: error.to_string(),
                     },
                 )?;
-        let result = RenderResult::from_verified_deterministic(verified).map_err(|error| {
-            RenderDeterministicResultFormationError::ResultFormation {
-                detail: error.to_string(),
-            }
-        })?;
+        let result = RenderResult::from_formation_evidence(formation_evidence);
         self.verification = DeterministicVerificationState::Formed;
         Ok(Some(result))
     }
@@ -1065,6 +1146,13 @@ pub enum RenderDeterministicLoweringError {
     },
     NumericRealization {
         field: &'static str,
+    },
+    DispatchCapacityExceeded {
+        sample_count: u32,
+        workgroup_size: u32,
+        required_workgroups: u64,
+        max_workgroups_per_dimension: u32,
+        capacity_workgroups: u64,
     },
     RunenGpuAuthoring {
         stage: &'static str,
@@ -1173,6 +1261,16 @@ impl fmt::Display for RenderDeterministicLoweringError {
                 formatter,
                 "{field} cannot be represented by the maintained finite f32 evaluator"
             ),
+            Self::DispatchCapacityExceeded {
+                sample_count,
+                workgroup_size,
+                required_workgroups,
+                max_workgroups_per_dimension,
+                capacity_workgroups,
+            } => write!(
+                formatter,
+                "sample count {sample_count} with workgroup size {workgroup_size} requires {required_workgroups} workgroups, but the admitted maximum per dimension is {max_workgroups_per_dimension} and the 2D dispatch capacity is {capacity_workgroups} workgroups"
+            ),
             Self::RunenGpuAuthoring { stage, detail } => {
                 write!(formatter, "RunenGPU {stage} authoring failed: {detail}")
             }
@@ -1265,9 +1363,6 @@ pub enum RenderDeterministicResultFormationError {
     VerificationRejected {
         detail: String,
     },
-    ResultFormation {
-        detail: String,
-    },
 }
 
 impl fmt::Display for RenderDeterministicResultFormationError {
@@ -1301,10 +1396,6 @@ impl fmt::Display for RenderDeterministicResultFormationError {
             Self::VerificationRejected { detail } => write!(
                 formatter,
                 "deterministic finite-evaluation verification rejected result formation: {detail}"
-            ),
-            Self::ResultFormation { detail } => write!(
-                formatter,
-                "renderer-owned deterministic result formation failed: {detail}"
             ),
         }
     }
@@ -1407,7 +1498,7 @@ pub(crate) fn prepare_deterministic_render_with_cache_in_scope(
     scope: u64,
 ) -> Result<PreparedDeterministicRender, RenderDeterministicExecutionError> {
     prepare_deterministic_render_with_cache_in_scope_and_evaluation(
-        admitted, context, resources, scope, None, false,
+        admitted, context, resources, scope, None, false, None,
     )
 }
 
@@ -1418,15 +1509,20 @@ pub(crate) fn prepare_deterministic_render_with_cache_in_scope_and_evaluation(
     scope: u64,
     finite_evaluation: Option<(usize, (u32, u32))>,
     produce_requested_coverage: bool,
+    camera_diagnostic_request: Option<RenderCameraDiagnosticRequest>,
 ) -> Result<PreparedDeterministicRender, RenderDeterministicExecutionError> {
+    resources.prepared_camera_diagnostics.remove(&scope);
     let lowered = lower_deterministic_render(
         &admitted,
         context,
         DeterministicObservationIntent::Ordinary,
         resources,
-        scope,
-        finite_evaluation,
-        produce_requested_coverage,
+        DeterministicRenderExecutionSelection {
+            scope,
+            finite_evaluation,
+            produce_requested_coverage,
+            camera_diagnostic_request,
+        },
     )?;
     debug_assert!(lowered.verification_readbacks.is_empty());
     Ok(PreparedDeterministicRender {
@@ -1472,9 +1568,12 @@ pub(super) async fn submit_deterministic_render_for_verification(
         context,
         DeterministicObservationIntent::Verify,
         &mut DeterministicResourceCache::default(),
-        0,
-        None,
-        false,
+        DeterministicRenderExecutionSelection {
+            scope: 0,
+            finite_evaluation: None,
+            produce_requested_coverage: false,
+            camera_diagnostic_request: None,
+        },
     )?;
     let verification_readbacks = lowered.verification_readbacks;
     let submitted = submit_lowered_deterministic_render(
@@ -1534,10 +1633,14 @@ fn lower_deterministic_render(
     context: &GpuContext,
     intent: DeterministicObservationIntent,
     resources: &mut DeterministicResourceCache,
-    scope: u64,
-    finite_evaluation: Option<(usize, (u32, u32))>,
-    produce_requested_coverage: bool,
+    execution: DeterministicRenderExecutionSelection,
 ) -> Result<LoweredDeterministicRender, RenderDeterministicLoweringError> {
+    let DeterministicRenderExecutionSelection {
+        scope,
+        finite_evaluation,
+        produce_requested_coverage,
+        camera_diagnostic_request,
+    } = execution;
     let admitted = maintained.admitted();
     if admitted.environment().affinity() != context.affinity() {
         return Err(RenderDeterministicLoweringError::ContextAffinityChanged {
@@ -1595,6 +1698,7 @@ fn lower_deterministic_render(
                     },
                 ),
                 produce_requested_coverage,
+                camera_diagnostic_request,
             },
         )?;
         fragments.push(lowered.fragment);
@@ -1651,6 +1755,7 @@ fn lower_output(
         scope,
         finite_evaluation_extent,
         produce_requested_coverage,
+        camera_diagnostic_request,
     } = execution;
     let admitted_output = admitted
         .outputs()
@@ -2025,32 +2130,14 @@ fn lower_output(
                     && temporal_history
                         .as_ref()
                         .is_some_and(|history| history.age == 8)
-                    && let Some(directory) =
-                        camera_diagnostics::CameraDiagnosticSnapshot::requested_directory()
+                    && let Some(request) = camera_diagnostic_request
                 {
-                    let source_revision =
-                        std::env::var("RUNENWERK_SOURCE_REVISION").map_err(|error| {
-                            gpu_authoring("camera diagnostic exact source revision", error)
-                        })?;
-                    if source_revision.len() != 40
-                        || !source_revision.bytes().all(|byte| byte.is_ascii_hexdigit())
-                    {
-                        return Err(gpu_authoring(
-                            "camera diagnostic exact source revision",
-                            "expected a complete 40-digit source SHA",
-                        ));
-                    }
                     let history = temporal_history.as_ref().expect("camera temporal history");
                     parameter_words[33] = 1;
-                    let current_only_control =
-                        std::env::var("RUNENWERK_CAMERA_HISTORY_CURRENT_ONLY_FIRST_MOTION")
-                            .ok()
-                            .as_deref()
-                            == Some("1");
-                    parameter_words[34] = u32::from(current_only_control);
-                    resources.camera_diagnostics.prepare(
+                    parameter_words[34] = u32::from(request.current_only_control());
+                    resources.prepared_camera_diagnostics.insert(
                         scope,
-                        camera_diagnostics::CameraDiagnosticSnapshot {
+                        RenderCameraDiagnosticSource {
                             history: current_history.clone(),
                             extent: requested
                                 .spec()
@@ -2060,9 +2147,7 @@ fn lower_output(
                             phase: history.phase,
                             history_age: history.age,
                             prior_same_pose_completed_frames: *same_pose_completed_frames,
-                            directory,
-                            source_revision,
-                            current_only_control,
+                            current_only_control: request.current_only_control(),
                         },
                     );
                 }
@@ -2212,7 +2297,7 @@ fn lower_output(
                             output_index,
                             relationship,
                             temporal_evidence: temporal_history.as_ref().map(|history| {
-                                RenderDeterministicTemporalExecutionEvidence {
+                                RenderTemporalExecutionEvidence {
                                     requested_extent: requested
                                         .spec()
                                         .topology()
@@ -2221,7 +2306,7 @@ fn lower_output(
                                     evaluation_extent: finite_evaluation_extent
                                         .expect("temporal history requires finite evaluation"),
                                     current_coverage: requested_coverage.as_ref().map(|_| {
-                                        RenderDeterministicRequestedCoveragePreparation {
+                                        RenderRequestedCoveragePreparation {
                                             extent: requested_extent.expect("coverage lattice"),
                                             policy_revision: REQUESTED_COVERAGE_POLICY_REVISION,
                                             evaluator_revision: MAINTAINED_EVALUATOR_REVISION,
@@ -3194,47 +3279,32 @@ fn deterministic_dispatch_size(
     sample_count: u32,
     max_workgroups_per_dimension: u32,
 ) -> Result<GpuDispatchSize, RenderDeterministicLoweringError> {
-    let sample_count = u64::from(sample_count);
+    let sample_count_u64 = u64::from(sample_count);
     let workgroup_size = u64::from(WORKGROUP_SIZE);
     let admitted_max = u64::from(max_workgroups_per_dimension);
-    let required_groups = sample_count.div_ceil(workgroup_size);
+    let required_groups = sample_count_u64.div_ceil(workgroup_size);
+    let capacity = admitted_max * admitted_max;
 
-    if admitted_max == 0 {
-        return Err(gpu_authoring(
-            "deterministic dispatch planning",
-            format!(
-                "sample count {sample_count} with workgroup size {WORKGROUP_SIZE} requires {required_groups} total workgroups, but admitted maximum per dimension is 0; 2D dispatch capacity is 0 workgroups",
-            ),
-        ));
-    }
-
-    let capacity = admitted_max.checked_mul(admitted_max).ok_or_else(|| {
-        gpu_authoring(
-            "deterministic dispatch planning",
-            format!(
-                "sample count {sample_count} with workgroup size {WORKGROUP_SIZE} requires {required_groups} total workgroups, but admitted maximum per dimension is {max_workgroups_per_dimension}; 2D dispatch capacity overflows u64",
-            ),
-        )
-    })?;
     if required_groups == 0 || required_groups > capacity {
-        return Err(gpu_authoring(
-            "deterministic dispatch planning",
-            format!(
-                "sample count {sample_count} with workgroup size {WORKGROUP_SIZE} requires {required_groups} total workgroups, but admitted maximum per dimension is {max_workgroups_per_dimension}; 2D dispatch capacity is {capacity} workgroups",
-            ),
-        ));
+        return Err(RenderDeterministicLoweringError::DispatchCapacityExceeded {
+            sample_count,
+            workgroup_size: WORKGROUP_SIZE,
+            required_workgroups: required_groups,
+            max_workgroups_per_dimension,
+            capacity_workgroups: capacity,
+        });
     }
 
     let groups_x = required_groups.min(admitted_max);
     let groups_y = required_groups.div_ceil(groups_x);
-    let dimensions = [groups_x, groups_y, 1];
-    if dimensions.iter().any(|dimension| *dimension > admitted_max) {
-        return Err(gpu_authoring(
-            "deterministic dispatch planning",
-            format!(
-                "sample count {sample_count} with workgroup size {WORKGROUP_SIZE} requires {required_groups} total workgroups, but admitted maximum per dimension is {max_workgroups_per_dimension}; planned 2D dispatch capacity is {capacity} workgroups but dimensions exceeded the admitted limit",
-            ),
-        ));
+    if groups_x > admitted_max || groups_y > admitted_max {
+        return Err(RenderDeterministicLoweringError::DispatchCapacityExceeded {
+            sample_count,
+            workgroup_size: WORKGROUP_SIZE,
+            required_workgroups: required_groups,
+            max_workgroups_per_dimension,
+            capacity_workgroups: capacity,
+        });
     }
 
     Ok(GpuDispatchSize::new(
@@ -4591,15 +4661,15 @@ mod tests {
     #[test]
     fn deterministic_dispatch_rejects_work_beyond_two_dimensional_capacity() {
         let error = deterministic_dispatch_size(4097, 8).expect_err("dispatch must reject");
-        assert!(matches!(
+        assert_eq!(
             error,
-            RenderDeterministicLoweringError::RunenGpuAuthoring { stage, detail }
-                if stage == "deterministic dispatch planning"
-                    && detail.contains("sample count 4097")
-                    && detail.contains("workgroup size 64")
-                    && detail.contains("admitted maximum per dimension is 8")
-                    && detail.contains("requires 65 total workgroups")
-                    && detail.contains("2D dispatch capacity is 64 workgroups")
-        ));
+            RenderDeterministicLoweringError::DispatchCapacityExceeded {
+                sample_count: 4097,
+                workgroup_size: 64,
+                required_workgroups: 65,
+                max_workgroups_per_dimension: 8,
+                capacity_workgroups: 64,
+            }
+        );
     }
 }

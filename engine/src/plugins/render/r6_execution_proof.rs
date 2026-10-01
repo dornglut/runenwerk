@@ -6,7 +6,7 @@
 // independently normalizes and certifies the same exact submission before semantic formation.
 
 use super::super::apply_runenwerk_gpu_context_policy;
-use super::super::deterministic_admission::{AdmittedDeterministicRender, admit_deterministic_render};
+use super::super::deterministic_admission::{AdmittedDeterministicRender, admit_deterministic_render_with_semantic_inputs};
 use super::super::deterministic_execution::DeterministicVerificationSubmission;
 use super::super::deterministic_verification::{
     submit_deterministic_render_for_verified_formation, verify_completed_deterministic_render,
@@ -347,10 +347,11 @@ fn admit_execution(
     context: &GpuContext,
 ) -> AdmittedDeterministicRender {
     let bindings = output_bindings();
-    admit_deterministic_render(
+    admit_deterministic_render_with_semantic_inputs(
         &fixture.scene,
         &fixture.request,
         &fixture.semantic_inputs,
+        &[],
         &fixture.availability,
         &bindings,
         context,
@@ -762,16 +763,14 @@ fn founding_renderer_executes_through_maintained_path_and_matches_cpu_reference(
         expected_probe,
     );
 
-    let verified = verify_completed_deterministic_render(verification)
-        .expect("R6 founding finite evaluation must satisfy EVAL-001");
     assert_eq!(
-        verified.submitted().admitted().admitted(),
+        verification.submitted().admitted().admitted(),
         &admitted_plan,
         "R6 verifier must remain bound to the exact maintained admission"
     );
-
-    let result = RenderResult::from_verified_deterministic(verified)
-        .expect("R6 verified execution must form one complete semantic result");
+    let formation = verify_completed_deterministic_render(verification)
+        .expect("R6 founding finite evaluation must satisfy EVAL-001");
+    let result = RenderResult::from_formation_evidence(formation);
     assert_eq!(result.scene_revision(), admitted_plan.scene_revision());
     assert_eq!(result.scene(), admitted_plan.plan().scene());
     assert_eq!(result.request(), admitted_plan.plan().request());

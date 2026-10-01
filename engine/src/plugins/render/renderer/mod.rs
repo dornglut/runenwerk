@@ -811,12 +811,10 @@ pub struct Renderer {
     product_surface_pass: Option<ProductSurfacePass>,
     product_surface_pass_format: Option<GpuTextureFormat>,
     glyph_atlas_gpu: BTreeMap<u64, UiGlyphAtlasGpu>,
-    deterministic_resources:
-        crate::plugins::render::deterministic_execution::DeterministicResourceCache,
-    deterministic_temporal_evidence: BTreeMap<
-        u64,
-        Vec<crate::plugins::render::deterministic_execution::RenderDeterministicTemporalExecutionEvidence>,
-    >,
+    render_execution: crate::plugins::render::RenderExecutionState,
+    camera_diagnostics: camera_diagnostics::RendererCameraDiagnostics,
+    temporal_execution_evidence:
+        BTreeMap<u64, Vec<crate::plugins::render::RenderTemporalExecutionEvidence>>,
     dynamic_texture_targets: dynamic_targets::RendererDynamicTextureTargetCache,
     flow_runtime_cache: BTreeMap<RenderFlowId, render_flow::FlowRuntimeResources>,
     flow_pipeline_cache: pipeline_cache::FlowPipelineArtifactCache,
@@ -867,11 +865,11 @@ impl Gfx {
         self.ctx.context().adapter_facts()
     }
 
-    pub fn deterministic_temporal_evidence(
+    pub fn temporal_execution_evidence(
         &self,
         frame_index: u64,
-    ) -> &[crate::plugins::render::deterministic_execution::RenderDeterministicTemporalExecutionEvidence]{
-        self.renderer.deterministic_temporal_evidence(frame_index)
+    ) -> &[crate::plugins::render::RenderTemporalExecutionEvidence] {
+        self.renderer.temporal_execution_evidence(frame_index)
     }
 
     pub fn attach_surface(
@@ -1088,6 +1086,7 @@ fn composed_frame_gpu_timing_capability(
     })
 }
 
+mod camera_diagnostics;
 mod dynamic_targets;
 mod extract;
 mod pipeline_cache;
