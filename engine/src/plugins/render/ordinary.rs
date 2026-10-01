@@ -202,9 +202,7 @@ pub enum RenderResultSubmissionErrorKind {
     Eligibility,
     Execution,
     ReadbackCardinality,
-    OutputCorrelationChanged,
-    DuplicateReadbackCorrelation,
-    MissingSubmissionReadback,
+    Correlation,
 }
 
 /// Failure while selecting result-verification intent or authoring its exact submission.
@@ -226,14 +224,10 @@ impl RenderResultSubmissionError {
             RenderDeterministicVerifiedSubmissionError::ReadbackCardinality { .. } => {
                 RenderResultSubmissionErrorKind::ReadbackCardinality
             }
-            RenderDeterministicVerifiedSubmissionError::OutputCorrelationChanged { .. } => {
-                RenderResultSubmissionErrorKind::OutputCorrelationChanged
-            }
-            RenderDeterministicVerifiedSubmissionError::DuplicateReadbackCorrelation { .. } => {
-                RenderResultSubmissionErrorKind::DuplicateReadbackCorrelation
-            }
-            RenderDeterministicVerifiedSubmissionError::MissingSubmissionReadback { .. } => {
-                RenderResultSubmissionErrorKind::MissingSubmissionReadback
+            RenderDeterministicVerifiedSubmissionError::OutputCorrelationChanged { .. }
+            | RenderDeterministicVerifiedSubmissionError::DuplicateReadbackCorrelation { .. }
+            | RenderDeterministicVerifiedSubmissionError::MissingSubmissionReadback { .. } => {
+                RenderResultSubmissionErrorKind::Correlation
             }
         }
     }
@@ -1279,7 +1273,7 @@ mod tests {
         };
         assert_eq!(
             correlation.kind(),
-            RenderResultSubmissionErrorKind::MissingSubmissionReadback
+            RenderResultSubmissionErrorKind::Correlation
         );
         assert_eq!(correlation.correlation_output_index(), Some(2));
         assert_eq!(correlation.correlation_channel(), Some("canonical-output"));
