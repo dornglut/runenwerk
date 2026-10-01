@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-09-13
+last_reviewed: 2026-10-01
 publication: repository-current
 draft: true
 pagefind: false
@@ -137,13 +137,16 @@ R4  RenderMethod plus conditional device-independent semantic planning
 R5  semantic bindings, binding admission, operational availability/output bindings, and execution admission
 R6  first complete semantic renderer and public RunenGPU lowering
 R7  derived state, reconstruction/history/sessions, multiview/multi-output, and advanced output integration
-R8  generality, scale, public-surface qualification, conformance, and extraction readiness
-RX  standalone RunenRender transfer and clean cutover
+R8  public/source-boundary qualification and extraction readiness
+RX  standalone RunenRender acceptance, authority transfer, and clean cutover
 ```
 
 R0 is architecture/documentation only. The canonical RunenRender design owns detailed
 semantics and conformance; the active RunenRender execution plan owns durable delivery
-boundaries. GitHub issues determine activation and current status.
+boundaries through RX. GitHub issues determine activation and current status. After RX,
+remaining renderer generality, scale, method, conformance, and capability evolution
+belongs to the standalone RunenRender repository rather than a continuing Runenwerk
+R-phase roadmap.
 
 ## Other repository-family programs
 

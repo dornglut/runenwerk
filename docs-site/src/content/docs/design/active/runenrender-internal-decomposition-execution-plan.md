@@ -5,7 +5,7 @@ status: active
 owner: render
 layer: engine/render
 canonical: true
-last_reviewed: 2026-09-14
+last_reviewed: 2026-10-01
 publication: reference
 pagefind: false
 related_docs:
@@ -86,10 +86,11 @@ accepted standalone RunenGPU public boundary
 
 ```text
 R0   RunenRender normative architecture gate
-R*   internal RunenRender future-public-boundary proof
-RX   external RunenRender clean cutover
+R1-R7 internal RunenRender semantic/integration proof
+R8   predecessor-side public/source-boundary qualification
+RX   standalone acceptance + external clean cutover
 A1   reusable adapter review
-V1+  advanced renderer program
+V1+  successor-owned advanced/generalization pressure
 ```
 
 R0 is mandatory. Historical RunenGPU G-phase sequencing is no longer an active prefix of
@@ -462,107 +463,94 @@ freeze that public surface merely because proof machinery exists. Any visual pro
 remain separate from semantic/GPU correctness evidence, and persisted image or media
 encoding policy remains Runenwerk-owned.
 
-## R8 — generalization, scale, public-surface qualification, conformance, and extraction readiness
+## R8 — public/source-boundary qualification and extraction readiness
 
-R8 validates the architecture rather than inventing new foundations merely to satisfy a
-matrix. It also qualifies the future standalone Rust surface from real R7 consumer
-pressure rather than promoting proof-private R6 machinery by default.
+R8 is the final predecessor-side qualification before source authority moves. It
+qualifies the current reusable renderer as a standalone-shaped public/source boundary;
+it does not require unrelated future renderer capabilities merely to satisfy a maturity
+matrix.
 
 Required evidence includes:
 
-- large-scene incremental characterization;
-- no systematic deep-copy snapshot publication;
-- no systematic full rebuild for local change;
-- no mandatory all-object x all-method planning;
-- no per-object CPU GPU submission;
-- RunenGPU work scaling with algorithm stages rather than logical object count;
-- bounded memory, histories, sessions, diagnostics, variants, and queues;
-- two independent source/adaptor families;
-- two meaningfully distinct representation/query families;
-- at least two meaningfully distinct render-method families sufficient to prove the
-  shared method/planning abstraction;
-- non-camera/non-image-grid observation;
-- GPU-produced request-scoped semantic input without CPU readback; if no earlier phase
-  introduced a real request-scoped semantic-input consumer, this is the mandatory first
-  concrete non-vacuous binding/admission conformance proof;
-- multi-observation and multi-output sharing;
-- incremental/full equivalence;
-- session/cancellation proof if retained;
-- public RunenGPU-only physical lowering and no private reach-through;
-- simpler direct renderer comparison for representative proof;
-- exact provenance/reproducibility evidence;
-- a curated future standalone public export surface rather than a copy of the current
-  mixed `engine::plugins::render` module tree or proof-only implementation vocabulary;
-- an ordinary public path with progressive disclosure that does not require manual
-  orchestration of planning, binding admission, execution admission, or lowering for a
-  representative render, while any retained advanced inspection path converges on the
-  same semantic spine and authority;
+- exact-current declaration, source, export, direct/transitive consumer, and writer
+  census;
+- accepted RunenShader handoff for the maintained renderer source under #719-equivalent
+  authority: exact maintained WGSL -> RunenShader canonical artifact -> public RunenGPU
+  program-source admission, with shader and GPU diagnostics kept separately owned;
+- a curated future standalone public export surface rather than a copy of the mixed
+  `engine::plugins::render` module tree;
+- proof-private constructors, witness types, and implementation vocabulary narrowed
+  unless a real public consumer justifies them;
+- an ordinary headless/offscreen public path with progressive disclosure that uses the
+  same scene/request/planning/admission/lowering/result authority as any retained
+  advanced inspection path;
+- at least one maintained Runenwerk consumer using that same future-transferable
+  semantic surface where applicable, without a predecessor-only semantic bypass;
 - structured human-readable public diagnostics for representative request,
-  compatibility, binding/admission, availability, execution, and result-definedness
-  failures without requiring private backend interpretation;
-- at least one independent downstream public-API conformance consumer of the internal
-  future-public RunenRender boundary and at least one real maintained Runenwerk consumer
-  using that same future-transferable surface, without private in-workspace bypasses or
-  proof-only constructors;
-- no speculative `runen-render` product package or external repository created merely
-  to manufacture R8 conformance; when package-level isolation would require premature
-  extraction, the downstream consumer may depend on the containing Runenwerk package
-  while importing only the candidate public RunenRender surface, and RX repeats
-  package-level conformance against the real standalone successor;
-- retained executable public examples covering conventional image-grid rendering,
-  non-image-grid/scalar observation, and advanced planning/admission/provenance
-  inspection when that advanced path remains public;
-- at least one meaningful real renderer visual integration/showcase proof through the
-  ordinary public path, kept separate from correctness/conformance oracles and without
-  transferring artifact-encoding policy into RunenRender;
-- crate/public API documentation for purpose/ownership, ordinary use, the
-  scene/request/result model, result definedness, retained extension points,
-  diagnostics, advanced inspection when public, and RunenGPU/Runenwerk relationships,
-  with examples compiled or doctested where practical;
-- result ergonomics that preserve semantic definedness/provenance without requiring
-  callers to understand physical sentinels, payload packing, or product artifact
-  formats;
-- an exact public-export census and anti-cheating audit proving examples, downstream
-  conformance, maintained Runenwerk dogfood, documentation, and representative execution
-  all use the same candidate standalone boundary;
-- standalone extraction readiness.
+  compatibility, semantic-binding/admission, availability, shader-compilation,
+  execution, and result-definedness failures;
+- public RunenGPU-only physical lowering and no private WGPU/backend reach-through;
+- explicit compatibility selection for the exact accepted RunenGPU and RunenShader
+  revisions the successor will consume; do not mechanically repin moving upstream
+  state;
+- result/readback ergonomics that keep semantic result authority distinct from physical
+  byte transport and product artifact encoding;
+- one exact transfer/stay manifest that separates framework semantic/method source from
+  Runenwerk App/ECS/Winit/UI/World/Editor/Render-Lab/product policy;
+- a complete Runenwerk consumer migration/deletion map;
+- successor repository/package/licensing/provenance/validation requirements and the
+  ADR-0008 cross-repository coordination path ready before successor acceptance;
+- no essential current consumer requiring a compatibility facade, source mirror,
+  moving predecessor dependency, or other duplicate authority.
 
-Exact ordinary API names and signatures remain consumer-gated until real R7 pressure
-exists. Pre-1.0 clean cutovers remain allowed; diagnostic API-diff tooling may be used
-after a candidate public surface is deliberately frozen, but R8 does not create a stable
-SemVer promise or justify compatibility aliases.
+R8 does **not** require a second maintained render method, GPU-produced semantic input,
+elimination of every founding planner/scale limitation, broad multi-observation/output
+sharing, or advanced temporal/transport capability before source-authority transfer.
+Those remain important standalone framework pressure. One real maintained method proves
+independent usefulness for transfer but does not stabilize the generalized method
+extension surface.
 
-Performance evidence remains diagnostic until a separately accepted controlled budget
-exists.
+Exact ordinary API names and signatures remain consumer-gated. Pre-1.0 clean cutovers
+remain allowed; no compatibility aliases are justified merely by extraction.
 
 ## RX — external RunenRender transfer and clean cutover
 
 Prerequisites:
 
 - R0-R8 accepted;
-- exact current-source/consumer census repeated;
-- standalone boundary proven independently useful;
-- the accepted R8 candidate public boundary is ready to transfer without essential
-  maintained consumers depending on internal Runenwerk renderer bypasses;
-- exact accepted RunenGPU revision selected;
+- exact current-source/consumer/writer census repeated;
+- the accepted R8 candidate public/source boundary is independently useful and ready to
+  transfer without essential consumers depending on Runenwerk-private renderer
+  semantics;
+- exact accepted RunenShader and RunenGPU revisions selected;
 - no private RunenGPU/WGPU reach-through;
-- every active consumer migration and predecessor deletion is ready.
+- successor bootstrap and repository-local validation authority ready;
+- the Engineering ADR-0008 coordination initiative active before successor acceptance;
+- every active Runenwerk consumer migration and predecessor deletion step ready.
 
 Cutover:
 
-1. populate `dornglut/runen-render` from accepted Runenwerk semantic authority;
-2. validate standalone;
-3. pin exact accepted RunenGPU revision;
-4. accept the standalone successor through its repository-owned workflow, including
-   package-level downstream public-API conformance against the real `runen-render`
-   package;
-5. migrate maintained Runenwerk consumers to the accepted successor revision;
-6. delete predecessor Runenwerk semantic-rendering authority and temporary seams;
-7. prove no source mirror, forwarding namespace, compatibility package, source include,
-   submodule, moving-branch dependency, or duplicate renderer remains;
-8. record provenance and closeout.
+1. populate an unmerged `dornglut/runen-render` successor candidate from accepted
+   Runenwerk semantic authority by ownership, not by copying the mixed render directory;
+2. establish repository-owned standalone validation, documentation, examples, and
+   package/source-boundary guards for the transferred current capability;
+3. pin exact accepted RunenShader and RunenGPU revisions;
+4. prove package-level downstream public-API conformance against the actual
+   `runen-render` package;
+5. accept the standalone successor through its repository-owned guarded workflow;
+6. under Engineering ADR 0008, make that accepted successor revision the sole semantic
+   source authority and freeze the still-present predecessor copy;
+7. migrate maintained Runenwerk consumers to the exact accepted successor revision and
+   delete predecessor semantic-rendering source and temporary seams in the bounded
+   downstream cutover;
+8. prove no source mirror, forwarding namespace, compatibility package, source include,
+   submodule, moving dependency, duplicate renderer, or private backend reach-through
+   remains;
+9. record provenance, release, accepted revisions, and cross-repository closeout.
 
-RX is transfer/cutover, not architecture invention or public-surface repair.
+RX is transfer/cutover and actual standalone-package proof, not architecture invention
+or public-surface repair. Missing reusable contracts discovered after the ADR-0008
+authority switch are corrected in standalone RunenRender, not in the frozen predecessor.
 
 ## A1 — reusable adapter review
 
@@ -571,11 +559,20 @@ bridge has at least two independent consumers, stable host-neutral semantics, an
 maintenance duplication to justify extraction. Do not pre-create adapter packages or
 change dependency direction merely because one bridge exists.
 
-## V1+ — advanced renderer program
+## V1+ — successor-owned advanced renderer pressure
 
-Advanced renderer capability continues through separately accepted protocols,
+After RX, Runenwerk no longer owns an active RunenRender semantic roadmap. The
+standalone repository owns further generality, scale, method, conformance, and advanced
+capability work through its own accepted roadmap.
+
+Carry-forward pressure includes the former broad R8 maturity requirements: multiple
+materially distinct methods before broad method-extension stabilization, GPU-produced
+semantic inputs, planner/acceleration scaling, multi-observation/output sharing, bounded
+large-scene behavior, and performance/algorithmic characterization.
+
+Advanced renderer capability may then continue through separately accepted protocols,
 representations, methods, outputs, semantic inputs, relationships, appearance
-extensions, or derived-state kinds. Examples may include:
+extensions, or derived-state kinds. Examples include:
 
 ```text
 multi-bounce and bidirectional transport

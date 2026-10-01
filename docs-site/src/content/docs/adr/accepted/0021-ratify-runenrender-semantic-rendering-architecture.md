@@ -370,8 +370,8 @@ R4  RenderMethod + conditional device-independent semantic planning
 R5  semantic bindings + binding admission + operational availability/output bindings + execution admission
 R6  first complete semantic renderer + public RunenGPU lowering
 R7  derived state + reconstruction/history/sessions + multiview/multi-output/advanced output integration
-R8  generality + scale + conformance + extraction readiness
-RX  clean standalone authority transfer
+R8  public/source-boundary qualification + extraction readiness
+RX  standalone acceptance + clean authority transfer/cutover
 ```
 
 R1 begins with only scene lineage, minimal renderer identity, atomic mutation, immutable
@@ -382,15 +382,29 @@ R6 proves both a conventional perspective HDR radiance/depth/object-identity wor
 and one non-image-grid scalar renderer probe through the permanent R1-R5 contracts and
 public RunenGPU only.
 
-R8 must prove at least two independent source/adaptor families, two meaningfully
-different representation/query families, two meaningfully different render-method
-families sufficient to validate the method/planning abstraction, non-camera observation,
-GPU-produced semantic input, multi-observation/output sharing, bounded scale behavior,
-incremental/full equivalence, public RunenGPU-only lowering, comparison with a simpler
-renderer, and extraction readiness.
+R8 is the final predecessor-side qualification of the source and public boundary. It
+must establish a curated transferable export set, an ordinary headless/offscreen public
+consumer, maintained Runenwerk dogfood through the same transferable semantic authority,
+explicit RunenShader and RunenGPU composition, structured owner-correct diagnostics,
+public RunenGPU-only lowering, an exact transfer/stay/consumer census, and a clean
+ADR-0008 cutover path. R8 must not require an unrelated renderer capability merely to
+delay moving already-reusable semantic authority to its standalone owner.
 
-RX is mechanical authority transfer after R1-R8 are accepted; it is not where renderer
-architecture is invented.
+One real maintained method is sufficient to prove independent usefulness for
+source-authority transfer. It is not sufficient to stabilize a generalized method
+extension contract. Method pluralism, GPU-produced semantic inputs, broad planner/scale
+qualification, multi-observation/output generalization, and later renderer capabilities
+remain required pressure for framework maturity where applicable, but after RX their
+roadmap and acceptance belong to standalone RunenRender.
+
+RX begins only after R1-R8 boundary qualification is accepted. RX owns actual standalone
+package validation and downstream conformance, successor acceptance, the ADR-0008
+authority switch, Runenwerk exact-revision migration, predecessor deletion, and
+provenance/closure. RX is not where renderer semantics or a replacement public boundary
+are invented.
+
+After RX, Runenwerk no longer owns an active RunenRender semantic roadmap. Remaining
+framework generalization and capability work belongs to the standalone repository.
 
 ## Future shared logical Plan compatibility
 
@@ -475,7 +489,9 @@ Accepted costs:
   derived/plumbing views rather than root authority;
 - R5 must track semantic binding validity and physical executability without conflating
   them;
-- protocol/method abstractions require multiple real proofs before broad stabilization.
+- protocol/method abstractions require multiple real proofs before broad stabilization,
+  but broad stabilization is distinct from transferring source authority to the correct
+  standalone owner.
 
 ## Fitness functions
 
