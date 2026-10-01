@@ -90,6 +90,37 @@ qualification runs must not be used as performance measurements for #1107. A SHA
 written into an artifact is source provenance, not an independent clean-tree proof;
 verify the checked-out revision and clean tree before running qualification.
 
+## Requested-lattice current coverage qualification
+
+The renderer-private coverage proof is included in the existing hosted
+`deterministic_execution_r7_proof` filter. The proof explicitly opts the same
+sub-native producer into requested-lattice coverage and adds bounded carrier
+observations to that GPU fragment and submission. Until an accepted reconstruction
+consumer exists, ordinary Render Flow preparation does not request coverage and
+therefore authors neither coverage dispatch/resources nor coverage readback.
+
+For clean, committed qualification:
+
+```text
+RUNENWERK_SOURCE_REVISION=<full-clean-source-SHA> RUNENRENDER_R7_REQUIRE_GPU=1 cargo +stable test -p engine --lib deterministic_execution_r7_proof_coverage --locked -- --nocapture --test-threads=1
+```
+
+The log identifies the observed backend/adapter and records each terminal
+requested cell's state and depth bits, requested extent, radiance evaluation
+extent, coverage extent, current phase and source generation. Hosted R7 receives
+the already proved checkout SHA through `RUNENWERK_SOURCE_REVISION`. The supplied
+SHA alone does not prove a clean checkout; verify it before native qualification.
+
+The proofs compare current coverage with the actual maintained P100 primary
+query for all four phases, exercise camera/source changes, sampled-field payload
+packing and generations, invalid normals and query-budget exhaustion, distinct
+producer resources and resize. State values are private `Invalid=0`,
+`KnownBackground=1`, and `Hit=2`; depth is finite only for Hit. Row padding is not
+requested coverage. The typed runtime record describes prepared work; completion
+of its correlated producer submission is required before claiming execution.
+This prerequisite preserves sub-native camera-pose history reset and supplies no
+radiance fallback or sub-native camera reconstruction policy.
+
 ## Evidence
 
 Report focused checks, `cargo validate`, exact-head CI, and anything not run. Do not convert source inspection or user-reported output into a stronger validation claim.
