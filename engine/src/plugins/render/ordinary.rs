@@ -16,9 +16,6 @@ use super::deterministic_capture::{
     RenderCapturedDeterministicRadiance, RenderDeterministicRadianceCaptureError,
     RenderDeterministicRadianceCaptureRequest, RenderDeterministicRadianceCaptureRequestError,
 };
-pub use super::deterministic_execution::{
-    RenderObjectIdentityDecoder, RenderRequestedCoveragePreparation, RenderTemporalExecutionEvidence,
-};
 use super::deterministic_execution::{
     DeterministicResourceCache, PreparedDeterministicRadianceOutput, PreparedDeterministicRender,
     RenderCameraDiagnosticRequest, RenderCameraDiagnosticSource, RenderDeterministicExecutionError,
@@ -26,6 +23,10 @@ use super::deterministic_execution::{
     SubmittedDeterministicRender, prepare_deterministic_render,
     prepare_deterministic_render_with_cache_in_scope_and_evaluation, submit_deterministic_render,
     submit_deterministic_render_for_verified_result,
+};
+pub use super::deterministic_execution::{
+    RenderObjectIdentityDecoder, RenderRequestedCoveragePreparation,
+    RenderTemporalExecutionEvidence,
 };
 use super::field_input::RenderFieldSemanticInputBinding;
 use super::lowering::RenderWorkSet;
@@ -560,11 +561,7 @@ impl RenderExecutionState {
         self.inner.retain_in_flight_submissions();
     }
 
-    pub fn record_submission(
-        &mut self,
-        scope: RenderExecutionScope,
-        submission: &GpuSubmission,
-    ) {
+    pub fn record_submission(&mut self, scope: RenderExecutionScope, submission: &GpuSubmission) {
         self.inner
             .record_producer_submission(scope.raw(), 0, submission);
     }

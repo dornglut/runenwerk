@@ -846,9 +846,7 @@ impl PreparedDeterministicRadianceOutput {
         &self.relationship
     }
 
-    pub fn temporal_execution_evidence(
-        &self,
-    ) -> Option<&RenderTemporalExecutionEvidence> {
+    pub fn temporal_execution_evidence(&self) -> Option<&RenderTemporalExecutionEvidence> {
         self.temporal_evidence.as_ref()
     }
 

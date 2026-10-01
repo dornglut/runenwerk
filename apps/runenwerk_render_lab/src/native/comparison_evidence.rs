@@ -9,21 +9,14 @@ const COMPARISON_DIFF_ID: &str = "runenwerk.render_lab.rl2.compare.a_vs_b";
 
 #[derive(Debug, Clone, Default, runen_ecs::Resource)]
 pub(super) struct RenderLabComparisonEvidenceState {
-    temporal_by_frame: BTreeMap<
-        u64,
-        Vec<
-            engine::plugins::render::RenderTemporalExecutionEvidence,
-        >,
-    >,
+    temporal_by_frame: BTreeMap<u64, Vec<engine::plugins::render::RenderTemporalExecutionEvidence>>,
 }
 
 impl RenderLabComparisonEvidenceState {
     fn observe_temporal_frame(
         &mut self,
         frame_index: u64,
-        records: Vec<
-            engine::plugins::render::RenderTemporalExecutionEvidence,
-        >,
+        records: Vec<engine::plugins::render::RenderTemporalExecutionEvidence>,
     ) {
         self.temporal_by_frame.insert(frame_index, records);
         while self.temporal_by_frame.len() > RL2_MEASUREMENT_HISTORY_CAPACITY {
@@ -54,9 +47,7 @@ impl RenderLabComparisonEvidenceState {
     fn temporal_frame(
         &self,
         frame_index: u64,
-    ) -> Option<
-        &[engine::plugins::render::RenderTemporalExecutionEvidence],
-    >{
+    ) -> Option<&[engine::plugins::render::RenderTemporalExecutionEvidence]> {
         self.temporal_by_frame.get(&frame_index).map(Vec::as_slice)
     }
 }
@@ -163,18 +154,20 @@ fn temporal_frames(
                 u64::try_from(class + 1).expect("bounded comparison generation class fits u64")
             })
             .collect();
-        let record_json = |record: &engine::plugins::render::RenderTemporalExecutionEvidence| json!({
-            "requested_size_px": [record.requested_extent.0, record.requested_extent.1],
-            "evaluation_size_px": [record.evaluation_extent.0, record.evaluation_extent.1],
-            "semantic_input_generation_classes": classes,
-            "sequence_revision": record.sequence_revision,
-            "reconstruction_revision": record.reconstruction_revision,
-            "phase": record.phase,
-            "history_generation": record.history_generation,
-            "history_age": record.history_age,
-            "history_reset": record.history_reset,
-            "camera_reprojection_eligible": record.camera_reprojection_eligible,
-        });
+        let record_json = |record: &engine::plugins::render::RenderTemporalExecutionEvidence| {
+            json!({
+                "requested_size_px": [record.requested_extent.0, record.requested_extent.1],
+                "evaluation_size_px": [record.evaluation_extent.0, record.evaluation_extent.1],
+                "semantic_input_generation_classes": classes,
+                "sequence_revision": record.sequence_revision,
+                "reconstruction_revision": record.reconstruction_revision,
+                "phase": record.phase,
+                "history_generation": record.history_generation,
+                "history_age": record.history_age,
+                "history_reset": record.history_reset,
+                "camera_reprojection_eligible": record.camera_reprojection_eligible,
+            })
+        };
         frames.push(json!({
             "frame_index": frame,
             "reference": record_json(reference),
