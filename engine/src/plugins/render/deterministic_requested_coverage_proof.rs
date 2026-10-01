@@ -154,6 +154,7 @@ fn prepare_with_requested_coverage(
         scope,
         finite_evaluation,
         true,
+        None,
     )
 }
 

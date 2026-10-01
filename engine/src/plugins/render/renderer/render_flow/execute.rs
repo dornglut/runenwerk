@@ -263,8 +263,14 @@ impl Renderer {
             )
         })?;
         for contribution in deterministic_contributions {
+            let producer_scope = contribution.producer_id.raw();
             self.deterministic_resources.record_producer_submission(
-                contribution.producer_id.raw(),
+                producer_scope,
+                prepared_frame.context.frame_index,
+                &submission,
+            );
+            self.camera_diagnostics.accept(
+                producer_scope,
                 prepared_frame.context.frame_index,
                 &submission,
             );
@@ -804,18 +810,30 @@ impl Renderer {
             let finite_evaluation = contribution
                 .finite_evaluation_extent
                 .map(|extent| (contribution.output_index, extent.dimensions()));
+            let producer_scope = contribution.producer_id.raw();
+            let camera_diagnostic_request =
+                self.camera_diagnostics.request_for_scope(producer_scope)?;
             let prepared =
                 crate::plugins::render::deterministic_execution::prepare_deterministic_render_with_cache_in_scope_and_evaluation(
                     admitted,
                     context,
                     &mut self.deterministic_resources,
-                    contribution.producer_id.raw(),
+                    producer_scope,
                     finite_evaluation,
                     false,
+                    camera_diagnostic_request,
                 )
                 .map_err(|error| {
                     anyhow::anyhow!("deterministic render preparation failed: {error}")
                 })?;
+            if let Some(source) = self
+                .deterministic_resources
+                .take_camera_diagnostic_source(producer_scope)
+            {
+                self.camera_diagnostics.prepare(producer_scope, source);
+            } else {
+                self.camera_diagnostics.discard_request(producer_scope);
+            }
             let output = prepared
                 .radiance_output(contribution.output_index)
                 .ok_or_else(|| {

@@ -40,7 +40,7 @@ use super::surface_input::{
 };
 use runen_gpu::{
     GpuAdmittedProgramSource, GpuBufferDescriptor, GpuBufferHandle, GpuBufferInitialization,
-    GpuBufferRegion, GpuBufferTextureLayout, GpuBufferUsage, GpuClearOperation,
+    GpuBufferRange, GpuBufferRegion, GpuBufferTextureLayout, GpuBufferUsage, GpuClearOperation,
     GpuComputeOperation, GpuComputePipelineDescriptor, GpuContext, GpuContextAffinity,
     GpuCopyOperation, GpuDispatchIntent, GpuDispatchSize, GpuExportKey, GpuExportRelationship,
     GpuInitialCoverage, GpuReadbackId, GpuReadbackOperation, GpuReadbackStatus, GpuReconstruction,
@@ -55,8 +55,6 @@ use std::error::Error;
 use std::fmt;
 use std::sync::LazyLock;
 
-#[path = "deterministic_camera_diagnostics.rs"]
-mod camera_diagnostics;
 
 #[cfg(test)]
 #[path = "deterministic_camera_history_proof.rs"]
@@ -88,6 +86,78 @@ const CURRENT_HIT_WORDS_PER_SAMPLE: u64 = 4;
 const CAMERA_DIAGNOSTIC_WORDS: u64 = 32 * 32;
 const MAINTAINED_EVALUATOR_REVISION: u64 = 3;
 const CAMERA_DEPTH_ABSOLUTE_EPSILON: f32 = 0.001;
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct RenderCameraDiagnosticRequest {
+    current_only_control: bool,
+}
+
+impl RenderCameraDiagnosticRequest {
+    pub(crate) const fn new(current_only_control: bool) -> Self {
+        Self {
+            current_only_control,
+        }
+    }
+
+    pub(crate) const fn current_only_control(self) -> bool {
+        self.current_only_control
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct RenderCameraDiagnosticSource {
+    history: GpuBufferHandle,
+    extent: (u32, u32),
+    phase: u32,
+    history_age: u32,
+    prior_same_pose_completed_frames: u32,
+    current_only_control: bool,
+}
+
+impl RenderCameraDiagnosticSource {
+    pub(crate) const fn extent(&self) -> (u32, u32) {
+        self.extent
+    }
+
+    pub(crate) const fn phase(&self) -> u32 {
+        self.phase
+    }
+
+    pub(crate) const fn history_age(&self) -> u32 {
+        self.history_age
+    }
+
+    pub(crate) const fn prior_same_pose_completed_frames(&self) -> u32 {
+        self.prior_same_pose_completed_frames
+    }
+
+    pub(crate) const fn current_only_control(&self) -> bool {
+        self.current_only_control
+    }
+
+    pub(crate) fn readback_operation(
+        &self,
+    ) -> Result<GpuReadbackOperation, RenderDeterministicLoweringError> {
+        let offset = u64::from(self.extent.0)
+            .checked_mul(u64::from(self.extent.1))
+            .and_then(|samples| samples.checked_mul(CAMERA_HISTORY_WORDS_PER_SAMPLE))
+            .and_then(|words| words.checked_mul(WORD_BYTES))
+            .ok_or(RenderDeterministicLoweringError::SizeOverflow {
+                field: "camera diagnostic readback offset",
+            })?;
+        let byte_len = CAMERA_DIAGNOSTIC_WORDS
+            .checked_mul(WORD_BYTES)
+            .ok_or(RenderDeterministicLoweringError::SizeOverflow {
+                field: "camera diagnostic readback byte length",
+            })?;
+        let range = GpuBufferRange::new(&self.history, offset, byte_len)
+            .map_err(|error| gpu_authoring("camera diagnostic readback range", error))?;
+        let region = GpuBufferRegion::new(&self.history, range)
+            .map_err(|error| gpu_authoring("camera diagnostic readback region", error))?;
+        GpuReadbackOperation::ordinary(region.into())
+            .map_err(|error| gpu_authoring("camera diagnostic readback", error))
+    }
+}
 const CAMERA_DEPTH_RELATIVE_EPSILON: f32 = 0.001;
 const TEMPORAL_PHASE_COUNT: u32 = 4;
 const SHAPE_SPHERE: u32 = 1;
@@ -251,7 +321,7 @@ pub(crate) struct DeterministicResourceCache {
     // Keep the latest accepted graph correlated with every producer namespace whose mutable
     // intermediates it used. A peer surface's submission must not stall this producer's cache.
     producer_submissions: BTreeMap<u64, GpuSubmission>,
-    camera_diagnostics: camera_diagnostics::CameraDiagnostics,
+    prepared_camera_diagnostics: BTreeMap<u64, RenderCameraDiagnosticSource>,
 }
 
 impl DeterministicResourceCache {
@@ -271,11 +341,25 @@ impl DeterministicResourceCache {
     pub(crate) fn record_producer_submission(
         &mut self,
         producer_scope: u64,
-        frame_index: u64,
+        _frame_index: u64,
         submission: &GpuSubmission,
     ) {
-        self.camera_diagnostics
-            .accept(producer_scope, frame_index, submission);
+        self.producer_submissions
+            .insert(producer_scope, submission.clone());
+    }
+
+    pub(crate) fn take_camera_diagnostic_source(
+        &mut self,
+        producer_scope: u64,
+    ) -> Option<RenderCameraDiagnosticSource> {
+        self.prepared_camera_diagnostics.remove(&producer_scope)
+    }
+
+    pub(crate) fn retain_auxiliary_producer_submission(
+        &mut self,
+        producer_scope: u64,
+        submission: &GpuSubmission,
+    ) {
         self.producer_submissions
             .insert(producer_scope, submission.clone());
     }
@@ -299,14 +383,6 @@ impl DeterministicResourceCache {
         // using a producer's reusable intermediates.
         self.producer_submissions
             .retain(|_, submission| matches!(submission.status(), GpuSubmissionStatus::Accepted));
-    }
-
-    pub(crate) fn progress_camera_diagnostics(
-        &mut self,
-        context: &GpuContext,
-    ) -> anyhow::Result<()> {
-        self.camera_diagnostics
-            .progress(context, &mut self.producer_submissions)
     }
 
     fn reconcile_temporal_outputs(&mut self, scope: u64, completed: bool) {
@@ -1403,7 +1479,7 @@ pub(crate) fn prepare_deterministic_render_with_cache_in_scope(
     scope: u64,
 ) -> Result<PreparedDeterministicRender, RenderDeterministicExecutionError> {
     prepare_deterministic_render_with_cache_in_scope_and_evaluation(
-        admitted, context, resources, scope, None, false,
+        admitted, context, resources, scope, None, false, None,
     )
 }
 
@@ -1414,7 +1490,9 @@ pub(crate) fn prepare_deterministic_render_with_cache_in_scope_and_evaluation(
     scope: u64,
     finite_evaluation: Option<(usize, (u32, u32))>,
     produce_requested_coverage: bool,
+    camera_diagnostic_request: Option<RenderCameraDiagnosticRequest>,
 ) -> Result<PreparedDeterministicRender, RenderDeterministicExecutionError> {
+    resources.prepared_camera_diagnostics.remove(&scope);
     let lowered = lower_deterministic_render(
         &admitted,
         context,
@@ -1423,6 +1501,7 @@ pub(crate) fn prepare_deterministic_render_with_cache_in_scope_and_evaluation(
         scope,
         finite_evaluation,
         produce_requested_coverage,
+        camera_diagnostic_request,
     )?;
     debug_assert!(lowered.verification_readbacks.is_empty());
     Ok(PreparedDeterministicRender {
@@ -1471,6 +1550,7 @@ pub(super) async fn submit_deterministic_render_for_verification(
         0,
         None,
         false,
+        None,
     )?;
     let verification_readbacks = lowered.verification_readbacks;
     let submitted = submit_lowered_deterministic_render(
@@ -1533,6 +1613,7 @@ fn lower_deterministic_render(
     scope: u64,
     finite_evaluation: Option<(usize, (u32, u32))>,
     produce_requested_coverage: bool,
+    camera_diagnostic_request: Option<RenderCameraDiagnosticRequest>,
 ) -> Result<LoweredDeterministicRender, RenderDeterministicLoweringError> {
     let admitted = maintained.admitted();
     if admitted.environment().affinity() != context.affinity() {
@@ -2021,32 +2102,14 @@ fn lower_output(
                     && temporal_history
                         .as_ref()
                         .is_some_and(|history| history.age == 8)
-                    && let Some(directory) =
-                        camera_diagnostics::CameraDiagnosticSnapshot::requested_directory()
+                    && let Some(request) = camera_diagnostic_request
                 {
-                    let source_revision =
-                        std::env::var("RUNENWERK_SOURCE_REVISION").map_err(|error| {
-                            gpu_authoring("camera diagnostic exact source revision", error)
-                        })?;
-                    if source_revision.len() != 40
-                        || !source_revision.bytes().all(|byte| byte.is_ascii_hexdigit())
-                    {
-                        return Err(gpu_authoring(
-                            "camera diagnostic exact source revision",
-                            "expected a complete 40-digit source SHA",
-                        ));
-                    }
                     let history = temporal_history.as_ref().expect("camera temporal history");
                     parameter_words[33] = 1;
-                    let current_only_control =
-                        std::env::var("RUNENWERK_CAMERA_HISTORY_CURRENT_ONLY_FIRST_MOTION")
-                            .ok()
-                            .as_deref()
-                            == Some("1");
-                    parameter_words[34] = u32::from(current_only_control);
-                    resources.camera_diagnostics.prepare(
+                    parameter_words[34] = u32::from(request.current_only_control());
+                    resources.prepared_camera_diagnostics.insert(
                         scope,
-                        camera_diagnostics::CameraDiagnosticSnapshot {
+                        RenderCameraDiagnosticSource {
                             history: current_history.clone(),
                             extent: requested
                                 .spec()
@@ -2056,9 +2119,7 @@ fn lower_output(
                             phase: history.phase,
                             history_age: history.age,
                             prior_same_pose_completed_frames: *same_pose_completed_frames,
-                            directory,
-                            source_revision,
-                            current_only_control,
+                            current_only_control: request.current_only_control(),
                         },
                     );
                 }

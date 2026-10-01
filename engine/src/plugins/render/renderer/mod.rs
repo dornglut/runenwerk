@@ -813,6 +813,7 @@ pub struct Renderer {
     glyph_atlas_gpu: BTreeMap<u64, UiGlyphAtlasGpu>,
     deterministic_resources:
         crate::plugins::render::deterministic_execution::DeterministicResourceCache,
+    camera_diagnostics: camera_diagnostics::RendererCameraDiagnostics,
     deterministic_temporal_evidence: BTreeMap<
         u64,
         Vec<crate::plugins::render::deterministic_execution::RenderDeterministicTemporalExecutionEvidence>,
@@ -1088,6 +1089,7 @@ fn composed_frame_gpu_timing_capability(
     })
 }
 
+mod camera_diagnostics;
 mod dynamic_targets;
 mod extract;
 mod pipeline_cache;
