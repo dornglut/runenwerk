@@ -9,17 +9,23 @@ use engine::prelude::{App, Plugin, ResMut, Startup};
 use runen_spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, WorldId};
 use world_sdf::{
     FieldProductConsumerClass, FieldProductDescriptor, FieldProductId, FieldProductKind,
-    FieldProductLineage, FieldProductScope, RegionSdfSummary, SdfBrickMetadata, SdfBrickRecord,
-    SdfBrickSamples, SdfChunkPayload, SdfPageCoord3, SdfPageRecord, WorldSdfPayloadRef,
+    FieldProductLineage, FieldProductScope, RegionSdfSummary, SDF_METRIC_BRICK_EDGE_SAMPLES,
+    SDF_METRIC_BRICK_SAMPLE_COUNT, SDF_PAGE_EDGE_BRICKS, SdfBrickMetadata, SdfBrickRecord,
+    SdfBrickSamples, SdfChunkPayload, SdfPageCoord3, SdfPageRecord, WorldSdfMetricEncoding,
+    WorldSdfMetricPayloadRef, WorldSdfPayloadRef,
 };
 
 pub const ARENA_WORLD_ID: WorldId = WorldId::new(0);
 pub const ARENA_CHUNK_EDGE_METERS: f64 = 4.0;
 pub const ARENA_PLAYER_SPAWN: [f32; 3] = [1.0, 0.5, 1.0];
 pub const ARENA_FIELD_PRODUCT_ID: FieldProductId = FieldProductId(1);
+pub const ARENA_METRIC_DISTANCE_UNITS_PER_METER: u32 = 1024;
+pub const ARENA_METRIC_MAX_ABSOLUTE_ERROR_UNITS: u32 = 444;
 
 const ARENA_PAGE_COORD: SdfPageCoord3 = SdfPageCoord3 { x: 0, y: 0, z: 0 };
 const ARENA_CELL_COUNT_PER_AXIS: u8 = 8;
+const ARENA_INTERIOR_MIN_METERS: f64 = 0.5;
+const ARENA_INTERIOR_MAX_XZ_METERS: f64 = 3.5;
 
 pub struct ArenaWorldPlugin;
 
@@ -40,21 +46,15 @@ fn install_arena_world(
 
     let payload = build_arena_chunk_payload();
     let descriptor = arena_field_product_descriptor(&payload);
+    let metric_payload_ref = arena_metric_payload_ref(&payload);
+    let region_summary = arena_region_summary(&payload);
     let enqueued = enqueue_ratified_world_sdf_payload_package(
         &mut completed,
         &mut chunks,
         &mut products,
         &mut metric_capabilities,
-        WorldSdfRuntimePayloadPackage::new(
-            descriptor,
-            vec![payload],
-            RegionSdfSummary {
-                min_distance: -1,
-                max_distance: 1,
-                occupied_chunk_count: 1,
-                surface_chunk_count: 1,
-            },
-        ),
+        WorldSdfRuntimePayloadPackage::new(descriptor, vec![payload], region_summary)
+            .with_metric_capability(metric_payload_ref),
     )
     .expect("maintained arena field product should satisfy runtime SDF intake");
     debug_assert_eq!(enqueued, 1);
@@ -83,33 +83,89 @@ pub fn arena_field_product_descriptor(payload: &SdfChunkPayload) -> FieldProduct
     descriptor
 }
 
+pub fn arena_metric_encoding() -> WorldSdfMetricEncoding {
+    WorldSdfMetricEncoding::try_new(
+        ARENA_METRIC_DISTANCE_UNITS_PER_METER,
+        ARENA_METRIC_MAX_ABSOLUTE_ERROR_UNITS,
+    )
+    .expect("maintained arena metric encoding is valid")
+}
+
+pub fn arena_metric_payload_ref(payload: &SdfChunkPayload) -> WorldSdfMetricPayloadRef {
+    WorldSdfMetricPayloadRef::try_new(WorldSdfPayloadRef::from(payload), arena_metric_encoding())
+        .expect("maintained arena metric capability is valid")
+}
+
+pub fn arena_metric_error_components_meters() -> [f64; 3] {
+    let brick_edge_meters = ARENA_CHUNK_EDGE_METERS / SDF_PAGE_EDGE_BRICKS as f64;
+    let subcell_edge_meters =
+        brick_edge_meters / (SDF_METRIC_BRICK_EDGE_SAMPLES - 1) as f64;
+    [
+        0.0,
+        (3.0_f64).sqrt() * subcell_edge_meters / 2.0,
+        0.5 / f64::from(ARENA_METRIC_DISTANCE_UNITS_PER_METER),
+    ]
+}
+
+pub fn arena_signed_distance_meters(position: [f64; 3]) -> f64 {
+    let x_violation = interval_violation(
+        position[0],
+        ARENA_INTERIOR_MIN_METERS,
+        ARENA_INTERIOR_MAX_XZ_METERS,
+    );
+    let y_violation = (ARENA_INTERIOR_MIN_METERS - position[1]).max(0.0);
+    let z_violation = interval_violation(
+        position[2],
+        ARENA_INTERIOR_MIN_METERS,
+        ARENA_INTERIOR_MAX_XZ_METERS,
+    );
+    let outside_distance =
+        (x_violation * x_violation + y_violation * y_violation + z_violation * z_violation)
+            .sqrt();
+
+    if outside_distance > 0.0 {
+        return -outside_distance;
+    }
+
+    (position[0] - ARENA_INTERIOR_MIN_METERS)
+        .min(ARENA_INTERIOR_MAX_XZ_METERS - position[0])
+        .min(position[1] - ARENA_INTERIOR_MIN_METERS)
+        .min(position[2] - ARENA_INTERIOR_MIN_METERS)
+        .min(ARENA_INTERIOR_MAX_XZ_METERS - position[2])
+}
+
 pub fn build_arena_chunk_payload() -> SdfChunkPayload {
     let mut page = SdfPageRecord {
         page_generation: 0,
         bricks: Default::default(),
     };
 
-    for brick_z in 0..4_u8 {
-        for brick_y in 0..4_u8 {
-            for brick_x in 0..4_u8 {
-                let occupancy_mask = arena_brick_occupancy_mask([brick_x, brick_y, brick_z]);
-                let (min_distance, max_distance) = match occupancy_mask {
-                    0 => (1, 1),
-                    u8::MAX => (-1, -1),
-                    _ => (-1, 1),
-                };
+    for brick_z in 0..SDF_PAGE_EDGE_BRICKS as u8 {
+        for brick_y in 0..SDF_PAGE_EDGE_BRICKS as u8 {
+            for brick_x in 0..SDF_PAGE_EDGE_BRICKS as u8 {
+                let brick_coord = [brick_x, brick_y, brick_z];
+                let distances = arena_brick_metric_samples(brick_coord);
+                let min_distance = *distances
+                    .iter()
+                    .min()
+                    .expect("metric arena brick has canonical samples");
+                let max_distance = *distances
+                    .iter()
+                    .max()
+                    .expect("metric arena brick has canonical samples");
+                let occupancy_mask = arena_brick_occupancy_mask(brick_coord);
                 page.bricks.insert(
-                    [brick_x, brick_y, brick_z],
+                    brick_coord,
                     SdfBrickRecord {
                         metadata: SdfBrickMetadata {
                             min_distance,
                             max_distance,
                             occupancy_mask,
                             material_channel_mask: u16::from(occupancy_mask != 0),
-                            surface_band_present: occupancy_mask != 0 && occupancy_mask != u8::MAX,
+                            surface_band_present: min_distance <= 0 && max_distance >= 0,
                             ..SdfBrickMetadata::default()
                         },
-                        samples: SdfBrickSamples::default(),
+                        samples: SdfBrickSamples { distances },
                     },
                 );
             }
@@ -129,22 +185,74 @@ pub fn build_arena_chunk_payload() -> SdfChunkPayload {
     }
 }
 
+fn arena_region_summary(payload: &SdfChunkPayload) -> RegionSdfSummary {
+    let mut min_distance = i16::MAX;
+    let mut max_distance = i16::MIN;
+    let mut occupied = false;
+    let mut surface = false;
+
+    for brick in payload
+        .page_table
+        .values()
+        .flat_map(|page| page.bricks.values())
+    {
+        min_distance = min_distance.min(brick.metadata.min_distance);
+        max_distance = max_distance.max(brick.metadata.max_distance);
+        occupied |= brick.metadata.occupancy_mask != 0;
+        surface |= brick.metadata.surface_band_present;
+    }
+
+    RegionSdfSummary {
+        min_distance,
+        max_distance,
+        occupied_chunk_count: u32::from(occupied),
+        surface_chunk_count: u32::from(surface),
+    }
+}
+
+fn arena_brick_metric_samples(brick: [u8; 3]) -> Vec<i16> {
+    let mut distances = Vec::with_capacity(SDF_METRIC_BRICK_SAMPLE_COUNT);
+    for sample_z in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
+        for sample_y in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
+            for sample_x in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
+                let position =
+                    arena_metric_sample_position(brick, [sample_x, sample_y, sample_z]);
+                distances.push(encode_arena_distance(arena_signed_distance_meters(position)));
+            }
+        }
+    }
+    distances
+}
+
+fn arena_metric_sample_position(brick: [u8; 3], sample: [usize; 3]) -> [f64; 3] {
+    let brick_edge_meters = ARENA_CHUNK_EDGE_METERS / SDF_PAGE_EDGE_BRICKS as f64;
+    let sample_step_meters =
+        brick_edge_meters / (SDF_METRIC_BRICK_EDGE_SAMPLES - 1) as f64;
+    [
+        f64::from(brick[0]) * brick_edge_meters + sample[0] as f64 * sample_step_meters,
+        f64::from(brick[1]) * brick_edge_meters + sample[1] as f64 * sample_step_meters,
+        f64::from(brick[2]) * brick_edge_meters + sample[2] as f64 * sample_step_meters,
+    ]
+}
+
+fn encode_arena_distance(distance_meters: f64) -> i16 {
+    let encoded =
+        (distance_meters * f64::from(ARENA_METRIC_DISTANCE_UNITS_PER_METER)).round();
+    assert!(
+        encoded >= f64::from(i16::MIN) && encoded <= f64::from(i16::MAX),
+        "maintained arena metric sample must fit i16"
+    );
+    encoded as i16
+}
+
 fn arena_brick_occupancy_mask(brick: [u8; 3]) -> u8 {
     let mut mask = 0_u8;
     for octant_z in 0..2_u8 {
         for octant_y in 0..2_u8 {
             for octant_x in 0..2_u8 {
-                let cell = [
-                    brick[0] * 2 + octant_x,
-                    brick[1] * 2 + octant_y,
-                    brick[2] * 2 + octant_z,
-                ];
-                let solid = cell[1] == 0
-                    || cell[0] == 0
-                    || cell[0] == ARENA_CELL_COUNT_PER_AXIS - 1
-                    || cell[2] == 0
-                    || cell[2] == ARENA_CELL_COUNT_PER_AXIS - 1;
-                if solid {
+                let position =
+                    arena_occupancy_cell_center(brick, [octant_x, octant_y, octant_z]);
+                if arena_signed_distance_meters(position) < 0.0 {
                     let octant_index = octant_x | (octant_y << 1) | (octant_z << 2);
                     mask |= 1 << octant_index;
                 }
@@ -152,6 +260,25 @@ fn arena_brick_occupancy_mask(brick: [u8; 3]) -> u8 {
         }
     }
     mask
+}
+
+fn arena_occupancy_cell_center(brick: [u8; 3], octant: [u8; 3]) -> [f64; 3] {
+    let cell_edge_meters = ARENA_CHUNK_EDGE_METERS / f64::from(ARENA_CELL_COUNT_PER_AXIS);
+    [
+        f64::from(brick[0] * 2 + octant[0]) * cell_edge_meters + cell_edge_meters * 0.5,
+        f64::from(brick[1] * 2 + octant[1]) * cell_edge_meters + cell_edge_meters * 0.5,
+        f64::from(brick[2] * 2 + octant[2]) * cell_edge_meters + cell_edge_meters * 0.5,
+    ]
+}
+
+fn interval_violation(value: f64, minimum: f64, maximum: f64) -> f64 {
+    if value < minimum {
+        minimum - value
+    } else if value > maximum {
+        value - maximum
+    } else {
+        0.0
+    }
 }
 
 #[cfg(test)]
@@ -176,5 +303,13 @@ mod tests {
         assert_ne!(arena_brick_occupancy_mask([2, 2, 3]), 0);
         assert_ne!(arena_brick_occupancy_mask([2, 0, 2]), 0);
         assert_eq!(arena_brick_occupancy_mask([2, 2, 2]), 0);
+    }
+
+    #[test]
+    fn arena_signed_distance_is_euclidean_at_wall_and_floor_junctions() {
+        let wall_wall = arena_signed_distance_meters([0.25, 1.0, 0.25]);
+        let wall_wall_floor = arena_signed_distance_meters([0.25, 0.25, 0.25]);
+        assert!((wall_wall + (2.0_f64).sqrt() * 0.25).abs() <= 1.0e-12);
+        assert!((wall_wall_floor + (3.0_f64).sqrt() * 0.25).abs() <= 1.0e-12);
     }
 }
