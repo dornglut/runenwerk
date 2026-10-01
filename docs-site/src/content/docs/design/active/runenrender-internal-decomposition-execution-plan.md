@@ -554,6 +554,10 @@ Cutover:
 RX is transfer/cutover and actual standalone-package proof, not architecture invention
 or public-surface repair. Missing reusable contracts discovered after the ADR-0008
 authority switch are corrected in standalone RunenRender, not in the frozen predecessor.
+During the bounded successor-accepted/predecessor-present overlap, changes to the
+transferred boundary remain limited to ADR-0008-permitted cutover-blocking extraction,
+security/correctness, validation, or release corrections; ordinary successor feature and
+capability evolution waits until predecessor deletion completes RX.
 
 ## A1 — reusable adapter review
 
