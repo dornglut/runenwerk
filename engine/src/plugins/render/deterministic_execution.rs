@@ -1354,9 +1354,6 @@ pub enum RenderDeterministicResultFormationError {
     VerificationRejected {
         detail: String,
     },
-    ResultFormation {
-        detail: String,
-    },
 }
 
 impl fmt::Display for RenderDeterministicResultFormationError {
@@ -1390,10 +1387,6 @@ impl fmt::Display for RenderDeterministicResultFormationError {
             Self::VerificationRejected { detail } => write!(
                 formatter,
                 "deterministic finite-evaluation verification rejected result formation: {detail}"
-            ),
-            Self::ResultFormation { detail } => write!(
-                formatter,
-                "renderer-owned deterministic result formation failed: {detail}"
             ),
         }
     }

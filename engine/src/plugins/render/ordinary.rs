@@ -225,7 +225,6 @@ pub enum RenderResultFormationErrorKind {
     ReadbackCorrelationLost,
     ReadbackFailed,
     VerificationRejected,
-    FormationFailed,
 }
 
 /// Failure while forming semantic provenance from a result-capable submission.
@@ -255,9 +254,6 @@ impl RenderResultFormationError {
             }
             RenderDeterministicResultFormationError::VerificationRejected { .. } => {
                 RenderResultFormationErrorKind::VerificationRejected
-            }
-            RenderDeterministicResultFormationError::ResultFormation { .. } => {
-                RenderResultFormationErrorKind::FormationFailed
             }
         }
     }
@@ -296,12 +292,6 @@ impl fmt::Display for RenderResultFormationError {
                 write!(
                     formatter,
                     "finite-evaluation verification rejected result formation: {detail}"
-                )
-            }
-            RenderDeterministicResultFormationError::ResultFormation { detail } => {
-                write!(
-                    formatter,
-                    "renderer-owned result formation failed: {detail}"
                 )
             }
         }
