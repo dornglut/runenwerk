@@ -13,7 +13,9 @@ use super::admission::{
 };
 use super::appearance::RenderDiffuseMaterial;
 use super::apply_runenwerk_gpu_context_policy;
-use super::deterministic_admission::{AdmittedDeterministicRender, admit_deterministic_render_with_semantic_inputs};
+use super::deterministic_admission::{
+    AdmittedDeterministicRender, admit_deterministic_render_with_semantic_inputs,
+};
 use super::deterministic_execution::{
     RenderDeterministicRadianceCaptureRequestError, RenderDeterministicResultFormationError,
     SubmittedDeterministicRender, submit_deterministic_render,
