@@ -72,7 +72,7 @@ impl Renderer {
             product_surface_pass: None,
             product_surface_pass_format: None,
             glyph_atlas_gpu: std::collections::BTreeMap::new(),
-            deterministic_resources: Default::default(),
+            render_execution: Default::default(),
             camera_diagnostics: Default::default(),
             temporal_execution_evidence: std::collections::BTreeMap::new(),
             dynamic_texture_targets:
@@ -116,9 +116,9 @@ impl Renderer {
         // capture consume the resulting public lifecycle facts; neither feature creates a poll
         // loop or reaches into the backend.
         context.progress();
-        self.deterministic_resources.retain_in_flight_submissions();
+        self.render_execution.retain_in_flight_submissions();
         self.camera_diagnostics
-            .progress(context, &mut self.deterministic_resources)?;
+            .progress(context, &mut self.render_execution)?;
         let super::render_flow::RendererGpuObservationOutput {
             timing_evidence,
             composed_timing_evidence,

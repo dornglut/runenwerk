@@ -5,8 +5,9 @@
 //! readback orchestration, JSON schema, filesystem persistence, and artifact lifecycle.
 
 use crate::plugins::render::deterministic_execution::{
-    DeterministicResourceCache, RenderCameraDiagnosticRequest, RenderCameraDiagnosticSource,
+    RenderCameraDiagnosticRequest, RenderCameraDiagnosticSource,
 };
+use crate::plugins::render::{RenderExecutionScope, RenderExecutionState};
 use anyhow::{Context, Result, bail};
 use runen_gpu::{
     GpuContext, GpuReadbackId, GpuReadbackOperation, GpuReadbackStatus, GpuSubmission,
@@ -124,7 +125,7 @@ impl RendererCameraDiagnostics {
     pub(super) fn progress(
         &mut self,
         context: &GpuContext,
-        resources: &mut DeterministicResourceCache,
+        execution: &mut RenderExecutionState,
     ) -> Result<()> {
         let mut completed = Vec::new();
         for (scope, readback) in &self.readbacks {
@@ -181,7 +182,7 @@ impl RendererCameraDiagnostics {
             })?;
             let submission =
                 pollster::block_on(context.submit_work("camera history cell diagnostics", [work]))?;
-            resources.retain_auxiliary_producer_submission(scope, &submission);
+            execution.retain_auxiliary_submission(RenderExecutionScope::new(scope), &submission);
             self.readbacks.insert(
                 scope,
                 DiagnosticReadback {

@@ -811,8 +811,7 @@ pub struct Renderer {
     product_surface_pass: Option<ProductSurfacePass>,
     product_surface_pass_format: Option<GpuTextureFormat>,
     glyph_atlas_gpu: BTreeMap<u64, UiGlyphAtlasGpu>,
-    deterministic_resources:
-        crate::plugins::render::deterministic_execution::DeterministicResourceCache,
+    render_execution: crate::plugins::render::RenderExecutionState,
     camera_diagnostics: camera_diagnostics::RendererCameraDiagnostics,
     temporal_execution_evidence: BTreeMap<
         u64,
