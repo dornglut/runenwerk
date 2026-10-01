@@ -50,7 +50,7 @@ pub struct RenderAdmissionError {
 }
 
 impl RenderAdmissionError {
-    pub const fn kind(&self) -> RenderAdmissionErrorKind {
+    pub fn kind(&self) -> RenderAdmissionErrorKind {
         match self.inner {
             RenderDeterministicAdmissionFailure::Planning(_) => RenderAdmissionErrorKind::Planning,
             RenderDeterministicAdmissionFailure::Admission(_) => {
@@ -101,7 +101,7 @@ pub struct RenderExecutionError {
 }
 
 impl RenderExecutionError {
-    pub const fn kind(&self) -> RenderExecutionErrorKind {
+    pub fn kind(&self) -> RenderExecutionErrorKind {
         match self.inner {
             RenderDeterministicExecutionError::Lowering(_) => RenderExecutionErrorKind::Lowering,
             RenderDeterministicExecutionError::Submission(_) => {
@@ -146,7 +146,7 @@ pub struct RenderVerifiedSubmissionError {
 }
 
 impl RenderVerifiedSubmissionError {
-    pub const fn kind(&self) -> RenderVerifiedSubmissionErrorKind {
+    pub fn kind(&self) -> RenderVerifiedSubmissionErrorKind {
         match self.inner {
             RenderDeterministicVerifiedSubmissionError::Eligibility { .. } => {
                 RenderVerifiedSubmissionErrorKind::Eligibility
@@ -165,7 +165,10 @@ impl fmt::Display for RenderVerifiedSubmissionError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.inner {
             RenderDeterministicVerifiedSubmissionError::Eligibility { detail } => {
-                write!(formatter, "render result verification is outside the certified domain: {detail}")
+                write!(
+                    formatter,
+                    "render result verification is outside the certified domain: {detail}"
+                )
             }
             RenderDeterministicVerifiedSubmissionError::Execution(error) => error.fmt(formatter),
             RenderDeterministicVerifiedSubmissionError::Correlation { detail } => {
@@ -202,7 +205,7 @@ pub struct RenderResultFormationError {
 }
 
 impl RenderResultFormationError {
-    pub const fn kind(&self) -> RenderResultFormationErrorKind {
+    pub fn kind(&self) -> RenderResultFormationErrorKind {
         match self.inner {
             RenderDeterministicResultFormationError::VerificationNotRequested => {
                 RenderResultFormationErrorKind::VerificationNotRequested
@@ -233,13 +236,17 @@ impl fmt::Display for RenderResultFormationError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.inner {
             RenderDeterministicResultFormationError::VerificationNotRequested => {
-                formatter.write_str("this render was submitted without semantic-result verification")
+                formatter
+                    .write_str("this render was submitted without semantic-result verification")
             }
             RenderDeterministicResultFormationError::ResultAlreadyFormed => {
                 formatter.write_str("semantic result evidence was already formed from this render")
             }
             RenderDeterministicResultFormationError::SubmissionFailed { kind } => {
-                write!(formatter, "RunenGPU submission failed before result formation: {kind:?}")
+                write!(
+                    formatter,
+                    "RunenGPU submission failed before result formation: {kind:?}"
+                )
             }
             RenderDeterministicResultFormationError::ReadbackCorrelationLost {
                 output_index,
@@ -257,7 +264,10 @@ impl fmt::Display for RenderResultFormationError {
                 "output {output_index} {channel} verification readback failed: {kind:?}"
             ),
             RenderDeterministicResultFormationError::VerificationRejected { detail } => {
-                write!(formatter, "finite-evaluation verification rejected result formation: {detail}")
+                write!(
+                    formatter,
+                    "finite-evaluation verification rejected result formation: {detail}"
+                )
             }
             RenderDeterministicResultFormationError::ResultFormation { detail } => {
                 write!(formatter, "renderer-owned result formation failed: {detail}")
