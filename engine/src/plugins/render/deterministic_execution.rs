@@ -49,9 +49,10 @@ use runen_gpu::{
     GpuResourceDescriptorError, GpuResourceLifetime, GpuResourceProvenance, GpuResourceRef,
     GpuRuntimeBindingValue, GpuSubmission, GpuSubmissionFailureKind, GpuSubmissionStatus,
     GpuTextureAccessResource, GpuTextureCopyRegion, GpuTextureFormat, GpuTextureHandle,
-    GpuUploadOperation, GpuWorkAuthoringError, GpuWorkFragment, GpuWorkImport, GpuWorkOperationError,
-    GpuWorkOutput, GpuWorkResourceIdAllocationError, GpuWorkResourceIdAllocator,
-    GpuWorkSubmissionError, PreparedGpuData, TransferData, admit_static_wgsl_sources,
+    GpuUploadOperation, GpuWorkAuthoringError, GpuWorkFragment, GpuWorkImport,
+    GpuWorkOperationError, GpuWorkOutput, GpuWorkResourceIdAllocationError,
+    GpuWorkResourceIdAllocator, GpuWorkSubmissionError, PreparedGpuData, TransferData,
+    admit_static_wgsl_sources,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
@@ -570,16 +571,22 @@ impl DeterministicResourceCache {
                         [GpuBufferUsage::Storage, GpuBufferUsage::CopySource],
                         GpuBufferInitialization::Zeroed,
                     )
-                    .map_err(|error| gpu_resource_descriptor("camera temporal-history descriptor", error))
+                    .map_err(|error| {
+                        gpu_resource_descriptor("camera temporal-history descriptor", error)
+                    })
                 };
                 let first = self
                     .identities
                     .allocate_buffer_handle(descriptor(0)?)
-                    .map_err(|error| gpu_resource_allocation("camera temporal-history allocation", error))?;
+                    .map_err(|error| {
+                        gpu_resource_allocation("camera temporal-history allocation", error)
+                    })?;
                 let second = self
                     .identities
                     .allocate_buffer_handle(descriptor(1)?)
-                    .map_err(|error| gpu_resource_allocation("camera temporal-history allocation", error))?;
+                    .map_err(|error| {
+                        gpu_resource_allocation("camera temporal-history allocation", error)
+                    })?;
                 DeterministicTemporalStorage::Camera(Box::new(DeterministicCameraTemporalStorage {
                     slots: [first, second],
                     completed_slot: 0,
@@ -598,10 +605,12 @@ impl DeterministicResourceCache {
                     GpuBufferInitialization::Zeroed,
                 )
                 .map_err(|error| gpu_resource_descriptor("temporal-history descriptor", error))?;
-                let handle = self
-                    .identities
-                    .allocate_buffer_handle(descriptor)
-                    .map_err(|error| gpu_resource_allocation("temporal-history allocation", error))?;
+                let handle =
+                    self.identities
+                        .allocate_buffer_handle(descriptor)
+                        .map_err(|error| {
+                            gpu_resource_allocation("temporal-history allocation", error)
+                        })?;
                 let count_descriptor = GpuBufferDescriptor::ordinary_owned(
                     format!("RunenRender output {output_index} temporal sample counts"),
                     GpuResourceLifetime::Retained,
@@ -610,11 +619,15 @@ impl DeterministicResourceCache {
                     [GpuBufferUsage::Storage],
                     GpuBufferInitialization::Zeroed,
                 )
-                .map_err(|error| gpu_resource_descriptor("temporal sample-count descriptor", error))?;
+                .map_err(|error| {
+                    gpu_resource_descriptor("temporal sample-count descriptor", error)
+                })?;
                 let sample_counts = self
                     .identities
                     .allocate_buffer_handle(count_descriptor)
-                    .map_err(|error| gpu_resource_allocation("temporal sample-count allocation", error))?;
+                    .map_err(|error| {
+                        gpu_resource_allocation("temporal sample-count allocation", error)
+                    })?;
                 DeterministicTemporalStorage::Static {
                     handle,
                     sample_counts,
@@ -2129,8 +2142,10 @@ fn lower_output(
                 ..
             } => {
                 let source = resources.reconstruction_source()?;
-                let pipeline = GpuComputePipelineDescriptor::ordinary(source, "main")
-                    .map_err(|error| gpu_program_contract("temporal reconstruction pipeline", error))?;
+                let pipeline =
+                    GpuComputePipelineDescriptor::ordinary(source, "main").map_err(|error| {
+                        gpu_program_contract("temporal reconstruction pipeline", error)
+                    })?;
                 let runtime_bindings = pipeline
                     .runtime_bindings([
                         GpuRuntimeBindingValue::whole_buffer(0, 0, &input),
@@ -2156,7 +2171,9 @@ fn lower_output(
                         runtime_bindings,
                         GpuDispatchIntent::direct(dispatch_size),
                     )
-                    .map_err(|error| gpu_work_operation("temporal reconstruction operation", error))?,
+                    .map_err(|error| {
+                        gpu_work_operation("temporal reconstruction operation", error)
+                    })?,
                 )
             }
             DeterministicTemporalHistoryUseStorage::Camera {
@@ -2344,8 +2361,10 @@ fn lower_output(
                         [destination_region.subresources()],
                     )
                     .map_err(|error| gpu_work_authoring("radiance output coverage", error))?;
-                    let output = GpuWorkOutput::new(relationship.clone(), coverage)
-                        .map_err(|error| gpu_work_authoring("radiance output relationship", error))?;
+                    let output =
+                        GpuWorkOutput::new(relationship.clone(), coverage).map_err(|error| {
+                            gpu_work_authoring("radiance output relationship", error)
+                        })?;
                     Some((
                         output,
                         PreparedDeterministicRadianceOutput {
@@ -3370,9 +3389,10 @@ fn deterministic_dispatch_size(
 }
 
 fn gpu_access(stage: &'static str, source: GpuAccessError) -> RenderDeterministicLoweringError {
-    RenderDeterministicLoweringError::RunenGpuPreparation(
-        RenderRunenGpuPreparationError::Access { stage, source },
-    )
+    RenderDeterministicLoweringError::RunenGpuPreparation(RenderRunenGpuPreparationError::Access {
+        stage,
+        source,
+    })
 }
 
 fn gpu_program_source(
@@ -4835,12 +4855,9 @@ mod tests {
             "access",
         );
 
-        let program_source = admit_static_wgsl_sources([(
-            "",
-            1,
-            "@compute @workgroup_size(1) fn main() {}",
-        )])
-        .expect_err("empty source key must fail in RunenGPU source authority");
+        let program_source =
+            admit_static_wgsl_sources([("", 1, "@compute @workgroup_size(1) fn main() {}")])
+                .expect_err("empty source key must fail in RunenGPU source authority");
         assert_owner(
             RenderRunenGpuPreparationError::ProgramSource {
                 stage: "program-source",
@@ -4943,12 +4960,9 @@ mod tests {
 
     #[test]
     fn runengpu_preparation_preserves_typed_source_chain() {
-        let source = admit_static_wgsl_sources([(
-            "",
-            1,
-            "@compute @workgroup_size(1) fn main() {}",
-        )])
-        .expect_err("empty RunenGPU source key must be rejected");
+        let source =
+            admit_static_wgsl_sources([("", 1, "@compute @workgroup_size(1) fn main() {}")])
+                .expect_err("empty RunenGPU source key must be rejected");
         let error = gpu_program_source("typed source proof", source.clone());
 
         let preparation =
@@ -4969,6 +4983,4 @@ mod tests {
             capacity_workgroups: 1,
         };
         assert!(Error::source(&error).is_none());
-    }
-
-}
+    }}
