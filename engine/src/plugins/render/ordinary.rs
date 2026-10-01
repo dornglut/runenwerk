@@ -51,7 +51,7 @@ pub struct RenderAdmissionError {
 
 impl RenderAdmissionError {
     pub fn kind(&self) -> RenderAdmissionErrorKind {
-        match self.inner {
+        match &self.inner {
             RenderDeterministicAdmissionFailure::Planning(_) => RenderAdmissionErrorKind::Planning,
             RenderDeterministicAdmissionFailure::Admission(_) => {
                 RenderAdmissionErrorKind::Admission
@@ -102,7 +102,7 @@ pub struct RenderExecutionError {
 
 impl RenderExecutionError {
     pub fn kind(&self) -> RenderExecutionErrorKind {
-        match self.inner {
+        match &self.inner {
             RenderDeterministicExecutionError::Lowering(_) => RenderExecutionErrorKind::Lowering,
             RenderDeterministicExecutionError::Submission(_) => {
                 RenderExecutionErrorKind::Submission
@@ -147,7 +147,7 @@ pub struct RenderVerifiedSubmissionError {
 
 impl RenderVerifiedSubmissionError {
     pub fn kind(&self) -> RenderVerifiedSubmissionErrorKind {
-        match self.inner {
+        match &self.inner {
             RenderDeterministicVerifiedSubmissionError::Eligibility { .. } => {
                 RenderVerifiedSubmissionErrorKind::Eligibility
             }
@@ -206,7 +206,7 @@ pub struct RenderResultFormationError {
 
 impl RenderResultFormationError {
     pub fn kind(&self) -> RenderResultFormationErrorKind {
-        match self.inner {
+        match &self.inner {
             RenderDeterministicResultFormationError::VerificationNotRequested => {
                 RenderResultFormationErrorKind::VerificationNotRequested
             }
