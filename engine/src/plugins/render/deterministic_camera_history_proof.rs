@@ -216,10 +216,14 @@ fn execute(
         context.progress();
         match submission.readback(readback_id).unwrap().status() {
             GpuReadbackStatus::Ready(bytes) => {
-                assert!(matches!(
-                    submission.status(),
-                    GpuSubmissionStatus::Completed
-                ));
+                if !matches!(submission.status(), GpuSubmissionStatus::Completed) {
+                    assert!(
+                        Instant::now() < deadline,
+                        "camera proof completion timed out"
+                    );
+                    std::thread::yield_now();
+                    continue;
+                }
                 return bytes
                     .as_bytes()
                     .as_chunks::<4>()
@@ -341,4 +345,165 @@ fn matched_plane_reuses_one_sample_and_rejects_wrong_radiance_or_outside_current
         "previous depth alone must not admit a sample outside current support"
     );
     assert_eq!(f32::from_bits(rejected[0]), 1.0);
+}
+
+#[test]
+fn hard_shadow_revalidation_distinguishes_depth_and_geometry_from_radiance() {
+    let Some(context) = context() else {
+        return;
+    };
+    let mut input = scene_input(true);
+    let blocker = HEADER_WORDS + GEOMETRY_WORDS;
+    pack_vec3(&mut input, blocker + 25, [2.0, -2.0, -2.0]).unwrap();
+    input[blocker + 28] = 0.25_f32.to_bits();
+    let emitter = input[29] as usize;
+    pack_vec3(&mut input, emitter, [0.0, 0.0, 1.0]).unwrap();
+    input[8] = 0.08_f32.to_bits();
+    let previous = [
+        1.0_f32.to_bits(),
+        4.0_f32.to_bits(),
+        4,
+        1,
+        0,
+        2.0_f32.to_bits(),
+        (-2.0_f32).to_bits(),
+        (-4.0_f32).to_bits(),
+    ];
+    let current_only = execute(
+        &context,
+        input.clone(),
+        previous,
+        camera_words(false, false, 0),
+    );
+    assert_eq!(f32::from_bits(current_only[4]), 1.0, "current phase is lit");
+    let accepted = execute(
+        &context,
+        input.clone(),
+        previous,
+        camera_words(true, true, 4),
+    );
+    assert_eq!(
+        accepted[2], 2,
+        "visible retained plane anchor is shadowed but in this footprint"
+    );
+    assert_eq!(
+        f32::from_bits(accepted[0]),
+        0.5,
+        "one lit and one validated shadow sample"
+    );
+    assert_eq!(
+        accepted[4], current_only[4],
+        "the new coherent lane must remain raw"
+    );
+    let mut wrong_shadow = previous;
+    wrong_shadow[4] = 1.0_f32.to_bits();
+    let rejected = execute(
+        &context,
+        input.clone(),
+        wrong_shadow,
+        camera_words(true, true, 4),
+    );
+    assert_eq!(
+        rejected[2], 1,
+        "matching hit, anchor and depth do not certify shadow radiance"
+    );
+    assert_eq!(rejected[0], current_only[0]);
+    let mut control = camera_words(true, true, 4);
+    control[34] = 1;
+    let oracle = execute(&context, input, previous, control);
+    assert_eq!(oracle[0], current_only[0]);
+    assert_eq!(oracle[2], 1);
+}
+
+#[test]
+fn settled_hit_miss_boundary_and_invalid_inputs_fail_closed_on_first_motion() {
+    let Some(context) = context() else {
+        return;
+    };
+    let mut input = scene_input(true);
+    input[4] = 1;
+    input[HEADER_WORDS] = SHAPE_SPHERE;
+    pack_vec3(&mut input, HEADER_WORDS + 25, [1.5, -1.5, -3.0]).unwrap();
+    input[HEADER_WORDS + 28] = 0.5_f32.to_bits();
+    let emitter = input[29] as usize;
+    pack_vec3(&mut input, emitter, [0.0, 0.0, 1.0]).unwrap();
+    let mut previous = [0; 8];
+    for index in 0..8 {
+        input[24] = index % 4;
+        previous = execute(
+            &context,
+            input.clone(),
+            previous,
+            camera_words(index != 0, false, index.min(4)),
+        );
+        assert_eq!(
+            previous[3] != 0,
+            index % 4 == 3,
+            "three miss phases and one hit phase"
+        );
+    }
+    assert_eq!(previous[2], 4);
+    assert!(f32::from_bits(previous[0]) > 0.0);
+    assert_ne!(
+        previous[0], previous[4],
+        "stationary hit/miss footprint retains all four phases"
+    );
+    input[24] = 0;
+    input[8] = 0.08_f32.to_bits();
+    let moving = execute(
+        &context,
+        input.clone(),
+        previous,
+        camera_words(true, true, 4),
+    );
+    assert_eq!(moving[3], 0);
+    assert_eq!(
+        moving[0], 0,
+        "a current miss cannot inherit a bright aggregate or anchor"
+    );
+    assert_eq!(moving[2], 1);
+    input[8] = f32::NAN.to_bits();
+    let invalid = execute(&context, input, previous, camera_words(true, true, 4));
+    assert_eq!(invalid[0], 0);
+    assert_eq!(invalid[2], u32::MAX);
+    assert_eq!(invalid[3], 0);
+    assert!(f32::from_bits(invalid[4]).is_nan());
+}
+
+#[test]
+fn invalid_retained_coherent_inputs_cannot_authorize_motion_reuse() {
+    let Some(context) = context() else {
+        return;
+    };
+    let mut input = scene_input(false);
+    input[8] = 0.08_f32.to_bits();
+    let previous = [
+        0.25_f32.to_bits(),
+        4.0_f32.to_bits(),
+        4,
+        1,
+        1.0_f32.to_bits(),
+        2.0_f32.to_bits(),
+        (-2.0_f32).to_bits(),
+        (-4.0_f32).to_bits(),
+    ];
+    for (slot, value) in [
+        (1, f32::NAN.to_bits()),
+        (2, 0),
+        (2, u32::MAX),
+        (3, 0),
+        (4, f32::NAN.to_bits()),
+        (5, f32::INFINITY.to_bits()),
+    ] {
+        let mut invalid = previous;
+        invalid[slot] = value;
+        let result = execute(
+            &context,
+            input.clone(),
+            invalid,
+            camera_words(true, true, 4),
+        );
+        assert_eq!(result[2], 1, "invalid history slot {slot}");
+        assert_eq!(f32::from_bits(result[0]), 1.0);
+    }
 }

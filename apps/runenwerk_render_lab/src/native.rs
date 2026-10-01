@@ -1177,12 +1177,12 @@ fn temporal_quality_source_generation(
 fn temporal_camera_motion_pose(completed_submissions: usize) -> RenderLabCamera {
     let mut camera = RenderLabCamera::default();
     match completed_submissions {
-        0..=7 | 10.. => {}
+        0..=7 => {}
         8 => {
             camera.yaw_radians = 0.08;
             camera.pan[0] = 0.05;
         }
-        9 => {
+        9.. => {
             camera.yaw_radians = 0.24;
             camera.pitch_radians = -0.06;
             camera.pan[0] = 0.12;
@@ -1638,7 +1638,9 @@ mod tests {
         assert_ne!(large, small);
         assert_eq!(small.yaw_radians, 0.08);
         assert_eq!(large.yaw_radians, 0.24);
-        assert_eq!(temporal_camera_motion_pose(10), RenderLabCamera::default());
+        for submission in 10..20 {
+            assert_eq!(temporal_camera_motion_pose(submission), large);
+        }
     }
 
     #[test]

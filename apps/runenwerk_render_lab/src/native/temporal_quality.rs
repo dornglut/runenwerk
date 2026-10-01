@@ -543,10 +543,9 @@ fn expected_camera_same_pose_completed_frames(frame_index: usize) -> u32 {
         3 => 3,
         4..=8 => 4,
         9..=10 => 0,
-        11 => 0,
-        12 => 1,
-        13 => 2,
-        14 => 3,
+        11 => 1,
+        12 => 2,
+        13 => 3,
         _ => 4,
     }
 }
@@ -645,7 +644,7 @@ fn validate_camera_motion_evidence(
     }
 
     for (index, frame) in frames.iter().enumerate().skip(2) {
-        let expected_pose_changed = (8..=10).contains(&index);
+        let expected_pose_changed = (8..=9).contains(&index);
         if frame.history_reset
             || !frame.previous_observation_available
             || frame.camera_pose_changed != expected_pose_changed
@@ -1094,7 +1093,7 @@ mod tests {
                     index as u32,
                     index == 0,
                     index != 0,
-                    (8..=10).contains(&index),
+                    (8..=9).contains(&index),
                     expected_camera_same_pose_completed_frames(index),
                 )
             })
@@ -1123,7 +1122,7 @@ mod tests {
                     index as u32,
                     index == 0,
                     index != 0,
-                    (8..=10).contains(&index),
+                    (8..=9).contains(&index),
                     expected_camera_same_pose_completed_frames(index),
                 )
             })
@@ -1131,7 +1130,7 @@ mod tests {
 
         validate_camera_motion_evidence(&frames, (1920, 1080)).unwrap();
         assert_eq!(
-            frames[11..]
+            frames[10..15]
                 .iter()
                 .map(|frame| frame.camera_same_pose_completed_frames)
                 .collect::<Vec<_>>(),

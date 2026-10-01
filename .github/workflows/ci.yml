@@ -394,9 +394,9 @@ jobs:
               and [.frames[].previous_observation_available]
                   == [false,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true]
               and [.frames[].camera_pose_changed]
-                  == [false,false,false,false,false,false,false,false,true,true,true,false,false,false,false,false,false,false,false,false]
+                  == [false,false,false,false,false,false,false,false,true,true,false,false,false,false,false,false,false,false,false,false]
               and [.frames[].camera_same_pose_completed_frames]
-                  == [0,1,2,3,4,4,4,4,4,0,0,0,1,2,3,4,4,4,4,4]
+                  == [0,1,2,3,4,4,4,4,4,0,0,1,2,3,4,4,4,4,4,4]
             ' "${evidence}"
           # Keep exact captures for settled, first motion, continued motion, stop,
           # each of four reconvergence frames, and stable post-settle.
@@ -417,10 +417,38 @@ jobs:
                 and .capture_submission_ordinal == $ordinal
                 and (.capture.artifact_blake3 | startswith("blake3:"))
                 and .frames[($ordinal - 1)].camera_same_pose_completed_frames ==
-                    (if $ordinal <= 9 then 4 elif $ordinal <= 12 then 0 else ([4, ($ordinal - 12)] | min) end)
+                    (if $ordinal <= 9 then 4 elif $ordinal <= 11 then 0 else ([4, ($ordinal - 11)] | min) end)
                 and .frames[($ordinal - 1)].reconstruction_revision == 2
-                and (if $ordinal >= 16 then .capture.artifact_blake3 == $hash else true end)
+                and (if $ordinal >= 15 then .capture.artifact_blake3 == $hash else true end)
               ' "${settle_output}/camera-motion-evidence.json"
+          done
+
+          # Compare exact first-motion canonical and current-only controls on both
+          # requested lattices. Startup frame indices can differ; temporal ordinal,
+          # phase, source and the bounded shader samples must match.
+          for size in 640x480 1920x1080; do
+            canonical="${output}/settle-9"
+            if [ "${size}" = "640x480" ]; then
+              canonical="${output}/first-motion-640"
+              RUNENWERK_CAMERA_HISTORY_DIAGNOSTICS_DIR="${canonical}" timeout 30s xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
+                cargo +stable run -p runenwerk_render_lab --locked -- \
+                  --rl2-camera-quality "${canonical}" --window-size-px "${size}" --submitted-frames 9
+            fi
+            control="${output}/current-only-${size}"
+            RUNENWERK_CAMERA_HISTORY_DIAGNOSTICS_DIR="${control}" RUNENWERK_CAMERA_HISTORY_CURRENT_ONLY_FIRST_MOTION=1 \
+              timeout 30s xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
+                cargo +stable run -p runenwerk_render_lab --locked -- \
+                  --rl2-camera-quality "${control}" --window-size-px "${size}" --submitted-frames 9
+            jq -e --slurp --arg revision "${RUNENWERK_SOURCE_REVISION}" '
+              .[0].source_git_revision == $revision and .[1].source_git_revision == $revision
+              and .[0].qualification_control == "canonical"
+              and .[1].qualification_control == "current_only_first_motion"
+              and all(.[]; .phase == 0 and .history_age == 8 and .prior_same_pose_completed_frames == 4 and (.cells | length) == 32)
+              and ([.[0].cells[] | [.current_cell,.current_only_radiance,.previous_cell,.coherent_sample_radiance,.retained_aggregate_radiance,.outcome]]
+                == [.[1].cells[] | [.current_cell,.current_only_radiance,.previous_cell,.coherent_sample_radiance,.retained_aggregate_radiance,.outcome]])
+              and all(.[1].cells[]; .resulting_radiance == .current_only_radiance and .result_sample_count == 1)
+              and all(.[0].cells[]; if .outcome == "accepted" then .result_sample_count == 2 else .resulting_radiance == .current_only_radiance end)
+            ' "${canonical}/camera-motion-cells.json" "${control}/camera-motion-cells.json"
           done
 
       - name: Upload Render Lab P100 camera-motion reprojection evidence

@@ -1,3 +1,15 @@
+// Private P100 history revision 3: [stationary/display estimate, latest forward depth,
+// display sample count, latest hit, raw latest phase radiance, actual hit point xyz].
+// The four-phase stationary estimate has several anchors and is never motion-reprojected.
+// One retained raw sample is eligible only when its anchor belongs to the current requested
+// footprint and a fresh current-view primary query returns that exact represented point.
+// Fresh maintained direct radiance must also match the retained value exactly. This establishes
+// that the reused value is a valid current-view finite sample, including shadow visibility;
+// depth/bounds only select a candidate. An accepted pair therefore has weight 1 + 1, while
+// the newly retained motion lane always contains the raw current sample, never that pair.
+// Exact equality deliberately rejects roundoff differences. It does not prove maximal reuse,
+// a spatial tolerance, moving-object support or a general TAA/TAAU correspondence method.
+
 @group(0) @binding(0)
 var<storage, read> input_words: array<u32>;
 
