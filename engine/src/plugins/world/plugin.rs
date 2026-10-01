@@ -17,8 +17,9 @@ use super::chunks::render_cache_bridge::{
 };
 use super::debug::metrics::WorldDebugMetricsResource;
 use super::prepare::{
+    PreparedWorldSdfFieldSourceResource, WorldSdfFieldProjectionStateResource,
     WorldSdfRenderBridgeStateResource, prepare_world_feature_contributions_system,
-    prepare_world_sdf_render_bridge_system,
+    prepare_world_sdf_field_projection_system, prepare_world_sdf_render_bridge_system,
 };
 use super::streaming::replication::{
     WorldReplicationExtractionCursor, rebuild_world_replication_state_system,
@@ -78,6 +79,7 @@ pub enum WorldRuntimeSet {
     RenderCacheSync,
     ReplicationState,
     RenderSdfBridge,
+    RenderSdfFieldProjection,
 }
 
 pub fn world_runtime_mode_for_authority(authority: AuthorityRole) -> WorldRuntimeMode {
@@ -118,6 +120,8 @@ impl Plugin for WorldPlugin {
             super::build::integration::WorldRuntimeSdfMetricCapabilityCatalogResource,
         >();
         app.init_resource::<WorldSdfRenderBridgeStateResource>();
+        app.init_resource::<PreparedWorldSdfFieldSourceResource>();
+        app.init_resource::<WorldSdfFieldProjectionStateResource>();
         app.init_resource::<CollisionQueryServiceResource>();
         app.init_resource::<WorldNavSummaryResource>();
         app.init_resource::<ReplicationStateResource>();
@@ -203,6 +207,15 @@ impl Plugin for WorldPlugin {
                 .on_invoker_thread()
                 .in_set(WorldRuntimeSet::RenderSdfBridge)
                 .in_set(RenderRuntimeSet::GpuResidency)
+                .before_if_present(RenderRuntimeSet::FramePrepare),
+        );
+        app.add_systems(
+            RenderPrepare,
+            prepare_world_sdf_field_projection_system
+                .on_invoker_thread()
+                .in_set(WorldRuntimeSet::RenderSdfFieldProjection)
+                .in_set(RenderRuntimeSet::GpuResidency)
+                .after(WorldRuntimeSet::RenderSdfBridge)
                 .before_if_present(RenderRuntimeSet::FramePrepare),
         );
         app.add_systems(

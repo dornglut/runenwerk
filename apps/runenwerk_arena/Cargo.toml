@@ -14,5 +14,6 @@ runen_ecs.workspace = true
 world_sdf.workspace = true
 
 [dev-dependencies]
+product.workspace = true
 world_ops.workspace = true
 winit = "0.30.9"

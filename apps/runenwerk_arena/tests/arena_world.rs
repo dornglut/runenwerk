@@ -6,7 +6,13 @@ use engine::plugins::world::build::{
     WorldRuntimeSdfProductCatalogResource,
 };
 use engine::plugins::world::chunks::lifecycle::WorldChunkRuntimeMapResource;
+use engine::plugins::world::prepare::PreparedWorldSdfFieldSourceResource;
+use engine::plugins::render::frame::PreparedRenderProductSelectionResource;
+use engine::plugins::render::{RenderFrameProducerId, RenderPlugin};
 use engine::prelude::*;
+use product::{
+    ProductResidency, RenderProductSelection, RenderResidencyRequest, RenderSelectedProduct,
+};
 use runen_spatial::WorldId;
 use runenwerk_arena::{
     ARENA_CHUNK_EDGE_METERS, ARENA_FIELD_PRODUCT_ID, ARENA_METRIC_DISTANCE_UNITS_PER_METER,
@@ -474,5 +480,145 @@ fn collision_classification_is_preserved_immediately_on_both_sides_of_all_bounda
     ] {
         assert!(signed_distance(&app, solid) < 0.0, "{solid:?}");
         assert!(signed_distance(&app, clear) > 0.0, "{clear:?}");
+    }
+}
+
+
+fn sample_projected_arena_field(
+    input: &engine::plugins::render::field_input::RenderFieldSemanticInput,
+    point: [f64; 3],
+) -> f64 {
+    let origin = input.origin_local_meters();
+    let spacing = input.sample_spacing_meters();
+    let dimensions = input.dimensions();
+    let axis = |axis: usize| {
+        let coordinate = ((point[axis] - origin[axis]) / spacing[axis])
+            .clamp(0.0, f64::from(dimensions[axis] - 1));
+        let lower = (coordinate.floor() as u32).min(dimensions[axis] - 2);
+        let upper = lower + 1;
+        (lower as usize, upper as usize, coordinate - f64::from(lower))
+    };
+    let (x0, x1, tx) = axis(0);
+    let (y0, y1, ty) = axis(1);
+    let (z0, z1, tz) = axis(2);
+    let width = dimensions[0] as usize;
+    let height = dimensions[1] as usize;
+    let sample = |x: usize, y: usize, z: usize| {
+        input
+            .signed_distance_sample_meters(z * width * height + y * width + x)
+            .unwrap()
+    };
+    let lerp = |left: f64, right: f64, t: f64| left + (right - left) * t;
+    let c00 = lerp(sample(x0, y0, z0), sample(x1, y0, z0), tx);
+    let c10 = lerp(sample(x0, y1, z0), sample(x1, y1, z0), tx);
+    let c01 = lerp(sample(x0, y0, z1), sample(x1, y0, z1), tx);
+    let c11 = lerp(sample(x0, y1, z1), sample(x1, y1, z1), tx);
+    let c0 = lerp(c00, c10, ty);
+    let c1 = lerp(c01, c11, ty);
+    lerp(c0, c1, tz)
+}
+
+#[test]
+fn maintained_arena_projects_through_world_residency_into_generic_render_field_input() {
+    let mut app = build_headless_game_app();
+    app.add_plugins(RenderPlugin);
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("maintained arena should integrate before render projection");
+
+    let descriptor = app
+        .world()
+        .resource::<WorldRuntimeSdfProductCatalogResource>()
+        .unwrap()
+        .products()
+        .values()
+        .find(|descriptor| descriptor.product_id == ARENA_FIELD_PRODUCT_ID)
+        .expect("maintained arena descriptor")
+        .clone();
+    let core = descriptor.product_core();
+    let selection = RenderProductSelection::new("maintained-arena-gp1b3")
+        .with_selected_product(RenderSelectedProduct {
+            product_id: core.identity,
+            scale_band: core.scale_band,
+            generation: core.lineage.generation,
+            freshness: core.freshness,
+            residency: core.residency,
+            authority_class: core.authority_class,
+            query_policy: core.query_policy,
+        })
+        .with_residency_request(RenderResidencyRequest::new(
+            core.identity,
+            ProductResidency::Resident,
+            100,
+            true,
+        ));
+    app.world_mut()
+        .resource_mut::<PreparedRenderProductSelectionResource>()
+        .expect("Render should own product selection resource")
+        .replace_contribution(
+            RenderFrameProducerId::try_from_raw(9201).expect("producer id"),
+            [selection],
+        )
+        .expect("maintained arena selection should ratify");
+
+    app = app
+        .run_for_frames(1)
+        .expect("World-to-Render field projection should execute");
+
+    let projected = app
+        .world()
+        .resource::<PreparedWorldSdfFieldSourceResource>()
+        .expect("World should own prepared SDF field projections")
+        .source(core.identity)
+        .expect("maintained arena should project after selection and residency");
+    let input = projected.input();
+
+    assert_eq!(projected.product_generation(), core.lineage.generation);
+    assert_eq!(projected.payload_ref(), descriptor.payload_refs[0]);
+    assert_eq!(input.origin_local_meters(), [0.0; 3]);
+    assert_eq!(input.sample_spacing_meters(), [0.5; 3]);
+    assert_eq!(input.dimensions(), [9, 9, 9]);
+    assert_eq!(input.sample_count(), 9 * 9 * 9);
+    assert_eq!(
+        input.max_absolute_query_error_local_meters(),
+        arena_metric_encoding().max_absolute_error_meters(),
+        "exact duplicated arena samples must add zero GP1B3 canonicalization error"
+    );
+
+    for z in 0..9 {
+        for y in 0..9 {
+            for x in 0..9 {
+                let point = [x as f64 * 0.5, y as f64 * 0.5, z as f64 * 0.5];
+                let expected = (arena_signed_distance_meters(point)
+                    * f64::from(ARENA_METRIC_DISTANCE_UNITS_PER_METER))
+                .round()
+                    / f64::from(ARENA_METRIC_DISTANCE_UNITS_PER_METER);
+                let index = z * 9 * 9 + y * 9 + x;
+                assert_eq!(
+                    input.signed_distance_sample_meters(index),
+                    Some(expected),
+                    "{point:?}"
+                );
+            }
+        }
+    }
+
+    let declared_error = input.max_absolute_query_error_local_meters();
+    for z in 0..16 {
+        for y in 0..16 {
+            for x in 0..16 {
+                let point = [
+                    (x as f64 + 0.5) * 0.25,
+                    (y as f64 + 0.5) * 0.25,
+                    (z as f64 + 0.5) * 0.25,
+                ];
+                let intended = arena_signed_distance_meters(point);
+                let rendered = sample_projected_arena_field(input, point);
+                assert!(
+                    (rendered - intended).abs() <= declared_error + 1.0e-12,
+                    "{point:?}: projected={rendered}, intended={intended}, declared={declared_error}"
+                );
+            }
+        }
     }
 }
