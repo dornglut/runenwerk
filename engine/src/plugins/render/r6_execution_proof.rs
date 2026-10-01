@@ -6,7 +6,7 @@
 // independently normalizes and certifies the same exact submission before semantic formation.
 
 use super::super::apply_runenwerk_gpu_context_policy;
-use super::super::deterministic_admission::{AdmittedDeterministicRender, admit_deterministic_render};
+use super::super::deterministic_admission::{AdmittedDeterministicRender, admit_deterministic_render_with_semantic_inputs};
 use super::super::deterministic_execution::DeterministicVerificationSubmission;
 use super::super::deterministic_verification::{
     submit_deterministic_render_for_verified_formation, verify_completed_deterministic_render,
@@ -347,10 +347,11 @@ fn admit_execution(
     context: &GpuContext,
 ) -> AdmittedDeterministicRender {
     let bindings = output_bindings();
-    admit_deterministic_render(
+    admit_deterministic_render_with_semantic_inputs(
         &fixture.scene,
         &fixture.request,
         &fixture.semantic_inputs,
+        &[],
         &fixture.availability,
         &bindings,
         context,
