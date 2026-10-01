@@ -762,16 +762,14 @@ fn founding_renderer_executes_through_maintained_path_and_matches_cpu_reference(
         expected_probe,
     );
 
-    let verified = verify_completed_deterministic_render(verification)
-        .expect("R6 founding finite evaluation must satisfy EVAL-001");
     assert_eq!(
-        verified.submitted().admitted().admitted(),
+        verification.submitted().admitted().admitted(),
         &admitted_plan,
         "R6 verifier must remain bound to the exact maintained admission"
     );
-
-    let result = RenderResult::from_verified_deterministic(verified)
-        .expect("R6 verified execution must form one complete semantic result");
+    let formation = verify_completed_deterministic_render(verification)
+        .expect("R6 founding finite evaluation must satisfy EVAL-001");
+    let result = RenderResult::from_formation_evidence(formation);
     assert_eq!(result.scene_revision(), admitted_plan.scene_revision());
     assert_eq!(result.scene(), admitted_plan.plan().scene());
     assert_eq!(result.request(), admitted_plan.plan().request());

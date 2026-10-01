@@ -632,12 +632,12 @@ fn maintained_execution_keeps_ordinary_unobserved_and_verified_same_submission_o
         "2x2 canonical observation must contain at least four one-word logical samples"
     );
 
-    let verified = verify_completed_deterministic_render(verified)
-        .expect("same-submission object-identity samples must satisfy RR566-EVAL-001");
     assert!(matches!(
         verified.submitted().submission().status(),
         GpuSubmissionStatus::Completed
     ));
+    let _formation = verify_completed_deterministic_render(verified)
+        .expect("same-submission object-identity samples must satisfy RR566-EVAL-001");
 }
 
 #[test]

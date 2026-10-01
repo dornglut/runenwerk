@@ -8,9 +8,9 @@ use engine::plugins::render::representation::{
     RenderSurfaceProtocolEvidence,
 };
 use engine::plugins::render::request::{
-    RenderObservationSpec, RenderOutputSpec, RenderOutputValue,
-    RenderPerspectiveObservation, RenderRequest, RenderRequestedOutput, RenderResultTopology,
-    RenderSamplingSupport, RenderSemanticTolerance,
+    RenderObservationSpec, RenderOutputSpec, RenderOutputValue, RenderPerspectiveObservation,
+    RenderRequest, RenderRequestedOutput, RenderResultTopology, RenderSamplingSupport,
+    RenderSemanticTolerance,
 };
 use engine::plugins::render::scene::{RenderObjectState, RenderSceneStore, RenderSceneUpdate};
 use engine::plugins::render::space_time::{
@@ -132,12 +132,12 @@ fn ordinary_semantic_renderer_surface_is_public_to_downstream_consumers() {
     assert_public_error::<RenderRadianceCaptureError>();
 }
 
-
 #[test]
 fn ordinary_surface_executes_headless_through_public_runengpu_only() {
-    let descriptor = GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements())
-        .require_format_role(GpuTextureFormat::R32Uint, GpuFormatRole::CopyDestination)
-        .with_label("RunenRender R8 ordinary public consumer");
+    let descriptor =
+        GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements())
+            .require_format_role(GpuTextureFormat::R32Uint, GpuFormatRole::CopyDestination)
+            .with_label("RunenRender R8 ordinary public consumer");
     let context = match pollster::block_on(GpuContext::request(descriptor)) {
         Ok(context) => context,
         Err(error) if error.category() == GpuContextRequestErrorCategory::NoAdapterAvailable => {
