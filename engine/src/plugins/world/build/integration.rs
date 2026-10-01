@@ -14,8 +14,8 @@ use world_ops::{BuildGeneration, ChunkGeneration, ChunkRevision};
 use world_sdf::{
     FieldProductCandidate, FieldProductDescriptor, FieldProductKind, RegionSdfSummary,
     SdfChunkPayload, WorldSdfMetricError, WorldSdfMetricPayloadRef, WorldSdfMetricProductCandidate,
-    ratify_field_product_candidate,
-    ratify_world_sdf_metric_product_candidate, validate_world_sdf_metric_payload,
+    ratify_field_product_candidate, ratify_world_sdf_metric_product_candidate,
+    validate_world_sdf_metric_payload,
 };
 
 #[derive(Debug, Clone, runen_ecs::Resource)]
@@ -58,10 +58,7 @@ impl WorldRuntimeSdfMetricCapabilityCatalogResource {
         &self.capabilities
     }
 
-    pub fn capability(
-        &self,
-        product_id: ProductIdentity,
-    ) -> Option<&WorldSdfMetricPayloadRef> {
+    pub fn capability(&self, product_id: ProductIdentity) -> Option<&WorldSdfMetricPayloadRef> {
         self.capabilities.get(&product_id)
     }
 }
