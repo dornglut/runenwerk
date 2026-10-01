@@ -20,7 +20,7 @@ pub use super::deterministic_execution::RenderObjectIdentityDecoder;
 use super::deterministic_execution::{
     DeterministicResourceCache, PreparedDeterministicRadianceOutput, PreparedDeterministicRender,
     RenderCameraDiagnosticRequest, RenderCameraDiagnosticSource, RenderDeterministicExecutionError,
-    RenderDeterministicResultFormationError, RenderRunenGpuPreparationError,
+    RenderDeterministicResultFormationError,
     RenderTemporalExecutionEvidence as DeterministicTemporalExecutionEvidence,
     SubmittedDeterministicRender, prepare_deterministic_render,
     prepare_deterministic_render_with_cache_in_scope_and_evaluation, submit_deterministic_render,
@@ -113,20 +113,6 @@ pub enum RenderExecutionErrorKind {
     Submission,
 }
 
-/// RunenGPU owner category preserved when maintained lowering fails during public GPU preparation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RenderRunenGpuPreparationErrorKind {
-    Access,
-    ProgramSource,
-    ResourceDescriptor,
-    ResourceAllocation,
-    TransferPreparation,
-    ProgramContract,
-    WorkOperation,
-    ReadbackRequest,
-    WorkAuthoring,
-}
-
 /// Failure while lowering admitted renderer meaning or submitting it through public RunenGPU.
 #[derive(Debug)]
 pub struct RenderExecutionError {
@@ -149,8 +135,12 @@ impl RenderExecutionError {
         }
     }
 
-    /// Specific public RunenGPU owner category when failure happened before physical submission.
-    pub fn runen_gpu_preparation_kind(&self) -> Option<RenderRunenGpuPreparationErrorKind> {
+    /// Exact public RunenGPU owner error when failure happened during GPU preparation.
+    ///
+    /// The returned error remains owned by RunenGPU. Callers that need a concrete category can
+    /// downcast this source to the public RunenGPU error type they understand without RunenRender
+    /// mirroring RunenGPU's error taxonomy.
+    pub fn runen_gpu_preparation_source(&self) -> Option<&(dyn Error + 'static)> {
         let RenderDeterministicExecutionError::Lowering(
             super::deterministic_execution::RenderDeterministicLoweringError::RunenGpuPreparation(
                 error,
@@ -159,7 +149,7 @@ impl RenderExecutionError {
         else {
             return None;
         };
-        Some(runen_gpu_preparation_kind(error))
+        Error::source(error)
     }
 
     /// Stable public RunenGPU submission failure when execution reached physical submission.
@@ -167,38 +157,6 @@ impl RenderExecutionError {
         match &self.inner {
             RenderDeterministicExecutionError::Submission(error) => Some(error),
             RenderDeterministicExecutionError::Lowering(_) => None,
-        }
-    }
-}
-
-fn runen_gpu_preparation_kind(
-    error: &RenderRunenGpuPreparationError,
-) -> RenderRunenGpuPreparationErrorKind {
-    match error {
-        RenderRunenGpuPreparationError::Access { .. } => RenderRunenGpuPreparationErrorKind::Access,
-        RenderRunenGpuPreparationError::ProgramSource { .. } => {
-            RenderRunenGpuPreparationErrorKind::ProgramSource
-        }
-        RenderRunenGpuPreparationError::ResourceDescriptor { .. } => {
-            RenderRunenGpuPreparationErrorKind::ResourceDescriptor
-        }
-        RenderRunenGpuPreparationError::ResourceAllocation { .. } => {
-            RenderRunenGpuPreparationErrorKind::ResourceAllocation
-        }
-        RenderRunenGpuPreparationError::TransferPreparation { .. } => {
-            RenderRunenGpuPreparationErrorKind::TransferPreparation
-        }
-        RenderRunenGpuPreparationError::ProgramContract { .. } => {
-            RenderRunenGpuPreparationErrorKind::ProgramContract
-        }
-        RenderRunenGpuPreparationError::WorkOperation { .. } => {
-            RenderRunenGpuPreparationErrorKind::WorkOperation
-        }
-        RenderRunenGpuPreparationError::ReadbackRequest { .. } => {
-            RenderRunenGpuPreparationErrorKind::ReadbackRequest
-        }
-        RenderRunenGpuPreparationError::WorkAuthoring { .. } => {
-            RenderRunenGpuPreparationErrorKind::WorkAuthoring
         }
     }
 }
