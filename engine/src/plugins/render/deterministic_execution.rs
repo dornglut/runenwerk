@@ -4645,15 +4645,15 @@ mod tests {
     #[test]
     fn deterministic_dispatch_rejects_work_beyond_two_dimensional_capacity() {
         let error = deterministic_dispatch_size(4097, 8).expect_err("dispatch must reject");
-        assert!(matches!(
+        assert_eq!(
             error,
-            RenderDeterministicLoweringError::RunenGpuAuthoring { stage, detail }
-                if stage == "deterministic dispatch planning"
-                    && detail.contains("sample count 4097")
-                    && detail.contains("workgroup size 64")
-                    && detail.contains("admitted maximum per dimension is 8")
-                    && detail.contains("requires 65 total workgroups")
-                    && detail.contains("2D dispatch capacity is 64 workgroups")
-        ));
+            RenderDeterministicLoweringError::DispatchCapacityExceeded {
+                sample_count: 4097,
+                workgroup_size: 64,
+                required_workgroups: 65,
+                max_workgroups_per_dimension: 8,
+                capacity_workgroups: 64,
+            }
+        );
     }
 }
