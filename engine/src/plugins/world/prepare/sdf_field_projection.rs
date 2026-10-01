@@ -137,37 +137,49 @@ impl From<RenderFieldSemanticInputError> for WorldSdfFieldProjectionError {
     }
 }
 
-#[derive(Debug, Clone)]
-struct ProjectedMetricField {
-    input: RenderFieldSemanticInput,
-    max_duplicate_spread_units: u32,
-}
-
 pub fn prepare_world_sdf_field_projection_system(mut world: WorldMut) {
     let catalog = match world.resource::<WorldRuntimeSdfProductCatalogResource>() {
         Ok(value) => value.clone(),
-        Err(_) => return,
+        Err(_) => {
+            clear_published_world_sdf_field_sources(&mut world);
+            return;
+        }
     };
     let metric_capabilities =
         match world.resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>() {
             Ok(value) => value.clone(),
-            Err(_) => return,
+            Err(_) => {
+                clear_published_world_sdf_field_sources(&mut world);
+                return;
+            }
         };
     let store = match world.resource::<SdfChunkStoreResource>() {
         Ok(value) => value.clone(),
-        Err(_) => return,
+        Err(_) => {
+            clear_published_world_sdf_field_sources(&mut world);
+            return;
+        }
     };
     let partition = match world.resource::<PartitionConfigResource>() {
         Ok(value) => value.clone(),
-        Err(_) => return,
+        Err(_) => {
+            clear_published_world_sdf_field_sources(&mut world);
+            return;
+        }
     };
     let selections = match world.resource::<PreparedRenderProductSelectionResource>() {
         Ok(value) => value.snapshot(),
-        Err(_) => return,
+        Err(_) => {
+            clear_published_world_sdf_field_sources(&mut world);
+            return;
+        }
     };
     let residency = match world.resource::<RenderSdfResidencyResource>() {
         Ok(value) => value.clone(),
-        Err(_) => return,
+        Err(_) => {
+            clear_published_world_sdf_field_sources(&mut world);
+            return;
+        }
     };
 
     let previously_published = world
@@ -251,12 +263,12 @@ fn prepare_source(
         return None;
     }
 
-    let projected = project_metric_payload(&metric_payload_ref, payload, partition).ok()?;
+    let input = project_metric_payload(&metric_payload_ref, payload, partition).ok()?;
     Some(PreparedWorldSdfFieldSource::new(
         product_id,
         generation,
         payload_ref,
-        projected.input,
+        input,
     ))
 }
 
@@ -317,7 +329,7 @@ fn project_metric_payload(
     metric_payload_ref: &WorldSdfMetricPayloadRef,
     payload: &SdfChunkPayload,
     partition: &PartitionConfigResource,
-) -> Result<ProjectedMetricField, WorldSdfFieldProjectionError> {
+) -> Result<RenderFieldSemanticInput, WorldSdfFieldProjectionError> {
     validate_world_sdf_metric_payload(metric_payload_ref, payload)?;
 
     let page = payload
@@ -403,10 +415,22 @@ fn project_metric_payload(
         RenderTemporalSupport::unbounded(),
     )?;
 
-    Ok(ProjectedMetricField {
-        input,
-        max_duplicate_spread_units,
-    })
+    Ok(input)
+}
+
+fn clear_published_world_sdf_field_sources(world: &mut WorldMut) {
+    let published = world
+        .resource::<WorldSdfFieldProjectionStateResource>()
+        .map(|state| state.published_product_ids.clone())
+        .unwrap_or_default();
+    if let Ok(resource) = world.resource_mut::<PreparedWorldSdfFieldSourceResource>() {
+        for product_id in &published {
+            resource.remove_source(*product_id);
+        }
+    }
+    if let Ok(state) = world.resource_mut::<WorldSdfFieldProjectionStateResource>() {
+        state.published_product_ids.clear();
+    }
 }
 
 fn dense_index(edge: usize, x: usize, y: usize, z: usize) -> usize {
@@ -534,20 +558,11 @@ mod tests {
         let projected =
             project_metric_payload(&metric_ref, &payload, &partition()).expect("valid projection");
 
-        assert_eq!(projected.max_duplicate_spread_units, 8);
-        assert_eq!(projected.input.dimensions(), [9, 9, 9]);
-        assert_eq!(projected.input.sample_spacing_meters(), [0.5; 3]);
-        assert_eq!(
-            projected.input.max_absolute_query_error_local_meters(),
-            0.08
-        );
+        assert_eq!(projected.dimensions(), [9, 9, 9]);
+        assert_eq!(projected.sample_spacing_meters(), [0.5; 3]);
+        assert_eq!(projected.max_absolute_query_error_local_meters(), 0.08);
         let shared_index = dense_index(9, 2, 2, 2);
-        assert_eq!(
-            projected
-                .input
-                .signed_distance_sample_meters(shared_index),
-            Some(0.0)
-        );
+        assert_eq!(projected.signed_distance_sample_meters(shared_index), Some(0.0));
     }
 
     #[test]
@@ -568,7 +583,7 @@ mod tests {
             )
             .expect("source query should be valid")
             .signed_distance_estimate_meters();
-            let rendered = sample_projected(&projected.input, point);
+            let rendered = sample_projected(&projected, point);
             assert!(
                 (rendered - source).abs() <= canonicalization_error_meters + 1.0e-12,
                 "{point:?}: projected={rendered}, source={source}"
