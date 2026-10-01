@@ -16,6 +16,7 @@ use super::deterministic_capture::{
     RenderCapturedDeterministicRadiance, RenderDeterministicRadianceCaptureError,
     RenderDeterministicRadianceCaptureRequest, RenderDeterministicRadianceCaptureRequestError,
 };
+pub use super::deterministic_execution::RenderObjectIdentityDecoder;
 use super::deterministic_execution::{
     PreparedDeterministicRadianceOutput, PreparedDeterministicRender,
     RenderDeterministicExecutionError, RenderDeterministicResultFormationError,
@@ -23,7 +24,6 @@ use super::deterministic_execution::{
     prepare_deterministic_render, submit_deterministic_render,
     submit_deterministic_render_for_verified_result,
 };
-pub use super::deterministic_execution::RenderObjectIdentityDecoder;
 use super::field_input::RenderFieldSemanticInputBinding;
 use super::lowering::RenderWorkSet;
 use super::render_result::RenderResult;
@@ -73,7 +73,10 @@ impl fmt::Display for RenderAdmissionError {
                 write!(formatter, "render admission failed: {error}")
             }
             RenderDeterministicAdmissionFailure::Compatibility(error) => {
-                write!(formatter, "maintained renderer compatibility failed: {error}")
+                write!(
+                    formatter,
+                    "maintained renderer compatibility failed: {error}"
+                )
             }
         }
     }
@@ -172,7 +175,10 @@ impl fmt::Display for RenderVerifiedSubmissionError {
             }
             RenderDeterministicVerifiedSubmissionError::Execution(error) => error.fmt(formatter),
             RenderDeterministicVerifiedSubmissionError::Correlation { detail } => {
-                write!(formatter, "render verification correlation failed: {detail}")
+                write!(
+                    formatter,
+                    "render verification correlation failed: {detail}"
+                )
             }
         }
     }
@@ -235,10 +241,8 @@ impl RenderResultFormationError {
 impl fmt::Display for RenderResultFormationError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.inner {
-            RenderDeterministicResultFormationError::VerificationNotRequested => {
-                formatter
-                    .write_str("this render was submitted without semantic-result verification")
-            }
+            RenderDeterministicResultFormationError::VerificationNotRequested => formatter
+                .write_str("this render was submitted without semantic-result verification"),
             RenderDeterministicResultFormationError::ResultAlreadyFormed => {
                 formatter.write_str("semantic result evidence was already formed from this render")
             }
@@ -270,7 +274,10 @@ impl fmt::Display for RenderResultFormationError {
                 )
             }
             RenderDeterministicResultFormationError::ResultFormation { detail } => {
-                write!(formatter, "renderer-owned result formation failed: {detail}")
+                write!(
+                    formatter,
+                    "renderer-owned result formation failed: {detail}"
+                )
             }
         }
     }
@@ -431,9 +438,7 @@ impl SubmittedRender {
         self.inner.object_identity_decoder()
     }
 
-    pub fn try_form_result(
-        &mut self,
-    ) -> Result<Option<RenderResult>, RenderResultFormationError> {
+    pub fn try_form_result(&mut self) -> Result<Option<RenderResult>, RenderResultFormationError> {
         self.inner
             .try_form_verified_result()
             .map_err(|inner| RenderResultFormationError { inner })
