@@ -592,7 +592,10 @@ fn founding_fixture_with_observation_extent_and_support(
     })
 }
 
-fn form_result(context: &GpuContext, submitted: &mut SubmittedRenderForResult) -> Result<RenderResult> {
+fn form_result(
+    context: &GpuContext,
+    submitted: &mut SubmittedRenderForResult,
+) -> Result<RenderResult> {
     let deadline = Instant::now() + Duration::from_secs(30);
     loop {
         context.progress();
