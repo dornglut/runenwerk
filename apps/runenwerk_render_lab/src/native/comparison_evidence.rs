@@ -12,7 +12,7 @@ pub(super) struct RenderLabComparisonEvidenceState {
     temporal_by_frame: BTreeMap<
         u64,
         Vec<
-            engine::plugins::render::deterministic_execution::RenderDeterministicTemporalExecutionEvidence,
+            engine::plugins::render::RenderTemporalExecutionEvidence,
         >,
     >,
 }
@@ -22,7 +22,7 @@ impl RenderLabComparisonEvidenceState {
         &mut self,
         frame_index: u64,
         records: Vec<
-            engine::plugins::render::deterministic_execution::RenderDeterministicTemporalExecutionEvidence,
+            engine::plugins::render::RenderTemporalExecutionEvidence,
         >,
     ) {
         self.temporal_by_frame.insert(frame_index, records);
@@ -44,7 +44,7 @@ impl RenderLabComparisonEvidenceState {
             if self.temporal_by_frame.contains_key(&frame_index) {
                 continue;
             }
-            let records = gfx.deterministic_temporal_evidence(frame_index);
+            let records = gfx.temporal_execution_evidence(frame_index);
             if !records.is_empty() {
                 self.observe_temporal_frame(frame_index, records.to_vec());
             }
@@ -55,7 +55,7 @@ impl RenderLabComparisonEvidenceState {
         &self,
         frame_index: u64,
     ) -> Option<
-        &[engine::plugins::render::deterministic_execution::RenderDeterministicTemporalExecutionEvidence],
+        &[engine::plugins::render::RenderTemporalExecutionEvidence],
     >{
         self.temporal_by_frame.get(&frame_index).map(Vec::as_slice)
     }
@@ -163,7 +163,7 @@ fn temporal_frames(
                 u64::try_from(class + 1).expect("bounded comparison generation class fits u64")
             })
             .collect();
-        let record_json = |record: &engine::plugins::render::deterministic_execution::RenderDeterministicTemporalExecutionEvidence| json!({
+        let record_json = |record: &engine::plugins::render::RenderTemporalExecutionEvidence| json!({
             "requested_size_px": [record.requested_extent.0, record.requested_extent.1],
             "evaluation_size_px": [record.evaluation_extent.0, record.evaluation_extent.1],
             "semantic_input_generation_classes": classes,

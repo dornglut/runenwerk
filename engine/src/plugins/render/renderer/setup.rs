@@ -74,7 +74,7 @@ impl Renderer {
             glyph_atlas_gpu: std::collections::BTreeMap::new(),
             deterministic_resources: Default::default(),
             camera_diagnostics: Default::default(),
-            deterministic_temporal_evidence: std::collections::BTreeMap::new(),
+            temporal_execution_evidence: std::collections::BTreeMap::new(),
             dynamic_texture_targets:
                 super::dynamic_targets::RendererDynamicTextureTargetCache::default(),
             flow_runtime_cache: std::collections::BTreeMap::new(),
@@ -101,11 +101,11 @@ impl Renderer {
         }
     }
 
-    pub fn deterministic_temporal_evidence(
+    pub fn temporal_execution_evidence(
         &self,
         frame_index: u64,
-    ) -> &[crate::plugins::render::deterministic_execution::RenderDeterministicTemporalExecutionEvidence]{
-        self.deterministic_temporal_evidence
+    ) -> &[crate::plugins::render::RenderTemporalExecutionEvidence]{
+        self.temporal_execution_evidence
             .get(&frame_index)
             .map(Vec::as_slice)
             .unwrap_or_default()

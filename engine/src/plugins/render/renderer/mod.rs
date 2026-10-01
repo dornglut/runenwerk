@@ -814,9 +814,9 @@ pub struct Renderer {
     deterministic_resources:
         crate::plugins::render::deterministic_execution::DeterministicResourceCache,
     camera_diagnostics: camera_diagnostics::RendererCameraDiagnostics,
-    deterministic_temporal_evidence: BTreeMap<
+    temporal_execution_evidence: BTreeMap<
         u64,
-        Vec<crate::plugins::render::deterministic_execution::RenderDeterministicTemporalExecutionEvidence>,
+        Vec<crate::plugins::render::RenderTemporalExecutionEvidence>,
     >,
     dynamic_texture_targets: dynamic_targets::RendererDynamicTextureTargetCache,
     flow_runtime_cache: BTreeMap<RenderFlowId, render_flow::FlowRuntimeResources>,
@@ -868,11 +868,11 @@ impl Gfx {
         self.ctx.context().adapter_facts()
     }
 
-    pub fn deterministic_temporal_evidence(
+    pub fn temporal_execution_evidence(
         &self,
         frame_index: u64,
-    ) -> &[crate::plugins::render::deterministic_execution::RenderDeterministicTemporalExecutionEvidence]{
-        self.renderer.deterministic_temporal_evidence(frame_index)
+    ) -> &[crate::plugins::render::RenderTemporalExecutionEvidence]{
+        self.renderer.temporal_execution_evidence(frame_index)
     }
 
     pub fn attach_surface(

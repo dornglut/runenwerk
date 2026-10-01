@@ -546,7 +546,7 @@ fn camera_temporal_submission_frames<'a>(
 ) -> impl Iterator<Item = u64> + 'a {
     history.observations().filter_map(|observation| {
         (!gfx
-            .deterministic_temporal_evidence(observation.key.frame_index)
+            .temporal_execution_evidence(observation.key.frame_index)
             .is_empty())
         .then_some(observation.key.frame_index)
     })
