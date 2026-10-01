@@ -1,7 +1,8 @@
 use engine::plugins::world::adapters::PartitionConfigResource;
 use engine::plugins::world::build::{
-    WorldCompletedBuildQueueResource, WorldRuntimeSdfProductCatalogResource,
-    WorldSdfRuntimePayloadPackage, enqueue_ratified_world_sdf_payload_package,
+    WorldCompletedBuildQueueResource, WorldRuntimeSdfMetricCapabilityCatalogResource,
+    WorldRuntimeSdfProductCatalogResource, WorldSdfRuntimePayloadPackage,
+    enqueue_ratified_world_sdf_payload_package,
 };
 use engine::plugins::world::chunks::lifecycle::WorldChunkRuntimeMapResource;
 use engine::prelude::{App, Plugin, ResMut, Startup};
@@ -33,6 +34,7 @@ fn install_arena_world(
     mut completed: ResMut<WorldCompletedBuildQueueResource>,
     mut chunks: ResMut<WorldChunkRuntimeMapResource>,
     mut products: ResMut<WorldRuntimeSdfProductCatalogResource>,
+    mut metric_capabilities: ResMut<WorldRuntimeSdfMetricCapabilityCatalogResource>,
 ) {
     *partition = PartitionConfigResource(arena_partition_config());
 
@@ -42,6 +44,7 @@ fn install_arena_world(
         &mut completed,
         &mut chunks,
         &mut products,
+        &mut metric_capabilities,
         WorldSdfRuntimePayloadPackage::new(
             descriptor,
             vec![payload],

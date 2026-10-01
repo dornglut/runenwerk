@@ -114,6 +114,9 @@ impl Plugin for WorldPlugin {
         app.init_resource::<super::build::jobs::WorldBuildJobRuntimeResource>();
         app.init_resource::<super::build::integration::WorldCompletedBuildQueueResource>();
         app.init_resource::<super::build::integration::WorldRuntimeSdfProductCatalogResource>();
+        app.init_resource::<
+            super::build::integration::WorldRuntimeSdfMetricCapabilityCatalogResource,
+        >();
         app.init_resource::<WorldSdfRenderBridgeStateResource>();
         app.init_resource::<CollisionQueryServiceResource>();
         app.init_resource::<WorldNavSummaryResource>();
