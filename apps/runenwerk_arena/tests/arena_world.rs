@@ -207,7 +207,6 @@ fn repeated_movement_stops_at_boundary_without_crossing_into_missing_payload_spa
     assert!(history.current.position[0] < ARENA_PLAYER_SPAWN[0]);
 }
 
-
 #[test]
 fn analytic_arena_field_has_expected_faces_sign_and_open_top() {
     for interior in [[1.0, 0.75, 1.0], [2.0, 2.0, 2.0], [2.0, 3.75, 2.0]] {
@@ -242,11 +241,9 @@ fn arena_metric_error_budget_is_derived_from_source_lipschitz_and_quantization_b
     assert_eq!(components[0], 0.0, "analytic source is the exact arena SDF");
 
     let brick_edge_meters = ARENA_CHUNK_EDGE_METERS / SDF_PAGE_EDGE_BRICKS as f64;
-    let subcell_edge_meters =
-        brick_edge_meters / (SDF_METRIC_BRICK_EDGE_SAMPLES - 1) as f64;
+    let subcell_edge_meters = brick_edge_meters / (SDF_METRIC_BRICK_EDGE_SAMPLES - 1) as f64;
     let expected_trilinear = (3.0_f64).sqrt() * subcell_edge_meters / 2.0;
-    let expected_quantization =
-        0.5 / f64::from(ARENA_METRIC_DISTANCE_UNITS_PER_METER);
+    let expected_quantization = 0.5 / f64::from(ARENA_METRIC_DISTANCE_UNITS_PER_METER);
     assert!((components[1] - expected_trilinear).abs() <= 1.0e-15);
     assert!((components[2] - expected_quantization).abs() <= 1.0e-15);
 
@@ -254,10 +251,7 @@ fn arena_metric_error_budget_is_derived_from_source_lipschitz_and_quantization_b
         * f64::from(ARENA_METRIC_DISTANCE_UNITS_PER_METER))
     .ceil() as u32;
     assert_eq!(required_units, ARENA_METRIC_MAX_ABSOLUTE_ERROR_UNITS);
-    assert!(
-        arena_metric_encoding().max_absolute_error_meters()
-            >= components.iter().sum::<f64>()
-    );
+    assert!(arena_metric_encoding().max_absolute_error_meters() >= components.iter().sum::<f64>());
 }
 
 #[test]
@@ -274,8 +268,7 @@ fn arena_payload_metric_samples_and_metadata_derive_from_one_analytic_source() {
     );
 
     let brick_edge_meters = ARENA_CHUNK_EDGE_METERS / SDF_PAGE_EDGE_BRICKS as f64;
-    let sample_step_meters =
-        brick_edge_meters / (SDF_METRIC_BRICK_EDGE_SAMPLES - 1) as f64;
+    let sample_step_meters = brick_edge_meters / (SDF_METRIC_BRICK_EDGE_SAMPLES - 1) as f64;
     let cell_edge_meters = ARENA_CHUNK_EDGE_METERS / (SDF_PAGE_EDGE_BRICKS * 2) as f64;
 
     for (brick_coord, brick) in &page.bricks {
@@ -327,8 +320,7 @@ fn arena_payload_metric_samples_and_metadata_derive_from_one_analytic_source() {
                             + cell_edge_meters * 0.5,
                     ];
                     if arena_signed_distance_meters(point) < 0.0 {
-                        expected_occupancy |=
-                            1 << (octant_x | (octant_y << 1) | (octant_z << 2));
+                        expected_occupancy |= 1 << (octant_x | (octant_y << 1) | (octant_z << 2));
                     }
                 }
             }
@@ -379,14 +371,10 @@ fn reconstructed_metric_distance_stays_inside_declared_error_on_dense_grid() {
             for x in 0..16 {
                 let point = [x as f64 * 0.25, y as f64 * 0.25, z as f64 * 0.25];
                 let intended = arena_signed_distance_meters(point);
-                let reconstructed = sample_world_sdf_metric_distance(
-                    &metric_ref,
-                    &payload,
-                    &partition,
-                    point,
-                )
-                .expect("dense arena metric query should succeed")
-                .signed_distance_estimate_meters();
+                let reconstructed =
+                    sample_world_sdf_metric_distance(&metric_ref, &payload, &partition, point)
+                        .expect("dense arena metric query should succeed")
+                        .signed_distance_estimate_meters();
                 let error = (reconstructed - intended).abs();
                 maximum_observed_error = maximum_observed_error.max(error);
                 assert!(

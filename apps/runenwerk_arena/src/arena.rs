@@ -98,8 +98,7 @@ pub fn arena_metric_payload_ref(payload: &SdfChunkPayload) -> WorldSdfMetricPayl
 
 pub fn arena_metric_error_components_meters() -> [f64; 3] {
     let brick_edge_meters = ARENA_CHUNK_EDGE_METERS / SDF_PAGE_EDGE_BRICKS as f64;
-    let subcell_edge_meters =
-        brick_edge_meters / (SDF_METRIC_BRICK_EDGE_SAMPLES - 1) as f64;
+    let subcell_edge_meters = brick_edge_meters / (SDF_METRIC_BRICK_EDGE_SAMPLES - 1) as f64;
     [
         0.0,
         (3.0_f64).sqrt() * subcell_edge_meters / 2.0,
@@ -120,8 +119,7 @@ pub fn arena_signed_distance_meters(position: [f64; 3]) -> f64 {
         ARENA_INTERIOR_MAX_XZ_METERS,
     );
     let outside_distance =
-        (x_violation * x_violation + y_violation * y_violation + z_violation * z_violation)
-            .sqrt();
+        (x_violation * x_violation + y_violation * y_violation + z_violation * z_violation).sqrt();
 
     if outside_distance > 0.0 {
         return -outside_distance;
@@ -215,9 +213,10 @@ fn arena_brick_metric_samples(brick: [u8; 3]) -> Vec<i16> {
     for sample_z in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
         for sample_y in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
             for sample_x in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
-                let position =
-                    arena_metric_sample_position(brick, [sample_x, sample_y, sample_z]);
-                distances.push(encode_arena_distance(arena_signed_distance_meters(position)));
+                let position = arena_metric_sample_position(brick, [sample_x, sample_y, sample_z]);
+                distances.push(encode_arena_distance(arena_signed_distance_meters(
+                    position,
+                )));
             }
         }
     }
@@ -226,8 +225,7 @@ fn arena_brick_metric_samples(brick: [u8; 3]) -> Vec<i16> {
 
 fn arena_metric_sample_position(brick: [u8; 3], sample: [usize; 3]) -> [f64; 3] {
     let brick_edge_meters = ARENA_CHUNK_EDGE_METERS / SDF_PAGE_EDGE_BRICKS as f64;
-    let sample_step_meters =
-        brick_edge_meters / (SDF_METRIC_BRICK_EDGE_SAMPLES - 1) as f64;
+    let sample_step_meters = brick_edge_meters / (SDF_METRIC_BRICK_EDGE_SAMPLES - 1) as f64;
     [
         f64::from(brick[0]) * brick_edge_meters + sample[0] as f64 * sample_step_meters,
         f64::from(brick[1]) * brick_edge_meters + sample[1] as f64 * sample_step_meters,
@@ -236,8 +234,7 @@ fn arena_metric_sample_position(brick: [u8; 3], sample: [usize; 3]) -> [f64; 3] 
 }
 
 fn encode_arena_distance(distance_meters: f64) -> i16 {
-    let encoded =
-        (distance_meters * f64::from(ARENA_METRIC_DISTANCE_UNITS_PER_METER)).round();
+    let encoded = (distance_meters * f64::from(ARENA_METRIC_DISTANCE_UNITS_PER_METER)).round();
     assert!(
         encoded >= f64::from(i16::MIN) && encoded <= f64::from(i16::MAX),
         "maintained arena metric sample must fit i16"
@@ -250,8 +247,7 @@ fn arena_brick_occupancy_mask(brick: [u8; 3]) -> u8 {
     for octant_z in 0..2_u8 {
         for octant_y in 0..2_u8 {
             for octant_x in 0..2_u8 {
-                let position =
-                    arena_occupancy_cell_center(brick, [octant_x, octant_y, octant_z]);
+                let position = arena_occupancy_cell_center(brick, [octant_x, octant_y, octant_z]);
                 if arena_signed_distance_meters(position) < 0.0 {
                     let octant_index = octant_x | (octant_y << 1) | (octant_z << 2);
                     mask |= 1 << octant_index;
