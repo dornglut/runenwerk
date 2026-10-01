@@ -396,8 +396,8 @@ fn reconstructed_metric_distance_stays_inside_declared_error_on_dense_grid() {
         let sample =
             sample_world_sdf_metric_distance(&metric_ref, &payload, &partition, point).unwrap();
         assert_eq!(
-            sample.signed_distance_estimate_meters().is_positive(),
-            arena_signed_distance_meters(point).is_positive(),
+            sample.signed_distance_estimate_meters() > 0.0,
+            arena_signed_distance_meters(point) > 0.0,
             "{point:?}"
         );
         assert_eq!(sample.max_absolute_error_meters(), declared_error);
@@ -422,8 +422,8 @@ fn collision_sample_sign_matches_analytic_source_on_dense_off_surface_grid() {
                 ]);
                 assert!(intended.abs() > 1.0e-12, "{point:?}");
                 assert_eq!(
-                    signed_distance(&app, point).is_positive(),
-                    intended.is_positive(),
+                    signed_distance(&app, point) > 0.0,
+                    intended > 0.0,
                     "{point:?}"
                 );
             }
