@@ -1,3 +1,27 @@
+use engine::plugins::render::admission::{
+    RenderOutputBinding, RenderOutputDestination, RenderRepresentationAvailabilityFact,
+    RenderRepresentationAvailabilityState,
+};
+use engine::plugins::render::participation::RenderObjectParticipation;
+use engine::plugins::render::representation::{
+    RENDER_SURFACE_QUERY_PROTOCOL_REVISION, RenderRefinementEvidence, RenderRepresentationRecord,
+    RenderSurfaceProtocolEvidence,
+};
+use engine::plugins::render::request::{
+    RenderObservationSpec, RenderOutputSpec, RenderOutputValue,
+    RenderPerspectiveObservation, RenderRequest, RenderRequestedOutput, RenderResultTopology,
+    RenderSamplingSupport, RenderSemanticTolerance,
+};
+use engine::plugins::render::scene::{RenderObjectState, RenderSceneStore, RenderSceneUpdate};
+use engine::plugins::render::space_time::{
+    RenderAffineTransform3, RenderHandedness, RenderObjectSpatialState, RenderObjectTemporalState,
+    RenderSpaceSpec, RenderSpatialCoverage, RenderTemporalSupport, RenderTimeInterval,
+    RenderTimePoint,
+};
+use engine::plugins::render::surface_input::{
+    RenderSurfaceSemanticInput, RenderSurfaceSemanticInputBinding,
+    RenderSurfaceSemanticInputRequirement,
+};
 use engine::plugins::render::{
     AdmittedRender, PreparedRadianceOutput, PreparedRender, RenderAdmissionError,
     RenderCapturedRadiance, RenderEvaluationSelection, RenderExecutionError,
@@ -9,7 +33,13 @@ use engine::plugins::render::{
     SubmittedRender, SubmittedRenderForResult, admit_render, prepare_render, submit_render,
     submit_render_for_result,
 };
-use runen_gpu::{GpuContext, GpuReadbackOperation, GpuSubmission};
+use runen_gpu::{
+    GpuCapabilityProfile, GpuContext, GpuContextDescriptor, GpuContextRequestErrorCategory,
+    GpuFormatRole, GpuReadbackOperation, GpuReconstruction, GpuResourceLifetime, GpuSubmission,
+    GpuSubmissionStatus, GpuTextureDescriptor, GpuTextureFormat, GpuTextureInitialization,
+    GpuTextureUsage, GpuWorkResourceIdAllocator,
+};
+use std::time::{Duration, Instant};
 
 #[test]
 fn ordinary_semantic_renderer_surface_is_public_to_downstream_consumers() {
@@ -100,4 +130,160 @@ fn ordinary_semantic_renderer_surface_is_public_to_downstream_consumers() {
     assert_public_error::<RenderResultFormationError>();
     assert_public_error::<RenderRadianceCaptureRequestError>();
     assert_public_error::<RenderRadianceCaptureError>();
+}
+
+
+#[test]
+fn ordinary_surface_executes_headless_through_public_runengpu_only() {
+    let descriptor = GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements())
+        .require_format_role(GpuTextureFormat::R32Uint, GpuFormatRole::CopyDestination)
+        .with_label("RunenRender R8 ordinary public consumer");
+    let context = match pollster::block_on(GpuContext::request(descriptor)) {
+        Ok(context) => context,
+        Err(error) if error.category() == GpuContextRequestErrorCategory::NoAdapterAvailable => {
+            assert_ne!(
+                std::env::var("RUNENRENDER_R8_REQUIRE_GPU").ok().as_deref(),
+                Some("1"),
+                "R8 ordinary public consumer CI requires a public RunenGPU adapter"
+            );
+            return;
+        }
+        Err(error) => panic!("unexpected R8 ordinary public RunenGPU context failure: {error}"),
+    };
+
+    let mut scene = RenderSceneStore::new();
+    let object_id = scene.allocate_object_id().expect("R8 public object id");
+    let object_state = RenderObjectState::new(
+        RenderObjectSpatialState::new(
+            RenderSpaceSpec::new(1.0, RenderHandedness::Right).expect("metric object space"),
+            RenderAffineTransform3::from_row_major_3x4([
+                1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, -3.0,
+            ])
+            .expect("finite object transform"),
+            RenderSpatialCoverage::unbounded(),
+        ),
+        RenderObjectTemporalState::new(RenderTemporalSupport::unbounded()),
+    );
+    let mut insert = RenderSceneUpdate::new();
+    insert.insert_with_state(object_id, object_state);
+    scene.commit(insert).expect("insert public consumer object");
+
+    let representation_id = scene
+        .allocate_representation_id(object_id)
+        .expect("R8 public representation id");
+    let surface = RenderSurfaceProtocolEvidence::exact(RENDER_SURFACE_QUERY_PROTOCOL_REVISION)
+        .expect("surface protocol")
+        .with_semantic_input_requirement(RenderSurfaceSemanticInputRequirement::current());
+    let representation = RenderRepresentationRecord::new(
+        representation_id,
+        RenderSpatialCoverage::unbounded(),
+        RenderTemporalSupport::unbounded(),
+        RenderRefinementEvidence::none(),
+        Some(surface),
+        None,
+    )
+    .expect("public surface representation");
+    let participation = RenderObjectParticipation::new(vec![representation], None, None)
+        .expect("public object participation");
+    let mut attach = RenderSceneUpdate::new();
+    attach.replace_participation(object_id, participation);
+    scene
+        .commit(attach)
+        .expect("attach public object participation");
+
+    let shutter = RenderTimeInterval::instant(
+        RenderTimePoint::from_seconds(0.0).expect("finite public consumer time"),
+    );
+    let observation = RenderObservationSpec::Perspective(
+        RenderPerspectiveObservation::new(
+            RenderAffineTransform3::identity(),
+            std::f64::consts::FRAC_PI_3,
+            1.0,
+            shutter,
+            RenderSamplingSupport::ideal_ray(),
+        )
+        .expect("public perspective observation"),
+    );
+    let request = RenderRequest::new(
+        shutter,
+        vec![observation],
+        vec![RenderRequestedOutput::new(
+            0,
+            RenderOutputSpec::new(
+                RenderOutputValue::ObjectIdentity,
+                RenderResultTopology::sample_lattice_2d(1, 1).expect("1x1 public lattice"),
+                RenderSemanticTolerance::exact(),
+            )
+            .expect("public object-identity output"),
+        )],
+    )
+    .expect("public render request");
+
+    let semantic_inputs = [RenderSurfaceSemanticInputBinding::new(
+        representation_id,
+        RenderSurfaceSemanticInput::sphere(
+            [0.0, 0.0, 0.0],
+            1.0,
+            RenderTemporalSupport::unbounded(),
+        )
+        .expect("public sphere semantic input"),
+    )];
+    let availability = [RenderRepresentationAvailabilityFact::new(
+        representation_id,
+        RenderRepresentationAvailabilityState::Available,
+    )];
+
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let destination = allocator
+        .allocate_texture_handle(
+            GpuTextureDescriptor::ordinary_owned_2d(
+                "R8 ordinary public consumer output",
+                GpuResourceLifetime::Transient,
+                GpuReconstruction::SourceBacked,
+                1,
+                1,
+                GpuTextureFormat::R32Uint,
+                [GpuTextureUsage::CopyDestination],
+                GpuTextureInitialization::Uninitialized,
+            )
+            .expect("public output descriptor"),
+        )
+        .expect("public output handle");
+    let output_bindings = [RenderOutputBinding::new(
+        0,
+        RenderOutputDestination::SampleLatticeTexture(destination),
+    )];
+
+    let admitted = admit_render(
+        &scene.snapshot(),
+        &request,
+        &semantic_inputs,
+        &[],
+        &availability,
+        &output_bindings,
+        &context,
+    )
+    .expect("public ordinary admission");
+    let submitted =
+        pollster::block_on(submit_render(admitted, &context)).expect("public ordinary submission");
+
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        context.progress();
+        match submitted.submission_status() {
+            GpuSubmissionStatus::Completed => break,
+            GpuSubmissionStatus::Failed(failure) => {
+                panic!("public ordinary RunenGPU submission failed: {failure:?}")
+            }
+            GpuSubmissionStatus::Accepted if Instant::now() < deadline => {
+                std::thread::yield_now();
+            }
+            GpuSubmissionStatus::Accepted => {
+                panic!("public ordinary RunenGPU submission did not complete before timeout")
+            }
+        }
+    }
+
+    assert_eq!(submitted.admitted_plan().scene_revision(), scene.revision());
+    assert_eq!(submitted.admitted_plan().outputs().len(), 1);
 }
