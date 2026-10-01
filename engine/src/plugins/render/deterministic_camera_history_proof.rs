@@ -202,12 +202,13 @@ fn execute(
         GpuDispatchIntent::direct(GpuDispatchSize::new(1, 1, 1)),
     )
     .unwrap();
-    let bindings = pipelines
-        .reconstruction
-        .runtime_bindings(handles[..8].iter().enumerate().map(|(index, handle)| {
-            GpuRuntimeBindingValue::whole_buffer(0, index as u32, handle)
-        }))
-        .unwrap();
+    let bindings =
+        pipelines
+            .reconstruction
+            .runtime_bindings(handles[..8].iter().enumerate().map(|(index, handle)| {
+                GpuRuntimeBindingValue::whole_buffer(0, index as u32, handle)
+            }))
+            .unwrap();
     let reconstruction = GpuComputeOperation::new(
         pipelines.reconstruction.clone(),
         bindings,
