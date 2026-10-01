@@ -278,10 +278,19 @@ struct DeterministicTemporalHistoryUse {
 }
 
 #[derive(Debug, Clone, Copy)]
+struct DeterministicRenderExecutionSelection {
+    scope: u64,
+    finite_evaluation: Option<(usize, (u32, u32))>,
+    produce_requested_coverage: bool,
+    camera_diagnostic_request: Option<RenderCameraDiagnosticRequest>,
+}
+
+#[derive(Debug, Clone, Copy)]
 struct DeterministicOutputExecutionSelection {
     scope: u64,
     finite_evaluation_extent: Option<(u32, u32)>,
     produce_requested_coverage: bool,
+    camera_diagnostic_request: Option<RenderCameraDiagnosticRequest>,
 }
 
 /// Physical execution selection; private coverage is not a requested semantic depth output.
@@ -1508,10 +1517,12 @@ pub(crate) fn prepare_deterministic_render_with_cache_in_scope_and_evaluation(
         context,
         DeterministicObservationIntent::Ordinary,
         resources,
-        scope,
-        finite_evaluation,
-        produce_requested_coverage,
-        camera_diagnostic_request,
+        DeterministicRenderExecutionSelection {
+            scope,
+            finite_evaluation,
+            produce_requested_coverage,
+            camera_diagnostic_request,
+        },
     )?;
     debug_assert!(lowered.verification_readbacks.is_empty());
     Ok(PreparedDeterministicRender {
@@ -1557,10 +1568,12 @@ pub(super) async fn submit_deterministic_render_for_verification(
         context,
         DeterministicObservationIntent::Verify,
         &mut DeterministicResourceCache::default(),
-        0,
-        None,
-        false,
-        None,
+        DeterministicRenderExecutionSelection {
+            scope: 0,
+            finite_evaluation: None,
+            produce_requested_coverage: false,
+            camera_diagnostic_request: None,
+        },
     )?;
     let verification_readbacks = lowered.verification_readbacks;
     let submitted = submit_lowered_deterministic_render(
@@ -1620,11 +1633,14 @@ fn lower_deterministic_render(
     context: &GpuContext,
     intent: DeterministicObservationIntent,
     resources: &mut DeterministicResourceCache,
-    scope: u64,
-    finite_evaluation: Option<(usize, (u32, u32))>,
-    produce_requested_coverage: bool,
-    camera_diagnostic_request: Option<RenderCameraDiagnosticRequest>,
+    execution: DeterministicRenderExecutionSelection,
 ) -> Result<LoweredDeterministicRender, RenderDeterministicLoweringError> {
+    let DeterministicRenderExecutionSelection {
+        scope,
+        finite_evaluation,
+        produce_requested_coverage,
+        camera_diagnostic_request,
+    } = execution;
     let admitted = maintained.admitted();
     if admitted.environment().affinity() != context.affinity() {
         return Err(RenderDeterministicLoweringError::ContextAffinityChanged {
@@ -1674,7 +1690,6 @@ fn lower_deterministic_render(
             context,
             resources,
             intent,
-            camera_diagnostic_request,
             DeterministicOutputExecutionSelection {
                 scope,
                 finite_evaluation_extent: finite_evaluation.and_then(
@@ -1683,6 +1698,7 @@ fn lower_deterministic_render(
                     },
                 ),
                 produce_requested_coverage,
+                camera_diagnostic_request,
             },
         )?;
         fragments.push(lowered.fragment);
@@ -1733,13 +1749,13 @@ fn lower_output(
     context: &GpuContext,
     resources: &mut DeterministicResourceCache,
     intent: DeterministicObservationIntent,
-    camera_diagnostic_request: Option<RenderCameraDiagnosticRequest>,
     execution: DeterministicOutputExecutionSelection,
 ) -> Result<LoweredDeterministicOutput, RenderDeterministicLoweringError> {
     let DeterministicOutputExecutionSelection {
         scope,
         finite_evaluation_extent,
         produce_requested_coverage,
+        camera_diagnostic_request,
     } = execution;
     let admitted_output = admitted
         .outputs()
