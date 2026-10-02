@@ -1,4 +1,5 @@
 use anyhow::{Context, Result, bail};
+use engine::plugins::WorldRuntimeSet;
 use engine::plugins::render::admission::{
     RenderRepresentationAvailabilityFact, RenderRepresentationAvailabilityState,
 };
@@ -13,9 +14,7 @@ use engine::plugins::render::frame::{
     PreparedRenderProductSelectionResource, RenderDeterministicFrameContribution,
     RenderDeterministicFrameContributionResource,
 };
-use engine::plugins::render::participation::{
-    RenderMaterialAssignment, RenderObjectParticipation,
-};
+use engine::plugins::render::participation::{RenderMaterialAssignment, RenderObjectParticipation};
 use engine::plugins::render::representation::{
     RENDER_FIELD_DISTANCE_PROTOCOL_REVISION, RENDER_ORIENTED_SURFACE_QUERY_PROTOCOL_REVISION,
     RENDER_SURFACE_QUERY_PROTOCOL_REVISION, RenderFieldDistanceGuarantee,
@@ -53,7 +52,6 @@ use engine::plugins::world::build::WorldRuntimeSdfProductCatalogResource;
 use engine::plugins::world::prepare::{
     PreparedWorldSdfFieldSource, PreparedWorldSdfFieldSourceResource,
 };
-use engine::plugins::WorldRuntimeSet;
 use engine::prelude::{
     App, FixedTimeConfig, FixedTimeState, Plugin, PrimaryPresentationMetricsResource, Query,
     RenderPrepare, Res, ResMut, SimulationTick, SystemConfigExt, SystemMobilityExt, WorldMut,
@@ -145,9 +143,27 @@ impl ArenaPresentationSceneResource {
 
         let mut insert = RenderSceneUpdate::new();
         insert
-            .insert_with_state(arena_object_id, object_state(RenderAffineTransform3::identity(), RenderSpatialCoverage::unbounded()))
-            .insert_with_state(player_object_id, object_state(RenderAffineTransform3::identity(), RenderSpatialCoverage::unbounded()))
-            .insert_with_state(light_object_id, object_state(RenderAffineTransform3::identity(), RenderSpatialCoverage::unbounded()));
+            .insert_with_state(
+                arena_object_id,
+                object_state(
+                    RenderAffineTransform3::identity(),
+                    RenderSpatialCoverage::unbounded(),
+                ),
+            )
+            .insert_with_state(
+                player_object_id,
+                object_state(
+                    RenderAffineTransform3::identity(),
+                    RenderSpatialCoverage::unbounded(),
+                ),
+            )
+            .insert_with_state(
+                light_object_id,
+                object_state(
+                    RenderAffineTransform3::identity(),
+                    RenderSpatialCoverage::unbounded(),
+                ),
+            );
         store
             .commit(insert)
             .expect("arena presentation scene bootstrap must be valid");
