@@ -1055,9 +1055,8 @@ mod tests {
         let mut app = crate::build_headless_game_app()
             .run_for_fixed_steps(1)
             .expect("maintained arena should ground the local player");
-        let before =
-            crate::player_physical_history_for(app.world(), LOCAL_PARTICIPANT_ID)
-                .expect("local player history before movement");
+        let before = crate::player_physical_history_for(app.world(), LOCAL_PARTICIPANT_ID)
+            .expect("local player history before movement");
         let batch = crate::TickCommandBatch {
             tick: SimulationTick(2),
             commands: vec![crate::ParticipantCommand {
@@ -1070,9 +1069,8 @@ mod tests {
         };
         crate::apply_game_commands(app.world_mut(), batch.tick, &batch)
             .expect("maintained movement should apply");
-        let after =
-            crate::player_physical_history_for(app.world(), LOCAL_PARTICIPANT_ID)
-                .expect("local player history after movement");
+        let after = crate::player_physical_history_for(app.world(), LOCAL_PARTICIPANT_ID)
+            .expect("local player history after movement");
         assert_ne!(
             after.current.position, before.current.position,
             "authoritative gameplay movement must change physical truth"
@@ -1250,9 +1248,7 @@ mod tests {
             .material();
         assert_eq!(arena_material.reflectance(), ARENA_REFLECTANCE);
 
-        let player_representation = player
-            .representation(ids.3)
-            .expect("player representation");
+        let player_representation = player.representation(ids.3).expect("player representation");
         let radius = f64::from(movement.character.radius);
         assert_eq!(
             player_representation
@@ -1297,7 +1293,10 @@ mod tests {
                 .row_major_3x4()
         );
         let output = publication.contribution.request.outputs()[0].spec();
-        assert_eq!(output.topology().sample_lattice_dimensions(), Some((1280, 720)));
+        assert_eq!(
+            output.topology().sample_lattice_dimensions(),
+            Some((1280, 720))
+        );
         assert_eq!(
             output.tolerance().absolute_max_error(),
             Some(ARENA_RADIANCE_TOLERANCE)
@@ -1311,7 +1310,10 @@ mod tests {
 
         assert_eq!(publication.target.width, 1280);
         assert_eq!(publication.target.height, 720);
-        assert_eq!(publication.target.format, RenderTextureTargetFormat::R32Float);
+        assert_eq!(
+            publication.target.format,
+            RenderTextureTargetFormat::R32Float
+        );
         assert!(publication.target.usage.sampled);
         assert!(publication.target.usage.copy_dst);
         assert_eq!(publication.invocation.view_id, "main");
@@ -1344,14 +1346,13 @@ mod tests {
         )
         .expect("old arena publication");
 
-        let (targets, mut frame_requests, contributions) =
-            stage_arena_frame_publication_resources(
-                RenderDynamicTextureTargetRequestRegistryResource::default(),
-                PreparedRenderFrameRequestResource::default(),
-                RenderDeterministicFrameContributionResource::default(),
-                old_publication,
-            )
-            .expect("initial publication should stage");
+        let (targets, mut frame_requests, contributions) = stage_arena_frame_publication_resources(
+            RenderDynamicTextureTargetRequestRegistryResource::default(),
+            PreparedRenderFrameRequestResource::default(),
+            RenderDeterministicFrameContributionResource::default(),
+            old_publication,
+        )
+        .expect("initial publication should stage");
 
         let foreign_producer =
             RenderFrameProducerId::try_from_raw(99_1127).expect("foreign producer id");
@@ -1403,13 +1404,10 @@ mod tests {
             flow_id,
         )
         .expect("replacement arena publication");
-        replacement.invocation = PreparedFlowInvocationRequest::new(
-            "foreign.arena.collision",
-            flow_id,
-            "main",
-        )
-        .bind_dynamic_texture_alias(ARENA_RADIANCE_ALIAS, replacement.target.key.clone())
-        .expect("replacement alias binding");
+        replacement.invocation =
+            PreparedFlowInvocationRequest::new("foreign.arena.collision", flow_id, "main")
+                .bind_dynamic_texture_alias(ARENA_RADIANCE_ALIAS, replacement.target.key.clone())
+                .expect("replacement alias binding");
 
         let error = stage_arena_frame_publication_resources(
             targets.clone(),
