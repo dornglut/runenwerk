@@ -3,11 +3,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use runen_spatial::ChunkId;
 use thiserror::Error;
 
-use crate::plugins::render::scene::{
+use crate::plugins::world::chunks::{ChunkLifecycleState, WorldChunkRuntimeMapResource};
+use runen_render::scene::{
     RenderObjectId, RenderObjectIdAllocationError, RenderSceneCommit, RenderSceneCommitError,
     RenderSceneStore, RenderSceneUpdate,
 };
-use crate::plugins::world::chunks::{ChunkLifecycleState, WorldChunkRuntimeMapResource};
 
 #[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum WorldChunkRenderSceneAdapterError {

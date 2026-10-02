@@ -1,10 +1,10 @@
 use runen_spatial::{ChunkCoord3, ChunkId, WorldId};
 
-use crate::plugins::render::scene::{RenderSceneCommitError, RenderSceneStore, RenderSceneUpdate};
 use crate::plugins::ui::render_scene::UiSurfaceRenderSceneAdapter;
 use crate::plugins::ui::{UiMountRequest, UiMountRequestsResource, UiMountSource};
 use crate::plugins::world::adapters::render_scene::WorldChunkRenderSceneAdapter;
 use crate::plugins::world::chunks::{ChunkLifecycleState, WorldChunkRuntimeMapResource};
+use runen_render::scene::RenderSceneStore;
 
 fn chunk_id(x: i64) -> ChunkId {
     ChunkId::new(WorldId::new(11), ChunkCoord3 { x, y: 0, z: 0 })
@@ -17,41 +17,6 @@ fn mount(source: &mut UiMountRequestsResource, screen: &str) -> ui_surface::Surf
         .last()
         .expect("accepted mount request should create a mounted session")
         .surface_instance_id()
-}
-
-#[test]
-fn duplicate_same_kind_operations_are_same_object_conflicts() {
-    let mut scene = RenderSceneStore::new();
-    let insert_id = scene
-        .allocate_object_id()
-        .expect("renderer identity should allocate");
-
-    let mut duplicate_insert = RenderSceneUpdate::new();
-    duplicate_insert.insert(insert_id).insert(insert_id);
-    assert_eq!(
-        scene.commit(duplicate_insert),
-        Err(RenderSceneCommitError::ConflictingOperations {
-            object_id: insert_id,
-        })
-    );
-    assert!(scene.snapshot().is_empty());
-
-    let mut insert = RenderSceneUpdate::new();
-    insert.insert(insert_id);
-    scene
-        .commit(insert)
-        .expect("test setup insertion should succeed");
-    let before_duplicate_remove = scene.snapshot();
-
-    let mut duplicate_remove = RenderSceneUpdate::new();
-    duplicate_remove.remove(insert_id).remove(insert_id);
-    assert_eq!(
-        scene.commit(duplicate_remove),
-        Err(RenderSceneCommitError::ConflictingOperations {
-            object_id: insert_id,
-        })
-    );
-    assert_eq!(scene.snapshot(), before_duplicate_remove);
 }
 
 #[test]

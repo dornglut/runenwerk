@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error;
 use ui_surface::SurfaceInstanceId;
 
-use crate::plugins::render::scene::{
+use runen_render::scene::{
     RenderObjectId, RenderObjectIdAllocationError, RenderSceneCommit, RenderSceneCommitError,
     RenderSceneStore, RenderSceneUpdate,
 };

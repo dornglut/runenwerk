@@ -1,72 +1,25 @@
 pub mod adapters;
-pub mod admission;
 pub mod api;
 mod app_ext;
-pub mod appearance;
 pub mod backend;
 pub mod composition;
-pub mod derived_state;
-#[cfg_attr(not(test), allow(dead_code))]
-mod derived_transform;
-mod deterministic_admission;
-mod deterministic_capture;
-mod deterministic_carrier;
-mod deterministic_execution;
-#[allow(dead_code)]
-mod deterministic_verification;
 pub mod features;
-pub mod field_input;
 pub mod frame;
 mod gpu_context_policy;
 pub mod gpu_primitives;
 pub mod graph;
 pub mod inspect;
-pub mod lowering;
-mod maintained_method;
 pub mod material_compiler;
-pub mod method;
 pub(crate) mod native_host;
-mod ordinary;
-pub mod output_result;
 pub mod params;
-pub mod participation;
 pub mod pipelines;
 pub mod procedural;
 pub mod readiness;
-#[cfg_attr(not(test), allow(dead_code))]
-mod render_result;
 pub mod renderer;
-pub mod representation;
-pub mod request;
 pub mod residency;
 pub mod resource;
-pub mod scene;
-mod semantic_binding;
-pub mod semantic_plan;
 pub mod shader;
-pub mod space_time;
-pub mod surface_input;
-pub mod surface_result;
 mod texture_upload;
-
-#[cfg(test)]
-mod derived_transform_r7_proof;
-#[cfg(test)]
-mod deterministic_composition_r7_proof;
-#[cfg(test)]
-mod deterministic_execution_r7_proof;
-#[cfg(test)]
-mod deterministic_execution_r7_proof_edges;
-#[cfg(test)]
-mod deterministic_execution_r7_proof_field;
-#[cfg(test)]
-mod r6_proof;
-#[cfg(test)]
-mod r6_reference_proof;
-#[cfg(test)]
-mod r6_spine_proof;
-#[cfg(test)]
-mod semantic_binding_r7_proof;
 
 mod plugin;
 pub mod runtime;
@@ -85,20 +38,15 @@ pub use gpu_context_policy::{
 pub use gpu_primitives::*;
 pub use graph::*;
 pub use material_compiler::*;
-pub use ordinary::*;
 pub use params::*;
 pub use plugin::RenderPlugin;
 pub(crate) use plugin::render_integration_is_active;
 pub use procedural::*;
 pub use readiness::{RenderReadinessPhase, RenderReadinessState};
-pub use render_result::{
-    RenderResult, RenderResultObjectRepresentation, RenderResultOutputEvidence,
-};
 pub use renderer::{Gfx, GfxFrameTimings, RenderFrameDataRegistry, Renderer, RendererFrameTimings};
 pub use residency::*;
 pub use resource::*;
 pub use runtime::*;
-pub use semantic_binding::RenderSemanticBindingInputError;
 pub use shader::{
     ShaderHandle, ShaderRegistryEvent, ShaderRegistryEventKind, ShaderRegistryResource,
     ShaderReloadPollReport, ShaderReloadPollStatus,

@@ -50,9 +50,3 @@ fn gpu_storage_derive_produces_gpu_params_impl() {
     .to_gpu();
     assert_eq!(raw.indices, [1, 2, 3, 4]);
 }
-
-#[test]
-fn unsupported_field_types_fail_to_compile() {
-    let t = trybuild::TestCases::new();
-    t.compile_fail("tests/ui/render_gpu_params_unsupported.rs");
-}

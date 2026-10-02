@@ -51,85 +51,31 @@ The execution case authors its own renderer scene, request, semantic surface inp
 
 ## Supplemental RunenRender GPU execution proof
 
-Current Runenwerk CI also runs `RunenRender Vulkan execution proofs` for pull-request feature heads, merge-group integration revisions, accepted-main pushes, and manual dispatch. It resolves and proves the selected repository revision, restricts Vulkan loading to the installed Mesa software Vulkan implementation, and runs the maintained native, R6, R7, founding-direct, and static-footprint temporal-quality evidence.
+Current Runenwerk CI also runs `RunenRender Vulkan execution proofs` for pull-request feature heads, merge-group integration revisions, accepted-main pushes, and manual dispatch. It resolves and proves the selected repository revision, restricts Vulkan loading to the installed Mesa software Vulkan implementation, and runs maintained native integration, direct standalone public-consumer, founding-direct, and Render Lab temporal-quality evidence.
 
 This is Runenwerk-owned consumer and render-integration evidence. It does not make Runenwerk the owner of RunenGPU implementation or standalone framework conformance. RunenGPU implementation and conformance are owned by the external `dornglut/runen-gpu` repository and its repository-owned validation/conformance workflows.
 
 Runenwerk validates its exact-revision RunenGPU dependency, public-API consumption, and product/runtime integration through its own locked baseline and focused integration proofs.
 
-## P100 camera-history correspondence qualification
-
-The private RunenRender GPU behavior tests run the maintained evaluator and camera
-reconstruction shaders together. Require an available adapter instead of accepting
-the no-adapter skip when collecting GPU evidence:
-
-```text
-RUNENRENDER_R7_REQUIRE_GPU=1 cargo +stable test -p engine camera_history_proof --locked -- --nocapture --test-threads=1
-```
+## Render Lab camera-motion product evidence
 
 The native Render Lab camera scenario retains eight stationary temporal submissions,
 first motion at ordinal 9, continued motion at 10, and holds the moved pose from
-ordinal 11. Ordinals 11–14 form the four stationary reconvergence samples; 15–20
-exercise stable output across subsequent phases. Capture ordinals 8–20 separately
-for the settled, motion, stop, reconvergence and stable-cycle images. Raw window
-startup observations are not temporal submissions.
+ordinal 11. Ordinals 11–14 form four stationary reconvergence samples; 15–20
+exercise visible stability across subsequent phases. Capture ordinals 8–20
+separately for the settled, motion, stop, reconvergence, and stable-cycle images.
+The product proof uses standalone public `RenderTemporalExecutionEvidence` and
+Runenwerk-owned capture/stability evidence. Reusable renderer conformance belongs
+to standalone `dornglut/runen-render`.
 
-For a clean, committed source revision, set `RUNENWERK_SOURCE_REVISION` to its full
-SHA and `RUNENWERK_CAMERA_HISTORY_DIAGNOSTICS_DIR` to the run's artifact directory:
-
-```text
-RUNENWERK_SOURCE_REVISION=<full-clean-source-SHA> RUNENWERK_CAMERA_HISTORY_DIAGNOSTICS_DIR=render-lab/camera-9 cargo +stable run -p runenwerk_render_lab --locked -- --rl2-camera-quality render-lab/camera-9 --window-size-px 1920x1080 --submitted-frames 9
-```
-
-`camera-motion-evidence.json` correlates `camera-motion-cells.json` to the exact
-first-motion producer frame, phase 0, history age 8 and prior completed same-pose
-state 4. The fixed 32-cell sample set records canonical floor lookup and a
-phase-aware nearest control under the same correspondence rule. Unknown or
-unevaluated semantic values are null; `raw_words` preserves the actual shader
-record. The first five probes use the investigated 640×480 cells, scaled to the
-requested extent; changing aspect ratio does not preserve their world location.
-
-A separate run with `RUNENWERK_CAMERA_HISTORY_CURRENT_ONLY_FIRST_MOTION=1` supplies
-the current-only oracle at that exact temporal ordinal. It requires the explicit
-diagnostic request and does not change earlier stationary samples. Compare both
-640×480 and 1920×1080 controls. Native artifacts identify the observed backend and
-adapter facts; unavailable software/fallback classification remains unknown.
-
-Diagnostic shader work and its bounded follow-up GPU readback add cost. These
-qualification runs must not be used as performance measurements for #1107. A SHA
-written into an artifact is source provenance, not an independent clean-tree proof;
-verify the checked-out revision and clean tree before running qualification.
-
-## Requested-lattice current coverage qualification
-
-The renderer-private coverage proof is included in the existing hosted
-`deterministic_execution_r7_proof` filter. The proof explicitly opts the same
-sub-native producer into requested-lattice coverage and adds bounded carrier
-observations to that GPU fragment and submission. Until an accepted reconstruction
-consumer exists, ordinary Render Flow preparation does not request coverage and
-therefore authors neither coverage dispatch/resources nor coverage readback.
-
-For clean, committed qualification:
+For a clean committed source revision:
 
 ```text
-RUNENWERK_SOURCE_REVISION=<full-clean-source-SHA> RUNENRENDER_R7_REQUIRE_GPU=1 cargo +stable test -p engine --lib deterministic_execution_r7_proof_coverage --locked -- --nocapture --test-threads=1
+RUNENWERK_SOURCE_REVISION=<full-clean-source-SHA> cargo +stable run -p runenwerk_render_lab --locked -- --rl2-camera-quality render-lab/camera-9 --window-size-px 1920x1080 --submitted-frames 9
 ```
 
-The log identifies the observed backend/adapter and records each terminal
-requested cell's state and depth bits, requested extent, radiance evaluation
-extent, coverage extent, current phase and source generation. Hosted R7 receives
-the already proved checkout SHA through `RUNENWERK_SOURCE_REVISION`. The supplied
-SHA alone does not prove a clean checkout; verify it before native qualification.
-
-The proofs compare current coverage with the actual maintained P100 primary
-query for all four phases, exercise camera/source changes, sampled-field payload
-packing and generations, invalid normals and query-budget exhaustion, distinct
-producer resources and resize. State values are private `Invalid=0`,
-`KnownBackground=1`, and `Hit=2`; depth is finite only for Hit. Row padding is not
-requested coverage. The typed runtime record describes prepared work; completion
-of its correlated producer submission is required before claiming execution.
-This prerequisite preserves sub-native camera-pose history reset and supplies no
-radiance fallback or sub-native camera reconstruction policy.
+The source SHA in an artifact records provenance; verify the checkout and clean tree
+before claiming exact-revision evidence.
 
 ## Evidence
 

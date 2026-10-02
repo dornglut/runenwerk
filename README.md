@@ -19,7 +19,7 @@ It is the integration and product repository for the wider Runen framework famil
 
 Standalone peer repositories own their reusable semantics and public contracts; family membership alone does not imply Runenwerk adoption or semantic ownership. Runenwerk composes accepted public framework capabilities through explicit adapters and product integration.
 
-RunenRender remains Runenwerk-owned rendering integration until a separately accepted external cutover and consumes RunenGPU only through its accepted public API. Current cross-repository family architecture is owned by [Dornglut Engineering](https://github.com/dornglut/engineering/blob/main/architecture/runen-family.md).
+Standalone RunenRender owns reusable rendering semantics and conformance. Runenwerk's render plugin owns product, frame, native-host, and render-flow integration and consumes the accepted RunenRender public API directly. Current cross-repository family architecture is owned by [Dornglut Engineering](https://github.com/dornglut/engineering/blob/main/architecture/runen-family.md).
 
 ## Repository layout
 

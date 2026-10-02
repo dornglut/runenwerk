@@ -264,14 +264,9 @@ impl Renderer {
         })?;
         for contribution in deterministic_contributions {
             let producer_scope =
-                crate::plugins::render::RenderExecutionScope::new(contribution.producer_id.raw());
+                runen_render::RenderExecutionScope::new(contribution.producer_id.raw());
             self.render_execution
                 .record_submission(producer_scope, &submission);
-            self.camera_diagnostics.accept(
-                producer_scope.raw(),
-                prepared_frame.context.frame_index,
-                &submission,
-            );
         }
         // Once G5 accepts the submission, retain every renderer-observed readback before any
         // fallible product evidence work. An accepted lifecycle handle must never be dropped merely
@@ -787,13 +782,11 @@ impl Renderer {
             let target = self
                 .dynamic_texture_targets
                 .texture_handle(&contribution.target_key)?;
-            let binding = crate::plugins::render::admission::RenderOutputBinding::new(
+            let binding = runen_render::admission::RenderOutputBinding::new(
                 contribution.output_index,
-                crate::plugins::render::admission::RenderOutputDestination::SampleLatticeTexture(
-                    target,
-                ),
+                runen_render::admission::RenderOutputDestination::SampleLatticeTexture(target),
             );
-            let admitted = crate::plugins::render::admit_render(
+            let admitted = runen_render::admit_render(
                 &contribution.scene,
                 &contribution.request,
                 &contribution.semantic_inputs,
@@ -805,7 +798,7 @@ impl Renderer {
             .map_err(|error| anyhow::anyhow!("render admission failed: {error}"))?;
             let finite_evaluation = contribution.finite_evaluation_extent.map(|extent| {
                 let (width, height) = extent.dimensions();
-                crate::plugins::render::RenderEvaluationSelection::new(
+                runen_render::RenderEvaluationSelection::new(
                     contribution.output_index,
                     width,
                     height,
@@ -813,36 +806,11 @@ impl Renderer {
                 .expect("frame finite evaluation extent is already non-zero")
             });
             let producer_scope =
-                crate::plugins::render::RenderExecutionScope::new(contribution.producer_id.raw());
-            let camera_diagnostic_request = self
-                .camera_diagnostics
-                .request_for_scope(producer_scope.raw())?;
-            let prepared = match camera_diagnostic_request {
-                Some(request) => self.render_execution.prepare_with_camera_diagnostic(
-                    admitted,
-                    context,
-                    producer_scope,
-                    finite_evaluation,
-                    request,
-                ),
-                None => self.render_execution.prepare(
-                    admitted,
-                    context,
-                    producer_scope,
-                    finite_evaluation,
-                ),
-            }
-            .map_err(|error| anyhow::anyhow!("render preparation failed: {error}"))?;
-            if let Some(source) = self
+                runen_render::RenderExecutionScope::new(contribution.producer_id.raw());
+            let prepared = self
                 .render_execution
-                .take_camera_diagnostic_source(producer_scope)
-            {
-                self.camera_diagnostics
-                    .prepare(producer_scope.raw(), source);
-            } else {
-                self.camera_diagnostics
-                    .discard_request(producer_scope.raw());
-            }
+                .prepare(admitted, context, producer_scope, finite_evaluation)
+                .map_err(|error| anyhow::anyhow!("render preparation failed: {error}"))?;
             let output = prepared
                 .radiance_output(contribution.output_index)
                 .ok_or_else(|| {

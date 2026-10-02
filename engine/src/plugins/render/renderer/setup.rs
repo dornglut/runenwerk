@@ -73,7 +73,6 @@ impl Renderer {
             product_surface_pass_format: None,
             glyph_atlas_gpu: std::collections::BTreeMap::new(),
             render_execution: Default::default(),
-            camera_diagnostics: Default::default(),
             temporal_execution_evidence: std::collections::BTreeMap::new(),
             dynamic_texture_targets:
                 super::dynamic_targets::RendererDynamicTextureTargetCache::default(),
@@ -104,7 +103,7 @@ impl Renderer {
     pub fn temporal_execution_evidence(
         &self,
         frame_index: u64,
-    ) -> &[crate::plugins::render::RenderTemporalExecutionEvidence] {
+    ) -> &[runen_render::RenderTemporalExecutionEvidence] {
         self.temporal_execution_evidence
             .get(&frame_index)
             .map(Vec::as_slice)
@@ -117,8 +116,6 @@ impl Renderer {
         // loop or reaches into the backend.
         context.progress();
         self.render_execution.retain_in_flight_submissions();
-        self.camera_diagnostics
-            .progress(context, &mut self.render_execution)?;
         let super::render_flow::RendererGpuObservationOutput {
             timing_evidence,
             composed_timing_evidence,
@@ -146,7 +143,7 @@ impl Renderer {
     ) -> bool {
         self.render_execution
             .has_in_flight_scopes(contributions.iter().map(|contribution| {
-                crate::plugins::render::RenderExecutionScope::new(contribution.producer_id.raw())
+                runen_render::RenderExecutionScope::new(contribution.producer_id.raw())
             }))
     }
 

@@ -2,11 +2,6 @@ use super::{
     PreparedFrameContext, PreparedFrameContributions, PreparedUiFrameContribution,
     PreparedViewFrame,
 };
-use crate::plugins::render::admission::RenderRepresentationAvailabilityFact;
-use crate::plugins::render::field_input::RenderFieldSemanticInputBinding;
-use crate::plugins::render::request::RenderRequest;
-use crate::plugins::render::scene::RenderSceneSnapshot;
-use crate::plugins::render::surface_input::RenderSurfaceSemanticInputBinding;
 use crate::plugins::render::{
     RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey,
     RenderDynamicTextureUploadDescriptor, RenderFlowId, RenderFrameProducerId,
@@ -15,6 +10,11 @@ use crate::plugins::render::{
 use crate::runtime::NativeWindowId;
 use product::RenderProductSelection;
 use runen_gpu::GpuWorkResourceId;
+use runen_render::admission::RenderRepresentationAvailabilityFact;
+use runen_render::field_input::RenderFieldSemanticInputBinding;
+use runen_render::request::RenderRequest;
+use runen_render::scene::RenderSceneSnapshot;
+use runen_render::surface_input::RenderSurfaceSemanticInputBinding;
 use std::collections::{BTreeMap, BTreeSet};
 use ui_render_data::ViewportSurfaceBindingRegistry;
 
@@ -106,15 +106,13 @@ impl RenderDeterministicFrameContributionResource {
 #[cfg(test)]
 mod deterministic_contribution_tests {
     use super::*;
-    use crate::plugins::render::request::{
+    use runen_render::request::{
         RenderObservationSpec, RenderOutputSpec, RenderOutputValue, RenderProbeObservation,
         RenderRadiometricRepresentation, RenderRequestedOutput, RenderResultTopology,
         RenderSamplingSupport, RenderSemanticTolerance,
     };
-    use crate::plugins::render::scene::RenderSceneStore;
-    use crate::plugins::render::space_time::{
-        RenderAffineTransform3, RenderTimeInterval, RenderTimePoint,
-    };
+    use runen_render::scene::RenderSceneStore;
+    use runen_render::space_time::{RenderAffineTransform3, RenderTimeInterval, RenderTimePoint};
 
     fn producer(raw: u64) -> RenderFrameProducerId {
         RenderFrameProducerId::try_from_raw(raw).expect("test producer id should be nonzero")
@@ -173,15 +171,17 @@ mod deterministic_contribution_tests {
 
     #[test]
     fn deterministic_contribution_replacement_cannot_retain_stale_field_inputs() {
-        use crate::plugins::render::field_input::{
+        use runen_render::field_input::{
             RenderFieldSemanticInput, RenderFieldSemanticInputBinding,
             RenderFieldSemanticInputGeneration,
         };
-        use crate::plugins::render::representation::RenderRepresentationId;
-        use crate::plugins::render::space_time::RenderTemporalSupport;
+        use runen_render::space_time::RenderTemporalSupport;
 
-        let representation_id =
-            RenderRepresentationId::from_raw(7).expect("test representation id is non-zero");
+        let mut scene = RenderSceneStore::new();
+        let owner = scene.allocate_object_id().expect("test object id");
+        let representation_id = scene
+            .allocate_representation_id(owner)
+            .expect("test representation id");
         let field_input = RenderFieldSemanticInput::dense(
             [0.0; 3],
             [1.0; 3],

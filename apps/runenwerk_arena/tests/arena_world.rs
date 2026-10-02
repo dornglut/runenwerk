@@ -484,7 +484,7 @@ fn collision_classification_is_preserved_immediately_on_both_sides_of_all_bounda
 }
 
 fn sample_projected_arena_field(
-    input: &engine::plugins::render::field_input::RenderFieldSemanticInput,
+    input: &runen_render::field_input::RenderFieldSemanticInput,
     point: [f64; 3],
 ) -> f64 {
     let origin = input.origin_local_meters();

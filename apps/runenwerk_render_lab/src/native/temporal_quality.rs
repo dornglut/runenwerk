@@ -141,24 +141,14 @@ struct RenderLabCameraMotionArtifact {
     gpu: RenderLabTemporalQualityGpuEvidence,
     execution: RenderLabTemporalQualityExecutionEvidence,
     frames: Vec<RenderLabCameraMotionFrameEvidence>,
-    cell_diagnostics: Option<RenderLabCameraCellDiagnosticArtifact>,
     capture_route: &'static str,
     capture: RenderLabTemporalQualityCaptureEvidence,
-}
-
-#[derive(Debug, serde::Serialize)]
-struct RenderLabCameraCellDiagnosticArtifact {
-    frame_index: u64,
-    artifact_path: String,
-    artifact_blake3: String,
-    cell_count: usize,
-    qualification_control: String,
 }
 
 const RL2_QUALITY_SCHEMA_VERSION: u32 = 5;
 const RL2_QUALITY_SCENARIO_ID: &str = "runenwerk.render_lab.rl2.temporal_quality";
 const RL2_QUALITY_SCENARIO_REVISION: u32 = 5;
-const RL2_CAMERA_MOTION_SCHEMA_VERSION: u32 = 3;
+const RL2_CAMERA_MOTION_SCHEMA_VERSION: u32 = 4;
 const RL2_CAMERA_MOTION_SCENARIO_ID: &str = "runenwerk.render_lab.rl2.camera_motion_p100";
 const RL2_CAMERA_MOTION_SCENARIO_REVISION: u32 = 3;
 pub(super) const RL2_QUALITY_FLOW_ID: &str = "runenwerk.render_lab.rl2.fixed_quality";
@@ -798,46 +788,6 @@ pub(super) fn write_camera_motion_quality_artifact(
     }
     validate_camera_motion_evidence(&frames, requested_output)?;
 
-    let cell_diagnostics = if let Some(path) = camera_motion_diagnostics_path(measurement) {
-        let bytes = fs::read(&path)
-            .with_context(|| format!("read exact first-motion cells {}", path.display()))?;
-        let diagnostic: serde_json::Value = serde_json::from_slice(&bytes)?;
-        let first_motion = frames
-            .get(8)
-            .ok_or_else(|| anyhow::anyhow!("first-motion diagnostic has no renderer frame"))?;
-        let revision = std::env::var("RUNENWERK_SOURCE_REVISION").ok();
-        if diagnostic["source_git_revision"].as_str() != revision.as_deref()
-            || diagnostic["frame_index"].as_u64() != Some(first_motion.frame_index)
-            || diagnostic["phase"].as_u64() != Some(0)
-            || diagnostic["history_age"].as_u64() != Some(8)
-            || diagnostic["prior_same_pose_completed_frames"].as_u64() != Some(4)
-        {
-            bail!(
-                "camera cells do not correlate to the exact fully settled first-motion submission"
-            );
-        }
-        let cells = diagnostic["cells"]
-            .as_array()
-            .ok_or_else(|| anyhow::anyhow!("camera diagnostic cells are missing"))?;
-        if cells.len() != 32 {
-            bail!(
-                "camera diagnostic cell count {} does not match the bounded set",
-                cells.len()
-            );
-        }
-        Some(RenderLabCameraCellDiagnosticArtifact {
-            frame_index: first_motion.frame_index,
-            artifact_path: path.to_string_lossy().into_owned(),
-            artifact_blake3: format!("blake3:{}", blake3::hash(&bytes).to_hex()),
-            cell_count: cells.len(),
-            qualification_control: diagnostic["qualification_control"]
-                .as_str()
-                .ok_or_else(|| anyhow::anyhow!("camera diagnostic control is unavailable"))?
-                .to_owned(),
-        })
-    } else {
-        None
-    };
     let artifact = RenderLabCameraMotionArtifact {
         schema_version: RL2_CAMERA_MOTION_SCHEMA_VERSION,
         scenario_id: RL2_CAMERA_MOTION_SCENARIO_ID,
@@ -849,7 +799,6 @@ pub(super) fn write_camera_motion_quality_artifact(
         gpu: temporal_quality_gpu_evidence(gfx.adapter_facts()),
         execution,
         frames,
-        cell_diagnostics,
         capture_route: "native_scene",
         capture,
     };

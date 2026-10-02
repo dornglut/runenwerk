@@ -13,6 +13,7 @@ default = []
 tracy = ["dep:tracing-tracy"]
 
 [dependencies]
+runen-render.workspace = true
 anyhow = "1.0.100"
 bytemuck = { version = "1.24.0", features = ["derive"] }
 pollster = "0.4.0"
@@ -72,7 +73,6 @@ crossbeam-deque = "0.8.6"
 thiserror = "2.0.18"
 
 [dev-dependencies]
-trybuild = "1.0.114"
 ui_app_integration = { workspace = true }
 ui_binding = { workspace = true }
 
