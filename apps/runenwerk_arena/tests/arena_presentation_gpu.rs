@@ -21,8 +21,8 @@ use winit::platform::windows::EventLoopBuilderExtWindows;
 use winit::platform::x11::EventLoopBuilderExtX11;
 use winit::window::Window;
 
-const ARENA_DISPLAY_PASS_ID: &str = "runenwerk.arena.radiance.display";
-const ARENA_PRESENT_PASS_ID: &str = "runenwerk.arena.radiance.present";
+const ARENA_DISPLAY_SHADER_ID: &str = "assets/shaders/runenwerk_arena_radiance.wgsl";
+const ARENA_PRESENT_SHADER_ID: &str = "builtin:present";
 const SURFACE_COLOR_RESOURCE_ID: &str = "surface.color";
 
 #[test]
@@ -94,14 +94,22 @@ fn arena_presentation_gpu_smoke() {
     let display = provenance
         .records
         .iter()
-        .find(|record| record.pass_id == ARENA_DISPLAY_PASS_ID)
+        .find(|record| {
+            record.pass_kind == engine::plugins::render::pipelines::FlowPassKind::Fullscreen
+                && record.shader_id == ARENA_DISPLAY_SHADER_ID
+        })
         .unwrap_or_else(|| {
             panic!(
                 "arena display pass did not execute; records={:?}",
                 provenance
                     .records
                     .iter()
-                    .map(|record| (&record.flow_id, &record.pass_id, &record.shader_id))
+                    .map(|record| (
+                        &record.flow_id,
+                        &record.pass_id,
+                        record.pass_kind,
+                        &record.shader_id,
+                    ))
                     .collect::<Vec<_>>()
             )
         })
@@ -110,7 +118,10 @@ fn arena_presentation_gpu_smoke() {
         provenance
             .records
             .iter()
-            .any(|record| record.pass_id == ARENA_PRESENT_PASS_ID),
+            .any(|record| {
+                record.pass_kind == engine::plugins::render::pipelines::FlowPassKind::Present
+                    && record.shader_id == ARENA_PRESENT_SHADER_ID
+            }),
         "arena presentation must reach its terminal Present pass"
     );
 
@@ -175,7 +186,9 @@ fn arena_presentation_gpu_smoke() {
     assert_eq!(capture.height, size_px.1);
     assert!(
         pixels
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .any(|pixel| pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 0),
         "maintained arena + player presentation must produce a non-black primary-surface frame"
     );
