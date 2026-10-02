@@ -126,6 +126,7 @@ mod contribution_deferral_tests {
             )
             .expect("test request should be valid"),
             semantic_inputs: Vec::new(),
+            field_semantic_inputs: Vec::new(),
             availability: Vec::new(),
             output_index: 0,
             target_key: RenderDynamicTextureTargetKey::new("test", "radiance"),

@@ -1504,6 +1504,7 @@ mod tests {
             scene: fixture.scene,
             request: fixture.request,
             semantic_inputs: fixture.semantic_inputs,
+            field_semantic_inputs: Vec::new(),
             availability: fixture.availability,
             output_index: 0,
             target_key: radiance_key,

@@ -797,7 +797,7 @@ impl Renderer {
                 &contribution.scene,
                 &contribution.request,
                 &contribution.semantic_inputs,
-                &[],
+                &contribution.field_semantic_inputs,
                 &contribution.availability,
                 std::slice::from_ref(&binding),
                 context,
@@ -860,7 +860,7 @@ impl Renderer {
             fragments.extend(prepared.work_set().fragments().iter().cloned());
             imports.push(output.import(GpuResourceProvenance::new(
                 GpuResourceLabel::new(format!(
-                    "render.lab.radiance.visualizer.{}",
+                    "render.frame.radiance.composition.{}",
                     contribution.target_key
                 ))?,
                 None,
