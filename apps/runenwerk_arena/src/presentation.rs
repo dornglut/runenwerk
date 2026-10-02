@@ -1364,20 +1364,21 @@ mod tests {
             source_tick: SimulationTick(5),
             presentation_time_seconds: 0.066,
         };
-        let next_publication = build_arena_frame_publication(
-            &mut scene,
-            next_snapshot,
-            &prepared,
-            crate::arena::arena_field_product_descriptor(
-                &crate::arena::build_arena_chunk_payload(),
+        let next_publication =
+            build_arena_frame_publication(
+                &mut scene,
+                next_snapshot,
+                &prepared,
+                crate::arena::arena_field_product_descriptor(
+                    &crate::arena::build_arena_chunk_payload(),
+                )
+                .product_core()
+                .identity,
+                movement,
+                (1280, 720),
+                flow_id,
             )
-            .product_core()
-            .identity,
-            movement,
-            (1280, 720),
-            flow_id,
-        )
-        .expect("next arena frame publication");
+            .expect("next arena frame publication");
         assert_eq!(
             (
                 scene.arena_object_id(),
@@ -1629,11 +1630,13 @@ mod tests {
         let remaining_invocations =
             frame_requests.requested_flow_invocations_for_surface(RenderSurfaceId::primary());
         assert_eq!(remaining_invocations.len(), 1);
-        assert_eq!(remaining_invocations[0].invocation_id.0, "foreign.proof.main");
+        assert_eq!(
+            remaining_invocations[0].invocation_id.0,
+            "foreign.proof.main"
+        );
 
         let remaining_contributions = contributions.clone().take_all();
         assert_eq!(remaining_contributions.len(), 1);
         assert_eq!(remaining_contributions[0].producer_id, foreign_producer);
     }
-
 }
