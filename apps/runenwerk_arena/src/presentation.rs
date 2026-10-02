@@ -412,10 +412,13 @@ fn publish_arena_frame_system(mut world: WorldMut) -> Result<()> {
     let movement = *world
         .resource::<ArenaMovementConfig>()
         .context("ArenaPresentation requires ArenaMovementConfig")?;
-    let extent = world
-        .resource::<PrimaryPresentationMetricsResource>()
-        .context("ArenaPresentation requires primary presentation metrics")?
-        .size_px();
+    let extent = match world.resource::<PrimaryPresentationMetricsResource>() {
+        Ok(presentation) => presentation.size_px(),
+        Err(_) => {
+            withdraw_arena_frame_publication(&mut world)?;
+            return Ok(());
+        }
+    };
     if extent.0 == 0 || extent.1 == 0 {
         withdraw_arena_frame_publication(&mut world)?;
         return Ok(());
@@ -736,20 +739,48 @@ fn stage_arena_frame_publication(
     Ok(())
 }
 
-fn withdraw_arena_frame_publication(world: &mut WorldMut) -> Result<()> {
+fn withdraw_arena_frame_publication_resources(
+    mut targets: RenderDynamicTextureTargetRequestRegistryResource,
+    mut frame_requests: PreparedRenderFrameRequestResource,
+    mut contributions: RenderDeterministicFrameContributionResource,
+) -> (
+    RenderDynamicTextureTargetRequestRegistryResource,
+    PreparedRenderFrameRequestResource,
+    RenderDeterministicFrameContributionResource,
+) {
     let producer_id = presentation_producer_id();
-    world
-        .resource_mut::<RenderDynamicTextureTargetRequestRegistryResource>()
+    targets.remove_contribution(producer_id);
+    frame_requests.remove_contribution(producer_id);
+    contributions.remove(producer_id);
+    (targets, frame_requests, contributions)
+}
+
+fn withdraw_arena_frame_publication(world: &mut WorldMut) -> Result<()> {
+    let targets = world
+        .resource::<RenderDynamicTextureTargetRequestRegistryResource>()
         .context("ArenaPresentation requires Render dynamic target requests")?
-        .remove_contribution(producer_id);
-    world
-        .resource_mut::<PreparedRenderFrameRequestResource>()
+        .clone();
+    let frame_requests = world
+        .resource::<PreparedRenderFrameRequestResource>()
         .context("ArenaPresentation requires prepared frame requests")?
-        .remove_contribution(producer_id);
-    world
-        .resource_mut::<RenderDeterministicFrameContributionResource>()
+        .clone();
+    let contributions = world
+        .resource::<RenderDeterministicFrameContributionResource>()
         .context("ArenaPresentation requires deterministic frame contributions")?
-        .remove(producer_id);
+        .clone();
+    let (targets, frame_requests, contributions) =
+        withdraw_arena_frame_publication_resources(targets, frame_requests, contributions);
+
+    *world
+        .resource_mut::<RenderDynamicTextureTargetRequestRegistryResource>()
+        .context("ArenaPresentation dynamic target authority disappeared")? = targets;
+    *world
+        .resource_mut::<PreparedRenderFrameRequestResource>()
+        .context("ArenaPresentation frame request authority disappeared")? = frame_requests;
+    *world
+        .resource_mut::<RenderDeterministicFrameContributionResource>()
+        .context("ArenaPresentation deterministic contribution authority disappeared")? =
+        contributions;
     Ok(())
 }
 
@@ -1116,7 +1147,7 @@ mod tests {
     }
 
     #[test]
-    fn frame_publication_uses_stable_ids_real_field_and_both_semantic_input_families() {
+    fn repeated_frame_publication_preserves_stable_ids_and_exact_render_policy() {
         let mut scene = ArenaPresentationSceneResource::new();
         let ids = (
             scene.arena_object_id(),
@@ -1326,6 +1357,67 @@ mod tests {
         assert!(publication.target.usage.copy_dst);
         assert_eq!(publication.invocation.view_id, "main");
         assert_eq!(publication.invocation.flow_id, flow_id);
+
+        let next_snapshot = ArenaPresentationSnapshot {
+            position_scene_meters: [2.5, 0.75, 1.5],
+            interpolation_alpha: 0.75,
+            source_tick: SimulationTick(5),
+            presentation_time_seconds: 0.066,
+        };
+        let next_publication = build_arena_frame_publication(
+            &mut scene,
+            next_snapshot,
+            &prepared,
+            crate::arena::arena_field_product_descriptor(
+                &crate::arena::build_arena_chunk_payload(),
+            )
+            .product_core()
+            .identity,
+            movement,
+            (1280, 720),
+            flow_id,
+        )
+        .expect("next arena frame publication");
+        assert_eq!(
+            (
+                scene.arena_object_id(),
+                scene.arena_representation_id(),
+                scene.player_object_id(),
+                scene.player_representation_id(),
+                scene.light_object_id(),
+            ),
+            ids,
+            "ordinary repeated frame publication must preserve renderer-local semantic identity"
+        );
+        assert!(
+            next_publication
+                .contribution
+                .scene
+                .object_participation(ids.0)
+                .and_then(|object| object.representation(ids.1))
+                .is_some()
+        );
+        assert!(
+            next_publication
+                .contribution
+                .scene
+                .object_participation(ids.2)
+                .and_then(|object| object.representation(ids.3))
+                .is_some()
+        );
+        assert_eq!(
+            next_publication
+                .contribution
+                .scene
+                .object_state(ids.2)
+                .expect("next player object state")
+                .spatial()
+                .local_to_scene()
+                .row_major_3x4(),
+            translation(next_snapshot.position_scene_meters)
+                .expect("next player translation")
+                .row_major_3x4()
+        );
     }
 
     #[test]
@@ -1450,4 +1542,98 @@ mod tests {
             "unrelated producer publication must survive the rejected game replacement"
         );
     }
+
+    #[test]
+    fn frame_withdrawal_removes_only_game_owned_publication() {
+        let mut scene = ArenaPresentationSceneResource::new();
+        let prepared = prepared_field();
+        let descriptor = crate::arena::arena_field_product_descriptor(
+            &crate::arena::build_arena_chunk_payload(),
+        );
+        let flow_id = arena_radiance_flow().id();
+        let publication = build_arena_frame_publication(
+            &mut scene,
+            ArenaPresentationSnapshot {
+                position_scene_meters: [2.0, 0.75, 2.0],
+                interpolation_alpha: 0.5,
+                source_tick: SimulationTick(8),
+                presentation_time_seconds: 0.12,
+            },
+            &prepared,
+            descriptor.product_core().identity,
+            ArenaMovementConfig::default(),
+            (1280, 720),
+            flow_id,
+        )
+        .expect("game publication");
+        let mut foreign_contribution = publication.contribution.clone();
+
+        let (mut targets, mut frame_requests, mut contributions) =
+            stage_arena_frame_publication_resources(
+                RenderDynamicTextureTargetRequestRegistryResource::default(),
+                PreparedRenderFrameRequestResource::default(),
+                RenderDeterministicFrameContributionResource::default(),
+                publication,
+            )
+            .expect("game publication should stage");
+
+        let foreign_producer =
+            RenderFrameProducerId::try_from_raw(99_2127).expect("foreign producer id");
+        let foreign_key = RenderDynamicTextureTargetKey::new("foreign.proof", "radiance");
+        targets
+            .replace_surface_contribution(
+                foreign_producer,
+                RenderSurfaceId::primary(),
+                [RenderDynamicTextureTargetDescriptor::new(
+                    foreign_key.clone(),
+                    64,
+                    64,
+                    RenderTextureTargetFormat::R32Float,
+                    RenderTextureTargetUsage {
+                        color_attachment: false,
+                        depth_attachment: false,
+                        sampled: true,
+                        storage: false,
+                        copy_src: false,
+                        copy_dst: true,
+                    },
+                    RenderTextureSampleMode::NonFilterableFloat,
+                    RenderDynamicTextureRetention::RetainWhileRequested,
+                )],
+            )
+            .expect("foreign target contribution");
+        frame_requests
+            .replace_surface_contribution_with_automatic_main_replacements(
+                foreign_producer,
+                RenderSurfaceId::primary(),
+                [],
+                [PreparedFlowInvocationRequest::new(
+                    "foreign.proof.main",
+                    flow_id,
+                    "main",
+                )],
+                [],
+            )
+            .expect("foreign frame request");
+        foreign_contribution.producer_id = foreign_producer;
+        foreign_contribution.target_key = foreign_key.clone();
+        contributions.replace(foreign_contribution);
+
+        let (targets, frame_requests, contributions) =
+            withdraw_arena_frame_publication_resources(targets, frame_requests, contributions);
+
+        let remaining_targets = targets.snapshot_for_surface(RenderSurfaceId::primary());
+        assert_eq!(remaining_targets.len(), 1);
+        assert_eq!(remaining_targets[0].key, foreign_key);
+
+        let remaining_invocations =
+            frame_requests.requested_flow_invocations_for_surface(RenderSurfaceId::primary());
+        assert_eq!(remaining_invocations.len(), 1);
+        assert_eq!(remaining_invocations[0].invocation_id.0, "foreign.proof.main");
+
+        let remaining_contributions = contributions.clone().take_all();
+        assert_eq!(remaining_contributions.len(), 1);
+        assert_eq!(remaining_contributions[0].producer_id, foreign_producer);
+    }
+
 }
