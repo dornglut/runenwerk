@@ -142,7 +142,7 @@ impl RenderCameraDiagnosticSource {
         CAMERA_REPROJECTION_REVISION
     }
 
-    pub(crate) fn readback_source(
+    pub(in crate::plugins::render) fn readback_source(
         &self,
     ) -> Result<GpuBufferRegion, RenderDeterministicLoweringError> {
         let offset = u64::from(self.extent.0)
