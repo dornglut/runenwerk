@@ -438,6 +438,7 @@ fn publish_arena_frame_system(mut world: WorldMut) -> Result<()> {
     stage_arena_frame_publication(&mut world, publication)
 }
 
+#[derive(Clone)]
 struct ArenaFramePublication {
     target: RenderDynamicTextureTargetDescriptor,
     invocation: PreparedFlowInvocationRequest,
@@ -655,10 +656,16 @@ fn build_arena_frame_publication(
     })
 }
 
-fn stage_arena_frame_publication(
-    world: &mut WorldMut,
+fn stage_arena_frame_publication_resources(
+    mut targets: RenderDynamicTextureTargetRequestRegistryResource,
+    mut frame_requests: PreparedRenderFrameRequestResource,
+    mut contributions: RenderDeterministicFrameContributionResource,
     publication: ArenaFramePublication,
-) -> Result<()> {
+) -> Result<(
+    RenderDynamicTextureTargetRequestRegistryResource,
+    PreparedRenderFrameRequestResource,
+    RenderDeterministicFrameContributionResource,
+)> {
     if publication.contribution.producer_id != presentation_producer_id()
         || publication.contribution.render_surface_id != RenderSurfaceId::primary()
     {
@@ -666,24 +673,14 @@ fn stage_arena_frame_publication(
     }
 
     let producer_id = presentation_producer_id();
-
-    let mut staged_targets = world
-        .resource::<RenderDynamicTextureTargetRequestRegistryResource>()
-        .context("ArenaPresentation requires Render dynamic target requests")?
-        .clone();
-    staged_targets
+    targets
         .replace_surface_contribution(
             producer_id,
             RenderSurfaceId::primary(),
             [publication.target],
         )
         .context("stage arena radiance target")?;
-
-    let mut staged_requests = world
-        .resource::<PreparedRenderFrameRequestResource>()
-        .context("ArenaPresentation requires prepared frame requests")?
-        .clone();
-    staged_requests
+    frame_requests
         .replace_surface_contribution_with_automatic_main_replacements(
             producer_id,
             RenderSurfaceId::primary(),
@@ -692,23 +689,44 @@ fn stage_arena_frame_publication(
             [],
         )
         .context("stage arena display flow invocation")?;
+    contributions.replace(publication.contribution);
 
-    let mut staged_contributions = world
+    Ok((targets, frame_requests, contributions))
+}
+
+fn stage_arena_frame_publication(
+    world: &mut WorldMut,
+    publication: ArenaFramePublication,
+) -> Result<()> {
+    let targets = world
+        .resource::<RenderDynamicTextureTargetRequestRegistryResource>()
+        .context("ArenaPresentation requires Render dynamic target requests")?
+        .clone();
+    let frame_requests = world
+        .resource::<PreparedRenderFrameRequestResource>()
+        .context("ArenaPresentation requires prepared frame requests")?
+        .clone();
+    let contributions = world
         .resource::<RenderDeterministicFrameContributionResource>()
         .context("ArenaPresentation requires deterministic frame contributions")?
         .clone();
-    staged_contributions.replace(publication.contribution);
+    let (targets, frame_requests, contributions) = stage_arena_frame_publication_resources(
+        targets,
+        frame_requests,
+        contributions,
+        publication,
+    )?;
 
     *world
         .resource_mut::<RenderDynamicTextureTargetRequestRegistryResource>()
-        .context("ArenaPresentation dynamic target authority disappeared")? = staged_targets;
+        .context("ArenaPresentation dynamic target authority disappeared")? = targets;
     *world
         .resource_mut::<PreparedRenderFrameRequestResource>()
-        .context("ArenaPresentation frame request authority disappeared")? = staged_requests;
+        .context("ArenaPresentation frame request authority disappeared")? = frame_requests;
     *world
         .resource_mut::<RenderDeterministicFrameContributionResource>()
         .context("ArenaPresentation deterministic contribution authority disappeared")? =
-        staged_contributions;
+        contributions;
 
     Ok(())
 }
@@ -1064,6 +1082,202 @@ mod tests {
         assert_eq!(
             light.spectral_irradiance_w_m3(),
             LIGHT_SPECTRAL_IRRADIANCE_W_M3
+        );
+        let direction_length = LIGHT_DIRECTION_TO_SOURCE
+            .iter()
+            .map(|component| component * component)
+            .sum::<f64>()
+            .sqrt();
+        assert_eq!(
+            light.direction_to_source_scene(),
+            LIGHT_DIRECTION_TO_SOURCE.map(|component| component / direction_length)
+        );
+
+        let arena_material = arena
+            .material_assignment()
+            .expect("arena material")
+            .material();
+        assert_eq!(arena_material.reflectance(), ARENA_REFLECTANCE);
+
+        let player_representation = player
+            .representation(ids.3)
+            .expect("player representation");
+        let radius = f64::from(movement.character.radius);
+        assert_eq!(
+            player_representation
+                .spatial_coverage()
+                .axis_aligned_bounds_value(),
+            Some(([-radius; 3], [radius; 3]))
+        );
+        assert_eq!(
+            publication.contribution.semantic_inputs[0].input(),
+            &RenderSurfaceSemanticInput::sphere(
+                [0.0; 3],
+                radius,
+                RenderTemporalSupport::unbounded(),
+            )
+            .expect("expected player sphere")
+        );
+        assert_eq!(
+            publication
+                .contribution
+                .scene
+                .object_state(ids.2)
+                .expect("player object state")
+                .spatial()
+                .local_to_scene()
+                .row_major_3x4(),
+            translation(snapshot.position_scene_meters)
+                .expect("player translation")
+                .row_major_3x4()
+        );
+
+        let RenderObservationSpec::Perspective(observation) =
+            publication.contribution.request.observations()[0]
+        else {
+            panic!("arena presentation must use one perspective observation");
+        };
+        assert_eq!(observation.aspect_ratio(), 1280.0 / 720.0);
+        assert!(observation.sampling_support().is_ideal_ray());
+        assert_eq!(
+            observation.observation_to_scene().row_major_3x4(),
+            top_down_camera_transform(snapshot.position_scene_meters)
+                .expect("camera transform")
+                .row_major_3x4()
+        );
+        let output = publication.contribution.request.outputs()[0].spec();
+        assert_eq!(output.topology().sample_lattice_dimensions(), Some((1280, 720)));
+        assert_eq!(
+            output.tolerance().absolute_max_error(),
+            Some(ARENA_RADIANCE_TOLERANCE)
+        );
+        match output.value() {
+            RenderOutputValue::Radiance { representation } => {
+                assert_eq!(representation.wavelength_meters(), ARENA_WAVELENGTH_METERS);
+            }
+            other => panic!("arena output must be radiance, got {other:?}"),
+        }
+
+        assert_eq!(publication.target.width, 1280);
+        assert_eq!(publication.target.height, 720);
+        assert_eq!(publication.target.format, RenderTextureTargetFormat::R32Float);
+        assert!(publication.target.usage.sampled);
+        assert!(publication.target.usage.copy_dst);
+        assert_eq!(publication.invocation.view_id, "main");
+        assert_eq!(publication.invocation.flow_id, flow_id);
+    }
+
+    #[test]
+    fn frame_publication_replacement_is_atomic_on_cross_producer_request_collision() {
+        let mut scene = ArenaPresentationSceneResource::new();
+        let prepared = prepared_field();
+        let descriptor = crate::arena::arena_field_product_descriptor(
+            &crate::arena::build_arena_chunk_payload(),
+        );
+        let movement = ArenaMovementConfig::default();
+        let flow_id = arena_radiance_flow().id();
+        let snapshot = ArenaPresentationSnapshot {
+            position_scene_meters: [1.5, 0.75, 1.5],
+            interpolation_alpha: 0.25,
+            source_tick: SimulationTick(7),
+            presentation_time_seconds: 0.1,
+        };
+        let old_publication = build_arena_frame_publication(
+            &mut scene,
+            snapshot,
+            &prepared,
+            descriptor.product_core().identity,
+            movement,
+            (1280, 720),
+            flow_id,
+        )
+        .expect("old arena publication");
+
+        let (targets, mut frame_requests, contributions) =
+            stage_arena_frame_publication_resources(
+                RenderDynamicTextureTargetRequestRegistryResource::default(),
+                PreparedRenderFrameRequestResource::default(),
+                RenderDeterministicFrameContributionResource::default(),
+                old_publication,
+            )
+            .expect("initial publication should stage");
+
+        let foreign_producer =
+            RenderFrameProducerId::try_from_raw(99_1127).expect("foreign producer id");
+        frame_requests
+            .replace_surface_contribution_with_automatic_main_replacements(
+                foreign_producer,
+                RenderSurfaceId::primary(),
+                [],
+                [PreparedFlowInvocationRequest::new(
+                    "foreign.arena.collision",
+                    flow_id,
+                    "main",
+                )],
+                [],
+            )
+            .expect("foreign request should stage before collision");
+
+        let before_targets = targets.snapshot_for_surface(RenderSurfaceId::primary());
+        let before_invocations = frame_requests
+            .requested_flow_invocations_for_surface(RenderSurfaceId::primary())
+            .into_iter()
+            .map(|request| request.invocation_id.clone())
+            .collect::<Vec<_>>();
+        let before_contributions = contributions.clone().take_all();
+
+        let mut replacement = build_arena_frame_publication(
+            &mut scene,
+            ArenaPresentationSnapshot {
+                position_scene_meters: [2.0, 0.75, 2.0],
+                ..snapshot
+            },
+            &prepared,
+            descriptor.product_core().identity,
+            movement,
+            (1280, 720),
+            flow_id,
+        )
+        .expect("replacement arena publication");
+        replacement.invocation = PreparedFlowInvocationRequest::new(
+            "foreign.arena.collision",
+            flow_id,
+            "main",
+        )
+        .bind_dynamic_texture_alias(ARENA_RADIANCE_ALIAS, replacement.target.key.clone())
+        .expect("replacement alias binding");
+
+        let error = stage_arena_frame_publication_resources(
+            targets.clone(),
+            frame_requests.clone(),
+            contributions.clone(),
+            replacement,
+        )
+        .expect_err("cross-producer invocation collision must reject the whole replacement");
+        assert!(
+            error.to_string().contains("invocation"),
+            "collision should report the request boundary: {error:#}"
+        );
+
+        assert_eq!(
+            targets.snapshot_for_surface(RenderSurfaceId::primary()),
+            before_targets
+        );
+        assert_eq!(
+            frame_requests
+                .requested_flow_invocations_for_surface(RenderSurfaceId::primary())
+                .into_iter()
+                .map(|request| request.invocation_id.clone())
+                .collect::<Vec<_>>(),
+            before_invocations
+        );
+        assert_eq!(contributions.clone().take_all(), before_contributions);
+        assert!(
+            frame_requests
+                .requested_flow_invocations_for_surface(RenderSurfaceId::primary())
+                .iter()
+                .any(|request| request.invocation_id.0 == "foreign.arena.collision"),
+            "unrelated producer publication must survive the rejected game replacement"
         );
     }
 }
