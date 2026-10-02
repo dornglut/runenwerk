@@ -3,7 +3,9 @@ pub mod command;
 pub mod input;
 pub mod player;
 pub mod plugin;
+pub mod presentation;
 
+use engine::plugins::render::RenderPlugin;
 use engine::plugins::{
     FixedStepPlugin, InputFinalizePlugin, SimulationPlugin, TimePlugin, WorldPlugin,
 };
@@ -15,6 +17,7 @@ pub use command::*;
 pub use input::*;
 pub use player::*;
 pub use plugin::*;
+pub use presentation::*;
 
 pub fn build_game_app(headless: bool) -> App {
     let mut app = if headless {
@@ -31,6 +34,9 @@ pub fn build_game_app(headless: bool) -> App {
         ArenaWorldPlugin,
         ArenaGamePlugin,
     ));
+    if !headless {
+        app.add_plugins((RenderPlugin, ArenaPresentationPlugin));
+    }
     app.set_simulation_profile(SimulationProfile::LocalSinglePlayer);
     app.set_authority_role(AuthorityRole::Local);
     app

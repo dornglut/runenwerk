@@ -2966,10 +2966,12 @@ dependencies = [
 name = "runenwerk_arena"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "engine",
  "physics",
  "product",
  "runen-ecs",
+ "runen-gpu",
  "runen-input",
  "runen-spatial",
  "winit",
