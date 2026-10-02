@@ -330,6 +330,15 @@ fn arena_field_descriptor(
         .find(|descriptor| descriptor.product_id == ARENA_FIELD_PRODUCT_ID)
 }
 
+fn current_prepared_arena_source<'a>(
+    descriptor: Option<&FieldProductDescriptor>,
+    prepared: &'a PreparedWorldSdfFieldSourceResource,
+) -> Option<&'a PreparedWorldSdfFieldSource> {
+    let core = descriptor?.product_core();
+    let source = prepared.source(core.identity)?;
+    (source.product_generation() == core.lineage.generation).then_some(source)
+}
+
 fn arena_product_selection(descriptor: &FieldProductDescriptor) -> RenderProductSelection {
     let core = descriptor.product_core();
     RenderProductSelection::new(ARENA_PRESENTATION_VIEW_ID)
@@ -379,30 +388,26 @@ fn publish_arena_frame_system(mut world: WorldMut) -> Result<()> {
         .resource::<ArenaPresentationState>()
         .context("ArenaPresentation state must exist")?
         .snapshot();
-    let descriptor_core = {
+    let descriptor = {
         let products = world
             .resource::<WorldRuntimeSdfProductCatalogResource>()
             .context("ArenaPresentation requires the World SDF product catalog")?;
-        arena_field_descriptor(products).map(FieldProductDescriptor::product_core)
+        arena_field_descriptor(products).cloned()
     };
-    let prepared_arena = descriptor_core.as_ref().and_then(|core| {
-        world
+    let prepared_arena = {
+        let prepared = world
             .resource::<PreparedWorldSdfFieldSourceResource>()
-            .ok()?
-            .source(core.identity)
-            .cloned()
-    });
+            .context("ArenaPresentation requires prepared World SDF field sources")?;
+        current_prepared_arena_source(descriptor.as_ref(), prepared).cloned()
+    };
 
-    let (Some(presentation), Some(descriptor_core), Some(prepared_arena)) =
-        (presentation, descriptor_core, prepared_arena)
+    let (Some(presentation), Some(descriptor), Some(prepared_arena)) =
+        (presentation, descriptor, prepared_arena)
     else {
         withdraw_arena_frame_publication(&mut world)?;
         return Ok(());
     };
-    if prepared_arena.product_generation() != descriptor_core.lineage.generation {
-        withdraw_arena_frame_publication(&mut world)?;
-        return Ok(());
-    }
+    let expected_product_identity = descriptor.product_core().identity;
 
     let movement = *world
         .resource::<ArenaMovementConfig>()
@@ -428,7 +433,7 @@ fn publish_arena_frame_system(mut world: WorldMut) -> Result<()> {
             scene,
             presentation,
             &prepared_arena,
-            descriptor_core.identity,
+            expected_product_identity,
             movement,
             extent,
             flow_id,
@@ -943,6 +948,152 @@ mod tests {
     }
 
     #[test]
+    fn unselected_and_nonresident_arena_do_not_project_a_render_field() {
+        use engine::plugins::render::RenderPlugin;
+        use engine::prelude::AppFixedStepExt;
+
+        let mut unselected = crate::build_headless_game_app();
+        unselected.add_plugin(RenderPlugin);
+        unselected = unselected
+            .run_for_fixed_steps(1)
+            .expect("arena truth should initialize");
+        let descriptor = unselected
+            .world()
+            .resource::<WorldRuntimeSdfProductCatalogResource>()
+            .expect("arena catalog")
+            .products()
+            .values()
+            .find(|descriptor| descriptor.product_id == ARENA_FIELD_PRODUCT_ID)
+            .expect("arena descriptor")
+            .clone();
+        unselected = unselected
+            .run_for_frames(1)
+            .expect("unselected GP1B3 frame should run");
+        assert!(
+            unselected
+                .world()
+                .resource::<PreparedWorldSdfFieldSourceResource>()
+                .expect("prepared source resource")
+                .source(descriptor.product_core().identity)
+                .is_none(),
+            "unselected arena must not synthesize a field projection"
+        );
+
+        let mut nonresident = crate::build_headless_game_app();
+        nonresident.add_plugin(RenderPlugin);
+        nonresident = nonresident
+            .run_for_fixed_steps(1)
+            .expect("arena truth should initialize");
+        let descriptor = nonresident
+            .world()
+            .resource::<WorldRuntimeSdfProductCatalogResource>()
+            .expect("arena catalog")
+            .products()
+            .values()
+            .find(|descriptor| descriptor.product_id == ARENA_FIELD_PRODUCT_ID)
+            .expect("arena descriptor")
+            .clone();
+        let mut selection = arena_product_selection(&descriptor);
+        selection.residency_requests.clear();
+        nonresident
+            .world_mut()
+            .resource_mut::<PreparedRenderProductSelectionResource>()
+            .expect("Render product selection")
+            .replace_contribution(presentation_producer_id(), [selection])
+            .expect("nonresident selection");
+        nonresident = nonresident
+            .run_for_frames(1)
+            .expect("nonresident GP1B3 frame should run");
+        assert!(
+            nonresident
+                .world()
+                .resource::<PreparedWorldSdfFieldSourceResource>()
+                .expect("prepared source resource")
+                .source(descriptor.product_core().identity)
+                .is_none(),
+            "selection without residency must not synthesize a field projection"
+        );
+    }
+
+    #[test]
+    fn absent_or_stale_prepared_arena_source_is_not_current() {
+        let payload = crate::arena::build_arena_chunk_payload();
+        let descriptor = crate::arena::arena_field_product_descriptor(&payload);
+        let core = descriptor.product_core();
+        let mut prepared = PreparedWorldSdfFieldSourceResource::default();
+
+        assert!(
+            current_prepared_arena_source(Some(&descriptor), &prepared).is_none(),
+            "absent GP1B3 source must withhold arena publication"
+        );
+
+        let input = RenderFieldSemanticInput::dense(
+            [0.0; 3],
+            [0.5; 3],
+            [2, 2, 2],
+            vec![0.0; 8],
+            0.125,
+            RenderTemporalSupport::unbounded(),
+        )
+        .expect("stale test field");
+        prepared.insert_source(PreparedWorldSdfFieldSource::new(
+            core.identity,
+            core.lineage.generation.saturating_add(1),
+            crate::arena::arena_metric_payload_ref(&payload).payload_ref,
+            input,
+        ));
+        assert!(
+            current_prepared_arena_source(Some(&descriptor), &prepared).is_none(),
+            "stale GP1B3 generation must withhold arena publication"
+        );
+    }
+
+    #[test]
+    fn gameplay_movement_changes_derived_pose_without_presentation_mutation() {
+        use engine::prelude::AppFixedStepExt;
+
+        let mut app = crate::build_headless_game_app()
+            .run_for_fixed_steps(1)
+            .expect("maintained arena should ground the local player");
+        let before =
+            crate::player_physical_history_for(app.world(), LOCAL_PARTICIPANT_ID)
+                .expect("local player history before movement");
+        let batch = crate::TickCommandBatch {
+            tick: SimulationTick(2),
+            commands: vec![crate::ParticipantCommand {
+                participant: LOCAL_PARTICIPANT_ID,
+                command: crate::PlayerCommand {
+                    move_x: 1,
+                    ..Default::default()
+                },
+            }],
+        };
+        crate::apply_game_commands(app.world_mut(), batch.tick, &batch)
+            .expect("maintained movement should apply");
+        let after =
+            crate::player_physical_history_for(app.world(), LOCAL_PARTICIPANT_ID)
+                .expect("local player history after movement");
+        assert_ne!(
+            after.current.position, before.current.position,
+            "authoritative gameplay movement must change physical truth"
+        );
+
+        let authoritative_after = after;
+        let derived = interpolate_position(after, 0.5);
+        assert_eq!(
+            derived,
+            std::array::from_fn(|axis| {
+                after.previous.position[axis] * 0.5 + after.current.position[axis] * 0.5
+            })
+        );
+        assert_eq!(
+            crate::player_physical_history_for(app.world(), LOCAL_PARTICIPANT_ID),
+            Some(authoritative_after),
+            "presentation interpolation must not write back into gameplay truth"
+        );
+    }
+
+    #[test]
     fn interpolation_clamps_remainder_and_preserves_source_history() {
         let history = history([1.0, 2.0, 3.0], [5.0, 6.0, 7.0]);
         let before = history;
@@ -1217,6 +1368,19 @@ mod tests {
                 [],
             )
             .expect("foreign request should stage before collision");
+
+        let secondary_surface =
+            RenderSurfaceId::try_from_raw(2).expect("secondary test surface id");
+        assert!(
+            targets.snapshot_for_surface(secondary_surface).is_empty(),
+            "arena target request must be scoped only to the primary surface"
+        );
+        assert!(
+            frame_requests
+                .requested_flow_invocations_for_surface(secondary_surface)
+                .is_empty(),
+            "arena flow invocation must be scoped only to the primary surface"
+        );
 
         let before_targets = targets.snapshot_for_surface(RenderSurfaceId::primary());
         let before_invocations = frame_requests
