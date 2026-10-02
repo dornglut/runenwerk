@@ -108,6 +108,17 @@ jobs:
                 --test native_host_smoke \
                 --locked
 
+      - name: Run maintained arena presentation GPU proof
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENWERK_ARENA_GPU_SMOKE: '1'
+        run: |
+          set -euo pipefail
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+            cargo +stable test -p runenwerk_arena \
+              --test arena_presentation_gpu \
+              --locked -- --ignored --exact --nocapture --test-threads=1
+
       - name: Run complete R6 public-RunenGPU execution proof module
         env:
           RUST_BACKTRACE: '1'
