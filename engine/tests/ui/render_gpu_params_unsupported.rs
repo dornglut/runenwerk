@@ -1,4 +1,4 @@
-use engine::plugins::render::GpuUniform;
+use engine::plugins::render::{GpuParams, GpuUniform};
 
 #[derive(Clone, Copy)]
 struct Unsupported;
@@ -8,4 +8,6 @@ struct InvalidParams {
     value: Unsupported,
 }
 
-fn main() {}
+fn main() {
+    let _ = InvalidParams { value: Unsupported }.to_gpu();
+}

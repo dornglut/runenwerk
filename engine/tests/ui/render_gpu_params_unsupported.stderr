@@ -42,3 +42,31 @@ help: the trait `GpuUniformField` is not implemented for `Unsupported`
             [i32; 4]
           and $N others
   = note: this error originates in the derive macro `GpuUniform` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0599]: the method `to_gpu` exists for struct `InvalidParams`, but its trait bounds were not satisfied
+  --> tests/ui/render_gpu_params_unsupported.rs:12:50
+   |
+ 4 | struct Unsupported;
+   | ------------------ doesn't satisfy `Unsupported: GpuUniformField`
+...
+ 7 | struct InvalidParams {
+   | -------------------- method `to_gpu` not found for this struct because it doesn't satisfy `InvalidParams: GpuParams`
+...
+12 |     let _ = InvalidParams { value: Unsupported }.to_gpu();
+   |                                                  ^^^^^^ method cannot be called on `InvalidParams` due to unsatisfied trait bounds
+   |
+note: trait bound `Unsupported: GpuUniformField` was not satisfied
+  --> tests/ui/render_gpu_params_unsupported.rs:6:10
+   |
+ 6 | #[derive(GpuUniform)]
+   |          ^^^^^^^^^^ type parameter would need to implement `GpuParams`
+note: the trait `GpuUniformField` must be implemented
+  --> src/plugins/render/params/gpu_value.rs
+   |
+   | pub trait GpuUniformField: ToGpuValue {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = help: consider manually implementing the trait to avoid undesired bounds
+   = help: items from traits can only be used if the trait is implemented and in scope
+   = note: the following trait defines an item `to_gpu`, perhaps you need to implement it:
+           candidate #1: `GpuParams`
+   = note: this error originates in the derive macro `GpuUniform` (in Nightly builds, run with -Z macro-backtrace for more info)
