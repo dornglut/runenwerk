@@ -30,9 +30,8 @@ use engine::plugins::render::{
     RenderRadianceCaptureRequestError, RenderRadianceCaptureRequestErrorKind,
     RenderResultFormationError, RenderResultFormationErrorKind, RenderResultSubmissionError,
     RenderResultSubmissionErrorKind, RenderTemporalExecutionEvidence,
-    RenderVerificationEligibilityErrorKind, SubmittedRender,
-    SubmittedRenderForResult, admit_render, prepare_render, submit_render,
-    submit_render_for_result,
+    RenderVerificationEligibilityErrorKind, SubmittedRender, SubmittedRenderForResult,
+    admit_render, prepare_render, submit_render, submit_render_for_result,
 };
 use runen_gpu::{
     GpuCapabilityProfile, GpuContext, GpuContextDescriptor, GpuContextRequestErrorCategory,
