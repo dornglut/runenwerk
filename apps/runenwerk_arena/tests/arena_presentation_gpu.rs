@@ -115,13 +115,10 @@ fn arena_presentation_gpu_smoke() {
         })
         .clone();
     assert!(
-        provenance
-            .records
-            .iter()
-            .any(|record| {
-                record.pass_kind == engine::plugins::render::pipelines::FlowPassKind::Present
-                    && record.shader_id == ARENA_PRESENT_SHADER_ID
-            }),
+        provenance.records.iter().any(|record| {
+            record.pass_kind == engine::plugins::render::pipelines::FlowPassKind::Present
+                && record.shader_id == ARENA_PRESENT_SHADER_ID
+        }),
         "arena presentation must reach its terminal Present pass"
     );
 
