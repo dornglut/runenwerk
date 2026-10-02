@@ -69,7 +69,7 @@ use crate::player::{
 };
 
 const ARENA_PRESENTATION_PRODUCER_RAW: u64 = 11_270;
-const ARENA_PRESENTATION_VIEW_ID: &str = "runenwerk.arena.main";
+const ARENA_PRODUCT_SELECTION_VIEW_ID: &str = "runenwerk.arena.main";
 const ARENA_PRESENTATION_FLOW_ID: &str = "runenwerk.arena.radiance";
 const ARENA_PRESENTATION_PASS_ID: &str = "runenwerk.arena.radiance.display";
 const ARENA_PRESENTATION_PRESENT_ID: &str = "runenwerk.arena.radiance.present";
@@ -341,7 +341,7 @@ fn current_prepared_arena_source<'a>(
 
 fn arena_product_selection(descriptor: &FieldProductDescriptor) -> RenderProductSelection {
     let core = descriptor.product_core();
-    RenderProductSelection::new(ARENA_PRESENTATION_VIEW_ID)
+    RenderProductSelection::new(ARENA_PRODUCT_SELECTION_VIEW_ID)
         .with_selected_product(RenderSelectedProduct {
             product_id: core.identity,
             scale_band: core.scale_band,
@@ -852,7 +852,7 @@ mod tests {
 
         let selection = arena_product_selection(&descriptor);
 
-        assert_eq!(selection.view_id, ARENA_PRESENTATION_VIEW_ID);
+        assert_eq!(selection.view_id, ARENA_PRODUCT_SELECTION_VIEW_ID);
         assert_eq!(selection.selected_products.len(), 1);
         let selected = &selection.selected_products[0];
         assert_eq!(descriptor.product_id, ARENA_FIELD_PRODUCT_ID);
