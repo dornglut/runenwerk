@@ -3,8 +3,7 @@ use engine::plugins::render::frame::{
 };
 use engine::plugins::render::runtime::RenderDynamicTextureTargetRequestRegistryResource;
 use runenwerk_arena::{
-    ArenaPresentationSceneResource, ArenaPresentationState, build_game_app,
-    build_headless_game_app,
+    ArenaPresentationSceneResource, ArenaPresentationState, build_game_app, build_headless_game_app,
 };
 
 #[test]

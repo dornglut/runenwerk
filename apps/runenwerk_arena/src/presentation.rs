@@ -264,7 +264,8 @@ fn derive_arena_presentation_state_system(
     query: Query<(&ArenaPlayer, &PlayerPhysicalHistory)>,
     mut presentation: ResMut<ArenaPresentationState>,
 ) {
-    let Some(alpha) = interpolation_alpha(fixed_state.accumulator_seconds, fixed_config.step_seconds)
+    let Some(alpha) =
+        interpolation_alpha(fixed_state.accumulator_seconds, fixed_config.step_seconds)
     else {
         presentation.snapshot = None;
         return;
@@ -278,9 +279,9 @@ fn derive_arena_presentation_state_system(
 
     let position = interpolate_position(history, alpha);
     let completed_steps = fixed_state.total_completed_steps as f64;
-    let presentation_time_seconds =
-        ((completed_steps - 1.0 + f64::from(alpha)) * f64::from(fixed_config.step_seconds))
-            .max(0.0);
+    let presentation_time_seconds = ((completed_steps - 1.0 + f64::from(alpha))
+        * f64::from(fixed_config.step_seconds))
+    .max(0.0);
 
     presentation.snapshot = Some(ArenaPresentationSnapshot {
         position_scene_meters: position.map(f64::from),
@@ -538,9 +539,8 @@ fn build_arena_frame_publication(
         shutter,
         RenderSamplingSupport::ideal_ray(),
     )?);
-    let radiance = RenderRadiometricRepresentation::spectral_at_wavelength_meters(
-        ARENA_WAVELENGTH_METERS,
-    )?;
+    let radiance =
+        RenderRadiometricRepresentation::spectral_at_wavelength_meters(ARENA_WAVELENGTH_METERS)?;
     let output = RenderOutputSpec::new(
         RenderOutputValue::Radiance {
             representation: radiance,
@@ -565,13 +565,11 @@ fn build_arena_frame_publication(
     .with_generation(RenderSurfaceSemanticInputGeneration::new(
         presentation.source_tick.0,
     ));
-    let field_binding = RenderFieldSemanticInputBinding::new(
-        scene.arena_representation_id,
-        arena_input.clone(),
-    )
-    .with_generation(RenderFieldSemanticInputGeneration::new(
-        prepared_arena.product_generation(),
-    ));
+    let field_binding =
+        RenderFieldSemanticInputBinding::new(scene.arena_representation_id, arena_input.clone())
+            .with_generation(RenderFieldSemanticInputGeneration::new(
+                prepared_arena.product_generation(),
+            ));
     let availability = vec![
         RenderRepresentationAvailabilityFact::new(
             scene.arena_representation_id,
@@ -583,8 +581,10 @@ fn build_arena_frame_publication(
         ),
     ];
 
-    let target_key =
-        RenderDynamicTextureTargetKey::new(ARENA_RADIANCE_TARGET_NAMESPACE, ARENA_RADIANCE_TARGET_ID);
+    let target_key = RenderDynamicTextureTargetKey::new(
+        ARENA_RADIANCE_TARGET_NAMESPACE,
+        ARENA_RADIANCE_TARGET_ID,
+    );
     let target = RenderDynamicTextureTargetDescriptor::new(
         target_key.clone(),
         extent.0,
@@ -750,9 +750,7 @@ fn translated_coverage(
 fn top_down_camera_transform(position: [f64; 3]) -> Result<RenderAffineTransform3> {
     let origin = [position[0], position[1] + 4.0, position[2]];
     Ok(RenderAffineTransform3::from_row_major_3x4([
-        1.0, 0.0, 0.0, origin[0],
-        0.0, 0.0, 1.0, origin[1],
-        0.0, -1.0, 0.0, origin[2],
+        1.0, 0.0, 0.0, origin[0], 0.0, 0.0, 1.0, origin[1], 0.0, -1.0, 0.0, origin[2],
     ])?)
 }
 
@@ -855,11 +853,8 @@ mod tests {
             .source(ARENA_FIELD_PRODUCT_ID)
             .expect("real arena GP1B3 projection")
             .clone();
-        let history = crate::player_physical_history_for(
-            app.world(),
-            LOCAL_PARTICIPANT_ID,
-        )
-        .expect("local player history");
+        let history = crate::player_physical_history_for(app.world(), LOCAL_PARTICIPANT_ID)
+            .expect("local player history");
         let mut scene = ArenaPresentationSceneResource::new();
         let publication = build_arena_frame_publication(
             &mut scene,
@@ -873,8 +868,7 @@ mod tests {
                 presentation_time_seconds: 0.0,
             },
             &prepared,
-            *app
-                .world()
+            *app.world()
                 .resource::<ArenaMovementConfig>()
                 .expect("movement config"),
             (1280, 720),
@@ -939,9 +933,15 @@ mod tests {
         };
         let flow_id = arena_radiance_flow().id();
 
-        let publication =
-            build_arena_frame_publication(&mut scene, snapshot, &prepared, movement, (1280, 720), flow_id)
-                .expect("arena frame publication");
+        let publication = build_arena_frame_publication(
+            &mut scene,
+            snapshot,
+            &prepared,
+            movement,
+            (1280, 720),
+            flow_id,
+        )
+        .expect("arena frame publication");
 
         assert_eq!(publication.contribution.semantic_inputs.len(), 1);
         assert_eq!(publication.contribution.field_semantic_inputs.len(), 1);
@@ -973,9 +973,7 @@ mod tests {
             .scene
             .object_participation(ids.0)
             .expect("arena participation");
-        let arena_representation = arena
-            .representation(ids.1)
-            .expect("arena representation");
+        let arena_representation = arena.representation(ids.1).expect("arena representation");
         assert_eq!(
             arena_representation
                 .spatial_coverage()
@@ -986,7 +984,9 @@ mod tests {
             ))
         );
         assert_eq!(
-            arena_representation.refinement().finest_absolute_error_meters(),
+            arena_representation
+                .refinement()
+                .finest_absolute_error_meters(),
             None
         );
         assert_eq!(
