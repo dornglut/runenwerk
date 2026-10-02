@@ -12,6 +12,8 @@ use runen_gpu::{
     GpuReadbackBytes, GpuReadbackId, GpuReadbackStatus, GpuSubmission, GpuSubmissionFailureKind,
     GpuSubmissionStatus,
 };
+use std::error::Error;
+use std::fmt;
 
 /// Renderer-private normalized physical observations for one exact admitted output.
 ///
@@ -77,6 +79,97 @@ pub(in crate::plugins::render) enum RenderDeterministicVerificationObservationEr
         channel: &'static str,
     },
 }
+
+impl RenderDeterministicVerificationObservationError {
+    pub(super) const fn output_index(&self) -> Option<usize> {
+        match self {
+            Self::CorrelationChanged { output_index, .. }
+            | Self::ReadbackPending { output_index, .. }
+            | Self::ReadbackFailed { output_index, .. }
+            | Self::InvalidPhysicalLayout { output_index, .. }
+            | Self::SizeOverflow { output_index, .. }
+            | Self::HostAllocation { output_index, .. } => Some(*output_index),
+            Self::SubmissionPending | Self::SubmissionFailed { .. } => None,
+        }
+    }
+
+    pub(super) const fn channel(&self) -> Option<&'static str> {
+        match self {
+            Self::CorrelationChanged { channel, .. }
+            | Self::ReadbackPending { channel, .. }
+            | Self::ReadbackFailed { channel, .. }
+            | Self::InvalidPhysicalLayout { channel, .. }
+            | Self::HostAllocation { channel, .. } => Some(*channel),
+            Self::SubmissionPending | Self::SubmissionFailed { .. } | Self::SizeOverflow { .. } => {
+                None
+            }
+        }
+    }
+
+    pub(super) const fn gpu_failure_kind(&self) -> Option<GpuSubmissionFailureKind> {
+        match self {
+            Self::SubmissionFailed { kind } | Self::ReadbackFailed { kind, .. } => Some(*kind),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for RenderDeterministicVerificationObservationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::SubmissionPending => formatter.write_str("verified submission is still pending"),
+            Self::SubmissionFailed { kind } => {
+                write!(formatter, "verified submission failed: {kind:?}")
+            }
+            Self::CorrelationChanged {
+                output_index,
+                channel,
+            } => write!(
+                formatter,
+                "output {output_index} {channel} observation lost exact-submission correlation"
+            ),
+            Self::ReadbackPending {
+                output_index,
+                channel,
+            } => write!(
+                formatter,
+                "output {output_index} {channel} readback is still pending"
+            ),
+            Self::ReadbackFailed {
+                output_index,
+                channel,
+                kind,
+            } => write!(
+                formatter,
+                "output {output_index} {channel} readback failed: {kind:?}"
+            ),
+            Self::InvalidPhysicalLayout {
+                output_index,
+                channel,
+                byte_len,
+            } => write!(
+                formatter,
+                "output {output_index} {channel} has invalid physical readback layout with {byte_len} bytes"
+            ),
+            Self::SizeOverflow {
+                output_index,
+                field,
+            } => write!(
+                formatter,
+                "output {output_index} {field} exceeds host indexing limits during observation normalization"
+            ),
+            Self::HostAllocation {
+                output_index,
+                channel,
+            } => write!(
+                formatter,
+                "host allocation failed while normalizing output {output_index} {channel}"
+            ),
+        }
+    }
+}
+
+impl Error for RenderDeterministicVerificationObservationError {}
 
 /// Observe one completed verified submission without yet claiming semantic correctness.
 ///

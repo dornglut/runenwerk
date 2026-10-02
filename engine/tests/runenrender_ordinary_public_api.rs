@@ -29,9 +29,9 @@ use engine::plugins::render::{
     RenderRadianceCaptureError, RenderRadianceCaptureErrorKind, RenderRadianceCaptureRequest,
     RenderRadianceCaptureRequestError, RenderRadianceCaptureRequestErrorKind,
     RenderResultFormationError, RenderResultFormationErrorKind, RenderResultSubmissionError,
-    RenderResultSubmissionErrorKind, RenderTemporalExecutionEvidence, SubmittedRender,
-    SubmittedRenderForResult, admit_render, prepare_render, submit_render,
-    submit_render_for_result,
+    RenderResultSubmissionErrorKind, RenderTemporalExecutionEvidence,
+    RenderVerificationEligibilityErrorKind, SubmittedRender, SubmittedRenderForResult,
+    admit_render, prepare_render, submit_render, submit_render_for_result,
 };
 use runen_gpu::{
     GpuCapabilityProfile, GpuContext, GpuContextDescriptor, GpuContextRequestErrorCategory,
@@ -68,9 +68,22 @@ fn ordinary_semantic_renderer_surface_is_public_to_downstream_consumers() {
     let _ = GpuReadbackOperation::new;
     let _ = RenderAdmissionError::kind;
     let _ = RenderExecutionError::kind;
+    let _ = RenderExecutionError::runen_gpu_preparation_source;
     let _ = RenderExecutionError::submission_error;
     let _ = RenderResultSubmissionError::kind;
+    let _ = RenderResultSubmissionError::verification_eligibility_kind;
+    let _ = RenderResultSubmissionError::observation_index;
+    let _ = RenderResultSubmissionError::object_id;
+    let _ = RenderResultSubmissionError::readback_cardinality;
+    let _ = RenderResultSubmissionError::output_correlation;
+    let _ = RenderResultSubmissionError::correlation_output_index;
+    let _ = RenderResultSubmissionError::correlation_channel;
     let _ = RenderResultFormationError::kind;
+    let _ = RenderResultFormationError::verification_eligibility_kind;
+    let _ = RenderResultFormationError::output_index;
+    let _ = RenderResultFormationError::sample_index;
+    let _ = RenderResultFormationError::channel;
+    let _ = RenderResultFormationError::gpu_failure_kind;
     let _ = RenderRadianceCaptureRequestError::kind;
     let _ = RenderRadianceCaptureError::kind;
     let _ = RenderRadianceCaptureError::gpu_failure_kind;
@@ -110,6 +123,7 @@ fn ordinary_semantic_renderer_surface_is_public_to_downstream_consumers() {
         let _ = (execution, submission, formation, capture_request, capture);
     }
     let _ = assert_error_kinds;
+    let _ = RenderVerificationEligibilityErrorKind::SamplingSupportUnsupported;
 
     fn assert_prepared_output_surface(output: &PreparedRadianceOutput<'_>) {
         let _ = output.output_index();

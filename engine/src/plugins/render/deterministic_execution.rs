@@ -39,16 +39,20 @@ use super::surface_input::{
     RenderSurfaceSemanticInputView,
 };
 use runen_gpu::{
-    GpuAdmittedProgramSource, GpuBufferDescriptor, GpuBufferHandle, GpuBufferInitialization,
-    GpuBufferRange, GpuBufferRegion, GpuBufferTextureLayout, GpuBufferUsage, GpuClearOperation,
-    GpuComputeOperation, GpuComputePipelineDescriptor, GpuContext, GpuContextAffinity,
-    GpuCopyOperation, GpuDispatchIntent, GpuDispatchSize, GpuExportKey, GpuExportRelationship,
-    GpuInitialCoverage, GpuReadbackId, GpuReadbackOperation, GpuReadbackStatus, GpuReconstruction,
-    GpuResourceAccessIntent, GpuResourceLifetime, GpuResourceProvenance, GpuResourceRef,
+    GpuAccessError, GpuAdmittedProgramSource, GpuBufferDescriptor, GpuBufferHandle,
+    GpuBufferInitialization, GpuBufferRange, GpuBufferRegion, GpuBufferTextureLayout,
+    GpuBufferUsage, GpuClearOperation, GpuComputeOperation, GpuComputePipelineDescriptor,
+    GpuContext, GpuContextAffinity, GpuCopyOperation, GpuDispatchIntent, GpuDispatchSize,
+    GpuExportKey, GpuExportRelationship, GpuInitialCoverage, GpuOrdinaryTransferPreparationError,
+    GpuProgramContractError, GpuProgramSourceError, GpuReadbackId, GpuReadbackOperation,
+    GpuReadbackRequestError, GpuReadbackStatus, GpuReconstruction, GpuResourceAccessIntent,
+    GpuResourceDescriptorError, GpuResourceLifetime, GpuResourceProvenance, GpuResourceRef,
     GpuRuntimeBindingValue, GpuSubmission, GpuSubmissionFailureKind, GpuSubmissionStatus,
     GpuTextureAccessResource, GpuTextureCopyRegion, GpuTextureFormat, GpuTextureHandle,
-    GpuUploadOperation, GpuWorkFragment, GpuWorkImport, GpuWorkOutput, GpuWorkResourceIdAllocator,
-    GpuWorkSubmissionError, PreparedGpuData, TransferData, admit_static_wgsl_sources,
+    GpuUploadOperation, GpuWorkAuthoringError, GpuWorkFragment, GpuWorkImport,
+    GpuWorkOperationError, GpuWorkOutput, GpuWorkResourceIdAllocationError,
+    GpuWorkResourceIdAllocator, GpuWorkSubmissionError, PreparedGpuData, TransferData,
+    admit_static_wgsl_sources,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
@@ -138,7 +142,7 @@ impl RenderCameraDiagnosticSource {
         CAMERA_REPROJECTION_REVISION
     }
 
-    pub(crate) fn readback_source(
+    pub(in crate::plugins::render) fn readback_source(
         &self,
     ) -> Result<GpuBufferRegion, RenderDeterministicLoweringError> {
         let offset = u64::from(self.extent.0)
@@ -154,9 +158,9 @@ impl RenderCameraDiagnosticSource {
             },
         )?;
         let range = GpuBufferRange::new(&self.history, offset, byte_len)
-            .map_err(|error| gpu_authoring("camera diagnostic readback range", error))?;
+            .map_err(|error| gpu_access("camera diagnostic readback range", error))?;
         let region = GpuBufferRegion::new(&self.history, range)
-            .map_err(|error| gpu_authoring("camera diagnostic readback region", error))?;
+            .map_err(|error| gpu_work_operation("camera diagnostic readback region", error))?;
         Ok(region)
     }
 }
@@ -446,7 +450,7 @@ impl DeterministicResourceCache {
             MAINTAINED_EVALUATOR_REVISION,
             MAINTAINED_WGSL.as_str(),
         )])
-        .map_err(|error| gpu_authoring("maintained WGSL admission", error))?;
+        .map_err(|error| gpu_program_source("maintained WGSL admission", error))?;
         self.maintained_source = Some(source.clone());
         Ok(source)
     }
@@ -462,7 +466,7 @@ impl DeterministicResourceCache {
             u64::from(TEMPORAL_RECONSTRUCTION_REVISION),
             TEMPORAL_RECONSTRUCTION_WGSL,
         )])
-        .map_err(|error| gpu_authoring("temporal reconstruction WGSL admission", error))?;
+        .map_err(|error| gpu_program_source("temporal reconstruction WGSL admission", error))?;
         self.reconstruction_source = Some(source.clone());
         Ok(source)
     }
@@ -478,7 +482,7 @@ impl DeterministicResourceCache {
             u64::from(CAMERA_REPROJECTION_REVISION),
             CAMERA_REPROJECTION_WGSL.as_str(),
         )])
-        .map_err(|error| gpu_authoring("camera-reprojection WGSL admission", error))?;
+        .map_err(|error| gpu_program_source("camera-reprojection WGSL admission", error))?;
         self.camera_reprojection_source = Some(source.clone());
         Ok(source)
     }
@@ -567,16 +571,22 @@ impl DeterministicResourceCache {
                         [GpuBufferUsage::Storage, GpuBufferUsage::CopySource],
                         GpuBufferInitialization::Zeroed,
                     )
-                    .map_err(|error| gpu_authoring("camera temporal-history descriptor", error))
+                    .map_err(|error| {
+                        gpu_resource_descriptor("camera temporal-history descriptor", error)
+                    })
                 };
                 let first = self
                     .identities
                     .allocate_buffer_handle(descriptor(0)?)
-                    .map_err(|error| gpu_authoring("camera temporal-history allocation", error))?;
+                    .map_err(|error| {
+                        gpu_resource_allocation("camera temporal-history allocation", error)
+                    })?;
                 let second = self
                     .identities
                     .allocate_buffer_handle(descriptor(1)?)
-                    .map_err(|error| gpu_authoring("camera temporal-history allocation", error))?;
+                    .map_err(|error| {
+                        gpu_resource_allocation("camera temporal-history allocation", error)
+                    })?;
                 DeterministicTemporalStorage::Camera(Box::new(DeterministicCameraTemporalStorage {
                     slots: [first, second],
                     completed_slot: 0,
@@ -594,11 +604,13 @@ impl DeterministicResourceCache {
                     [GpuBufferUsage::Storage, GpuBufferUsage::CopySource],
                     GpuBufferInitialization::Zeroed,
                 )
-                .map_err(|error| gpu_authoring("temporal-history descriptor", error))?;
-                let handle = self
-                    .identities
-                    .allocate_buffer_handle(descriptor)
-                    .map_err(|error| gpu_authoring("temporal-history allocation", error))?;
+                .map_err(|error| gpu_resource_descriptor("temporal-history descriptor", error))?;
+                let handle =
+                    self.identities
+                        .allocate_buffer_handle(descriptor)
+                        .map_err(|error| {
+                            gpu_resource_allocation("temporal-history allocation", error)
+                        })?;
                 let count_descriptor = GpuBufferDescriptor::ordinary_owned(
                     format!("RunenRender output {output_index} temporal sample counts"),
                     GpuResourceLifetime::Retained,
@@ -607,11 +619,15 @@ impl DeterministicResourceCache {
                     [GpuBufferUsage::Storage],
                     GpuBufferInitialization::Zeroed,
                 )
-                .map_err(|error| gpu_authoring("temporal sample-count descriptor", error))?;
+                .map_err(|error| {
+                    gpu_resource_descriptor("temporal sample-count descriptor", error)
+                })?;
                 let sample_counts = self
                     .identities
                     .allocate_buffer_handle(count_descriptor)
-                    .map_err(|error| gpu_authoring("temporal sample-count allocation", error))?;
+                    .map_err(|error| {
+                        gpu_resource_allocation("temporal sample-count allocation", error)
+                    })?;
                 DeterministicTemporalStorage::Static {
                     handle,
                     sample_counts,
@@ -693,7 +709,7 @@ impl DeterministicResourceCache {
         let handle = self
             .identities
             .allocate_buffer_handle(descriptor)
-            .map_err(|error| gpu_authoring("deterministic buffer allocation", error))?;
+            .map_err(|error| gpu_resource_allocation("deterministic buffer allocation", error))?;
         self.buffers.insert(key, handle.clone());
         Ok(handle)
     }
@@ -1044,11 +1060,7 @@ impl SubmittedDeterministicRender {
         };
         let formation_evidence =
             super::deterministic_verification::verify_completed_deterministic_render(verification)
-                .map_err(
-                    |error| RenderDeterministicResultFormationError::VerificationRejected {
-                        detail: error.to_string(),
-                    },
-                )?;
+                .map_err(RenderDeterministicResultFormationError::Verification)?;
         let result = RenderResult::from_formation_evidence(formation_evidence);
         self.verification = DeterministicVerificationState::Formed;
         Ok(Some(result))
@@ -1084,7 +1096,94 @@ impl DeterministicVerificationSubmission {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RenderDeterministicLoweringError {
+pub(super) enum RenderRunenGpuPreparationError {
+    Access {
+        stage: &'static str,
+        source: GpuAccessError,
+    },
+    ProgramSource {
+        stage: &'static str,
+        source: GpuProgramSourceError,
+    },
+    ResourceDescriptor {
+        stage: &'static str,
+        source: GpuResourceDescriptorError,
+    },
+    ResourceAllocation {
+        stage: &'static str,
+        source: GpuWorkResourceIdAllocationError,
+    },
+    TransferPreparation {
+        stage: &'static str,
+        source: GpuOrdinaryTransferPreparationError,
+    },
+    ProgramContract {
+        stage: &'static str,
+        source: GpuProgramContractError,
+    },
+    WorkOperation {
+        stage: &'static str,
+        source: GpuWorkOperationError,
+    },
+    ReadbackRequest {
+        stage: &'static str,
+        source: GpuReadbackRequestError,
+    },
+    WorkAuthoring {
+        stage: &'static str,
+        source: GpuWorkAuthoringError,
+    },
+}
+
+impl RenderRunenGpuPreparationError {
+    pub const fn stage(&self) -> &'static str {
+        match self {
+            Self::Access { stage, .. }
+            | Self::ProgramSource { stage, .. }
+            | Self::ResourceDescriptor { stage, .. }
+            | Self::ResourceAllocation { stage, .. }
+            | Self::TransferPreparation { stage, .. }
+            | Self::ProgramContract { stage, .. }
+            | Self::WorkOperation { stage, .. }
+            | Self::ReadbackRequest { stage, .. }
+            | Self::WorkAuthoring { stage, .. } => stage,
+        }
+    }
+
+    fn owner_source(&self) -> &(dyn Error + 'static) {
+        match self {
+            Self::Access { source, .. } => source,
+            Self::ProgramSource { source, .. } => source,
+            Self::ResourceDescriptor { source, .. } => source,
+            Self::ResourceAllocation { source, .. } => source,
+            Self::TransferPreparation { source, .. } => source,
+            Self::ProgramContract { source, .. } => source,
+            Self::WorkOperation { source, .. } => source,
+            Self::ReadbackRequest { source, .. } => source,
+            Self::WorkAuthoring { source, .. } => source,
+        }
+    }
+}
+
+impl fmt::Display for RenderRunenGpuPreparationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "RunenGPU {} failed: {}",
+            self.stage(),
+            self.owner_source()
+        )
+    }
+}
+
+impl Error for RenderRunenGpuPreparationError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(self.owner_source())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum RenderDeterministicLoweringError {
     ContextAffinityChanged {
         admitted: GpuContextAffinity,
         actual: GpuContextAffinity,
@@ -1154,10 +1253,7 @@ pub enum RenderDeterministicLoweringError {
         max_workgroups_per_dimension: u32,
         capacity_workgroups: u64,
     },
-    RunenGpuAuthoring {
-        stage: &'static str,
-        detail: String,
-    },
+    RunenGpuPreparation(RenderRunenGpuPreparationError),
 }
 
 impl fmt::Display for RenderDeterministicLoweringError {
@@ -1271,17 +1367,22 @@ impl fmt::Display for RenderDeterministicLoweringError {
                 formatter,
                 "sample count {sample_count} with workgroup size {workgroup_size} requires {required_workgroups} workgroups, but the admitted maximum per dimension is {max_workgroups_per_dimension} and the 2D dispatch capacity is {capacity_workgroups} workgroups"
             ),
-            Self::RunenGpuAuthoring { stage, detail } => {
-                write!(formatter, "RunenGPU {stage} authoring failed: {detail}")
-            }
+            Self::RunenGpuPreparation(error) => error.fmt(formatter),
         }
     }
 }
 
-impl Error for RenderDeterministicLoweringError {}
+impl Error for RenderDeterministicLoweringError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::RunenGpuPreparation(error) => Some(error),
+            _ => None,
+        }
+    }
+}
 
 #[derive(Debug)]
-pub enum RenderDeterministicExecutionError {
+pub(super) enum RenderDeterministicExecutionError {
     Lowering(RenderDeterministicLoweringError),
     Submission(GpuWorkSubmissionError),
 }
@@ -1310,42 +1411,9 @@ impl From<RenderDeterministicLoweringError> for RenderDeterministicExecutionErro
     }
 }
 
-/// Failure while selecting verified-result intent and authoring its one exact submission.
-#[derive(Debug)]
-pub enum RenderDeterministicVerifiedSubmissionError {
-    Eligibility { detail: String },
-    Execution(RenderDeterministicExecutionError),
-    Correlation { detail: String },
-}
-
-impl fmt::Display for RenderDeterministicVerifiedSubmissionError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Eligibility { detail } => write!(
-                formatter,
-                "verified deterministic submission is outside the certified result-formation domain: {detail}"
-            ),
-            Self::Execution(error) => error.fmt(formatter),
-            Self::Correlation { detail } => write!(
-                formatter,
-                "verified deterministic same-submission correlation failed: {detail}"
-            ),
-        }
-    }
-}
-
-impl Error for RenderDeterministicVerifiedSubmissionError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            Self::Execution(error) => Some(error),
-            Self::Eligibility { .. } | Self::Correlation { .. } => None,
-        }
-    }
-}
-
 /// Failure while polling one exact verified submission for semantic result formation.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RenderDeterministicResultFormationError {
+pub(super) enum RenderDeterministicResultFormationError {
     VerificationNotRequested,
     ResultAlreadyFormed,
     SubmissionFailed {
@@ -1360,9 +1428,7 @@ pub enum RenderDeterministicResultFormationError {
         channel: &'static str,
         kind: GpuSubmissionFailureKind,
     },
-    VerificationRejected {
-        detail: String,
-    },
+    Verification(super::deterministic_verification::RenderDeterministicVerificationError),
 }
 
 impl fmt::Display for RenderDeterministicResultFormationError {
@@ -1393,37 +1459,19 @@ impl fmt::Display for RenderDeterministicResultFormationError {
                 formatter,
                 "output {output_index} {channel} verification readback failed: {kind:?}"
             ),
-            Self::VerificationRejected { detail } => write!(
+            Self::Verification(error) => write!(
                 formatter,
-                "deterministic finite-evaluation verification rejected result formation: {detail}"
+                "deterministic finite-evaluation verification rejected result formation: {error}"
             ),
         }
     }
 }
 
-impl Error for RenderDeterministicResultFormationError {}
-
-fn map_verified_submission_error(
-    error: super::deterministic_verification::RenderDeterministicVerifiedSubmissionError,
-) -> RenderDeterministicVerifiedSubmissionError {
-    use super::deterministic_verification::RenderDeterministicVerifiedSubmissionError as PrivateError;
-
-    match error {
-        PrivateError::Eligibility(error) => {
-            RenderDeterministicVerifiedSubmissionError::Eligibility {
-                detail: error.to_string(),
-            }
-        }
-        PrivateError::Execution(error) => {
-            RenderDeterministicVerifiedSubmissionError::Execution(error)
-        }
-        PrivateError::ReadbackCardinality { .. }
-        | PrivateError::OutputCorrelationChanged { .. }
-        | PrivateError::DuplicateReadbackCorrelation { .. }
-        | PrivateError::MissingSubmissionReadback { .. } => {
-            RenderDeterministicVerifiedSubmissionError::Correlation {
-                detail: error.to_string(),
-            }
+impl Error for RenderDeterministicResultFormationError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Verification(error) => Some(error),
+            _ => None,
         }
     }
 }
@@ -1545,13 +1593,15 @@ pub(crate) fn prepare_deterministic_render_with_cache_in_scope_and_evaluation(
 pub async fn submit_deterministic_render_for_verified_result(
     admitted: AdmittedDeterministicRender,
     context: &GpuContext,
-) -> Result<SubmittedDeterministicRender, RenderDeterministicVerifiedSubmissionError> {
+) -> Result<
+    SubmittedDeterministicRender,
+    super::deterministic_verification::RenderDeterministicVerifiedSubmissionError,
+> {
     super::deterministic_verification::submit_deterministic_render_for_verified_formation(
         admitted, context,
     )
     .await
     .map(DeterministicVerificationSubmission::into_submitted)
-    .map_err(map_verified_submission_error)
 }
 
 /// Submit the exact maintained deterministic path with renderer-private same-submission readbacks.
@@ -1904,7 +1954,7 @@ fn lower_output(
         format!("RunenRender output {output_index} packed semantic input"),
         &packed.input_words,
     )
-    .map_err(|error| gpu_authoring("semantic-input preparation", error))?;
+    .map_err(|error| gpu_transfer_preparation("semantic-input preparation", error))?;
 
     let input = resources.buffer(
         scope,
@@ -1918,7 +1968,7 @@ fn lower_output(
             [GpuBufferUsage::Storage, GpuBufferUsage::CopyDestination],
             GpuBufferInitialization::Uninitialized,
         )
-        .map_err(|error| gpu_authoring("input-buffer descriptor", error))?,
+        .map_err(|error| gpu_resource_descriptor("input-buffer descriptor", error))?,
     )?;
     let canonical_output = resources.buffer(
         scope,
@@ -1936,7 +1986,7 @@ fn lower_output(
             ],
             GpuBufferInitialization::Uninitialized,
         )
-        .map_err(|error| gpu_authoring("canonical-output descriptor", error))?,
+        .map_err(|error| gpu_resource_descriptor("canonical-output descriptor", error))?,
     )?;
     let definedness = resources.buffer(
         scope,
@@ -1954,7 +2004,7 @@ fn lower_output(
             ],
             GpuBufferInitialization::Uninitialized,
         )
-        .map_err(|error| gpu_authoring("definedness descriptor", error))?,
+        .map_err(|error| gpu_resource_descriptor("definedness descriptor", error))?,
     )?;
     let status = resources.buffer(
         scope,
@@ -1972,7 +2022,7 @@ fn lower_output(
             ],
             GpuBufferInitialization::Uninitialized,
         )
-        .map_err(|error| gpu_authoring("status descriptor", error))?,
+        .map_err(|error| gpu_resource_descriptor("status descriptor", error))?,
     )?;
 
     let current_depth = resources.buffer(
@@ -1987,7 +2037,7 @@ fn lower_output(
             [GpuBufferUsage::Storage, GpuBufferUsage::CopyDestination],
             GpuBufferInitialization::Uninitialized,
         )
-        .map_err(|error| gpu_authoring("current-depth descriptor", error))?,
+        .map_err(|error| gpu_resource_descriptor("current-depth descriptor", error))?,
     )?;
     let current_hit = resources.buffer(
         scope,
@@ -2006,40 +2056,40 @@ fn lower_output(
             [GpuBufferUsage::Storage, GpuBufferUsage::CopyDestination],
             GpuBufferInitialization::Uninitialized,
         )
-        .map_err(|error| gpu_authoring("current-hit descriptor", error))?,
+        .map_err(|error| gpu_resource_descriptor("current-hit descriptor", error))?,
     )?;
 
     let input_upload = GpuUploadOperation::whole_buffer(&input, input_payload)
-        .map_err(|error| gpu_authoring("input upload", error))?;
+        .map_err(|error| gpu_work_operation("input upload", error))?;
     let output_clear = GpuClearOperation::buffer_zero(
         GpuBufferRegion::whole(&canonical_output)
-            .map_err(|error| gpu_authoring("canonical-output clear region", error))?,
+            .map_err(|error| gpu_work_operation("canonical-output clear region", error))?,
     )
-    .map_err(|error| gpu_authoring("canonical-output clear", error))?;
+    .map_err(|error| gpu_work_operation("canonical-output clear", error))?;
     let definedness_clear = GpuClearOperation::buffer_zero(
         GpuBufferRegion::whole(&definedness)
-            .map_err(|error| gpu_authoring("definedness clear region", error))?,
+            .map_err(|error| gpu_work_operation("definedness clear region", error))?,
     )
-    .map_err(|error| gpu_authoring("definedness clear", error))?;
+    .map_err(|error| gpu_work_operation("definedness clear", error))?;
     let status_clear = GpuClearOperation::buffer_zero(
         GpuBufferRegion::whole(&status)
-            .map_err(|error| gpu_authoring("status clear region", error))?,
+            .map_err(|error| gpu_work_operation("status clear region", error))?,
     )
-    .map_err(|error| gpu_authoring("status clear", error))?;
+    .map_err(|error| gpu_work_operation("status clear", error))?;
     let current_depth_clear = GpuClearOperation::buffer_zero(
         GpuBufferRegion::whole(&current_depth)
-            .map_err(|error| gpu_authoring("current-depth clear region", error))?,
+            .map_err(|error| gpu_work_operation("current-depth clear region", error))?,
     )
-    .map_err(|error| gpu_authoring("current-depth clear", error))?;
+    .map_err(|error| gpu_work_operation("current-depth clear", error))?;
     let current_hit_clear = GpuClearOperation::buffer_zero(
         GpuBufferRegion::whole(&current_hit)
-            .map_err(|error| gpu_authoring("current-hit clear region", error))?,
+            .map_err(|error| gpu_work_operation("current-hit clear region", error))?,
     )
-    .map_err(|error| gpu_authoring("current-hit clear", error))?;
+    .map_err(|error| gpu_work_operation("current-hit clear", error))?;
 
     let source = resources.maintained_source()?;
     let pipeline = GpuComputePipelineDescriptor::ordinary(source, "main")
-        .map_err(|error| gpu_authoring("compute-pipeline descriptor", error))?;
+        .map_err(|error| gpu_program_contract("compute-pipeline descriptor", error))?;
     let runtime_bindings = pipeline
         .runtime_bindings([
             GpuRuntimeBindingValue::whole_buffer(0, 0, &input),
@@ -2049,7 +2099,7 @@ fn lower_output(
             GpuRuntimeBindingValue::whole_buffer(0, 4, &current_depth),
             GpuRuntimeBindingValue::whole_buffer(0, 5, &current_hit),
         ])
-        .map_err(|error| gpu_authoring("compute runtime bindings", error))?;
+        .map_err(|error| gpu_program_contract("compute runtime bindings", error))?;
     let dispatch_size = deterministic_dispatch_size(
         packed.sample_count,
         context
@@ -2063,7 +2113,7 @@ fn lower_output(
         runtime_bindings,
         GpuDispatchIntent::direct(dispatch_size),
     )
-    .map_err(|error| gpu_authoring("compute operation", error))?;
+    .map_err(|error| gpu_work_operation("compute operation", error))?;
 
     let mut camera_parameter_upload = None;
     let reconstruction_compute = if let Some(history) = temporal_history.as_ref() {
@@ -2074,8 +2124,10 @@ fn lower_output(
                 ..
             } => {
                 let source = resources.reconstruction_source()?;
-                let pipeline = GpuComputePipelineDescriptor::ordinary(source, "main")
-                    .map_err(|error| gpu_authoring("temporal reconstruction pipeline", error))?;
+                let pipeline =
+                    GpuComputePipelineDescriptor::ordinary(source, "main").map_err(|error| {
+                        gpu_program_contract("temporal reconstruction pipeline", error)
+                    })?;
                 let runtime_bindings = pipeline
                     .runtime_bindings([
                         GpuRuntimeBindingValue::whole_buffer(0, 0, &input),
@@ -2085,7 +2137,7 @@ fn lower_output(
                         GpuRuntimeBindingValue::whole_buffer(0, 4, sample_counts),
                     ])
                     .map_err(|error| {
-                        gpu_authoring("temporal reconstruction runtime bindings", error)
+                        gpu_program_contract("temporal reconstruction runtime bindings", error)
                     })?;
                 let dispatch_size = deterministic_dispatch_size(
                     packed.sample_count,
@@ -2101,7 +2153,9 @@ fn lower_output(
                         runtime_bindings,
                         GpuDispatchIntent::direct(dispatch_size),
                     )
-                    .map_err(|error| gpu_authoring("temporal reconstruction operation", error))?,
+                    .map_err(|error| {
+                        gpu_work_operation("temporal reconstruction operation", error)
+                    })?,
                 )
             }
             DeterministicTemporalHistoryUseStorage::Camera {
@@ -2156,7 +2210,7 @@ fn lower_output(
                     &parameter_words,
                 )
                 .map_err(|error| {
-                    gpu_authoring("camera-reprojection parameter preparation", error)
+                    gpu_transfer_preparation("camera-reprojection parameter preparation", error)
                 })?;
                 let parameters = resources.buffer(
                     scope,
@@ -2171,17 +2225,17 @@ fn lower_output(
                         GpuBufferInitialization::Uninitialized,
                     )
                     .map_err(|error| {
-                        gpu_authoring("camera-reprojection parameter descriptor", error)
+                        gpu_resource_descriptor("camera-reprojection parameter descriptor", error)
                     })?,
                 )?;
                 camera_parameter_upload = Some(
                     GpuUploadOperation::whole_buffer(&parameters, payload).map_err(|error| {
-                        gpu_authoring("camera-reprojection parameter upload", error)
+                        gpu_work_operation("camera-reprojection parameter upload", error)
                     })?,
                 );
                 let source = resources.camera_reprojection_source()?;
                 let pipeline = GpuComputePipelineDescriptor::ordinary(source, "main")
-                    .map_err(|error| gpu_authoring("camera-reprojection pipeline", error))?;
+                    .map_err(|error| gpu_program_contract("camera-reprojection pipeline", error))?;
                 let runtime_bindings = pipeline
                     .runtime_bindings([
                         GpuRuntimeBindingValue::whole_buffer(0, 0, &input),
@@ -2194,7 +2248,7 @@ fn lower_output(
                         GpuRuntimeBindingValue::whole_buffer(0, 7, &parameters),
                     ])
                     .map_err(|error| {
-                        gpu_authoring("camera-reprojection runtime bindings", error)
+                        gpu_program_contract("camera-reprojection runtime bindings", error)
                     })?;
                 let dispatch_size = deterministic_dispatch_size(
                     packed.sample_count,
@@ -2210,7 +2264,7 @@ fn lower_output(
                         runtime_bindings,
                         GpuDispatchIntent::direct(dispatch_size),
                     )
-                    .map_err(|error| gpu_authoring("camera-reprojection operation", error))?,
+                    .map_err(|error| gpu_work_operation("camera-reprojection operation", error))?,
                 )
             }
         }
@@ -2223,12 +2277,12 @@ fn lower_output(
             RenderOutputDestination::ScalarBuffer(destination) => {
                 GpuCopyOperation::buffer_to_buffer(
                     GpuBufferRegion::whole(&canonical_output)
-                        .map_err(|error| gpu_authoring("scalar source region", error))?,
+                        .map_err(|error| gpu_work_operation("scalar source region", error))?,
                     GpuBufferRegion::whole(destination)
-                        .map_err(|error| gpu_authoring("scalar destination region", error))?,
+                        .map_err(|error| gpu_work_operation("scalar destination region", error))?,
                 )
                 .map(|copy| (copy, None, None))
-                .map_err(|error| gpu_authoring("scalar destination copy", error))?
+                .map_err(|error| gpu_work_operation("scalar destination copy", error))?
             }
             RenderOutputDestination::SampleLatticeTexture(destination) => {
                 let (copy_source, row_bytes) = if let Some(history) = temporal_history.as_ref() {
@@ -2261,12 +2315,12 @@ fn lower_output(
                     (&canonical_output, row_bytes)
                 };
                 let source = GpuBufferTextureLayout::new(copy_source, 0, row_bytes, 0)
-                    .map_err(|error| gpu_authoring("lattice source layout", error))?;
+                    .map_err(|error| gpu_work_operation("lattice source layout", error))?;
                 let destination_region = GpuTextureCopyRegion::whole_base_mip(destination)
-                    .map_err(|error| gpu_authoring("lattice destination region", error))?;
+                    .map_err(|error| gpu_work_operation("lattice destination region", error))?;
                 let destination_copy =
                     GpuCopyOperation::buffer_to_texture(source, destination_region.clone())
-                        .map_err(|error| gpu_authoring("lattice destination copy", error))?;
+                        .map_err(|error| gpu_work_operation("lattice destination copy", error))?;
                 let composable = if matches!(intent, DeterministicObservationIntent::Ordinary)
                     && matches!(requested.spec().value(), RenderOutputValue::Radiance { .. })
                     && destination.descriptor().format() == GpuTextureFormat::R32Float
@@ -2276,7 +2330,7 @@ fn lower_output(
                         GpuExportKey::new(format!(
                             "runenrender.maintained.radiance.scope.{scope}.output.{output_index}"
                         ))
-                        .map_err(|error| gpu_authoring("radiance export key", error))?,
+                        .map_err(|error| gpu_resource_descriptor("radiance export key", error))?,
                         GpuResourceAccessIntent::Write,
                         GpuResourceProvenance::new(
                             destination.descriptor().common().label().clone(),
@@ -2288,9 +2342,11 @@ fn lower_output(
                         &GpuTextureAccessResource::Texture(destination.clone()),
                         [destination_region.subresources()],
                     )
-                    .map_err(|error| gpu_authoring("radiance output coverage", error))?;
-                    let output = GpuWorkOutput::new(relationship.clone(), coverage)
-                        .map_err(|error| gpu_authoring("radiance output relationship", error))?;
+                    .map_err(|error| gpu_work_authoring("radiance output coverage", error))?;
+                    let output =
+                        GpuWorkOutput::new(relationship.clone(), coverage).map_err(|error| {
+                            gpu_work_authoring("radiance output relationship", error)
+                        })?;
                     Some((
                         output,
                         PreparedDeterministicRadianceOutput {
@@ -2397,22 +2453,22 @@ fn lower_output(
     let verification = if intent.requires_private_readback() {
         let canonical_readback = GpuReadbackOperation::ordinary(
             GpuBufferRegion::whole(&canonical_output)
-                .map_err(|error| gpu_authoring("canonical-output readback region", error))?
+                .map_err(|error| gpu_work_operation("canonical-output readback region", error))?
                 .into(),
         )
-        .map_err(|error| gpu_authoring("canonical-output readback", error))?;
+        .map_err(|error| gpu_readback_request("canonical-output readback", error))?;
         let definedness_readback = GpuReadbackOperation::ordinary(
             GpuBufferRegion::whole(&definedness)
-                .map_err(|error| gpu_authoring("definedness readback region", error))?
+                .map_err(|error| gpu_work_operation("definedness readback region", error))?
                 .into(),
         )
-        .map_err(|error| gpu_authoring("definedness readback", error))?;
+        .map_err(|error| gpu_readback_request("definedness readback", error))?;
         let status_readback = GpuReadbackOperation::ordinary(
             GpuBufferRegion::whole(&status)
-                .map_err(|error| gpu_authoring("status readback region", error))?
+                .map_err(|error| gpu_work_operation("status readback region", error))?
                 .into(),
         )
-        .map_err(|error| gpu_authoring("status readback", error))?;
+        .map_err(|error| gpu_readback_request("status readback", error))?;
         Some(VerificationReadbackOperations {
             correlation: DeterministicVerificationReadbacks {
                 output_index,
@@ -2479,7 +2535,7 @@ fn lower_output(
             Ok(())
         },
     )
-    .map_err(|error| gpu_authoring("work-fragment construction", error))?;
+    .map_err(|error| gpu_work_authoring("work-fragment construction", error))?;
 
     Ok(LoweredDeterministicOutput {
         fragment,
@@ -2509,7 +2565,7 @@ fn prepare_requested_coverage(
         "current requested coverage input",
         &packed.input_words,
     )
-    .map_err(|error| gpu_authoring("coverage input preparation", error))?;
+    .map_err(|error| gpu_transfer_preparation("coverage input preparation", error))?;
     let state_bytes = u64::from(packed.sample_count)
         .checked_mul(WORD_BYTES)
         .ok_or(RenderDeterministicLoweringError::SizeOverflow {
@@ -2548,29 +2604,29 @@ fn prepare_requested_coverage(
                     ],
                     GpuBufferInitialization::Uninitialized,
                 )
-                .map_err(|error| gpu_authoring("coverage buffer descriptor", error))?,
+                .map_err(|error| gpu_resource_descriptor("coverage buffer descriptor", error))?,
             )
         })
         .collect::<Result<Vec<_>, _>>()?;
     let input_upload = GpuUploadOperation::whole_buffer(&handles[0], payload)
-        .map_err(|error| gpu_authoring("coverage input upload", error))?;
+        .map_err(|error| gpu_work_operation("coverage input upload", error))?;
     let clears = handles[1..]
         .iter()
         .map(|handle| {
             GpuClearOperation::buffer_zero(
                 GpuBufferRegion::whole(handle)
-                    .map_err(|error| gpu_authoring("coverage clear region", error))?,
+                    .map_err(|error| gpu_work_operation("coverage clear region", error))?,
             )
-            .map_err(|error| gpu_authoring("coverage clear", error))
+            .map_err(|error| gpu_work_operation("coverage clear", error))
         })
         .collect::<Result<Vec<_>, _>>()?;
     let pipeline = GpuComputePipelineDescriptor::ordinary(resources.maintained_source()?, "main")
-        .map_err(|error| gpu_authoring("coverage pipeline", error))?;
+        .map_err(|error| gpu_program_contract("coverage pipeline", error))?;
     let bindings = pipeline
         .runtime_bindings(handles.iter().enumerate().map(|(binding, handle)| {
             GpuRuntimeBindingValue::whole_buffer(0, binding as u32, handle)
         }))
-        .map_err(|error| gpu_authoring("coverage runtime bindings", error))?;
+        .map_err(|error| gpu_program_contract("coverage runtime bindings", error))?;
     let dispatch = deterministic_dispatch_size(
         packed.sample_count,
         context
@@ -2580,7 +2636,7 @@ fn prepare_requested_coverage(
             .max_compute_workgroups_per_dimension(),
     )?;
     let compute = GpuComputeOperation::new(pipeline, bindings, GpuDispatchIntent::direct(dispatch))
-        .map_err(|error| gpu_authoring("coverage compute", error))?;
+        .map_err(|error| gpu_work_operation("coverage compute", error))?;
     Ok(PreparedRequestedCoverage {
         input_upload,
         clears,
@@ -3314,14 +3370,83 @@ fn deterministic_dispatch_size(
     ))
 }
 
-fn gpu_authoring(
-    stage: &'static str,
-    error: impl fmt::Display,
-) -> RenderDeterministicLoweringError {
-    RenderDeterministicLoweringError::RunenGpuAuthoring {
+fn gpu_access(stage: &'static str, source: GpuAccessError) -> RenderDeterministicLoweringError {
+    RenderDeterministicLoweringError::RunenGpuPreparation(RenderRunenGpuPreparationError::Access {
         stage,
-        detail: error.to_string(),
-    }
+        source,
+    })
+}
+
+fn gpu_program_source(
+    stage: &'static str,
+    source: GpuProgramSourceError,
+) -> RenderDeterministicLoweringError {
+    RenderDeterministicLoweringError::RunenGpuPreparation(
+        RenderRunenGpuPreparationError::ProgramSource { stage, source },
+    )
+}
+
+fn gpu_resource_descriptor(
+    stage: &'static str,
+    source: GpuResourceDescriptorError,
+) -> RenderDeterministicLoweringError {
+    RenderDeterministicLoweringError::RunenGpuPreparation(
+        RenderRunenGpuPreparationError::ResourceDescriptor { stage, source },
+    )
+}
+
+fn gpu_resource_allocation(
+    stage: &'static str,
+    source: GpuWorkResourceIdAllocationError,
+) -> RenderDeterministicLoweringError {
+    RenderDeterministicLoweringError::RunenGpuPreparation(
+        RenderRunenGpuPreparationError::ResourceAllocation { stage, source },
+    )
+}
+
+fn gpu_transfer_preparation(
+    stage: &'static str,
+    source: GpuOrdinaryTransferPreparationError,
+) -> RenderDeterministicLoweringError {
+    RenderDeterministicLoweringError::RunenGpuPreparation(
+        RenderRunenGpuPreparationError::TransferPreparation { stage, source },
+    )
+}
+
+fn gpu_program_contract(
+    stage: &'static str,
+    source: GpuProgramContractError,
+) -> RenderDeterministicLoweringError {
+    RenderDeterministicLoweringError::RunenGpuPreparation(
+        RenderRunenGpuPreparationError::ProgramContract { stage, source },
+    )
+}
+
+fn gpu_work_operation(
+    stage: &'static str,
+    source: GpuWorkOperationError,
+) -> RenderDeterministicLoweringError {
+    RenderDeterministicLoweringError::RunenGpuPreparation(
+        RenderRunenGpuPreparationError::WorkOperation { stage, source },
+    )
+}
+
+fn gpu_readback_request(
+    stage: &'static str,
+    source: GpuReadbackRequestError,
+) -> RenderDeterministicLoweringError {
+    RenderDeterministicLoweringError::RunenGpuPreparation(
+        RenderRunenGpuPreparationError::ReadbackRequest { stage, source },
+    )
+}
+
+fn gpu_work_authoring(
+    stage: &'static str,
+    source: GpuWorkAuthoringError,
+) -> RenderDeterministicLoweringError {
+    RenderDeterministicLoweringError::RunenGpuPreparation(
+        RenderRunenGpuPreparationError::WorkAuthoring { stage, source },
+    )
 }
 
 #[cfg(test)]
@@ -4671,5 +4796,181 @@ mod tests {
                 capacity_workgroups: 64,
             }
         );
+    }
+    #[test]
+    fn every_runengpu_preparation_owner_remains_a_typed_source() {
+        fn assert_owner<Owner>(
+            error: RenderRunenGpuPreparationError,
+            expected: &Owner,
+            expected_stage: &'static str,
+        ) where
+            Owner: Error + PartialEq + fmt::Debug + 'static,
+        {
+            assert_eq!(error.stage(), expected_stage);
+            let source = Error::source(&error).expect("typed RunenGPU owner source");
+            assert_eq!(source.downcast_ref::<Owner>(), Some(expected));
+        }
+
+        let mut resources = GpuWorkResourceIdAllocator::new();
+        let buffer = resources
+            .allocate_buffer_handle(
+                GpuBufferDescriptor::ordinary_owned(
+                    "typed error owner proof",
+                    GpuResourceLifetime::Transient,
+                    GpuReconstruction::SourceBacked,
+                    16,
+                    [GpuBufferUsage::Storage],
+                    GpuBufferInitialization::Uninitialized,
+                )
+                .expect("proof buffer descriptor"),
+            )
+            .expect("proof buffer allocation");
+
+        let access = GpuBufferRange::new(&buffer, 0, 0)
+            .expect_err("zero range must fail in RunenGPU access authority");
+        assert_owner(
+            RenderRunenGpuPreparationError::Access {
+                stage: "access",
+                source: access.clone(),
+            },
+            &access,
+            "access",
+        );
+
+        let program_source =
+            admit_static_wgsl_sources([("", 1, "@compute @workgroup_size(1) fn main() {}")])
+                .expect_err("empty source key must fail in RunenGPU source authority");
+        assert_owner(
+            RenderRunenGpuPreparationError::ProgramSource {
+                stage: "program-source",
+                source: program_source.clone(),
+            },
+            &program_source,
+            "program-source",
+        );
+
+        let resource_descriptor = GpuBufferDescriptor::ordinary_owned(
+            "",
+            GpuResourceLifetime::Transient,
+            GpuReconstruction::SourceBacked,
+            16,
+            [GpuBufferUsage::Storage],
+            GpuBufferInitialization::Uninitialized,
+        )
+        .expect_err("empty label must fail in RunenGPU descriptor authority");
+        assert_owner(
+            RenderRunenGpuPreparationError::ResourceDescriptor {
+                stage: "resource-descriptor",
+                source: resource_descriptor.clone(),
+            },
+            &resource_descriptor,
+            "resource-descriptor",
+        );
+
+        let resource_allocation = GpuWorkResourceIdAllocationError::Exhausted;
+        assert_owner(
+            RenderRunenGpuPreparationError::ResourceAllocation {
+                stage: "resource-allocation",
+                source: resource_allocation,
+            },
+            &resource_allocation,
+            "resource-allocation",
+        );
+
+        let transfer_preparation =
+            PreparedGpuData::<TransferData>::ordinary_pod_transfer("", &[1_u32])
+                .expect_err("empty label must fail in RunenGPU transfer preparation");
+        assert_owner(
+            RenderRunenGpuPreparationError::TransferPreparation {
+                stage: "transfer-preparation",
+                source: transfer_preparation.clone(),
+            },
+            &transfer_preparation,
+            "transfer-preparation",
+        );
+
+        let [source] = admit_static_wgsl_sources([(
+            "typed-error-program",
+            1,
+            "@compute @workgroup_size(1) fn main() {}",
+        )])
+        .expect("proof program source admission");
+        let program_contract = GpuComputePipelineDescriptor::ordinary(source, "")
+            .expect_err("empty entry point must fail in RunenGPU program authority");
+        assert_owner(
+            RenderRunenGpuPreparationError::ProgramContract {
+                stage: "program-contract",
+                source: program_contract.clone(),
+            },
+            &program_contract,
+            "program-contract",
+        );
+
+        let region = GpuBufferRegion::whole(&buffer).expect("whole proof buffer region");
+        let work_operation = GpuClearOperation::buffer_zero(region.clone())
+            .expect_err("buffer without copy-destination usage must reject clear");
+        assert_owner(
+            RenderRunenGpuPreparationError::WorkOperation {
+                stage: "work-operation",
+                source: work_operation.clone(),
+            },
+            &work_operation,
+            "work-operation",
+        );
+
+        let readback_request = GpuReadbackOperation::ordinary(region.into())
+            .expect_err("buffer without copy-source usage must reject readback");
+        assert_owner(
+            RenderRunenGpuPreparationError::ReadbackRequest {
+                stage: "readback-request",
+                source: readback_request.clone(),
+            },
+            &readback_request,
+            "readback-request",
+        );
+
+        let work_authoring = GpuWorkAuthoringError::from(access);
+        assert_owner(
+            RenderRunenGpuPreparationError::WorkAuthoring {
+                stage: "work-authoring",
+                source: work_authoring.clone(),
+            },
+            &work_authoring,
+            "work-authoring",
+        );
+    }
+
+    #[test]
+    fn runengpu_preparation_preserves_typed_source_chain() {
+        let source =
+            admit_static_wgsl_sources([("", 1, "@compute @workgroup_size(1) fn main() {}")])
+                .expect_err("empty RunenGPU source key must be rejected");
+        let error = gpu_program_source("typed source proof", source.clone());
+
+        let preparation =
+            Error::source(&error).expect("lowering must expose RunenGPU preparation source");
+        let owner = preparation
+            .source()
+            .expect("RunenGPU preparation must expose the exact owner error");
+        assert_eq!(owner.downcast_ref::<GpuProgramSourceError>(), Some(&source));
+    }
+
+    #[test]
+    fn renderer_local_lowering_does_not_claim_a_runengpu_source() {
+        let error = RenderDeterministicLoweringError::DispatchCapacityExceeded {
+            sample_count: 65,
+            workgroup_size: 64,
+            required_workgroups: 2,
+            max_workgroups_per_dimension: 1,
+            capacity_workgroups: 1,
+        };
+        assert!(Error::source(&error).is_none());
+    }
+
+    #[test]
+    fn maintained_execution_has_no_string_flattening_gpu_authoring_bucket() {
+        let source = include_str!("deterministic_execution.rs");
+        assert!(!source.contains(concat!("gpu_", "authoring(")));
+        assert!(!source.contains(concat!("RunenGpu", "Authoring")));
     }
 }
