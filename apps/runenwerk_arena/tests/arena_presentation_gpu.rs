@@ -6,6 +6,7 @@ use engine::plugins::render::inspect::{
     RenderPassProvenanceState,
 };
 use engine::plugins::render::{AppRenderExt, Gfx};
+use engine::plugins::AppFixedStepExt;
 use engine::runtime::{
     NativeWindowId, PrimaryPresentationMetricsResource, WindowStateRegistryResource,
 };
