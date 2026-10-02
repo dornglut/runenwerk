@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
+use engine::plugins::AppFixedStepExt;
 use engine::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryResource};
 use engine::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, RenderCaptureSelector, RenderCapturedTextureState,
     RenderPassProvenanceState,
 };
 use engine::plugins::render::{AppRenderExt, Gfx};
-use engine::plugins::AppFixedStepExt;
 use engine::runtime::{
     NativeWindowId, PrimaryPresentationMetricsResource, WindowStateRegistryResource,
 };
