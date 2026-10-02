@@ -93,8 +93,7 @@ fn deterministic_frame_contribution_carries_surface_and_field_inputs_into_ordina
     .with_semantic_input_requirement(RenderFieldSemanticInputRequirement::current());
     let field_record = RenderRepresentationRecord::new(
         field_representation,
-        RenderSpatialCoverage::axis_aligned_bounds([-1.0; 3], [1.0; 3])
-            .expect("field coverage"),
+        RenderSpatialCoverage::axis_aligned_bounds([-1.0; 3], [1.0; 3]).expect("field coverage"),
         RenderTemporalSupport::unbounded(),
         RenderRefinementEvidence::none(),
         None,
@@ -141,9 +140,8 @@ fn deterministic_frame_contribution_carries_surface_and_field_inputs_into_ordina
         .commit(attach_surface)
         .expect("attach surface participation");
 
-    let shutter = RenderTimeInterval::instant(
-        RenderTimePoint::from_seconds(0.0).expect("finite test time"),
-    );
+    let shutter =
+        RenderTimeInterval::instant(RenderTimePoint::from_seconds(0.0).expect("finite test time"));
     let observation = RenderObservationSpec::Perspective(
         RenderPerspectiveObservation::new(
             RenderAffineTransform3::identity(),
@@ -171,12 +169,8 @@ fn deterministic_frame_contribution_carries_surface_and_field_inputs_into_ordina
 
     let surface_binding = RenderSurfaceSemanticInputBinding::new(
         surface_representation,
-        RenderSurfaceSemanticInput::sphere(
-            [0.0; 3],
-            0.5,
-            RenderTemporalSupport::unbounded(),
-        )
-        .expect("surface sphere input"),
+        RenderSurfaceSemanticInput::sphere([0.0; 3], 0.5, RenderTemporalSupport::unbounded())
+            .expect("surface sphere input"),
     );
     let field_input = RenderFieldSemanticInput::dense(
         [-1.0; 3],
