@@ -106,6 +106,13 @@ impl ArenaPresentationState {
 #[derive(Debug, Clone, Copy, runen_ecs::Resource)]
 struct ArenaPresentationFlowId(RenderFlowId);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, runen_ecs::SystemSet)]
+enum ArenaPresentationSet {
+    Derive,
+    ProductSelection,
+    FramePublication,
+}
+
 #[derive(Debug, runen_ecs::Resource)]
 pub struct ArenaPresentationSceneResource {
     store: RenderSceneStore,
@@ -193,18 +200,23 @@ impl Plugin for ArenaPresentationPlugin {
 
         app.add_systems(
             RenderPrepare,
-            derive_arena_presentation_state_system.before(RenderRuntimeSet::FramePrepare),
+            derive_arena_presentation_state_system
+                .in_set(ArenaPresentationSet::Derive)
+                .before(RenderRuntimeSet::FramePrepare),
         );
         app.add_systems(
             RenderPrepare,
             publish_arena_product_selection_system
                 .on_invoker_thread()
+                .in_set(ArenaPresentationSet::ProductSelection)
                 .before(WorldRuntimeSet::RenderSdfBridge),
         );
         app.add_systems(
             RenderPrepare,
             publish_arena_frame_system
                 .on_invoker_thread()
+                .in_set(ArenaPresentationSet::FramePublication)
+                .after(ArenaPresentationSet::Derive)
                 .after(WorldRuntimeSet::RenderSdfFieldProjection)
                 .before(RenderRuntimeSet::FramePrepare),
         );
@@ -337,16 +349,27 @@ fn publish_arena_frame_system(mut world: WorldMut) -> Result<()> {
         .resource::<ArenaPresentationState>()
         .context("ArenaPresentation state must exist")?
         .snapshot();
+    let descriptor_generation = world
+        .resource::<WorldRuntimeSdfProductCatalogResource>()
+        .context("ArenaPresentation requires the World SDF product catalog")?
+        .product(ARENA_FIELD_PRODUCT_ID)
+        .map(|descriptor| descriptor.product_core().lineage.generation);
     let prepared_arena = world
         .resource::<PreparedWorldSdfFieldSourceResource>()
         .context("ArenaPresentation requires prepared World SDF field sources")?
         .source(ARENA_FIELD_PRODUCT_ID)
         .cloned();
 
-    let (Some(presentation), Some(prepared_arena)) = (presentation, prepared_arena) else {
+    let (Some(presentation), Some(descriptor_generation), Some(prepared_arena)) =
+        (presentation, descriptor_generation, prepared_arena)
+    else {
         withdraw_arena_frame_publication(&mut world)?;
         return Ok(());
     };
+    if prepared_arena.product_generation() != descriptor_generation {
+        withdraw_arena_frame_publication(&mut world)?;
+        return Ok(());
+    }
 
     let movement = *world
         .resource::<ArenaMovementConfig>()
@@ -732,7 +755,6 @@ fn top_down_camera_transform(position: [f64; 3]) -> Result<RenderAffineTransform
 mod tests {
     use super::*;
     use engine::plugins::render::field_input::RenderFieldSemanticInput;
-    use world_sdf::{ChunkId, ChunkRevision, WorldSdfPayloadRef};
 
     fn history(previous: [f32; 3], current: [f32; 3]) -> PlayerPhysicalHistory {
         let mut previous_state = physics::CharacterPhysicalState::default();
@@ -755,14 +777,11 @@ mod tests {
             RenderTemporalSupport::unbounded(),
         )
         .expect("test field");
+        let payload = crate::arena::build_arena_chunk_payload();
         PreparedWorldSdfFieldSource::new(
             ARENA_FIELD_PRODUCT_ID,
             7,
-            WorldSdfPayloadRef {
-                chunk_id: ChunkId::new(0, 0, 0, 0),
-                chunk_revision: ChunkRevision::default(),
-                checksum: 1,
-            },
+            crate::arena::arena_metric_payload_ref(&payload).payload_ref,
             input,
         )
     }
