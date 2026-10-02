@@ -6,18 +6,18 @@ use engine::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, RenderCaptureSelector, RenderCapturedTextureState,
     RenderPassProvenanceState,
 };
-use engine::plugins::render::{AppRenderExt, Gfx};
+use engine::plugins::render::{AppRenderExt, Gfx, RenderPlugin};
 use engine::runtime::{
     NativeWindowId, PrimaryPresentationMetricsResource, WindowStateRegistryResource,
 };
-use runenwerk_arena::build_game_app;
+use runenwerk_arena::{ArenaPresentationPlugin, build_game_app};
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
 use winit::event_loop::{ActiveEventLoop, EventLoop};
-#[cfg(target_os = "linux")]
-use winit::platform::x11::EventLoopBuilderExtX11;
 #[cfg(target_os = "windows")]
 use winit::platform::windows::EventLoopBuilderExtWindows;
+#[cfg(target_os = "linux")]
+use winit::platform::x11::EventLoopBuilderExtX11;
 use winit::window::Window;
 
 const ARENA_DISPLAY_PASS_ID: &str = "runenwerk.arena.radiance.display";
@@ -43,7 +43,12 @@ fn arena_presentation_gpu_smoke() {
     let size_px = (size.width.max(1), size.height.max(1));
     let scale_factor = window.scale_factor();
 
-    let mut app = build_game_app(false);
+    // Keep the test harness headless so deterministic fixed-step/frame advancement remains
+    // available, while exercising the exact Render + ArenaPresentation composition against a
+    // real window-backed primary surface. Separate composition tests prove build_game_app(false)
+    // selects these same plugins only for the maintained native product path.
+    let mut app = build_game_app(true);
+    app.add_plugins((RenderPlugin, ArenaPresentationPlugin));
     app.world_mut().insert_resource(gfx);
     app.world_mut()
         .insert_resource(PrimaryPresentationMetricsResource::new(
@@ -249,7 +254,9 @@ fn create_smoke_event_loop() -> EventLoop<()> {
     {
         let mut builder = EventLoop::builder();
         builder.with_x11().with_any_thread(true);
-        builder.build().expect("arena X11 event loop should initialize")
+        builder
+            .build()
+            .expect("arena X11 event loop should initialize")
     }
 
     #[cfg(target_os = "windows")]
