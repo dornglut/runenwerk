@@ -6,6 +6,7 @@ publish = false
 license.workspace = true
 
 [dependencies]
+runen-render.workspace = true
 anyhow = "1.0.100"
 engine = { path = "../../engine" }
 physics.workspace = true

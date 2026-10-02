@@ -70,21 +70,19 @@ mod contribution_deferral_tests {
         RenderComposedFrameGpuTimingEvidence, RenderFrameHistoryState, RenderFrameObservationKey,
         RenderFrameObservationPolicyResource, RenderGpuTimingCapability, RenderPassTimingEvidence,
     };
-    use crate::plugins::render::request::{
-        RenderObservationSpec, RenderOutputSpec, RenderOutputValue, RenderProbeObservation,
-        RenderRadiometricRepresentation, RenderRequest, RenderRequestedOutput,
-        RenderResultTopology, RenderSamplingSupport, RenderSemanticTolerance,
-    };
-    use crate::plugins::render::scene::RenderSceneStore;
-    use crate::plugins::render::space_time::{
-        RenderAffineTransform3, RenderTimeInterval, RenderTimePoint,
-    };
     use crate::plugins::render::{
         GfxFrameTimings, PreparedFrameContext, PreparedFrameContributions, PreparedRenderFrame,
         PreparedShaderSnapshot, PreparedSurfaceInfo, PreparedViewFrame,
         RenderDeterministicFrameContribution, RenderDynamicTextureTargetKey, RenderFrameProducerId,
     };
     use crate::runtime::NativeWindowId;
+    use runen_render::request::{
+        RenderObservationSpec, RenderOutputSpec, RenderOutputValue, RenderProbeObservation,
+        RenderRadiometricRepresentation, RenderRequest, RenderRequestedOutput,
+        RenderResultTopology, RenderSamplingSupport, RenderSemanticTolerance,
+    };
+    use runen_render::scene::RenderSceneStore;
+    use runen_render::space_time::{RenderAffineTransform3, RenderTimeInterval, RenderTimePoint};
     use std::collections::BTreeMap;
     use ui_render_data::ViewportSurfaceBindingRegistry;
 

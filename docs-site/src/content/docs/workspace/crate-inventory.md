@@ -133,7 +133,7 @@ Concrete QUIC realization is consumed from external `runen-net-quic` where requi
 | `runenwerk_editor` | `apps/runenwerk_editor` | app | Runnable editor app and authoring workflows. |
 | `runenwerk_draw` | `apps/runenwerk_draw` | app | Focused drawing app shell and shared engine/UI/render runtime integration. |
 | `runenwerk_runtime_preview` | `apps/runenwerk_runtime_preview` | app | External runtime-preview child process and preview/play app shell. |
-| `runenwerk_render_lab` | `apps/runenwerk_render_lab` | app | Headless deterministic render artifact and evidence producer for accepted RunenRender verification scenarios. |
+| `runenwerk_render_lab` | `apps/runenwerk_render_lab` | app | Headless and native product render artifacts and integration evidence through standalone RunenRender. |
 | `runenwerk_arena` | `apps/runenwerk_arena` | app | Maintained small-game application and deterministic tick-command authority spine. |
 | `native_tablet_input` | `adapters/native_tablet_input` | adapter/tool | Native tablet packet normalization for platform-neutral UI stylus events. |
 
@@ -144,6 +144,7 @@ Exact dependency revisions are executable truth in root `Cargo.toml` / `Cargo.lo
 - `runen-net` and `runen-net-quic` — standalone RunenNet authority/transport realization consumed by Runenwerk networking integration.
 - `runen-spatial` — standalone reusable spatial identity/addressing mechanics.
 - `runen-gpu` — standalone GPU execution authority consumed by Runenwerk/RunenRender integration.
+- `runen-render` — standalone reusable renderer semantic and conformance authority consumed directly by Engine, Render Lab, and Arena.
 - `runen-ecs` — standalone ECS authority consumed by Runenwerk through an exact accepted Git revision; implementation and downstream conformance live in `dornglut/runen-ecs`.
 
 RunenECS is no longer a local workspace member. Runenwerk retains only

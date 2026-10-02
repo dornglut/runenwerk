@@ -74,10 +74,10 @@ public boundary before transfer. They are predecessor evidence now, not active
 architecture. Their proof taxonomy is retained noncanonically in
 [the historical RunenGPU proof report](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/reports/design/runengpu-phase-requirements-proof-matrix.md).
 
-RunenRender remains Runenwerk-owned until its separately accepted external cutover. Its
-current semantic architecture is owned by the
-[RunenRender architecture design](../../design/accepted/runenrender-decomposition-design.md)
-and its active execution plan.
+Standalone RunenRender owns reusable renderer semantics and conformance. Runenwerk
+consumes its public contract through product integration. Its semantic architecture is
+specified by the accepted
+[RunenRender architecture design](../../design/accepted/runenrender-decomposition-design.md).
 
 ## Why the split exists
 

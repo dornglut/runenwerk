@@ -17,12 +17,10 @@ use super::super::build::integration::{
 use crate::plugins::render::features::world::{
     RenderSdfChunkResidencyEntry, RenderSdfResidencyResource, RenderSdfResidencyStatus,
 };
-use crate::plugins::render::field_input::{
-    RenderFieldSemanticInput, RenderFieldSemanticInputError,
-};
 use crate::plugins::render::frame::PreparedRenderProductSelectionResource;
-use crate::plugins::render::space_time::RenderTemporalSupport;
 use crate::runtime::WorldMut;
+use runen_render::field_input::{RenderFieldSemanticInput, RenderFieldSemanticInputError};
+use runen_render::space_time::RenderTemporalSupport;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreparedWorldSdfFieldSource {

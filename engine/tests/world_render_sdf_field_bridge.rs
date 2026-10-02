@@ -1,7 +1,6 @@
 use engine::plugins::render::features::world::{
     RenderSdfResidencyResource, RenderSdfResidencyStatus,
 };
-use engine::plugins::render::field_input::RenderFieldSemanticInput;
 use engine::plugins::render::frame::PreparedRenderProductSelectionResource;
 use engine::plugins::render::{RenderFrameProducerId, RenderPlugin};
 use engine::plugins::world::WorldPlugin;
@@ -21,6 +20,7 @@ use product::{
     ProductIdentity, ProductQueryPolicy, ProductResidency, RenderProductSelection,
     RenderResidencyRequest, RenderSelectedProduct,
 };
+use runen_render::field_input::RenderFieldSemanticInput;
 use runen_spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, WorldId};
 use world_ops::{ChunkGeneration, ChunkRevision};
 use world_sdf::{
@@ -329,7 +329,7 @@ fn selection_removal_removes_only_world_owned_projection() {
         [2, 2, 2],
         vec![1.0; 8],
         0.0,
-        engine::plugins::render::space_time::RenderTemporalSupport::unbounded(),
+        runen_render::space_time::RenderTemporalSupport::unbounded(),
     )
     .expect("unrelated field input");
     app.world_mut()
@@ -458,7 +458,7 @@ fn source_generation_replacement_updates_only_that_projection() {
         [2, 2, 2],
         vec![1.0; 8],
         0.0,
-        engine::plugins::render::space_time::RenderTemporalSupport::unbounded(),
+        runen_render::space_time::RenderTemporalSupport::unbounded(),
     )
     .expect("unrelated field input");
     app.world_mut()
@@ -520,7 +520,7 @@ fn descriptor_store_mismatch_removes_world_projection_without_unrelated_eviction
         [2, 2, 2],
         vec![1.0; 8],
         0.0,
-        engine::plugins::render::space_time::RenderTemporalSupport::unbounded(),
+        runen_render::space_time::RenderTemporalSupport::unbounded(),
     )
     .expect("unrelated field input");
     app.world_mut()

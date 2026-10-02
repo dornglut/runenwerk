@@ -34,9 +34,9 @@ RunenUI       dornglut/runen-ui          existing workspace; current packages in
 Historical `Crystonix/*` paths remain provenance only; active repository identity uses
 the `dornglut/*` namespace.
 
-RunenSDF, RunenECS, RunenGPU, and RunenUI have standalone repository authority.
-RunenRender remains governed by its accepted Runenwerk-local boundary and current
-cutover state. This ADR owns the durable dependency and ownership laws, not a
+RunenSDF, RunenECS, RunenGPU, RunenRender, and RunenUI have standalone repository authority.
+Runenwerk consumes the accepted RunenRender public API directly and retains product
+and integration ownership. This ADR owns the durable dependency and ownership laws, not a
 duplicate copy of any standalone framework's semantics or live work status.
 
 Framework repositories must not depend on Runenwerk. Integration-specific translation,
@@ -139,8 +139,9 @@ active G-phase semantic designs as current framework authority.
 
 ### RunenRender
 
-RunenRender remains Runenwerk-owned semantic-rendering authority until its separately
-accepted external cutover. It depends only on public RunenGPU contracts and must not
+Standalone RunenRender owns reusable semantic rendering and conformance. Runenwerk
+consumes its accepted public contract through explicit product adapters and frame
+integration. RunenRender depends only on public RunenGPU contracts and must not
 reintroduce direct/private WGPU ownership or duplicate RunenGPU semantics.
 
 ### RunenUI

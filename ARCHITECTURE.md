@@ -20,16 +20,17 @@ standalone framework public contracts
 
 Runenwerk retains application lifecycle, windows/event-loop policy, cross-framework adapters, editor/runtime integration, product policy, diagnostics presentation, and applications. Cross-framework meaning is translated explicitly rather than by reaching into framework internals.
 
-The render plugin remains Runenwerk-owned integration until the separately bounded RunenRender extraction. It consumes RunenGPU only through the external public API; the accepted direct dependency direction is `RunenRender -> RunenGPU`.
+The render plugin remains Runenwerk-owned product, frame, native-host, and render-flow integration. Reusable renderer semantics and conformance belong to standalone RunenRender, which consumes RunenGPU through its public API. Runenwerk consumes the accepted RunenRender public contract directly.
 
 ## Current source layout
 
-The standalone RunenECS and RunenGPU successors and their Runenwerk consumer cutovers are accepted. The workspace consumes `runen-ecs` and `runen-gpu` through exact accepted Git revisions; their implementations and framework conformance belong to `dornglut/runen-ecs` and `dornglut/runen-gpu` rather than to Runenwerk.
+The standalone RunenECS, RunenGPU, and RunenRender successors and their Runenwerk consumer cutovers are accepted. The workspace consumes them through exact accepted Git revisions; their implementations and framework conformance belong to their standalone repositories.
 
 ```text
 foundation -> domain -> engine/runtime -> apps/adapters/tools
                  |             |
                  |             +--> exact-SHA runen-ecs consumer
+                 |             +--> exact-SHA runen-render consumer
                  +----------------> exact-SHA runen-gpu consumer
 ```
 

@@ -62,10 +62,9 @@ Framework repositories do not depend on Runenwerk. A Runenwerk adapter may depen
 the public contracts it translates between, but it does not transfer semantic ownership
 back into the product repository.
 
-RunenRender remains Runenwerk-owned rendering integration until a separately accepted
-external cutover. While local, its rendering semantics remain distinct from RunenGPU
-execution semantics and it consumes RunenGPU through the accepted public API. The
-accepted direct dependency direction remains:
+Standalone RunenRender owns reusable rendering semantics and conformance. Runenwerk's
+render plugin owns product, frame, native-host, and render-flow integration and consumes
+RunenRender through its public API. The accepted framework dependency direction is:
 
 ```text
 RunenRender -> RunenGPU
@@ -223,5 +222,5 @@ contract. Add reusable meaning to the framework only under its own accepted auth
 add product translation or composition to Runenwerk.
 
 Cross-repository source movement follows Engineering ADR 0008 rather than a local
-Runenwerk cutover procedure. RunenRender extraction likewise requires separately
-accepted authority; this integration document does not activate or sequence that work.
+Runenwerk cutover procedure. The accepted RunenRender handoff and downstream
+retirement are owned by their repository-local issues and the Engineering RX initiative.
