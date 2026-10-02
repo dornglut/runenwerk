@@ -633,7 +633,7 @@ fn build_arena_frame_publication(
     let invocation = PreparedFlowInvocationRequest::new(
         format!("{ARENA_PRESENTATION_FLOW_ID}.main"),
         flow_id,
-        ARENA_PRESENTATION_VIEW_ID,
+        "main",
     )
     .bind_dynamic_texture_alias(ARENA_RADIANCE_ALIAS, target_key.clone())?;
 
@@ -789,13 +789,15 @@ mod tests {
     use engine::plugins::render::field_input::RenderFieldSemanticInput;
 
     fn history(previous: [f32; 3], current: [f32; 3]) -> PlayerPhysicalHistory {
-        let mut previous_state = physics::CharacterPhysicalState::default();
-        previous_state.position = previous;
-        let mut current_state = physics::CharacterPhysicalState::default();
-        current_state.position = current;
         PlayerPhysicalHistory {
-            previous: previous_state,
-            current: current_state,
+            previous: physics::CharacterPhysicalState {
+                position: previous,
+                ..Default::default()
+            },
+            current: physics::CharacterPhysicalState {
+                position: current,
+                ..Default::default()
+            },
         }
     }
 
@@ -982,6 +984,7 @@ mod tests {
             )
             .expect("arena frame publication");
 
+        assert_eq!(publication.invocation.view_id, "main");
         assert_eq!(publication.contribution.semantic_inputs.len(), 1);
         assert_eq!(publication.contribution.field_semantic_inputs.len(), 1);
         assert_eq!(
