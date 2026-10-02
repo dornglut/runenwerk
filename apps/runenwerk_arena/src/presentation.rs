@@ -57,7 +57,8 @@ use engine::prelude::{
     RenderPrepare, Res, ResMut, SimulationTick, SystemConfigExt, SystemMobilityExt, WorldMut,
 };
 use product::{
-    ProductResidency, RenderProductSelection, RenderResidencyRequest, RenderSelectedProduct,
+    ProductIdentity, ProductResidency, RenderProductSelection, RenderResidencyRequest,
+    RenderSelectedProduct,
 };
 use runen_gpu::GpuBindingKey;
 use world_sdf::FieldProductDescriptor;
@@ -277,7 +278,7 @@ fn derive_arena_presentation_state_system(
     fixed_config: Res<FixedTimeConfig>,
     fixed_state: Res<FixedTimeState>,
     tick: Res<SimulationTick>,
-    query: Query<(&ArenaPlayer, &PlayerPhysicalHistory)>,
+    mut query: Query<(&ArenaPlayer, &PlayerPhysicalHistory)>,
     mut presentation: ResMut<ArenaPresentationState>,
 ) {
     let Some(alpha) =
@@ -320,6 +321,15 @@ fn interpolate_position(history: PlayerPhysicalHistory, alpha: f32) -> [f32; 3] 
     })
 }
 
+fn arena_field_descriptor(
+    products: &WorldRuntimeSdfProductCatalogResource,
+) -> Option<&FieldProductDescriptor> {
+    products
+        .products()
+        .values()
+        .find(|descriptor| descriptor.product_id == ARENA_FIELD_PRODUCT_ID)
+}
+
 fn arena_product_selection(descriptor: &FieldProductDescriptor) -> RenderProductSelection {
     let core = descriptor.product_core();
     RenderProductSelection::new(ARENA_PRESENTATION_VIEW_ID)
@@ -345,9 +355,7 @@ fn publish_arena_product_selection_system(mut world: WorldMut) -> Result<()> {
         let products = world
             .resource::<WorldRuntimeSdfProductCatalogResource>()
             .context("ArenaPresentation requires the World SDF product catalog")?;
-        products
-            .product(ARENA_FIELD_PRODUCT_ID)
-            .map(arena_product_selection)
+        arena_field_descriptor(products).map(arena_product_selection)
     };
 
     let selections = world
@@ -371,24 +379,27 @@ fn publish_arena_frame_system(mut world: WorldMut) -> Result<()> {
         .resource::<ArenaPresentationState>()
         .context("ArenaPresentation state must exist")?
         .snapshot();
-    let descriptor_generation = world
-        .resource::<WorldRuntimeSdfProductCatalogResource>()
-        .context("ArenaPresentation requires the World SDF product catalog")?
-        .product(ARENA_FIELD_PRODUCT_ID)
-        .map(|descriptor| descriptor.product_core().lineage.generation);
-    let prepared_arena = world
-        .resource::<PreparedWorldSdfFieldSourceResource>()
-        .context("ArenaPresentation requires prepared World SDF field sources")?
-        .source(ARENA_FIELD_PRODUCT_ID)
-        .cloned();
+    let descriptor_core = {
+        let products = world
+            .resource::<WorldRuntimeSdfProductCatalogResource>()
+            .context("ArenaPresentation requires the World SDF product catalog")?;
+        arena_field_descriptor(products).map(FieldProductDescriptor::product_core)
+    };
+    let prepared_arena = descriptor_core.as_ref().and_then(|core| {
+        world
+            .resource::<PreparedWorldSdfFieldSourceResource>()
+            .ok()?
+            .source(core.identity)
+            .cloned()
+    });
 
-    let (Some(presentation), Some(descriptor_generation), Some(prepared_arena)) =
-        (presentation, descriptor_generation, prepared_arena)
+    let (Some(presentation), Some(descriptor_core), Some(prepared_arena)) =
+        (presentation, descriptor_core, prepared_arena)
     else {
         withdraw_arena_frame_publication(&mut world)?;
         return Ok(());
     };
-    if prepared_arena.product_generation() != descriptor_generation {
+    if prepared_arena.product_generation() != descriptor_core.lineage.generation {
         withdraw_arena_frame_publication(&mut world)?;
         return Ok(());
     }
@@ -417,6 +428,7 @@ fn publish_arena_frame_system(mut world: WorldMut) -> Result<()> {
             scene,
             presentation,
             &prepared_arena,
+            descriptor_core.identity,
             movement,
             extent,
             flow_id,
@@ -436,11 +448,12 @@ fn build_arena_frame_publication(
     scene: &mut ArenaPresentationSceneResource,
     presentation: ArenaPresentationSnapshot,
     prepared_arena: &PreparedWorldSdfFieldSource,
+    expected_product_identity: ProductIdentity,
     movement: ArenaMovementConfig,
     extent: (u32, u32),
     flow_id: RenderFlowId,
 ) -> Result<ArenaFramePublication> {
-    if prepared_arena.product_id() != ARENA_FIELD_PRODUCT_ID {
+    if prepared_arena.product_id() != expected_product_identity {
         bail!("prepared arena field source has the wrong product identity");
     }
 
@@ -797,8 +810,9 @@ mod tests {
         )
         .expect("test field");
         let payload = crate::arena::build_arena_chunk_payload();
+        let descriptor = crate::arena::arena_field_product_descriptor(&payload);
         PreparedWorldSdfFieldSource::new(
-            ARENA_FIELD_PRODUCT_ID,
+            descriptor.product_core().identity,
             7,
             crate::arena::arena_metric_payload_ref(&payload).payload_ref,
             input,
@@ -816,7 +830,7 @@ mod tests {
         assert_eq!(selection.view_id, ARENA_PRESENTATION_VIEW_ID);
         assert_eq!(selection.selected_products.len(), 1);
         let selected = &selection.selected_products[0];
-        assert_eq!(selected.product_id, ARENA_FIELD_PRODUCT_ID);
+        assert_eq!(descriptor.product_id, ARENA_FIELD_PRODUCT_ID);
         assert_eq!(selected.product_id, core.identity);
         assert_eq!(selected.scale_band, core.scale_band);
         assert_eq!(selected.generation, core.lineage.generation);
@@ -826,7 +840,7 @@ mod tests {
         assert_eq!(selected.query_policy, core.query_policy);
         assert_eq!(selection.residency_requests.len(), 1);
         let residency = &selection.residency_requests[0];
-        assert_eq!(residency.product_id, ARENA_FIELD_PRODUCT_ID);
+        assert_eq!(residency.product_id, core.identity);
         assert_eq!(residency.residency, ProductResidency::Resident);
         assert!(residency.hard_pin);
     }
@@ -846,7 +860,9 @@ mod tests {
             .world()
             .resource::<WorldRuntimeSdfProductCatalogResource>()
             .expect("arena product catalog")
-            .product(ARENA_FIELD_PRODUCT_ID)
+            .products()
+            .values()
+            .find(|descriptor| descriptor.product_id == ARENA_FIELD_PRODUCT_ID)
             .expect("arena descriptor")
             .clone();
         app.world_mut()
@@ -866,7 +882,7 @@ mod tests {
             .world()
             .resource::<PreparedWorldSdfFieldSourceResource>()
             .expect("prepared field source resource")
-            .source(ARENA_FIELD_PRODUCT_ID)
+            .source(descriptor.product_core().identity)
             .expect("real arena GP1B3 projection")
             .clone();
         let history = crate::player_physical_history_for(app.world(), LOCAL_PARTICIPANT_ID)
@@ -884,6 +900,7 @@ mod tests {
                 presentation_time_seconds: 0.0,
             },
             &prepared,
+            descriptor.product_core().identity,
             *app.world()
                 .resource::<ArenaMovementConfig>()
                 .expect("movement config"),
@@ -953,6 +970,11 @@ mod tests {
             &mut scene,
             snapshot,
             &prepared,
+            crate::arena::arena_field_product_descriptor(
+                &crate::arena::build_arena_chunk_payload(),
+            )
+            .product_core()
+            .identity,
             movement,
             (1280, 720),
             flow_id,
