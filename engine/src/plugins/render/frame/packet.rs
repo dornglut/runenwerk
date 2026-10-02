@@ -3,6 +3,7 @@ use super::{
     PreparedViewFrame,
 };
 use crate::plugins::render::admission::RenderRepresentationAvailabilityFact;
+use crate::plugins::render::field_input::RenderFieldSemanticInputBinding;
 use crate::plugins::render::request::RenderRequest;
 use crate::plugins::render::scene::RenderSceneSnapshot;
 use crate::plugins::render::surface_input::RenderSurfaceSemanticInputBinding;
@@ -65,6 +66,7 @@ pub struct RenderDeterministicFrameContribution {
     pub scene: RenderSceneSnapshot,
     pub request: RenderRequest,
     pub semantic_inputs: Vec<RenderSurfaceSemanticInputBinding>,
+    pub field_semantic_inputs: Vec<RenderFieldSemanticInputBinding>,
     pub availability: Vec<RenderRepresentationAvailabilityFact>,
     pub output_index: usize,
     pub target_key: RenderDynamicTextureTargetKey,
@@ -152,6 +154,7 @@ mod deterministic_contribution_tests {
             )
             .expect("test request should be valid"),
             semantic_inputs: Vec::new(),
+            field_semantic_inputs: Vec::new(),
             availability: Vec::new(),
             output_index: 0,
             target_key: RenderDynamicTextureTargetKey::new("test", "radiance"),
@@ -166,6 +169,48 @@ mod deterministic_contribution_tests {
         resource.replace(contribution(producer(2)));
         resource.replace(contribution(producer(1)));
         assert_eq!(resource.take_all().len(), 2);
+    }
+
+    #[test]
+    fn deterministic_contribution_replacement_cannot_retain_stale_field_inputs() {
+        use crate::plugins::render::field_input::{
+            RenderFieldSemanticInput, RenderFieldSemanticInputBinding,
+            RenderFieldSemanticInputGeneration,
+        };
+        use crate::plugins::render::representation::RenderRepresentationId;
+        use crate::plugins::render::space_time::RenderTemporalSupport;
+
+        let representation_id =
+            RenderRepresentationId::from_raw(7).expect("test representation id is non-zero");
+        let field_input = RenderFieldSemanticInput::dense(
+            [0.0; 3],
+            [1.0; 3],
+            [2, 2, 2],
+            vec![0.0; 8],
+            0.25,
+            RenderTemporalSupport::unbounded(),
+        )
+        .expect("test field input should be valid");
+        let field_binding = RenderFieldSemanticInputBinding::new(representation_id, field_input)
+            .with_generation(RenderFieldSemanticInputGeneration::new(11));
+
+        let producer_id = producer(3);
+        let mut with_field = contribution(producer_id);
+        with_field.field_semantic_inputs = vec![field_binding.clone()];
+
+        let mut resource = RenderDeterministicFrameContributionResource::default();
+        resource.replace(with_field);
+        let retained = resource.take_all();
+        assert_eq!(retained.len(), 1);
+        assert_eq!(retained[0].field_semantic_inputs, vec![field_binding]);
+
+        resource.replace(contribution(producer_id));
+        let replaced = resource.take_all();
+        assert_eq!(replaced.len(), 1);
+        assert!(
+            replaced[0].field_semantic_inputs.is_empty(),
+            "whole-contribution replacement must not retain stale field bindings"
+        );
     }
 }
 
