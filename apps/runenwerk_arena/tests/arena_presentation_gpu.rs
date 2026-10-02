@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use engine::plugins::AppFixedStepExt;
@@ -35,6 +36,8 @@ fn arena_presentation_gpu_smoke() {
         eprintln!("macOS arena GPU smoke requires the process main thread");
         return;
     }
+
+    let _workspace_directory = WorkspaceDirectoryGuard::enter();
 
     let window = create_hidden_window();
     let gfx = Gfx::new(Arc::clone(&window)).expect("arena GPU smoke should create Gfx");
@@ -176,6 +179,36 @@ fn arena_presentation_gpu_smoke() {
             .any(|pixel| pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 0),
         "maintained arena + player presentation must produce a non-black primary-surface frame"
     );
+}
+
+struct WorkspaceDirectoryGuard {
+    previous: PathBuf,
+}
+
+impl WorkspaceDirectoryGuard {
+    fn enter() -> Self {
+        let previous =
+            std::env::current_dir().expect("arena GPU smoke should resolve its current directory");
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let workspace_root = manifest_dir
+            .parent()
+            .and_then(|apps| apps.parent())
+            .expect("arena package should live under <workspace>/apps/runenwerk_arena");
+        assert!(
+            workspace_root.join("assets/shaders").is_dir(),
+            "arena GPU smoke workspace root must expose the maintained shader asset directory"
+        );
+        std::env::set_current_dir(workspace_root)
+            .expect("arena GPU smoke should enter the workspace asset root");
+        Self { previous }
+    }
+}
+
+impl Drop for WorkspaceDirectoryGuard {
+    fn drop(&mut self) {
+        std::env::set_current_dir(&self.previous)
+            .expect("arena GPU smoke should restore its original working directory");
+    }
 }
 
 fn gpu_smoke_enabled() -> bool {
