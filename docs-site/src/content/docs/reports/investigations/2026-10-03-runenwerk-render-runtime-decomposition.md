@@ -9,7 +9,6 @@ last_reviewed: 2026-10-03
 publication: reference
 pagefind: false
 related_docs:
-  - ../../../../ARCHITECTURE.md
   - ../../engine/reference/plugins/render/architecture.md
   - ../../engine/reference/plugins/render/render-target-architecture.md
   - ../../engine/roadmaps/render-final-architecture-migration.md
