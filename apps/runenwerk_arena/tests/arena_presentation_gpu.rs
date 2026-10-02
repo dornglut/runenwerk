@@ -25,9 +25,7 @@ const SURFACE_COLOR_RESOURCE_ID: &str = "surface.color";
 #[ignore = "requires a windowed GPU adapter; retained Linux/Vulkan evidence runs this explicitly under Xvfb"]
 fn arena_presentation_gpu_smoke() {
     if !gpu_smoke_enabled() {
-        eprintln!(
-            "RUNENWERK_ARENA_GPU_SMOKE is not enabled; skipping retained arena GPU smoke"
-        );
+        eprintln!("RUNENWERK_ARENA_GPU_SMOKE is not enabled; skipping retained arena GPU smoke");
         return;
     }
     if cfg!(target_os = "macos") && !running_on_macos_main_thread() {
