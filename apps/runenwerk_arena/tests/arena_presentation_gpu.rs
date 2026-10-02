@@ -14,6 +14,8 @@ use runenwerk_arena::build_game_app;
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
 use winit::event_loop::{ActiveEventLoop, EventLoop};
+#[cfg(target_os = "linux")]
+use winit::platform::x11::EventLoopBuilderExtX11;
 #[cfg(target_os = "windows")]
 use winit::platform::windows::EventLoopBuilderExtWindows;
 use winit::window::Window;
@@ -243,6 +245,13 @@ fn create_hidden_window() -> Arc<Window> {
 }
 
 fn create_smoke_event_loop() -> EventLoop<()> {
+    #[cfg(target_os = "linux")]
+    {
+        let mut builder = EventLoop::builder();
+        builder.with_x11().with_any_thread(true);
+        builder.build().expect("arena X11 event loop should initialize")
+    }
+
     #[cfg(target_os = "windows")]
     {
         let mut builder = EventLoop::builder();
@@ -250,7 +259,7 @@ fn create_smoke_event_loop() -> EventLoop<()> {
         builder.build().expect("arena event loop should initialize")
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
     {
         EventLoop::new().expect("arena event loop should initialize")
     }

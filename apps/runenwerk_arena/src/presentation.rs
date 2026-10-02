@@ -1237,10 +1237,18 @@ mod tests {
             .map(|component| component * component)
             .sum::<f64>()
             .sqrt();
-        assert_eq!(
-            light.direction_to_source_scene(),
-            LIGHT_DIRECTION_TO_SOURCE.map(|component| component / direction_length)
-        );
+        let expected_direction =
+            LIGHT_DIRECTION_TO_SOURCE.map(|component| component / direction_length);
+        for (actual, expected) in light
+            .direction_to_source_scene()
+            .into_iter()
+            .zip(expected_direction)
+        {
+            assert!(
+                (actual - expected).abs() <= f64::EPSILON,
+                "normalized light direction differs beyond floating-point roundoff: actual={actual}, expected={expected}"
+            );
+        }
 
         let arena_material = arena
             .material_assignment()
