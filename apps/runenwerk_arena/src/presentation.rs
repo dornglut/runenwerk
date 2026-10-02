@@ -62,6 +62,7 @@ use product::{
     ProductResidency, RenderProductSelection, RenderResidencyRequest, RenderSelectedProduct,
 };
 use runen_gpu::GpuBindingKey;
+use world_sdf::FieldProductDescriptor;
 
 use crate::arena::ARENA_FIELD_PRODUCT_ID;
 use crate::player::{
@@ -302,30 +303,34 @@ fn interpolate_position(history: PlayerPhysicalHistory, alpha: f32) -> [f32; 3] 
     })
 }
 
+fn arena_product_selection(descriptor: &FieldProductDescriptor) -> RenderProductSelection {
+    let core = descriptor.product_core();
+    RenderProductSelection::new(ARENA_PRESENTATION_VIEW_ID)
+        .with_selected_product(RenderSelectedProduct {
+            product_id: core.identity,
+            scale_band: core.scale_band,
+            generation: core.lineage.generation,
+            freshness: core.freshness,
+            residency: core.residency,
+            authority_class: core.authority_class,
+            query_policy: core.query_policy,
+        })
+        .with_residency_request(RenderResidencyRequest::new(
+            core.identity,
+            ProductResidency::Resident,
+            100,
+            true,
+        ))
+}
+
 fn publish_arena_product_selection_system(mut world: WorldMut) -> Result<()> {
     let selection = {
         let products = world
             .resource::<WorldRuntimeSdfProductCatalogResource>()
             .context("ArenaPresentation requires the World SDF product catalog")?;
-        products.product(ARENA_FIELD_PRODUCT_ID).map(|descriptor| {
-            let core = descriptor.product_core();
-            RenderProductSelection::new(ARENA_PRESENTATION_VIEW_ID)
-                .with_selected_product(RenderSelectedProduct {
-                    product_id: core.identity,
-                    scale_band: core.scale_band,
-                    generation: core.lineage.generation,
-                    freshness: core.freshness,
-                    residency: core.residency,
-                    authority_class: core.authority_class,
-                    query_policy: core.query_policy,
-                })
-                .with_residency_request(RenderResidencyRequest::new(
-                    core.identity,
-                    ProductResidency::Resident,
-                    100,
-                    true,
-                ))
-        })
+        products
+            .product(ARENA_FIELD_PRODUCT_ID)
+            .map(arena_product_selection)
     };
 
     let selections = world
@@ -784,6 +789,110 @@ mod tests {
             crate::arena::arena_metric_payload_ref(&payload).payload_ref,
             input,
         )
+    }
+
+    #[test]
+    fn product_selection_copies_exact_arena_descriptor_facts_and_requests_residency() {
+        let payload = crate::arena::build_arena_chunk_payload();
+        let descriptor = crate::arena::arena_field_product_descriptor(&payload);
+        let core = descriptor.product_core();
+
+        let selection = arena_product_selection(&descriptor);
+
+        assert_eq!(selection.view_id, ARENA_PRESENTATION_VIEW_ID);
+        assert_eq!(selection.selected_products.len(), 1);
+        let selected = &selection.selected_products[0];
+        assert_eq!(selected.product_id, ARENA_FIELD_PRODUCT_ID);
+        assert_eq!(selected.product_id, core.identity);
+        assert_eq!(selected.scale_band, core.scale_band);
+        assert_eq!(selected.generation, core.lineage.generation);
+        assert_eq!(selected.freshness, core.freshness);
+        assert_eq!(selected.residency, core.residency);
+        assert_eq!(selected.authority_class, core.authority_class);
+        assert_eq!(selected.query_policy, core.query_policy);
+        assert_eq!(selection.residency_requests.len(), 1);
+        let residency = &selection.residency_requests[0];
+        assert_eq!(residency.product_id, ARENA_FIELD_PRODUCT_ID);
+        assert_eq!(residency.residency, ProductResidency::Resident);
+        assert!(residency.hard_pin);
+    }
+
+    #[test]
+    fn real_gp1b3_projection_is_the_arena_field_binding() {
+        use engine::plugins::render::RenderPlugin;
+        use engine::prelude::AppFixedStepExt;
+
+        let mut app = crate::build_headless_game_app();
+        app.add_plugin(RenderPlugin);
+        app = app
+            .run_for_fixed_steps(1)
+            .expect("arena truth should integrate before projection");
+
+        let descriptor = app
+            .world()
+            .resource::<WorldRuntimeSdfProductCatalogResource>()
+            .expect("arena product catalog")
+            .product(ARENA_FIELD_PRODUCT_ID)
+            .expect("arena descriptor")
+            .clone();
+        app.world_mut()
+            .resource_mut::<PreparedRenderProductSelectionResource>()
+            .expect("Render product selection")
+            .replace_contribution(
+                presentation_producer_id(),
+                [arena_product_selection(&descriptor)],
+            )
+            .expect("arena selection");
+
+        app = app
+            .run_for_frames(1)
+            .expect("real GP1B3 projection should run");
+
+        let prepared = app
+            .world()
+            .resource::<PreparedWorldSdfFieldSourceResource>()
+            .expect("prepared field source resource")
+            .source(ARENA_FIELD_PRODUCT_ID)
+            .expect("real arena GP1B3 projection")
+            .clone();
+        let history = crate::player_physical_history_for(
+            app.world(),
+            LOCAL_PARTICIPANT_ID,
+        )
+        .expect("local player history");
+        let mut scene = ArenaPresentationSceneResource::new();
+        let publication = build_arena_frame_publication(
+            &mut scene,
+            ArenaPresentationSnapshot {
+                position_scene_meters: history.current.position.map(f64::from),
+                interpolation_alpha: 1.0,
+                source_tick: *app
+                    .world()
+                    .resource::<SimulationTick>()
+                    .expect("simulation tick"),
+                presentation_time_seconds: 0.0,
+            },
+            &prepared,
+            *app
+                .world()
+                .resource::<ArenaMovementConfig>()
+                .expect("movement config"),
+            (1280, 720),
+            arena_radiance_flow().id(),
+        )
+        .expect("game presentation should consume real GP1B3 input");
+
+        assert_eq!(publication.contribution.field_semantic_inputs.len(), 1);
+        assert_eq!(
+            publication.contribution.field_semantic_inputs[0].input(),
+            prepared.input()
+        );
+        assert_eq!(
+            publication.contribution.field_semantic_inputs[0].generation(),
+            Some(RenderFieldSemanticInputGeneration::new(
+                prepared.product_generation()
+            ))
+        );
     }
 
     #[test]
