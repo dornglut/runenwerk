@@ -73,7 +73,6 @@ crossbeam-deque = "0.8.6"
 thiserror = "2.0.18"
 
 [dev-dependencies]
-trybuild = "1.0.114"
 ui_app_integration = { workspace = true }
 ui_binding = { workspace = true }
 
