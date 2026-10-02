@@ -1313,7 +1313,6 @@ mod tests {
         assert_eq!(tolerance.output_index(), Some(1));
         assert_eq!(tolerance.sample_index(), Some(5));
 
-
         let inconclusive = RenderResultFormationError {
             inner: RenderDeterministicResultFormationError::Verification(
                 RenderDeterministicVerificationError::Inconclusive {
