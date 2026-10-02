@@ -966,20 +966,21 @@ mod tests {
         };
         let flow_id = arena_radiance_flow().id();
 
-        let publication = build_arena_frame_publication(
-            &mut scene,
-            snapshot,
-            &prepared,
-            crate::arena::arena_field_product_descriptor(
-                &crate::arena::build_arena_chunk_payload(),
+        let publication =
+            build_arena_frame_publication(
+                &mut scene,
+                snapshot,
+                &prepared,
+                crate::arena::arena_field_product_descriptor(
+                    &crate::arena::build_arena_chunk_payload(),
+                )
+                .product_core()
+                .identity,
+                movement,
+                (1280, 720),
+                flow_id,
             )
-            .product_core()
-            .identity,
-            movement,
-            (1280, 720),
-            flow_id,
-        )
-        .expect("arena frame publication");
+            .expect("arena frame publication");
 
         assert_eq!(publication.contribution.semantic_inputs.len(), 1);
         assert_eq!(publication.contribution.field_semantic_inputs.len(), 1);
