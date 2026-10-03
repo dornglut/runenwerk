@@ -2,14 +2,14 @@
 
 use crate::{
     BrushLineageRef, CanvasTileId, DrawingDocument, DrawingDocumentRevision, DrawingProductLineage,
-    PaperLineageRef, PaintTarget, StrokeLineageRange, StrokeRecord,
+    PaintTarget, PaperLineageRef, StrokeLineageRange, StrokeRecord,
 };
 
+use super::super::determinism::StableDrawingHasher;
 use super::{
     DrawingInkTileFormationKind, DrawingInkTilePayload, DrawingTileFormationPolicy,
     active_output_id,
 };
-use super::super::determinism::StableDrawingHasher;
 
 pub(super) fn drawing_tile_determinism_key_for_records(
     document: &DrawingDocument,
@@ -21,7 +21,6 @@ pub(super) fn drawing_tile_determinism_key_for_records(
     hash_formation_inputs(&mut hasher, document, policy, kind, strokes);
     format!("{:016x}", hasher.finish())
 }
-
 
 pub(super) fn formation_key_with_requested_tiles(
     base: String,
@@ -37,7 +36,6 @@ pub(super) fn formation_key_with_requested_tiles(
     tile_parts.sort();
     format!("{base}:tiles={}", tile_parts.join(","))
 }
-
 
 pub(super) fn drawing_ink_tile_source_cache_key(
     document: &DrawingDocument,
@@ -62,7 +60,6 @@ pub(super) fn drawing_ink_tile_source_cache_key(
         policy.formation_version.raw()
     ))
 }
-
 
 pub(super) fn lineage_for_strokes(
     document: &DrawingDocument,
