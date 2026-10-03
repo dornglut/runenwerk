@@ -1,3 +1,5 @@
+//! Private tile coverage and stroke-bound geometry helpers for ink formation.
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
