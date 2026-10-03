@@ -144,3 +144,25 @@ top-level Render dependency. Same-top-level-module references are omitted from *
 | `engine/src/plugins/render/residency/handle.rs` | `bcfccb7b2d4827cdc0071e4915dc23f075fa655e` | — | — | — | 4 |
 | `engine/src/plugins/render/residency/mod.rs` | `68b929ddc6eae6813f9160a4204445923de2b9dd` | — | — | — | 2 |
 | `engine/src/plugins/render/residency/resource.rs` | `b0328f8444b4829fcebc18da93d3d1f99b14dd61` | `root-facade` | — | — | 17 |
+
+## Graph and shader
+
+| File | Blob | Render deps | Framework deps | Peer deps | Public items |
+| --- | --- | --- | --- | --- | ---: |
+| `engine/src/plugins/render/graph/diagnostics.rs` | `fd1ecf3a57da19370b531d78b1e7a15c5661607d` | `root-facade` | `runen_gpu` | — | 25 |
+| `engine/src/plugins/render/graph/execution_plan.rs` | `5e52c98e625d685af06ebb034da49d31875f5a3f` | `api`, `features`, `root-facade` | `runen_gpu` | — | 29 |
+| `engine/src/plugins/render/graph/flow_graph.rs` | `56a0b39650e9e1636d42f16859cee027cfb1d4cf` | `root-facade` | — | — | 5 |
+| `engine/src/plugins/render/graph/merge.rs` | `8cca40a6c574648b1d33f92adb66daa9d7392e96` | `api`, `composition`, `root-facade` | `runen_gpu` | — | 4 |
+| `engine/src/plugins/render/graph/mod.rs` | `e1143b1d38bfc4eb4f586c4dc094a1000f125fbe` | — | — | — | 22 |
+| `engine/src/plugins/render/graph/pass_graph.rs` | `595b57b953f09799010fd97b6ce923e6a17b90ec` | `api`, `root-facade` | `runen_gpu` | — | 48 |
+| `engine/src/plugins/render/graph/pass_shape.rs` | `25b91af5a3533526d2b5f42377cc30b3e60d90f6` | — | — | — | 1 |
+| `engine/src/plugins/render/graph/planning.rs` | `08243fae2992287b9cf993bd6a5b1c2b7ed72c7c` | `api`, `root-facade` | `runen_gpu` | — | 16 |
+| `engine/src/plugins/render/graph/prepared_validation.rs` | `90b796eb59e49fbcf56dd13c8341a3b7a172f737` | `features`, `root-facade` | `runen_gpu` | — | 21 |
+| `engine/src/plugins/render/graph/resource_graph.rs` | `8d871d416502bad683ddb2c95e7c5cc5820e6dd3` | `root-facade` | `runen_gpu` | — | 9 |
+| `engine/src/plugins/render/graph/validation.rs` | `94ee37bb94fa85d0530bc4996c067f5e96db71ba` | `api`, `resource`, `root-facade` | `runen_gpu` | — | 4 |
+| `engine/src/plugins/render/graph/validation_builtin_ui.rs` | `67fede64b82f28961a114f12106581ea946a0604` | — | — | — | 1 |
+| `engine/src/plugins/render/shader/helpers.rs` | `0661e990c8de6bc56680c591ceb0ae10897ad216` | — | — | — | 7 |
+| `engine/src/plugins/render/shader/hot_reload.rs` | `f5ebdf34915335903afe68f26319d81bd50363dc` | — | — | — | 1 |
+| `engine/src/plugins/render/shader/mod.rs` | `dca94b63f3c3443aa0297403436dfe29037edb51` | — | — | `shared` | 3 |
+| `engine/src/plugins/render/shader/registry.rs` | `d6d23227c0d925829b3a4f3c5ea8d3a26a2afd2a` | — | — | — | 31 |
+| `engine/src/plugins/render/shader/types.rs` | `558cc9eb0868288ae8154bf5b4b61be247a14cde` | — | — | — | 13 |
