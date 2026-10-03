@@ -1,3 +1,5 @@
+//! Private deterministic cache, lineage, descriptor, and formation-input identity helpers.
+
 use crate::{
     BrushLineageRef, CanvasTileId, DrawingDocument, DrawingDocumentRevision, DrawingProductLineage,
     PaperLineageRef, PaintTarget, StrokeLineageRange, StrokeRecord,
