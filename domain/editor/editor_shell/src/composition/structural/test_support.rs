@@ -1,13 +1,13 @@
 use editor_definition::{
-    EditorWorkspaceHostDefinition, EditorWorkspaceLayoutDefinition, EditorWorkspacePanelTabDefinition,
-    EditorWorkspaceSplitAxisDefinition,
+    EditorWorkspaceHostDefinition, EditorWorkspaceLayoutDefinition,
+    EditorWorkspacePanelTabDefinition, EditorWorkspaceSplitAxisDefinition,
 };
 use ui_surface::{SessionRetentionClass, SurfaceCapabilitySet};
 
 use crate::{
     EditorToolSuite, PanelKind, ProviderFamilyDefinition, ProviderFamilyId,
-    SCENE_WORKSPACE_PROFILE_ID, SuiteRef, SurfaceRef, ToolSuiteRegistry,
-    ToolSurfaceCreationPolicy, ToolSurfaceDefinition, ToolSurfaceRole, ToolSurfaceRoute,
+    SCENE_WORKSPACE_PROFILE_ID, SuiteRef, SurfaceRef, ToolSuiteRegistry, ToolSurfaceCreationPolicy,
+    ToolSurfaceDefinition, ToolSurfaceRole, ToolSurfaceRoute,
 };
 
 use super::{EditorCompositionRuntime, form_editor_profile_composition};
@@ -60,10 +60,6 @@ pub(crate) fn test_editor_composition_runtime() -> EditorCompositionRuntime {
         floating_hosts: Vec::new(),
     };
 
-    form_editor_profile_composition(
-        SCENE_WORKSPACE_PROFILE_ID,
-        &layout,
-        registry.surfaces(),
-    )
-    .expect("current composition-native test layout should form")
+    form_editor_profile_composition(SCENE_WORKSPACE_PROFILE_ID, &layout, registry.surfaces())
+        .expect("current composition-native test layout should form")
 }
