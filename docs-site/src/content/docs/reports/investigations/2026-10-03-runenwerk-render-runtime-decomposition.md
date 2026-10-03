@@ -642,7 +642,7 @@ Current search found no maintained consumers for:
 - `DetailCellPayload` / `DetailPreparedCellResource`;
 - `WorldLodBand`, `WorldLodPolicyResource`, `WorldLodSelectionResource` beyond plugin
   initialization for the latter resources;
-- `EditorPickingResultResource` beyond plugin initialization.
+- `EditorPickingResultResource` beyond plugin initialization. The sibling `EditorGizmoAxis`, `EditorPickingHit`, and `EditorPickingTarget` contracts are actively consumed by Editor and are **not** deletion candidates.
 
 The LOD scaffold is especially misleading because accepted renderer-scale architecture assigns
 **semantic LOD policy** outside Render while allowing renderer-owned derived visibility/LOD
