@@ -329,6 +329,14 @@ The 68 RunenGPU users fall into four owner-correct classes:
 
 No inspected call establishes duplicate generic device/resource/submission authority in Runenwerk.
 
+The dependency appendix also records the separate owner-crate concentration check: `runen_ecs`
+is the broad integration substrate (27 central files), while domain-specific direct coupling is
+concentrated in `product` (9), `world_sdf` (3), `world_ops` (1), `runen_spatial` (6),
+`ui_render_data` (11), `ui_text` (2), `ui_math` (1), and `material_graph` (9). There is no
+direct central Render dependency on `runen_input` or `runen_net`. These edges are classified by
+authority in the module matrix below rather than conflated with RunenRender/RunenGPU framework
+ownership.
+
 The dependency appendix also records the direct semantic-owner overlay that sits beside the
 RunenRender/RunenGPU execution boundary. Positive reviewed-reference sets include:
 
