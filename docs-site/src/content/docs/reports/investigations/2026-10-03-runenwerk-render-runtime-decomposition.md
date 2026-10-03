@@ -835,7 +835,9 @@ real responsibilities. Re-evaluate the remaining name after those changes.
 
 ## #1110 — RunenUI renderer publication
 
-Treat as serialization barrier for files it owns, especially:
+At the final investigation recheck, #1110 remains open, but its named branch is 0 commits ahead / 13 behind accepted `main` and no open #1110 PR was found. It is therefore not a current changed-file writer at this instant. It remains an accepted scope owner that must be re-resolved before a cleanup claims overlapping files.
+
+Potential overlap includes:
 
 ```text
 features/ui/**
@@ -845,13 +847,11 @@ runtime/frame_submit.rs
 plugin.rs
 ```
 
-Do not perform broad physical moves across those files until #1110 either lands, closes, or its
-owner explicitly releases the paths.
+Do not perform broad physical moves across those files if #1110 has reactivated a writer by the time implementation starts. If it remains writer-free, record that exact-current fact in the successor issue/PR rather than treating this point-in-time branch state as a permanent exemption.
 
 ## #842 — material compiler capability admission
 
-Do not reorganize or redefine material compiler semantics underneath this active issue. Structural
-work may record the boundary, but semantic material/compiler changes remain #842-owned.
+At the final recheck #842 is open, with no matching branch or open PR found. It remains the semantic material/compiler scope owner. Do not reorganize or redefine its semantics under render cleanup; re-resolve before touching material-compiler source.
 
 ## #977 — world/SDF authority documentation
 
@@ -860,8 +860,7 @@ Do not use render cleanup to revise world/SDF semantic ownership.
 
 ## #1058 — Render Lab native trace recording
 
-Render Lab is a product/validation consumer. Preserve its public inspection/execution needs during
-API cleanup; do not move trace semantics into generic renderer state.
+Render Lab is a product/validation consumer. At the final recheck #1058 has stale/diverged branches but no open PR; their changed files are automation/input-only and do not overlap central render source. Preserve Render Lab's public inspection/execution needs during API cleanup and re-resolve before publication; do not move trace semantics into generic renderer state.
 
 # 9. Architecture-document disposition
 
