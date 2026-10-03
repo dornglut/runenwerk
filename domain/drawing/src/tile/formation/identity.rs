@@ -2,7 +2,7 @@
 
 use crate::{
     BrushLineageRef, CanvasTileId, DrawingDocument, DrawingDocumentRevision, DrawingProductLineage,
-    PaintTarget, PaperLineageRef, StrokeLineageRange, StrokeRecord,
+    PaintTarget, PaperLineageRef, StrokeLineageRange, StrokeRecord, StrokeToolKind,
 };
 
 use super::super::determinism::StableDrawingHasher;
