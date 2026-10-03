@@ -123,3 +123,24 @@ top-level Render dependency. Same-top-level-module references are omitted from *
 | `engine/src/plugins/render/features/world/sdf_raymarch.rs` | `73ef3e05efcb131c299dd1a19bf64103c5da4be6` | — | — | — | 17 |
 | `engine/src/plugins/render/features/world/sdf_residency.rs` | `4f23b698c1ae975b7101f013c44a9447368bb6fd` | — | — | — | 25 |
 | `engine/src/plugins/render/features/world/visuals/mod.rs` | `e0329f47e0f2b2ebb252e5cda20e8ca910181fb4` | `root-facade` | — | — | 31 |
+
+## GPU primitives, resources, pipelines, and residency
+
+| File | Blob | Render deps | Framework deps | Peer deps | Public items |
+| --- | --- | --- | --- | --- | ---: |
+| `engine/src/plugins/render/gpu_primitives/compaction.rs` | `7846d1477465b41e33f84093ae251d0f756c1776` | `root-facade` | `runen_gpu` | — | 3 |
+| `engine/src/plugins/render/gpu_primitives/counters.rs` | `d9a407413ea826d52a1f3f3c656b293bd853cfb3` | `root-facade` | `runen_gpu` | — | 6 |
+| `engine/src/plugins/render/gpu_primitives/draw_args.rs` | `f505dde4f2398ab54062a6abc0268f6c40853fec` | `graph`, `root-facade` | `runen_gpu` | — | 6 |
+| `engine/src/plugins/render/gpu_primitives/mod.rs` | `ef64a027c5fe7d0a0f24f89bf53221a05776ce60` | — | — | — | 5 |
+| `engine/src/plugins/render/gpu_primitives/plan.rs` | `10712f9ba1b1484a793e14ea1568438174bcf3a3` | `root-facade` | `runen_gpu`, `naga` | — | 24 |
+| `engine/src/plugins/render/gpu_primitives/scan.rs` | `6de141e4b0d885848680deb92bd798ccb4b70548` | `root-facade` | `runen_gpu` | — | 9 |
+| `engine/src/plugins/render/resource/dynamic_target.rs` | `48770b1b1b4aef0a01505dce6c89d0a853ddfe4d` | — | — | — | 28 |
+| `engine/src/plugins/render/resource/mod.rs` | `f2187e0748f9af2082dbaf13de7a97884b861481` | — | — | — | 6 |
+| `engine/src/plugins/render/resource/transient.rs` | `bd0bb7bc35963bccbcac59815dbb9aeecbddc126` | — | `runen_gpu` | — | 8 |
+| `engine/src/plugins/render/resource/usages.rs` | `4a5befbe46e2b790504c20e0e4b913aaa19737e2` | — | `runen_gpu` | — | 3 |
+| `engine/src/plugins/render/pipelines/cache.rs` | `276a3a7274a37ba4ac0d7bce71681928e58c3891` | — | — | — | 4 |
+| `engine/src/plugins/render/pipelines/flow_keys.rs` | `127cd86e94a7346eb3a26d259eef170a9e180412` | `root-facade` | `runen_gpu` | — | 15 |
+| `engine/src/plugins/render/pipelines/mod.rs` | `f7d51c37b8a874c2767498ef5cd09a518aa4019a` | — | — | — | 2 |
+| `engine/src/plugins/render/residency/handle.rs` | `bcfccb7b2d4827cdc0071e4915dc23f075fa655e` | — | — | — | 4 |
+| `engine/src/plugins/render/residency/mod.rs` | `68b929ddc6eae6813f9160a4204445923de2b9dd` | — | — | — | 2 |
+| `engine/src/plugins/render/residency/resource.rs` | `b0328f8444b4829fcebc18da93d3d1f99b14dd61` | `root-facade` | — | — | 17 |
