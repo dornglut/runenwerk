@@ -452,16 +452,11 @@ impl CompositionExtensionSnapshotPort for EditorCompositionExtensionSnapshot<'_>
 #[cfg(test)]
 mod tests {
     use super::Code;
-    use crate::{WorkspaceIdentityAllocator, default_workspace_profile_registry};
+    use crate::composition::structural::test_editor_composition_runtime;
 
     #[test]
     fn composition_extension_rejects_invalid_and_duplicate_compatibility_identities() {
-        let registry = default_workspace_profile_registry();
-        let profile = registry.default_profile().unwrap();
-        let mut allocator = WorkspaceIdentityAllocator::new();
-        let workspace_id = allocator.allocate_workspace_id();
-        let workspace = profile.build_default_workspace_state(workspace_id, &mut allocator);
-        let runtime = super::super::import_legacy_workspace(profile.id, &workspace).unwrap();
+        let runtime = test_editor_composition_runtime();
         let mut extension = runtime.extension().clone();
         let duplicate_panel = extension.mounted_units[0].panel_instance_raw;
         extension.mounted_units[1].panel_instance_raw = duplicate_panel;

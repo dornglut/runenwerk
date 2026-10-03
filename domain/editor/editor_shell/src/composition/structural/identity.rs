@@ -169,20 +169,13 @@ fn take_next(
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        WorkspaceIdentityAllocator, default_workspace_profile_registry, import_legacy_workspace,
-    };
+    use crate::composition::structural::test_editor_composition_runtime;
 
     use super::*;
 
     #[test]
     fn allocator_starts_after_every_installed_core_identity_family() {
-        let profiles = default_workspace_profile_registry();
-        let profile = profiles.default_profile().unwrap();
-        let mut legacy_ids = WorkspaceIdentityAllocator::new();
-        let workspace_id = legacy_ids.allocate_workspace_id();
-        let workspace = profile.build_default_workspace_state(workspace_id, &mut legacy_ids);
-        let runtime = import_legacy_workspace(profile.id, &workspace).unwrap();
+        let runtime = test_editor_composition_runtime();
         let definition = runtime.composition().definition();
         let max_target = definition
             .targets()

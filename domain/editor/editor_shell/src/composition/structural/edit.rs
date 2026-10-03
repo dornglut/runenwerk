@@ -629,10 +629,10 @@ mod tests {
     use crate::{
         EditorToolSuite, PanelKind, ProviderFamilyDefinition, ProviderFamilyId, SuiteRef,
         SurfaceRef, ToolSuiteRegistry, ToolSurfaceCreationPolicy, ToolSurfaceRole,
-        ToolSurfaceRoute, WorkspaceIdentityAllocator, default_workspace_profile_registry,
-        import_legacy_workspace, panel_kind_for_tool_surface_kind,
-        tool_surface_kind_from_definition_key,
+        ToolSurfaceRoute, panel_kind_for_tool_surface_kind, tool_surface_kind_from_definition_key,
     };
+
+    use crate::composition::structural::test_editor_composition_runtime;
 
     use super::*;
 
@@ -669,12 +669,7 @@ mod tests {
     }
 
     fn runtime() -> EditorCompositionRuntime {
-        let profiles = default_workspace_profile_registry();
-        let profile = profiles.default_profile().unwrap();
-        let mut ids = WorkspaceIdentityAllocator::new();
-        let workspace =
-            profile.build_default_workspace_state(ids.allocate_workspace_id(), &mut ids);
-        import_legacy_workspace(profile.id, &workspace).unwrap()
+        test_editor_composition_runtime()
     }
 
     fn policies(allow: &Allow) -> CompositionPolicies<'_> {

@@ -565,9 +565,7 @@ mod tests {
         CompositionPolicyDecision, CompositionSnapshot, CompositionTargetPolicy,
     };
 
-    use crate::{
-        WorkspaceIdentityAllocator, default_workspace_profile_registry, import_legacy_workspace,
-    };
+    use crate::composition::structural::test_editor_composition_runtime;
 
     use super::*;
     use crate::evaluate_editor_docking_intent;
@@ -611,12 +609,7 @@ mod tests {
     }
 
     fn runtime() -> EditorCompositionRuntime {
-        let profiles = default_workspace_profile_registry();
-        let profile = profiles.default_profile().unwrap();
-        let mut ids = WorkspaceIdentityAllocator::new();
-        let workspace_id = ids.allocate_workspace_id();
-        let workspace = profile.build_default_workspace_state(workspace_id, &mut ids);
-        import_legacy_workspace(profile.id, &workspace).unwrap()
+        test_editor_composition_runtime()
     }
 
     fn first_two_stacks(runtime: &EditorCompositionRuntime) -> (RegionId, RegionId) {
