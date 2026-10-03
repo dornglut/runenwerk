@@ -9,6 +9,7 @@ last_reviewed: 2026-10-03
 publication: reference
 pagefind: false
 related_docs:
+  - ./2026-10-03-runenwerk-render-runtime-source-census.md
   - ../../engine/reference/plugins/render/architecture.md
   - ../../engine/reference/plugins/render/render-target-architecture.md
   - ../../engine/roadmaps/render-final-architecture-migration.md
@@ -259,6 +260,67 @@ domain/product truth after the cut. Current evidence does not show that regressi
 | shader filesystem watching/reload/product last-good policy | Runenwerk | product policy only |
 | reusable shader-source/toolchain/canonical-artifact semantics | RunenShader family authority | separate cross-repository boundary; not reassigned here |
 
+# 3.1 Exact source inventory and source-level dependency census
+
+The immutable source inventory is recorded in the linked
+[exact source census](./2026-10-03-runenwerk-render-runtime-source-census.md).
+It lists all 184 Rust files with byte size and immutable blob SHA at the reviewed revision.
+
+For architectural dependency review, explicit cross-group source references on the unchanged
+reviewed default branch produce the following materially relevant edges:
+
+| Consuming group | Explicit dependency groups observed | Architectural interpretation |
+| --- | --- | --- |
+| `api` | `graph`, `renderer`, `gpu_primitives`, `procedural` | `api -> renderer` is compatibility debt; compiler/procedural helper dependencies are authoring/compiler integration. |
+| `composition` | `api`, `graph` | Accepted fragment-to-RenderFlow/compiler seam. |
+| `features` | `api`, `frame`, `backend` | Feature packet/host integration; current UI/backend edge is active migration pressure. |
+| `frame` | `api`, `features`, `backend` | Prepared-frame boundary plus legacy feature strangler and surface identity. |
+| `graph` | `api`, `composition`, `features`, `resource` | Accepted compiler ownership. |
+| `inspect` | `graph`, `features`, `renderer`, `pipelines`, `shader` | Derived inspection/evidence projections over execution state. |
+| `renderer` | `api`, `graph`, `frame`, `features`, `inspect`, `pipelines`, `shader`, `backend`, `adapters` | Main execution convergence point; later decomposition candidate. |
+| `runtime` | `frame`, `renderer`, `inspect`, `backend`, `pipelines` | Prepare/submit orchestration. |
+| `procedural` | `api`, `gpu_primitives` | Authoring/lowering path. |
+| `backend` | `graph`, `pipelines` | Residual host/capability wrapper; partly obsolete after RunenGPU. |
+
+This is a source-level ownership map, not a claim that every relative intra-group Rust import is
+listed separately. Relative imports within one top-level owner do not alter the cross-owner
+conclusions above.
+
+## 3.2 Standalone framework dependency classification
+
+Direct dependency census inside `engine/src/plugins/render/**` at the reviewed revision:
+
+| Dependency | Files | Disposition |
+| --- | ---: | --- |
+| `runen_gpu::` | 68 | Expected physical/render-execution vocabulary and integration. |
+| `runen_render::` | 5 | Narrow semantic admission/execution/prepared-payload integration. |
+| `runen_shader::` | 0 | No direct central Render dependency. |
+| `wgpu::` | 0 | No retained raw WGPU authority in central Render. |
+| `naga::` | 2 | Local shader/program validation in material compiler and GPU-primitive planning; separate shader-authority seam, not GPU-device ownership. |
+
+The five direct RunenRender files classify as:
+
+| File | Role | Disposition |
+| --- | --- | --- |
+| `frame/packet.rs` | Carries prepared RunenRender scene/request/input/availability DTOs across the frame boundary. | Legitimate semantic projection. |
+| `renderer/mod.rs` | Owns RunenRender execution state/evidence. | Legitimate runtime integration. |
+| `renderer/render_flow/execute.rs` | Calls `admit_render`, prepares execution, binds output destinations, records submission lifecycle. | Legitimate semantic execution integration. |
+| `renderer/setup.rs` | Progresses execution lifecycle and exposes derived temporal evidence. | Legitimate derived execution/evidence integration. |
+| `runtime/frame_submit.rs` | Direct RunenRender imports occur in tests only. | No production authority edge. |
+
+The 68 RunenGPU users fall into four owner-correct classes:
+
+1. **authoring/compiler vocabulary** — `api`, `graph`, `frame`, `composition`,
+   `resource`, `pipelines`, and `procedural` use backend-neutral RunenGPU ids, formats,
+   usages, binding keys, resource references, or work descriptors;
+2. **explicit translation** — `adapters` maps render compiler/execution facts into RunenGPU work,
+   resources, and capabilities;
+3. **physical realization** — `renderer`, current `backend`, `gpu_primitives`, and one
+   `runtime` path own Runenwerk-side orchestration over public RunenGPU execution contracts;
+4. **derived evidence** — `inspect` projects RunenGPU-backed provenance/resource/timing facts.
+
+No inspected call establishes duplicate generic device/resource/submission authority in Runenwerk.
+
 # 4. Findings
 
 ## RRA-001 — Standalone authority cutover is structurally sound
@@ -481,25 +543,31 @@ dynamic targets, invocation/history scopes, feature gates and capabilities.
 Individual duplicate checks may still be refactored when found, but the two-stage architecture is
 intentional.
 
-## RRA-011 — The root render facade is broader than ordinary consumers require
+## RRA-011 — The root render facade is broad, but not all prepared/compiler contracts are internal
 
-**Classification:** narrow after compatibility cleanup.
+**Classification:** narrow selectively after compatibility cleanup.
 
 `render/mod.rs` wildcard-reexports authoring, compiler, feature, frame, procedural, residency,
 resource and runtime surfaces, and additionally reexports `Gfx`, `Renderer`, timing types, and
 the compatibility `RenderFrameDataRegistry`.
 
-Current ordinary app consumers are concentrated on higher-level contracts such as `RenderPlugin`,
-`RenderFlow`, product target/frame requests, feature publication, and inspection controls.
-Compiler/execution internals are mainly consumed internally, by tests/benchmarks, and by advanced
-Render Lab proof paths.
+The consumer audit corrects an earlier overgeneralization:
 
-**Disposition:** after compatibility deletion and active writer reconciliation, keep ordinary
-authoring/runtime contracts ergonomic but require advanced compiler/execution/inspection APIs to be
-reached through their owning submodules. Do not preserve wildcard aliases solely to avoid import
-updates in repository-owned consumers.
+- `RenderPlugin`, `AppRenderExt`, and `RenderFlow` are ordinary maintained app-facing contracts;
+- `PreparedRenderFrame` is also a real maintained integration contract with Arena, Draw, Editor,
+  Render Lab, benches, examples, and tests;
+- `Gfx` is an advanced host/runtime contract used by Render Lab and engine host integration;
+- `Renderer` itself has no maintained app consumer found beyond engine state;
+- `CompiledRenderFlowPlan` has narrow maintained advanced consumers (Render Lab temporal quality,
+  one editor architecture guard, benches/examples);
+- `RenderExecutionGraphPreparedReport` and prepared-preflight report types are currently
+  inspection/test/bench surfaces;
+- `RenderFrameDataRegistry` is only used by repository examples/tests and is excluded from active
+  submission.
 
-This is an API cleanup and needs a complete consumer diff before delivery.
+**Disposition:** preserve ordinary authoring and prepared-frame integration ergonomics. Remove only
+proven compatibility surface first. Later public-facade narrowing must be type-by-type and
+consumer-backed; it must not hide `PreparedRenderFrame` merely because it is execution-adjacent.
 
 ## RRA-012 — Canonical/current render docs contain post-cutover factual drift
 
@@ -536,6 +604,72 @@ be silently reassigned during a render-directory cleanup.
 If the cleanup uncovers a missing reusable RunenShader contract, open that work under the owning
 cross-repository authority. Do not solve it with a Runenwerk render compatibility layer.
 
+## RRA-014 — Vertical feature placement contains both valid adapters and unused scaffold
+
+**Classification:** mixed keep / active migration / delete-candidate / separately owned disposition.
+
+A complete feature-tree review distinguishes four cases.
+
+### Generic feature contribution framework — keep
+
+`features/mod.rs`, the typed collector registry, descriptors, contribution status/fallback gates,
+and registered payload contracts are renderer-owned execution integration. Their current coexistence
+with legacy central payload variants is the accepted strangler from RRA-006.
+
+### Active producer adapters — keep within current owner
+
+- particle/VFX and world-visual collectors are registered and translate prepared producer resources
+  into generic render contribution packets;
+- world runtime cache is actively consumed by World -> Render bridges and remains derived GPU/render
+  cache state;
+- SDF residency/page/brick/clipmap state is actively produced by the World bridge and consumed as
+  renderer integration/residency evidence.
+
+These are not dead merely because their semantic vocabulary is product-specific.
+
+### UI realization/publication — active #1110 migration seam
+
+`features/ui/**` includes publication ordering, prepared `UiFrame` transport, font-atlas
+realization, output proof, and renderer submission integration. Active issue #1110 owns the current
+RunenUI publication cut. No structural move from this investigation may preempt its accepted write
+set.
+
+### Unused scaffold — delete candidates after exact-current revalidation
+
+Current search found no maintained consumers for:
+
+- `CaveRenderVisibilityResource`;
+- `DetailCellPayload` / `DetailPreparedCellResource`;
+- `WorldLodBand`, `WorldLodPolicyResource`, `WorldLodSelectionResource` beyond plugin
+  initialization for the latter resources;
+- `EditorPickingResultResource` beyond plugin initialization.
+
+The LOD scaffold is especially misleading because accepted renderer-scale architecture assigns
+**semantic LOD policy** outside Render while allowing renderer-owned derived visibility/LOD
+execution structures. Since the current threshold policy has no maintained consumer, it should not
+be preserved as future-facing authority.
+
+These delete candidates are separate evidence from the post-RunenGPU `backend/` residue and must
+be revalidated immediately before any delivery.
+
+## RRA-015 — SDF raymarch scaffolding is superseded as acceleration authority, not simply dead
+
+**Classification:** retain integration evidence where consumed; do not redesign under #1138.
+
+Completed investigation #1124 already owns the detailed disposition:
+
+- `RenderSdfResidencyResource` / clipmap records: retain as Runenwerk
+  integration/residency evidence, not generic RunenRender acceleration authority;
+- current `RenderSdfRaymarchAccelerationResource`: superseded as acceleration authority;
+- current "distance mips": placeholder/proof-only and superseded for real hierarchy claims;
+- current tile/depth candidate lists: placeholder/proof-only and superseded as spatial candidate
+  acceleration;
+- generic `RenderFieldSemanticInput`: retain;
+- generic future query acceleration belongs to standalone RunenRender.
+
+Therefore #1138 must not absorb SDF acceleration redesign or delete still-consumed integration
+evidence under a generic cleanup label.
+
 # 5. Dependency-direction assessment
 
 The current source has several physical bidirectional references inside the single render crate
@@ -549,6 +683,59 @@ tree. The important conclusion is not "all cycles are forbidden."
 | `renderer <-> inspect` | **Instrumentation coupling**; semantically acceptable while evidence remains derived/read-only, but candidate contract-placement cleanup later. |
 
 This distinction prevents a cosmetic re-layout from replacing accepted semantics.
+
+# 5.1 Inspection responsibility classification
+
+The 33-file `inspect/` tree is large but remains semantically derived/read-oriented. Source search
+found no production `ResMut`, `world.resource_mut`, or resource-insertion path inside inspection;
+the only resource insertion hit is a test fixture. Apparent `commands` hits are benchmark-command
+fields in evidence requests, not engine command mutation.
+
+The inspection modules classify as:
+
+| Class | Modules / examples | Disposition |
+| --- | --- | --- |
+| Runtime diagnostics and budgets | `budgets`, `pipeline_fallback`, `timings`, `gpu_residency` | Keep derived. |
+| Prepared/execution projections | `plan`, `prepared_frame`, `resource_inspector`, `producer`, `query_snapshot`, `frame_history` | Keep read-only. |
+| Capture/debug inspection | `capture`, `texture_preview`, `texture_view`, `graph_dump`, `pass_provenance` | Keep tooling/evidence. |
+| Product-family production evidence | `material_*`, `scale_*`, `sdf_*`, `temporal_*`, `product_visual_evidence`, `ray_query` | Keep as evidence while current owning designs require them; do not promote to product truth. |
+| Aggregate readiness/reporting | `readiness`, `report`, `artifacts`, `config` | Keep aggregate/read-only. |
+
+No second execution or product-truth path was found. Later physical decomposition may move neutral
+execution-evidence DTOs out of `inspect` if needed to remove import cycles, but semantic ownership
+does not need redesign.
+
+# 5.2 Large-module cohesion review
+
+Large-file size is not itself a defect. The current large units classify as:
+
+| File | Current change reasons | Disposition |
+| --- | --- | --- |
+| `api/flow.rs` | RenderFlow authoring/resources/builders plus compatibility uniform projection and embedded tests. | Mostly cohesive authoring; delete compatibility projection, do not split builder API by LOC. |
+| `adapters/gpu_work.rs` | Render work composition, RunenGPU translation, control ordering, timing/capture/present nodes, extensive correctness tests. | Cohesive translation subsystem; consider test extraction only if maintenance pressure warrants. |
+| `graph/validation.rs` | Static RenderFlow validation rules. | Large but cohesive; keep one compiler-validation owner. |
+| `graph/prepared_validation.rs` | Prepared-frame preflight, cache keys/hashing, runtime guards. | Cohesive second validation phase; keep distinct from static validation. |
+| `frame/contributions.rs` | Generic contribution container plus many legacy feature/material payload families and codecs. | Genuine mixed convergence/migration file; shrink as feature collector strangler completes. |
+| `renderer/prepare.rs` | UI preparation/batching, material GPU realization, uploads, feature hashing. | Multiple independent reasons to change; split after #1110/material writer constraints resolve. |
+| `runtime/frame_prepare.rs` | Frame/surface/view/invocation extraction, feature collection, input projection, fallback policy. | Orchestration hub; later split by preparation stage after collector migration. |
+| `renderer/render_flow/execute.rs` | Batch realization, RunenRender admission/execution, pass execution, capture, present/provenance. | Execution convergence point; later split by execution stage once current boundaries stabilize. |
+| `runtime/frame_submit.rs` | Multi-surface transaction/orchestration, frame history, retry/defer behavior, attachment validation, diagnostics tiering. | Large but mostly submit-transaction owner; extract validation/history helpers only when change pressure justifies. |
+| `runtime/frame_diagnostics.rs` | Delayed capture/probe/diff transaction lifecycle and bounded evidence retention. | Large but cohesive diagnostics transaction subsystem. |
+
+# 5.3 Public consumer disposition
+
+The root facade should be cleaned by proven consumer class rather than by module aesthetics:
+
+| Surface | Maintained consumer class | Disposition |
+| --- | --- | --- |
+| `RenderPlugin`, `AppRenderExt` | Arena, Draw, Editor, Render Lab, examples/tests | Keep ergonomic public entrypoints. |
+| `RenderFlow` and ordinary authoring builders | Apps, examples, Render Lab, benches/tests | Keep public. |
+| `PreparedRenderFrame` and prepared request/invocation contracts | Arena, Draw, Editor, Render Lab, benches/tests | Keep as explicit Runenwerk integration contract. |
+| `Gfx` | Render Lab + engine native-host/state integration + tests | Keep advanced host/runtime contract for now; reassess placement, not existence. |
+| `Renderer` | Engine state only among exact `render::Renderer` consumers found | Candidate to stop root re-exporting after consumer-proofed cleanup. |
+| `CompiledRenderFlowPlan` | Narrow advanced Render Lab/bench/guard consumers | Candidate for explicit `graph` namespace rather than root wildcard. |
+| preflight/inspection report types | Tests/bench/inspection | Prefer owner submodule surface. |
+| `RenderFrameDataRegistry` | Examples/tests only | Delete; no compatibility alias. |
 
 # 6. Target decomposition
 
@@ -795,9 +982,11 @@ requires proof before removal, such as the feature collector strangler.
 
 # 13. Next gate
 
-This investigation is decision-complete for **R1 only**.
+After the completeness correction recorded as INV-COMP-001, this report now contains the missing exact source inventory, framework dependency classification, vertical-feature disposition, inspection classification, cohesion review, and public-consumer map.
 
-The next implementation issue should own exactly:
+The investigation candidate is therefore decision-complete for **one first successor shape**, subject to acceptance of this report on `main` and current-writer re-resolution.
+
+The next implementation issue, created only after this investigation is accepted, should own exactly:
 
 > retire proven post-RunenGPU/RunenRender compatibility/backend residue, move the retained
 > surface/RunenGPU host integration to backend-neutral ownership, and reconcile current render
@@ -807,7 +996,7 @@ That issue must re-resolve active #1110 before claiming `plugin.rs` or `renderer
 If #1110 remains an active writer on required files, R1 is blocked/serialized rather than
 parallelized through conflicting edits.
 
-R2-R4 remain sequenced architecture outcomes, not pre-created implementation backlog.
+R2-R4 remain sequenced architecture outcomes, not pre-created implementation backlog. Premature issue #1140 was closed as not planned after INV-COMP-001 and is not delivery authority.
 
 ## Result
 
