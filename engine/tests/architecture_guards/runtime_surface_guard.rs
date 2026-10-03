@@ -11,7 +11,7 @@ const GUARDED_PATHS: &[&str] = &[
     "src/plugins/debug_metrics/mod.rs",
     "examples/runtime_minimal",
     "examples/window_input_demo",
-    "tests/runtime_app.rs",
+    "tests/runtime_core/runtime_app.rs",
     "tests/network_plugins.rs",
 ];
 
