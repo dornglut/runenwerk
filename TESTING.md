@@ -20,17 +20,11 @@ An integration-test executable represents an actual isolation or external-bounda
 
 Keep separate executables where platform behavior, process or environment isolation, compile-fail behavior, crash or panic isolation, native GPU conformance, or explicit backend/runtime evidence requires them. Target consolidation must not introduce shared mutable runtime state or weaken test isolation.
 
-## Test debug information
+## Canonical validation test debug information
 
-Repository test builds use Cargo's `line-tables-only` debug information policy. This keeps filename/line information for panic backtraces while reducing test-build debug payload and link cost.
+The product-workspace test stage inside `cargo validate` uses Cargo's `line-tables-only` debug information policy. This retains filename/line information for panic backtraces while reducing canonical validation test-build debug payload and link cost.
 
-For an interactive debugging session that needs full local test debuginfo, override the repository default explicitly:
-
-```text
-CARGO_PROFILE_TEST_DEBUG=full cargo test -p <package>
-```
-
-This override is for local debugging; merge-readiness evidence uses the repository default.
+Direct developer `cargo test` commands keep Cargo's normal full-debug test profile. The reduced-debug policy is repository-owned by the validator and is applied identically when `cargo validate` runs locally or in CI.
 
 ## Required baseline
 
