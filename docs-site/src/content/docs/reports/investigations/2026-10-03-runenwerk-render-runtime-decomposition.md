@@ -9,6 +9,7 @@ last_reviewed: 2026-10-03
 publication: reference
 pagefind: false
 related_docs:
+  - ./2026-10-03-runenwerk-render-runtime-dependency-census.md
   - ./2026-10-03-runenwerk-render-runtime-source-census.md
   - ../../engine/reference/plugins/render/architecture.md
   - ../../engine/reference/plugins/render/render-target-architecture.md
@@ -266,8 +267,15 @@ The immutable source inventory is recorded in the linked
 [exact source census](./2026-10-03-runenwerk-render-runtime-source-census.md).
 It lists all 184 Rust files with byte size and immutable blob SHA at the reviewed revision.
 
-For architectural dependency review, explicit cross-group source references on the unchanged
-reviewed default branch produce the following materially relevant edges:
+The linked [lexical dependency census](./2026-10-03-runenwerk-render-runtime-dependency-census.md)
+independently covers the same 184/184 files with zero omissions or duplicates and records, from
+exact immutable file bytes, each file's blob SHA, explicit cross-top-level Render dependencies,
+direct framework dependencies, direct peer-plugin dependencies, and lexical public-item count.
+It explicitly distinguishes this exact lexical reference graph from a compiler-resolved Rust type
+graph.
+
+Summarizing that per-file census at the top-level owner boundary gives the following materially
+relevant edges:
 
 | Consuming group | Explicit dependency groups observed | Architectural interpretation |
 | --- | --- | --- |
@@ -282,9 +290,9 @@ reviewed default branch produce the following materially relevant edges:
 | `procedural` | `api`, `gpu_primitives` | Authoring/lowering path. |
 | `backend` | `graph`, `pipelines` | Residual host/capability wrapper; partly obsolete after RunenGPU. |
 
-This is a source-level ownership map, not a claim that every relative intra-group Rust import is
-listed separately. Relative imports within one top-level owner do not alter the cross-owner
-conclusions above.
+This summary is backed by the complete per-file lexical appendix. Same-owner relative references
+are intentionally omitted from the top-level summary because they do not change owner direction;
+the appendix remains the exact file-by-file evidence surface.
 
 ## 3.2 Standalone framework dependency classification
 
