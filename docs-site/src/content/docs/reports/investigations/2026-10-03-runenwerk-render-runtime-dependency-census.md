@@ -166,3 +166,20 @@ top-level Render dependency. Same-top-level-module references are omitted from *
 | `engine/src/plugins/render/shader/mod.rs` | `dca94b63f3c3443aa0297403436dfe29037edb51` | — | — | `shared` | 3 |
 | `engine/src/plugins/render/shader/registry.rs` | `d6d23227c0d925829b3a4f3c5ea8d3a26a2afd2a` | — | — | — | 31 |
 | `engine/src/plugins/render/shader/types.rs` | `558cc9eb0868288ae8154bf5b4b61be247a14cde` | — | — | — | 13 |
+
+## Material compiler
+
+| File | Blob | Render deps | Framework deps | Peer deps | Public items |
+| --- | --- | --- | --- | --- | ---: |
+| `engine/src/plugins/render/material_compiler/bindings.rs` | `b251fa5c6ba06ea18dcb89915ee795508ee4b837` | — | — | — | 11 |
+| `engine/src/plugins/render/material_compiler/diagnostics.rs` | `5dd4ca45818d9fa279b0eedfcfe4b7a7f3537a0a` | — | — | — | 1 |
+| `engine/src/plugins/render/material_compiler/identity.rs` | `58f1b54a20c3ae05b2c77bd7830958afcf7b58fd` | — | — | — | 6 |
+| `engine/src/plugins/render/material_compiler/mod.rs` | `b753fc95718479ee338c8c212582c72faafe13c8` | — | — | — | 5 |
+| `engine/src/plugins/render/material_compiler/tests.rs` | `977443d269e9a934bd25a9c7dd1fa41c5c9ff134` | — | — | — | 0 |
+| `engine/src/plugins/render/material_compiler/types.rs` | `136e3eab2907025a9215306ad7bf0454ebadffaa` | — | — | — | 9 |
+| `engine/src/plugins/render/material_compiler/validation.rs` | `e790fe52a36f7220f881c135d9c4532b0db4c99c` | — | `naga` | — | 3 |
+| `engine/src/plugins/render/material_compiler/wgsl/literals.rs` | `8eb99c67827fac5f832faaf644a4635d661f2d13` | — | — | — | 4 |
+| `engine/src/plugins/render/material_compiler/wgsl/mod.rs` | `3bef6a66c3a71a55fae415aaa0b96f5d7141774b` | — | — | — | 3 |
+| `engine/src/plugins/render/material_compiler/wgsl/preview.rs` | `a7e61f6ece0aaee32abd6369fbefc3371fd8b6b0` | — | — | — | 1 |
+| `engine/src/plugins/render/material_compiler/wgsl/program.rs` | `f9478fcfa7280214a849a149bd5a32e139545a85` | — | — | — | 3 |
+| `engine/src/plugins/render/material_compiler/wgsl/scene.rs` | `3034a1c78dcb3e93c28709322013ec4899ffab49` | — | — | — | 3 |
