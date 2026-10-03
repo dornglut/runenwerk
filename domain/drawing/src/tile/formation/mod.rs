@@ -1,5 +1,5 @@
-//! File: domain/drawing/src/tile/formation.rs
-//! Purpose: Deterministic CPU ink tile formation from committed drawing strokes.
+//! File: domain/drawing/src/tile/formation/mod.rs
+//! Purpose: Public deterministic ink-tile formation contracts and orchestration.
 
 use std::collections::BTreeMap;
 
