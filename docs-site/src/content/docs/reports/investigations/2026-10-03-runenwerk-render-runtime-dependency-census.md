@@ -203,3 +203,25 @@ top-level Render dependency. Same-top-level-module references are omitted from *
 | `engine/src/plugins/render/runtime/frame_prepare.rs` | `884b8079dc330f869c4cffb08b2b480e548e6fb9` | `backend`, `inspect`, `root-facade` | `runen_gpu` | `scene` | 3 |
 | `engine/src/plugins/render/runtime/frame_submit.rs` | `2a546b351cd2ef6b3dc657f2e86a29f81cccb770` | `backend`, `inspect`, `renderer`, `root-facade` | `runen_render` | `inspect`, `pipelines`, `time` | 1 |
 | `engine/src/plugins/render/runtime/mod.rs` | `61a57613c929f77422b94e2da1b87c1fe584cf06` | — | — | — | 11 |
+
+## Inspect — part 1
+
+| File | Blob | Render deps | Framework deps | Peer deps | Public items |
+| --- | --- | --- | --- | --- | ---: |
+| `engine/src/plugins/render/inspect/artifacts.rs` | `821da159412b7461e7590f2c4cc21b951a32f4fb` | — | — | — | 5 |
+| `engine/src/plugins/render/inspect/budgets.rs` | `e12b3ac7015ed18aa503d387a7727a2bd4e59ff8` | — | — | — | 14 |
+| `engine/src/plugins/render/inspect/capture.rs` | `b1860af952bfc6fec51f27bbf1ff3084f57269e9` | — | — | — | 30 |
+| `engine/src/plugins/render/inspect/config.rs` | `b70a9967f57a9cef1132a54c263fafe248e23f67` | `api` | — | — | 24 |
+| `engine/src/plugins/render/inspect/frame_history.rs` | `bf7d1129b29235d8a72ee3221ddf6d38eda00f5d` | `renderer` | — | — | 25 |
+| `engine/src/plugins/render/inspect/gpu_residency.rs` | `b417dbac892b14978b26ba134d4cfcc9f3b29294` | `root-facade` | — | — | 5 |
+| `engine/src/plugins/render/inspect/graph_dump.rs` | `7f26da8be94ba7042bb7f991fed666d4bd1f6656` | `root-facade` | — | — | 5 |
+| `engine/src/plugins/render/inspect/material_handoff.rs` | `951201cb1ca0a557e570fb7e990646a9a94af155` | `root-facade` | — | — | 7 |
+| `engine/src/plugins/render/inspect/material_production.rs` | `ab35b8e0dc8607f39caafd2a6638558b4b92c2c5` | — | — | — | 16 |
+| `engine/src/plugins/render/inspect/mod.rs` | `1f21df7514b080b1be63c4f3baad4d72fb65a361` | — | — | — | 32 |
+| `engine/src/plugins/render/inspect/pass_provenance.rs` | `cd4067f9240a408666dd6488ea73b2cc5898e5fd` | `pipelines`, `root-facade` | `runen_gpu` | — | 7 |
+| `engine/src/plugins/render/inspect/pipeline_fallback.rs` | `8845cf0d593881820805647eeb6c8de0c6137fd6` | `pipelines`, `shader` | — | — | 9 |
+| `engine/src/plugins/render/inspect/plan.rs` | `a7f405e834e869c95d5dbc3bfaea5046f3f91dc6` | `graph`, `root-facade` | `runen_gpu` | — | 14 |
+| `engine/src/plugins/render/inspect/prepared_frame.rs` | `632ade45a4a898072cdc1c7cefde5a63669013a0` | `root-facade` | — | — | 19 |
+| `engine/src/plugins/render/inspect/producer.rs` | `81b15ac873d28d27af1101d2f770f1c18fc5191d` | — | — | `diagnostics` | 7 |
+| `engine/src/plugins/render/inspect/product_visual_evidence.rs` | `cee6182ce2ae5da2e4238faf4f1d202cb4f2884e` | `features`, `root-facade` | — | — | 26 |
+| `engine/src/plugins/render/inspect/query_snapshot.rs` | `a651f0fd8338573cc1c57b28837545db4bb03385` | — | — | — | 3 |
