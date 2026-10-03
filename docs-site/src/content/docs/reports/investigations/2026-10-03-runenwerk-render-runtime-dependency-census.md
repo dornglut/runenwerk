@@ -59,3 +59,23 @@ top-level Render dependency. Same-top-level-module references are omitted from *
 | `engine/src/plugins/render/params/gpu_params.rs` | `bd1a983cc36555eadc32563cada1472ccb94d805` | — | — | — | 3 |
 | `engine/src/plugins/render/params/gpu_value.rs` | `c0c79a339bedd9492dc54ecff30980787567e09e` | — | — | — | 5 |
 | `engine/src/plugins/render/params/mod.rs` | `f8bb7609fa145b0b8c051107d495c244bf2b4f5c` | — | — | — | 4 |
+
+## API and backend
+
+| File | Blob | Render deps | Framework deps | Peer deps | Public items |
+| --- | --- | --- | --- | --- | ---: |
+| `engine/src/plugins/render/api/bindings.rs` | `d9f53d542c28b461013149d8d844022e35bbd6b0` | `graph`, `renderer`, `root-facade` | `runen_gpu` | — | 31 |
+| `engine/src/plugins/render/api/dispatch.rs` | `e52c799a076d3ccd1382d270ef3d60e80f3ba28d` | — | — | — | 7 |
+| `engine/src/plugins/render/api/errors.rs` | `e42ee224b71d6843a6a7bf7341d9b3163f44848a` | `gpu_primitives`, `procedural`, `root-facade` | `runen_gpu` | — | 1 |
+| `engine/src/plugins/render/api/flow.rs` | `33fb10c1564f92c2ef44d60a22b9183134142e1f` | `graph`, `procedural`, `renderer`, `root-facade` | `runen_gpu` | — | 53 |
+| `engine/src/plugins/render/api/handles.rs` | `c58bb8bce85edc499ded43bf4da527a600dc6747` | `root-facade` | `runen_gpu` | — | 8 |
+| `engine/src/plugins/render/api/ids.rs` | `5ce8fd5a703a9abe85bf8e378b847ecec6cab1cb` | — | — | — | 4 |
+| `engine/src/plugins/render/api/mod.rs` | `07f26158f6bbb465665848d5ab456d2e4334c37b` | — | — | — | 14 |
+| `engine/src/plugins/render/api/passes.rs` | `323b863fbed0a71adc41133d2c66fda5e26e27cf` | `graph`, `root-facade` | `runen_gpu` | — | 101 |
+| `engine/src/plugins/render/backend/execution.rs` | `c699aab724572667df4da77f20badcf899cadaea` | `graph` | — | — | 1 |
+| `engine/src/plugins/render/backend/formats.rs` | `17b885be5901d1eecc2ef7c2f2ac6ebe04613fc6` | — | `runen_gpu` | — | 1 |
+| `engine/src/plugins/render/backend/mod.rs` | `1a18b45bd9b54c8ac3db9129e918461c2d647b40` | — | — | — | 6 |
+| `engine/src/plugins/render/backend/pipeline_cache.rs` | `de09f631b8ff381a235f96d5bb089a08318f2475` | `pipelines` | — | — | 2 |
+| `engine/src/plugins/render/backend/resource_allocator.rs` | `f2745f426d3a44a8452a1aaea73ab1e91214fe14` | `root-facade` | `runen_gpu` | — | 16 |
+| `engine/src/plugins/render/backend/surface.rs` | `8bdf7704022049943d5d9da9c738849329ed4ffd` | — | `runen_gpu` | — | 18 |
+| `engine/src/plugins/render/backend/wgpu_ctx.rs` | `2e54a0e741d09ce9546f73e52ae0ccd9dc05b8ce` | `root-facade` | `runen_gpu` | — | 10 |
