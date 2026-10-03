@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-09-25
+last_reviewed: 2026-10-03
 publication: reference
 pagefind: false
 ---
@@ -276,9 +276,8 @@ Pick the owner before picking a file.
 
 Use these rules:
 
-- `domain/` for Runenwerk-owned engine-agnostic domain contracts and logic
-- `engine/` for Runenwerk runtime composition, plugins, rendering integration, input, scene, UI, and time
-- `net/` for the remaining Runenwerk simulation/history packages; realtime networking integration lives under `engine/src/plugins/net`, while reusable realtime-networking semantics belong to standalone RunenNet
+- `domain/` for Runenwerk-owned engine-agnostic domain contracts and logic, including current simulation and replay semantics
+- `engine/` for Runenwerk runtime composition, plugins, rendering integration, input, scene, UI, time, and Runenwerk-specific realtime networking integration under `engine/src/plugins/net`
 - `apps/` for process wiring, config loading, product policy, and external service integration
 - `adapters/` for explicit external runtime/engine integration glue
 
