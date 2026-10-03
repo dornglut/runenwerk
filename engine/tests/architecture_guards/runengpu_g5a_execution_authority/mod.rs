@@ -1,9 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-#[path = "runengpu_g5a_execution_authority/renderer_timing_boundary.rs"]
 mod renderer_timing_boundary;
-#[path = "runengpu_g5a_execution_authority/renderer_ui_boundary.rs"]
 mod renderer_ui_boundary;
 
 fn engine_path(path: &str) -> PathBuf {
