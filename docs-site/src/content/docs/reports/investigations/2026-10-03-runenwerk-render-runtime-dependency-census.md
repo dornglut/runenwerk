@@ -225,3 +225,24 @@ top-level Render dependency. Same-top-level-module references are omitted from *
 | `engine/src/plugins/render/inspect/producer.rs` | `81b15ac873d28d27af1101d2f770f1c18fc5191d` | — | — | `diagnostics` | 7 |
 | `engine/src/plugins/render/inspect/product_visual_evidence.rs` | `cee6182ce2ae5da2e4238faf4f1d202cb4f2884e` | `features`, `root-facade` | — | — | 26 |
 | `engine/src/plugins/render/inspect/query_snapshot.rs` | `a651f0fd8338573cc1c57b28837545db4bb03385` | — | — | — | 3 |
+
+## Inspect — part 2
+
+| File | Blob | Render deps | Framework deps | Peer deps | Public items |
+| --- | --- | --- | --- | --- | ---: |
+| `engine/src/plugins/render/inspect/ray_query.rs` | `4fc6b43f9203620f3ed0460bc28d7f3c58e85d85` | — | — | — | 22 |
+| `engine/src/plugins/render/inspect/readiness.rs` | `ed4c39679a8d49a20b95eff83e5fe47da1498afa` | — | — | — | 22 |
+| `engine/src/plugins/render/inspect/report.rs` | `e5ebdf31822b49917cca4d651e31ff63cc1ce95c` | — | — | — | 13 |
+| `engine/src/plugins/render/inspect/resource_inspector.rs` | `d848f185004877629ad8666d9e0dd7b95d01ce69` | `root-facade` | `runen_gpu` | — | 11 |
+| `engine/src/plugins/render/inspect/scale_production.rs` | `9fadf23105f98434595b9b371e4f04cb92483d91` | — | — | — | 16 |
+| `engine/src/plugins/render/inspect/scale_visibility.rs` | `994cafa4f9923b4b44505ae24a3cb0f982f7f1c3` | — | — | — | 15 |
+| `engine/src/plugins/render/inspect/sdf_production.rs` | `44f816547e0bcc1721a9f563191e7a47ae2c0f8a` | `features` | — | — | 16 |
+| `engine/src/plugins/render/inspect/sdf_raymarch.rs` | `dbf75d06cafc9ad9019eeaeb5b33b2c2326267f2` | `features` | — | — | 2 |
+| `engine/src/plugins/render/inspect/sdf_residency.rs` | `6bb333e710744923e247074447d683469fdd629c` | `features` | — | — | 8 |
+| `engine/src/plugins/render/inspect/temporal.rs` | `bac29efece842d5ffa704aeb601507e72c1fc837` | `root-facade` | — | — | 23 |
+| `engine/src/plugins/render/inspect/temporal_production.rs` | `eb832b872c2ca4bcac18a94198da2d271db3e4d8` | — | — | — | 16 |
+| `engine/src/plugins/render/inspect/temporal_upscaling.rs` | `c2c2363001c072eaae1252b8dadc8837e47ffd79` | — | — | — | 15 |
+| `engine/src/plugins/render/inspect/texture_preview.rs` | `a39ebb053d36df8ff3cd148d24710dccdc9bc0ab` | `root-facade` | `runen_gpu` | — | 6 |
+| `engine/src/plugins/render/inspect/texture_view.rs` | `448096d4ca9dd1fb9abaf25b49dc85ba6aa3d229` | `root-facade` | `runen_gpu` | — | 5 |
+| `engine/src/plugins/render/inspect/timings.rs` | `61d2c8a73f416d11492c4563fd763c78ab110a27` | `graph`, `renderer`, `shader` | — | — | 38 |
+| `engine/src/plugins/render/inspect/world_runtime.rs` | `690810473b069f5c85a52b429cbc2ec848004867` | — | — | — | 1 |
