@@ -79,3 +79,24 @@ top-level Render dependency. Same-top-level-module references are omitted from *
 | `engine/src/plugins/render/backend/resource_allocator.rs` | `f2745f426d3a44a8452a1aaea73ab1e91214fe14` | `root-facade` | `runen_gpu` | — | 16 |
 | `engine/src/plugins/render/backend/surface.rs` | `8bdf7704022049943d5d9da9c738849329ed4ffd` | — | `runen_gpu` | — | 18 |
 | `engine/src/plugins/render/backend/wgpu_ctx.rs` | `2e54a0e741d09ce9546f73e52ae0ccd9dc05b8ce` | `root-facade` | `runen_gpu` | — | 10 |
+
+## Composition and frame
+
+| File | Blob | Render deps | Framework deps | Peer deps | Public items |
+| --- | --- | --- | --- | --- | ---: |
+| `engine/src/plugins/render/composition/fragment_registry.rs` | `2c4ba88ba5da2f133326bb8d938bd36cdb642bad` | `graph`, `root-facade` | `runen_gpu` | — | 14 |
+| `engine/src/plugins/render/composition/fragment_validation.rs` | `915e45ddae6fd9af26fbb2b612503f9be97ac520` | — | `runen_gpu` | — | 1 |
+| `engine/src/plugins/render/composition/fragments.rs` | `d065b8b85edafb05eda6b997614b6212d9991c96` | `root-facade` | `runen_gpu` | — | 88 |
+| `engine/src/plugins/render/composition/hot_reload.rs` | `fb1f44ee9f7dd8b9db9696dfcdf0dc4b012aa1cf` | — | — | — | 3 |
+| `engine/src/plugins/render/composition/integration.rs` | `f25c68cfad836fe1727639b9afe3239e3e0067c3` | `api`, `graph`, `root-facade` | — | — | 9 |
+| `engine/src/plugins/render/composition/mod.rs` | `4b05b7ee13b039d7074733fa1c68462634572f69` | — | — | — | 11 |
+| `engine/src/plugins/render/frame/context.rs` | `06c635b0e4719311108ebf571e19a56bde05a19c` | — | — | — | 1 |
+| `engine/src/plugins/render/frame/contribution_diagnostics.rs` | `7d810a1578e2d60cb8146daa25a963b427db9a85` | `api`, `features`, `root-facade` | — | — | 8 |
+| `engine/src/plugins/render/frame/contribution_registry.rs` | `235fb55b6166257f111d8632c673a39242f427b1` | `api`, `features`, `root-facade` | — | — | 37 |
+| `engine/src/plugins/render/frame/contributions.rs` | `788cafa021ea2fb99219a9e2603cacea066dbffc` | `api`, `features` | — | — | 92 |
+| `engine/src/plugins/render/frame/fixed_resolution.rs` | `8cd3f120e5698daf7eb6a008298046b5df3ef5f8` | `backend`, `root-facade` | `runen_gpu` | — | 16 |
+| `engine/src/plugins/render/frame/mod.rs` | `978afe9d5f67ef25c663aac728f79888e80979f8` | `features` | — | — | 19 |
+| `engine/src/plugins/render/frame/packet.rs` | `91eb2580f44bff5d94b4f70f278ec10072fd7e39` | `backend`, `root-facade` | `runen_render`, `runen_gpu` | — | 70 |
+| `engine/src/plugins/render/frame/product_selection.rs` | `74bc215ba503d768ec4649803f35666dae68f3c1` | `root-facade` | — | — | 9 |
+| `engine/src/plugins/render/frame/product_surface.rs` | `69d18b4250b2f26bd6adb15b25a55ac5463e04e8` | `root-facade` | — | — | 64 |
+| `engine/src/plugins/render/frame/view.rs` | `5ed3103a3ae35cde8e54d5bb785229f10a7652c6` | — | — | — | 6 |
