@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use ratification::RatificationSeverity;
 
 use crate::{
-    BrushDescriptor, BrushId, CanvasRect, CanvasTileId, ColorRgba, CompositeOutputId,
+    BrushId, CanvasTileId, ColorRgba, CompositeOutputId,
     DrawingDocument, DrawingDocumentRevision, DrawingRatificationReport, DrawingTileProduct,
     DrawingTileProductId, DrawingTileProductSource, FormationVersion, PaintTarget,
     ProductQualityClass, StrokeId, StrokeRecord, StrokeSample, StrokeToolKind,
