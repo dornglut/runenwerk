@@ -18,8 +18,6 @@ pub use extension::*;
 pub use fresh_target::*;
 pub use identity::*;
 pub use layout_formation::*;
-#[cfg(test)]
-pub(crate) use legacy_import::*;
 pub use projection::*;
 pub use runtime::*;
 #[cfg(test)]
