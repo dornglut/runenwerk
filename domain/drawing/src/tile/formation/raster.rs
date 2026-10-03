@@ -1,3 +1,5 @@
+//! Private stroke reconstruction, dab generation, rasterization, and blending helpers.
+
 use crate::{
     BrushDab, BrushDabStream, BrushDescriptor, CanvasCoordinate, CanvasRect, DynamicsCurve,
     StrokeReconstructedPath, StrokeReconstructionPolicy, StrokeRecord, StrokeSample,
