@@ -183,3 +183,23 @@ top-level Render dependency. Same-top-level-module references are omitted from *
 | `engine/src/plugins/render/material_compiler/wgsl/preview.rs` | `a7e61f6ece0aaee32abd6369fbefc3371fd8b6b0` | — | — | — | 1 |
 | `engine/src/plugins/render/material_compiler/wgsl/program.rs` | `f9478fcfa7280214a849a149bd5a32e139545a85` | — | — | — | 3 |
 | `engine/src/plugins/render/material_compiler/wgsl/scene.rs` | `3034a1c78dcb3e93c28709322013ec4899ffab49` | — | — | — | 3 |
+
+## Procedural and runtime
+
+| File | Blob | Render deps | Framework deps | Peer deps | Public items |
+| --- | --- | --- | --- | --- | ---: |
+| `engine/src/plugins/render/procedural/authoring.rs` | `cfdae5c1767d2619a73ecbdc64c785a44e0ef6b4` | `api`, `root-facade` | `runen_gpu` | — | 11 |
+| `engine/src/plugins/render/procedural/camera.rs` | `f2cdf173c9ae3dc40de1a2fb01e8186e5ca1a09b` | `root-facade` | — | — | 18 |
+| `engine/src/plugins/render/procedural/descriptors.rs` | `666ae867e576eba8ae4fae52b2c2b3da188f902a` | `root-facade` | `runen_gpu` | — | 36 |
+| `engine/src/plugins/render/procedural/lowering.rs` | `3d1966a49d9ecf6f3e080943e9872f71958fb9ee` | `api`, `root-facade` | `runen_gpu` | — | 4 |
+| `engine/src/plugins/render/procedural/mod.rs` | `3404b0f84e160cbc64a50e67aa3e67f3dd810824` | — | — | — | 7 |
+| `engine/src/plugins/render/procedural/population/mod.rs` | `422f3c5f2674b19c486a919ab4a94266b7421baa` | — | — | — | 1 |
+| `engine/src/plugins/render/procedural/population/uniform_grid.rs` | `b47561c3acb68861f72ac2e469b2eff32cd4c55b` | `gpu_primitives`, `root-facade` | `runen_gpu` | — | 14 |
+| `engine/src/plugins/render/procedural/validation.rs` | `2f5c55dce41b4b4cd086f115f1724ca712e2c4c3` | `root-facade` | — | — | 2 |
+| `engine/src/plugins/render/runtime/debug_eval.rs` | `2e39a16906024732e5ab9e4f1b3e64c01e592139` | `frame` | — | `inspect` | 3 |
+| `engine/src/plugins/render/runtime/dynamic_targets.rs` | `cf447bf763f455c172dc2136223818c85cd7a127` | `backend`, `root-facade` | — | — | 11 |
+| `engine/src/plugins/render/runtime/dynamic_texture_uploads.rs` | `20d664f6975f8b09bbceb9389cc2e2e554bc2363` | `root-facade` | — | — | 14 |
+| `engine/src/plugins/render/runtime/frame_diagnostics.rs` | `56bccabb9cd058ca7c8a53bbc3087ad2d9f6faca` | `inspect`, `pipelines` | — | — | 5 |
+| `engine/src/plugins/render/runtime/frame_prepare.rs` | `884b8079dc330f869c4cffb08b2b480e548e6fb9` | `backend`, `inspect`, `root-facade` | `runen_gpu` | `scene` | 3 |
+| `engine/src/plugins/render/runtime/frame_submit.rs` | `2a546b351cd2ef6b3dc657f2e86a29f81cccb770` | `backend`, `inspect`, `renderer`, `root-facade` | `runen_render` | `inspect`, `pipelines`, `time` | 1 |
+| `engine/src/plugins/render/runtime/mod.rs` | `61a57613c929f77422b94e2da1b87c1fe584cf06` | — | — | — | 11 |
