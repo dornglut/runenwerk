@@ -23,8 +23,10 @@ Integration coverage is organized by behavior area.
   - One boundary-owned integration target for source/ownership guardrails covering GPU, input, render, runtime, and world architecture.
 - `ui_plugins.rs`
   - Scene/UI runtime interaction and overlay state assertions.
-- `replay_plugin.rs`
-  - Replay recording, archive loading, and seek validation path.
+- `scene_replay_contracts/`
+  - One boundary-owned integration target for scene lifecycle/catalog/runtime ownership and replay recording, archive loading, and seek behavior.
+- `world_contracts/`
+  - One boundary-owned integration target for world runtime correctness, deterministic replication, render-cache invalidation, and SDF render bridges.
 - `network_plugins.rs`
   - Net plugin integration with role-specific runtime behavior.
 - `network_plugins/`
