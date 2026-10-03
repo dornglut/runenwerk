@@ -283,3 +283,26 @@ top-level Render dependency. Same-top-level-module references are omitted from *
 | `engine/src/plugins/render/renderer/render_flow/runtime_resources/resolve.rs` | `74fdc58680ee1eedc9feb131d7ade3bfc068a7f2` | — | `runen_gpu` | — | 13 |
 | `engine/src/plugins/render/renderer/resource_descriptors.rs` | `70516ff5e65e9835d72844057c05b3b5cb0ff150` | — | `runen_gpu` | — | 7 |
 | `engine/src/plugins/render/renderer/setup.rs` | `3efbab08b81c76ea1125d5ca559ecb2f87cd5520` | `features`, `graph`, `inspect`, `root-facade` | `runen_render`, `runen_gpu` | — | 33 |
+
+## Semantic-owner dependency overlay
+
+The per-file rows above focus on cross-Render references and the renderer's principal execution
+frameworks. The unchanged accepted revision also has these direct positive source-reference sets to
+other semantic/runtime owners:
+
+| Owner crate/framework | Central Render files | Boundary interpretation |
+| --- | ---: | --- |
+| `runen_ecs` | 27 | ECS Resource/Component/scheduling substrate used across authoring, registry, runtime, inspection, and plugin composition; not Render semantic authority. |
+| `runen_spatial` | 6 | Chunk/spatial identity used by world/detail/residency prepared integration; standalone spatial authority remains external. |
+| `product` | 9 | Prepared product selection, residency requests, authority/freshness/query facts consumed by frame/features/inspection; product truth remains external. |
+| `material_graph` | 9 | Material-compiler input semantics; #842/material owner remains external to generic render execution. |
+| `ui_render_data` | 11 | Renderer-neutral UI frame/publication payloads consumed by UI feature and execution integration. |
+| `ui_text` | 2 | Font/text atlas/layout contracts used by Runenwerk UI realization. |
+| `ui_math` | 1 | UI proof geometry/value dependency. |
+| `world_sdf` | 3 | WorldSDF payload/identity used by SDF residency and inspection integration; not generic RunenRender semantics. |
+| `world_ops` | 1 | World chunk generation/revision facts used by derived render cache integration. |
+
+These are direct positive reference sets on the reviewed default branch, whose head is the immutable
+review revision. They supplement, rather than replace, the exact per-file lexical table above. The
+investigation does not use an empty code-search result as proof of absence for semantic owners.
+
