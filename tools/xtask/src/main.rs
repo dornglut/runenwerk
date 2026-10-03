@@ -46,10 +46,11 @@ const TOOLING_CARGO_STEPS: &[(&str, &[&str])] = &[
     ),
 ];
 
-const PRODUCT_CARGO_STEPS_BEFORE_CLEANUP: &[(&str, &[&str])] = &[
-    ("workspace fmt", &["fmt", "--all", "--check"]),
-    ("workspace tests", &["test", "--workspace", "--locked"]),
-];
+const PRODUCT_CARGO_STEPS_BEFORE_CLEANUP: &[(&str, &[&str])] =
+    &[("workspace fmt", &["fmt", "--all", "--check"])];
+
+const WORKSPACE_TEST_ARGS: &[&str] = &["test", "--workspace", "--locked"];
+const CANONICAL_TEST_DEBUG_INFO: &str = "line-tables-only";
 
 const WORKSPACE_CLIPPY_ARGS: &[&str] = &[
     "clippy",
@@ -122,6 +123,14 @@ fn validate() -> Result<(), String> {
         for (name, args) in PRODUCT_CARGO_STEPS_BEFORE_CLEANUP {
             measure_validation_stage(&mut timings, name, || run(&root, "cargo", args))?;
         }
+        measure_validation_stage(&mut timings, "workspace tests", || {
+            run_with_env(
+                &root,
+                "cargo",
+                WORKSPACE_TEST_ARGS,
+                &[("CARGO_PROFILE_TEST_DEBUG", CANONICAL_TEST_DEBUG_INFO)],
+            )
+        })?;
         measure_validation_stage(&mut timings, "workspace build cleanup", || {
             reclaim_workspace_build_output(
                 &root,
@@ -677,6 +686,35 @@ fn run(root: &Path, program: &str, args: &[&str]) -> Result<(), String> {
         Ok(false) => Err(format!("{program} {} failed", args.join(" "))),
         Err(error) => Err(format!(
             "failed to run {program} {}: {error}",
+            args.join(" ")
+        )),
+    }
+}
+
+fn run_with_env(
+    root: &Path,
+    program: &str,
+    args: &[&str],
+    envs: &[(&str, &str)],
+) -> Result<(), String> {
+    let environment = envs
+        .iter()
+        .map(|(key, value)| format!("{key}={value}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    eprintln!("> {environment} {program} {}", args.join(" "));
+
+    let status = Command::new(program)
+        .args(args)
+        .envs(envs.iter().copied())
+        .current_dir(root)
+        .status();
+
+    match status {
+        Ok(status) if status.success() => Ok(()),
+        Ok(_) => Err(format!("{environment} {program} {} failed", args.join(" "))),
+        Err(error) => Err(format!(
+            "failed to run {environment} {program} {}: {error}",
             args.join(" ")
         )),
     }
