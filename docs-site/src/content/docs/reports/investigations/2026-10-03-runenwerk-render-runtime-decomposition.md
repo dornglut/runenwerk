@@ -329,6 +329,23 @@ The 68 RunenGPU users fall into four owner-correct classes:
 
 No inspected call establishes duplicate generic device/resource/submission authority in Runenwerk.
 
+The dependency appendix also records the direct semantic-owner overlay that sits beside the
+RunenRender/RunenGPU execution boundary. Positive reviewed-reference sets include:
+
+| Owner | Central Render files | Meaning |
+| --- | ---: | --- |
+| RunenECS | 27 | ECS substrate for resources/components/scheduling, not renderer semantics. |
+| RunenSpatial | 6 | chunk/spatial identity for prepared world/residency integration. |
+| `product` | 9 | prepared selection/residency/authority/freshness/query facts; product truth stays external. |
+| `material_graph` | 9 | material compiler input authority; generic Render does not own material truth. |
+| `ui_render_data` | 11 | renderer-neutral UI publication payloads. |
+| `ui_text` / `ui_math` | 2 / 1 | UI text/proof realization contracts. |
+| `world_sdf` / `world_ops` | 3 / 1 | World-owned payload/identity/generation inputs consumed by derived render integration. |
+
+This reinforces the vertical-feature finding: direct dependency is legitimate where Render consumes
+a prepared/owner-defined contract; it becomes a defect only when Render recreates the owner's
+semantic policy or source truth.
+
 ## 3.3 Top-level owner, lifecycle, authority, and consumer matrix
 
 The exact file/dependency appendices answer **what exists and what it references**. The matrix below
