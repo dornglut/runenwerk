@@ -5,7 +5,7 @@ status: accepted
 owner: engine
 layer: engine-runtime / render public API
 canonical: true
-last_reviewed: 2026-05-21
+last_reviewed: 2026-10-03
 publication: reference
 pagefind: false
 related_designs:
@@ -209,11 +209,11 @@ Implementation must follow this order:
 
 Focused tests:
 
-- `engine/tests/render_dynamic_targets.rs` proves helper-built descriptors,
+- `engine/tests/render_contracts/render_dynamic_targets.rs` proves helper-built descriptors,
   prepared views, prepared flow invocation requests, alias bindings, history
   signatures, typed duplicate diagnostics, and prepared-frame inspection after
   helper-built requests.
-- `engine/tests/render_runtime_inspect.rs` proves inspection exposes
+- `engine/tests/render_contracts/render_runtime_inspect.rs` proves inspection exposes
   helper-built prepared frame state without backend handles.
 - `apps/runenwerk_editor/src/runtime/viewport/render_jobs.rs` tests prove
   viewport jobs use the shared helper path and still bind the correct scene,

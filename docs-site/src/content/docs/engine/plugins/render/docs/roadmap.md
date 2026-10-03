@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-07-24
+last_reviewed: 2026-10-03
 publication: primary
 related_designs:
   - ../../../../design/accepted/sdf-product-renderer-and-gpu-residency-design.md
@@ -912,7 +912,7 @@ This phase removes the remaining awkwardness.
 - `engine/src/plugins/render/graph/merge.rs`
 - `engine/src/plugins/render/inspect/graph_dump.rs`
 - `engine/src/plugins/render/inspect/pass_provenance.rs`
-- `engine/tests/render_flow_fragments.rs`
+- `engine/tests/render_contracts/render_flow_fragments.rs`
 - `engine/examples/render_fragment_compositor.rs`
 
 ## Required implementation
