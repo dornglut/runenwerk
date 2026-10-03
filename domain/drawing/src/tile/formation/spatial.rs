@@ -56,4 +56,3 @@ pub(super) fn tile_bounds(tile_id: CanvasTileId, tile_size: f64) -> CanvasRect {
 pub(super) fn rects_intersect(a: CanvasRect, b: CanvasRect) -> bool {
     a.min.x <= b.max.x && a.max.x >= b.min.x && a.min.y <= b.max.y && a.max.y >= b.min.y
 }
-
