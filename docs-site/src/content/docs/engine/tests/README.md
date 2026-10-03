@@ -17,6 +17,8 @@ Integration coverage is organized by behavior area.
 
 - `runtime_core/`
   - One boundary-owned integration target for App lifecycle, runtime ownership, fixed-step/simulation, frame pacing, time, native-window hooks, and RunenECS consumer behavior.
+- `render_contracts/`
+  - One boundary-owned integration target for ordinary renderer/procedural contracts, planning, inspection, scale, SDF, temporal, and resource-model behavior. 
 - `architecture_guards/`
   - One boundary-owned integration target for source/ownership guardrails covering GPU, input, render, runtime, and world architecture.
 - `ui_plugins.rs`
