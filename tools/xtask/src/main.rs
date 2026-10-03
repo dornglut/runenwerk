@@ -46,21 +46,19 @@ const TOOLING_CARGO_STEPS: &[(&str, &[&str])] = &[
     ),
 ];
 
-const PRODUCT_CARGO_STEPS: &[(&str, &[&str])] = &[
+const PRODUCT_CARGO_STEPS_BEFORE_CLEANUP: &[(&str, &[&str])] = &[
     ("workspace fmt", &["fmt", "--all", "--check"]),
     ("workspace tests", &["test", "--workspace", "--locked"]),
-    (
-        "workspace clippy",
-        &[
-            "clippy",
-            "--workspace",
-            "--all-targets",
-            "--locked",
-            "--",
-            "-D",
-            "warnings",
-        ],
-    ),
+];
+
+const WORKSPACE_CLIPPY_ARGS: &[&str] = &[
+    "clippy",
+    "--workspace",
+    "--all-targets",
+    "--locked",
+    "--",
+    "-D",
+    "warnings",
 ];
 
 const RETIRED_PATHS: &[&str] = &[
@@ -121,9 +119,19 @@ fn validate() -> Result<(), String> {
             measure_validation_stage(&mut timings, name, || run(&root, "cargo", args))?;
         }
 
-        for (name, args) in PRODUCT_CARGO_STEPS {
+        for (name, args) in PRODUCT_CARGO_STEPS_BEFORE_CLEANUP {
             measure_validation_stage(&mut timings, name, || run(&root, "cargo", args))?;
         }
+        measure_validation_stage(&mut timings, "workspace build cleanup", || {
+            reclaim_workspace_build_output(
+                &root,
+                env::var_os("CARGO_TARGET_DIR").is_some()
+                    || env::var_os("CARGO_BUILD_TARGET_DIR").is_some(),
+            )
+        })?;
+        measure_validation_stage(&mut timings, "workspace clippy", || {
+            run(&root, "cargo", WORKSPACE_CLIPPY_ARGS)
+        })?;
 
         measure_validation_stage(&mut timings, "docs validation", || validate_docs(&root))?;
         measure_validation_stage(&mut timings, "repository audit", || audit_repository(&root))
@@ -184,6 +192,51 @@ fn format_validation_timings(timings: &[ValidationTiming], total: Duration) -> S
     )
     .expect("writing validation total to a String cannot fail");
     report
+}
+
+fn reclaim_workspace_build_output(root: &Path, target_override: bool) -> Result<(), String> {
+    if target_override {
+        eprintln!("> workspace build cleanup skipped: Cargo target directory override is set");
+        return Ok(());
+    }
+
+    let target = root.join("target");
+    if !target.is_dir() {
+        eprintln!("> workspace build cleanup skipped: no default product target directory");
+        return Ok(());
+    }
+
+    let root = fs::canonicalize(root)
+        .map_err(|error| format!("failed to resolve repository root for build cleanup: {error}"))?;
+    let target = fs::canonicalize(&target)
+        .map_err(|error| format!("failed to resolve product target for build cleanup: {error}"))?;
+    let validator = env::current_exe()
+        .and_then(fs::canonicalize)
+        .map_err(|error| {
+            format!("failed to resolve validator executable for build cleanup: {error}")
+        })?;
+
+    if !product_target_is_safe_to_remove(&root, &target, &validator) {
+        return Err(format!(
+            "refusing to remove product target outside the repository or containing the running validator: {}",
+            target.display()
+        ));
+    }
+
+    eprintln!(
+        "> remove disposable product build output: {}",
+        target.display()
+    );
+    fs::remove_dir_all(&target).map_err(|error| {
+        format!(
+            "failed to remove product build output {}: {error}",
+            target.display()
+        )
+    })
+}
+
+fn product_target_is_safe_to_remove(root: &Path, target: &Path, validator: &Path) -> bool {
+    target.parent() == Some(root) && !validator.starts_with(target)
 }
 
 fn validate_docs(root: &Path) -> Result<(), String> {
@@ -648,9 +701,54 @@ fn print_usage() {
 mod tests {
     use super::{
         ValidationTiming, format_validation_timings, is_product_rust_source, is_sdf_gitlink,
-        measure_validation_stage, normalize_source_line_endings, sdf_manifest_violation,
+        measure_validation_stage, normalize_source_line_endings, product_target_is_safe_to_remove,
+        reclaim_workspace_build_output, sdf_manifest_violation,
     };
-    use std::time::Duration;
+    use std::{
+        fs,
+        path::Path,
+        time::{Duration, SystemTime, UNIX_EPOCH},
+    };
+
+    #[test]
+    fn product_build_cleanup_skips_overrides_and_removes_default_output() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time must be after the Unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "runenwerk-xtask-cleanup-{}-{nonce}",
+            std::process::id()
+        ));
+        let target = root.join("target");
+        fs::create_dir_all(&target).expect("temporary target must be creatable");
+        fs::write(target.join("disposable"), b"build output")
+            .expect("temporary build output must be writable");
+
+        reclaim_workspace_build_output(&root, true).expect("override must skip cleanup");
+        assert!(target.join("disposable").is_file());
+        reclaim_workspace_build_output(&root, false).expect("default target must be removed");
+        assert!(!target.exists());
+        fs::remove_dir(&root).expect("temporary root must be removable");
+    }
+
+    #[test]
+    fn product_build_cleanup_only_removes_the_owned_target_without_the_validator() {
+        let root = Path::new("repo");
+        let target = root.join("target");
+        let validator = root.join("tools/xtask/target/xtask");
+        assert!(product_target_is_safe_to_remove(root, &target, &validator));
+        assert!(!product_target_is_safe_to_remove(
+            root,
+            &target,
+            &target.join("debug/xtask")
+        ));
+        assert!(!product_target_is_safe_to_remove(
+            root,
+            Path::new("shared/target"),
+            &validator
+        ));
+    }
 
     #[test]
     fn repository_audit_markers_match_lf_and_crlf_workflows() {
