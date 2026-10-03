@@ -39,3 +39,23 @@ type graph:
 Relative `super::...` paths are resolved against the file's module path before assigning a
 top-level Render dependency. Same-top-level-module references are omitted from **Render deps**.
 
+
+## Root, adapters, and params
+
+| File | Blob | Render deps | Framework deps | Peer deps | Public items |
+| --- | --- | --- | --- | --- | ---: |
+| `engine/src/plugins/render/app_ext.rs` | `8fe36a7dbb2a164c8cbdf617f127592bcbca2ecf` | `inspect`, `root-facade` | — | — | 1 |
+| `engine/src/plugins/render/gpu_context_policy.rs` | `124f212ed4233bcd1b3efa53a40e73b8c7a56ce4` | — | `runen_gpu` | — | 2 |
+| `engine/src/plugins/render/mod.rs` | `2e673aaae7108834518ee930b77e96314bb89dde` | — | — | — | 42 |
+| `engine/src/plugins/render/native_host.rs` | `f9adc551e92faaa9eb034cd32822f888beaa2bc7` | `backend`, `renderer` | — | — | 5 |
+| `engine/src/plugins/render/plugin.rs` | `b850ab0417e85ab967c717684b2104c03541718b` | `backend`, `composition`, `features`, `frame`, `inspect`, `pipelines`, `residency`, `runtime`, `shader` | — | `scene`, `ui` | 3 |
+| `engine/src/plugins/render/readiness.rs` | `c2257ef4c864fd9a9135d9ca690b6472be87c53b` | — | — | — | 9 |
+| `engine/src/plugins/render/texture_upload.rs` | `b0a0221a7974c0c86cbd54d7fb7d2e626a0a6d3c` | `root-facade` | `runen_gpu` | — | 2 |
+| `engine/src/plugins/render/adapters/gpu_capabilities.rs` | `7bd8b8e4ec45acc85e863a3070257fb4c0acd663` | `graph`, `root-facade` | `runen_gpu` | — | 6 |
+| `engine/src/plugins/render/adapters/gpu_data.rs` | `25ac5ec41d973733066e1ffb4df8d1a0a33cdaac` | `root-facade` | `runen_gpu` | — | 11 |
+| `engine/src/plugins/render/adapters/gpu_resources.rs` | `2fa8106dad686ca9d1409064fddf19986ca224e3` | `root-facade` | `runen_gpu` | — | 84 |
+| `engine/src/plugins/render/adapters/gpu_work.rs` | `5d211514155119d9d21a6bb43775b29fef288e5f` | — | `runen_gpu` | — | 15 |
+| `engine/src/plugins/render/adapters/mod.rs` | `f181b2da9f78c99100d9972d24c54c30ed7a2aca` | — | — | — | 4 |
+| `engine/src/plugins/render/params/gpu_params.rs` | `bd1a983cc36555eadc32563cada1472ccb94d805` | — | — | — | 3 |
+| `engine/src/plugins/render/params/gpu_value.rs` | `c0c79a339bedd9492dc54ecff30980787567e09e` | — | — | — | 5 |
+| `engine/src/plugins/render/params/mod.rs` | `f8bb7609fa145b0b8c051107d495c244bf2b4f5c` | — | — | — | 4 |
