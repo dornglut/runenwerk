@@ -265,3 +265,21 @@ top-level Render dependency. Same-top-level-module references are omitted from *
 | `engine/src/plugins/render/renderer/render_flow/logical_copy.rs` | `4b1ad459c6178e0ceacd8f7142fe7082c3d20c6b` | `root-facade` | `runen_gpu` | — | 3 |
 | `engine/src/plugins/render/renderer/render_flow/logical_operations.rs` | `bdcb7202c3083688459b37f40a72f1d2cddf85c6` | `graph`, `root-facade` | `runen_gpu` | — | 8 |
 | `engine/src/plugins/render/renderer/render_flow/logical_timing.rs` | `11600fe0b303488ad626a388b1117c238d54c611` | — | `runen_gpu` | — | 10 |
+
+## Renderer — part 2
+
+| File | Blob | Render deps | Framework deps | Peer deps | Public items |
+| --- | --- | --- | --- | --- | ---: |
+| `engine/src/plugins/render/renderer/render_flow/mod.rs` | `27270899b298a4272cfca21651194788f24c5574` | `api`, `backend`, `frame`, `graph`, `inspect`, `pipelines`, `root-facade` | `runen_gpu` | — | 10 |
+| `engine/src/plugins/render/renderer/render_flow/observation.rs` | `40fe96320f15e3932666d7dbfdad04c0a0414eb2` | — | `runen_gpu` | — | 4 |
+| `engine/src/plugins/render/renderer/render_flow/occurrences.rs` | `008c39146112a91365eb06afd4f716fe5aeb1396` | `root-facade` | `runen_gpu` | — | 3 |
+| `engine/src/plugins/render/renderer/render_flow/pipeline_realization.rs` | `40f52e8144c846e3aadfadcd20d7fa45dbe7907f` | `pipelines`, `root-facade` | `runen_gpu` | — | 1 |
+| `engine/src/plugins/render/renderer/render_flow/preflight_cache.rs` | `a6fc3338f36f8966de66f611a5e44b785421e899` | `graph`, `root-facade` | — | — | 2 |
+| `engine/src/plugins/render/renderer/render_flow/program_sources.rs` | `042e5708a6dcab347b2df9e1cf2c4d6f816e1303` | — | `runen_gpu` | — | 7 |
+| `engine/src/plugins/render/renderer/render_flow/provenance.rs` | `e71f9217f6f4495db48edee2bd16e399e6b16a27` | `features`, `root-facade` | — | — | 18 |
+| `engine/src/plugins/render/renderer/render_flow/runtime_resources.rs` | `3b72f3defffd83a98fcb09bae5dd805a83038211` | `root-facade` | `runen_gpu` | — | 11 |
+| `engine/src/plugins/render/renderer/render_flow/runtime_resources/inspect.rs` | `fb756eab9b222a3bff67823d475ee8abd1a11095` | — | — | — | 1 |
+| `engine/src/plugins/render/renderer/render_flow/runtime_resources/realize.rs` | `51dca0a726acf28976a8aaa21dc26a1cfa28ac37` | `root-facade` | `runen_gpu` | — | 8 |
+| `engine/src/plugins/render/renderer/render_flow/runtime_resources/resolve.rs` | `74fdc58680ee1eedc9feb131d7ade3bfc068a7f2` | — | `runen_gpu` | — | 13 |
+| `engine/src/plugins/render/renderer/resource_descriptors.rs` | `70516ff5e65e9835d72844057c05b3b5cb0ff150` | — | `runen_gpu` | — | 7 |
+| `engine/src/plugins/render/renderer/setup.rs` | `3efbab08b81c76ea1125d5ca559ecb2f87cd5520` | `features`, `graph`, `inspect`, `root-facade` | `runen_render`, `runen_gpu` | — | 33 |
