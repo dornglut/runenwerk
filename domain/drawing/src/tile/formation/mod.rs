@@ -694,4 +694,3 @@ fn supported_strokes<'a>(
         })
         .collect()
 }
-
