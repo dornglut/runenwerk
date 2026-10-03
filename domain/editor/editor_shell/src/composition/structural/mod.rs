@@ -8,6 +8,8 @@ mod layout_formation;
 mod legacy_import;
 mod projection;
 mod runtime;
+#[cfg(test)]
+mod test_support;
 mod transaction;
 
 pub use diagnostic::*;
@@ -16,8 +18,8 @@ pub use extension::*;
 pub use fresh_target::*;
 pub use identity::*;
 pub use layout_formation::*;
-#[cfg(test)]
-pub(crate) use legacy_import::*;
 pub use projection::*;
 pub use runtime::*;
+#[cfg(test)]
+pub(crate) use test_support::test_editor_composition_runtime;
 pub use transaction::*;

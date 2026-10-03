@@ -42,8 +42,6 @@ pub use build_self_authoring_control_panel::build_self_authoring_control_panel;
 pub use build_toolbar::build_toolbar;
 pub use build_viewport_panel::build_viewport_panel;
 pub use docking::*;
-#[cfg(test)]
-pub(crate) use structural::import_legacy_workspace;
 pub use structural::*;
 pub use surface_control_polish::compact_surface_action_button;
 pub use toolbar_definition::{
