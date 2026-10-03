@@ -15,8 +15,8 @@ Integration coverage is organized by behavior area.
 
 ## Suites
 
-- `runtime_app.rs`
-  - App lifecycle, startup ordering, fixed-step semantics, builtin resource expectations.
+- `runtime_core/`
+  - One boundary-owned integration target for App lifecycle, runtime ownership, fixed-step/simulation, frame pacing, time, native-window hooks, and RunenECS consumer behavior.
 - `architecture_guards/`
   - One boundary-owned integration target for source/ownership guardrails covering GPU, input, render, runtime, and world architecture.
 - `ui_plugins.rs`
