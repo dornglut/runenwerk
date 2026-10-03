@@ -100,3 +100,26 @@ top-level Render dependency. Same-top-level-module references are omitted from *
 | `engine/src/plugins/render/frame/product_selection.rs` | `74bc215ba503d768ec4649803f35666dae68f3c1` | `root-facade` | — | — | 9 |
 | `engine/src/plugins/render/frame/product_surface.rs` | `69d18b4250b2f26bd6adb15b25a55ac5463e04e8` | `root-facade` | — | — | 64 |
 | `engine/src/plugins/render/frame/view.rs` | `5ed3103a3ae35cde8e54d5bb785229f10a7652c6` | — | — | — | 6 |
+
+## Features
+
+| File | Blob | Render deps | Framework deps | Peer deps | Public items |
+| --- | --- | --- | --- | --- | ---: |
+| `engine/src/plugins/render/features/caves/mod.rs` | `f8a8c2c98c89f000c83c3b0d767843a7166fe44c` | — | — | — | 1 |
+| `engine/src/plugins/render/features/detail/mod.rs` | `37ee3e53bdbbf27c82e5550a4431373bd739261a` | — | — | — | 2 |
+| `engine/src/plugins/render/features/editor_picking/mod.rs` | `ea4696c18aa00ab2c0b1c51d386efeac4d5d8e79` | — | — | — | 1 |
+| `engine/src/plugins/render/features/editor_picking/resource.rs` | `7da2305af55d3950f37560e4e006c2223844bdf0` | — | — | — | 9 |
+| `engine/src/plugins/render/features/mod.rs` | `855bc0559c499616e4fc052764e2397be8cc2ca8` | `api`, `frame` | — | — | 60 |
+| `engine/src/plugins/render/features/particle_vfx/mod.rs` | `562fabc1a0ee8b4631bb0c2560fefaf67cdaa310` | `root-facade` | — | — | 32 |
+| `engine/src/plugins/render/features/ui/descriptor.rs` | `5a3cd8469e83a8bc992d5f5f5d0a3205154627c2` | — | — | — | 2 |
+| `engine/src/plugins/render/features/ui/mod.rs` | `458bdd8d729bde4f2b875c98b2169b3bb6a94bb7` | — | — | — | 10 |
+| `engine/src/plugins/render/features/ui/prepared.rs` | `04607c0f9c6dea33b0c10b176360f8bd833224bd` | — | — | — | 6 |
+| `engine/src/plugins/render/features/ui/render_output_proof.rs` | `5561b9a0ae6c09e1381581746c8e647bbf4e0ad9` | `api` | — | — | 4 |
+| `engine/src/plugins/render/features/ui/resource.rs` | `2d410ae44b8964080fe2a2ffc40052e284506821` | `backend` | — | — | 13 |
+| `engine/src/plugins/render/features/ui/submission.rs` | `95fdd837065f1ebb4bd70a367fcf66d7b45c8f75` | `api`, `backend` | — | — | 26 |
+| `engine/src/plugins/render/features/world/lod.rs` | `883c5ea708a9390ebab916e8bc80db44b4c34a57` | — | — | — | 4 |
+| `engine/src/plugins/render/features/world/mod.rs` | `d145b086a11a82e3b3e6a83b00616dd034edee40` | — | — | — | 10 |
+| `engine/src/plugins/render/features/world/runtime_cache.rs` | `5ce49f6bd277bdfd97ccd6f4dd996aeaee3216d7` | `root-facade` | — | — | 4 |
+| `engine/src/plugins/render/features/world/sdf_raymarch.rs` | `73ef3e05efcb131c299dd1a19bf64103c5da4be6` | — | — | — | 17 |
+| `engine/src/plugins/render/features/world/sdf_residency.rs` | `4f23b698c1ae975b7101f013c44a9447368bb6fd` | — | — | — | 25 |
+| `engine/src/plugins/render/features/world/visuals/mod.rs` | `e0329f47e0f2b2ebb252e5cda20e8ca910181fb4` | `root-facade` | — | — | 31 |
