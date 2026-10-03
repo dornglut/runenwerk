@@ -36,19 +36,8 @@ fn nonproduction_rust_sources(workspace: &Path, engine: &Path) -> Vec<PathBuf> {
     paths
 }
 
-fn is_cutover_guard_source(relative: &Path) -> bool {
-    [
-        "engine/tests/gpu_cutover_guards.rs",
-        "engine/tests/gpu_cutover_nonproduction_guards.rs",
-        "engine/tests/gpu_g4c1_cutover_guards.rs",
-        "engine/tests/gpu_g7a2_surface_authority.rs",
-        "engine/tests/render_cutoff_guard.rs",
-        "engine/tests/runengpu_g5a_execution_authority.rs",
-        "engine/tests/runengpu_g5a_execution_authority/renderer_timing_boundary.rs",
-        "engine/tests/runengpu_g5c2_observation_authority.rs",
-    ]
-    .iter()
-    .any(|guard| relative == Path::new(guard))
+fn is_architecture_guard_source(relative: &Path) -> bool {
+    relative.starts_with(Path::new("engine/tests/architecture_guards"))
 }
 
 #[test]
@@ -65,9 +54,7 @@ fn tests_examples_and_benches_do_not_read_or_import_the_predecessor_gpu_tree() {
 
     for path in nonproduction_rust_sources(workspace, &engine) {
         let relative = path.strip_prefix(workspace).unwrap_or(&path);
-        if relative == Path::new("engine/tests/gpu_cutover_guards.rs")
-            || relative == Path::new("engine/tests/gpu_cutover_nonproduction_guards.rs")
-        {
+        if is_architecture_guard_source(relative) {
             continue;
         }
         let source = fs::read_to_string(&path)
@@ -102,7 +89,7 @@ fn tests_examples_and_benches_do_not_retain_renderer_execution_bridges() {
 
     for path in nonproduction_rust_sources(workspace, &engine) {
         let relative = path.strip_prefix(workspace).unwrap_or(&path);
-        if is_cutover_guard_source(relative) {
+        if is_architecture_guard_source(relative) {
             continue;
         }
         let source = fs::read_to_string(&path)
