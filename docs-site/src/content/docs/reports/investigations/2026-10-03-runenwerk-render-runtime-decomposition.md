@@ -932,8 +932,7 @@ At the final recheck #842 is open, with no matching branch or open PR found. It 
 
 ## #977 — world/SDF authority documentation
 
-The current open PR is documentation-only and does not overlap the new investigation report path.
-Do not use render cleanup to revise world/SDF semantic ownership.
+At the final recheck #977 remains open with draft PR #1132 at `ae82aee149bbc6fdd0d95d7349d5d074b0ee726b`. Relative to the investigation base it is 1 commit ahead / 3 behind and changes only `field-product-contracts-diagnostics-and-residency-design.md` plus `sdf-first-field-world-platform-design.md`. It does not overlap this investigation's report paths, but it remains the world/SDF semantic-documentation owner. Do not use render cleanup to revise that authority.
 
 ## #1058 — Render Lab native trace recording
 
