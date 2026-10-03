@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-16
+last_reviewed: 2026-10-03
 publication: primary
 related_designs:
   - ../../design/accepted/editor-native-multi-window-presentation-design.md
@@ -181,7 +181,7 @@ The compatibility frame-data registry has been retired. Uniform state projection
   - isolate/remove deprecated or misleading active-path scaffolding and finalize docs.
 - Core files:
   - `engine/src/plugins/render/api/{bindings.rs,flow.rs}`
-  - `engine/tests/render_cutoff_guard.rs`
+  - `engine/tests/architecture_guards/render_cutoff_guard.rs`
   - render docs in `docs-site/src/content/docs/engine/reference/plugins/render/`
 - Gate:
   - maintained projection coverage stays green (`render_flow_v2`), and cutoff guards prevent compatibility-registry reintroduction.

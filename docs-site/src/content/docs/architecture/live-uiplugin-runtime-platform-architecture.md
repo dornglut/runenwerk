@@ -5,7 +5,7 @@ status: active
 owner: ui
 layer: architecture
 canonical: true
-last_reviewed: 2026-09-28
+last_reviewed: 2026-10-03
 publication: reference
 pagefind: false
 related_docs:
@@ -44,7 +44,7 @@ Further RunenUI adoption proceeds under the accepted consumer-by-consumer progra
 | Input/redraw loop | Winit keyboard, mouse, cursor, wheel, and touch events become platform/input events and request redraw on success. `RedrawRequested` runs the engine frame. | `engine/src/runtime/winit_runner.rs` |
 | Frame pacing | Default policy is `ContinuousCapped { target_fps: 60 }`; `OnDemand` exists and has no continuous deadline. | `engine/src/runtime/frame_pacing.rs` |
 | Render plugin ownership today | `RenderPlugin` initializes generic surface-frame submission resources and runs `prepare_ui_feature_resource_system`, frame prepare, and frame submit. It no longer imports, exports, or schedules a scene/debug UI semantic collector after Phase 011. | `engine/src/plugins/render/plugin.rs` |
-| Scene/debug producer path today | Scene and debug owners publish their overlay UI frames through `SurfaceFrameSubmissionRegistryResource`; the prior render-owned `ui_submission.rs` collector is deleted and guarded by tests. | `engine/src/plugins/scene/lifecycle/overlay_update.rs`, `engine/src/plugins/debug_metrics/mod.rs`, `engine/tests/runtime_surface_guard.rs` |
+| Scene/debug producer path today | Scene and debug owners publish their overlay UI frames through `SurfaceFrameSubmissionRegistryResource`; the prior render-owned `ui_submission.rs` collector is deleted and guarded by tests. | `engine/src/plugins/scene/lifecycle/overlay_update.rs`, `engine/src/plugins/debug_metrics/mod.rs`, `engine/tests/architecture_guards/runtime_surface_guard.rs` |
 | UiPlugin mounted-runtime ownership today | `UiPlugin` installs `UiRuntimeSlotsResource`; `app.mount_ui(S)` and `app.ui().mount(S)` lower typed `UiScreen` source, validate the compiled artifact, and create standalone RunenUI `AppRuntime` slots. Engine slot IDs are integration lookup identities only; mounted widget/runtime identity remains RunenUI-owned. | `engine/src/plugins/ui/app_ext.rs`, `engine/src/plugins/ui/runenui_adapter.rs`, `engine/src/plugins/ui/plugin.rs` |
 | UiPlugin state/action integration today | Host-backed Runenwerk state is resolved through retained UiProgram/evaluator binding semantics and enters RunenUI through public action ingress. For the bounded CounterScreen cut, the retained `selected` binding remains boolean state; because the accepted RunenUI Button has no selected-state authoring API, U3 does not reinterpret that state as label or presentation semantics. RunenUI control activation exits through a public host request carrying the retained Runenwerk `UiEventPacket`; that request remains pending until existing Runenwerk typed action/host/domain contracts decide authorization/mutation, after which Engine completes the RunenUI request with the accepted/rejected decision. | `engine/src/plugins/ui/runenui_adapter.rs`, `engine/src/plugins/ui/host.rs` |
 | Predecessor UI frame publication today | `engine/src/plugins/ui/render_publish.rs` and `UiRuntimeEvaluationResource` remain available only for explicitly isolated unmigrated renderer evidence. `UiPlugin` no longer initializes or schedules them as the normal mounted UI runtime path. | `engine/src/plugins/ui/render_publish.rs`, `engine/tests/ui_render_publication.rs` |

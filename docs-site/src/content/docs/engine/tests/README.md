@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-10-03
 publication: primary
 ---
 
@@ -17,8 +17,8 @@ Integration coverage is organized by behavior area.
 
 - `runtime_app.rs`
   - App lifecycle, startup ordering, fixed-step semantics, builtin resource expectations.
-- `runtime_surface_guard.rs`
-  - Guardrail test to prevent legacy runtime API usage in runtime-facing surfaces.
+- `architecture_guards/`
+  - One boundary-owned integration target for source/ownership guardrails covering GPU, input, render, runtime, and world architecture.
 - `ui_plugins.rs`
   - Scene/UI runtime interaction and overlay state assertions.
 - `replay_plugin.rs`
@@ -35,8 +35,8 @@ Integration coverage is organized by behavior area.
 
 - Full integration tests:
   - `cargo test -p engine --tests`
-- Guardrail test only:
-  - `cargo test -p engine --test runtime_surface_guard`
+- Architecture guardrails only:
+  - `cargo test -p engine --test architecture_guards`
 
 ## Related
 
