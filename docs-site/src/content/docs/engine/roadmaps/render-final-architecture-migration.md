@@ -75,7 +75,7 @@ Native OS multi-window and multi-swapchain presentation is specified separately 
   - runtime flow resources and temporal/history allocations
   - command encoding/submission
 
-`RenderFrameDataRegistry` remains compatibility-only for projection helpers/tests and is excluded from active submit/execute.
+The compatibility frame-data registry has been retired. Uniform state projection is owned by `RenderPrepare` and frozen into prepared flow inputs before submit/execute.
 
 ## Staged Plan
 
@@ -180,11 +180,11 @@ Native OS multi-window and multi-swapchain presentation is specified separately 
 - Objective:
   - isolate/remove deprecated or misleading active-path scaffolding and finalize docs.
 - Core files:
-  - `engine/src/plugins/render/renderer/frame_bindings.rs`
+  - `engine/src/plugins/render/api/{bindings.rs,flow.rs}`
   - `engine/tests/render_cutoff_guard.rs`
   - render docs in `docs-site/src/content/docs/engine/reference/plugins/render/`
 - Gate:
-  - compatibility coverage stays green (`render_flow_v2`), cutoff guards prevent reintroduction.
+  - maintained projection coverage stays green (`render_flow_v2`), and cutoff guards prevent compatibility-registry reintroduction.
 
 ## Feature Fallback Contract
 

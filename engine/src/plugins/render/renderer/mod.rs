@@ -1092,9 +1092,7 @@ mod render_flow;
 mod resource_descriptors;
 mod setup;
 
-pub mod frame_bindings;
 use crate::plugins::RenderFeatureId;
-pub use frame_bindings::RenderFrameDataRegistry;
 
 #[cfg(test)]
 mod tests {

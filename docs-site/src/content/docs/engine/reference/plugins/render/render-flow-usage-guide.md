@@ -718,7 +718,7 @@ let flow = RenderFlow::new("ui.flow")
 - `flow.validation_report()` returns pass order and validation result details.
 - `compile_flow_plan_checked(&flow, &current_runtime_gpu_capabilities())` returns typed compiler diagnostics for static validation failures, prepared G3 access/dependency/initialization errors, and mismatches against normalized `GpuCapabilities` facts.
 - `flow.graph()` exposes declared pass/resource topology for tests and tooling.
-- `flow.project_uniforms(frame_data, surface_size)` verifies state projection at frame time.
+- declared pass `uniform_bindings` expose the maintained `PassParamBinding` projection contracts for focused tests and tooling; production aggregation occurs in `RenderPrepare`.
 
 Prepared-frame preflight is submit-adjacent and runs before backend command encoding. The active renderer uses cached strict preflight by default: full structural validation runs when the prepared-frame structure, compiled flow revision, shader revision, dynamic target signatures, alias bindings, feature gates, history signatures, or uniform/dispatch shape changes. Cheap runtime guards still run every frame.
 
@@ -756,8 +756,8 @@ Graphics contract:
 
 Runtime boundary note:
 
-- `RenderFrameDataRegistry` remains a compatibility helper for projection tests/tools.
-- Active frame execution uses `PreparedRenderFrame` produced in `RenderPrepare`.
+- Uniform/state projection is completed in `RenderPrepare` and frozen into prepared flow inputs.
+- Active frame execution uses `PreparedRenderFrame` produced in `RenderPrepare`; submit does not read mutable ECS state through a compatibility registry.
 
 Advanced feature-tagged pass note:
 

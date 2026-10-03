@@ -1,15 +1,12 @@
 use crate::plugins::render::api::{
     BuiltinUiCompositePassBuilder, ComputePassBuilder, CopyPassBuilder, FullscreenPassBuilder,
-    GraphicsPassBuilder, ParamProjectionError, PassUniformProjection, PresentPassBuilder,
-    ProjectedUniformSet, RenderDoubleBuffer, RenderFixedStepIterationUniform,
+    GraphicsPassBuilder, PresentPassBuilder, RenderDoubleBuffer, RenderFixedStepIterationUniform,
     RenderFlowAuthoringError, RenderShaderBinding, RenderShaderBindingResource,
-    project_uniform_bindings_for_pass,
 };
 use crate::plugins::render::graph::compile_flow_plan;
 use crate::plugins::render::procedural::{
     ProceduralPassBuilder, ProceduralPassDescriptor, build_procedural_pass,
 };
-use crate::plugins::render::renderer::frame_bindings::RenderFrameDataRegistry;
 use crate::plugins::render::{
     FlowValidationReport, GpuParams, GpuPrimitiveDispatchPlan, GpuPrimitiveExecutionPlan,
     IndirectDrawArgsBuffer, RenderFixedStepRegionId, RenderFixedStepRegionMembership,
@@ -402,41 +399,6 @@ impl RenderFlow {
 
     pub fn pass_id(&self, label: &str) -> Option<RenderPassId> {
         self.resolve_pass_id(label)
-    }
-
-    pub fn project_uniforms(
-        &self,
-        frame_data: &RenderFrameDataRegistry<'_>,
-        surface_size: (u32, u32),
-    ) -> Result<ProjectedUniformSet, Vec<ParamProjectionError>> {
-        let mut projections = Vec::<PassUniformProjection>::new();
-        let mut errors = Vec::<ParamProjectionError>::new();
-
-        for pass in &self.graph.passes.passes {
-            match project_uniform_bindings_for_pass(
-                pass,
-                &self.graph.resources,
-                frame_data,
-                surface_size,
-            ) {
-                Ok(buffers) => {
-                    if !buffers.is_empty() {
-                        projections.push(PassUniformProjection {
-                            pass_id: pass.id,
-                            pass_label: pass.label.clone(),
-                            buffers,
-                        });
-                    }
-                }
-                Err(mut pass_errors) => errors.append(&mut pass_errors),
-            }
-        }
-
-        if errors.is_empty() {
-            Ok(ProjectedUniformSet::from_passes(projections))
-        } else {
-            Err(errors)
-        }
     }
 
     pub(crate) fn allocate_pass(&mut self, label: impl Into<String>) -> (RenderPassId, String) {

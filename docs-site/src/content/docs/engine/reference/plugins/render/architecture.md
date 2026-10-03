@@ -41,7 +41,7 @@ publication: primary
 - Non-ownership: frame-time progression/frame pacing, app input mapping ownership, and scene lifecycle ownership.
 - Prepare/submit boundary artifact: `PreparedRenderFrame` in `engine/src/plugins/render/frame/`.
 - Prepared frame packets carry main/offscreen views, flow input snapshots, prepared flow invocations, dynamic target descriptor snapshots, target alias bindings, UI surface bindings, and history signatures.
-- Runtime compatibility helper: `RenderFrameDataRegistry` for projection helpers/tests only, not active submission.
+- Uniform state projection is finalized during `RenderPrepare` into prepared flow inputs; no generic mutable-state registry crosses the submit boundary.
 - Feature/domain payloads are carried as prepared contributions (`PreparedFrameContributions`) with explicit status/fallback policy.
 - Feature prepared payload handoff resources are explicit (`PreparedDrawFeatureResource`, `PreparedMaterialFeatureResource`, `PreparedDeformationFeatureResource`) and consumed only in `RenderPrepare`.
 - Active runtime validation accepts typed surface-color/UI/history semantics; external imports are compatibility-only.

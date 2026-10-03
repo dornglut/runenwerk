@@ -1,16 +1,12 @@
-use crate::plugins::render::graph::{RenderPassNode, ResourceGraph};
-use crate::plugins::render::renderer::frame_bindings::RenderFrameDataRegistry;
-use crate::plugins::render::{GpuParams, GpuUniform, RenderPassId};
+use crate::plugins::render::{GpuParams, GpuUniform};
 use bytemuck::{Pod, Zeroable};
 use runen_gpu::{
     GpuBindingKey, GpuStorageBufferAccess, GpuStorageTextureAccess, GpuTextureSampleClass,
     GpuWorkResourceId,
 };
 use std::any::{Any, TypeId, type_name};
-use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use thiserror::Error;
 
 /// Explicit shader-visible resource identity for one render pass.
 ///
@@ -65,13 +61,6 @@ impl RenderShaderBindingResource {
             Self::Sampler => None,
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct ProjectedUniformBuffer {
-    pub buffer_id: GpuWorkResourceId,
-    pub params_type_name: &'static str,
-    pub bytes: Vec<u8>,
 }
 
 #[repr(C)]
@@ -160,102 +149,6 @@ impl GpuParams for RenderFixedStepIterationUniform {
 }
 
 impl GpuUniform for RenderFixedStepIterationUniform {}
-
-#[derive(Debug, Clone)]
-pub struct PassUniformProjection {
-    pub pass_id: RenderPassId,
-    pub pass_label: String,
-    pub buffers: Vec<ProjectedUniformBuffer>,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct ProjectedUniformSet {
-    passes: Vec<PassUniformProjection>,
-    by_pass: BTreeMap<RenderPassId, usize>,
-}
-
-impl ProjectedUniformSet {
-    pub fn from_passes(passes: Vec<PassUniformProjection>) -> Self {
-        let mut by_pass = BTreeMap::<RenderPassId, usize>::new();
-        for (index, pass) in passes.iter().enumerate() {
-            by_pass.insert(pass.pass_id, index);
-        }
-        Self { passes, by_pass }
-    }
-
-    pub fn pass(&self, pass_id: RenderPassId) -> Option<&PassUniformProjection> {
-        self.by_pass
-            .get(&pass_id)
-            .and_then(|index| self.passes.get(*index))
-    }
-
-    pub fn passes(&self) -> &[PassUniformProjection] {
-        &self.passes
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
-pub enum ParamProjectionError {
-    #[error(
-        "pass '{pass_label}' is missing with_state::<{state_type_name}>() declaration for uniform projection"
-    )]
-    MissingStateResourceDeclaration {
-        pass_id: RenderPassId,
-        pass_label: String,
-        state_type_name: &'static str,
-        params_type_name: &'static str,
-    },
-
-    #[error(
-        "pass '{pass_label}' is missing state resource value for '{state_type_name}' during projection"
-    )]
-    MissingStateResourceValue {
-        pass_id: RenderPassId,
-        pass_label: String,
-        state_type_name: &'static str,
-        params_type_name: &'static str,
-    },
-
-    #[error("pass '{pass_label}' references missing uniform buffer '{uniform_id:?}'")]
-    MissingUniformBuffer {
-        pass_id: RenderPassId,
-        pass_label: String,
-        state_type_name: &'static str,
-        params_type_name: &'static str,
-        uniform_id: GpuWorkResourceId,
-    },
-
-    #[error(
-        "pass '{pass_label}' cannot project params '{params_type_name}' into uniform buffer '{uniform_id:?}' declared for '{declared_type_name}'"
-    )]
-    UniformBufferTypeMismatch {
-        pass_id: RenderPassId,
-        pass_label: String,
-        state_type_name: &'static str,
-        params_type_name: &'static str,
-        declared_type_name: &'static str,
-        uniform_id: GpuWorkResourceId,
-    },
-
-    #[error(
-        "pass '{pass_label}' failed to project state '{state_type_name}' into params '{params_type_name}'"
-    )]
-    ProjectionFailed {
-        pass_id: RenderPassId,
-        pass_label: String,
-        state_type_name: &'static str,
-        params_type_name: &'static str,
-    },
-
-    #[error("pass '{pass_label}' wrote conflicting bytes for uniform buffer '{uniform_id:?}'")]
-    ConflictingUniformProjection {
-        pass_id: RenderPassId,
-        pass_label: String,
-        state_type_name: &'static str,
-        params_type_name: &'static str,
-        uniform_id: GpuWorkResourceId,
-    },
-}
 
 pub trait ParamProjection: Send + Sync {
     fn state_type_id(&self) -> TypeId;
@@ -428,108 +321,5 @@ where
         let params = (self.build)(state, surface_size);
         let raw = params.to_gpu();
         Some(crate::plugins::render::bytemuck::bytes_of(&raw).to_vec())
-    }
-}
-
-pub fn project_uniform_bindings_for_pass(
-    pass: &RenderPassNode,
-    resources: &ResourceGraph,
-    frame_data: &RenderFrameDataRegistry<'_>,
-    surface_size: (u32, u32),
-) -> Result<Vec<ProjectedUniformBuffer>, Vec<ParamProjectionError>> {
-    let mut outputs = Vec::<ProjectedUniformBuffer>::new();
-    let mut projected_by_buffer = BTreeMap::<GpuWorkResourceId, usize>::new();
-    let mut errors = Vec::<ParamProjectionError>::new();
-
-    for binding in &pass.uniform_bindings {
-        let state_type_name = binding.state_type_name();
-        let params_type_name = binding.params_type_name();
-        let pass_id = pass.id;
-        let pass_label = pass.label.clone();
-
-        if !resources.has_state_resource(binding.state_type_id()) {
-            errors.push(ParamProjectionError::MissingStateResourceDeclaration {
-                pass_id,
-                pass_label: pass_label.clone(),
-                state_type_name,
-                params_type_name,
-            });
-            continue;
-        }
-
-        let Some(state) = frame_data.get_by_type_id(binding.state_type_id()) else {
-            errors.push(ParamProjectionError::MissingStateResourceValue {
-                pass_id,
-                pass_label: pass_label.clone(),
-                state_type_name,
-                params_type_name,
-            });
-            continue;
-        };
-
-        match resources.uniform_buffer_params(binding.uniform_id()) {
-            None => {
-                errors.push(ParamProjectionError::MissingUniformBuffer {
-                    pass_id,
-                    pass_label: pass_label.clone(),
-                    state_type_name,
-                    params_type_name,
-                    uniform_id: *binding.uniform_id(),
-                });
-                continue;
-            }
-            Some((declared_type_id, declared_type_name))
-                if declared_type_id != binding.params_type_id() =>
-            {
-                errors.push(ParamProjectionError::UniformBufferTypeMismatch {
-                    pass_id,
-                    pass_label: pass_label.clone(),
-                    state_type_name,
-                    params_type_name,
-                    declared_type_name,
-                    uniform_id: *binding.uniform_id(),
-                });
-                continue;
-            }
-            Some(_) => {}
-        }
-
-        let Some(bytes) = binding.project_bytes(state, surface_size) else {
-            errors.push(ParamProjectionError::ProjectionFailed {
-                pass_id,
-                pass_label: pass_label.clone(),
-                state_type_name,
-                params_type_name,
-            });
-            continue;
-        };
-
-        let buffer_id = *binding.uniform_id();
-        if let Some(existing_index) = projected_by_buffer.get(&buffer_id) {
-            let existing = &outputs[*existing_index];
-            if existing.bytes != bytes {
-                errors.push(ParamProjectionError::ConflictingUniformProjection {
-                    pass_id,
-                    pass_label: pass_label.clone(),
-                    state_type_name,
-                    params_type_name,
-                    uniform_id: buffer_id,
-                });
-            }
-            continue;
-        }
-
-        projected_by_buffer.insert(buffer_id, outputs.len());
-        outputs.push(ProjectedUniformBuffer {
-            buffer_id,
-            params_type_name,
-            bytes,
-        });
-    }
-
-    if errors.is_empty() {
-        Ok(outputs)
-    } else {
-        Err(errors)
     }
 }

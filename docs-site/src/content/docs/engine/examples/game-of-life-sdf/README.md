@@ -31,7 +31,7 @@ Runtime state note:
 - the app inserts `GameOfLifeRenderState` as a resource.
 - update systems advance the clock/tick and ping-pong phase.
 - pass uniforms are projected from state methods in `rendering/state.rs`.
-- unit tests keep `RenderFrameDataRegistry` usage only as projection-helper compatibility coverage.
+- focused unit tests project each declared pass binding directly from explicit state; runtime aggregation remains owned by `RenderPrepare`.
 
 ## Run
 

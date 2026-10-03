@@ -43,7 +43,7 @@ pub use plugin::RenderPlugin;
 pub(crate) use plugin::render_integration_is_active;
 pub use procedural::*;
 pub use readiness::{RenderReadinessPhase, RenderReadinessState};
-pub use renderer::{Gfx, GfxFrameTimings, RenderFrameDataRegistry, Renderer, RendererFrameTimings};
+pub use renderer::{Gfx, GfxFrameTimings, Renderer, RendererFrameTimings};
 pub use residency::*;
 pub use resource::*;
 pub use runtime::*;

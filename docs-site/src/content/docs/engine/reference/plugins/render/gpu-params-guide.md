@@ -73,4 +73,4 @@ let flow = RenderFlow::new("main.flow")
 
 ## Contract Testing
 
-Use `flow.project_uniforms(...)` in tests to verify that expected pass uniforms are produced for your state type.
+In focused unit tests, inspect the pass's declared `PassParamBinding` values and call `binding.project_bytes(&state, surface_size)` to verify state-to-uniform projection. Runtime aggregation remains owned by `RenderPrepare`; do not recreate a generic frame-data registry in tests.

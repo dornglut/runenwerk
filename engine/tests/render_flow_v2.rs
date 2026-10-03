@@ -2,12 +2,11 @@ use engine::plugins::render::{
     CompiledPassExecutionPlan, DrawIndirectArgs, GpuStorage, GpuUniform, PreparedFlowInputs,
     PreparedFlowInvocation, PreparedFrameContext, PreparedFrameContributions, PreparedRenderFrame,
     PreparedShaderSnapshot, PreparedSurfaceInfo, PreparedViewFrame,
-    RenderExecutionGraphDiagnosticKind, RenderFlow, RenderFlowValidationIssue,
-    RenderFrameDataRegistry, RenderPassId, RenderPassShapeIntent, RenderResourceDeclaration,
-    RenderTextureFormatPolicy, RenderTextureSizePolicy, RenderTextureTargetFormat,
-    RenderVertexBufferLayout, RenderVertexFormat, ShaderRegistryResource, compile_flow_plan,
-    compile_flow_plan_checked, current_runtime_gpu_capabilities,
-    preflight_prepared_render_frame_runtime_guards,
+    RenderExecutionGraphDiagnosticKind, RenderFlow, RenderFlowValidationIssue, RenderPassId,
+    RenderPassShapeIntent, RenderResourceDeclaration, RenderTextureFormatPolicy,
+    RenderTextureSizePolicy, RenderTextureTargetFormat, RenderVertexBufferLayout,
+    RenderVertexFormat, ShaderRegistryResource, compile_flow_plan, compile_flow_plan_checked,
+    current_runtime_gpu_capabilities, preflight_prepared_render_frame_runtime_guards,
 };
 use runen_gpu::{GpuBindingKey, GpuCapabilities, GpuCapabilityFeature};
 use std::any::TypeId;
@@ -423,23 +422,29 @@ fn render_flow_runtime_guard_rejects_cached_instanced_fullscreen_hazard() {
 }
 
 #[test]
-fn v2_uniform_projection_uses_state_bindings() {
+fn v2_uniform_bindings_project_from_state() {
     let flow = build_flow();
     let state = FlowState::default();
-    let frame_data = RenderFrameDataRegistry::new().with(&state);
-    let projections = flow
-        .project_uniforms(&frame_data, (1280, 720))
-        .expect("projection should succeed");
-    assert!(
-        projections
-            .pass(pass_id_by_label(&flow, "simulate"))
-            .is_some()
-    );
-    assert!(
-        projections
-            .pass(pass_id_by_label(&flow, "compose"))
-            .is_some()
-    );
+
+    for pass_label in ["simulate", "compose"] {
+        let pass = flow
+            .graph()
+            .passes
+            .passes
+            .iter()
+            .find(|pass| pass.label == pass_label)
+            .expect("projected pass should exist");
+        assert!(
+            !pass.uniform_bindings.is_empty(),
+            "pass '{pass_label}' should declare uniform bindings"
+        );
+        for binding in &pass.uniform_bindings {
+            assert!(
+                binding.project_bytes(&state, (1280, 720)).is_some(),
+                "pass '{pass_label}' should project state through its maintained binding"
+            );
+        }
+    }
 }
 
 #[test]
@@ -536,20 +541,25 @@ fn v2_uniform_projection_infers_types_from_method_items() {
         .expect("flow should validate");
 
     let state = FlowState::default();
-    let frame_data = RenderFrameDataRegistry::new().with(&state);
-    let projections = flow
-        .project_uniforms(&frame_data, (1920, 1080))
-        .expect("projection should succeed");
-    assert!(
-        projections
-            .pass(pass_id_by_label(&flow, "simulate"))
-            .is_some()
-    );
-    assert!(
-        projections
-            .pass(pass_id_by_label(&flow, "compose"))
-            .is_some()
-    );
+    for pass_label in ["simulate", "compose"] {
+        let pass = flow
+            .graph()
+            .passes
+            .passes
+            .iter()
+            .find(|pass| pass.label == pass_label)
+            .expect("projected pass should exist");
+        assert!(
+            !pass.uniform_bindings.is_empty(),
+            "pass '{pass_label}' should declare uniform bindings"
+        );
+        for binding in &pass.uniform_bindings {
+            assert!(
+                binding.project_bytes(&state, (1920, 1080)).is_some(),
+                "pass '{pass_label}' should infer and project its maintained state binding"
+            );
+        }
+    }
 }
 
 #[test]
