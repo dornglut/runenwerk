@@ -21,29 +21,28 @@ RUNENWERK_REVISION=8d0bad6c7e4c24f2579bd89c3f797946af85dba3
 CENTRAL_RENDER_RUST_FILES=184
 CENTRAL_RENDER_RUST_BYTES=2442976
 WIDER_RENDER_INTEGRATION_UNIQUE_RUST_FILES=124
-WIDER_RENDER_INTEGRATION_UNIQUE_RUST_BYTES=2707709
+WIDER_RENDER_INTEGRATION_UNIQUE_RUST_BYTES=2720874
 COMBINED_CONCRETE_RUNENWERK_RENDER_FOOTPRINT_RUST_FILES=308
-COMBINED_CONCRETE_RUNENWERK_RENDER_FOOTPRINT_RUST_BYTES=5150685
+COMBINED_CONCRETE_RUNENWERK_RENDER_FOOTPRINT_RUST_BYTES=5163850
 ```
 
 ## Inclusion rule
 
-This appendix makes the investigation's wider-source scope reproducible instead of treating
-"render-related" as a subjective directory label.
-
 Outside `engine/src/plugins/render/**`, include:
 
-1. every Rust file under `apps/runenwerk_render_lab/**`, because Render Lab is explicitly a
-   rendering product/validation consumer;
-2. every accepted-revision Rust file under Arena, Editor, Draw, Engine UI, Engine World, and other
-   Engine host/scene/debug integration that has a direct lexical dependency on
-   `engine::plugins::render` / `crate::plugins::render`;
-3. every Engine example/test Rust file with a direct lexical dependency on Runenwerk Render,
+1. every Rust file under `apps/runenwerk_render_lab/**`;
+2. every accepted-revision Rust file in Arena, Editor, Draw, Engine UI, and Engine World with a
+   direct lexical dependency on `engine::plugins::render` / `crate::plugins::render`;
+3. the verified Engine host/scene/debug integration files that directly import Render contracts;
+4. every Engine example/test Rust file with a direct lexical dependency on Runenwerk Render,
    standalone `runen_render`, or standalone `runen_gpu`.
 
-This is intentionally stricter than counting entire app/test/example directories. Files with no
-direct render/framework edge are excluded even if they live beside render-facing code. The central
-184-file Render tree is inventoried separately and is not duplicated here.
+Every search above is path-scoped and remains below the 100-result search ceiling. The resulting
+paths are then resolved against the immutable recursive Git tree for the revision above. The
+central 184-file Render tree is inventoried separately and is not duplicated here.
+
+This census intentionally does not count whole app/test/example directories. Neighboring files
+without a direct render/framework edge are outside this investigation's concrete source inventory.
 
 ## Category summary
 
@@ -54,11 +53,11 @@ direct render/framework edge are excluded even if they live beside render-facing
 | Editor — direct Render integration | 34 | 1372305 |
 | Draw — direct Render integration | 4 | 192400 |
 | Engine UI — direct Render integration | 4 | 44688 |
-| Engine World — direct Render integration | 4 | 30275 |
-| Other Engine host/scene/debug integration | 8 | 89154 |
-| Engine examples/proofs — direct Render/RunenRender/RunenGPU | 21 | 168561 |
+| Engine World — direct Render integration | 5 | 52108 |
+| Other Engine host/scene/debug render-facing | 7 | 80486 |
+| Engine examples/proofs — direct Render/RunenGPU | 21 | 168561 |
 | Engine tests — direct Render/RunenRender/RunenGPU | 35 | 395680 |
-| **Unique wider total** | **124** | **2707709** |
+| **Unique wider total** | **124** | **2720874** |
 
 ## Render Lab — all Rust
 
@@ -148,9 +147,10 @@ direct render/framework edge are excluded even if they live beside render-facing
 | `engine/src/plugins/world/chunks/render_cache_bridge.rs` | 4245 | `b0f397fdca15a98995d89b4d584f381ee5e2f610` |
 | `engine/src/plugins/world/plugin.rs` | 8718 | `6a0e4efb37d7ae6601de3d5a94e50790a60f9794` |
 | `engine/src/plugins/world/prepare/contributions.rs` | 9426 | `c863b6ef68510ef41d8915216b7c11866741e907` |
+| `engine/src/plugins/world/prepare/sdf_field_projection.rs` | 21833 | `027c257a4c4dfe8d57bd0e91632311ac603ea1a7` |
 | `engine/src/plugins/world/prepare/sdf_render_bridge.rs` | 7886 | `c54c3491a287645ce8113dbebfed4e4d3cfe3cdb` |
 
-## Other Engine host/scene/debug integration
+## Other Engine host/scene/debug render-facing
 
 | Path | Bytes | Blob |
 | --- | ---: | --- |
@@ -160,10 +160,9 @@ direct render/framework edge are excluded even if they live beside render-facing
 | `engine/src/plugins/scene/runtime/overlay_ui.rs` | 17138 | `a1c27ff51f2e6dc722cf87d28ee6ef1ef4612f0b` |
 | `engine/src/prelude.rs` | 1167 | `d362c6bf5cf26d328798c6438413065cdb4fc791` |
 | `engine/src/runtime/winit_runner.rs` | 44333 | `5b2c49a987014b40f2c7e6efbdddb30e768f623a` |
-| `engine/src/runtime/winit_window_realizer.rs` | 8668 | `1d36026b2decb076328901a560dc53b335ab8d96` |
 | `engine/src/state.rs` | 1187 | `2ce0709598438c37d05863be7c0aa81605f5ec85` |
 
-## Engine examples/proofs — direct Render/RunenRender/RunenGPU
+## Engine examples/proofs — direct Render/RunenGPU
 
 | Path | Bytes | Blob |
 | --- | ---: | --- |
