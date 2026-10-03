@@ -61,10 +61,8 @@ fn binding_key(binding: u64) -> GpuBindingKey {
 
 #[cfg(test)]
 mod tests {
-    #[allow(deprecated)]
     use super::*;
-    #[allow(deprecated)]
-    use engine::plugins::render::{RenderFrameDataRegistry, RenderPassKind};
+    use engine::plugins::render::RenderPassKind;
 
     fn pass_kind(flow: &RenderFlow, pass_id: &str) -> RenderPassKind {
         flow.graph()
@@ -124,30 +122,26 @@ mod tests {
     fn state_projects_prepare_and_compose_uniforms() {
         let flow = build_render_flow();
         let state = Sdf3dRenderState::default();
-        #[allow(deprecated)]
-        let frame_data = RenderFrameDataRegistry::new().with(&state);
 
-        let uniforms = flow
-            .project_uniforms(&frame_data, (1600, 900))
-            .expect("uniform projection should succeed");
-
-        let compose_id = flow
-            .graph()
-            .passes
-            .passes
-            .iter()
-            .find(|pass| pass.label == "sdf.compose")
-            .map(|pass| pass.id)
-            .expect("compose pass should exist");
-        let prepare_id = flow
-            .graph()
-            .passes
-            .passes
-            .iter()
-            .find(|pass| pass.label == "sdf.prepare")
-            .map(|pass| pass.id)
-            .expect("prepare pass should exist");
-        assert!(uniforms.pass(prepare_id).is_some());
-        assert!(uniforms.pass(compose_id).is_some());
+        for pass_label in ["sdf.prepare", "sdf.compose"] {
+            let pass = flow
+                .graph()
+                .passes
+                .passes
+                .iter()
+                .find(|pass| pass.label == pass_label)
+                .expect("projected pass should exist");
+            assert!(
+                !pass.uniform_bindings.is_empty(),
+                "pass '{pass_label}' should declare uniform bindings"
+            );
+            for binding in &pass.uniform_bindings {
+                assert!(
+                    binding.project_bytes(&state, (1600, 900)).is_some(),
+                    "pass '{pass_label}' should project state through its maintained binding"
+                );
+            }
+        }
     }
+
 }

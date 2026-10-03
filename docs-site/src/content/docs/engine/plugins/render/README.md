@@ -30,7 +30,7 @@ Render runtime orchestration for the engine runtime path.
 - `features/`
   - Render feature registry, dependency ordering, and contribution fallback policies.
 - `renderer/`
-  - Per-frame orchestration and execution (`extract`, `frame_bindings`, `prepare`, `submit`).
+  - Per-frame realization and execution (`extract`, `prepare`, `render_flow`, dynamic targets, and setup).
 - `readiness/`
   - Render-owned readiness state derived from successful render warm-frame evidence and timeout policy.
 - `shader/`

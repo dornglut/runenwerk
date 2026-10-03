@@ -70,15 +70,11 @@ These are the APIs most users should start with.
   - `GpuQuerySetHandle`
   - `GpuResourceRef`
   - `RenderDoubleBuffer`
-- bindings and projection helpers:
+- bindings and projection primitives:
   - `PassParamBinding`
+  - `ParamProjection`
   - `ComputeDispatchBinding`
   - `ComputeDispatchDescriptor`
-  - `PassUniformProjection`
-  - `ProjectedUniformSet`
-  - `ProjectedUniformBuffer`
-  - `ParamProjectionError`
-  - `ParamProjectionErrorKind`
 - params derives and traits:
   - `GpuUniform`
   - `GpuStorage`
@@ -771,8 +767,6 @@ Current status:
 - prepared-frame request validation reports typed duplicate view/invocation diagnostics through `PreparedRenderFrameRequestDiagnostic`;
 - renderer-owned dynamic target cache allocation and target-alias pass execution are implemented foundation behavior and should not be faked with editor-specific flow ids.
 
-## Compatibility Surface
+## Frame Projection Boundary
 
-`RenderFrameDataRegistry` remains public for projection helper compatibility and tests.
-
-It is not part of the active runtime submission path and should not be used as a substitute for `PreparedRenderFrame`.
+Uniform/state projection is not exposed through a generic frame-data registry. `RenderPrepare` projects declared `PassParamBinding` values into prepared flow inputs; `RenderSubmit` consumes only the frozen `PreparedRenderFrame`.

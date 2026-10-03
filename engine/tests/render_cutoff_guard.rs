@@ -114,6 +114,38 @@ fn read_render_production_sources() -> Vec<(String, String)> {
         .collect()
 }
 
+#[test]
+fn compatibility_frame_projection_registry_cannot_return() {
+    assert!(
+        !Path::new("src/plugins/render/renderer/frame_bindings.rs").exists(),
+        "compatibility-only frame_bindings module must remain deleted"
+    );
+
+    let forbidden = [
+        "RenderFrameDataRegistry",
+        "fn project_uniforms(",
+        "project_uniform_bindings_for_pass",
+        "ProjectedUniformSet",
+        "PassUniformProjection",
+        "ProjectedUniformBuffer",
+        "ParamProjectionError",
+    ];
+    let offenders = read_render_production_sources()
+        .into_iter()
+        .flat_map(|(file, source)| {
+            forbidden
+                .iter()
+                .filter(move |term| source.contains(**term))
+                .map(move |term| format!("{file}: {term}"))
+        })
+        .collect::<Vec<_>>();
+
+    assert!(
+        offenders.is_empty(),
+        "removed frame-projection compatibility surface must not return: {offenders:?}"
+    );
+}
+
 fn function_body(source: &str, signature: &str) -> String {
     let start = source
         .find(signature)

@@ -38,7 +38,7 @@ Validation catches:
 Use:
 
 - `flow.graph()` for pass/resource declarations
-- `flow.project_uniforms(...)` for frame-level uniform projection checks
+- declared `PassParamBinding` values for focused state-to-uniform projection checks
 - `dump_flow_graph(...)`, `inspect_resources(...)`, `inspect_texture_resources(...)`, and `summarize_pass_timings(...)` for runtime diagnostics
 - `inspect_prepared_render_frame(...)` for prepared views, per-flow invocations, target alias bindings, dynamic target descriptors, and history signatures
 
@@ -85,7 +85,7 @@ Prepare/submit boundary types are public for inspection and integration:
 - `FeatureContributionStatus`
 - `FeatureFallbackPolicy`
 
-`RenderFrameDataRegistry` remains available for projection helper compatibility and tests, but it is not part of the active runtime submit/render path.
+Uniform projection has no public frame-data registry compatibility path. `RenderPrepare` projects declared bindings into prepared flow inputs, and submit/render consumes only the frozen prepared frame.
 
 Prepared product-surface packets:
 

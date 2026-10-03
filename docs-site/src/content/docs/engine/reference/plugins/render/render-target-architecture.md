@@ -50,7 +50,7 @@ Render stays:
   - runtime flow resources and temporal/history allocations
   - command encoding and submission
 
-`RenderFrameDataRegistry` remains compatibility-only (projection helpers/tests), not active runtime submission.
+Uniform state projection is completed in `RenderPrepare` and carried through prepared flow inputs; active runtime submission does not expose a mutable frame-data registry.
 
 ## Typed Import Boundary
 

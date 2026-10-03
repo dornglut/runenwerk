@@ -274,12 +274,9 @@ fn boid_instance_layout() -> RenderVertexBufferLayout {
 
 #[cfg(test)]
 mod tests {
-    #[allow(deprecated)]
     use super::*;
-    #[allow(deprecated)]
     use engine::plugins::render::{
-        RenderFrameDataRegistry, RenderPassId, RenderPassKind, compile_flow_plan_checked,
-        current_runtime_gpu_capabilities,
+        RenderPassKind, compile_flow_plan_checked, current_runtime_gpu_capabilities,
     };
 
     fn pass_kind(flow: &RenderFlow, pass_id: &str) -> RenderPassKind {
@@ -289,16 +286,6 @@ mod tests {
             .iter()
             .find(|pass| pass.label == pass_id)
             .map(|pass| pass.kind)
-            .expect("requested pass should exist")
-    }
-
-    fn pass_id(flow: &RenderFlow, pass_label: &str) -> RenderPassId {
-        flow.graph()
-            .passes
-            .passes
-            .iter()
-            .find(|pass| pass.label == pass_label)
-            .map(|pass| pass.id)
             .expect("requested pass should exist")
     }
 
@@ -422,30 +409,31 @@ mod tests {
     fn state_projects_simulation_and_publish_uniforms() {
         let flow = build_render_flow();
         let state = BoidsRenderState::default();
-        // Projection-helper compatibility surface; active runtime submission uses PreparedRenderFrame.
-        #[allow(deprecated)]
-        let frame_data = RenderFrameDataRegistry::new().with(&state);
 
-        let uniforms = flow
-            .project_uniforms(&frame_data, (1600, 900))
-            .expect("uniform projection should succeed");
-
-        assert!(
-            uniforms
-                .pass(pass_id(&flow, "boids.seed_or_hold"))
-                .is_some()
-        );
-        assert!(
-            uniforms
-                .pass(pass_id(&flow, "boids.grid.scan_counts"))
-                .is_some()
-        );
-        assert!(
-            uniforms
-                .pass(pass_id(&flow, "boids.grid.publish_draw"))
-                .is_some()
-        );
-        assert!(uniforms.pass(pass_id(&flow, "boids.draw")).is_some());
+        for pass_label in [
+            "boids.seed_or_hold",
+            "boids.grid.scan_counts",
+            "boids.grid.publish_draw",
+            "boids.draw",
+        ] {
+            let pass = flow
+                .graph()
+                .passes
+                .passes
+                .iter()
+                .find(|pass| pass.label == pass_label)
+                .expect("projected pass should exist");
+            assert!(
+                !pass.uniform_bindings.is_empty(),
+                "pass '{pass_label}' should declare uniform bindings"
+            );
+            for binding in &pass.uniform_bindings {
+                assert!(
+                    binding.project_bytes(&state, (1600, 900)).is_some(),
+                    "pass '{pass_label}' should project state through its maintained binding"
+                );
+            }
+        }
     }
 
     #[test]
