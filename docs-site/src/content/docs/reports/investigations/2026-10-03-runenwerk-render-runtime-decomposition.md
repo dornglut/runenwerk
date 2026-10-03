@@ -9,6 +9,7 @@ last_reviewed: 2026-10-03
 publication: reference
 pagefind: false
 related_docs:
+  - ./2026-10-03-runenwerk-wider-render-integration-source-census.md
   - ./2026-10-03-runenwerk-render-runtime-dependency-census.md
   - ./2026-10-03-runenwerk-render-runtime-source-census.md
   - ../../engine/reference/plugins/render/architecture.md
@@ -170,30 +171,41 @@ findings below depend on ownership and dependency behavior.
 
 ## 1.1 Wider rendering footprint
 
-The central 184-file tree excludes:
+The linked
+[wider render integration source census](./2026-10-03-runenwerk-wider-render-integration-source-census.md)
+records the exact accepted-revision source inventory outside the central Render tree using a
+reproducible inclusion rule: all Render Lab Rust plus path-scoped direct Runenwerk Render /
+RunenRender / RunenGPU consumers in the required integration, app, example, and test areas.
 
-- Render Lab;
-- Arena presentation;
-- Editor viewport/material/render integration;
-- Draw GPU/render integration;
-- Engine render examples;
-- Engine render integration tests;
-- UI-to-render publication;
-- world-to-render adapters;
-- standalone RunenRender;
-- standalone RunenGPU.
-
-For scale context only, the exact Git tree contains:
+At the reviewed revision:
 
 ```text
-apps/runenwerk_render_lab/**  9 Rust files / 314,532 bytes
-engine/tests/**              79 Rust files / 794,338 bytes
-engine/examples/**           39 Rust files / 181,457 bytes
+central engine/src/plugins/render/**        184 Rust files / 2,442,976 bytes
+wider Runenwerk render integration          124 Rust files / 2,720,874 bytes
+---------------------------------------------------------------------------
+combined concrete Runenwerk render scope    308 Rust files / 5,163,850 bytes
 ```
 
-Those directories include concerns beyond this investigation's central runtime and must not be
-blindly counted as render implementation. Direct render consumers exist across Arena, Editor, Draw,
-Render Lab, UI publication, and world integration.
+The wider 124-file inventory breaks down as:
+
+| Area | Rust files |
+| --- | ---: |
+| Render Lab — all Rust | 9 |
+| Arena — direct Render integration | 5 |
+| Editor — direct Render integration | 34 |
+| Draw — direct Render integration | 4 |
+| Engine UI — direct Render integration | 4 |
+| Engine World — direct Render integration | 5 |
+| Other Engine host/scene/debug render-facing | 7 |
+| Engine examples/proofs — direct Render/RunenGPU | 21 |
+| Engine tests — direct Render/RunenRender/RunenGPU | 35 |
+
+The wider inventory deliberately does not count whole app/test/example directories. Neighboring
+files without a direct render/framework edge are excluded. Every retained path is resolved to an
+immutable blob SHA in the appendix.
+
+Standalone RunenRender and standalone RunenGPU remain separate repositories and are not included in
+the 308-file Runenwerk count.
 
 # 2. Current lifecycle and data-flow map
 
