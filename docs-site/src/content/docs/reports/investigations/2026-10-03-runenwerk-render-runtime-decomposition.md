@@ -882,32 +882,48 @@ architecture work.
 
 # 10. Migration sequence
 
-The safe sequence is not a mass tree move.
+The safe sequence is not a mass tree move, and the first delivery must own one coherent boundary.
 
-## R1 — post-cutover residue cleanup
+## R1 — remove the compatibility projection inversion
 
-After re-resolving #1110 writer ownership:
+First successor only:
 
-1. remove compatibility-only `RenderFrameDataRegistry` public projection path and migrate
-   repository-owned tests/examples;
-2. remove proven dead/alias/no-op `backend` residue;
-3. move retained surface/RunenGPU host integration out of the false backend/WGPU namespace;
-4. correct current/reference documentation truth;
-5. add/strengthen source guards so deleted compatibility names cannot return.
+1. remove public `RenderFrameDataRegistry` and `RenderFlow::project_uniforms(...)` compatibility
+   projection;
+2. migrate repository-owned examples/tests to the maintained prepared/projection path or a private
+   test helper;
+3. delete `renderer/frame_bindings.rs` and the root compatibility re-export;
+4. update current/reference documentation for that removed API;
+5. strengthen cutoff/source guards so the compatibility path cannot return.
 
-This slice should change no rendering semantics.
+This is the smallest confirmed architectural defect: app-facing authoring currently depends
+downward on a compatibility type physically owned by `renderer`, while active submit already
+excludes it.
 
-## R2 — complete accepted feature collector migration
+R1 must not reorganize host/backend code merely because the same investigation found that debt.
+
+## R2 — post-RunenGPU host/backend residue cleanup
+
+Only after R1 is accepted and current state is re-audited:
+
+- delete alias-only/dead/no-op backend scaffolding if exact-current evidence still proves it unused;
+- move retained surface/RunenGPU/native-host integration out of false WGPU/backend naming;
+- correct current/reference ownership wording associated with that move.
+
+This is a distinct physical-host boundary and therefore a separate change reason from R1.
+
+## R3 — complete accepted feature collector migration
 
 Continue the existing Feature-Owned Render Contributions design one bounded feature at a time.
 After all maintained legacy feature payloads are migrated and equivalence is proven, delete central
-compatibility variants/helpers in one clean cut.
+compatibility variants/helpers in a clean cut.
 
-This phase is not authorized by R1 merely because both improve structure.
+This phase is not authorized by R1 or R2 merely because all three improve structure.
 
-## R3 — post-#1110 execution decomposition
+## R4 — post-#1110 execution decomposition
 
-Re-census `renderer/`, `runtime/`, and `features/ui/` after the RunenUI publication cut.
+Re-census `renderer/`, `runtime/`, and `features/ui/` after the RunenUI publication state is
+resolved.
 
 Split only responsibilities that remain independently changing, likely including:
 
@@ -915,18 +931,17 @@ Split only responsibilities that remain independently changing, likely including
 - generic RenderFlow execution;
 - RunenRender semantic contribution execution;
 - resource/pipeline realization;
-- host/presentation integration;
 - execution-evidence publication.
 
 Do not create generic service layers or compatibility facades.
 
-## R4 — public surface narrowing
+## R5 — public surface narrowing
 
 Once internal paths are stable:
 
-- remove obsolete root wildcard reexports;
-- keep ordinary app authoring ergonomic;
-- keep advanced compiler/execution/inspection APIs under explicit owner submodules;
+- preserve ordinary authoring and prepared-frame integration contracts;
+- remove obsolete root wildcard reexports only where consumer evidence supports it;
+- keep advanced compiler/execution/inspection APIs under explicit owner submodules where useful;
 - update all repository-owned consumers in the same clean cut.
 
 # 11. Validation requirements for delivery
@@ -939,17 +954,12 @@ Minimum families for R1:
 ```text
 cargo test -p engine --test render_cutoff_guard
 cargo test -p engine --test render_flow_v2
-cargo test -p engine render_runtime_inspect
 cargo validate
 git diff --check
 CI=true pnpm --dir docs-site build
 ```
 
-Add focused tests for any moved surface/host context and compile-fail/source guards for deleted
-compatibility names.
-
-Host-backed GPU validation is required only where the slice changes host/surface execution. Do not
-fabricate unavailable native evidence.
+Add focused source/compile guards for the deleted compatibility names. R1 does not change host or GPU execution, so it must not invent a native-GPU evidence requirement merely because later R2 work may do so.
 
 # 12. Rejected alternatives
 
@@ -981,21 +991,28 @@ requires proof before removal, such as the feature collector strangler.
 
 # 13. Next gate
 
-After the completeness correction recorded as INV-COMP-001, this report now contains the missing exact source inventory, framework dependency classification, vertical-feature disposition, inspection classification, cohesion review, and public-consumer map.
+After the completeness correction recorded as INV-COMP-001, this report contains the required
+source inventory, framework dependency classification, vertical-feature disposition, inspection
+classification, cohesion review, and public-consumer map.
 
-The investigation candidate is therefore decision-complete for **one first successor shape**, subject to acceptance of this report on `main` and current-writer re-resolution.
+The investigation candidate is decision-complete for **one first successor shape**, subject to
+acceptance of this report on `main` and exact-current writer re-resolution.
 
-The next implementation issue, created only after this investigation is accepted, should own exactly:
+The next implementation issue, created only after this investigation is accepted, should own
+exactly:
 
-> retire proven post-RunenGPU/RunenRender compatibility/backend residue, move the retained
-> surface/RunenGPU host integration to backend-neutral ownership, and reconcile current render
-> documentation, without changing renderer semantics.
+> remove the compatibility-only `RenderFrameDataRegistry` projection path and the resulting
+> `api -> renderer` layering inversion, migrate repository-owned consumers, update current docs,
+> and guard against predecessor reintroduction, without changing active frame submission semantics.
 
-That issue must re-resolve active #1110 before claiming `plugin.rs` or `renderer/mod.rs`.
-If #1110 remains an active writer on required files, R1 is blocked/serialized rather than
-parallelized through conflicting edits.
+It must not include the separately evidenced backend/host rename, feature collector migration,
+SDF acceleration work, RunenUI publication, material semantics, or broader renderer decomposition.
 
-R2-R4 remain sequenced architecture outcomes, not pre-created implementation backlog. Premature issue #1140 was closed as not planned after INV-COMP-001 and is not delivery authority.
+After that delivery is accepted, re-audit current state before activating another structural slice.
+
+The later R2-R5 items above are architecture sequence/disposition only, not pre-created
+implementation backlog. Premature issue #1140 was closed as not planned after INV-COMP-001 and is
+not delivery authority.
 
 ## Result
 
