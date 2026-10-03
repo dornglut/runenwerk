@@ -679,7 +679,7 @@ Exact tracked blobs: **2461**.
 | `docs-site/src/content/docs/engine/plugins/time/README.md` | `4c1c2d157776eba1a7d6f3d97eb5498f428860a1` | 1460 | documentation | `docs-site` | current |
 | `docs-site/src/content/docs/engine/plugins/world/00-overview.md` | `8366e3a3d28926619e3494c11a42e3ad82a2fc3d` | 4231 | documentation | `docs-site` | current |
 | `docs-site/src/content/docs/engine/plugins/world/README.md` | `64b74623e31ba493415182ae4991a159125d2182` | 6311 | documentation | `docs-site` | current |
-| `docs-site/src/content/docs/engine/README.md` | `f517340048d687e4cda6b5d605a8022206ddae58` | 4905 | documentation | `docs-site` | current |
+| `docs-site/src/content/docs/engine/README&#46;md` | `f517340048d687e4cda6b5d605a8022206ddae58` | 4905 | documentation | `docs-site` | current |
 | `docs-site/src/content/docs/engine/reference/advanced-guide.md` | `34aaf42484e7283862a640aad6c9f2fc850fa7c5` | 3796 | documentation | `docs-site` | current |
 | `docs-site/src/content/docs/engine/reference/architecture.md` | `32d166a745db620ca7805dba46e6eceea47f857f` | 11576 | documentation | `docs-site` | current |
 | `docs-site/src/content/docs/engine/reference/plugins/debug-metrics/advanced-guide.md` | `c060fa2a6b9f4199c52f1f85465a53b907a533ed` | 1052 | documentation | `docs-site` | current |
@@ -728,7 +728,7 @@ Exact tracked blobs: **2461**.
 | `docs-site/src/content/docs/engine/roadmaps/render-final-architecture-migration.md` | `82b62478d836c8c54abc89be06547507453dee30` | 8862 | documentation | `docs-site` | current |
 | `docs-site/src/content/docs/engine/roadmaps/runtime-product-job-executor-roadmap.md` | `8fa5fbabed02484f37fb9cee1a78feddeebf215f` | 11944 | documentation | `docs-site` | current |
 | `docs-site/src/content/docs/engine/roadmaps/world-runtime-final-architecture-migration.md` | `c1e1e81ee199e3586978a0fc09b349899ed39aa3` | 6862 | documentation | `docs-site` | current |
-| `docs-site/src/content/docs/engine/tests/README.md` | `9a050c89a43b1fbdf92ab9ad7ccf9d0e850a0c01` | 1889 | documentation | `docs-site` | current |
+| `docs-site/src/content/docs/engine/tests/README&#46;md` | `9a050c89a43b1fbdf92ab9ad7ccf9d0e850a0c01` | 1889 | documentation | `docs-site` | current |
 | `docs-site/src/content/docs/foundation/commands/README.md` | `14752a458443774fedafe009c8f9ed86a618297f` | 1736 | documentation | `docs-site` | current |
 | `docs-site/src/content/docs/foundation/diagnostics/current-state.md` | `125f89df52d7c22ccbb64f57281b436fdb3b6da0` | 1728 | documentation | `docs-site` | current |
 | `docs-site/src/content/docs/foundation/diagnostics/README.md` | `759f8547ed4513d25ab776bcf464f247f0481532` | 563 | documentation | `docs-site` | current |
