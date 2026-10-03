@@ -306,3 +306,33 @@ These are direct positive reference sets on the reviewed default branch, whose h
 review revision. They supplement, rather than replace, the exact per-file lexical table above. The
 investigation does not use an empty code-search result as proof of absence for semantic owners.
 
+
+## External owner-crate concentration
+
+The framework columns above intentionally focus on RunenRender/RunenGPU/RunenShader and raw GPU
+toolchain authority. A separate accepted-main source census was therefore used to check direct
+domain/integration owner crates that would otherwise be hidden by that narrower vocabulary.
+
+| Direct owner crate | Central Render files | Interpretation |
+| --- | ---: | --- |
+| `runen_ecs` | 27 | Expected Runenwerk integration substrate: resources/components/plugin/runtime wiring. |
+| `product` | 9 | Product selection/residency/inspection vocabulary; concentrated in frame, feature, inspection, and residency integration. |
+| `world_sdf` | 3 | World-specific SDF payload/identity integration; not RunenRender semantic authority. |
+| `world_ops` | 1 | World cache generation/revision bridge only. |
+| `runen_spatial` | 6 | Chunk/spatial identity in world/detail/frame/inspection integration. |
+| `ui_render_data` | 11 | Prepared UI transport and renderer realization boundary. |
+| `ui_text` | 2 | UI font/text realization support. |
+| `ui_math` | 1 | UI proof geometry only. |
+| `material_graph` | 9 | Specialized material compiler integration; semantically owned by the material track/#842. |
+| `runen_input` | 0 | No direct central Render authority edge. |
+| `runen_net` | 0 | No direct central Render authority edge. |
+
+These references do not by themselves imply misplaced ownership. The companion investigation
+classifies whether each dependency consumes an owning-domain contract, carries prepared state, or
+duplicates source truth. The important boundary findings remain:
+
+- product/world/UI/material source semantics stay outside generic renderer authority;
+- Runenwerk may own prepared adapters, derived GPU/runtime state, and presentation/execution policy;
+- generic reusable renderer semantics stay in RunenRender;
+- generic physical GPU execution stays in RunenGPU.
+
