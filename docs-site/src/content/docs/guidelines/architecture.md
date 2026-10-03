@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-09-11
+last_reviewed: 2026-10-03
 publication: reference
 pagefind: false
 ---
@@ -28,9 +28,8 @@ This page remains the workspace boundary and placement guide; it is not a second
 ## Top-Level Areas
 
 - `foundation/`: low-level Runenwerk-owned shared primitives.
-- `domain/`: engine-agnostic Runenwerk-owned domain contracts and logic, including UI and editor domain crates.
-- `engine/`: Runenwerk runtime composition and plugin integration.
-- `net/`: remaining Runenwerk simulation/history/network-authoring and migration surfaces. Standalone RunenNet owns reusable realtime-networking semantics, and `runen-net-quic` owns concrete QUIC realization where a maintained consumer requires it.
+- `domain/`: engine-agnostic Runenwerk-owned domain contracts and logic, including simulation, replay, UI, and editor domain crates.
+- `engine/`: Runenwerk runtime composition and plugin integration, including Runenwerk-specific realtime networking integration under `engine/src/plugins/net/**`. Standalone RunenNet owns reusable realtime-networking semantics, and `runen-net-quic` owns concrete QUIC realization where a maintained consumer requires it.
 - `apps/`: runnable Runenwerk applications and product/tool process wiring.
 - `adapters/`: Runenwerk integration glue for external host/runtime boundaries.
 - `assets/`: data assets consumed by Runenwerk domains/runtime/apps.
@@ -54,9 +53,8 @@ Cross-repository family membership, repository relationships, and source-authori
 ## Ownership Boundaries
 
 - `foundation/*` owns only the low-level reusable vocabulary explicitly assigned to each foundation crate.
-- `domain/*` owns Runenwerk-local engine-agnostic semantic contracts while those contracts remain local authority.
-- `engine` owns Runenwerk application/runtime composition and plugin integration.
-- `net/*` owns only the remaining Runenwerk-specific or migration responsibilities documented by the current networking authority; it must not duplicate reusable RunenNet semantics.
+- `domain/*` owns Runenwerk-local engine-agnostic semantic contracts while those contracts remain local authority, including current simulation and replay semantics.
+- `engine` owns Runenwerk application/runtime composition and plugin integration; Runenwerk-specific realtime networking integration lives under `engine/src/plugins/net/**` without duplicating reusable RunenNet semantics.
 - `apps/*` owns application/product process wiring and app-local policy.
 - `adapters/*` owns explicit Runenwerk translation/interop glue.
 
