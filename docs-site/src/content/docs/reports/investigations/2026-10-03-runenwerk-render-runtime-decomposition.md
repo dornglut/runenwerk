@@ -329,6 +329,38 @@ The 68 RunenGPU users fall into four owner-correct classes:
 
 No inspected call establishes duplicate generic device/resource/submission authority in Runenwerk.
 
+## 3.3 Top-level owner, lifecycle, authority, and consumer matrix
+
+The exact file/dependency appendices answer **what exists and what it references**. The matrix below
+answers **why each retained top-level package exists** and whether it owns source truth, prepared
+state, derived execution state, product policy, or evidence.
+
+| Area | Module visibility / public pressure | Primary change reason | Lifecycle | Authority class | Maintained consumer class | Active scope pressure | Disposition |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| root integration (`app_ext`, `plugin`, `gpu_context_policy`, `native_host`, `readiness`, `texture_upload`) | mixed private/`pub(crate)` modules with selected public re-exports | app/plugin composition, GPU-context policy, native host attachment, readiness, upload integration | startup + prepare/submit + host lifecycle | Runenwerk integration/product policy; derived runtime state | apps, engine runtime, tests | #1110 may overlap plugin/host-facing publication | Keep composition root; split only proven residual host debt later. |
+| `api` | public module and broad root re-export; high app/example pressure | declarative RenderFlow/resource/pass authoring | authoring + compile input | Runenwerk render authoring contract | Arena, Draw, Editor, Render Lab, examples/tests | R1 compatibility cut | Keep; remove downward compatibility dependency. |
+| `composition` | public module; advanced/fragment consumers | flow/fragment registry, validation, merge/hot-reload integration | authoring promotion + prepare sync | derived accepted render descriptions; no product truth | render runtime, fragment examples/tests | none material found | Keep accepted fragment/compiler seam. |
+| `graph` | public module; advanced/bench/test consumers | static validation, planning, execution-plan compilation, prepared preflight | compile + preflight | derived compiler authority over render execution validity | runtime, renderer, Render Lab/bench/inspection | none material found | Keep; static and prepared validation remain distinct. |
+| `frame` | public module; strong app integration pressure | immutable prepared frame, invocations, targets, selections, contribution boundary | RenderPrepare -> RenderSubmit cutoff | prepared projection, not source truth | Arena, Draw, Editor, Render Lab, runtime/tests | feature strangler crosses it | Keep public prepared-frame integration contract. |
+| `features` | public module; mixed generic + vertical contracts | feature descriptors, collector/fallback gates, renderer-facing producer adapters | prepare | prepared/derived integration; producer semantics remain external | World, UI, Editor, runtime | #1110 UI; accepted collector migration; #1124 SDF disposition | Keep framework; prune unused scaffold separately after recheck. |
+| `runtime` | public module but mainly engine-internal scheduling consumers | frame prepare/submit transactions, dynamic targets/uploads, diagnostics orchestration | RenderPrepare + RenderSubmit | orchestration over prepared/derived state | RenderPlugin, renderer, tests | #1110 may overlap frame submit | Keep; later split orchestration stages only by change reason. |
+| `renderer` | public module; root exposes `Gfx`/`Renderer`; concrete `Renderer` has little external pressure | physical render execution, RunenRender integration, RunenGPU realization, UI/material preparation, caches | submit/execution | derived execution state; no product truth | engine host/state, Render Lab, runtime | #1110 UI realization | Keep now; later decompose convergence points. |
+| `backend` | public module with active surface identity consumers | surface/native correlation plus residual pre-RunenGPU scaffolding | host + execution support | mixed Runenwerk host integration and obsolete derived scaffold | Editor/Arena/Render Lab/runtime | later R2 only | Do not delete wholesale; re-home retained host contracts and delete only proven residue later. |
+| `adapters` | public module but predominantly internal execution pressure | translate render facts/work into RunenGPU contracts | compile/submit realization | translation only | renderer/render-flow execution | none material found | Keep explicit translation; later public-surface narrowing may hide internals. |
+| `gpu_primitives` | public module; procedural/compiler use | renderer-specific scan/compaction/counter/draw-plan building over RunenGPU vocabulary | planning + execution preparation | derived render algorithm/plans | procedural path, tests | none material found | Keep unless later RunenGPU extraction pressure is independently proved. |
+| `resource` | public module | dynamic/transient resource descriptions and usage contracts | authoring + compile + realization | render execution descriptions | graph/runtime/renderer | none material found | Keep. |
+| `pipelines` | public module; mostly renderer/inspection use | pipeline keys/cache metadata | execution | derived cache state | renderer, inspection | later backend residue cleanup | Keep canonical cache owner; remove alias-only backend mirror later. |
+| `residency` | public module | render GPU cache identities/budget/residency bookkeeping | prepare + execution | derived renderer cache state | render integration | no active writer found | Keep where consumed; do not confuse with product residency intent. |
+| `procedural` | public module; example/authoring pressure | procedural visual descriptions, camera, population lowering/validation | authoring + planning | prepared/derived render contracts | examples, API, GPU primitives | no active writer found | Keep. |
+| `params` | public module | typed GPU parameter/value authoring | authoring | value/encoding contract | public render authors | no active writer found | Keep. |
+| `shader` | public module + selected root exports | shader product discovery, filesystem/watch/reload, revisions, last-good diagnostics | startup + prepare polling | Runenwerk product/runtime policy, not reusable RunenShader semantics | Editor/runtime/renderer/inspection | RunenShader family boundary | Keep Runenwerk policy subset; stop on reusable-toolchain pressure. |
+| `material_compiler` | public module; Editor consumers | material product -> render shader/resource compilation and validation | authoring/asset preparation | specialized Runenwerk material/render integration | Editor material lab/runtime | #842 semantic owner | Keep structurally stable while #842 remains open. |
+| `inspect` | public module; extensive example/tool/test use | read-only diagnostics, capture, provenance, readiness, production evidence | prepare/submit aftermath + tooling | derived evidence only | apps/tools/examples/tests | #1058 consumes Render Lab evidence but no central writer at final recheck | Keep semantically read-only; move neutral DTOs only if later cycle pressure requires. |
+
+This matrix is the semantic counterpart to the exact lexical dependency appendix. It also explains
+why a physical source edge is not automatically an ownership violation: the relevant test is whether
+the dependency reaches an owner for its contract or recreates that owner's authority.
+
 # 4. Findings
 
 ## RRA-001 — Standalone authority cutover is structurally sound
