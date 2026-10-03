@@ -712,10 +712,7 @@ fn run_with_env(
 
     match status {
         Ok(status) if status.success() => Ok(()),
-        Ok(_) => Err(format!(
-            "{environment} {program} {} failed",
-            args.join(" ")
-        )),
+        Ok(_) => Err(format!("{environment} {program} {} failed", args.join(" "))),
         Err(error) => Err(format!(
             "failed to run {environment} {program} {}: {error}",
             args.join(" ")
